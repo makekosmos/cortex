@@ -16,6 +16,10 @@ import { useDictationPending } from "../composables/useDictationPending";
 
 defineProps<{ intro: IntroDescriptor | null }>();
 
+// Системный hotkey-capture (begin_hotkey_capture) — adapter-метод: ловит даже
+// системные сочетания до WebContents через low-level hook (Windows) / CGEventTap
+// (macOS). UI платформо-агностичен: всегда external-capture, платформа
+// инкапсулирована per-OS внутри backend-адаптера.
 const ctx = inject(DictationConfigKey);
 if (!ctx) throw new Error("DictationTab requires DictationConfigKey provider in parent");
 

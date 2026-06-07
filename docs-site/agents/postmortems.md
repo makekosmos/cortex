@@ -21,6 +21,24 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-07 — macOS: смена хоткея в настройках не реагирует на клавиши
+
+**Симптомы** — в Настройках при клике на поле захвата хоткея появляется «Нажми сочетание…», но нажатия клавиш не регистрируются — сочетание не меняется. На Windows тот же UI работает.
+**Где жило** — `packages/visuals/components/HotkeyCapture.vue::start` / `onKey`.
+**Root cause** — компонент ловит хоткей через DOM `@keydown` на `<button>`, что требует фокуса на этом элементе. На macOS клик по `<button>` по умолчанию **не передаёт ему focus** (WebKit/Chromium следует системной настройке Full Keyboard Access — в отличие от Windows/Linux, где button фокусится по клику). Без фокуса keydown уходит мимо button → `onKey` (с гардом `if (!capturing.value) return` плюс отсутствие события) не отрабатывает → капчур висит в состоянии ожидания.
+**Fix** — в `start()` добавлен программный `buttonRef.value?.focus()` (программный focus работает на всех платформах). Заодно отображение модификаторов сделано платформо-зависимым: на macOS — нативные символы `⌘ ⌥ ⌃ ⇧` (через `navigator.platform` детект), на остальных — текст `Win/Alt/Ctrl/Shift`.
+**Регрешн-защита** — визуальная проверка на macOS: Настройки → клик по полю хоткея → нажать сочетание → оно отображается и сохраняется.
+**Prevention** — Любой UI-primitive, ловящий keyboard-события через фокус-зависимый DOM-listener (`<button>`, `<div tabindex>`), на macOS должен явно вызывать `.focus()` при активации: клик не гарантирует focus на macOS. Не полагаться на «клик → элемент сфокусирован» как на кросс-платформенный инвариант.
+
+## 2026-06-07 — macOS Shell: рендер замерзает через 1-2с + пустой экран в dev
+
+**Симптомы** — (1) окно launcher'а открывается по хоткею, рендерится 1-2 секунды (можно ввести пару букв), затем визуально замерзает: ввод продолжает обрабатываться (при переоткрытии виден весь набранный запрос), но экран не перерисовывается. (2) В dev после нескольких перезапусков — стабильно пустой тёмный экран.
+**Где жило** — `platform/desktop/electron/main.ts::createLauncher` (webPreferences окна, `openDevTools`), `showLauncher`; dev-артефакт — взаимодействие vite-plugin-electron с `app.requestSingleInstanceLock()`.
+**Root cause** — (1) **macOS window occlusion throttling**: launcher — frameless окно с полупрозрачным `backgroundColor: "#00000000"` без постоянного always-on-top (на macOS его убрали из-за focus war). macOS Window Server помечает такое окно как occluded, и Chromium останавливает compositor для экономии — paint замерзает после первого кадра, хотя Vue реактивность продолжает работать. (2) **Пустой экран в dev** — зомби-Electron от грязных перезапусков держал single-instance lock; новый Electron, спавнутый vite-plugin-electron, не мог взять lock → `app.quit()` exit(0); плагин интерпретировал это как «Electron closed» и убивал shell-vite (порт 5173); живой зомби-Electron оставался на `chrome-error://chromewebdata/` (renderer dev server мёртв) → пустой тёмный экран.
+**Fix** — против occlusion throttling: `backgroundThrottling: false` в `webPreferences` + Chromium switch'и `--disable-backgrounding-occluded-windows` и `--disable-renderer-backgrounding` (только darwin, до `app.whenReady`). Дополнительно: `openDevTools({ mode: "detach", activate: false })` (DevTools не ворует фокус → не тригерит blur), убраны `app.focus({ steal: true })` и `mainWindow.moveTop()` из `showLauncher()` (двойной `activateIgnoringOtherApps` создавал focus war). Пустой экран в dev лечится чистым перезапуском без зомби-процессов (`pkill -9 -f "MacOS/Electron"` перед стартом).
+**Регрешн-защита** — визуальная проверка: открыть по хоткею → печатать 5+ секунд → каждая буква появляется немедленно (рендер не замерзает); CDP-проба `document.getElementById('app').childElementCount > 0` и `location.href === 'http://localhost:5173/'` (не chrome-error).
+**Prevention** — Frameless/полупрозрачные окна на macOS подвержены occlusion throttling: для always-visible launcher/overlay ставить `backgroundThrottling: false` + occlusion switch'и. В dev с vite-plugin-electron + single-instance-lock грязный kill оставляет зомби, держащий lock — перед перезапуском всегда полностью убивать дерево Electron, иначе новый instance молча выходит и dev server гибнет.
+
 ## 2026-06-06 — Shell dev повторно стартовал на чужих портах
 
 **Симптомы** — повторный `bun run --cwd platform/desktop dev` при уже живом dev-run строил backend/extensions, потом shell Vite писал `Port 5173 is in use, trying another one...`, уезжал на `5174`, Akasha падала с `Port 5185 is already in use`, а shutdown мог допечатать шум вроде `ERROR: The process "<pid>" not found`.

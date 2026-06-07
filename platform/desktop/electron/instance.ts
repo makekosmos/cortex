@@ -128,11 +128,12 @@ export function resolveInstance(): Instance {
 
   const appId = slot === "prod" ? "com.kazui.kosmos" : `com.kazui.kosmos.${slot}`;
 
-  // Hotkey: prod = Alt+Space (legacy), dev = Alt+` (legacy, не конфликтует
-  // с prod-инстансом). dev-<x> и test-<x> = disabled (несколько dev-инстансов
-  // не могут поделить один accelerator; пользователь активирует launcher
-  // через tray click).
-  const hotkey = slot === "prod" ? "Alt+Space" : slot === "dev" ? "Alt+`" : null;
+  // Hotkey: prod использует platform-native accelerator; dev = Alt+`
+  // (legacy, не конфликтует с prod-инстансом). dev-<x> и test-<x> =
+  // disabled (несколько dev-инстансов не могут поделить один accelerator;
+  // пользователь активирует launcher через tray click).
+  const prodHotkey = process.platform === "darwin" ? "Command+Shift+K" : "Alt+Space";
+  const hotkey = slot === "prod" ? prodHotkey : slot === "dev" ? "Alt+`" : null;
 
   return (cached = {
     slot,

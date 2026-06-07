@@ -14,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveInstance } from "./instance";
 import { keplerDataDir } from "./data-dir";
+import { macWindowChrome } from "./mac-window";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,12 +62,12 @@ export function setTrayIconEnabled(enabled: boolean): void {
   writeSettings({ showTrayIcon: !!enabled });
 }
 
-export const DEFAULT_HOTKEY_PROD = "Alt+Space";
+export const DEFAULT_HOTKEY_PROD = process.platform === "darwin" ? "Command+Shift+K" : "Alt+Space";
 export const DEFAULT_HOTKEY_DEV = "Alt+`";
-// Slot-aware default. prod = Alt+Space; dev = Alt+` (не конфликтует с
-// installed Kepler); dev-<x> / test-<x> = пусто (hotkey запрещён, см.
-// instance.ts → instance.hotkey). main.ts читает instance.hotkey напрямую
-// для решения «регистрировать или нет».
+// Slot-aware default. prod = platform-native launcher hotkey; dev = Alt+`
+// (не конфликтует с installed Kepler); dev-<x> / test-<x> = пусто (hotkey
+// запрещён, см. instance.ts → instance.hotkey). main.ts читает instance.hotkey
+// напрямую для решения «регистрировать или нет».
 export const DEFAULT_HOTKEY = resolveInstance().hotkey ?? DEFAULT_HOTKEY_PROD;
 
 export function getStoredHotkey(): string {
@@ -135,6 +136,8 @@ export function openSettings(): void {
       symbolColor: "#FFFFFF",
       height: 36,
     },
+    // macOS: vibrancy + центрированные traffic lights (на Windows — no-op).
+    ...macWindowChrome({ trafficLightY: 12 }),
     resizable: true,
     minimizable: true,
     maximizable: false,

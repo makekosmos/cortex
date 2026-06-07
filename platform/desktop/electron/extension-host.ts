@@ -39,6 +39,7 @@ import path from "node:path";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
+import { macWindowChrome } from "./mac-window";
 import { KEPLER_API_VERSION, satisfiesSemver } from "./kepler-api";
 import {
   installFromPath,
@@ -1132,6 +1133,9 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
       symbolColor: "#f5f5f5",
       height: 40,
     },
+    // macOS: vibrancy (виден для backdrop-окон) + центрированные traffic
+    // lights под 40px titlebar (на Windows — no-op).
+    ...macWindowChrome({ trafficLightY: 14 }),
     webPreferences: {
       preload,
       contextIsolation: true,

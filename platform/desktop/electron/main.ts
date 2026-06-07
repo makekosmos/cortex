@@ -29,6 +29,7 @@ import {
   Menu,
   nativeImage,
   nativeTheme,
+  powerMonitor,
   screen,
 } from "electron";
 import { resolveInstance, applyInstanceToApp, verifyUserDataMatches } from "./instance";
@@ -40,6 +41,16 @@ import { resolveInstance, applyInstanceToApp, verifyUserDataMatches } from "./in
 // (settings-window.ts, autoupdater-host.ts), — поэтому здесь, не в bootstrap().
 const KEPLER_INSTANCE = resolveInstance();
 applyInstanceToApp(KEPLER_INSTANCE);
+
+// macOS: launcher — frameless полупрозрачное окно без постоянного always-on-top.
+// macOS Window Server помечает такое окно как occluded, и Chromium останавливает
+// compositor (paint замерзает через 1-2с после показа — Vue реактивность жива,
+// но экран не перерисовывается). Эти switch'и отключают occlusion-throttling на
+// уровне Chromium. Должны быть выставлены ДО app.whenReady. См. postmortems.md.
+if (process.platform === "darwin") {
+  app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+  app.commandLine.appendSwitch("disable-renderer-backgrounding");
+}
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
@@ -180,6 +191,16 @@ let backendRespawnTimer: NodeJS.Timeout | null = null;
 let backendCrashDialogShown = false;
 let arkInitRetryTimer: NodeJS.Timeout | null = null;
 let arkInitRetryAttempt = 0;
+// Идёт ли прямо сейчас initArkClient handshake — чтобы recoverBackendIfDead не
+// вмешивался в штатный (re)connect и не плодил дублирующий backend.
+let arkInitInFlight = false;
+// Стартовый boot-init запущен. До этого recoverBackendIfDead — no-op (иначе
+// showLauncher на старте, до первого initArkClient, ложно «починит» только что
+// заспавненный backend). См. .agent/tasks/2026-06-07-backend-recovery-after-sleep.
+let bootInitStarted = false;
+// Re-entrancy guard для recoverBackendIfDead (probe async → дедуп нескольких
+// триггеров: powerMonitor resume + showLauncher одновременно).
+let recoveringBackend = false;
 // Promise который резолвится когда arkClient готов принимать request'ы.
 // Renderer может стрелять kepler:ark:request как только подняло окно —
 // до того как initArkClient прошёл handshake. Handler ниже await'ит ready
@@ -239,16 +260,19 @@ function resolveBackendExe(): string {
   // Try dev paths first regardless of isDev — Playwright тесты не выставляют
   // VITE_DEV_SERVER_URL, но cargo build выкладывает binary в target/{debug,release}/
   // как при dev так и при first-time test run.
-  const devDebug = path.resolve(__dirname, "../../../target/debug/kepler-backend.exe");
+  const backendBin = process.platform === "win32" ? "kepler-backend.exe" : "kepler-backend";
+  const packagedRuntime = process.platform === "win32" ? "Kosmos Runtime.exe" : "Kosmos Runtime";
+
+  const devDebug = path.resolve(__dirname, "../../../target/debug", backendBin);
   if (existsSync(devDebug)) return devDebug;
-  const devRelease = path.resolve(__dirname, "../../../target/release/kepler-backend.exe");
+  const devRelease = path.resolve(__dirname, "../../../target/release", backendBin);
   if (existsSync(devRelease)) return devRelease;
 
   // production: рядом с упакованным приложением (extraResources)
   const resources = process.resourcesPath ?? __dirname;
-  const packaged = path.join(resources, "Kosmos Runtime.exe");
+  const packaged = path.join(resources, packagedRuntime);
   if (existsSync(packaged)) return packaged;
-  return path.join(resources, "kepler-backend.exe");
+  return path.join(resources, backendBin);
 }
 
 // --- Phase 7: boot self-check ------------------------------------------------
@@ -486,7 +510,10 @@ function createLauncher() {
     maximizable: false,
     fullscreenable: false,
     skipTaskbar: true,
-    alwaysOnTop: true,
+    // См. postmortems.md § 2026-06-07. На macOS frameless BrowserWindow с
+    // always-on-top + showInactive/focus может активировать app без видимого
+    // reactive window после первого input event. Этот path нужен только Windows.
+    alwaysOnTop: process.platform === "win32",
     backgroundMaterial: resolveLauncherBgMaterial(),
     backgroundColor: "#00000000",
     roundedCorners: true,
@@ -494,6 +521,12 @@ function createLauncher() {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      // macOS occlusion throttling: frameless + полупрозрачный launcher без
+      // постоянного always-on-top помечается системой как occluded, и Chromium
+      // останавливает compositor — paint замерзает через 1-2с после показа
+      // (Vue реактивность жива, но экран не перерисовывается). Отключаем
+      // throttling, чтобы окно всегда рендерилось. См. postmortems.md § 2026-06-07.
+      backgroundThrottling: false,
     },
   });
 
@@ -521,7 +554,9 @@ function createLauncher() {
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
     // detached DevTools — отдельное окно, не блокирует launcher.
-    mainWindow.webContents.openDevTools({ mode: "detach" });
+    // activate: false — не отдаём фокус DevTools при открытии: иначе
+    // DevTools берёт фокус через ~1-2с и триггерит blur → hideLauncher.
+    mainWindow.webContents.openDevTools({ mode: "detach", activate: false });
   } else {
     void mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
@@ -551,15 +586,24 @@ function showLauncher() {
   // работает через webContents без paint'а. Renderer всё равно получает
   // `kepler:window:show` для focus/refresh, и `launcherHidden` обновляется.
   if (!headless) {
-    if (!mainWindow.isVisible()) {
+    if (process.platform === "darwin") {
+      // show() на macOS уже вызывает activateIgnoringOtherApps внутри Electron.
+      // Не добавляем app.focus({ steal: true }) — двойной activate создавал
+      // «войну фокуса» с предыдущим приложением → blur через 1-2с → hideLauncher.
+      // См. postmortems.md § 2026-06-07.
+      mainWindow.show();
+      mainWindow.focus();
+    } else if (!mainWindow.isVisible()) {
       mainWindow.showInactive();
+      mainWindow.focus();
+    } else {
+      mainWindow.focus();
     }
-    mainWindow.focus();
     // Гарантируем что окно реально окажется на переднем плане (нужно для
     // post-update flow: процесс только что перезапустился и Windows может
     // отдать focus текущему foreground app). Снимаем флаг через 800мс —
     // постоянный always-on-top раздражает.
-    if (!mainWindow.isAlwaysOnTop()) {
+    if (process.platform === "win32" && !mainWindow.isAlwaysOnTop()) {
       const win = mainWindow;
       win.setAlwaysOnTop(true);
       setTimeout(() => {
@@ -569,6 +613,9 @@ function showLauncher() {
   }
   launcherHidden = false;
   mainWindow.webContents.send("kepler:window:show");
+  // Self-heal: если backend умер (например после сна) — поднимаем его при
+  // открытии лаунчера. No-op пока backend жив или идёт штатный (re)connect.
+  void recoverBackendIfDead("launcher-show");
 }
 
 function showClipboardHistoryLauncher() {
@@ -762,6 +809,7 @@ export async function awaitArkReady(timeoutMs = ARK_READY_REQUEST_TIMEOUT_MS): P
 }
 
 async function initArkClient(): Promise<void> {
+  arkInitInFlight = true;
   try {
     const spaceId = KEPLER_SPACE_ID;
     ensureArkReadyPromise(); // создаём promise до handshake'а если ещё нет
@@ -860,6 +908,59 @@ async function initArkClient(): Promise<void> {
   } catch (e) {
     keplerLog.error("ark", "ArkClient init failed", { err: String(e) });
     arkClientReadyReject?.(e instanceof Error ? e : new Error(String(e)));
+  } finally {
+    arkInitInFlight = false;
+  }
+}
+
+/// Активная проверка живости ARK: probe лёгкой операцией с коротким таймаутом.
+/// `arkClient !== null` недостаточно — после suspend событие `exit` могло не
+/// прийти, и клиент держит ref на мёртвый WS (запросы висят). Probe это ловит.
+async function backendHealthy(timeoutMs = 1500): Promise<boolean> {
+  const client = arkClient;
+  if (!client) return false;
+  let timer: NodeJS.Timeout | null = null;
+  try {
+    await Promise.race([
+      client.commands.list(),
+      new Promise<never>((_, rej) => {
+        timer = setTimeout(() => rej(new Error("health probe timeout")), timeoutMs);
+      }),
+    ]);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/// On-demand recovery: если backend мёртв (process exit не доставлен во время
+/// сна / clean code=0 без respawn), reset + spawn + reconnect. Идемпотентно и
+/// не вмешивается в штатный (re)connect/respawn. Триггеры: powerMonitor resume,
+/// showLauncher. См. .agent/tasks/2026-06-07-backend-recovery-after-sleep.
+async function recoverBackendIfDead(reason: string): Promise<void> {
+  if (!bootInitStarted || recoveringBackend || isQuiting) return;
+  // Идёт штатный handshake или уже запланирован respawn/retry — не мешаем.
+  if (arkInitInFlight || arkInitRetryTimer || backendRespawnTimer) return;
+  recoveringBackend = true;
+  try {
+    if (await backendHealthy()) return;
+    keplerLog.warn("supervisor", "backend unhealthy — recovering", { reason });
+    backendCrashStreak = 0;
+    backendCrashDialogShown = false;
+    await resetArkClient(`recover: ${reason}`);
+    if (backendProc && !backendProc.killed) {
+      try {
+        backendProc.kill();
+      } catch {
+        // уже мёртв — ок
+      }
+    }
+    spawnBackend();
+    await initArkClient();
+  } finally {
+    recoveringBackend = false;
   }
 }
 
@@ -1073,9 +1174,20 @@ safeHandle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
 
   // 3) Runtime dynamic (commands.register от running extension'ов).
   //    Видны только пока соответствующий extension запущен.
+  //    ВАЖНО: динамический ark-вызов ограничен коротким таймаутом. Если backend
+  //    мёртв (например после сна), `arkClient.commands.list()` висит ~30s на
+  //    собственном ark-таймауте и блокирует возврат даже статических команд —
+  //    лаунчер выглядит полностью пустым. Built-in команды (Настройки/Фокус/
+  //    Дашборд) обязаны показываться мгновенно при любом состоянии backend'а.
   if (arkClient) {
     try {
-      const dynamic = await arkClient.commands.list();
+      const COMMANDS_DYNAMIC_TIMEOUT_MS = 2000;
+      const dynamic = await Promise.race([
+        arkClient.commands.list(),
+        new Promise<never>((_, rej) =>
+          setTimeout(() => rej(new Error("dynamic commands timeout")), COMMANDS_DYNAMIC_TIMEOUT_MS),
+        ),
+      ]);
       if (Array.isArray(dynamic)) {
         for (const c of dynamic) {
           if (byId.has(c.id)) continue; // internal/manifest priority
@@ -1650,7 +1762,17 @@ app.whenReady().then(async () => {
     showLauncher();
   }
 
+  bootInitStarted = true;
   void initArkClient();
+
+  // Wake-from-sleep recovery: во время сна backend мог умереть так, что
+  // `backendProc.on("exit")` не доставился (electron-main был suspended) или
+  // backend вышел code=0 (supervisor не respawn'ит). На resume активно
+  // проверяем и поднимаем backend заново. См.
+  // .agent/tasks/2026-06-07-backend-recovery-after-sleep.
+  powerMonitor.on("resume", () => {
+    void recoverBackendIfDead("power-resume");
+  });
 
   if (CLIPBOARD_HISTORY_ENABLED) {
     registerClipboardHistoryIpc();
@@ -1719,7 +1841,7 @@ app.whenReady().then(async () => {
   // мигрированные extensions + Dashboard для RAM-измерения. После warmup 5s.
   if (process.env.KEPLER_BENCHMARK_OPEN_ALL === "1") {
     setTimeout(() => {
-      for (const id of ["horologion", "delphi", "arrancador", "eden"]) {
+      for (const id of ["delphi", "arrancador", "eden"]) {
         void openExtension(id).catch((e) => console.error(`bench open ${id} failed:`, e));
       }
       // Dashboard — встроенный shell view (не extension); открывается через

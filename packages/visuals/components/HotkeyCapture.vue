@@ -60,15 +60,25 @@ const emit = defineEmits<{
 }>();
 
 const capturing = ref(false);
+const buttonRef = ref<HTMLButtonElement | null>(null);
+
+// На macOS модификаторы показываем нативными символами (⌘ ⌥ ⌃ ⇧), на остальных
+// платформах — текстом. Super/Meta = Command на macOS, Win на Windows.
+const isMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform);
 
 const keyParts = computed(() => {
   if (!props.modelValue) return [];
-  return props.modelValue
-    .split("+")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => {
-      const labels: Record<string, string> = {
+  const labels: Record<string, string> = isMac
+    ? {
+        Ctrl: "⌃",
+        Control: "⌃",
+        Alt: "⌥",
+        Shift: "⇧",
+        Super: "⌘",
+        Meta: "⌘",
+        Space: "Space",
+      }
+    : {
         Ctrl: "Ctrl",
         Control: "Ctrl",
         Alt: "Alt",
@@ -77,13 +87,21 @@ const keyParts = computed(() => {
         Meta: "Win",
         Space: "Space",
       };
-      return labels[part] ?? part;
-    });
+  return props.modelValue
+    .split("+")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => labels[part] ?? part);
 });
 
 function start() {
   if (props.disabled) return;
   capturing.value = true;
+  // macOS: клик по <button> по умолчанию НЕ ставит focus (WebKit/Chromium
+  // следует системной настройке Full Keyboard Access). Без focus button не
+  // получает keydown → onKey не срабатывает → капчур висит и не ловит клавиши.
+  // Программный .focus() работает на всех платформах.
+  buttonRef.value?.focus();
   if (props.externalCapture) {
     emit("capture-start");
   }
@@ -159,6 +177,7 @@ function onKey(e: KeyboardEvent) {
 
 <template>
   <button
+    ref="buttonRef"
     type="button"
     :class="[
       'inline-flex min-h-8 min-w-[120px] cursor-default items-center justify-center rounded-md border border-[color-mix(in_srgb,var(--foreground)_14%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] px-2 font-[inherit] text-[length:var(--kosmos-text-caption-size)] text-[var(--foreground)] transition-[border-color,background-color] duration-140 ease-[cubic-bezier(0.2,0,0,1)] disabled:cursor-not-allowed disabled:opacity-55',

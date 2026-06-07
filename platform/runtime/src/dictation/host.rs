@@ -333,6 +333,9 @@ pub async fn handle_dictation_op(
         "reset_stats" => op_reset_stats(host).await,
         "begin_hotkey_capture" => op_begin_hotkey_capture(host).await,
         "end_hotkey_capture" => op_end_hotkey_capture(host).await,
+        "native_status" => op_native_status().await,
+        "ensure_native_permissions" => op_ensure_native_permissions(params).await,
+        "native_audio_ping" => op_native_audio_ping().await,
         other => DictationResponse::err(format!("dictation.{other}: unknown sub-operation")),
     }
 }
@@ -518,7 +521,20 @@ fn apply_ptt_hook(cfg: &DictationConfig, _tx: &broadcast::Sender<Value>) {
     }
     #[cfg(not(windows))]
     {
-        let _ = cfg;
+        #[cfg(target_os = "macos")]
+        {
+            if let Err(e) = crate::dictation::macos_native::set_hotkey_active(
+                &cfg.hotkey,
+                cfg.trigger_mode,
+                _tx.clone(),
+            ) {
+                eprintln!("[dictation::host] macOS hotkey helper unavailable: {e}");
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = cfg;
+        }
     }
 }
 
@@ -1067,10 +1083,17 @@ async fn op_begin_hotkey_capture(host: &DictationHost) -> DictationResponse {
         hotkey_hook::set_capture_mode(true, Some(host.events_tx.clone()));
         DictationResponse::ok(json!({ "ok": true }))
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        match crate::dictation::macos_native::begin_capture(host.events_tx.clone()) {
+            Ok(()) => DictationResponse::ok(json!({ "ok": true })),
+            Err(e) => DictationResponse::err(format!("begin_hotkey_capture: {e}")),
+        }
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = host;
-        DictationResponse::err("begin_hotkey_capture: Windows-only (Phase 1)")
+        DictationResponse::err("begin_hotkey_capture: unsupported platform")
     }
 }
 
@@ -1081,10 +1104,71 @@ async fn op_end_hotkey_capture(host: &DictationHost) -> DictationResponse {
         hotkey_hook::set_capture_mode(false, None);
         DictationResponse::ok(json!({ "ok": true }))
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        let _ = host;
+        crate::dictation::macos_native::end_capture();
+        DictationResponse::ok(json!({ "ok": true }))
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = host;
         DictationResponse::ok(json!({ "ok": true }))
+    }
+}
+
+async fn op_native_status() -> DictationResponse {
+    #[cfg(target_os = "macos")]
+    {
+        DictationResponse::ok(crate::dictation::macos_native::helper_status())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        DictationResponse::ok(json!({
+            "platform": std::env::consts::OS,
+            "helpers": [],
+            "supported": false,
+        }))
+    }
+}
+
+async fn op_ensure_native_permissions(params: Value) -> DictationResponse {
+    let prompt = params
+        .get("prompt")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    #[cfg(target_os = "macos")]
+    {
+        match crate::dictation::macos_native::check_permissions(prompt) {
+            Ok(v) => DictationResponse::ok(v),
+            Err(e) => DictationResponse::err(format!("ensure_native_permissions: {e}")),
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = prompt;
+        DictationResponse::ok(json!({
+            "platform": std::env::consts::OS,
+            "supported": false,
+        }))
+    }
+}
+
+async fn op_native_audio_ping() -> DictationResponse {
+    #[cfg(target_os = "macos")]
+    {
+        match crate::dictation::macos_native::audio_ping() {
+            Ok(v) => DictationResponse::ok(v),
+            Err(e) => DictationResponse::err(format!("native_audio_ping: {e}")),
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        DictationResponse::ok(json!({
+            "platform": std::env::consts::OS,
+            "supported": false,
+        }))
     }
 }
 
@@ -2098,11 +2182,11 @@ mod tests {
     // `KOSMOS_DATA_DIR`. `config::save` пишет по абсолютному пути из
     // env, поэтому без guard'а параллельные тесты ломают друг друга
     // ИЛИ затирают `%APPDATA%\Kosmos\dictation-config.json` пользователя.
-    static ENV_DATA_DIR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    static ENV_DATA_DIR_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     #[tokio::test]
     async fn update_config_persists_and_emits_event() {
-        let _guard = ENV_DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = ENV_DATA_DIR_LOCK.lock().await;
         let tmp = tempfile::TempDir::new().expect("tempdir");
         std::env::set_var("KOSMOS_DATA_DIR", tmp.path());
 

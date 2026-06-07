@@ -63,31 +63,28 @@ pub fn ensure_icon(cache_dir: &Path, app: &App) -> Result<String> {
                     );
                     crate::app_index::AppIndexError::Other(format!("icon extraction: {e}"))
                 })?;
+                Ok(path.to_string_lossy().to_string())
             }
             #[cfg(not(target_os = "windows"))]
             {
-                return Err(crate::app_index::AppIndexError::Other(
+                Err(crate::app_index::AppIndexError::Other(
                     "Win32 icon extraction only on Windows".into(),
-                ));
+                ))
             }
         }
         AppKind::Uwp => {
             // UWP icons извлекаются eagerly в UwpSource::discover()
             // через ensure_icon_for_uwp() с доступом к Package. Здесь
             // fallback не имеем — return Err (UI покажет placeholder).
-            return Err(crate::app_index::AppIndexError::Other(
+            Err(crate::app_index::AppIndexError::Other(
                 "UWP icon must be extracted via ensure_icon_for_uwp at discover time".into(),
-            ));
+            ))
         }
-        _ => {
-            return Err(crate::app_index::AppIndexError::Other(format!(
-                "icon extraction not implemented for kind: {:?}",
-                app.kind
-            )));
-        }
+        _ => Err(crate::app_index::AppIndexError::Other(format!(
+            "icon extraction not implemented for kind: {:?}",
+            app.kind
+        ))),
     }
-
-    Ok(path.to_string_lossy().to_string())
 }
 
 /// Win32 икон-extractor с приоритетом .lnk::icon_location над target.
@@ -142,6 +139,7 @@ pub fn ensure_icon_for_uwp(
 }
 
 /// 1×1 прозрачный PNG (67 байт). Placeholder если extractor не сработал.
+#[cfg(target_os = "windows")]
 const PLACEHOLDER_PNG: &[u8] = &[
     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
     0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
@@ -150,6 +148,7 @@ const PLACEHOLDER_PNG: &[u8] = &[
     0x42, 0x60, 0x82,
 ];
 
+#[cfg(target_os = "windows")]
 fn write_placeholder(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;

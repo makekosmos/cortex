@@ -7,6 +7,23 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { KeplerApi } from "../shared/ipc-types";
 
+// Платформенный маркер на <html> — чтобы CSS токены ([data-platform="mac"])
+// и usePlatform() видели платформу. Inline (не отдельный модуль): vite выносит
+// import preload'а в отдельный chunk, а Electron preload sandbox его не
+// резолвит → exposeInMainWorld ломается. См. postmortems.md § focus-block.
+//
+// Preload в sandbox запускается ДО создания documentElement, поэтому ставим
+// и сразу (если <html> уже есть), и на DOMContentLoaded (надёжный момент).
+{
+  const platform =
+    process.platform === "darwin" ? "mac" : process.platform === "win32" ? "windows" : "linux";
+  const mark = () => {
+    if (document.documentElement) document.documentElement.dataset.platform = platform;
+  };
+  mark();
+  document.addEventListener("DOMContentLoaded", mark, { once: true });
+}
+
 const api: KeplerApi = {
   backend: {
     status: () => ipcRenderer.invoke("kepler:backend:status"),

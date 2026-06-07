@@ -39,8 +39,14 @@ import {
   SettingsSidebarButton,
   ToastHost,
   provideToastHost,
+  usePlatform,
 } from "@kosmos/visuals";
+import SettingsTopTabs from "./settings/components/SettingsTopTabs.vue";
 import type { BackendStatus } from "@shared/ipc-types";
+
+// macOS: настройки в стиле Raycast — горизонтальный таб-бар сверху вместо
+// вертикального сайдбара. Те же navigation items, другой layout.
+const { isMac } = usePlatform();
 
 // Focus-tab types/constants — `./settings/composables/useFocusTab.ts`.
 
@@ -75,6 +81,12 @@ const advancedNavigationItems = computed(() =>
 );
 
 const hasSidebarMatches = computed(() => matchedNavigationItems.value.length > 0);
+
+// Плоский список табов для macOS top-tab bar (main + advanced подряд).
+const topTabItems = computed(() => [
+  ...mainNavigationItems.value,
+  ...advancedNavigationItems.value,
+]);
 
 const activeTab = computed<Tab | null>(() => {
   if (!normalizedSearchQuery.value) return tab.value;
@@ -398,13 +410,21 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="settings" tabindex="0" @keydown="onKey">
+  <div class="settings" :class="{ 'settings--mac': isMac }" tabindex="0" @keydown="onKey">
     <ToastHost />
     <!-- Raycast-style update banner. Шириной во всё окно, height ~32px. -->
     <UpdateBanner :banner="updateBanner" :state="updateState" @install="onInstallUpdate" />
 
+    <!-- macOS: горизонтальный таб-бар (Raycast-style) вместо сайдбара. -->
+    <SettingsTopTabs
+      v-if="isMac"
+      :items="topTabItems"
+      :active-tab="activeTab"
+      @select="selectTab"
+    />
+
     <div class="settings-shell">
-      <SettingsSidebar title="Настройки">
+      <SettingsSidebar v-if="!isMac" title="Настройки">
         <div class="settings-sidebar-search">
           <SettingsSearchInput v-model="searchQuery" placeholder="Поиск" />
         </div>
@@ -445,7 +465,7 @@ onBeforeUnmount(() => {
       </SettingsSidebar>
 
       <div class="settings-content">
-        <header class="content-header">
+        <header v-if="!isMac" class="content-header">
           <div class="content-header__nav">
             <button type="button" class="chrome-control" disabled title="Назад" aria-label="Назад">
               <ChevronLeft :size="14" :stroke-width="2" />
@@ -599,4 +619,10 @@ onBeforeUnmount(() => {
  * Утилитарные классы (.row, .btn, .label, .hint, .advanced-page и т.д.)
  * живут в `./settings/settings-shared.css` (non-scoped, namespaced под
  * .settings-shell). */
+
+/* macOS Raycast-style layout: навигация в top-tab баре, контент во всю ширину
+   под ним. Sidebar скрыт (v-if), поэтому settings-content занимает всё. */
+.settings--mac .settings-content {
+  padding-top: 4px;
+}
 </style>

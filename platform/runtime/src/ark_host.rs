@@ -87,6 +87,14 @@ pub fn resolve_ark_core_rpc_path() -> ArkResult<PathBuf> {
         if let Some(parent) = current_exe.parent() {
             #[cfg(windows)]
             let packaged_candidate = parent.join("Kosmos Data Engine.exe");
+            #[cfg(not(windows))]
+            let packaged_candidate = parent.join("Kosmos Data Engine");
+            #[cfg(not(windows))]
+            if packaged_candidate.exists() {
+                return Ok(packaged_candidate);
+            }
+            #[cfg(not(windows))]
+            candidates.push(packaged_candidate);
             #[cfg(windows)]
             if packaged_candidate.exists() {
                 return Ok(packaged_candidate);
@@ -147,18 +155,14 @@ impl ArkHost {
             .kill_on_drop(true)
             .spawn()?;
 
-        let stdin = child.stdin.take().ok_or_else(|| {
-            ArkHostError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "child stdin missing",
-            ))
-        })?;
-        let stdout = child.stdout.take().ok_or_else(|| {
-            ArkHostError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "child stdout missing",
-            ))
-        })?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| ArkHostError::Io(std::io::Error::other("child stdin missing")))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| ArkHostError::Io(std::io::Error::other("child stdout missing")))?;
 
         let pending: Arc<Mutex<HashMap<String, oneshot::Sender<ArkResponse>>>> =
             Arc::new(Mutex::new(HashMap::new()));

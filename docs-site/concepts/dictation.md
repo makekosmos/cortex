@@ -72,7 +72,9 @@ state: Transcribing → Idle  +  pill.pillFinished() → hide window
 
 ## Безопасность ключа
 
-API key Groq хранится в **Windows Credential Manager** через крейт `keyring` (target `kosmos-kepler`, user `groq-api-key`). Это enterprise-стандарт (так делают Raycast на macOS Keychain, gh CLI, git-credential-manager).
+API key Groq хранится в нативном secret store через крейт `keyring` (target `kosmos-kepler`, user `groq-api-key`): **Windows Credential Manager** (feature `windows-native`) и **macOS Keychain** (feature `apple-native`). Это enterprise-стандарт (так делают Raycast на macOS Keychain, gh CLI, git-credential-manager).
+
+> ⚠️ keyring без backend-feature для текущей платформы молча использует **mock store** (запись «успешна», но ключ не персистит между процессами). На macOS это давало `submit_audio: API key не задан` после ввода ключа — оба feature должны быть в `platform/runtime/Cargo.toml`.
 
 - Ключ **никогда** не попадает в `dictation-config.json`.
 - Не утекает через `db_backup` (`backups/` не копирует Credential Manager).
@@ -318,9 +320,21 @@ UI рендерит чек-листом + подсказку для первой
 - Локальные модели (whisper.cpp, Parakeet V3) — отдельный proof-loop Phase 2.
 - LLM post-processing транскрипта (filler-word cleanup, пунктуация, стиль) — Phase 3.
 - DoH для не-AI запросов (sync / RAWG / прочее) — out of scope.
-- macOS / Linux порт — Win32 `GetForegroundWindow` + Credential Manager + `WH_KEYBOARD_LL` специфичны.
+- Linux порт — Win32 `GetForegroundWindow` + `WH_KEYBOARD_LL` специфичны; native helpers есть только под macOS.
 - Persistent история транскрипций.
-- PTT на macOS / Linux (low-level hook Windows-only в Phase 1.5).
+
+## macOS hotkey capture (adapter)
+
+Назначение хоткея в Settings → Диктация идёт через backend-op `dictation.begin_hotkey_capture` (adapter-метод) одинаково на обеих платформах; «как именно ловим сочетание» инкапсулировано per-OS внутри адаптера, UI платформо-агностичен (безусловный `external-capture`).
+
+- **Windows** — `host.rs::op_begin_hotkey_capture` → low-level hook (`hotkey_hook::set_capture_mode`), эмитит `dictation_capture_key { vk, ctrl, shift, alt, win }`.
+- **macOS** — Swift helper `capture-hotkey` (`platform/runtime/native/macos/capture-hotkey.swift`): `CGEventTap` без фильтра по keyCode, ловит первый `keyDown` с ≥1 квалифицирующим модификатором (cmd/ctrl/alt/shift). `macos_native::begin_capture` / `end_capture` читают helper, **резолвят mac `keyCode` → accelerator-строку в Rust** (`mac_key_name` — обратный маппинг к `mac_key_code`; cmd→`Super`) и эмитят `dictation_capture_key { accelerator }`; `Escape` → `dictation_capture_cancelled`.
+
+::: tip Почему accelerator из Rust, а не `vk`
+macOS `CGKeyCode` ≠ Windows VK: фронтовый `vkToKeyName` ждёт Windows-коды. Поэтому строку собирает адаптер (`build_accelerator`), а `useDictationConfig.onDictationCaptureStart` предпочитает `e.accelerator` если он есть — ветка платформо-агностична, leak в UI не возвращается.
+:::
+
+История долга (variation point протекал в UI через `:external-capture="isWindows"`, закрыт 2026-06-07) — `.agent/tasks/2026-06-07-macos-hotkey-capture-adapter/spec.md`.
 
 ## ADR
 

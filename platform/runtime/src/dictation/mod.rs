@@ -15,6 +15,8 @@ pub mod host;
 #[cfg(windows)]
 pub mod hotkey_hook;
 pub mod inject;
+#[cfg(target_os = "macos")]
+pub mod macos_native;
 pub mod network;
 pub mod pending;
 pub mod retry;
