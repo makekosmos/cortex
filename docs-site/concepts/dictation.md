@@ -72,7 +72,9 @@ state: Transcribing → Idle  +  pill.pillFinished() → hide window
 
 ## Безопасность ключа
 
-API key Groq хранится в **Windows Credential Manager** через крейт `keyring` (target `kosmos-kepler`, user `groq-api-key`). Это enterprise-стандарт (так делают Raycast на macOS Keychain, gh CLI, git-credential-manager).
+API key Groq хранится в нативном secret store через крейт `keyring` (target `kosmos-kepler`, user `groq-api-key`): **Windows Credential Manager** (feature `windows-native`) и **macOS Keychain** (feature `apple-native`). Это enterprise-стандарт (так делают Raycast на macOS Keychain, gh CLI, git-credential-manager).
+
+> ⚠️ keyring без backend-feature для текущей платформы молча использует **mock store** (запись «успешна», но ключ не персистит между процессами). На macOS это давало `submit_audio: API key не задан` после ввода ключа — оба feature должны быть в `platform/runtime/Cargo.toml`.
 
 - Ключ **никогда** не попадает в `dictation-config.json`.
 - Не утекает через `db_backup` (`backups/` не копирует Credential Manager).
@@ -318,9 +320,26 @@ UI рендерит чек-листом + подсказку для первой
 - Локальные модели (whisper.cpp, Parakeet V3) — отдельный proof-loop Phase 2.
 - LLM post-processing транскрипта (filler-word cleanup, пунктуация, стиль) — Phase 3.
 - DoH для не-AI запросов (sync / RAWG / прочее) — out of scope.
-- macOS / Linux порт — Win32 `GetForegroundWindow` + Credential Manager + `WH_KEYBOARD_LL` специфичны.
+- Linux порт — Win32 `GetForegroundWindow` + `WH_KEYBOARD_LL` специфичны; native helpers есть только под macOS.
 - Persistent история транскрипций.
-- PTT на macOS / Linux (low-level hook Windows-only в Phase 1.5).
+- **macOS hotkey capture** через adapter — пока заглушка + UI-обход, см. § Tech debt.
+
+## Tech debt
+
+### macOS hotkey capture — variation point протёк в UI (2026-06-07)
+
+**Что сейчас.** Назначение хоткея диктации в Settings → Диктация работает через backend-op `dictation.begin_hotkey_capture` (adapter-метод). Его Windows-ветка (`host.rs::op_begin_hotkey_capture`) запускает low-level hook (`hotkey_hook::set_capture_mode`), а **macOS-ветка — заглушка `Err("begin_hotkey_capture: Windows-only (Phase 1)")`** (незаполненный variation point из Phase 1). Чтобы UI не падал, временно вкручено условие `:external-capture="isWindows"` в `DictationTab.vue` — то есть на macOS используется локальный DOM-capture.
+
+**Почему это долг.** Условие `isWindows` в `DictationTab` **протекает платформу в UI-слой**, нарушая adapter-first паттерн (платформенная логика должна жить в `#[cfg]`-ветках адаптера, а не в презентации). Добавление Linux потребует править UI; шов оказался не там, где его держит остальная кодовая база.
+
+**Что сделать (FULL_LOOP).**
+
+1. **Swift helper `capture-hotkey`** (`platform/runtime/native/macos/`) — вариация `hotkey-hold-monitor.swift`: тот же `CGEventTap`, но **без фильтра по конкретному keyCode** — ловит первое `keyDown` с модификаторами и эмитит JSON `{vk, ctrl, shift, alt, win}`; `Escape` → `cancelled`. ~80% переиспользование существующего helper'а. Добавить в `HELPERS` в `macos_native.rs` и в `build-macos-native.mjs`.
+2. **`macos_native.rs`** — `begin_capture(tx)` / `end_capture()`, эмитящие `dictation_capture_key` / `dictation_capture_cancelled` в общий broadcast (тот же канал, что слушает `useDictationConfig.onDictationCaptureStart`).
+3. **`host.rs`** — заполнить `#[cfg(target_os = "macos")]` ветку `op_begin_hotkey_capture` / `op_end_hotkey_capture` вызовом helper'а вместо `Err`.
+4. **Откатить UI-leak** — вернуть `DictationTab.vue` к безусловному `external-capture`, убрать `usePlatform()`/`isWindows`. UI снова платформо-агностичен.
+
+После этого «назначить хоткей» работает одинаково на обеих платформах через один adapter-метод, а «как именно ловим сочетание» инкапсулировано per-OS внутри адаптера.
 
 ## ADR
 
