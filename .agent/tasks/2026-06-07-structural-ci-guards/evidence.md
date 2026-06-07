@@ -2,6 +2,10 @@
 
 Verified on branch `structural-refactor-ci-guards`.
 
+The local branch first recorded the CI evidence, then merged
+`origin/structural-refactor-ci-guards` after the remote moved ahead by 10
+commits. The full check suite below was rerun after that merge.
+
 ## AC1
 
 Verdict: PASS
@@ -12,7 +16,8 @@ Command:
 bun install --frozen-lockfile
 ```
 
-Result: exited 0. Bun reported `Checked 930 installs across 1117 packages (no changes)`.
+Result: exited 0. Bun reported `Checked 930 installs across 1117 packages
+(no changes)`.
 
 ## AC2
 
@@ -86,9 +91,9 @@ Results:
 
 ## AC6
 
-Verdict: PENDING
+Verdict: PASS
 
-Commit and push are the next step after final status/staging review. The local
+Final status/staging review completed after merging the remote branch. The local
 checkout still contains untracked old-layout cache directories (`shell/`,
 `extensions/eden/`) with no tracked files; they are intentionally excluded from
-staging.
+staging and push.

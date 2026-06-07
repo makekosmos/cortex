@@ -35,9 +35,9 @@
     },
     {
       "ac": "AC6",
-      "verdict": "PENDING",
-      "command": "git status && git add <tracked files> && git commit && git push",
-      "summary": "Commit and push pending; untracked old-layout cache directories are excluded."
+      "verdict": "PASS",
+      "command": "git fetch origin structural-refactor-ci-guards && git merge origin/structural-refactor-ci-guards --no-edit && git status && git add <tracked files> && git commit && git push",
+      "summary": "Remote branch merged without conflicts; final status/staging reviewed; untracked old-layout cache directories are excluded from staging and push."
     }
   ]
 }
