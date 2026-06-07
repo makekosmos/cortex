@@ -103,7 +103,7 @@ bun run test:e2e           # Playwright smoke (билдит JS перед про
 bun run test:e2e:headed    # то же, с видимым окном
 bun run ext:install <path> # положить extension override в %APPDATA%\Kosmos\extensions\
 bun run ext:uninstall <id> # удалить extension override
-bun run ext:publish <id>   # опубликовать .kext extension в kepler-releases (GitHub)
+bun run ext:publish <id>   # опубликовать .kext extension в makekosmos/extensions (GitHub)
 bun run ext:publish-all    # ext:publish для всех extension'ов подряд
 bun run ext:catalog        # пересобрать catalog.json со списком published extension'ов
 ```

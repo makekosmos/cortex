@@ -425,7 +425,7 @@ export interface KeplerApi {
     backupsList(id: string): Promise<string[]>;
     /** Удалить user copy extension'а. */
     uninstall(id: string): Promise<boolean>;
-    /** Marketplace: получить catalog.json из kosmos-extensions. Cache 1h в
+    /** Marketplace: получить catalog.json из makekosmos/extensions. Cache 1h в
         main; `force=true` обходит cache. */
     catalogFetch(force?: boolean): Promise<MarketplaceCatalog>;
     /** Скачать .kext по URL и установить через existing installFromPath.

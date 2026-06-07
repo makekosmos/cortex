@@ -1,6 +1,6 @@
 {
   "name": "kepler-shell",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "description": "Kosmos — desktop host for notes, tasks, games, focus, and activity",
   "author": "Kazui",
@@ -74,6 +74,12 @@
       "buildResources": "build"
     },
     "publish": [
+      {
+        "provider": "github",
+        "owner": "makekosmos",
+        "repo": "desktop",
+        "releaseType": "release"
+      },
       {
         "provider": "github",
         "owner": "yoso-industries",

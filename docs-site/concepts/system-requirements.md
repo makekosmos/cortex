@@ -47,7 +47,7 @@
 
 - **Visual Studio Build Tools** — для `signtool.exe` (electron-builder NSIS signing на production build)
 - **Playwright Chromium** — для Storybook Vitest browser tests (`bun run --cwd packages/visuals test`)
-- **gh CLI** ИЛИ `GH_TOKEN` env var — для `bun run --cwd platform/desktop build` (publish step uploads release to `yoso-industries/kepler-releases`)
+- **gh CLI** ИЛИ `GH_TOKEN` env var — для `bun run --cwd platform/desktop build` (publish step uploads release to `makekosmos/desktop`; bridge release also publishes to `yoso-industries/kepler-releases`)
 
 ## Зависимости компонентов
 
@@ -58,8 +58,8 @@
 | **ARK storage**             | `Kosmos Data Engine.exe` (packaged `ark-core-rpc`)       | —                                                                                                                                                 |
 | **Focus / file svc**        | `Kosmos System Service.exe` (Windows Service, AutoStart) | **Один UAC при первой установке service** — дальше zero UAC через named pipe: hosts-блокировка для Focus и быстрый NTFS/MFT scan для File Search. |
 | **Focus helper** (fallback) | `Kosmos Helper.exe` (admin elevation manifest)           | UAC per toggle — используется только если юзер отклонил auto-install service'а                                                                    |
-| **AutoUpdater**             | `electron-updater`                                       | Доступ к `github.com/yoso-industries/kepler-releases`                                                                                             |
-| **Extension marketplace**   | github raw + releases                                    | Доступ к `github.com/yoso-industries/kosmos-extensions`                                                                                           |
+| **AutoUpdater**             | `electron-updater`                                       | Доступ к `github.com/makekosmos/desktop` и, на время bridge-релиза, `github.com/yoso-industries/kepler-releases`                                  |
+| **Extension marketplace**   | github raw + releases                                    | Доступ к `github.com/makekosmos/extensions`                                                                                                       |
 
 ## Размер на диске (после install)
 
