@@ -443,4 +443,17 @@ North-star проекта — «всё есть объект + AI-friendly гр�
 
 ## Баги / замечания
 
+- ⚠️ **Extension window drag rollback under system load** — 2026-06-08 debug: на Eden/Delphi
+  при drag окна под высокой системной нагрузкой (например после Valorant) Win32 `GetWindowRect`
+  иногда фиксирует реальный откат bounds примерно через 100ms после движения (`Delphi` дошёл до
+  `x=1482,y=193`, затем тем же hwnd/size откатился на `x=1371,y=197`). Это не Eden-specific:
+  общий слой `platform/desktop/electron/extension-host.ts` создаёт extension windows как
+  `frame: true` + `titleBarStyle: "hidden"` + `titleBarOverlay` + transparent
+  `backgroundMaterial: "acrylic"`, а draggable зона идёт через CSS `-webkit-app-region: drag`
+  в `packages/visuals/components/Titlebar.vue`. Гипотеза: редкий Win32/DWM/Electron chrome-path
+  становится чувствителен к GPU/CPU pressure; Discord не показатель, потому что может использовать
+  другой titlebar/backdrop strategy. Минимальные A/B проверки: (1) временно `windowEffect: "none"`
+  для Eden/Delphi; (2) оставить flat background, но изолировать `titleBarOverlay`; (3) отдельно
+  убрать startup spikes (`file_index` lazy/idle, `usage_tracker` adaptive backoff), потому что
+  нагрузка выглядит усилителем, а не единственной причиной.
 - ⚠️ **Win32 SetWindowPos jitter** при show/hide launcher окна — зафиксили: snap resize + GPU CSS Transition. Если регрессии в Phase 4 (extension windows) — смотреть туда же.
