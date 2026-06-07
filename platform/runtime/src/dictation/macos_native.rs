@@ -1,0 +1,441 @@
+// macOS native dictation helpers.
+//
+// Rust owns lifecycle/state and Swift owns low-level macOS APIs. Helpers are
+// line-oriented JSON executables copied from sample/SuperCmd-main and built by
+// `platform/desktop/scripts/build-macos-native.mjs`.
+
+#![cfg(target_os = "macos")]
+
+use serde_json::{json, Value};
+use std::io::{BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
+use std::thread;
+use thiserror::Error;
+use tokio::sync::broadcast;
+
+use super::config::TriggerMode;
+
+static WATCH_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+const HELPERS: &[&str] = &[
+    "audio-capturer",
+    "get-selected-text",
+    "hotkey-hold-monitor",
+    "input-monitoring-request",
+    "microphone-access",
+    "speech-recognizer",
+];
+
+#[derive(Debug, Error)]
+pub enum NativeHelperError {
+    #[error("helper '{name}' not found in candidates: {candidates:?}")]
+    NotFound {
+        name: String,
+        candidates: Vec<PathBuf>,
+    },
+    #[error("helper '{name}' failed: {error}")]
+    Spawn { name: String, error: String },
+    #[error("helper '{name}' returned invalid JSON: {output}")]
+    Json { name: String, output: String },
+}
+
+pub fn helper_status() -> Value {
+    let helpers: Vec<Value> = HELPERS
+        .iter()
+        .map(|name| match resolve_helper(name) {
+            Ok(path) => json!({
+                "name": name,
+                "available": true,
+                "path": path.to_string_lossy(),
+            }),
+            Err(e) => json!({
+                "name": name,
+                "available": false,
+                "error": e.to_string(),
+            }),
+        })
+        .collect();
+    json!({
+        "platform": "macos",
+        "helpers": helpers,
+    })
+}
+
+pub fn check_permissions(prompt: bool) -> Result<Value, NativeHelperError> {
+    let microphone = run_json_helper(
+        "microphone-access",
+        if prompt { &["--prompt"][..] } else { &[] },
+    )?;
+    let input_monitoring = run_json_helper(
+        "input-monitoring-request",
+        if prompt { &[] } else { &["--check"][..] },
+    )?;
+    Ok(json!({
+        "platform": "macos",
+        "microphone": microphone,
+        "inputMonitoring": input_monitoring,
+    }))
+}
+
+pub fn audio_ping() -> Result<Value, NativeHelperError> {
+    run_json_helper_stdin("audio-capturer", json!({ "command": "ping" }))
+}
+
+pub fn set_hotkey_active(
+    hotkey: &str,
+    mode: TriggerMode,
+    tx: broadcast::Sender<Value>,
+) -> Result<(), NativeHelperError> {
+    let spec = match parse_hotkey(hotkey) {
+        Some(spec) => spec,
+        None => {
+            WATCH_GENERATION.fetch_add(1, Ordering::SeqCst);
+            return Ok(());
+        }
+    };
+    let helper = resolve_helper("hotkey-hold-monitor")?;
+    let generation = WATCH_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+
+    thread::spawn(move || {
+        while WATCH_GENERATION.load(Ordering::SeqCst) == generation {
+            if let Err(error) = watch_hotkey_once(&helper, &spec, mode, &tx, generation) {
+                let _ = tx.send(json!({
+                    "event": "dictation_hotkey_error",
+                    "platform": "macos",
+                    "error": error,
+                }));
+                thread::sleep(std::time::Duration::from_secs(2));
+            }
+        }
+    });
+
+    Ok(())
+}
+
+fn watch_hotkey_once(
+    helper: &Path,
+    spec: &MacHotkeySpec,
+    mode: TriggerMode,
+    tx: &broadcast::Sender<Value>,
+    generation: u64,
+) -> Result<(), String> {
+    let args = vec![
+        spec.key_code.to_string(),
+        bool_arg(spec.cmd).to_string(),
+        bool_arg(spec.ctrl).to_string(),
+        bool_arg(spec.alt).to_string(),
+        bool_arg(spec.shift).to_string(),
+        bool_arg(spec.function).to_string(),
+    ];
+    let mut child = Command::new(helper)
+        .args(args)
+        .env("KOSMOS_PARENT_PID", std::process::id().to_string())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("spawn: {e}"))?;
+    let child_pid = child.id();
+    let child_done = Arc::new(AtomicBool::new(false));
+    {
+        let child_done = child_done.clone();
+        thread::spawn(move || {
+            while !child_done.load(Ordering::SeqCst)
+                && WATCH_GENERATION.load(Ordering::SeqCst) == generation
+            {
+                thread::sleep(std::time::Duration::from_millis(250));
+            }
+            if !child_done.load(Ordering::SeqCst) {
+                #[cfg(unix)]
+                unsafe {
+                    libc::kill(child_pid as libc::pid_t, libc::SIGTERM);
+                }
+            }
+        });
+    }
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "missing helper stdout".to_string())?;
+    let reader = BufReader::new(stdout);
+    for line in reader.lines() {
+        let line = line.map_err(|e| format!("read stdout: {e}"))?;
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        if let Some(error) = value.get("error").and_then(|v| v.as_str()) {
+            return Err(error.to_string());
+        }
+        if value.get("pressed").and_then(|v| v.as_bool()) == Some(true) {
+            match mode {
+                TriggerMode::Toggle => {
+                    let _ = tx.send(json!({ "event": "dictation_toggle_trigger" }));
+                }
+                TriggerMode::PushToTalk => {
+                    let _ = tx.send(json!({
+                        "event": "dictation_ptt_trigger",
+                        "phase": "down",
+                    }));
+                }
+            }
+        }
+        if value.get("released").and_then(|v| v.as_bool()) == Some(true) {
+            if matches!(mode, TriggerMode::PushToTalk) {
+                let _ = tx.send(json!({
+                    "event": "dictation_ptt_trigger",
+                    "phase": "up",
+                }));
+            }
+            break;
+        }
+    }
+
+    let _ = child.wait();
+    child_done.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+fn bool_arg(value: bool) -> &'static str {
+    if value {
+        "1"
+    } else {
+        "0"
+    }
+}
+
+#[derive(Debug, Clone)]
+struct MacHotkeySpec {
+    key_code: u16,
+    cmd: bool,
+    ctrl: bool,
+    alt: bool,
+    shift: bool,
+    function: bool,
+}
+
+fn parse_hotkey(raw: &str) -> Option<MacHotkeySpec> {
+    let mut spec = MacHotkeySpec {
+        key_code: 0,
+        cmd: false,
+        ctrl: false,
+        alt: false,
+        shift: false,
+        function: false,
+    };
+    let mut key: Option<&str> = None;
+    for part in raw.split('+') {
+        let token = part.trim().to_ascii_lowercase();
+        match token.as_str() {
+            "cmd" | "command" | "meta" | "super" => spec.cmd = true,
+            "ctrl" | "control" => spec.ctrl = true,
+            "alt" | "option" => spec.alt = true,
+            "shift" => spec.shift = true,
+            "fn" | "function" => spec.function = true,
+            "" => {}
+            _ => key = Some(part.trim()),
+        }
+    }
+    spec.key_code = mac_key_code(key?)?;
+    Some(spec)
+}
+
+fn mac_key_code(key: &str) -> Option<u16> {
+    let lower = key.to_ascii_lowercase();
+    match lower.as_str() {
+        "a" => Some(0),
+        "s" => Some(1),
+        "d" => Some(2),
+        "f" => Some(3),
+        "h" => Some(4),
+        "g" => Some(5),
+        "z" => Some(6),
+        "x" => Some(7),
+        "c" => Some(8),
+        "v" => Some(9),
+        "b" => Some(11),
+        "q" => Some(12),
+        "w" => Some(13),
+        "e" => Some(14),
+        "r" => Some(15),
+        "y" => Some(16),
+        "t" => Some(17),
+        "1" => Some(18),
+        "2" => Some(19),
+        "3" => Some(20),
+        "4" => Some(21),
+        "6" => Some(22),
+        "5" => Some(23),
+        "=" => Some(24),
+        "9" => Some(25),
+        "7" => Some(26),
+        "-" => Some(27),
+        "8" => Some(28),
+        "0" => Some(29),
+        "]" => Some(30),
+        "o" => Some(31),
+        "u" => Some(32),
+        "[" => Some(33),
+        "i" => Some(34),
+        "p" => Some(35),
+        "l" => Some(37),
+        "j" => Some(38),
+        "'" => Some(39),
+        "k" => Some(40),
+        ";" | "semicolon" => Some(41),
+        "\\" => Some(42),
+        "," => Some(43),
+        "/" => Some(44),
+        "n" => Some(45),
+        "m" => Some(46),
+        "." => Some(47),
+        "`" | "backquote" => Some(50),
+        "space" => Some(49),
+        _ => None,
+    }
+}
+
+fn run_json_helper(name: &str, args: &[&str]) -> Result<Value, NativeHelperError> {
+    let path = resolve_helper(name)?;
+    let output = Command::new(&path)
+        .args(args)
+        .output()
+        .map_err(|e| NativeHelperError::Spawn {
+            name: name.to_string(),
+            error: e.to_string(),
+        })?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let first_line = stdout.lines().next().unwrap_or("").trim();
+    serde_json::from_str(first_line).map_err(|_| NativeHelperError::Json {
+        name: name.to_string(),
+        output: stdout.to_string(),
+    })
+}
+
+fn run_json_helper_stdin(name: &str, request: Value) -> Result<Value, NativeHelperError> {
+    let path = resolve_helper(name)?;
+    let mut child = Command::new(&path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .map_err(|e| NativeHelperError::Spawn {
+            name: name.to_string(),
+            error: e.to_string(),
+        })?;
+    {
+        let stdin = child
+            .stdin
+            .as_mut()
+            .ok_or_else(|| NativeHelperError::Spawn {
+                name: name.to_string(),
+                error: "missing helper stdin".into(),
+            })?;
+        writeln!(stdin, "{request}").map_err(|e| NativeHelperError::Spawn {
+            name: name.to_string(),
+            error: e.to_string(),
+        })?;
+        writeln!(stdin, "{}", json!({ "command": "exit" })).map_err(|e| {
+            NativeHelperError::Spawn {
+                name: name.to_string(),
+                error: e.to_string(),
+            }
+        })?;
+    }
+    let output = child
+        .wait_with_output()
+        .map_err(|e| NativeHelperError::Spawn {
+            name: name.to_string(),
+            error: e.to_string(),
+        })?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let first_line = stdout.lines().next().unwrap_or("").trim();
+    serde_json::from_str(first_line).map_err(|_| NativeHelperError::Json {
+        name: name.to_string(),
+        output: stdout.to_string(),
+    })
+}
+
+fn resolve_helper(name: &str) -> Result<PathBuf, NativeHelperError> {
+    let mut candidates = Vec::new();
+
+    if let Ok(dir) = std::env::var("KOSMOS_MACOS_NATIVE_DIR") {
+        push_candidate(&mut candidates, PathBuf::from(dir).join(name));
+    }
+
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(parent) = current_exe.parent() {
+            push_candidate(
+                &mut candidates,
+                parent.join("native").join("macos").join(name),
+            );
+            if let Some(resources) = parent.parent() {
+                push_candidate(
+                    &mut candidates,
+                    resources.join("native").join("macos").join(name),
+                );
+            }
+        }
+    }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        push_candidate(
+            &mut candidates,
+            cwd.join("platform")
+                .join("desktop")
+                .join(".tmp")
+                .join("native")
+                .join("macos")
+                .join(name),
+        );
+        push_candidate(
+            &mut candidates,
+            cwd.join(".tmp").join("native").join("macos").join(name),
+        );
+    }
+
+    for candidate in &candidates {
+        if candidate.exists() {
+            return Ok(candidate.clone());
+        }
+    }
+
+    Err(NativeHelperError::NotFound {
+        name: name.to_string(),
+        candidates,
+    })
+}
+
+fn push_candidate(candidates: &mut Vec<PathBuf>, path: PathBuf) {
+    if !candidates.iter().any(|p| same_path(p, &path)) {
+        candidates.push(path);
+    }
+}
+
+fn same_path(a: &Path, b: &Path) -> bool {
+    a == b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_default_semicolon_hotkey() {
+        let spec = parse_hotkey("Ctrl+Shift+;").unwrap();
+        assert_eq!(spec.key_code, 41);
+        assert!(spec.ctrl);
+        assert!(spec.shift);
+        assert!(!spec.cmd);
+        assert!(!spec.alt);
+    }
+
+    #[test]
+    fn parses_command_space_hotkey() {
+        let spec = parse_hotkey("Cmd+Space").unwrap();
+        assert_eq!(spec.key_code, 49);
+        assert!(spec.cmd);
+        assert!(!spec.ctrl);
+    }
+}

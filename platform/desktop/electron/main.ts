@@ -40,6 +40,16 @@ import { resolveInstance, applyInstanceToApp, verifyUserDataMatches } from "./in
 // (settings-window.ts, autoupdater-host.ts), — поэтому здесь, не в bootstrap().
 const KEPLER_INSTANCE = resolveInstance();
 applyInstanceToApp(KEPLER_INSTANCE);
+
+// macOS: launcher — frameless полупрозрачное окно без постоянного always-on-top.
+// macOS Window Server помечает такое окно как occluded, и Chromium останавливает
+// compositor (paint замерзает через 1-2с после показа — Vue реактивность жива,
+// но экран не перерисовывается). Эти switch'и отключают occlusion-throttling на
+// уровне Chromium. Должны быть выставлены ДО app.whenReady. См. postmortems.md.
+if (process.platform === "darwin") {
+  app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+  app.commandLine.appendSwitch("disable-renderer-backgrounding");
+}
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
@@ -239,16 +249,19 @@ function resolveBackendExe(): string {
   // Try dev paths first regardless of isDev — Playwright тесты не выставляют
   // VITE_DEV_SERVER_URL, но cargo build выкладывает binary в target/{debug,release}/
   // как при dev так и при first-time test run.
-  const devDebug = path.resolve(__dirname, "../../../target/debug/kepler-backend.exe");
+  const backendBin = process.platform === "win32" ? "kepler-backend.exe" : "kepler-backend";
+  const packagedRuntime = process.platform === "win32" ? "Kosmos Runtime.exe" : "Kosmos Runtime";
+
+  const devDebug = path.resolve(__dirname, "../../../target/debug", backendBin);
   if (existsSync(devDebug)) return devDebug;
-  const devRelease = path.resolve(__dirname, "../../../target/release/kepler-backend.exe");
+  const devRelease = path.resolve(__dirname, "../../../target/release", backendBin);
   if (existsSync(devRelease)) return devRelease;
 
   // production: рядом с упакованным приложением (extraResources)
   const resources = process.resourcesPath ?? __dirname;
-  const packaged = path.join(resources, "Kosmos Runtime.exe");
+  const packaged = path.join(resources, packagedRuntime);
   if (existsSync(packaged)) return packaged;
-  return path.join(resources, "kepler-backend.exe");
+  return path.join(resources, backendBin);
 }
 
 // --- Phase 7: boot self-check ------------------------------------------------
@@ -486,7 +499,10 @@ function createLauncher() {
     maximizable: false,
     fullscreenable: false,
     skipTaskbar: true,
-    alwaysOnTop: true,
+    // См. postmortems.md § 2026-06-07. На macOS frameless BrowserWindow с
+    // always-on-top + showInactive/focus может активировать app без видимого
+    // reactive window после первого input event. Этот path нужен только Windows.
+    alwaysOnTop: process.platform === "win32",
     backgroundMaterial: resolveLauncherBgMaterial(),
     backgroundColor: "#00000000",
     roundedCorners: true,
@@ -494,6 +510,12 @@ function createLauncher() {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      // macOS occlusion throttling: frameless + полупрозрачный launcher без
+      // постоянного always-on-top помечается системой как occluded, и Chromium
+      // останавливает compositor — paint замерзает через 1-2с после показа
+      // (Vue реактивность жива, но экран не перерисовывается). Отключаем
+      // throttling, чтобы окно всегда рендерилось. См. postmortems.md § 2026-06-07.
+      backgroundThrottling: false,
     },
   });
 
@@ -521,7 +543,9 @@ function createLauncher() {
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
     // detached DevTools — отдельное окно, не блокирует launcher.
-    mainWindow.webContents.openDevTools({ mode: "detach" });
+    // activate: false — не отдаём фокус DevTools при открытии: иначе
+    // DevTools берёт фокус через ~1-2с и триггерит blur → hideLauncher.
+    mainWindow.webContents.openDevTools({ mode: "detach", activate: false });
   } else {
     void mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
@@ -551,15 +575,24 @@ function showLauncher() {
   // работает через webContents без paint'а. Renderer всё равно получает
   // `kepler:window:show` для focus/refresh, и `launcherHidden` обновляется.
   if (!headless) {
-    if (!mainWindow.isVisible()) {
+    if (process.platform === "darwin") {
+      // show() на macOS уже вызывает activateIgnoringOtherApps внутри Electron.
+      // Не добавляем app.focus({ steal: true }) — двойной activate создавал
+      // «войну фокуса» с предыдущим приложением → blur через 1-2с → hideLauncher.
+      // См. postmortems.md § 2026-06-07.
+      mainWindow.show();
+      mainWindow.focus();
+    } else if (!mainWindow.isVisible()) {
       mainWindow.showInactive();
+      mainWindow.focus();
+    } else {
+      mainWindow.focus();
     }
-    mainWindow.focus();
     // Гарантируем что окно реально окажется на переднем плане (нужно для
     // post-update flow: процесс только что перезапустился и Windows может
     // отдать focus текущему foreground app). Снимаем флаг через 800мс —
     // постоянный always-on-top раздражает.
-    if (!mainWindow.isAlwaysOnTop()) {
+    if (process.platform === "win32" && !mainWindow.isAlwaysOnTop()) {
       const win = mainWindow;
       win.setAlwaysOnTop(true);
       setTimeout(() => {

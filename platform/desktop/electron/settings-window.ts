@@ -61,12 +61,12 @@ export function setTrayIconEnabled(enabled: boolean): void {
   writeSettings({ showTrayIcon: !!enabled });
 }
 
-export const DEFAULT_HOTKEY_PROD = "Alt+Space";
+export const DEFAULT_HOTKEY_PROD = process.platform === "darwin" ? "Command+Shift+K" : "Alt+Space";
 export const DEFAULT_HOTKEY_DEV = "Alt+`";
-// Slot-aware default. prod = Alt+Space; dev = Alt+` (не конфликтует с
-// installed Kepler); dev-<x> / test-<x> = пусто (hotkey запрещён, см.
-// instance.ts → instance.hotkey). main.ts читает instance.hotkey напрямую
-// для решения «регистрировать или нет».
+// Slot-aware default. prod = platform-native launcher hotkey; dev = Alt+`
+// (не конфликтует с installed Kepler); dev-<x> / test-<x> = пусто (hotkey
+// запрещён, см. instance.ts → instance.hotkey). main.ts читает instance.hotkey
+// напрямую для решения «регистрировать или нет».
 export const DEFAULT_HOTKEY = resolveInstance().hotkey ?? DEFAULT_HOTKEY_PROD;
 
 export function getStoredHotkey(): string {

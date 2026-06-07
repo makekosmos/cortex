@@ -127,10 +127,29 @@ fn send_ctrl_v() -> Result<(), InjectError> {
     Ok(())
 }
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(target_os = "macos")))]
 fn send_ctrl_v() -> Result<(), InjectError> {
     // Phase 1 Windows-only. На non-Windows автоинжект не реализован — пользователь
     // получит транскрипт в clipboard и Ctrl+V руками.
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn send_ctrl_v() -> Result<(), InjectError> {
+    let script = r#"tell application "System Events" to keystroke "v" using command down"#;
+    let status = std::process::Command::new("/usr/bin/osascript")
+        .args(["-e", script])
+        .status()
+        .map_err(|_| InjectError::SendInput {
+            injected: 0,
+            expected: 1,
+        })?;
+    if !status.success() {
+        return Err(InjectError::SendInput {
+            injected: 0,
+            expected: 1,
+        });
+    }
     Ok(())
 }
 

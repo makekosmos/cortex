@@ -7,7 +7,8 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "build:backend": "cargo build --release --manifest-path ../../Cargo.toml --bin kepler-backend --bin ark-core-rpc --bin kepler-focus-helper --bin kepler-focus-svc",
+    "build:backend": "node scripts/build-backend.mjs",
+    "build:native:macos": "node scripts/build-macos-native.mjs",
     "build:backend:dev": "cargo build --manifest-path ../../Cargo.toml --bin kepler-backend",
     "build:extensions": "node scripts/build-extensions.mjs",
     "build:extension": "node scripts/build-extensions.mjs --only",
@@ -23,9 +24,10 @@
     "dev:no-build": "node scripts/dev.mjs",
     "build:js:shell": "tsc && vite build --configLoader native",
     "build:js": "tsc && vite build --configLoader native && bun run build:extensions",
-    "build": "bun run build:backend && bun run build:js && bun run stage:bundled-extensions && electron-builder --win nsis --publish always",
+    "build": "bun run build:backend && bun run build:native:macos && bun run build:js && bun run stage:bundled-extensions && electron-builder --win nsis --publish always",
     "typecheck": "tsc --noEmit",
     "package:dir": "bun run build:js && bun run stage:bundled-extensions && electron-builder --dir",
+    "package:mac": "bun run build:backend && bun run build:native:macos && bun run build:js && bun run stage:bundled-extensions && electron-builder --mac dmg",
     "ext:install": "node scripts/install-extension.mjs",
     "ext:uninstall": "node scripts/uninstall-extension.mjs",
     "ext:publish": "node scripts/publish-extension.mjs",
@@ -85,22 +87,6 @@
     ],
     "extraResources": [
       {
-        "from": "../../target/release/kepler-backend.exe",
-        "to": "Kosmos Runtime.exe"
-      },
-      {
-        "from": "../../target/release/ark-core-rpc.exe",
-        "to": "Kosmos Data Engine.exe"
-      },
-      {
-        "from": "../../target/release/kepler-focus-helper.exe",
-        "to": "Kosmos Helper.exe"
-      },
-      {
-        "from": "../../target/release/kepler-focus-svc.exe",
-        "to": "Kosmos System Service.exe"
-      },
-      {
         "from": ".tmp/bundled-extensions/extensions",
         "to": "extensions"
       },
@@ -112,7 +98,43 @@
     "win": {
       "icon": "build/icon.png",
       "target": "nsis",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "extraResources": [
+        {
+          "from": "../../target/release/kepler-backend.exe",
+          "to": "Kosmos Runtime.exe"
+        },
+        {
+          "from": "../../target/release/ark-core-rpc.exe",
+          "to": "Kosmos Data Engine.exe"
+        },
+        {
+          "from": "../../target/release/kepler-focus-helper.exe",
+          "to": "Kosmos Helper.exe"
+        },
+        {
+          "from": "../../target/release/kepler-focus-svc.exe",
+          "to": "Kosmos System Service.exe"
+        }
+      ]
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "target": "dmg",
+      "extraResources": [
+        {
+          "from": "../../target/release/kepler-backend",
+          "to": "Kosmos Runtime"
+        },
+        {
+          "from": "../../target/release/ark-core-rpc",
+          "to": "Kosmos Data Engine"
+        },
+        {
+          "from": ".tmp/native/macos",
+          "to": "native/macos"
+        }
+      ]
     },
     "fileAssociations": [
       {

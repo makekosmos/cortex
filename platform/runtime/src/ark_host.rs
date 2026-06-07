@@ -87,6 +87,14 @@ pub fn resolve_ark_core_rpc_path() -> ArkResult<PathBuf> {
         if let Some(parent) = current_exe.parent() {
             #[cfg(windows)]
             let packaged_candidate = parent.join("Kosmos Data Engine.exe");
+            #[cfg(not(windows))]
+            let packaged_candidate = parent.join("Kosmos Data Engine");
+            #[cfg(not(windows))]
+            if packaged_candidate.exists() {
+                return Ok(packaged_candidate);
+            }
+            #[cfg(not(windows))]
+            candidates.push(packaged_candidate);
             #[cfg(windows)]
             if packaged_candidate.exists() {
                 return Ok(packaged_candidate);

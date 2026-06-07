@@ -10,14 +10,15 @@
 // children, чтобы Ctrl+C корректно убивал всё дерево.
 
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { listRepoExtensionEntries } from "./repo-extension-roots.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const shellRoot = path.resolve(__dirname, "..");
-const extensionsRoot = path.resolve(shellRoot, "..", "extensions");
+const repoRoot = path.resolve(shellRoot, "..", "..");
 const shellDevPort = 5173;
 
 // --- .env.local loader (per-worktree dev slot override) ---------------------
@@ -66,19 +67,12 @@ const children = [];
 
 function readExtensionDevPorts() {
   const requestedIds = process.env.KEPLER_DEV_EXTENSIONS === "1" ? null : new Set(["akasha"]);
-  return readdirSync(extensionsRoot, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .filter((d) => !requestedIds || requestedIds.has(d.name))
-    .map((d) => {
-      const manifestPath = path.join(extensionsRoot, d.name, "manifest.json");
-      if (!existsSync(manifestPath)) return null;
-      try {
-        const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-        if (manifest.kind !== "vue" || !manifest.devPort) return null;
-        return { label: d.name, port: Number(manifest.devPort) };
-      } catch {
-        return null;
-      }
+  return listRepoExtensionEntries(repoRoot)
+    .filter((e) => !requestedIds || requestedIds.has(e.id) || requestedIds.has(e.folder))
+    .map((e) => {
+      const { manifest } = e;
+      if (manifest.kind !== "vue" || !manifest.devPort) return null;
+      return { label: e.id, port: Number(manifest.devPort) };
     })
     .filter(Boolean);
 }

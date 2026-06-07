@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "dataDir": "/private/tmp/kosmos-electron-spawn-smoke",
+  "userDataDir": "/private/tmp/kosmos-electron-spawn-smoke/userdata",
+  "pid": 55456,
+  "lock": {
+    "pid": 55461,
+    "ws_port": 58347,
+    "protocol_version": {
+      "major": 1,
+      "minor": 0,
+      "patch": 0
+    },
+    "db_path": "/private/tmp/kosmos-electron-spawn-smoke/ark.db"
+  },
+  "observed": {
+    "bootSelfCheck": true,
+    "backendSpawn": true,
+    "appIndexMacos": true,
+    "arkClientConnected": true
+  }
+}

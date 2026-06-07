@@ -1,0 +1,132 @@
+{
+  "date": "2026-06-07",
+  "branch": "structural-refactor-ci-guards",
+  "classification": "FULL_LOOP",
+  "status": "ready_with_gaps",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "title": "Platform contract exists",
+      "verdict": "PASS",
+      "evidence": [
+        "Runtime operations include dictation.native_status, dictation.ensure_native_permissions, dictation.native_audio_ping.",
+        "App index has platform module dispatch with macOS source."
+      ]
+    },
+    {
+      "id": "AC2",
+      "title": "Windows is wrapped, not rewritten",
+      "verdict": "PASS",
+      "evidence": [
+        "Existing Windows dictation win_hook path remains platform-gated.",
+        "No deep Windows internals refactor in this phase."
+      ]
+    },
+    {
+      "id": "AC3",
+      "title": "macOS app search works",
+      "verdict": "PASS",
+      "evidence": [
+        "cargo test -p kepler-backend app_index::platform::macos passed.",
+        "Runtime smoke discovered 220 apps from mac_applications.",
+        "WebSocket app_index.search returned Calculator and Safari-related macOS bundle results."
+      ]
+    },
+    {
+      "id": "AC4",
+      "title": "macOS app launch works",
+      "verdict": "PASS",
+      "evidence": [
+        "Runtime smoke launched /System/Applications/Calculator.app through app_index.launch.",
+        "Backend returned { ok: true }."
+      ]
+    },
+    {
+      "id": "AC5",
+      "title": "macOS native helpers are integrated as runtime-managed executors",
+      "verdict": "PASS",
+      "evidence": [
+        "Swift helper sources exist under platform/runtime/native/macos.",
+        "bun run --cwd platform/desktop build:native:macos passed.",
+        "Packaged app smoke resolved helpers from Contents/Resources/native/macos."
+      ]
+    },
+    {
+      "id": "AC6",
+      "title": "Dictation/hotkey MVP path is wired",
+      "verdict": "PASS_WITH_GAP",
+      "evidence": [
+        "Runtime has macOS permission checks, hotkey bridge, native audio ping, dictation state/config operations, and paste injection.",
+        "dictation.native_audio_ping returned pong over backend WebSocket.",
+        "audio-capture-smoke.mjs wrote a WAV file through warmup/start/stop/exit.",
+        "Microphone and input-monitoring permissions returned granted: true.",
+        "All six Swift helpers were available.",
+        "Packaged smoke found no leftover hotkey-hold-monitor after lifecycle fix."
+      ],
+      "gaps": [
+        "Full spoken record/transcribe/paste flow with API key was not manually verified.",
+        "macOS paste injection may require Accessibility/Automation approval."
+      ]
+    },
+    {
+      "id": "AC7",
+      "title": "Electron remains transport/shell",
+      "verdict": "PASS",
+      "evidence": [
+        "Electron changes are limited to backend executable resolution and packaging resources/scripts.",
+        "Direct Electron smoke observed boot self-check, backend spawn, app index, and ArkClient connection."
+      ]
+    },
+    {
+      "id": "AC8",
+      "title": "Verification passes where local environment allows",
+      "verdict": "PASS_WITH_GAP",
+      "evidence": [
+        "cargo fmt passed.",
+        "cargo check --workspace passed.",
+        "cargo test -p kepler-backend app_index::platform::macos passed.",
+        "cargo test -p kepler-backend dictation::macos_native passed.",
+        "bun run --cwd platform/desktop build:native:macos passed.",
+        "bun run --cwd platform/desktop typecheck passed.",
+        "bun run --cwd platform/desktop build:js:shell passed.",
+        "bun run --cwd platform/desktop build:backend passed.",
+        "bun run --cwd platform/desktop package:mac passed and built release/Kosmos-0.4.2.dmg.",
+        "Native audio capture smoke wrote a WAV file.",
+        "Runtime smoke passed for app search, app launch, helper status, permissions, and native audio ping.",
+        "Packaged app smoke passed for packaged backend/resource resolution and ArkClient connection.",
+        "Process cleanup check found no leftover backend/native helper processes."
+      ],
+      "gaps": [
+        "Playwright _electron.launch attach timed out on this macOS run despite direct Electron/package smoke passing.",
+        "Full human visual UI interaction was not performed."
+      ]
+    },
+    {
+      "id": "AC9",
+      "title": "ARK write boundary remains intact",
+      "verdict": "PASS",
+      "evidence": ["bun run ark:guard:writes passed after final changes."]
+    },
+    {
+      "id": "AC10",
+      "title": "Evidence is recorded",
+      "verdict": "PASS",
+      "evidence": ["evidence.md, evidence.json, and raw smoke outputs recorded."]
+    }
+  ],
+  "artifacts": [
+    ".agent/tasks/2026-06-07-cross-platform-adapter-macos-mvp/raw/macos-runtime-smoke.json",
+    ".agent/tasks/2026-06-07-cross-platform-adapter-macos-mvp/raw/audio-capture-smoke.json",
+    ".agent/tasks/2026-06-07-cross-platform-adapter-macos-mvp/raw/electron-spawn-smoke.json",
+    ".agent/tasks/2026-06-07-cross-platform-adapter-macos-mvp/raw/electron-packaged-spawn-smoke.json",
+    "platform/desktop/release/Kosmos-0.4.2.dmg"
+  ],
+  "knownGaps": [
+    "Full visual/manual UI interaction was not performed through a human-driven launcher window.",
+    "Full end-to-end spoken dictation with API key was not verified.",
+    "macOS paste injection uses AppleScript/System Events and may require Accessibility/Automation approval.",
+    "DMG packaging works locally but is unsigned/not notarized because no valid Developer ID Application identity is installed.",
+    "Playwright _electron.launch attach currently times out on this macOS run despite direct Electron/package smoke passing.",
+    "build still targets the Windows publish path; macOS local packaging is exposed separately through package:mac."
+  ]
+}
