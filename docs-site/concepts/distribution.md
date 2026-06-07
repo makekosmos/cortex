@@ -13,7 +13,7 @@
 ksanrse/kepler (private monorepo)         ← source of truth
         │
         │  bun run --cwd platform/desktop build
-        ↓                                  bun run --cwd platform/desktop ext:publish <id>
+        ↓                                  bun run --cwd platform/desktop ext:publish ID
 yoso-industries/kepler-releases             yoso-industries/kosmos-extensions
    v0.1.0/                                    horologion-v0.3.0/
      Kepler-Setup-0.1.0.exe                     horologion-0.3.0.kext
@@ -173,7 +173,7 @@ Auto-генерируется из GitHub Releases (`gh api releases`):
 - Группировка по prefix tag'а (`horologion-`, `delphi-`, …).
 - Per group выбирается **highest semver**.
 - Metadata (name, description, keplerApiVersion) тянется из локального
-  `extensions/<id>/manifest.json` в monorepo.
+  `extensions/ID/manifest.json` в monorepo.
 
 Schema:
 
@@ -210,8 +210,8 @@ Settings → **Расширения** — плоский список устан
 - Cache 1h в main process (`extension-marketplace.ts → fetchCatalog`).
 - Per-row: сравнение `catalog[id].version` с `installed.version` — если catalog свежее, появляется кнопка **«Обновить»**.
 - Кнопка **«Проверить обновления»** в шапке таба зовёт `loadCatalog(force=true)` (минует cache).
-- Для каждой установленной строки также доступны **«Откатить»** (если в `extensions-backups/<id>/` есть копия) и **«Удалить»**.
-- Секций «Прочие установленные» / «Каталог пуст» / hint «Каталог обновлён: `<date>`» больше нет — каталог не показывается как самостоятельная витрина.
+- Для каждой установленной строки также доступны **«Откатить»** (если в `extensions-backups/ID/` есть копия) и **«Удалить»**.
+- Секций «Прочие установленные» / «Каталог пуст» / hint «Каталог обновлён: `DATE`» больше нет — каталог не показывается как самостоятельная витрина.
 
 ### Periodic check
 
@@ -221,7 +221,7 @@ Settings → **Расширения** — плоский список устан
   update уже установленных user extensions.
 - `setInterval(24h)` для force-перефетча и unattended update в фоне.
 - Skip в `KOSMOS_TEST_MODE=1`.
-- Skip в dev / dev-<x> slots через `periodicMarketplaceCheckEnabled=false`.
+- Skip в dev / `dev-X` slots через `periodicMarketplaceCheckEnabled=false`.
 - Обновляются только `source: "installed"` extension'ы. Repo dev-source
   extension'ы не трогаются.
 - Новые extension'ы из каталога автоматически не ставятся.
@@ -244,12 +244,12 @@ Settings → **Расширения** — плоский список устан
 
 ## Команды
 
-| Команда                                                    | Описание                                                               |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `bun run --cwd platform/desktop build`                     | Полный build launcher'а + publish в kepler-releases (нужен `GH_TOKEN`) |
-| `bun run --cwd platform/desktop ext:publish <id>`          | Build extension → .kext → release в kosmos-extensions                  |
-| `bun run --cwd platform/desktop ext:publish-all`           | То же для всех extensions                                              |
-| `bun run --cwd platform/desktop ext:catalog -- <out-path>` | Регенерация catalog.json из GitHub releases                            |
+| Команда                                                  | Описание                                                               |
+| -------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `bun run --cwd platform/desktop build`                   | Полный build launcher'а + publish в kepler-releases (нужен `GH_TOKEN`) |
+| `bun run --cwd platform/desktop ext:publish ID`          | Build extension → .kext → release в kosmos-extensions                  |
+| `bun run --cwd platform/desktop ext:publish-all`         | То же для всех extensions                                              |
+| `bun run --cwd platform/desktop ext:catalog -- OUT_PATH` | Регенерация catalog.json из GitHub releases                            |
 
 `platform/desktop/scripts/publish-extension.mjs` использует `gh release create` —
 автоматически берёт `gh auth token` если `KEPLER_GH_PATH` не указан.
@@ -260,15 +260,15 @@ Settings → **Расширения** — плоский список устан
 
 Сейчас (Phase 1):
 
-1. Maintainer (`ksanrse`) пишет / правит extension в `extensions/<id>/`.
-2. `bun run --cwd platform/desktop ext:publish <id>` → release в `kosmos-extensions`.
+1. Maintainer (`ksanrse`) пишет / правит extension в `extensions/ID/`.
+2. `bun run --cwd platform/desktop ext:publish ID` → release в `kosmos-extensions`.
 3. `bun run --cwd platform/desktop ext:catalog -- .tmp/kosmos-extensions/catalog.json`.
 4. Commit + push catalog.json в `kosmos-extensions` main branch.
 
 Phase 2 (когда появятся внешние contributors):
 
 - Fork main `yoso-industries/kepler` monorepo.
-- PR с extension'ом в `extensions/<id>/`.
+- PR с extension'ом в `extensions/ID/`.
 - Maintainer review + merge + publish.
 
 ## Ограничения
