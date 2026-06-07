@@ -1841,7 +1841,7 @@ app.whenReady().then(async () => {
   // мигрированные extensions + Dashboard для RAM-измерения. После warmup 5s.
   if (process.env.KEPLER_BENCHMARK_OPEN_ALL === "1") {
     setTimeout(() => {
-      for (const id of ["horologion", "delphi", "arrancador", "eden"]) {
+      for (const id of ["delphi", "arrancador", "eden"]) {
         void openExtension(id).catch((e) => console.error(`bench open ${id} failed:`, e));
       }
       // Dashboard — встроенный shell view (не extension); открывается через
