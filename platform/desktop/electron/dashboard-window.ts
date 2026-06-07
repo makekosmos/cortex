@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
+import { macWindowChrome } from "./mac-window";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -136,6 +137,8 @@ export function openDashboardWindow(): void {
       symbolColor: "#FFFFFF",
       height: 36,
     },
+    // macOS: центрированные traffic lights (на Windows — no-op).
+    ...macWindowChrome({ trafficLightY: 12 }),
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,

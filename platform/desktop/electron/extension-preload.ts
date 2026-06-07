@@ -18,6 +18,19 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 
+// Платформенный маркер на <html> для extension-окон (Eden/Delphi/...).
+// Inline + DOMContentLoaded — см. preload.ts (chunk-split ломает sandbox,
+// preload запускается до создания documentElement).
+{
+  const platform =
+    process.platform === "darwin" ? "mac" : process.platform === "win32" ? "windows" : "linux";
+  const mark = () => {
+    if (document.documentElement) document.documentElement.dataset.platform = platform;
+  };
+  mark();
+  document.addEventListener("DOMContentLoaded", mark, { once: true });
+}
+
 type Unsubscribe = () => void;
 
 const api = {

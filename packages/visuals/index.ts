@@ -72,6 +72,8 @@ export {
   type ToastApi,
 } from "./composables/useToast";
 
+export { usePlatform, type PlatformInfo } from "./composables/usePlatform";
+
 // Runtime helpers
 
 export { installScrollFadeListener, type InstallScrollFadeOptions } from "./runtime/scroll-fade";

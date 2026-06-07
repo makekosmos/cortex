@@ -14,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveInstance } from "./instance";
 import { keplerDataDir } from "./data-dir";
+import { macWindowChrome } from "./mac-window";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -135,6 +136,8 @@ export function openSettings(): void {
       symbolColor: "#FFFFFF",
       height: 36,
     },
+    // macOS: vibrancy + центрированные traffic lights (на Windows — no-op).
+    ...macWindowChrome({ trafficLightY: 12 }),
     resizable: true,
     minimizable: true,
     maximizable: false,

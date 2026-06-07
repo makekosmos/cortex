@@ -162,6 +162,35 @@
   --kosmos-type-title-1-letter-spacing: var(--kosmos-text-heading-letter-spacing);
   --kosmos-type-title-1-weight: var(--kosmos-text-heading-weight);
   --kosmos-page-max-width: 700px;
+
+  /* Платформенные safe-area (default — без отступов; на macOS переопределяются
+     в [data-platform="mac"] ниже). Окна-chrome (titlebar / sidebar header)
+     читают эти переменные, чтобы контент не залезал под нативные оконные
+     контролы. */
+  --kosmos-mac-traffic-light-left-safe-area: 0px;
+  --kosmos-mac-traffic-light-top-safe-area: 0px;
+}
+
+/* macOS-специфичные токены. Активируются `data-platform="mac"` на <html>,
+   который preload ставит из process.platform (platform-chrome.ts).
+   Цель — нативное «маковское» ощущение без ломки layout: те же компоненты,
+   только подстроенные safe-area, тени и squircle-углы. Apps могут точечно
+   переопределять любую из этих переменных в своём :root (равная
+   специфичность, выигрывает порядок загрузки). */
+[data-platform="mac"] {
+  /* Traffic lights (close/min/zoom) занимают ~70px от левого края окна.
+     80px даёт запас, чтобы заголовок/контролы titlebar'а начинались правее. */
+  --kosmos-mac-traffic-light-left-safe-area: 80px;
+  /* Высота зоны traffic lights — для вертикальных layout'ов (sidebar/контент
+     сверху), где контролы перекрывают верх по вертикали. */
+  --kosmos-mac-traffic-light-top-safe-area: 28px;
+
+  /* macOS отрисовывает окна с более мягкими, рассеянными тенями. */
+  --shadow-floating: 0 8px 32px color-mix(in srgb, oklch(0 0 0) 24%, transparent);
+
+  /* Continuous (squircle) углы — нативная форма macOS. Уже default, но явно
+     фиксируем для маковского контекста. */
+  --corner-shape: superellipse;
 }
 
 .dark {
