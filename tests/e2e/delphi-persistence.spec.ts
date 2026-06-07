@@ -13,7 +13,7 @@
 //
 // Pre-fix (без ensureTaskObjectTypeRegistered) ARK upsert_object падает с
 // FK constraint, потому что `task_obj` тип не существует в свежей DB
-// (builtin types в crates/ark-core не включают task_obj). Задача остаётся
+// (builtin types в core/ark/crates/ark-core не включают task_obj). Задача остаётся
 // в Pinia store (in-memory) → видна до закрытия → исчезает после reopen.
 //
 // Post-fix shim лениво регистрирует object_type перед первым upsert.

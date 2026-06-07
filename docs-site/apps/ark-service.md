@@ -1,16 +1,16 @@
 # ark-service — Android data provider
 
-- **Path**: `mobile/ark-service`
+- **Path**: `incubator/mobile/ark-service`
 - **Стек**: Kotlin / Gradle / Android (`com.android.application`)
 - **Package**: `com.kosmos.ark.data`
 
 ::: warning Не путать с desktop-стеком
-Это **отдельная APK** для Android, которая хранит данные **Android-приложения** Delphi (`mobile/delphi`, `com.kazui.delphi`) через свой Room SQLite и отдаёт их через ContentProvider. Это **не** «JVM service surface» вокруг `ark-core` Rust runtime — никакого UniFFI/FFI здесь нет, чистый Room.
+Это **отдельная APK** для Android, которая хранит данные **Android-приложения** Delphi (`incubator/mobile/delphi`, `com.kazui.delphi`) через свой Room SQLite и отдаёт их через ContentProvider. Это **не** «JVM service surface» вокруг `ark-core` Rust runtime — никакого UniFFI/FFI здесь нет, чистый Room.
 :::
 
 ## Зачем
 
-Android Delphi (`mobile/delphi`) и `ark-service` — это **две APK одного продукта**, связанные через signature-permission ContentProvider:
+Android Delphi (`incubator/mobile/delphi`) и `ark-service` — это **две APK одного продукта**, связанные через signature-permission ContentProvider:
 
 ```mermaid
 flowchart LR
@@ -30,7 +30,7 @@ flowchart LR
   class room db
 ```
 
-То есть **на Android** Delphi не владеет своими данными — он стучится в `ark-service` через `com.kosmos.ark.data` ContentProvider. Если `ark-service` не установлен — Delphi показывает экран «Установите ark-service для работы Delphi» (см. `mobile/delphi/.../NavGraph.kt:140`).
+То есть **на Android** Delphi не владеет своими данными — он стучится в `ark-service` через `com.kosmos.ark.data` ContentProvider. Если `ark-service` не установлен — Delphi показывает экран «Установите ark-service для работы Delphi» (см. `incubator/mobile/delphi/.../NavGraph.kt:140`).
 
 Это **зеркалит desktop-архитектуру** (Electron apps → ark-core-rpc), но в Android-IPC механизме и с Room вместо Rust runtime.
 
@@ -47,7 +47,7 @@ flowchart LR
 ## Сборка
 
 ```powershell
-cd mobile/ark-service
+cd incubator/mobile/ark-service
 .\gradlew build
 ```
 
@@ -61,7 +61,7 @@ cd mobile/ark-service
 
 Долгосрочный план — заменить `ark-service` Room-стек на **UniFFI-binding'и от `ark-core`**:
 
-- `ark-core` уже экспортирует UniFFI-фасад (`crates/ark-core/rust/src/ffi.rs`).
+- `ark-core` уже экспортирует UniFFI-фасад (`core/ark/crates/ark-core/rust/src/ffi.rs`).
 - В перспективе Android Delphi сможет напрямую использовать `ark-core` через сгенерированные Kotlin-binding'и, без отдельной `ark-service` APK.
 - Тогда desktop и Android заговорят с одним рантаймом, sync между платформами начнёт работать.
 
@@ -69,6 +69,6 @@ cd mobile/ark-service
 
 ## Связанные документы
 
-- `mobile/delphi/AGENTS.md` — Android-приложение Delphi, потребитель ContentProvider.
+- `incubator/mobile/delphi/AGENTS.md` — Android-приложение Delphi, потребитель ContentProvider.
 - [Архитектура](/concepts/architecture) — общая картина desktop ARK.
 - [@kosmos/ark](/packages/ark) — desktop TS-клиент к `ark-core-rpc` (аналог `ark-service` для desktop).

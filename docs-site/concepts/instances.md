@@ -28,7 +28,7 @@
 
 ### Resolution priority
 
-`shell/electron/instance.ts::resolveInstance()`:
+`platform/desktop/electron/instance.ts::resolveInstance()`:
 
 1. `KEPLER_INSTANCE` env (explicit override). Валидируется regex.
 2. Иначе если `KOSMOS_DATA_DIR` set → `test-<basename(KOSMOS_DATA_DIR)>`.
@@ -37,9 +37,9 @@
 
 ## Где это применяется в коде
 
-Single source of truth: **`shell/electron/instance.ts`**.
+Single source of truth: **`platform/desktop/electron/instance.ts`**.
 
-`shell/electron/main.ts` в самом верху (до `requestSingleInstanceLock`):
+`platform/desktop/electron/main.ts` в самом верху (до `requestSingleInstanceLock`):
 
 ```ts
 import { resolveInstance, applyInstanceToApp } from "./instance";
@@ -65,10 +65,10 @@ applyInstanceToApp(KEPLER_INSTANCE); // app.setName + app.setPath('userData') + 
 # Завести второй dev-инстанс в worktree:
 git worktree add ../kepler-dev-a -b dev-a main
 Set-Location ../kepler-dev-a
-Copy-Item shell/.env.local.example shell/.env.local
+Copy-Item platform/desktop/.env.local.example platform/desktop/.env.local
 # раскомментировать: KEPLER_INSTANCE=dev-a
 bun install
-bun run --cwd shell dev
+bun run --cwd platform/desktop dev
 # → tray: Kosmos [dev-a], %APPDATA%\Kosmos App-dev-a\, %APPDATA%\Kosmos-dev-a\
 
 # Параллельно установленный prod Kosmos.exe продолжает работать.
@@ -77,7 +77,7 @@ bun run --cwd shell dev
 
 ### Известные ограничения мульти-dev
 
-- **HMR для extension'ов** (Vite dev server, порты 5180-5185) — Akasha (`:5185`) поднимается в обычном `bun run --cwd shell dev`, все остальные extension'ы opt-in через `KEPLER_DEV_EXTENSIONS=1`. Одновременно может быть запущен только **один** worktree с HMR (порты hardcoded в `manifest.json::devPort`). Остальные dev-инстансы работают с prebuilt `dist/` extension'ов — это всё ещё дает HMR для shell main process, но не для Vue extension'ов. На практике одного агента с HMR хватает.
+- **HMR для extension'ов** (Vite dev server, порты 5180-5185) — Akasha (`:5185`) поднимается в обычном `bun run --cwd platform/desktop dev`, все остальные extension'ы opt-in через `KEPLER_DEV_EXTENSIONS=1`. Одновременно может быть запущен только **один** worktree с HMR (порты hardcoded в `manifest.json::devPort`). Остальные dev-инстансы работают с prebuilt `dist/` extension'ов — это всё ещё дает HMR для shell main process, но не для Vue extension'ов. На практике одного агента с HMR хватает.
 - **`globalShortcut F12`** (toggle DevTools в dev) — Windows route'ит accelerator одному фокусному окну. В multi-dev только первый зарегистрировавшийся инстанс получит F12; остальные пользуются Tray → DevTools или меняют код через redocking.
 - **Storage на диске**: каждый dev-slot хранит **полную** копию ARK DB (extensions + backups + crashes). Один dev-slot = ~50-200 MB. Имей это в виду при настройке 3-4 worktree'ев.
 
@@ -100,7 +100,7 @@ bun run --cwd shell dev
 Минимальный smoke (ручной):
 
 1. Запустить installed `Kosmos.exe`. В tray появляется иконка «Kosmos».
-2. В этом же worktree (без `.env.local`): `bun run --cwd shell dev`. В tray появляется вторая иконка «Kosmos [dev]». Оба окна доступны через свои hotkey: prod — `Alt+Space`, dev — `` Alt+` ``.
+2. В этом же worktree (без `.env.local`): `bun run --cwd platform/desktop dev`. В tray появляется вторая иконка «Kosmos [dev]». Оба окна доступны через свои hotkey: prod — `Alt+Space`, dev — `` Alt+` ``.
 3. Создать заметку в dev Eden. Открыть prod Eden — заметки нет (разные `ark.db`).
 4. Завести второй worktree с `KEPLER_INSTANCE=dev-a`. Три иконки в tray. Три отдельных `ark.db`.
 

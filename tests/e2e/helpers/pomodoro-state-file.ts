@@ -1,6 +1,6 @@
 // Helper'ы для чтения / записи `<data_dir>/pomodoro-state.json` из тестов.
 //
-// Файл пишется backend'ом (см. `services/kepler-backend/src/pomodoro_host.rs`)
+// Файл пишется backend'ом (см. `platform/runtime/src/pomodoro_host.rs`)
 // на каждый mutation pomodoro session. Используется e2e-тестами для:
 //   1. Проверки persist'а: после start/pause/skip/stop файл существует или
 //      отсутствует, содержимое соответствует ожиданиям.

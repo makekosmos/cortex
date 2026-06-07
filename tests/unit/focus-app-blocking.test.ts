@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isAppBlockedByFocus } from "../../shell/src/lib/focusAppBlocking";
+import { isAppBlockedByFocus } from "../../platform/desktop/src/lib/focusAppBlocking";
 
 describe("focus app blocking", () => {
   test("blocks selected app ids only while focus is active", () => {

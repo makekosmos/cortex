@@ -5,7 +5,7 @@ description: Как Kepler хранит и индексирует установ
 
 # App Index
 
-Модуль `services/kepler-backend/src/app_index/` — поиск и запуск установленных приложений из лаунчера Kepler. Cross-platform-ready: общий trait + per-platform impl. Windows реализован, macOS и Linux — позже.
+Модуль `platform/runtime/src/app_index/` — поиск и запуск установленных приложений из лаунчера Kepler. Cross-platform-ready: общий trait + per-platform impl. Windows реализован, macOS и Linux — позже.
 
 ## Зачем отдельная база (не ARK)
 

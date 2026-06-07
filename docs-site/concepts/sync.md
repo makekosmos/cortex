@@ -166,7 +166,7 @@ Wire-формат остаётся `snake_case`. RPC-операции `ark-core-
 
 ## Hybrid Logical Clock (HLC)
 
-`crates/ark-core/rust/src/hlc.rs`. Гибрид физического и логического времени. Каждое изменение получает HLC-метку вида `<timestamp_ms>:<counter>:<device_id>`. HLC даёт строгий партийный порядок событий для merge-resolution даже когда часы пиров разъезжаются.
+`core/ark/crates/ark-core/rust/src/hlc.rs`. Гибрид физического и логического времени. Каждое изменение получает HLC-метку вида `<timestamp_ms>:<counter>:<device_id>`. HLC даёт строгий партийный порядок событий для merge-resolution даже когда часы пиров разъезжаются.
 
 HLC последнего apply хранится в `sync_kv`.
 
@@ -180,7 +180,7 @@ Apply-ошибки на стороне приёма возвращаются к�
 
 Если процесс пишет напрямую в SQLite (не через `ark-core-rpc`), он **обязан** вызвать `ark_core::db::bump_sync_version_vector` после каждой группы изменений. Иначе CRDT-merge на пирах сломается — они не узнают, что у этого пира есть новые данные.
 
-Это касается `services/kepler-backend/src/usage_tracker` и любых будущих Rust-writers.
+Это касается `platform/runtime/src/usage_tracker` и любых будущих Rust-writers.
 
 ## Текущие ограничения
 
@@ -190,12 +190,12 @@ Apply-ошибки на стороне приёма возвращаются к�
 
 ## Реализация
 
-- `crates/ark-core/rust/src/sync_server.rs` — WebSocket sync сервер.
-- `crates/ark-core/rust/src/sync_client.rs` — WebSocket sync клиент.
-- `crates/ark-core/rust/src/relay_transport.rs` — outbound клиент к relay.
-- `crates/ark-core/rust/src/relay_sync.rs` — relay bridge поверх sync.
-- `crates/ark-core/rust/src/beacon.rs` — UDP discovery.
-- `crates/ark-core/rust/src/mesh.rs` — координация LAN + relay.
-- `crates/ark-core/rust/src/hlc.rs` — HLC.
-- `crates/ark-core/rust/src/protocol.rs` — фреймы.
-- `services/ark-relay-server/` — сам relay-сервер.
+- `core/ark/crates/ark-core/rust/src/sync_server.rs` — WebSocket sync сервер.
+- `core/ark/crates/ark-core/rust/src/sync_client.rs` — WebSocket sync клиент.
+- `core/ark/crates/ark-core/rust/src/relay_transport.rs` — outbound клиент к relay.
+- `core/ark/crates/ark-core/rust/src/relay_sync.rs` — relay bridge поверх sync.
+- `core/ark/crates/ark-core/rust/src/beacon.rs` — UDP discovery.
+- `core/ark/crates/ark-core/rust/src/mesh.rs` — координация LAN + relay.
+- `core/ark/crates/ark-core/rust/src/hlc.rs` — HLC.
+- `core/ark/crates/ark-core/rust/src/protocol.rs` — фреймы.
+- `services/relay-reference/` — сам relay-сервер.

@@ -1,6 +1,6 @@
 # Dictation (STT)
 
-Источник: `services/kepler-backend/src/dictation/` + `shell/electron/dictation-pill.ts` + `shell/src/views/DictationPillView.vue`.
+Источник: `platform/runtime/src/dictation/` + `platform/desktop/electron/dictation-pill.ts` + `platform/desktop/src/views/DictationPillView.vue`.
 
 ## За 30 секунд
 
@@ -59,20 +59,22 @@ state: Transcribing → Idle  +  pill.pillFinished() → hide window
 
 ## Компоненты
 
-| Файл                                                               | Что делает                                                                                                                                                                                                                    |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `services/kepler-backend/src/dictation/host.rs`                    | State machine `Idle → Recording → Transcribing → Idle\|Error`. Dispatch для `dictation.*` operations. `broadcast::Sender<Value>` для WS events.                                                                               |
-| `services/kepler-backend/src/dictation/groq.rs`                    | Multipart POST к `/openai/v1/audio/transcriptions`. `language="auto"` → пропускаем поле (Whisper auto-detect). Long-form WAV режется на ≤30s chunks и склеивается обратно в один transcript.                                  |
-| `services/kepler-backend/src/dictation/inject.rs`                  | `enigo` Ctrl+V симуляция + `arboard` clipboard save/restore + `windows::Win32 GetForegroundWindow/SetForegroundWindow` для возврата фокуса. Все sleep'ы 80ms.                                                                 |
-| `services/kepler-backend/src/dictation/config.rs`                  | JSON (`<data_dir>/dictation-config.json`) для не-секретов + `keyring` (Windows Credential Manager target `kosmos-kepler` / user `groq-api-key`) для API ключа.                                                                |
-| `services/kepler-backend/src/dictation/network.rs`                 | Фабрика `reqwest::Client` с переключаемым DNS resolver'ом (System / Cloudflare DoH / Google DoH / custom DoH URL) через `hickory-resolver`. Scope: только AI HTTP.                                                            |
-| `shell/electron/dictation-pill.ts`                                 | BrowserWindow lifecycle (`focusable: false`, alwaysOnTop, transparent), global hotkey регистрация, IPC `kepler:dictation:toggle/cancel/pill-finished/command`. Hotkey перерегистрируется на event `dictation_config_changed`. |
-| `shell/src/views/DictationPillView.vue`                            | Audio capture (Web Audio API), waveform (AnalyserNode → 12 bars), таймер, WAV encode, base64, отправка через `window.kepler.ark.request("dictation.submit_audio", ...)`.                                                      |
-| `shell/src/views/SettingsView.vue` (tabs "security" + "dictation") | UI настроек: DNS resolver выбор (Безопасность, main group), hotkey / язык / inject mode / API key / тест (Диктация, advanced group).                                                                                          |
+| Файл                                                                          | Что делает                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `platform/runtime/src/dictation/host.rs`                                      | State machine `Idle → Recording → Transcribing → Idle\|Error`. Dispatch для `dictation.*` operations. `broadcast::Sender<Value>` для WS events.                                                                               |
+| `platform/runtime/src/dictation/groq.rs`                                      | Multipart POST к `/openai/v1/audio/transcriptions`. `language="auto"` → пропускаем поле (Whisper auto-detect). Long-form WAV режется на ≤30s chunks и склеивается обратно в один transcript.                                  |
+| `platform/runtime/src/dictation/inject.rs`                                    | `enigo` Ctrl+V симуляция + `arboard` clipboard save/restore + `windows::Win32 GetForegroundWindow/SetForegroundWindow` для возврата фокуса. Все sleep'ы 80ms.                                                                 |
+| `platform/runtime/src/dictation/config.rs`                                    | JSON (`<data_dir>/dictation-config.json`) для не-секретов + `keyring` (Windows Credential Manager target `kosmos-kepler` / user `groq-api-key`) для API ключа.                                                                |
+| `platform/runtime/src/dictation/network.rs`                                   | Фабрика `reqwest::Client` с переключаемым DNS resolver'ом (System / Cloudflare DoH / Google DoH / custom DoH URL) через `hickory-resolver`. Scope: только AI HTTP.                                                            |
+| `platform/desktop/electron/dictation-pill.ts`                                 | BrowserWindow lifecycle (`focusable: false`, alwaysOnTop, transparent), global hotkey регистрация, IPC `kepler:dictation:toggle/cancel/pill-finished/command`. Hotkey перерегистрируется на event `dictation_config_changed`. |
+| `platform/desktop/src/views/DictationPillView.vue`                            | Audio capture (Web Audio API), waveform (AnalyserNode → 12 bars), таймер, WAV encode, base64, отправка через `window.kepler.ark.request("dictation.submit_audio", ...)`.                                                      |
+| `platform/desktop/src/views/SettingsView.vue` (tabs "security" + "dictation") | UI настроек: DNS resolver выбор (Безопасность, main group), hotkey / язык / inject mode / API key / тест (Диктация, advanced group).                                                                                          |
 
 ## Безопасность ключа
 
-API key Groq хранится в **Windows Credential Manager** через крейт `keyring` (target `kosmos-kepler`, user `groq-api-key`). Это enterprise-стандарт (так делают Raycast на macOS Keychain, gh CLI, git-credential-manager).
+API key Groq хранится в нативном secret store через крейт `keyring` (target `kosmos-kepler`, user `groq-api-key`): **Windows Credential Manager** (feature `windows-native`) и **macOS Keychain** (feature `apple-native`). Это enterprise-стандарт (так делают Raycast на macOS Keychain, gh CLI, git-credential-manager).
+
+> ⚠️ keyring без backend-feature для текущей платформы молча использует **mock store** (запись «успешна», но ключ не персистит между процессами). На macOS это давало `submit_audio: API key не задан` после ввода ключа — оба feature должны быть в `platform/runtime/Cargo.toml`.
 
 - Ключ **никогда** не попадает в `dictation-config.json`.
 - Не утекает через `db_backup` (`backups/` не копирует Credential Manager).
@@ -119,7 +121,7 @@ Operations см. в `host.rs::handle_dictation_op`.
 
 ## Push-to-talk (Phase 1.5)
 
-`globalShortcut.register` шлёт только key-down event'ы — для hold-to-record этого мало. Решение: Win32 low-level keyboard hook (`WH_KEYBOARD_LL`) в выделенном OS-потоке (`services/kepler-backend/src/dictation/hotkey_hook.rs`). Hook парсит accelerator из config'а в `Matcher { vk, ctrl, shift, alt }`, на каждое key event'е проверяет vk + модификаторы через `GetAsyncKeyState`, emit'ит broadcast `dictation_ptt_trigger { phase: "down" | "up" }`.
+`globalShortcut.register` шлёт только key-down event'ы — для hold-to-record этого мало. Решение: Win32 low-level keyboard hook (`WH_KEYBOARD_LL`) в выделенном OS-потоке (`platform/runtime/src/dictation/hotkey_hook.rs`). Hook парсит accelerator из config'а в `Matcher { vk, ctrl, shift, alt }`, на каждое key event'е проверяет vk + модификаторы через `GetAsyncKeyState`, emit'ит broadcast `dictation_ptt_trigger { phase: "down" | "up" }`.
 
 Electron подписывается на этот event и вызывает `toggleDictation()` — те же два вызова что юзер делал бы в Toggle mode (первый запускает, второй отправляет). В PTT-режиме `globalShortcut` НЕ регистрируется (см. `applyHotkeyForMode` в `dictation-pill.ts`).
 
@@ -318,9 +320,21 @@ UI рендерит чек-листом + подсказку для первой
 - Локальные модели (whisper.cpp, Parakeet V3) — отдельный proof-loop Phase 2.
 - LLM post-processing транскрипта (filler-word cleanup, пунктуация, стиль) — Phase 3.
 - DoH для не-AI запросов (sync / RAWG / прочее) — out of scope.
-- macOS / Linux порт — Win32 `GetForegroundWindow` + Credential Manager + `WH_KEYBOARD_LL` специфичны.
+- Linux порт — Win32 `GetForegroundWindow` + `WH_KEYBOARD_LL` специфичны; native helpers есть только под macOS.
 - Persistent история транскрипций.
-- PTT на macOS / Linux (low-level hook Windows-only в Phase 1.5).
+
+## macOS hotkey capture (adapter)
+
+Назначение хоткея в Settings → Диктация идёт через backend-op `dictation.begin_hotkey_capture` (adapter-метод) одинаково на обеих платформах; «как именно ловим сочетание» инкапсулировано per-OS внутри адаптера, UI платформо-агностичен (безусловный `external-capture`).
+
+- **Windows** — `host.rs::op_begin_hotkey_capture` → low-level hook (`hotkey_hook::set_capture_mode`), эмитит `dictation_capture_key { vk, ctrl, shift, alt, win }`.
+- **macOS** — Swift helper `capture-hotkey` (`platform/runtime/native/macos/capture-hotkey.swift`): `CGEventTap` без фильтра по keyCode, ловит первый `keyDown` с ≥1 квалифицирующим модификатором (cmd/ctrl/alt/shift). `macos_native::begin_capture` / `end_capture` читают helper, **резолвят mac `keyCode` → accelerator-строку в Rust** (`mac_key_name` — обратный маппинг к `mac_key_code`; cmd→`Super`) и эмитят `dictation_capture_key { accelerator }`; `Escape` → `dictation_capture_cancelled`.
+
+::: tip Почему accelerator из Rust, а не `vk`
+macOS `CGKeyCode` ≠ Windows VK: фронтовый `vkToKeyName` ждёт Windows-коды. Поэтому строку собирает адаптер (`build_accelerator`), а `useDictationConfig.onDictationCaptureStart` предпочитает `e.accelerator` если он есть — ветка платформо-агностична, leak в UI не возвращается.
+:::
+
+История долга (variation point протекал в UI через `:external-capture="isWindows"`, закрыт 2026-06-07) — `.agent/tasks/2026-06-07-macos-hotkey-capture-adapter/spec.md`.
 
 ## ADR
 

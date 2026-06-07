@@ -1,0 +1,43 @@
+{
+  "task_id": "2026-06-07-structural-ci-guards",
+  "verified_at": "2026-06-07T00:00:00+03:00",
+  "branch": "structural-refactor-ci-guards",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "bun install --frozen-lockfile",
+      "summary": "Exited 0; no tracked dependency changes."
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "bunx oxlint . && bunx oxfmt --check . && bun run ark:guard:writes && bun run docs:sync && bun run docs:check",
+      "summary": "Lint, format, ARK write guard, docs sync, and docs freshness checks passed."
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "bun run --cwd platform/desktop typecheck && bun run --cwd core/ark/packages/ark typecheck && bun run --cwd core/ark/packages/ark test && bun run --cwd products/eden test:unit",
+      "summary": "Desktop and @kosmos/ark typechecks passed; @kosmos/ark 12 tests passed; Eden unit 20 tests passed."
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "cargo clippy --workspace --all-targets",
+      "summary": "Exited 0 with warnings only."
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "command": "bun run shell:build && bun run ark:smoke",
+      "summary": "Desktop build passed; ARK smoke matrix passed."
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "command": "git fetch origin structural-refactor-ci-guards && git merge origin/structural-refactor-ci-guards --no-edit && git status && git add <tracked files> && git commit && git push",
+      "summary": "Remote branch merged without conflicts; final status/staging reviewed; untracked old-layout cache directories are excluded from staging and push."
+    }
+  ]
+}

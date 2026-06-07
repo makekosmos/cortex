@@ -8,7 +8,7 @@
 100% CPU). Диагностика подтвердила два источника, оба устранены в коде, но фича
 всё равно заморожена до доработки поллинга.
 
-- Единый рубильник `CLIPBOARD_HISTORY_ENABLED` в `shell/shared/ipc-types.ts`
+- Единый рубильник `CLIPBOARD_HISTORY_ENABLED` в `platform/desktop/shared/ipc-types.ts`
   (`false`). Им загейтлены: запуск поллинга/IPC/shell-opener (`main.ts`), команда
   лаунчера «Открыть буфер обмена» (`commands.ts`), вкладка настроек «Буфер обмена»
   (`settings/navigation.ts`). Режим `clipboard` в `LauncherView.vue` остался в
@@ -26,7 +26,7 @@
 
 Proof loop: `.agent/tasks/2026-06-06-clipboard-history-jank/`.
 
-Checks: `bun run shell:typecheck`, `bun test shell/electron/clipboard-history-store.test.ts`
+Checks: `bun run shell:typecheck`, `bun test platform/desktop/electron/clipboard-history-store.test.ts`
 (6/6), `bun run ark:guard:writes`, `bun run docs:check`, визуальная проверка в dev
 (команда и вкладка скрыты, провисов при копировании нет).
 
@@ -44,7 +44,7 @@ Kosmos Desktop получил patch release после диагностики ф
 - Recursive file-index watcher больше не включается по умолчанию на широких
   persisted roots. Startup/manual rescan остаётся, а постоянный recursive watch
   требует явного `KEPLER_FILE_INDEX_WATCHER=1`.
-- `bun run --cwd shell dev` теперь заранее проверяет dev-порты shell/extension
+- `bun run --cwd platform/desktop dev` теперь заранее проверяет dev-порты platform/desktop/extension
   (`5173`, `5185` для Akasha default-on) и останавливается с понятным сообщением,
   если прошлый dev-run ещё жив. Shell Vite закреплён на `127.0.0.1:5173` со
   `strictPort`, поэтому он больше не уезжает молча на `5174`.
@@ -56,8 +56,8 @@ Proof loop: `.agent/tasks/2026-06-06-backend-cpu-loop/`.
 Checks: `cargo fmt --package kepler-backend`,
 `cargo test -p kepler-backend active_session_heartbeat_flush_is_rate_limited -- --nocapture`,
 `cargo test -p kepler-backend recursive_watcher_is_opt_in -- --nocapture`,
-`node --check shell/scripts/dev.mjs`, `node shell/scripts/dev.mjs` with busy
-ports, clean `bun run --cwd shell dev`, `bun run ark:guard:writes`,
+`node --check platform/desktop/scripts/dev.mjs`, `node platform/desktop/scripts/dev.mjs` with busy
+ports, clean `bun run --cwd platform/desktop dev`, `bun run ark:guard:writes`,
 `bun run docs:sync`, `bun run docs:check`, `bun run ark:smoke`.
 
 ## 2026-06-06 — Raycast-style command surfaces and Focus hardening (Kosmos Desktop 0.3.12 → 0.4.0)
@@ -103,8 +103,8 @@ Proof loops:
 - `.agent/tasks/2026-06-05-focus-launcher-commands/`
 
 Checks: `bun test tests/unit/clipboard-history-store.test.ts tests/unit/focus-app-blocking.test.ts tests/unit/focus-command-instant-render.test.ts tests/unit/focus-command-payload.test.ts tests/unit/focus-launcher-commands.test.ts tests/unit/launcher-commands.test.ts tests/unit/raycast-api.test.ts tests/unit/raycast-command-runner.test.ts tests/unit/raycast-manifest.test.ts tests/unit/raycast-view-model.test.ts`,
-`bun run --cwd shell typecheck`, `bun run ark:guard:writes`,
-`bun run --cwd shell build:js:shell`, `bun run docs:sync`, `bun run docs:check`.
+`bun run --cwd platform/desktop typecheck`, `bun run ark:guard:writes`,
+`bun run --cwd platform/desktop build:js:shell`, `bun run docs:sync`, `bun run docs:check`.
 
 ## 2026-06-04 — Permissions, dictation, Delphi cleanup (Kosmos Desktop 0.3.11 → 0.3.12, Akasha 0.1.1 → 0.1.2, Arrancador 0.1.3 → 0.1.4, Delphi 0.1.6 → 0.1.7, Eden 0.1.11 → 0.1.12, Horologion 0.1.6 → 0.1.7)
 
@@ -145,8 +145,8 @@ Proof loops:
 - `.agent/tasks/2026-06-04-full-review-bump-release/`
 
 Checks: `bun test tests/unit/extension-permissions.test.ts tests/unit/settings-autostart-ui.test.ts tests/unit/ark-client-invoke-device-id.test.ts tests/unit/akasha-epub-guardrails.test.ts`,
-`bun run --cwd shell typecheck`, `bun run shell:build`,
-`bun run --cwd shell build:extensions`, `bun run docs:sync`,
+`bun run --cwd platform/desktop typecheck`, `bun run shell:build`,
+`bun run --cwd platform/desktop build:extensions`, `bun run docs:sync`,
 `bun run docs:check`, `bun run ark:guard:writes`, `bun run ark:smoke`,
 `bunx playwright test --config playwright.config.ts tests/e2e/extension-permissions.spec.ts tests/e2e/headless-window-repeat-open.spec.ts tests/e2e/delphi-legacy-cleanup.spec.ts tests/e2e/extensions-contract.spec.ts tests/e2e/commands-architecture.spec.ts tests/e2e/focus-widget-controls.spec.ts`,
 `git diff --check`.
@@ -178,8 +178,8 @@ Akasha больше не живёт как Rust/GPUI app внутри Kosmos wor
 
 - Старый GPUI-код Akasha вынесен в приватный standalone repo
   `ksanrse/akasha-gpui`.
-- Бывший workspace Akasha удалён из Cargo workspace; current Kosmos reader живёт в `extensions/akasha`.
-- `extensions/akasha` переведён на обычный Vue-extension contract:
+- Бывший workspace Akasha удалён из Cargo workspace; current Kosmos reader живёт в `incubator/akasha`.
+- `incubator/akasha` переведён на обычный Vue-extension contract:
   `kind: "vue"`, `entryHtml: "dist/index.html"`, `devPort: 5185`.
 - Новый reader открывает `.epub` через file input, читает ZIP/OPF/spine в
   renderer'е, рендерит главы непрерывным потоком и сохраняет настройки чтения в
@@ -213,7 +213,7 @@ Vue primitives, но public contract остался через CSS variables и 
 
 Checks: `bun run --cwd packages/visuals format:check`,
 `bun run --cwd packages/visuals test`, `bun run --cwd packages/visuals build-storybook`,
-`bun run --cwd shell typecheck`, `bun run --cwd shell build:extensions`,
+`bun run --cwd platform/desktop typecheck`, `bun run --cwd platform/desktop build:extensions`,
 Playwright screenshots of Dropdown / Toggle / SettingsRow / DesktopChrome /
 Titlebar-in-window stories under `.tmp/visuals-check/`.
 
@@ -243,8 +243,8 @@ Dashboard «Таблица данных» получил визуальный pa
   должны проверяться не только typecheck'ом, но и Playwright screenshot +
   `view_image`.
 
-Checks: `bun run --cwd shell typecheck`,
-`bun shell/src/dashboard/store.regression.mjs`, Playwright screenshot checks for
+Checks: `bun run --cwd platform/desktop typecheck`,
+`bun platform/desktop/src/dashboard/store.regression.mjs`, Playwright screenshot checks for
 object type colors and usage header alignment.
 
 ## 2026-06-01 — Usage playtime precision + process icons (Kosmos Desktop 0.3.7 → 0.3.8)
@@ -269,7 +269,7 @@ Usage tracker больше не подменяет playtime игры foreground-
   иконки нет, слот остаётся пустым, без буквенных placeholder'ов.
 - Proof loop: `.agent/tasks/2026-06-01-usage-playtime-precision/`.
 - Regression checks: `ark:smoke`, targeted ark-core/backend usage tests,
-  shell/packages typecheck, docs freshness and format checks.
+  platform/desktop/packages typecheck, docs freshness and format checks.
 
 ## 2026-06-01 — Dashboard usage data visibility (Kosmos Desktop 0.3.6 → 0.3.7)
 
@@ -400,7 +400,7 @@ Post-mortems (см. [`docs-site/concepts/dictation.md`](docs-site/concepts/dicta
 
 ### Что есть в 0.3.0
 
-- **Backend модуль** `services/kepler-backend/src/dictation/`: host (state machine + broadcast events), Groq client с anti-hallucination фильтрацией сегментов (`no_speech_prob > 0.6`, `avg_logprob < -1.0`) + `temperature=0` + захардкоженный prompt, inject через `windows::Win32::SendInput` (`Ctrl+V`), Windows Credential Manager для API-ключа, DoH/SOCKS proxy для AI HTTP, low-level keyboard hook для push-to-talk, persistent stats (WPM / Time Saved / Total Words).
+- **Backend модуль** `platform/runtime/src/dictation/`: host (state machine + broadcast events), Groq client с anti-hallucination фильтрацией сегментов (`no_speech_prob > 0.6`, `avg_logprob < -1.0`) + `temperature=0` + захардкоженный prompt, inject через `windows::Win32::SendInput` (`Ctrl+V`), Windows Credential Manager для API-ключа, DoH/SOCKS proxy для AI HTTP, low-level keyboard hook для push-to-talk, persistent stats (WPM / Time Saved / Total Words).
 - **Pill window** — frameless, alwaysOnTop, `focusable: false`, 200×56 в окне 240×72, снизу экрана 100px от низа. Glossy чёрный с waveform внутри. Audio capture в renderer через Web Audio API (16kHz mono PCM → WAV → base64).
 - **Settings**:
   - **Безопасность** — DNS-резолвер (System / Cloudflare DoH / Google DoH / Custom) + HTTP/SOCKS proxy + test connectivity.
@@ -430,10 +430,10 @@ Proof loops: `.agent/tasks/2026-05-23-settings-sidebar-visuals/`, `.agent/tasks/
 
 File Search v1 доведён до fast-path архитектуры на Windows:
 
-- `services/kepler-backend/src/file_index/scanner/ntfs.rs` теперь сначала
+- `platform/runtime/src/file_index/scanner/ntfs.rs` теперь сначала
   обращается к `KeplerFocusSvc` через named pipe `\\.\pipe\kepler-focus-svc`
   и просит `ntfs_scan`.
-- `services/kepler-focus-svc/src/ntfs_scan.rs` читает MFT через
+- `platform/native-services/kepler-focus-svc/src/ntfs_scan.rs` читает MFT через
   `ntfs-reader` под LocalSystem token'ом service'а. Kepler UI и
   `kepler-backend.exe` остаются user-level процессами; UAC нужен только при
   установке service'а.
@@ -455,7 +455,7 @@ Proof loops:
 Kepler launcher теперь ищет **файлы по имени и пути** через отдельный
 host-local индекс в `kepler-backend`:
 
-- `services/kepler-backend/src/file_index/` хранит индекс в `file-index.db`
+- `platform/runtime/src/file_index/` хранит индекс в `file-index.db`
   рядом с instance data, не в ARK и не в sync.
 - V1 сканирует файлы на локальных fixed drives; на NTFS drive roots backend
   сначала пробует MFT/USN fast scan и при недоступности прозрачно падает назад
@@ -479,7 +479,7 @@ Store apps, в общем списке с командами.
 
 ### Что под капотом
 
-- `services/kepler-backend/src/app_index/` — новый Rust-модуль:
+- `platform/runtime/src/app_index/` — новый Rust-модуль:
   trait `AppSource` + per-platform impl (Windows: Start Menu + UWP),
   отдельный SQLite `app-index.db` рядом с `ark.db` (host-specific,
   НЕ в ARK — см. write-boundary), in-memory cache, icon extractor
@@ -511,15 +511,15 @@ Setting в Settings → Общие.
 
 ## Текущие версии
 
-| Артефакт                                             | Версия                                                                                                              |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Kosmos Desktop (`shell/package.json`)                | **0.4.1**                                                                                                           |
-| Akasha extension (`extensions/akasha/manifest.json`) | **0.1.2** (Vue EPUB reader; EPUB parser guardrails)                                                                 |
-| Eden extension (`extensions/eden/manifest.json`)     | **0.1.12** (Pattern B + Anytype block selection + Linear statuses + Ctrl+A markdown copy + drag-select auto-scroll) |
-| Delphi extension                                     | **0.1.7** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                   |
-| Horologion extension                                 | **0.1.6** (keepAliveInBackground — pomodoro live в фоне)                                                            |
-| Arrancador extension                                 | **0.1.4**                                                                                                           |
-| Dashboard                                            | встроен в shell (не extension)                                                                                      |
+| Артефакт                                            | Версия                                                                                                              |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Kosmos Desktop (`platform/desktop/package.json`)    | **0.4.1**                                                                                                           |
+| Akasha extension (`incubator/akasha/manifest.json`) | **0.1.2** (Vue EPUB reader; EPUB parser guardrails)                                                                 |
+| Eden extension (`products/eden/manifest.json`)      | **0.1.12** (Pattern B + Anytype block selection + Linear statuses + Ctrl+A markdown copy + drag-select auto-scroll) |
+| Delphi extension                                    | **0.1.7** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                   |
+| Horologion extension                                | **0.1.6** (keepAliveInBackground — pomodoro live в фоне)                                                            |
+| Arrancador extension                                | **0.1.4**                                                                                                           |
+| Dashboard                                           | встроен в shell (не extension)                                                                                      |
 
 ## 2026-05-22 — Horologion live-в-фоне + drag-select auto-scroll (Kepler 0.2.3 → 0.2.4, Eden 0.1.10 → 0.1.11, Horologion 0.1.5 → 0.1.6)
 
@@ -533,7 +533,7 @@ Setting в Settings → Общие.
 
 **Решение**:
 
-- **`keepAliveInBackground: true`** новое поле в `ExtensionManifest`. `shell/electron/extension-host.ts` intercept'ит `close` event для таких extensions → `win.hide()` вместо destroy. Renderer переживает X, все side-effects продолжают работать. Окно реально destroy'ится только на `app.before-quit`.
+- **`keepAliveInBackground: true`** новое поле в `ExtensionManifest`. `platform/desktop/electron/extension-host.ts` intercept'ит `close` event для таких extensions → `win.hide()` вместо destroy. Renderer переживает X, все side-effects продолжают работать. Окно реально destroy'ится только на `app.before-quit`.
 - **`backgroundThrottling: false`** теперь для всех extension `webPreferences` — даже hidden / minimized таймеры не throttle'ятся Chromium'ом.
 - **`focus-widget` backend sync** — main process подписывается напрямую на `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` через `arkClient.onArkEvent`, деривит focus state, зовёт `setFocusState`. Виджет теперь появляется даже если pomodoro стартанули через launcher команду без открытия Horologion окна. Renderer push'и остаются для blockingActive (live из focusBlocklistId setting).
 - **Drag fix виджета** — `focusable: false` на BrowserWindow ломал `-webkit-app-region: drag` (Win32 не отправляет WM_NCLBUTTONDOWN не-фокусабельному окну). Поменяли на `focusable: true`; `showInactive()` всё ещё обеспечивает «не воровать фокус при появлении».
@@ -657,16 +657,16 @@ Kepler.exe (Electron host)
   ├─ settings window (tray menu)
   ├─ Dashboard window (embedded shell view — read-only ARK browser)
   ├─ extension-host
-  │   ├─ extensions/horologion/  (Vue bundle inside Kepler)
-  │   ├─ extensions/delphi/      (Vue bundle inside Kepler)
-  │   └─ extensions/arrancador/  (Vue bundle inside Kepler)
+  │   ├─ incubator/horologion/  (Vue bundle inside Kepler)
+  │   ├─ products/delphi/      (Vue bundle inside Kepler)
+  │   └─ incubator/arrancador/  (Vue bundle inside Kepler)
   └─ spawn kepler-backend.exe (Rust, headless)
       ├─ ark-core-rpc child (SQLite WAL, FTS5)
       ├─ WS server 127.0.0.1:<port>
       ├─ command bus (registry + invoke broadcast)
       └─ LAN sync (centralized — один node на машину)
 
-Eden — Vue extension в `extensions/eden/` (Phase 6.0 / 6.0.A, 2026-05-17). Standalone `apps/eden/ts/` удалён полностью.
+Eden — Vue extension в `products/eden/` (Phase 6.0 / 6.0.A, 2026-05-17). Standalone `apps/eden/ts/` удалён полностью.
 ```
 
 ## Naming convention (после brand swap)
@@ -686,14 +686,14 @@ derive'ятся Electron userData, ARK dataDir, productName, hotkey, autoupdater
 autorun. Цель — installed prod Kepler работает **одновременно** с dev-сессиями
 (и multi-agent worktree разработкой).
 
-| slot             | trigger                                                           | Electron userData             | ARK dataDir                 | hotkey      | autoupdater |
-| ---------------- | ----------------------------------------------------------------- | ----------------------------- | --------------------------- | ----------- | ----------- |
-| `prod` (default) | installed `Kepler.exe`                                            | `%APPDATA%\Kepler\`           | `%APPDATA%\Kosmos\`         | `Alt+Space` | on          |
-| `dev`            | `VITE_DEV_SERVER_URL` (`bun run --cwd shell dev`)                 | `%APPDATA%\Kepler-dev\`       | `%APPDATA%\Kosmos-dev\`     | `` Alt+` `` | off         |
-| `dev-<x>`        | `KEPLER_INSTANCE=dev-<x>` (per-worktree `.env.local` in `shell/`) | `%APPDATA%\Kepler-dev-<x>\`   | `%APPDATA%\Kosmos-dev-<x>\` | disabled    | off         |
-| `test-<x>`       | Playwright (`KOSMOS_DATA_DIR` set)                                | `<KOSMOS_DATA_DIR>/userdata/` | `KOSMOS_DATA_DIR`           | disabled    | off         |
+| slot             | trigger                                                                      | Electron userData             | ARK dataDir                 | hotkey      | autoupdater |
+| ---------------- | ---------------------------------------------------------------------------- | ----------------------------- | --------------------------- | ----------- | ----------- |
+| `prod` (default) | installed `Kepler.exe`                                                       | `%APPDATA%\Kepler\`           | `%APPDATA%\Kosmos\`         | `Alt+Space` | on          |
+| `dev`            | `VITE_DEV_SERVER_URL` (`bun run --cwd platform/desktop dev`)                 | `%APPDATA%\Kepler-dev\`       | `%APPDATA%\Kosmos-dev\`     | `` Alt+` `` | off         |
+| `dev-<x>`        | `KEPLER_INSTANCE=dev-<x>` (per-worktree `.env.local` in `platform/desktop/`) | `%APPDATA%\Kepler-dev-<x>\`   | `%APPDATA%\Kosmos-dev-<x>\` | disabled    | off         |
+| `test-<x>`       | Playwright (`KOSMOS_DATA_DIR` set)                                           | `<KOSMOS_DATA_DIR>/userdata/` | `KOSMOS_DATA_DIR`           | disabled    | off         |
 
-Single source of truth: `shell/electron/instance.ts::resolveInstance()`.
+Single source of truth: `platform/desktop/electron/instance.ts::resolveInstance()`.
 `applyInstanceToApp()` вызывается в самом верху `main.ts` — до
 `requestSingleInstanceLock`, чтобы lock scope'ился по новому userData.
 
@@ -703,7 +703,7 @@ Single source of truth: `shell/electron/instance.ts::resolveInstance()`.
 
 ### Phase 0 — Backend extraction
 
-- `services/kepler-backend/` (lib + bin) — Rust headless service. Extracted из старого legacy Rust launcher.
+- `platform/runtime/` (lib + bin) — Rust headless service. Extracted из старого legacy Rust launcher.
 - 41 → 46 unit tests passing (5 новых для command_bus).
 
 ### Brand swap (Kepler ↔ Kosmos)
@@ -714,7 +714,7 @@ Single source of truth: `shell/electron/instance.ts::resolveInstance()`.
 
 ### Phase 1 — Electron Kepler shell
 
-- `shell/` — Electron + Vue 3.6 + electron-vite + TypeScript.
+- `platform/desktop/` — Electron + Vue 3.6 + electron-vite + TypeScript.
 - Frameless launcher 720×460, acrylic Mica на Win11, globalShortcut Ctrl+Shift+K.
 - Tray icon + menu (Открыть / Настройки / Выход).
 - Spawn `kepler-backend.exe` child + auto-connect через `ensureKeplerRunning`.
@@ -723,7 +723,7 @@ Single source of truth: `shell/electron/instance.ts::resolveInstance()`.
 
 ### Phase 2 — Command bus full stack
 
-- `services/kepler-backend/src/command_bus.rs` — Rust WS-протокол.
+- `platform/runtime/src/command_bus.rs` — Rust WS-протокол.
   - Operations: `commands.register / unregister / list / invoke`.
   - Events: `command_invoked` / `commands_changed` broadcast.
   - Auto-unregister на WS disconnect.
@@ -757,10 +757,10 @@ Single source of truth: `shell/electron/instance.ts::resolveInstance()`.
 
 ### Phase 8 — Production packaging
 
-- `electron-builder` NSIS config: `shell/package.json` `build` section.
+- `electron-builder` NSIS config: `platform/desktop/package.json` `build` section.
 - `extraResources`: `kepler-backend.exe` + `ark-core-rpc.exe` + `extensions/<id>/dist+manifest+icon` + tray icon.
 - `afterPack.cjs` hook — PNG → ICO + rcedit embed metadata в `Kepler.exe`.
-- `bun run --cwd shell build` → `shell/release/Kosmos Setup X.Y.Z.exe`.
+- `bun run --cwd platform/desktop build` → `platform/desktop/release/Kosmos Setup X.Y.Z.exe`.
 - Install path: `%LOCALAPPDATA%\Programs\Kepler\` (per-user oneClick).
 
 ### Inter-app communication
@@ -792,7 +792,7 @@ Caveats: оба measurements в dev mode (DevTools overhead +~160 MB). Real prod
 Серия багов после Phase 4 (Vue extensions). См. `.agent/tasks/2026-05-15-post-migration-fixes/{spec,evidence}.md` для proof loop.
 
 - **Drop spaces concept** (single DB per user) — welcome screen и space-picker убраны. Dashboard сразу открывается на список объектов. Делphi shim emits stub `KEPLERDEFAULT` чтобы не показывать SpaceSetup modal.
-- **Master bug — `missing field 'id'`** (`services/kepler-backend/src/ws_server.rs`): backend strip'ил `id` из params как envelope id, ломал `get_object`/`delete_object`/`upsert_object` с top-level id. Fix: чтит `_req_id` для envelope, оставляет `id` нетронутым. Это разблокировало все extension CRUD.
+- **Master bug — `missing field 'id'`** (`platform/runtime/src/ws_server.rs`): backend strip'ил `id` из params как envelope id, ломал `get_object`/`delete_object`/`upsert_object` с top-level id. Fix: чтит `_req_id` для envelope, оставляет `id` нетронутым. Это разблокировало все extension CRUD.
 - **Extension ARK bridge ready-gate** — `kepler:extension:ark:request` ждёт arkClient connect (15s timeout) вместо мгновенного throw. См. commit fdfc8d4.
 - **Делphi task persistence** — lazy ensure `task_obj` object_type перед первым upsert. FK constraint failed → silent swallow в `.catch()` → задача жила in-memory. Fix: registered + warn вместо silent.
 - **Horologion orphan filter + DesktopChrome titlebar + transitionend** — несколько мелких фиксов параллельно (mode-toggle hide, orphan time_entries, animation jank).
@@ -804,7 +804,7 @@ Caveats: оба measurements в dev mode (DevTools overhead +~160 MB). Real prod
 
 **Phase 6.0 — Scaffold + ARK note CRUD**:
 
-- `extensions/eden/` создан как Vue extension (manifest, package, vite config, src/).
+- `products/eden/` создан как Vue extension (manifest, package, vite config, src/).
 - `kepler-api-shim` (renderer-side bridge поверх `window.kepler.ark.request`) — emulates `window.api` так, что Eden codebase почти не правился.
 - Note CRUD / folders / typed-notes / search — все ARK операции через shim.
 - Команды `eden:note:create` / `eden:note:search` зарегистрированы в command bus.
@@ -822,7 +822,7 @@ Caveats: оба measurements в dev mode (DevTools overhead +~160 MB). Real prod
 
 См. `.agent/tasks/2026-05-18-arrancador-full-completion/spec.md`.
 
-- Backend `services/kepler-backend/src/arrancador/` — 5 modules (scanner, launcher, rawg, sqoba, config), 32 unit tests + 3 integration tests с synthetic Steam library (Dota 2 / Cairn / Outlast).
+- Backend `platform/runtime/src/arrancador/` — 5 modules (scanner, launcher, rawg, sqoba, config), 32 unit tests + 3 integration tests с synthetic Steam library (Dota 2 / Cairn / Outlast).
 - Scanner: Steam VDF/ACF custom parser (без новых deps) + Epic JSON manifests. GOG skip.
 - Launcher: `steam://rungameid/<id>` через `cmd /c start` + прямой exe spawn для Epic/manual.
 - RAWG client: search + get_details + apply (merge в game_obj.propsJson), httpmock тесты.
@@ -836,16 +836,16 @@ Caveats: оба measurements в dev mode (DevTools overhead +~160 MB). Real prod
 
 См. `.agent/tasks/2026-05-18-phase-7-universal-export/spec.md` и `docs-site/concepts/data-export.md`.
 
-- Rust `Converter` trait + registry в `services/kepler-backend/src/export/` + WS endpoints `export.list` / `export.run`.
+- Rust `Converter` trait + registry в `platform/runtime/src/export/` + WS endpoints `export.list` / `export.run`.
 - 6 первых конвертеров: `note_md` (TipTap → markdown с YAML frontmatter), `task_md`, `task_csv`, `time_entry_csv`, `tag_json`, `game_json`.
-- Shell UI: новый таб «Экспорт» в `shell/src/views/SettingsView.vue` — per-converter карта, native directory picker, история экспортов (10 шт в localStorage).
+- Shell UI: новый таб «Экспорт» в `platform/desktop/src/views/SettingsView.vue` — per-converter карта, native directory picker, история экспортов (10 шт в localStorage).
 - 17 unit tests для converters; cargo test 75/75 зелёный.
 - ARK guard:writes остался clean (export — read-only через `list_objects_by_type`).
 - Eden export-to-markdown заменён этим универсальным механизмом.
 
 ### Lock-file test isolation (2026-05-17)
 
-env-флаг `KOSMOS_LOCK_PERMISSIONS_DISABLED=1` в `services/kepler-backend/src/lock_file.rs` пропускает icacls/chmod ACL-хардинг в test mode. `tests/e2e/helpers/launch.ts` выставляет автоматически. Решает проблему stale ACL lock-файлов при смене Windows account'а.
+env-флаг `KOSMOS_LOCK_PERMISSIONS_DISABLED=1` в `platform/runtime/src/lock_file.rs` пропускает icacls/chmod ACL-хардинг в test mode. `tests/e2e/helpers/launch.ts` выставляет автоматически. Решает проблему stale ACL lock-файлов при смене Windows account'а.
 
 ### Visuals unification (2026-05-18)
 
@@ -871,7 +871,7 @@ bunx playwright test --list # parse-check
 - `scripts/measure-kepler-ram.ps1` — baseline / kepler / `-Compare` modes для RAM benchmarks.
 - `scripts/fix-mojibake.mjs` — UTF-8 recovery после PowerShell encoding bugs.
 - `scripts/merge-swap.mjs` — token swap helper после `git checkout --theirs` merge conflicts.
-- `shell/scripts/dev-extensions.mjs` — orchestrator для Vite dev servers per extension.
+- `platform/desktop/scripts/dev-extensions.mjs` — orchestrator для Vite dev servers per extension.
 
 ## ⏳ Не сделано / отложено
 
@@ -886,7 +886,7 @@ LRU eviction, RAM budget management, lazy extension load/unload. Имеет см
 - Старый Rust GPUI launcher — удалить, если ещё всплывут остатки после migration cleanup.
 - `apps/{dashboard,delphi,horologion,arrancador}/` standalone Electron — удалить (extensions cover everything).
 - Eden — оставить пока не сделано Phase 6.
-- Auto-update mechanism (`electron-updater`) — **подключён** (Phase 8b, 2026-05-16): `shell/electron/autoupdater-host.ts` (state machine: idle/checking/available/downloading/downloaded/error), Raycast-style banner в Settings, launcher-команда `kepler:check-updates`, кнопка «Проверить обновления» в General. Distribution через `yoso-industries/kepler-releases`. См. [Distribution](docs-site/concepts/distribution.md#kepler-launcher-autoupdater).
+- Auto-update mechanism (`electron-updater`) — **подключён** (Phase 8b, 2026-05-16): `platform/desktop/electron/autoupdater-host.ts` (state machine: idle/checking/available/downloading/downloaded/error), Raycast-style banner в Settings, launcher-команда `kepler:check-updates`, кнопка «Проверить обновления» в General. Distribution через `yoso-industries/kepler-releases`. См. [Distribution](docs-site/concepts/distribution.md#kepler-launcher-autoupdater).
 
 ### Phase 9 — Delphi UI на plain CSS (open question)
 
@@ -894,9 +894,9 @@ Delphi extension использует **Tailwind v4** (наследие legacy s
 
 Что нужно для Phase 9 (open question):
 
-- ~30 .vue файлов в `extensions/delphi/src/` — удалить Tailwind utility classes из templates.
+- ~30 .vue файлов в `products/delphi/src/` — удалить Tailwind utility classes из templates.
 - Переписать стили в `<style scoped>` с CSS vars из `@kosmos/visuals`.
-- Удалить `@import "tailwindcss"` + `@source` из `extensions/delphi/src/global.css`.
+- Удалить `@import "tailwindcss"` + `@source` из `products/delphi/src/global.css`.
 - Удалить `@tailwindcss/vite` plugin из vite configs.
 - Удалить tailwind deps.
 
@@ -926,17 +926,17 @@ Delphi extension использует **Tailwind v4** (наследие legacy s
 
 ```cmd
 :: Terminal 1: Vite dev servers per extension с HMR
-bun run --cwd shell dev:extensions
+bun run --cwd platform/desktop dev:extensions
 ::   → dashboard:  http://localhost:5180/
 ::   → horologion: http://localhost:5181/
 ::   → delphi:     http://localhost:5182/
 ::   → arrancador: http://localhost:5183/
 
 :: Terminal 2: Kepler shell + main process
-bun run --cwd shell dev:kepler
+bun run --cwd platform/desktop dev:kepler
 
 :: или для проверки prod build:
-bun run --cwd shell dev
+bun run --cwd platform/desktop dev
 ```
 
 ### Production build
@@ -952,15 +952,15 @@ bun run build
 
 ```cmd
 :: Backend Rust + 46 unit tests
-cargo build --manifest-path services/kepler-backend/Cargo.toml --bin kepler-backend
-cargo test --manifest-path services/kepler-backend/Cargo.toml --lib
+cargo build --manifest-path platform/runtime/Cargo.toml --bin kepler-backend
+cargo test --manifest-path platform/runtime/Cargo.toml --lib
 
 :: TypeScript
-bun run --cwd packages/ark typecheck
-bun run --cwd shell typecheck
+bun run --cwd core/ark/packages/ark typecheck
+bun run --cwd platform/desktop typecheck
 
 :: Extensions build
-bun run --cwd shell build:extensions
+bun run --cwd platform/desktop build:extensions
 
 :: RAM benchmark
 pwsh scripts/measure-kepler-ram.ps1 -Mode baseline

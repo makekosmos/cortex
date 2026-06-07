@@ -19,22 +19,22 @@ const steps = [
   {
     name: "ARK core Rust tests",
     command: "cargo",
-    args: ["test", "--manifest-path", "crates/ark-core/rust/Cargo.toml"],
+    args: ["test", "--manifest-path", "core/ark/crates/ark-core/rust/Cargo.toml"],
   },
   {
     name: "kepler-backend Rust tests (включая usage_tracker модуль)",
     command: "cargo",
-    args: ["test", "--manifest-path", "services/kepler-backend/Cargo.toml", "--lib"],
+    args: ["test", "--manifest-path", "platform/runtime/Cargo.toml", "--lib"],
   },
   {
     name: "@kosmos/ark typecheck",
     command: "bun",
-    args: ["run", "--cwd", "packages/ark", "typecheck"],
+    args: ["run", "--cwd", "core/ark/packages/ark", "typecheck"],
   },
   {
-    name: "shell + extensions build",
+    name: "desktop host + extensions build",
     command: "bun",
-    args: ["run", "--cwd", "shell", "build:js"],
+    args: ["run", "--cwd", "platform/desktop", "build:js"],
   },
 ];
 
@@ -42,7 +42,7 @@ const steps = [
 // — Eden, Dashboard, Delphi, Arrancador — Vue extensions в `extensions/<name>`,
 //   у них нет отдельных Electron unit / e2e наборов (host берёт на себя через Kepler shell).
 // — Standalone Eden удалён в Phase 6.0.A, миграции из vault'а Heart больше нет.
-// — Standalone сценарии покрывает `bun run --cwd shell test:e2e`,
+// — Standalone сценарии покрывает `bun run --cwd platform/desktop test:e2e`,
 //   но он тяжёлый и должен запускаться явно, не как часть smoke.
 //
 // Если нужно добавить шаг — извлекай `cwd` через `path.join(repoRoot, ...)`,

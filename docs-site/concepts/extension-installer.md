@@ -1,7 +1,7 @@
 # Extension installer
 
 ::: tip Статус — .kext + Revert (2026-05-15)
-`.kext` пакетный формат + install dialog с manifest preview + backup на каждый install + Revert UI в Settings — реализовано. CLI installer (`bun run --cwd shell ext:install`) принимает и директорию, и `.kext`/`.zip`. File association через electron-builder NSIS — extension `.kext` регистрируется в Windows на install Kepler'а; двойной клик в Проводнике открывает install dialog.
+`.kext` пакетный формат + install dialog с manifest preview + backup на каждый install + Revert UI в Settings — реализовано. CLI installer (`bun run --cwd platform/desktop ext:install`) принимает и директорию, и `.kext`/`.zip`. File association через electron-builder NSIS — extension `.kext` регистрируется в Windows на install Kepler'а; двойной клик в Проводнике открывает install dialog.
 :::
 
 ## Зачем это нужно
@@ -70,7 +70,7 @@ extension.kext        (ZIP)
 - Если **не** удовлетворён — extension **не загружается**, открывается отдельное окно «Расширение несовместимо» с инструкцией обновить `.kext`.
 - Если поле отсутствует — extension считается legacy, грузится с warning в console. Рекомендуется всегда указывать.
 
-Текущая версия — `KEPLER_API_VERSION = "1.0.0"` (см. `shell/electron/kepler-api.ts`).
+Текущая версия — `KEPLER_API_VERSION = "1.0.0"` (см. `platform/desktop/electron/kepler-api.ts`).
 
 Bump правила:
 
@@ -78,7 +78,7 @@ Bump правила:
 - minor (1.x.0): новый method/event, старые работают;
 - major (X.0.0): breaking change.
 
-Поддерживаемые формы range: `1.2.3`, `^1.2.3`, `~1.2.3`, `>=1.2.3`, `>1.2.3`, `<=1.2.3`, `<1.2.3`, `*`, `1.2.3 - 2.0.0`, `1.x`, `1.2.x`, OR через `||`. Реализация — `shell/electron/kepler-api.ts → satisfiesSemver()` (минимальная, без `node-semver`).
+Поддерживаемые формы range: `1.2.3`, `^1.2.3`, `~1.2.3`, `>=1.2.3`, `>1.2.3`, `<=1.2.3`, `<1.2.3`, `*`, `1.2.3 - 2.0.0`, `1.x`, `1.2.x`, OR через `||`. Реализация — `platform/desktop/electron/kepler-api.ts → satisfiesSemver()` (минимальная, без `node-semver`).
 
 ## Install flow
 
@@ -102,7 +102,7 @@ Bump правила:
 
 ### File association (Windows)
 
-`shell/package.json` объявляет:
+`platform/desktop/package.json` объявляет:
 
 ```json
 "fileAssociations": [
@@ -157,20 +157,20 @@ API:
 
 ```powershell
 # Install: принимает директорию (dev flow) или .kext / .zip архив.
-bun run --cwd shell ext:install <path-to-dir-or-kext>
+bun run --cwd platform/desktop ext:install <path-to-dir-or-kext>
 
 # Uninstall: удаляет код, user data preserved.
-bun run --cwd shell ext:uninstall <id>
+bun run --cwd platform/desktop ext:uninstall <id>
 
 # Uninstall + очистка user data.
-bun run --cwd shell ext:uninstall <id> --purge-data
+bun run --cwd platform/desktop ext:uninstall <id> --purge-data
 ```
 
-Скрипты — `shell/scripts/install-extension.mjs` / `uninstall-extension.mjs`. CLI installer выполняет тот же flow (backup + atomic + semver check), что и runtime; код частично дублирован чтобы скрипт работал без dist-electron bundle'а.
+Скрипты — `platform/desktop/scripts/install-extension.mjs` / `uninstall-extension.mjs`. CLI installer выполняет тот же flow (backup + atomic + semver check), что и runtime; код частично дублирован чтобы скрипт работал без dist-electron bundle'а.
 
 ## IPC API (Settings UI / install dialog)
 
-Через `window.kepler.extension.*` (см. `shell/shared/ipc-types.ts → KeplerApi.extension`):
+Через `window.kepler.extension.*` (см. `platform/desktop/shared/ipc-types.ts → KeplerApi.extension`):
 
 | Метод                    | Назначение                                          |
 | ------------------------ | --------------------------------------------------- |

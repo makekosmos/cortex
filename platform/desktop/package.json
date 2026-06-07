@@ -1,0 +1,161 @@
+{
+  "name": "kepler-shell",
+  "version": "0.4.2",
+  "private": true,
+  "description": "Kosmos — desktop host for notes, tasks, games, focus, and activity",
+  "author": "Kazui",
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "build:backend": "node scripts/build-backend.mjs",
+    "build:native:macos": "node scripts/build-macos-native.mjs",
+    "build:backend:dev": "cargo build --manifest-path ../../Cargo.toml --bin kepler-backend",
+    "build:extensions": "node scripts/build-extensions.mjs",
+    "build:extension": "node scripts/build-extensions.mjs --only",
+    "build:extensions:only": "node scripts/build-extensions.mjs --only",
+    "build:extensions:changed": "node scripts/build-extensions.mjs --changed --skip-native",
+    "build:extensions:vue": "node scripts/build-extensions.mjs --vue-only",
+    "stage:bundled-extensions": "node scripts/stage-bundled-extensions.mjs",
+    "dev:extensions": "node scripts/dev-extensions.mjs",
+    "dev:extension": "node scripts/dev-extensions.mjs --only",
+    "dev:extensions:only": "node scripts/dev-extensions.mjs --only",
+    "dev:kepler": "node -e \"process.env.KEPLER_DEV='1';require('node:child_process').spawnSync('vite',['--configLoader','native'],{stdio:'inherit',shell:true,env:process.env});\"",
+    "dev": "bun run build:backend:dev && bun run build:extensions && node scripts/dev.mjs",
+    "dev:no-build": "node scripts/dev.mjs",
+    "build:js:shell": "tsc && vite build --configLoader native",
+    "build:js": "tsc && vite build --configLoader native && bun run build:extensions",
+    "build": "bun run build:backend && bun run build:native:macos && bun run build:js && bun run stage:bundled-extensions && electron-builder --win nsis --publish always",
+    "typecheck": "tsc --noEmit",
+    "package:dir": "bun run build:js && bun run stage:bundled-extensions && electron-builder --dir",
+    "package:mac": "bun run build:backend && bun run build:native:macos && bun run build:js && bun run stage:bundled-extensions && electron-builder --mac dmg",
+    "ext:install": "node scripts/install-extension.mjs",
+    "ext:uninstall": "node scripts/uninstall-extension.mjs",
+    "ext:publish": "node scripts/publish-extension.mjs",
+    "ext:publish-all": "node scripts/publish-extension.mjs --all",
+    "ext:catalog": "node scripts/generate-catalog.mjs",
+    "test:e2e": "bun run build:js && playwright test --config playwright.config.ts",
+    "test:e2e:headed": "bun run build:js && playwright test --config playwright.config.ts --headed"
+  },
+  "dependencies": {
+    "@kosmos/ark": "workspace:*",
+    "@kosmos/visuals": "workspace:*",
+    "@lucide/vue": "^1.16.0",
+    "@phosphor-icons/vue": "^2.2.1",
+    "@raycast/api": "workspace:*",
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/node": "^24.9.2",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "electron": "^42.2.0",
+    "electron-builder": "^26.8.1",
+    "playwright": "^1.58.2",
+    "png-to-ico": "^3.0.1",
+    "rcedit": "^5.0.2",
+    "tailwindcss": "^4.1.16",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.3",
+    "vite-plugin-electron": "1.0.0-beta.2",
+    "vite-plugin-electron-renderer": "^0.14.6",
+    "vue": "^3.6.0-beta.12"
+  },
+  "build": {
+    "appId": "com.kazui.kosmos",
+    "productName": "Kosmos",
+    "electronLanguages": [
+      "en-US",
+      "ru"
+    ],
+    "afterPack": "./build/afterPack.cjs",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "yoso-industries",
+        "repo": "kepler-releases",
+        "releaseType": "release"
+      }
+    ],
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".tmp/bundled-extensions/extensions",
+        "to": "extensions"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "target": "nsis",
+      "signAndEditExecutable": false,
+      "extraResources": [
+        {
+          "from": "../../target/release/kepler-backend.exe",
+          "to": "Kosmos Runtime.exe"
+        },
+        {
+          "from": "../../target/release/ark-core-rpc.exe",
+          "to": "Kosmos Data Engine.exe"
+        },
+        {
+          "from": "../../target/release/kepler-focus-helper.exe",
+          "to": "Kosmos Helper.exe"
+        },
+        {
+          "from": "../../target/release/kepler-focus-svc.exe",
+          "to": "Kosmos System Service.exe"
+        }
+      ]
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "target": "dmg",
+      "extraResources": [
+        {
+          "from": "../../target/release/kepler-backend",
+          "to": "Kosmos Runtime"
+        },
+        {
+          "from": "../../target/release/ark-core-rpc",
+          "to": "Kosmos Data Engine"
+        },
+        {
+          "from": ".tmp/native/macos",
+          "to": "native/macos"
+        }
+      ]
+    },
+    "fileAssociations": [
+      {
+        "ext": "kext",
+        "name": "Kosmos Extension Package",
+        "description": "Установочный пакет расширения Kosmos",
+        "role": "Editor"
+      }
+    ],
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Kosmos",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "include": "build/installer.nsh"
+    }
+  }
+}

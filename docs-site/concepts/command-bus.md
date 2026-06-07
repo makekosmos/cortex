@@ -4,11 +4,11 @@ Command bus — communication primitive в Kepler, который позволя
 
 ## Архитектура: три слоя команд (V1 + V2, 2026-05-19)
 
-После Phase 6.2 команды в launcher'е приходят из **трёх** независимых источников. Merge происходит в `shell/electron/main.ts → kepler:commands:list` IPC, дедуп по `id`:
+После Phase 6.2 команды в launcher'е приходят из **трёх** независимых источников. Merge происходит в `platform/desktop/electron/main.ts → kepler:commands:list` IPC, дедуп по `id`:
 
 | Слой                     | Источник                                                                             | Видимость                     | Use case                                                                                    |
 | ------------------------ | ------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------- |
-| **A. Kepler-internal**   | `shell/electron/commands.ts` `COMMANDS[]`                                            | всегда                        | settings/dashboard/check-updates — это сам shell                                            |
+| **A. Kepler-internal**   | `platform/desktop/electron/commands.ts` `COMMANDS[]`                                 | всегда                        | settings/dashboard/check-updates — это сам shell                                            |
 | **B. Manifest-declared** | `extensions/<id>/manifest.json` `commands[]` или Raycast `package.json` `commands[]` | пока extension установлен     | Entry points (Open Eden, Pomodoro, Raycast no-view) — declarative, не требует running state |
 | **C. Runtime dynamic**   | `commands.register(...)` через WS из running extension'а                             | только пока extension запущен | State-aware actions (Stop pomodoro, Save current note)                                      |
 
@@ -55,7 +55,7 @@ declared-command registry: если `extensionName` не указан, target и
 
 ### Что было до и зачем рефактор
 
-Раньше extension-команды зашивались в `shell/electron/commands.ts` как static `COMMANDS[]`. Минусы: shell coupled с extension internals, новая команда extension'а требовала правки shell, третьесторонние extension'ы не могли публиковать команды, uninstall не очищал launcher. Phase 6.2 — manifest = source of truth, `loadDeclaredCommands` в `extension-host.ts` строит registry на лету при каждом `kepler:commands:list`. `notifyCommandsChanged()` после install/uninstall/revert триггерит launcher refresh через `kepler:commands:updated`.
+Раньше extension-команды зашивались в `platform/desktop/electron/commands.ts` как static `COMMANDS[]`. Минусы: shell coupled с extension internals, новая команда extension'а требовала правки shell, третьесторонние extension'ы не могли публиковать команды, uninstall не очищал launcher. Phase 6.2 — manifest = source of truth, `loadDeclaredCommands` в `extension-host.ts` строит registry на лету при каждом `kepler:commands:list`. `notifyCommandsChanged()` после install/uninstall/revert триггерит launcher refresh через `kepler:commands:updated`.
 
 ### Edge cases (cover'ятся в `tests/e2e/commands-architecture.spec.ts`)
 
@@ -93,7 +93,7 @@ ws client #3 ───►─┤                          │
 - **Broadcast.** Любое invoke / register / unregister рассылается всем подключённым (via `tokio::broadcast`). Owning client фильтрует по `id`.
 - **Intercept в ws_server.** Операции `commands.*` не доходят до `ark-core-rpc` — `ws_server.rs` обрабатывает их прямо через `CommandBus`.
 
-См. `services/kepler-backend/src/command_bus.rs`.
+См. `platform/runtime/src/command_bus.rs`.
 
 ## WS Protocol
 
@@ -124,7 +124,7 @@ interface CommandManifest {
 }
 ```
 
-### CommandRecord (launcher-side, `shell/shared/ipc-types.ts`)
+### CommandRecord (launcher-side, `platform/desktop/shared/ipc-types.ts`)
 
 Static `COMMANDS` в shell + dynamic с backend merge'атся в единый список `CommandRecord`, который видит renderer. Поверх wire-`CommandManifest` добавлены два UI-поля:
 
@@ -184,14 +184,14 @@ sequenceDiagram
 
 ## Code refs
 
-| Слой                     | Файл                                         | Что делает                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Backend registry         | `services/kepler-backend/src/command_bus.rs` | `CommandBus` структура (registrations, broadcast), unit-тесты                                                                                                                                                                                                                                                                                       |
-| Backend WS dispatch      | `services/kepler-backend/src/ws_server.rs`   | intercept `commands.*` operations, broadcast events                                                                                                                                                                                                                                                                                                 |
-| TS SDK                   | `packages/ark/src/ark-client.ts`             | `ArkCommandsApi`: `register/unregister/list/invoke/onInvoked/onChanged`                                                                                                                                                                                                                                                                             |
-| Launcher merge           | `shell/electron/main.ts`                     | `kepler:commands:list` IPC = static `COMMANDS` ∪ `arkClient.commands.list()`                                                                                                                                                                                                                                                                        |
-| Launcher invoke          | `shell/electron/main.ts`                     | `kepler:commands:invoke` — static exec локально, dynamic — `arkClient.commands.invoke(id)`                                                                                                                                                                                                                                                          |
-| Static/internal commands | `shell/electron/commands.ts`                 | `COMMANDS: InternalCommand[]` — shell-owned commands (Settings / Dashboard / Clipboard History / Focus command set / Check updates). Extension commands come from active `manifest.json` files or runtime dynamic registration. Полный список — см. [Kepler → Static commands](/apps/kepler#static-commands-registry-в-shell-electron-commands-ts). |
+| Слой                     | Файл                                      | Что делает                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------ | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend registry         | `platform/runtime/src/command_bus.rs`     | `CommandBus` структура (registrations, broadcast), unit-тесты                                                                                                                                                                                                                                                                                       |
+| Backend WS dispatch      | `platform/runtime/src/ws_server.rs`       | intercept `commands.*` operations, broadcast events                                                                                                                                                                                                                                                                                                 |
+| TS SDK                   | `core/ark/packages/ark/src/ark-client.ts` | `ArkCommandsApi`: `register/unregister/list/invoke/onInvoked/onChanged`                                                                                                                                                                                                                                                                             |
+| Launcher merge           | `platform/desktop/electron/main.ts`       | `kepler:commands:list` IPC = static `COMMANDS` ∪ `arkClient.commands.list()`                                                                                                                                                                                                                                                                        |
+| Launcher invoke          | `platform/desktop/electron/main.ts`       | `kepler:commands:invoke` — static exec локально, dynamic — `arkClient.commands.invoke(id)`                                                                                                                                                                                                                                                          |
+| Static/internal commands | `platform/desktop/electron/commands.ts`   | `COMMANDS: InternalCommand[]` — shell-owned commands (Settings / Dashboard / Clipboard History / Focus command set / Check updates). Extension commands come from active `manifest.json` files or runtime dynamic registration. Полный список — см. [Kepler → Static commands](/apps/kepler#static-commands-registry-в-shell-electron-commands-ts). |
 
 ## Examples
 
@@ -242,7 +242,7 @@ window.addEventListener("beforeunload", () => off());
 ### Invoke (от launcher через `@kosmos/ark`)
 
 ```ts
-// shell/electron/main.ts (упрощённо)
+// platform/desktop/electron/main.ts (упрощённо)
 await arkClient.commands.invoke("delphi:task:create");
 ```
 
@@ -265,13 +265,13 @@ client.commands.onChanged(() => {
 
 ## Когда использовать command bus, а когда entity event
 
-| Сценарий                         | Что использовать                                                                                          |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| «Покажи мне task с id X»         | ARK objects (get / list), не command bus                                                                  |
-| «Создай новую заметку с title Y» | command bus (action `<app>:note:create`)                                                                  |
-| «Начни фокус на 25 минут»        | shell internal command `kepler:focus-session`, дальше Focus Session вызывает `pomodoro.start`             |
-| «Объект task-1 изменился»        | entity events (`onEntityChanged`)                                                                         |
-| «Открой Delphi»                  | manifest-declared в `extensions/delphi/manifest.json` `commands[]` (`delphi:open` → `openExtension(...)`) |
+| Сценарий                         | Что использовать                                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| «Покажи мне task с id X»         | ARK objects (get / list), не command bus                                                                |
+| «Создай новую заметку с title Y» | command bus (action `<app>:note:create`)                                                                |
+| «Начни фокус на 25 минут»        | shell internal command `kepler:focus-session`, дальше Focus Session вызывает `pomodoro.start`           |
+| «Объект task-1 изменился»        | entity events (`onEntityChanged`)                                                                       |
+| «Открой Delphi»                  | manifest-declared в `products/delphi/manifest.json` `commands[]` (`delphi:open` → `openExtension(...)`) |
 
 Идея: command bus = императивный trigger для running апки. ARK objects = stateful data. Entity events = observation channel. Не путай.
 

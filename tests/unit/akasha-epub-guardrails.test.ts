@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readEpubBytes } from "../../extensions/akasha/src/lib/epub";
+import { readEpubBytes } from "../../incubator/akasha/src/lib/epub";
 
 function makeZipWithSingleEntry(name: string, uncompressedSize: number): Uint8Array {
   const encoder = new TextEncoder();

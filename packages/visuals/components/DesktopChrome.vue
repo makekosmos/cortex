@@ -38,7 +38,14 @@ provide("kosmosHasSidebar", hasSidebar);
       class="relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--background)]"
     >
       <header
-        class="kosmos-desktop-chrome-settings__header flex min-h-9 items-center justify-between gap-4 px-[10px] pb-1 pt-2 pr-[140px] [-webkit-app-region:drag]"
+        :class="[
+          'kosmos-desktop-chrome-settings__header flex min-h-9 items-center justify-between gap-4 pb-1 pt-2 [-webkit-app-region:drag]',
+          // Native window controls: на macOS traffic lights слева → отступ
+          // слева под них; на Windows min/max/close справа → отступ справа.
+          props.platform === 'mac'
+            ? 'pr-[10px] pl-[calc(10px+var(--kosmos-mac-traffic-light-left-safe-area,0px))]'
+            : 'pl-[10px] pr-[140px]',
+        ]"
       >
         <div
           class="kosmos-desktop-chrome-settings__header-left inline-flex min-w-0 items-center gap-2 [-webkit-app-region:no-drag]"

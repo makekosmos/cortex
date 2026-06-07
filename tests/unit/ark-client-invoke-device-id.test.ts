@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ArkClient } from "../../packages/ark/src/ark-client";
+import { ArkClient } from "../../core/ark/packages/ark/src/ark-client";
 
 function makeClient(captured: Record<string, unknown>[]): ArkClient {
   return new ArkClient({

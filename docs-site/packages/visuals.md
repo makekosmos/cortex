@@ -13,7 +13,7 @@
 3. Использовать только токены (`var(--*)`) для цветов / радиусов / шрифтов в собственных компонентах — никаких hardcoded `#hex`, `rgb()`, `font-family: "Inter"` и тому подобного.
 4. Брать готовые компоненты (`Sidebar`, `Titlebar`, `StatusDot`, `CommandPalette`, и т.д.) вместо своих копий.
 
-Свой UI пишется в `extensions/<name>/src/` / `shell/src/` и должен **только** использовать токены и компоненты из `@kosmos/visuals`. App-specific компоненты (например, `TimeEntryRow` в Horologion) — это потребители kosmos-visuals токенов, не альтернатива им.
+Свой UI пишется в `extensions/<name>/src/` / `platform/desktop/src/` и должен **только** использовать токены и компоненты из `@kosmos/visuals`. App-specific компоненты (например, `TimeEntryRow` в Horologion) — это потребители kosmos-visuals токенов, не альтернатива им.
 :::
 
 ## Структура
@@ -396,7 +396,7 @@ const off = installScrollFadeListener({ idleMs: 600 }); // оба парамет
 off(); // unsubscribe (idempotent)
 ```
 
-Вызов идемпотентен — повторный `installScrollFadeListener({ root })` с тем же root возвращает прежнюю отписку, новый listener не регистрируется. Это позволяет звать его и в `shell/src/main.ts`, и в каждом extension `main.ts` без риска накопить duplicate handler'ы при HMR. До 2026-05-19 эта логика была inline в `shell/src/main.ts`; теперь она единый источник правды в `@kosmos/visuals` и используется shell'ом и extension'ами.
+Вызов идемпотентен — повторный `installScrollFadeListener({ root })` с тем же root возвращает прежнюю отписку, новый listener не регистрируется. Это позволяет звать его и в `platform/desktop/src/main.ts`, и в каждом extension `main.ts` без риска накопить duplicate handler'ы при HMR. До 2026-05-19 эта логика была inline в `platform/desktop/src/main.ts`; теперь она единый источник правды в `@kosmos/visuals` и используется shell'ом и extension'ами.
 
 **Как это устроено:**
 
@@ -428,9 +428,9 @@ off(); // unsubscribe (idempotent)
 
 **Где сейчас применяется:**
 
-- `shell/src/views/LauncherView.vue` — `.list.kosmos-scroll`;
-- `shell/src/views/SettingsView.vue` — `.rows.kosmos-scroll`, `.ext-list.kosmos-scroll`;
-- Eden sidebar / entries list (через `installScrollFadeListener` в `extensions/eden/src/main.ts`).
+- `platform/desktop/src/views/LauncherView.vue` — `.list.kosmos-scroll`;
+- `platform/desktop/src/views/SettingsView.vue` — `.rows.kosmos-scroll`, `.ext-list.kosmos-scroll`;
+- Eden sidebar / entries list (через `installScrollFadeListener` в `products/eden/src/main.ts`).
 
 Любой новый scrollable-контейнер в Kepler/extensions должен использовать этот класс, чтобы скроллбар не торчал на фоне Mica/Acrylic.
 

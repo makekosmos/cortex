@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { CommandRecord } from "../../shell/shared/ipc-types";
+import type { CommandRecord } from "../../platform/desktop/shared/ipc-types";
 import {
   buildFocusAwareCommands,
   FOCUS_START_COMMAND_ID,
@@ -7,7 +7,7 @@ import {
   FOCUS_DONE_ID,
   FOCUS_STOP_ID,
   FOCUS_EDIT_ID,
-} from "../../shell/src/lib/focusLauncherCommands";
+} from "../../platform/desktop/src/lib/focusLauncherCommands";
 
 function baseCommands(): CommandRecord[] {
   return [

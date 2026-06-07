@@ -26,16 +26,16 @@ bold и italic рендерятся Vue-компонентами без `v-html`
 
 ## Где код
 
-| Часть             | Путь                                 | Роль                                              |
-| ----------------- | ------------------------------------ | ------------------------------------------------- |
-| Manifest          | `extensions/akasha/manifest.json`    | Команда launcher'а + Vue entrypoint               |
-| Vue app           | `extensions/akasha/src`              | EPUB reader UI + parser                           |
-| User data         | `extensions-data/akasha`             | Библиотека, EPUB-копии, progress, reader settings |
-| Build integration | `shell/scripts/build-extensions.mjs` | Vite build через shared extension config          |
+| Часть             | Путь                                            | Роль                                              |
+| ----------------- | ----------------------------------------------- | ------------------------------------------------- |
+| Manifest          | `incubator/akasha/manifest.json`                | Команда launcher'а + Vue entrypoint               |
+| Vue app           | `incubator/akasha/src`                          | EPUB reader UI + parser                           |
+| User data         | `extensions-data/akasha`                        | Библиотека, EPUB-копии, progress, reader settings |
+| Build integration | `platform/desktop/scripts/build-extensions.mjs` | Vite build через shared extension config          |
 
 ## Контракт
 
-`extensions/akasha/manifest.json` объявляет:
+`incubator/akasha/manifest.json` объявляет:
 
 - `kind: "vue"`;
 - `entryHtml: "dist/index.html"`;
@@ -77,6 +77,6 @@ highlights, notes, semantic/RAG features — отдельная будущая �
 ## Проверки
 
 ```powershell
-bun run --cwd shell build:extensions
-bun run --cwd shell typecheck
+bun run --cwd platform/desktop build:extensions
+bun run --cwd platform/desktop typecheck
 ```

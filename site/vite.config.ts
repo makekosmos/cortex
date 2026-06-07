@@ -10,10 +10,10 @@ export default defineConfig({
   server: { port: 5180 },
   resolve: {
     alias: {
-      // Те же alias'ы что и shell/vite.config.mjs — site импортирует
-      // реальные shell-компоненты (LauncherView.vue и т.п.) без копирования.
-      "@": path.resolve(__dirname, "../shell/src"),
-      "@shared": path.resolve(__dirname, "../shell/shared"),
+      // Те же alias'ы что и platform/desktop/vite.config.mjs — site импортирует
+      // реальные desktop-компоненты (LauncherView.vue и т.п.) без копирования.
+      "@": path.resolve(__dirname, "../platform/desktop/src"),
+      "@shared": path.resolve(__dirname, "../platform/desktop/shared"),
       "@kosmos/visuals/theme/css": path.resolve(
         __dirname,
         "../packages/visuals/theme/css-variables.css",

@@ -25,7 +25,7 @@
   - **−1 Node runtime**: 4 Electron main процесса → 1 (kepler-shell).
   - **Shared GPU process + utility processes**: один набор на host вместо четырёх.
   - **1 ark-core-rpc вместо 4**: ARK runtime + SQLite handle разделяются между extensions через общий backend.
-- **Eden migration done (Phase 6.0):** Eden уже extension (`extensions/eden/`), без отдельного `.exe`, без Heart Rust sidecar. Пост-migration baseline RAM ещё не замерен — числа в таблице выше относятся к Phase 4 конфигурации (4 extensions без Eden). Свежий замер с Eden как extension — TODO для следующего baseline-прогона.
+- **Eden migration done (Phase 6.0):** Eden уже extension (`products/eden/`), без отдельного `.exe`, без Heart Rust sidecar. Пост-migration baseline RAM ещё не замерен — числа в таблице выше относятся к Phase 4 конфигурации (4 extensions без Eden). Свежий замер с Eden как extension — TODO для следующего baseline-прогона.
 
 ## Воспроизведение
 
@@ -48,20 +48,20 @@ pwsh scripts/measure-kepler-ram.ps1 -Mode kepler -Scenario all-extensions-idle -
 
 ```powershell
 # 1. Launcher only — голый Kepler
-bun run --cwd shell dev
+bun run --cwd platform/desktop dev
 # через 30s:
 pwsh scripts/measure-kepler-ram.ps1 -Mode kepler -Scenario launcher-only -Samples 3
 
 # 2. All extensions idle — launcher + 4 extensions + Dashboard, 5min idle
 $env:KEPLER_BENCHMARK_OPEN_ALL = "1"
-bun run --cwd shell dev
+bun run --cwd platform/desktop dev
 # через 5min:
 pwsh scripts/measure-kepler-ram.ps1 -Mode kepler -Scenario all-extensions-idle -Warmup 30 -Samples 3
 
 # 3. Exp 23 Mica vs Acrylic A/B
-$env:KEPLER_BG_MATERIAL = "acrylic"; bun run --cwd shell dev
+$env:KEPLER_BG_MATERIAL = "acrylic"; bun run --cwd platform/desktop dev
 # → measure → close → open again with mica:
-$env:KEPLER_BG_MATERIAL = "mica"; bun run --cwd shell dev
+$env:KEPLER_BG_MATERIAL = "mica"; bun run --cwd platform/desktop dev
 # Сравни в Task Manager: dwm.exe %GPU + kepler-shell.exe %GPU
 ```
 

@@ -5,7 +5,7 @@
 // .agent/tasks/2026-05-21-bug-detection-phase1-determinism/.
 //
 // Все хелперы предполагают что Kepler shell запущен с `KOSMOS_TEST_MODE=1`,
-// тогда preload exposes `window.kepler.__test`. См. shell/electron/preload.ts.
+// тогда preload exposes `window.kepler.__test`. См. platform/desktop/electron/preload.ts.
 
 import type { Page } from "playwright";
 

@@ -22,23 +22,23 @@
 ## За 30 секунд
 
 - **Kosmos** = внешний desktop product + монорепо личной экосистемы (Bun workspaces + Cargo workspace, Windows-only).
-- **Kepler** = legacy/internal namespace (`kepler:*`, `window.kepler`, `services/kepler-backend/`), не user-facing product name.
-- **ARK** = общий Rust+SQLite рантайм (`crates/ark-core`, бинарь `ark-core-rpc`).
+- **Kepler** = legacy/internal namespace (`kepler:*`, `window.kepler`, `platform/runtime/`), не user-facing product name.
+- **ARK** = общий Rust+SQLite рантайм (`core/ark/crates/ark-core`, бинарь `ark-core-rpc`).
 - **Extensions** (`extensions/<id>/`) — Vue-приложения, грузятся в Kepler shell как отдельные окна.
 - **Apps говорят с ARK только** через `@kosmos/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в синхронизируемые таблицы — запрещены.
 - **Сначала классифицируй задачу**: `NO_LOOP`, `LIGHT_LOOP`, `FULL_LOOP`. Substantial-правки всегда `FULL_LOOP` через `.agent/tasks/<DATE>-<slug>/` proof loop.
 
 ## 🚨 Прежде чем менять код
 
-| Область правки                                                                                   | Обязательно прочитать                                                              |
-| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| Data-слой (`shell/electron`, `extensions/<id>/src`, `services/kepler-backend/src/usage_tracker`) | `docs-site/concepts/write-boundary.md` + `agents/forbidden.md` § ARK writes / Sync |
-| `extensions/<id>/src/`                                                                           | `docs-site/apps/<name>.md` + `forbidden.md` § per-app                              |
-| `shell/electron/focus-*`, `kepler-focus-helper/svc`                                              | `docs-site/concepts/focus-mode.md` + `forbidden.md` § Focus mode                   |
-| `shell/electron/extension-host.ts`, command bus                                                  | `docs-site/concepts/command-bus.md`, `extension-host.md`, `extension-dev-mode.md`  |
-| Sync / schema / write-boundary                                                                   | `docs-site/concepts/sync.md` + `ark-objects.md`                                    |
-| Substantial-задача (фича / endpoint / архитектура)                                               | `docs-site/concepts/proof-loop.md` + spec в `.agent/tasks/<DATE>-<slug>/`          |
-| Перед оценкой срока пользователю                                                                 | skill `estimate-calibration` (читать `log.jsonl`)                                  |
+| Область правки                                                                                       | Обязательно прочитать                                                              |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Data-слой (`platform/desktop/electron`, `extensions/<id>/src`, `platform/runtime/src/usage_tracker`) | `docs-site/concepts/write-boundary.md` + `agents/forbidden.md` § ARK writes / Sync |
+| `extensions/<id>/src/`                                                                               | `docs-site/apps/<name>.md` + `forbidden.md` § per-app                              |
+| `platform/desktop/electron/focus-*`, `kepler-focus-helper/svc`                                       | `docs-site/concepts/focus-mode.md` + `forbidden.md` § Focus mode                   |
+| `platform/desktop/electron/extension-host.ts`, command bus                                           | `docs-site/concepts/command-bus.md`, `extension-host.md`, `extension-dev-mode.md`  |
+| Sync / schema / write-boundary                                                                       | `docs-site/concepts/sync.md` + `ark-objects.md`                                    |
+| Substantial-задача (фича / endpoint / архитектура)                                                   | `docs-site/concepts/proof-loop.md` + spec в `.agent/tasks/<DATE>-<slug>/`          |
+| Перед оценкой срока пользователю                                                                     | skill `estimate-calibration` (читать `log.jsonl`)                                  |
 
 ## Команды (всегда под рукой)
 
@@ -47,26 +47,26 @@ bun run ark:guard:writes   # после правок в data-слой
 bun run ark:smoke          # после любой substantial-задачи
 bun run docs:check         # после правок docs-site/
 bun run docs:sync          # регенерация CLAUDE.md / AGENTS.md / llms.txt
-bunx playwright test --config shell/playwright.config.ts   # e2e (всегда headless)
+bunx playwright test --config platform/desktop/playwright.config.ts   # e2e (всегда headless)
 ```
 
 Полный набор скриптов — `docs-site/reference/commands.md`. Что прогонять перед PR — `docs-site/reference/smoke-matrix.md`.
 
 ## Карта (где что)
 
-| Имя                                           | Где                                                                                                        |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Eden (заметки, TipTap)                        | `extensions/eden/`                                                                                         |
-| Delphi (задачи)                               | `extensions/delphi/`                                                                                       |
-| Focus Session / Focus mode                    | `shell/electron/focus-*`, `shell/src/views/LauncherView.vue`, `shell/src/components/FocusCommandPanel.vue` |
-| Arrancador (игровая библиотека)               | `extensions/arrancador/`                                                                                   |
-| Kosmos desktop shell (лаунчер + focus widget) | `shell/`                                                                                                   |
-| Kosmos Runtime / kepler-backend               | `services/kepler-backend/`                                                                                 |
-| Kosmos Helper / System Service                | `services/kepler-focus-helper/`, `services/kepler-focus-svc/`                                              |
-| ARK core (Rust runtime)                       | `crates/ark-core/`                                                                                         |
-| `@kosmos/ark` (TS SDK)                        | `packages/ark/`                                                                                            |
-| `@kosmos/visuals` (UI токены)                 | `packages/visuals/`                                                                                        |
-| Dashboard (встроенный shell view)             | `shell/src/views/Dashboard*.vue`                                                                           |
+| Имя                                           | Где                                                                                                                                         |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Eden (заметки, TipTap)                        | `products/eden/`                                                                                                                            |
+| Delphi (задачи)                               | `products/delphi/`                                                                                                                          |
+| Focus Session / Focus mode                    | `platform/desktop/electron/focus-*`, `platform/desktop/src/views/LauncherView.vue`, `platform/desktop/src/components/FocusCommandPanel.vue` |
+| Arrancador (игровая библиотека)               | `incubator/arrancador/`                                                                                                                     |
+| Kosmos desktop shell (лаунчер + focus widget) | `platform/desktop/`                                                                                                                         |
+| Kosmos Runtime / kepler-backend               | `platform/runtime/`                                                                                                                         |
+| Kosmos Helper / System Service                | `platform/native-services/kepler-focus-helper/`, `platform/native-services/kepler-focus-svc/`                                               |
+| ARK core (Rust runtime)                       | `core/ark/crates/ark-core/`                                                                                                                 |
+| `@kosmos/ark` (TS SDK)                        | `core/ark/packages/ark/`                                                                                                                    |
+| `@kosmos/visuals` (UI токены)                 | `packages/visuals/`                                                                                                                         |
+| Dashboard (встроенный shell view)             | `platform/desktop/src/views/Dashboard*.vue`                                                                                                 |
 
 Подробное описание — `docs-site/agents/index.md` (Карта приложений).
 
@@ -87,18 +87,18 @@ bunx playwright test --config shell/playwright.config.ts   # e2e (всегда h
 
 - ❌ `Mutex::lock().unwrap()` в production paths. Только `lock().unwrap_or_else(|e| e.into_inner())` (poison recovery). См. `concepts/db-resilience.md`.
 - ❌ Spawn `kepler-backend` без `RUST_BACKTRACE=1`.
-- ❌ Удалять `crash_reporter::install`, `db_backup::maybe_backup_on_startup`, `db::check_integrity` из `services/kepler-backend/src/main.rs::setup`.
+- ❌ Удалять `crash_reporter::install`, `db_backup::maybe_backup_on_startup`, `db::check_integrity` из `platform/runtime/src/main.rs::setup`.
 
 ### Тесты (всегда headless)
 
-- ❌ E2e без `KOSMOS_HEADLESS=1`. Любой `BrowserWindow` в `shell/electron/` обязан респектить `process.env.KOSMOS_HEADLESS === "1"` (`show: !headless`, `skipTaskbar: headless`).
+- ❌ E2e без `KOSMOS_HEADLESS=1`. Любой `BrowserWindow` в `platform/desktop/electron/` обязан респектить `process.env.KOSMOS_HEADLESS === "1"` (`show: !headless`, `skipTaskbar: headless`).
 - ❌ `.show()` / `.showInactive()` / `.focus()` / `.setAlwaysOnTop(true)` без headless guard'а. Включая launcher, Settings, Dashboard, focus widget, install dialog.
 - ❌ Захардкоженный путь к user ARK DB (`%APPDATA%\Kosmos\ark.db`) в тестах. Override через `KOSMOS_DATA_DIR` под `tests/.e2e/<spec>/`.
-- ❌ `path.join(appData, "Kosmos"|"Kepler", ...)` где попало. Используй `resolveInstance()` / `keplerDataDir()` из `shell/electron/instance.ts` (slot-based изоляция prod/dev/test).
+- ❌ `path.join(appData, "Kosmos"|"Kepler", ...)` где попало. Используй `resolveInstance()` / `keplerDataDir()` из `platform/desktop/electron/instance.ts` (slot-based изоляция prod/dev/test).
 
 ### Focus mode
 
-- ❌ Прямые `BrowserWindow` манипуляции focus widget'ом вне `shell/electron/focus-widget.ts`. Только через IPC `kepler:focus-widget:*`.
+- ❌ Прямые `BrowserWindow` манипуляции focus widget'ом вне `platform/desktop/electron/focus-widget.ts`. Только через IPC `kepler:focus-widget:*`.
 - ❌ Запись в `C:\Windows\System32\drivers\etc\hosts` вне `Kosmos Helper.exe` / `Kosmos System Service.exe` (dev: `kepler-focus-helper` / `kepler-focus-svc`) и вне маркерной секции `# === kepler-focus BEGIN/END ===` (иначе backup юзерских entries теряется).
 - ❌ Lifecycle pomodoro мимо `pomodoro_host` / `invokeOperation("pomodoro.<op>")`. Backend — source of truth.
 
@@ -127,7 +127,7 @@ bunx playwright test --config shell/playwright.config.ts   # e2e (всегда h
 ### Framework / architecture
 
 - ❌ Предлагать миграцию с Electron на Tauri / Wails. Зафиксировано экспериментом 2026-05-19 (`docs-site/experiments/tauri-vs-electron.md`).
-- ❌ Массовый rename внутренних `kepler:*` / `window.kepler` / `services/kepler-backend` без отдельного proof loop. User-facing product — Kosmos; `Kepler` остаётся compat namespace'ом.
+- ❌ Массовый rename внутренних `kepler:*` / `window.kepler` / `platform/runtime` без отдельного proof loop. User-facing product — Kosmos; `Kepler` остаётся compat namespace'ом.
 
 ### Дисциплина
 

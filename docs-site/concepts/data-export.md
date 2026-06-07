@@ -18,15 +18,15 @@ ARK хранит всё в одной `ark.db` (SQLite). Пользовател�
 ## Архитектура
 
 ```
-shell/src/views/SettingsView.vue (UI section "Экспорт")
+platform/desktop/src/views/SettingsView.vue (UI section "Экспорт")
         ↓ window.kepler.export.{list, run, pickDir}
-shell/electron/preload.ts (contextBridge)
+platform/desktop/electron/preload.ts (contextBridge)
         ↓ ipcRenderer.invoke("kepler:export:*")
-shell/electron/main.ts (IPC handlers)
+platform/desktop/electron/main.ts (IPC handlers)
         ↓ arkClient.invokeOperation({operation: "export.list" | "export.run"})
-services/kepler-backend/src/ws_server.rs (export.* dispatch)
+platform/runtime/src/ws_server.rs (export.* dispatch)
         ↓
-services/kepler-backend/src/export/mod.rs (Converter registry)
+platform/runtime/src/export/mod.rs (Converter registry)
         ↓ для каждого конвертера: list_objects_by_type → convert → write files
         files written в dest_dir
 ```
@@ -106,7 +106,7 @@ Registry — `OnceLock<Vec<Box<dyn Converter>>>` в `export/mod.rs`. Регис�
 
 ## UI
 
-`shell/src/views/SettingsView.vue` → таб «Экспорт»:
+`platform/desktop/src/views/SettingsView.vue` → таб «Экспорт»:
 
 - Список converters (`export.list`).
 - Per-converter карточка: display_name, dropdown формата (если `supported_formats.length > 1`), кнопка «Экспортировать».
@@ -115,7 +115,7 @@ Registry — `OnceLock<Vec<Box<dyn Converter>>>` в `export/mod.rs`. Регис�
 
 ## Как добавить новый конвертер
 
-1. Создать `services/kepler-backend/src/export/<name>.rs` с `pub struct MyConverter` + `impl Converter`.
+1. Создать `platform/runtime/src/export/<name>.rs` с `pub struct MyConverter` + `impl Converter`.
 2. Добавить в `export/mod.rs::list_converters()` `Box::new(<name>::MyConverter)`.
 3. Минимум 2 unit test'а в `<name>.rs` (`#[cfg(test)] mod tests`): создать sample ArkObject, вызвать `convert(...)`, assert файлы созданы + содержат ключевые строки.
 4. `cargo test --manifest-path services\kepler-backend\Cargo.toml --lib` зелёный.

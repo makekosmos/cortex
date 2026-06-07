@@ -12,13 +12,13 @@
     "resolveJsonModule": true,
     "types": ["vite/client", "node"],
     "paths": {
-      "@/*": ["../shell/src/*"],
-      "@shared/*": ["../shell/shared/*"],
+      "@/*": ["../platform/desktop/src/*"],
+      "@shared/*": ["../platform/desktop/shared/*"],
       "@kosmos/visuals": ["../packages/visuals/index.ts"],
       "@kosmos/visuals/*": ["../packages/visuals/*"]
     },
     "incremental": true,
     "tsBuildInfoFile": ".tsbuildinfo"
   },
-  "include": ["src/**/*", "vite.config.ts", "../shell/src/global.d.ts"]
+  "include": ["src/**/*", "vite.config.ts", "../platform/desktop/src/global.d.ts"]
 }

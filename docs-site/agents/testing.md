@@ -6,12 +6,12 @@
 
 ## Уровни тестов
 
-| Уровень                            | Где                                               | Что                                                        | Когда писать                                               |
-| ---------------------------------- | ------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
-| Rust unit                          | `crates/ark-core/rust`, `services/kepler-backend` | `cargo test` — ARK runtime, lock-file, WS handshake, sync  | Новый Rust код / refactor                                  |
-| TS unit                            | `packages/ark/tests/`                             | `bun test` — `@kosmos/ark` SDK contracts                   | Новый SDK метод / lock-file resolver                       |
-| **Extension contract (universal)** | `tests/e2e/extensions-contract.spec.ts`           | Manifest-driven: boot + commands.register + ARK round-trip | **Автоматически** для каждого extension с `manifest.tests` |
-| **Per-app UI spec**                | `tests/e2e/<app>.spec.ts`                         | Конкретный UI flow (TipTap render, Pomodoro tick)          | Когда фича не покрывается архитектурным contract'ом        |
+| Уровень                            | Где                                                 | Что                                                        | Когда писать                                               |
+| ---------------------------------- | --------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
+| Rust unit                          | `core/ark/crates/ark-core/rust`, `platform/runtime` | `cargo test` — ARK runtime, lock-file, WS handshake, sync  | Новый Rust код / refactor                                  |
+| TS unit                            | `core/ark/packages/ark/tests/`                      | `bun test` — `@kosmos/ark` SDK contracts                   | Новый SDK метод / lock-file resolver                       |
+| **Extension contract (universal)** | `tests/e2e/extensions-contract.spec.ts`             | Manifest-driven: boot + commands.register + ARK round-trip | **Автоматически** для каждого extension с `manifest.tests` |
+| **Per-app UI spec**                | `tests/e2e/<app>.spec.ts`                           | Конкретный UI flow (TipTap render, Pomodoro tick)          | Когда фича не покрывается архитектурным contract'ом        |
 
 ## Universal extension contract (manifest-driven)
 
@@ -72,7 +72,7 @@ if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1")
 win.showInactive();
 ```
 
-Главное shell-окно (launcher) и так стартует с `show: false` — но `showLauncher()` (вызывается из hotkey, tray-click, post-update flow) обязан проверять headless перед `mainWindow.showInactive()`. См. `shell/electron/main.ts::showLauncher()`.
+Главное shell-окно (launcher) и так стартует с `show: false` — но `showLauncher()` (вызывается из hotkey, tray-click, post-update flow) обязан проверять headless перед `mainWindow.showInactive()`. См. `platform/desktop/electron/main.ts::showLauncher()`.
 
 Запрет CLAUDE.md дублирует это правило в секции «Тесты». Любое нарушение — fail из-за visible window — это **баг**, не «фича тестов».
 
@@ -163,7 +163,7 @@ if (initialArk) {
 }
 ```
 
-Не lazy при первом upsert. См. `extensions/delphi/src/lib/electron-api-shim.ts` (Phase 6.0.5 fix).
+Не lazy при первом upsert. См. `products/delphi/src/lib/electron-api-shim.ts` (Phase 6.0.5 fix).
 
 ### 5. Stale ACL lock-files (Windows)
 
@@ -207,7 +207,7 @@ Get-ChildItem tests\.e2e -Recurse -Force -Filter kepler.lock.json | ForEach-Obje
     "smoke": { "objectType": "<type_id>", "sample": { "title": "contract-smoke-<id>" } }
   }
   ```
-- [ ] Если extension использует custom object_type, который не зарегистрирован в `crates/ark-core` builtin types — eager registration в shim на boot (см. ловушку #4).
+- [ ] Если extension использует custom object_type, который не зарегистрирован в `core/ark/crates/ark-core` builtin types — eager registration в shim на boot (см. ловушку #4).
 - [ ] Per-app UI spec `tests/e2e/<id>.spec.ts` для нетривиальных flow'ов (helper `open<Id>(app)` для повторного использования).
 
 ## Связанные документы

@@ -1,14 +1,14 @@
 # Horologion — трекер времени
 
 ::: tip Статус
-**Archived с 2026-06-05.** Horologion больше не активное Kosmos extension/window: `manifest.json` и `package.json` переименованы в archived variants, а текущий workflow фокус-сессий живёт в shell (`shell/electron/focus-session.ts`) и открывается внутри Shell command surface. Эта страница оставлена как legacy reference для восстановимого source archive.
+**Archived с 2026-06-05.** Horologion больше не активное Kosmos extension/window: `manifest.json` и `package.json` переименованы в archived variants, а текущий workflow фокус-сессий живёт в shell (`platform/desktop/electron/focus-session.ts`) и открывается внутри Shell command surface. Эта страница оставлена как legacy reference для восстановимого source archive.
 :::
 
 ::: info Имя
-Имя приложения — **Horologion** (греч. ὡρολόγιον — «часослов»). После Phase B-D Horologion жил как Vue-extension внутри Kepler shell — `extensions/horologion/`. С 2026-06-05 active surface заменён shell-owned Focus Session; внутренние идентификаторы в archived source сохранены как legacy compatibility context.
+Имя приложения — **Horologion** (греч. ὡρολόγιον — «часослов»). После Phase B-D Horologion жил как Vue-extension внутри Kepler shell — `incubator/horologion/`. С 2026-06-05 active surface заменён shell-owned Focus Session; внутренние идентификаторы в archived source сохранены как legacy compatibility context.
 :::
 
-- **Path**: `extensions/horologion/`
+- **Path**: `incubator/horologion/`
 - **Стек**: archived Vue 3.6 Vapor source + `@kosmos/ark` + `@kosmos/visuals`. Не открывается active shell `extension-host.ts`, пока не восстановить manifest/package.
 - **Аналог**: Toggl Track — без социалки, без web-app, локально, с интеграцией Delphi-задач.
 
@@ -19,7 +19,7 @@
 ## Структура
 
 ```
-extensions/horologion/
+incubator/horologion/
 ├─ manifest.json           # id, title, devPort, capabilities
 ├─ index.html
 ├─ vite.config.mjs
@@ -48,7 +48,7 @@ extensions/horologion/
       └─ format.ts         # formatDuration / dayKey / formatDayHeader
 ```
 
-Запускается из Kepler launcher'а через команду `horologion:open` (открывает extension window). Иконка embed в shell.exe — за это отвечает `shell/build/`.
+Запускается из Kepler launcher'а через команду `horologion:open` (открывает extension window). Иконка embed в shell.exe — за это отвечает `platform/desktop/build/`.
 
 ## UI и дизайн
 
@@ -126,8 +126,8 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 - Cвой `<MentionInput>` сверху — выбираешь «над чем работаешь» (можно поменять в любой момент, в т.ч. во время break'а — следующий work возьмёт новое значение).
 - Точки `[● ● ○ ○]` показывают сколько помидорок до длинного перерыва.
 - Кнопки: primary «Начать сессию» (по статусу: Пауза / Продолжить / Старт фокуса / Старт перерыва), Skip, Stop.
-- **Состояние сохраняется при сворачивании в трей и при закрытии окна Horologion** — manifest имеет `keepAliveInBackground: true` (с 2026-05-22), `shell/electron/extension-host.ts` intercept'ит `close` и делает `win.hide()` вместо destroy. Renderer переживает закрытие, таймер продолжает тикать. Реальный destroy окна — только на `app.before-quit`.
-- **Pomodoro state как single source of truth — backend.** `services/kepler-backend/src/pomodoro_host.rs` (`PomodoroHost`) держит состояние сессии (phase, phase_ends_at_ms, remainingMs) и эмитит `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` через ARK event bus даже если Horologion-окно закрыто. Renderer и focus widget слушают эти события и ресинхронизуются при reopen.
+- **Состояние сохраняется при сворачивании в трей и при закрытии окна Horologion** — manifest имеет `keepAliveInBackground: true` (с 2026-05-22), `platform/desktop/electron/extension-host.ts` intercept'ит `close` и делает `win.hide()` вместо destroy. Renderer переживает закрытие, таймер продолжает тикать. Реальный destroy окна — только на `app.before-quit`.
+- **Pomodoro state как single source of truth — backend.** `platform/runtime/src/pomodoro_host.rs` (`PomodoroHost`) держит состояние сессии (phase, phase_ends_at_ms, remainingMs) и эмитит `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` через ARK event bus даже если Horologion-окно закрыто. Renderer и focus widget слушают эти события и ресинхронизуются при reopen.
 - **Пауза = stop текущего сегмента, resume = новый сегмент** (Toggl-style). На `pause()` `usePomodoroSession` закрывает активный `time_entry_obj` с `endedAt = моментом паузы`, на `resume()` открывает свежий entry. Время в паузе **не учитывается** в длительности записей. Один pomodoro с N паузами = N+1 `time_entry_obj`, сумма их `endedAt - startedAt` = чистое отработанное время. Backend (`ark-core::pomodoro::Session`) одновременно замораживает `remainingMs` / `phase_ends_at_ms` — таймер визуально стоит.
 
 ### Settings
@@ -151,7 +151,7 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 
 В Horologion-extension'е topbar содержит два UI-элемента справа от заголовка:
 
-- **Status dot** — круглая точка (8px), цвет показывает состояние подключения к `kepler-backend`. Логика в `extensions/horologion/src/App.vue`: при mount и каждые 10 секунд дёргает дешёвую операцию `kepler.ark.request("list_object_types")` — успех → `connected` (зелёный), ошибка → `error` (красный), стартовое состояние → `connecting`. Tooltip переключается между «ARK подключен» / «Подключение к ARK…» / «ARK недоступен». Визуально совпадает с Delphi extension status dot (одни и те же oklch-токены из `@kosmos/visuals`).
+- **Status dot** — круглая точка (8px), цвет показывает состояние подключения к `kepler-backend`. Логика в `incubator/horologion/src/App.vue`: при mount и каждые 10 секунд дёргает дешёвую операцию `kepler.ark.request("list_object_types")` — успех → `connected` (зелёный), ошибка → `error` (красный), стартовое состояние → `connecting`. Tooltip переключается между «ARK подключен» / «Подключение к ARK…» / «ARK недоступен». Визуально совпадает с Delphi extension status dot (одни и те же oklch-токены из `@kosmos/visuals`).
 - **Кнопка ⚙ Настройки** — `router.push("/settings")` в memory-router'е extension'а. На route `/settings` App.vue прячет dot и кнопку, показывает «Назад» (`router.push("/")`) и заголовок «Настройки помодоро».
 
 ## Настройки
@@ -165,7 +165,7 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 
 ## Persistence pomodoro
 
-С 2026-05-22 pomodoro state machine живёт в `services/kepler-backend/src/pomodoro_host.rs` (`PomodoroHost`):
+С 2026-05-22 pomodoro state machine живёт в `platform/runtime/src/pomodoro_host.rs` (`PomodoroHost`):
 
 - Backend держит фазу, `phase_ends_at_ms`, `remainingMs`, конфигурацию сессии и эмитит события `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` через ARK event bus.
 - Horologion-окно закрыли (или extension вообще не открывали в этой сессии) — таймер продолжает тикать в backend'е, focus widget и system notifications работают.
@@ -174,22 +174,22 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 
 ## Focus widget
 
-Floating focus widget — отдельное окно, которым управляет `shell/electron/focus-widget.ts`. Главный процесс подписывается на `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` напрямую через `arkClient.onArkEvent` (`focus-service.ts`) и деривит state виджета — поэтому он появляется и тикает даже когда Horologion-окно никто не открывал, например при запуске pomodoro через launcher-команду. Подробности render-логики и blocking integration — `shell/electron/focus-block.ts` / `focus-service.ts` (см. будущий [Focus mode](../concepts/focus-mode.md)).
+Floating focus widget — отдельное окно, которым управляет `platform/desktop/electron/focus-widget.ts`. Главный процесс подписывается на `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` напрямую через `arkClient.onArkEvent` (`focus-service.ts`) и деривит state виджета — поэтому он появляется и тикает даже когда Horologion-окно никто не открывал, например при запуске pomodoro через launcher-команду. Подробности render-логики и blocking integration — `platform/desktop/electron/focus-block.ts` / `focus-service.ts` (см. будущий [Focus mode](../concepts/focus-mode.md)).
 
 ## Команды
 
 Сборка проходит через Kepler shell:
 
 ```powershell
-bun run --cwd shell build:extensions
-bun run --cwd shell build:js
-bun run --cwd shell dev
-bun run --cwd shell test:e2e
+bun run --cwd platform/desktop build:extensions
+bun run --cwd platform/desktop build:js
+bun run --cwd platform/desktop dev
+bun run --cwd platform/desktop test:e2e
 ```
 
-В dev mode (`bun run --cwd shell dev:extensions` или `KEPLER_DEV_EXTENSIONS=1 bun run --cwd shell dev`) extension поднимается с HMR (см. [Extension dev mode](/concepts/extension-dev-mode)).
+В dev mode (`bun run --cwd platform/desktop dev:extensions` или `KEPLER_DEV_EXTENSIONS=1 bun run --cwd platform/desktop dev`) extension поднимается с HMR (см. [Extension dev mode](/concepts/extension-dev-mode)).
 
-Иконка в Kepler launcher отображается из `extensions/horologion/icon.png`.
+Иконка в Kepler launcher отображается из `incubator/horologion/icon.png`.
 
 ## Command bus integration
 
@@ -203,7 +203,7 @@ Horologion регистрируется в [Kepler command bus](/concepts/comman
 | `horologion:pomodoro:50`     | Запускает помодоро на 50 минут |
 | `horologion:stopwatch:start` | Запускает секундомер           |
 
-Регистрация — в extension main (`extensions/horologion/src/main.ts`) через `ArkClient.commands.register([...])` после подключения к `kepler-backend`.
+Регистрация — в extension main (`incubator/horologion/src/main.ts`) через `ArkClient.commands.register([...])` после подключения к `kepler-backend`.
 
 Когда invoke приходит, App.vue dispatcher разводит:
 

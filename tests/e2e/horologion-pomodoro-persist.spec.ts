@@ -5,8 +5,8 @@
 // восстанавливает Session, advance'я истёкшие фазы. Stop удаляет файл.
 //
 // Файлы:
-//   - crates/ark-core/rust/src/pomodoro/session.rs::PersistedSession + from_persisted
-//   - services/kepler-backend/src/pomodoro_host.rs::PomodoroHost::new(data_dir)
+//   - core/ark/crates/ark-core/rust/src/pomodoro/session.rs::PersistedSession + from_persisted
+//   - platform/runtime/src/pomodoro_host.rs::PomodoroHost::new(data_dir)
 //
 // Тесты используют ОДИН `dataDir` между launch'ами (freshDataDir один раз).
 

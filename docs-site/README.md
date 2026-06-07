@@ -11,8 +11,8 @@ docs-site/**/*.md         (источник правды, правишь тол�
         ▼
         ├─ AGENTS.md                       (корень)
         ├─ CLAUDE.md                       (корень)
-        ├─ mobile/delphi/AGENTS.md
-        ├─ crates/ark-core/AGENTS.md
+        ├─ incubator/mobile/delphi/AGENTS.md
+        ├─ core/ark/crates/ark-core/AGENTS.md
         └─ docs-site/public/llms.txt       (полный inline-текст для агентов через WebFetch)
 ```
 

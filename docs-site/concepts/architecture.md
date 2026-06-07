@@ -10,16 +10,16 @@
 ## Brand'ы
 
 - **Kosmos** — внешний продукт и название экосистемы. Пользователь запускает `Kosmos.exe`; внутри живут Notes/Eden, Tasks/Delphi, Games/Arrancador, Focus/Activity и shared-пакеты (`@kosmos/ark`, `@kosmos/visuals`).
-- **Kepler** — legacy/internal имя desktop host слоя: `shell/`, IPC namespace `kepler:*`, `kepler-backend`, `kepler.lock.json`. В UX и installed artifact'ах с 2026-05-26 используется **Kosmos**.
-- **Kosmos Runtime.exe** — packaged display name для `services/kepler-backend`: Rust host, который держит `ark-core-rpc` child, gateway-WS для апок, command bus и LAN/relay sync. Слияние с `ark-core-rpc` в один процесс — отдельная архитектурная задача, не часть rename migration.
+- **Kepler** — legacy/internal имя desktop host слоя: `platform/desktop/`, IPC namespace `kepler:*`, `kepler-backend`, `kepler.lock.json`. В UX и installed artifact'ах с 2026-05-26 используется **Kosmos**.
+- **Kosmos Runtime.exe** — packaged display name для `platform/runtime`: Rust host, который держит `ark-core-rpc` child, gateway-WS для апок, command bus и LAN/relay sync. Слияние с `ark-core-rpc` в один процесс — отдельная архитектурная задача, не часть rename migration.
 
-Раньше "Kepler" обозначал отдельный Rust+gpui фоновый sync host, затем Electron launcher. После product rename 2026-05-26 Kepler остаётся только кодовым namespace'ом; user-facing app называется Kosmos. Phase B-E (2026-05-14) свели весь stack в плоский top-level layout: `shell/`, `extensions/`, `crates/`, `mobile/`, `services/`.
+Раньше "Kepler" обозначал отдельный Rust+gpui фоновый sync host, затем Electron launcher. После product rename 2026-05-26 Kepler остаётся только кодовым namespace'ом; user-facing app называется Kosmos. Phase B-E (2026-05-14) свели весь stack в плоский top-level layout: `platform/desktop/`, `extensions/`, `crates/`, `mobile/`, `services/`.
 
 ## Высокоуровневая картина
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│  Kosmos.exe  (Electron host, shell/)                         │
+│  Kosmos.exe  (Electron host, platform/desktop/)                         │
 │    ├─ Launcher BrowserWindow (Ctrl+Shift+K, FTS5 search)     │
 │    ├─ Tray icon                                              │
 │    ├─ Settings window                                        │
@@ -30,7 +30,7 @@
                             │ child process
                             ▼
 ┌──────────────────────────────────────────────────────────────┐
-│  Kosmos Runtime.exe  (Rust, services/kepler-backend)         │
+│  Kosmos Runtime.exe  (Rust, platform/runtime)         │
 │    ├─ spawn: Kosmos Data Engine.exe / ark-core-rpc.exe       │
 │    ├─ WS server 127.0.0.1:<random_port>                      │
 │    ├─ Command bus (registry + invoke broadcast)              │
@@ -45,35 +45,35 @@
 ┌──┴──┐ ┌─────┴────┐ ┌─────┴────┐ ┌─────┴───┐ ┌──────┴─────┐
 │Eden │ │ Delphi   │ │Arrancador│ │Horologion│ │ Dashboard  │
 └─────┘ └──────────┘ └──────────┘ └──────────┘ └────────────┘
- extensions/<id>/ (Vue-extensions внутри shell/)         shell view
+ extensions/<id>/ (Vue-extensions внутри platform/desktop/)         shell view
 
 Eden, Delphi, Arrancador, Horologion — Vue-extensions внутри Kepler shell.
-Dashboard — встроенный shell view (shell/src/views/Dashboard*.vue), не extension.
+Dashboard — встроенный shell view (platform/desktop/src/views/Dashboard*.vue), не extension.
 Все общаются с kepler-backend через @kosmos/ark.
 ```
 
-- `shell/` (Electron, npm `kepler-shell`) — оркестратор: launcher окно, tray, settings, extension loader, focus mode подсистема (см. `shell/electron/focus-*.ts`), спавн `kepler-backend`.
+- `platform/desktop/` (Electron, npm `kepler-shell`) — оркестратор: launcher окно, tray, settings, extension loader, focus mode подсистема (см. `platform/desktop/electron/focus-*.ts`), спавн `kepler-backend`.
 - `kepler-backend` (Rust) — shared runtime: supervisor для `ark-core-rpc`, WS gateway, command bus, sync, встроенный usage tracker, pomodoro host (`pomodoro_host.rs`).
-- `ark-core-rpc` (Rust, `crates/ark-core`) — канонический ARK runtime: SQLite, миграции, sync protocol.
+- `ark-core-rpc` (Rust, `core/ark/crates/ark-core`) — канонический ARK runtime: SQLite, миграции, sync protocol.
 - Extensions (`extensions/<id>/`) — Vue-bundles внутри Kepler shell. Общаются с `kepler-backend` через `@kosmos/ark`.
 
 ## Роли
 
 ### Kepler launcher (kepler-shell)
 
-`shell/electron/main.ts` — Electron host:
+`platform/desktop/electron/main.ts` — Electron host:
 
 - Спавнит `kepler-backend.exe` как child (`spawnBackend`).
 - Подключается к нему через `@kosmos/ark` в kepler-mode (`ensureKeplerRunning`).
-- Показывает launcher окно (frameless, acrylic background, alwaysOnTop) по `Alt+Space` (prod) / `Alt+\`` (dev) — см. `shell/electron/instance.ts → resolveInstance().hotkey`и`shell/electron/settings-window.ts → DEFAULT_HOTKEY_PROD`.
+- Показывает launcher окно (frameless, acrylic background, alwaysOnTop) по `Alt+Space` (prod) / `Alt+\`` (dev) — см. `platform/desktop/electron/instance.ts → resolveInstance().hotkey`и`platform/desktop/electron/settings-window.ts → DEFAULT_HOTKEY_PROD`.
 - Tray-иконка с menu (Открыть / Настройки / Выход).
 - Список команд в launcher = **static open-commands** (`COMMANDS` из `electron/commands.ts`) + **dynamic action-commands** (через `arkClient.commands.list()` — приходят от running апок).
 - При invoke: static исполняются локально (`spawn(exe)`), dynamic уходят в `kepler-backend` через `arkClient.commands.invoke(id)` — backend broadcast'ит `command_invoked`, owning апка handle'ит.
-- Extension loader (`shell/electron/extension-host.ts`) — open Vue extension bundles в отдельные BrowserWindow (Phase 4: Dashboard / Horologion / Delphi / Arrancador мигрированы как extensions).
+- Extension loader (`platform/desktop/electron/extension-host.ts`) — open Vue extension bundles в отдельные BrowserWindow (Phase 4: Dashboard / Horologion / Delphi / Arrancador мигрированы как extensions).
 
 ### kepler-backend (Rust)
 
-`services/kepler-backend/`:
+`platform/runtime/`:
 
 | Файл                  | Что делает                                                                      |
 | --------------------- | ------------------------------------------------------------------------------- |
@@ -118,7 +118,7 @@ Vue 3.6 Vapor в Eden, Dashboard, Arrancador, Akasha и shell views. Никог�
 
 ### ark-core-rpc (Rust)
 
-Канонический бинарь рантайма. Принимает newline-delimited JSON со stdin, пишет ответы и события в stdout. Все исходники — в `crates/ark-core/rust/src/`:
+Канонический бинарь рантайма. Принимает newline-delimited JSON со stdin, пишет ответы и события в stdout. Все исходники — в `core/ark/crates/ark-core/rust/src/`:
 
 | Файл                                  | Что делает                                   |
 | ------------------------------------- | -------------------------------------------- |
@@ -149,13 +149,13 @@ Apps (`@kosmos/ark` в kepler-mode) не открывают SQLite напрям�
 
 ## Communication primitives
 
-| Primitive          | Где определён                                         | Когда                                                                                                                 |
-| ------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **ARK objects**    | `objects` + `object_links` в SQLite                   | Долгоживущие данные, репликация sync'ом                                                                               |
-| **Entity events**  | `onArkEvent` / `onEntityChanged` в `@kosmos/ark`      | Подписка на изменения объектов                                                                                        |
-| **Command bus**    | `commands.*` в WS protocol                            | Императивные «ручки» апок (Pomodoro start, create note и т.п.). См. [Command bus](/concepts/command-bus)              |
-| **Extension host** | `kepler:extension:*` IPC в kepler-shell               | Загрузка Vue extension bundles внутри launcher'а (Phase 4 foundation). См. [Extension host](/concepts/extension-host) |
-| **Focus mode**     | `shell/electron/focus-*.ts` + backend `pomodoro_host` | Floating widget, app/website blocker, pomodoro phase events. См. [Focus mode](/concepts/focus-mode)                   |
+| Primitive          | Где определён                                                    | Когда                                                                                                                 |
+| ------------------ | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **ARK objects**    | `objects` + `object_links` в SQLite                              | Долгоживущие данные, репликация sync'ом                                                                               |
+| **Entity events**  | `onArkEvent` / `onEntityChanged` в `@kosmos/ark`                 | Подписка на изменения объектов                                                                                        |
+| **Command bus**    | `commands.*` в WS protocol                                       | Императивные «ручки» апок (Pomodoro start, create note и т.п.). См. [Command bus](/concepts/command-bus)              |
+| **Extension host** | `kepler:extension:*` IPC в kepler-shell                          | Загрузка Vue extension bundles внутри launcher'а (Phase 4 foundation). См. [Extension host](/concepts/extension-host) |
+| **Focus mode**     | `platform/desktop/electron/focus-*.ts` + backend `pomodoro_host` | Floating widget, app/website blocker, pomodoro phase events. См. [Focus mode](/concepts/focus-mode)                   |
 
 ## Принципы
 
@@ -181,16 +181,16 @@ Substantial-правки проходят через proof loop с явными 
 
 ## Компонентная карта
 
-| Кусок                 | Где                                                       | Тип                 | Роль                                                                                                                        |
-| --------------------- | --------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| ark-core              | `crates/ark-core/rust`                                    | Rust crate + бинарь | runtime данных                                                                                                              |
-| @kosmos/ark           | `packages/ark`                                            | TS SDK              | клиент к sidecar / kepler-backend                                                                                           |
-| kepler-shell          | `shell/` (npm `kepler-shell`)                             | TS + Electron       | launcher host, tray, settings, extension loader                                                                             |
-| kepler-backend        | `services/kepler-backend`                                 | Rust binary         | shared runtime supervisor + WS gateway + command bus + sync + usage_tracker модуль                                          |
-| ark-relay-server      | `services/ark-relay-server`                               | Rust server         | WebSocket relay (NAT-обход p2p sync)                                                                                        |
-| kepler-watcher        | `services/kepler-watcher`                                 | Rust                | watcher-демон над ark-core                                                                                                  |
-| @kosmos/visuals       | `packages/visuals`                                        | TS + Vue            | дизайн-система                                                                                                              |
-| Vue-extensions        | `extensions/{eden,delphi,arrancador,horologion}`          | TS + Vue            | продуктовые оболочки внутри Kepler shell                                                                                    |
-| Dashboard             | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | TS + Vue            | встроенный shell view (read-only ARK browser), не extension                                                                 |
-| ark-service (Android) | `mobile/ark-service`                                      | Kotlin + Room       | Android ContentProvider, держит данные Android Delphi (`mobile/delphi`). Изолирован от desktop ARK, ждёт миграции на UniFFI |
-| usage-tracker module  | `services/kepler-backend/src/usage_tracker/`              | Rust                | захват usage data → ARK; standalone-бинарь заморожен в `legacy/usage-tracker/` после Phase E3                               |
+| Кусок                 | Где                                                                             | Тип                 | Роль                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| ark-core              | `core/ark/crates/ark-core/rust`                                                 | Rust crate + бинарь | runtime данных                                                                                                                        |
+| @kosmos/ark           | `core/ark/packages/ark`                                                         | TS SDK              | клиент к sidecar / kepler-backend                                                                                                     |
+| kepler-shell          | `platform/desktop/` (npm `kepler-shell`)                                        | TS + Electron       | launcher host, tray, settings, extension loader                                                                                       |
+| kepler-backend        | `platform/runtime`                                                              | Rust binary         | shared runtime supervisor + WS gateway + command bus + sync + usage_tracker модуль                                                    |
+| ark-relay-server      | `services/relay-reference`                                                      | Rust server         | WebSocket relay (NAT-обход p2p sync)                                                                                                  |
+| kepler-watcher        | `platform/native-services/kepler-watcher`                                       | Rust                | watcher-демон над ark-core                                                                                                            |
+| @kosmos/visuals       | `packages/visuals`                                                              | TS + Vue            | дизайн-система                                                                                                                        |
+| Vue-extensions        | `extensions/{eden,delphi,arrancador,horologion}`                                | TS + Vue            | продуктовые оболочки внутри Kepler shell                                                                                              |
+| Dashboard             | `platform/desktop/src/views/Dashboard*.vue` + `platform/desktop/src/dashboard/` | TS + Vue            | встроенный shell view (read-only ARK browser), не extension                                                                           |
+| ark-service (Android) | `incubator/mobile/ark-service`                                                  | Kotlin + Room       | Android ContentProvider, держит данные Android Delphi (`incubator/mobile/delphi`). Изолирован от desktop ARK, ждёт миграции на UniFFI |
+| usage-tracker module  | `platform/runtime/src/usage_tracker/`                                           | Rust                | захват usage data → ARK; standalone-бинарь заморожен в `legacy/usage-tracker/` после Phase E3                                         |

@@ -50,16 +50,16 @@ ARK — это Rust-крейт + бинарь sidecar'а. Большинство
 ```powershell
 cargo build --manifest-path crates\ark-core\rust\Cargo.toml --bin ark-core-rpc
 cargo test  --manifest-path crates\ark-core\rust\Cargo.toml
-bun run --cwd packages/ark typecheck
+bun run --cwd core/ark/packages/ark typecheck
 ```
 
-Бинарь `ark-core-rpc` — канонический sidecar. Запускается из `services/kepler-backend` как child process; общается через stdin/stdout newline-delimited JSON. См. [ark-core](/packages/ark-core) и [Синхронизация](/concepts/sync).
+Бинарь `ark-core-rpc` — канонический sidecar. Запускается из `platform/runtime` как child process; общается через stdin/stdout newline-delimited JSON. См. [ark-core](/packages/ark-core) и [Синхронизация](/concepts/sync).
 
 ## Запуск Kepler shell (главный путь)
 
 ```powershell
-cd shell
-bun run build:backend:dev   # cargo build (debug) services/kepler-backend
+cd platform/desktop
+bun run build:backend:dev   # cargo build (debug) platform/runtime
 bun run dev                 # backend + extensions + Vite + Electron
 ```
 

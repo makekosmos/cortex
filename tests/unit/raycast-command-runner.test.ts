@@ -4,7 +4,7 @@ import path from "node:path";
 import {
   runRaycastNoViewCommand,
   runRaycastViewCommand,
-} from "../../shell/electron/raycast/command-runner";
+} from "../../platform/desktop/electron/raycast/command-runner";
 
 const root = path.resolve(".tmp", "raycast-command-runner-test");
 

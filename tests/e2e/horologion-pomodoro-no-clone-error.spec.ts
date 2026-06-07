@@ -2,7 +2,7 @@
 // «An object could not be cloned» когда `config.tasks` приходит из
 // Vue reactive `pomodoroDraft` (Proxy-обёрнутые элементы).
 //
-// Фикс — в `extensions/horologion/src/lib/usePomodoroSession.ts::start`:
+// Фикс — в `incubator/horologion/src/lib/usePomodoroSession.ts::start`:
 // `tasksPlain` строится явным map'ом в `{ id: String, title: String }` →
 // IPC structured clone больше не падает.
 //

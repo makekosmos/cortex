@@ -1,7 +1,7 @@
 # usage-tracker
 
 ::: tip Статус
-После Phase E3 (2026-05-14) `usage-tracker` **больше не standalone-сервис**. Активный код живёт как модуль в составе kepler-backend — `services/kepler-backend/src/usage_tracker/`. Старый бинарь (исторический путь services/usage-tracker) заморожен в `legacy/usage-tracker/`.
+После Phase E3 (2026-05-14) `usage-tracker` **больше не standalone-сервис**. Активный код живёт как модуль в составе kepler-backend — `platform/runtime/src/usage_tracker/`. Старый бинарь (исторический путь services/usage-tracker) заморожен в `legacy/usage-tracker/`.
 :::
 
 Записывает process runtime/playtime и foreground activity **напрямую в ARK DB** изнутри kepler-backend процесса. На устройстве пользователя нет отдельного `usage-tracker.exe` — модуль стартует автоматически вместе с backend'ом (Phase E2 wiring).
@@ -23,18 +23,18 @@
 ## Структура модуля
 
 ```
-services/kepler-backend/
+platform/runtime/
 └─ src/
    └─ usage_tracker/
       ├─ mod.rs                # активный runtime: polling, process sessions, ARK writes
       └─ windows_capture.rs    # Win32 foreground sampling, visible-window checks, idle detection
 ```
 
-Подключён в `services/kepler-backend/src/lib.rs` и стартует из `services/kepler-backend/src/main.rs` после того как backend подключился к `ark-core-rpc`.
+Подключён в `platform/runtime/src/lib.rs` и стартует из `platform/runtime/src/main.rs` после того как backend подключился к `ark-core-rpc`.
 
 ## Defaults
 
-- ARK DB path: `%APPDATA%\Kosmos\ark.db` (либо `KOSMOS_DB_PATH`, если backend получил его от `shell/electron/main.ts`).
+- ARK DB path: `%APPDATA%\Kosmos\ark.db` (либо `KOSMOS_DB_PATH`, если backend получил его от `platform/desktop/electron/main.ts`).
 - Poll interval: `1000` ms
 - Idle threshold: `60` s
 
@@ -48,7 +48,7 @@ services/kepler-backend/
 
 ## Сборка и тесты
 
-Модуль собирается как часть `services/kepler-backend`:
+Модуль собирается как часть `platform/runtime`:
 
 ```powershell
 cargo build --manifest-path services\kepler-backend\Cargo.toml --bin kepler-backend

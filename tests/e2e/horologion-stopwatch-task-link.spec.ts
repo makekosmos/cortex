@@ -2,7 +2,7 @@
 // `taskId` + `taskTitle` в `time_entry_obj.propsJson`, и ListView
 // рендерит chip `@<taskTitle>` через `.row__task` accent-span.
 //
-// Фикс — `extensions/horologion/src/views/ListView.vue::titleParts()`:
+// Фикс — `incubator/horologion/src/views/ListView.vue::titleParts()`:
 // если `g.taskTitle` есть, но `@<taskTitle>` нет inline в title, всё равно
 // добавляем accent prefix.
 //

@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "packaged": true,
+  "executable": "/Users/kirill/Documents/projects/my-kosmos/kosmos/platform/desktop/release/mac/Kosmos.app/Contents/MacOS/Kosmos",
+  "dataDir": "/private/tmp/kosmos-packaged-spawn-smoke",
+  "userDataDir": "/private/tmp/kosmos-packaged-spawn-smoke/userdata",
+  "pid": 84831,
+  "lock": {
+    "pid": 84913,
+    "ws_port": 58595,
+    "protocol_version": {
+      "major": 1,
+      "minor": 0,
+      "patch": 0
+    },
+    "db_path": "/private/tmp/kosmos-packaged-spawn-smoke/ark.db"
+  },
+  "observed": {
+    "bootSelfCheck": true,
+    "backendSpawn": true,
+    "appIndexMacos": true,
+    "arkClientConnected": true
+  }
+}

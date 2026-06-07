@@ -38,7 +38,7 @@ Kepler   = launcher (отдельное приложение, host для ark-co
 | HKCU Run key       | `KeplerKosmos`                      | `KosmosKepler`                      |
 | TS package         | `@kepler/ark`, `@kepler/visuals`    | `@kosmos/ark`, `@kosmos/visuals`    |
 | Env vars           | `KEPLER_DB_PATH`, `KEPLER_SPACE_ID` | `KOSMOS_DB_PATH`, `KOSMOS_SPACE_ID` |
-| Backend service    | `services/kosmos-backend`           | `services/kepler-backend`           |
+| Backend service    | `services/kosmos-backend`           | `platform/runtime`                  |
 
 Полный список изменений в коде делается параллельно агентами 1–4 (см. swap PR). Этот документ описывает только **пользовательские данные**.
 

@@ -4,15 +4,15 @@
 
 ### Языки и runtime
 
-| Слой                 | Инструменты                                                                | Где используется                                                                                                                                                  |
-| -------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Системный язык       | **Rust** (stable) + **Cargo workspace**                                    | `crates/ark-core`, `services/kepler-backend`, `services/kepler-focus-svc`, `services/kepler-focus-helper`, `services/kepler-watcher`, `services/ark-relay-server` |
-| Async runtime (Rust) | **tokio** (multi-threaded)                                                 | весь backend / WS server / spawning subprocess                                                                                                                    |
-| Type system (TS)     | **TypeScript** (`tsc --noEmit`)                                            | shell + все Vue extensions                                                                                                                                        |
-| Desktop UI           | **Vue 3.6.0-beta.12** (везде) + Vapor (experimental, активно в Eden)       | Kepler shell + все 4 Vue-extensions (Eden, Horologion, Delphi, Arrancador) + Dashboard                                                                            |
-| Desktop shell        | **Electron 42**                                                            | Kepler launcher + extension windows                                                                                                                               |
-| Android UI           | **Kotlin** + **Jetpack Compose** + **Gradle** + **Room** (ContentProvider) | `mobile/delphi` (UI), `mobile/ark-service` (Room ContentProvider для Delphi mobile)                                                                               |
-| Cross-language FFI   | **UniFFI** (Mozilla)                                                       | `crates/ark-core` → Android Room provider; единый ARK code path                                                                                                   |
+| Слой                 | Инструменты                                                                | Где используется                                                                                                                                                                                                   |
+| -------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Системный язык       | **Rust** (stable) + **Cargo workspace**                                    | `core/ark/crates/ark-core`, `platform/runtime`, `platform/native-services/kepler-focus-svc`, `platform/native-services/kepler-focus-helper`, `platform/native-services/kepler-watcher`, `services/relay-reference` |
+| Async runtime (Rust) | **tokio** (multi-threaded)                                                 | весь backend / WS server / spawning subprocess                                                                                                                                                                     |
+| Type system (TS)     | **TypeScript** (`tsc --noEmit`)                                            | shell + все Vue extensions                                                                                                                                                                                         |
+| Desktop UI           | **Vue 3.6.0-beta.12** (везде) + Vapor (experimental, активно в Eden)       | Kepler shell + все 4 Vue-extensions (Eden, Horologion, Delphi, Arrancador) + Dashboard                                                                                                                             |
+| Desktop shell        | **Electron 42**                                                            | Kepler launcher + extension windows                                                                                                                                                                                |
+| Android UI           | **Kotlin** + **Jetpack Compose** + **Gradle** + **Room** (ContentProvider) | `incubator/mobile/delphi` (UI), `incubator/mobile/ark-service` (Room ContentProvider для Delphi mobile)                                                                                                            |
+| Cross-language FFI   | **UniFFI** (Mozilla)                                                       | `core/ark/crates/ark-core` → Android Room provider; единый ARK code path                                                                                                                                           |
 
 ### Менеджеры пакетов и сборка
 
@@ -41,10 +41,10 @@
 | Слой                           | Инструменты                                                                                                                                                                    | Где используется                                                                              |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
 | Unit (TS, pure JS)             | **`bun test`**                                                                                                                                                                 | `extensions/*/tests/*.test.ts`                                                                |
-| Component (Vue, real Chromium) | **Vitest 4** + **`@vitest/browser`** + **`@vitest/browser-playwright`** + **`vitest-browser-vue`** + **`@vitejs/plugin-vue`** — real Chromium, не jsdom (для Vapor edge-cases) | `extensions/eden/tests/components/*.spec.ts`                                                  |
+| Component (Vue, real Chromium) | **Vitest 4** + **`@vitest/browser`** + **`@vitest/browser-playwright`** + **`vitest-browser-vue`** + **`@vitejs/plugin-vue`** — real Chromium, не jsdom (для Vapor edge-cases) | `products/eden/tests/components/*.spec.ts`                                                    |
 | Unit (Rust)                    | **cargo-nextest** (`cargo nextest run`)                                                                                                                                        | все workspace crates                                                                          |
 | Property-based (Rust)          | **proptest**                                                                                                                                                                   | sync invariants, ARK CRDT properties                                                          |
-| Benchmarks (Rust)              | **criterion**                                                                                                                                                                  | `crates/ark-core/rust/benches/` (pomodoro_session, delphi_filters)                            |
+| Benchmarks (Rust)              | **criterion**                                                                                                                                                                  | `core/ark/crates/ark-core/rust/benches/` (pomodoro_session, delphi_filters)                   |
 | HTTP mocking (Rust)            | **httpmock**                                                                                                                                                                   | relay-server / arrancador RAWG integration tests                                              |
 | E2E (Electron)                 | **Playwright** + **`@playwright/test`** через `_electron.launch`                                                                                                               | `tests/e2e/*.spec.ts` (eden, delphi, horologion, arrancador, launcher, commands-architecture) |
 | Watch-mode (Rust, опционально) | **bacon** (cargo-watch deprecated)                                                                                                                                             | personal dev-tool, `cargo install bacon` локально                                             |
@@ -53,7 +53,7 @@
 
 | Слой                           | Инструменты                                           | Где используется                                                            |
 | ------------------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------- |
-| ARK storage (Rust)             | **SQLite** через **`rusqlite`** (bundled, с **FTS5**) | `crates/ark-core/rust` — единый storage для всех apps                       |
+| ARK storage (Rust)             | **SQLite** через **`rusqlite`** (bundled, с **FTS5**) | `core/ark/crates/ark-core/rust` — единый storage для всех apps              |
 | Electron main каши             | **better-sqlite3**                                    | shell main process (window state, не-ARK кэши)                              |
 | Full-text search               | **ARK FTS5** через `search_objects` op                | Eden (будущий semantic search — Phase 16 в [roadmap](/apps/kepler-roadmap)) |
 | Сериализация (Rust)            | **serde** + **serde_json**                            | весь Rust workspace — wire format ARK protocol                              |
@@ -124,11 +124,11 @@
 
 ### Release tooling (external)
 
-| Слой           | Инструменты   | Где используется                                                                  |
-| -------------- | ------------- | --------------------------------------------------------------------------------- |
-| GitHub CLI     | **`gh`**      | `shell/scripts/publish-extension.mjs`, marketplace `ext:catalog`, manual releases |
-| Archive (Rust) | **zip** crate | `.kext` extension package format extraction                                       |
-| CSV export     | **csv** crate | Phase 7 universal export — time entries / tags → CSV                              |
+| Слой           | Инструменты   | Где используется                                                                             |
+| -------------- | ------------- | -------------------------------------------------------------------------------------------- |
+| GitHub CLI     | **`gh`**      | `platform/desktop/scripts/publish-extension.mjs`, marketplace `ext:catalog`, manual releases |
+| Archive (Rust) | **zip** crate | `.kext` extension package format extraction                                                  |
+| CSV export     | **csv** crate | Phase 7 universal export — time entries / tags → CSV                                         |
 
 ## Гварды и smoke-скрипты
 
@@ -150,7 +150,7 @@ bun run ark:smoke
 bun run lint            # oxlint (корневой .oxlintrc.json)
 bun run format          # oxfmt — пишет в файлы
 bun run format:check    # oxfmt --check (для CI / лефтхука)
-bun run typecheck       # tsc --noEmit (в shell + packages/ark и пр.)
+bun run typecheck       # tsc --noEmit (в shell + core/ark/packages/ark и пр.)
 ```
 
 Активные guards (Phase 2 bug-detection, 2026-05-22):
@@ -165,7 +165,7 @@ bun run typecheck       # tsc --noEmit (в shell + packages/ark и пр.)
   `[lints]\nworkspace = true`.
 - **`scripts/check-ark-write-boundaries.mjs`** — runtime invariant guard:
   SQL writes в ARK таблицы, `app.getPath('userData')` outside
-  `shell/electron/instance.ts`, `path.join(..., 'Kosmos'|'Kepler', ...)`
+  `platform/desktop/electron/instance.ts`, `path.join(..., 'Kosmos'|'Kepler', ...)`
   outside instance/data-dir, `KOSMOS_DATA_DIR=...APPDATA...` в `tests/e2e`
   outside `helpers/launch.ts`.
 
@@ -184,15 +184,15 @@ cargo check в crate'ах, docs:sync / docs:check.
 cargo build --workspace                                                 # все crates + services
 cargo build --manifest-path crates\ark-core\rust\Cargo.toml --bin ark-core-rpc
 cargo test  --manifest-path crates\ark-core\rust\Cargo.toml
-bun run --cwd packages/ark typecheck
-bun run --cwd packages/ark build
+bun run --cwd core/ark/packages/ark typecheck
+bun run --cwd core/ark/packages/ark build
 ```
 
 ## Сборка Kepler shell (главный путь)
 
 ```powershell
-cd shell
-bun run build:backend:dev    # cargo build (debug) services/kepler-backend
+cd platform/desktop
+bun run build:backend:dev    # cargo build (debug) platform/runtime
 bun run dev                  # backend + extensions + Vite + Electron
 bun run build:js             # tsc + vite + extensions (без NSIS)
 bun run build                # release backend + js + electron-builder --win nsis
@@ -202,11 +202,11 @@ bun run test:e2e             # Playwright
 
 ## Сборка Eden
 
-Eden — Vue extension внутри Kepler shell, отдельной сборки не имеет (`apps/eden/ts/` standalone удалён в Phase 6.0.A). Сборка происходит как часть `shell/`:
+Eden — Vue extension внутри Kepler shell, отдельной сборки не имеет (`apps/eden/ts/` standalone удалён в Phase 6.0.A). Сборка происходит как часть `platform/desktop/`:
 
 ```powershell
-bun run --cwd shell build:extensions   # собирает dist/ всех Vue extensions, включая Eden
-bun run --cwd shell dev                # dev shell (extension HMR — opt-in через KEPLER_DEV_EXTENSIONS=1)
+bun run --cwd platform/desktop build:extensions   # собирает dist/ всех Vue extensions, включая Eden
+bun run --cwd platform/desktop dev                # dev shell (extension HMR — opt-in через KEPLER_DEV_EXTENSIONS=1)
 ```
 
 ## Документация
@@ -235,7 +235,7 @@ Tauri даёт installer ~10 MB вместо ~370 MB и более «натив�
 - **RAM экономия — миф на Windows.** WebView2 — тот же Chromium что и в Electron, renderer/GPU/utility процессы жрут столько же. Реальная экономия только на main process (Node→Rust, ~135 MB). Полная разбивка по процессам — в [эксперименте](/experiments/tauri-vs-electron).
 - **Кроссплатформа на Tauri — боль.** Каждая платформа использует свой WebView (WebView2 на Windows, WebKit на macOS, WebKitGTK на Linux). На Linux WebKitGTK **ломает Eden**: contentEditable в TipTap, font-weight +100 жирнее, нет WebRTC/WebGPU. На Electron Chromium везде одинаковый.
 - **Тулзы экосистемы под вопросом.** Год назад Playwright под Tauri вообще не работал нормально. Сейчас [`tauri-playwright`](https://github.com/tauri-apps/awesome-tauri) подтягивается, но «работает» ≠ «работает как родной для Electron». Пока всё что есть в нашем тестовом контракте (`_electron.launch`, `page.evaluate` на main process, доступ к ARK через preload) — стабильно покрывает Electron.
-- **Цена миграции.** 5814 строк TS в `shell/electron/` + 70 IPC handlers + 4 extension'а с preload bridge. Реалистично 3-6 недель работы на feature-parity на Windows + 4-8 недель на Linux/macOS обход WebKitGTK багов.
+- **Цена миграции.** 5814 строк TS в `platform/desktop/electron/` + 70 IPC handlers + 4 extension'а с preload bridge. Реалистично 3-6 недель работы на feature-parity на Windows + 4-8 недель на Linux/macOS обход WebKitGTK багов.
 - **Не приоритет автора.** Главное сейчас — личная экосистема приложений с быстрой итерацией, не оптимизация installer size. Когда / если product станет публичным и 360 MB начнут жать — пересмотрим, **но это отдельная фаза, не текущая**.
 
 Tauri остаётся «watch list» — следим за зрелостью Playwright/Spectron-replacement инструментов и кроссплатформенной консистентностью. Не сегодня.

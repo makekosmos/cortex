@@ -21,14 +21,14 @@
 
 ## Кому что можно
 
-| Кто                                                | Что разрешено                                                                             |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Electron renderer                                  | Только preload API (`window.<app>Api`). Никакого SQLite вообще.                           |
-| Electron main (app services)                       | `@kosmos/ark`. Read-only SQLite — только как fallback, явно отделённый от writes.         |
-| Rust app code                                      | `@kosmos/ark` через sidecar, либо `ark_core::db` (если внутри одного процесса с runtime). |
-| `services/kepler-backend/src/usage_tracker` (Rust) | Прямые писи через `ark_core::db` **с** обновлением `version_vector`.                      |
-| Migration scripts                                  | Могут читать **источник** напрямую, но writes в target ARK идут через ARK RPC/SDK.        |
-| Dashboard                                          | Read-only SQLite инспекция. **Никаких** writes.                                           |
+| Кто                                         | Что разрешено                                                                             |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Electron renderer                           | Только preload API (`window.<app>Api`). Никакого SQLite вообще.                           |
+| Electron main (app services)                | `@kosmos/ark`. Read-only SQLite — только как fallback, явно отделённый от writes.         |
+| Rust app code                               | `@kosmos/ark` через sidecar, либо `ark_core::db` (если внутри одного процесса с runtime). |
+| `platform/runtime/src/usage_tracker` (Rust) | Прямые писи через `ark_core::db` **с** обновлением `version_vector`.                      |
+| Migration scripts                           | Могут читать **источник** напрямую, но writes в target ARK идут через ARK RPC/SDK.        |
+| Dashboard                                   | Read-only SQLite инспекция. **Никаких** writes.                                           |
 
 ```mermaid
 flowchart TD
@@ -124,16 +124,16 @@ bun run ark:guard:writes
 
 Скрипт — `scripts/check-ark-write-boundaries.mjs`. Проверяет, что app services не содержат `INSERT/UPDATE/DELETE` SQL в ARK-таблицы. Запуск обязателен при изменении файлов в:
 
-- `extensions/arrancador/src/`
-- `extensions/delphi/src/`
-- `extensions/eden/src/`
-- `extensions/horologion/src/`
-- `shell/electron/`
-- `shell/src/dashboard/` (встроенный Dashboard view — read-only ARK browser)
+- `incubator/arrancador/src/`
+- `products/delphi/src/`
+- `products/eden/src/`
+- `incubator/horologion/src/`
+- `platform/desktop/electron/`
+- `platform/desktop/src/dashboard/` (встроенный Dashboard view — read-only ARK browser)
 
 ## Direct Rust writers — особый случай
 
-`services/kepler-backend/src/usage_tracker` пишет напрямую в `tracked_apps` / `usage_sessions` / `usage_events`, потому что:
+`platform/runtime/src/usage_tracker` пишет напрямую в `tracked_apps` / `usage_sessions` / `usage_events`, потому что:
 
 - Он Rust, не TypeScript.
 - Он линкуется с `ark_core` напрямую как библиотека.

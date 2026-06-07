@@ -2,8 +2,8 @@
 // фазы independently от того, открыто ли окно Horologion.
 //
 // Файлы:
-//   - shell/electron/pomodoro-notifier.ts — subscribe на pomodoro_phase_changed
-//   - shell/electron/system-notifications.ts::notify — headless guard
+//   - platform/desktop/electron/pomodoro-notifier.ts — subscribe на pomodoro_phase_changed
+//   - platform/desktop/electron/system-notifications.ts::notify — headless guard
 //   - IPC `kepler:pomodoro:notify-now` — тестовый триггер
 //
 // В headless / test mode `notify()` возвращает false и не материализует

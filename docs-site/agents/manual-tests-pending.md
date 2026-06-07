@@ -13,11 +13,35 @@
 
 ---
 
+## 🟠 Pending — macOS hotkey capture (2026-06-07)
+
+Заполнен variation point macOS hotkey capture (Swift helper `capture-hotkey` + adapter). Proof loop — `.agent/tasks/2026-06-07-macos-hotkey-capture-adapter/`.
+
+**Helper-уровень проверен автоматически на живом маке (2026-06-07)** через CGEvent-инъекцию (`capture-driver`, `.tmp/native-tests/`):
+
+- [x] event tap создаётся (`{"ready":true}`) — Input Monitoring permission ок.
+- [x] `Cmd+Shift+H` → `captured keyCode=4 cmd shift` (letter).
+- [x] `Ctrl+Alt+;` → `captured keyCode=41 ctrl alt` (symbol).
+- [x] `Escape` → `cancelled reason=escape`.
+- [x] пассивно (без нажатий) helper не эмитит фантомных `captured`.
+
+> No-modifier ignore инъекцией не проверяется надёжно: CGEventPost с `maskCommand` загрязняет глобальное состояние модификаторов и плодит эхо-события. Фильтр `if !(cmd||ctrl||alt||shift)` тривиален и виден в коде helper'а.
+
+**Осталось ручное (UI-уровень):** `bun run --cwd platform/desktop dev` на macOS:
+
+- [ ] Settings → Диктация → «Горячая клавиша» → клик → поле показывает «Нажми сочетание…».
+- [ ] Зажать `Cmd+Shift+;` — поле принимает сочетание (`⌘ ⇧ ;`), конфиг сохраняется (через `pendingAccelerator`).
+- [ ] `Escape` во время capture — отмена, поле возвращает прежнее значение.
+- [ ] Без Input Monitoring permission — capture не виснет (адаптер шлёт `cancelled`), UI выходит из ожидания.
+- [ ] Назначенный хоткей реально триггерит диктацию (hold-monitor подхватывает новый accelerator).
+
+---
+
 ## 🟠 Pending — Settings sidebar + command visibility (2026-05-23, Kepler 0.2.8)
 
 Полная переработка Settings UI: sidebar навигация, поиск, страницы с `SettingsAdvancedIntro`, tray-toggle и управление видимостью команд.
 
-**Старт:** `bun run --cwd shell dev`
+**Старт:** `bun run --cwd platform/desktop dev`
 
 ### Чек-лист
 
@@ -143,7 +167,7 @@ Horologion integration + PowerShell elevation fallback + NSIS uninstall hook.
 **Старт:**
 
 ```powershell
-bun run --cwd shell dev
+bun run --cwd platform/desktop dev
 ```
 
 В launcher (Ctrl+Shift+K) → «Открыть Arrancador».
@@ -171,7 +195,7 @@ bun run --cwd shell dev
 
 **Подготовка:** в ARK должны быть `note_obj` (Eden создавал), `task_obj` (Delphi), `tag_obj`, `game_obj` (Arrancador). Если каких-то типов нет — те конвертеры просто отработают на пустом списке (создадут пустой CSV / JSON).
 
-**Старт:** `bun run --cwd shell dev` → Kepler → Settings → таб «Экспорт».
+**Старт:** `bun run --cwd platform/desktop dev` → Kepler → Settings → таб «Экспорт».
 
 **Чек-лист:**
 
@@ -196,7 +220,7 @@ bun run --cwd shell dev
 
 **Что проверить:**
 
-- [ ] `bun run --cwd shell dev` → Ctrl+Shift+K → «Открыть Eden».
+- [ ] `bun run --cwd platform/desktop dev` → Ctrl+Shift+K → «Открыть Eden».
 - [ ] Окно Eden открывается размер ~1100×750. TipTap editor виден на main view.
 - [ ] Список заметок (если есть `note_obj` в ARK) рендерится в сайдбаре.
 - [ ] Создать новую заметку (`+` button) → набрать текст → закрыть Eden → переоткрыть → заметка persisted.
@@ -212,7 +236,7 @@ bun run --cwd shell dev
 
 **Что проверить:**
 
-- [ ] Fresh checkout / новая Windows-сессия → `bun install && bun run --cwd shell build:js && bun run test:e2e` → **без admin'а**. Все 20 e2e зелёные, никаких `EPERM` на `tests/.e2e/<slug>/kepler.lock.json`.
+- [ ] Fresh checkout / новая Windows-сессия → `bun install && bun run --cwd platform/desktop build:js && bun run test:e2e` → **без admin'а**. Все 20 e2e зелёные, никаких `EPERM` на `tests/.e2e/<slug>/kepler.lock.json`.
 - [ ] Lock-файлы в `tests/.e2e/` после прогона можно открыть/удалить обычным user'ом (никакого `icacls /reset` не нужно).
 - [ ] В prod (НЕ выставлен `KOSMOS_LOCK_PERMISSIONS_DISABLED`) lock остаётся с жёстким ACL — `icacls %APPDATA%\Kosmos\kepler.lock.json` показывает только текущий user.
 
@@ -230,7 +254,7 @@ bun run --cwd shell dev
 - [ ] **Settings.** Tray menu → «Настройки» → окно открывается, все табы рендерятся, нативные диалоги (filepicker в табе «Экспорт») показывают строки без тарабарщины (en-US fallback для не-ru систем).
 - [ ] **Context menu.** ПКМ в Eden editor / Delphi textarea → нативное контекстное меню Chromium показывает читаемые подписи (Cut/Copy/Paste либо локализованные).
 
-Если что-то сломано — откатить: убрать строку `"electronLanguages": [...]` из `shell/package.json` build блока.
+Если что-то сломано — откатить: убрать строку `"electronLanguages": [...]` из `platform/desktop/package.json` build блока.
 
 ### Exp 7 — explicit `backgroundThrottling: true` (применён, проверка нерегрессии)
 
@@ -241,7 +265,7 @@ bun run --cwd shell dev
 
 ### Exp 30 — CSS `contain: layout style` на extension roots (применён, проверка нерегрессии)
 
-Добавлено в `extensions/{horologion,arrancador,delphi}/src/...css` + `extensions/eden/src/App.css`.
+Добавлено в `extensions/{horologion,arrancador,delphi}/src/...css` + `products/eden/src/App.css`.
 
 - [ ] **Horologion.** Pomodoro + Stopwatch работают, переключение между HomeView/SettingsView без layout-смещений.
 - [ ] **Arrancador.** Library scroll, переключение pages — нет clipped overflow.
@@ -258,7 +282,7 @@ Cold typecheck 1650ms → warm 1177ms (−28%). Effect для DX в watch-mode.
 
 ## 🔴 Tech debt — Export tab disabled (2026-05-18)
 
-**Симптом:** На production install 0.1.11 страница «Экспорт» падает на whitescreen / catch-all error. Tab временно закомментирован в `shell/src/views/SettingsView.vue` (tab nav + content), функциональность доступна через WS API напрямую но не через UI.
+**Симптом:** На production install 0.1.11 страница «Экспорт» падает на whitescreen / catch-all error. Tab временно закомментирован в `platform/desktop/src/views/SettingsView.vue` (tab nav + content), функциональность доступна через WS API напрямую но не через UI.
 
 **Что уже сделано:**
 
@@ -320,7 +344,7 @@ Orchestrator проведёт через 4 сценария:
 #### Scenario 1: launcher-only
 
 ```powershell
-bun run --cwd shell dev
+bun run --cwd platform/desktop dev
 # дождись когда launcher открылся (Ctrl+Shift+K, увидел launcher окно).
 # нажми Enter в orchestrator. Жди 30s warmup + 30s samples.
 ```
@@ -329,7 +353,7 @@ bun run --cwd shell dev
 
 ```powershell
 $env:KEPLER_BENCHMARK_OPEN_ALL = "1"
-bun run --cwd shell dev
+bun run --cwd platform/desktop dev
 # через ~5s launcher автоматически откроет Horologion + Delphi + Arrancador + Eden + Dashboard.
 # Подожди 30s чтобы окна полностью загрузились + 5min idle для стабилизации памяти.
 # Нажми Enter в orchestrator (warmup 30s ещё подождёт).
@@ -339,14 +363,14 @@ bun run --cwd shell dev
 
 ```powershell
 # Сначала acrylic вариант:
-$env:KEPLER_BG_MATERIAL = "acrylic"; bun run --cwd shell dev
+$env:KEPLER_BG_MATERIAL = "acrylic"; bun run --cwd platform/desktop dev
 # Открой Task Manager → Performance → GPU. Засеки:
 #   - dwm.exe %GPU
 #   - kepler-shell.exe %GPU
 # Запиши на бумажку. Нажми Enter в orchestrator.
 
 # Закрой Kepler. Перезапусти с mica:
-$env:KEPLER_BG_MATERIAL = "mica"; bun run --cwd shell dev
+$env:KEPLER_BG_MATERIAL = "mica"; bun run --cwd platform/desktop dev
 # Снова Task Manager → запиши те же метрики.
 # Сравни.
 ```
@@ -381,7 +405,7 @@ exp23-acrylic dwm.exe %GPU sustained:
 
 **Statics:** semantic анализ показал безопасность (`updateTodo` reassigns array; нет прямых `todos.value[i].field = x` мутаций). Win: меньше Proxy overhead для больших списков задач.
 
-Файл: `extensions/delphi/src/store/todos.ts` — `todos = ref<TodoItem[]>([])` → `shallowRef<TodoItem[]>([])`. Аналогично projects/areas/tags/headings.
+Файл: `products/delphi/src/store/todos.ts` — `todos = ref<TodoItem[]>([])` → `shallowRef<TodoItem[]>([])`. Аналогично projects/areas/tags/headings.
 
 **Что нужно проверить перед commit'ом:**
 
@@ -403,9 +427,9 @@ exp23-acrylic dwm.exe %GPU sustained:
 
 Принято решение использовать **Mica** как default backdrop для launcher'а. Settings window переключён на **Acrylic** (2026-05-23) — Mica плохо выглядит с native titleBarOverlay.
 
-- `shell/electron/main.ts` → `resolveLauncherBgMaterial()` default = `"mica"`.
-- `shell/electron/settings-window.ts` → `"acrylic"` (Acrylic + native titleBarOverlay 36px).
-- `shell/electron/install-extension-window.ts` → `"mica"`.
+- `platform/desktop/electron/main.ts` → `resolveLauncherBgMaterial()` default = `"mica"`.
+- `platform/desktop/electron/settings-window.ts` → `"acrylic"` (Acrylic + native titleBarOverlay 36px).
+- `platform/desktop/electron/install-extension-window.ts` → `"mica"`.
 - Dashboard оставлен solid (frame + titleBarOverlay — Mica с overlay'ем выглядит странно).
 - Env override `KEPLER_BG_MATERIAL=acrylic|mica|none` доступен (только для launcher).
 

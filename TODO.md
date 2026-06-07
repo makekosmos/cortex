@@ -2,7 +2,7 @@
 
 ## UX polish (отложенные)
 
-- [ ] **Полоска загрузки снизу при in-app update.** Когда autoUpdater качает новую версию через UI (Settings → Обновление), показывать тонкий progress bar внизу окна Kepler с процентом download'а. Сейчас обновление триггерится из Settings, но визуальной обратной связи о ходе скачивания нет — пользователь не знает, идёт ли загрузка. Источник прогресса: `electron-updater` `download-progress` event (см. `shell/electron/autoupdater-host.ts`). Renderer-side hook через IPC. Делать когда руки дойдут — не блокирует другие фичи.
+- [ ] **Полоска загрузки снизу при in-app update.** Когда autoUpdater качает новую версию через UI (Settings → Обновление), показывать тонкий progress bar внизу окна Kepler с процентом download'а. Сейчас обновление триггерится из Settings, но визуальной обратной связи о ходе скачивания нет — пользователь не знает, идёт ли загрузка. Источник прогресса: `electron-updater` `download-progress` event (см. `platform/desktop/electron/autoupdater-host.ts`). Renderer-side hook через IPC. Делать когда руки дойдут — не блокирует другие фичи.
 
 ## Kepler Extension API v2 — Raycast-shaped UX (2026-05-23)
 
@@ -55,7 +55,7 @@
 
 ### Текущее состояние Kepler extension API (что есть сейчас)
 
-`window.kepler.*` (`shell/electron/extension-preload.ts:1-215` + `extension-host.ts:1108-1504`):
+`window.kepler.*` (`platform/desktop/electron/extension-preload.ts:1-215` + `extension-host.ts:1108-1504`):
 
 - `kepler.ark.request(op, params)` / `.subscribe(event, cb)` — generic RPC к Rust backend (главная рабочая лошадка)
 - `kepler.window.*` — `close/minimize/maximize/toggleDockCorner/...` (Kepler-unique)
@@ -120,10 +120,10 @@ Substantial-задача → **proof loop** обязательно. Структ
 
 ### Ключевые ссылки
 
-- Preload: `shell/electron/extension-preload.ts:1-215`
-- Host handlers: `shell/electron/extension-host.ts:1108-1504` (ark proxy `:1117`, navigation `:1236`, window `:1243-1372`, userData `:1396-1441`)
-- Manifest пример: `extensions/delphi/manifest.json`
-- Real usage: `extensions/horologion/src/lib/horologionApi.ts`, `extensions/arrancador/src/lib/arkGames.ts`, `extensions/eden/src/lib/kepler-api-shim.ts`, `extensions/delphi/src/lib/electron-api-shim.ts`
+- Preload: `platform/desktop/electron/extension-preload.ts:1-215`
+- Host handlers: `platform/desktop/electron/extension-host.ts:1108-1504` (ark proxy `:1117`, navigation `:1236`, window `:1243-1372`, userData `:1396-1441`)
+- Manifest пример: `products/delphi/manifest.json`
+- Real usage: `incubator/horologion/src/lib/horologionApi.ts`, `incubator/arrancador/src/lib/arkGames.ts`, `products/eden/src/lib/kepler-api-shim.ts`, `products/delphi/src/lib/electron-api-shim.ts`
 - Roadmap (Phase 13): `docs-site/apps/kepler-roadmap.md:339-361`
 - Distribution (Raycast-style two-repo update model): `docs-site/concepts/distribution.md:10`
 
@@ -133,7 +133,7 @@ North star: всё есть объект, любые объекты связыв
 
 Action items (приоритет сверху вниз):
 
-- [ ] **MCP server поверх `@kosmos/ark`** — обёртка над существующим WS / command bus в `services/kepler-backend`. Эмитит JSON Schema из `object_types.schemaJson` как tool definitions. Подключается одним `claude mcp add` / Cursor / любой LLM-host. Снимает 90% галлюцинаций агента — schema-driven, не угадывание формата.
+- [ ] **MCP server поверх `@kosmos/ark`** — обёртка над существующим WS / command bus в `platform/runtime`. Эмитит JSON Schema из `object_types.schemaJson` как tool definitions. Подключается одним `claude mcp add` / Cursor / любой LLM-host. Снимает 90% галлюцинаций агента — schema-driven, не угадывание формата.
 - [ ] **`content_md` projection в read/write API.** `get_object` опционально возвращает `content_md` (TipTap JSON → markdown через существующий `note_md` converter из Phase 7). `upsert_object` принимает `content_md` и парсит обратно в TipTap JSON. Source of truth остаётся `content_json`, но для агентов и для человеческого чтения наружу торчит markdown. Нужно достроить обратный конвертер markdown → TipTap, если ещё нет (export-only сейчас).
 - [ ] **`get_neighborhood(id, depth)` ARK endpoint.** Возвращает subgraph: узлы (объекты) + рёбра (links) в радиусе N от заданного id. Сейчас агенту чтобы понять «что связано с этой заметкой» нужно `list_object_links` → фильтр → `get_objects_by_ids`. Один endpoint = multi-hop reasoning возможен в один tool-call.
 - [ ] **Read-only markdown mirror** под `<data_dir>/notes-md/` (и аналогично для других «человекочитаемых» типов: `tasks-md/`?). Регенерируется на save через `note_md` converter. User видит файлы в Explorer, может grep / git commit / открыть в Obsidian для чтения. Контракт: правки в файлах **игнорируются** (или показываются как hint «создать новую заметку из этого файла»). Source of truth — ARK SQLite. Это закрывает психологический запрос на portability без двойного sync'а.
@@ -146,14 +146,14 @@ Action items (приоритет сверху вниз):
 
 ## Legacy Note
 
-The previous contents of this file described an older `packages/ark/` Python/server-era plan. That is no longer the active ARK architecture.
+The previous contents of this file described an older `core/ark/packages/ark/` Python/server-era plan. That is no longer the active ARK architecture.
 
 Current ARK runtime documentation:
 
-- [`crates/ark-core/README.md`](./crates/ark-core/README.md)
-- Rust runtime: `crates/ark-core/rust`
-- Node/Electron SDK: `packages/ark` (`@kosmos/ark`)
-- Compatibility SDK `@arksync/node` больше не поддерживается как workspace; current TS SDK — `packages/ark` (`@kosmos/ark`).
+- [`core/ark/crates/ark-core/README.md`](./core/ark/crates/ark-core/README.md)
+- Rust runtime: `core/ark/crates/ark-core/rust`
+- Node/Electron SDK: `core/ark/packages/ark` (`@kosmos/ark`)
+- Compatibility SDK `@arksync/node` больше не поддерживается как workspace; current TS SDK — `core/ark/packages/ark` (`@kosmos/ark`).
 - Canonical desktop sidecar: `ark-core-rpc`
 
 ## Current ARK Priorities

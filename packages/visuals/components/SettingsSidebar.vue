@@ -26,7 +26,7 @@ const sidebarStyle = computed(() => ({
   >
     <div
       v-if="title"
-      class="px-3 pt-3 pb-0 font-[var(--font-sans)] text-[13px] leading-[1.4] font-medium [-webkit-app-region:drag]"
+      class="px-3 pb-0 pt-[calc(0.75rem+var(--kosmos-mac-traffic-light-top-safe-area,0px))] font-[var(--font-sans)] text-[13px] leading-[1.4] font-medium [-webkit-app-region:drag]"
     >
       {{ title }}
     </div>

@@ -20,7 +20,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
-export const SHELL_ROOT = path.join(REPO_ROOT, "shell");
+export const SHELL_ROOT = path.join(REPO_ROOT, "platform", "desktop");
 export const E2E_ROOT = path.join(REPO_ROOT, "tests", ".e2e");
 
 export interface LaunchOptions {
@@ -54,7 +54,9 @@ async function _launch(
 
   const mainJs = path.join(SHELL_ROOT, "dist-electron", "main.js");
   if (!fs.existsSync(mainJs)) {
-    throw new Error(`${mainJs} не существует. Сначала запусти 'bun run --cwd shell build:js'.`);
+    throw new Error(
+      `${mainJs} не существует. Сначала запусти 'bun run --cwd platform/desktop build:js'.`,
+    );
   }
 
   return electron.launch({
@@ -68,7 +70,7 @@ async function _launch(
       KOSMOS_TEST_MODE: "1",
       // Headless mode: extension windows создаются с show:false + skipTaskbar.
       // Playwright всё равно может evaluate() и locator() работать через
-      // webContents без visible render. См. shell/electron/extension-host.ts.
+      // webContents без visible render. См. platform/desktop/electron/extension-host.ts.
       KOSMOS_HEADLESS: "1",
       // Test-only: backend пропускает icacls/chmod hardening на kepler.lock.json.
       // Без этого stale lock-файл от прошлого Windows account'а блокирует

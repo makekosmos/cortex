@@ -9,8 +9,8 @@ import {
   List,
   MenuBarExtra,
 } from "../../packages/raycast-api/src/index";
-import { normalizeRaycastNode } from "../../shell/electron/raycast/view-model";
-import { parseRaycastMarkdown } from "../../shell/src/raycast-host/markdown";
+import { normalizeRaycastNode } from "../../platform/desktop/electron/raycast/view-model";
+import { parseRaycastMarkdown } from "../../platform/desktop/src/raycast-host/markdown";
 import {
   actionNodes,
   actionSections,
@@ -47,7 +47,7 @@ import {
   matchesActionShortcut,
   menuBarSections,
   menuBarTitle,
-} from "../../shell/src/raycast-host/model";
+} from "../../platform/desktop/src/raycast-host/model";
 
 describe("Raycast view model", () => {
   test("normalizes List.Item detail/actions props into host-renderable children", () => {

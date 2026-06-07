@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { reactive } from "vue";
-import { buildFocusSessionStartInput } from "../../shell/src/components/focusCommandPayload";
+import { buildFocusSessionStartInput } from "../../platform/desktop/src/components/focusCommandPayload";
 
 describe("focus command payload", () => {
   test("builds clone-safe payload from reactive blocklist ids", () => {

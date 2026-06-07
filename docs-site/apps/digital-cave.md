@@ -5,7 +5,7 @@
 :::
 
 - **Path**: `apps/digital-cave` (зарезервировано)
-- **Реализованная часть**: `shell/electron/focus-*.ts` + `services/kepler-focus-helper/` + `services/kepler-focus-svc/` + `shell/src/views/FocusWidgetView.vue` + `services/kepler-backend/src/focus.rs`. См. [focus-mode](/concepts/focus-mode).
+- **Реализованная часть**: `platform/desktop/electron/focus-*.ts` + `platform/native-services/kepler-focus-helper/` + `platform/native-services/kepler-focus-svc/` + `platform/desktop/src/views/FocusWidgetView.vue` + `platform/runtime/src/focus.rs`. См. [focus-mode](/concepts/focus-mode).
 - **Аналог**: [Cold Turkey Blocker](https://getcoldturkey.com/) — блокировщик отвлекающих сайтов / приложений на запланированный фокус-период.
 
 ## Что уже работает (focus-mode)

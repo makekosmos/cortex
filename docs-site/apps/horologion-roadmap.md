@@ -44,7 +44,7 @@
 
 ## Сделано
 
-- **Pomodoro state в kepler-backend** (2026-05-22). `services/kepler-backend/src/pomodoro_host.rs` (`PomodoroHost`) держит state machine, эмитит `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` через ARK event bus. Horologion-окно можно закрывать — таймер тикает в фоне, focus widget и notifications продолжают работать. Полный quit Kepler shell всё ещё останавливает таймер (sidecar убивается вместе с shell'ом), но это уже корректно: «сегмент закрыт» с правильным `endedAt`.
+- **Pomodoro state в kepler-backend** (2026-05-22). `platform/runtime/src/pomodoro_host.rs` (`PomodoroHost`) держит state machine, эмитит `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` через ARK event bus. Horologion-окно можно закрывать — таймер тикает в фоне, focus widget и notifications продолжают работать. Полный quit Kepler shell всё ещё останавливает таймер (sidecar убивается вместе с shell'ом), но это уже корректно: «сегмент закрыт» с правильным `endedAt`.
 - **`keepAliveInBackground` для Horologion-окна** (2026-05-22). Manifest имеет флаг, shell intercept'ит close → hide, renderer переживает закрытие.
 
 ## Баги / замечания

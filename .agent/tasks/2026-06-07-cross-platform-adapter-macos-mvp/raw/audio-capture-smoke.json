@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "helper": "/Users/kirill/Documents/projects/my-kosmos/kosmos/platform/desktop/.tmp/native/macos/audio-capturer",
+  "lines": [
+    {
+      "ready": true
+    },
+    {
+      "recording": true
+    },
+    {
+      "file": "/var/folders/yy/xrmxqfzj5h92dtzmrcdj7l8r0000gn/T/supercmd-audio-capture-C50B156B-D054-434A-9951-DEB8F2495FDC/captured.wav",
+      "duration": 0
+    }
+  ],
+  "errors": [],
+  "file": "/var/folders/yy/xrmxqfzj5h92dtzmrcdj7l8r0000gn/T/supercmd-audio-capture-C50B156B-D054-434A-9951-DEB8F2495FDC/captured.wav",
+  "fileSize": 28886,
+  "duration": 0
+}

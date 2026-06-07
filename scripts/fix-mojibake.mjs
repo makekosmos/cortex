@@ -17,8 +17,8 @@ import { writeFileSync } from "node:fs";
 // new path → old path в HEAD
 const renameMap = {
   "apps/kepler/": "apps/kosmos/",
-  "services/kepler-backend/": "services/kosmos-backend/",
-  "services/kepler-watcher/": "services/kosmos-watcher/",
+  "platform/runtime/": "services/kosmos-backend/",
+  "platform/native-services/kepler-watcher/": "services/kosmos-watcher/",
   "legacy/usage-tracker/src/kepler_client.rs": "services/usage-tracker/src/cosmos_client.rs",
 };
 
@@ -57,19 +57,19 @@ function swap(s) {
 }
 
 const broken = [
-  "services/kepler-backend/Cargo.toml",
-  "services/kepler-backend/src/main.rs",
-  "services/kepler-backend/src/lib.rs",
-  "services/kepler-backend/src/sync.rs",
-  "services/kepler-backend/src/lock_file.rs",
-  "services/kepler-backend/src/ws_server.rs",
-  "services/kepler-backend/src/singleton.rs",
-  "services/kepler-backend/src/protocol_version.rs",
-  "services/kepler-backend/src/ark_host.rs",
-  "services/kepler-backend/src/auth.rs",
-  "services/kepler-watcher/Cargo.toml",
-  "services/kepler-watcher/src/main.rs",
-  "services/ark-relay-server/Cargo.toml",
+  "platform/runtime/Cargo.toml",
+  "platform/runtime/src/main.rs",
+  "platform/runtime/src/lib.rs",
+  "platform/runtime/src/sync.rs",
+  "platform/runtime/src/lock_file.rs",
+  "platform/runtime/src/ws_server.rs",
+  "platform/runtime/src/singleton.rs",
+  "platform/runtime/src/protocol_version.rs",
+  "platform/runtime/src/ark_host.rs",
+  "platform/runtime/src/auth.rs",
+  "platform/native-services/kepler-watcher/Cargo.toml",
+  "platform/native-services/kepler-watcher/src/main.rs",
+  "services/relay-reference/Cargo.toml",
   "legacy/usage-tracker/src/main.rs",
   "legacy/usage-tracker/src/spool.rs",
   "legacy/usage-tracker/src/kepler_client.rs",

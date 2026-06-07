@@ -1,12 +1,12 @@
 # Kepler — Roadmap
 
-Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler`. Все паттерны swap'нуты в коммите brand-swap. Эта страница — единый план работ по Electron host'у `shell/`.
+Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler`. Все паттерны swap'нуты в коммите brand-swap. Эта страница — единый план работ по Electron host'у `platform/desktop/`.
 
 ## Статус по фазам
 
 | Фаза | Что                                                                                                                                                                                                                       | Статус |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 0    | Backend extracted в `services/kepler-backend/` (lib + bin `kepler-backend.exe`)                                                                                                                                           | ✅     |
+| 0    | Backend extracted в `platform/runtime/` (lib + bin `kepler-backend.exe`)                                                                                                                                                  | ✅     |
 | 1    | Electron shell scaffold (launcher window, tray, settings, hotkey, backend spawn, window state)                                                                                                                            | ✅     |
 | 2    | Command bus (Rust в backend + `@kosmos/ark` SDK + apps register + dynamic launcher)                                                                                                                                       | ✅     |
 | 3    | Real handlers (Horologion / Delphi / Eden wired), Settings window, extension loader PoC                                                                                                                                   | ✅     |
@@ -26,15 +26,15 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 
 ## Phase 0 ✅ — Backend extracted
 
-Из старого Rust gpui launcher (легаси, удалён в Phase A) выделен чистый backend в `services/kepler-backend/`:
+Из старого Rust gpui launcher (легаси, удалён в Phase A) выделен чистый backend в `platform/runtime/`:
 
 - Crate с lib (ARK runtime, WS server, command bus, sync) + бинарь `kepler-backend.exe`.
 - Spawn'ится Electron host'ом как child process; держит ARK и обслуживает WS-клиентов.
-- Сборка: `cargo build --release --manifest-path services/kepler-backend/Cargo.toml --bin kepler-backend`.
+- Сборка: `cargo build --release --manifest-path platform/runtime/Cargo.toml --bin kepler-backend`.
 
 ## Phase 1 ✅ — Electron shell scaffold
 
-`shell/` — новая Electron-апка:
+`platform/desktop/` — новая Electron-апка:
 
 - Frameless 720×460 launcher window, Mica/Acrylic (Win11), centered на active display, `nativeTheme.themeSource = 'dark'`.
 - `globalShortcut Ctrl+Shift+K` toggle show/hide; при потере фокуса — hide.
@@ -66,7 +66,7 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 Дополнительно:
 
 - Settings window для Kepler shell (отдельный `BrowserWindow`, hash `#/settings`).
-- Extension loader PoC: `electron/extension-host.ts` загружает static extensions из `extensions/<id>/{manifest.json,index.html,bundle.js}` в отдельные BrowserWindow'ы. Демо: `extensions/horologion/` и др.
+- Extension loader PoC: `electron/extension-host.ts` загружает static extensions из `extensions/<id>/{manifest.json,index.html,bundle.js}` в отдельные BrowserWindow'ы. Демо: `incubator/horologion/` и др.
 
 ## Phase 4 ✅ — Apps как Vue extensions
 
@@ -85,7 +85,7 @@ RAM-эффект Phase 4 — −124 MB Working Set / −209 MB Private Bytes / �
 
 После основной миграции Phase 4 добавлены доводки, считаются частью Phase 4:
 
-- **App icons в launcher** — каждое open-command extension'а (Eden / Horologion / Delphi / Arrancador) показывает иконку из `extensions/<id>/icon.png`. `extensionIconDataUri(id)` в `extension-host.ts` читает PNG и кэширует по **mtime файла** — hot-swap иконки без рестарта Kepler. После Phase 6.0 Eden уже extension, иконка `extensions/eden/icon.png` участвует в общем механизме.
+- **App icons в launcher** — каждое open-command extension'а (Eden / Horologion / Delphi / Arrancador) показывает иконку из `extensions/<id>/icon.png`. `extensionIconDataUri(id)` в `extension-host.ts` читает PNG и кэширует по **mtime файла** — hot-swap иконки без рестарта Kepler. После Phase 6.0 Eden уже extension, иконка `products/eden/icon.png` участвует в общем механизме.
 - **Crash on close fix** — `BrowserWindow.on("closed", …)` теперь использует captured `wcId` (захваченный **до** регистрации listener'а), а не `win.webContents.id` после destroy. До фикса Kepler падал при закрытии extension-окна.
 - **Status dot в Horologion topbar** — точка статуса подключения к ARK (probe `list_object_types` каждые 10с), визуально совпадает с Delphi extension'ом.
 - **Selected-space DB resolution** — `kepler-shell` main читает `%APPDATA%\Kosmos\selected-space.json` (через `@kosmos/ark` хелперы `readSharedSelectedSpace` / `getArkDbPathForSelectedSpace`) и передаёт `KOSMOS_DB_PATH=<spaceDir>/ark.db` в env при `spawnBackend()`. Backend пишет в выбранный space, а не в дефолтный `%APPDATA%\Kosmos\ark.db`.
@@ -96,15 +96,15 @@ Hot-reload для extensions через Vite dev servers, как `ray develop` �
 
 Состав:
 
-- `bun run --cwd shell dev` поднимает shell dev session и Akasha HMR (`:5185`); `bun run --cwd shell dev:extensions` поднимает Vite dev server на отдельном порту для каждого Vue extension'а (5180–5185).
+- `bun run --cwd platform/desktop dev` поднимает shell dev session и Akasha HMR (`:5185`); `bun run --cwd platform/desktop dev:extensions` поднимает Vite dev server на отдельном порту для каждого Vue extension'а (5180–5185).
 - Поле `devPort` в manifest + TCP probe в extension-host → живой порт резолвится в `loadURL('http://localhost:<port>/')`, мёртвый порт — в `loadFile(dist/...)`. `KEPLER_DEV=1` управляет shell-level dev, а не принудительным extension HMR.
 - F12 toggles DevTools на любом extension window.
 
 ### Cleanup под Phase 5 (выполнено)
 
-- **Delphi `electron-api-shim`** — `extensions/delphi/src/lib/electron-api-shim.ts` устанавливает `window.electronAPI` поверх `window.kepler.ark.request`, мапит legacy каналы (`ark:listDelphiTasks`, `ark:upsertDelphiTask`, `ark:deleteDelphiTask`, `ark:listTimeEntries`) на ARK operations. LAN sync / P2P / space management — graceful no-op. Подробно — [Delphi → electron-api shim](./delphi.md#electron-api-shim-в-extension).
+- **Delphi `electron-api-shim`** — `products/delphi/src/lib/electron-api-shim.ts` устанавливает `window.electronAPI` поверх `window.kepler.ark.request`, мапит legacy каналы (`ark:listDelphiTasks`, `ark:upsertDelphiTask`, `ark:deleteDelphiTask`, `ark:listTimeEntries`) на ARK operations. LAN sync / P2P / space management — graceful no-op. Подробно — [Delphi → electron-api shim](./delphi.md#electron-api-shim-в-extension).
 - **Arrancador pages migration** — все 7 страниц мигрированы в extension (Library, Catalogue, Scan, Sqoba, Statistics, Settings, GameDetail). Native scanner / RAWG / game launch / usage heatmap пока stubs. Подробно — [Arrancador](./arrancador.md).
-- **Tailwind restored для Delphi** — `@tailwindcss/vite` plugin подключён обратно в `extensions/delphi/vite.config.mjs`, т.к. оригинальный UI на Tailwind utility classes. Переписывание на plain CSS — открытый вопрос Phase 9.
+- **Tailwind restored для Delphi** — `@tailwindcss/vite` plugin подключён обратно в `products/delphi/vite.config.mjs`, т.к. оригинальный UI на Tailwind utility classes. Переписывание на plain CSS — открытый вопрос Phase 9.
 
 ## Phase 6 ✅ — Eden как extension
 
@@ -112,8 +112,8 @@ Eden — самый сложный кейс (TipTap editor + Heart Rust поис
 
 ### Phase 6.0 (2026-05-17) — Scaffold + ARK note CRUD
 
-- `extensions/eden/` создан как Vue extension: manifest (devPort 5184, 1100×750), package.json, vite config, src/ портирован из standalone Eden.
-- `kepler-api-shim` (`extensions/eden/src/lib/kepler-api-shim.ts`) эмулирует `window.api` поверх `window.kepler.ark.request(...)`. Шаблон такой же, как Delphi `electron-api-shim` — позволяет сохранить ~50 call-sites Eden codebase'а без переписывания.
+- `products/eden/` создан как Vue extension: manifest (devPort 5184, 1100×750), package.json, vite config, src/ портирован из standalone Eden.
+- `kepler-api-shim` (`products/eden/src/lib/kepler-api-shim.ts`) эмулирует `window.api` поверх `window.kepler.ark.request(...)`. Шаблон такой же, как Delphi `electron-api-shim` — позволяет сохранить ~50 call-sites Eden codebase'а без переписывания.
 - Note CRUD / folders (stubs) / typed-notes / search — через ARK операции (`list_objects`, `get_object`, `upsert_object`, `delete_object`, `list_object_types`, `upsert_object_type`, `search_objects`).
 - Команды `eden:note:create`, `eden:note:search` зарегистрированы через command bus.
 - Standalone `Eden.exe` остался временно как fallback.
@@ -137,10 +137,10 @@ Eden — самый сложный кейс (TipTap editor + Heart Rust поис
 
 **Что есть:**
 
-- Rust `Converter` trait + registry в `services/kepler-backend/src/export/`.
+- Rust `Converter` trait + registry в `platform/runtime/src/export/`.
 - 6 первых конвертеров: `note_md`, `task_md`, `task_csv`, `time_entry_csv`, `tag_json`, `game_json`.
 - WS endpoints `export.list` / `export.run`.
-- UI секция «Экспорт» в `shell/src/views/SettingsView.vue` с per-converter картой, native directory picker, история экспортов в localStorage.
+- UI секция «Экспорт» в `platform/desktop/src/views/SettingsView.vue` с per-converter картой, native directory picker, история экспортов в localStorage.
 - 17 unit tests для converters (cargo test 75/75 зелёный).
 
 **Что НЕ в Phase 7** (отложено):
@@ -158,7 +158,7 @@ Eden — самый сложный кейс (TipTap editor + Heart Rust поис
 
 ### Packaging ✅
 
-`bun run --cwd shell build` собирает финальный **NSIS one-click** установщик `release/Kepler Setup X.Y.Z.exe`. Конфиг — `shell/package.json → build`:
+`bun run --cwd platform/desktop build` собирает финальный **NSIS one-click** установщик `release/Kepler Setup X.Y.Z.exe`. Конфиг — `platform/desktop/package.json → build`:
 
 - `extraResources` копирует `kepler-backend.exe`, `ark-core-rpc.exe`, директорию `extensions/` (только `manifest.json`, `icon.png`, `index.html`, `dist/` — без `src/` / `node_modules/`), и `build/icon.png`.
 - `afterPack` (`build/afterPack.cjs`) embed'ит иконку в `Kepler.exe` через `rcedit` + `png-to-ico` (стандартный паттерн Kosmos, см. [Horologion](./horologion.md), [Delphi](./delphi.md)).
@@ -178,12 +178,12 @@ Delphi extension сейчас использует Tailwind v4 в templates (н�
 
 Что нужно для Phase 9:
 
-- Пройти ~30 .vue файлов в `extensions/delphi/src/{App.vue, components, pages}`.
+- Пройти ~30 .vue файлов в `products/delphi/src/{App.vue, components, pages}`.
 - Удалить Tailwind utility classes (`flex items-center gap-2 px-3 rounded-lg ...`) из шаблонов.
 - Переписать стили в `<style scoped>` с `var(--background) / --foreground / --border / --radius-*` из `@kosmos/visuals`.
 - Удалить `@import "tailwindcss"` + `@source` directive из `src/global.css`.
-- Удалить `@tailwindcss/vite` plugin из `extensions/delphi/vite.config.mjs` + `vite.extensions.config.mjs`.
-- Удалить `tailwindcss` + `@tailwindcss/vite` deps из `extensions/delphi/package.json` (и shared kepler-shell deps если нет других пользователей).
+- Удалить `@tailwindcss/vite` plugin из `products/delphi/vite.config.mjs` + `vite.extensions.config.mjs`.
+- Удалить `tailwindcss` + `@tailwindcss/vite` deps из `products/delphi/package.json` (и shared kepler-shell deps если нет других пользователей).
 - Verify build + manual UI smoke (Delphi выглядит OK на acrylic Mica background).
 
 Скоуп — несколько часов сфокусированной работы (или один agent). Откладываем до момента когда Delphi UI стабилизируется (project / area / settings flows не меняются часто) — иначе придётся переделывать дважды.
@@ -215,7 +215,7 @@ GitHub — отдельный destination type (не path). Auto-push в private
 
 **Phase 11.0 — MVP**
 
-- `services/kepler-backend/src/backup.rs`: функция `snapshot_to(dest: PathBuf) → Result` через `VACUUM INTO`.
+- `platform/runtime/src/backup.rs`: функция `snapshot_to(dest: PathBuf) → Result` через `VACUUM INTO`.
 - WS endpoint `backup.snapshot {dest}` для shell.
 - UI: `BackupsSettings.vue` в Kepler shell — кнопка «Создать бекап сейчас» + path picker.
 - Storage: `%APPDATA%\Kosmos\backup-config.json` хранит список destinations + history `[{dest, started_at, finished_at, size_bytes, ok, error}]`.
@@ -263,9 +263,9 @@ GitHub — отдельный destination type (не path). Auto-push в private
 ### MVP ✅ (2026-05-14)
 
 - **Resolution chain**: `extension-host.ts` поднимает user-installed копию из `%APPDATA%\Kosmos\extensions\<id>\` выше bundled `<resourcesPath>/extensions/<id>\`. Built-ins продолжают ехать с installer'ом как fallback.
-- **CLI scripts** в `shell/scripts/`:
-  - `bun run --cwd shell ext:install <path-to-extension-dir>` — копирует source в `<APPDATA>/Kosmos/extensions/<id>/` (atomic: tmp + rename + old backup).
-  - `bun run --cwd shell ext:uninstall <id>` — удаляет user-папку. Bundled версия (если есть) поднимается автоматически.
+- **CLI scripts** в `platform/desktop/scripts/`:
+  - `bun run --cwd platform/desktop ext:install <path-to-extension-dir>` — копирует source в `<APPDATA>/Kosmos/extensions/<id>/` (atomic: tmp + rename + old backup).
+  - `bun run --cwd platform/desktop ext:uninstall <id>` — удаляет user-папку. Bundled версия (если есть) поднимается автоматически.
 - **listExtensions dedup** по `id` — первый встреченный root по приоритету выигрывает.
 
 ### Что осталось
@@ -299,7 +299,7 @@ GitHub — отдельный destination type (не path). Auto-push в private
 
 ## Phase 14 ⏳ — Eden state на Pinia Colada
 
-Цель — заменить **самопальный** server-state-management в `extensions/eden/src/store/eden.ts` (saveCoordinator + latestSaveTimestamps + manual `entries.value[idx]` обновления) на queries/mutations [Pinia Colada](https://pinia-colada.esm.dev/) (v1.3.0+, аналог TanStack Query для Vue).
+Цель — заменить **самопальный** server-state-management в `products/eden/src/store/eden.ts` (saveCoordinator + latestSaveTimestamps + manual `entries.value[idx]` обновления) на queries/mutations [Pinia Colada](https://pinia-colada.esm.dev/) (v1.3.0+, аналог TanStack Query для Vue).
 
 ### Что даст
 
@@ -314,7 +314,7 @@ GitHub — отдельный destination type (не path). Auto-push в private
 
 Pinia Colada **коэкзистит** с обычной Pinia → миграция инкрементальная, не big-bang:
 
-1. **Pilot** (~30 мин): `bun add @pinia/colada` в `extensions/eden/`, `app.use(PiniaColada)` в `main.ts`. Установка — drop-in, никакого behavior change. Этот шаг можно сделать сейчас (E3 в [experiments harness](/agents/spec-templates#experiments)).
+1. **Pilot** (~30 мин): `bun add @pinia/colada` в `products/eden/`, `app.use(PiniaColada)` в `main.ts`. Установка — drop-in, никакого behavior change. Этот шаг можно сделать сейчас (E3 в [experiments harness](/agents/spec-templates#experiments)).
 2. **Query #1**: конвертировать `listEntries` → `useQuery({ key: ['entries'], query: listEntries })`. Удалить ручной `entries.value = await listEntries()` из `initApp` / `openTodayJournal` / `refreshData`.
 3. **Query #2**: `loadEntry(id)` → `useQuery({ key: ['entry', id], query: () => loadEntry(id) })`.
 4. **Mutation #1**: `saveEntry` → `useMutation({ mutation: saveEntry, onSuccess: () => queryCache.invalidate(['entries']) })`. Удалить `saveCoordinator` и `latestSaveTimestamps`.
@@ -323,11 +323,11 @@ Pinia Colada **коэкзистит** с обычной Pinia → миграци
 
 ### Метрики (proof loop обязателен)
 
-| Метрика                                   | До     | После | Цель                              |
-| ----------------------------------------- | ------ | ----- | --------------------------------- |
-| `wc -l extensions/eden/src/store/eden.ts` | 686    | TBD   | ≤ 500                             |
-| Eden bundle `index.js` gzip               | 113 KB | TBD   | ≤ 125 KB (стоимость либы ~5-10KB) |
-| `tests/e2e/eden.spec.ts` wall-clock       | TBD    | TBD   | не выросло                        |
+| Метрика                                 | До     | После | Цель                              |
+| --------------------------------------- | ------ | ----- | --------------------------------- |
+| `wc -l products/eden/src/store/eden.ts` | 686    | TBD   | ≤ 500                             |
+| Eden bundle `index.js` gzip             | 113 KB | TBD   | ≤ 125 KB (стоимость либы ~5-10KB) |
+| `tests/e2e/eden.spec.ts` wall-clock     | TBD    | TBD   | не выросло                        |
 
 baseline снят в `.agent/experiments/2026-05-19-tooling-pass/` (E3).
 
