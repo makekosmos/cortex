@@ -47,8 +47,6 @@ bun.lockb
 target/
 target-*/
 *.rlib
-# Frozen standalone crate excluded from the root Cargo workspace.
-legacy/usage-tracker/Cargo.lock
 
 # === Swift / Xcode ===
 DerivedData/

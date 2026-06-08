@@ -72,21 +72,6 @@ export interface SearchResult {
 }
 
 /**
- * @deprecated 2026-05-15: концепция spaces убрана, single DB per user.
- * Тип оставлен временно чтобы legacy consumers (если ещё импортируют) не
- * падали с typecheck-ошибкой. Удалить когда `legacy/dashboard-extension`
- * перестанет ссылаться.
- */
-export interface SpaceMeta {
-  id: string;
-  name: string;
-  objectCount: number | null;
-  lastAccessedAt: number;
-  label: string;
-  isSelected: boolean;
-}
-
-/**
  * Manifest preview данные для install dialog'а (.kext / dir).
  * Соответствует `KextManifestPreview` из `platform/desktop/electron/extension-installer.ts`.
  */
