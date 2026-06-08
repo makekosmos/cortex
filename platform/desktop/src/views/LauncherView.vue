@@ -980,15 +980,21 @@ async function refreshCommands() {
   // Двухфазно: команды (built-in появляются МГНОВЕННО) отдельно от apps. При
   // мёртвом backend'е `app_index.list_all` висит ~30s на ark-таймауте — нельзя
   // блокировать на нём показ встроенных команд (иначе лаунчер выглядит пустым).
+  // Ранее известные приложения — чтобы фаза 1 НЕ схлопывала список до одних
+  // built-in команд при тёплом переоткрытии (иначе apps пропадают и тут же
+  // возвращаются → визуальный «прыжок», ощущение перезагрузки с нуля).
+  const prevApps = allCommandsCache.value.filter((c) => c.kind === "app");
   const cmds = await window.kepler.commands.list().catch((e) => {
     console.warn("commands.list failed", e);
     return [] as CommandRecord[];
   });
   if (run !== commandsRefreshRun) return; // более свежий refresh победил
-  const phase1 = dedupeCommandsById(cmds);
+  // Фаза 1: built-in/extension команды появляются мгновенно, но уже известные
+  // apps сохраняем — список не теряет элементы между открытиями.
+  const phase1 = dedupeCommandsById([...cmds, ...prevApps]);
   allCommandsCache.value = phase1;
   commands.value = phase1.filter(isCommandVisible);
-  // Фаза 2: приложения (могут быть медленными/пустыми при мёртвом backend).
+  // Фаза 2: свежие приложения (могут быть медленными/пустыми при мёртвом backend).
   const apps = await fetchApps();
   if (run !== commandsRefreshRun || apps.length === 0) return;
   const deduped = dedupeCommandsById([...cmds, ...apps]);
@@ -1284,7 +1290,14 @@ onUnmounted(() => {
               :from="builtInIconFor(cmd)!.from"
               :to="builtInIconFor(cmd)!.to"
             />
-            <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+            <img
+              v-else-if="cmd.icon"
+              :src="cmd.icon"
+              class="icon"
+              alt=""
+              loading="lazy"
+              decoding="async"
+            />
             <BuiltInIcon v-else />
             <span class="title">{{ cmd.title }}</span>
             <span class="kind-label">{{
@@ -1369,7 +1382,14 @@ onUnmounted(() => {
                   :from="builtInIconFor(cmd)!.from"
                   :to="builtInIconFor(cmd)!.to"
                 />
-                <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+                <img
+                  v-else-if="cmd.icon"
+                  :src="cmd.icon"
+                  class="icon"
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                />
                 <BuiltInIcon v-else />
                 <span class="title">{{ cmd.title }}</span>
                 <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
@@ -1411,7 +1431,14 @@ onUnmounted(() => {
                   :from="builtInIconFor(cmd)!.from"
                   :to="builtInIconFor(cmd)!.to"
                 />
-                <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+                <img
+                  v-else-if="cmd.icon"
+                  :src="cmd.icon"
+                  class="icon"
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                />
                 <BuiltInIcon v-else />
                 <span class="title">{{ cmd.title }}</span>
                 <span v-if="cmd.kind === 'file' && cmd.subtitle" class="subtitle">{{
@@ -1467,7 +1494,14 @@ onUnmounted(() => {
                   :from="builtInIconFor(cmd)!.from"
                   :to="builtInIconFor(cmd)!.to"
                 />
-                <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+                <img
+                  v-else-if="cmd.icon"
+                  :src="cmd.icon"
+                  class="icon"
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                />
                 <BuiltInIcon v-else />
                 <span class="title">{{ cmd.title }}</span>
                 <span v-if="cmd.kind === 'file' && cmd.subtitle" class="subtitle">{{
@@ -1511,7 +1545,14 @@ onUnmounted(() => {
                   :from="builtInIconFor(cmd)!.from"
                   :to="builtInIconFor(cmd)!.to"
                 />
-                <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+                <img
+                  v-else-if="cmd.icon"
+                  :src="cmd.icon"
+                  class="icon"
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                />
                 <span v-else class="icon icon-placeholder" aria-hidden="true" />
                 <span class="title">{{ cmd.title }}</span>
                 <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
@@ -1837,6 +1878,12 @@ onUnmounted(() => {
   background: transparent;
   margin: 1px 0;
   /* Без transition: выделение должно срабатывать моментально. */
+  /* Длинный список (сотни приложений) не виртуализирован: content-visibility
+     позволяет браузеру пропускать layout/paint строк вне вьюпорта — убирает
+     лаг скролла. contain-intrinsic-size — размер-заглушка (≈высота строки),
+     чтобы scrollbar и геометрия не прыгали. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 42px;
 }
 
 .icon {
