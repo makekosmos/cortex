@@ -30,6 +30,8 @@ playwright-report/
 test-results/
 coverage/
 blob-report/
+.e2e/
+.vitest-attachments/
 
 # === Storybook ===
 storybook-static/
