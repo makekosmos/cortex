@@ -14,6 +14,7 @@ mod windows_capture;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -63,6 +64,51 @@ pub struct UsageTrackerOpts {
     /// Lowercased substrings; sample матчится если ЛЮБОЙ из паттернов входит
     /// в process_name ИЛИ в window_title. Дефолт — DEFAULT_EXCLUDE_PATTERNS.
     pub exclude_patterns: Vec<String>,
+}
+
+#[derive(Debug, Default)]
+pub struct UsageTrackerDiagnosticsState {
+    tick_p95_ms: AtomicU64,
+    active_sessions: AtomicUsize,
+    enum_windows_calls_per_tick: AtomicU64,
+    process_path_queries_per_tick: AtomicU64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct UsageTrackerDiagnosticsSnapshot {
+    pub tick_p95_ms: u64,
+    pub active_sessions: usize,
+    pub enum_windows_calls_per_tick: u64,
+    pub process_path_queries_per_tick: u64,
+}
+
+impl UsageTrackerDiagnosticsState {
+    pub fn observe(
+        &self,
+        tick_p95_ms: u64,
+        active_sessions: usize,
+        enum_windows_calls_per_tick: u64,
+        process_path_queries_per_tick: u64,
+    ) {
+        self.tick_p95_ms.store(tick_p95_ms, Ordering::SeqCst);
+        self.active_sessions
+            .store(active_sessions, Ordering::SeqCst);
+        self.enum_windows_calls_per_tick
+            .store(enum_windows_calls_per_tick, Ordering::SeqCst);
+        self.process_path_queries_per_tick
+            .store(process_path_queries_per_tick, Ordering::SeqCst);
+    }
+
+    pub fn snapshot(&self) -> UsageTrackerDiagnosticsSnapshot {
+        UsageTrackerDiagnosticsSnapshot {
+            tick_p95_ms: self.tick_p95_ms.load(Ordering::SeqCst),
+            active_sessions: self.active_sessions.load(Ordering::SeqCst),
+            enum_windows_calls_per_tick: self.enum_windows_calls_per_tick.load(Ordering::SeqCst),
+            process_path_queries_per_tick: self
+                .process_path_queries_per_tick
+                .load(Ordering::SeqCst),
+        }
+    }
 }
 
 impl Default for UsageTrackerOpts {
@@ -139,10 +185,14 @@ impl UsageTrackerOpts {
 /// resolve'ится при штатной работе (loop бесконечный). Caller может drop'нуть
 /// handle если хочет fire-and-forget.
 #[cfg(target_os = "windows")]
-pub fn spawn(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> JoinHandle<()> {
+pub fn spawn(
+    ark: Arc<ArkHost>,
+    opts: UsageTrackerOpts,
+    diagnostics: Arc<UsageTrackerDiagnosticsState>,
+) -> JoinHandle<()> {
     tokio::spawn(async move {
         loop {
-            if let Err(e) = run(Arc::clone(&ark), opts.clone()).await {
+            if let Err(e) = run(Arc::clone(&ark), opts.clone(), diagnostics.clone()).await {
                 eprintln!("[usage-tracker] loop crashed, restarting in 5s: {e}");
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
@@ -151,14 +201,22 @@ pub fn spawn(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> JoinHandle<()> {
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn spawn(_ark: Arc<ArkHost>, _opts: UsageTrackerOpts) -> JoinHandle<()> {
+pub fn spawn(
+    _ark: Arc<ArkHost>,
+    _opts: UsageTrackerOpts,
+    _diagnostics: Arc<UsageTrackerDiagnosticsState>,
+) -> JoinHandle<()> {
     tokio::spawn(async move {
         eprintln!("[usage-tracker] disabled on non-Windows platforms");
     })
 }
 
 #[cfg(target_os = "windows")]
-async fn run(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> Result<(), String> {
+async fn run(
+    ark: Arc<ArkHost>,
+    opts: UsageTrackerOpts,
+    diagnostics_state: Arc<UsageTrackerDiagnosticsState>,
+) -> Result<(), String> {
     let identity = TrackerIdentity {
         device_id: load_or_create_tracker_device_id(&ark).await?,
         device_name: resolve_device_name(),
@@ -170,7 +228,7 @@ async fn run(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> Result<(), String> {
 
     let mut active_sessions: HashMap<SessionKey, ActiveSession> = HashMap::new();
     let mut process_probe_cache = ProcessProbeCache::default();
-    let mut diagnostics_reporter = UsageTrackerDiagnostics::default();
+    let mut diagnostics_reporter = UsageTrackerDiagnostics::new(diagnostics_state);
     let mut previous_tick = std::time::Instant::now();
     // first_seen_at cache: stable между запусками backend'а сохраняется через
     // upsert (DB) — но в рамках одного процесса нам достаточно in-memory HashMap,
@@ -658,12 +716,21 @@ fn overflow_session_keys(active_sessions: &HashMap<SessionKey, ActiveSession>) -
 #[cfg(target_os = "windows")]
 #[derive(Debug, Default)]
 struct UsageTrackerDiagnostics {
+    state: Arc<UsageTrackerDiagnosticsState>,
     last_log_at: Option<std::time::Instant>,
     tick_ms_samples: Vec<i64>,
 }
 
 #[cfg(target_os = "windows")]
 impl UsageTrackerDiagnostics {
+    fn new(state: Arc<UsageTrackerDiagnosticsState>) -> Self {
+        Self {
+            state,
+            last_log_at: None,
+            tick_ms_samples: Vec::new(),
+        }
+    }
+
     fn observe(
         &mut self,
         tick_ms: i64,
@@ -681,6 +748,12 @@ impl UsageTrackerDiagnostics {
         }
 
         let p95 = percentile(&mut self.tick_ms_samples, 95);
+        self.state.observe(
+            p95.max(0) as u64,
+            active_sessions,
+            u64::from(probe_diagnostics.enum_windows_calls),
+            u64::from(probe_diagnostics.process_path_queries),
+        );
         eprintln!(
             "[usage-tracker] diagnostics usage_tracker.tick_ms={} usage_tracker.tick_ms.p95={} usage_tracker.active_sessions={} usage_tracker.enum_windows_calls_per_tick={} usage_tracker.process_path_queries_per_tick={} usage_tracker.visible_window_count={}",
             tick_ms,

@@ -20,6 +20,7 @@ pub mod watcher;
 pub use app::{App, AppKind};
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -59,6 +60,9 @@ pub struct AppIndex {
     store: store::AppStore,
     cache: Arc<RwLock<Vec<App>>>,
     icon_cache_dir: PathBuf,
+    last_rescan_ms: AtomicU64,
+    icon_reads_count: AtomicU64,
+    icon_bytes_read: AtomicU64,
 }
 
 impl AppIndex {
@@ -83,12 +87,16 @@ impl AppIndex {
             store,
             cache,
             icon_cache_dir,
+            last_rescan_ms: AtomicU64::new(0),
+            icon_reads_count: AtomicU64::new(0),
+            icon_bytes_read: AtomicU64::new(0),
         })
     }
 
     /// Force re-index — пройти все sources, обновить SQLite + cache.
     /// Возвращает diff stats для broadcast'а через command bus.
     pub async fn rescan(&self) -> Result<RescanStats> {
+        let started = std::time::Instant::now();
         let mut all_apps: Vec<App> = Vec::new();
         let mut errors: Vec<String> = Vec::new();
 
@@ -135,6 +143,10 @@ impl AppIndex {
         if !errors.is_empty() {
             tracing::warn!(target: "app_index", errors = ?errors, "rescan partial errors");
         }
+        self.last_rescan_ms.store(
+            started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
+            Ordering::SeqCst,
+        );
 
         Ok(stats)
     }
@@ -177,6 +189,21 @@ impl AppIndex {
     pub fn launch(&self, app: &App) -> Result<()> {
         platform::launch(app)
     }
+
+    pub fn observe_icon_read(&self, bytes: usize) {
+        self.icon_reads_count.fetch_add(1, Ordering::SeqCst);
+        self.icon_bytes_read
+            .fetch_add(bytes as u64, Ordering::SeqCst);
+    }
+
+    pub async fn diagnostics_snapshot(&self) -> AppIndexDiagnosticsSnapshot {
+        AppIndexDiagnosticsSnapshot {
+            apps_count: self.cache.read().await.len(),
+            last_rescan_ms: self.last_rescan_ms.load(Ordering::SeqCst),
+            icon_reads_count: self.icon_reads_count.load(Ordering::SeqCst),
+            icon_bytes_read: self.icon_bytes_read.load(Ordering::SeqCst),
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -185,6 +212,14 @@ pub struct RescanStats {
     pub updated: usize,
     pub removed: usize,
     pub total: usize,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AppIndexDiagnosticsSnapshot {
+    pub apps_count: usize,
+    pub last_rescan_ms: u64,
+    pub icon_reads_count: u64,
+    pub icon_bytes_read: u64,
 }
 
 fn compute_diff(old: &[App], new: &[App]) -> RescanStats {

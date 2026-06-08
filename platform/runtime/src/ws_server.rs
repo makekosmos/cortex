@@ -19,12 +19,14 @@ use crate::ark_host::ArkHost;
 use crate::arrancador;
 use crate::auth;
 use crate::command_bus::{ClientId, CommandBus, CommandBusEvent, CommandManifest};
+use crate::diagnostics::{RpcDiagnostics, SharedRpcDiagnostics};
 use crate::dictation::{handle_dictation_op, DictationHost};
 use crate::export;
 use crate::file_index::{FileIndex, FileIndexSettingsPatch};
 use crate::focus::handle_focus_op;
 use crate::pomodoro_host::{handle_pomodoro_op, PomodoroHost};
 use crate::protocol_version::{Compatibility, ProtocolVersion, PROTOCOL_VERSION};
+use crate::usage_tracker::UsageTrackerDiagnosticsState;
 
 /// Закрывающие коды (соответствуют codes в hello-error response).
 pub mod handshake_errors {
@@ -178,6 +180,8 @@ pub struct WsServer {
     dictation_host: Arc<DictationHost>,
     app_index: Arc<AppIndex>,
     file_index: Arc<FileIndex>,
+    usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
+    rpc_diagnostics: SharedRpcDiagnostics,
     next_client_id: Arc<AtomicU64>,
 }
 
@@ -190,6 +194,7 @@ impl WsServer {
         data_dir: std::path::PathBuf,
         app_index: Arc<AppIndex>,
         file_index: Arc<FileIndex>,
+        usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
     ) -> Result<Self, WsServerError> {
         let addr: SocketAddr = "127.0.0.1:0"
             .parse()
@@ -204,6 +209,8 @@ impl WsServer {
             dictation_host: DictationHost::new(),
             app_index,
             file_index,
+            usage_diagnostics,
+            rpc_diagnostics: Arc::new(RpcDiagnostics::new()),
             next_client_id: Arc::new(AtomicU64::new(1)),
         })
     }
@@ -231,10 +238,13 @@ impl WsServer {
             let dict = self.dictation_host.clone();
             let app_idx = self.app_index.clone();
             let file_idx = self.file_index.clone();
+            let usage_diag = self.usage_diagnostics.clone();
+            let rpc_diag = self.rpc_diagnostics.clone();
             let client_id = self.next_client_id.fetch_add(1, Ordering::Relaxed);
             tokio::spawn(async move {
                 if let Err(e) = handle_connection(
-                    stream, ark_host, token, bus, pomo, dict, app_idx, file_idx, client_id,
+                    stream, ark_host, token, bus, pomo, dict, app_idx, file_idx, usage_diag,
+                    rpc_diag, client_id,
                 )
                 .await
                 {
@@ -254,6 +264,8 @@ async fn handle_connection(
     dictation_host: Arc<DictationHost>,
     app_index: Arc<AppIndex>,
     file_index: Arc<FileIndex>,
+    usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
+    rpc_diagnostics: SharedRpcDiagnostics,
     client_id: ClientId,
 ) -> Result<(), WsServerError> {
     let ws = tokio_tungstenite::accept_async(stream).await?;
@@ -329,8 +341,6 @@ async fn handle_connection(
 
     loop {
         tokio::select! {
-            biased;
-
             // 2a. Outgoing: events from command_bus → client.
             evt = bus_rx.recv() => {
                 match evt {
@@ -472,6 +482,33 @@ async fn handle_connection(
                         map.remove("id");
                     }
                 }
+                let operation_started = std::time::Instant::now();
+
+                if operation == "diagnostics.snapshot" {
+                    let data = build_diagnostics_snapshot(
+                        &rpc_diagnostics,
+                        &file_index,
+                        &usage_diagnostics,
+                        &app_index,
+                    )
+                    .await;
+                    let response = serde_json::json!({
+                        "id": req_id,
+                        "ok": true,
+                        "data": data,
+                    });
+                    let payload = response.to_string();
+                    observe_rpc_payload(
+                        &rpc_diagnostics,
+                        &operation,
+                        operation_started,
+                        &payload,
+                    );
+                    if sink.send(Message::Text(payload)).await.is_err() {
+                        break;
+                    }
+                    continue;
+                }
 
                 // Intercept dictation.* — STT через DictationHost.
                 if let Some(rest) = operation.strip_prefix("dictation.") {
@@ -486,6 +523,12 @@ async fn handle_connection(
                         envelope.insert("error".into(), serde_json::Value::String(err));
                     }
                     let payload = serde_json::Value::Object(envelope).to_string();
+                    observe_rpc_payload(
+                        &rpc_diagnostics,
+                        &operation,
+                        operation_started,
+                        &payload,
+                    );
                     if sink.send(Message::Text(payload)).await.is_err() {
                         break;
                     }
@@ -505,6 +548,12 @@ async fn handle_connection(
                         envelope.insert("error".into(), serde_json::Value::String(err));
                     }
                     let payload = serde_json::Value::Object(envelope).to_string();
+                    observe_rpc_payload(
+                        &rpc_diagnostics,
+                        &operation,
+                        operation_started,
+                        &payload,
+                    );
                     if sink.send(Message::Text(payload)).await.is_err() {
                         break;
                     }
@@ -524,6 +573,12 @@ async fn handle_connection(
                         envelope.insert("error".into(), serde_json::Value::String(err));
                     }
                     let payload = serde_json::Value::Object(envelope).to_string();
+                    observe_rpc_payload(
+                        &rpc_diagnostics,
+                        &operation,
+                        operation_started,
+                        &payload,
+                    );
                     if sink.send(Message::Text(payload)).await.is_err() {
                         break;
                     }
@@ -545,6 +600,12 @@ async fn handle_connection(
                         envelope.insert("error".into(), serde_json::Value::String(err));
                     }
                     let payload = serde_json::Value::Object(envelope).to_string();
+                    observe_rpc_payload(
+                        &rpc_diagnostics,
+                        &operation,
+                        operation_started,
+                        &payload,
+                    );
                     if sink.send(Message::Text(payload)).await.is_err() {
                         break;
                     }
@@ -564,6 +625,12 @@ async fn handle_connection(
                         envelope.insert("error".into(), serde_json::Value::String(err));
                     }
                     let payload = serde_json::Value::Object(envelope).to_string();
+                    observe_rpc_payload(
+                        &rpc_diagnostics,
+                        &operation,
+                        operation_started,
+                        &payload,
+                    );
                     if sink.send(Message::Text(payload)).await.is_err() {
                         break;
                     }
@@ -583,6 +650,12 @@ async fn handle_connection(
                         envelope.insert("error".into(), serde_json::Value::String(err));
                     }
                     let payload = serde_json::Value::Object(envelope).to_string();
+                    observe_rpc_payload(
+                        &rpc_diagnostics,
+                        &operation,
+                        operation_started,
+                        &payload,
+                    );
                     if sink.send(Message::Text(payload)).await.is_err() {
                         break;
                     }
@@ -601,6 +674,7 @@ async fn handle_connection(
                     if let Some(err) = resp.error {
                         envelope.insert("error".into(), serde_json::Value::String(err));
                     }
+                    rpc_diagnostics.observe(&operation, operation_started.elapsed());
                     let payload = serde_json::Value::Object(envelope).to_string();
                     if sink.send(Message::Text(payload)).await.is_err() {
                         break;
@@ -621,6 +695,7 @@ async fn handle_connection(
                     if let Some(err) = resp.error {
                         envelope.insert("error".into(), serde_json::Value::String(err));
                     }
+                    rpc_diagnostics.observe(&operation, operation_started.elapsed());
                     let payload = serde_json::Value::Object(envelope).to_string();
                     if sink.send(Message::Text(payload)).await.is_err() {
                         break;
@@ -640,6 +715,12 @@ async fn handle_connection(
                             envelope.insert("error".into(), serde_json::Value::String(err));
                         }
                         let payload = serde_json::Value::Object(envelope).to_string();
+                        observe_rpc_payload(
+                            &rpc_diagnostics,
+                            &operation,
+                            operation_started,
+                            &payload,
+                        );
                         if sink.send(Message::Text(payload)).await.is_err() {
                             break;
                         }
@@ -650,7 +731,14 @@ async fn handle_connection(
                             "ok": false,
                             "error": format!("ark_host: {e}")
                         });
-                        if sink.send(Message::Text(response.to_string())).await.is_err() {
+                        let payload = response.to_string();
+                        observe_rpc_payload(
+                            &rpc_diagnostics,
+                            &operation,
+                            operation_started,
+                            &payload,
+                        );
+                        if sink.send(Message::Text(payload)).await.is_err() {
                             break;
                         }
                     }
@@ -690,6 +778,29 @@ impl LocalResponse {
             error: Some(msg.into()),
         }
     }
+}
+
+async fn build_diagnostics_snapshot(
+    rpc_diagnostics: &SharedRpcDiagnostics,
+    file_index: &Arc<FileIndex>,
+    usage_diagnostics: &Arc<UsageTrackerDiagnosticsState>,
+    app_index: &Arc<AppIndex>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "rpc": rpc_diagnostics.snapshot(),
+        "file_index": file_index.diagnostics_snapshot(),
+        "usage_tracker": usage_diagnostics.snapshot(),
+        "app_index": app_index.diagnostics_snapshot().await,
+    })
+}
+
+fn observe_rpc_payload(
+    rpc_diagnostics: &SharedRpcDiagnostics,
+    operation: &str,
+    started: std::time::Instant,
+    payload: &str,
+) {
+    rpc_diagnostics.observe_response(operation, started.elapsed(), payload.len());
 }
 
 /// Диспатч `commands.<subop>` — обрабатывает register / unregister / list /
@@ -1206,25 +1317,31 @@ async fn handle_app_index_op(
 
     match subop {
         "list_all" => {
-            // Все приложения с inline base64 иконками. Используется когда
-            // launcher хочет показать apps как часть общего списка команд
-            // (без отдельной поисковой подсекции).
+            // Lightweight command-list payload: no bulk inline icons in the WS hot path.
+            // См. postmortems.md § 2026-06-08 — WS hot path инлайнил сотни иконок.
             let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(500) as usize;
-            let mut out: Vec<crate::app_index::App> = app_index.all(limit).await;
-            for app in &mut out {
-                if let Some(path) = app.icon_path.clone() {
-                    if let Ok(bytes) = std::fs::read(&path) {
-                        let b64 = base64_encode(&bytes);
-                        app.icon_path = Some(format!("data:image/png;base64,{b64}"));
-                    } else {
-                        app.icon_path = None;
-                    }
-                }
-            }
-            match serde_json::to_value(serde_json::json!({ "apps": out })) {
-                Ok(v) => LocalResponse::ok(v),
-                Err(e) => LocalResponse::err(format!("app_index.list_all: serialize: {e}")),
-            }
+            let out: Vec<_> = app_index
+                .all(limit)
+                .await
+                .into_iter()
+                .map(|app| {
+                    let icon_ref = app
+                        .icon_path
+                        .as_ref()
+                        .map(|_| format!("kosmos-icon://app/{}", app.id));
+                    serde_json::json!({
+                        "id": app.id,
+                        "name": app.name,
+                        "exec_path": app.exec_path,
+                        "icon_path": null,
+                        "icon_ref": icon_ref,
+                        "kind": app.kind,
+                        "source": app.source,
+                        "mtime": app.mtime,
+                    })
+                })
+                .collect();
+            LocalResponse::ok(serde_json::json!({ "apps": out }))
         }
         "search" => {
             let query = match params.get("query").and_then(|v| v.as_str()) {
@@ -1239,12 +1356,7 @@ async fn handle_app_index_op(
             // ~50KB per icon, top-8 = ~400KB JSON, приемлемо.
             for scored in &mut results {
                 if let Some(path) = scored.app.icon_path.clone() {
-                    if let Ok(bytes) = std::fs::read(&path) {
-                        let b64 = base64_encode(&bytes);
-                        scored.app.icon_path = Some(format!("data:image/png;base64,{b64}"));
-                    } else {
-                        scored.app.icon_path = None;
-                    }
+                    scored.app.icon_path = inline_icon_data_url(app_index.clone(), path).await;
                 }
             }
             match serde_json::to_value(serde_json::json!({ "results": results })) {
@@ -1294,14 +1406,17 @@ async fn handle_file_index_op(
                 .and_then(|v| v.as_u64())
                 .unwrap_or(8)
                 .min(50) as usize;
-            match file_index.search(query, limit) {
-                Ok(results) => {
+            let index = file_index.clone();
+            let query = query.to_string();
+            match tokio::task::spawn_blocking(move || index.search(&query, limit)).await {
+                Ok(Ok(results)) => {
                     match serde_json::to_value(serde_json::json!({ "results": results })) {
                         Ok(value) => LocalResponse::ok(value),
                         Err(e) => LocalResponse::err(format!("file_index.search: serialize: {e}")),
                     }
                 }
-                Err(e) => LocalResponse::err(format!("file_index.search: {e}")),
+                Ok(Err(e)) => LocalResponse::err(format!("file_index.search: {e}")),
+                Err(e) => LocalResponse::err(format!("file_index.search: join: {e}")),
             }
         }
         "open" => {
@@ -1413,6 +1528,20 @@ fn base64_encode(input: &[u8]) -> String {
         out.push('=');
     }
     out
+}
+
+async fn inline_icon_data_url(app_index: Arc<AppIndex>, path: String) -> Option<String> {
+    tokio::task::spawn_blocking(move || match std::fs::read(&path) {
+        Ok(bytes) => {
+            app_index.observe_icon_read(bytes.len());
+            let b64 = base64_encode(&bytes);
+            Some(format!("data:image/png;base64,{b64}"))
+        }
+        Err(_) => None,
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 async fn send_hello_error<S>(sink: &mut S, code: &str, message: &str) -> Result<(), WsServerError>

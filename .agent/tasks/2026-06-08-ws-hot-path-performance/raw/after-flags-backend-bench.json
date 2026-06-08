@@ -1,0 +1,277 @@
+{
+  "label": "after-flags",
+  "flags": {
+    "KEPLER_USAGE_TRACKER": "0",
+    "KEPLER_SKIP_SYNC": "1",
+    "KEPLER_FILE_INDEX_INITIAL_RESCAN": "0",
+    "KOSMOS_WINDOW_EFFECTS": "flat"
+  },
+  "dataDir": "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-06-08-ws-hot-path-performance\\smoke\\after-flags",
+  "typeperfPath": "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-06-08-ws-hot-path-performance\\raw\\after-flags-typeperf.csv",
+  "typeperfStatus": {
+    "code": 4026531842,
+    "signal": null
+  },
+  "typeperfLog": [
+    "�믮������ ��室, ��������...                         ",
+    "�訡��: ���稪� �� 㪠����.",
+    "�ਬ�砭��. ",
+    "  �⮡� �ᯮ�짮���� �ਫ������ Typeperf, ����室��� ���� ���⭨��� �����쭮� ",
+    "  ��㯯� \"���짮��⥫� ��ୠ��� �ந�����⥫쭮��\" ��� �믮����� ������� �� ",
+    "  ���� ��������� ��ப� � �ࠢ��� �����������.",
+    "\r\r"
+  ],
+  "processSamplerPath": "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-06-08-ws-hot-path-performance\\raw\\after-flags-process-sampler.csv",
+  "processSamplerStatus": {
+    "code": 0,
+    "signal": null
+  },
+  "processSamplerLog": [],
+  "backendPid": 28888,
+  "beforeSnapshot": {
+    "app_index": {
+      "apps_count": 76,
+      "icon_bytes_read": 0,
+      "icon_reads_count": 0,
+      "last_rescan_ms": 1706
+    },
+    "file_index": {
+      "files_count": 0,
+      "last_scan_ms": 0,
+      "like_search_count": 0,
+      "query_len_histogram": {},
+      "roots": [],
+      "scan_in_progress": false,
+      "search_count": 0
+    },
+    "rpc": {
+      "by_operation": {
+        "app_index.list_all": {
+          "count": 7,
+          "max_ms": 2,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 20102,
+          "response_bytes_p50": 59,
+          "response_bytes_p95": 59
+        }
+      },
+      "total": 7
+    },
+    "usage_tracker": {
+      "active_sessions": 0,
+      "enum_windows_calls_per_tick": 0,
+      "process_path_queries_per_tick": 0,
+      "tick_p95_ms": 0
+    }
+  },
+  "afterSnapshot": {
+    "app_index": {
+      "apps_count": 76,
+      "icon_bytes_read": 0,
+      "icon_reads_count": 0,
+      "last_rescan_ms": 1706
+    },
+    "file_index": {
+      "files_count": 0,
+      "last_scan_ms": 0,
+      "like_search_count": 0,
+      "query_len_histogram": {
+        "6_12": 20
+      },
+      "roots": [],
+      "scan_in_progress": false,
+      "search_count": 20
+    },
+    "rpc": {
+      "by_operation": {
+        "app_index.list_all": {
+          "count": 37,
+          "max_ms": 2,
+          "p50_ms": 1,
+          "p95_ms": 2,
+          "response_bytes_max": 20103,
+          "response_bytes_p50": 20103,
+          "response_bytes_p95": 20103
+        },
+        "commands.list": {
+          "count": 50,
+          "max_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 0,
+          "response_bytes_p50": 0,
+          "response_bytes_p95": 0
+        },
+        "diagnostics.snapshot": {
+          "count": 1,
+          "max_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 586,
+          "response_bytes_p50": 586,
+          "response_bytes_p95": 586
+        },
+        "file_index.search": {
+          "count": 20,
+          "max_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 0,
+          "response_bytes_p50": 0,
+          "response_bytes_p95": 0
+        }
+      },
+      "total": 108
+    },
+    "usage_tracker": {
+      "active_sessions": 0,
+      "enum_windows_calls_per_tick": 0,
+      "process_path_queries_per_tick": 0,
+      "tick_p95_ms": 0
+    }
+  },
+  "stormSnapshot": {
+    "app_index": {
+      "apps_count": 76,
+      "icon_bytes_read": 0,
+      "icon_reads_count": 0,
+      "last_rescan_ms": 1706
+    },
+    "file_index": {
+      "files_count": 0,
+      "last_scan_ms": 0,
+      "like_search_count": 0,
+      "query_len_histogram": {
+        "6_12": 20
+      },
+      "roots": [],
+      "scan_in_progress": false,
+      "search_count": 20
+    },
+    "rpc": {
+      "by_operation": {
+        "app_index.list_all": {
+          "count": 37,
+          "max_ms": 2,
+          "p50_ms": 1,
+          "p95_ms": 2,
+          "response_bytes_max": 20103,
+          "response_bytes_p50": 20103,
+          "response_bytes_p95": 20103
+        },
+        "commands.invoke": {
+          "count": 512,
+          "max_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 0,
+          "response_bytes_p50": 0,
+          "response_bytes_p95": 0
+        },
+        "commands.list": {
+          "count": 280,
+          "max_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 0,
+          "response_bytes_p50": 0,
+          "response_bytes_p95": 0
+        },
+        "diagnostics.snapshot": {
+          "count": 2,
+          "max_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 1016,
+          "response_bytes_p50": 586,
+          "response_bytes_p95": 586
+        },
+        "file_index.search": {
+          "count": 20,
+          "max_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 0,
+          "response_bytes_p50": 0,
+          "response_bytes_p95": 0
+        }
+      },
+      "total": 851
+    },
+    "usage_tracker": {
+      "active_sessions": 0,
+      "enum_windows_calls_per_tick": 0,
+      "process_path_queries_per_tick": 0,
+      "tick_p95_ms": 0
+    }
+  },
+  "app_index_list_all": {
+    "latency": {
+      "count": 30,
+      "p50_ms": 2.2335999999995693,
+      "p95_ms": 2.755300000000716,
+      "max_ms": 3.087100000000646
+    },
+    "payload_bytes": {
+      "count": 30,
+      "p50_ms": 20103,
+      "p95_ms": 20103,
+      "max_ms": 20103
+    },
+    "last_count": 76
+  },
+  "commands_list": {
+    "latency": {
+      "count": 50,
+      "p50_ms": 0.17139999999926658,
+      "p95_ms": 0.2206000000005588,
+      "max_ms": 0.27000000000043656
+    },
+    "payload_bytes": {
+      "count": 50,
+      "p50_ms": 64,
+      "p95_ms": 64,
+      "max_ms": 64
+    },
+    "last_count": 0
+  },
+  "file_index_search": {
+    "latency": {
+      "count": 20,
+      "p50_ms": 0.2903999999998632,
+      "p95_ms": 0.3943999999992229,
+      "max_ms": 0.5501000000003842
+    },
+    "payload_bytes": {
+      "count": 20,
+      "p50_ms": 63,
+      "p95_ms": 64,
+      "max_ms": 64
+    },
+    "last_count": 0
+  },
+  "event_storm": {
+    "duration_s": 60,
+    "target_events_per_min": 1000,
+    "sent": 973,
+    "received_by_measure_client": 973,
+    "commands_list_latency": {
+      "count": 230,
+      "p50_ms": 0.509699999998702,
+      "p95_ms": 0.7675000000017462,
+      "max_ms": 0.921199999998862
+    }
+  },
+  "backendLogTail": [
+    "kepler-backend v0.1.0 starting (protocol 1.0.0)",
+    "[crash-reporter] installed, crashes go to \"D:\\\\Personal\\\\Hobby\\\\Coding\\\\kosmos\\\\.agent\\\\tasks\\\\2026-06-08-ws-hot-path-performance\\\\smoke\\\\after-flags\\\\crashes\"",
+    "[kepler-backend] KOSMOS_LOCK_PERMISSIONS_DISABLED=1 — icacls hardening skipped for D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-06-08-ws-hot-path-performance\\smoke\\after-flags\\.kepler.lock.json.tmp.28888 (test-only path, prod должен не выставлять флаг)",
+    "[kepler-backend] KEPLER_USAGE_TRACKER=0 — usage_tracker disabled",
+    "[kepler-backend] ready. Ctrl+C для shutdown.",
+    "[db-backup] no previous backup recorded, running",
+    "[db-backup] starting → D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-06-08-ws-hot-path-performance\\smoke\\after-flags\\backups\\ark.db.backup-2026-06-08-134220",
+    "[db-backup] success → \"D:\\\\Personal\\\\Hobby\\\\Coding\\\\kosmos\\\\.agent\\\\tasks\\\\2026-06-08-ws-hot-path-performance\\\\smoke\\\\after-flags\\\\backups\\\\ark.db.backup-2026-06-08-134220\"",
+    ""
+  ]
+}

@@ -26,7 +26,7 @@ use kepler_backend::{
     protocol_version::{ProtocolVersion, PROTOCOL_VERSION},
     singleton::SingletonGuard,
     sync,
-    usage_tracker::{self, UsageTrackerOpts},
+    usage_tracker::{self, UsageTrackerDiagnosticsState, UsageTrackerOpts},
     ws_server::WsServer,
 };
 
@@ -35,6 +35,7 @@ type DynError = Box<dyn std::error::Error + Send + Sync>;
 struct SetupState {
     ark: Arc<ArkHost>,
     ws: WsServer,
+    usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
     lock_path: PathBuf,
     _singleton: SingletonGuard,
     // tracing-appender WorkerGuard. Drop'нется когда SetupState упадёт —
@@ -95,6 +96,7 @@ async fn main() -> ExitCode {
     let SetupState {
         ark,
         ws,
+        usage_diagnostics,
         lock_path,
         _singleton,
         _log_guard,
@@ -117,7 +119,7 @@ async fn main() -> ExitCode {
             .map(|p| p.join("app-icons"))
             .unwrap_or_else(|| PathBuf::from("app-icons"));
         let opts = UsageTrackerOpts::from_env().with_icon_cache_dir(icon_cache_dir);
-        usage_tracker::spawn(ark_for_tracker, opts);
+        usage_tracker::spawn(ark_for_tracker, opts, usage_diagnostics.clone());
         eprintln!("[kepler-backend] usage_tracker spawned (in-process)");
     } else {
         eprintln!("[kepler-backend] KEPLER_USAGE_TRACKER=0 — usage_tracker disabled");
@@ -232,6 +234,7 @@ async fn setup() -> Result<SetupState, DynError> {
     }
 
     let token = auth::generate_token();
+    let usage_diagnostics = Arc::new(UsageTrackerDiagnosticsState::default());
 
     // App Index: индексирует Start Menu + UWP. SQLite в lock_dir (рядом с ark.db),
     // icon cache в lock_dir/app-icons/. На старте — load cached синхронно (<10ms),
@@ -284,6 +287,7 @@ async fn setup() -> Result<SetupState, DynError> {
         lock_dir.clone(),
         app_index.clone(),
         file_index.clone(),
+        usage_diagnostics.clone(),
     )
     .await?;
     let port = ws.port();
@@ -338,6 +342,7 @@ async fn setup() -> Result<SetupState, DynError> {
     Ok(SetupState {
         ark,
         ws,
+        usage_diagnostics,
         lock_path,
         _singleton,
         _log_guard: log_guard,

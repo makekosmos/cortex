@@ -20,6 +20,7 @@ pub mod auth;
 pub mod command_bus;
 pub mod crash_reporter;
 pub mod db_backup;
+pub mod diagnostics;
 pub mod dictation;
 pub mod export;
 pub mod file_index;

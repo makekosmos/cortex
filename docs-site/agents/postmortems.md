@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-08 — WS hot path инлайнил сотни иконок
+
+**Симптомы** — refresh launcher-команд мог создавать резкий backend/RPC latency spike: `app_index.list_all` возвращал большой JSON с base64-иконками, а `file_index.search` занимал тот же WS connection task синхронной работой. На event storm входящие RPC дополнительно стояли после outgoing event branches в `tokio::select! { biased; ... }`.
+**Где жило** — `platform/runtime/src/ws_server.rs::handle_connection`, `platform/runtime/src/ws_server.rs::handle_app_index_op`, `platform/runtime/src/ws_server.rs::handle_file_index_op`.
+**Root cause** — WS handler совмещал управление соединением, outgoing event forwarding и тяжёлую локальную работу. `app_index.list_all` для списка команд читал PNG с диска и base64-кодировал каждую иконку прямо перед сериализацией ответа, поэтому payload рос пропорционально числу приложений и размеру иконок. `file_index.search` вызывал SQLite/ranking синхронно из async task, а biased select отдавал приоритет ready outgoing branches перед incoming frames.
+**Fix** — `app_index.list_all` больше не инлайнит base64-иконки: для app entries возвращается lightweight `kosmos-icon://app/<id>` ref, поэтому refresh команд не читает сотни PNG и не шлёт большой JSON. Inline data URL оставлен только для `app_index.search` top-N, но чтение/кодирование вынесено в `tokio::task::spawn_blocking`. `file_index.search` тоже выполняется через `spawn_blocking`, `tokio::select!` в WS loop больше не `biased`, а backend diagnostics теперь пишет response payload bytes по RPC operation.
+**Регрешн-защита** — proof-loop `.agent/tasks/2026-06-08-ws-hot-path-performance/` содержит baseline/A-B harness и evidence: на локальном app set 76 apps `app_index.list_all` p95 улучшился с 43.7ms / 374KB / 2294 icon reads до 2.9ms / 20.1KB / 0 icon reads без флагов и 2.8ms / 20.1KB / 0 icon reads с `KEPLER_USAGE_TRACKER=0`, `KEPLER_SKIP_SYNC=1`, `KEPLER_FILE_INDEX_INITIAL_RESCAN=0`, `KOSMOS_WINDOW_EFFECTS=flat`. Event storm ~970 events/min сохранил `commands.list` p95 < 1ms. `cargo check -p kepler-backend`, `cargo test -p kepler-backend diagnostics`, `bun run ark:guard:writes`, `bun run docs:check`, `bun run ark:smoke` прошли.
+**Prevention** — WS/RPC handlers не должны выполнять bulk FS reads, base64 encode, SQLite scans/ranking или другую непредсказуемую работу прямо в connection task. List endpoints обязаны возвращать lightweight refs/metadata, heavy assets грузятся lazy/cached отдельным путём, а diagnostics должны включать не только latency, но и response payload size: маленький p95 без byte cap может скрывать будущий UI freeze на сериализации/парсинге JSON.
+
 ## 2026-06-08 — Usage tracker делал EnumWindows на каждую сессию
 
 **Симптомы** — после долгой работы приложения `kepler-backend` мог тратить CPU в простое: каждую секунду usage tracker обходил top-level windows отдельно для каждой активной tracked session.

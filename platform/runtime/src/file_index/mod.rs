@@ -8,6 +8,7 @@ mod store;
 mod watcher;
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -107,6 +108,17 @@ pub struct FileIndexSettingsPatch {
     pub ntfs_accelerated: Option<bool>,
 }
 
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct FileIndexDiagnosticsSnapshot {
+    pub scan_in_progress: bool,
+    pub roots: Vec<String>,
+    pub files_count: usize,
+    pub last_scan_ms: u64,
+    pub search_count: u64,
+    pub like_search_count: u64,
+    pub query_len_histogram: HashMap<String, u64>,
+}
+
 #[derive(Debug, Clone)]
 pub struct ScanOptions {
     pub exclude_noisy_folders: bool,
@@ -124,6 +136,10 @@ pub struct FileIndex {
     scan_generation: Arc<AtomicU64>,
     scan_in_progress: AtomicBool,
     scan_progress: Arc<StdMutex<ScanProgressSnapshot>>,
+    last_scan_ms: AtomicU64,
+    search_count: AtomicU64,
+    like_search_count: AtomicU64,
+    query_len_histogram: StdMutex<HashMap<String, u64>>,
     // Regression H3 (2026-05-24): coalesce overlapping spawn_rescan calls.
     // Toggling 5 patterns in a row used to queue 5 full rescans on scan_lock.
     rescan_pending: AtomicBool,
@@ -172,6 +188,10 @@ impl FileIndex {
             scan_generation: Arc::new(AtomicU64::new(0)),
             scan_in_progress: AtomicBool::new(false),
             scan_progress: Arc::new(StdMutex::new(ScanProgressSnapshot::default())),
+            last_scan_ms: AtomicU64::new(0),
+            search_count: AtomicU64::new(0),
+            like_search_count: AtomicU64::new(0),
+            query_len_histogram: StdMutex::new(HashMap::new()),
             rescan_pending: AtomicBool::new(false),
             ntfs_last_state: Arc::new(StdMutex::new(NtfsState::default())),
             enabled,
@@ -302,6 +322,7 @@ impl FileIndex {
     }
 
     async fn rescan_locked(&self) -> Result<ScanStats> {
+        let scan_started = std::time::Instant::now();
         self.scan_in_progress.store(true, Ordering::SeqCst);
         self.set_progress(ScanProgressSnapshot {
             phase: "scanning".to_string(),
@@ -400,6 +421,10 @@ impl FileIndex {
             message: "Индексация завершена".to_string(),
             ..Default::default()
         });
+        self.last_scan_ms.store(
+            scan_started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
+            Ordering::SeqCst,
+        );
         Ok(ScanStats {
             total,
             roots,
@@ -414,6 +439,7 @@ impl FileIndex {
         if !self.enabled {
             return Ok(Vec::new());
         }
+        self.observe_search(query);
         let candidate_limit = limit.saturating_mul(64).max(512);
         let candidates = self.store.search(query, candidate_limit)?;
         Ok(rank(candidates, query, limit))
@@ -550,6 +576,46 @@ impl FileIndex {
     fn set_progress(&self, snapshot: ScanProgressSnapshot) {
         let mut progress = self.scan_progress.lock().unwrap_or_else(|e| e.into_inner());
         *progress = snapshot;
+    }
+
+    pub fn diagnostics_snapshot(&self) -> FileIndexDiagnosticsSnapshot {
+        let stats = self.current_stats().ok();
+        let roots = self.root_strings().unwrap_or_default();
+        let files_count = stats.as_ref().map(|s| s.total).unwrap_or_default();
+        FileIndexDiagnosticsSnapshot {
+            scan_in_progress: self.scan_in_progress.load(Ordering::SeqCst),
+            roots,
+            files_count,
+            last_scan_ms: self.last_scan_ms.load(Ordering::SeqCst),
+            search_count: self.search_count.load(Ordering::SeqCst),
+            like_search_count: self.like_search_count.load(Ordering::SeqCst),
+            query_len_histogram: self
+                .query_len_histogram
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+        }
+    }
+
+    fn observe_search(&self, query: &str) {
+        self.search_count.fetch_add(1, Ordering::SeqCst);
+        let len = query.trim().chars().count();
+        if len < 3 {
+            self.like_search_count.fetch_add(1, Ordering::SeqCst);
+        }
+        let bucket = match len {
+            0 => "0",
+            1 => "1",
+            2 => "2",
+            3..=5 => "3_5",
+            6..=12 => "6_12",
+            _ => "13_plus",
+        };
+        let mut histogram = self
+            .query_len_histogram
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        *histogram.entry(bucket.to_string()).or_insert(0) += 1;
     }
 }
 

@@ -303,6 +303,11 @@ const api: KeplerApi = {
     bundle: () => ipcRenderer.invoke("kepler:diagnostics:bundle"),
     bundleSave: () => ipcRenderer.invoke("kepler:diagnostics:bundle-save"),
     openLogsFolder: () => ipcRenderer.invoke("kepler:diagnostics:open-logs-folder"),
+    metrics: () => ipcRenderer.invoke("kepler:diagnostics:metrics"),
+    traceStart: () => ipcRenderer.invoke("kepler:diagnostics:trace-start"),
+    traceStop: (outPath?: string) => ipcRenderer.invoke("kepler:diagnostics:trace-stop", outPath),
+    windowMoveBenchmark: (input) =>
+      ipcRenderer.invoke("kepler:diagnostics:window-move-benchmark", input),
   },
   postUpdate: {
     onShown: (listener) => {
