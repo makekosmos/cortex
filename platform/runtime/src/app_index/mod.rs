@@ -20,7 +20,7 @@ pub mod watcher;
 pub use app::{App, AppKind};
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -73,6 +73,9 @@ pub struct AppIndex {
     last_rescan_ms: AtomicU64,
     icon_reads_count: AtomicU64,
     icon_bytes_read: AtomicU64,
+    // Diagnostics: реально ли последний rescan шёл на background-priority потоке
+    // (THREAD_MODE_BACKGROUND_BEGIN активирован). Подтверждает AC1/AC3.
+    scan_background_mode: AtomicBool,
 }
 
 impl AppIndex {
@@ -100,6 +103,7 @@ impl AppIndex {
             last_rescan_ms: AtomicU64::new(0),
             icon_reads_count: AtomicU64::new(0),
             icon_bytes_read: AtomicU64::new(0),
+            scan_background_mode: AtomicBool::new(false),
         })
     }
 
@@ -117,7 +121,11 @@ impl AppIndex {
         let sources = self.sources.clone();
         let icon_cache_dir = self.icon_cache_dir.clone();
         let icon_sleep = icon_extract_sleep();
-        let (all_apps, errors) = crate::priority::spawn_background_blocking(move || {
+        let (all_apps, errors, background_mode) = tokio::task::spawn_blocking(move || {
+            // Guard живёт внутри sync closure (без `.await`) — снимается на том же
+            // потоке. is_active() фиксируем для diagnostics (подтверждение AC1/AC3).
+            let bg = crate::priority::BackgroundThreadGuard::enter();
+            let background_mode = bg.is_active();
             let mut all_apps: Vec<App> = Vec::new();
             let mut errors: Vec<String> = Vec::new();
 
@@ -159,10 +167,12 @@ impl AppIndex {
                 }
             }
 
-            (all_apps, errors)
+            (all_apps, errors, background_mode)
         })
         .await
         .map_err(|e| AppIndexError::Other(format!("rescan background join failed: {e}")))?;
+        self.scan_background_mode
+            .store(background_mode, Ordering::SeqCst);
 
         // Diff против existing cache для stats.
         let existing = self.cache.read().await.clone();
@@ -234,6 +244,7 @@ impl AppIndex {
             last_rescan_ms: self.last_rescan_ms.load(Ordering::SeqCst),
             icon_reads_count: self.icon_reads_count.load(Ordering::SeqCst),
             icon_bytes_read: self.icon_bytes_read.load(Ordering::SeqCst),
+            scan_background_mode: self.scan_background_mode.load(Ordering::SeqCst),
         }
     }
 }
@@ -252,6 +263,8 @@ pub struct AppIndexDiagnosticsSnapshot {
     pub last_rescan_ms: u64,
     pub icon_reads_count: u64,
     pub icon_bytes_read: u64,
+    /// Шёл ли последний rescan на background-priority потоке (CPU+I/O).
+    pub scan_background_mode: bool,
 }
 
 fn compute_diff(old: &[App], new: &[App]) -> RescanStats {

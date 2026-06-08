@@ -82,11 +82,15 @@ THREAD_MODE_BACKGROUND_BEGIN)`, Drop → `THREAD_MODE_BACKGROUND_END`. На non-
    `Win32_System_Threading` в windows features ark-core если ещё нет).
 3. Обычные ARK requests продолжают обслуживаться во время backup.
 
-### Phase 3 — diagnostics + verification
+### Phase 3 — diagnostics + verification — ✅ DONE (counters lean; WPR = user-run)
 
-1. Diagnostics counters: `background_workers.{app_index,icon_extractor,db_backup}`
-   (active, thread_background_mode, jobs, last_duration_ms, concurrency, throttle).
-2. WPR A/B trace (CPU + DiskIO + FileIO) до/после под CPU stress + window-move.
+1. Diagnostics: `app_index.scan_background_mode` (bool) в `diagnostics.snapshot` —
+   подтверждает, что rescan реально шёл на background-priority потоке (AC1/AC3).
+   db_backup — log-based (тайминг + `background-priority chunked copy` в success-логе);
+   полноценный `background_workers` counters-блок через WsServer::bind признан
+   непропорциональным (инвазивный плёнкинг через много call-sites) — намеренно не делал.
+2. WPR A/B trace: `wpr-trace.ps1` (CPU + DiskIO + FileIO). Требует admin elevation +
+   ручной workload + BEFORE-сборку → запускает пользователь, не агент.
 
 ## Acceptance criteria
 

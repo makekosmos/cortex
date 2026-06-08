@@ -35,6 +35,11 @@ impl BackgroundThreadGuard {
         let ok = unsafe { SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN) };
         Self { active: ok.is_ok() }
     }
+
+    /// Реально ли поток вошёл в background mode (для diagnostics).
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -60,6 +65,11 @@ pub struct BackgroundThreadGuard;
 impl BackgroundThreadGuard {
     pub fn enter() -> Self {
         Self
+    }
+
+    /// На non-Windows background mode недоступен → всегда false.
+    pub fn is_active(&self) -> bool {
+        false
     }
 }
 

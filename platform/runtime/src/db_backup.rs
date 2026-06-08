@@ -162,6 +162,7 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
     let mut events = ark.subscribe_events();
 
     eprintln!("[db-backup] starting → {dest_str}");
+    let backup_started = std::time::Instant::now();
     // RPC возвращается сразу ({"started": true}) — копирование продолжается в
     // фоне, не блокируя серийный RPC-loop ark-core-rpc.
     ark.request("db_backup", json!({ "dest_path": dest_str.clone() }))
@@ -180,7 +181,10 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
         Err(e) => eprintln!("[db-backup] rotation failed: {e}"),
     }
 
-    eprintln!("[db-backup] success → {dest:?}");
+    eprintln!(
+        "[db-backup] success → {dest:?} ({} ms, background-priority chunked copy)",
+        backup_started.elapsed().as_millis()
+    );
     Ok(dest)
 }
 
