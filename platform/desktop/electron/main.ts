@@ -592,22 +592,23 @@ function showLauncher() {
       // См. postmortems.md § 2026-06-07.
       mainWindow.show();
       mainWindow.focus();
-    } else if (!mainWindow.isVisible()) {
-      mainWindow.showInactive();
-      mainWindow.focus();
     } else {
+      // Windows/Linux. Launcher открывается по globalShortcut, поэтому Kepler
+      // shell — НЕ foreground-процесс: showInactive() показывал окно без
+      // активации, а .focus() блокировался Windows foreground lock'ом (окно
+      // всплывало поверх всего благодаря alwaysOnTop, но клавиатурный ввод
+      // оставался в предыдущем приложении). show() активирует окно и отдаёт
+      // ему фокус ввода — штатное поведение launcher'а (PowerToys Run / Raycast).
+      mainWindow.show();
       mainWindow.focus();
-    }
-    // Гарантируем что окно реально окажется на переднем плане (нужно для
-    // post-update flow: процесс только что перезапустился и Windows может
-    // отдать focus текущему foreground app). Снимаем флаг через 800мс —
-    // постоянный always-on-top раздражает.
-    if (process.platform === "win32" && !mainWindow.isAlwaysOnTop()) {
-      const win = mainWindow;
-      win.setAlwaysOnTop(true);
-      setTimeout(() => {
-        if (!win.isDestroyed()) win.setAlwaysOnTop(false);
-      }, 800);
+      // Windows может всё равно отказать SetForegroundWindow фоновому процессу.
+      // Кратковременный toggle alwaysOnTop (off→on) дёргает SetWindowPos с
+      // HWND_TOPMOST и пинает систему реально вытащить окно на передний план.
+      if (process.platform === "win32") {
+        mainWindow.setAlwaysOnTop(false);
+        mainWindow.setAlwaysOnTop(true);
+        mainWindow.focus();
+      }
     }
   }
   launcherHidden = false;
