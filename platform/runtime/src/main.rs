@@ -264,10 +264,15 @@ async fn setup() -> Result<SetupState, DynError> {
         });
     }
 
-    // File Index v1: non-elevated local-drive filename/path scanner. Test mode
-    // supplies no roots unless KEPLER_FILE_INDEX_ROOTS is set, so test backend
-    // processes do not walk the developer's drives.
-    let file_index = match kepler_backend::file_index::FileIndex::new(&lock_dir) {
+    // File Index v1: host-local filename/path search. Broad startup scans are
+    // opt-in only; see postmortems.md § 2026-06-08.
+    let file_index_enabled =
+        kepler_backend::file_index::env_flag_enabled("KEPLER_FILE_INDEX", true);
+    let file_index = match if file_index_enabled {
+        kepler_backend::file_index::FileIndex::new(&lock_dir)
+    } else {
+        kepler_backend::file_index::FileIndex::new_disabled(&lock_dir)
+    } {
         Ok(index) => std::sync::Arc::new(index),
         Err(e) => return Err(format!("file_index init failed: {e}").into()),
     };
@@ -299,6 +304,9 @@ async fn setup() -> Result<SetupState, DynError> {
     // File indexing can be slow on large disks or when NTFS fast scan falls
     // back to walking. Start it only after WS + lock-file are ready, otherwise
     // shell IPC requests time out during backend startup.
+    if file_index_enabled
+        && kepler_backend::file_index::env_flag_enabled("KEPLER_FILE_INDEX_INITIAL_RESCAN", true)
+        && file_index.has_roots()?
     {
         let index = file_index.clone();
         tokio::spawn(async move {
@@ -315,6 +323,16 @@ async fn setup() -> Result<SetupState, DynError> {
                 Err(e) => tracing::warn!(error = %e, "file_index initial rescan failed"),
             }
         });
+    } else {
+        tracing::info!(
+            enabled = file_index_enabled,
+            initial_rescan = kepler_backend::file_index::env_flag_enabled(
+                "KEPLER_FILE_INDEX_INITIAL_RESCAN",
+                true
+            ),
+            has_roots = file_index.has_roots().unwrap_or(false),
+            "file_index initial rescan skipped"
+        );
     }
 
     Ok(SetupState {

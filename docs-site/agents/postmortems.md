@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-08 — File index стартовал полным сканом профиля
+
+**Симптомы** — при cold start backend создавал file index и сразу запускал initial rescan, который по умолчанию обходил весь `%USERPROFILE%`. На реальном профиле это могло включать Downloads, Desktop, Documents, dev-репозитории, кэши и окружения, создавая CPU/IO spike и latency для RPC.
+**Где жило** — `platform/runtime/src/main.rs:267-318`, `platform/runtime/src/file_index/scanner.rs:476-493`, `platform/runtime/src/file_index/mod.rs:261-342`.
+**Root cause** — file index был спроектирован как always-on capability: если `KEPLER_FILE_INDEX_ROOTS` не задан и это не test mode, `default_roots()` seed'ил `%USERPROFILE%`, а `main.rs` без kill switch запускал `index.rescan()` после записи lock-файла. Сам `rescan_locked()` был `async`, но внутри синхронно делал filesystem walk и `replace_all` в SQLite, поэтому тяжелая работа занимала tokio worker runtime'а вместо blocking pool. `scan_generation` проверялся только после полного walk, так что изменение настроек во время большого scan не останавливало уже начатый обход.
+**Fix** — `scanner::default_roots()` теперь возвращает пустой список без `KEPLER_FILE_INDEX_ROOTS`, поэтому `%USERPROFILE%` больше не seed'ится как implicit scope. В startup добавлены `KEPLER_FILE_INDEX=0` и `KEPLER_FILE_INDEX_INITIAL_RESCAN=0`; initial rescan стартует только когда index включён, flag initial rescan включён и roots непустые. `FileIndex::new_disabled()` даёт настоящий kill switch: search/settings/rescan API остаются безопасными, но roots/files не экспонируются и background scan не запускается. `rescan_locked()` выносит filesystem walk и SQLite `replace_all` в `tokio::task::spawn_blocking`, а scanner принимает cancellation predicate и проверяет его внутри walk loop до commit.
+**Регрешн-защита** — `cargo test -p kepler-backend file_index` (через `CARGO_TARGET_DIR=.tmp/cargo-file-index-test`) проверяет пустые default roots без opt-in, disabled safe surface, env flag parser, cancellation внутри scanner loop и прежние file index контракты. `ark:smoke` (через `CARGO_TARGET_DIR=.tmp/cargo-ark-smoke`) прошёл полностью, включая ARK write boundary guard и kepler-backend Rust tests.
+**Prevention** — Desktop background indexers не должны иметь broad filesystem roots или startup scan как implicit default. Любая capability, которая может обойти user profile / drive / repo tree, обязана иметь отдельные kill switches для всей функции и для startup work, пустой default до opt-in, blocking isolation для FS/SQLite jobs и cooperative cancellation внутри long loop, а не только stale-result discard после завершения.
+
 ## 2026-06-08 — Скрытый launcher бесконечно искал файлы
 
 **Симптомы** — после ввода короткого query в launcher и скрытия окна backend мог продолжать получать `file_index.search` каждые ~800 мс. На большом file index это выглядело как периодический или постоянный CPU burn у `kepler-backend`.

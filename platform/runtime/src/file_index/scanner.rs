@@ -67,6 +67,7 @@ pub fn scan_roots_with_progress(
     opts: &ScanOptions,
     mut on_progress: impl FnMut(ScanProgress),
     mut on_ntfs: impl FnMut(NtfsStatus, Option<String>),
+    is_cancelled: impl Fn() -> bool,
 ) -> Vec<IndexedFile> {
     let mut files = Vec::new();
     let roots_total = roots.len();
@@ -75,6 +76,9 @@ pub fn scan_roots_with_progress(
     let mut ntfs_any_fallback = false;
     let mut ntfs_note: Option<String> = None;
     for (idx, root) in roots.iter().enumerate() {
+        if is_cancelled() {
+            break;
+        }
         if !root.is_dir() {
             continue;
         }
@@ -87,8 +91,18 @@ pub fn scan_roots_with_progress(
             files_indexed: files.len(),
             message: "Сканируем файлы".to_string(),
         });
-        let (root_files, root_ntfs) = scan_root(root, opts, idx, roots_total, &mut on_progress);
+        let (root_files, root_ntfs) = scan_root(
+            root,
+            opts,
+            idx,
+            roots_total,
+            &mut on_progress,
+            &is_cancelled,
+        );
         files.extend(root_files);
+        if is_cancelled() {
+            break;
+        }
         if let Some((status, note)) = root_ntfs {
             ntfs_any_drive = true;
             match status {
@@ -136,6 +150,7 @@ fn scan_root(
     root_index: usize,
     roots_total: usize,
     on_progress: &mut impl FnMut(ScanProgress),
+    is_cancelled: &impl Fn() -> bool,
 ) -> (Vec<IndexedFile>, Option<(NtfsStatus, Option<String>)>) {
     #[cfg(windows)]
     if opts.ntfs_accelerated && is_drive_root(root) {
@@ -148,7 +163,14 @@ fn scan_root(
                 root = %root.to_string_lossy(),
                 "ntfs fast scan skipped: respect_gitignore is on"
             );
-            let files = scan_walk_root(root, opts, root_index, roots_total, on_progress);
+            let files = scan_walk_root(
+                root,
+                opts,
+                root_index,
+                roots_total,
+                on_progress,
+                is_cancelled,
+            );
             return (
                 files,
                 Some((
@@ -193,7 +215,14 @@ fn scan_root(
                     error = %error,
                     "ntfs fast scan unavailable; using walk fallback"
                 );
-                let files = scan_walk_root(root, opts, root_index, roots_total, on_progress);
+                let files = scan_walk_root(
+                    root,
+                    opts,
+                    root_index,
+                    roots_total,
+                    on_progress,
+                    is_cancelled,
+                );
                 return (
                     files,
                     Some((NtfsStatus::Unavailable, Some(error.to_string()))),
@@ -210,7 +239,14 @@ fn scan_root(
     #[cfg(not(windows))]
     let drive_marker: Option<(NtfsStatus, Option<String>)> = None;
     (
-        scan_walk_root(root, opts, root_index, roots_total, on_progress),
+        scan_walk_root(
+            root,
+            opts,
+            root_index,
+            roots_total,
+            on_progress,
+            is_cancelled,
+        ),
         drive_marker,
     )
 }
@@ -221,6 +257,7 @@ fn scan_walk_root(
     root_index: usize,
     roots_total: usize,
     on_progress: &mut impl FnMut(ScanProgress),
+    is_cancelled: &impl Fn() -> bool,
 ) -> Vec<IndexedFile> {
     let mut builder = WalkBuilder::new(root);
     builder
@@ -235,6 +272,9 @@ fn scan_walk_root(
     let mut files = Vec::new();
     let mut seen = 0usize;
     for entry in builder.build().filter_map(|entry| entry.ok()) {
+        if is_cancelled() {
+            break;
+        }
         let path = entry.path();
         if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
             && !should_enter_dir(path, root, opts, matcher.as_ref())
@@ -485,11 +525,8 @@ pub fn default_roots() -> Vec<PathBuf> {
     if std::env::var("KOSMOS_TEST_MODE").as_deref() == Ok("1") {
         return Vec::new();
     }
-    std::env::var_os("USERPROFILE")
-        .map(PathBuf::from)
-        .filter(|path| path.is_dir())
-        .into_iter()
-        .collect()
+    // См. postmortems.md § 2026-06-08: broad profile scans are opt-in only.
+    Vec::new()
 }
 
 #[cfg(windows)]
@@ -519,10 +556,6 @@ mod default_roots_tests {
     // other test reading the same vars. This static lock serializes them.
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    /// `default_roots` обязан возвращать system-wide drives (C:\, D:\...),
-    /// а не data_dir / lock_dir. Регрешн на bug: в production видели что
-    /// файловый поиск находил только файлы рядом с `%APPDATA%\Kosmos\` —
-    /// если бы кто-то случайно подменил roots на data_dir, этот тест поймал бы.
     #[test]
     fn env_override_takes_precedence() {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -556,26 +589,23 @@ mod default_roots_tests {
         }
     }
 
-    #[cfg(windows)]
     #[test]
-    fn windows_default_returns_user_profile() {
-        // Regression: 2026-05-24. Drive-root defaults caused user-mode fallback
-        // to spend forever in system noise. Default scope is now USERPROFILE.
+    fn production_default_roots_are_empty_without_opt_in() {
+        // Regression: 2026-06-08. Startup must not scan USERPROFILE unless the
+        // user/process explicitly opts into roots through KEPLER_FILE_INDEX_ROOTS.
         let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let prev_roots = std::env::var("KEPLER_FILE_INDEX_ROOTS").ok();
         let prev_test = std::env::var("KOSMOS_TEST_MODE").ok();
+        let prev_profile = std::env::var("USERPROFILE").ok();
         unsafe {
             std::env::remove_var("KEPLER_FILE_INDEX_ROOTS");
             std::env::remove_var("KOSMOS_TEST_MODE");
+            std::env::set_var("USERPROFILE", r"C:\Users\real-user");
         }
 
         let roots = default_roots();
 
-        assert_eq!(roots.len(), 1);
-        assert_eq!(
-            roots[0],
-            PathBuf::from(std::env::var("USERPROFILE").unwrap())
-        );
+        assert!(roots.is_empty());
 
         unsafe {
             match prev_roots {
@@ -586,7 +616,38 @@ mod default_roots_tests {
                 Some(v) => std::env::set_var("KOSMOS_TEST_MODE", v),
                 None => std::env::remove_var("KOSMOS_TEST_MODE"),
             }
+            match prev_profile {
+                Some(v) => std::env::set_var("USERPROFILE", v),
+                None => std::env::remove_var("USERPROFILE"),
+            }
         }
+    }
+
+    #[test]
+    fn scan_walk_stops_when_cancelled() {
+        // Regression: 2026-06-08. Generation checks after the full walk were too
+        // late; scanner must observe cancellation inside the loop.
+        let root = tempfile::tempdir().unwrap();
+        for n in 0..1_000 {
+            std::fs::write(root.path().join(format!("file-{n}.txt")), b"v").unwrap();
+        }
+        let opts = ScanOptions {
+            exclude_noisy_folders: true,
+            respect_gitignore: true,
+            include_hidden: false,
+            ntfs_accelerated: false,
+            ignore_patterns: Vec::new(),
+        };
+        let seen = std::sync::atomic::AtomicUsize::new(0);
+        let files = scan_roots_with_progress(
+            &[root.path().to_path_buf()],
+            &opts,
+            |_| {},
+            |_, _| {},
+            || seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst) > 8,
+        );
+
+        assert!(files.len() < 1_000);
     }
 
     #[test]

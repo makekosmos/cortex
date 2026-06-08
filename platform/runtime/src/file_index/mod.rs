@@ -26,6 +26,8 @@ pub enum FileIndexError {
     Open(String),
     #[error("invalid setting: {0}")]
     InvalidSetting(String),
+    #[error("blocking task failed: {0}")]
+    BlockingTask(String),
 }
 
 pub type Result<T> = std::result::Result<T, FileIndexError>;
@@ -119,13 +121,14 @@ pub struct FileIndex {
     scan_lock: TokioMutex<()>,
     watcher: StdMutex<Option<notify::RecommendedWatcher>>,
     self_ref: StdMutex<std::sync::Weak<FileIndex>>,
-    scan_generation: AtomicU64,
+    scan_generation: Arc<AtomicU64>,
     scan_in_progress: AtomicBool,
     scan_progress: Arc<StdMutex<ScanProgressSnapshot>>,
     // Regression H3 (2026-05-24): coalesce overlapping spawn_rescan calls.
     // Toggling 5 patterns in a row used to queue 5 full rescans on scan_lock.
     rescan_pending: AtomicBool,
     ntfs_last_state: Arc<StdMutex<NtfsState>>,
+    enabled: bool,
 }
 
 impl FileIndex {
@@ -133,26 +136,45 @@ impl FileIndex {
         Self::with_roots(data_dir, scanner::default_roots())
     }
 
+    pub fn new_disabled(data_dir: &Path) -> Result<Self> {
+        Self::with_roots_internal(data_dir, Vec::new(), false)
+    }
+
     pub fn with_roots(data_dir: &Path, roots: Vec<PathBuf>) -> Result<Self> {
+        Self::with_roots_internal(data_dir, roots, true)
+    }
+
+    fn with_roots_internal(data_dir: &Path, roots: Vec<PathBuf>, enabled: bool) -> Result<Self> {
         std::fs::create_dir_all(data_dir)?;
         let store = Arc::new(store::FileStore::open(&data_dir.join("file-index.db"))?);
-        store.seed_roots_if_empty(&roots)?;
-        let actual_roots = store
-            .roots()?
-            .into_iter()
-            .map(PathBuf::from)
-            .collect::<Vec<_>>();
-        let watcher = watcher::start(&actual_roots, store.clone());
+        if enabled {
+            store.seed_roots_if_empty(&roots)?;
+        }
+        let actual_roots = if enabled {
+            store
+                .roots()?
+                .into_iter()
+                .map(PathBuf::from)
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+        let watcher = if enabled {
+            watcher::start(&actual_roots, store.clone())
+        } else {
+            None
+        };
         Ok(Self {
             store,
             scan_lock: TokioMutex::new(()),
             watcher: StdMutex::new(watcher),
             self_ref: StdMutex::new(std::sync::Weak::new()),
-            scan_generation: AtomicU64::new(0),
+            scan_generation: Arc::new(AtomicU64::new(0)),
             scan_in_progress: AtomicBool::new(false),
             scan_progress: Arc::new(StdMutex::new(ScanProgressSnapshot::default())),
             rescan_pending: AtomicBool::new(false),
             ntfs_last_state: Arc::new(StdMutex::new(NtfsState::default())),
+            enabled,
         })
     }
 
@@ -173,7 +195,7 @@ impl FileIndex {
         };
         Ok(FileIndexSettings {
             exclude_noisy_folders: options.exclude_noisy_folders,
-            roots: self.store.roots()?,
+            roots: self.root_strings()?,
             ignore_patterns: options.ignore_patterns,
             respect_gitignore: options.respect_gitignore,
             include_hidden: options.include_hidden,
@@ -193,6 +215,9 @@ impl FileIndex {
     }
 
     pub async fn set_settings(&self, patch: FileIndexSettingsPatch) -> Result<ScanStats> {
+        if !self.enabled {
+            return self.current_stats();
+        }
         self.invalidate_running_scan();
         if let Some(value) = patch.exclude_noisy_folders {
             self.store.set_exclude_noisy_folders(value)?;
@@ -211,6 +236,9 @@ impl FileIndex {
     }
 
     pub async fn add_root(&self, path: &str) -> Result<ScanStats> {
+        if !self.enabled {
+            return self.current_stats();
+        }
         let path_buf = PathBuf::from(path);
         if !path_buf.is_dir() {
             return Err(FileIndexError::InvalidSetting(format!(
@@ -225,6 +253,9 @@ impl FileIndex {
     }
 
     pub async fn remove_root(&self, path: &str) -> Result<ScanStats> {
+        if !self.enabled {
+            return self.current_stats();
+        }
         self.invalidate_running_scan();
         let removed_root = self.store.remove_root_record(path)?;
         self.restart_watcher()?;
@@ -234,6 +265,9 @@ impl FileIndex {
     }
 
     pub async fn add_ignore_pattern(&self, pattern: &str) -> Result<ScanStats> {
+        if !self.enabled {
+            return self.current_stats();
+        }
         scanner::validate_ignore_pattern(pattern)?;
         self.invalidate_running_scan();
         self.store.add_ignore_pattern(pattern)?;
@@ -242,6 +276,9 @@ impl FileIndex {
     }
 
     pub async fn remove_ignore_pattern(&self, pattern: &str) -> Result<ScanStats> {
+        if !self.enabled {
+            return self.current_stats();
+        }
         self.invalidate_running_scan();
         self.store.remove_ignore_pattern(pattern)?;
         self.spawn_rescan();
@@ -249,11 +286,17 @@ impl FileIndex {
     }
 
     pub async fn rescan(&self) -> Result<ScanStats> {
+        if !self.enabled {
+            return self.current_stats();
+        }
         let _guard = self.scan_lock.lock().await;
         self.rescan_locked().await
     }
 
     pub fn request_rescan(&self) -> Result<ScanStats> {
+        if !self.enabled {
+            return self.current_stats();
+        }
         self.spawn_rescan();
         self.current_stats()
     }
@@ -275,42 +318,68 @@ impl FileIndex {
         let options = self.scan_options()?;
         let progress = self.scan_progress.clone();
         let ntfs_state = self.ntfs_last_state.clone();
-        let files = scanner::scan_roots_with_progress(
-            &roots,
-            &options,
-            move |snapshot| {
+        let scan_generation = self.scan_generation.clone();
+        let store = self.store.clone();
+        let outcome = tokio::task::spawn_blocking(move || -> Result<ScanCommitOutcome> {
+            let progress_for_scan = progress.clone();
+            let files = scanner::scan_roots_with_progress(
+                &roots,
+                &options,
+                move |snapshot| {
+                    let mut guard = progress_for_scan.lock().unwrap_or_else(|e| e.into_inner());
+                    *guard = ScanProgressSnapshot {
+                        phase: snapshot.phase,
+                        root: snapshot.root,
+                        roots_done: snapshot.roots_done,
+                        roots_total: snapshot.roots_total,
+                        files_seen: snapshot.files_seen,
+                        files_indexed: snapshot.files_indexed,
+                        message: snapshot.message,
+                    };
+                },
+                move |status, note| {
+                    let mut state = ntfs_state.lock().unwrap_or_else(|e| e.into_inner());
+                    state.status = status;
+                    state.note = note;
+                },
+                || scan_generation.load(Ordering::SeqCst) != generation,
+            );
+            if scan_generation.load(Ordering::SeqCst) != generation {
+                return Ok(ScanCommitOutcome::Cancelled);
+            }
+            {
                 let mut guard = progress.lock().unwrap_or_else(|e| e.into_inner());
                 *guard = ScanProgressSnapshot {
-                    phase: snapshot.phase,
-                    root: snapshot.root,
-                    roots_done: snapshot.roots_done,
-                    roots_total: snapshot.roots_total,
-                    files_seen: snapshot.files_seen,
-                    files_indexed: snapshot.files_indexed,
-                    message: snapshot.message,
+                    phase: "writing".to_string(),
+                    roots_done: roots.len(),
+                    roots_total: roots.len(),
+                    files_seen: files.len(),
+                    files_indexed: files.len(),
+                    message: "Записываем индекс".to_string(),
+                    ..Default::default()
                 };
-            },
-            move |status, note| {
-                let mut state = ntfs_state.lock().unwrap_or_else(|e| e.into_inner());
-                state.status = status;
-                state.note = note;
-            },
-        );
-        if self.scan_generation.load(Ordering::SeqCst) != generation {
-            tracing::info!(target: "file_index", "rescan discarded because settings changed");
-            return self.current_stats();
-        }
-        self.set_progress(ScanProgressSnapshot {
-            phase: "writing".to_string(),
-            roots_done: roots.len(),
-            roots_total: roots.len(),
-            files_seen: files.len(),
-            files_indexed: files.len(),
-            message: "Записываем индекс".to_string(),
-            ..Default::default()
-        });
-        let total = files.len();
-        self.store.replace_all(&files)?;
+            }
+            let total = files.len();
+            store.replace_all(&files)?;
+            Ok(ScanCommitOutcome::Committed {
+                total,
+                roots: roots.len(),
+                options,
+            })
+        })
+        .await
+        .map_err(|e| FileIndexError::BlockingTask(e.to_string()))??;
+        let (total, roots, options) = match outcome {
+            ScanCommitOutcome::Cancelled => {
+                tracing::info!(target: "file_index", "rescan discarded because settings changed");
+                return self.current_stats();
+            }
+            ScanCommitOutcome::Committed {
+                total,
+                roots,
+                options,
+            } => (total, roots, options),
+        };
         // Regression C3 (2026-05-24): mutation may bump scan_generation between
         // the pre-write check and replace_all; this rescan then commits stale
         // results. Detect and trigger a follow-up rescan so eventual state is
@@ -324,8 +393,8 @@ impl FileIndex {
         }
         self.set_progress(ScanProgressSnapshot {
             phase: "done".to_string(),
-            roots_done: roots.len(),
-            roots_total: roots.len(),
+            roots_done: roots,
+            roots_total: roots,
             files_seen: total,
             files_indexed: total,
             message: "Индексация завершена".to_string(),
@@ -333,7 +402,7 @@ impl FileIndex {
         });
         Ok(ScanStats {
             total,
-            roots: roots.len(),
+            roots,
             exclude_noisy_folders: options.exclude_noisy_folders,
             respect_gitignore: options.respect_gitignore,
             include_hidden: options.include_hidden,
@@ -342,6 +411,9 @@ impl FileIndex {
     }
 
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<FileSearchResult>> {
+        if !self.enabled {
+            return Ok(Vec::new());
+        }
         let candidate_limit = limit.saturating_mul(64).max(512);
         let candidates = self.store.search(query, candidate_limit)?;
         Ok(rank(candidates, query, limit))
@@ -355,7 +427,22 @@ impl FileIndex {
     }
 
     fn root_paths(&self) -> Result<Vec<PathBuf>> {
-        Ok(self.store.roots()?.into_iter().map(PathBuf::from).collect())
+        Ok(self
+            .root_strings()?
+            .into_iter()
+            .map(PathBuf::from)
+            .collect())
+    }
+
+    fn root_strings(&self) -> Result<Vec<String>> {
+        if !self.enabled {
+            return Ok(Vec::new());
+        }
+        self.store.roots()
+    }
+
+    pub fn has_roots(&self) -> Result<bool> {
+        Ok(!self.root_strings()?.is_empty())
     }
 
     fn scan_options(&self) -> Result<ScanOptions> {
@@ -369,6 +456,9 @@ impl FileIndex {
     }
 
     fn restart_watcher(&self) -> Result<()> {
+        if !self.enabled {
+            return Ok(());
+        }
         let roots = self.root_paths()?;
         let next = watcher::start(&roots, self.store.clone());
         let mut watcher = self.watcher.lock().unwrap_or_else(|e| e.into_inner());
@@ -377,6 +467,17 @@ impl FileIndex {
     }
 
     fn current_stats(&self) -> Result<ScanStats> {
+        if !self.enabled {
+            let options = self.scan_options()?;
+            return Ok(ScanStats {
+                total: 0,
+                roots: 0,
+                exclude_noisy_folders: options.exclude_noisy_folders,
+                respect_gitignore: options.respect_gitignore,
+                include_hidden: options.include_hidden,
+                ntfs_accelerated: options.ntfs_accelerated,
+            });
+        }
         // Regression 2026-05-24-evening: single-lock snapshot to avoid 7
         // separate lock() acquisitions racing with chunked remove_tree windows.
         let snap = self.store.stats_snapshot()?;
@@ -449,6 +550,25 @@ impl FileIndex {
     fn set_progress(&self, snapshot: ScanProgressSnapshot) {
         let mut progress = self.scan_progress.lock().unwrap_or_else(|e| e.into_inner());
         *progress = snapshot;
+    }
+}
+
+enum ScanCommitOutcome {
+    Cancelled,
+    Committed {
+        total: usize,
+        roots: usize,
+        options: ScanOptions,
+    },
+}
+
+pub fn env_flag_enabled(key: &str, default: bool) -> bool {
+    match std::env::var(key) {
+        Ok(value) => !matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "0" | "false" | "off" | "no"
+        ),
+        Err(_) => default,
     }
 }
 
@@ -531,6 +651,8 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
+    static ENV_FLAG_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[tokio::test]
     async fn scan_searches_regular_files_and_skips_noisy_folders_by_default() {
         let data = tempdir().unwrap();
@@ -548,6 +670,57 @@ mod tests {
         assert_eq!(stats.total, 1);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].name, "roadmap.txt");
+    }
+
+    #[tokio::test]
+    async fn disabled_index_exposes_empty_safe_surface() {
+        // Regression: 2026-06-08. KEPLER_FILE_INDEX=0 must be a real kill switch,
+        // not just "skip startup scan while old persisted roots keep working".
+        let data = tempdir().unwrap();
+        let root = tempdir().unwrap();
+        let enabled = FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap();
+        enabled
+            .store
+            .upsert(&IndexedFile {
+                path: root
+                    .path()
+                    .join("persisted-note.txt")
+                    .to_string_lossy()
+                    .to_string(),
+                name: "persisted-note.txt".to_string(),
+                mtime: 1,
+            })
+            .unwrap();
+
+        let disabled = FileIndex::new_disabled(data.path()).unwrap();
+
+        assert!(disabled.settings().unwrap().roots.is_empty());
+        assert!(disabled.search("persisted", 10).unwrap().is_empty());
+        assert_eq!(disabled.request_rescan().unwrap().total, 0);
+        assert_eq!(disabled.rescan().await.unwrap().roots, 0);
+    }
+
+    #[test]
+    fn env_flag_parser_treats_zero_false_off_no_as_disabled() {
+        let _guard = ENV_FLAG_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let key = "KEPLER_FILE_INDEX_TEST_FLAG";
+        let prev = std::env::var(key).ok();
+        for value in ["0", "false", "off", "no"] {
+            unsafe {
+                std::env::set_var(key, value);
+            }
+            assert!(!env_flag_enabled(key, true), "value {value}");
+        }
+        unsafe {
+            std::env::set_var(key, "1");
+        }
+        assert!(env_flag_enabled(key, false));
+        unsafe {
+            match prev {
+                Some(v) => std::env::set_var(key, v),
+                None => std::env::remove_var(key),
+            }
+        }
     }
 
     #[tokio::test]
