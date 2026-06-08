@@ -12,7 +12,7 @@
 #[cfg(target_os = "windows")]
 mod windows_capture;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,14 +28,17 @@ use crate::ark_host::ArkHost;
 
 #[cfg(target_os = "windows")]
 use windows_capture::{
-    capture_foreground_window, process_window_state, ForegroundWindowSample, ProcessWindowState,
-    PLATFORM,
+    capture_foreground_window_with_diagnostics, process_window_state, ForegroundWindowSample,
+    ProcessProbeCache, ProcessProbeDiagnostics, ProcessWindowState, WindowSnapshot, PLATFORM,
 };
 
 const TRACKER_DEVICE_ID_KEY: &str = "usage_tracker.device_id";
 const DEFAULT_POLL_MS: u64 = 1_000;
 const DEFAULT_IDLE_SECS: u64 = 60;
 const SESSION_HEARTBEAT_FLUSH_MS: i64 = 60_000;
+const HIDDEN_INACTIVE_SESSION_TTL_MS: i64 = 10 * 60_000;
+const MAX_ACTIVE_SESSIONS: usize = 256;
+const DIAGNOSTICS_LOG_INTERVAL: Duration = Duration::from_secs(60);
 
 /// Дефолтный blocklist для privacy. Match — case-insensitive substring в
 /// process name или window title. Если sample матчится — он не пишется в БД
@@ -166,6 +169,8 @@ async fn run(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> Result<(), String> {
     );
 
     let mut active_sessions: HashMap<SessionKey, ActiveSession> = HashMap::new();
+    let mut process_probe_cache = ProcessProbeCache::default();
+    let mut diagnostics_reporter = UsageTrackerDiagnostics::default();
     let mut previous_tick = std::time::Instant::now();
     // first_seen_at cache: stable между запусками backend'а сохраняется через
     // upsert (DB) — но в рамках одного процесса нам достаточно in-memory HashMap,
@@ -176,23 +181,44 @@ async fn run(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> Result<(), String> {
     let mut first_seen_cache: HashMap<String, String> = HashMap::new();
 
     loop {
+        let tick_started = std::time::Instant::now();
         let idle = opts.idle_threshold;
-        let raw_sample =
-            match tokio::task::spawn_blocking(move || capture_foreground_window(idle)).await {
-                Ok(Ok(sample)) => sample,
-                Ok(Err(error)) => {
-                    eprintln!("[usage-tracker] capture failed: {error}");
-                    None
+        let tick_probe = match tokio::task::spawn_blocking(move || {
+            let mut diagnostics = ProcessProbeDiagnostics::default();
+            let raw_sample =
+                match capture_foreground_window_with_diagnostics(idle, &mut diagnostics) {
+                    Ok(sample) => sample,
+                    Err(error) => {
+                        eprintln!("[usage-tracker] capture failed: {error}");
+                        None
+                    }
+                };
+            let window_snapshot = WindowSnapshot::capture(&mut diagnostics);
+            TickProbe {
+                raw_sample,
+                window_snapshot,
+                diagnostics,
+            }
+        })
+        .await
+        {
+            Ok(probe) => probe,
+            Err(error) => {
+                eprintln!("[usage-tracker] capture join failed: {error}");
+                TickProbe {
+                    raw_sample: None,
+                    window_snapshot: WindowSnapshot::default(),
+                    diagnostics: ProcessProbeDiagnostics::default(),
                 }
-                Err(error) => {
-                    eprintln!("[usage-tracker] capture join failed: {error}");
-                    None
-                }
-            };
+            }
+        };
+        let mut window_snapshot = tick_probe.window_snapshot;
+        let mut probe_diagnostics = tick_probe.diagnostics;
         // Privacy filter — password manager'ы и подобные не пишем в БД.
         // Treat'им как «нет foreground окна»: excluded process не стартует,
         // уже известные non-excluded процессы продолжают runtime tracking.
-        let sample = raw_sample
+        let sample = tick_probe
+            .raw_sample
             .filter(|s| !opts.matches_exclude(&s.process_name, s.window_title.as_deref()));
         let captured_at = iso_now();
         let delta_ms = previous_tick.elapsed().as_millis().min(i64::MAX as u128) as i64;
@@ -200,10 +226,15 @@ async fn run(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> Result<(), String> {
 
         let mut ended_keys = Vec::new();
         for (key, session) in active_sessions.iter_mut() {
-            let window_state =
-                process_window_state_or_dead(key.pid, &session.tracked_app.normalized_exe_path);
+            let window_state = process_window_state_or_dead(
+                key.pid,
+                &session.tracked_app.normalized_exe_path,
+                &mut window_snapshot,
+                &mut process_probe_cache,
+                &mut probe_diagnostics,
+            );
             if window_state == ProcessWindowState::Dead {
-                ended_keys.push(key.clone());
+                ended_keys.push((key.clone(), "session_ended"));
                 continue;
             }
             session.accumulate(
@@ -211,6 +242,10 @@ async fn run(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> Result<(), String> {
                 foreground_key.as_ref() == Some(key),
                 window_state == ProcessWindowState::AliveVisible,
             );
+            if session.should_finalize_hidden_inactive(HIDDEN_INACTIVE_SESSION_TTL_MS) {
+                ended_keys.push((key.clone(), "session_hidden_timeout"));
+                continue;
+            }
             if session.should_flush_heartbeat(SESSION_HEARTBEAT_FLUSH_MS) {
                 if let Err(error) =
                     flush_session_heartbeat(&ark, &identity, session, &identity.device_id).await
@@ -249,31 +284,46 @@ async fn run(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> Result<(), String> {
                 {
                     Ok(session) => {
                         active_sessions.insert(key, session);
+                        for overflow_key in overflow_session_keys(&active_sessions) {
+                            ended_keys.push((overflow_key, "session_pruned"));
+                        }
                     }
                     Err(error) => eprintln!("[usage-tracker] start session failed: {error}"),
                 }
             }
         }
 
-        for key in ended_keys {
+        for (key, kind) in ended_keys {
             if let Some(active) = active_sessions.remove(&key) {
-                if let Err(error) = finalize_session(
-                    &ark,
-                    &identity,
-                    &active,
-                    captured_at.clone(),
-                    "session_ended",
-                )
-                .await
+                if let Err(error) =
+                    finalize_session(&ark, &identity, &active, captured_at.clone(), kind).await
                 {
                     eprintln!("[usage-tracker] finalize session failed: {error}");
                 }
             }
         }
+        let live_pids = active_sessions
+            .keys()
+            .map(|key| key.pid)
+            .collect::<HashSet<_>>();
+        process_probe_cache.retain_pids(&live_pids);
 
         previous_tick = std::time::Instant::now();
+        diagnostics_reporter.observe(
+            tick_started.elapsed().as_millis().min(i64::MAX as u128) as i64,
+            active_sessions.len(),
+            &probe_diagnostics,
+        );
         tokio::time::sleep(opts.poll_interval).await;
     }
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Debug)]
+struct TickProbe {
+    raw_sample: Option<ForegroundWindowSample>,
+    window_snapshot: WindowSnapshot,
+    diagnostics: ProcessProbeDiagnostics,
 }
 
 #[derive(Debug, Clone)]
@@ -286,10 +336,19 @@ struct TrackerIdentity {
 fn process_window_state_or_dead(
     pid: u32,
     expected_normalized_exe_path: &str,
+    snapshot: &mut WindowSnapshot,
+    cache: &mut ProcessProbeCache,
+    diagnostics: &mut ProcessProbeDiagnostics,
 ) -> ProcessWindowState {
     process_window_state_from_probe_result(
         pid,
-        process_window_state(pid, expected_normalized_exe_path),
+        process_window_state(
+            pid,
+            expected_normalized_exe_path,
+            snapshot,
+            cache,
+            diagnostics,
+        ),
     )
 }
 
@@ -344,6 +403,7 @@ struct ActiveSession {
     current_is_idle: bool,
     sample_count: u64,
     heartbeat_elapsed_ms: i64,
+    hidden_inactive_elapsed_ms: i64,
 }
 
 /// Локальный snapshot полей TrackedApp. Не используем ark_core::types::TrackedApp
@@ -372,6 +432,13 @@ impl ActiveSession {
     fn accumulate(&mut self, delta_ms: i64, is_foreground: bool, is_visible: bool) {
         self.current_is_foreground = is_foreground;
         self.current_is_visible = is_visible;
+        if is_visible || is_foreground {
+            self.hidden_inactive_elapsed_ms = 0;
+        } else {
+            self.hidden_inactive_elapsed_ms = self
+                .hidden_inactive_elapsed_ms
+                .saturating_add(delta_ms.max(0));
+        }
         if is_visible {
             self.runtime_ms += delta_ms;
         }
@@ -390,6 +457,12 @@ impl ActiveSession {
 
     fn mark_heartbeat_flushed(&mut self) {
         self.heartbeat_elapsed_ms = 0;
+    }
+
+    fn should_finalize_hidden_inactive(&self, ttl_ms: i64) -> bool {
+        !self.current_is_visible
+            && !self.current_is_foreground
+            && self.hidden_inactive_elapsed_ms >= ttl_ms
     }
 
     fn to_usage_session(&self, identity: &TrackerIdentity, ended_at: Option<String>) -> Value {
@@ -523,6 +596,7 @@ async fn start_session(
         current_is_idle: sample.is_idle,
         sample_count: 1,
         heartbeat_elapsed_ms: 0,
+        hidden_inactive_elapsed_ms: 0,
     };
 
     persist_usage_session(
@@ -548,6 +622,87 @@ async fn start_session(
     .await?;
 
     Ok(session)
+}
+
+#[cfg(target_os = "windows")]
+fn overflow_session_keys(active_sessions: &HashMap<SessionKey, ActiveSession>) -> Vec<SessionKey> {
+    if active_sessions.len() <= MAX_ACTIVE_SESSIONS {
+        return Vec::new();
+    }
+
+    let mut candidates = active_sessions
+        .iter()
+        .filter(|(_, session)| !session.current_is_foreground)
+        .map(|(key, session)| {
+            (
+                key.clone(),
+                session.current_is_visible,
+                session.hidden_inactive_elapsed_ms,
+                session.started_at.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_by(|a, b| {
+        a.1.cmp(&b.1)
+            .then_with(|| b.2.cmp(&a.2))
+            .then_with(|| a.3.cmp(&b.3))
+    });
+
+    candidates
+        .into_iter()
+        .take(active_sessions.len().saturating_sub(MAX_ACTIVE_SESSIONS))
+        .map(|(key, _, _, _)| key)
+        .collect()
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Debug, Default)]
+struct UsageTrackerDiagnostics {
+    last_log_at: Option<std::time::Instant>,
+    tick_ms_samples: Vec<i64>,
+}
+
+#[cfg(target_os = "windows")]
+impl UsageTrackerDiagnostics {
+    fn observe(
+        &mut self,
+        tick_ms: i64,
+        active_sessions: usize,
+        probe_diagnostics: &ProcessProbeDiagnostics,
+    ) {
+        let now = std::time::Instant::now();
+        self.tick_ms_samples.push(tick_ms.max(0));
+        let should_log = self
+            .last_log_at
+            .map(|last| last.elapsed() >= DIAGNOSTICS_LOG_INTERVAL)
+            .unwrap_or(true);
+        if !should_log {
+            return;
+        }
+
+        let p95 = percentile(&mut self.tick_ms_samples, 95);
+        eprintln!(
+            "[usage-tracker] diagnostics usage_tracker.tick_ms={} usage_tracker.tick_ms.p95={} usage_tracker.active_sessions={} usage_tracker.enum_windows_calls_per_tick={} usage_tracker.process_path_queries_per_tick={} usage_tracker.visible_window_count={}",
+            tick_ms,
+            p95,
+            active_sessions,
+            probe_diagnostics.enum_windows_calls,
+            probe_diagnostics.process_path_queries,
+            probe_diagnostics.visible_window_count,
+        );
+        self.last_log_at = Some(now);
+        self.tick_ms_samples.clear();
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn percentile(samples: &mut [i64], percentile: usize) -> i64 {
+    if samples.is_empty() {
+        return 0;
+    }
+    samples.sort_unstable();
+    let rank = ((samples.len() - 1) * percentile) / 100;
+    samples[rank]
 }
 
 #[cfg(target_os = "windows")]
@@ -849,6 +1004,7 @@ mod tests {
             current_is_idle: false,
             sample_count: 0,
             heartbeat_elapsed_ms: 0,
+            hidden_inactive_elapsed_ms: 0,
         }
     }
 
@@ -891,6 +1047,50 @@ mod tests {
 
     #[cfg(target_os = "windows")]
     #[test]
+    fn hidden_inactive_session_expires_after_ttl() {
+        // Regression: 2026-06-08. Hidden sessions must not accumulate forever
+        // and force per-tick Win32 probes for the rest of the day.
+        let mut session = test_session();
+        session.accumulate(HIDDEN_INACTIVE_SESSION_TTL_MS - 1, false, false);
+        assert!(!session.should_finalize_hidden_inactive(HIDDEN_INACTIVE_SESSION_TTL_MS));
+
+        session.accumulate(1, false, false);
+        assert!(session.should_finalize_hidden_inactive(HIDDEN_INACTIVE_SESSION_TTL_MS));
+
+        session.accumulate(1_000, false, true);
+        assert!(!session.should_finalize_hidden_inactive(HIDDEN_INACTIVE_SESSION_TTL_MS));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn overflow_session_keys_prunes_hidden_background_before_visible() {
+        // Regression: 2026-06-08. A hard cap keeps the active session map
+        // bounded even if many processes stay alive after losing all windows.
+        let mut sessions = HashMap::new();
+        for index in 0..=MAX_ACTIVE_SESSIONS {
+            let mut session = test_session();
+            session.session_id = format!("session-{index}");
+            session.started_at = format!("2026-01-01T00:00:{index:02}.000Z");
+            session.current_is_foreground = false;
+            session.current_is_visible = index % 2 == 0;
+            session.hidden_inactive_elapsed_ms = index as i64;
+            sessions.insert(
+                SessionKey {
+                    tracked_app_id: format!("app-{index}"),
+                    pid: index as u32 + 100,
+                },
+                session,
+            );
+        }
+
+        let pruned = overflow_session_keys(&sessions);
+        assert_eq!(pruned.len(), 1);
+        let pruned_session = sessions.get(&pruned[0]).expect("pruned session exists");
+        assert!(!pruned_session.current_is_visible);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
     fn active_session_heartbeat_flush_is_rate_limited() {
         // Regression: 2026-06-06. Persisting the session every 1s poll kept
         // ARK sync/version-vector hot while the foreground window was stable.
@@ -918,5 +1118,12 @@ mod tests {
         );
 
         assert_eq!(state, ProcessWindowState::Dead);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn percentile_uses_sorted_rank() {
+        let mut samples = vec![10, 1, 7, 3, 5];
+        assert_eq!(percentile(&mut samples, 95), 7);
     }
 }

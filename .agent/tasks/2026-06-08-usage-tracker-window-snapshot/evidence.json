@@ -1,0 +1,37 @@
+{
+  "task_id": "2026-06-08-usage-tracker-window-snapshot",
+  "verified_at": "2026-06-08T12:25:00Z",
+  "status": "PASS",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "evidence": "Static rg found EnumWindows only in WindowSnapshot::capture; runtime diagnostics reported usage_tracker.enum_windows_calls_per_tick=1."
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "evidence": "66s isolated backend run emitted usage_tracker.tick_ms=5 / p95=5 on first diagnostics and tick_ms=1 / p95=0 on interval diagnostics."
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "evidence": "5s isolated backend run with KEPLER_USAGE_TRACKER=0 emitted disabled message and ready state."
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "evidence": "ProcessProbeCache validates process creation time via GetProcessTimes before reusing cached normalized exe path; focused test passed."
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "evidence": "Hidden inactive TTL and overflow pruning tests passed; implementation finalizes hidden sessions and caps active sessions at 256."
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "evidence": "cargo fmt, focused usage_tracker tests, ARK write guard, ark smoke, docs sync, and docs freshness check passed."
+    }
+  ]
+}
