@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-08 — Скрытый launcher бесконечно искал файлы
+
+**Симптомы** — после ввода короткого query в launcher и скрытия окна backend мог продолжать получать `file_index.search` каждые ~800 мс. На большом file index это выглядело как периодический или постоянный CPU burn у `kepler-backend`.
+**Где жило** — `platform/desktop/src/views/LauncherView.vue::scheduleFileSearch`, `platform/desktop/electron/main.ts::hideLauncher`, `platform/desktop/electron/preload.ts::api.window`, `platform/runtime/src/file_index/store.rs::search`.
+**Root cause** — renderer реализовал file search как self-refresh loop: успешный `file_index.search` снова планировал тот же query через 800 мс. Launcher window при закрытии/blur не уничтожается, а скрывается через `BrowserWindow.hide()`, поэтому `onUnmounted()` не срабатывает и timer живёт дальше. Отдельно backend для query короче 3 символов обходил FTS и делал substring `LIKE '%q%'` по `name/path`, то есть скрытый polling по `a`/`do` превращался в повторяющийся scan по индексу файлов.
+**Fix** — `LauncherView.vue` больше не self-reschedule'ит file search после результата: поиск запускается только debounce'ом от изменения query. Добавлен `cancelFileSearch()` и IPC событие `kepler:window:hide` (`main.ts` → `preload.ts` → renderer), которое инвалидирует текущий run, чистит timer и очищает file-команды при скрытии окна. Backend `FileStore::search` теперь возвращает пустой результат для query короче 3 символов и больше не имеет substring `LIKE '%q%'` fallback. `backgroundThrottling` у launcher'а оставлен выключенным только на macOS, где это нужно для occlusion workaround; на Windows/Linux он снова включён.
+**Регрешн-защита** — `tests/unit/launcher-file-search-contract.test.ts` проверяет отсутствие self-refresh polling, наличие hide bridge/cancel path и платформенный `backgroundThrottling`. `cargo test -p kepler-backend short_queries_do_not_scan_files_table` проверяет, что 1-2 символа не возвращают file-index результаты, а 3+ символа продолжают работать. `ark:smoke` дополнительно поймал старый file-index тест с 1-character query; assertion обновлён на 3+ символа.
+**Prevention** — Hidden/long-lived Electron windows нельзя полагаться на `onUnmounted()` для остановки side effects: каждый show/hide lifecycle должен иметь явный renderer event и cleanup для timers/subscriptions. Поиск в больших локальных индексах должен иметь минимальную длину query или dedicated prefix-index; substring scan по 1-2 символам нельзя оставлять за hot UI input path.
+
 ## 2026-06-07 — macOS: смена хоткея в настройках не реагирует на клавиши
 
 **Симптомы** — в Настройках при клике на поле захвата хоткея появляется «Нажми сочетание…», но нажатия клавиш не регистрируются — сочетание не меняется. На Windows тот же UI работает.

@@ -725,7 +725,7 @@ async function enterClipboardMode(): Promise<void> {
   mode.value = "clipboard";
   query.value = "";
   selectedIndex.value = 0;
-  fileCommands.value = [];
+  cancelFileSearch();
   await refreshClipboardHistory();
   await nextTick();
   inputRef.value?.focus();
@@ -750,7 +750,7 @@ async function enterFocusMode(edit = false): Promise<void> {
   mode.value = "focus";
   query.value = "";
   selectedIndex.value = 0;
-  fileCommands.value = [];
+  cancelFileSearch();
   await nextTick();
   if (listRef.value) listRef.value.scrollTop = 0;
   savePersistedState();
@@ -1008,18 +1008,28 @@ let offFocusOpen = () => {};
 let offFocusSessionUpdated = () => {};
 let offCommandVisibilityStorage = () => {};
 let offBackendReady = () => {};
+let offHide = () => {};
 let fileSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let fileSearchRun = 0;
 const FILE_SEARCH_DEBOUNCE_MS = 120;
-const FILE_SEARCH_REFRESH_MS = 800;
+const MIN_FILE_SEARCH_QUERY_CHARS = 3;
+
+function cancelFileSearch(): void {
+  fileSearchRun++;
+  if (fileSearchTimer) {
+    clearTimeout(fileSearchTimer);
+    fileSearchTimer = null;
+  }
+  fileCommands.value = [];
+}
 
 function scheduleFileSearch(text: string, run: number, delay: number) {
   if (fileSearchTimer) clearTimeout(fileSearchTimer);
   fileSearchTimer = setTimeout(async () => {
+    fileSearchTimer = null;
     const found = await searchFiles(text);
     if (run === fileSearchRun) {
       fileCommands.value = found;
-      scheduleFileSearch(text, run, FILE_SEARCH_REFRESH_MS);
     }
   }, delay);
 }
@@ -1027,15 +1037,17 @@ function scheduleFileSearch(text: string, run: number, delay: number) {
 watch(query, (value) => {
   if (mode.value !== "commands") {
     selectedIndex.value = 0;
+    cancelFileSearch();
     return;
   }
   const text = value.trim();
-  const run = ++fileSearchRun;
-  if (!text) {
-    if (fileSearchTimer) clearTimeout(fileSearchTimer);
-    fileCommands.value = [];
+  if (text.length < MIN_FILE_SEARCH_QUERY_CHARS) {
+    // См. postmortems.md § 2026-06-08: короткие query не должны запускать
+    // backend file LIKE scan, а hidden launcher обязан оставаться тихим.
+    cancelFileSearch();
     return;
   }
+  const run = ++fileSearchRun;
   scheduleFileSearch(text, run, FILE_SEARCH_DEBOUNCE_MS);
 });
 
@@ -1077,6 +1089,9 @@ onMounted(async () => {
   // команды и приложения, иначе список остаётся пустым до следующего show.
   offBackendReady = window.kepler.backend.onReady(() => {
     void refreshCommands();
+  });
+  offHide = window.kepler.window.onHide(() => {
+    cancelFileSearch();
   });
   offClipboardOpen = window.kepler.clipboardHistory.onOpenShell(() => {
     void enterClipboardMode();
@@ -1131,8 +1146,8 @@ onUnmounted(() => {
   offFocusOpen();
   offCommandVisibilityStorage();
   offBackendReady();
-  fileSearchRun++;
-  if (fileSearchTimer) clearTimeout(fileSearchTimer);
+  offHide();
+  cancelFileSearch();
   unsubUpdateState?.();
   unsubPostUpdate?.();
 });

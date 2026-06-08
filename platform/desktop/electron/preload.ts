@@ -49,6 +49,11 @@ const api: KeplerApi = {
       ipcRenderer.on("kepler:window:show", handler);
       return () => ipcRenderer.removeListener("kepler:window:show", handler);
     },
+    onHide: (listener) => {
+      const handler = () => listener();
+      ipcRenderer.on("kepler:window:hide", handler);
+      return () => ipcRenderer.removeListener("kepler:window:hide", handler);
+    },
     setExpanded: (expanded) => ipcRenderer.invoke("kepler:window:setExpanded", expanded),
   },
   search: {

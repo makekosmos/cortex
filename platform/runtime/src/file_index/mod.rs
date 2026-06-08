@@ -738,7 +738,7 @@ mod tests {
         })
         .await
         .expect("follow-up rescan must converge");
-        assert_eq!(index.search("a", 10).unwrap().len(), 1);
+        assert_eq!(index.search("a.md", 10).unwrap().len(), 1);
     }
 
     #[tokio::test]

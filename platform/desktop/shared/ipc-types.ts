@@ -320,6 +320,8 @@ export interface KeplerApi {
     hide(): Promise<void>;
     /** Зарегистрировать callback на показ окна (от globalShortcut). */
     onShow(listener: () => void): () => void;
+    /** Зарегистрировать callback на скрытие окна. */
+    onHide(listener: () => void): () => void;
     /** Растягивает окно в expanded (с результатами) / collapsed (только input). */
     setExpanded(expanded: boolean): Promise<void>;
   };

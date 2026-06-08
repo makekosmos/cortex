@@ -204,10 +204,12 @@ impl FileStore {
         if q.is_empty() || limit == 0 {
             return Ok(Vec::new());
         }
-        if q.chars().count() >= 3 {
-            return self.search_fts(&q, limit);
+        // См. postmortems.md § 2026-06-08: короткие substring queries
+        // превращали hidden-launcher polling в повторяющийся LIKE scan.
+        if q.chars().count() < 3 {
+            return Ok(Vec::new());
         }
-        self.search_like(&q, limit)
+        self.search_fts(&q, limit)
     }
 
     // Regression 2026-05-24-evening: scope_remove was timing out at 30s because
@@ -253,35 +255,6 @@ impl FileStore {
                 mtime: row.get(2)?,
             })
         })?;
-        collect_files(rows)
-    }
-
-    fn search_like(&self, query: &str, limit: usize) -> Result<Vec<IndexedFile>> {
-        let pattern = format!("%{}%", escape_like(query));
-        let prefix_pattern = format!("{}%", escape_like(query));
-        let conn = self.lock();
-        let mut stmt = conn.prepare(
-            "SELECT path, name, mtime FROM files
-             WHERE lower(name) LIKE ? ESCAPE '!' OR lower(path) LIKE ? ESCAPE '!'
-             ORDER BY CASE
-                 WHEN lower(name) LIKE ? ESCAPE '!' THEN 0
-                 WHEN lower(name) LIKE ? ESCAPE '!' THEN 1
-                 ELSE 2
-             END,
-             length(name) ASC,
-             name COLLATE NOCASE ASC
-             LIMIT ?",
-        )?;
-        let rows = stmt.query_map(
-            params![pattern, pattern, prefix_pattern, pattern, limit as i64],
-            |row| {
-                Ok(IndexedFile {
-                    path: row.get(0)?,
-                    name: row.get(1)?,
-                    mtime: row.get(2)?,
-                })
-            },
-        )?;
         collect_files(rows)
     }
 
@@ -556,6 +529,25 @@ mod tests {
         let paths: std::collections::HashSet<_> = results.iter().map(|r| r.path.as_str()).collect();
         assert!(paths.contains(r"C:\junction\note.txt"));
         assert!(paths.contains(r"C:\real\note.txt"));
+    }
+
+    #[test]
+    fn short_queries_do_not_scan_files_table() {
+        // Regression: 2026-06-08. Launcher polling with "a"/"do" hit the
+        // substring LIKE path forever after the window was hidden.
+        let data = tempdir().unwrap();
+        let store = FileStore::open(&data.path().join("files.db")).unwrap();
+        store
+            .upsert(&IndexedFile {
+                path: r"C:\docs\alpha.txt".to_string(),
+                name: "alpha.txt".to_string(),
+                mtime: 1,
+            })
+            .unwrap();
+
+        assert!(store.search("a", 10).unwrap().is_empty());
+        assert!(store.search("al", 10).unwrap().is_empty());
+        assert_eq!(store.search("alp", 10).unwrap().len(), 1);
     }
 
     #[test]
