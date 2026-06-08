@@ -7,8 +7,7 @@
 //   - State хранится в main process (singleton focusState). Renderer
 //     получает через initial `getState()` IPC + push events `state:update`.
 //   - Position персистится в kepler-shell-settings.json (focusWidgetBounds).
-//   - Listens на pomodoro state от Horologion через
-//     `kepler:focus-widget:set-state` IPC (см. preload + extension-preload).
+//   - Listens на backend pomodoro state and renderer focus-session updates.
 //   - На active=false (pomodoro stopped) → hide(), но window не destroy
 //     чтобы reopen был мгновенным.
 
@@ -43,7 +42,7 @@ export interface FocusState {
    * Wallclock (Unix ms) когда текущая фаза должна закончиться. null = idle/paused
    * (нет автономного тика). Когда задан и active=true, main process сам
    * пересчитывает remainingSec каждую секунду — поэтому виджет продолжает
-   * тикать даже если Horologion renderer скрыт / закрыт и Chromium throttle'ит
+   * тикать даже если renderer скрыт / закрыт и Chromium throttle'ит
    * его таймеры. На каждый setState от renderer'а перезаписываем — он
    * authoritative.
    */
@@ -237,8 +236,8 @@ function broadcastState(): void {
 
 // --- Autonomous tick --------------------------------------------------------
 //
-// Horologion renderer пушит state на каждой смене целой секунды. Когда
-// окно Horologion скрыто или закрыто, Chromium агрессивно throttle'ит
+// Renderer пушит state на каждой смене целой секунды. Когда
+// окно скрыто или закрыто, Chromium агрессивно throttle'ит
 // его setInterval (вплоть до полной остановки), и pushFocusWidgetState
 // перестаёт приходить → виджет «замерзает». Чтобы это пережить, main
 // process сам пересчитывает remainingSec из wallclock anchor'а
@@ -304,7 +303,7 @@ export function setFocusState(next: Partial<FocusState>): void {
   } else {
     hideWidget();
   }
-  // Start/stop autonomous tick. Без него, когда Horologion окно скрыто,
+  // Start/stop autonomous tick. Без него, когда окно скрыто,
   // setInterval в renderer'е throttle'ится Chromium'ом → MM:SS замерзает.
   if (currentState.active && currentState.phaseEndsAtMs != null) {
     // Сразу пересчитаем — renderer мог прислать stale remainingSec
@@ -335,7 +334,7 @@ ipcMain.handle("kepler:focus-widget:hide", () => {
   hideWidget();
 });
 
-ipcMain.handle("kepler:focus-widget:open-horologion", async () => {
+ipcMain.handle("kepler:focus-widget:open-focus-session", async () => {
   const { openFocusSessionShell } = await import("./focus-session");
   openFocusSessionShell();
 });
@@ -379,8 +378,8 @@ ipcMain.handle("kepler:focus-widget:show-menu", () => {
 //
 // IPC от FocusWidgetView'ы. Все pomodoro операции идут через kepler-backend
 // (PomodoroHost): он source of truth для session lifecycle. После успешной
-// op backend сам шлёт `phase_changed` event → Horologion renderer обновит
-// state → pushFocusWidgetState() запушит свежий patch в виджет. Поэтому
+// op backend сам шлёт `phase_changed` event, а focus-session renderer
+// запушит свежий patch в виджет. Поэтому
 // здесь дополнительно setFocusState() не дёргаем.
 //
 // Stopwatch stop — отдельный путь: pomodoro session не задействована, надо
@@ -487,14 +486,14 @@ ipcMain.handle("kepler:focus-widget:stopwatch:stop", async () => {
 // --- Backend pomodoro events subscription ----------------------------------
 //
 // До 2026-05-22 focus widget состояние обновлялось ИСКЛЮЧИТЕЛЬНО через
-// `kepler:focus-widget:set-state` push из renderer'а Horologion. Если юзер
-// стартанул помодоро через launcher команду (`pomodoro:25`), окно Horologion
-// не открывается → renderer не работает → widget никогда не появляется.
+// `kepler:focus-widget:set-state` push из renderer'а. Если юзер стартанул
+// помодоро через launcher команду, renderer может быть не открыт → widget
+// всё равно должен появиться.
 //
 // Решение: main process подписывается напрямую на backend pomodoro events
 // (как `pomodoro-notifier`), деривит focus state и зовёт `setFocusState`.
-// Renderer push остаётся source of truth когда horologion открыт (его state
-// содержит pomodoroDraft.title и live blockingActive из focusBlocklistId
+// Renderer push остаётся source of truth когда focus-session открыт (его state
+// содержит draft title и live blockingActive из focusBlocklistId
 // settings, которые backend не знает).
 //
 // Idempotent: повторные set с тем же контентом перезатирают, дешёво.
@@ -543,7 +542,7 @@ function deriveFocusStateFromBackend(raw: PomodoroEventState): Partial<FocusStat
     mode,
     isPaused,
     // backend не знает про focus blocklist — оставляем как есть. Renderer
-    // обновит при следующем push'е если horologion открыт.
+    // обновит при следующем push'е если focus-session открыт.
     phaseEndsAtMs: active ? (raw.phaseEndsAtMs ?? null) : null,
   };
 }

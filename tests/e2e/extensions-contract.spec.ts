@@ -16,8 +16,8 @@
 //   3) каждый describe: открыть extension через command bus, дождаться
 //      окна, проверить commands.list + ARK round-trip
 //
-// Per-app UI flow'ы (TipTap рендерится, Pomodoro переключается и т.п.) —
-// отдельные spec'и (`eden.spec.ts`, `horologion.spec.ts`, …).
+// Per-app UI flow'ы (TipTap рендерится и т.п.) —
+// отдельные spec'и (`eden.spec.ts`, …).
 
 import { test, expect, type Page } from "@playwright/test";
 import path from "node:path";
@@ -117,7 +117,7 @@ for (const manifest of manifests) {
         await extWindow.waitForLoadState("domcontentloaded");
 
         // 1.5s — достаточно для shim install + initial render + commands.register
-        // успело отработать в extension'е (см. main.ts по образцу Horologion).
+        // в extension'е.
         await extWindow.waitForTimeout(1500);
 
         // Sanity: extension window жив, не destroyed.

@@ -1,6 +1,6 @@
 // Orchestrator для `bun run dev`: параллельно поднимает:
 //   1) Vite dev server'ы всех Vue extension'ов (через dev-extensions.mjs) —
-//      даёт HMR в Eden / Delphi / Horologion / Arrancador.
+//      даёт HMR в Eden / Delphi / Arrancador / Akasha.
 //   2) Vite renderer для shell (KEPLER_DEV=1 — Electron подхватывает
 //      hot reload главного окна + extension dev mode загружается с
 //      http://localhost:<devPort>/ при включённом Settings → Developer mode).

@@ -521,12 +521,11 @@ function createLauncher() {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,
       nodeIntegration: false,
-      // macOS occlusion throttling: frameless + полупрозрачный launcher без
-      // постоянного always-on-top помечается системой как occluded, и Chromium
-      // останавливает compositor — paint замерзает через 1-2с после показа
-      // (Vue реактивность жива, но экран не перерисовывается). Отключаем
-      // throttling, чтобы окно всегда рендерилось. См. postmortems.md § 2026-06-07.
-      backgroundThrottling: false,
+      // macOS occlusion throttling: frameless launcher без постоянного
+      // always-on-top может заморозить paint. На Windows/Linux throttling
+      // должен оставаться включённым для скрытого окна. См. postmortems.md
+      // § 2026-06-07 и § 2026-06-08.
+      backgroundThrottling: process.platform !== "darwin",
     },
   });
 
@@ -641,6 +640,7 @@ function hideLauncher() {
   // фильтруют по `IsWindowVisible` (= ShowWindow state) и не видели —
   // отсюда асимметрия. Настоящий `hide()` вызывает `ShowWindow(SW_HIDE)`,
   // окно уходит из enum'а для всех инструментов.
+  mainWindow.webContents.send("kepler:window:hide");
   mainWindow.hide();
 }
 

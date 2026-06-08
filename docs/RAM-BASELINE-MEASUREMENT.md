@@ -6,8 +6,6 @@
 
 ## Цель
 
-Проверить заявленную экономию RAM при pivot'е к Kepler ecosystem. Теоретический ориентир из review — около 220 MB на сэте из четырёх запущенных одновременно апок (Eden, Delphi, Arrancador, Horologion) против одного Electron host'а с разделяемым backend'ом.
-
 Результат измерения определяет, нужно ли двигаться в Phase 2 (extension architecture с aggressive pre-warming) или достаточно текущей standalone-модели.
 
 ## Подход
@@ -31,14 +29,13 @@ Snapshot снимается **один раз** после фиксирован�
 ### Baseline
 
 1. Закрой Kepler ecosystem (если запущен).
-2. Запусти все четыре standalone-апки: Eden, Delphi, Arrancador, Horologion. Дождись полной загрузки UI каждой.
-3. Запусти:
+2. Запусти:
 
    ```powershell
    pwsh scripts/measure-kepler-ram.ps1 -Mode baseline
    ```
 
-4. Скрипт ждёт 15 секунд warmup и сохраняет отчёт в `.tmp/ram-measurement-baseline-<timestamp>.json`.
+3. Скрипт ждёт 15 секунд warmup и сохраняет отчёт в `.tmp/ram-measurement-baseline-<timestamp>.json`.
 
 ### Kepler
 

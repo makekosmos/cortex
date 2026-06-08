@@ -8,7 +8,7 @@
  * работать без `:deep()` хаков или дублирования CSS.
  *
  * Префиксование защищает от коллизий с одноимёнными классами в
- * `LauncherView`/`InstallExtensionView`/`FocusWidgetView`/Horologion, у
+ * `LauncherView`/`InstallExtensionView`/`FocusWidgetView`, у
  * которых тоже есть свои `.row` / `.btn` / `.label` в scoped-style.
  *
  * Когда нужно добавить новый utility-класс, расширяемый между несколькими

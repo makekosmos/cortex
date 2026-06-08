@@ -49,6 +49,11 @@ const api: KeplerApi = {
       ipcRenderer.on("kepler:window:show", handler);
       return () => ipcRenderer.removeListener("kepler:window:show", handler);
     },
+    onHide: (listener) => {
+      const handler = () => listener();
+      ipcRenderer.on("kepler:window:hide", handler);
+      return () => ipcRenderer.removeListener("kepler:window:hide", handler);
+    },
     setExpanded: (expanded) => ipcRenderer.invoke("kepler:window:setExpanded", expanded),
   },
   search: {
@@ -175,7 +180,7 @@ const api: KeplerApi = {
     setState: (patch) => ipcRenderer.invoke("kepler:focus-widget:set-state", patch),
     getState: () => ipcRenderer.invoke("kepler:focus-widget:get-state"),
     hide: () => ipcRenderer.invoke("kepler:focus-widget:hide"),
-    openHorologion: () => ipcRenderer.invoke("kepler:focus-widget:open-horologion"),
+    openFocusSession: () => ipcRenderer.invoke("kepler:focus-widget:open-focus-session"),
     pomodoro: {
       pause: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:pause"),
       resume: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:resume"),
@@ -298,6 +303,11 @@ const api: KeplerApi = {
     bundle: () => ipcRenderer.invoke("kepler:diagnostics:bundle"),
     bundleSave: () => ipcRenderer.invoke("kepler:diagnostics:bundle-save"),
     openLogsFolder: () => ipcRenderer.invoke("kepler:diagnostics:open-logs-folder"),
+    metrics: () => ipcRenderer.invoke("kepler:diagnostics:metrics"),
+    traceStart: () => ipcRenderer.invoke("kepler:diagnostics:trace-start"),
+    traceStop: (outPath?: string) => ipcRenderer.invoke("kepler:diagnostics:trace-stop", outPath),
+    windowMoveBenchmark: (input) =>
+      ipcRenderer.invoke("kepler:diagnostics:window-move-benchmark", input),
   },
   postUpdate: {
     onShown: (listener) => {

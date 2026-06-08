@@ -1,0 +1,276 @@
+{
+  "label": "after-no-flags",
+  "flags": {},
+  "dataDir": "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-06-08-ws-hot-path-performance\\smoke\\after-no-flags",
+  "typeperfPath": "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-06-08-ws-hot-path-performance\\raw\\after-no-flags-typeperf.csv",
+  "typeperfStatus": {
+    "code": 4026531842,
+    "signal": null
+  },
+  "typeperfLog": [
+    "�믮������ ��室, ��������...                         ",
+    "�訡��: ���稪� �� 㪠����.",
+    "�ਬ�砭��. ",
+    "  �⮡� �ᯮ�짮���� �ਫ������ Typeperf, ����室��� ���� ���⭨��� �����쭮� ",
+    "  ��㯯� \"���짮��⥫� ��ୠ��� �ந�����⥫쭮��\" ��� �믮����� ������� �� ",
+    "  ���� ��������� ��ப� � �ࠢ��� �����������.",
+    "\r\r"
+  ],
+  "processSamplerPath": "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-06-08-ws-hot-path-performance\\raw\\after-no-flags-process-sampler.csv",
+  "processSamplerStatus": {
+    "code": 0,
+    "signal": null
+  },
+  "processSamplerLog": [],
+  "backendPid": 36980,
+  "beforeSnapshot": {
+    "app_index": {
+      "apps_count": 76,
+      "icon_bytes_read": 0,
+      "icon_reads_count": 0,
+      "last_rescan_ms": 1777
+    },
+    "file_index": {
+      "files_count": 0,
+      "last_scan_ms": 0,
+      "like_search_count": 0,
+      "query_len_histogram": {},
+      "roots": [],
+      "scan_in_progress": false,
+      "search_count": 0
+    },
+    "rpc": {
+      "by_operation": {
+        "app_index.list_all": {
+          "count": 7,
+          "max_ms": 2,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 20105,
+          "response_bytes_p50": 62,
+          "response_bytes_p95": 62
+        }
+      },
+      "total": 7
+    },
+    "usage_tracker": {
+      "active_sessions": 1,
+      "enum_windows_calls_per_tick": 1,
+      "process_path_queries_per_tick": 1,
+      "tick_p95_ms": 45
+    }
+  },
+  "afterSnapshot": {
+    "app_index": {
+      "apps_count": 76,
+      "icon_bytes_read": 0,
+      "icon_reads_count": 0,
+      "last_rescan_ms": 1777
+    },
+    "file_index": {
+      "files_count": 0,
+      "last_scan_ms": 0,
+      "like_search_count": 0,
+      "query_len_histogram": {
+        "6_12": 20
+      },
+      "roots": [],
+      "scan_in_progress": false,
+      "search_count": 20
+    },
+    "rpc": {
+      "by_operation": {
+        "app_index.list_all": {
+          "count": 37,
+          "max_ms": 2,
+          "p50_ms": 1,
+          "p95_ms": 2,
+          "response_bytes_max": 20106,
+          "response_bytes_p50": 20106,
+          "response_bytes_p95": 20106
+        },
+        "commands.list": {
+          "count": 50,
+          "max_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 0,
+          "response_bytes_p50": 0,
+          "response_bytes_p95": 0
+        },
+        "diagnostics.snapshot": {
+          "count": 1,
+          "max_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 590,
+          "response_bytes_p50": 590,
+          "response_bytes_p95": 590
+        },
+        "file_index.search": {
+          "count": 20,
+          "max_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 0,
+          "response_bytes_p50": 0,
+          "response_bytes_p95": 0
+        }
+      },
+      "total": 108
+    },
+    "usage_tracker": {
+      "active_sessions": 1,
+      "enum_windows_calls_per_tick": 1,
+      "process_path_queries_per_tick": 1,
+      "tick_p95_ms": 45
+    }
+  },
+  "stormSnapshot": {
+    "app_index": {
+      "apps_count": 76,
+      "icon_bytes_read": 0,
+      "icon_reads_count": 0,
+      "last_rescan_ms": 1777
+    },
+    "file_index": {
+      "files_count": 0,
+      "last_scan_ms": 0,
+      "like_search_count": 0,
+      "query_len_histogram": {
+        "6_12": 20
+      },
+      "roots": [],
+      "scan_in_progress": false,
+      "search_count": 20
+    },
+    "rpc": {
+      "by_operation": {
+        "app_index.list_all": {
+          "count": 37,
+          "max_ms": 2,
+          "p50_ms": 1,
+          "p95_ms": 2,
+          "response_bytes_max": 20106,
+          "response_bytes_p50": 20106,
+          "response_bytes_p95": 20106
+        },
+        "commands.invoke": {
+          "count": 512,
+          "max_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 0,
+          "response_bytes_p50": 0,
+          "response_bytes_p95": 0
+        },
+        "commands.list": {
+          "count": 281,
+          "max_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 0,
+          "response_bytes_p50": 0,
+          "response_bytes_p95": 0
+        },
+        "diagnostics.snapshot": {
+          "count": 2,
+          "max_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 1020,
+          "response_bytes_p50": 590,
+          "response_bytes_p95": 590
+        },
+        "file_index.search": {
+          "count": 20,
+          "max_ms": 0,
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "response_bytes_max": 0,
+          "response_bytes_p50": 0,
+          "response_bytes_p95": 0
+        }
+      },
+      "total": 852
+    },
+    "usage_tracker": {
+      "active_sessions": 2,
+      "enum_windows_calls_per_tick": 1,
+      "process_path_queries_per_tick": 1,
+      "tick_p95_ms": 1
+    }
+  },
+  "app_index_list_all": {
+    "latency": {
+      "count": 30,
+      "p50_ms": 2.2541000000001077,
+      "p95_ms": 2.858799999999974,
+      "max_ms": 3.2112999999999374
+    },
+    "payload_bytes": {
+      "count": 30,
+      "p50_ms": 20106,
+      "p95_ms": 20106,
+      "max_ms": 20106
+    },
+    "last_count": 76
+  },
+  "commands_list": {
+    "latency": {
+      "count": 50,
+      "p50_ms": 0.17150000000037835,
+      "p95_ms": 0.39960000000019136,
+      "max_ms": 0.6185999999997875
+    },
+    "payload_bytes": {
+      "count": 50,
+      "p50_ms": 67,
+      "p95_ms": 67,
+      "max_ms": 67
+    },
+    "last_count": 0
+  },
+  "file_index_search": {
+    "latency": {
+      "count": 20,
+      "p50_ms": 0.28949999999986176,
+      "p95_ms": 0.6566000000002532,
+      "max_ms": 1.4135999999998603
+    },
+    "payload_bytes": {
+      "count": 20,
+      "p50_ms": 66,
+      "p95_ms": 67,
+      "max_ms": 67
+    },
+    "last_count": 0
+  },
+  "event_storm": {
+    "duration_s": 60,
+    "target_events_per_min": 1000,
+    "sent": 971,
+    "received_by_measure_client": 971,
+    "commands_list_latency": {
+      "count": 231,
+      "p50_ms": 0.5136999999958789,
+      "p95_ms": 0.7098000000005413,
+      "max_ms": 1.915100000000166
+    }
+  },
+  "backendLogTail": [
+    "kepler-backend v0.1.0 starting (protocol 1.0.0)",
+    "[crash-reporter] installed, crashes go to \"D:\\\\Personal\\\\Hobby\\\\Coding\\\\kosmos\\\\.agent\\\\tasks\\\\2026-06-08-ws-hot-path-performance\\\\smoke\\\\after-no-flags\\\\crashes\"",
+    "[kepler-backend] KOSMOS_LOCK_PERMISSIONS_DISABLED=1 — icacls hardening skipped for D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-06-08-ws-hot-path-performance\\smoke\\after-no-flags\\.kepler.lock.json.tmp.36980 (test-only path, prod должен не выставлять флаг)",
+    "[kepler-backend] usage_tracker spawned (in-process)",
+    "[kepler-backend] ready. Ctrl+C для shutdown.",
+    "[db-backup] no previous backup recorded, running",
+    "[db-backup] starting → D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-06-08-ws-hot-path-performance\\smoke\\after-no-flags\\backups\\ark.db.backup-2026-06-08-134440",
+    "[usage-tracker] started: device_id=usage-tracker-36b078f08f044dbeb6e93845a048b4ad device_name=\"DESKTOP-F786FID\"",
+    "[db-backup] success → \"D:\\\\Personal\\\\Hobby\\\\Coding\\\\kosmos\\\\.agent\\\\tasks\\\\2026-06-08-ws-hot-path-performance\\\\smoke\\\\after-no-flags\\\\backups\\\\ark.db.backup-2026-06-08-134440\"",
+    "[usage-tracker] diagnostics usage_tracker.tick_ms=45 usage_tracker.tick_ms.p95=45 usage_tracker.active_sessions=1 usage_tracker.enum_windows_calls_per_tick=1 usage_tracker.process_path_queries_per_tick=1 usage_tracker.visible_window_count=27",
+    "[usage-tracker] diagnostics usage_tracker.tick_ms=1 usage_tracker.tick_ms.p95=1 usage_tracker.active_sessions=2 usage_tracker.enum_windows_calls_per_tick=1 usage_tracker.process_path_queries_per_tick=1 usage_tracker.visible_window_count=27",
+    "[usage-tracker] diagnostics usage_tracker.tick_ms=3 usage_tracker.tick_ms.p95=1 usage_tracker.active_sessions=3 usage_tracker.enum_windows_calls_per_tick=1 usage_tracker.process_path_queries_per_tick=1 usage_tracker.visible_window_count=27",
+    ""
+  ]
+}

@@ -7,7 +7,6 @@ Akasha — EPUB-читалка для Kosmos.
 MVP: обычный `kind: "vue"` extension внутри Kosmos shell. Запускается
 launcher-командой `akasha:open`, рендерится в стандартном extension
 `BrowserWindow` и собирается тем же Vite pipeline, что Eden, Delphi,
-Arrancador и Horologion.
 
 Старый Rust/GPUI reader вынесен в приватный standalone-репозиторий
 `ksanrse/akasha-gpui` и удалён из локального Kosmos workspace.

@@ -195,7 +195,6 @@ Get-ChildItem tests\.e2e -Recurse -Force -Filter kepler.lock.json | ForEach-Obje
 - [ ] Locator'ы scope'ятся к специфичным CSS классам, не общим role-based, если на странице потенциально несколько подходящих элементов (Vue transitions, multiple panes).
 - [ ] Headless-flag не overridden в `opts.env` (если опечатался — `KOSMOS_HEADLESS=1` остаётся, окна не лезут).
 - [ ] `app.close()` или `app.quit()` в `finally` — кепнул процесс.
-- [ ] Test name на русском («horologion: ...» — convention).
 - [ ] Если spec тестирует UI flow специфичный для extension — добавлен `tests` блок в manifest.json для universal contract coverage.
 
 ## Чек-лист: я добавил новый extension

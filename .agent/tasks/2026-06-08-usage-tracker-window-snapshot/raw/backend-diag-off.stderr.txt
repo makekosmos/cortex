@@ -1,0 +1,7 @@
+kepler-backend v0.1.0 starting (protocol 1.0.0)
+[crash-reporter] installed, crashes go to "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-06-08-usage-tracker-window-snapshot\\smoke\\backend-diag-off\\crashes"
+[kepler-backend] KEPLER_USAGE_TRACKER=0 — usage_tracker disabled
+[kepler-backend] ready. Ctrl+C для shutdown.
+[db-backup] no previous backup recorded, running
+[db-backup] starting → D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-06-08-usage-tracker-window-snapshot\smoke\backend-diag-off\backups\ark.db.backup-2026-06-08-122531
+[db-backup] success → "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-06-08-usage-tracker-window-snapshot\\smoke\\backend-diag-off\\backups\\ark.db.backup-2026-06-08-122531"

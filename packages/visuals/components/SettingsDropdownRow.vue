@@ -2,7 +2,7 @@
 // SettingsDropdownRow — атомарная композиция SettingsRow + Dropdown.
 // Устраняет повторяющийся паттерн <SettingsRow><template #control><div>
 // <Dropdown .../></div></template></SettingsRow>, который встречался ≥ 10 раз
-// между shell/SettingsView, horologion/SettingsView, arrancador/SettingsPage.
+// между shell/SettingsView и arrancador/SettingsPage.
 
 import { computed } from "vue";
 import SettingsRow from "./SettingsRow.vue";

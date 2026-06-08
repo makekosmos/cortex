@@ -63,8 +63,6 @@ bun run build:backend:dev   # cargo build (debug) platform/runtime
 bun run dev                 # backend + extensions + Vite + Electron
 ```
 
-`Alt+Space` (настраивается) глобально откроет launcher. Tray-иконка появится в трее. Открой extension через launcher (Eden, Horologion, Delphi, Arrancador, Dashboard).
-
 ## Дальше
 
 - [Структура репозитория](/guide/layout) — что где лежит.

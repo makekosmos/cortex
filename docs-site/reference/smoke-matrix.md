@@ -72,7 +72,6 @@ bun run ark:guard:writes
 
 После Phase B-D из smoke выпали:
 
-- Standalone Arrancador / Dashboard / Delphi / Horologion — мигрированы в `extensions/<name>`, отдельных Electron unit/e2e наборов нет.
 - Dashboard `seedSmokeDb.ts` / `smokeAnalytics.ts` — переехали в архив, к smoke не подключены до Phase 6.
 - Standalone `usage-tracker.exe` — заморожен в `legacy/usage-tracker/`. Активные тесты — внутри `platform/runtime` lib.
 

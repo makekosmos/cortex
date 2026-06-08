@@ -44,11 +44,11 @@ function catalog(entries: Array<{ id: string; version: string }>): Catalog {
 describe("findExtensionUpdates", () => {
   test("returns only installed extensions with newer catalog versions", () => {
     const result = findExtensionUpdates(
-      [installed("eden", "1.0.0"), installed("delphi", "2.0.0"), installed("horologion", "3.0.0")],
+      [installed("eden", "1.0.0"), installed("delphi", "2.0.0"), installed("arrancador", "3.0.0")],
       catalog([
         { id: "eden", version: "1.0.1" },
         { id: "delphi", version: "2.0.0" },
-        { id: "horologion", version: "2.9.9" },
+        { id: "arrancador", version: "2.9.9" },
       ]),
     );
 

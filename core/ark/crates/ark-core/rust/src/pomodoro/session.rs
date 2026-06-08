@@ -60,8 +60,7 @@ pub struct SessionConfig {
     pub title: String,
     #[serde(default)]
     pub tasks: Vec<TaskRef>,
-    /// Optional override для work-фазы — используется command bus'ом
-    /// (`horologion:pomodoro:25` / `:50`).
+    /// Optional override для work-фазы — используется command bus action'ами.
     #[serde(
         rename = "workMinOverride",
         default,

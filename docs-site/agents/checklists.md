@@ -85,12 +85,9 @@
 - [ ] Закрытие dashboard окна не закрывает Kepler shell.
 - [ ] Hash routing остался `#/dashboard` (без `/welcome` / `/space/<id>` — spaces убраны 2026-05-15).
 
-## Я правил Horologion extension (`incubator/horologion`)
-
 - [ ] `bun run --cwd platform/desktop build:js` — собирается.
 - [ ] Если правил pomodoro — multi-task split в `closeArkEntry` читает АКТУАЛЬНЫЙ `pomodoroDraft`, не снапшот со старта.
 - [ ] Если правил Settings — settings-окно открывается через `platform/desktop/electron/settings-window.ts` (отдельный BrowserWindow).
-- [ ] Тесты — на изолированной БД (`ARK_DB_PATH=.e2e/horologion-e2e.db`).
 - [ ] `time_entry_obj` и `tag_obj` — типы остаются согласованы с `core/ark/crates/ark-core/rust/src/types.rs`.
 
 ## Я правил kepler-shell (`platform/desktop/`)

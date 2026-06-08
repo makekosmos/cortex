@@ -1,0 +1,35 @@
+{
+  "task_id": "2026-06-08-performance-diagnostics",
+  "verified_at": "2026-06-08T00:00:00+03:00",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "node_modules\\.bin\\tsc.exe --noEmit; node scripts/ark-smoke.mjs"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "node_modules\\.bin\\tsc.exe --noEmit"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "cargo check --manifest-path Cargo.toml -p kepler-backend; node scripts/ark-smoke.mjs"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "node scripts/ark-smoke.mjs"
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "command": "cargo fmt --all --manifest-path Cargo.toml; cargo check --manifest-path Cargo.toml -p kepler-backend; node_modules\\.bin\\tsc.exe --noEmit; node scripts/check-ark-write-boundaries.mjs; node scripts/ark-smoke.mjs"
+    }
+  ],
+  "notes": [
+    "Bun script runner reported Script not found for package.json scripts in this shell session, so the underlying node/tsc commands were executed directly.",
+    "Cargo and TypeScript verification required sandbox escalation for build artifacts."
+  ]
+}

@@ -28,6 +28,42 @@ export interface BackendStatus {
   lockFilePath: string;
 }
 
+export interface DiagnosticsWindowInfo {
+  id: number;
+  title: string;
+  visible: boolean;
+  minimized: boolean;
+  alwaysOnTop: boolean;
+  bounds: { x: number; y: number; width: number; height: number };
+  pid: number;
+  url: string;
+}
+
+export interface DiagnosticsMetricsSnapshot {
+  at: string;
+  appMetrics: unknown[];
+  gpuFeatureStatus: Record<string, unknown>;
+  gpuInfo: unknown;
+  windows: DiagnosticsWindowInfo[];
+}
+
+export interface DiagnosticsWindowMoveBenchmarkInput {
+  windowKind?: "launcher" | "settings" | "extension" | "flatTest";
+  steps?: number;
+  intervalMs?: number;
+  acrossDisplays?: boolean;
+}
+
+export interface DiagnosticsWindowMoveBenchmarkResult {
+  total_ms: number;
+  intervals_p50_ms: number;
+  intervals_p95_ms: number;
+  intervals_max_ms: number;
+  frames_over_24ms: number;
+  frames_over_33ms: number;
+  frames_over_50ms: number;
+}
+
 export interface SearchResult {
   id: string;
   title: string;
@@ -175,7 +211,7 @@ export interface CommandRecord {
       'command' → «Команда · <appName>», 'file' → file-index hit.
       Если не указано — считается 'app'. */
   kind?: "app" | "command" | "file";
-  /** Имя родительского приложения для command-плашек (Delphi / Horologion / Kepler). */
+  /** Имя родительского приложения для command-плашек (Delphi / Kepler). */
   appName?: string;
   /** Опциональная иконка команды. Data URI (`data:image/png;base64,...`)
       для open-команд extension'ов; undefined для action-команд. */
@@ -320,6 +356,8 @@ export interface KeplerApi {
     hide(): Promise<void>;
     /** Зарегистрировать callback на показ окна (от globalShortcut). */
     onShow(listener: () => void): () => void;
+    /** Зарегистрировать callback на скрытие окна. */
+    onHide(listener: () => void): () => void;
     /** Растягивает окно в expanded (с результатами) / collapsed (только input). */
     setExpanded(expanded: boolean): Promise<void>;
   };
@@ -481,7 +519,7 @@ export interface KeplerApi {
       isPaused: boolean;
     } | null>;
     hide(): Promise<void>;
-    openHorologion(): Promise<void>;
+    openFocusSession(): Promise<void>;
     /** Pomodoro inline controls. Прокидываются в kepler-backend
         PomodoroHost через ArkClient.request("pomodoro.<op>"). */
     pomodoro: {
@@ -647,6 +685,16 @@ export interface KeplerApi {
     bundleSave(): Promise<string | null>;
     /** Открыть `<data_dir>/logs/` директорию в Explorer'е. */
     openLogsFolder(): Promise<void>;
+    /** Snapshot Electron process/GPU/window metrics. */
+    metrics(): Promise<DiagnosticsMetricsSnapshot>;
+    /** Start Chromium content trace collection. */
+    traceStart(): Promise<{ ok: true }>;
+    /** Stop Chromium trace collection and return the written trace path. */
+    traceStop(outPath?: string): Promise<{ path: string }>;
+    /** Repeatable setBounds benchmark for launcher/settings/extension/test windows. */
+    windowMoveBenchmark(
+      input?: DiagnosticsWindowMoveBenchmarkInput,
+    ): Promise<DiagnosticsWindowMoveBenchmarkResult>;
   };
   /** Post-update first launch — main process детектит `post-update.flag` в
       userData (создаётся autoupdater-host'ом перед quitAndInstall) и шлёт

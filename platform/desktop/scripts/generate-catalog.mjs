@@ -2,7 +2,7 @@
 // Генерирует catalog.json для makekosmos/extensions marketplace.
 //
 // Источник правды: GitHub releases в makekosmos/extensions
-// (per-extension tagged: horologion-v0.3.0 ...). Per group выбирает
+// (per-extension tagged: eden-v0.3.0 ...). Per group выбирает
 // highest semver. Metadata (name/description/keplerApiVersion) тянет
 // из локального source — products/<id>, incubator/<id> или legacy extensions/<id>.
 //

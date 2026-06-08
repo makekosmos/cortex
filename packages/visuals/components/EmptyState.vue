@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // EmptyState — стандартный empty-state для list views, trash, search results.
 // Используется в Eden (SearchOverlay nothing), Delphi (QuickSearch empty),
-// Arrancador (game list empty), Horologion (ListView no entries).
+// Arrancador (game list empty).
 //
 // title — заголовок (например «Нет заметок»)
 // description — поясняющий текст (опционально)

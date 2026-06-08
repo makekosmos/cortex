@@ -43,11 +43,9 @@
               │ WS ws://127.0.0.1:<port>
    ┌──────────┼────────────┬────────────┬────────────┐
 ┌──┴──┐ ┌─────┴────┐ ┌─────┴────┐ ┌─────┴───┐ ┌──────┴─────┐
-│Eden │ │ Delphi   │ │Arrancador│ │Horologion│ │ Dashboard  │
 └─────┘ └──────────┘ └──────────┘ └──────────┘ └────────────┘
  extensions/<id>/ (Vue-extensions внутри platform/desktop/)         shell view
 
-Eden, Delphi, Arrancador, Horologion — Vue-extensions внутри Kepler shell.
 Dashboard — встроенный shell view (platform/desktop/src/views/Dashboard*.vue), не extension.
 Все общаются с kepler-backend через @kosmos/ark.
 ```
@@ -69,7 +67,6 @@ Dashboard — встроенный shell view (platform/desktop/src/views/Dashbo
 - Tray-иконка с menu (Открыть / Настройки / Выход).
 - Список команд в launcher = **static open-commands** (`COMMANDS` из `electron/commands.ts`) + **dynamic action-commands** (через `arkClient.commands.list()` — приходят от running апок).
 - При invoke: static исполняются локально (`spawn(exe)`), dynamic уходят в `kepler-backend` через `arkClient.commands.invoke(id)` — backend broadcast'ит `command_invoked`, owning апка handle'ит.
-- Extension loader (`platform/desktop/electron/extension-host.ts`) — open Vue extension bundles в отдельные BrowserWindow (Phase 4: Dashboard / Horologion / Delphi / Arrancador мигрированы как extensions).
 
 ### kepler-backend (Rust)
 
@@ -112,8 +109,6 @@ Vue 3.6 Vapor в Eden, Dashboard, Arrancador, Akasha и shell views. Никог�
 
 ### @kosmos/ark
 
-Канонический TS-клиент. Работает в **kepler-mode**: `ArkClient` коннектится к `kepler-backend` через WS, используя `kepler.lock.json` (bearer token, port). Шейринг одного backend'а с другими апками — Eden, Delphi, Arrancador, Horologion, Dashboard. Self-spawn `ark-core-rpc.exe` из renderer'а / extension'а — не делается, этим владеет backend.
-
 См. [@kosmos/ark](/packages/ark).
 
 ### ark-core-rpc (Rust)
@@ -136,8 +131,6 @@ Vue 3.6 Vapor в Eden, Dashboard, Arrancador, Akasha и shell views. Никог�
 | `ffi.rs`                              | UniFFI facade для Android / Swift            |
 
 ### SQLite
-
-Одна база на юзера — `%APPDATA%\Kosmos\ark.db`. Концепция multi-space убрана 2026-05-15: больше нет welcome screen / space picker, больше нет `%APPDATA%\Kosmos\spaces\<spaceId>\ark.db`, больше нет `KOSMOS_DB_PATH` / `selected-space.json`. Все apps (Eden, Delphi, Horologion, Arrancador, usage-tracker, Dashboard) работают на одной DB.
 
 Схема — additive: `init_schema` мигрирует существующие БД на месте через `CREATE TABLE IF NOT EXISTS` без перезаписи файла.
 
@@ -190,7 +183,6 @@ Substantial-правки проходят через proof loop с явными 
 | ark-relay-server      | `services/relay-reference`                                                      | Rust server         | WebSocket relay (NAT-обход p2p sync)                                                                                                  |
 | kepler-watcher        | `platform/native-services/kepler-watcher`                                       | Rust                | watcher-демон над ark-core                                                                                                            |
 | @kosmos/visuals       | `packages/visuals`                                                              | TS + Vue            | дизайн-система                                                                                                                        |
-| Vue-extensions        | `extensions/{eden,delphi,arrancador,horologion}`                                | TS + Vue            | продуктовые оболочки внутри Kepler shell                                                                                              |
 | Dashboard             | `platform/desktop/src/views/Dashboard*.vue` + `platform/desktop/src/dashboard/` | TS + Vue            | встроенный shell view (read-only ARK browser), не extension                                                                           |
 | ark-service (Android) | `incubator/mobile/ark-service`                                                  | Kotlin + Room       | Android ContentProvider, держит данные Android Delphi (`incubator/mobile/delphi`). Изолирован от desktop ARK, ждёт миграции на UniFFI |
 | usage-tracker module  | `platform/runtime/src/usage_tracker/`                                           | Rust                | захват usage data → ARK; standalone-бинарь заморожен в `legacy/usage-tracker/` после Phase E3                                         |

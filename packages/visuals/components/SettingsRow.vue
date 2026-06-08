@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // SettingsRow — стандартная строка в Settings UI: title + description слева,
-// action / value control справа. Используется в Eden / Horologion / Delphi /
+// action / value control справа. Используется в Eden / Delphi /
 // Arrancador settings.
 //
 // Slot `control` — место для Toggle, select, button, input, etc.

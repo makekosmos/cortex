@@ -74,7 +74,6 @@
 - [ ] Страница «Заметки» содержит список команд Eden с чекбоксами. Снять галочку с «Открыть Eden» → команда исчезает из launcher'а (проверить `Alt+Space`).
 - [ ] Переоткрыть Settings — снятая галочка сохранилась.
 - [ ] Включить команду обратно → появляется в launcher'е.
-- [ ] Страницы «Задачи», «Времяметр», «Игры» аналогично содержат команды Delphi / Horologion / Arrancador.
 - [ ] Раздел «Времяметр» дополнительно содержит toggle «Трекать активные приложения».
 
 #### Window chrome
@@ -87,7 +86,6 @@
 ## 🟠 Pending — Focus mode end-to-end (2026-05-18, Kepler 0.2.4+)
 
 Полная реализация focus mode shipped: helper bin + ARK schema + Settings UI +
-Horologion integration + PowerShell elevation fallback + NSIS uninstall hook.
 
 Тесты ниже **требуют admin rights** на машине (helper.exe запускается с UAC).
 
@@ -126,9 +124,6 @@ Horologion integration + PowerShell elevation fallback + NSIS uninstall hook.
 - [ ] Settings → Фокус → «Отключить» → UAC снова (или может cached) → одобри → hosts очищен от kepler-section.
 - [ ] Перезагрузи браузер DNS cache (`Ctrl+Shift+Delete` или просто перезапусти браузер) → tiktok.com снова открывается.
 
-#### Horologion integration
-
-- [ ] Открой Horologion → создай pomodoro: title «Focus test», добавь любую задачу.
 - [ ] Справа от input → 🛡️ chip → выбери «Test» blocklist.
 - [ ] Старт pomodoro → UAC prompt → одобри.
 - [ ] Focus widget (320×52, всегда сверху) показывает 🛡️ слева от MM:SS.
@@ -265,9 +260,6 @@ bun run --cwd platform/desktop dev
 
 ### Exp 30 — CSS `contain: layout style` на extension roots (применён, проверка нерегрессии)
 
-Добавлено в `extensions/{horologion,arrancador,delphi}/src/...css` + `products/eden/src/App.css`.
-
-- [ ] **Horologion.** Pomodoro + Stopwatch работают, переключение между HomeView/SettingsView без layout-смещений.
 - [ ] **Arrancador.** Library scroll, переключение pages — нет clipped overflow.
 - [ ] **Delphi.** Sidebar + main pane, drag&drop задач, modal'ы (QuickEntry / QuickOpen) — нет визуальных регрессий.
 - [ ] **Eden.** Editor + sidebar resize, modal overlays (search, settings) — нет clipped content.
@@ -354,7 +346,6 @@ bun run --cwd platform/desktop dev
 ```powershell
 $env:KEPLER_BENCHMARK_OPEN_ALL = "1"
 bun run --cwd platform/desktop dev
-# через ~5s launcher автоматически откроет Horologion + Delphi + Arrancador + Eden + Dashboard.
 # Подожди 30s чтобы окна полностью загрузились + 5min idle для стабилизации памяти.
 # Нажми Enter в orchestrator (warmup 30s ещё подождёт).
 ```

@@ -27,7 +27,6 @@ flowchart LR
   eden["Eden"]
   delphi["Delphi"]
   arrancador["Arrancador"]
-  horologion["Horologion"]
   dashboard["Dashboard"]
 
   arkcore -- "JSON-RPC" --> kosmosark
@@ -35,20 +34,17 @@ flowchart LR
   eden --> kosmosark
   delphi --> kosmosark
   arrancador --> kosmosark
-  horologion --> kosmosark
   dashboard --> kosmosark
 
   eden --> visuals
   delphi --> visuals
   arrancador --> visuals
-  horologion --> visuals
   dashboard --> visuals
 
   classDef pkg fill:#2b2b46,stroke:#6b6bcd,color:#fff,stroke-width:1.5px
   classDef app fill:#202020,stroke:#666,color:#fafafa
 
   class arkcore,kosmosark,visuals pkg
-  class eden,delphi,arrancador,horologion,dashboard app
 ```
 
 - `ark-core` — Rust crate + бинарь `ark-core-rpc`. Стрелка к `@kosmos/ark` — JSON-RPC поверх stdin/stdout.

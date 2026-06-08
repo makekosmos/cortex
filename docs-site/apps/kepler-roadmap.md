@@ -9,8 +9,6 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 | 0    | Backend extracted в `platform/runtime/` (lib + bin `kepler-backend.exe`)                                                                                                                                                  | ✅     |
 | 1    | Electron shell scaffold (launcher window, tray, settings, hotkey, backend spawn, window state)                                                                                                                            | ✅     |
 | 2    | Command bus (Rust в backend + `@kosmos/ark` SDK + apps register + dynamic launcher)                                                                                                                                       | ✅     |
-| 3    | Real handlers (Horologion / Delphi / Eden wired), Settings window, extension loader PoC                                                                                                                                   | ✅     |
-| 4    | Apps как Vue extensions внутри Kepler (Dashboard / Horologion / Delphi / Arrancador)                                                                                                                                      | ✅     |
 | 5    | Extension developer mode (Vite HMR per extension, Raycast-style)                                                                                                                                                          | ✅     |
 | 6    | Eden как extension (Phase 6.0 scaffold + ARK note CRUD; Phase 6.0.A cleanup — Hevy/code-tools/standalone удалены, trash UI, codesplit)                                                                                    | ✅     |
 | 7    | Universal per-type data export (notes → md, tasks → md/CSV, time entries → CSV, tags/games → JSON) — Rust converter framework + Settings UI                                                                               | ✅     |
@@ -59,14 +57,12 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 
 Динамические команды реально что-то делают:
 
-- **Horologion**: `horologion:pomodoro:25`, `horologion:pomodoro:50`, `horologion:stopwatch:start`. Main → IPC `horologion:cmd` → renderer вызывает `pomodoro.start({ workMinOverride })` или `timeEntries.startTimer`. `usePomodoro` поддерживает `workMinOverride` для per-session override без мутации persistent settings.
 - **Delphi**: `delphi:task:create` (открывает QuickEntry) и `delphi:task:today` (router.push '/today'). `SidecarClient.onCommand` listener + `focusMainWindow` перед dispatch.
 - **Eden**: `eden:note:create` (новая заметка), `eden:note:open-today` (открыть/создать сегодняшний journal entry). Поиск — внутри Eden (Ctrl+K в окне), отдельной команды `eden:search` нет.
 
 Дополнительно:
 
 - Settings window для Kepler shell (отдельный `BrowserWindow`, hash `#/settings`).
-- Extension loader PoC: `electron/extension-host.ts` загружает static extensions из `extensions/<id>/{manifest.json,index.html,bundle.js}` в отдельные BrowserWindow'ы. Демо: `incubator/horologion/` и др.
 
 ## Phase 4 ✅ — Apps как Vue extensions
 
@@ -75,7 +71,6 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 Мигрированы:
 
 - **Dashboard** — полная Vue migration, build ~83 KB JS. Read-only аналитика, ARK через preload bridge. <span class="kbadge warn">после 2026-05-14 Dashboard rewritten — теперь встроенный shell view (ARK browser), не extension. См. [Dashboard](/apps/dashboard).</span>
-- **Horologion** — полная Vue migration с `horologionApi` shim над `window.kepler.*`. Build ~102 KB chunk `pomodoroSettings`. Pomodoro/stopwatch state работает.
 - **Delphi** — Vue + memory router, build 3483 modules. После Phase 5 cleanup: `electron-api-shim.ts` устанавливает `window.electronAPI` поверх `kepler.ark.request` — все existing call sites работают. Tailwind plugin подключён (Phase 5). **Открытый вопрос** — переписать Delphi UI с Tailwind utility classes на plain CSS + `@kosmos/visuals` tokens (как остальные extension'ы). См. Phase 9 ниже.
 - **Arrancador** — изначально UI subset (LayoutPage + GameCard). После full completion (2026-05-18): scanner Steam+Epic, launcher (Steam URL + exe spawn), RAWG metadata, SQOBA save backups, все 4 страницы оживлены. См. [Arrancador](./arrancador.md).
 
@@ -85,9 +80,7 @@ RAM-эффект Phase 4 — −124 MB Working Set / −209 MB Private Bytes / �
 
 После основной миграции Phase 4 добавлены доводки, считаются частью Phase 4:
 
-- **App icons в launcher** — каждое open-command extension'а (Eden / Horologion / Delphi / Arrancador) показывает иконку из `extensions/<id>/icon.png`. `extensionIconDataUri(id)` в `extension-host.ts` читает PNG и кэширует по **mtime файла** — hot-swap иконки без рестарта Kepler. После Phase 6.0 Eden уже extension, иконка `products/eden/icon.png` участвует в общем механизме.
 - **Crash on close fix** — `BrowserWindow.on("closed", …)` теперь использует captured `wcId` (захваченный **до** регистрации listener'а), а не `win.webContents.id` после destroy. До фикса Kepler падал при закрытии extension-окна.
-- **Status dot в Horologion topbar** — точка статуса подключения к ARK (probe `list_object_types` каждые 10с), визуально совпадает с Delphi extension'ом.
 - **Selected-space DB resolution** — `kepler-shell` main читает `%APPDATA%\Kosmos\selected-space.json` (через `@kosmos/ark` хелперы `readSharedSelectedSpace` / `getArkDbPathForSelectedSpace`) и передаёт `KOSMOS_DB_PATH=<spaceDir>/ark.db` в env при `spawnBackend()`. Backend пишет в выбранный space, а не в дефолтный `%APPDATA%\Kosmos\ark.db`.
 
 ## Phase 5 ✅ — Extension developer mode
@@ -161,7 +154,6 @@ Eden — самый сложный кейс (TipTap editor + Heart Rust поис
 `bun run --cwd platform/desktop build` собирает финальный **NSIS one-click** установщик `release/Kepler Setup X.Y.Z.exe`. Конфиг — `platform/desktop/package.json → build`:
 
 - `extraResources` копирует `kepler-backend.exe`, `ark-core-rpc.exe`, директорию `extensions/` (только `manifest.json`, `icon.png`, `index.html`, `dist/` — без `src/` / `node_modules/`), и `build/icon.png`.
-- `afterPack` (`build/afterPack.cjs`) embed'ит иконку в `Kepler.exe` через `rcedit` + `png-to-ico` (стандартный паттерн Kosmos, см. [Horologion](./horologion.md), [Delphi](./delphi.md)).
 - NSIS: `oneClick`, `perMachine: false` (install в `%LocalAppData%\Kepler` без UAC), `runAfterFinish: true`, desktop + Start Menu shortcuts, `deleteAppDataOnUninstall: false`.
 
 Полная разбивка — [Kepler → Production packaging](./kepler.md#production-packaging-phase-8).
@@ -173,8 +165,6 @@ Eden — самый сложный кейс (TipTap editor + Heart Rust поис
 - Установщик переписывает HKCU Run на новый `Kepler.exe`.
 
 ## Phase 9 ⏳ — Delphi UI: Tailwind → plain CSS (открытый вопрос)
-
-Delphi extension сейчас использует Tailwind v4 в templates (наследие legacy standalone Delphi). Все остальные extension'ы (Horologion, Dashboard, Arrancador, Kepler launcher / settings) написаны на **plain scoped CSS + `@kosmos/visuals` CSS variables** — единый стиль через ecosystem.
 
 Что нужно для Phase 9:
 
@@ -434,7 +424,6 @@ North-star проекта — «всё есть объект + AI-friendly гр�
 - **Privacy**: embeddings содержат смысл текста заметок. Хранятся в той же ARK DB, рискуют попасть в backup'ы. Encrypt-at-rest для embeddings — нужен или нет?
 - **Sync**: 1024-dim Qwen3 embeddings — это +4KB на заметку. Для 10k заметок — +40MB к ARK DB. По LAN sync передаётся всё. Acceptable?
 - **Hybrid search**: combining FTS5 (lexical) + sqlite-vec (semantic) с rerank'ом — стандартный паттерн (Reciprocal Rank Fusion). В MVP или позже?
-- **Eden vs другие apps**: search-API универсальный (любой object), но UI сначала в Eden. Когда подключить Delphi (поиск задач) / Horologion (поиск time entries)?
 
 ### Connected memories
 

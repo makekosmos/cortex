@@ -48,7 +48,6 @@ Kepler   = launcher (отдельное приложение, host для ark-co
 > Выполнить ровно один раз, после установки swap'нутой версии репозитория, **до** первого запуска приложений из новой раскладки.
 
 1. **Закройте все приложения экосистемы.**
-   - Eden, Delphi, Arrancador, Dashboard, Horologion.
    - Запущенный Kosmos launcher (старый бренд).
    - `ark-core-rpc`, `usage-tracker` (фон).
 
@@ -67,8 +66,6 @@ Kepler   = launcher (отдельное приложение, host для ark-co
    ```
 
 4. **Установите новый Kepler launcher** (после swap'а это бывший Kosmos launcher, переименованный). Если launcher уже стоял в `%LOCALAPPDATA%\Kepler\Kosmos\`, миграционный скрипт перенесёт его в `%LOCALAPPDATA%\Kosmos\Kepler\`. HKCU autorun запись будет пересоздана только если новый `kepler.exe` найден в target.
-
-5. **Запустите Kepler launcher**. Он должен поднять `ark-core-rpc` против `%APPDATA%\Kosmos\ark.db`. Откройте любое приложение (Eden / Delphi / Horologion) и проверьте, что данные на месте.
 
 ## Что делает скрипт
 

@@ -96,7 +96,6 @@ bun run build:js           # сборка renderer + main + preload + extensions
 bun run build              # full production chain:
                             #   1. cargo build --release platform/runtime
                             #   2. tsc + vite (renderer / main / preload)
-                            #   3. vite build per extension × 4 (Dashboard / Horologion / Delphi / Arrancador)
                             #   4. electron-builder --win nsis (one-click installer)
 bun run package:dir        # unpacked desktop bundle
 bun run test:e2e           # Playwright smoke (билдит JS перед прогоном)
@@ -136,8 +135,6 @@ $env:KEPLER_DEV_EXTENSIONS = "1"; bun run --cwd platform/desktop dev
 # Авто-открыть все 4 extension'а через 5s после старта (для RAM benchmark или smoke)
 $env:KEPLER_BENCHMARK_OPEN_ALL = "1"; bun run --cwd platform/desktop dev
 ```
-
-Extension bundles лежат в `extensions/<id>/` — Eden / Horologion / Delphi / Arrancador. Dashboard — встроенный shell view (`platform/desktop/src/views/Dashboard*.vue`).
 
 ## Kepler Backend (Rust)
 

@@ -1,7 +1,7 @@
 // Arrancador extension router.
 //
 // Differences vs legacy `apps/arrancador/src-vue/router.ts`:
-//   - history → `createMemoryHistory()` (как в Delphi / Horologion extension'ах);
+//   - history → `createMemoryHistory()` (как в Delphi extension'е);
 //     extension renderer'у не нужен URL hash, BrowserWindow грузит file://.
 //   - Все route'ы плоские (без вложенного LayoutPage children): корневой
 //     `App.vue` рендерит shell + `<router-view />`.

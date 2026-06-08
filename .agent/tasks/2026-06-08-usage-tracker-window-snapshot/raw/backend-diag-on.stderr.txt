@@ -1,0 +1,10 @@
+kepler-backend v0.1.0 starting (protocol 1.0.0)
+[crash-reporter] installed, crashes go to "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-06-08-usage-tracker-window-snapshot\\smoke\\backend-diag-on\\crashes"
+[kepler-backend] usage_tracker spawned (in-process)
+[usage-tracker] started: device_id=usage-tracker-b3e8331b28a94cde91ef171ed54a5943 device_name="DESKTOP-F786FID"
+[kepler-backend] ready. Ctrl+C для shutdown.
+[db-backup] no previous backup recorded, running
+[usage-tracker] diagnostics usage_tracker.tick_ms=5 usage_tracker.tick_ms.p95=5 usage_tracker.active_sessions=1 usage_tracker.enum_windows_calls_per_tick=1 usage_tracker.process_path_queries_per_tick=1 usage_tracker.visible_window_count=28
+[db-backup] starting → D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-06-08-usage-tracker-window-snapshot\smoke\backend-diag-on\backups\ark.db.backup-2026-06-08-122407
+[db-backup] success → "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-06-08-usage-tracker-window-snapshot\\smoke\\backend-diag-on\\backups\\ark.db.backup-2026-06-08-122407"
+[usage-tracker] diagnostics usage_tracker.tick_ms=1 usage_tracker.tick_ms.p95=0 usage_tracker.active_sessions=1 usage_tracker.enum_windows_calls_per_tick=1 usage_tracker.process_path_queries_per_tick=1 usage_tracker.visible_window_count=28

@@ -125,9 +125,7 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 | **Delphi**                | `products/delphi`                                                               | задачи — Vue-extension в Kepler shell                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Arrancador**            | `incubator/arrancador`                                                          | игровая библиотека — Vue-extension                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Dashboard**             | `platform/desktop/src/views/Dashboard*.vue` + `platform/desktop/src/dashboard/` | встроенный ARK browser: sidebar по типам + таблица объектов. До 2026-05-14 был extension'ом (заморожен в `legacy/dashboard-extension/`), 2026-05-15 убран welcome screen — single DB per user.                                                                                                                                                                                                                                                                                                                                                                                  |
-| **Horologion**            | `incubator/horologion`                                                          | трекер времени, pomodoro — Vue-extension. `time_entry_obj` + общий `tag_obj`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **Akasha**                | `incubator/akasha`                                                              | EPUB-читалка — Vue-extension. Launcher command `akasha:open`; состояние v1 локально в `extensions-data/akasha`, без ARK writes. Старый Rust/GPUI prototype вынесен в приватный `ksanrse/akasha-gpui`.                                                                                                                                                                                                                                                                                                                                                                           |
-| **Kepler Shell**          | `platform/desktop/` (npm name: `kepler-shell`)                                  | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](docs-site/concepts/command-bus.md) + [Extension host](docs-site/concepts/extension-host.md) (Phase 4 + 6.0 ✅: Eden / Horologion / Delphi / Arrancador как Vue extensions; Dashboard — встроенный shell view).                                                                                                                                                                                                                                                                                                                              |
 | **Kepler Backend**        | `platform/runtime`                                                              | Rust-сервис: command bus host + WS server + встроенный `usage_tracker` модуль (после Phase E2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **Extension host**        | `platform/desktop/electron/extension-host.ts` + `extensions/<id>/`              | Loader Vue-бандлов как extension windows внутри Kepler shell. Manifest + `openExtension(id)` + dev mode (HMR). См. [Extension host](docs-site/concepts/extension-host.md), [Extension dev mode](docs-site/concepts/extension-dev-mode.md).                                                                                                                                                                                                                                                                                                                                                              |
 | **Command bus**           | `platform/runtime/src/command_bus.rs` + `@kosmos/ark` `commands` namespace      | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](docs-site/concepts/command-bus.md).                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -220,11 +218,9 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
               │ WS ws://127.0.0.1:<port>
    ┌──────────┼────────────┬────────────┬────────────┐
 ┌──┴──┐ ┌─────┴────┐ ┌─────┴────┐ ┌─────┴───┐ ┌──────┴─────┐
-│Eden │ │ Delphi   │ │Arrancador│ │Horologion│ │ Dashboard  │
 └─────┘ └──────────┘ └──────────┘ └──────────┘ └────────────┘
  extensions/<id>/ (Vue-extensions внутри platform/desktop/)         shell view
 
-Eden, Delphi, Arrancador, Horologion — Vue-extensions внутри Kepler shell.
 Dashboard — встроенный shell view (platform/desktop/src/views/Dashboard*.vue), не extension.
 Все общаются с kepler-backend через @kosmos/ark.
 ```
@@ -246,7 +242,6 @@ Dashboard — встроенный shell view (platform/desktop/src/views/Dashbo
 - Tray-иконка с menu (Открыть / Настройки / Выход).
 - Список команд в launcher = **static open-commands** (`COMMANDS` из `electron/commands.ts`) + **dynamic action-commands** (через `arkClient.commands.list()` — приходят от running апок).
 - При invoke: static исполняются локально (`spawn(exe)`), dynamic уходят в `kepler-backend` через `arkClient.commands.invoke(id)` — backend broadcast'ит `command_invoked`, owning апка handle'ит.
-- Extension loader (`platform/desktop/electron/extension-host.ts`) — open Vue extension bundles в отдельные BrowserWindow (Phase 4: Dashboard / Horologion / Delphi / Arrancador мигрированы как extensions).
 
 ### kepler-backend (Rust)
 
@@ -289,8 +284,6 @@ Vue 3.6 Vapor в Eden, Dashboard, Arrancador, Akasha и shell views. Никог�
 
 ### @kosmos/ark
 
-Канонический TS-клиент. Работает в **kepler-mode**: `ArkClient` коннектится к `kepler-backend` через WS, используя `kepler.lock.json` (bearer token, port). Шейринг одного backend'а с другими апками — Eden, Delphi, Arrancador, Horologion, Dashboard. Self-spawn `ark-core-rpc.exe` из renderer'а / extension'а — не делается, этим владеет backend.
-
 См. [@kosmos/ark](docs-site/packages/ark.md).
 
 ### ark-core-rpc (Rust)
@@ -313,8 +306,6 @@ Vue 3.6 Vapor в Eden, Dashboard, Arrancador, Akasha и shell views. Никог�
 | `ffi.rs`                              | UniFFI facade для Android / Swift            |
 
 ### SQLite
-
-Одна база на юзера — `%APPDATA%\Kosmos\ark.db`. Концепция multi-space убрана 2026-05-15: больше нет welcome screen / space picker, больше нет `%APPDATA%\Kosmos\spaces\<spaceId>\ark.db`, больше нет `KOSMOS_DB_PATH` / `selected-space.json`. Все apps (Eden, Delphi, Horologion, Arrancador, usage-tracker, Dashboard) работают на одной DB.
 
 Схема — additive: `init_schema` мигрирует существующие БД на месте через `CREATE TABLE IF NOT EXISTS` без перезаписи файла.
 
@@ -367,7 +358,6 @@ Substantial-правки проходят через proof loop с явными 
 | ark-relay-server      | `services/relay-reference`                                                      | Rust server         | WebSocket relay (NAT-обход p2p sync)                                                                                                  |
 | kepler-watcher        | `platform/native-services/kepler-watcher`                                       | Rust                | watcher-демон над ark-core                                                                                                            |
 | @kosmos/visuals       | `packages/visuals`                                                              | TS + Vue            | дизайн-система                                                                                                                        |
-| Vue-extensions        | `extensions/{eden,delphi,arrancador,horologion}`                                | TS + Vue            | продуктовые оболочки внутри Kepler shell                                                                                              |
 | Dashboard             | `platform/desktop/src/views/Dashboard*.vue` + `platform/desktop/src/dashboard/` | TS + Vue            | встроенный shell view (read-only ARK browser), не extension                                                                           |
 | ark-service (Android) | `incubator/mobile/ark-service`                                                  | Kotlin + Room       | Android ContentProvider, держит данные Android Delphi (`incubator/mobile/delphi`). Изолирован от desktop ARK, ждёт миграции на UniFFI |
 | usage-tracker module  | `platform/runtime/src/usage_tracker/`                                           | Rust                | захват usage data → ARK; standalone-бинарь заморожен в `legacy/usage-tracker/` после Phase E3                                         |
@@ -484,23 +474,20 @@ erDiagram
 
 ## Известные типы объектов
 
-| `typeId`                                         | Кто пишет                        | Что значит                                                                                                   |
-| ------------------------------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `note_obj`                                       | Eden                             | заметка (дневник, typed note)                                                                                |
-| `task_obj`                                       | Delphi                           | задача (после миграции legacy todos)                                                                         |
-| `game_obj`                                       | Arrancador                       | запись об игре                                                                                               |
-| `time_entry_obj`                                 | Horologion                       | запись отрезка времени (start/end), pomodoro-сегменты, ручные записи                                         |
-| `tag_obj` <span class="kbadge accent">WIP</span> | **shared** (Delphi + Horologion) | общий тег (`title` = имя, `propsJson.color` = OKLCH-цвет). Связи через `object_links` с `linkType='tagged'`. |
+| `typeId`   | Кто пишет  | Что значит                           |
+| ---------- | ---------- | ------------------------------------ |
+| `note_obj` | Eden       | заметка (дневник, typed note)        |
+| `task_obj` | Delphi     | задача (после миграции legacy todos) |
+| `game_obj` | Arrancador | запись об игре                       |
 
 Каждое приложение может зарегистрировать **custom object type** (например, для специализированных typed-notes Eden или для категорий задач Delphi). Custom types — это часть продуктового домена приложения.
 
 ### Object links — конвенции `linkType`
 
-| `linkType` | source → target               | Кто использует                        |
-| ---------- | ----------------------------- | ------------------------------------- |
-| `tagged`   | `<any>` → `tag_obj`           | Все приложения — для пометки тегом    |
-| `for-task` | `time_entry_obj` → `task_obj` | Horologion — привязка записи к задаче |
-| `related`  | универсальное                 | любая семантически связанная пара     |
+| `linkType` | source → target     | Кто использует                     |
+| ---------- | ------------------- | ---------------------------------- |
+| `tagged`   | `<any>` → `tag_obj` | Все приложения — для пометки тегом |
+| `related`  | универсальное       | любая семантически связанная пара  |
 
 ### Schema для `time_entry_obj`
 
@@ -542,8 +529,6 @@ title «Отдых».
   },
 }
 ```
-
-Подробнее про использование — см. [Horologion](docs-site/apps/horologion.md).
 
 ## Usage data
 
@@ -1008,7 +993,6 @@ bun run ark:guard:writes
 - `incubator/arrancador/src/`
 - `products/delphi/src/`
 - `products/eden/src/`
-- `incubator/horologion/src/`
 - `platform/desktop/electron/`
 - `platform/desktop/src/dashboard/` (встроенный Dashboard view — read-only ARK browser)
 
@@ -1368,8 +1352,6 @@ node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts `
 
 ## packaged smoke
 
-После Phase 6.0 все продуктовые апки (Eden, Delphi, Arrancador, Horologion) живут как Vue-extensions внутри Kepler shell, отдельных Electron .exe больше нет. Packaged smoke — это unpacked Windows-бандл **Kepler shell**, запущенный с **временными** `APPDATA`, `LOCALAPPDATA`, `KOSMOS_DATA_DIR` под `tests/.e2e/packaged-smoke/`. Внутри shell'а поднимаются те же extensions, что и в production install.
-
 Это нужно потому, что packaged Electron читает реальные `%APPDATA%` пути — приходится подменять весь user dir, а не только `ARK_DB_PATH` / `KOSMOS_DATA_DIR`.
 
 ## Что точно нельзя
@@ -1481,9 +1463,6 @@ node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts `
 - ❌ Tauri зависимости / Tauri runtime пути.
 - ❌ React зависимости / React runtime пути.
 
-### Horologion
-
-- ❌ `window.horologion.timeEntries.listRunning()` без `{ source: "manual" }` в `StopwatchView.vue` и для команды `horologion:stopwatch:start`. Без фильтра подхватывается pomodoro_break entry (созданная pomodoro session при `trackBreaksAsRest=true`), и кнопка «Стоп» в StopwatchView закрывает её в обход pomodoro lifecycle. Pomodoro session теряет синхронизацию с ARK.
 - ❌ Side-effect операции над ARK time_entry (createArkEntry / closeArkEntry) в `usePomodoroSession.ts` фоном через `void (async () => {...})()`. Pause + phase_changed handler могут гоняться → двойной stopTimer / создание дубликата entry. Все side effects идут через `enqueueSideEffect()` (serial queue) — гарантирует строгий порядок и единственного владельца `currentEntryId`.
 - ❌ Создание `currentEntryId` без проверки `currentEntryId.value == null` в phase_changed handler'е. Двойной phase_changed (quick double-click «Старт» / backend retry) создаёт два entry, первый orphan'ится с null id-references.
 - ❌ Пропустить `rehydrateCurrentEntryId(phase)` в `ensureInit()` когда backend сообщил `isRunning && phase !== "idle"`. После reload extension'а renderer теряет id открытого ARK entry — последующий pause/stop становится no-op'ом, entry «running вечно». Фикс: смотрим `listRunning({ source: 'pomodoro' | 'pomodoro_break' })` и берём последнюю.
@@ -1751,12 +1730,9 @@ bun run ark:smoke
 - [ ] Закрытие dashboard окна не закрывает Kepler shell.
 - [ ] Hash routing остался `#/dashboard` (без `/welcome` / `/space/<id>` — spaces убраны 2026-05-15).
 
-## Я правил Horologion extension (`incubator/horologion`)
-
 - [ ] `bun run --cwd platform/desktop build:js` — собирается.
 - [ ] Если правил pomodoro — multi-task split в `closeArkEntry` читает АКТУАЛЬНЫЙ `pomodoroDraft`, не снапшот со старта.
 - [ ] Если правил Settings — settings-окно открывается через `platform/desktop/electron/settings-window.ts` (отдельный BrowserWindow).
-- [ ] Тесты — на изолированной БД (`ARK_DB_PATH=.e2e/horologion-e2e.db`).
 - [ ] `time_entry_obj` и `tag_obj` — типы остаются согласованы с `core/ark/crates/ark-core/rust/src/types.rs`.
 
 ## Я правил kepler-shell (`platform/desktop/`)
@@ -2219,7 +2195,6 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / per-a
 
 Per-area `AGENTS.md` тоже не должны инлайнить полные app/package страницы или полный `forbidden.md`. Формат: scope → source docs → локальные invariants → команды → общий TL;DR. Если нужны новые локальные правила, добавляй 1-2 строки в соответствующий `TARGETS` entry и оставляй ссылку на полный doc.
 
-::: tip Eden / Dashboard / Horologion / Arrancador
 Per-extension `AGENTS.md` не генерируются (папки `apps/<name>/` упразднены — расширения живут в `extensions/<id>/` и читают общий корневой `AGENTS.md`). Если нужны жёсткие per-extension правила — добавляй их в соответствующую страницу `docs-site/apps/<name>.md` либо в `docs-site/agents/forbidden.md` (секция per-app).
 :::
 
@@ -2239,8 +2214,6 @@ Per-extension `AGENTS.md` не генерируются (папки `apps/<name>
 1. **Ближайшее** — фичи, над которыми работают сейчас или планируют скоро (по приоритету ↓). Если фича в работе — пометка статуса (`WIP — scaffold`, `WIP — UI готов`).
 2. **Потом** — идеи / nice-to-have. Не критично, но не теряем.
 3. **Баги / замечания** — открытые проблемы.
-
-Пример — [Horologion Roadmap](docs-site/apps/horologion-roadmap.md).
 
 ### Как поддерживать
 
@@ -2443,7 +2416,6 @@ bun run ark:guard:writes
 
 После Phase B-D из smoke выпали:
 
-- Standalone Arrancador / Dashboard / Delphi / Horologion — мигрированы в `extensions/<name>`, отдельных Electron unit/e2e наборов нет.
 - Dashboard `seedSmokeDb.ts` / `smokeAnalytics.ts` — переехали в архив, к smoke не подключены до Phase 6.
 - Standalone `usage-tracker.exe` — заморожен в `legacy/usage-tracker/`. Активные тесты — внутри `platform/runtime` lib.
 
@@ -2683,7 +2655,6 @@ bun run build:js           # сборка renderer + main + preload + extensions
 bun run build              # full production chain:
                             #   1. cargo build --release platform/runtime
                             #   2. tsc + vite (renderer / main / preload)
-                            #   3. vite build per extension × 4 (Dashboard / Horologion / Delphi / Arrancador)
                             #   4. electron-builder --win nsis (one-click installer)
 bun run package:dir        # unpacked desktop bundle
 bun run test:e2e           # Playwright smoke (билдит JS перед прогоном)
@@ -2723,8 +2694,6 @@ $env:KEPLER_DEV_EXTENSIONS = "1"; bun run --cwd platform/desktop dev
 # Авто-открыть все 4 extension'а через 5s после старта (для RAM benchmark или smoke)
 $env:KEPLER_BENCHMARK_OPEN_ALL = "1"; bun run --cwd platform/desktop dev
 ```
-
-Extension bundles лежат в `extensions/<id>/` — Eden / Horologion / Delphi / Arrancador. Dashboard — встроенный shell view (`platform/desktop/src/views/Dashboard*.vue`).
 
 ## Kepler Backend (Rust)
 

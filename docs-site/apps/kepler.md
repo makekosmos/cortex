@@ -86,7 +86,6 @@ platform/desktop/                     # npm package "kepler-shell"
 
 extensions/                   # ← top-level рядом с platform/desktop/
 ├─ akasha/  ├─ delphi/  ├─ eden/  ├─ arrancador/
-└─ horologion/                 # archived source: no manifest.json/package.json, not active
 ```
 
 ## Окно launcher'а
@@ -178,8 +177,6 @@ Developer mode с Vite HMR per extension — [Extension dev mode](../concepts/ex
 
 ## Окно настроек
 
-Настройки открываются как **отдельное `BrowserWindow`** через IPC `kepler:settings:open` (паттерн как в [Horologion](./horologion.md#окно-настроек)). Хеш-route `#/settings`, App.vue рендерит `SettingsView` внутри `<DesktopChrome>`. Размер окна — **880×560**, resizable (чтобы Extensions-таб с длинным списком и каталогом помещался без скролла).
-
 В Settings:
 
 - **Autostart** toggle — пишет / удаляет ключ `Kosmos` в `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` через `app.setLoginItemSettings`; при миграции читает legacy `Kepler` entry как enabled и чистит его best-effort при следующей записи.
@@ -221,8 +218,6 @@ NSIS-настройки: `oneClick: true`, `perMachine: false` (install в `%Loc
 Что ещё в Phase 8 (⏳): `electron-updater` для auto-update. Legacy Rust gpui launcher уже удалён в Phase A (директория apps/kepler/ больше не существует).
 
 ## Extension installer (Phase 10 MVP)
-
-Built-ins (Eden, Delphi, Arrancador, Akasha) едут с Kepler installer'ом в `<resourcesPath>/extensions/`. Поверх можно положить свежую копию extension'а в `%APPDATA%\Kosmos\extensions\<id>\` — resolution chain в `extension-host.ts` ставит её выше bundled, перекрывая для этого `id`. Удаление user-папки откатывает на bundled. Horologion source archived locally and is not shipped as an active built-in extension.
 
 Dashboard в этот список **не входит** — после 2026-05-14 он встроенный shell view (см. [Dashboard](/apps/dashboard)), не extension.
 

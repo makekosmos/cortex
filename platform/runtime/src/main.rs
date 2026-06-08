@@ -26,7 +26,7 @@ use kepler_backend::{
     protocol_version::{ProtocolVersion, PROTOCOL_VERSION},
     singleton::SingletonGuard,
     sync,
-    usage_tracker::{self, UsageTrackerOpts},
+    usage_tracker::{self, UsageTrackerDiagnosticsState, UsageTrackerOpts},
     ws_server::WsServer,
 };
 
@@ -35,6 +35,7 @@ type DynError = Box<dyn std::error::Error + Send + Sync>;
 struct SetupState {
     ark: Arc<ArkHost>,
     ws: WsServer,
+    usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
     lock_path: PathBuf,
     _singleton: SingletonGuard,
     // tracing-appender WorkerGuard. Drop'нется когда SetupState упадёт —
@@ -95,6 +96,7 @@ async fn main() -> ExitCode {
     let SetupState {
         ark,
         ws,
+        usage_diagnostics,
         lock_path,
         _singleton,
         _log_guard,
@@ -117,7 +119,7 @@ async fn main() -> ExitCode {
             .map(|p| p.join("app-icons"))
             .unwrap_or_else(|| PathBuf::from("app-icons"));
         let opts = UsageTrackerOpts::from_env().with_icon_cache_dir(icon_cache_dir);
-        usage_tracker::spawn(ark_for_tracker, opts);
+        usage_tracker::spawn(ark_for_tracker, opts, usage_diagnostics.clone());
         eprintln!("[kepler-backend] usage_tracker spawned (in-process)");
     } else {
         eprintln!("[kepler-backend] KEPLER_USAGE_TRACKER=0 — usage_tracker disabled");
@@ -232,6 +234,7 @@ async fn setup() -> Result<SetupState, DynError> {
     }
 
     let token = auth::generate_token();
+    let usage_diagnostics = Arc::new(UsageTrackerDiagnosticsState::default());
 
     // App Index: индексирует Start Menu + UWP. SQLite в lock_dir (рядом с ark.db),
     // icon cache в lock_dir/app-icons/. На старте — load cached синхронно (<10ms),
@@ -264,10 +267,15 @@ async fn setup() -> Result<SetupState, DynError> {
         });
     }
 
-    // File Index v1: non-elevated local-drive filename/path scanner. Test mode
-    // supplies no roots unless KEPLER_FILE_INDEX_ROOTS is set, so test backend
-    // processes do not walk the developer's drives.
-    let file_index = match kepler_backend::file_index::FileIndex::new(&lock_dir) {
+    // File Index v1: host-local filename/path search. Broad startup scans are
+    // opt-in only; see postmortems.md § 2026-06-08.
+    let file_index_enabled =
+        kepler_backend::file_index::env_flag_enabled("KEPLER_FILE_INDEX", true);
+    let file_index = match if file_index_enabled {
+        kepler_backend::file_index::FileIndex::new(&lock_dir)
+    } else {
+        kepler_backend::file_index::FileIndex::new_disabled(&lock_dir)
+    } {
         Ok(index) => std::sync::Arc::new(index),
         Err(e) => return Err(format!("file_index init failed: {e}").into()),
     };
@@ -279,6 +287,7 @@ async fn setup() -> Result<SetupState, DynError> {
         lock_dir.clone(),
         app_index.clone(),
         file_index.clone(),
+        usage_diagnostics.clone(),
     )
     .await?;
     let port = ws.port();
@@ -299,6 +308,9 @@ async fn setup() -> Result<SetupState, DynError> {
     // File indexing can be slow on large disks or when NTFS fast scan falls
     // back to walking. Start it only after WS + lock-file are ready, otherwise
     // shell IPC requests time out during backend startup.
+    if file_index_enabled
+        && kepler_backend::file_index::env_flag_enabled("KEPLER_FILE_INDEX_INITIAL_RESCAN", true)
+        && file_index.has_roots()?
     {
         let index = file_index.clone();
         tokio::spawn(async move {
@@ -315,11 +327,22 @@ async fn setup() -> Result<SetupState, DynError> {
                 Err(e) => tracing::warn!(error = %e, "file_index initial rescan failed"),
             }
         });
+    } else {
+        tracing::info!(
+            enabled = file_index_enabled,
+            initial_rescan = kepler_backend::file_index::env_flag_enabled(
+                "KEPLER_FILE_INDEX_INITIAL_RESCAN",
+                true
+            ),
+            has_roots = file_index.has_roots().unwrap_or(false),
+            "file_index initial rescan skipped"
+        );
     }
 
     Ok(SetupState {
         ark,
         ws,
+        usage_diagnostics,
         lock_path,
         _singleton,
         _log_guard: log_guard,

@@ -1,0 +1,97 @@
+{
+  "task_id": "2026-06-08-ws-hot-path-performance",
+  "verified_at": "2026-06-08T13:45:00Z",
+  "classification": "FULL_LOOP",
+  "measurements": {
+    "baseline": {
+      "app_index_list_all_p95_ms": 43.7088,
+      "app_index_list_all_payload_p95_bytes": 373977,
+      "commands_list_p95_ms": 0.2525,
+      "event_storm_commands_list_p95_ms": 0.914,
+      "app_index_icon_reads": 2294
+    },
+    "after_no_flags": {
+      "app_index_list_all_p95_ms": 2.8588,
+      "app_index_list_all_payload_p95_bytes": 20106,
+      "commands_list_p95_ms": 0.3996,
+      "event_storm_commands_list_p95_ms": 0.7098,
+      "app_index_icon_reads": 0,
+      "process_sampler": {
+        "samples": 120,
+        "cpu_delta_s": 1.3,
+        "working_set_max_mb": 45.1
+      }
+    },
+    "after_flags": {
+      "flags": {
+        "KEPLER_USAGE_TRACKER": "0",
+        "KEPLER_SKIP_SYNC": "1",
+        "KEPLER_FILE_INDEX_INITIAL_RESCAN": "0",
+        "KOSMOS_WINDOW_EFFECTS": "flat"
+      },
+      "app_index_list_all_p95_ms": 2.7553,
+      "app_index_list_all_payload_p95_bytes": 20103,
+      "commands_list_p95_ms": 0.2206,
+      "event_storm_commands_list_p95_ms": 0.7675,
+      "app_index_icon_reads": 0,
+      "process_sampler": {
+        "samples": 120,
+        "cpu_delta_s": 1.19,
+        "working_set_max_mb": 43.8
+      },
+      "electron": {
+        "browser_working_set_mb": 113.9,
+        "network_working_set_mb": 58.0,
+        "tab_working_set_mb": 70.3,
+        "flat_move_p95_ms": 32,
+        "launcher_move_p95_ms": 32
+      }
+    },
+    "probe_gaps": [
+      "typeperf failed in non-interactive Codex shell with status 4026531842 and no accepted counter path",
+      "Electron diagnostics/windowMoveBenchmark were collected after the code fix, not before it",
+      "WPR trace was not collected because backend A/B identified the hot path clearly"
+    ]
+  },
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "notes": "Baseline/A-B backend diagnostics collected; typeperf failure recorded; fallback 120s process sampler and Electron diagnostics collected."
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "notes": "Fixed list_all p95 <= 2.9ms and payload <= 20.2KB."
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "notes": "Fixed commands.list p95 <= 0.40ms."
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "notes": "Bulk icon reads removed from list_all; search icon/file-index work uses spawn_blocking."
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "notes": "Event storm p95 remained below 1ms; biased select removed."
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "commands": [
+        "cargo fmt --all --manifest-path Cargo.toml",
+        "cargo check --manifest-path Cargo.toml -p kepler-backend",
+        "cargo test --manifest-path Cargo.toml -p kepler-backend diagnostics",
+        "bun run --cwd platform/desktop typecheck",
+        "bun run ark:guard:writes",
+        "bun run docs:sync",
+        "bun run docs:check",
+        "bun run ark:smoke"
+      ]
+    }
+  ]
+}

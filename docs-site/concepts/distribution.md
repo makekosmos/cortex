@@ -15,8 +15,6 @@ ksanrse/kepler (private monorepo)         ← source of truth
         │  bun run --cwd platform/desktop build
         ↓                                  bun run --cwd platform/desktop ext:publish ID
 makekosmos/desktop                          makekosmos/extensions
-   v0.1.0/                                    horologion-v0.3.0/
-     Kepler-Setup-0.1.0.exe                     horologion-0.3.0.kext
      latest.yml                               delphi-v0.2.0/
                                               ...
                                             catalog.json (auto-regenerated)
@@ -177,7 +175,6 @@ Marketplace или drag-and-drop `.kext` файлов.
 Single source of truth для launcher'а — что доступно установить.
 Auto-генерируется из GitHub Releases (`gh api releases`):
 
-- Группировка по prefix tag'а (`horologion-`, `delphi-`, …).
 - Per group выбирается **highest semver**.
 - Metadata (name, description, keplerApiVersion) тянется из локального
   `extensions/ID/manifest.json` в monorepo.
@@ -190,14 +187,11 @@ Schema:
   "updatedAt": "ISO timestamp",
   "extensions": [
     {
-      "id": "horologion",
-      "name": "Horologion",
       "description": "Трекер времени и pomodoro",
       "author": "makekosmos",
       "version": "0.3.0",
       "keplerApiVersion": "^1.0.0",
       "iconUrl": "https://raw.githubusercontent.com/.../icon.png",
-      "downloadUrl": "https://github.com/.../horologion-0.3.0.kext",
       "sha256": "abc...",
       "size": 12345
     }

@@ -19,7 +19,7 @@ import {
   gracefulQuit,
   setFocusWidgetState,
   startPomodoroViaArk,
-} from "./helpers/horologion";
+} from "./helpers/focus-widget";
 import {
   pomodoroStateFileExists,
   waitForPomodoroStateFile,

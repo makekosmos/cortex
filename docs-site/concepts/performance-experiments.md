@@ -34,7 +34,6 @@ Permanent log: какие performance / optimization эксперименты б
 
 **Изменение:** `#app` / `.app-container` корни всех 4 extensions:
 
-- `incubator/horologion/src/styles.css`
 - `incubator/arrancador/src/styles.css`
 - `products/delphi/src/global.css`
 - `products/eden/src/App.css`

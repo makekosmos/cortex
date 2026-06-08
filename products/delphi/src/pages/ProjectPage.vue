@@ -72,7 +72,7 @@ const activeTodos = computed(() => todos.value.filter((t) => !t.isCompleted && !
 const completedTodos = computed(() => todos.value.filter((t) => t.isCompleted || t.isCancelled));
 
 // ---------------------------------------------------------------------------
-// Time entries — read from ARK (Horologion / Strontium) and distribute price
+// Time entries — read from ARK and distribute price
 // ---------------------------------------------------------------------------
 
 interface TimeEntrySummary {
