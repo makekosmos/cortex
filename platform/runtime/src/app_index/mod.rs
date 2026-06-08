@@ -43,6 +43,16 @@ pub enum AppIndexError {
 
 pub type Result<T> = std::result::Result<T, AppIndexError>;
 
+/// Пауза (мс) между извлечениями иконок в `rescan`, чтобы холодный icon-storm
+/// не бил диск пачкой (стабильность важнее скорости индексации). Override через
+/// `KEPLER_APP_ICON_EXTRACT_SLEEP_MS`; default 15мс; `0` — без пауз.
+fn icon_extract_sleep() -> u64 {
+    std::env::var("KEPLER_APP_ICON_EXTRACT_SLEEP_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(15)
+}
+
 /// Один источник приложений (Start Menu, UWP, etc.).
 ///
 /// Один платформенный модуль может регистрировать несколько источников —
@@ -56,7 +66,7 @@ pub trait AppSource: Send + Sync {
 ///
 /// Singleton per backend process, shared через `Arc`.
 pub struct AppIndex {
-    sources: Vec<Box<dyn AppSource>>,
+    sources: Arc<Vec<Box<dyn AppSource>>>,
     store: store::AppStore,
     cache: Arc<RwLock<Vec<App>>>,
     icon_cache_dir: PathBuf,
@@ -83,7 +93,7 @@ impl AppIndex {
         let sources = platform::default_sources(icon_cache_dir.clone());
 
         Ok(Self {
-            sources,
+            sources: Arc::new(sources),
             store,
             cache,
             icon_cache_dir,
@@ -97,40 +107,62 @@ impl AppIndex {
     /// Возвращает diff stats для broadcast'а через command bus.
     pub async fn rescan(&self) -> Result<RescanStats> {
         let started = std::time::Instant::now();
-        let mut all_apps: Vec<App> = Vec::new();
-        let mut errors: Vec<String> = Vec::new();
 
-        for src in &self.sources {
-            match src.discover() {
-                Ok(apps) => {
-                    tracing::info!(
-                        target: "app_index",
-                        source = src.name(),
-                        count = apps.len(),
-                        "discovered apps"
-                    );
-                    all_apps.extend(apps);
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        target: "app_index",
-                        source = src.name(),
-                        error = %e,
-                        "source discover failed"
-                    );
-                    errors.push(format!("{}: {e}", src.name()));
+        // Discover (WinRT UWP enum + Start Menu walk) и icon extraction (GDI →
+        // PNG → запись файла) — синхронная блокирующая работа. Выносим на
+        // blocking-pool поток с понижённым background приоритетом (CPU + I/O),
+        // чтобы холодный icon-storm не насыщал диск и не душил систему. Никаких
+        // `.await` внутри closure — guard снимается на том же потоке. Между
+        // извлечениями иконок — throttle, чтобы не бить диск пачкой.
+        let sources = self.sources.clone();
+        let icon_cache_dir = self.icon_cache_dir.clone();
+        let icon_sleep = icon_extract_sleep();
+        let (all_apps, errors) = crate::priority::spawn_background_blocking(move || {
+            let mut all_apps: Vec<App> = Vec::new();
+            let mut errors: Vec<String> = Vec::new();
+
+            for src in sources.iter() {
+                match src.discover() {
+                    Ok(apps) => {
+                        tracing::info!(
+                            target: "app_index",
+                            source = src.name(),
+                            count = apps.len(),
+                            "discovered apps"
+                        );
+                        all_apps.extend(apps);
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "app_index",
+                            source = src.name(),
+                            error = %e,
+                            "source discover failed"
+                        );
+                        errors.push(format!("{}: {e}", src.name()));
+                    }
                 }
             }
-        }
 
-        // Извлечь / переиспользовать иконки.
-        for app in &mut all_apps {
-            if app.icon_path.is_none() {
-                if let Ok(path) = icons::ensure_icon(&self.icon_cache_dir, app) {
-                    app.icon_path = Some(path);
+            // Извлечь / переиспользовать иконки (concurrency=1, серийно).
+            for app in &mut all_apps {
+                if app.icon_path.is_none() {
+                    if let Ok(path) = icons::ensure_icon(&icon_cache_dir, app) {
+                        app.icon_path = Some(path);
+                    }
+                    // Throttle только когда реально извлекали (cached early-return
+                    // в ensure_icon сюда тоже попадает, но это дешёвый stat —
+                    // приемлемо; см. spec). 0 → без пауз.
+                    if icon_sleep > 0 {
+                        std::thread::sleep(std::time::Duration::from_millis(icon_sleep));
+                    }
                 }
             }
-        }
+
+            (all_apps, errors)
+        })
+        .await
+        .map_err(|e| AppIndexError::Other(format!("rescan background join failed: {e}")))?;
 
         // Diff против existing cache для stats.
         let existing = self.cache.read().await.clone();
@@ -182,7 +214,7 @@ impl AppIndex {
 
     /// Список источников (для launch dispatch).
     pub fn sources(&self) -> &[Box<dyn AppSource>] {
-        &self.sources
+        self.sources.as_slice()
     }
 
     /// Запустить приложение через подходящий source.

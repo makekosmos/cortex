@@ -342,6 +342,10 @@ impl FileIndex {
         let scan_generation = self.scan_generation.clone();
         let store = self.store.clone();
         let outcome = tokio::task::spawn_blocking(move || -> Result<ScanCommitOutcome> {
+            // Тяжёлый WalkDir/NTFS scan + commit — на background-priority потоке
+            // (CPU + I/O), чтобы не душить систему. Guard живёт внутри sync
+            // closure, без `.await`. См. crate::priority.
+            let _bg = crate::priority::BackgroundThreadGuard::enter();
             let progress_for_scan = progress.clone();
             let files = scanner::scan_roots_with_progress(
                 &roots,

@@ -83,6 +83,17 @@ fn init_tracing(lock_dir: &std::path::Path) -> tracing_appender::non_blocking::W
     guard
 }
 
+/// Задержка (мс) перед запуском отложенного фонового maintenance-таска
+/// (app_index / file_index initial rescan, db_backup). Уводит тяжёлую работу
+/// со startup hot path, чтобы не насыщать CPU/IO в момент cold start. Override
+/// через `env_key`; `0` — без задержки.
+fn startup_delay_ms(env_key: &str, default_ms: u64) -> u64 {
+    std::env::var(env_key)
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(default_ms)
+}
+
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> ExitCode {
     let state = match setup().await {
@@ -133,7 +144,12 @@ async fn main() -> ExitCode {
             .parent()
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| PathBuf::from("."));
+        let delay = startup_delay_ms("KEPLER_BACKUP_DELAY_MS", 120_000);
         tokio::spawn(async move {
+            // Уводим backup со startup hot path: тяжёлое копирование БД не должно
+            // совпадать с cold-start CPU/IO burst. (Понижение приоритета самого
+            // копирования внутри ark-core-rpc — Phase 2, см. spec.)
+            tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
             db_backup::maybe_backup_on_startup(ark_for_backup, backup_dir).await;
         });
     }
@@ -251,9 +267,14 @@ async fn setup() -> Result<SetupState, DynError> {
         };
 
     // Background rescan на старте — не блокирует bind / запуск backend'а.
+    // Отложен на initial-delay, чтобы не входить в общий cold-start CPU/IO
+    // burst (discover + icon extraction идут на background-priority потоке,
+    // см. app_index::rescan).
     {
         let ai = app_index.clone();
+        let delay = startup_delay_ms("KEPLER_APP_INDEX_INITIAL_DELAY_MS", 15_000);
         tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
             match ai.rescan().await {
                 Ok(stats) => tracing::info!(
                     added = stats.added,
@@ -313,7 +334,9 @@ async fn setup() -> Result<SetupState, DynError> {
         && file_index.has_roots()?
     {
         let index = file_index.clone();
+        let delay = startup_delay_ms("KEPLER_FILE_INDEX_INITIAL_DELAY_MS", 20_000);
         tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
             match index.rescan().await {
                 Ok(stats) => tracing::info!(
                     total = stats.total,

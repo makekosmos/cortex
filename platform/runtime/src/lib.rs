@@ -27,6 +27,7 @@ pub mod file_index;
 pub mod focus;
 pub mod lock_file;
 pub mod pomodoro_host;
+pub mod priority;
 pub mod protocol_version;
 pub mod singleton;
 pub mod sync;
