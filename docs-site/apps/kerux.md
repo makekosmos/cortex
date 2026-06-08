@@ -42,5 +42,3 @@
 - [Delphi](/apps/delphi) — голосовое создание задачи через [command bus](/concepts/command-bus).
 
 ## Когда
-
-После Horologion / Digital Cave. Сейчас застолблено имя.

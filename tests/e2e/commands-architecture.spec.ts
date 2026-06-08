@@ -51,13 +51,7 @@ test.describe("commands architecture v1+v2", () => {
       expect(ids).toContain("eden:note:create");
       expect(ids).toContain("eden:note:open-today");
 
-      // Horologion + Delphi manifest-declared. Action команды
-      // pomodoro:25/50 / stopwatch:start теперь объявлены в manifest
-      // (mode:"action") — видны в launcher до запуска extension'а.
-      expect(ids).toContain("horologion:open");
-      expect(ids).toContain("horologion:pomodoro:25");
-      expect(ids).toContain("horologion:pomodoro:50");
-      expect(ids).toContain("horologion:stopwatch:start");
+      // Delphi manifest-declared commands видны в launcher до запуска extension'а.
       expect(ids).toContain("delphi:open");
       expect(ids).toContain("delphi:inbox");
 

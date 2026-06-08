@@ -1,12 +1,9 @@
 //! Pomodoro session state machine — pure logic, без I/O и без DB.
 //!
-//! Port of `incubator/horologion/src/lib/usePomodoro.ts` для Wave 2:
-//! state machine жить должна в backend (kepler-backend), чтобы переживать
-//! renderer crash / reload. Side effects (time_entry CRUD, audio, system
-//! notifications) — остаются в renderer'е (listen на phase_changed event).
+//! Backend-owned state machine for focus sessions. It lives in kepler-backend
+//! so active sessions survive renderer crash / reload.
 //!
-//! Parity-tested: тот же набор сценариев что и в TS golden tests
-//! (`incubator/horologion/tests/usePomodoro.test.ts`).
+//! Covered by deterministic Rust tests around phase transitions and clock control.
 //!
 //! Clock инжектится через trait `Clock`, чтобы tests могли использовать
 //! MockClock с детерминированной advance().

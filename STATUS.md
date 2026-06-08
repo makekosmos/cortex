@@ -126,8 +126,6 @@ Checks: `bun test tests/unit/clipboard-history-store.test.ts tests/unit/focus-ap
 `bun run --cwd platform/desktop typecheck`, `bun run ark:guard:writes`,
 `bun run --cwd platform/desktop build:js:shell`, `bun run docs:sync`, `bun run docs:check`.
 
-## 2026-06-04 — Permissions, dictation, Delphi cleanup (Kosmos Desktop 0.3.11 → 0.3.12, Akasha 0.1.1 → 0.1.2, Arrancador 0.1.3 → 0.1.4, Delphi 0.1.6 → 0.1.7, Eden 0.1.11 → 0.1.12, Horologion 0.1.6 → 0.1.7)
-
 Большой hardening/release pass после review всего worktree.
 
 - Runtime permissions для user-installed Vue extensions теперь enforce'ятся в
@@ -537,15 +535,8 @@ Setting в Settings → Общие.
 | Akasha extension (`incubator/akasha/manifest.json`) | **0.1.2** (Vue EPUB reader; EPUB parser guardrails)                                                                 |
 | Eden extension (`products/eden/manifest.json`)      | **0.1.12** (Pattern B + Anytype block selection + Linear statuses + Ctrl+A markdown copy + drag-select auto-scroll) |
 | Delphi extension                                    | **0.1.7** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                   |
-| Horologion extension                                | **0.1.6** (keepAliveInBackground — pomodoro live в фоне)                                                            |
 | Arrancador extension                                | **0.1.4**                                                                                                           |
 | Dashboard                                           | встроен в shell (не extension)                                                                                      |
-
-## 2026-05-22 — Horologion live-в-фоне + drag-select auto-scroll (Kepler 0.2.3 → 0.2.4, Eden 0.1.10 → 0.1.11, Horologion 0.1.5 → 0.1.6)
-
-### Horologion 0.1.5 → 0.1.6 + Kepler shell 0.2.3 → 0.2.4
-
-Закрытие окна Horologion во время pomodoro ломало 3 вещи:
 
 1. Floating focus widget переставал тикать (renderer push'ил state, renderer dead → no push'ей; main process autonomous tick не обновлял phaseEndsAtMs на phase boundary).
 2. `time_entry_obj` оставались `endedAt: null` навсегда (close/create логика жила в `usePomodoroSession` renderer'е).
@@ -555,7 +546,6 @@ Setting в Settings → Общие.
 
 - **`keepAliveInBackground: true`** новое поле в `ExtensionManifest`. `platform/desktop/electron/extension-host.ts` intercept'ит `close` event для таких extensions → `win.hide()` вместо destroy. Renderer переживает X, все side-effects продолжают работать. Окно реально destroy'ится только на `app.before-quit`.
 - **`backgroundThrottling: false`** теперь для всех extension `webPreferences` — даже hidden / minimized таймеры не throttle'ятся Chromium'ом.
-- **`focus-widget` backend sync** — main process подписывается напрямую на `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` через `arkClient.onArkEvent`, деривит focus state, зовёт `setFocusState`. Виджет теперь появляется даже если pomodoro стартанули через launcher команду без открытия Horologion окна. Renderer push'и остаются для blockingActive (live из focusBlocklistId setting).
 - **Drag fix виджета** — `focusable: false` на BrowserWindow ломал `-webkit-app-region: drag` (Win32 не отправляет WM_NCLBUTTONDOWN не-фокусабельному окну). Поменяли на `focusable: true`; `showInactive()` всё ещё обеспечивает «не воровать фокус при появлении».
 
 ### @kosmos/visuals → `IconButton` primitive
@@ -635,7 +625,6 @@ Setting в Settings → Общие.
 - **0.1.13** — Launcher commands filtered by installed extensions (Eden / Delphi / etc не показываются если не установлен)
 - **0.1.14** — Toggle цвет = акцент (был зелёный) + streamer mode (Chromium occlusion off, shell-wide)
 - **0.1.15** — **Focus widget** — Spotify-mini-player-style плавающий always-on-top окно для активной pomodoro
-- **0.1.16** — Horologion task input alignment fix + QuickEntryPanel removed Tailwind + Storybook 8 + handcrafted convention + Focus mode roadmap spec
 
 См.:
 
@@ -677,7 +666,6 @@ Kepler.exe (Electron host)
   ├─ settings window (tray menu)
   ├─ Dashboard window (embedded shell view — read-only ARK browser)
   ├─ extension-host
-  │   ├─ incubator/horologion/  (Vue bundle inside Kepler)
   │   ├─ products/delphi/      (Vue bundle inside Kepler)
   │   └─ incubator/arrancador/  (Vue bundle inside Kepler)
   └─ spawn kepler-backend.exe (Rust, headless)
@@ -748,11 +736,9 @@ Single source of truth: `platform/desktop/electron/instance.ts::resolveInstance(
   - Events: `command_invoked` / `commands_changed` broadcast.
   - Auto-unregister на WS disconnect.
 - `@kosmos/ark` SDK: `client.commands.{register,unregister,list,invoke,onInvoked,onChanged}` namespace + types (`CommandManifest`, `CommandInvokedEvent`).
-- Apps (Horologion / Delphi / Eden) регистрируют свои «ручки» при подключении в kepler-mode.
 
 ### Phase 3 — Real action handlers
 
-- **Horologion**: `pomodoro:25 / 50 / stopwatch:start` действительно стартуют таймеры через usePomodoro composable + `workMinOverride` (без мутации persistent settings).
 - **Delphi**: `task:create` → QuickEntry, `task:today` → router.push '/today'.
 - **Eden**: `note:create` → `createNewEntry`, `note:search` → `openSearch`.
 - **Kepler settings window** — separate BrowserWindow с автозапуском HKCU toggle + backend status + version.
@@ -760,16 +746,14 @@ Single source of truth: `platform/desktop/electron/instance.ts::resolveInstance(
 
 ### Phase 4 — Apps как Vue extensions
 
-| App            | Build                                                              | Что работает                                                                                                                                             | Что осталось                                                                       |
-| -------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| **Dashboard**  | 83 KB JS / 17 KB CSS                                               | Read-only analytics: Overview + Sessions pages через `kepler.ark.request("get_usage_analytics")` + focus/visibility auto-refresh                         | Choose/reset DB — host-managed; vue-router history dropped                         |
-| **Horologion** | 102 KB pomodoroSettings chunk + 23 KB HomeView + 5 KB SettingsView | Pomodoro + Stopwatch + Settings через `horologionApi` shim над `kepler.ark.*`. Status dot + settings button в topbar.                                    | Streamer mode / tray / multi-window settings — dropped                             |
-| **Delphi**     | 3485 modules, 32 KB CSS с Tailwind                                 | Vue Router (memory history), 5 pages, `electron-api-shim.ts` устанавливает `window.electronAPI` поверх `kepler.ark.request`. Task CRUD работает          | LAN sync / P2P / space management — graceful no-op. Tailwind остался (см. Phase 9) |
-| **Arrancador** | 108 KB JS / 19 KB CSS, 57 modules                                  | 7 страниц (Library + 6 stubs/read-only): Library, Catalogue (stub), Scan, Sqoba (stub), Statistics (JS aggregation), Settings (localStorage), GameDetail | Native scanner spawn, game launch, RAWG metadata fetch — Phase 5+                  |
+| App            | Build                              | Что работает                                                                                                                                             | Что осталось                                                                       |
+| -------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **Dashboard**  | 83 KB JS / 17 KB CSS               | Read-only analytics: Overview + Sessions pages через `kepler.ark.request("get_usage_analytics")` + focus/visibility auto-refresh                         | Choose/reset DB — host-managed; vue-router history dropped                         |
+| **Delphi**     | 3485 modules, 32 KB CSS с Tailwind | Vue Router (memory history), 5 pages, `electron-api-shim.ts` устанавливает `window.electronAPI` поверх `kepler.ark.request`. Task CRUD работает          | LAN sync / P2P / space management — graceful no-op. Tailwind остался (см. Phase 9) |
+| **Arrancador** | 108 KB JS / 19 KB CSS, 57 modules  | 7 страниц (Library + 6 stubs/read-only): Library, Catalogue (stub), Scan, Sqoba (stub), Statistics (JS aggregation), Settings (localStorage), GameDetail | Native scanner spawn, game launch, RAWG metadata fetch — Phase 5+                  |
 
 ### Phase 5 — Extension developer mode (Raycast-style)
 
-- Vite dev server per extension с unique портом (5180-5183 для dashboard/horologion/delphi/arrancador).
 - `KEPLER_DEV=1` env var → extensions грузятся с `http://localhost:<port>/` вместо `dist/index.html`. HMR работает.
 - F12 toggles DevTools на любом extension window.
 - Settings → Developer Mode toggle (persist в `kepler-shell-settings.json`).
@@ -802,7 +786,6 @@ Caveats: оба measurements в dev mode (DevTools overhead +~160 MB). Real prod
 ### Documentation
 
 - `docs-site/concepts/`: architecture, command-bus, extension-host, extension-dev-mode, ram-benchmarks, sync, ark-objects, write-boundary, test-isolation.
-- `docs-site/apps/`: kepler, kepler-roadmap, horologion, delphi, dashboard, arrancador.
 - `docs-site/packages/`: kosmos-ark (с Commands API), kosmos-visuals, ark-core.
 - `docs-site/reference/`: commands, rules, decisions, smoke-matrix.
 - `docs-site/agents/`: index, checklists, forbidden, docs-maintenance.
@@ -815,7 +798,6 @@ Caveats: оба measurements в dev mode (DevTools overhead +~160 MB). Real prod
 - **Master bug — `missing field 'id'`** (`platform/runtime/src/ws_server.rs`): backend strip'ил `id` из params как envelope id, ломал `get_object`/`delete_object`/`upsert_object` с top-level id. Fix: чтит `_req_id` для envelope, оставляет `id` нетронутым. Это разблокировало все extension CRUD.
 - **Extension ARK bridge ready-gate** — `kepler:extension:ark:request` ждёт arkClient connect (15s timeout) вместо мгновенного throw. См. commit fdfc8d4.
 - **Делphi task persistence** — lazy ensure `task_obj` object_type перед первым upsert. FK constraint failed → silent swallow в `.catch()` → задача жила in-memory. Fix: registered + warn вместо silent.
-- **Horologion orphan filter + DesktopChrome titlebar + transitionend** — несколько мелких фиксов параллельно (mode-toggle hide, orphan time_entries, animation jank).
 - **Dev mode data isolation** — `keplerDataDir()` returns `Kosmos-dev` в dev, `Kosmos` в prod, `KOSMOS_DATA_DIR` override в test. shell+backend смотрят на один dir.
 
 ### Phase 6.0 / 6.0.A — Eden как extension (2026-05-17)
@@ -869,8 +851,6 @@ env-флаг `KOSMOS_LOCK_PERMISSIONS_DISABLED=1` в `platform/runtime/src/lock_
 
 ### Visuals unification (2026-05-18)
 
-3 новых компонента в `@kosmos/visuals`: `Toggle`, `SettingsRow`, `EmptyState`. 4 новых tokens (`--destructive-foreground`, `--status-warning`, `--status-connecting`, `--scrim-gradient`). Все 4 extensions мигрированы где возможно (Horologion StatusDot оставлен для e2e compat, Arrancador Tailwind plugin сохранён транзитивно через GamePosterCard).
-
 ### Phase 10 — Playwright e2e infrastructure
 
 `tests/e2e/` — 13 specs, single worker, isolated DB per spec под `tests/.e2e/<slug>/`. Helper `tests/e2e/helpers/launch.ts` refuses paths inside `%APPDATA%`. Backend читает `KOSMOS_DATA_DIR` env override.
@@ -880,8 +860,6 @@ bun run test:e2e            # full suite (~1.5min, 13/13 PASS)
 bun run test:e2e:headed     # visible Electron
 bunx playwright test --list # parse-check
 ```
-
-Покрытие: launcher boot, Делphi sidebar + tasks + persistence, Horologion stopwatch/pomodoro/persistence/toggle-hide, extension ARK bridge ready race.
 
 ### Migration scripts
 
@@ -904,7 +882,6 @@ LRU eviction, RAM budget management, lazy extension load/unload. Имеет см
 После production smoke testing:
 
 - Старый Rust GPUI launcher — удалить, если ещё всплывут остатки после migration cleanup.
-- `apps/{dashboard,delphi,horologion,arrancador}/` standalone Electron — удалить (extensions cover everything).
 - Eden — оставить пока не сделано Phase 6.
 - Auto-update mechanism (`electron-updater`) — **подключён** (Phase 8b, 2026-05-16): `platform/desktop/electron/autoupdater-host.ts` (state machine: idle/checking/available/downloading/downloaded/error), Raycast-style banner в Settings, launcher-команда `kepler:check-updates`, кнопка «Проверить обновления» в General. Distribution через `yoso-industries/kepler-releases`. См. [Distribution](docs-site/concepts/distribution.md#kepler-launcher-autoupdater).
 
@@ -948,7 +925,6 @@ Delphi extension использует **Tailwind v4** (наследие legacy s
 :: Terminal 1: Vite dev servers per extension с HMR
 bun run --cwd platform/desktop dev:extensions
 ::   → dashboard:  http://localhost:5180/
-::   → horologion: http://localhost:5181/
 ::   → delphi:     http://localhost:5182/
 ::   → arrancador: http://localhost:5183/
 
@@ -1008,7 +984,6 @@ pwsh scripts/migrate-kepler-to-kosmos.ps1           :: execute
 af24795 Phase 2 command bus full stack
 8b2948f Phase 1 finishing (WS, resize, state, smoke, RAM)
 0280bdb Phase 1 scaffold Electron Kepler launcher
-66df4ce merge main (Horologion streamer + audit + Dropdown)
 de064e0 global swap Kepler ↔ Kosmos (836 файлов)
 000034e Phase 0 + Phases 1-6 legacy Rust scaffold
 ```

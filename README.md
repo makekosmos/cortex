@@ -14,8 +14,6 @@ The desktop host is the Electron launcher/settings/runtime shell. It owns extens
 
 ## Extensions
 
-Desktop workflow apps live under `extensions/<id>/` and run inside the shell. Horologion source is archived under `incubator/horologion` without an active manifest/package; focus sessions now live in the shell.
-
 - [Eden](./products/eden/manifest.json) - notes and journal editor.
 - [Delphi](./products/delphi/manifest.json) - task tracking UI.
 - [Arrancador](./incubator/arrancador/manifest.json) - game library, playtime, backups, and ARK game-object integration.

@@ -166,13 +166,11 @@ Milestone-релиз, объединяет работу `0.1.20` и `0.1.21` п�
 ### Добавлено
 
 - Vue компонент `BuiltInIcon` с пропсами `icon`/`from`/`to`/`size`/`strokeWidth`. Дефолт — голубой → синий gradient + `HelpCircle`.
-- Новые команды: `settings:open`, `kepler:check-updates`, `delphi:today`, `horologion:pomodoro`, `horologion:stopwatch`.
 - `CommandRecord` расширен полями `kind` / `appName` — UI рендерит «Команда · App» справа от title.
 - Секции «Недавние» (5 последних, localStorage) и «Все» в launcher.
 - Hide-on-blur (кроме DevTools focus в dev mode).
 - Scroll-driven fade scrollbar в `@kepler/visuals` через `@property --kosmos-scroll-alpha`.
 - Глубокие ссылки в extension'ы через IPC `kepler:extension:navigation` — работает с любым `vue-router` history mode (memory / hash / web).
-- Horologion `HomeView` читает `route.query.mode` → переключает `timerMode` (Pomodoro / Секундомер).
 
 ### Изменено
 

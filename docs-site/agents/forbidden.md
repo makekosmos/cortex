@@ -83,9 +83,6 @@
 - ❌ Tauri зависимости / Tauri runtime пути.
 - ❌ React зависимости / React runtime пути.
 
-### Horologion
-
-- ❌ `window.horologion.timeEntries.listRunning()` без `{ source: "manual" }` в `StopwatchView.vue` и для команды `horologion:stopwatch:start`. Без фильтра подхватывается pomodoro_break entry (созданная pomodoro session при `trackBreaksAsRest=true`), и кнопка «Стоп» в StopwatchView закрывает её в обход pomodoro lifecycle. Pomodoro session теряет синхронизацию с ARK.
 - ❌ Side-effect операции над ARK time_entry (createArkEntry / closeArkEntry) в `usePomodoroSession.ts` фоном через `void (async () => {...})()`. Pause + phase_changed handler могут гоняться → двойной stopTimer / создание дубликата entry. Все side effects идут через `enqueueSideEffect()` (serial queue) — гарантирует строгий порядок и единственного владельца `currentEntryId`.
 - ❌ Создание `currentEntryId` без проверки `currentEntryId.value == null` в phase_changed handler'е. Двойной phase_changed (quick double-click «Старт» / backend retry) создаёт два entry, первый orphan'ится с null id-references.
 - ❌ Пропустить `rehydrateCurrentEntryId(phase)` в `ensureInit()` когда backend сообщил `isRunning && phase !== "idle"`. После reload extension'а renderer теряет id открытого ARK entry — последующий pause/stop становится no-op'ом, entry «running вечно». Фикс: смотрим `listRunning({ source: 'pomodoro' | 'pomodoro_break' })` и берём последнюю.

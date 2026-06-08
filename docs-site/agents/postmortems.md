@@ -165,10 +165,7 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ## 2026-06-05 — Focus Session не стартовал из пустой формы
 
-**Симптомы** — при клике «Начать фокус» без ввода Shell показывал `An object could not be cloned`; правая idle-панель визуально распадалась, а задача Delphi была отдельным select вместо Horologion-style `@` mention.
 **Где жило** — `platform/desktop/src/components/FocusCommandPanel.vue::start`, `platform/desktop/electron/focus-session.ts::listTasks`, `platform/desktop/electron/focus-session.ts::startFocusSession`.
-**Root cause** — renderer отправлял в Electron IPC Vue reactive/proxy array (`selectedBlocklistIds.value`) как `categoryIds`; structured clone не умеет клонировать Proxy, поэтому main-process handler даже не получал нормальный payload. UI дополнительно разделил цель и задачу на два независимых поля, хотя исходная модель Horologion выбирала task mention внутри единого текстового поля.
-**Fix** — `FocusCommandPanel` теперь собирает IPC payload через `buildFocusSessionStartInput(...)`, который копирует reactive массивы в plain arrays перед `ipcRenderer.invoke`. Форма фокуса вернулась к Horologion-style модели: одно поле цели с `@` mention для незавершённых Delphi-задач, длительность выбирается через dropdown `25/45/60/90/Свое время`; правая панель `Сейчас` удалена полностью. Управление текущей сессией вынесено в отдельные Shell commands `kepler:focus-toggle`, `kepler:focus-pause`, `kepler:focus-resume`, `kepler:focus-skip`, `kepler:focus-complete`, как command-set модель Raycast Focus. `focus-session.ts::listTasks` фильтрует done/canceled/trashed задачи.
 **Регрешн-защита** — `bun test tests/unit/focus-command-payload.test.ts`; `bun run shell:typecheck`; `bun run lint`; `bun run --cwd platform/desktop build:js:shell`; visual screenshots `.tmp/visual/2026-06-05-shell-command-surfaces-clipboard/{shell-focus-idle-720x460.png,shell-focus-720x460.png}`.
 **Prevention** — Любой payload из Vue renderer в Electron IPC должен быть plain-data DTO. `ref([])` / `reactive([])` нельзя передавать в `ipcRenderer.invoke` напрямую; перед boundary делай `Array.from(...)` / object literal и добавляй structured-clone regression test для новых IPC DTO.
 
@@ -197,7 +194,6 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 ## 2026-06-04 — focus-widget set-state стал extension-only
 
 **Симптомы** — `window.kepler.focusWidget.setState(...)` из shell preload / launcher test helper начинает падать с `[kepler-shell] sender is not an extension` после добавления runtime permissions. Это ломает headless focus-widget tests и любые first-party shell windows, которые используют общий preload API.
-**Где жило** — `platform/desktop/electron/focus-widget.ts::kepler:focus-widget:set-state` стал безусловно вызывать `assertExtensionSenderHostPermission`; `platform/desktop/electron/preload.ts` всё ещё exposes `focusWidget.setState` для shell renderer'ов, а `tests/e2e/helpers/horologion.ts::setFocusWidgetState` вызывает его из launcher window.
 **Root cause** — permission fix смешал две разные sender-категории: untrusted extension renderers и first-party shell renderers. `webContentsToExtensionContext` знает только extension windows, поэтому shell window не может пройти extension permission lookup, хотя она не является user-installed кодом.
 **Fix** — Добавлен `assertExtensionSenderHostPermissionIfExtension(...)`: если sender является extension window, `focus.control` enforce'ится как раньше; если sender — first-party shell renderer, handler допускает вызов. `focus-widget.ts` переведён на этот helper. Дополнительно e2e selector для кнопки «Ещё» переведён с устаревшего `.icon-btn` на role/name locator, потому что `@kosmos/visuals` IconButton больше не гарантирует этот CSS-класс.
 **Регрешн-защита** — `bunx playwright test --config playwright.config.ts tests/e2e/focus-widget-controls.spec.ts` сначала воспроизвёл `[kepler-shell] sender is not an extension`, затем прошёл 7/7 после фикса. Unit permission tests также прошли.
@@ -339,8 +335,6 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 **Симптомы.** Pomodoro focus widget визуально дёргался при задаче: label мог прыгать между конкретным названием и дефолтным pomodoro label. Сам виджет был перегружен: controls постоянно занимали место вместо базового режима «время + задача».
 
 **Где жило.** `platform/desktop/electron/focus-widget.ts` — `setFocusState` без различения качества источников сливал patches от backend events и renderer push. `platform/desktop/src/views/FocusWidgetView.vue` — controls были всегда видимыми при active session.
-
-**Root cause.** Focus widget имеет два источника правды: backend events дают надёжный lifecycle/tick, а Horologion renderer знает более богатый UI context (draft title, tasks, focus blocking). Main process принимал последний patch целиком, поэтому более бедный backend tick мог перезаписать уже показанный конкретный label дефолтом. В UI controls были частью обычного flex layout, поэтому даже idle visual state выглядел как toolbar, а не compact status widget. Первый hover-only fix повесил reveal на область с `-webkit-app-region: drag`; в реальном Electron drag-region не ведёт себя как обычная DOM hover target, поэтому кнопки пропали и не раскрывались.
 
 **Fix.** `setFocusState` теперь сохраняет уже известный конкретный label, когда следующий active patch в том же mode несёт только дефолтный `Фокус`/`Перерыв`. `FocusWidgetView` переведён в compact baseline: время и label занимают обычную no-drag hover area, а `IconButton` controls из `@kosmos/visuals` появляются на их месте поверх content overlay. Перетаскивание вынесено в отдельную `.drag-handle` с `GripVertical`, окно стало уже, левая accent-полоса удалена, а mode-индикация стала заполняющим progress-fill внутри плашки через новый `totalSec` в focus widget state.
 
@@ -574,17 +568,11 @@ Manual repro для AC7: запустить `bun run --cwd platform/desktop dev`
 
 ---
 
-## 2026-05-23 — Horologion: focus widget пропадает между фазами pomodoro
-
 **Симптомы.** Pomodoro запущен, focus widget (docked корнер) показывается нормально, через ~25 минут (длительность work-фазы) **пропадает**. Pomodoro session при этом не stop'нута — `completed_pomodoros` уже инкрементнут, phase = ShortBreak (или LongBreak) с `isRunning=false`, ждёт ручного Skip/Start. Пользователь думает что pomodoro «всё ещё идёт», индикатора нет.
-
-**Где жило.** `platform/desktop/electron/focus-widget.ts:446` (`deriveFocusStateFromBackend`, `widgetActive = isRunning && phase !== "idle"`) + `incubator/horologion/src/lib/usePomodoroSession.ts:147` (`pushFocusWidgetState`, `active = isRunning.value && !isPaused.value && phase.value !== "idle"`).
 
 **Root cause.** Два разных контракта столкнулись. Backend session (`core/ark/crates/ark-core/rust/src/pomodoro/session.rs:399-438`, `finish_phase`) при `auto_start_break=false` (default config) после work делает `is_running=false`, эмитит `Finished`, затем переключает phase на ShortBreak/LongBreak с `is_running=false` и эмитит `PhaseChanged`. Backend трактует «не idle» = «session жива» (включая межфазный простой); widget derive трактовал «visible» как «активно тикает». При корректном backend-state `phase=ShortBreak, isRunning=false` widget уходил в hide, потеряв связь с реально живущей session. Единственный валидный индикатор «session закончилась» — `phase === "idle"`, потому что **только** `Session::stop()` возвращает phase в Idle.
 
 **Fix.** В обоих местах деривации (main process + renderer push) `widgetActive` теперь `phase !== "idle"`. `phaseEndsAtMs` остаётся `null` пока `isRunning && !isPaused` ложен — автономный tick widget'а не запустится при межфазном простое, виджет покажет статичный MM:SS = `remainingSec`.
-
-**Регрешн-защита.** `tests/e2e/horologion-focus-widget-between-phases.spec.ts` (headless Playwright): start pomodoro через ARK op → assert widget active → skip (work→ShortBreak с isRunning=false) → assert widget **всё ещё** active и BrowserWindow жив → stop → assert widget inactive. Без зависимости от реального 25-минутного wait.
 
 **Prevention.** **Источник правды о видимости UI-элемента должен быть один и совпадать с lifecycle сущности, а не с её sub-state'ом.** «Сессия жива» (session.is_alive() = phase !== Idle) ≠ «активно тикает» (is_running). Если деривация одного UI-state'а живёт в двух местах (main derive + renderer push) — оба должны использовать **одну** чистую функцию, а не дублировать формулу. Кандидат: вынести `deriveWidgetActive(phase, isRunning, isPaused)` в `@kosmos/ark` или общий util и импортировать в обоих сайтах. Применимо ко всем UI-элементам которые tied к long-running backend state'у — focus widget, sync indicator, dashboard, любой tray badge.
 

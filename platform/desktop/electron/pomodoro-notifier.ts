@@ -1,8 +1,7 @@
 // pomodoro-notifier.ts — main-process подписчик на `pomodoro_phase_changed`,
 // который шлёт native OS toast'ы при смене фазы Pomodoro независимо от того,
-// открыто ли окно Horologion. До 2026-05-21 уведомления отправлялись из
-// renderer'ом через DOM `Notification` — это работало только пока extension
-// был открыт. Юзер закрыл Horologion → пропустил конец фокус-сегмента.
+// открыт ли renderer Focus Session. Уведомления живут в main process, чтобы
+// renderer lifecycle не влиял на конец фокус-сегмента.
 //
 // Архитектура:
 //   ArkClient.onArkEvent → фильтр по event === "pomodoro_phase_changed"

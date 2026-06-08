@@ -14,8 +14,6 @@
 | Private Bytes | 683 MB                                | 474 MB                | −209 MB / −31% |
 | Processes     | 15                                    | 11                    | −4             |
 
-Конфигурация: Dashboard + Horologion + Delphi + Arrancador, open одновременно, dev mode, после ~30s стабилизации.
-
 ## Caveats — читай прежде чем ссылаться
 
 - Оба измерения **в dev mode**. DevTools renderer добавляет ~160 MB на окно — production-цифры будут существенно ниже в обеих колонках.

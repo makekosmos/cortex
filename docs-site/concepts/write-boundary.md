@@ -127,7 +127,6 @@ bun run ark:guard:writes
 - `incubator/arrancador/src/`
 - `products/delphi/src/`
 - `products/eden/src/`
-- `incubator/horologion/src/`
 - `platform/desktop/electron/`
 - `platform/desktop/src/dashboard/` (встроенный Dashboard view — read-only ARK browser)
 

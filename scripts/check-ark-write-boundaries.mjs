@@ -78,12 +78,10 @@ function checkDirectSqlWrites() {
     "extensions/dashboard/src",
     "products/delphi/src",
     "products/eden/src",
-    "incubator/horologion/src",
     "products/delphi/src",
     "products/eden/src",
     "incubator/arrancador/src",
     "incubator/akasha/src",
-    "incubator/horologion/src",
     "platform/desktop/electron",
   ];
   const findings = [];

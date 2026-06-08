@@ -167,29 +167,24 @@ import { ArkClient } from "@kosmos/ark";
 
 await ark.commands.register([
   {
-    id: "horologion:pomodoro:25",
     title: "Pomodoro 25 минут",
-    subtitle: "Horologion",
     category: "action",
   },
 ]);
 
 const off = ark.commands.onInvoked((event) => {
-  if (event.id === "horologion:pomodoro:25") {
     startPomodoro(25);
   }
 });
 
 // На shutdown:
 off();
-await ark.commands.unregister(["horologion:pomodoro:25"]);
 ```
 
 ### Пример: launcher-side
 
 ```ts
 const cmds = await ark.commands.list(); // отрендерить в palette
-await ark.commands.invoke("horologion:pomodoro:25"); // провайдер получит CommandInvokedEvent
 const offChanged = ark.commands.onChanged((next) => rerenderPalette(next));
 ```
 

@@ -3,14 +3,11 @@
 Extension host — production foundation Kepler shell: продуктовые апки рендерятся как **Vue extension bundles** в отдельных BrowserWindow внутри kepler-shell, без собственных Electron .exe.
 
 ::: tip Текущий статус — Production foundation (Phase 4 + 6.0 ✅)
-Loader (`platform/desktop/electron/extension-host.ts`) и manifest spec используются продакшеном. Активные Vue-extension апки: Delphi, Arrancador, Eden, Akasha. Dashboard и Focus Session теперь встроенные shell views. Horologion source archived locally and is not active.
 
 RAM-эффект миграции зафиксирован в [RAM benchmarks](/concepts/ram-benchmarks): −124 MB Working Set / −209 MB Private Bytes / −4 процесса относительно baseline'а из 4 standalone Electron-апок (без Eden — Eden replaced standalone в Phase 6.0.A).
 :::
 
 ## Цель
-
-До Phase 4 каждая Kosmos-апка была отдельная .exe (Eden.exe, Delphi.exe, Horologion.exe, Arrancador.exe, Dashboard.exe). Это значит:
 
 - Память: каждая Electron .exe = ~120-200 MB resident. Пять апок открытых одновременно = ~1 GB только под shell'ы.
 - Update: пять отдельных NSIS installer'ов / GitHub Releases.
@@ -223,7 +220,6 @@ e2e не показывали окна. Contract tests для native прове�
 Используется в `platform/desktop/electron/commands.ts` для глубоких open-команд:
 
 - `delphi:today` → `openExtension('delphi', '/today')`.
-- `eden:note:open-today` → `openExtension('eden', ...)` — Eden открывает сегодняшнюю заметку. (Horologion раньше имел открывающие `horologion:pomodoro` / `horologion:stopwatch`, в 2026-05-19 заменены action-командами `horologion:pomodoro:25` / `:50` / `:stopwatch:start` — `mode:"action"` в manifest, handler стартует таймер.)
 
 Если extension хочет принимать deep links, его `main.ts` должен явно подписаться:
 
@@ -595,7 +591,6 @@ Extension ничего не делает — это shell-level автомати
 | Апка       | Статус          | Bundle / замечания                                                                                                                                                                     |
 | ---------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Dashboard  | ✅              | Полная Vue migration, ~83 KB JS. Read-only, ARK через preload bridge.                                                                                                                  |
-| Horologion | ✅              | Полная Vue migration с `horologionApi` shim над `window.kepler.*`. Chunk `pomodoroSettings` ~102 KB.                                                                                   |
 | Delphi     | ✅ (с долгами)  | Vue + memory router, 3483 modules. `electronAPI` shim над `window.kepler.*`. Tailwind plugin подключён.                                                                                |
 | Arrancador | ✅ (2026-05-18) | Все 4 страницы оживлены + backend в `platform/runtime/src/arrancador/`: scanner Steam+Epic, launcher (Steam URL + exe spawn), RAWG client, SQOBA save backups.                         |
 | Eden       | ✅ (Phase 6.0)  | TipTap editor + Pinia + `kepler-api-shim` над `window.kepler.ark`. Main bundle ~353KB, lazy Editor chunk ~1.36MB. Hevy / code-tools / vault picker / Heart Rust удалены в Phase 6.0.A. |

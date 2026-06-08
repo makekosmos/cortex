@@ -211,7 +211,7 @@ export interface CommandRecord {
       'command' → «Команда · <appName>», 'file' → file-index hit.
       Если не указано — считается 'app'. */
   kind?: "app" | "command" | "file";
-  /** Имя родительского приложения для command-плашек (Delphi / Horologion / Kepler). */
+  /** Имя родительского приложения для command-плашек (Delphi / Kepler). */
   appName?: string;
   /** Опциональная иконка команды. Data URI (`data:image/png;base64,...`)
       для open-команд extension'ов; undefined для action-команд. */
@@ -519,7 +519,7 @@ export interface KeplerApi {
       isPaused: boolean;
     } | null>;
     hide(): Promise<void>;
-    openHorologion(): Promise<void>;
+    openFocusSession(): Promise<void>;
     /** Pomodoro inline controls. Прокидываются в kepler-backend
         PomodoroHost через ArkClient.request("pomodoro.<op>"). */
     pomodoro: {

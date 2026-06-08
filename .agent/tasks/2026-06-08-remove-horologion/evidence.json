@@ -1,0 +1,46 @@
+{
+  "task_id": "2026-06-08-remove-horologion",
+  "verified_at": "2026-06-08T18:39:43.8300622+03:00",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "gh repo view ksanrse/horologion --json nameWithOwner,isArchived,visibility,url,defaultBranchRef"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "Test-Path incubator\\horologion; Test-Path extensions\\horologion; Test-Path .tmp\\horologion-archive"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "rg -n \"horologion|Horologion\" --glob \"!.git/**\" --glob \"!node_modules/**\" --glob \"!**/node_modules/**\" --glob \"!.tmp/**\" ."
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "node scripts/check-docs-freshness.mjs"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "node scripts/check-ark-write-boundaries.mjs"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "node scripts/ark-smoke.mjs"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "bun test tests/unit/extension-update-plan.test.ts"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "platform/desktop/.\\node_modules\\.bin\\tsc.exe --noEmit"
+    }
+  ]
+}

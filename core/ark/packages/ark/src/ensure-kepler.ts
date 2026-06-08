@@ -9,7 +9,7 @@
 //   6. Если exe есть — spawn detached, polling lock-файл до waitMs
 //   7. Если lock появился — connected; иначе launch-failed
 //
-// Это shared между Eden / Delphi / Arrancador / Horologion / Dashboard, чтобы
+// Это shared между Eden / Delphi / Arrancador / Dashboard, чтобы
 // 5 апок не дублировали ~100 строк lock-file parsing + spawn + polling логики.
 
 import { spawn } from "node:child_process";

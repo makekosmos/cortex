@@ -45,7 +45,6 @@ $env:KEPLER_DEV_EXTENSIONS = "1"; bun run --cwd platform/desktop dev
 | Extension  | devPort |
 | ---------- | ------- |
 | Dashboard  | 5180    |
-| Horologion | 5181    |
 | Delphi     | 5182    |
 | Arrancador | 5183    |
 | Eden       | 5184    |

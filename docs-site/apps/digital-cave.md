@@ -14,7 +14,6 @@
 - Блокировка доменов через `C:\Windows\System32\drivers\etc\hosts` (managed-секция между маркерами).
 - Zero-UAC режим после первой установки Windows-сервиса `kepler-focus-svc`.
 - Хранение blocklist'ов как `blocklist_obj` объектов в ARK.
-- Триггер из [Horologion](/apps/horologion) pomodoro-сессии: на старте work-фазы `focus.set_active_state` → hosts модифицируется, на stop — reset.
 
 Подробности — [Focus mode](/concepts/focus-mode).
 
@@ -33,10 +32,7 @@
 
 ## Когда
 
-App-level блокировка и hard mode — после стабилизации pomodoro lifecycle в Horologion и накопления usage-данных в `tracked_apps`.
-
 ## Связанные документы
 
 - [Focus mode](/concepts/focus-mode) — текущая реализация (widget + domain blocking).
-- [Horologion](/apps/horologion) — partner-приложение для focus-сессий.
 - [usage-tracker](/services/usage-tracker) — источник данных о процессах (для будущей app-level блокировки).

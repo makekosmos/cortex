@@ -14,9 +14,8 @@
 
 1. **DX-цель**: Vue-native с Raycast-shape компонентов (**рекомендуется**) vs React-runtime внутри Electron (отвергается).
 2. **Process isolation для inline extensions**: `<webview>` (изоляция, ограниченный IPC) vs direct mount в launcher process (быстро, но extension видит DOM launcher'а). Влияет на security model.
-3. **Migration**: новые extensions сразу `kind: "inline"`, legacy (Eden/Delphi/Horologion/Arrancador) остаются `kind: "vue"` (own window). Не ломаем working extensions.
-4. **Permission model**: сделать **ДО** расширения API surface. Manifest declares capabilities (`clipboard`, `shell.open`, `applications`, `oauth`, …), backend gates `ark.request` по ним. Без этого расширение surface = security hole.
-5. **MVP scope первой итерации**: `<KList>` + `<KDetail>` + `<KActionPanel>` + `useNavigation` + `clipboard`/`showToast`/`environment` + `kind: "inline"` mode + permission declaration. Остальное — отдельные подзадачи.
+3. **Permission model**: сделать **ДО** расширения API surface. Manifest declares capabilities (`clipboard`, `shell.open`, `applications`, `oauth`, …), backend gates `ark.request` по ним. Без этого расширение surface = security hole.
+4. **MVP scope первой итерации**: `<KList>` + `<KDetail>` + `<KActionPanel>` + `useNavigation` + `clipboard`/`showToast`/`environment` + `kind: "inline"` mode + permission declaration. Остальное — отдельные подзадачи.
 
 ### POC до полноценной работы
 
@@ -63,7 +62,6 @@
 - `kepler.navigation.initialRoute()` + `.onNavigate(handler)` — host пушит route string
 - `kepler.meta.id()`
 - `kepler.host.invoke(action, payload)` — **stub**, всегда `false` (`extension-host.ts:1373-1376`)
-- `kepler.focusWidget.setState(patch)` — Kepler-unique (Horologion only)
 - `kepler.backend.onReady/onDisconnected`
 - `kepler.arrancador.*` — domain sugar над `ark.request("arrancador.*")`
 
@@ -123,7 +121,6 @@ Substantial-задача → **proof loop** обязательно. Структ
 - Preload: `platform/desktop/electron/extension-preload.ts:1-215`
 - Host handlers: `platform/desktop/electron/extension-host.ts:1108-1504` (ark proxy `:1117`, navigation `:1236`, window `:1243-1372`, userData `:1396-1441`)
 - Manifest пример: `products/delphi/manifest.json`
-- Real usage: `incubator/horologion/src/lib/horologionApi.ts`, `incubator/arrancador/src/lib/arkGames.ts`, `products/eden/src/lib/kepler-api-shim.ts`, `products/delphi/src/lib/electron-api-shim.ts`
 - Roadmap (Phase 13): `docs-site/apps/kepler-roadmap.md:339-361`
 - Distribution (Raycast-style two-repo update model): `docs-site/concepts/distribution.md:10`
 

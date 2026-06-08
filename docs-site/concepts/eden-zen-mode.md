@@ -22,7 +22,6 @@ title.
 ## Команды
 
 **Manifest-declared команды** в `extensions/<id>/manifest.json::commands[]`
-(как `horologion:pomodoro:25`). Видны в launcher всегда, не зависят от того что
 Eden запущен.
 
 | id                     | route    | действие                                                                        |

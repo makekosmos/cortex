@@ -40,7 +40,6 @@ extensions, ARK, Rust services, UI-библиотеку, docs и build tooling. 
 
 - `extensions/delphi` - задачи;
 - `extensions/eden` - заметки;
-- `extensions/horologion` - трекер времени / pomodoro;
 - `extensions/arrancador` - игровая библиотека;
 - будущие `extensions/*` или `apps/*`.
 

@@ -10,16 +10,15 @@
 // После fix'а handler ждёт ready-promise (как kepler:ark:request) → первый
 // запрос не fail'ится, indicator корректно становится «connected».
 //
-// Этот тест открывает Horologion СРАЗУ через command bus (без 2s warm-up),
+// Этот тест открывает Eden СРАЗУ через command bus (без 2s warm-up),
 // захватывает console errors из extension renderer'а и проверяет, что
-// никаких «ark bridge not ready» в первые секунды нет, а статус-индикатор
-// в DOM показывает «ARK подключен».
+// никаких «ark bridge not ready» в первые секунды нет.
 
 import { test, expect, type ConsoleMessage, type Page } from "@playwright/test";
 import { launchKepler } from "./helpers/launch";
 
 test.describe("extension ark bridge", () => {
-  test("Horologion: первый probe не fails — bridge ready-gate работает", async () => {
+  test("первый extension probe не fails — bridge ready-gate работает", async () => {
     const app = await launchKepler({ slug: "extension-ark-bridge" });
     try {
       // Минимальный wait — только дождаться, что launcher window вообще
@@ -43,7 +42,7 @@ test.describe("extension ark bridge", () => {
         });
       });
 
-      // Триггерим открытие Horologion как можно раньше — через invoke
+      // Триггерим открытие Eden как можно раньше — через invoke
       // open-команды из launcher window. Если launcher ещё не имеет
       // commands API (race с preload exposure), коротко поллим до 3s.
       // Это всё ещё минимальный warm-up vs нормальные 2.5s — оставляем
@@ -60,7 +59,7 @@ test.describe("extension ark bridge", () => {
                 return "no-api";
               }
               try {
-                await window.kepler.commands.invoke("horologion:open");
+                await window.kepler.commands.invoke("eden:open");
                 return "ok";
               } catch (e) {
                 return "throw:" + (e && e.message ? e.message : String(e));
@@ -74,19 +73,9 @@ test.describe("extension ark bridge", () => {
       });
       expect(triggered, `commands.invoke status: ${triggered}`).toBe("ok");
 
-      const horoWindow = await app.waitForEvent("window", { timeout: 10_000 });
-      await horoWindow.waitForLoadState("domcontentloaded");
-
-      // Ждём пока индикатор станет «connected». В App.vue класс на dot
-      // выставляется по arkStatus: `dot dot--connected | --connecting | --error`.
-      // Polling: 5s overall, шаг 100ms.
-      const dot = horoWindow.locator(".dot");
-      await expect(dot).toHaveClass(/dot--connected/, { timeout: 5_000 });
-
-      // Дополнительная проверка: title-атрибут кнопки статуса должен быть
-      // «ARK подключен» (см. arkStatusMessage в App.vue).
-      const btn = horoWindow.locator(".ark-status-btn");
-      await expect(btn).toHaveAttribute("title", "ARK подключен");
+      const extensionWindow = await app.waitForEvent("window", { timeout: 10_000 });
+      await extensionWindow.waitForLoadState("domcontentloaded");
+      await extensionWindow.waitForTimeout(5_000);
 
       // Убеждаемся, что «ark bridge not ready» нигде не прилетело за это
       // время — ни в console, ни в page errors. (Сами по себе IPC reject'ы

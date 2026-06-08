@@ -377,7 +377,7 @@ export interface ArkObjectsApi {
    * опционально отфильтрованные по props.source. SQL-уровневый фильтр
    * через json_extract — без обхода всех записей типа.
    *
-   * Hot path для Horologion (StopwatchView mount / rehydrate) и focus
+   * Hot path для focus session and widget rehydrate.
    * widget'а (stopManualStopwatch).
    */
   listRunningTimeEntries(opts?: {

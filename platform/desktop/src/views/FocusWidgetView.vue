@@ -3,8 +3,7 @@
 // ~320x52. Слева MM:SS countdown, справа подпись над чем работаем.
 // Лayout вдохновлён Spotify mini-player + Raycast Focus mode.
 //
-// Получает state через IPC `kepler:focus-widget:state` события от main
-// (Horologion публикует обновления через `window.kepler.focusWidget.setState`).
+// Получает state через IPC `kepler:focus-widget:state` события от main.
 
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { GripVertical, Pause, Play, Check, MoreVertical } from "@lucide/vue";
@@ -80,7 +79,7 @@ const progressStyle = computed(() => {
 });
 
 function onClick(): void {
-  window.kepler.focusWidget.openHorologion?.();
+  window.kepler.focusWidget.openFocusSession?.();
 }
 
 const showControls = computed(() => state.value.active);

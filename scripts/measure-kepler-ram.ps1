@@ -7,7 +7,7 @@
     после фиксированного warmup-периода и сохраняет результат в JSON.
 
     Два режима:
-      - baseline: измеряет четыре standalone-апки (Eden, Delphi, Arrancador, Horologion)
+      - baseline: измеряет standalone-апки (Eden, Delphi, Arrancador)
         плюс их child-процессы (ark-core-rpc) — фотография «до Kepler ecosystem».
       - kepler: измеряет Kepler ecosystem (kepler-shell + Electron child-процессы
         + kepler-backend + ark-core-rpc) — фотография «после Phase 1».
@@ -77,7 +77,6 @@ $BaselineRoleMap = @{
     'eden'           = 'eden'
     'delphi'         = 'delphi'
     'arrancador'     = 'arrancador'
-    'horologion'     = 'horologion'
     'ark-core-rpc'   = 'ark-core-rpc'
 }
 
@@ -201,7 +200,7 @@ function Collect-Baseline {
     if ($rootPids.Count -eq 0) {
         Write-Host ""
         Write-Host "Не найдено ни одного standalone-процесса." -ForegroundColor Yellow
-        Write-Host "Запусти вручную нужные апки (Eden / Delphi / Arrancador / Horologion)," -ForegroundColor Yellow
+        Write-Host "Запусти вручную нужные апки (Eden / Delphi / Arrancador)," -ForegroundColor Yellow
         Write-Host "дождись полной загрузки и повтори:" -ForegroundColor Yellow
         Write-Host "    pwsh scripts/measure-kepler-ram.ps1 -Mode baseline" -ForegroundColor Yellow
         exit 2

@@ -108,8 +108,6 @@ node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts `
 
 ## packaged smoke
 
-После Phase 6.0 все продуктовые апки (Eden, Delphi, Arrancador, Horologion) живут как Vue-extensions внутри Kepler shell, отдельных Electron .exe больше нет. Packaged smoke — это unpacked Windows-бандл **Kepler shell**, запущенный с **временными** `APPDATA`, `LOCALAPPDATA`, `KOSMOS_DATA_DIR` под `tests/.e2e/packaged-smoke/`. Внутри shell'а поднимаются те же extensions, что и в production install.
-
 Это нужно потому, что packaged Electron читает реальные `%APPDATA%` пути — приходится подменять весь user dir, а не только `ARK_DB_PATH` / `KOSMOS_DATA_DIR`.
 
 ## Что точно нельзя

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // IconButton — ghost icon button primitive с @kosmos/visuals tokens.
-// Используется в titlebar'ах (Horologion App.vue), in mini-player widget'е,
+// Используется в titlebar'ах, mini-player widget'е,
 // в context-aware controls. Заменяет ad-hoc `.iconbtn` / `.ctl-btn` /
 // `.close-btn` CSS, которые тиражировались по экосистеме.
 

@@ -68,10 +68,6 @@ declared-command registry: если `extensionName` не указан, target и
 
 ## Цель
 
-Сценарий: пользователь жмёт `Ctrl+Shift+K`, набирает «pomodoro 25», видит пункт «Pomodoro 25 min — Horologion», нажимает Enter. Horologion (если запущен) получает event и стартует таймер. Если Horologion не запущен — пункта в списке нет.
-
-Это **не** RPC: invoker (kepler-shell) не получает ответа от handler'а (Horologion). Это broadcast события — fire-and-forget, идемпотентность на стороне апки.
-
 ## Архитектура
 
 ```text
@@ -80,7 +76,6 @@ declared-command registry: если `extensionName` не указан, target и
                   │  CommandBus              │
                   │  ┌────────────────────┐  │
 ws client #1 ───►─┤  │ HashMap<ClientId,  │  │
-(Horologion)      │  │   Vec<Manifest>>   │  │
                   │  └────────────────────┘  │
 ws client #2 ───►─┤  ┌────────────────────┐  │
 (Eden)            │  │ broadcast::Sender  │──┼─►─ Changed | Invoked

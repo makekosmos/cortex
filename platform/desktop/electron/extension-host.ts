@@ -184,9 +184,7 @@ export interface ExtensionManifest {
    * **скрывает** окно вместо destroy. Renderer остаётся жив (вместе со всеми
    * таймерами, ARK подписками и side-effect'ами), reopen через `openExtension`
    * мгновенно показывает hidden окно. Используется для extensions с долго
-   * живущим процессом (Horologion — pomodoro session, time_entry close on
-   * phase boundary, native notifications). Окно реально уничтожается только
-   * на quit приложения.
+   * живущим процессом. Окно реально уничтожается только на quit приложения.
    *
    * Default: false (классический destroy on close).
    *
@@ -282,8 +280,8 @@ let arkSubscribe: ArkSubscribeFn | null = null;
 
 // Ready-gate для extension ARK bridge. Extension windows могут открыться раньше,
 // чем main.ts успеет вызвать `setExtensionArkBridge(...)` после handshake'а
-// ArkClient'а. Если в этот момент extension probe'нет ARK (как Horologion делает
-// в onMounted), он получит «ark bridge not ready» и UI запомнит status=error
+// ArkClient'а. Если в этот момент extension probe'нет ARK в onMounted,
+// он получит «ark bridge not ready» и UI запомнит status=error
 // до следующего probe-интервала (10s) — отсюда «горит индикатор не подключено».
 //
 // Решение: handler не throws сразу, а await'ит resolve этого promise (с
@@ -464,8 +462,8 @@ interface ExtensionRootEntry {
 }
 
 // Per-id lookup (`resolveExtensionLocation`) обходит цепочку и возвращает первый
-// корень, где есть `manifest.json`. Это позволяет смешивать: Dashboard может
-// быть user-installed, а Horologion — bundled.
+// корень, где есть `manifest.json`. Это позволяет смешивать user-installed
+// и bundled extensions.
 function resolveExtensionRootEntries(): ExtensionRootEntry[] {
   const roots: ExtensionRootEntry[] = [];
   // Repo dev tree: __dirname is platform/desktop/electron/ (or dist-electron/).
@@ -1142,7 +1140,7 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
       nodeIntegration: false,
       // Hidden / minimized extensions держат timers через
       // `requestAnimationFrame` / `setInterval` для side-effect логики
-      // (Horologion: phase boundary → close time_entry, push focus widget).
+      // (например, extension-owned timers and subscriptions).
       // Chromium по умолчанию throttle'ит фоновые timers — выключаем.
       backgroundThrottling: false,
     },

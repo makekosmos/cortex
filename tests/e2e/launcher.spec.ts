@@ -2,7 +2,7 @@
 // окно launcher'а создаётся (hidden до global hotkey).
 //
 // AC8/AC9/AC10 baseline: проверяет infrastructure, не functional behaviour
-// (functional regressions покрываются delphi.spec.ts / horologion.spec.ts).
+// (functional regressions покрываются delphi.spec.ts и extension specs).
 
 import { test, expect } from "@playwright/test";
 import { launchKepler } from "./helpers/launch";

@@ -58,13 +58,13 @@ export default defineConfig(({ mode }) => {
     base: "./",
     // `@tailwindcss/vite` v4 is a no-op for CSS files that don't `@import "tailwindcss"`,
     // so включение plugin'а глобально безопасно для extensions без Tailwind
-    // (dashboard, horologion). Активируется только для delphi/arrancador,
+    // (dashboard). Активируется только для delphi/arrancador,
     // у которых tailwind directives есть в их CSS entry.
     plugins: [vue({ features: { vaporInterop: true } }), tailwindcss()],
     resolve: {
       alias: {
         // Per-extension "@" alias → <extensionDir>/src. Совпадает с конвенцией
-        // legacy apps (Delphi, Eden, Horologion), упрощает миграцию исходников
+        // legacy apps (Delphi, Eden), упрощает миграцию исходников
         // как Vue extension без массового rewrite import-путей.
         "@": path.resolve(extensionDir, "src"),
         "@kosmos/ark": path.resolve(__dirname, "../../core/ark/packages/ark/src/index.ts"),
@@ -90,8 +90,7 @@ export default defineConfig(({ mode }) => {
         // copies in packages/visuals/node_modules (peer satisfy) → разные
         // RouterLink injection symbols → primary/footer sidebar items не
         // рендерятся. Alias привязывает к одной копии. Только для extension'ов
-        // у которых эта зависимость реально установлена (horologion и
-        // arrancador не используют pinia, например).
+        // у которых эта зависимость реально установлена.
         ...(existsSync(path.join(extensionDir, "node_modules/vue-router"))
           ? { "vue-router": path.resolve(extensionDir, "node_modules/vue-router") }
           : {}),

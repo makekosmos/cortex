@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Toggle / switch — бинарный control. Используется в settings (Horologion,
-// Delphi, Eden) для опций on/off.
+// Toggle / switch — бинарный control. Используется в settings
+// Delphi/Eden для опций on/off.
 //
 // API совместим с v-model: `:model-value` / `@update:modelValue`.
 

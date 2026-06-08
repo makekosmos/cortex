@@ -81,7 +81,6 @@ flowchart LR
 | `kepler:focus-widget:get-state`                              | renderer → main      | initial hydrate в `FocusWidgetView`                                          |
 | `kepler:focus-widget:state`                                  | main → renderer      | broadcast updated state виджету                                              |
 | `kepler:focus-widget:hide`                                   | renderer → main      | спрятать виджет (не destroy)                                                 |
-| `kepler:focus-widget:open-horologion`                        | renderer → main      | legacy channel; открывает shell Focus Session                                |
 | `kepler:focus-widget:pomodoro:{pause,resume,skip,stop}`      | renderer → main      | проксируется в `invokeOperation("pomodoro.<op>")`                            |
 | `kepler:focus-widget:stopwatch:stop`                         | renderer → main      | закрывает running `time_entry_obj` (source=manual) напрямую через ARK upsert |
 | `kepler:focus:applied`                                       | main → all renderers | результат `applyFocusBlock` (Settings показывает status)                     |

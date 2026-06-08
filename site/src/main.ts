@@ -15,13 +15,6 @@ const HARDCODED_COMMANDS = [
     icon: undefined,
   },
   {
-    id: "horologion:open",
-    title: "Открыть Horologion",
-    category: "open",
-    kind: "app",
-    icon: undefined,
-  },
-  {
     id: "dashboard:open",
     title: "Открыть таблицу данных",
     subtitle: "Kepler",
@@ -55,24 +48,6 @@ const HARDCODED_COMMANDS = [
     category: "open",
     kind: "command",
     appName: "Delphi",
-    icon: undefined,
-  },
-  {
-    id: "horologion:pomodoro:25",
-    title: "Помодоро 25 минут",
-    subtitle: "Horologion",
-    category: "action",
-    kind: "command",
-    appName: "Horologion",
-    icon: undefined,
-  },
-  {
-    id: "horologion:stopwatch:start",
-    title: "Запустить секундомер",
-    subtitle: "Horologion",
-    category: "action",
-    kind: "command",
-    appName: "Horologion",
     icon: undefined,
   },
 ];

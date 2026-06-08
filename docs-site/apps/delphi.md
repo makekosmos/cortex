@@ -111,8 +111,6 @@ type Project = {
 
 ### Распределение по time entries
 
-[Horologion](/apps/horologion) пишет `time_entry_obj` с `propsJson.taskId` и `propsJson.billable`. Delphi читает их через ARK SDK в `ProjectPage`:
-
 - Σ billable секунд по задаче → chip с часами.
 - Σ billable секунд по всем задачам проекта → общий часовой счётчик.
 - Если у проекта задан `price` — `$/час = price / Σ(billable_hours)`.
@@ -181,5 +179,4 @@ await arkClient.commands.register([
 - `docs/DELPHI-LEGACY-DB-DECISION.md` — почему legacy sidecar удалён.
 - [Command bus](/concepts/command-bus) — протокол dynamic commands.
 - [Модель данных ARK](/concepts/ark-objects).
-- [Horologion](/apps/horologion) — трекер времени, который привязывается к Delphi-задачам.
 - [@kosmos/ark](/packages/ark).

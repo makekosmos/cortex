@@ -137,7 +137,6 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / per-a
 
 Per-area `AGENTS.md` тоже не должны инлайнить полные app/package страницы или полный `forbidden.md`. Формат: scope → source docs → локальные invariants → команды → общий TL;DR. Если нужны новые локальные правила, добавляй 1-2 строки в соответствующий `TARGETS` entry и оставляй ссылку на полный doc.
 
-::: tip Eden / Dashboard / Horologion / Arrancador
 Per-extension `AGENTS.md` не генерируются (папки `apps/<name>/` упразднены — расширения живут в `extensions/<id>/` и читают общий корневой `AGENTS.md`). Если нужны жёсткие per-extension правила — добавляй их в соответствующую страницу `docs-site/apps/<name>.md` либо в `docs-site/agents/forbidden.md` (секция per-app).
 :::
 
@@ -157,8 +156,6 @@ Per-extension `AGENTS.md` не генерируются (папки `apps/<name>
 1. **Ближайшее** — фичи, над которыми работают сейчас или планируют скоро (по приоритету ↓). Если фича в работе — пометка статуса (`WIP — scaffold`, `WIP — UI готов`).
 2. **Потом** — идеи / nice-to-have. Не критично, но не теряем.
 3. **Баги / замечания** — открытые проблемы.
-
-Пример — [Horologion Roadmap](/apps/horologion-roadmap).
 
 ### Как поддерживать
 

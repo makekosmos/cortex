@@ -1030,7 +1030,7 @@ pub fn list_objects_by_type(conn: &Connection, type_id: &str) -> Result<Vec<ArkO
 /// Возвращает только running time_entry_obj (props.endedAt IS NULL),
 /// опционально отфильтрованных по props.source. Без обхода всех записей
 /// типа — фильтр на SQL уровне через `json_extract`. Hot path для
-/// Horologion (`listRunning`) и focus widget'а (`stopManualStopwatch`).
+/// focus widget'а (`stopManualStopwatch`).
 ///
 /// `deleted_at IS NULL` — чтобы tombstones не возвращались как running.
 /// Сортировка: новейшие startedAt сверху (DESC), как у callers'ов раньше.

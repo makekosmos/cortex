@@ -9,7 +9,6 @@ kepler/
 │  ├─ arrancador/          # игровая библиотека
 │  ├─ delphi/              # задачи
 │  ├─ eden/                # заметки (TipTap)
-│  └─ horologion/          # трекер времени + pomodoro
 ├─ apps/                   # Зарезервировано (на 2026-05 пусто, только README.md)
 ├─ crates/                 # Rust crates
 │  └─ ark-core/            # ⭐ Rust runtime + ark-core-rpc sidecar
