@@ -92,6 +92,33 @@ pub fn backup_to_file(conn: &Connection, dest_path: &str) -> Result<(), String> 
         .map_err(|e| format!("backup_to_file failed: {e}"))
 }
 
+/// Online backup через ОТДЕЛЬНЫЙ read-коннекшн к `src_db_path` — НЕ держит
+/// глобальный DB mutex, поэтому обычные ARK ops продолжают работать во время
+/// копирования. Копирование идёт chunk'ами по `pages_per_step` страниц с паузой
+/// `pause` между шагами, чтобы тяжёлый I/O не насыщал диск (стабильность ПК
+/// важнее скорости бэкапа). WAL + busy_timeout source DB дают консистентный
+/// снапшот при concurrent writer. Вызывается из `Request::DbBackup` на отдельном
+/// background-priority потоке (см. ark-core-rpc main.rs).
+pub fn backup_to_file_chunked(
+    src_db_path: &str,
+    dest_path: &str,
+    pages_per_step: i32,
+    pause: std::time::Duration,
+) -> Result<(), String> {
+    let src = open_db(src_db_path)?;
+    let mut dst = Connection::open(dest_path)
+        .map_err(|e| format!("backup_to_file_chunked open dest failed: {e}"))?;
+    let backup = rusqlite::backup::Backup::new(&src, &mut dst)
+        .map_err(|e| format!("backup_to_file_chunked init failed: {e}"))?;
+    backup
+        .run_to_completion(
+            pages_per_step,
+            pause,
+            None::<fn(rusqlite::backup::Progress)>,
+        )
+        .map_err(|e| format!("backup_to_file_chunked run failed: {e}"))
+}
+
 #[allow(dead_code)]
 fn builtin_note_object_type() -> ObjectType {
     ObjectType {
@@ -4947,5 +4974,40 @@ mod tests {
         );
         assert_eq!(objects[0].id, "obj-backup");
         assert_eq!(objects[0].title, "Backup test");
+    }
+
+    #[test]
+    fn backup_to_file_chunked_creates_valid_copy_via_separate_connection() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src_path = tmp.path().join("ark.db");
+        let src_str = src_path.to_str().unwrap();
+        {
+            // Файловый source: chunked backup открывает его по пути отдельным
+            // коннекшном (а не из переданного &Connection).
+            let conn = open_db(src_str).unwrap();
+            init_schema(&conn).unwrap();
+            upsert_object_type(&conn, &make_object_type("note_obj", "Note")).unwrap();
+            upsert_object(
+                &conn,
+                &make_object("obj-chunked", "note_obj", "Chunked backup"),
+            )
+            .unwrap();
+        }
+
+        let dest = tmp.path().join("ark.db.backup");
+        let dest_str = dest.to_str().unwrap();
+        backup_to_file_chunked(src_str, dest_str, 4, std::time::Duration::from_millis(0))
+            .expect("chunked backup должен пройти");
+
+        assert!(dest.exists(), "файл backup'а должен существовать");
+        let backup_conn = open_db(dest_str).unwrap();
+        let objects = list_objects(&backup_conn).unwrap();
+        assert_eq!(
+            objects.len(),
+            1,
+            "backup должен содержать оригинальный объект"
+        );
+        assert_eq!(objects[0].id, "obj-chunked");
+        assert_eq!(objects[0].title, "Chunked backup");
     }
 }

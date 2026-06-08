@@ -46,6 +46,11 @@ thiserror.workspace = true
 # bindings).
 ts-rs = { version = "10", optional = true, features = ["import-esm"] }
 
+# DB backup runs на отдельном потоке с пониженным CPU+I/O приоритетом
+# (THREAD_MODE_BACKGROUND_BEGIN), чтобы тяжёлое копирование не насыщало диск.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = ["Win32_System_Threading"] }
+
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 tempfile.workspace = true

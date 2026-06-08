@@ -44,6 +44,10 @@ use ark_core::types::*;
 
 static DB: StdMutex<Option<Arc<StdMutex<rusqlite::Connection>>>> = StdMutex::new(None);
 
+// Путь к ARK DB (из Init). Нужен чтобы db_backup открывал ОТДЕЛЬНЫЙ read-коннекшн
+// и не держал глобальный DB mutex на всё копирование.
+static DB_PATH: StdMutex<Option<String>> = StdMutex::new(None);
+
 struct SyncRuntime {
     server: Arc<SyncServer>,
     storage: Arc<SqliteStorageBackend>,
@@ -414,6 +418,71 @@ fn get_shared_conn() -> Result<Arc<StdMutex<rusqlite::Connection>>, String> {
         .ok_or_else(|| "Database not initialized. Call Init first.".to_string())
 }
 
+// --- DB backup: background-priority thread + chunking config ---------------
+
+/// Страниц за один шаг online-backup. Меньше шаг → мягче для диска. Override
+/// `ARK_BACKUP_PAGES_PER_STEP`.
+fn backup_pages_per_step() -> i32 {
+    std::env::var("ARK_BACKUP_PAGES_PER_STEP")
+        .ok()
+        .and_then(|v| v.parse::<i32>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(256)
+}
+
+/// Пауза (мс) между шагами online-backup, чтобы не насыщать диск. Override
+/// `ARK_BACKUP_PAUSE_MS`.
+fn backup_pause_ms() -> u64 {
+    std::env::var("ARK_BACKUP_PAUSE_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(5)
+}
+
+/// Thread-scoped background priority (CPU + I/O) для backup-потока.
+/// `THREAD_MODE_BACKGROUND_BEGIN` на Windows; no-op иначе. RAII (Drop → END).
+/// НЕ process-wide — ark-core-rpc обслуживает интерактивные ARK ops.
+#[cfg(windows)]
+mod background_priority {
+    pub struct BackgroundThreadGuard {
+        active: bool,
+    }
+    impl BackgroundThreadGuard {
+        pub fn enter() -> Self {
+            use windows::Win32::System::Threading::{
+                GetCurrentThread, SetThreadPriority, THREAD_MODE_BACKGROUND_BEGIN,
+            };
+            // SAFETY: меняем приоритет только текущего потока через псевдо-handle.
+            let ok = unsafe { SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN) };
+            Self { active: ok.is_ok() }
+        }
+    }
+    impl Drop for BackgroundThreadGuard {
+        fn drop(&mut self) {
+            if !self.active {
+                return;
+            }
+            use windows::Win32::System::Threading::{
+                GetCurrentThread, SetThreadPriority, THREAD_MODE_BACKGROUND_END,
+            };
+            // SAFETY: симметричный END для ранее успешного BEGIN на том же потоке.
+            unsafe {
+                let _ = SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_END);
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+mod background_priority {
+    pub struct BackgroundThreadGuard;
+    impl BackgroundThreadGuard {
+        pub fn enter() -> Self {
+            Self
+        }
+    }
+}
+
 fn local_write_device_id(device_id: Option<String>) -> String {
     device_id
         .filter(|value| !value.trim().is_empty())
@@ -453,6 +522,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let conn = db::open_db(&db_path)?;
             db::init_schema(&conn)?;
             *DB.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(StdMutex::new(conn)));
+            *DB_PATH.lock().unwrap_or_else(|e| e.into_inner()) = Some(db_path);
             Ok(json!(true))
         }
 
@@ -720,10 +790,44 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             Ok(json!(count))
         }),
 
-        Request::DbBackup { dest_path } => with_conn(|conn| {
-            db::backup_to_file(conn, &dest_path)?;
-            Ok(json!({ "dest": dest_path }))
-        }),
+        Request::DbBackup { dest_path } => {
+            let src_path = DB_PATH
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+                .ok_or_else(|| "Database not initialized. Call Init first.".to_string())?;
+            let pages = backup_pages_per_step();
+            let pause = std::time::Duration::from_millis(backup_pause_ms());
+            let dest_for_thread = dest_path.clone();
+            // Fire-and-forget: копирование идёт на отдельном background-priority
+            // потоке через ОТДЕЛЬНЫЙ read-коннекшн (не держит глобальный DB
+            // mutex) — серийный RPC-loop сразу свободен для других запросов.
+            // Завершение сообщается событием `db_backup_result`; kepler-backend
+            // ждёт его, чтобы записать last_backup_ts + ротацию.
+            std::thread::Builder::new()
+                .name("ark-db-backup".to_string())
+                .spawn(move || {
+                    let _bg = background_priority::BackgroundThreadGuard::enter();
+                    let result =
+                        db::backup_to_file_chunked(&src_path, &dest_for_thread, pages, pause);
+                    let event = match &result {
+                        Ok(()) => json!({
+                            "event": "db_backup_result",
+                            "ok": true,
+                            "dest": dest_for_thread,
+                        }),
+                        Err(e) => json!({
+                            "event": "db_backup_result",
+                            "ok": false,
+                            "dest": dest_for_thread,
+                            "error": e,
+                        }),
+                    };
+                    emit_event(event);
+                })
+                .map_err(|e| format!("spawn db_backup thread failed: {e}"))?;
+            Ok(json!({ "started": true, "dest": dest_path }))
+        }
 
         Request::StartSync {
             space_id,

@@ -68,6 +68,51 @@ async fn write_last_backup_ts(ark: &ArkHost, ts: DateTime<Utc>) -> Result<(), St
     .map_err(|e| e.to_string())
 }
 
+fn backup_wait_timeout_secs() -> u64 {
+    std::env::var("KEPLER_BACKUP_WAIT_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(900)
+}
+
+/// Дождаться события `db_backup_result` для нашего `dest_str` (backup идёт
+/// async в ark-core-rpc). Bounded таймаутом, чтобы не зависнуть навсегда если
+/// ark-core-rpc умер посреди копирования.
+async fn wait_for_backup_result(
+    events: &mut tokio::sync::broadcast::Receiver<(String, serde_json::Value)>,
+    dest_str: &str,
+) -> Result<(), String> {
+    use tokio::sync::broadcast::error::RecvError;
+    let deadline = std::time::Duration::from_secs(backup_wait_timeout_secs());
+    let wait = async {
+        loop {
+            match events.recv().await {
+                Ok((name, payload)) if name == "db_backup_result" => {
+                    if payload.get("dest").and_then(|d| d.as_str()) != Some(dest_str) {
+                        continue; // чужой backup (не наш dest) — игнор
+                    }
+                    if payload.get("ok").and_then(|b| b.as_bool()).unwrap_or(false) {
+                        return Ok(());
+                    }
+                    let err = payload
+                        .get("error")
+                        .and_then(|e| e.as_str())
+                        .unwrap_or("unknown")
+                        .to_string();
+                    return Err(format!("backup failed: {err}"));
+                }
+                Ok(_) => continue,
+                Err(RecvError::Lagged(_)) => continue,
+                Err(RecvError::Closed) => return Err("event channel closed".to_string()),
+            }
+        }
+    };
+    match tokio::time::timeout(deadline, wait).await {
+        Ok(res) => res,
+        Err(_) => Err("backup timed out waiting for completion".to_string()),
+    }
+}
+
 /// Ensure `<data_dir>/backups/` exists and return path.
 fn ensure_backups_dir(data_dir: &Path) -> Result<PathBuf, String> {
     let dir = data_dir.join(BACKUPS_SUBDIR);
@@ -111,10 +156,21 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
         .ok_or("backup dest path is not UTF-8")?
         .to_string();
 
+    // Подписка ДО запроса: backup в ark-core-rpc идёт async на отдельном
+    // background-priority потоке, событие завершения может прийти раньше, чем
+    // мы успеем подписаться после await'а RPC.
+    let mut events = ark.subscribe_events();
+
     eprintln!("[db-backup] starting → {dest_str}");
+    // RPC возвращается сразу ({"started": true}) — копирование продолжается в
+    // фоне, не блокируя серийный RPC-loop ark-core-rpc.
     ark.request("db_backup", json!({ "dest_path": dest_str.clone() }))
         .await
         .map_err(|e| format!("db_backup RPC failed: {e}"))?;
+
+    // Ждём событие завершения (или таймаут) — только после успеха пишем
+    // last_backup_ts и ротируем (иначе ротация могла бы удалить незавершённый файл).
+    wait_for_backup_result(&mut events, &dest_str).await?;
 
     write_last_backup_ts(ark, now).await?;
 
