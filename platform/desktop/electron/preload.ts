@@ -293,6 +293,7 @@ const api: KeplerApi = {
     setInteractive: (interactive: boolean) =>
       ipcRenderer.invoke("kepler:focus-overlay:set-interactive", interactive),
     showBlocked: (app) => ipcRenderer.invoke("kepler:focus-overlay:show-blocked", app),
+    done: () => ipcRenderer.send("kepler:focus-overlay:done"),
   },
   crashes: {
     list: () => ipcRenderer.invoke("kepler:crashes:list"),

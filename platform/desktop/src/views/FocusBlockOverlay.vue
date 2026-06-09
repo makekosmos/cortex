@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, nextTick, onMounted, onUnmounted } from "vue";
 
 interface BlockedApp {
   id: string;
@@ -76,6 +76,8 @@ function finish(): void {
   edgesOn.value = false;
   popupOn.value = false;
   void window.kepler.focusOverlay.setInteractive(false);
+  // Ждём один тик Vue-рендера (DOM очищен), затем сигналим main скрыть окно.
+  void nextTick(() => window.kepler.focusOverlay.done());
 }
 
 // --- hover плашки: пауза авто-скрытия + интерактивность окна ---------------

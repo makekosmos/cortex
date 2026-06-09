@@ -106,7 +106,7 @@ import {
   setBlockedAppNotifier,
   teardownFocusSessionBackendSync,
 } from "./focus-session";
-import { createFocusBlockOverlay, showFocusBlockOverlay } from "./focus-overlay";
+import { showFocusBlockOverlay } from "./focus-overlay";
 import { setupDictationHotkey } from "./dictation-pill";
 import { getServiceStatus, runServiceCliElevated, pingService } from "./focus-service";
 import { findKextInArgv, openInstallExtensionWindow } from "./install-extension-window";
@@ -1756,7 +1756,6 @@ app.whenReady().then(async () => {
   setBlockedAppNotifier((app) => {
     showFocusBlockOverlay(app);
   });
-  createFocusBlockOverlay();
   setTrayVisibilityController(setTrayVisible);
   setTrayVisible(isTrayIconEnabled());
   if (shouldShowLauncherOnStartup(process.argv)) {

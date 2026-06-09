@@ -5,13 +5,8 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Окно создаётся сразу на весь экран и показывается ОДИН раз (прозрачное,
-// click-through). На каждую блокировку мы НЕ делаем show/hide — иначе ОС
-// проигрывает системную анимацию открытия окна («расширение»). Появление и
-// исчезновение градиента/плашки — чисто CSS внутри renderer'а.
 let overlayWin: BrowserWindow | null = null;
 let isReady = false;
-let shownOnce = false;
 let pendingApp: { id: string; title: string; icon?: string | null } | null = null;
 let readyFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -33,6 +28,13 @@ ipcMain.handle("kepler:focus-overlay:set-interactive", (_e, interactive: boolean
   }
 });
 
+// Renderer сигналит когда анимация ухода завершена — скрываем окно.
+// Это убирает fullscreen transparent composited surface до следующей блокировки.
+ipcMain.on("kepler:focus-overlay:done", () => {
+  if (!overlayWin || overlayWin.isDestroyed()) return;
+  overlayWin.hide();
+});
+
 // Renderer (launcher) просит показать overlay при запуске заблокированного app.
 ipcMain.handle(
   "kepler:focus-overlay:show-blocked",
@@ -47,22 +49,21 @@ function markReady(): void {
     readyFallbackTimer = null;
   }
   isReady = true;
-  ensureShown();
   if (pendingApp) {
     const app = pendingApp;
     pendingApp = null;
+    showOverlay();
     overlayWin?.webContents.send("kepler:focus-overlay:show", app);
   }
+  // Нет pending-блокировки — окно остаётся скрытым, compositor surface не занята.
 }
 
-// Показ окна один раз: прозрачное, click-through, поверх всего. Дальше окно
-// больше не прячется и не ресайзится.
-function ensureShown(): void {
-  if (!overlayWin || overlayWin.isDestroyed() || shownOnce) return;
+// Показывает overlay для текущей блокировки. Вызывается каждый раз при блокировке.
+function showOverlay(): void {
+  if (!overlayWin || overlayWin.isDestroyed()) return;
   overlayWin.setAlwaysOnTop(true, "screen-saver", 1);
   overlayWin.setIgnoreMouseEvents(true, { forward: true });
   overlayWin.showInactive();
-  shownOnce = true;
 }
 
 function getOrCreateOverlay(): BrowserWindow | null {
@@ -70,7 +71,6 @@ function getOrCreateOverlay(): BrowserWindow | null {
   if (overlayWin && !overlayWin.isDestroyed()) return overlayWin;
 
   isReady = false;
-  shownOnce = false;
   const { bounds } = screen.getPrimaryDisplay();
 
   overlayWin = new BrowserWindow({
@@ -91,7 +91,8 @@ function getOrCreateOverlay(): BrowserWindow | null {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      backgroundThrottling: false,
+      // Throttling включён — окно не рисуется когда скрыто/нет анимации.
+      backgroundThrottling: true,
       preload: path.join(__dirname, "preload.mjs"),
     },
   });
@@ -107,13 +108,12 @@ function getOrCreateOverlay(): BrowserWindow | null {
     });
   }
 
-  // Fallback: если ready не пришёл за 3с — показываем окно всё равно.
+  // Fallback: если ready не пришёл за 3с — считаем готовым.
   readyFallbackTimer = setTimeout(() => markReady(), 3000);
 
   overlayWin.on("closed", () => {
     overlayWin = null;
     isReady = false;
-    shownOnce = false;
     if (readyFallbackTimer) {
       clearTimeout(readyFallbackTimer);
       readyFallbackTimer = null;
@@ -121,10 +121,6 @@ function getOrCreateOverlay(): BrowserWindow | null {
   });
 
   return overlayWin;
-}
-
-export function createFocusBlockOverlay(): void {
-  getOrCreateOverlay();
 }
 
 export function showFocusBlockOverlay(app: {
@@ -135,9 +131,10 @@ export function showFocusBlockOverlay(app: {
   const win = getOrCreateOverlay();
   if (!win) return;
   if (isReady) {
-    ensureShown();
+    showOverlay();
     win.webContents.send("kepler:focus-overlay:show", app);
   } else {
+    // Окно загружается — отправим сообщение как только renderer будет готов.
     pendingApp = app;
   }
 }

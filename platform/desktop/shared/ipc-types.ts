@@ -650,6 +650,8 @@ export interface KeplerApi {
     ): () => void;
     setInteractive(interactive: boolean): Promise<void>;
     showBlocked(app: { id: string; title: string; icon?: string | null }): Promise<void>;
+    /** Сигнализирует main, что анимация завершена и окно можно скрыть. */
+    done(): void;
   };
 
   /** Crash reports — locations + management для Settings → Диагностика. */
