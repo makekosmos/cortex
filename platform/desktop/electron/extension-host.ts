@@ -194,6 +194,19 @@ export interface ExtensionManifest {
    */
   keepAliveInBackground?: boolean;
   /**
+   * Opt-in к `backgroundThrottling: false` для extension-owned renderer'а.
+   *
+   * По умолчанию (`false`) Chromium throttle'ит фоновые timers/rAF — безопасный
+   * baseline, hidden/свёрнутые extension windows не жгут CPU попусту.
+   *
+   * `true` разрешается только extensions, чья логика **обоснованно** зависит
+   * от foreground-accurate timers в скрытом окне (например, real-time sync-loop
+   * без backend). Фоновые side-effect'ы лучше держать в backend/main/service.
+   *
+   * Default: false (throttling включён).
+   */
+  backgroundExecution?: boolean;
+  /**
    * Declarative commands extension'а (Raycast-style). Manifest = source of
    * truth для entry-point команд: открыть extension с конкретным route,
    * либо триггернуть action который extension обработает через
@@ -1138,11 +1151,9 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
       preload,
       contextIsolation: true,
       nodeIntegration: false,
-      // Hidden / minimized extensions держат timers через
-      // `requestAnimationFrame` / `setInterval` для side-effect логики
-      // (например, extension-owned timers and subscriptions).
-      // Chromium по умолчанию throttle'ит фоновые timers — выключаем.
-      backgroundThrottling: false,
+      // Throttling включён по умолчанию — скрытые окна не жгут CPU.
+      // Opt-out только если extension явно декларирует backgroundExecution: true.
+      backgroundThrottling: manifest.backgroundExecution !== true,
     },
   });
 
