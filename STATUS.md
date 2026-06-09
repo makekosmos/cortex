@@ -1,4 +1,14 @@
-# Kosmos — статус проекта (2026-06-07)
+# Kosmos — статус проекта (2026-06-09)
+
+## 2026-06-09 — Performance hardening + startup fixes (Kosmos Desktop 0.4.3 → 0.4.4)
+
+Патч-релиз закрывает накопившиеся perf-регрессии и диагностические улучшения бэкенда.
+
+- **Background-maintenance diagnostics**: Phase 3 диагностики бэкенда — WPR trace, structured telemetry для maintenance-сканов.
+- **ARK backup non-blocking**: `db_backup::maybe_backup_on_startup` переведён на background-priority chunked запись, не блокирует UI-старт.
+- **Launcher scroll/reflow**: устранён лишний reflow списка при повторном открытии лаунчера; smoother scroll при большом количестве команд.
+- **Startup maintenance priority**: background-сканы (integrity check, vacuum stats) запускаются на фоновом приоритете, не задерживают ready-сигнал.
+- **Launcher focus on Windows**: лаунчер корректно захватывает foreground и keyboard focus при вызове hotkey.
 
 ## 2026-06-07 — Bridge release на makekosmos channels (Kosmos Desktop 0.4.2 → 0.4.3)
 
@@ -652,7 +662,6 @@ In-process facade (subprocess removal) — отложено: subprocess нуже
 ## 🟡 Хранимый техдолг (2026-05-18)
 
 - **Export tab** скрыт в Settings (whitescreen на production 0.1.11). См. `docs-site/agents/manual-tests-pending.md` → tech debt entry. Возврат после DevTools debug.
-- **QuickEntryPanel** в @kosmos/visuals — **handcrafted: false** (agent-built temp). Стилистика на токенах, но детали UX к доработке (badge показывает в Storybook).
 - **`vue-router` mock в Storybook preview** — Sidebar/SidebarButton stories skipped (зависят от RouterLink).
 - **Light theme** — TODO в `packages/visuals/.storybook/preview.ts` (theme toolbar item закомментирован).
 
