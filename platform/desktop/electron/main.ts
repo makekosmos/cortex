@@ -677,14 +677,15 @@ function setLauncherExpanded(_expanded: boolean) {
 // --- tray --------------------------------------------------------------------
 
 function resolveTrayIconPath(): string | null {
-  // production install: electron-builder копирует build/icon.png в
-  // <install>/resources/icon.png через extraResources. process.resourcesPath
+  // production install: electron-builder копирует build/tray.ico в
+  // <install>/resources/tray.ico через extraResources. process.resourcesPath
   // указывает на тот же `resources/` dir в production, поэтому это первый
-  // кандидат и работает в installed Kepler.
+  // кандидат и работает в installed Kepler. tray.ico — multi-size (16-48),
+  // отрендерен из build/tray.svg; Windows сам выбирает кадр под DPI.
   // dev: __dirname = platform/desktop/dist-electron, нужен относительный путь к
-  // build/icon.png в source tree. В dev-сессии используем dev.png — визуально
+  // build/ в source tree. В dev-сессии используем dev.png — визуально
   // отличает trayIcon разработческого инстанса от установленного.
-  const iconName = isDev ? "dev.png" : "icon.png";
+  const iconName = isDev ? "dev.png" : "tray.ico";
   const candidates: string[] = [];
   if (process.resourcesPath) {
     candidates.push(path.join(process.resourcesPath, iconName));
@@ -700,8 +701,9 @@ function resolveTrayIconPath(): string | null {
 function createTray() {
   if (tray) return;
   const iconPath = resolveTrayIconPath();
-  const icon = iconPath ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
-  tray = new Tray(icon);
+  // Путь передаём строкой: nativeImage.createFromPath не декодирует .ico,
+  // а Tray(path) на Windows сам выбирает нужный кадр из multi-size ICO.
+  tray = new Tray(iconPath ?? nativeImage.createEmpty());
   tray.setToolTip(KEPLER_INSTANCE.productName);
   tray.setContextMenu(
     Menu.buildFromTemplate([

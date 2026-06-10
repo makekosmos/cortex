@@ -99,6 +99,10 @@
       {
         "from": "build/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "build/tray.ico",
+        "to": "tray.ico"
       }
     ],
     "win": {
