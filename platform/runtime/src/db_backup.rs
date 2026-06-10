@@ -12,6 +12,7 @@
 // попробует снова. Failure не должен блокировать backend startup.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
@@ -22,6 +23,7 @@ use crate::ark_host::ArkHost;
 const SYNC_KV_LAST_BACKUP: &str = "kepler.last_backup_ts";
 const BACKUPS_SUBDIR: &str = "backups";
 const BACKUP_FILE_PREFIX: &str = "ark.db.backup-";
+static BACKUP_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 fn interval_hours() -> u64 {
     std::env::var("KEPLER_BACKUP_INTERVAL_HOURS")
@@ -73,6 +75,38 @@ fn backup_wait_timeout_secs() -> u64 {
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(900)
+}
+
+fn backup_pages_per_step() -> i32 {
+    std::env::var("ARK_BACKUP_PAGES_PER_STEP")
+        .ok()
+        .and_then(|v| v.parse::<i32>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(256)
+}
+
+fn backup_pause_ms() -> u64 {
+    std::env::var("ARK_BACKUP_PAUSE_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(5)
+}
+
+pub fn diagnostics_snapshot() -> DbBackupDiagnosticsSnapshot {
+    DbBackupDiagnosticsSnapshot {
+        active: BACKUP_ACTIVE.load(Ordering::SeqCst),
+        pages_per_step: backup_pages_per_step(),
+        pause_ms: backup_pause_ms(),
+        background_mode: true,
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DbBackupDiagnosticsSnapshot {
+    pub active: bool,
+    pub pages_per_step: i32,
+    pub pause_ms: u64,
+    pub background_mode: bool,
 }
 
 /// Дождаться события `db_backup_result` для нашего `dest_str` (backup идёт
@@ -165,13 +199,21 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
     let backup_started = std::time::Instant::now();
     // RPC возвращается сразу ({"started": true}) — копирование продолжается в
     // фоне, не блокируя серийный RPC-loop ark-core-rpc.
-    ark.request("db_backup", json!({ "dest_path": dest_str.clone() }))
+    BACKUP_ACTIVE.store(true, Ordering::SeqCst);
+    let start_result = ark
+        .request("db_backup", json!({ "dest_path": dest_str.clone() }))
         .await
-        .map_err(|e| format!("db_backup RPC failed: {e}"))?;
+        .map_err(|e| format!("db_backup RPC failed: {e}"));
+    if let Err(e) = start_result {
+        BACKUP_ACTIVE.store(false, Ordering::SeqCst);
+        return Err(e);
+    }
 
     // Ждём событие завершения (или таймаут) — только после успеха пишем
     // last_backup_ts и ротируем (иначе ротация могла бы удалить незавершённый файл).
-    wait_for_backup_result(&mut events, &dest_str).await?;
+    let wait_result = wait_for_backup_result(&mut events, &dest_str).await;
+    BACKUP_ACTIVE.store(false, Ordering::SeqCst);
+    wait_result?;
 
     write_last_backup_ts(ark, now).await?;
 
@@ -295,5 +337,16 @@ mod tests {
         assert_eq!(removed, 0);
         assert!(dir.path().join("README.md").exists());
         assert!(dir.path().join("ark.db").exists());
+    }
+
+    #[test]
+    fn diagnostics_exposes_db_backup_background_worker() {
+        // Regression: 2026-06-09. diagnostics.snapshot must expose DB backup
+        // background worker state and chunking config in background_workers.
+        let snapshot = diagnostics_snapshot();
+
+        assert!(!snapshot.active);
+        assert!(snapshot.pages_per_step > 0);
+        assert!(snapshot.background_mode);
     }
 }

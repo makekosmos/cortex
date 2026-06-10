@@ -43,14 +43,73 @@ pub enum AppIndexError {
 
 pub type Result<T> = std::result::Result<T, AppIndexError>;
 
-/// Пауза (мс) между извлечениями иконок в `rescan`, чтобы холодный icon-storm
-/// не бил диск пачкой (стабильность важнее скорости индексации). Override через
-/// `KEPLER_APP_ICON_EXTRACT_SLEEP_MS`; default 15мс; `0` — без пауз.
+/// Пауза (мс) между реальными cold extraction/write попытками, чтобы icon-storm
+/// не бил DWM/GDI/Defender пачкой. Override через
+/// `KEPLER_APP_ICON_EXTRACT_SLEEP_MS`; default 50мс; `0` — без пауз.
 fn icon_extract_sleep() -> u64 {
     std::env::var("KEPLER_APP_ICON_EXTRACT_SLEEP_MS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
-        .unwrap_or(15)
+        .unwrap_or(50)
+}
+
+struct IconExtractionQueue {
+    cache_dir: PathBuf,
+    sleep: std::time::Duration,
+}
+
+#[derive(Debug, Clone, Default)]
+struct IconExtractionStats {
+    extracted: u64,
+    cached: u64,
+    failed: u64,
+    last_icon_ms: u64,
+}
+
+impl IconExtractionQueue {
+    fn new(cache_dir: PathBuf, sleep_ms: u64) -> Self {
+        Self {
+            cache_dir,
+            sleep: std::time::Duration::from_millis(sleep_ms),
+        }
+    }
+
+    fn fill_missing_icons(&self, apps: &mut [App]) -> IconExtractionStats {
+        let mut stats = IconExtractionStats::default();
+
+        for app in apps {
+            if app.icon_path.is_some() {
+                continue;
+            }
+
+            let cached_path = icons::cached_icon_path(&self.cache_dir, &app.exec_path);
+            let was_cached = cached_path.exists();
+            let started = std::time::Instant::now();
+            match icons::ensure_icon(&self.cache_dir, app) {
+                Ok(path) => {
+                    stats.last_icon_ms =
+                        started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+                    app.icon_path = Some(path);
+                    if was_cached {
+                        stats.cached += 1;
+                    } else {
+                        stats.extracted += 1;
+                    }
+                }
+                Err(_) => {
+                    stats.last_icon_ms =
+                        started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+                    stats.failed += 1;
+                }
+            }
+
+            if !was_cached && !self.sleep.is_zero() {
+                std::thread::sleep(self.sleep);
+            }
+        }
+
+        stats
+    }
 }
 
 /// Один источник приложений (Start Menu, UWP, etc.).
@@ -67,7 +126,7 @@ pub trait AppSource: Send + Sync {
 /// Singleton per backend process, shared через `Arc`.
 pub struct AppIndex {
     sources: Arc<Vec<Box<dyn AppSource>>>,
-    store: store::AppStore,
+    store: Arc<store::AppStore>,
     cache: Arc<RwLock<Vec<App>>>,
     icon_cache_dir: PathBuf,
     last_rescan_ms: AtomicU64,
@@ -76,6 +135,12 @@ pub struct AppIndex {
     // Diagnostics: реально ли последний rescan шёл на background-priority потоке
     // (THREAD_MODE_BACKGROUND_BEGIN активирован). Подтверждает AC1/AC3.
     scan_background_mode: AtomicBool,
+    discover_active: AtomicBool,
+    icons_extracted: AtomicU64,
+    icons_cached: AtomicU64,
+    icons_failed: AtomicU64,
+    last_icon_ms: AtomicU64,
+    icon_sleep_ms: AtomicU64,
 }
 
 impl AppIndex {
@@ -87,7 +152,7 @@ impl AppIndex {
         std::fs::create_dir_all(&icon_cache_dir)?;
 
         let db_path = data_dir.join("app-index.db");
-        let store = store::AppStore::open(&db_path)?;
+        let store = Arc::new(store::AppStore::open(&db_path)?);
 
         // Загружаем cached apps в memory сразу — hot path для search <10ms.
         let cached = store.list_all()?;
@@ -104,6 +169,12 @@ impl AppIndex {
             icon_reads_count: AtomicU64::new(0),
             icon_bytes_read: AtomicU64::new(0),
             scan_background_mode: AtomicBool::new(false),
+            discover_active: AtomicBool::new(false),
+            icons_extracted: AtomicU64::new(0),
+            icons_cached: AtomicU64::new(0),
+            icons_failed: AtomicU64::new(0),
+            last_icon_ms: AtomicU64::new(0),
+            icon_sleep_ms: AtomicU64::new(icon_extract_sleep()),
         })
     }
 
@@ -121,7 +192,9 @@ impl AppIndex {
         let sources = self.sources.clone();
         let icon_cache_dir = self.icon_cache_dir.clone();
         let icon_sleep = icon_extract_sleep();
-        let (all_apps, errors, background_mode) = tokio::task::spawn_blocking(move || {
+        self.discover_active.store(true, Ordering::SeqCst);
+        self.icon_sleep_ms.store(icon_sleep, Ordering::SeqCst);
+        let scan_result = tokio::task::spawn_blocking(move || {
             // Guard живёт внутри sync closure (без `.await`) — снимается на том же
             // потоке. is_active() фиксируем для diagnostics (подтверждение AC1/AC3).
             let bg = crate::priority::BackgroundThreadGuard::enter();
@@ -152,34 +225,41 @@ impl AppIndex {
                 }
             }
 
-            // Извлечь / переиспользовать иконки (concurrency=1, серийно).
-            for app in &mut all_apps {
-                if app.icon_path.is_none() {
-                    if let Ok(path) = icons::ensure_icon(&icon_cache_dir, app) {
-                        app.icon_path = Some(path);
-                    }
-                    // Throttle только когда реально извлекали (cached early-return
-                    // в ensure_icon сюда тоже попадает, но это дешёвый stat —
-                    // приемлемо; см. spec). 0 → без пауз.
-                    if icon_sleep > 0 {
-                        std::thread::sleep(std::time::Duration::from_millis(icon_sleep));
-                    }
-                }
-            }
+            let icon_stats = IconExtractionQueue::new(icon_cache_dir, icon_sleep)
+                .fill_missing_icons(&mut all_apps);
 
-            (all_apps, errors, background_mode)
+            (all_apps, errors, background_mode, icon_stats)
         })
-        .await
-        .map_err(|e| AppIndexError::Other(format!("rescan background join failed: {e}")))?;
+        .await;
+        self.discover_active.store(false, Ordering::SeqCst);
+        let (all_apps, errors, background_mode, icon_stats) = scan_result
+            .map_err(|e| AppIndexError::Other(format!("rescan background join failed: {e}")))?;
         self.scan_background_mode
             .store(background_mode, Ordering::SeqCst);
+        self.icons_extracted
+            .store(icon_stats.extracted, Ordering::SeqCst);
+        self.icons_cached.store(icon_stats.cached, Ordering::SeqCst);
+        self.icons_failed.store(icon_stats.failed, Ordering::SeqCst);
+        self.last_icon_ms
+            .store(icon_stats.last_icon_ms, Ordering::SeqCst);
 
         // Diff против existing cache для stats.
         let existing = self.cache.read().await.clone();
         let stats = compute_diff(&existing, &all_apps);
 
         // Запись в SQLite + cache (atomic enough — SQLite транзакцией, cache swap'ом).
-        self.store.replace_all(&all_apps)?;
+        let store = self.store.clone();
+        let (all_apps, write_background_mode) = tokio::task::spawn_blocking(move || {
+            let bg = crate::priority::BackgroundThreadGuard::enter();
+            let background_mode = bg.is_active();
+            store.replace_all(&all_apps)?;
+            Ok::<_, AppIndexError>((all_apps, background_mode))
+        })
+        .await
+        .map_err(|e| AppIndexError::Other(format!("rescan store join failed: {e}")))??;
+        self.scan_background_mode
+            .store(background_mode && write_background_mode, Ordering::SeqCst);
+
         *self.cache.write().await = all_apps;
 
         if !errors.is_empty() {
@@ -245,6 +325,15 @@ impl AppIndex {
             icon_reads_count: self.icon_reads_count.load(Ordering::SeqCst),
             icon_bytes_read: self.icon_bytes_read.load(Ordering::SeqCst),
             scan_background_mode: self.scan_background_mode.load(Ordering::SeqCst),
+            background_worker: AppIndexBackgroundWorkerDiagnostics {
+                discover_active: self.discover_active.load(Ordering::SeqCst),
+                icons_extracted: self.icons_extracted.load(Ordering::SeqCst),
+                icons_cached: self.icons_cached.load(Ordering::SeqCst),
+                icons_failed: self.icons_failed.load(Ordering::SeqCst),
+                last_icon_ms: self.last_icon_ms.load(Ordering::SeqCst),
+                sleep_ms: self.icon_sleep_ms.load(Ordering::SeqCst),
+                background_mode: self.scan_background_mode.load(Ordering::SeqCst),
+            },
         }
     }
 }
@@ -265,6 +354,18 @@ pub struct AppIndexDiagnosticsSnapshot {
     pub icon_bytes_read: u64,
     /// Шёл ли последний rescan на background-priority потоке (CPU+I/O).
     pub scan_background_mode: bool,
+    pub background_worker: AppIndexBackgroundWorkerDiagnostics,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AppIndexBackgroundWorkerDiagnostics {
+    pub discover_active: bool,
+    pub icons_extracted: u64,
+    pub icons_cached: u64,
+    pub icons_failed: u64,
+    pub last_icon_ms: u64,
+    pub sleep_ms: u64,
+    pub background_mode: bool,
 }
 
 fn compute_diff(old: &[App], new: &[App]) -> RescanStats {
@@ -292,5 +393,110 @@ fn compute_diff(old: &[App], new: &[App]) -> RescanStats {
         updated,
         removed,
         total: new.len(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    struct StaticSource {
+        apps: Vec<App>,
+    }
+
+    impl AppSource for StaticSource {
+        fn name(&self) -> &'static str {
+            "static"
+        }
+
+        fn discover(&self) -> Result<Vec<App>> {
+            Ok(self.apps.clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn rescan_commits_store_then_swaps_cache() {
+        let dir = tempdir().unwrap();
+        let icon_dir = dir.path().join("icons");
+        std::fs::create_dir_all(&icon_dir).unwrap();
+        let app = App {
+            id: "static-app".into(),
+            name: "Static App".into(),
+            exec_path: "C:\\static.exe".into(),
+            icon_path: Some("C:\\icons\\static.png".into()),
+            icon_source: None,
+            kind: AppKind::Win32,
+            source: "static".into(),
+            mtime: 1,
+        };
+        let store = Arc::new(store::AppStore::open(&dir.path().join("app-index.db")).unwrap());
+        let index = AppIndex {
+            sources: Arc::new(vec![Box::new(StaticSource {
+                apps: vec![app.clone()],
+            })]),
+            store: store.clone(),
+            cache: Arc::new(RwLock::new(Vec::new())),
+            icon_cache_dir: icon_dir,
+            last_rescan_ms: AtomicU64::new(0),
+            icon_reads_count: AtomicU64::new(0),
+            icon_bytes_read: AtomicU64::new(0),
+            scan_background_mode: AtomicBool::new(false),
+            discover_active: AtomicBool::new(false),
+            icons_extracted: AtomicU64::new(0),
+            icons_cached: AtomicU64::new(0),
+            icons_failed: AtomicU64::new(0),
+            last_icon_ms: AtomicU64::new(0),
+            icon_sleep_ms: AtomicU64::new(icon_extract_sleep()),
+        };
+
+        // Regression: 2026-06-09. SQLite replace_all must run inside rescan's
+        // blocking commit path before the async-side cache swap publishes data.
+        let stats = index.rescan().await.unwrap();
+
+        assert_eq!(stats.added, 1);
+        let cached = index.all(10).await;
+        let persisted = store.list_all().unwrap();
+
+        assert_eq!(cached.len(), 1);
+        assert_eq!(cached[0].id, app.id);
+        assert_eq!(persisted.len(), 1);
+        assert_eq!(persisted[0].id, app.id);
+    }
+
+    #[tokio::test]
+    async fn diagnostics_exposes_app_index_background_worker() {
+        let dir = tempdir().unwrap();
+        let icon_dir = dir.path().join("icons");
+        std::fs::create_dir_all(&icon_dir).unwrap();
+        let store = Arc::new(store::AppStore::open(&dir.path().join("app-index.db")).unwrap());
+        let index = AppIndex {
+            sources: Arc::new(Vec::new()),
+            store,
+            cache: Arc::new(RwLock::new(Vec::new())),
+            icon_cache_dir: icon_dir,
+            last_rescan_ms: AtomicU64::new(0),
+            icon_reads_count: AtomicU64::new(0),
+            icon_bytes_read: AtomicU64::new(0),
+            scan_background_mode: AtomicBool::new(true),
+            discover_active: AtomicBool::new(false),
+            icons_extracted: AtomicU64::new(2),
+            icons_cached: AtomicU64::new(3),
+            icons_failed: AtomicU64::new(1),
+            last_icon_ms: AtomicU64::new(7),
+            icon_sleep_ms: AtomicU64::new(50),
+        };
+
+        // Regression: 2026-06-09. Diagnostics must prove icon extraction is a
+        // throttled background queue, not just expose scan_background_mode.
+        let snapshot = index.diagnostics_snapshot().await;
+
+        assert!(!snapshot.background_worker.discover_active);
+        assert_eq!(snapshot.background_worker.icons_extracted, 2);
+        assert_eq!(snapshot.background_worker.icons_cached, 3);
+        assert_eq!(snapshot.background_worker.icons_failed, 1);
+        assert_eq!(snapshot.background_worker.last_icon_ms, 7);
+        assert_eq!(snapshot.background_worker.sleep_ms, 50);
+        assert!(snapshot.background_worker.background_mode);
     }
 }

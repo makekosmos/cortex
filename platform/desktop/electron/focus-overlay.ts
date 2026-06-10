@@ -1,6 +1,11 @@
 import { BrowserWindow, ipcMain, screen } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  applyWindowMaterial,
+  backgroundMaterialOption,
+  resolveWindowMaterial,
+} from "./window-effects";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -72,6 +77,7 @@ function getOrCreateOverlay(): BrowserWindow | null {
 
   isReady = false;
   const { bounds } = screen.getPrimaryDisplay();
+  const backgroundMaterial = resolveWindowMaterial("none");
 
   overlayWin = new BrowserWindow({
     x: bounds.x,
@@ -79,6 +85,7 @@ function getOrCreateOverlay(): BrowserWindow | null {
     width: bounds.width,
     height: bounds.height,
     backgroundColor: "#00000000",
+    ...backgroundMaterialOption(backgroundMaterial),
     transparent: true,
     frame: false,
     alwaysOnTop: true,
@@ -98,6 +105,7 @@ function getOrCreateOverlay(): BrowserWindow | null {
   });
 
   overlayWin.setIgnoreMouseEvents(true, { forward: true });
+  applyWindowMaterial(overlayWin, backgroundMaterial, "focus-overlay");
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) {

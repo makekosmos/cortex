@@ -106,6 +106,7 @@ fn app_from_bundle(path: &Path) -> Option<App> {
         name,
         exec_path,
         icon_path: None,
+        icon_source: None,
         kind: AppKind::MacBundle,
         source: "mac_applications".into(),
         mtime,

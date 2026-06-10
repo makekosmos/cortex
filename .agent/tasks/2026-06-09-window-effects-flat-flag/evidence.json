@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-06-09-window-effects-flat-flag",
+  "verified_at": "2026-06-09",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "bun test platform/desktop/electron/window-effects.test.ts"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "rg \"resolveWindowMaterial\" platform/desktop/electron -n"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "bun test platform/desktop/electron/window-effects.test.ts"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "bun test platform/desktop/electron/window-effects.test.ts"
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "command": "bun run typecheck (from platform/desktop); node scripts/sync-agents-docs.mjs; node scripts/check-docs-freshness.mjs"
+    }
+  ]
+}

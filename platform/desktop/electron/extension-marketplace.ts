@@ -6,7 +6,8 @@
 // Cache: in-memory, 1h TTL. Force refresh — параметр `force` в catalogFetch.
 
 import { BrowserWindow, ipcMain } from "electron";
-import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, rmSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import https from "node:https";
@@ -109,9 +110,9 @@ function httpsDownload(url: string, destPath: string, timeoutMs = 60000): Promis
   });
 }
 
-function sha256File(p: string): string {
+async function sha256File(p: string): Promise<string> {
   const h = crypto.createHash("sha256");
-  h.update(readFileSync(p));
+  h.update(await readFile(p));
   return h.digest("hex");
 }
 
@@ -156,12 +157,12 @@ export async function installFromUrl(
       throw new Error(`download finished but file отсутствует: ${tmpFile}`);
     }
     if (expectedSha256 && expectedSha256.length > 0) {
-      const actual = sha256File(tmpFile);
+      const actual = await sha256File(tmpFile);
       if (actual.toLowerCase() !== expectedSha256.toLowerCase()) {
         throw new Error(`sha256 mismatch: expected ${expectedSha256}, got ${actual}`);
       }
     }
-    return installFromPath(tmpFile);
+    return await installFromPath(tmpFile);
   } finally {
     try {
       rmSync(tmpFile, { force: true });
@@ -199,7 +200,7 @@ export async function autoUpdateExtensionsOnce(forceCatalog = true): Promise<voi
       return;
     }
 
-    const candidates = findExtensionUpdates(listInstalledUserExtensions(), catalog);
+    const candidates = findExtensionUpdates(await listInstalledUserExtensions(), catalog);
     if (candidates.length === 0) {
       console.log("[marketplace] extension auto-update: no updates");
       return;

@@ -19,6 +19,11 @@ import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
+import {
+  applyWindowMaterial,
+  backgroundMaterialOption,
+  resolveWindowMaterial,
+} from "./window-effects";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -148,6 +153,7 @@ function createWidgetWindow(): BrowserWindow {
   const persisted = readPersistedBounds();
   const pos =
     persisted && isOnSomeDisplay(persisted.x, persisted.y) ? persisted : defaultPosition();
+  const backgroundMaterial = resolveWindowMaterial("none");
 
   const win = new BrowserWindow({
     width: WIDGET_WIDTH,
@@ -165,6 +171,7 @@ function createWidgetWindow(): BrowserWindow {
     alwaysOnTop: true,
     transparent: true,
     backgroundColor: "#00000000",
+    ...backgroundMaterialOption(backgroundMaterial),
     roundedCorners: true,
     // focusable: true (default). Раньше было false («не воровать фокус
     // когда показывается»), но на Win32 non-focusable окно не получает
@@ -181,6 +188,7 @@ function createWidgetWindow(): BrowserWindow {
 
   // Удерживаем поверх even над fullscreen apps (best-effort).
   win.setAlwaysOnTop(true, "screen-saver", 1);
+  applyWindowMaterial(win, backgroundMaterial, "focus-widget");
 
   // Load с hash для FocusWidgetView dispatch в src/main.ts.
   const devUrl = process.env.VITE_DEV_SERVER_URL;

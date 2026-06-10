@@ -65,6 +65,7 @@ interface RawUsageAnalyticsSnapshot {
 interface RawAppIndexEntry {
   exec_path: string;
   icon_path: string | null;
+  icon_ref?: string | null;
 }
 
 function arkRequest<T>(operation: string, params?: Record<string, unknown>): Promise<T> {
@@ -174,8 +175,8 @@ function toUsageRow(rec: RawTopAppEntry, appIcons: Map<string, string>): Dashboa
     id: rec.id,
     processName: rec.processName,
     displayName: rec.displayName,
-    // См. postmortems.md § 2026-06-01 — app_index отдаёт renderer-safe data URL,
-    // а tracked_apps.icon_ref может быть stale path'ом, который ломает <img>.
+    // См. postmortems.md § 2026-06-01 / § 2026-06-09 — app_index отдаёт
+    // renderer-safe ref, а tracked_apps.icon_ref может быть stale path'ом.
     iconRef: chooseUsageIconRef(rec.iconRef, appIcons.get(normalizePath(rec.normalizedPath))),
     runtimeMs: rec.runtimeMs,
     foregroundMs: rec.foregroundMs,
@@ -208,8 +209,8 @@ export async function loadUsageRows(): Promise<void> {
     ]);
     const appIcons = new Map(
       apps.apps
-        .filter((app) => app.icon_path)
-        .map((app) => [normalizePath(app.exec_path), app.icon_path as string]),
+        .map((app) => [normalizePath(app.exec_path), app.icon_ref ?? app.icon_path ?? ""])
+        .filter((entry): entry is [string, string] => entry[1].length > 0),
     );
     const rows = raw.topApps.map((row) => toUsageRow(row, appIcons));
     usageRowsLoaded = true;

@@ -3,7 +3,7 @@
 // Отдельная база `<data_dir>/app-index.db`, НЕ ARK. См. spec.md → Architecture
 // decisions: app-индекс host-specific и regenerable, не синхронизируется.
 
-use crate::app_index::app::{App, AppKind};
+use crate::app_index::app::{App, AppKind, IconSource};
 use crate::app_index::Result;
 use rusqlite::{params, Connection};
 use std::path::Path;
@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS apps (
     name TEXT NOT NULL,
     exec_path TEXT NOT NULL,
     icon_path TEXT,
+    icon_source TEXT,
     kind TEXT NOT NULL,
     source TEXT NOT NULL,
     mtime INTEGER NOT NULL,
@@ -33,6 +34,14 @@ impl AppStore {
         let conn = Connection::open(path)?;
         conn.execute_batch("PRAGMA journal_mode = WAL;")?;
         conn.execute_batch(SCHEMA)?;
+        conn.execute_batch("ALTER TABLE apps ADD COLUMN icon_source TEXT;")
+            .or_else(|e| {
+                if is_duplicate_column_error(&e) {
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            })?;
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -46,25 +55,27 @@ impl AppStore {
     pub fn list_all(&self) -> Result<Vec<App>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, name, exec_path, icon_path, kind, source, mtime FROM apps ORDER BY name COLLATE NOCASE ASC",
+            "SELECT id, name, exec_path, icon_path, icon_source, kind, source, mtime FROM apps ORDER BY name COLLATE NOCASE ASC",
         )?;
         let rows = stmt.query_map([], |row| {
-            let kind_str: String = row.get(4)?;
+            let kind_str: String = row.get(5)?;
             let kind = parse_kind(&kind_str).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
-                    4,
+                    5,
                     rusqlite::types::Type::Text,
                     Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
                 )
             })?;
+            let icon_source_json: Option<String> = row.get(4)?;
             Ok(App {
                 id: row.get(0)?,
                 name: row.get(1)?,
                 exec_path: row.get(2)?,
                 icon_path: row.get(3)?,
+                icon_source: deserialize_icon_source(icon_source_json.as_deref())?,
                 kind,
-                source: row.get(5)?,
-                mtime: row.get(6)?,
+                source: row.get(6)?,
+                mtime: row.get(7)?,
             })
         })?;
         let mut out = Vec::new();
@@ -83,14 +94,16 @@ impl AppStore {
         let now = chrono::Utc::now().timestamp();
         {
             let mut stmt = tx.prepare(
-                "INSERT INTO apps (id, name, exec_path, icon_path, kind, source, mtime, last_indexed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO apps (id, name, exec_path, icon_path, icon_source, kind, source, mtime, last_indexed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )?;
             for a in apps {
+                let icon_source = serialize_icon_source(a.icon_source.as_ref())?;
                 stmt.execute(params![
                     a.id,
                     a.name,
                     a.exec_path,
                     a.icon_path,
+                    icon_source,
                     kind_to_str(&a.kind),
                     a.source,
                     a.mtime,
@@ -101,6 +114,23 @@ impl AppStore {
         tx.commit()?;
         Ok(())
     }
+}
+
+fn is_duplicate_column_error(e: &rusqlite::Error) -> bool {
+    matches!(e, rusqlite::Error::SqliteFailure(_, Some(msg)) if msg.contains("duplicate column name"))
+}
+
+fn serialize_icon_source(source: Option<&IconSource>) -> rusqlite::Result<Option<String>> {
+    source
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
+}
+
+fn deserialize_icon_source(source: Option<&str>) -> rusqlite::Result<Option<IconSource>> {
+    source.map(serde_json::from_str).transpose().map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, Box::new(e))
+    })
 }
 
 fn kind_to_str(k: &AppKind) -> &'static str {
@@ -143,6 +173,10 @@ mod tests {
                 name: "Notepad".into(),
                 exec_path: "C:\\notepad.exe".into(),
                 icon_path: None,
+                icon_source: Some(IconSource::StartMenuLnk {
+                    lnk_path: "C:\\Users\\me\\Start Menu\\Notepad.lnk".into(),
+                    target_path: "C:\\notepad.exe".into(),
+                }),
                 kind: AppKind::Win32,
                 source: "start_menu".into(),
                 mtime: 100,
@@ -152,6 +186,10 @@ mod tests {
                 name: "Calculator".into(),
                 exec_path: "shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App".into(),
                 icon_path: Some("C:\\cache\\calc.png".into()),
+                icon_source: Some(IconSource::UwpPackage {
+                    package_full_name: "Microsoft.WindowsCalculator_1.0.0.0_x64__8wekyb3d8bbwe"
+                        .into(),
+                }),
                 kind: AppKind::Uwp,
                 source: "uwp".into(),
                 mtime: 200,
@@ -164,5 +202,6 @@ mod tests {
         assert_eq!(loaded[0].name, "Calculator");
         assert_eq!(loaded[1].name, "Notepad");
         assert_eq!(loaded[1].kind, AppKind::Win32);
+        assert_eq!(loaded[1].icon_source, apps[0].icon_source);
     }
 }

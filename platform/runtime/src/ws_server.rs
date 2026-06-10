@@ -786,11 +786,17 @@ async fn build_diagnostics_snapshot(
     usage_diagnostics: &Arc<UsageTrackerDiagnosticsState>,
     app_index: &Arc<AppIndex>,
 ) -> serde_json::Value {
+    let app_index_snapshot = app_index.diagnostics_snapshot().await;
+    let app_index_background_worker = app_index_snapshot.background_worker.clone();
     serde_json::json!({
         "rpc": rpc_diagnostics.snapshot(),
         "file_index": file_index.diagnostics_snapshot(),
         "usage_tracker": usage_diagnostics.snapshot(),
-        "app_index": app_index.diagnostics_snapshot().await,
+        "app_index": app_index_snapshot,
+        "background_workers": {
+            "app_index": app_index_background_worker,
+            "db_backup": crate::db_backup::diagnostics_snapshot(),
+        },
     })
 }
 
@@ -1305,7 +1311,7 @@ async fn handle_arrancador_op(
 /// Dispatch `app_index.<subop>` — App Launcher: search / launch / rescan.
 ///
 /// Sub-operations:
-///   - `app_index.search { query, limit? }` → `{ results: [{id, name, icon_path, kind, score}] }`
+///   - `app_index.search { query, limit? }` → `{ results: [{app, score}] }`
 ///   - `app_index.launch { id }` → `{ ok: true }`. Frecency tracking — TODO через ARK usage_event_obj.
 ///   - `app_index.rescan` → `{ added, updated, removed, total }`
 async fn handle_app_index_op(
@@ -1324,22 +1330,7 @@ async fn handle_app_index_op(
                 .all(limit)
                 .await
                 .into_iter()
-                .map(|app| {
-                    let icon_ref = app
-                        .icon_path
-                        .as_ref()
-                        .map(|_| format!("kosmos-icon://app/{}", app.id));
-                    serde_json::json!({
-                        "id": app.id,
-                        "name": app.name,
-                        "exec_path": app.exec_path,
-                        "icon_path": null,
-                        "icon_ref": icon_ref,
-                        "kind": app.kind,
-                        "source": app.source,
-                        "mtime": app.mtime,
-                    })
-                })
+                .map(|app| app_index_entry_json(&app))
                 .collect();
             LocalResponse::ok(serde_json::json!({ "apps": out }))
         }
@@ -1351,18 +1342,32 @@ async fn handle_app_index_op(
             let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(8) as usize;
             // Frecency: пустой UsageStats в v1. TODO: join из ARK usage_event_obj.
             let usage = UsageStats::empty();
-            let mut results = app_index.search(&query, limit, &usage).await;
-            // Inline icon как data URL — renderer не имеет file:// доступа.
-            // ~50KB per icon, top-8 = ~400KB JSON, приемлемо.
-            for scored in &mut results {
-                if let Some(path) = scored.app.icon_path.clone() {
-                    scored.app.icon_path = inline_icon_data_url(app_index.clone(), path).await;
-                }
-            }
+            let results: Vec<_> = app_index
+                .search(&query, limit, &usage)
+                .await
+                .into_iter()
+                .map(|scored| {
+                    serde_json::json!({
+                        "app": app_index_entry_json(&scored.app),
+                        "score": scored.score,
+                    })
+                })
+                .collect();
             match serde_json::to_value(serde_json::json!({ "results": results })) {
                 Ok(v) => LocalResponse::ok(v),
                 Err(e) => LocalResponse::err(format!("app_index.search: serialize: {e}")),
             }
+        }
+        "icon_path" => {
+            let id = match params.get("id").and_then(|v| v.as_str()) {
+                Some(s) => s.to_string(),
+                None => return LocalResponse::err("app_index.icon_path: missing 'id'"),
+            };
+            let app = match app_index.find(&id).await {
+                Some(a) => a,
+                None => return LocalResponse::err(format!("app_index.icon_path: not found: {id}")),
+            };
+            LocalResponse::ok(serde_json::json!({ "path": app.icon_path }))
         }
         "launch" => {
             let id = match params.get("id").and_then(|v| v.as_str()) {
@@ -1387,6 +1392,27 @@ async fn handle_app_index_op(
         },
         other => LocalResponse::err(format!("app_index.{other}: unknown sub-operation")),
     }
+}
+
+fn app_icon_ref(app: &crate::app_index::App) -> Option<String> {
+    app.icon_path
+        .as_ref()
+        .map(|_| format!("kosmos-icon://app/{}", app.id))
+}
+
+fn app_index_entry_json(app: &crate::app_index::App) -> serde_json::Value {
+    serde_json::json!({
+        "id": &app.id,
+        "name": &app.name,
+        "exec_path": &app.exec_path,
+        // См. postmortems.md § 2026-06-09: app-index hot paths return refs;
+        // renderer loads only visible icons through the Electron protocol.
+        "icon_path": null,
+        "icon_ref": app_icon_ref(app),
+        "kind": &app.kind,
+        "source": &app.source,
+        "mtime": app.mtime,
+    })
 }
 
 /// Dispatch `file_index.<subop>` — host-local file search and settings.
@@ -1497,53 +1523,6 @@ async fn handle_file_index_op(
     }
 }
 
-/// Minimal base64 encoder (RFC 4648 standard alphabet, no padding-stripping).
-/// Используется для inline PNG icons в app_index.search response. Не добавляем
-/// dep `base64` ради ~30 строк.
-fn base64_encode(input: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
-    let mut i = 0;
-    while i + 3 <= input.len() {
-        let n =
-            (u32::from(input[i]) << 16) | (u32::from(input[i + 1]) << 8) | u32::from(input[i + 2]);
-        out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
-        out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
-        out.push(ALPHABET[((n >> 6) & 0x3F) as usize] as char);
-        out.push(ALPHABET[(n & 0x3F) as usize] as char);
-        i += 3;
-    }
-    let rem = input.len() - i;
-    if rem == 1 {
-        let n = u32::from(input[i]) << 16;
-        out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
-        out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
-        out.push('=');
-        out.push('=');
-    } else if rem == 2 {
-        let n = (u32::from(input[i]) << 16) | (u32::from(input[i + 1]) << 8);
-        out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
-        out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
-        out.push(ALPHABET[((n >> 6) & 0x3F) as usize] as char);
-        out.push('=');
-    }
-    out
-}
-
-async fn inline_icon_data_url(app_index: Arc<AppIndex>, path: String) -> Option<String> {
-    tokio::task::spawn_blocking(move || match std::fs::read(&path) {
-        Ok(bytes) => {
-            app_index.observe_icon_read(bytes.len());
-            let b64 = base64_encode(&bytes);
-            Some(format!("data:image/png;base64,{b64}"))
-        }
-        Err(_) => None,
-    })
-    .await
-    .ok()
-    .flatten()
-}
-
 async fn send_hello_error<S>(sink: &mut S, code: &str, message: &str) -> Result<(), WsServerError>
 where
     S: SinkExt<Message, Error = tokio_tungstenite::tungstenite::Error> + Unpin,
@@ -1562,6 +1541,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app_index::{App, AppKind};
 
     fn baseline_hello() -> HelloMessage {
         HelloMessage {
@@ -1688,5 +1668,25 @@ mod tests {
             compatibility_label(&Compatibility::Incompatible),
             "incompatible"
         );
+    }
+
+    #[test]
+    fn app_index_entry_uses_icon_ref_without_inline_data_url() {
+        // Regression: 2026-06-09. app_index.search must not read/base64 top-N icons.
+        let app = App {
+            id: "calc".into(),
+            name: "Calculator".into(),
+            exec_path: "C:\\Windows\\System32\\calc.exe".into(),
+            icon_path: Some("C:\\Kosmos\\icons\\calc.png".into()),
+            icon_source: None,
+            kind: AppKind::Win32,
+            source: "test".into(),
+            mtime: 1,
+        };
+
+        let entry = app_index_entry_json(&app);
+
+        assert_eq!(entry["icon_path"], serde_json::Value::Null);
+        assert_eq!(entry["icon_ref"], "kosmos-icon://app/calc");
     }
 }

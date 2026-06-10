@@ -34,9 +34,6 @@ const meta = {
   title: "Components/MyButton",
   component: MyButton,
   tags: ["autodocs"],
-  parameters: {
-    handcrafted: false, // см. ниже
-  },
   argTypes: {
     size: { control: "select", options: ["sm", "md", "lg"] },
   },
@@ -65,36 +62,6 @@ export const Large: Story = {
 
 `Intro → Tokens → Primitives → Components → Patterns → *`.
 Задано через `options.storySort` в `.storybook/preview.ts`.
-
-## Handcrafted tag — что это и зачем
-
-В Kepler-экосистеме компоненты часто рождаются от агента (Claude builds it),
-а потом пользователь либо подтверждает UX, либо переделывает. Чтобы reviewer
-сразу видел статус — каждая story помечается badge'ом в правом верхнем углу
-preview:
-
-- **🤖 AGENT-BUILT — нужна доработка** (amber) — собрано агентом, UX **не**
-  верифицирован живым человеком. Default.
-- **✋ HANDCRAFTED** (green) — пользователь сам выверил UX, можно
-  использовать в production.
-
-### Как пометить story
-
-```ts
-const meta = {
-  title: "Components/Button",
-  component: Button,
-  parameters: {
-    handcrafted: true, // ✋ HANDCRAFTED badge
-  },
-};
-```
-
-Если не указано — `false` (badge **AGENT-BUILT**). Это намеренно: явное
-действие пользователя нужно, чтобы пометить компонент как доработанный.
-
-Поле `parameters.handcrafted` можно override'ить и на уровне отдельной story
-(например, `Default` уже доведён, а `Loading` — ещё нет).
 
 ## Theme switcher
 
@@ -125,7 +92,6 @@ const meta = {
 5. Поставь `tags: ["autodocs"]` — Storybook автоматом сгенерирует Docs page
    с props table и source code (source — closed by default, открывается
    через "Show code").
-6. Не помечай `handcrafted: true`, пока пользователь не подтвердил UX live.
 
 ## Дополнительно
 

@@ -7,10 +7,8 @@
 
 #![cfg(target_os = "windows")]
 
-use crate::app_index::app::{App, AppKind};
-use crate::app_index::icons;
+use crate::app_index::app::{App, AppKind, IconSource};
 use crate::app_index::{AppIndexError, AppSource, Result};
-use std::path::PathBuf;
 use windows::core::HSTRING;
 use windows::ApplicationModel::Package;
 use windows::Management::Deployment::{PackageManager, PackageTypes};
@@ -30,17 +28,7 @@ const NOISE_PREFIXES: &[&str] = &[
 /// Win32 epoch (1601-01-01) → Unix epoch (1970-01-01) — разница в 100ns тиках.
 const FILETIME_UNIX_EPOCH_DIFF: i64 = 116_444_736_000_000_000;
 
-pub struct UwpSource {
-    /// Eager UWP icon extraction directory. См. `icons.rs` Option A —
-    /// извлекаем logo в `discover()` пока Package ещё в руках.
-    icon_cache_dir: PathBuf,
-}
-
-impl UwpSource {
-    pub fn new(icon_cache_dir: PathBuf) -> Self {
-        Self { icon_cache_dir }
-    }
-}
+pub struct UwpSource;
 
 impl AppSource for UwpSource {
     fn name(&self) -> &'static str {
@@ -66,7 +54,7 @@ impl AppSource for UwpSource {
         let mut out: Vec<App> = Vec::new();
 
         for pkg in packages {
-            match collect_entries_from_package(&pkg, &self.icon_cache_dir, &mut out) {
+            match collect_entries_from_package(&pkg, &mut out) {
                 Ok(()) => {}
                 Err(e) => {
                     tracing::debug!(
@@ -84,11 +72,7 @@ impl AppSource for UwpSource {
 
 /// Извлечь все валидные AppListEntry из одного Package, заполнить `out`.
 /// Любая ошибка короткозамыкает обработку этого пакета (но не всего скана).
-fn collect_entries_from_package(
-    pkg: &Package,
-    icon_cache_dir: &std::path::Path,
-    out: &mut Vec<App>,
-) -> Result<()> {
+fn collect_entries_from_package(pkg: &Package, out: &mut Vec<App>) -> Result<()> {
     // Filter: framework / resource / unavailable.
     if pkg.IsFramework().unwrap_or(false) {
         return Ok(());
@@ -119,6 +103,12 @@ fn collect_entries_from_package(
     } else {
         0
     };
+    let package_full_name = pkg
+        .Id()
+        .ok()
+        .and_then(|id| id.FullName().ok())
+        .map(|h| h.to_string())
+        .unwrap_or_default();
 
     let entries_op = pkg.GetAppListEntriesAsync().map_err(|e| {
         AppIndexError::Discover("uwp".into(), format!("GetAppListEntriesAsync: {e}"))
@@ -155,15 +145,20 @@ fn collect_entries_from_package(
 
         let exec_path = format!("shell:AppsFolder\\{aumid}");
 
-        // Eager logo extraction — Package в руках, не нужно повторно лукапить.
-        // Ошибка → placeholder (ensure_icon_for_uwp catch'ает внутри).
-        let icon_path = icons::ensure_icon_for_uwp(icon_cache_dir, &exec_path, pkg).ok();
-
+        // Сохраняем package metadata для throttled lazy extraction.
+        // См. postmortems.md § 2026-06-09.
         out.push(App {
             id: aumid.clone(),
             name,
             exec_path,
-            icon_path,
+            icon_path: None,
+            icon_source: if package_full_name.is_empty() {
+                None
+            } else {
+                Some(IconSource::UwpPackage {
+                    package_full_name: package_full_name.clone(),
+                })
+            },
             kind: AppKind::Uwp,
             source: "uwp".into(),
             mtime,

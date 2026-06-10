@@ -7,9 +7,6 @@ const meta: Meta<typeof BlocklistCard> = {
   tags: ["autodocs"],
   parameters: {
     layout: "centered",
-    // Этот компонент свежий — agent-built, не handcrafted.
-    // После того как юзер allowed UX → мы переключим на true.
-    handcrafted: false,
   },
   argTypes: {
     name: { control: "text" },

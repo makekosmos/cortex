@@ -9,10 +9,10 @@ use crate::app_index::app::{App, AppKind};
 use crate::app_index::{AppIndexError, AppSource, Result};
 use std::path::PathBuf;
 
-pub fn sources(icon_cache_dir: PathBuf) -> Vec<Box<dyn AppSource>> {
+pub fn sources(_icon_cache_dir: PathBuf) -> Vec<Box<dyn AppSource>> {
     vec![
-        Box::new(start_menu::StartMenuSource::new(icon_cache_dir.clone())),
-        Box::new(uwp::UwpSource::new(icon_cache_dir)),
+        Box::new(start_menu::StartMenuSource),
+        Box::new(uwp::UwpSource),
     ]
 }
 

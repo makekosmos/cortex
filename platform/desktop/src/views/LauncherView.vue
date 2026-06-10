@@ -180,6 +180,7 @@ interface AppEntry {
   name: string;
   exec_path: string;
   icon_path: string | null;
+  icon_ref?: string | null;
   kind: string;
   source: string;
   mtime: number | null;
@@ -193,7 +194,7 @@ function appToCommand(a: AppEntry): CommandRecord {
     title: a.name,
     category: "open",
     kind: "app",
-    icon: a.icon_path ?? undefined,
+    icon: a.icon_ref ?? a.icon_path ?? undefined,
   };
 }
 

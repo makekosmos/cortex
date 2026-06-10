@@ -962,6 +962,7 @@ async fn resolve_icon_ref(
             .unwrap_or_else(|| sample.process_name.clone()),
         exec_path: sample.exe_path.clone(),
         icon_path: None,
+        icon_source: None,
         kind: AppKind::Win32,
         source: "usage_tracker".to_string(),
         mtime: 0,

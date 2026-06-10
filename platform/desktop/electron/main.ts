@@ -30,6 +30,7 @@ import {
   nativeImage,
   nativeTheme,
   powerMonitor,
+  protocol,
   screen,
 } from "electron";
 import { resolveInstance, applyInstanceToApp, verifyUserDataMatches } from "./instance";
@@ -54,6 +55,7 @@ if (process.platform === "darwin") {
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { ArkClient, ensureKeplerRunning } from "@kosmos/ark";
 import { keplerDataDir } from "./data-dir";
@@ -117,6 +119,17 @@ import {
   setupAutoUpdater,
 } from "./autoupdater-host";
 import { setupPomodoroNotifier, teardownPomodoroNotifier } from "./pomodoro-notifier";
+import {
+  applyWindowMaterial,
+  backgroundMaterialOption,
+  resolveWindowMaterial,
+  type KosmosWindowMaterial,
+} from "./window-effects";
+import {
+  APP_ICON_PROTOCOL,
+  bufferToArrayBuffer,
+  parseAppIconRequestUrl,
+} from "./app-icon-protocol";
 
 // См. postmortems.md § 2026-05-30: focus-block dynamic chunk imports from
 // main.js after Vite/Rolldown code-splitting, so these helper APIs must remain
@@ -135,15 +148,24 @@ const WINDOW_HEIGHT = 460;
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: APP_ICON_PROTOCOL,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+    },
+  },
+]);
+
 // Mica — modern Win11 22H2+ backdrop (static texture от desktop wallpaper,
-// дешевле acrylic'а в DWM). Env override `KEPLER_BG_MATERIAL=acrylic|mica|none`
-// для experiment'ов / fallback. Non-Win11 systems: setBackgroundMaterial no-op'ит,
-// окно остаётся opaque (acceptable graceful fallback).
-type LauncherBgMaterial = "acrylic" | "mica" | "none";
-function resolveLauncherBgMaterial(): LauncherBgMaterial {
-  const v = (process.env.KEPLER_BG_MATERIAL ?? "").toLowerCase();
-  if (v === "mica" || v === "none" || v === "acrylic") return v;
-  return "mica";
+// дешевле acrylic'а в DWM). Global env override:
+// `KOSMOS_WINDOW_EFFECTS=flat|mica|acrylic`; legacy
+// `KEPLER_BG_MATERIAL=acrylic|mica|none` remains supported when global flag is unset.
+// Non-Win11 systems: setBackgroundMaterial no-op'ит, окно остаётся opaque.
+function resolveLauncherBgMaterial(): KosmosWindowMaterial {
+  return resolveWindowMaterial("mica");
 }
 
 /**
@@ -208,6 +230,7 @@ let recoveringBackend = false;
 let arkClientReady: Promise<ArkClient> | null = null;
 let arkClientReadyResolve: ((c: ArkClient) => void) | null = null;
 let arkClientReadyReject: ((e: Error) => void) | null = null;
+const appIconBytesCache = new Map<string, Buffer>();
 // --- single instance ---------------------------------------------------------
 
 if (!app.requestSingleInstanceLock()) {
@@ -491,6 +514,7 @@ function defaultLauncherPosition(): LauncherPosition {
 
 function createLauncher() {
   const pos = defaultLauncherPosition();
+  const backgroundMaterial = resolveLauncherBgMaterial();
 
   mainWindow = new BrowserWindow({
     width: WINDOW_WIDTH,
@@ -514,7 +538,7 @@ function createLauncher() {
     // always-on-top + showInactive/focus может активировать app без видимого
     // reactive window после первого input event. Этот path нужен только Windows.
     alwaysOnTop: process.platform === "win32",
-    backgroundMaterial: resolveLauncherBgMaterial(),
+    ...backgroundMaterialOption(backgroundMaterial),
     backgroundColor: "#00000000",
     roundedCorners: true,
     webPreferences: {
@@ -533,10 +557,8 @@ function createLauncher() {
   // не применяется на frameless+alwaysOnTop комбинации; setBackgroundMaterial
   // прямо дёргает DwmSetWindowAttribute. Безопасно: no-op на non-Win11.
   try {
-    mainWindow.setBackgroundMaterial(resolveLauncherBgMaterial());
-  } catch (e) {
-    console.error("[kepler-shell] setBackgroundMaterial failed:", e);
-  }
+    applyWindowMaterial(mainWindow, backgroundMaterial, "launcher");
+  } catch {}
 
   // Hide launcher при потере фокуса (клик вне окна / Alt+Tab).
   // В dev пропускаем если фокус ушёл на DevTools — иначе нечем отлаживать.
@@ -758,6 +780,7 @@ async function resetArkClient(reason: string): Promise<void> {
   arkClientReady = null;
   const prev = arkClient;
   arkClient = null;
+  appIconBytesCache.clear();
   setExtensionArkBridge({ request: null, subscribe: null });
   if (wasConnected) broadcastBackendEvent("kepler:backend:disconnected");
   // pomodoro-notifier + focus-widget держат ref на старый arkClient через
@@ -773,6 +796,48 @@ async function resetArkClient(reason: string): Promise<void> {
       keplerLog.warn("ark", "ArkClient stop failed", { err: String(e) });
     }
   }
+}
+
+function registerAppIconProtocol(): void {
+  protocol.handle(APP_ICON_PROTOCOL, async (request) => {
+    let appId: string | null = null;
+    try {
+      appId = parseAppIconRequestUrl(request.url);
+      if (!appId) {
+        return new Response(null, { status: 404 });
+      }
+
+      const cached = appIconBytesCache.get(appId);
+      if (cached) {
+        return new Response(bufferToArrayBuffer(cached), {
+          headers: { "content-type": "image/png", "cache-control": "max-age=3600" },
+        });
+      }
+
+      const client = await awaitArkReady(5_000);
+      const resp = (await client.invokeOperation({
+        operation: "app_index.icon_path",
+        id: appId,
+      })) as { path?: unknown };
+      const iconPath = typeof resp?.path === "string" ? resp.path : "";
+      if (!iconPath || !existsSync(iconPath)) {
+        return new Response(null, { status: 404 });
+      }
+
+      // См. postmortems.md § 2026-06-09: only visible <img> requests touch icon files.
+      const bytes = await readFile(iconPath);
+      appIconBytesCache.set(appId, bytes);
+      return new Response(bufferToArrayBuffer(bytes), {
+        headers: { "content-type": "image/png", "cache-control": "max-age=3600" },
+      });
+    } catch (e) {
+      keplerLog.warn("app-icon", "kosmos-icon protocol lookup failed", {
+        appId: appId ?? null,
+        err: String(e),
+      });
+      return new Response(null, { status: 404 });
+    }
+  });
 }
 
 function scheduleArkClientInitRetry(reason: string): void {
@@ -1119,14 +1184,14 @@ safeHandle("kepler:search:query", async (_e, text: string): Promise<SearchResult
   }
 });
 
-function staticCommands(): CommandRecord[] {
+async function staticCommands(): Promise<CommandRecord[]> {
   // Filter: команды с requiresExtension показываются только если этот
   // extension реально установлен (manifest.json в %APPDATA%\Kosmos\extensions\).
   // Snapshot installed ids per-call — listInstalledUserExtensions делает
   // disk scan, дёшево (4-10 dir entries).
   let installedIds: Set<string>;
   try {
-    installedIds = new Set(listInstalledUserExtensions().map((e) => e.id));
+    installedIds = new Set((await listInstalledUserExtensions()).map((e) => e.id));
   } catch {
     installedIds = new Set();
   }
@@ -1153,7 +1218,7 @@ safeHandle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
   const byId = new Map<string, CommandRecord>();
 
   // 1) Kepler-internal (settings/dashboard/check-updates).
-  for (const c of staticCommands()) byId.set(c.id, c);
+  for (const c of await staticCommands()) byId.set(c.id, c);
 
   // 2) Manifest-declared из всех установленных + dev-tree extension'ов.
   try {
@@ -1749,6 +1814,7 @@ app.whenReady().then(async () => {
   }
 
   spawnBackend();
+  registerAppIconProtocol();
   createLauncher();
   // Буфер обмена заморожен — см. CLIPBOARD_HISTORY_ENABLED в shared/ipc-types.
   if (CLIPBOARD_HISTORY_ENABLED) setClipboardHistoryShellOpener(showClipboardHistoryLauncher);

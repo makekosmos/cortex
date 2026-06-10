@@ -1,7 +1,7 @@
 # usage-tracker
 
 ::: tip Статус
-После Phase E3 (2026-05-14) `usage-tracker` **больше не standalone-сервис**. Активный код живёт как модуль в составе kepler-backend — `platform/runtime/src/usage_tracker/`. Старый бинарь (исторический путь services/usage-tracker) заморожен в `legacy/usage-tracker/`.
+После Phase E3 (2026-05-14) `usage-tracker` **больше не standalone-сервис**. Активный код живёт как модуль в составе kepler-backend — `platform/runtime/src/usage_tracker/`. Старый бинарь (исторический путь services/usage-tracker) — frozen legacy и больше не active-tree path.
 :::
 
 Записывает process runtime/playtime и foreground activity **напрямую в ARK DB** изнутри kepler-backend процесса. На устройстве пользователя нет отдельного `usage-tracker.exe` — модуль стартует автоматически вместе с backend'ом (Phase E2 wiring).
@@ -76,7 +76,7 @@ cargo test --manifest-path services\kepler-backend\Cargo.toml --lib
 
 ## Legacy standalone
 
-Standalone бинарь `usage-tracker.exe` со собственным installer'ом (`install.ps1` / `uninstall.ps1`, autostart через `HKCU\...\Run`) заморожен. Если нужен такой режим обратно — есть архив в `legacy/usage-tracker/`, но возвращать его в активный код запрещено (см. [Запреты](/agents/forbidden#usage-tracker)).
+Standalone бинарь `usage-tracker.exe` со собственным installer'ом (`install.ps1` / `uninstall.ps1`, autostart через `HKCU\...\Run`) заморожен. Возвращать его в активный код запрещено (см. [Запреты](/agents/forbidden#usage-tracker)).
 
 ## Заметки
 

@@ -7,7 +7,6 @@ const meta: Meta<typeof Checkbox> = {
   tags: ["autodocs"],
   parameters: {
     layout: "centered",
-    handcrafted: false,
   },
   argTypes: {
     modelValue: { control: "boolean" },

@@ -13,6 +13,7 @@ interface FocusAppEntry {
   name: string;
   exec_path?: string;
   icon_path?: string | null;
+  icon_ref?: string | null;
 }
 
 const snapshot = shallowRef<FocusSessionSnapshot | null>(null);
@@ -158,7 +159,7 @@ const blockedAppPayload = computed<FocusBlockedApp[]>(() =>
   blockedApps.value.map((app) => ({
     id: app.id,
     name: app.name,
-    icon: app.icon_path ?? null,
+    icon: app.icon_ref ?? app.icon_path ?? null,
     exec_path: app.exec_path ?? null,
   })),
 );
@@ -260,6 +261,10 @@ function removeBlockedApp(appId: string): void {
 function appById(id: string | number | null | undefined): FocusAppEntry | null {
   if (typeof id !== "string") return null;
   return apps.value.find((app) => app.id === id) ?? null;
+}
+
+function appIcon(app: FocusAppEntry | null | undefined): string | null {
+  return app?.icon_ref ?? app?.icon_path ?? null;
 }
 
 function onTitleKeydown(event: KeyboardEvent): void {
@@ -443,8 +448,8 @@ defineExpose({ start });
                   @click="removeBlockedApp(app.id)"
                 >
                   <img
-                    v-if="app.icon_path"
-                    :src="app.icon_path"
+                    v-if="appIcon(app)"
+                    :src="appIcon(app)!"
                     class="focus-command__chip-icon"
                     alt=""
                   />
@@ -464,16 +469,16 @@ defineExpose({ start });
               >
                 <template #trigger-leading="{ option }">
                   <img
-                    v-if="appById(option?.value)?.icon_path"
-                    :src="appById(option?.value)!.icon_path!"
+                    v-if="appIcon(appById(option?.value))"
+                    :src="appIcon(appById(option?.value))!"
                     class="focus-command__dropdown-icon"
                     alt=""
                   />
                 </template>
                 <template #option-leading="{ option }">
                   <img
-                    v-if="appById(option.value)?.icon_path"
-                    :src="appById(option.value)!.icon_path!"
+                    v-if="appIcon(appById(option.value))"
+                    :src="appIcon(appById(option.value))!"
                     class="focus-command__dropdown-icon"
                     alt=""
                   />

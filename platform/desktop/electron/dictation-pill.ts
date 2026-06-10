@@ -25,6 +25,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { awaitArkReady } from "./main";
+import {
+  applyWindowMaterial,
+  backgroundMaterialOption,
+  resolveWindowMaterial,
+} from "./window-effects";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,6 +64,7 @@ function createPill(): BrowserWindow {
   const x = area.x + Math.floor((area.width - WIDTH) / 2);
   // Снизу экрана, с отступом BOTTOM_MARGIN. `workArea` уже исключает taskbar.
   const y = area.y + area.height - HEIGHT - BOTTOM_MARGIN;
+  const backgroundMaterial = resolveWindowMaterial("none");
 
   const win = new BrowserWindow({
     width: WIDTH,
@@ -76,6 +82,7 @@ function createPill(): BrowserWindow {
     alwaysOnTop: true,
     transparent: true,
     backgroundColor: "#00000000",
+    ...backgroundMaterialOption(backgroundMaterial),
     roundedCorners: true,
     // КРИТИЧНО: focusable: false — pill НЕ ворует фокус с активного окна.
     // Иначе Ctrl+V после inject улетит в pill (а не в Telegram / редактор).
@@ -91,6 +98,7 @@ function createPill(): BrowserWindow {
   });
 
   win.setAlwaysOnTop(true, "screen-saver", 1);
+  applyWindowMaterial(win, backgroundMaterial, "dictation-pill");
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) {

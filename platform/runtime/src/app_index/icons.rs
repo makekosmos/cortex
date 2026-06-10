@@ -9,14 +9,10 @@
 // Storage: `<icon_cache_dir>/<sha256(exec_path)[..16]>.png`. Идемпотентно —
 // если файл существует, не пересоздаём.
 //
-// UWP coupling — Option A: `UwpSource` принимает `icon_cache_dir` в `new()` и
-// вызывает `ensure_icon_for_uwp(...)` прямо в `discover()` с доступом к
-// `Package`. Альтернатива (resolve Package из AUMID через PackageManager) —
-// O(n) на каждый UWP при каждом scan, slow. Eager extraction в discover
-// pays once и shortcut'ит `AppIndex::rescan`'s `ensure_icon` loop через
-// pre-set `App.icon_path`.
+// Discovery не пишет PNG. Sources сохраняют `App.icon_source`, а `AppIndex::rescan`
+// вызывает `ensure_icon` последовательным throttled loop'ом.
 
-use crate::app_index::app::{App, AppKind};
+use crate::app_index::app::{App, AppKind, IconSource};
 use crate::app_index::Result;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -54,6 +50,13 @@ pub fn ensure_icon(cache_dir: &Path, app: &App) -> Result<String> {
         AppKind::Win32 => {
             #[cfg(target_os = "windows")]
             {
+                if let Some(IconSource::StartMenuLnk {
+                    lnk_path,
+                    target_path,
+                }) = app.icon_source.as_ref()
+                {
+                    return ensure_icon_for_lnk(cache_dir, Path::new(lnk_path), target_path);
+                }
                 win32::extract_to_png(&app.exec_path, &path).map_err(|e| {
                     tracing::debug!(
                         target: "app_index::icons",
@@ -73,12 +76,26 @@ pub fn ensure_icon(cache_dir: &Path, app: &App) -> Result<String> {
             }
         }
         AppKind::Uwp => {
-            // UWP icons извлекаются eagerly в UwpSource::discover()
-            // через ensure_icon_for_uwp() с доступом к Package. Здесь
-            // fallback не имеем — return Err (UI покажет placeholder).
-            Err(crate::app_index::AppIndexError::Other(
-                "UWP icon must be extracted via ensure_icon_for_uwp at discover time".into(),
-            ))
+            #[cfg(target_os = "windows")]
+            {
+                if let Some(IconSource::UwpPackage { package_full_name }) = app.icon_source.as_ref()
+                {
+                    return ensure_icon_for_uwp_package(
+                        cache_dir,
+                        &app.exec_path,
+                        package_full_name,
+                    );
+                }
+                Err(crate::app_index::AppIndexError::Other(
+                    "UWP icon extraction missing package metadata".into(),
+                ))
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                Err(crate::app_index::AppIndexError::Other(
+                    "UWP icon extraction only on Windows".into(),
+                ))
+            }
         }
         _ => Err(crate::app_index::AppIndexError::Other(format!(
             "icon extraction not implemented for kind: {:?}",
@@ -88,7 +105,7 @@ pub fn ensure_icon(cache_dir: &Path, app: &App) -> Result<String> {
 }
 
 /// Win32 икон-extractor с приоритетом .lnk::icon_location над target.
-/// Используется eagerly из StartMenuSource::discover() — это спасает
+/// Используется lazy из throttled icon queue — это спасает
 /// Squirrel-installer apps (Discord, Slack, Teams), где target=Update.exe
 /// без иконки, а icon_location в .lnk указывает на реальный exe.
 #[cfg(target_os = "windows")]
@@ -105,7 +122,7 @@ pub fn ensure_icon_for_lnk(cache_dir: &Path, lnk_path: &Path, target_path: &str)
     Ok(out.to_string_lossy().to_string())
 }
 
-/// Eager UWP icon extraction — вызывается из `UwpSource::discover()`.
+/// UWP icon extraction для throttled queue.
 /// Принимает уже открытый `Package` (избегает повторного PackageManager lookup).
 /// Идемпотентно (skip if exists). При ошибке — placeholder, debug log.
 #[cfg(target_os = "windows")]
@@ -136,6 +153,30 @@ pub fn ensure_icon_for_uwp(
     }
 
     Ok(path.to_string_lossy().to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn ensure_icon_for_uwp_package(
+    cache_dir: &Path,
+    exec_path: &str,
+    package_full_name: &str,
+) -> Result<String> {
+    use windows::core::HSTRING;
+    use windows::Management::Deployment::PackageManager;
+
+    let package_manager = PackageManager::new()
+        .map_err(|e| crate::app_index::AppIndexError::Other(format!("PackageManager::new: {e}")))?;
+    let empty = HSTRING::new();
+    let full_name = HSTRING::from(package_full_name);
+    let package = package_manager
+        .FindPackageByUserSecurityIdPackageFullName(&empty, &full_name)
+        .map_err(|e| {
+            crate::app_index::AppIndexError::Other(format!(
+                "FindPackageByUserSecurityIdPackageFullName: {e}"
+            ))
+        })?;
+
+    ensure_icon_for_uwp(cache_dir, exec_path, &package)
 }
 
 /// 1×1 прозрачный PNG (67 байт). Placeholder если extractor не сработал.

@@ -14,16 +14,8 @@
 // Revert: восстанавливает самый свежий backup (или указанный timestamp) в
 // `extensions/<id>/`, текущая копия уходит в новый backup как «pre-revert».
 
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, renameSync } from "node:fs";
+import * as fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
@@ -72,8 +64,8 @@ function findEOCD(buf: Buffer): { cdOffset: number; cdEntries: number } | null {
   return null;
 }
 
-function readZipEntries(zipPath: string): ZipEntry[] {
-  const buf = readFileSync(zipPath);
+async function readZipEntries(zipPath: string): Promise<ZipEntry[]> {
+  const buf = await fs.readFile(zipPath);
   const eocd = findEOCD(buf);
   if (!eocd) throw new Error(`not a valid zip (no EOCD): ${zipPath}`);
   const entries: ZipEntry[] = [];
@@ -124,18 +116,18 @@ function safeEntryName(name: string): string {
   return norm;
 }
 
-function extractZipTo(zipPath: string, targetDir: string): void {
-  const entries = readZipEntries(zipPath);
-  mkdirSync(targetDir, { recursive: true });
+async function extractZipTo(zipPath: string, targetDir: string): Promise<void> {
+  const entries = await readZipEntries(zipPath);
+  await fs.mkdir(targetDir, { recursive: true });
   for (const e of entries) {
     const safe = safeEntryName(e.name);
     const out = path.join(targetDir, safe);
     if (e.isDir) {
-      mkdirSync(out, { recursive: true });
+      await fs.mkdir(out, { recursive: true });
       continue;
     }
-    mkdirSync(path.dirname(out), { recursive: true });
-    writeFileSync(out, e.data);
+    await fs.mkdir(path.dirname(out), { recursive: true });
+    await fs.writeFile(out, e.data);
   }
 }
 
@@ -175,8 +167,8 @@ function extensionsTmpRoot(): string {
  *
  * Throws при invalid zip / отсутствии manifest.json / invalid JSON.
  */
-export function previewKext(kextPath: string): KextManifestPreview {
-  const entries = readZipEntries(kextPath);
+export async function previewKext(kextPath: string): Promise<KextManifestPreview> {
+  const entries = await readZipEntries(kextPath);
   const manifestEntry = entries.find((e) => e.name === "manifest.json" && !e.isDir);
   if (!manifestEntry) {
     throw new Error("manifest.json не найден в .kext");
@@ -229,7 +221,7 @@ export function previewKext(kextPath: string): KextManifestPreview {
     isUpgrade = true;
     try {
       const cur = JSON.parse(
-        readFileSync(path.join(currentDir, "manifest.json"), "utf8"),
+        await fs.readFile(path.join(currentDir, "manifest.json"), "utf8"),
       ) as ExtensionManifest;
       currentVersion = cur.version ?? null;
     } catch {
@@ -246,14 +238,14 @@ export function previewKext(kextPath: string): KextManifestPreview {
  * pre-extracted (для dev). previewKext поддерживает только zip — для dir
  * используем previewDir.
  */
-export function previewDir(extDir: string): KextManifestPreview {
+export async function previewDir(extDir: string): Promise<KextManifestPreview> {
   const manifestPath = path.join(extDir, "manifest.json");
   if (!existsSync(manifestPath)) {
     throw new Error(`manifest.json не найден в ${extDir}`);
   }
   let manifest: ExtensionManifest;
   try {
-    manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as ExtensionManifest;
+    manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as ExtensionManifest;
   } catch (e) {
     throw new Error(`manifest.json повреждён: ${(e as Error).message}`);
   }
@@ -279,7 +271,7 @@ export function previewDir(extDir: string): KextManifestPreview {
           : ext === ".jpg" || ext === ".jpeg"
             ? "image/jpeg"
             : "image/png";
-      iconDataUri = `data:${mime};base64,${readFileSync(iconPath).toString("base64")}`;
+      iconDataUri = `data:${mime};base64,${(await fs.readFile(iconPath)).toString("base64")}`;
     }
   }
   const currentDir = path.join(userExtensionsRoot(), manifest.id);
@@ -289,7 +281,7 @@ export function previewDir(extDir: string): KextManifestPreview {
     isUpgrade = true;
     try {
       const cur = JSON.parse(
-        readFileSync(path.join(currentDir, "manifest.json"), "utf8"),
+        await fs.readFile(path.join(currentDir, "manifest.json"), "utf8"),
       ) as ExtensionManifest;
       currentVersion = cur.version ?? null;
     } catch {
@@ -303,11 +295,11 @@ export function previewDir(extDir: string): KextManifestPreview {
  * Универсальный preview: если path — .kext / .zip файл, читает zip; если
  * директория с manifest.json, читает её. Используется install dialog'ом.
  */
-export function previewSource(sourcePath: string): KextManifestPreview {
+export async function previewSource(sourcePath: string): Promise<KextManifestPreview> {
   if (!existsSync(sourcePath)) {
     throw new Error(`источник не существует: ${sourcePath}`);
   }
-  const stat = statSync(sourcePath);
+  const stat = await fs.stat(sourcePath);
   if (stat.isDirectory()) {
     return previewDir(sourcePath);
   }
@@ -320,70 +312,76 @@ export function previewSource(sourcePath: string): KextManifestPreview {
  *
  * После создания удаляет старые backup'ы, если их больше MAX_BACKUPS.
  */
-export function backupExtension(id: string): string | null {
+export async function backupExtension(id: string): Promise<string | null> {
   const currentDir = path.join(userExtensionsRoot(), id);
   if (!existsSync(currentDir)) return null;
   const backupsRoot = path.join(extensionsBackupsRoot(), id);
-  mkdirSync(backupsRoot, { recursive: true });
+  await fs.mkdir(backupsRoot, { recursive: true });
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const target = path.join(backupsRoot, timestamp);
-  // cpSync с recursive — Node 16+ поддерживает.
-  copyDirSync(currentDir, target);
+  await copyDirAsync(currentDir, target);
   // Pruning: удалить старые backup'ы.
-  pruneBackups(id);
+  await pruneBackups(id);
   return target;
 }
 
-function copyDirSync(src: string, dst: string): void {
-  mkdirSync(dst, { recursive: true });
-  for (const entry of readdirSync(src, { withFileTypes: true })) {
-    const s = path.join(src, entry.name);
-    const d = path.join(dst, entry.name);
-    if (entry.isDirectory()) {
-      copyDirSync(s, d);
-    } else if (entry.isFile()) {
-      writeFileSync(d, readFileSync(s));
-    }
-    // Symlinks / sockets игнорируем — extension'ы не должны их содержать.
-  }
+async function copyDirAsync(src: string, dst: string): Promise<void> {
+  // dereference: false (default) — сохраняет поведение старой синхронной реализации, которая
+  // пропускала symlink'и (entry.isFile()/isDirectory() возвращают false для symlink).
+  // Важно: extension dir не должен содержать symlink'ов; dereference: true скопировало бы
+  // содержимое node_modules/ junction'ов при backup — регрессия (см. spec § Риски).
+  await fs.cp(src, dst, { recursive: true });
 }
 
-function pruneBackups(id: string): void {
+async function pruneBackups(id: string): Promise<void> {
   const root = path.join(extensionsBackupsRoot(), id);
   if (!existsSync(root)) return;
-  const entries = readdirSync(root)
-    .filter((n) => {
+  const entries: string[] = [];
+  try {
+    for (const n of await fs.readdir(root)) {
       try {
-        return statSync(path.join(root, n)).isDirectory();
+        const stat = await fs.stat(path.join(root, n));
+        if (stat.isDirectory()) {
+          entries.push(n);
+        }
       } catch {
-        return false;
+        // skip unreadable entry
       }
-    })
-    .sort();
+    }
+  } catch {
+    return; // directory doesn't exist or not readable
+  }
+  entries.sort();
   // Старшие в начале (ISO timestamp сортится лексикографически).
   while (entries.length > MAX_BACKUPS) {
     const old = entries.shift()!;
     try {
-      rmSync(path.join(root, old), { recursive: true, force: true });
+      await fs.rm(path.join(root, old), { recursive: true, force: true });
     } catch (e) {
       console.warn(`[ext:install] prune backup ${id}/${old} failed:`, e);
     }
   }
 }
 
-export function listBackups(id: string): string[] {
+export async function listBackups(id: string): Promise<string[]> {
   const root = path.join(extensionsBackupsRoot(), id);
   if (!existsSync(root)) return [];
-  return readdirSync(root)
-    .filter((n) => {
+  const entries: string[] = [];
+  try {
+    for (const n of await fs.readdir(root)) {
       try {
-        return statSync(path.join(root, n)).isDirectory();
+        const stat = await fs.stat(path.join(root, n));
+        if (stat.isDirectory()) {
+          entries.push(n);
+        }
       } catch {
-        return false;
+        // skip unreadable entry
       }
-    })
-    .sort()
-    .reverse(); // самые свежие первыми
+    }
+  } catch {
+    return []; // directory doesn't exist or not readable
+  }
+  return entries.sort().reverse(); // самые свежие первыми
 }
 
 /**
@@ -397,28 +395,28 @@ export function listBackups(id: string): string[] {
  *
  * Возвращает финальный preview с обновлёнными currentVersion / isUpgrade.
  */
-export function installFromPath(sourcePath: string): KextManifestPreview {
-  const preview = previewSource(sourcePath);
+export async function installFromPath(sourcePath: string): Promise<KextManifestPreview> {
+  const preview = await previewSource(sourcePath);
   if (preview.apiCompatError) {
     throw new Error(`API compat: ${preview.apiCompatError}`);
   }
   const id = preview.manifest.id;
   const tmpRoot = extensionsTmpRoot();
-  mkdirSync(tmpRoot, { recursive: true });
+  await fs.mkdir(tmpRoot, { recursive: true });
   const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const tmpDir = path.join(tmpRoot, `${id}-${stamp}`);
 
   try {
-    const stat = statSync(sourcePath);
+    const stat = await fs.stat(sourcePath);
     if (stat.isDirectory()) {
-      copyDirSync(sourcePath, tmpDir);
+      await copyDirAsync(sourcePath, tmpDir);
     } else {
-      extractZipTo(sourcePath, tmpDir);
+      await extractZipTo(sourcePath, tmpDir);
     }
     // Validate post-extract: manifest.json должен совпасть с тем, что мы
     // прочитали в preview (id матчится).
     const extractedManifest = JSON.parse(
-      readFileSync(path.join(tmpDir, "manifest.json"), "utf8"),
+      await fs.readFile(path.join(tmpDir, "manifest.json"), "utf8"),
     ) as ExtensionManifest;
     if (extractedManifest.id !== id) {
       throw new Error(
@@ -426,15 +424,15 @@ export function installFromPath(sourcePath: string): KextManifestPreview {
       );
     }
   } catch (e) {
-    rmSync(tmpDir, { recursive: true, force: true });
+    await fs.rm(tmpDir, { recursive: true, force: true });
     throw e;
   }
 
   // Бэкап.
-  const backup = backupExtension(id);
+  const backup = await backupExtension(id);
 
   const target = path.join(userExtensionsRoot(), id);
-  mkdirSync(path.dirname(target), { recursive: true });
+  await fs.mkdir(path.dirname(target), { recursive: true });
 
   try {
     // Atomic switch: rename target → .old, rename tmp → target, rm .old.
@@ -453,23 +451,23 @@ export function installFromPath(sourcePath: string): KextManifestPreview {
       throw e;
     }
     if (oldDir && existsSync(oldDir)) {
-      rmSync(oldDir, { recursive: true, force: true });
+      await fs.rm(oldDir, { recursive: true, force: true });
     }
   } catch (e) {
     // best-effort revert from backup
     if (backup && !existsSync(target)) {
       try {
-        copyDirSync(backup, target);
+        await copyDirAsync(backup, target);
       } catch (revertErr) {
         console.error(`[ext:install] revert from backup failed:`, revertErr);
       }
     }
-    rmSync(tmpDir, { recursive: true, force: true });
+    await fs.rm(tmpDir, { recursive: true, force: true });
     throw e;
   }
 
   // Возвращаем обновлённый preview (после install).
-  const finalPreview = previewDir(target);
+  const finalPreview = await previewDir(target);
   return finalPreview;
 }
 
@@ -480,8 +478,8 @@ export function installFromPath(sourcePath: string): KextManifestPreview {
  * Если `timestamp` не указан — берётся самый свежий backup. Возвращает true
  * если revert удался, false если backup'ов нет.
  */
-export function revertExtension(id: string, timestamp?: string): boolean {
-  const backups = listBackups(id);
+export async function revertExtension(id: string, timestamp?: string): Promise<boolean> {
+  const backups = await listBackups(id);
   if (backups.length === 0) return false;
   const chosen = timestamp ?? backups[0]!;
   const backupDir = path.join(extensionsBackupsRoot(), id, chosen);
@@ -492,16 +490,16 @@ export function revertExtension(id: string, timestamp?: string): boolean {
 
   // Сохраняем текущую копию как pre-revert backup (если есть).
   if (existsSync(target)) {
-    backupExtension(id);
+    await backupExtension(id);
   }
 
   const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const tmpRoot = extensionsTmpRoot();
-  mkdirSync(tmpRoot, { recursive: true });
+  await fs.mkdir(tmpRoot, { recursive: true });
   const tmpDir = path.join(tmpRoot, `${id}-revert-${stamp}`);
 
   try {
-    copyDirSync(backupDir, tmpDir);
+    await copyDirAsync(backupDir, tmpDir);
     let oldDir: string | null = null;
     if (existsSync(target)) {
       oldDir = `${target}.old-${stamp}`;
@@ -514,11 +512,11 @@ export function revertExtension(id: string, timestamp?: string): boolean {
       throw e;
     }
     if (oldDir && existsSync(oldDir)) {
-      rmSync(oldDir, { recursive: true, force: true });
+      await fs.rm(oldDir, { recursive: true, force: true });
     }
     return true;
   } catch (e) {
-    rmSync(tmpDir, { recursive: true, force: true });
+    await fs.rm(tmpDir, { recursive: true, force: true });
     throw e;
   }
 }
@@ -550,17 +548,17 @@ function repoDevExtensionsRoot(): string | null {
   return existsSync(candidate) ? candidate : null;
 }
 
-function readManifestSafe(dir: string): ExtensionManifest | null {
+async function readManifestSafe(dir: string): Promise<ExtensionManifest | null> {
   const manifestPath = path.join(dir, "manifest.json");
   if (!existsSync(manifestPath)) return null;
   try {
-    return JSON.parse(readFileSync(manifestPath, "utf8")) as ExtensionManifest;
+    return JSON.parse(await fs.readFile(manifestPath, "utf8")) as ExtensionManifest;
   } catch {
     return null;
   }
 }
 
-function readIconDataUri(dir: string, manifest: ExtensionManifest): string | null {
+async function readIconDataUri(dir: string, manifest: ExtensionManifest): Promise<string | null> {
   if (!manifest.icon) return null;
   const iconPath = path.join(dir, manifest.icon);
   if (!existsSync(iconPath)) return null;
@@ -571,22 +569,31 @@ function readIconDataUri(dir: string, manifest: ExtensionManifest): string | nul
       : ext === ".jpg" || ext === ".jpeg"
         ? "image/jpeg"
         : "image/png";
-  return `data:${mime};base64,${readFileSync(iconPath).toString("base64")}`;
+  return `data:${mime};base64,${(await fs.readFile(iconPath)).toString("base64")}`;
 }
 
-function scanExtensionsDir(root: string, source: "installed" | "dev"): InstalledExtensionInfo[] {
+async function scanExtensionsDir(
+  root: string,
+  source: "installed" | "dev",
+): Promise<InstalledExtensionInfo[]> {
   if (!existsSync(root)) return [];
   const out: InstalledExtensionInfo[] = [];
-  for (const id of readdirSync(root)) {
+  let entries: string[];
+  try {
+    entries = await fs.readdir(root);
+  } catch {
+    return [];
+  }
+  for (const id of entries) {
     const dir = path.join(root, id);
     let stat;
     try {
-      stat = statSync(dir);
+      stat = await fs.stat(dir);
     } catch {
       continue;
     }
     if (!stat.isDirectory()) continue;
-    const manifest = readManifestSafe(dir);
+    const manifest = await readManifestSafe(dir);
     if (!manifest) continue;
     // Dev-source extensions могут быть в repo но без built dist/ / native exe —
     // не показываем их как "installed" пока bun run build:extensions не сделан.
@@ -602,9 +609,9 @@ function scanExtensionsDir(root: string, source: "installed" | "dev"): Installed
         if (!existsSync(entryPath)) continue;
       }
     }
-    const iconDataUri = readIconDataUri(dir, manifest);
+    const iconDataUri = await readIconDataUri(dir, manifest);
     // backupCount только для installed — у dev-source это repo state, revert не имеет смысла.
-    const backups = source === "installed" ? listBackups(id) : [];
+    const backups = source === "installed" ? await listBackups(id) : [];
     out.push({
       id,
       name: manifest.name,
@@ -621,7 +628,7 @@ function scanExtensionsDir(root: string, source: "installed" | "dev"): Installed
   return out;
 }
 
-export function listInstalledUserExtensions(): InstalledExtensionInfo[] {
+export async function listInstalledUserExtensions(): Promise<InstalledExtensionInfo[]> {
   // Resolution priority согласована с extension-host.ts::resolveExtensionRoots:
   //   1. Repo dev tree — если запущены из repo (developer flow).
   //   2. User-installed — production flow через marketplace / .kext install.
@@ -630,8 +637,8 @@ export function listInstalledUserExtensions(): InstalledExtensionInfo[] {
   // Это значит в dev mode user видит свои repo extensions как "installed"
   // и launcher commands работают сразу — без marketplace download.
   const dev = repoDevExtensionsRoot();
-  const devList = dev ? scanExtensionsDir(dev, "dev") : [];
-  const installedList = scanExtensionsDir(userExtensionsRoot(), "installed");
+  const devList = dev ? await scanExtensionsDir(dev, "dev") : [];
+  const installedList = await scanExtensionsDir(userExtensionsRoot(), "installed");
   const seen = new Set(devList.map((e) => e.id));
   const merged = [...devList, ...installedList.filter((e) => !seen.has(e.id))];
   return merged;
@@ -642,9 +649,9 @@ export function listInstalledUserExtensions(): InstalledExtensionInfo[] {
  * (`extensions-data/<id>/`) сохраняется. Возвращает true если что-то
  * удалили, false если код-папка не существовала.
  */
-export function uninstallExtension(id: string): boolean {
+export async function uninstallExtension(id: string): Promise<boolean> {
   const dir = path.join(userExtensionsRoot(), id);
   if (!existsSync(dir)) return false;
-  rmSync(dir, { recursive: true, force: true });
+  await fs.rm(dir, { recursive: true, force: true });
   return true;
 }

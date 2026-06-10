@@ -12,7 +12,7 @@ const hasRows = computed(() => props.rows.length > 0);
 
 function iconSrc(iconRef?: string | null): string | null {
   if (!iconRef) return null;
-  if (/^(file|https?|data):/i.test(iconRef)) return iconRef;
+  if (/^(file|https?|data|kosmos-icon):/i.test(iconRef)) return iconRef;
   return `file:///${iconRef.replace(/\\/g, "/")}`;
 }
 

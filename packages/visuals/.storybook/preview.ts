@@ -55,17 +55,6 @@ const keplerViewports = {
   },
 };
 
-// --- Component status — handcrafted convention ---------------------------
-// `parameters.handcrafted: true | false` объявляется в каждой *.stories.ts.
-//   true  → ✋ HANDCRAFTED — пользователь сам выверил UX.
-//   false → 🤖 AGENT-BUILT (default) — собрано агентом, требует доработки.
-// Раньше badge рендерился ОВЕРЛЕЕМ поверх preview → ломал визуал компонента
-// (особенно overlay'ев и draggable). Теперь:
-//   - Badge добавляется в `parameters.docs.description.story` → текстом
-//     над preview area в Docs page (не overlay).
-//   - Stories автоматически получают tag `handcrafted` или `agent-built`
-//     через `tags` array — visible в Storybook sidebar.
-
 const preview: Preview = {
   parameters: {
     backgrounds: {
@@ -118,15 +107,7 @@ const preview: Preview = {
         ],
       },
     },
-    // Default convention: agent-built. Stories помечают handcrafted: true,
-    // если пользователь верифицировал UX.
-    handcrafted: false,
   },
-
-  // Default tag для всех stories — sidebar показывает badge рядом с
-  // именем. Stories с `parameters.handcrafted: true` могут override
-  // через `tags: ["handcrafted"]` в meta.
-  tags: ["agent-built"],
 
   decorators: [
     (story, context) => {

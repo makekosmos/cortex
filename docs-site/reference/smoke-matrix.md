@@ -73,7 +73,7 @@ bun run ark:guard:writes
 После Phase B-D из smoke выпали:
 
 - Dashboard `seedSmokeDb.ts` / `smokeAnalytics.ts` — переехали в архив, к smoke не подключены до Phase 6.
-- Standalone `usage-tracker.exe` — заморожен в `legacy/usage-tracker/`. Активные тесты — внутри `platform/runtime` lib.
+- Standalone `usage-tracker.exe` — frozen legacy, больше не active-tree path. Активные тесты — внутри `platform/runtime` lib.
 
 ## Связанные документы
 

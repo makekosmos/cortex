@@ -11,8 +11,8 @@ ARK browser: sidebar с object_types + таблица объектов.
 ::: info Pivot 2026-05-14 → 2026-05-15
 До 2026-05-14 Dashboard жил как Vue extension и показывал usage analytics
 (foreground sessions, app ranking и т.п.). По решению пользователя
-переосмыслен как ARK browser и встроен в shell. Старый extension
-заморожен в `legacy/dashboard-extension/`.
+переосмыслен как ARK browser и встроен в shell. Старый extension больше
+не active-tree path.
 
 2026-05-15 — концепция spaces (welcome screen → space picker → space view)
 убрана. Dashboard сразу открывается на единый список объектов поверх

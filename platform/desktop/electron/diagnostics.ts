@@ -17,18 +17,10 @@
 //   // showSaveDialog и копирует / переименовывает.
 
 import { app, BrowserWindow, contentTracing, ipcMain, dialog, shell, screen } from "electron";
-import {
-  existsSync,
-  mkdirSync,
-  writeFileSync,
-  copyFileSync,
-  readdirSync,
-  statSync,
-  rmSync,
-  unlinkSync,
-} from "node:fs";
+import { existsSync, mkdirSync, unlinkSync } from "node:fs";
+import { promises as fs } from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { keplerDataDir } from "./data-dir";
 import { keplerLog } from "./logging";
 import { resolveInstance } from "./instance";
@@ -60,18 +52,18 @@ interface WindowMoveBenchmarkResult {
   frames_over_50ms: number;
 }
 
-function copyRecentFiles(srcDir: string, destDir: string, keepDays: number): number {
+async function copyRecentFiles(srcDir: string, destDir: string, keepDays: number): Promise<number> {
   if (!existsSync(srcDir)) return 0;
   const cutoff = Date.now() - keepDays * 24 * 60 * 60 * 1000;
-  mkdirSync(destDir, { recursive: true });
+  await fs.mkdir(destDir, { recursive: true });
   let copied = 0;
-  for (const entry of readdirSync(srcDir, { withFileTypes: true })) {
+  for (const entry of await fs.readdir(srcDir, { withFileTypes: true })) {
     if (!entry.isFile()) continue;
     const fullPath = path.join(srcDir, entry.name);
     try {
-      const stats = statSync(fullPath);
+      const stats = await fs.stat(fullPath);
       if (stats.mtimeMs < cutoff) continue;
-      copyFileSync(fullPath, path.join(destDir, entry.name));
+      await fs.copyFile(fullPath, path.join(destDir, entry.name));
       copied++;
     } catch {
       // Skip unreadable file
@@ -96,9 +88,9 @@ function buildVersionsJson(): string {
   return JSON.stringify(versions, null, 2);
 }
 
-function buildInstalledExtensionsJson(): string {
+async function buildInstalledExtensionsJson(): Promise<string> {
   try {
-    const installed = listInstalledUserExtensions();
+    const installed = await listInstalledUserExtensions();
     return JSON.stringify(installed, null, 2);
   } catch (e) {
     keplerLog.warn("diagnostics", "listInstalledUserExtensions failed", { err: String(e) });
@@ -225,17 +217,33 @@ async function runWindowMoveBenchmark(
   };
 }
 
+async function spawnAsync(
+  command: string,
+  args: string[],
+): Promise<{ status: number; stderr: string }> {
+  return new Promise((resolve) => {
+    let stderr = "";
+    const child = spawn(command, args, { windowsHide: true });
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("exit", (status) => {
+      resolve({ status: status ?? 1, stderr });
+    });
+  });
+}
+
 async function createBundleZip(): Promise<BundleResult> {
   const stagingRoot = app.getPath("temp");
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const stagingDir = path.join(stagingRoot, `kepler-bug-${ts}`);
   const zipPath = path.join(stagingRoot, `kepler-bug-${ts}.zip`);
 
-  mkdirSync(stagingDir, { recursive: true });
+  await fs.mkdir(stagingDir, { recursive: true });
 
   try {
     // 1. Логи.
-    const logsCount = copyRecentFiles(
+    const logsCount = await copyRecentFiles(
       path.join(keplerDataDir(), "logs"),
       path.join(stagingDir, "logs"),
       LOGS_KEEP_DAYS,
@@ -243,7 +251,7 @@ async function createBundleZip(): Promise<BundleResult> {
     keplerLog.info("diagnostics", "logs copied", { count: logsCount });
 
     // 2. Crashes.
-    const crashesCount = copyRecentFiles(
+    const crashesCount = await copyRecentFiles(
       path.join(keplerDataDir(), "crashes"),
       path.join(stagingDir, "crashes"),
       CRASHES_KEEP_DAYS,
@@ -251,10 +259,10 @@ async function createBundleZip(): Promise<BundleResult> {
     keplerLog.info("diagnostics", "crashes copied", { count: crashesCount });
 
     // 3. Metadata.
-    writeFileSync(path.join(stagingDir, "versions.json"), buildVersionsJson(), "utf8");
-    writeFileSync(
+    await fs.writeFile(path.join(stagingDir, "versions.json"), buildVersionsJson(), "utf8");
+    await fs.writeFile(
       path.join(stagingDir, "installed-extensions.json"),
-      buildInstalledExtensionsJson(),
+      await buildInstalledExtensionsJson(),
       "utf8",
     );
 
@@ -267,18 +275,16 @@ async function createBundleZip(): Promise<BundleResult> {
       }
     }
     const psCmd = `Compress-Archive -Path '${stagingDir}\\*' -DestinationPath '${zipPath}' -Force`;
-    const res = spawnSync("powershell.exe", ["-NoProfile", "-Command", psCmd], {
-      windowsHide: true,
-    });
+    const res = await spawnAsync("powershell.exe", ["-NoProfile", "-Command", psCmd]);
     if (res.status !== 0) {
-      const stderr = res.stderr?.toString() ?? "(no stderr)";
+      const stderr = res.stderr ?? "(no stderr)";
       keplerLog.error("diagnostics", "Compress-Archive failed", { stderr, status: res.status });
       return { ok: false, error: `Compress-Archive failed: ${stderr}` };
     }
 
     // 5. Очистка staging dir — ZIP отдельно.
     try {
-      rmSync(stagingDir, { recursive: true, force: true });
+      await fs.rm(stagingDir, { recursive: true, force: true });
     } catch (e) {
       keplerLog.warn("diagnostics", "staging cleanup failed", { err: String(e) });
     }
@@ -324,7 +330,7 @@ ipcMain.handle("kepler:diagnostics:bundle-save", async (): Promise<string | null
   }
 
   try {
-    copyFileSync(bundle.zipPath, result.filePath);
+    await fs.copyFile(bundle.zipPath, result.filePath);
     unlinkSync(bundle.zipPath);
     keplerLog.info("diagnostics", "bundle saved to user-chosen path", {
       path: result.filePath,

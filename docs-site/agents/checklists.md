@@ -131,7 +131,7 @@
 - [ ] `lan_sync.version_vector` обновляется после прямых писей.
 - [ ] Default DB path остался `%APPDATA%\Kosmos\ark.db`.
 - [ ] Тесты переопределяют DB path в `.tmp` / `.e2e` / OS temp.
-- [ ] Tracker-модуль стартует/останавливается из `platform/runtime/src/main.rs` (Phase E2). Standalone-бинарь — frozen в `legacy/usage-tracker/`.
+- [ ] Tracker-модуль стартует/останавливается из `platform/runtime/src/main.rs` (Phase E2). Standalone-бинарь — frozen legacy, не active-tree path.
 - [ ] Tracker остаётся user-level, не Windows Service.
 
 ## Я правил focus-mode (`platform/desktop/electron/focus-*.ts` + `services/kepler-focus-*` + `platform/runtime/src/focus.rs`)

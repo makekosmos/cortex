@@ -141,7 +141,7 @@
 - ❌ SQLite open в renderer.
 - ❌ ARK queries в обход `window.kepler.ark.request` (то есть в обход `@kosmos/ark` через main proxy).
 - ❌ Любые **writes** в ARK таблицы.
-- ❌ Возврат Dashboard как extension. После 2026-05-14 он **встроенный** shell view (`platform/desktop/src/views/DashboardRoot.vue` + `DashboardView.vue`), старый код заморожен в `legacy/dashboard-extension/`.
+- ❌ Возврат Dashboard как extension. После 2026-05-14 он **встроенный** shell view (`platform/desktop/src/views/DashboardRoot.vue` + `DashboardView.vue`), старый dashboard-extension больше не active-tree path.
 - ❌ Возврат welcome screen с карточками spaces. После 2026-05-15 Dashboard сразу открывается на список объектов — single DB per user.
 
 ### Kepler Shell (launcher)
@@ -189,7 +189,7 @@
 - ❌ Превращение в Windows Service.
 - ❌ Добавление UI / tray icon / окон.
 - ❌ Прямой SQL write без `ark_core::db` хелперов и без обновления `version_vector`.
-- ❌ Возврат standalone-бинарника по пути services/usage-tracker. После Phase E3 он заморожен в `legacy/usage-tracker/`, а активный код живёт как модуль `platform/runtime/src/usage_tracker/`.
+- ❌ Возврат standalone-бинарника по пути services/usage-tracker. После Phase E3 старый usage-tracker больше не active-tree path, а активный код живёт как модуль `platform/runtime/src/usage_tracker/`.
 
 ## Файловые операции на Windows
 

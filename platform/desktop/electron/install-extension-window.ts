@@ -9,6 +9,11 @@
 import { app, BrowserWindow, screen } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  applyWindowMaterial,
+  backgroundMaterialOption,
+  resolveWindowMaterial,
+} from "./window-effects";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +35,7 @@ export function openInstallExtensionWindow(sourcePath: string): void {
     return;
   }
   const display = screen.getPrimaryDisplay().workAreaSize;
+  const backgroundMaterial = resolveWindowMaterial("mica");
   installWindow = new BrowserWindow({
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,
@@ -44,7 +50,7 @@ export function openInstallExtensionWindow(sourcePath: string): void {
     skipTaskbar: isHeadlessOrTest(),
     alwaysOnTop: false,
     backgroundColor: "#1a1a1a",
-    backgroundMaterial: "mica",
+    ...backgroundMaterialOption(backgroundMaterial),
     roundedCorners: true,
     title: "Kepler — Установка расширения",
     webPreferences: {
@@ -59,7 +65,7 @@ export function openInstallExtensionWindow(sourcePath: string): void {
   });
 
   try {
-    installWindow.setBackgroundMaterial("mica");
+    applyWindowMaterial(installWindow, backgroundMaterial, "install-extension");
   } catch {
     /* non-Win11 ignored */
   }

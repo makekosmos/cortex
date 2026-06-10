@@ -40,6 +40,12 @@ import net from "node:net";
 import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
 import { macWindowChrome } from "./mac-window";
+import {
+  applyWindowMaterial,
+  backgroundMaterialOption,
+  resolveWindowMaterial,
+  type KosmosWindowMaterial,
+} from "./window-effects";
 import { KEPLER_API_VERSION, satisfiesSemver } from "./kepler-api";
 import {
   installFromPath,
@@ -1115,13 +1121,14 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
   // webContents без visible render. См. tests/e2e/helpers/launch.ts.
   const headless = process.env.KOSMOS_HEADLESS === "1";
 
-  // Windows backdrop material — opt-in через manifest.windowEffect.
-  // Acrylic/mica требуют прозрачного backgroundColor; иначе native renderer
-  // нарисует сплошной цвет поверх backdrop'а и эффект не будет виден.
-  const wantsBackdrop = manifest.windowEffect === "acrylic" || manifest.windowEffect === "mica";
-  const backgroundMaterial: "acrylic" | "mica" | undefined = wantsBackdrop
-    ? (manifest.windowEffect as "acrylic" | "mica")
-    : undefined;
+  // Windows backdrop material: manifest remains per-extension fallback, while
+  // KOSMOS_WINDOW_EFFECTS is the global benchmark/runtime override.
+  const manifestFallback: KosmosWindowMaterial =
+    manifest.windowEffect === "acrylic" || manifest.windowEffect === "mica"
+      ? manifest.windowEffect
+      : "none";
+  const backgroundMaterial = resolveWindowMaterial(manifestFallback);
+  const wantsBackdrop = backgroundMaterial === "acrylic" || backgroundMaterial === "mica";
 
   const win = new BrowserWindow({
     width,
@@ -1134,7 +1141,7 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
     skipTaskbar: headless,
     title: manifest.name,
     backgroundColor: wantsBackdrop ? "#00000000" : "#1a1a1a",
-    ...(backgroundMaterial ? { backgroundMaterial } : {}),
+    ...backgroundMaterialOption(backgroundMaterial),
     // Native controls живут в titleBarOverlay; renderer рисует только drag-region
     // и учитывает safe-area через env(titlebar-area-*).
     frame: true,
@@ -1157,13 +1164,7 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
     },
   });
 
-  if (backgroundMaterial) {
-    try {
-      win.setBackgroundMaterial(backgroundMaterial);
-    } catch (e) {
-      console.error(`[kepler-shell] extension '${id}' setBackgroundMaterial failed:`, e);
-    }
-  }
+  applyWindowMaterial(win, backgroundMaterial, `extension '${id}'`);
 
   // Если в saved state окно было maximized — восстановим после ready-to-show.
   if (savedState.isMaximized) {
@@ -1844,11 +1845,11 @@ ipcMain.handle("kepler:extension:userData:deleteFile", (e, name: string): boolea
 // revert — восстановить из backup'а;
 // uninstall — удалить user copy.
 
-ipcMain.handle("kepler:extension:install:preview", (_e, sourcePath: string) => {
+ipcMain.handle("kepler:extension:install:preview", async (_e, sourcePath: string) => {
   if (typeof sourcePath !== "string") {
     throw new Error("install:preview: sourcePath must be a string");
   }
-  return previewSource(sourcePath);
+  return await previewSource(sourcePath);
 });
 
 /**
@@ -1867,38 +1868,40 @@ function notifyCommandsChanged(): void {
   }
 }
 
-ipcMain.handle("kepler:extension:install:do", (_e, sourcePath: string) => {
+ipcMain.handle("kepler:extension:install:do", async (_e, sourcePath: string) => {
   if (typeof sourcePath !== "string") {
     throw new Error("install:do: sourcePath must be a string");
   }
-  const result = installFromPath(sourcePath);
+  const result = await installFromPath(sourcePath);
   notifyCommandsChanged();
   return result;
 });
 
-ipcMain.handle("kepler:extension:installed:list", () => listInstalledUserExtensions());
+ipcMain.handle("kepler:extension:installed:list", async () => {
+  return await listInstalledUserExtensions();
+});
 
-ipcMain.handle("kepler:extension:revert", (_e, id: string, timestamp?: string) => {
+ipcMain.handle("kepler:extension:revert", async (_e, id: string, timestamp?: string) => {
   if (typeof id !== "string") {
     throw new Error("revert: id must be a string");
   }
-  const result = revertExtension(id, timestamp);
+  const result = await revertExtension(id, timestamp);
   notifyCommandsChanged();
   return result;
 });
 
-ipcMain.handle("kepler:extension:backups:list", (_e, id: string) => {
+ipcMain.handle("kepler:extension:backups:list", async (_e, id: string) => {
   if (typeof id !== "string") {
     throw new Error("backups:list: id must be a string");
   }
-  return listBackups(id);
+  return await listBackups(id);
 });
 
-ipcMain.handle("kepler:extension:uninstall", (_e, id: string) => {
+ipcMain.handle("kepler:extension:uninstall", async (_e, id: string) => {
   if (typeof id !== "string") {
     throw new Error("uninstall: id must be a string");
   }
-  const result = uninstallExtension(id);
+  const result = await uninstallExtension(id);
   notifyCommandsChanged();
   return result;
 });

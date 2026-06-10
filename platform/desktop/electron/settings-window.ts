@@ -9,12 +9,20 @@
 
 import { app, BrowserWindow, ipcMain, screen } from "electron";
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import path from "node:path";
+
+const execFileAsync = promisify(execFile);
 import { fileURLToPath } from "node:url";
 import { resolveInstance } from "./instance";
 import { keplerDataDir } from "./data-dir";
 import { macWindowChrome } from "./mac-window";
+import {
+  applyWindowMaterial,
+  backgroundMaterialOption,
+  resolveWindowMaterial,
+} from "./window-effects";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -121,6 +129,7 @@ export function openSettings(): void {
     return;
   }
   const display = screen.getPrimaryDisplay().workAreaSize;
+  const backgroundMaterial = resolveWindowMaterial("acrylic");
   settingsWindow = new BrowserWindow({
     width: SETTINGS_WIDTH,
     height: SETTINGS_HEIGHT,
@@ -145,7 +154,7 @@ export function openSettings(): void {
     skipTaskbar: process.env.KOSMOS_HEADLESS === "1",
     alwaysOnTop: false,
     backgroundColor: "#00000000",
-    backgroundMaterial: "acrylic",
+    ...backgroundMaterialOption(backgroundMaterial),
     roundedCorners: true,
     title: "Kosmos — Настройки",
     webPreferences: {
@@ -157,10 +166,8 @@ export function openSettings(): void {
   });
 
   try {
-    settingsWindow.setBackgroundMaterial("acrylic");
-  } catch (e) {
-    console.error("[kepler-shell] settings setBackgroundMaterial failed:", e);
-  }
+    applyWindowMaterial(settingsWindow, backgroundMaterial, "settings");
+  } catch {}
 
   if (process.env.VITE_DEV_SERVER_URL) {
     void settingsWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}#settings`);
@@ -232,7 +239,7 @@ function isLegacyAutostartEnabled(): boolean {
   });
 }
 
-function removeLegacyAutostartEntries(): void {
+async function removeLegacyAutostartEntries(): Promise<void> {
   if (process.platform !== "win32") return;
   for (const legacyPath of legacyAutostartPathCandidates()) {
     for (const name of LEGACY_AUTOSTART_NAMES) {
@@ -250,10 +257,10 @@ function removeLegacyAutostartEntries(): void {
   }
 
   try {
-    execFileSync(
+    await execFileAsync(
       "reg.exe",
       ["delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "Kepler", "/f"],
-      { windowsHide: true, stdio: "ignore" },
+      { windowsHide: true },
     );
   } catch {
     /* value absent or registry unavailable */
@@ -278,7 +285,7 @@ export function isAutostartEnabled(): boolean {
   );
 }
 
-export function setAutostartEnabled(enabled: boolean): void {
+export async function setAutostartEnabled(enabled: boolean): Promise<void> {
   // Только prod slot может писать в HKCU Run. Из dev process.execPath это
   // electron.exe из node_modules — прописывать его в autorun бессмысленно
   // и грязно (мусор в реестре). Из dev-<x> / test — silently no-op.
@@ -293,7 +300,7 @@ export function setAutostartEnabled(enabled: boolean): void {
   //      `"C:\...\Kosmos.exe" --autostart` (с кавычками вокруг path). Без
   //      args Electron на некоторых версиях кладёт path без кавычек; если в
   //      пути есть пробелы (system-wide install в "Program Files"), Windows
-  //      shell не парсит и autorun не срабатывает. Per-user install в
+  //      shell не парсит и autorun не срабатывается. Per-user install в
   //      %LOCALAPPDATA%\Programs\Kepler\ пробелов не имеет, но защита
   //      универсальная.
   //   2) Маркер для main.ts: если argv содержит `--autostart`, мы знаем
@@ -306,7 +313,7 @@ export function setAutostartEnabled(enabled: boolean): void {
     path: process.execPath,
     args: AUTOSTART_ARGS,
   });
-  removeLegacyAutostartEntries();
+  await removeLegacyAutostartEntries();
   // Сразу читаем обратно — если запись в HKCU не прошла, openAtLogin будет
   // false и UI покажет ошибку. Логируем для диагностики реальных установок.
   // Передаём { path, args } — без них verify фейлится из-за args mismatch
@@ -347,8 +354,8 @@ ipcMain.handle("kepler:settings:autostart:get", () => isAutostartEnabled());
 
 ipcMain.handle("kepler:settings:autostart:allowed", () => isAutostartAllowed());
 
-ipcMain.handle("kepler:settings:autostart:set", (_e, enabled: boolean) => {
-  setAutostartEnabled(!!enabled);
+ipcMain.handle("kepler:settings:autostart:set", async (_e, enabled: boolean) => {
+  await setAutostartEnabled(!!enabled);
 });
 
 ipcMain.handle("kepler:settings:tray-icon:get", () => isTrayIconEnabled());

@@ -89,6 +89,7 @@ mod tests {
             name: name.into(),
             exec_path: format!("/{name}"),
             icon_path: None,
+            icon_source: None,
             kind: AppKind::Win32,
             source: "test".into(),
             mtime: 0,
