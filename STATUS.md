@@ -1,4 +1,13 @@
-# Kosmos — статус проекта (2026-06-09)
+# Kosmos — статус проекта (2026-06-10)
+
+## 2026-06-10 — Electron main-process async I/O + app icon (Kosmos Desktop 0.4.4 → 0.4.5)
+
+Патч-релиз устраняет синхронный I/O на горячих путях main process, добавляет новую иконку приложения.
+
+- **Async I/O on main hot paths**: installer, diagnostics, autostart, kosmos-icon protocol, marketplace — переведены на `fs.promises` и асинхронный `spawn` вместо `*Sync` вызовов. Proof loop `.agent/tasks/2026-06-10-electron-main-async-io/`, новый regression test `no-sync-io.test.ts`.
+- **No window hangups on extension operations**: неблокирующий async I/O устранил провисания всех окон при установке/откате расширений, сборке bug-report bundle, переключении автозапуска, чтении иконок приложений.
+- **New app icon**: обновлена иконка Kosmos Desktop.
+- **WIP follow-ups**: app-index throttling/ranking improvements, window-effects flat flag, docs-site/storybook maintenance.
 
 ## 2026-06-09 — Performance hardening + startup fixes (Kosmos Desktop 0.4.3 → 0.4.4)
 
