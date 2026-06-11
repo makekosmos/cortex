@@ -21,6 +21,24 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-11 — Eden CM6 caret не использовал zennotes cursor layer
+
+**Симптомы** — при включённом CodeMirror 6 markdown-редакторе ввод уже работал в WYSIWYG/live-preview стиле, но каретка выглядела не как в ZenNotes: Eden CSS задавал 2px accent cursor, однако пользователь видел обычную браузерную каретку.
+**Где жило** — `products/eden/src/editor-cm/CmEditor.vue`, `products/eden/src/editor-cm/cm-editor.css`.
+**Root cause** — из ZenNotes был перенесён CSS для `.cm-cursor`, но “толстая” ZenNotes-каретка живёт не там: её создаёт `@replit/codemirror-vim` как отдельный DOM-элемент `.cm-fat-cursor` в normal mode, а CSS только превращает этот элемент в solid block. Попытка утолщать `.cm-cursor` давала лишь bar-caret, визуально всё ещё тонкую.
+**Fix** — `CmEditor.vue` теперь подключает `drawSelection()` и собственный `fatCursorPlugin`, который без Vim keybindings рисует `.cm-fat-cursor` через CodeMirror `layer(...)`, синхронизированный с `coordsAtPos` и scroll geometry. `cm-editor.css` повторяет ZenNotes visual contract для `.cm-fat-cursor` и скрывает обычную `.cm-cursor` при активном fat cursor. Цвета идут через `var(--eden-accent-color, var(--accent, currentColor))`.
+**Регрешн-защита** — `products/eden/tests/components/CmEditor.spec.ts` проверяет, что после реального ввода появляется `.cm-fat-cursor` с видимой шириной и непрозрачным background, а `.cm-cursor-primary` скрыт; targeted RED до фикса падал на отсутствии `.cm-cursor`, после фикса полный `bun run --cwd products/eden test` прошёл.
+**Prevention** — При портировании CM6 UX из другого редактора сначала проверь, какой DOM-элемент реально рисует видимый эффект. В CodeMirror `.cm-cursor`, native caret, inline decorations и overlay layers — разные механизмы; для caret-подобных эффектов используй layer/coords-based rendering, а не inline decoration, иначе возможен desync с настоящей selection geometry.
+
+### UPDATE 2026-06-11 — Vim mode оставлял старый Eden fat-cursor layer
+
+**Симптомы.** При persisted настройках `cmEditorEnabled=true` + `vimModeEnabled=true` редактор сначала монтировался обычным CM6, затем preferences догоняли и включали Vim. В DOM мог оставаться старый Eden `.cm-fat-cursorLayer`, пока Vim уже рисовал собственный `.cm-fat-cursor.cm-cursor-primary`.
+**Где жило.** `products/eden/src/editor-cm/CmEditor.vue`, `products/eden/src/editor-cm/cm/fat-cursor-fix.ts`.
+**Root cause.** Initial-mount путь `vimMode=true` был покрыт тестом, а hydration/reconfigure путь `false → true` — нет. CodeMirror `Compartment.reconfigure([])` убирал extension, но старый layer DOM мог пережить переключение достаточно долго, чтобы визуально конфликтовать с Vim cursor.
+**Fix.** Удалён старый Eden-owned fat cursor layer. Eden использует Vim-owned `.cm-fat-cursor` из `@replit/codemirror-vim` и отдельный zennotes-style helper `fatCursorFixPlugin`, который чинит natural width/height cursor DOM на `selectionSet` / `geometryChanged` / `docChanged` / `viewportChanged`.
+**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` теперь проверяет false→true reconfigure: custom `.cm-fat-cursorLayer` не появляется, а после включения Vim остаётся Vim-owned `.cm-fat-cursor`. Дополнительно visual-check production bundle проверяет отсутствие Eden layer при Vim mode.
+**Prevention.** Для toggled CM6 extensions тестируй не только initial state, но и reconfigure-переходы после async preferences hydration. Если CSS class name совпадает с third-party extension (`.cm-fat-cursor`), контракт теста должен проверять owned wrapper/layer, а не общий selector.
+
 ## 2026-06-10 — kosmos-icon URLs не грузили PNG в renderer
 
 **Симптомы** — после перевода app-index иконок на `kosmos-icon://app/<id>` иконки приложений перестали отображаться в renderer.

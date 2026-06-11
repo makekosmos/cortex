@@ -5,6 +5,7 @@ interface Props {
   icon: Component;
   label: string;
   active?: boolean;
+  testId?: string;
   iconImage?: string;
   iconVariant?: "tile" | "plain";
   iconFrom?: string;
@@ -13,6 +14,7 @@ interface Props {
 
 withDefaults(defineProps<Props>(), {
   active: false,
+  testId: undefined,
   iconImage: "",
   iconVariant: "tile",
   iconFrom: "var(--settings-sidebar-icon-from)",
@@ -21,6 +23,7 @@ withDefaults(defineProps<Props>(), {
 
 defineEmits<{
   click: [];
+  contextmenu: [event: MouseEvent];
 }>();
 </script>
 
@@ -29,7 +32,9 @@ defineEmits<{
     type="button"
     class="kosmos-settings-sidebar-button flex w-full cursor-default select-none items-center gap-2 rounded border-0 bg-transparent p-1 text-left text-white data-[active=true]:bg-[var(--settings-sidebar-active)]"
     :data-active="active ? 'true' : undefined"
+    :data-testid="testId"
     @click="$emit('click')"
+    @contextmenu="$emit('contextmenu', $event)"
   >
     <span
       class="inline-flex size-6 shrink-0 items-center justify-center overflow-hidden rounded text-white"
@@ -50,7 +55,7 @@ defineEmits<{
       <component v-else :is="icon" :size="14" :stroke-width="2" />
     </span>
     <span
-      class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-[var(--font-sans)] text-[13px] leading-[1.4] font-medium"
+      class="kosmos-settings-sidebar-button__label min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-[var(--font-sans)] text-[13px] leading-[1.4] font-medium"
     >
       {{ label }}
     </span>

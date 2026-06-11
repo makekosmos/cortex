@@ -1,0 +1,108 @@
+$ vitest run --browser
+
+ RUN  v4.1.6 D:/Personal/Hobby/Coding/kosmos/products/eden
+
+01:06:27 [vite] (client) [console.warn] [@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+01:06:27 [vite] (client) [console.warn] [@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+01:06:27 [vite] (client) [console.warn] [@vue/compiler-core] decodeEntities option is passed but will be ignored in non-browser builds.
+ ❯ |chromium| tests/components/CmEditor.spec.ts (4 tests | 4 failed) 497ms
+     × монтируется и показывает контент в .cm-editor-host 147ms
+     × ввод текста эмитит liveCharCount 117ms
+     × чекбокс live preview 112ms
+     × автосейв вызывает onSave с валидным PM JSON 120ms
+ ❯ |chromium| tests/components/CmConvert.spec.ts (5 tests | 5 failed) 665ms
+     × jsonToMarkdown: PM JSON с heading level 1 → markdown содержит # Заголовок 261ms
+     × jsonToMarkdown: paragraph с bold-текстом → markdown содержит ** 112ms
+     × markdownToJson: «# Привет\n\nтекст» → объект с heading level 1 101ms
+     × round-trip стабильность: markdown → JSON → markdown → JSON дают deep-equal JSON 73ms
+     × round-trip чекбокс-строк: markdown с [ ] и [x] сохраняют подстроки 117ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |chromium| tests/components/CmConvert.spec.ts > CmConvert — Markdown ↔ PM JSON converter > jsonToMarkdown: PM JSON с heading level 1 → markdown содержит # Заголовок
+ FAIL  |chromium| tests/components/CmConvert.spec.ts > CmConvert — Markdown ↔ PM JSON converter > jsonToMarkdown: paragraph с bold-текстом → markdown содержит **
+ FAIL  |chromium| tests/components/CmConvert.spec.ts > CmConvert — Markdown ↔ PM JSON converter > markdownToJson: «# Привет\n\nтекст» → объект с heading level 1
+ FAIL  |chromium| tests/components/CmConvert.spec.ts > CmConvert — Markdown ↔ PM JSON converter > round-trip стабильность: markdown → JSON → markdown → JSON дают deep-equal JSON
+ FAIL  |chromium| tests/components/CmConvert.spec.ts > CmConvert — Markdown ↔ PM JSON converter > round-trip чекбокс-строк: markdown с [ ] и [x] сохраняют подстроки
+Error: not implemented
+
+Failure screenshots:
+  - tests/components/__screenshots__/CmConvert.spec.ts/CmConvert---Markdown---PM-JSON-converter-jsonToMarkdown--PM-JSON---heading-level-1---markdown----------------------1.png
+  - tests/components/__screenshots__/CmConvert.spec.ts/CmConvert---Markdown---PM-JSON-converter-jsonToMarkdown--paragraph---bold-----------markdown-------------1.png
+  - tests/components/__screenshots__/CmConvert.spec.ts/CmConvert---Markdown---PM-JSON-converter-markdownToJson------------n-n------------------heading-level-1-1.png
+  - tests/components/__screenshots__/CmConvert.spec.ts/CmConvert---Markdown---PM-JSON-converter-round-trip---------------markdown---JSON---markdown---JSON------deep-equal-JSON-1.png
+  - tests/components/__screenshots__/CmConvert.spec.ts/CmConvert---Markdown---PM-JSON-converter-round-trip----------------markdown----------x----------------------1.png
+
+ ❯ createMdConverter src/editor-cm/mdConvert.ts:10:8
+      8|
+      9| export function createMdConverter(): MdConverter {
+     10|   throw new Error("not implemented");
+       |        ^
+     11| }
+     12|
+ ❯ tests/components/CmConvert.spec.ts:8:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+ FAIL  |chromium| tests/components/CmConvert.spec.ts > CmConvert — Markdown ↔ PM JSON converter > jsonToMarkdown: PM JSON с heading level 1 → markdown содержит # Заголовок
+ FAIL  |chromium| tests/components/CmConvert.spec.ts > CmConvert — Markdown ↔ PM JSON converter > jsonToMarkdown: paragraph с bold-текстом → markdown содержит **
+ FAIL  |chromium| tests/components/CmConvert.spec.ts > CmConvert — Markdown ↔ PM JSON converter > markdownToJson: «# Привет\n\nтекст» → объект с heading level 1
+ FAIL  |chromium| tests/components/CmConvert.spec.ts > CmConvert — Markdown ↔ PM JSON converter > round-trip стабильность: markdown → JSON → markdown → JSON дают deep-equal JSON
+ FAIL  |chromium| tests/components/CmConvert.spec.ts > CmConvert — Markdown ↔ PM JSON converter > round-trip чекбокс-строк: markdown с [ ] и [x] сохраняют подстроки
+TypeError: Cannot read properties of undefined (reading 'destroy')
+
+Failure screenshots:
+  - tests/components/__screenshots__/CmConvert.spec.ts/CmConvert---Markdown---PM-JSON-converter-jsonToMarkdown--PM-JSON---heading-level-1---markdown----------------------1.png
+  - tests/components/__screenshots__/CmConvert.spec.ts/CmConvert---Markdown---PM-JSON-converter-jsonToMarkdown--paragraph---bold-----------markdown-------------1.png
+  - tests/components/__screenshots__/CmConvert.spec.ts/CmConvert---Markdown---PM-JSON-converter-markdownToJson------------n-n------------------heading-level-1-1.png
+  - tests/components/__screenshots__/CmConvert.spec.ts/CmConvert---Markdown---PM-JSON-converter-round-trip---------------markdown---JSON---markdown---JSON------deep-equal-JSON-1.png
+  - tests/components/__screenshots__/CmConvert.spec.ts/CmConvert---Markdown---PM-JSON-converter-round-trip----------------markdown----------x----------------------1.png
+
+ ❯ tests/components/CmConvert.spec.ts:12:14
+     10|
+     11|   afterEach(() => {
+     12|     converter.destroy();
+       |              ^
+     13|   });
+     14|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/14]⎯
+
+ FAIL  |chromium| tests/components/CmEditor.spec.ts > CmEditor component > монтируется и показывает контент в .cm-editor-host
+ FAIL  |chromium| tests/components/CmEditor.spec.ts > CmEditor component > ввод текста эмитит liveCharCount
+ FAIL  |chromium| tests/components/CmEditor.spec.ts > CmEditor component > чекбокс live preview
+ FAIL  |chromium| tests/components/CmEditor.spec.ts > CmEditor component > автосейв вызывает onSave с валидным PM JSON
+Error: CmEditor not implemented
+
+Failure screenshots:
+  - tests/components/__screenshots__/CmEditor.spec.ts/CmEditor-component-------------------------------------cm-editor-host-1.png
+  - tests/components/__screenshots__/CmEditor.spec.ts/CmEditor-component--------------------liveCharCount-1.png
+  - tests/components/__screenshots__/CmEditor.spec.ts/CmEditor-component---------live-preview-1.png
+  - tests/components/__screenshots__/CmEditor.spec.ts/CmEditor-component-------------------onSave------------PM-JSON-1.png
+
+ ❯ src/editor-cm/CmEditor.vue:26:8
+     24|
+     25| onMounted(() => {
+     26|   throw new Error("CmEditor not implemented");
+       |        ^
+     27| });
+     28| </script>
+ ❯ ../../node_modules/.bun/@vue+runtime-core@3.6.0-beta.12/node_modules/@vue/runtime-core/dist/runtime-core.esm-bundler.js:2396:86
+ ❯ callWithErrorHandling ../../node_modules/.bun/@vue+runtime-core@3.6.0-beta.12/node_modules/@vue/runtime-core/dist/runtime-core.esm-bundler.js:192:16
+ ❯ callWithAsyncErrorHandling ../../node_modules/.bun/@vue+runtime-core@3.6.0-beta.12/node_modules/@vue/runtime-core/dist/runtime-core.esm-bundler.js:199:14
+ ❯ hook.__weh.hook.__weh ../../node_modules/.bun/@vue+runtime-core@3.6.0-beta.12/node_modules/@vue/runtime-core/dist/runtime-core.esm-bundler.js:2384:11
+ ❯ flushPostFlushCbs ../../node_modules/.bun/@vue+runtime-core@3.6.0-beta.12/node_modules/@vue/runtime-core/dist/runtime-core.esm-bundler.js:346:4
+ ❯ flushOnAppMount ../../node_modules/.bun/@vue+runtime-core@3.6.0-beta.12/node_modules/@vue/runtime-core/dist/runtime-core.esm-bundler.js:363:2
+ ❯ render ../../node_modules/.bun/@vue+runtime-core@3.6.0-beta.12/node_modules/@vue/runtime-core/dist/runtime-core.esm-bundler.js:4929:2
+ ❯ mountApp ../../node_modules/.bun/@vue+runtime-core@3.6.0-beta.12/node_modules/@vue/runtime-core/dist/runtime-core.esm-bundler.js:4958:7
+ ❯ mount ../../node_modules/.bun/@vue+runtime-core@3.6.0-beta.12/node_modules/@vue/runtime-core/dist/runtime-core.esm-bundler.js:3290:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/14]⎯
+
+
+ Test Files  2 failed | 6 passed (8)
+      Tests  9 failed | 22 passed (31)
+   Start at  01:06:24
+   Duration  2.66s (transform 0ms, setup 0ms, import 3.49s, tests 1.26s, environment 0ms)
+
+error: script "test:vue" exited with code 1

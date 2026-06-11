@@ -596,13 +596,12 @@ test.describe("eden extension", () => {
         ).api;
         await api.listEntries(); // refresh
         // Поскольку navigateTo сложно достать без exposed store,
-        // используем sidebar click. Ищем элемент с data-entry-id или
+        // используем sidebar click. Ищем элемент с recent-entry testid или
         // title-текстом.
         await new Promise((r) => setTimeout(r, 500));
-        const candidates = Array.from(document.querySelectorAll("[data-entry-id]"));
-        const match = candidates.find((el) => (el as HTMLElement).dataset.entryId === id);
+        const match = document.querySelector<HTMLElement>(`[data-testid="recent-entry-${id}"]`);
         if (match) {
-          (match as HTMLElement).click();
+          match.click();
           return "clicked-sidebar";
         }
         // Fallback: попробуем найти по тексту "Другая заметка"
@@ -766,9 +765,8 @@ test.describe("eden extension", () => {
         // Wait for sidebar / app to be ready
         await new Promise((r) => setTimeout(r, 500));
         // Find an interactive element that opens the entry.
-        // Sidebar entries have data-entry-id attribute (или title-based).
-        const candidates = Array.from(document.querySelectorAll<HTMLElement>("[data-entry-id]"));
-        const match = candidates.find((el) => el.dataset.entryId === id);
+        // Sidebar entries use `recent-entry-<id>` test ids (или title-based).
+        const match = document.querySelector<HTMLElement>(`[data-testid="recent-entry-${id}"]`);
         if (match) {
           match.click();
           return "clicked-sidebar";

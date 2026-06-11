@@ -8,6 +8,7 @@
       />
       <TrashSettings v-else-if="activeTab === 'trash'" @refresh-data="emit('refreshData')" />
       <StorageSettings v-else-if="activeTab === 'storage'" :vault-path="vaultPath" />
+      <VimSettings v-else-if="activeTab === 'vim'" />
       <SpacesSettings
         v-else-if="activeTab === 'spaces'"
         :active-space="activeSpace"
@@ -23,10 +24,11 @@ import type { SpaceId } from "@/components/sidebar/types";
 import GeneralSettings from "./GeneralSettings.vue";
 import TrashSettings from "./TrashSettings.vue";
 import StorageSettings from "./StorageSettings.vue";
+import VimSettings from "./VimSettings.vue";
 import SpacesSettings from "./SpacesSettings.vue";
 import "./SettingsPage.css";
 
-type SettingsTab = "general" | "trash" | "storage" | "spaces";
+type SettingsTab = "general" | "trash" | "storage" | "vim" | "spaces";
 
 const props = defineProps<{
   vaultPath: string;

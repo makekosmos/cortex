@@ -11,6 +11,8 @@
 //   - spellcheckEnabled — включает браузерный spellcheck в редакторе. По
 //     умолчанию false (юзер сам жалуется на «красные подчёркивания
 //     которые отвлекают»).
+//   - cmEditorEnabled — включает CM6 markdown-редактор за флагом.
+//   - vimModeEnabled — включает Vim motions внутри CM6-редактора.
 //
 // Расширение: добавь новое поле в `EdenPreferences`, default в
 // `DEFAULT_PREFERENCES`, экспортируй setter — composable сам подхватит.
@@ -23,10 +25,16 @@ const LOCAL_STORAGE_KEY = "eden-preferences";
 export interface EdenPreferences {
   /** false по умолчанию — браузерный spellcheck выключен. */
   spellcheckEnabled: boolean;
+  /** false по умолчанию — CodeMirror 6 markdown-редактор выключен (бета). */
+  cmEditorEnabled: boolean;
+  /** false по умолчанию — Vim mode включается пользователем явно. */
+  vimModeEnabled: boolean;
 }
 
 const DEFAULT_PREFERENCES: EdenPreferences = {
   spellcheckEnabled: false,
+  cmEditorEnabled: false,
+  vimModeEnabled: false,
 };
 
 const state = reactive<EdenPreferences>({ ...DEFAULT_PREFERENCES });
@@ -48,6 +56,12 @@ function mergeIntoState(partial: Partial<EdenPreferences> | null | undefined): v
   if (!partial || typeof partial !== "object") return;
   if (typeof partial.spellcheckEnabled === "boolean") {
     state.spellcheckEnabled = partial.spellcheckEnabled;
+  }
+  if (typeof partial.cmEditorEnabled === "boolean") {
+    state.cmEditorEnabled = partial.cmEditorEnabled;
+  }
+  if (typeof partial.vimModeEnabled === "boolean") {
+    state.vimModeEnabled = partial.vimModeEnabled;
   }
 }
 
@@ -137,6 +151,12 @@ export function usePreferences() {
     state,
     setSpellcheckEnabled(value: boolean): void {
       state.spellcheckEnabled = value;
+    },
+    setCmEditorEnabled(value: boolean): void {
+      state.cmEditorEnabled = value;
+    },
+    setVimModeEnabled(value: boolean): void {
+      state.vimModeEnabled = value;
     },
     /** Promise, который resolve'ит когда первичный read из userData завершился. */
     ready(): Promise<void> {

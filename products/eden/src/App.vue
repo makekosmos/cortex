@@ -30,106 +30,42 @@
       @result-select="onResultSelect"
     />
 
-    <DesktopChrome class="app-shell" :platform="chromePlatform">
-      <template #titlebar-leading>
-        <template v-if="!layout.isZenMode">
-          <button
-            type="button"
-            class="sidebar-head-icon withBackground eden-titlebar-toggle"
-            data-testid="sidebar-toggle"
-            :title="
-              layout.widgetSidebarHidden ? 'Показать боковую панель' : 'Скрыть боковую панель'
-            "
-            @click="layout.toggleWidgetSidebar()"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <rect width="18" height="18" x="3" y="3" rx="2" />
-              <path d="M9 3v18" />
-            </svg>
-          </button>
-
-          <TitlebarHistoryControls
-            :back-disabled="!canGoBack"
-            :forward-disabled="!canGoForward"
-            back-title="Назад"
-            forward-title="Вперёд"
-            @back="navigateBack"
-            @forward="navigateForward"
-          />
-        </template>
-        <button
-          v-else
-          type="button"
-          class="eden-titlebar-toggle eden-zen-exit"
-          data-testid="zen-mode-exit"
-          title="Выйти из режима фокуса (Esc Esc или Ctrl+K Z)"
-          @click="layout.disableZenMode()"
-        >
-          <LoaderPinwheel :size="14" :stroke-width="2" />
-        </button>
+    <DesktopChrome appearance="settings" class="h-screen w-screen" :platform="chromePlatform">
+      <template v-if="!layout.isZenMode" #titlebar-leading>
+        <TitlebarHistoryControls
+          :back-disabled="!canGoBack"
+          :forward-disabled="!canGoForward"
+          back-title="Назад"
+          forward-title="Вперёд"
+          @back="navigateBack"
+          @forward="navigateForward"
+        />
       </template>
 
-      <template #titlebar-center>
-        <span
-          v-if="titlebarTitle"
-          class="eden-titlebar-title"
-          :title="layout.isZenMode ? 'Двойной клик — закрепить поверх окон' : ''"
-          @dblclick="onTitleDblClick"
-          >{{ titlebarTitle }}</span
-        >
+      <template v-if="!layout.isZenMode" #sidebar>
+        <EdenSidebar
+          :hidden="layout.widgetSidebarHidden"
+          :is-search-open="layout.isSearchOpen"
+          :search-query="layout.searchQuery"
+          :recent-entries="recentSidebarEntries"
+          :note-types="eden.noteTypes"
+          :current-entry="eden.currentEntry"
+          :active-screen="eden.activeScreen"
+          :active-settings-tab="settingsInitialTab"
+          :selected-object-type-id="eden.activeNoteTypeId"
+          @toggle-search="layout.isSearchOpen = !layout.isSearchOpen"
+          @create-entry="eden.createNewEntry()"
+          @open-entry="(id) => eden.navigateTo(id)"
+          @entry-context-menu="onEntryContextMenu"
+          @open-settings-tab="openSettingsTab"
+          @open-object-types="openObjectTypes()"
+          @open-object-type="eden.openTypeCollection($event)"
+          @create-object-type="createObjectType()"
+          @back="handleSidebarBack"
+        />
       </template>
 
-      <template v-if="showSidebarChrome && !layout.isZenMode" #sidebar>
-        <div class="sidebar-layout">
-          <EdenSidebar
-            class="widget-sidebar-wrapper"
-            :hidden="layout.widgetSidebarHidden"
-            :initial-config="{
-              width: layout.widgetSidebarWidth,
-              hidden: layout.widgetSidebarHidden,
-            }"
-            :is-search-open="layout.isSearchOpen"
-            :search-query="layout.searchQuery"
-            :recent-entries="recentSidebarEntries"
-            :all-entries="eden.entries"
-            :note-types="eden.noteTypes"
-            :current-entry="eden.currentEntry"
-            :active-screen="eden.activeScreen"
-            :active-settings-tab="settingsInitialTab"
-            :selected-object-type-id="eden.activeNoteTypeId"
-            @config-change="layout.onWidgetConfigChange"
-            @update:hidden="layout.widgetSidebarHidden = $event"
-            @toggle-search="layout.isSearchOpen = !layout.isSearchOpen"
-            @create-entry="eden.createNewEntry()"
-            @open-entry="(id) => eden.navigateTo(id)"
-            @entry-context-menu="onEntryContextMenu"
-            @open-settings-tab="openSettingsTab"
-            @open-object-types="openObjectTypes()"
-            @open-object-type="eden.openTypeCollection($event)"
-            @create-object-type="createObjectType()"
-            @back="handleSidebarBack"
-          />
-        </div>
-      </template>
-
-      <DesktopContentSurface
-        class="eden-content-surface"
-        padding-top="0"
-        padding-inline="0"
-        padding-bottom="0"
-        :show-left-border="false"
-        radius-top-left="0px"
-      >
+      <DesktopContentSurface>
         <main class="app-main">
           <div
             v-if="
@@ -167,6 +103,18 @@
             @select-vault="eden.selectFolder()"
             @select-space="onSelectSpace"
             @refresh-data="eden.refreshData()"
+          />
+          <CmEditor
+            v-else-if="eden.currentEntry && useCmEditorForCurrent"
+            :key="eden.currentEntry.id"
+            :entry="eden.currentEntry"
+            :zen-mode="layout.isZenMode"
+            :vim-mode="preferences.state.vimModeEnabled"
+            :on-save="eden.handleSave"
+            @exit-zen="layout.disableZenMode()"
+            @close-entry="closeCurrentEntry"
+            @set-zen-mode="setZenMode"
+            @live-char-count="liveCharCount = $event"
           />
           <Editor
             v-else-if="eden.currentEntry"
@@ -220,17 +168,7 @@
 </template>
 
 <script setup lang="ts">
-import {
-  computed,
-  defineAsyncComponent,
-  nextTick,
-  onMounted,
-  onUnmounted,
-  ref,
-  shallowRef,
-  watch,
-} from "vue";
-import { LoaderPinwheel } from "@lucide/vue";
+import { computed, defineAsyncComponent, onMounted, onUnmounted, shallowRef, watch } from "vue";
 import {
   ContextMenu,
   ContextMenuItem,
@@ -252,7 +190,8 @@ import { useDockedWidget } from "@/composables/useDockedWidget";
 import { useNavigationHistory } from "@/composables/useNavigationHistory";
 import type { SpaceId } from "@/components/sidebar/types";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
-import { getNoteTypeCollectionName } from "@/lib/typedNotes";
+import { usePreferences } from "@/composables/usePreferences";
+import { shouldUseCmEditor } from "@/editor-cm/cmGate";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
 import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
@@ -260,6 +199,7 @@ import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
 // gzipped). Lazy-load — основной bundle открывается быстрее, заметка-чанк
 // подгружается при первом открытии заметки.
 const Editor = defineAsyncComponent(() => import("./Editor.vue"));
+const CmEditor = defineAsyncComponent(() => import("./editor-cm/CmEditor.vue"));
 import SpacesView from "@/components/spaces/SpacesView.vue";
 import SettingsPage from "@/components/settings/SettingsPage.vue";
 import ObjectTypesSettings from "@/components/settings/ObjectTypesSettings.vue";
@@ -268,12 +208,22 @@ import "@/App.css";
 
 const eden = useEdenStore();
 const layout = useLayoutStore();
+const preferences = usePreferences();
+
+const useCmEditorForCurrent = computed(
+  () =>
+    eden.currentEntry != null &&
+    shouldUseCmEditor(
+      preferences.state.cmEditorEnabled || preferences.state.vimModeEnabled,
+      eden.currentEntry.content_json,
+    ),
+);
 // Provide toast api на root уровне — useToast() из любого descendant'а
 // (Editor.vue и т.д.) увидит его. ToastHost дальше в template только
 // рендерит, не повторяет provide.
 provideToastHost();
 
-type SettingsTab = "general" | "trash" | "storage" | "spaces";
+type SettingsTab = "general" | "trash" | "storage" | "vim" | "spaces";
 
 usePlatform();
 useKeyboard();
@@ -284,24 +234,6 @@ const entryMenu = useContextMenu<string>();
 
 function onEntryContextMenu(event: MouseEvent, entryId: string) {
   entryMenu.open(event, entryId);
-}
-
-/**
- * Двойной клик по тексту title в `#titlebar-center` (только zen mode)
- * → toggle floating-widget: always-on-top + top-right 360×560.
- *
- * Сам `.kosmos-titlebar` это drag-region (`-webkit-app-region: drag`) —
- * DOM click/dblclick events на него не fire'ят. Но дочерний `<span>`
- * с `-webkit-app-region: no-drag` (см. eden-titlebar-title CSS) события
- * получает.
- */
-function onTitleDblClick() {
-  if (!layout.isZenMode) return;
-  void (
-    window as unknown as {
-      kepler?: { window?: { toggleDockCorner?: () => Promise<void> } };
-    }
-  ).kepler?.window?.toggleDockCorner?.();
 }
 
 // Docked-widget state — для CSS-маркера (.eden-docked) на app-container.
@@ -366,20 +298,6 @@ const recentSidebarEntries = computed(() => pickRecentEntries(eden.entries, 10))
 const { liveCharCount, currentEntryCharCount, charCounterHasOverlap, pluralizeCharacters } =
   useCharCounter(eden, layout);
 
-const titlebarTitle = computed<string>(() => {
-  if (eden.activeScreen === "settings") return "Настройки";
-  if (eden.activeScreen === "object-types") return "Типы объектов";
-  if (eden.activeScreen === "type-collection") {
-    return activeCollectionType.value
-      ? getNoteTypeCollectionName(activeCollectionType.value)
-      : "Коллекция";
-  }
-  if (eden.currentEntry) {
-    return getEntryDisplayTitle(eden.currentEntry.title, eden.currentEntry.header_props_json);
-  }
-  return "";
-});
-
 const entryTitlesById = computed<Record<string, string>>(() =>
   Object.fromEntries(
     eden.entries.map((entry) => [
@@ -395,7 +313,6 @@ const chromePlatform = computed<TitlebarPlatform>(() => {
   return "windows";
 });
 
-const showSidebarChrome = computed(() => true);
 const activeCollectionType = computed(
   () => eden.noteTypes.find((noteType) => noteType.id === eden.activeNoteTypeId) ?? null,
 );
@@ -416,6 +333,19 @@ function createObjectType() {
 
 function openTypeSettings(noteTypeId: string) {
   openObjectTypes(noteTypeId);
+}
+
+function closeCurrentEntry() {
+  eden.currentEntry = null;
+}
+
+function setZenMode(enabled: boolean) {
+  if (enabled) {
+    layout.enableZenMode();
+    return;
+  }
+
+  layout.disableZenMode();
 }
 
 function handleSidebarBack() {

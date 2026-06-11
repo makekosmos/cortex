@@ -6,9 +6,9 @@
 //
 // Порт должен совпадать с manifest.json `devPort`.
 
-import { defineConfig } from "vite";
-import vue from "@vitejs/plugin-vue";
-import tailwindcss from "@tailwindcss/vite";
+import { defineConfig } from "../../platform/desktop/node_modules/vite/dist/node/index.js";
+import vue from "../../platform/desktop/node_modules/@vitejs/plugin-vue/dist/index.mjs";
+import tailwindcss from "../../platform/desktop/node_modules/@tailwindcss/vite/dist/index.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -16,10 +16,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
 
 export default defineConfig({
+  cacheDir: path.resolve(repoRoot, ".tmp/vite-cache/arrancador"),
   plugins: [vue({ features: { vaporInterop: true } }), tailwindcss()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
+      tailwindcss: path.resolve(repoRoot, "platform/desktop/node_modules/tailwindcss"),
       "@kosmos/ark": path.resolve(repoRoot, "core/ark/packages/ark/src/index.ts"),
       "@kosmos/visuals/theme/css": path.resolve(
         repoRoot,

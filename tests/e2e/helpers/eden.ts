@@ -5,7 +5,8 @@
 //   - createEdenNote(edenWindow, {id?, title?, content?}) — saveEntry через shim
 //     с дефолтами note_obj. Возвращает id.
 //   - openEdenNote(edenWindow, id) — навигация на заметку через клик в sidebar
-//     по `[data-entry-id="<id>"]` (или fallback по title-тексту). Если не найдена —
+//     по `[data-testid="recent-entry-<id>"]` (или fallback по title-тексту).
+//     Если не найдена —
 //     возвращает "not-found".
 //   - getProseMirrorJSON(edenWindow) — best-effort извлечение editor.getJSON()
 //     через DOM-spelunking (TipTap Vue node view → __vueParentComponent →
@@ -163,7 +164,7 @@ export async function openEdenNote(
   expectedTitle?: string,
 ): Promise<string> {
   // Sidebar item для recent entry рендерится с data-testid="recent-entry-<id>"
-  // (см. EdenSidebar.vue::buildEntryItem + visuals/Sidebar.vue). Если note
+  // (см. EdenSidebar.vue::buildEntryItem). Если note
   // только что создан и ещё не в `recentEntries.value` (refresh периодически
   // через subscribeObjectChanges) — может потребоваться wait.
   const status = await edenWindow.evaluate(
@@ -179,16 +180,17 @@ export async function openEdenNote(
         }
         await new Promise((r) => setTimeout(r, 150));
       }
-      // Fallback: by-text. Точное совпадение текста в data-testid="kosmos-sidebar".
+      // Fallback: by-text по кликабельным элементам. Не завязываемся на
+      // общий root вроде `kosmos-sidebar`, чтобы смена sidebar API не
+      // ломала helper.
       if (title) {
-        const sidebar = document.querySelector('[data-testid="kosmos-sidebar"]');
-        if (sidebar) {
-          const all = Array.from(sidebar.querySelectorAll<HTMLElement>("*"));
-          const byText = all.find((el) => (el.textContent ?? "").trim() === title);
-          if (byText) {
-            byText.click();
-            return "clicked-by-text";
-          }
+        const all = Array.from(
+          document.querySelectorAll<HTMLElement>("button, a, [role='button']"),
+        );
+        const byText = all.find((el) => (el.textContent ?? "").trim() === title);
+        if (byText) {
+          byText.click();
+          return "clicked-by-text";
         }
       }
       return "not-found";

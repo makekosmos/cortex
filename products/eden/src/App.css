@@ -49,29 +49,16 @@
 .app-container.focus-mode-active .kosmos-desktop-chrome,
 .app-container.focus-mode-active .kosmos-desktop-chrome__sidebar,
 .app-container.focus-mode-active .kosmos-desktop-content-surface,
-.app-container.focus-mode-active .sidebar-layout,
 .app-container.focus-mode-active .kosmos-sidebar-shell,
 .app-container.focus-mode-active .kosmos-sidebar-content,
 .app-container.focus-mode-active .kosmos-sidebar-wrapper,
 .app-container.focus-mode-active .widget-sidebar-wrapper,
-.app-container.focus-mode-active .eden-content-surface,
 .app-container.focus-mode-active .app-main,
 .app-container.focus-mode-active .editor-wrapper,
 .app-container.focus-mode-active .editor-content-area,
 .app-container.focus-mode-active .ProseMirror {
   background: transparent !important;
   background-color: transparent !important;
-}
-
-.sidebar-layout {
-  display: flex;
-  height: 100%;
-  flex-shrink: 0;
-}
-
-.sidebar-layout.is-resizing,
-.widget-sidebar-wrapper.is-resizing {
-  user-select: none;
 }
 
 .widget-sidebar-wrapper {
@@ -3913,7 +3900,8 @@ span[data-wikilink]:hover {
 .setup-container,
 .setup-box,
 .ProseMirror {
-  background: var(--sidebar-bg);
+  background: transparent;
+  background-color: transparent;
   color: var(--color-text-primary);
 }
 
@@ -3991,21 +3979,6 @@ span[data-wikilink]:hover {
 .suggestion-item:hover,
 .suggestion-item.is-selected {
   background: var(--color-shape-highlight-medium);
-}
-
-.sidebar-layout {
-  height: calc(100% - var(--titlebar-height));
-  margin-top: var(--titlebar-height);
-  background: var(--color-bg-primary);
-}
-
-.widget-sidebar-wrapper {
-  height: 100%;
-  background: var(--color-bg-primary);
-}
-
-.widget-sidebar-wrapper {
-  padding: 0;
 }
 
 .widget-sidebar {
@@ -4688,12 +4661,6 @@ span[data-wikilink]:hover {
   overflow: hidden;
 }
 
-/* macOS: no titlebar background, content goes to top edge */
-.platform-mac .sidebar-layout {
-  height: 100%;
-  margin-top: 0;
-}
-
 .platform-mac .app-main {
   margin-top: 0;
 }
@@ -4710,46 +4677,6 @@ span[data-wikilink]:hover {
 
 .platform-windows .sidebar-expand-btn {
   left: 0;
-}
-
-.app-shell {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-
-/* Override scoped стилей DesktopContentSurface: убираем верхнюю границу,
-   фон не задаём — он унаследуется от `.app-container` (single acrylic layer). */
-.eden-content-surface.kosmos-desktop-content-surface {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  border-top: none !important;
-}
-
-.eden-titlebar-toggle {
-  width: var(--kosmos-titlebar-control-size, 32px);
-  height: var(--kosmos-titlebar-control-size, 32px);
-  border-radius: var(--kosmos-titlebar-control-radius, 10px);
-  -webkit-app-region: no-drag;
-}
-
-.eden-zen-exit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: color-mix(in srgb, var(--sidebar-foreground) 72%, transparent);
-  transition:
-    background-color 120ms ease,
-    color 120ms ease;
-}
-
-.eden-zen-exit:hover {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  color: var(--foreground);
 }
 
 .eden-char-counter {
@@ -4791,43 +4718,6 @@ span[data-wikilink]:hover {
 .app-container.focus-mode-active {
   padding-bottom: 32px;
   box-sizing: border-box;
-}
-
-.eden-titlebar-title {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: color-mix(in srgb, var(--sidebar-foreground) 82%, transparent);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-  /* no-drag — иначе span внутри `.kosmos-titlebar` глотает события для
-     drag-to-move, DOM dblclick не fire'ит. С этим — dblclick по тексту
-     в zen mode превращает окно в floating widget. */
-  -webkit-app-region: no-drag;
-  user-select: none;
-}
-
-.sidebar-layout {
-  height: 100%;
-  margin-top: 0;
-  background: var(--sidebar-bg);
-}
-
-/* Когда Sidebar collapsed (Sidebar.vue добавляет `hidden collapsed` на
-   wrapper при _hidden=true), `.sidebar-layout` оставляет за собой видимый
-   серый блок, потому что у него background и inherited width. Делаем
-   контейнер прозрачным и без размера — `<aside>` сворачивается до 0px,
-   серого артефакта рядом с content не видно. Toggle-кнопка в titlebar
-   продолжает менять `widgetSidebarHidden` → reactive Sidebar разворачивается. */
-.sidebar-layout:has(.kosmos-sidebar-wrapper.hidden) {
-  background: transparent;
-  width: 0;
-  overflow: hidden;
-}
-
-.widget-sidebar-wrapper {
-  height: 100%;
 }
 
 .app-main {

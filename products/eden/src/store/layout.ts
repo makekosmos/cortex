@@ -2,9 +2,7 @@ import { defineStore } from "pinia";
 
 import { ref } from "vue";
 
-const MIN_WIDGET_SIDEBAR_WIDTH = 220;
-
-const MAX_WIDGET_SIDEBAR_WIDTH = 520;
+const EDEN_SETTINGS_SIDEBAR_WIDTH = 228;
 
 // LocalStorage key для persistence zen mode'а. Юзер ожидает что reload
 // окна (особенно дев-HMR) сохраняет состояние «я был в zen режиме».
@@ -31,8 +29,6 @@ function writePersistedZenMode(value: boolean): void {
 }
 
 export const useLayoutStore = defineStore("layout", () => {
-  const widgetSidebarWidth = ref(320);
-
   const widgetSidebarHidden = ref(false);
 
   const isSearchOpen = ref(false);
@@ -50,7 +46,7 @@ export const useLayoutStore = defineStore("layout", () => {
       await window.api.updateSidebarConfig({
         widget: {
           hidden: widgetSidebarHidden.value,
-          width: widgetSidebarWidth.value,
+          width: EDEN_SETTINGS_SIDEBAR_WIDTH,
         },
       });
     }
@@ -89,22 +85,16 @@ export const useLayoutStore = defineStore("layout", () => {
   }
 
   async function onWidgetConfigChange(config: { width: number; hidden: boolean }) {
-    widgetSidebarWidth.value = Math.max(
-      MIN_WIDGET_SIDEBAR_WIDTH,
-
-      Math.min(MAX_WIDGET_SIDEBAR_WIDTH, config.width),
-    );
-
     widgetSidebarHidden.value = config.hidden;
 
     if (window.api) {
-      await window.api.updateSidebarConfig({ widget: config });
+      await window.api.updateSidebarConfig({
+        widget: { hidden: config.hidden, width: EDEN_SETTINGS_SIDEBAR_WIDTH },
+      });
     }
   }
 
   return {
-    widgetSidebarWidth,
-
     widgetSidebarHidden,
 
     isSearchOpen,

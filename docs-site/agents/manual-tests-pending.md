@@ -13,6 +13,28 @@
 
 ---
 
+## 🟠 Pending — Eden CM6 markdown-редактор, фаза 1 (2026-06-11)
+
+CodeMirror 6 редактор за фичефлагом. Proof loop — `.agent/tasks/2026-06-11-eden-cm6-editor/`.
+Компонентный уровень проверен автоматически (vitest browser). Production bundle визуально
+проверен Playwright-скриншотами:
+`.tmp/visual/2026-06-11-eden-cm6-editor/eden-notes-cm-vim-desktop.png`,
+`.tmp/visual/2026-06-11-eden-cm6-editor/eden-settings-vim-desktop.png`,
+`.tmp/visual/2026-06-11-eden-cm6-editor/eden-settings-vim-compact.png`.
+
+**Осталось ручное (в реальном шелле):** запустить Eden в Kepler shell (dev):
+
+- [ ] Настройки → Общие → включить «Markdown-редактор (бета)».
+- [ ] Настройки → Vim → включить «Vim-режим»; справочник motions читаемый, toggle сохраняется.
+- [ ] Открыть простую заметку (без задач/wikilinks) — открывается CM-редактор, печать ощущается плавной, синтаксис скрывается вне строки с курсором.
+- [ ] В Vim mode проверить `i`, `Esc`, `h/j/k/l`, `:w`, `:zen on/off` в реальном Kepler shell.
+- [ ] Чекбоксы `- [ ]` кликаются, состояние сохраняется после переоткрытия заметки.
+- [ ] Заметка с TaskRef/wikilink — открывается старый редактор (fallback), контент цел.
+- [ ] Выключить флаг — везде старый редактор, заметки с правками из CM открываются корректно.
+- [ ] Slash-команды (`/` в начале строки) показывают русское меню и вставляют разметку.
+
+---
+
 ## 🟠 Pending — macOS hotkey capture (2026-06-07)
 
 Заполнен variation point macOS hotkey capture (Swift helper `capture-hotkey` + adapter). Proof loop — `.agent/tasks/2026-06-07-macos-hotkey-capture-adapter/`.

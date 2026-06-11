@@ -234,8 +234,6 @@ export const useEdenStore = defineStore("eden", () => {
 
     const layout = useLayoutStore();
 
-    layout.widgetSidebarWidth = sidebarConfig.widget.width;
-
     layout.widgetSidebarHidden = sidebarConfig.widget.hidden;
 
     isInitializing.value = false;
