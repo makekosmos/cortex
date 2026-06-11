@@ -1,5 +1,7 @@
 import { EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 
+const FIXED_FAT_CURSOR_WIDTH = "var(--eden-vim-cursor-width, 0.62em)";
+
 function restoreStyleProperty(
   el: HTMLElement,
   key: "width" | "min-width" | "height" | "max-height" | "line-height" | "transform",
@@ -52,12 +54,8 @@ function fixFatCursorHeight(view: EditorView): void {
           : null;
     if (!(targetHeight && targetHeight > 0)) continue;
 
-    const targetWidth =
-      naturalCursorRect?.width && naturalCursorRect.width > 0 ? naturalCursorRect.width : null;
-    if (targetWidth) {
-      el.style.width = `${targetWidth}px`;
-      el.style.minWidth = `${targetWidth}px`;
-    }
+    el.style.width = FIXED_FAT_CURSOR_WIDTH;
+    el.style.minWidth = FIXED_FAT_CURSOR_WIDTH;
     el.style.height = `${targetHeight}px`;
     el.style.maxHeight = `${targetHeight}px`;
     el.style.lineHeight = "normal";

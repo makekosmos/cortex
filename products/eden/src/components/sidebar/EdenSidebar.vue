@@ -1,71 +1,68 @@
 <template>
-  <SettingsSidebar v-if="!hidden" tone="strong">
-    <div class="eden-settings-sidebar">
-      <div class="eden-settings-sidebar__title">{{ sidebarTitle }}</div>
+  <SettingsSidebar v-if="!hidden" tone="strong" :title="sidebarTitle">
+    <template #title-leading>
+      <button
+        type="button"
+        class="inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)"
+        title="Скрыть сайдбар"
+        aria-label="Скрыть сайдбар"
+        aria-pressed="true"
+        data-testid="sidebar-titlebar-toggle"
+        @click="emit('toggleSidebar')"
+      >
+        <PanelLeftClose :size="16" />
+      </button>
+    </template>
 
-      <div class="eden-settings-sidebar__scroll kosmos-scroll">
-        <div v-if="topItems.length > 0" class="eden-settings-sidebar__group">
-          <SettingsSidebarButton
-            v-for="item in topItems"
-            :key="item.id"
-            :icon="item.icon"
-            :label="item.label"
-            :test-id="item.testId"
-            icon-variant="plain"
-            @click="item.onClick()"
-          />
-        </div>
+    <div class="flex min-h-0 flex-1 flex-col gap-6 px-2 pb-2">
+      <div v-if="primaryItems.length > 0" class="flex flex-col gap-1">
+        <SettingsSidebarButton
+          v-for="item in primaryItems"
+          :key="item.id"
+          :icon="item.icon"
+          :label="item.label"
+          :active="item.active"
+          :test-id="item.testId"
+          icon-variant="plain"
+          @click="item.onClick()"
+        />
+      </div>
 
-        <div v-if="primaryItems.length > 0" class="eden-settings-sidebar__group">
-          <SettingsSidebarButton
-            v-for="item in primaryItems"
-            :key="item.id"
-            :icon="item.icon"
-            :label="item.label"
-            :active="item.active"
-            :test-id="item.testId"
-            :icon-variant="item.iconVariant"
-            :icon-from="item.iconFrom"
-            :icon-to="item.iconTo"
-            @click="item.onClick()"
-          />
-        </div>
-
-        <section
-          v-for="group in projectGroups"
-          :key="group.id"
-          class="eden-settings-sidebar__group"
-        >
-          <div class="eden-settings-sidebar__header">
-            <span>{{ group.label }}</span>
-            <button
+      <div v-if="sidebarGroups.length > 0" class="flex min-h-0 flex-1 flex-col gap-6">
+        <section v-for="group in sidebarGroups" :key="group.id" class="flex min-h-0 flex-col gap-2">
+          <div class="flex items-center justify-between px-1">
+            <span class="text-[11px] font-medium text-[var(--muted-foreground)]">
+              {{ group.label }}
+            </span>
+            <Button
               v-if="group.action"
               type="button"
-              class="eden-settings-sidebar__action"
-              :title="group.action.label"
+              size="sm"
+              variant="ghost"
               :data-testid="group.action.testId"
               @click="group.action.onClick()"
             >
-              <component :is="group.action.icon" :size="14" :stroke-width="2" />
-            </button>
+              Новый
+            </Button>
           </div>
 
-          <SettingsSidebarButton
-            v-for="item in group.items"
-            :key="item.id"
-            :icon="item.icon"
-            :icon-image="item.iconImage"
-            :label="item.label"
-            :active="item.active"
-            :test-id="item.testId"
-            icon-variant="plain"
-            @click="item.onClick()"
-            @contextmenu="item.onContextMenu?.($event)"
-          />
+          <div class="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto kosmos-scroll">
+            <SettingsSidebarButton
+              v-for="item in group.items"
+              :key="item.id"
+              :icon="item.icon"
+              :label="item.label"
+              :active="item.active"
+              :test-id="item.testId"
+              icon-variant="plain"
+              @click="item.onClick()"
+              @contextmenu="item.onContextMenu?.($event)"
+            />
+          </div>
         </section>
       </div>
 
-      <div v-if="footerItems.length > 0" class="eden-settings-sidebar__footer">
+      <div v-if="footerItems.length > 0" class="mt-auto flex flex-col gap-1">
         <SettingsSidebarButton
           v-for="item in footerItems"
           :key="item.id"
@@ -83,13 +80,12 @@
 
 <script setup lang="ts">
 import { computed, type Component } from "vue";
-import { SettingsSidebar, SettingsSidebarButton } from "@kosmos/visuals";
+import { Button, SettingsSidebar, SettingsSidebarButton } from "@kosmos/visuals";
 import {
   ArrowLeft,
-  Database,
   FileText,
-  Globe,
   Keyboard,
+  PanelLeftClose,
   Plus,
   Search,
   Settings,
@@ -99,10 +95,9 @@ import {
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { getNoteTypeCollectionName } from "@/lib/typedNotes";
 import { isSystemType } from "@/lib/systemTypes";
-import { objectIconUri } from "@/lib/iconResolver";
 
 type EdenScreen = "notes" | "settings" | "object-types" | "type-collection";
-type SettingsTab = "general" | "trash" | "storage" | "vim" | "spaces";
+type SettingsTab = "general" | "trash" | "vim";
 
 interface SidebarActionItem {
   id: string;
@@ -110,16 +105,12 @@ interface SidebarActionItem {
   label: string;
   active?: boolean;
   testId?: string;
-  iconVariant?: "tile" | "plain";
-  iconFrom?: string;
-  iconTo?: string;
   onClick: () => void;
 }
 
 interface SidebarListItem {
   id: string;
   icon: Component;
-  iconImage?: string;
   label: string;
   active?: boolean;
   testId?: string;
@@ -154,6 +145,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   createEntry: [];
   toggleSearch: [];
+  toggleSidebar: [];
   openEntry: [entryId: string];
   entryContextMenu: [event: MouseEvent, entryId: string];
   openSettingsTab: [tab: SettingsTab];
@@ -163,13 +155,6 @@ const emit = defineEmits<{
   back: [];
 }>();
 
-const noteTypesById = computed(
-  () =>
-    new Map(
-      props.noteTypes.map((noteType) => [noteType.id, noteType] satisfies [string, NoteType]),
-    ),
-);
-
 const systemNoteTypes = computed(() =>
   props.noteTypes.filter((noteType) => isSystemType(noteType.id)),
 );
@@ -178,14 +163,11 @@ const customNoteTypes = computed(() =>
 );
 
 function buildEntryItem(entry: Entry, testId: string): SidebarListItem {
-  const noteType = entry.type_id ? (noteTypesById.value.get(entry.type_id) ?? null) : null;
-
   return {
     id: entry.id,
     icon: FileText,
-    iconImage: objectIconUri(noteType?.icon ?? "document"),
     label: getEntryDisplayTitle(entry.title, entry.header_props_json),
-    active: props.currentEntry?.id === entry.id,
+    active: props.activeScreen === "notes" && props.currentEntry?.id === entry.id,
     onClick: () => emit("openEntry", entry.id),
     onContextMenu: (event: MouseEvent) => emit("entryContextMenu", event, entry.id),
     testId,
@@ -196,20 +178,14 @@ function buildTypeItem(noteType: NoteType, testId: string): SidebarListItem {
   return {
     id: noteType.id,
     icon: Shapes,
-    iconImage: objectIconUri(noteType.icon),
     label: getNoteTypeCollectionName(noteType),
-    active: props.selectedObjectTypeId === noteType.id,
+    active:
+      (props.activeScreen === "type-collection" || props.activeScreen === "object-types") &&
+      props.selectedObjectTypeId === noteType.id,
     onClick: () => emit("openObjectType", noteType.id),
     testId,
   };
 }
-
-const sidebarTitle = computed(() => {
-  if (props.activeScreen === "settings") return "Настройки";
-  if (props.activeScreen === "object-types") return "Типы объектов";
-  if (props.activeScreen === "type-collection") return "Коллекция";
-  return "Eden";
-});
 
 const notesPrimaryItems = computed<SidebarActionItem[]>(() => [
   {
@@ -218,8 +194,6 @@ const notesPrimaryItems = computed<SidebarActionItem[]>(() => [
     label: "Новая заметка",
     onClick: () => emit("createEntry"),
     testId: "sidebar-create-entry",
-    iconFrom: "var(--settings-sidebar-icon-from)",
-    iconTo: "var(--settings-sidebar-icon-to)",
   },
   {
     id: "search",
@@ -228,10 +202,15 @@ const notesPrimaryItems = computed<SidebarActionItem[]>(() => [
     active: !!props.isSearchOpen || !!props.searchQuery,
     onClick: () => emit("toggleSearch"),
     testId: "widget-link-search",
-    iconFrom: "var(--accent)",
-    iconTo: "color-mix(in srgb, var(--accent) 60%, var(--background))",
   },
 ]);
+
+const sidebarTitle = computed(() => {
+  if (props.activeScreen === "settings") return "Настройки";
+  if (props.activeScreen === "object-types") return "Типы объектов";
+  if (props.activeScreen === "type-collection") return "Коллекция";
+  return "Eden";
+});
 
 const settingsPrimaryItems = computed<SidebarActionItem[]>(() => [
   {
@@ -251,28 +230,12 @@ const settingsPrimaryItems = computed<SidebarActionItem[]>(() => [
     testId: "settings-nav-trash",
   },
   {
-    id: "storage",
-    icon: Database,
-    label: "Хранилище",
-    active: props.activeSettingsTab === "storage",
-    onClick: () => emit("openSettingsTab", "storage"),
-    testId: "settings-nav-storage",
-  },
-  {
     id: "vim",
     icon: Keyboard,
     label: "Vim",
     active: props.activeSettingsTab === "vim",
     onClick: () => emit("openSettingsTab", "vim"),
     testId: "settings-nav-vim",
-  },
-  {
-    id: "spaces",
-    icon: Globe,
-    label: "Пространства",
-    active: props.activeSettingsTab === "spaces",
-    onClick: () => emit("openSettingsTab", "spaces"),
-    testId: "settings-nav-spaces",
   },
   {
     id: "object-types",
@@ -322,14 +285,21 @@ const topItems = computed<SidebarActionItem[]>(() => {
 });
 
 const primaryItems = computed<SidebarActionItem[]>(() => {
-  if (props.activeScreen === "settings") return settingsPrimaryItems.value;
-  if (props.activeScreen === "object-types") return objectTypesPrimaryItems.value;
+  if (props.activeScreen === "settings") return [...topItems.value, ...settingsPrimaryItems.value];
+  if (props.activeScreen === "object-types") {
+    return [...topItems.value, ...objectTypesPrimaryItems.value];
+  }
   return notesPrimaryItems.value;
 });
 
-const recentItems = computed<SidebarListItem[]>(() =>
-  props.recentEntries.map((entry) => buildEntryItem(entry, `recent-entry-${entry.id}`)),
-);
+const recentItems = computed<SidebarListItem[]>(() => {
+  const entries =
+    props.currentEntry && !props.recentEntries.some((entry) => entry.id === props.currentEntry?.id)
+      ? [props.currentEntry, ...props.recentEntries]
+      : props.recentEntries;
+
+  return entries.map((entry) => buildEntryItem(entry, `recent-entry-${entry.id}`));
+});
 
 const noteObjectTypeItems = computed<SidebarListItem[]>(() =>
   [...props.noteTypes]
@@ -345,7 +315,7 @@ const objectTypesCustomItems = computed<SidebarListItem[]>(() =>
   customNoteTypes.value.map((noteType) => buildTypeItem(noteType, `custom-type-${noteType.id}`)),
 );
 
-const projectGroups = computed<SidebarGroup[]>(() => {
+const sidebarGroups = computed<SidebarGroup[]>(() => {
   if (props.activeScreen === "object-types") {
     return [
       { id: "system-types", label: "Системные типы", items: objectTypesSystemItems.value },
@@ -381,94 +351,10 @@ const footerItems = computed<SidebarActionItem[]>(() => {
       id: "settings",
       icon: Settings,
       label: "Настройки",
-      active: false,
+      active: props.activeScreen === "settings",
       onClick: () => emit("openSettingsTab", "general"),
       testId: "open-settings-btn",
     },
   ];
 });
 </script>
-
-<style scoped>
-.eden-settings-sidebar {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 16px;
-  padding: 0 8px 12px;
-}
-
-.eden-settings-sidebar__title {
-  padding: 12px 12px 0;
-  color: var(--foreground);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.4;
-  -webkit-app-region: drag;
-}
-
-.eden-settings-sidebar__scroll {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 24px;
-  margin-right: -8px;
-  overflow-y: auto;
-  padding-right: 8px;
-}
-
-.eden-settings-sidebar__group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.eden-settings-sidebar__header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 28px;
-  padding: 4px 2px 6px 10px;
-  color: color-mix(in srgb, var(--foreground) 45%, transparent);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
-.eden-settings-sidebar__header span {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.eden-settings-sidebar__action {
-  display: inline-flex;
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: color-mix(in srgb, var(--foreground) 58%, transparent);
-  -webkit-app-region: no-drag;
-}
-
-.eden-settings-sidebar__action:hover {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  color: var(--foreground);
-}
-
-.eden-settings-sidebar__footer {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-</style>

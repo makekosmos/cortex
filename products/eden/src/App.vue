@@ -32,14 +32,28 @@
 
     <DesktopChrome appearance="settings" class="h-screen w-screen" :platform="chromePlatform">
       <template v-if="!layout.isZenMode" #titlebar-leading>
-        <TitlebarHistoryControls
-          :back-disabled="!canGoBack"
-          :forward-disabled="!canGoForward"
-          back-title="Назад"
-          forward-title="Вперёд"
-          @back="navigateBack"
-          @forward="navigateForward"
-        />
+        <div class="inline-flex items-center gap-2 [-webkit-app-region:no-drag]">
+          <button
+            v-if="layout.widgetSidebarHidden"
+            type="button"
+            class="inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)"
+            title="Показать сайдбар"
+            aria-label="Показать сайдбар"
+            aria-pressed="false"
+            data-testid="titlebar-sidebar-toggle"
+            @click="layout.toggleWidgetSidebar()"
+          >
+            <PanelLeftOpen :size="16" />
+          </button>
+          <TitlebarHistoryControls
+            :back-disabled="!canGoBack"
+            :forward-disabled="!canGoForward"
+            back-title="Назад"
+            forward-title="Вперёд"
+            @back="navigateBack"
+            @forward="navigateForward"
+          />
+        </div>
       </template>
 
       <template v-if="!layout.isZenMode" #sidebar>
@@ -61,86 +75,83 @@
           @open-object-types="openObjectTypes()"
           @open-object-type="eden.openTypeCollection($event)"
           @create-object-type="createObjectType()"
+          @toggle-sidebar="layout.toggleWidgetSidebar()"
           @back="handleSidebarBack"
         />
       </template>
 
-      <DesktopContentSurface>
-        <main class="app-main">
-          <div
-            v-if="
-              eden.isHydratingVault &&
-              eden.activeScreen !== 'settings' &&
-              eden.activeScreen !== 'object-types' &&
-              !eden.currentEntry
-            "
-            class="app-main-loading"
-          >
-            Загрузка данных...
-          </div>
-          <ObjectTypesSettings
-            v-else-if="eden.activeScreen === 'object-types'"
-            :note-types="eden.noteTypes"
-            :initial-selected-type-id="eden.activeNoteTypeId"
-            :create-draft-token="objectTypeCreateToken"
-            :on-note-type-save="eden.saveNoteType"
-            :on-note-type-delete="eden.deleteNoteType"
-            @selected-type-change="onSelectedTypeChange"
-          />
-          <TypeObjectsView
-            v-else-if="eden.activeScreen === 'type-collection' && activeCollectionType"
-            :note-type="activeCollectionType"
-            :entries="eden.entries"
-            @open-entry="(id) => eden.navigateTo(id)"
-            @create-entry="eden.createNewEntry(activeCollectionType.id)"
-            @edit-type="openTypeSettings(activeCollectionType.id)"
-          />
-          <SettingsPage
-            v-else-if="eden.activeScreen === 'settings'"
-            :vault-path="eden.vaultPath"
-            :active-space="eden.activeSpace"
-            :initial-tab="settingsInitialTab"
-            @select-vault="eden.selectFolder()"
-            @select-space="onSelectSpace"
-            @refresh-data="eden.refreshData()"
-          />
-          <CmEditor
-            v-else-if="eden.currentEntry && useCmEditorForCurrent"
-            :key="eden.currentEntry.id"
-            :entry="eden.currentEntry"
-            :zen-mode="layout.isZenMode"
-            :vim-mode="preferences.state.vimModeEnabled"
-            :on-save="eden.handleSave"
-            @exit-zen="layout.disableZenMode()"
-            @close-entry="closeCurrentEntry"
-            @set-zen-mode="setZenMode"
-            @live-char-count="liveCharCount = $event"
-          />
-          <Editor
-            v-else-if="eden.currentEntry"
-            :key="eden.currentEntry.id"
-            :entry="eden.currentEntry"
-            :all-entries="eden.entries"
-            :note-types="eden.noteTypes"
-            :zen-mode="layout.isZenMode"
-            :on-save="eden.handleSave"
-            :on-navigate="eden.navigateTo"
-            :on-open-type-settings="openTypeSettings"
-            @exit-zen="layout.disableZenMode()"
-            @live-char-count="liveCharCount = $event"
-          />
-          <SpacesView
-            v-else
-            :active-space="eden.activeSpace"
-            :entries="eden.entries"
-            :note-types="eden.noteTypes"
-            :sort-mode="eden.sortMode"
-            @sort-mode-change="eden.sortMode = $event"
-            @create-entry="eden.createNewEntry()"
-            @open-entry="(id) => eden.navigateTo(id)"
-          />
-        </main>
-      </DesktopContentSurface>
+      <main class="app-main">
+        <div
+          v-if="
+            eden.isHydratingVault &&
+            eden.activeScreen !== 'settings' &&
+            eden.activeScreen !== 'object-types' &&
+            !eden.currentEntry
+          "
+          class="app-main-loading"
+        >
+          Загрузка данных...
+        </div>
+        <ObjectTypesSettings
+          v-else-if="eden.activeScreen === 'object-types'"
+          :note-types="eden.noteTypes"
+          :initial-selected-type-id="eden.activeNoteTypeId"
+          :create-draft-token="objectTypeCreateToken"
+          :on-note-type-save="eden.saveNoteType"
+          :on-note-type-delete="eden.deleteNoteType"
+          @selected-type-change="onSelectedTypeChange"
+        />
+        <TypeObjectsView
+          v-else-if="eden.activeScreen === 'type-collection' && activeCollectionType"
+          :note-type="activeCollectionType"
+          :entries="eden.entries"
+          @open-entry="(id) => eden.navigateTo(id)"
+          @create-entry="eden.createNewEntry(activeCollectionType.id)"
+          @edit-type="openTypeSettings(activeCollectionType.id)"
+        />
+        <SettingsPage
+          v-else-if="eden.activeScreen === 'settings'"
+          :initial-tab="settingsInitialTab"
+          @refresh-data="eden.refreshData()"
+        />
+        <CmEditor
+          v-else-if="eden.currentEntry && useCmEditorForCurrent"
+          :key="eden.currentEntry.id"
+          :entry="eden.currentEntry"
+          :zen-mode="layout.isZenMode"
+          :vim-mode="preferences.state.vimModeEnabled"
+          :on-save="eden.handleSave"
+          @exit-zen="layout.disableZenMode()"
+          @close-entry="closeCurrentEntry"
+          @set-zen-mode="setZenMode"
+          @entry-draft-change="eden.updateEntryDraft"
+          @live-char-count="liveCharCount = $event"
+        />
+        <Editor
+          v-else-if="eden.currentEntry"
+          :key="eden.currentEntry.id"
+          :entry="eden.currentEntry"
+          :all-entries="eden.entries"
+          :note-types="eden.noteTypes"
+          :zen-mode="layout.isZenMode"
+          :on-save="eden.handleSave"
+          :on-navigate="eden.navigateTo"
+          :on-open-type-settings="openTypeSettings"
+          @exit-zen="layout.disableZenMode()"
+          @entry-draft-change="eden.updateEntryDraft"
+          @live-char-count="liveCharCount = $event"
+        />
+        <SpacesView
+          v-else
+          :active-space="eden.activeSpace"
+          :entries="eden.entries"
+          :note-types="eden.noteTypes"
+          :sort-mode="eden.sortMode"
+          @sort-mode-change="eden.sortMode = $event"
+          @create-entry="eden.createNewEntry()"
+          @open-entry="(id) => eden.navigateTo(id)"
+        />
+      </main>
     </DesktopChrome>
 
     <div
@@ -173,7 +184,6 @@ import {
   ContextMenu,
   ContextMenuItem,
   DesktopChrome,
-  DesktopContentSurface,
   TitlebarHistoryControls,
   ToastHost,
   type TitlebarPlatform,
@@ -188,10 +198,9 @@ import { useSearch } from "@/composables/useSearch";
 import { useCharCounter } from "@/composables/useCharCounter";
 import { useDockedWidget } from "@/composables/useDockedWidget";
 import { useNavigationHistory } from "@/composables/useNavigationHistory";
-import type { SpaceId } from "@/components/sidebar/types";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { usePreferences } from "@/composables/usePreferences";
-import { shouldUseCmEditor } from "@/editor-cm/cmGate";
+import { getCmEditorBlockers, shouldUseCmEditor } from "@/editor-cm/cmGate";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
 import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
@@ -204,6 +213,7 @@ import SpacesView from "@/components/spaces/SpacesView.vue";
 import SettingsPage from "@/components/settings/SettingsPage.vue";
 import ObjectTypesSettings from "@/components/settings/ObjectTypesSettings.vue";
 import TypeObjectsView from "@/components/objects/TypeObjectsView.vue";
+import { PanelLeftOpen } from "@lucide/vue";
 import "@/App.css";
 
 const eden = useEdenStore();
@@ -218,12 +228,41 @@ const useCmEditorForCurrent = computed(
       eden.currentEntry.content_json,
     ),
 );
+const loggedCmBlockers = new Set<string>();
+
+watch(
+  [
+    () => eden.currentEntry?.id,
+    () => eden.currentEntry?.content_json,
+    () => preferences.state.cmEditorEnabled,
+    () => preferences.state.vimModeEnabled,
+  ],
+  () => {
+    const entry = eden.currentEntry;
+    const prefEnabled = preferences.state.cmEditorEnabled || preferences.state.vimModeEnabled;
+    if (!entry || !prefEnabled || useCmEditorForCurrent.value) return;
+
+    const blockers = getCmEditorBlockers(entry.content_json);
+    if (blockers.length === 0) return;
+
+    const key = `${entry.id}:${blockers.join(",")}`;
+    if (loggedCmBlockers.has(key)) return;
+
+    loggedCmBlockers.add(key);
+    console.warn("[eden] CM editor disabled for entry", {
+      id: entry.id,
+      title: entry.title,
+      blockers,
+    });
+  },
+  { immediate: true },
+);
 // Provide toast api на root уровне — useToast() из любого descendant'а
 // (Editor.vue и т.д.) увидит его. ToastHost дальше в template только
 // рендерит, не повторяет provide.
 provideToastHost();
 
-type SettingsTab = "general" | "trash" | "storage" | "vim" | "spaces";
+type SettingsTab = "general" | "trash" | "vim";
 
 usePlatform();
 useKeyboard();
@@ -465,18 +504,5 @@ async function onResultSelect(entryId: string) {
     layout.searchResults = [];
     layout.isSearchOpen = false;
   }
-}
-
-async function onSelectSpace(spaceId: SpaceId) {
-  await eden.refreshData();
-
-  if (spaceId === "my-space") {
-    void eden.openMySpace();
-    return;
-  }
-  eden.activeScreen = "notes";
-  eden.activeSpace = spaceId;
-  eden.activeNoteTypeId = null;
-  eden.currentEntry = null;
 }
 </script>

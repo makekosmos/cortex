@@ -47,6 +47,7 @@ const URL_NODE = "URL";
 const PREFIX_HIDE_WITH_SPACE = new Set(["HeaderMark", "QuoteMark"]);
 
 const hide = Decoration.replace({});
+const visibleSyntaxMarker = Decoration.mark({ class: "cm-markdown-syntax-marker" });
 
 type PendingDecoration = {
   from: number;
@@ -197,11 +198,17 @@ function computeDecorations(view: EditorView): DecorationSet {
         if (replacedLines.has(line)) return;
         if (isLinkSyntax) {
           const linkRange = enclosingLinkRange(node);
-          if (linkRange && selectionTouchesRange(state, linkRange.from, linkRange.to)) return;
+          if (linkRange && selectionTouchesRange(state, linkRange.from, linkRange.to)) {
+            pending.push({ from: node.from, to: node.to, deco: visibleSyntaxMarker });
+            return;
+          }
         } else if (activeLines.has(line)) {
           const keepHeadingMarkerHidden =
             name === "HeaderMark" && !selectionTouchesRange(state, node.from, node.to);
-          if (!keepHeadingMarkerHidden) return;
+          if (!keepHeadingMarkerHidden) {
+            pending.push({ from: node.from, to: node.to, deco: visibleSyntaxMarker });
+            return;
+          }
         }
 
         let start = node.from;

@@ -72,6 +72,18 @@ export function useKeyboard() {
       }
     }
 
+    // Ctrl/Cmd+B — раскрыть / скрыть sidebar. Используем physical code,
+    // чтобы shortcut не зависел от текущей раскладки.
+    if (mod && !e.altKey && e.code === "KeyB") {
+      e.preventDefault();
+      e.stopPropagation();
+      await layout.toggleWidgetSidebar();
+      console.debug("[eden] sidebar toggled by keyboard", {
+        hidden: layout.widgetSidebarHidden,
+      });
+      return;
+    }
+
     // Ctrl+K — открыть поиск + поднять chord-окно. Если за CHORD_WINDOW_MS
     // успели нажать Z — это chord Ctrl+K Z, переключаем zen.
 
@@ -154,10 +166,12 @@ export function useKeyboard() {
   onMounted(() => {
     void restoreZoom();
 
-    window.addEventListener("keydown", handleKeydown);
+    window.addEventListener("keydown", handleKeydown, { capture: true });
+    document.addEventListener("keydown", handleKeydown, { capture: true });
   });
 
   onUnmounted(() => {
-    window.removeEventListener("keydown", handleKeydown);
+    window.removeEventListener("keydown", handleKeydown, { capture: true });
+    document.removeEventListener("keydown", handleKeydown, { capture: true });
   });
 }

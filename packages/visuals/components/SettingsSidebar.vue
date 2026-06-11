@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, useSlots } from "vue";
 
 interface Props {
   tone?: "default" | "strong";
@@ -10,6 +10,11 @@ const props = withDefaults(defineProps<Props>(), {
   tone: "default",
   title: undefined,
 });
+
+const slots = useSlots();
+const hasTitleBar = computed(
+  () => Boolean(props.title) || Boolean(slots["title-leading"]) || Boolean(slots["title-trailing"]),
+);
 
 const sidebarStyle = computed(() => ({
   "--kosmos-settings-sidebar-bg":
@@ -25,10 +30,22 @@ const sidebarStyle = computed(() => ({
     :style="sidebarStyle"
   >
     <div
-      v-if="title"
-      class="kosmos-settings-sidebar__title px-3 pb-0 pt-[calc(0.75rem+var(--kosmos-mac-traffic-light-top-safe-area,0px))] font-[var(--font-sans)] text-[13px] leading-[1.4] font-medium [-webkit-app-region:drag]"
+      v-if="hasTitleBar"
+      class="kosmos-settings-sidebar__title flex min-h-9 items-center gap-2 px-2 pb-0 pt-2 font-[var(--font-sans)] text-[13px] leading-[1.4] font-medium [-webkit-app-region:drag]"
     >
-      {{ title }}
+      <div
+        v-if="$slots['title-leading']"
+        class="inline-flex shrink-0 items-center [-webkit-app-region:no-drag]"
+      >
+        <slot name="title-leading" />
+      </div>
+      <span v-if="title" class="min-w-0 truncate px-1">{{ title }}</span>
+      <div
+        v-if="$slots['title-trailing']"
+        class="ml-auto inline-flex shrink-0 items-center [-webkit-app-region:no-drag]"
+      >
+        <slot name="title-trailing" />
+      </div>
     </div>
     <div
       class="kosmos-settings-sidebar__content flex min-h-0 flex-1 flex-col gap-6 [-webkit-app-region:no-drag]"

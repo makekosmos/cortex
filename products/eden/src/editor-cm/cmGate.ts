@@ -12,6 +12,10 @@ export const CM_SAFE_NODES = new Set([
   "codeBlock",
   "hardBreak",
   "horizontalRule",
+  // Legacy TipTap task nodes. CmEditor serializes them as plain markdown
+  // checklist text before handing the document to @tiptap/markdown.
+  "taskList",
+  "taskItem",
 ]);
 
 export const CM_SAFE_MARKS = new Set(["bold", "italic", "strike", "code", "link"]);
@@ -57,6 +61,45 @@ function isNodeSafe(node: unknown): boolean {
   return true;
 }
 
+function collectCmBlockers(node: unknown, blockers: Set<string>): void {
+  if (!node || typeof node !== "object" || Array.isArray(node)) {
+    blockers.add("invalid-node");
+    return;
+  }
+
+  const n = node as Record<string, unknown>;
+
+  if (typeof n.type !== "string") {
+    blockers.add("missing-node-type");
+    return;
+  }
+
+  if (!CM_SAFE_NODES.has(n.type)) {
+    blockers.add(`node:${n.type}`);
+  }
+
+  if (Array.isArray(n.marks)) {
+    for (const mark of n.marks) {
+      if (!mark || typeof mark !== "object" || Array.isArray(mark)) {
+        blockers.add("invalid-mark");
+        continue;
+      }
+      const m = mark as Record<string, unknown>;
+      if (typeof m.type !== "string") {
+        blockers.add("missing-mark-type");
+      } else if (!CM_SAFE_MARKS.has(m.type)) {
+        blockers.add(`mark:${m.type}`);
+      }
+    }
+  }
+
+  if (Array.isArray(n.content)) {
+    for (const child of n.content) {
+      collectCmBlockers(child, blockers);
+    }
+  }
+}
+
 export function isCmSafeDoc(doc: unknown): boolean {
   return isNodeSafe(doc);
 }
@@ -72,4 +115,17 @@ export function shouldUseCmEditor(prefEnabled: boolean, contentJson: string): bo
   }
 
   return isCmSafeDoc(parsed);
+}
+
+export function getCmEditorBlockers(contentJson: string): string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(contentJson);
+  } catch {
+    return ["invalid-json"];
+  }
+
+  const blockers = new Set<string>();
+  collectCmBlockers(parsed, blockers);
+  return [...blockers].sort();
 }

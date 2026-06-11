@@ -23,6 +23,53 @@ export interface MdConverter {
 // Постпроцессинг в jsonToMarkdown восстанавливает `[` обратно.
 const CHECKBOX_PRE_RE = /^(\s*[-*+]\s+)\[([x ])\]/gim;
 
+function textNode(text: string): JSONContent {
+  return { type: "text", text };
+}
+
+function paragraph(content: JSONContent[]): JSONContent {
+  return { type: "paragraph", content };
+}
+
+function listItem(content: JSONContent[]): JSONContent {
+  return { type: "listItem", content };
+}
+
+function normalizeLegacyTaskNodes(node: JSONContent): JSONContent {
+  if (node.type === "taskList") {
+    return {
+      type: "bulletList",
+      content: (node.content ?? []).map(normalizeLegacyTaskNodes),
+    };
+  }
+
+  if (node.type === "taskItem") {
+    const checked = (node.attrs as { checked?: boolean } | undefined)?.checked === true;
+    const normalizedChildren = (node.content ?? []).map(normalizeLegacyTaskNodes);
+    const marker = textNode(checked ? "[x] " : "[ ] ");
+
+    if (normalizedChildren.length === 0) {
+      return listItem([paragraph([marker])]);
+    }
+
+    const [firstChild, ...restChildren] = normalizedChildren;
+    if (firstChild.type === "paragraph") {
+      return listItem([
+        { ...firstChild, content: [marker, ...(firstChild.content ?? [])] },
+        ...restChildren,
+      ]);
+    }
+
+    return listItem([paragraph([marker]), firstChild, ...restChildren]);
+  }
+
+  if (Array.isArray(node.content)) {
+    return { ...node, content: node.content.map(normalizeLegacyTaskNodes) };
+  }
+
+  return node;
+}
+
 // Рекурсивно заменяет U+FF3B (fullwidth `[`) обратно на ASCII `[` в text-нодах
 // ProseMirror JSON. Нужно чтобы content_json хранил корректные ASCII-чекбоксы.
 function restoreCheckboxBracketsInJson(node: JSONContent): JSONContent {
@@ -51,7 +98,8 @@ export function createMdConverter(): MdConverter {
   return {
     jsonToMarkdown(doc: object): string {
       // Прямая сериализация через MarkdownManager — не меняет состояние редактора.
-      const raw = manager.serialize(doc as JSONContent);
+      const normalizedDoc = normalizeLegacyTaskNodes(doc as JSONContent);
+      const raw = manager.serialize(normalizedDoc);
       // Восстанавливаем `[` из fullwidth placeholder'а U+FF3B в чекбокс-строках.
       // Также убираем экранирование если serializer добавил `\[` перед `［`.
       return (

@@ -3,21 +3,14 @@
     :class="['cm-editor-host', 'kosmos-scroll', { 'is-vim-mode': props.vimMode }]"
     data-testid="cm-editor-host"
   >
-    <input
-      ref="titleInputRef"
-      class="cm-editor-title-input"
-      type="text"
-      placeholder="Без названия"
-      :value="props.entry.title"
-      @blur="onTitleBlur"
-    />
+    <div ref="titleContainerRef" class="cm-editor-title-container"></div>
     <div ref="containerRef" class="cm-editor-container"></div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch } from "vue";
-import { Compartment } from "@codemirror/state";
+import { Compartment, EditorState, Prec } from "@codemirror/state";
 import { drawSelection, EditorView, keymap } from "@codemirror/view";
 import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
 import { highlightActiveLine } from "@codemirror/view";
@@ -25,6 +18,11 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { createMdConverter } from "./mdConvert";
+import {
+  getEditableEntryTitle,
+  resolveStoredEntryTitle,
+  syncUntitledEntryTitleFlag,
+} from "@/lib/entryTitles";
 import { livePreviewPlugin } from "./cm/live-preview";
 import { codeBlockFontPlugin } from "./cm/code-block-font";
 import { fatCursorFixPlugin } from "./cm/fat-cursor-fix";
@@ -34,6 +32,7 @@ import { slashCommandSource } from "./cm/slash-commands";
 import { resolveCodeLanguage } from "./cm/code-languages";
 import { edenHighlight } from "./cm/highlight";
 import { Vim, vim } from "@replit/codemirror-vim";
+import { useLayoutStore } from "@/store/layout";
 import "./cm-editor.css";
 
 interface Props {
@@ -47,11 +46,13 @@ interface Emits {
   exitZen: [];
   closeEntry: [];
   setZenMode: [enabled: boolean];
+  entryDraftChange: [entry: Entry];
   liveCharCount: [count: number];
 }
 
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
+const layout = useLayoutStore();
 
 const AUTOSAVE_DEBOUNCE_MS = 300;
 type EdenVimActions = {
@@ -104,15 +105,65 @@ function registerEdenVimCommands(): void {
 }
 
 const containerRef = ref<HTMLDivElement | null>(null);
-const titleInputRef = ref<HTMLInputElement | null>(null);
+const titleContainerRef = ref<HTMLDivElement | null>(null);
+const title = ref(getEditableEntryTitle(props.entry.title, props.entry.header_props_json));
 const vimCompartment = new Compartment();
+const titleVimCompartment = new Compartment();
 
 let view: EditorView | null = null;
+let titleView: EditorView | null = null;
 let converter: ReturnType<typeof createMdConverter> | null = null;
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+let lastPersistedTitle = props.entry.title;
+let lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(props.entry.header_props_json);
 
 function getCurrentTitle(): string {
-  return titleInputRef.value?.value ?? props.entry.title;
+  return titleView?.state.doc.toString() ?? title.value;
+}
+
+function normalizeHeaderPropsJson(headerPropsJson: string | null | undefined): string {
+  if (!headerPropsJson?.trim()) {
+    return JSON.stringify({});
+  }
+
+  try {
+    return JSON.stringify(JSON.parse(headerPropsJson) as Record<string, unknown>);
+  } catch {
+    return JSON.stringify({});
+  }
+}
+
+function parseHeaderProps(headerPropsJson: string | null | undefined): Record<string, unknown> {
+  try {
+    return JSON.parse(normalizeHeaderPropsJson(headerPropsJson)) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function buildEntryDraft(contentJson?: string): Entry {
+  const editedTitle = getCurrentTitle();
+  const normalizedTitle = resolveStoredEntryTitle(
+    editedTitle,
+    lastPersistedTitle,
+    lastPersistedHeaderPropsJson,
+  );
+  const normalizedHeaderPropsJson = JSON.stringify(
+    syncUntitledEntryTitleFlag(
+      parseHeaderProps(props.entry.header_props_json),
+      editedTitle,
+      lastPersistedTitle,
+      lastPersistedHeaderPropsJson,
+    ),
+  );
+
+  return {
+    ...props.entry,
+    title: normalizedTitle,
+    header_props_json: normalizedHeaderPropsJson,
+    content_json: contentJson ?? props.entry.content_json,
+    updated_at: Date.now(),
+  };
 }
 
 function scheduleAutosave(): void {
@@ -131,13 +182,11 @@ async function flushSave(): Promise<void> {
   if (!view || !converter) return;
   const md = view.state.doc.toString();
   const contentJson = JSON.stringify(converter.markdownToJson(md));
-  const entry: Entry = {
-    ...props.entry,
-    title: getCurrentTitle(),
-    content_json: contentJson,
-    updated_at: Date.now(),
-  };
+  const entry = buildEntryDraft(contentJson);
+  emit("entryDraftChange", entry);
   await props.onSave(entry);
+  lastPersistedTitle = entry.title;
+  lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(entry.header_props_json);
 }
 
 function closeEntry(): void {
@@ -148,20 +197,80 @@ function setZenMode(enabled: boolean): void {
   emit("setZenMode", enabled);
 }
 
+function toggleSidebarFromEditor(source: string): boolean {
+  void layout.toggleWidgetSidebar();
+  console.debug(`[eden] sidebar toggled by ${source}`, {
+    hidden: layout.widgetSidebarHidden,
+  });
+  return true;
+}
+
+function createSidebarToggleKeymap(source: string) {
+  return {
+    key: "Mod-b",
+    run: () => toggleSidebarFromEditor(source),
+  };
+}
+
 function onKeydown(e: KeyboardEvent): void {
   if (e.key === "Escape" && props.zenMode) {
     emit("exitZen");
   }
 }
 
-function onTitleBlur(): void {
-  void flushSave().catch((err) => {
-    console.warn("[eden cm] title blur save failed:", err);
+function createTitleState(initialTitle: string): EditorState {
+  return EditorState.create({
+    doc: initialTitle,
+    extensions: [
+      titleVimCompartment.of(props.vimMode ? vim() : []),
+      drawSelection(),
+      EditorView.lineWrapping,
+      fatCursorFixPlugin,
+      EditorView.editorAttributes.of({ class: "cm-title-editor" }),
+      EditorView.contentAttributes.of({
+        spellcheck: "false",
+        "aria-label": "Название заметки",
+        "data-placeholder": "Без названия",
+      }),
+      Prec.highest(
+        keymap.of([
+          createSidebarToggleKeymap("CodeMirror title keymap"),
+          {
+            key: "Enter",
+            run: () => {
+              view?.focus();
+              return true;
+            },
+          },
+        ]),
+      ),
+      EditorView.domEventHandlers({
+        blur: () => {
+          void flushSave().catch((err) => {
+            console.warn("[eden cm] title blur save failed:", err);
+          });
+        },
+      }),
+      EditorView.updateListener.of((update) => {
+        if (!update.docChanged) return;
+        const nextTitle = update.state.doc.toString().replace(/[\r\n]+/g, " ");
+        if (nextTitle !== update.state.doc.toString()) {
+          update.view.dispatch({
+            changes: { from: 0, to: update.state.doc.length, insert: nextTitle },
+          });
+          return;
+        }
+
+        title.value = nextTitle;
+        emit("entryDraftChange", buildEntryDraft());
+        scheduleAutosave();
+      }),
+    ],
   });
 }
 
 onMounted(() => {
-  if (!containerRef.value) return;
+  if (!containerRef.value || !titleContainerRef.value) return;
 
   registerEdenVimCommands();
   activeVimActions = {
@@ -181,7 +290,12 @@ onMounted(() => {
     initialMd = "";
   }
 
-  view = new EditorView({
+  titleView = new EditorView({
+    state: createTitleState(title.value),
+    parent: titleContainerRef.value,
+  });
+
+  const state = EditorState.create({
     doc: initialMd,
     extensions: [
       vimCompartment.of(props.vimMode ? vim() : []),
@@ -198,7 +312,12 @@ onMounted(() => {
       markdownListIndentPlugin,
       orderedListRenumber,
       autocompletion({ override: [slashCommandSource] }),
-      keymap.of([...defaultKeymap, ...historyKeymap, ...completionKeymap]),
+      keymap.of([
+        createSidebarToggleKeymap("CodeMirror keymap"),
+        ...defaultKeymap,
+        ...historyKeymap,
+        ...completionKeymap,
+      ]),
       EditorView.contentAttributes.of({ spellcheck: "false" }),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
@@ -207,6 +326,10 @@ onMounted(() => {
         }
       }),
     ],
+  });
+
+  view = new EditorView({
+    state,
     parent: containerRef.value,
   });
   view.scrollDOM.classList.add("kosmos-scroll");
@@ -215,11 +338,28 @@ onMounted(() => {
 });
 
 watch(
+  () => props.entry.id,
+  () => {
+    title.value = getEditableEntryTitle(props.entry.title, props.entry.header_props_json);
+    if (titleView && titleView.state.doc.toString() !== title.value) {
+      titleView.dispatch({
+        changes: { from: 0, to: titleView.state.doc.length, insert: title.value },
+      });
+    }
+    lastPersistedTitle = props.entry.title;
+    lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(props.entry.header_props_json);
+  },
+);
+
+watch(
   () => props.vimMode,
   (enabled) => {
-    if (!view) return;
-    view.dispatch({
-      effects: [vimCompartment.reconfigure(enabled ? vim() : [])],
+    const extension = enabled ? vim() : [];
+    view?.dispatch({
+      effects: [vimCompartment.reconfigure(extension)],
+    });
+    titleView?.dispatch({
+      effects: [titleVimCompartment.reconfigure(extension)],
     });
   },
 );
@@ -237,6 +377,8 @@ onBeforeUnmount(() => {
   }
 
   const unmountSave = flushSave();
+  titleView?.destroy();
+  titleView = null;
   view?.destroy();
   view = null;
   converter?.destroy();
@@ -259,30 +401,66 @@ onBeforeUnmount(() => {
   overscroll-behavior: contain;
 }
 
-.cm-editor-title-input {
+.cm-editor-title-container {
   width: 100%;
   box-sizing: border-box;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-family: var(--font-sans);
-  font-size: 1.5em;
-  font-weight: 700;
-  color: var(--text-primary);
-  caret-color: var(--eden-accent-color, var(--accent, currentColor));
-  padding: 24px 32px 8px 32px;
+  padding: 16px 32px 4px 32px;
   max-width: 760px;
   margin: 0 auto;
   align-self: stretch;
+  flex: 0 0 auto;
 }
 
-.cm-editor-title-input::placeholder {
+.cm-editor-title-container :deep(.cm-title-editor) {
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 1.5em;
+  font-weight: 700;
+  outline: none;
+}
+
+.cm-editor-title-container :deep(.cm-title-editor .cm-scroller) {
+  overflow: visible;
+  font-family: inherit;
+  line-height: 1.25;
+  min-height: 0;
+  padding: 0;
+}
+
+.cm-editor-title-container :deep(.cm-title-editor .cm-content) {
+  padding: 0;
+  caret-color: var(--eden-accent-color, var(--accent, currentColor));
+  font-family: inherit;
+  line-height: 1.25;
+  min-height: 0;
+  position: relative;
+}
+
+.cm-editor-title-container :deep(.cm-title-editor .cm-line) {
+  padding: 0;
+  font-family: inherit;
+  line-height: 1.25;
+  min-height: 0;
+}
+
+.cm-editor-host.is-vim-mode .cm-editor-title-container :deep(.cm-title-editor),
+.cm-editor-host.is-vim-mode .cm-editor-title-container :deep(.cm-title-editor .cm-line) {
+  font-family: var(--font-mono);
+  font-weight: 400;
+}
+
+.cm-editor-title-container :deep(.cm-title-editor .cm-content:has(.cm-line br)::before) {
+  content: attr(data-placeholder);
   color: var(--text-secondary);
+  position: absolute;
+  inset: 0 auto auto 0;
+  pointer-events: none;
 }
 
 .cm-editor-container {
   flex: 0 0 auto;
-  min-height: calc(100% - 72px);
+  min-height: calc(100% - 56px);
   overflow: visible;
   display: flex;
   flex-direction: column;

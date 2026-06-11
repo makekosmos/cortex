@@ -30,9 +30,10 @@ defineEmits<{
 <template>
   <button
     type="button"
-    class="kosmos-settings-sidebar-button flex w-full cursor-default select-none items-center gap-2 rounded border-0 bg-transparent p-1 text-left text-white data-[active=true]:bg-[var(--settings-sidebar-active)]"
+    class="kosmos-settings-sidebar-button flex w-full cursor-default select-none items-center gap-2 rounded border-0 bg-transparent p-1 text-left text-[color-mix(in_srgb,var(--foreground)_78%,transparent)] data-[active=true]:bg-[var(--settings-sidebar-active)] data-[active=true]:text-[var(--foreground)]"
     :data-active="active ? 'true' : undefined"
     :data-testid="testId"
+    :aria-current="active ? 'page' : undefined"
     @click="$emit('click')"
     @contextmenu="$emit('contextmenu', $event)"
   >
@@ -42,7 +43,9 @@ defineEmits<{
         iconImage
           ? 'bg-none shadow-none'
           : iconVariant === 'plain'
-            ? 'bg-transparent shadow-none text-[color-mix(in_srgb,var(--foreground)_82%,transparent)]'
+            ? active
+              ? 'bg-transparent shadow-none text-[var(--foreground)]'
+              : 'bg-transparent shadow-none text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]'
             : 'bg-linear-to-bl from-[var(--settings-sidebar-button-icon-from)] to-[var(--settings-sidebar-button-icon-to)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,oklch(1_0_0)_6%,transparent)]'
       "
       :style="{

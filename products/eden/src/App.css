@@ -48,7 +48,6 @@
 .app-container.focus-mode-active .kosmos-titlebar,
 .app-container.focus-mode-active .kosmos-desktop-chrome,
 .app-container.focus-mode-active .kosmos-desktop-chrome__sidebar,
-.app-container.focus-mode-active .kosmos-desktop-content-surface,
 .app-container.focus-mode-active .kosmos-sidebar-shell,
 .app-container.focus-mode-active .kosmos-sidebar-content,
 .app-container.focus-mode-active .kosmos-sidebar-wrapper,
@@ -4721,7 +4720,11 @@ span[data-wikilink]:hover {
 }
 
 .app-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-height: 0;
+  min-width: 0;
   margin-top: 0;
   overflow: hidden;
 }
@@ -4733,4 +4736,12 @@ span[data-wikilink]:hover {
 .platform-mac .vault-browser,
 .platform-mac .pageWidget {
   padding-top: 0;
+}
+
+.app-container .kosmos-desktop-chrome-settings > div {
+  background: #18181b;
+}
+
+.app-container .app-main {
+  background: #18181b;
 }

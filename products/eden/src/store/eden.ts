@@ -663,6 +663,20 @@ export const useEdenStore = defineStore("eden", () => {
     });
   }
 
+  function updateEntryDraft(entry: Entry) {
+    const idx = entries.value.findIndex((candidate) => candidate.id === entry.id);
+
+    if (idx >= 0) {
+      entries.value[idx] = entry;
+    } else {
+      entries.value = [entry, ...entries.value];
+    }
+
+    if (currentEntry.value?.id === entry.id) {
+      currentEntry.value = entry;
+    }
+  }
+
   return {
     entries,
 
@@ -715,5 +729,7 @@ export const useEdenStore = defineStore("eden", () => {
     deleteNoteType,
 
     handleSave,
+
+    updateEntryDraft,
   };
 });

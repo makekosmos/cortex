@@ -8,8 +8,6 @@
             v-model="title"
             class="title-input"
             :placeholder="UNTITLED_ENTRY_PLACEHOLDER"
-            :readonly="isJournalEntry"
-            :tabindex="isJournalEntry ? -1 : 0"
           />
           <div ref="noteTypeMenu" class="note-type-inline">
             <button
@@ -142,7 +140,7 @@ import {
   safeParseHeaderProps,
   validateHeaderProps,
 } from "@/lib/typedNotes";
-import { SYSTEM_TYPE_NOTE_ID, SYSTEM_TYPE_JOURNAL_ID } from "@/lib/systemTypes";
+import { SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
 import { countCharsInProseMirrorDoc, countCharsInProseMirrorNode } from "@/lib/charCount";
 import { objectIconUri } from "@/lib/iconResolver";
 import {
@@ -185,6 +183,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   exitZen: [];
+  entryDraftChange: [entry: Entry];
   liveCharCount: [count: number];
 }>();
 
@@ -194,6 +193,17 @@ function emitLiveCharCount() {
     return;
   }
   emit("liveCharCount", countCharsInProseMirrorNode(editor.value.getJSON()));
+}
+
+function emitEntryDraftChange() {
+  emit("entryDraftChange", {
+    ...props.entry,
+    title: title.value,
+    type_id: noteTypeId.value,
+    header_layout: headerLayout.value,
+    header_props_json: JSON.stringify(headerProps.value),
+    updated_at: Date.now(),
+  });
 }
 
 const title = ref(getEditableEntryTitle(props.entry.title, props.entry.header_props_json));
@@ -245,12 +255,6 @@ watch(
 const activeNoteType = computed(
   () => props.noteTypes.find((noteType) => noteType.id === noteTypeId.value) ?? null,
 );
-
-// Дневник: title заметки — это ISO-дата (`YYYY-MM-DD`), её менять нельзя
-// (lookup в openTodayJournal ищет именно по точному совпадению с сегодня).
-// readonly + tabindex=-1 защищает от случайного ввода (например слайдер фокуса
-// в zen-режиме, попадание `/` в title через keyboard navigation).
-const isJournalEntry = computed(() => noteTypeId.value === SYSTEM_TYPE_JOURNAL_ID);
 
 const typePickerOptions = computed(() =>
   props.noteTypes.filter((noteType) => Boolean(noteType.id)),
@@ -1327,6 +1331,7 @@ watch(
   [title, noteTypeId, headerLayout, headerProps],
   () => {
     markMetadataDirty();
+    emitEntryDraftChange();
   },
   { deep: true, flush: "post" },
 );

@@ -68,11 +68,12 @@
   --danger: #f55522;
   --danger-muted: rgba(245, 85, 34, 0.14);
 
-  --bg-app: var(--background);
+  --bg-app: #18181b;
   --bg-sidebar: var(--sidebar);
   --bg-sidebar-hover: var(--secondary);
   --bg-sidebar-active: var(--surface);
-  --bg-editor: var(--background);
+  --settings-sidebar-active: color-mix(in srgb, var(--foreground) 16%, transparent);
+  --bg-editor: #18181b;
   --bg-elevated: var(--card);
   --bg-surface: var(--surface);
   --bg-input: var(--input);
@@ -124,9 +125,7 @@
   --transition-slow: 0ms linear;
   --titlebar-height: 28px;
   --titlebar-bg: #232323;
-  --kosmos-mac-sidebar-top-safe-area: 52px;
   --kosmos-mac-traffic-light-left-safe-area: 92px;
-  --kosmos-mac-traffic-light-top-safe-area: 38px;
 }
 
 body {
@@ -173,10 +172,11 @@ input {
   font-family: inherit;
 }
 
-/* Caret color = brand accent для всего extension'а. Eden — orange.
-   Применяется ко всему: contentEditable (ProseMirror text), input,
-   textarea. */
-* {
+/* Caret color = brand accent для обычных контролов Eden.
+   CodeMirror сам управляет native caret через drawSelection()/vim(). */
+input,
+textarea,
+.ProseMirror {
   caret-color: var(--eden-accent-color);
 }
 
