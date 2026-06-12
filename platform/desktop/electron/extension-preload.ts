@@ -78,6 +78,24 @@ const api = {
         отработать без флика. */
     setMaximizable: (value: boolean): Promise<void> =>
       ipcRenderer.invoke("kepler:extension:window:set-maximizable", value),
+    setTitlebarSymbolColor: (symbolColor: string): Promise<void> =>
+      ipcRenderer.invoke("kepler:extension:window:set-titlebar-symbol-color", symbolColor),
+    beginManualDrag: (point: { screenX: number; screenY: number }): Promise<void> =>
+      ipcRenderer.invoke("kepler:extension:window:begin-manual-drag", point),
+    moveManualDrag: (point: { screenX: number; screenY: number }): Promise<void> =>
+      ipcRenderer.invoke("kepler:extension:window:move-manual-drag", point),
+    endManualDrag: (): Promise<void> =>
+      ipcRenderer.invoke("kepler:extension:window:end-manual-drag"),
+    setTitlebarHoverTracking: (enabled: boolean, height: number): Promise<void> =>
+      ipcRenderer.invoke("kepler:extension:window:set-titlebar-hover-tracking", enabled, height),
+    onTitlebarHoverChange: (handler: (hovered: boolean) => void): Unsubscribe => {
+      const wrapped = (_e: unknown, value: unknown) => {
+        if (typeof value === "boolean") handler(value);
+      };
+      ipcRenderer.on("kepler:extension:window:titlebar-hover-changed", wrapped);
+      return () =>
+        ipcRenderer.removeListener("kepler:extension:window:titlebar-hover-changed", wrapped);
+    },
     onMaximizedChange: (handler: (isMaximized: boolean) => void): Unsubscribe => {
       const wrapped = (_e: unknown, value: unknown) => {
         if (typeof value === "boolean") handler(value);
@@ -89,6 +107,18 @@ const api = {
   host: {
     invoke: (action: string, payload?: unknown): Promise<boolean> =>
       ipcRenderer.invoke("kepler:extension:invoke-host", action, payload),
+  },
+  markdownFiles: {
+    open: (): Promise<{ path: string; name: string; content: string } | null> =>
+      ipcRenderer.invoke("kepler:extension:markdownFiles:open") as Promise<{
+        path: string;
+        name: string;
+        content: string;
+      } | null>,
+    save: (suggestedName: string, content: string): Promise<{ path: string } | null> =>
+      ipcRenderer.invoke("kepler:extension:markdownFiles:save", suggestedName, content) as Promise<{
+        path: string;
+      } | null>,
   },
   navigation: {
     /** Subscribe to navigation events (`router.push(route)`). Initial route

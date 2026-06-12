@@ -4745,3 +4745,92 @@ span[data-wikilink]:hover {
 .app-container .app-main {
   background: #18181b;
 }
+
+.app-container.focus-mode-active .kosmos-desktop-chrome-settings > div,
+.app-container.focus-mode-active .kosmos-desktop-chrome-settings__header {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.app-container.focus-mode-active .kosmos-desktop-chrome-settings__header {
+  min-height: 40px;
+  position: relative;
+  z-index: 4;
+  -webkit-app-region: no-drag;
+}
+
+.app-container.focus-mode-active .kosmos-desktop-chrome-settings__header-left,
+.app-container.focus-mode-active .kosmos-desktop-chrome-settings__header-center,
+.app-container.focus-mode-active .kosmos-desktop-chrome-settings__header-right {
+  position: relative;
+  z-index: 1;
+  -webkit-app-region: no-drag;
+}
+
+.app-container.focus-mode-active .kosmos-desktop-chrome-settings__header-left,
+.app-container.focus-mode-active .kosmos-desktop-chrome-settings__header-center,
+.app-container.focus-mode-active .kosmos-desktop-chrome-settings__header-right,
+.app-container.focus-mode-active .eden-focus-titlebar-title {
+  background: transparent !important;
+  opacity: 0;
+  transition:
+    background-color 400ms ease,
+    color 400ms ease,
+    opacity 400ms ease;
+}
+
+.app-container.focus-mode-active
+  .kosmos-desktop-chrome-settings__header:focus-within
+  .kosmos-desktop-chrome-settings__header-left,
+.app-container.focus-mode-active
+  .kosmos-desktop-chrome-settings__header:hover
+  .kosmos-desktop-chrome-settings__header-left,
+.app-container.focus-mode-active
+  .kosmos-desktop-chrome-settings__header:focus-within
+  .kosmos-desktop-chrome-settings__header-center,
+.app-container.focus-mode-active
+  .kosmos-desktop-chrome-settings__header:hover
+  .kosmos-desktop-chrome-settings__header-center,
+.app-container.focus-mode-active
+  .kosmos-desktop-chrome-settings__header:focus-within
+  .kosmos-desktop-chrome-settings__header-right,
+.app-container.focus-mode-active
+  .kosmos-desktop-chrome-settings__header:hover
+  .kosmos-desktop-chrome-settings__header-right,
+.app-container.focus-mode-active.focus-titlebar-hover .kosmos-desktop-chrome-settings__header-left,
+.app-container.focus-mode-active.focus-titlebar-hover
+  .kosmos-desktop-chrome-settings__header-center,
+.app-container.focus-mode-active.focus-titlebar-hover .kosmos-desktop-chrome-settings__header-right,
+.app-container.focus-mode-active
+  .kosmos-desktop-chrome-settings__header:focus-within
+  .eden-focus-titlebar-title,
+.app-container.focus-mode-active
+  .kosmos-desktop-chrome-settings__header:hover
+  .eden-focus-titlebar-title,
+.app-container.focus-mode-active.focus-titlebar-hover .eden-focus-titlebar-title {
+  opacity: 1;
+}
+
+.app-container.focus-mode-active .kosmos-desktop-chrome-settings__header button:hover,
+.app-container.focus-mode-active .eden-titlebar-button:hover {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent) !important;
+}
+
+.eden-focus-titlebar-title {
+  position: fixed;
+  top: 12px;
+  left: 50vw;
+  z-index: 6;
+  width: min(46vw, 520px);
+  overflow: hidden;
+  transform: translateX(-50%);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--sidebar-foreground) 74%, transparent);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  pointer-events: none;
+  text-align: center;
+}

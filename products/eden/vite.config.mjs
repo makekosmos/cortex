@@ -27,6 +27,10 @@ export default defineConfig({
         "packages/visuals/theme/css-variables.css",
       ),
       "@kosmos/visuals": path.resolve(repoRoot, "packages/visuals"),
+      "@phosphor-icons/vue": path.resolve(
+        repoRoot,
+        "platform/desktop/node_modules/@phosphor-icons/vue",
+      ),
       pinia: path.resolve(__dirname, "node_modules/pinia"),
     },
     dedupe: ["vue", "pinia"],

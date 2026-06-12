@@ -266,28 +266,6 @@ async fn setup() -> Result<SetupState, DynError> {
             }
         };
 
-    // Background rescan на старте — не блокирует bind / запуск backend'а.
-    // Отложен на initial-delay, чтобы не входить в общий cold-start CPU/IO
-    // burst (discover + icon extraction идут на background-priority потоке,
-    // см. app_index::rescan).
-    {
-        let ai = app_index.clone();
-        let delay = startup_delay_ms("KEPLER_APP_INDEX_INITIAL_DELAY_MS", 15_000);
-        tokio::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
-            match ai.rescan().await {
-                Ok(stats) => tracing::info!(
-                    added = stats.added,
-                    updated = stats.updated,
-                    removed = stats.removed,
-                    total = stats.total,
-                    "app_index initial rescan"
-                ),
-                Err(e) => tracing::warn!(error = %e, "app_index initial rescan failed"),
-            }
-        });
-    }
-
     // File Index v1: host-local filename/path search. Broad startup scans are
     // opt-in only; see postmortems.md § 2026-06-08.
     let file_index_enabled =
@@ -325,6 +303,27 @@ async fn setup() -> Result<SetupState, DynError> {
     };
     lock_file::write_atomic(&lock_path, &lock)?;
     tracing::info!(path = ?lock_path, "lock-file written");
+
+    // App discovery is useful but not part of backend readiness. Start it only
+    // after WS + lock-file are ready, otherwise extension IPC requests can time
+    // out while the shell is still waiting for the Ark bridge.
+    {
+        let ai = app_index.clone();
+        let delay = startup_delay_ms("KEPLER_APP_INDEX_INITIAL_DELAY_MS", 15_000);
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+            match ai.rescan().await {
+                Ok(stats) => tracing::info!(
+                    added = stats.added,
+                    updated = stats.updated,
+                    removed = stats.removed,
+                    total = stats.total,
+                    "app_index initial rescan"
+                ),
+                Err(e) => tracing::warn!(error = %e, "app_index initial rescan failed"),
+            }
+        });
+    }
 
     // File indexing can be slow on large disks or when NTFS fast scan falls
     // back to walking. Start it only after WS + lock-file are ready, otherwise

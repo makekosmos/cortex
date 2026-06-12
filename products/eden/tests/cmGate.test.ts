@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { isCmSafeDoc, shouldUseCmEditor } from "../src/editor-cm/cmGate";
+import { coerceToCmSafeDoc, isCmSafeDoc, shouldUseCmEditor } from "../src/editor-cm/cmGate";
 
 describe("cmGate — isCmSafeDoc", () => {
   test("возвращает true для safe doc с heading + paragraph + list + codeBlock", () => {
@@ -131,5 +131,74 @@ describe("cmGate — shouldUseCmEditor", () => {
 
   test("возвращает false если JSON невалидный", () => {
     expect(shouldUseCmEditor(true, "не json {")).toBe(false);
+  });
+});
+
+describe("cmGate — coerceToCmSafeDoc", () => {
+  test("превращает legacy taskRef в CM-safe markdown checklist", () => {
+    const docWithTaskRef = {
+      type: "doc",
+      content: [
+        {
+          type: "taskRef",
+          attrs: { taskId: "task-1", titleSnapshot: "Проверить Eden" },
+        },
+      ],
+    };
+
+    const coerced = coerceToCmSafeDoc(docWithTaskRef);
+
+    expect(isCmSafeDoc(docWithTaskRef)).toBe(false);
+    expect(isCmSafeDoc(coerced)).toBe(true);
+    expect(coerced).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "bulletList",
+          content: [
+            {
+              type: "listItem",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "[ ] Проверить Eden" }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  test("сохраняет wikilink как обычный markdown-текст внутри paragraph", () => {
+    const docWithWikilink = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "См. " },
+            { type: "wikilink", attrs: { target: "Дневник" } },
+          ],
+        },
+      ],
+    };
+
+    const coerced = coerceToCmSafeDoc(docWithWikilink);
+
+    expect(isCmSafeDoc(coerced)).toBe(true);
+    expect(coerced).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "См. " },
+            { type: "text", text: "[[Дневник]]" },
+          ],
+        },
+      ],
+    });
   });
 });

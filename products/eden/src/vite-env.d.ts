@@ -243,6 +243,18 @@ interface ExportMarkdownVaultResult {
   outputDir: string;
 }
 
+interface MarkdownFileOpenResult {
+  path: string;
+
+  name: string;
+
+  content: string;
+}
+
+interface MarkdownFileSaveResult {
+  path: string;
+}
+
 interface VaultStorageInfo {
   textBytes: number;
 
@@ -309,6 +321,14 @@ interface Window {
 
     exportMarkdownVault: () => Promise<ExportMarkdownVaultResult | null>;
 
+    openMarkdownFile: () => Promise<MarkdownFileOpenResult | null>;
+
+    saveMarkdownFile: (
+      suggestedName: string,
+
+      content: string,
+    ) => Promise<MarkdownFileSaveResult | null>;
+
     searchEntries: (query: string) => Promise<SearchResult[]>;
 
     createFolder: (
@@ -342,6 +362,10 @@ interface Window {
     updateSidebarConfig: (config: { widget?: { width?: number; hidden?: boolean } }) => Promise<{
       widget: { width: number; hidden: boolean };
     }>;
+
+    getEdenVisibleObjectTypeIds: () => Promise<string[]>;
+
+    setEdenVisibleObjectTypeIds: (typeIds: string[]) => Promise<string[]>;
 
     getPlatform: () => Promise<NodeJS.Platform>;
 
@@ -387,6 +411,13 @@ interface Window {
       close: () => void;
       minimize: () => void;
       maximize: () => void;
+      setMaximizable?: (value: boolean) => Promise<void>;
+      setTitlebarSymbolColor?: (symbolColor: string) => Promise<void>;
+      beginManualDrag?: (point: { screenX: number; screenY: number }) => Promise<void>;
+      moveManualDrag?: (point: { screenX: number; screenY: number }) => Promise<void>;
+      endManualDrag?: () => Promise<void>;
+      setTitlebarHoverTracking?: (enabled: boolean, height: number) => Promise<void>;
+      onTitlebarHoverChange?: (handler: (hovered: boolean) => void) => () => void;
     };
     navigation?: {
       initialRoute: () => Promise<string | null>;
@@ -401,6 +432,10 @@ interface Window {
       readFile: (name: string) => Promise<string | null>;
       writeFile: (name: string, content: string) => Promise<void>;
       path: () => Promise<string>;
+    };
+    markdownFiles?: {
+      open: () => Promise<MarkdownFileOpenResult | null>;
+      save: (suggestedName: string, content: string) => Promise<MarkdownFileSaveResult | null>;
     };
   };
 }

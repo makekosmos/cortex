@@ -128,18 +128,13 @@ export const VIM_MOTION_GROUPS: VimMotionGroup[] = [
       { keys: ":wq", title: "Сохранить и закрыть", description: "Сохранить заметку и закрыть её." },
       {
         keys: ":zen",
-        title: "Переключить focus mode",
-        description: "Включить или выключить режим фокуса.",
+        title: "Включить focus mode",
+        description: "Открыть редактор без лишнего chrome.",
       },
       {
         keys: ":zen on",
         title: "Включить focus mode",
         description: "Открыть редактор без лишнего chrome.",
-      },
-      {
-        keys: ":zen off",
-        title: "Выключить focus mode",
-        description: "Вернуться к обычному виду Eden.",
       },
     ],
   },

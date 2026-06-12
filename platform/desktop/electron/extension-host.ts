@@ -24,7 +24,16 @@
 // kind: "static" (legacy PoC) — preload не используется по умолчанию;
 // extension сам отвечает за всю свою логику.
 
-import { app, BrowserWindow, ipcMain, screen, type WebContents } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  screen,
+  type OpenDialogOptions,
+  type SaveDialogOptions,
+  type WebContents,
+} from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
 import {
   existsSync,
@@ -1247,6 +1256,8 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
     manifestPermissions: manifest.permissions,
   });
   win.on("closed", () => {
+    clearExtensionTitlebarHoverTracker(wcId);
+    extensionWindowDrags.delete(wcId);
     webContentsToExtensionContext.delete(wcId);
     extensionWindows.delete(id);
   });
@@ -1393,6 +1404,22 @@ function windowForSender(sender: WebContents): BrowserWindow | null {
   return win && !win.isDestroyed() ? win : null;
 }
 
+type ExtensionWindowDragState = {
+  startBounds: { x: number; y: number; width: number; height: number };
+  startScreenX: number;
+  startScreenY: number;
+};
+
+const extensionWindowDrags = new Map<number, ExtensionWindowDragState>();
+const extensionTitlebarHoverTrackers = new Map<number, NodeJS.Timeout>();
+
+function clearExtensionTitlebarHoverTracker(webContentsId: number): void {
+  const interval = extensionTitlebarHoverTrackers.get(webContentsId);
+  if (!interval) return;
+  clearInterval(interval);
+  extensionTitlebarHoverTrackers.delete(webContentsId);
+}
+
 function extensionIdForSender(sender: WebContents): string | null {
   return webContentsToExtensionContext.get(sender.id)?.id ?? null;
 }
@@ -1407,7 +1434,12 @@ function extensionContextForSender(sender: WebContents): ExtensionRendererContex
 
 export function assertExtensionSenderHostPermission(
   sender: WebContents,
-  capability: "userData.read" | "userData.write" | "focus.control",
+  capability:
+    | "userData.read"
+    | "userData.write"
+    | "focus.control"
+    | "markdownFiles.open"
+    | "markdownFiles.save",
 ): void {
   const context = extensionContextForSender(sender);
   assertExtensionHostPermission({
@@ -1420,7 +1452,12 @@ export function assertExtensionSenderHostPermission(
 
 export function assertExtensionSenderHostPermissionIfExtension(
   sender: WebContents,
-  capability: "userData.read" | "userData.write" | "focus.control",
+  capability:
+    | "userData.read"
+    | "userData.write"
+    | "focus.control"
+    | "markdownFiles.open"
+    | "markdownFiles.save",
 ): void {
   const context = webContentsToExtensionContext.get(sender.id);
   if (!context) return;
@@ -1624,14 +1661,88 @@ ipcMain.handle("kepler:extension:window:is-maximized", (e): boolean => {
   return win ? win.isMaximized() : false;
 });
 
-// Контроль возможности maximize. Eden использует это в zen mode: после
-// setMaximizable(false) Windows native double-click-on-titlebar
-// больше не разворачивает окно — наш Vue dblclick handler (dock-corner)
-// отрабатывает без флика "maximize → unmaximize".
+// Контроль возможности maximize для extension-окон.
 ipcMain.handle("kepler:extension:window:set-maximizable", (e, value: boolean) => {
   const win = windowForSender(e.sender);
   if (!win || win.isDestroyed()) return;
   win.setMaximizable(Boolean(value));
+});
+
+ipcMain.handle("kepler:extension:window:set-titlebar-symbol-color", (e, symbolColor: string) => {
+  const win = windowForSender(e.sender);
+  if (!win || win.isDestroyed()) return;
+  win.setTitleBarOverlay({
+    color: "#00000000",
+    symbolColor,
+    height: 40,
+  });
+});
+
+ipcMain.handle("kepler:extension:window:begin-manual-drag", (e, point) => {
+  const win = windowForSender(e.sender);
+  if (!win || win.isDestroyed()) return;
+  if (!point || typeof point.screenX !== "number" || typeof point.screenY !== "number") return;
+
+  if (win.isMaximized()) win.unmaximize();
+  extensionWindowDrags.set(e.sender.id, {
+    startBounds: win.getBounds(),
+    startScreenX: point.screenX,
+    startScreenY: point.screenY,
+  });
+});
+
+ipcMain.handle("kepler:extension:window:move-manual-drag", (e, point) => {
+  const win = windowForSender(e.sender);
+  const drag = extensionWindowDrags.get(e.sender.id);
+  if (!win || win.isDestroyed() || !drag) return;
+  if (!point || typeof point.screenX !== "number" || typeof point.screenY !== "number") return;
+
+  win.setBounds({
+    ...drag.startBounds,
+    x: Math.round(drag.startBounds.x + point.screenX - drag.startScreenX),
+    y: Math.round(drag.startBounds.y + point.screenY - drag.startScreenY),
+  });
+});
+
+ipcMain.handle("kepler:extension:window:end-manual-drag", (e) => {
+  extensionWindowDrags.delete(e.sender.id);
+});
+
+ipcMain.handle("kepler:extension:window:set-titlebar-hover-tracking", (e, enabled, height) => {
+  const win = windowForSender(e.sender);
+  if (!win || win.isDestroyed()) return;
+
+  const webContentsId = e.sender.id;
+  clearExtensionTitlebarHoverTracker(webContentsId);
+
+  if (!enabled) {
+    e.sender.send("kepler:extension:window:titlebar-hover-changed", false);
+    return;
+  }
+
+  const titlebarHeight = typeof height === "number" && height > 0 ? height : 56;
+  let lastHovered: boolean | null = null;
+
+  const interval = setInterval(() => {
+    if (win.isDestroyed() || e.sender.isDestroyed()) {
+      clearExtensionTitlebarHoverTracker(webContentsId);
+      return;
+    }
+
+    const cursor = screen.getCursorScreenPoint();
+    const bounds = win.getBounds();
+    const hovered =
+      cursor.x >= bounds.x &&
+      cursor.x <= bounds.x + bounds.width &&
+      cursor.y >= bounds.y &&
+      cursor.y <= bounds.y + titlebarHeight;
+
+    if (hovered === lastHovered) return;
+    lastHovered = hovered;
+    e.sender.send("kepler:extension:window:titlebar-hover-changed", hovered);
+  }, 33);
+
+  extensionTitlebarHoverTrackers.set(webContentsId, interval);
 });
 
 // "Dock corner" — toggle между floating-widget mode (always-on-top,
@@ -1733,6 +1844,83 @@ ipcMain.handle("kepler:extension:invoke-host", (_e, action: string, _payload?: u
   console.error(`[kepler-shell] extension invoke-host: ${action} (no handler)`);
   return false;
 });
+
+// ---------------------------------------------------------------------------
+// IPC: Markdown file dialogs
+// ---------------------------------------------------------------------------
+
+const MARKDOWN_FILE_MAX_BYTES = 5 * 1024 * 1024;
+
+function markdownDialogParent(sender: WebContents): BrowserWindow | undefined {
+  return BrowserWindow.fromWebContents(sender) ?? undefined;
+}
+
+function safeMarkdownDefaultName(name: unknown): string {
+  const fallback = "eden-object.md";
+  if (typeof name !== "string") return fallback;
+  const base = path
+    .basename(name)
+    .replace(/[<>:"/\\|?*]/g, "-")
+    .replace(/./g, (char) => (char.charCodeAt(0) < 32 ? "-" : char))
+    .trim();
+  if (!base) return fallback;
+  return base.toLowerCase().endsWith(".md") ? base : `${base}.md`;
+}
+
+ipcMain.handle(
+  "kepler:extension:markdownFiles:open",
+  async (e): Promise<{ path: string; name: string; content: string } | null> => {
+    assertExtensionSenderHostPermission(e.sender, "markdownFiles.open");
+    const parent = markdownDialogParent(e.sender);
+    const options: OpenDialogOptions = {
+      title: "Импорт Markdown",
+      properties: ["openFile"],
+      filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
+    };
+    const result = parent
+      ? await dialog.showOpenDialog(parent, options)
+      : await dialog.showOpenDialog(options);
+    if (result.canceled || result.filePaths.length === 0) return null;
+
+    const filePath = result.filePaths[0];
+    const stat = statSync(filePath);
+    if (!stat.isFile()) {
+      throw new Error("[kepler-shell] Markdown import expects a file");
+    }
+    if (stat.size > MARKDOWN_FILE_MAX_BYTES) {
+      throw new Error("[kepler-shell] Markdown file is too large");
+    }
+
+    return {
+      path: filePath,
+      name: path.basename(filePath),
+      content: readFileSync(filePath, "utf8"),
+    };
+  },
+);
+
+ipcMain.handle(
+  "kepler:extension:markdownFiles:save",
+  async (e, suggestedName: unknown, content: unknown): Promise<{ path: string } | null> => {
+    assertExtensionSenderHostPermission(e.sender, "markdownFiles.save");
+    if (typeof content !== "string") {
+      throw new Error("[kepler-shell] Markdown export content must be a string");
+    }
+    const parent = markdownDialogParent(e.sender);
+    const options: SaveDialogOptions = {
+      title: "Экспорт Markdown",
+      defaultPath: safeMarkdownDefaultName(suggestedName),
+      filters: [{ name: "Markdown", extensions: ["md"] }],
+    };
+    const result = parent
+      ? await dialog.showSaveDialog(parent, options)
+      : await dialog.showSaveDialog(options);
+    if (result.canceled || !result.filePath) return null;
+
+    writeFileSync(result.filePath, content, "utf8");
+    return { path: result.filePath };
+  },
+);
 
 // ---------------------------------------------------------------------------
 // IPC: userData (extension renderer → main → <APPDATA>/Kosmos/extensions-data/<id>/)

@@ -8,6 +8,8 @@ import { normalizeSlug } from "@/lib/typedNotes";
 
 import { createUntitledEntryHeaderProps } from "@/lib/entryTitles";
 
+import { coerceToCmSafeDoc, isCmSafeDoc } from "@/editor-cm/cmGate";
+
 import {
   SYSTEM_TYPE_JOURNAL,
   SYSTEM_TYPE_JOURNAL_ID,
@@ -153,8 +155,11 @@ export const useEdenStore = defineStore("eden", () => {
     pruneTransientSaveState(latestSaveTimestamps, saveCoordinators, entriesData);
 
     if (currentEntry.value) {
-      currentEntry.value =
+      const refreshed =
         entriesData.find((e) => e.id === currentEntry.value!.id) ?? currentEntry.value;
+      currentEntry.value = isMySpaceEntry(refreshed)
+        ? await ensureMySpaceEntryCmSafe(refreshed)
+        : refreshed;
     }
   }
 
@@ -179,7 +184,10 @@ export const useEdenStore = defineStore("eden", () => {
       if (lastVisitedId) {
         const lastEntry = entriesData.find((e) => e.id === lastVisitedId && !e.deleted_at);
         if (lastEntry) {
-          currentEntry.value = lastEntry;
+          currentEntry.value =
+            lastEntry.title.trim() === MY_SPACE_TITLE
+              ? await ensureMySpaceEntryCmSafe(lastEntry)
+              : lastEntry;
           activeSpace.value = "diary"; // не открываем my-space welcome
           return;
         }
@@ -188,7 +196,8 @@ export const useEdenStore = defineStore("eden", () => {
       const existingMySpace = entriesData.find((e) => e.title.trim() === MY_SPACE_TITLE) ?? null;
 
       if (existingMySpace) {
-        currentEntry.value = existingMySpace;
+        const normalizedMySpace = await ensureMySpaceEntryCmSafe(existingMySpace);
+        currentEntry.value = normalizedMySpace;
         return;
       }
 
@@ -290,6 +299,52 @@ export const useEdenStore = defineStore("eden", () => {
     return entries.value.find((e) => e.title.trim() === MY_SPACE_TITLE) ?? null;
   }
 
+  function isMySpaceEntry(entry: Entry): boolean {
+    return entry.title.trim() === MY_SPACE_TITLE;
+  }
+
+  async function ensureMySpaceEntryCmSafe(entry: Entry): Promise<Entry> {
+    let parsed: unknown = null;
+    let contentSafe = false;
+
+    try {
+      parsed = JSON.parse(entry.content_json);
+      contentSafe = isCmSafeDoc(parsed);
+    } catch {
+      parsed = null;
+    }
+
+    const nextTypeId = entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
+    if (contentSafe && nextTypeId === SYSTEM_TYPE_NOTE_ID) {
+      return entry;
+    }
+
+    const normalized: Entry = {
+      ...entry,
+      type_id: SYSTEM_TYPE_NOTE_ID,
+      content_json: contentSafe ? entry.content_json : JSON.stringify(coerceToCmSafeDoc(parsed)),
+      updated_at: Date.now(),
+    };
+
+    const idx = entries.value.findIndex((candidate) => candidate.id === entry.id);
+    if (idx >= 0) {
+      entries.value[idx] = normalized;
+    }
+
+    if (window.api) {
+      try {
+        const result = await window.api.saveEntry(normalized);
+        if (!result.ok) {
+          console.warn("[eden] normalize my-space entry failed:", result);
+        }
+      } catch (err) {
+        console.warn("[eden] normalize my-space entry threw:", err);
+      }
+    }
+
+    return normalized;
+  }
+
   async function openMySpace() {
     activeScreen.value = "notes";
 
@@ -299,7 +354,7 @@ export const useEdenStore = defineStore("eden", () => {
     const existing = findMySpaceEntry();
 
     if (existing) {
-      currentEntry.value = existing;
+      currentEntry.value = await ensureMySpaceEntryCmSafe(existing);
 
       return;
     }
@@ -515,7 +570,7 @@ export const useEdenStore = defineStore("eden", () => {
       activeScreen.value = "notes";
       activeNoteTypeId.value = null;
 
-      currentEntry.value = entry;
+      currentEntry.value = isMySpaceEntry(entry) ? await ensureMySpaceEntryCmSafe(entry) : entry;
       writeLastVisitedEntryId(entryId);
     }
   }

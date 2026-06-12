@@ -267,8 +267,9 @@ function mapNoteTypeToArkObjectType(noteType: NoteType): ArkObjectTypeRecord {
 // ---------------------------------------------------------------------------
 
 export async function listEntries(): Promise<Entry[]> {
+  const visibleTypeIds = readVisibleObjectTypeIds();
   const [objects, links, objectTypes] = await Promise.all([
-    ark<unknown>("list_objects").then(ensureList<ArkObjectRecord>),
+    listObjectsForVisibleTypes(visibleTypeIds),
     ark<unknown>("list_object_links").then(ensureList<ArkObjectLinkRecord>),
     ark<unknown>("list_object_types").then(ensureList<ArkObjectTypeRecord>),
   ]);
@@ -277,6 +278,19 @@ export async function listEntries(): Promise<Entry[]> {
   return objects
     .map((o) => mapArkObjectToEntry(o, links, typesById.get(o.typeId)))
     .sort((a, b) => b.updated_at - a.updated_at);
+}
+
+async function listObjectsForVisibleTypes(typeIds: string[]): Promise<ArkObjectRecord[]> {
+  if (typeIds.length === 0) {
+    return ark<unknown>("list_objects").then(ensureList<ArkObjectRecord>);
+  }
+
+  const chunks = await Promise.all(
+    typeIds.map((typeId) =>
+      ark<unknown>("list_objects_by_type", { type_id: typeId }).then(ensureList<ArkObjectRecord>),
+    ),
+  );
+  return chunks.flat();
 }
 
 export async function loadEntry(id: string): Promise<Entry | undefined> {
@@ -391,10 +405,9 @@ export async function saveEntry(entry: Entry): Promise<SaveEntryResult> {
   }
 
   const normalizedTitle = normalized.title.trim().toLocaleLowerCase("ru");
-  const existingEntries = await listEntries();
-  const conflicting = existingEntries.find((candidate) => {
-    if (candidate.id === normalized.id || candidate.deleted_at !== null) return false;
-    if ((candidate.folder_id ?? null) !== (normalized.folder_id ?? null)) return false;
+  const existingObjects = await listAllObjects();
+  const conflicting = existingObjects.find((candidate) => {
+    if (candidate.id === normalized.id || candidate.deletedAt) return false;
     return candidate.title.trim().toLocaleLowerCase("ru") === normalizedTitle;
   });
 
@@ -553,6 +566,7 @@ export async function deleteFolder(_folderId: string): Promise<DeleteFolderResul
 
 const VAULT_PATH_PLACEHOLDER = "kepler://ark";
 const SIDEBAR_STORAGE_KEY = "eden-extension-sidebar-config";
+const VISIBLE_OBJECT_TYPE_IDS_STORAGE_KEY = "eden-extension-visible-object-type-ids";
 
 export async function getVaultPath(): Promise<string | null> {
   return VAULT_PATH_PLACEHOLDER;
@@ -574,6 +588,17 @@ export async function selectFolder(): Promise<string | null> {
 
 async function exportMarkdownVault(): Promise<ExportMarkdownVaultResult | null> {
   return null;
+}
+
+async function openMarkdownFile(): Promise<MarkdownFileOpenResult | null> {
+  return window.kepler?.markdownFiles?.open?.() ?? null;
+}
+
+async function saveMarkdownFile(
+  suggestedName: string,
+  content: string,
+): Promise<MarkdownFileSaveResult | null> {
+  return window.kepler?.markdownFiles?.save?.(suggestedName, content) ?? null;
 }
 
 // Renderer-types (`vite-env.d.ts`) declare `widget: { width, hidden }`,
@@ -615,6 +640,52 @@ async function updateSidebarConfig(patch: {
   };
   try {
     localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // ignore storage failures
+  }
+  return next;
+}
+
+function readVisibleObjectTypeIds(): string[] {
+  try {
+    const raw = localStorage.getItem(VISIBLE_OBJECT_TYPE_IDS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    const seen = new Set<string>();
+    return parsed
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .filter((value) => {
+        if (seen.has(value)) return false;
+        seen.add(value);
+        return true;
+      });
+  } catch {
+    return [];
+  }
+}
+
+async function getEdenVisibleObjectTypeIds(): Promise<string[]> {
+  return readVisibleObjectTypeIds();
+}
+
+async function setEdenVisibleObjectTypeIds(typeIds: string[]): Promise<string[]> {
+  const seen = new Set<string>();
+  const next = typeIds
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value) => {
+      if (seen.has(value)) return false;
+      seen.add(value);
+      return true;
+    });
+
+  try {
+    localStorage.setItem(VISIBLE_OBJECT_TYPE_IDS_STORAGE_KEY, JSON.stringify(next));
   } catch {
     // ignore storage failures
   }
@@ -1056,6 +1127,8 @@ export function installKeplerApiShim(): void {
     selectFolder,
     setVaultPath,
     exportMarkdownVault,
+    openMarkdownFile,
+    saveMarkdownFile,
     searchEntries,
     createFolder,
     listFolders,
@@ -1068,6 +1141,8 @@ export function installKeplerApiShim(): void {
     deleteFolder,
     getSidebarConfig,
     updateSidebarConfig,
+    getEdenVisibleObjectTypeIds,
+    setEdenVisibleObjectTypeIds,
     getPlatform,
     listTrashEntries,
     restoreEntry,

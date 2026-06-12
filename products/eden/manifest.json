@@ -13,7 +13,14 @@
   "minWidth": 450,
   "minHeight": 400,
   "windowEffect": "acrylic",
-  "permissions": ["objects.read", "objects.write", "userData.read", "userData.write"],
+  "permissions": [
+    "objects.read",
+    "objects.write",
+    "userData.read",
+    "userData.write",
+    "markdownFiles.open",
+    "markdownFiles.save"
+  ],
   "commands": [
     {
       "id": "open",

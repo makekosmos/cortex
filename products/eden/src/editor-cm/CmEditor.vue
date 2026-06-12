@@ -1,6 +1,10 @@
 <template>
   <div
-    :class="['cm-editor-host', 'kosmos-scroll', { 'is-vim-mode': props.vimMode }]"
+    :class="[
+      'cm-editor-host',
+      'kosmos-scroll',
+      { 'is-vim-mode': props.vimMode, 'is-focus-mode': props.zenMode },
+    ]"
     data-testid="cm-editor-host"
   >
     <div ref="titleContainerRef" class="cm-editor-title-container"></div>
@@ -32,7 +36,6 @@ import { slashCommandSource } from "./cm/slash-commands";
 import { resolveCodeLanguage } from "./cm/code-languages";
 import { edenHighlight } from "./cm/highlight";
 import { Vim, vim } from "@replit/codemirror-vim";
-import { useLayoutStore } from "@/store/layout";
 import "./cm-editor.css";
 
 interface Props {
@@ -43,7 +46,6 @@ interface Props {
 }
 
 interface Emits {
-  exitZen: [];
   closeEntry: [];
   setZenMode: [enabled: boolean];
   entryDraftChange: [entry: Entry];
@@ -52,7 +54,6 @@ interface Emits {
 
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
-const layout = useLayoutStore();
 
 const AUTOSAVE_DEBOUNCE_MS = 300;
 type EdenVimActions = {
@@ -89,18 +90,13 @@ function registerEdenVimCommands(): void {
   });
   Vim.defineEx("zen", "zen", (_cm: unknown, params: { argString?: string } | undefined) => {
     const mode = (params?.argString ?? "toggle").trim().toLowerCase();
-    if (mode === "on") {
-      activeVimActions?.setZenMode(true);
-      return;
-    }
     if (mode === "off") {
-      activeVimActions?.setZenMode(false);
       return;
     }
-    activeVimActions?.setZenMode(!(activeVimActions?.getZenMode() ?? false));
+    activeVimActions?.setZenMode(true);
   });
   Vim.defineEx("zenmode", "zenmode", () => {
-    activeVimActions?.setZenMode(!(activeVimActions?.getZenMode() ?? false));
+    activeVimActions?.setZenMode(true);
   });
 }
 
@@ -197,27 +193,6 @@ function setZenMode(enabled: boolean): void {
   emit("setZenMode", enabled);
 }
 
-function toggleSidebarFromEditor(source: string): boolean {
-  void layout.toggleWidgetSidebar();
-  console.debug(`[eden] sidebar toggled by ${source}`, {
-    hidden: layout.widgetSidebarHidden,
-  });
-  return true;
-}
-
-function createSidebarToggleKeymap(source: string) {
-  return {
-    key: "Mod-b",
-    run: () => toggleSidebarFromEditor(source),
-  };
-}
-
-function onKeydown(e: KeyboardEvent): void {
-  if (e.key === "Escape" && props.zenMode) {
-    emit("exitZen");
-  }
-}
-
 function createTitleState(initialTitle: string): EditorState {
   return EditorState.create({
     doc: initialTitle,
@@ -234,7 +209,6 @@ function createTitleState(initialTitle: string): EditorState {
       }),
       Prec.highest(
         keymap.of([
-          createSidebarToggleKeymap("CodeMirror title keymap"),
           {
             key: "Enter",
             run: () => {
@@ -312,12 +286,7 @@ onMounted(() => {
       markdownListIndentPlugin,
       orderedListRenumber,
       autocompletion({ override: [slashCommandSource] }),
-      keymap.of([
-        createSidebarToggleKeymap("CodeMirror keymap"),
-        ...defaultKeymap,
-        ...historyKeymap,
-        ...completionKeymap,
-      ]),
+      keymap.of([...defaultKeymap, ...historyKeymap, ...completionKeymap]),
       EditorView.contentAttributes.of({ spellcheck: "false" }),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
@@ -333,8 +302,6 @@ onMounted(() => {
     parent: containerRef.value,
   });
   view.scrollDOM.classList.add("kosmos-scroll");
-
-  document.addEventListener("keydown", onKeydown);
 });
 
 watch(
@@ -365,8 +332,6 @@ watch(
 );
 
 onBeforeUnmount(() => {
-  document.removeEventListener("keydown", onKeydown);
-
   if (activeVimActions?.save === flushSave) {
     activeVimActions = null;
   }
@@ -409,6 +374,10 @@ onBeforeUnmount(() => {
   margin: 0 auto;
   align-self: stretch;
   flex: 0 0 auto;
+}
+
+.cm-editor-host.is-focus-mode .cm-editor-title-container {
+  display: none;
 }
 
 .cm-editor-title-container :deep(.cm-title-editor) {

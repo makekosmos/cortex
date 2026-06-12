@@ -15,18 +15,12 @@ const ZOOM_MAX = 2.0;
 // CHORD_WINDOW_MS пользователь нажмёт Z — отменяем search и переключаем zen.
 const CHORD_WINDOW_MS = 700;
 
-// Double-Esc для выхода из zen mode. Если два Escape подряд в пределах
-// этого окна — отключаем zen. Одиночный Escape ничего не делает (чтобы
-// пользователь случайным касанием не вылетал из режима фокуса).
-const DOUBLE_ESC_WINDOW_MS = 600;
-
 export function useKeyboard() {
   const eden = useEdenStore();
 
   const layout = useLayoutStore();
 
   let chordExpiresAt = 0;
-  let lastEscapeAt = 0;
 
   async function restoreZoom() {
     const saved = localStorage.getItem("eden-zoom");
@@ -77,6 +71,7 @@ export function useKeyboard() {
     if (mod && !e.altKey && e.code === "KeyB") {
       e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation();
       await layout.toggleWidgetSidebar();
       console.debug("[eden] sidebar toggled by keyboard", {
         hidden: layout.widgetSidebarHidden,
@@ -140,25 +135,12 @@ export function useKeyboard() {
       return;
     }
 
-    // Escape:
-    //   - search открыт → закрываем (одиночный Esc, как везде)
-    //   - в zen → требуем двойной Esc в окне DOUBLE_ESC_WINDOW_MS
+    // Escape закрывает только поиск. Из focus mode выходим кнопкой в
+    // titlebar или явным hotkey toggle, чтобы случайный Esc не выбивал из письма.
 
     if (e.code === "Escape") {
       if (layout.isSearchOpen) {
         layout.closeSearch();
-        lastEscapeAt = 0;
-        return;
-      }
-
-      if (layout.isZenMode) {
-        const now = Date.now();
-        if (now - lastEscapeAt <= DOUBLE_ESC_WINDOW_MS && lastEscapeAt > 0) {
-          layout.disableZenMode();
-          lastEscapeAt = 0;
-        } else {
-          lastEscapeAt = now;
-        }
       }
     }
   }

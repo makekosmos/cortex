@@ -21,6 +21,24 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-12 — Eden my-space оставался в TipTap вместо CM editor
+
+**Симптомы.** Запись `Мое пространство` выглядела и редактировалась иначе обычных заметок: Vim не работал, шрифты и отступы отличались, заголовок вел себя не как CM title editor.
+**Где жило.** `products/eden/src/App.vue::useCmEditorForCurrent`, `products/eden/src/store/eden.ts::openMySpace` / `hydrateVaultData`.
+**Root cause.** `Мое пространство` — дефолтная запись, которую store подхватывает по title без проверки `content_json`. Если в старой версии этой записи лежали unsupported PM nodes (`taskRef`, `wikilink`, unknown marks), `cmGate.shouldUseCmEditor()` возвращал `false`, и App.vue падал в legacy TipTap `Editor.vue`; все Vim/CM cursor/font правила живут только в `CmEditor`.
+**Fix.** `cmGate` получил `coerceToCmSafeDoc()`, который превращает старые unsupported PM nodes в безопасный markdown-shaped doc. Все входы в дефолтную запись (`hydrateVaultData` fallback, last-visited restore, `openMySpace`, `navigateTo`, `refreshData` current entry refresh) нормализуют только `Мое пространство`, обновляют `type_id` до `note_obj` и сохраняют через `window.api.saveEntry`.
+**Регрешн-защита.** `products/eden/tests/cmGate.test.ts` проверяет, что `taskRef` превращается в CM-safe checklist, а `wikilink` внутри paragraph сохраняется как markdown-текст. Дополнительно проверена сборка Eden extension.
+**Prevention.** Дефолтные/служебные entries нельзя подхватывать по title и сразу отдавать в editor: перед установкой в `currentEntry` нужен контракт совместимости с активным editor path. Если документ может попасть в CM editor, normalization должен жить рядом с gate, а не в случайном CSS/UI workaround.
+
+## 2026-06-12 — Backend app_index rescan стартовал до WS readiness
+
+**Симптомы** — при dev-старте Eden/extension IPC несколько раз падал с `ark bridge not ready (timeout)` / `kepler-backend not-installed`; backend писал `WS listening` и lock-file только после startup-скана app index.
+**Где жило** — `platform/runtime/src/main.rs::setup`.
+**Root cause** — `app_index` initial rescan планировался до `WsServer::bind()` и записи lock-file. Таймер был отложен на 15 секунд, но cold-start работа до WS могла занять дольше, поэтому scan начинался раньше backend readiness и конкурировал с критическим путем, которого ждет shell.
+**Fix** — startup rescan `app_index` перенесен после `WS listening` и `lock-file written`, как уже было сделано для `file_index`.
+**Регрешн-защита** — targeted `cargo check -p kepler-backend` / `cargo test -p kepler-backend` должны поймать compile-регрессии в startup wiring; runtime-проверка по логам: `WS listening` и lock-file должны появляться до `app_index initial rescan`.
+**Prevention** — все optional startup workers, которые делают disk/app discovery, должны стартовать только после observable backend readiness: WS bind + lock-file, иначе renderer/extension IPC получает ложные backend timeouts.
+
 ## 2026-06-11 — Eden CM6 caret не использовал zennotes cursor layer
 
 **Симптомы** — при включённом CodeMirror 6 markdown-редакторе ввод уже работал в WYSIWYG/live-preview стиле, но каретка выглядела не как в ZenNotes: Eden CSS задавал 2px accent cursor, однако пользователь видел обычную браузерную каретку.

@@ -18,7 +18,14 @@
   <!-- Main app -->
   <div
     v-else
-    :class="['app-container', { 'focus-mode-active': layout.isZenMode, 'eden-docked': isDocked }]"
+    :class="[
+      'app-container',
+      {
+        'focus-mode-active': layout.isZenMode,
+        'focus-titlebar-hover': focusTitlebarHovered,
+        'eden-docked': isDocked,
+      },
+    ]"
   >
     <SearchOverlay
       :is-open="layout.isSearchOpen"
@@ -31,12 +38,23 @@
     />
 
     <DesktopChrome appearance="settings" class="h-screen w-screen" :platform="chromePlatform">
-      <template v-if="!layout.isZenMode" #titlebar-leading>
+      <template #titlebar-leading>
         <div class="inline-flex items-center gap-2 [-webkit-app-region:no-drag]">
           <button
-            v-if="layout.widgetSidebarHidden"
+            v-if="layout.isZenMode"
             type="button"
-            class="inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)"
+            class="eden-titlebar-button inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in [-webkit-app-region:no-drag] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)"
+            title="Выйти из фокуса"
+            aria-label="Выйти из фокуса"
+            data-testid="titlebar-focus-exit"
+            @click="layout.disableZenMode()"
+          >
+            <PhPottedPlant :size="17" weight="duotone" />
+          </button>
+          <button
+            v-else-if="layout.widgetSidebarHidden"
+            type="button"
+            class="eden-titlebar-button inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in [-webkit-app-region:no-drag] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)"
             title="Показать сайдбар"
             aria-label="Показать сайдбар"
             aria-pressed="false"
@@ -46,6 +64,7 @@
             <PanelLeftOpen :size="16" />
           </button>
           <TitlebarHistoryControls
+            v-if="!layout.isZenMode"
             :back-disabled="!canGoBack"
             :forward-disabled="!canGoForward"
             back-title="Назад"
@@ -121,7 +140,6 @@
           :zen-mode="layout.isZenMode"
           :vim-mode="preferences.state.vimModeEnabled"
           :on-save="eden.handleSave"
-          @exit-zen="layout.disableZenMode()"
           @close-entry="closeCurrentEntry"
           @set-zen-mode="setZenMode"
           @entry-draft-change="eden.updateEntryDraft"
@@ -137,7 +155,6 @@
           :on-save="eden.handleSave"
           :on-navigate="eden.navigateTo"
           :on-open-type-settings="openTypeSettings"
-          @exit-zen="layout.disableZenMode()"
           @entry-draft-change="eden.updateEntryDraft"
           @live-char-count="liveCharCount = $event"
         />
@@ -152,6 +169,14 @@
           @open-entry="(id) => eden.navigateTo(id)"
         />
       </main>
+
+      <div
+        v-if="layout.isZenMode"
+        class="eden-focus-titlebar-title"
+        data-testid="focus-titlebar-title"
+      >
+        {{ currentTitlebarTitle }}
+      </div>
     </DesktopChrome>
 
     <div
@@ -179,7 +204,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, onUnmounted, shallowRef, watch } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  ref,
+  shallowRef,
+  watch,
+} from "vue";
 import {
   ContextMenu,
   ContextMenuItem,
@@ -213,6 +247,7 @@ import SpacesView from "@/components/spaces/SpacesView.vue";
 import SettingsPage from "@/components/settings/SettingsPage.vue";
 import ObjectTypesSettings from "@/components/settings/ObjectTypesSettings.vue";
 import TypeObjectsView from "@/components/objects/TypeObjectsView.vue";
+import { PhPottedPlant } from "@phosphor-icons/vue";
 import { PanelLeftOpen } from "@lucide/vue";
 import "@/App.css";
 
@@ -229,6 +264,40 @@ const useCmEditorForCurrent = computed(
     ),
 );
 const loggedCmBlockers = new Set<string>();
+const MY_SPACE_DEBUG_TITLE = "Мое пространство";
+
+function mountedEditorKind(): "cm" | "tiptap" | "spaces" | "other" {
+  if (document.querySelector(".cm-editor-host")) return "cm";
+  if (document.querySelector(".editor-wrapper")) return "tiptap";
+  if (document.querySelector(".spaces-view")) return "spaces";
+  return "other";
+}
+
+function currentEdenDebug() {
+  const entry = eden.currentEntry;
+  const prefEnabled = preferences.state.cmEditorEnabled || preferences.state.vimModeEnabled;
+  return {
+    activeScreen: eden.activeScreen,
+    activeSpace: eden.activeSpace,
+    editorKind: mountedEditorKind(),
+    prefEnabled,
+    cmEditorEnabled: preferences.state.cmEditorEnabled,
+    vimModeEnabled: preferences.state.vimModeEnabled,
+    useCmEditor: useCmEditorForCurrent.value,
+    entry: entry
+      ? {
+          id: entry.id,
+          title: entry.title,
+          typeId: entry.type_id,
+          deletedAt: entry.deleted_at,
+          blockers: getCmEditorBlockers(entry.content_json),
+          contentHead: entry.content_json.slice(0, 500),
+        }
+      : null,
+  };
+}
+
+(window as unknown as { __edenDebug?: () => unknown }).__edenDebug = currentEdenDebug;
 
 watch(
   [
@@ -257,6 +326,21 @@ watch(
   },
   { immediate: true },
 );
+
+watch(
+  [
+    () => eden.currentEntry?.id,
+    () => eden.currentEntry?.content_json,
+    () => useCmEditorForCurrent.value,
+  ],
+  () => {
+    if (eden.currentEntry?.title.trim() !== MY_SPACE_DEBUG_TITLE) return;
+    void nextTick(() => {
+      console.info("[eden debug] my-space editor route", currentEdenDebug());
+    });
+  },
+  { immediate: true },
+);
 // Provide toast api на root уровне — useToast() из любого descendant'а
 // (Editor.vue и т.д.) увидит его. ToastHost дальше в template только
 // рендерит, не повторяет provide.
@@ -278,17 +362,205 @@ function onEntryContextMenu(event: MouseEvent, entryId: string) {
 // Docked-widget state — для CSS-маркера (.eden-docked) на app-container.
 const { isDocked } = useDockedWidget();
 
-// На Windows native double-click-on-titlebar разворачивает окно. В zen mode
-// это не нужно (header и так скрыт, maximize не имеет UX смысла) — отключаем,
-// чтобы случайный dblclick не вырывал из режима фокуса.
+const TITLEBAR_SYMBOL_VISIBLE = "#f5f5f5";
+const TITLEBAR_SYMBOL_HIDDEN = "#00000000";
+const FOCUS_TITLEBAR_HOVER_HEIGHT = 56;
+const TITLEBAR_REVEAL_DURATION_MS = 400;
+const FOCUS_TITLEBAR_LISTENER_CAPTURE = true;
+const focusTitlebarHovered = ref(false);
+let titlebarSymbolOpacity = 1;
+let titlebarSymbolAnimationFrame: number | null = null;
+let focusWindowDragPointerId: number | null = null;
+let focusTitlebarListenersInstalled = false;
+let titlebarHoverUnsubscribe: (() => void) | null = null;
+
+function clearTitlebarSymbolAnimation(): void {
+  if (titlebarSymbolAnimationFrame === null) return;
+  window.cancelAnimationFrame(titlebarSymbolAnimationFrame);
+  titlebarSymbolAnimationFrame = null;
+}
+
+function titlebarSymbolColor(opacity: number): string {
+  if (opacity <= 0) return TITLEBAR_SYMBOL_HIDDEN;
+  const alpha = Math.round(Math.min(1, Math.max(0, opacity)) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `${TITLEBAR_SYMBOL_VISIBLE}${alpha}`;
+}
+
+function setTitlebarSymbolOpacity(opacity: number): void {
+  const nextOpacity = Math.min(1, Math.max(0, opacity));
+  if (Math.abs(titlebarSymbolOpacity - nextOpacity) < 0.01) return;
+
+  titlebarSymbolOpacity = nextOpacity;
+  void window.kepler?.window?.setTitlebarSymbolColor?.(titlebarSymbolColor(nextOpacity));
+}
+
+function restoreTitlebarSymbols(): void {
+  clearTitlebarSymbolAnimation();
+  titlebarSymbolOpacity = 1;
+  void window.kepler?.window?.setTitlebarSymbolColor?.(TITLEBAR_SYMBOL_VISIBLE);
+}
+
+function animateTitlebarSymbolOpacity(targetOpacity: number): void {
+  clearTitlebarSymbolAnimation();
+
+  const startOpacity = titlebarSymbolOpacity;
+  const delta = targetOpacity - startOpacity;
+  if (Math.abs(delta) < 0.01) {
+    setTitlebarSymbolOpacity(targetOpacity);
+    return;
+  }
+
+  const startedAt = performance.now();
+
+  const tick = (now: number) => {
+    const progress = Math.min(1, (now - startedAt) / TITLEBAR_REVEAL_DURATION_MS);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    setTitlebarSymbolOpacity(startOpacity + delta * eased);
+
+    if (progress < 1) {
+      titlebarSymbolAnimationFrame = window.requestAnimationFrame(tick);
+      return;
+    }
+
+    titlebarSymbolAnimationFrame = null;
+    setTitlebarSymbolOpacity(targetOpacity);
+  };
+
+  titlebarSymbolAnimationFrame = window.requestAnimationFrame(tick);
+}
+
+function showFocusTitlebarChrome(): void {
+  if (!layout.isZenMode) return;
+  setFocusTitlebarHovered(true);
+}
+
+function setFocusTitlebarHovered(hovered: boolean): void {
+  if (!layout.isZenMode) {
+    focusTitlebarHovered.value = false;
+    return;
+  }
+
+  focusTitlebarHovered.value = hovered;
+  animateTitlebarSymbolOpacity(hovered ? 1 : 0);
+}
+
+function syncFocusTitlebarChrome(event?: MouseEvent | PointerEvent): void {
+  if (!layout.isZenMode) {
+    setFocusTitlebarHovered(false);
+    return;
+  }
+
+  if (event && event.clientY >= 0 && event.clientY <= FOCUS_TITLEBAR_HOVER_HEIGHT) {
+    setFocusTitlebarHovered(true);
+    return;
+  }
+
+  setFocusTitlebarHovered(false);
+}
+
+function hideFocusTitlebarChrome(): void {
+  setFocusTitlebarHovered(false);
+}
+
+function isFocusTitlebarDragTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  const header = target.closest(".kosmos-desktop-chrome-settings__header");
+  if (!header) return false;
+  if (
+    target.closest('button, a, input, textarea, select, [role="button"], [contenteditable="true"]')
+  )
+    return false;
+  if (
+    target.closest(
+      ".kosmos-desktop-chrome-settings__header-left, .kosmos-desktop-chrome-settings__header-center, .kosmos-desktop-chrome-settings__header-right",
+    )
+  )
+    return false;
+
+  return target === header;
+}
+
+function beginFocusWindowDrag(event: PointerEvent): void {
+  if (!layout.isZenMode || event.button !== 0 || !isFocusTitlebarDragTarget(event.target)) return;
+
+  event.preventDefault();
+  focusWindowDragPointerId = event.pointerId;
+  setFocusTitlebarHovered(true);
+  void window.kepler?.window?.beginManualDrag?.({
+    screenX: event.screenX,
+    screenY: event.screenY,
+  });
+}
+
+function moveFocusWindowDrag(event: PointerEvent): void {
+  if (focusWindowDragPointerId !== event.pointerId) return;
+  event.preventDefault();
+  void window.kepler?.window?.moveManualDrag?.({
+    screenX: event.screenX,
+    screenY: event.screenY,
+  });
+}
+
+function endFocusWindowDrag(): void {
+  if (focusWindowDragPointerId === null) return;
+  focusWindowDragPointerId = null;
+  void window.kepler?.window?.endManualDrag?.();
+}
+
+function handleFocusTitlebarPointerMove(event: PointerEvent): void {
+  syncFocusTitlebarChrome(event);
+  moveFocusWindowDrag(event);
+}
+
+function installFocusTitlebarListeners(): void {
+  if (focusTitlebarListenersInstalled) return;
+  focusTitlebarListenersInstalled = true;
+  window.addEventListener("pointerdown", beginFocusWindowDrag, FOCUS_TITLEBAR_LISTENER_CAPTURE);
+  window.addEventListener(
+    "pointermove",
+    handleFocusTitlebarPointerMove,
+    FOCUS_TITLEBAR_LISTENER_CAPTURE,
+  );
+  window.addEventListener("mousemove", syncFocusTitlebarChrome, FOCUS_TITLEBAR_LISTENER_CAPTURE);
+  window.addEventListener("pointerup", endFocusWindowDrag, FOCUS_TITLEBAR_LISTENER_CAPTURE);
+  window.addEventListener("pointercancel", endFocusWindowDrag, FOCUS_TITLEBAR_LISTENER_CAPTURE);
+  document.addEventListener("mouseleave", hideFocusTitlebarChrome);
+  window.addEventListener("blur", hideFocusTitlebarChrome);
+}
+
+function removeFocusTitlebarListeners(): void {
+  if (!focusTitlebarListenersInstalled) return;
+  focusTitlebarListenersInstalled = false;
+  window.removeEventListener("pointerdown", beginFocusWindowDrag, FOCUS_TITLEBAR_LISTENER_CAPTURE);
+  window.removeEventListener(
+    "pointermove",
+    handleFocusTitlebarPointerMove,
+    FOCUS_TITLEBAR_LISTENER_CAPTURE,
+  );
+  window.removeEventListener("mousemove", syncFocusTitlebarChrome, FOCUS_TITLEBAR_LISTENER_CAPTURE);
+  window.removeEventListener("pointerup", endFocusWindowDrag, FOCUS_TITLEBAR_LISTENER_CAPTURE);
+  window.removeEventListener("pointercancel", endFocusWindowDrag, FOCUS_TITLEBAR_LISTENER_CAPTURE);
+  document.removeEventListener("mouseleave", hideFocusTitlebarChrome);
+  window.removeEventListener("blur", hideFocusTitlebarChrome);
+  endFocusWindowDrag();
+  focusTitlebarHovered.value = false;
+}
+
+// В focus mode maximize должен оставаться доступным через native window controls.
 watch(
   () => layout.isZenMode,
-  (isZen) => {
-    void (
-      window as unknown as {
-        kepler?: { window?: { setMaximizable?: (v: boolean) => Promise<void> } };
-      }
-    ).kepler?.window?.setMaximizable?.(!isZen);
+  (isZenMode) => {
+    void window.kepler?.window?.setMaximizable?.(true);
+    void window.kepler?.window?.setTitlebarHoverTracking?.(isZenMode, FOCUS_TITLEBAR_HOVER_HEIGHT);
+    if (isZenMode) {
+      installFocusTitlebarListeners();
+      setFocusTitlebarHovered(false);
+    } else {
+      removeFocusTitlebarListeners();
+      restoreTitlebarSymbols();
+    }
   },
   { immediate: true },
 );
@@ -344,6 +616,11 @@ const entryTitlesById = computed<Record<string, string>>(() =>
       getEntryDisplayTitle(entry.title, entry.header_props_json),
     ]),
   ),
+);
+const currentTitlebarTitle = computed(() =>
+  eden.currentEntry
+    ? getEntryDisplayTitle(eden.currentEntry.title, eden.currentEntry.header_props_json)
+    : "Eden",
 );
 
 const chromePlatform = computed<TitlebarPlatform>(() => {
@@ -406,6 +683,13 @@ const commandUnsubscribers: Array<() => void> = [];
 
 onMounted(() => {
   void eden.initApp();
+  titlebarHoverUnsubscribe =
+    window.kepler?.window?.onTitlebarHoverChange?.(setFocusTitlebarHovered) ?? null;
+  void window.kepler?.window?.setTitlebarHoverTracking?.(
+    layout.isZenMode,
+    FOCUS_TITLEBAR_HOVER_HEIGHT,
+  );
+  if (layout.isZenMode) installFocusTitlebarListeners();
 
   if (window.api?.onCommand) {
     commandUnsubscribers.push(
@@ -435,6 +719,12 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  titlebarHoverUnsubscribe?.();
+  titlebarHoverUnsubscribe = null;
+  void window.kepler?.window?.setTitlebarHoverTracking?.(false, FOCUS_TITLEBAR_HOVER_HEIGHT);
+  removeFocusTitlebarListeners();
+  restoreTitlebarSymbols();
+
   while (commandUnsubscribers.length > 0) {
     const off = commandUnsubscribers.pop();
     try {
@@ -479,7 +769,8 @@ watch([() => layout.isZenMode, () => eden.activeScreen], ([isZenMode, activeScre
   // заметками currentEntry кратковременно null'ится, что валило zen
   // mode мид-navigation и ломало dock-corner dblclick на следующей
   // странице. Если юзер сам не находится ни на каком entry в notes
-  // screen — пусть смотрит пустой editor, Esc выйдет руками.
+  // screen — пусть смотрит пустой editor, выйти можно кнопкой titlebar
+  // или явным hotkey toggle.
   if (activeScreen !== "notes") {
     layout.disableZenMode();
   }

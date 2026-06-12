@@ -182,7 +182,6 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  exitZen: [];
   entryDraftChange: [entry: Entry];
   liveCharCount: [count: number];
 }>();

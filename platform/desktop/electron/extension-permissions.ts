@@ -13,7 +13,12 @@ export interface ExtensionHostPermissionCheck {
   extensionId: string;
   source: ExtensionSource;
   manifestPermissions?: readonly string[];
-  capability: "userData.read" | "userData.write" | "focus.control";
+  capability:
+    | "userData.read"
+    | "userData.write"
+    | "focus.control"
+    | "markdownFiles.open"
+    | "markdownFiles.save";
 }
 
 const TRUSTED_SOURCES = new Set<ExtensionSource>(["dev", "bundled"]);
