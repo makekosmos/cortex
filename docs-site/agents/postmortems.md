@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-12 — Eden CM normalization была привязана к одной записи
+
+**Симптомы.** После фикса `Мое пространство` та же поломка повторилась на записи `2026-05-22`: Vim не работал, шрифты/отступы отличались, запись открывалась через legacy TipTap вместо CodeMirror.
+**Где жило.** `products/eden/src/store/eden.ts::ensureMySpaceEntryCmSafe`, `products/eden/src/App.vue::useCmEditorForCurrent`.
+**Root cause.** Предыдущий фикс нормализовал несовместимый `content_json` только для записи с title `Мое пространство`. Любая другая старая запись с unsupported PM nodes (`taskRef`, `wikilink`, unknown marks) проходила обычный `navigateTo()` без coercion, `shouldUseCmEditor()` возвращал `false`, и App.vue снова падал в TipTap.
+**Fix.** `ensureMySpaceEntryCmSafe()` заменён на общий `ensureEntryCmSafe()`: `refreshData()`, `hydrateVaultData()`, `openMySpace()`, `openTodayJournal()` и `navigateTo()` теперь нормализуют любую открываемую запись перед попаданием в editor gate. Search result selection больше не присваивает `currentEntry` напрямую, а идёт через `navigateTo()`. Нормализация сохраняет существующий `type_id`, а отсутствующий тип приводит к базовому типу заметки.
+**Регрешн-защита.** `products/eden/tests/cmGate.test.ts` проверяет, что legacy doc с `wikilink`/`taskRef` становится CM-safe без привязки к конкретному title; локально прогоняется `rtk proxy bun test tests/cmGate.test.ts`.
+**Prevention.** Editor compatibility нельзя привязывать к title, user-facing имени или “особой” записи. Любой fallback из CM в legacy editor из-за content blockers должен закрываться на entry-boundary перед присваиванием `currentEntry`.
+
 ## 2026-06-12 — Eden my-space оставался в TipTap вместо CM editor
 
 **Симптомы.** Запись `Мое пространство` выглядела и редактировалась иначе обычных заметок: Vim не работал, шрифты и отступы отличались, заголовок вел себя не как CM title editor.

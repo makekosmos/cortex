@@ -207,7 +207,6 @@
 import {
   computed,
   defineAsyncComponent,
-  nextTick,
   onMounted,
   onUnmounted,
   ref,
@@ -264,7 +263,6 @@ const useCmEditorForCurrent = computed(
     ),
 );
 const loggedCmBlockers = new Set<string>();
-const MY_SPACE_DEBUG_TITLE = "Мое пространство";
 
 function mountedEditorKind(): "cm" | "tiptap" | "spaces" | "other" {
   if (document.querySelector(".cm-editor-host")) return "cm";
@@ -327,20 +325,6 @@ watch(
   { immediate: true },
 );
 
-watch(
-  [
-    () => eden.currentEntry?.id,
-    () => eden.currentEntry?.content_json,
-    () => useCmEditorForCurrent.value,
-  ],
-  () => {
-    if (eden.currentEntry?.title.trim() !== MY_SPACE_DEBUG_TITLE) return;
-    void nextTick(() => {
-      console.info("[eden debug] my-space editor route", currentEdenDebug());
-    });
-  },
-  { immediate: true },
-);
 // Provide toast api на root уровне — useToast() из любого descendant'а
 // (Editor.vue и т.д.) увидит его. ToastHost дальше в template только
 // рендерит, не повторяет provide.
@@ -784,16 +768,10 @@ function onSearchClose() {
 }
 
 async function onResultSelect(entryId: string) {
-  if (!window.api) return;
-  const found = await window.api.loadEntry(entryId);
-  if (found) {
-    eden.activeScreen = "notes";
-    eden.currentEntry = found;
-    eden.activeNoteTypeId = null;
-    pendingQuery.value = "";
-    layout.searchQuery = "";
-    layout.searchResults = [];
-    layout.isSearchOpen = false;
-  }
+  await eden.navigateTo(entryId);
+  pendingQuery.value = "";
+  layout.searchQuery = "";
+  layout.searchResults = [];
+  layout.isSearchOpen = false;
 }
 </script>

@@ -157,9 +157,7 @@ export const useEdenStore = defineStore("eden", () => {
     if (currentEntry.value) {
       const refreshed =
         entriesData.find((e) => e.id === currentEntry.value!.id) ?? currentEntry.value;
-      currentEntry.value = isMySpaceEntry(refreshed)
-        ? await ensureMySpaceEntryCmSafe(refreshed)
-        : refreshed;
+      currentEntry.value = await ensureEntryCmSafe(refreshed);
     }
   }
 
@@ -184,10 +182,7 @@ export const useEdenStore = defineStore("eden", () => {
       if (lastVisitedId) {
         const lastEntry = entriesData.find((e) => e.id === lastVisitedId && !e.deleted_at);
         if (lastEntry) {
-          currentEntry.value =
-            lastEntry.title.trim() === MY_SPACE_TITLE
-              ? await ensureMySpaceEntryCmSafe(lastEntry)
-              : lastEntry;
+          currentEntry.value = await ensureEntryCmSafe(lastEntry);
           activeSpace.value = "diary"; // не открываем my-space welcome
           return;
         }
@@ -196,7 +191,7 @@ export const useEdenStore = defineStore("eden", () => {
       const existingMySpace = entriesData.find((e) => e.title.trim() === MY_SPACE_TITLE) ?? null;
 
       if (existingMySpace) {
-        const normalizedMySpace = await ensureMySpaceEntryCmSafe(existingMySpace);
+        const normalizedMySpace = await ensureEntryCmSafe(existingMySpace);
         currentEntry.value = normalizedMySpace;
         return;
       }
@@ -299,11 +294,8 @@ export const useEdenStore = defineStore("eden", () => {
     return entries.value.find((e) => e.title.trim() === MY_SPACE_TITLE) ?? null;
   }
 
-  function isMySpaceEntry(entry: Entry): boolean {
-    return entry.title.trim() === MY_SPACE_TITLE;
-  }
-
-  async function ensureMySpaceEntryCmSafe(entry: Entry): Promise<Entry> {
+  // См. postmortems.md § 2026-06-12 — CM normalization должна быть entry-wide.
+  async function ensureEntryCmSafe(entry: Entry): Promise<Entry> {
     let parsed: unknown = null;
     let contentSafe = false;
 
@@ -315,13 +307,13 @@ export const useEdenStore = defineStore("eden", () => {
     }
 
     const nextTypeId = entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
-    if (contentSafe && nextTypeId === SYSTEM_TYPE_NOTE_ID) {
+    if (contentSafe && entry.type_id === nextTypeId) {
       return entry;
     }
 
     const normalized: Entry = {
       ...entry,
-      type_id: SYSTEM_TYPE_NOTE_ID,
+      type_id: nextTypeId,
       content_json: contentSafe ? entry.content_json : JSON.stringify(coerceToCmSafeDoc(parsed)),
       updated_at: Date.now(),
     };
@@ -335,10 +327,10 @@ export const useEdenStore = defineStore("eden", () => {
       try {
         const result = await window.api.saveEntry(normalized);
         if (!result.ok) {
-          console.warn("[eden] normalize my-space entry failed:", result);
+          console.warn("[eden] normalize entry for CM failed:", result);
         }
       } catch (err) {
-        console.warn("[eden] normalize my-space entry threw:", err);
+        console.warn("[eden] normalize entry for CM threw:", err);
       }
     }
 
@@ -354,7 +346,7 @@ export const useEdenStore = defineStore("eden", () => {
     const existing = findMySpaceEntry();
 
     if (existing) {
-      currentEntry.value = await ensureMySpaceEntryCmSafe(existing);
+      currentEntry.value = await ensureEntryCmSafe(existing);
 
       return;
     }
@@ -456,7 +448,7 @@ export const useEdenStore = defineStore("eden", () => {
         "content[:200]=",
         target.content_json?.slice(0, 200) ?? "",
       );
-      currentEntry.value = target;
+      currentEntry.value = await ensureEntryCmSafe(target);
       return;
     }
 
@@ -570,7 +562,7 @@ export const useEdenStore = defineStore("eden", () => {
       activeScreen.value = "notes";
       activeNoteTypeId.value = null;
 
-      currentEntry.value = isMySpaceEntry(entry) ? await ensureMySpaceEntryCmSafe(entry) : entry;
+      currentEntry.value = await ensureEntryCmSafe(entry);
       writeLastVisitedEntryId(entryId);
     }
   }

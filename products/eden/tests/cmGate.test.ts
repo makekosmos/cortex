@@ -135,6 +135,29 @@ describe("cmGate — shouldUseCmEditor", () => {
 });
 
 describe("cmGate — coerceToCmSafeDoc", () => {
+  test("нормализует unsupported content без привязки к конкретному title", () => {
+    // Regression: 2026-06-12. Старый фикс применял coercion только к `Мое пространство`.
+    const legacyJournalDoc = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "День " },
+            { type: "wikilink", attrs: { target: "2026-05-22" } },
+          ],
+        },
+        {
+          type: "taskRef",
+          attrs: { titleSnapshot: "Проверить глобальную нормализацию" },
+        },
+      ],
+    };
+
+    expect(isCmSafeDoc(legacyJournalDoc)).toBe(false);
+    expect(isCmSafeDoc(coerceToCmSafeDoc(legacyJournalDoc))).toBe(true);
+  });
+
   test("превращает legacy taskRef в CM-safe markdown checklist", () => {
     const docWithTaskRef = {
       type: "doc",

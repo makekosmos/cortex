@@ -217,7 +217,7 @@ const settingsPrimaryItems = computed<SidebarActionItem[]>(() => [
     id: "general",
     icon: Settings,
     label: "Общие",
-    active: props.activeSettingsTab === "general",
+    active: props.activeScreen === "settings" && props.activeSettingsTab === "general",
     onClick: () => emit("openSettingsTab", "general"),
     testId: "settings-nav-general",
   },
@@ -225,7 +225,7 @@ const settingsPrimaryItems = computed<SidebarActionItem[]>(() => [
     id: "trash",
     icon: Trash2,
     label: "Корзина",
-    active: props.activeSettingsTab === "trash",
+    active: props.activeScreen === "settings" && props.activeSettingsTab === "trash",
     onClick: () => emit("openSettingsTab", "trash"),
     testId: "settings-nav-trash",
   },
@@ -233,7 +233,7 @@ const settingsPrimaryItems = computed<SidebarActionItem[]>(() => [
     id: "vim",
     icon: Keyboard,
     label: "Vim",
-    active: props.activeSettingsTab === "vim",
+    active: props.activeScreen === "settings" && props.activeSettingsTab === "vim",
     onClick: () => emit("openSettingsTab", "vim"),
     testId: "settings-nav-vim",
   },
@@ -241,6 +241,7 @@ const settingsPrimaryItems = computed<SidebarActionItem[]>(() => [
     id: "object-types",
     icon: Shapes,
     label: "Типы объектов",
+    active: props.activeScreen === "object-types",
     onClick: () => emit("openObjectTypes"),
     testId: "settings-nav-object-types",
   },
@@ -251,6 +252,7 @@ const objectTypesPrimaryItems = computed<SidebarActionItem[]>(() => [
     id: "create-object-type",
     icon: Plus,
     label: "Новый тип",
+    active: props.activeScreen === "object-types" && props.selectedObjectTypeId === null,
     onClick: () => emit("createObjectType"),
     testId: "object-types-create",
   },
@@ -351,10 +353,24 @@ const footerItems = computed<SidebarActionItem[]>(() => {
       id: "settings",
       icon: Settings,
       label: "Настройки",
-      active: props.activeScreen === "settings",
+      active: props.activeScreen === "settings" || props.activeScreen === "object-types",
       onClick: () => emit("openSettingsTab", "general"),
       testId: "open-settings-btn",
     },
   ];
 });
 </script>
+
+<style scoped>
+:deep(.kosmos-settings-sidebar-button:hover) {
+  background: var(--surface);
+}
+
+:deep(.kosmos-settings-sidebar-button[data-active="true"]) {
+  background: var(--settings-sidebar-active);
+}
+
+:deep(.kosmos-settings-sidebar-button[data-active="true"]:hover) {
+  background: var(--settings-sidebar-active);
+}
+</style>
