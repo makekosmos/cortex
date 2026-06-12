@@ -46,7 +46,8 @@ import {
 } from "node:fs";
 import path from "node:path";
 import net from "node:net";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
+import { localImageUrl } from "./local-image-protocol";
 import { keplerDataDir } from "./data-dir";
 import { macWindowChrome } from "./mac-window";
 import {
@@ -1852,7 +1853,7 @@ ipcMain.handle("kepler:extension:invoke-host", (_e, action: string, _payload?: u
 const MARKDOWN_FILE_MAX_BYTES = 5 * 1024 * 1024;
 const MARKDOWN_VAULT_MAX_FILES = 5_000;
 const MARKDOWN_VAULT_MAX_IMAGES = 5_000;
-const MARKDOWN_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
+const MARKDOWN_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif"]);
 
 type MarkdownVaultTextFile = {
   path: string;
@@ -1904,7 +1905,7 @@ function normalizeVaultRelativePath(root: string, filePath: string): string {
 }
 
 function isIgnoredVaultDir(name: string): boolean {
-  return name === ".git" || name === ".obsidian" || name === "node_modules";
+  return name.startsWith(".") || name === "node_modules";
 }
 
 function imageMimeType(filePath: string): string {
@@ -1913,6 +1914,7 @@ function imageMimeType(filePath: string): string {
   if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
   if (ext === ".gif") return "image/gif";
   if (ext === ".webp") return "image/webp";
+  if (ext === ".avif") return "image/avif";
   return "application/octet-stream";
 }
 
@@ -2034,7 +2036,7 @@ function scanMarkdownVault(rootPath: string): MarkdownVaultOpenResult {
           path: fullPath,
           relativePath: normalizeVaultRelativePath(rootPath, fullPath),
           name: entry.name,
-          fileUrl: pathToFileURL(fullPath).toString(),
+          fileUrl: localImageUrl(fullPath),
           mimeType: imageMimeType(fullPath),
           sizeBytes: stat.size,
           width: dimensions?.width ?? null,

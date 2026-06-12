@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-12 — Eden Obsidian vault import создавал ссылки до объектов
+
+**Симптомы** — импорт папки Obsidian падал с `Error invoking remote method 'kepler:extension:ark:request': Error: FOREIGN KEY constraint failed`; во время импорта не было видимого прогресса, поэтому большой vault выглядел как зависание.
+**Где жило** — `products/eden/src/components/settings/GeneralSettings.vue::importObsidianVaultFolder`, `products/eden/src/lib/kepler-api-shim.ts::syncRelatedLinks`.
+**Root cause** — bulk-import строил `related_notes` из wikilinks сразу для каждой импортируемой заметки. `saveEntry()` после сохранения объекта немедленно синхронизирует `related_notes` в `object_links`; если заметка A ссылалась на заметку B, которая будет создана позже в том же vault, ARK получал `object_link.targetObjectId` на ещё не существующий объект и валился по FK.
+**Fix** — `importObsidianVaultFolder()` переведён на две фазы: сначала сохраняются все заметки без `related_notes`, затем уже существующим объектам добавляются связи. Резолв wikilinks вынесен в `buildObsidianRelatedImportPlan()`, который нормализует Obsidian targets (`.md`, `#heading`, `^block`) и отбрасывает self-links. В настройках добавлен live progress импорта: этап, счётчик, progress-bar и текущий файл.
+**Регрешн-защита** — `products/eden/tests/obsidianVault.test.ts` проверяет, что first-pass header props не содержат `related_notes`, а second-pass связи резолвятся только в object ids. Дополнительно FK smoke на `C:\Users\kirill\Desktop\markdown-brain` построил 973 связи без dangling target ids.
+**Prevention** — Любой bulk-import внешнего графа должен быть staged: сначала создать/обновить все nodes, потом materialize edges. Нельзя писать FK-связи из пользовательских wikilinks в том же проходе, где создаются target objects.
+
 ## 2026-06-12 — Eden CM scroller перестал скроллить заметки
 
 **Симптомы.** В заметках Eden больше не получалось скроллить текст.
@@ -742,3 +751,19 @@ Manual repro для AC7: запустить `bun run --cwd platform/desktop dev`
 - **Supervisor должен делать health-check WS, а не только pid-alive.** Сейчас pid жив → supervisor спит, даже если WS-server stuck.
 
 **Связанные правила.** [forbidden.md § Rust](/agents/forbidden) — про Mutex poison recovery, `RUST_BACKTRACE=1`, и обязательный `db_backup::maybe_backup_on_startup`. Этот случай показывает что недостаточно — нужен ещё health-check.
+
+---
+
+## 2026-06-13 — Eden: изображения из Obsidian import не отображались
+
+**Симптомы.** После импорта Obsidian vault объект типа `Изображение` открывался, метаданные (`file_name`, `width`, `height`, `resolution`) были на месте, но вместо картинки Chromium показывал broken image + alt text.
+
+**Где жило.** `platform/desktop/electron/extension-host.ts::openMarkdownVault` записывал в объект изображения `fileUrl: pathToFileURL(fullPath).toString()`. Eden renderer затем напрямую отдавал этот `file://...` в `<img src>`.
+
+**Root cause.** Eden в dev mode загружен с `http://localhost:<port>/`, а Chromium/Electron не разрешает странице из http-origin грузить произвольные `file://` ресурсы. Данные импортировались корректно, но browser security блокировал саму загрузку файла.
+
+**Fix.** Добавлен privileged Electron protocol `kosmos-local-image://file/<encoded-path>` с handler'ом в main process. Handler отдаёт только поддержанные image extensions (`png/jpg/jpeg/gif/webp/avif`) и корректный MIME. Obsidian vault scanner теперь сохраняет image URL сразу через этот protocol. Renderer добавил `toDisplayImageSrc`, чтобы уже импортированные старые `file://` значения превращались в `kosmos-local-image://...` без переимпорта.
+
+**Регрешн-защита.** `platform/desktop` TypeScript check покрывает protocol imports/handler typing. `products/eden/tests/obsidianVault.test.ts` остаётся зелёным для markdown rewrite/import flow. Manual check: после перезапуска shell открыть уже импортированный объект изображения — `<img>` должен грузиться через `kosmos-local-image://...`.
+
+**Prevention.** Никогда не хранить renderer-facing local resources как raw `file://` в extension UI. Любой локальный файл, который должен отобразиться в web contents, проходит через app-owned protocol с allowlist'ом типов и main-process handler'ом.

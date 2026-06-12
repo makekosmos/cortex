@@ -4,6 +4,7 @@ import ObjectPropertyField from "./ObjectPropertyField.vue";
 import { UNTITLED_ENTRY_PLACEHOLDER } from "@/lib/entryTitles";
 import { getNoteTypePresentation, getResolvedNoteTypeField } from "@/lib/typedNotes";
 import { SYSTEM_TYPE_GAME_ID, SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
+import { toDisplayImageSrc } from "@/lib/localImages";
 
 const props = withDefaults(
   defineProps<{
@@ -65,7 +66,7 @@ const coverImageSrc = computed(() => {
     return "";
   }
 
-  return String(props.headerProps[imageFieldId] ?? "").trim();
+  return toDisplayImageSrc(String(props.headerProps[imageFieldId] ?? ""));
 });
 const backgroundImageSrc = computed(() => {
   const field = getResolvedNoteTypeField(props.activeNoteType, "background_image");
@@ -73,7 +74,7 @@ const backgroundImageSrc = computed(() => {
     return "";
   }
 
-  return String(props.headerProps.background_image ?? "").trim();
+  return toDisplayImageSrc(String(props.headerProps.background_image ?? ""));
 });
 const titleText = computed(
   () => props.title.trim() || props.activeNoteType?.name || UNTITLED_ENTRY_PLACEHOLDER,

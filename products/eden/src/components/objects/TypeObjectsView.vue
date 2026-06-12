@@ -4,12 +4,14 @@ import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { formatObjectFieldValue, formatReadableRussianDate } from "@/lib/objectFieldFormatting";
 import {
   getNoteTypeCollectionName,
+  getNoteTypePresentation,
   parseNoteTypeDefinition,
   parseNoteTypeUiSchema,
   type ResolvedNoteTypeField,
   resolveNoteTypeFields,
 } from "@/lib/typedNotes";
 import { objectIconUri } from "@/lib/iconResolver";
+import { toDisplayImageSrc } from "@/lib/localImages";
 
 const props = defineProps<{
   noteType: NoteType;
@@ -43,6 +45,14 @@ function formatFieldValue(field: ResolvedNoteTypeField, value: unknown): string 
 
 const collectionTitle = computed(() => getNoteTypeCollectionName(props.noteType));
 const iconSrc = computed(() => objectIconUri(props.noteType.icon));
+const presentation = computed(() => getNoteTypePresentation(props.noteType));
+
+function getEntryImageSrc(entry: Entry): string {
+  const imageFieldId = presentation.value.imageFieldId;
+  if (!imageFieldId) return "";
+
+  return toDisplayImageSrc(String(parseHeaderProps(entry)[imageFieldId] ?? ""));
+}
 
 const collectionEntries = computed(() =>
   props.entries
@@ -53,6 +63,14 @@ const collectionEntries = computed(() =>
 const summaryFields = computed(() => {
   const resolved = resolveNoteTypeFields(props.noteType);
   const preferredIds = parseNoteTypeUiSchema(props.noteType.ui_schema_json).featured_fields ?? [];
+  const hiddenIds = new Set([
+    "description",
+    "related_notes",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "source_path",
+  ]);
   const orderedIds = new Map(preferredIds.map((fieldId, index) => [fieldId, index]));
   const definitionFields = parseNoteTypeDefinition(props.noteType.schema_json).fields;
   const definitionOrder = new Map(definitionFields.map((field, index) => [field.id, index]));
@@ -60,7 +78,8 @@ const summaryFields = computed(() => {
   return [...resolved]
     .filter((field) => field.visible)
     .filter((field) => field.kind !== "image" && field.kind !== "long_text")
-    .filter((field) => field.id !== "description")
+    .filter((field) => field.kind !== "relation")
+    .filter((field) => !hiddenIds.has(field.id))
     .sort((left, right) => {
       const preferredDelta = (orderedIds.get(left.id) ?? 999) - (orderedIds.get(right.id) ?? 999);
       if (preferredDelta !== 0) {
@@ -75,7 +94,7 @@ const tableColumnsStyle = computed(() => ({
   gridTemplateColumns: [
     "minmax(220px, 1.6fr)",
     ...summaryFields.value.map(() => "minmax(140px, 1fr)"),
-    "120px",
+    "minmax(150px, 0.72fr)",
   ].join(" "),
 }));
 </script>
@@ -86,7 +105,7 @@ const tableColumnsStyle = computed(() => ({
       <div class="type-objects-title-wrap">
         <span
           class="type-objects-icon-wrap"
-          :style="{ '--type-accent': noteType.color || '#2aa7ee' }"
+          :style="{ '--type-accent': noteType.color || 'var(--accent)' }"
         >
           <span
             class="type-objects-icon"
@@ -102,10 +121,10 @@ const tableColumnsStyle = computed(() => ({
 
       <div class="type-objects-actions">
         <button class="type-objects-secondary-btn" type="button" @click="emit('editType')">
-          Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ С‚РёРї
+          Редактировать тип
         </button>
         <button class="type-objects-primary-btn" type="button" @click="emit('createEntry')">
-          РќРѕРІС‹Р№
+          Новый
         </button>
       </div>
     </header>
@@ -113,51 +132,63 @@ const tableColumnsStyle = computed(() => ({
     <section class="type-objects-panel">
       <div v-if="collectionEntries.length > 0" class="type-objects-table">
         <div class="type-objects-table-head" :style="tableColumnsStyle">
-          <span>РќР°Р·РІР°РЅРёРµ</span>
+          <span class="type-objects-table-head-name">
+            <span class="type-objects-table-head-icon" aria-hidden="true"></span>
+            <span>Название</span>
+          </span>
           <span v-for="field in summaryFields" :key="field.id">{{ field.label }}</span>
-          <span>РћР±РЅРѕРІР»РµРЅРѕ</span>
+          <span>Обновлено</span>
         </div>
 
-        <button
-          v-for="entry in collectionEntries"
-          :key="entry.id"
-          class="type-objects-row"
-          :style="tableColumnsStyle"
-          type="button"
-          @click="emit('openEntry', entry.id)"
-        >
-          <span class="type-objects-name-cell">
-            <span
-              class="type-objects-row-icon-wrap"
-              :style="{ '--type-accent': noteType.color || '#2aa7ee' }"
-            >
+        <div class="type-objects-table-body kosmos-scroll">
+          <button
+            v-for="entry in collectionEntries"
+            :key="entry.id"
+            class="type-objects-row"
+            :style="tableColumnsStyle"
+            type="button"
+            @click="emit('openEntry', entry.id)"
+          >
+            <span class="type-objects-name-cell">
               <span
-                class="type-objects-row-icon"
-                :style="{ '--type-icon-src': `url(${iconSrc})` }"
-                aria-hidden="true"
-              />
+                class="type-objects-row-icon-wrap"
+                :style="{ '--type-accent': noteType.color || 'var(--accent)' }"
+              >
+                <img
+                  v-if="getEntryImageSrc(entry)"
+                  class="type-objects-row-thumb"
+                  :src="getEntryImageSrc(entry)"
+                  :alt="getEntryDisplayTitle(entry.title, entry.header_props_json)"
+                  draggable="false"
+                />
+                <span
+                  v-else
+                  class="type-objects-row-icon"
+                  :style="{ '--type-icon-src': `url(${iconSrc})` }"
+                  aria-hidden="true"
+                />
+              </span>
+              <span class="type-objects-name-text">
+                {{ getEntryDisplayTitle(entry.title, entry.header_props_json) }}
+              </span>
             </span>
-            <span class="type-objects-name-text">
-              {{ getEntryDisplayTitle(entry.title, entry.header_props_json) }}
+
+            <span v-for="field in summaryFields" :key="field.id" class="type-objects-cell">
+              {{ formatFieldValue(field, parseHeaderProps(entry)[field.id]) }}
             </span>
-          </span>
 
-          <span v-for="field in summaryFields" :key="field.id">
-            {{ formatFieldValue(field, parseHeaderProps(entry)[field.id]) }}
-          </span>
-
-          <time>{{ formatDate(entry.updated_at) }}</time>
-        </button>
+            <time>{{ formatDate(entry.updated_at) }}</time>
+          </button>
+        </div>
       </div>
 
       <div v-else class="type-objects-empty">
-        <h2>РџРѕРєР° РЅРµС‚ РѕР±СЉРµРєС‚РѕРІ СЌС‚РѕРіРѕ С‚РёРїР°</h2>
+        <h2>Пока нет объектов этого типа</h2>
         <p>
-          РЎРѕР·РґР°Р№ РїРµСЂРІС‹Р№ РѕР±СЉРµРєС‚ С‚РёРїР° В«{{ noteType.name }}В», Рё Р·РґРµСЃСЊ
-          РїРѕСЏРІРёС‚СЃСЏ РїРѕР»РЅРѕС†РµРЅРЅР°СЏ РєРѕР»Р»РµРєС†РёСЏ.
+          Создай первый объект типа «{{ noteType.name }}», и здесь появится полноценная коллекция.
         </p>
         <button class="type-objects-primary-btn" type="button" @click="emit('createEntry')">
-          РЎРѕР·РґР°С‚СЊ РѕР±СЉРµРєС‚
+          Создать объект
         </button>
       </div>
     </section>
@@ -166,12 +197,14 @@ const tableColumnsStyle = computed(() => ({
 
 <style scoped>
 .type-objects-view {
-  display: grid;
-  gap: 24px;
+  display: flex;
+  height: 100%;
+  min-height: 0;
   min-width: 0;
-  min-height: 100%;
+  flex-direction: column;
+  gap: 24px;
   padding: 36px 40px 40px;
-  background: var(--background);
+  overflow: hidden;
 }
 
 .type-objects-header {
@@ -201,8 +234,11 @@ const tableColumnsStyle = computed(() => ({
 }
 
 .type-objects-row-icon-wrap {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
+  justify-self: center;
+  overflow: hidden;
+  border-radius: 4px;
 }
 
 .type-objects-icon,
@@ -225,8 +261,15 @@ const tableColumnsStyle = computed(() => ({
 }
 
 .type-objects-row-icon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
+}
+
+.type-objects-row-thumb {
+  display: block;
+  width: 20px;
+  height: 20px;
+  object-fit: cover;
 }
 
 .type-objects-title-copy {
@@ -283,37 +326,58 @@ const tableColumnsStyle = computed(() => ({
 }
 
 .type-objects-panel {
+  flex: 1;
   min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 22px;
-  background: var(--surface);
+  min-height: 0;
   overflow: hidden;
 }
 
 .type-objects-table {
-  display: grid;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .type-objects-table-head,
 .type-objects-row {
   display: grid;
-  gap: 18px;
+  gap: 16px;
   align-items: center;
-  padding: 14px 18px;
 }
 
 .type-objects-table-head {
-  border-bottom: 1px solid var(--border);
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border-color-strong);
+  background: var(--main-background-color);
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.type-objects-table-head-name {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.type-objects-table-head-icon {
+  width: 20px;
+  justify-self: center;
 }
 
 .type-objects-row {
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  min-height: 36px;
+  padding: 4px 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color-strong) 72%, transparent);
   background: transparent;
   color: var(--foreground);
+  font-size: 13px;
   text-align: left;
 }
 
@@ -322,19 +386,37 @@ const tableColumnsStyle = computed(() => ({
 }
 
 .type-objects-row:hover {
-  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.type-objects-table-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .type-objects-name-cell {
-  display: flex;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
 .type-objects-name-text {
   min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.type-objects-cell,
+.type-objects-row time {
+  min-width: 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--foreground) 68%, transparent);
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -344,6 +426,7 @@ const tableColumnsStyle = computed(() => ({
   gap: 10px;
   justify-items: start;
   padding: 28px;
+  background: transparent;
 }
 
 .type-objects-empty h2,
@@ -357,6 +440,7 @@ const tableColumnsStyle = computed(() => ({
 
 @media (max-width: 920px) {
   .type-objects-view {
+    height: 100%;
     padding: 28px 24px 32px;
   }
 
@@ -372,7 +456,7 @@ const tableColumnsStyle = computed(() => ({
   .type-objects-table-head,
   .type-objects-row {
     gap: 12px;
-    padding: 12px 14px;
+    padding: 8px 14px;
   }
 }
 </style>

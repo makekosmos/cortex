@@ -133,6 +133,11 @@
           :initial-tab="settingsInitialTab"
           @refresh-data="eden.refreshData()"
         />
+        <ImageObjectView
+          v-else-if="eden.currentEntry && activeCurrentType?.id === SYSTEM_TYPE_IMAGE_ID"
+          :entry="eden.currentEntry"
+          :note-type="activeCurrentType"
+        />
         <CmEditor
           v-else-if="eden.currentEntry && useCmEditorForCurrent"
           :key="eden.currentEntry.id"
@@ -246,6 +251,8 @@ import SpacesView from "@/components/spaces/SpacesView.vue";
 import SettingsPage from "@/components/settings/SettingsPage.vue";
 import ObjectTypesSettings from "@/components/settings/ObjectTypesSettings.vue";
 import TypeObjectsView from "@/components/objects/TypeObjectsView.vue";
+import ImageObjectView from "@/components/objects/ImageObjectView.vue";
+import { SYSTEM_TYPE_IMAGE_ID } from "@/lib/systemTypes";
 import { PhPottedPlant } from "@phosphor-icons/vue";
 import { PanelLeftOpen } from "@lucide/vue";
 import "@/App.css";
@@ -615,6 +622,11 @@ const chromePlatform = computed<TitlebarPlatform>(() => {
 
 const activeCollectionType = computed(
   () => eden.noteTypes.find((noteType) => noteType.id === eden.activeNoteTypeId) ?? null,
+);
+const activeCurrentType = computed(() =>
+  eden.currentEntry
+    ? (eden.noteTypes.find((noteType) => noteType.id === eden.currentEntry?.type_id) ?? null)
+    : null,
 );
 function openSettingsTab(tab: SettingsTab = "general") {
   settingsInitialTab.value = tab;

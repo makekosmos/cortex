@@ -9,6 +9,7 @@ import {
   type ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
+import { toDisplayImageSrc } from "@/lib/localImages";
 
 /**
  * Live-preview extension: hides markdown syntax markers on lines where
@@ -160,7 +161,7 @@ class ImagePreviewWidget extends WidgetType {
 
     const image = document.createElement("img");
     image.className = "cm-image-preview-img";
-    image.src = this.src;
+    image.src = toDisplayImageSrc(this.src);
     image.alt = this.alt;
     image.loading = "lazy";
     image.decoding = "async";

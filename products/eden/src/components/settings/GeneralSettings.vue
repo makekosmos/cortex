@@ -93,6 +93,21 @@
           <p v-if="markdownStatus" class="settings-row-desc-plain">
             {{ markdownStatus }}
           </p>
+          <div v-if="markdownProgress" class="settings-markdown-progress" role="status">
+            <div class="settings-markdown-progress-head">
+              <span>{{ markdownProgress.label }}</span>
+              <span>{{ markdownProgress.current }} / {{ markdownProgress.total }}</span>
+            </div>
+            <div class="settings-markdown-progress-track">
+              <div
+                class="settings-markdown-progress-fill"
+                :style="{ width: `${markdownProgressPercent}%` }"
+              />
+            </div>
+            <p v-if="markdownProgress.item" class="settings-markdown-progress-item">
+              {{ markdownProgress.item }}
+            </p>
+          </div>
         </div>
       </section>
     </div>
@@ -106,12 +121,13 @@ import { SettingsButtonRow, SettingsList, SettingsToggleRow } from "@kosmos/visu
 import { usePreferences } from "@/composables/usePreferences";
 import { buildEntryMarkdownDocument, parseEntryMarkdownDocument } from "@/lib/markdownFrontmatter";
 import {
+  buildObsidianRelatedImportPlan,
   buildObsidianExportFiles,
   importObsidianVault,
   type ObsidianImportDraft,
 } from "@/lib/obsidianVault";
 import { SYSTEM_TYPE_IMAGE, SYSTEM_TYPE_IMAGE_ID, SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
-import { normalizeHeaderProps } from "@/lib/typedNotes";
+import { normalizeHeaderProps, type NoteType } from "@/lib/typedNotes";
 import { useEdenStore } from "@/store/eden";
 
 const preferences = usePreferences();
@@ -119,6 +135,12 @@ const eden = useEdenStore();
 const markdownBusy = ref(false);
 const markdownOperation = ref<"export" | "import" | "import-vault" | "export-vault" | null>(null);
 const markdownStatus = ref("");
+const markdownProgress = ref<{
+  label: string;
+  current: number;
+  total: number;
+  item: string;
+} | null>(null);
 const visibleObjectTypeIds = ref<string[]>([]);
 
 const noteTypesById = computed(
@@ -127,6 +149,11 @@ const noteTypesById = computed(
 const entryTitlesById = computed(
   () => new Map(eden.entries.map((entry) => [entry.id, entry.title])),
 );
+const markdownProgressPercent = computed(() => {
+  const progress = markdownProgress.value;
+  if (!progress || progress.total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((progress.current / progress.total) * 100)));
+});
 
 const allObjectTypeIds = computed(() => eden.noteTypes.map((noteType) => noteType.id));
 
@@ -191,6 +218,7 @@ async function withMarkdownOperation<T>(
   markdownBusy.value = true;
   markdownOperation.value = operation;
   markdownStatus.value = "";
+  markdownProgress.value = null;
   try {
     return await action();
   } catch (err) {
@@ -200,6 +228,7 @@ async function withMarkdownOperation<T>(
   } finally {
     markdownBusy.value = false;
     markdownOperation.value = null;
+    markdownProgress.value = null;
   }
 }
 
@@ -309,19 +338,33 @@ function existingEntryForImport(draft: ObsidianImportDraft): Entry | null {
 function resolveDraftRelatedNotes(
   draft: ObsidianImportDraft,
   importedTitleIds: Map<string, string>,
+  entryId: string,
 ): string[] {
   const existingByTitle = new Map(
     eden.entries.map((entry) => [entry.title.trim().toLocaleLowerCase("ru"), entry.id]),
   );
 
-  return draft.wikilinks
-    .map((target) => target.trim())
-    .filter(Boolean)
-    .map((target) => {
-      const normalized = target.toLocaleLowerCase("ru");
-      return importedTitleIds.get(normalized) ?? existingByTitle.get(normalized) ?? null;
-    })
-    .filter((target): target is string => Boolean(target));
+  return buildObsidianRelatedImportPlan({
+    draft,
+    entryId,
+    importedTitleIds,
+    existingTitleIds: existingByTitle,
+  }).secondPassRelatedIds;
+}
+
+async function updateMarkdownProgress(
+  label: string,
+  current: number,
+  total: number,
+  item: string = "",
+): Promise<void> {
+  markdownProgress.value = {
+    label,
+    current,
+    total,
+    item,
+  };
+  await Promise.resolve();
 }
 
 async function importObsidianVaultFolder(): Promise<void> {
@@ -334,6 +377,7 @@ async function importObsidianVaultFolder(): Promise<void> {
 
     const converter = await createMarkdownConverter();
     try {
+      await updateMarkdownProgress("Подготовка импорта", 0, 1, vault.rootPath);
       await window.api.saveNoteType(SYSTEM_TYPE_IMAGE);
       const imageType = SYSTEM_TYPE_IMAGE;
       const imported = importObsidianVault({
@@ -345,6 +389,12 @@ async function importObsidianVaultFolder(): Promise<void> {
       });
       const now = Date.now();
       const importedTitleIds = new Map<string, string>();
+      const noteEntries: Array<{
+        draft: ObsidianImportDraft;
+        existingEntry: Entry | null;
+        entry: Entry;
+        noteType: NoteType | null;
+      }> = [];
 
       for (const draft of imported.entries) {
         const existingEntry = existingEntryForImport(draft);
@@ -353,15 +403,20 @@ async function importObsidianVaultFolder(): Promise<void> {
       }
 
       let savedNotes = 0;
-      for (const draft of imported.entries) {
+      for (let index = 0; index < imported.entries.length; index += 1) {
+        const draft = imported.entries[index]!;
+        await updateMarkdownProgress(
+          "Импорт заметок",
+          index,
+          imported.entries.length,
+          draft.relativePath,
+        );
         const existingEntry = existingEntryForImport(draft);
         const id =
           existingEntry?.id ?? importedTitleIds.get(draft.title.trim().toLocaleLowerCase("ru"))!;
-        const noteType =
-          noteTypesById.value.get(draft.typeId) ?? noteTypesById.value.get(SYSTEM_TYPE_NOTE_ID);
+        const noteType = noteTypesById.value.get(SYSTEM_TYPE_NOTE_ID);
         const headerProps = {
           ...draft.headerProps,
-          related_notes: resolveDraftRelatedNotes(draft, importedTitleIds),
           source_path: draft.sourcePath,
         };
         const entry: Entry = {
@@ -371,7 +426,7 @@ async function importObsidianVaultFolder(): Promise<void> {
           created_at: existingEntry?.created_at ?? now,
           updated_at: now,
           folder_id: existingEntry?.folder_id ?? null,
-          type_id: noteType?.id ?? SYSTEM_TYPE_NOTE_ID,
+          type_id: SYSTEM_TYPE_NOTE_ID,
           header_layout: existingEntry?.header_layout ?? null,
           header_props_json: JSON.stringify(normalizeHeaderProps(noteType ?? null, headerProps)),
           schema_version: existingEntry?.schema_version ?? 1,
@@ -381,11 +436,50 @@ async function importObsidianVaultFolder(): Promise<void> {
         if (!result.ok) {
           throw new Error(result.message ?? `Не удалось импортировать ${draft.relativePath}.`);
         }
+        noteEntries.push({ draft, existingEntry, entry, noteType: noteType ?? null });
         savedNotes += 1;
       }
 
+      let linkedNotes = 0;
+      for (let index = 0; index < noteEntries.length; index += 1) {
+        const item = noteEntries[index]!;
+        await updateMarkdownProgress(
+          "Связывание заметок",
+          index,
+          noteEntries.length,
+          item.draft.relativePath,
+        );
+        const relatedNotes = resolveDraftRelatedNotes(item.draft, importedTitleIds, item.entry.id);
+        if (relatedNotes.length === 0) {
+          continue;
+        }
+        const headerProps = {
+          ...item.draft.headerProps,
+          related_notes: relatedNotes,
+          source_path: item.draft.sourcePath,
+        };
+        const result = await window.api.saveEntry({
+          ...item.entry,
+          header_props_json: JSON.stringify(normalizeHeaderProps(item.noteType, headerProps)),
+          updated_at: now,
+        });
+        if (!result.ok) {
+          throw new Error(
+            result.message ?? `Не удалось связать заметки для ${item.draft.relativePath}.`,
+          );
+        }
+        linkedNotes += 1;
+      }
+
       let savedImages = 0;
-      for (const image of imported.images) {
+      for (let index = 0; index < imported.images.length; index += 1) {
+        const image = imported.images[index]!;
+        await updateMarkdownProgress(
+          "Импорт изображений",
+          index,
+          imported.images.length,
+          image.title,
+        );
         const entry: Entry = {
           id: image.id,
           title: image.title,
@@ -406,8 +500,9 @@ async function importObsidianVaultFolder(): Promise<void> {
         savedImages += 1;
       }
 
+      await updateMarkdownProgress("Обновление Eden", 1, 1);
       await eden.refreshData();
-      markdownStatus.value = `Импортировано: ${savedNotes} заметок, ${savedImages} изображений.`;
+      markdownStatus.value = `Импортировано: ${savedNotes} заметок, ${savedImages} изображений. Связи обновлены у ${linkedNotes} заметок.`;
     } finally {
       converter.destroy();
     }

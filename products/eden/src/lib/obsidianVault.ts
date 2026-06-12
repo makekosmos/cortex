@@ -39,6 +39,11 @@ export interface ObsidianImageObjectDraft {
   headerProps: Record<string, unknown>;
 }
 
+export interface ObsidianRelatedImportPlan {
+  firstPassHeaderProps: Record<string, unknown>;
+  secondPassRelatedIds: string[];
+}
+
 export interface ImportObsidianVaultArgs {
   files: readonly ObsidianVaultMarkdownFile[];
   images?: readonly ObsidianVaultImageFile[];
@@ -67,8 +72,7 @@ export interface ObsidianExportFile {
 type LooseFrontmatter = Record<string, FrontmatterValue | undefined>;
 
 const RESERVED_FRONTMATTER_KEYS = new Set(["eden", "title", "type", "links"]);
-const IMAGE_MARKDOWN_RE =
-  /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)|!\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/g;
+const IMAGE_MARKDOWN_RE = /!\[([^\]]*)\]\(([^)\n]+)\)|!\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/g;
 const WIKILINK_RE = /(?<!!)\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/g;
 
 export function importObsidianVault(args: ImportObsidianVaultArgs): ImportObsidianVaultResult {
@@ -83,6 +87,7 @@ export function importObsidianVault(args: ImportObsidianVaultArgs): ImportObsidi
 
 export function createObsidianVaultImportDrafts(args: {
   files: readonly ObsidianVaultMarkdownFile[];
+  images?: readonly ObsidianVaultImageFile[];
   noteTypes: readonly NoteType[];
   defaultNoteTypeId: string;
 }): Array<
@@ -95,6 +100,7 @@ export function createObsidianVaultImportDrafts(args: {
 > {
   return importObsidianVault({
     files: args.files,
+    images: args.images,
     noteTypes: args.noteTypes,
     defaultTypeId: args.defaultNoteTypeId,
     imageTypeId: "image_obj",
@@ -105,6 +111,34 @@ export function createObsidianVaultImportDrafts(args: {
     titleReferences: entry.wikilinks,
     imageReferences: entry.imageRefs,
   }));
+}
+
+export function buildObsidianRelatedImportPlan(args: {
+  draft: Pick<ObsidianImportDraft, "headerProps" | "id" | "title" | "wikilinks">;
+  entryId: string;
+  importedTitleIds: ReadonlyMap<string, string>;
+  existingTitleIds?: ReadonlyMap<string, string>;
+}): ObsidianRelatedImportPlan {
+  const firstPassHeaderProps = { ...args.draft.headerProps };
+  delete firstPassHeaderProps.related_notes;
+
+  const secondPassRelatedIds = uniqueStrings(
+    args.draft.wikilinks
+      .map(normalizeObsidianTitleTarget)
+      .filter(Boolean)
+      .map((target) => {
+        const normalized = target.toLocaleLowerCase("ru");
+        return (
+          args.importedTitleIds.get(normalized) ?? args.existingTitleIds?.get(normalized) ?? null
+        );
+      })
+      .filter((target): target is string => Boolean(target && target !== args.entryId)),
+  );
+
+  return {
+    firstPassHeaderProps,
+    secondPassRelatedIds,
+  };
 }
 
 export function buildObsidianExportFiles(args: BuildObsidianExportFilesArgs): ObsidianExportFile[] {
@@ -227,13 +261,16 @@ function splitLooseFrontmatter(markdown: string): {
   frontmatter: LooseFrontmatter;
   bodyMarkdown: string;
 } {
-  const normalized = markdown.replace(/\r\n?/g, "\n");
+  const normalized = markdown.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
   const lines = normalized.split("\n");
-  if (lines[0] !== "---") {
+  if (lines[0]?.trim() !== "---") {
     return { frontmatter: {}, bodyMarkdown: normalized };
   }
 
-  const closeIndex = lines.findIndex((line, index) => index > 0 && line === "---");
+  const closeIndex = lines.findIndex((line, index) => {
+    const trimmed = line.trim();
+    return index > 0 && (trimmed === "---" || trimmed === "...");
+  });
   if (closeIndex === -1) {
     return { frontmatter: {}, bodyMarkdown: normalized };
   }
@@ -316,13 +353,63 @@ function parseLooseScalar(value: string): FrontmatterValue {
   if (trimmed === "true") return true;
   if (trimmed === "false") return false;
   if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    return splitInlineYamlArray(trimmed.slice(1, -1)).map((item) => parseLooseScalar(item));
+  }
   if (
     (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
     (trimmed.startsWith("'") && trimmed.endsWith("'"))
   ) {
-    return trimmed.slice(1, -1);
+    return unquoteLooseScalar(trimmed);
   }
   return trimmed;
+}
+
+function splitInlineYamlArray(value: string): string[] {
+  const items: string[] = [];
+  let current = "";
+  let quote: '"' | "'" | null = null;
+  let escapeNext = false;
+
+  for (const char of value) {
+    if (escapeNext) {
+      current += char;
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === "\\" && quote === '"') {
+      current += char;
+      escapeNext = true;
+      continue;
+    }
+
+    if ((char === '"' || char === "'") && (!quote || quote === char)) {
+      quote = quote ? null : char;
+      current += char;
+      continue;
+    }
+
+    if (char === "," && !quote) {
+      const item = current.trim();
+      if (item) items.push(item);
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  const tail = current.trim();
+  if (tail) items.push(tail);
+  return items;
+}
+
+function unquoteLooseScalar(value: string): string {
+  const quote = value[0];
+  const inner = value.slice(1, -1);
+  if (quote !== '"') return inner;
+  return inner.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
 }
 
 function resolveTypeId(
@@ -394,9 +481,17 @@ function extractBodyWikilinks(markdown: string): string[] {
     .filter((value): value is string => Boolean(value));
 }
 
+function normalizeObsidianTitleTarget(target: string): string {
+  return target
+    .trim()
+    .replace(/\.md$/i, "")
+    .replace(/[#^].*$/, "")
+    .trim();
+}
+
 function extractMarkdownImageRefs(markdown: string): string[] {
   return [...markdown.matchAll(IMAGE_MARKDOWN_RE)]
-    .map((match) => (match[2] ?? match[3] ?? "").trim())
+    .map((match) => parseMarkdownImageTarget(match[2] ?? match[3] ?? ""))
     .filter(Boolean);
 }
 
@@ -412,13 +507,29 @@ function rewriteImageReferences(
   return markdown.replace(
     IMAGE_MARKDOWN_RE,
     (raw, alt: string, inlineSrc: string, wikiSrc: string) => {
-      const src = (inlineSrc ?? wikiSrc ?? "").trim();
+      const src = parseMarkdownImageTarget(inlineSrc ?? wikiSrc ?? "");
       const asset = resolveImageAsset(src, sourceDir, imageAssets);
       if (!asset) return raw;
       const label = (alt || titleFromPath(asset.relativePath)).trim();
       return `![${label}](${asset.fileUrl})`;
     },
   );
+}
+
+function parseMarkdownImageTarget(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("<")) {
+    const closeIndex = trimmed.indexOf(">");
+    if (closeIndex > 1) return trimmed.slice(1, closeIndex).trim();
+  }
+
+  const titleMatch = trimmed.match(/\s+(?:"[^"]*"|'[^']*')\s*$/);
+  if (titleMatch?.index && titleMatch.index > 0) {
+    return trimmed.slice(0, titleMatch.index).trim();
+  }
+
+  return trimmed;
 }
 
 function buildImageAssetMap(
@@ -464,7 +575,16 @@ function titleFromPath(relativePath: string): string {
 }
 
 function normalizePath(value: string): string {
-  return value.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+/g, "/");
+  const parts: string[] = [];
+  for (const part of value.replace(/\\/g, "/").replace(/^\/+/, "").split("/")) {
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      parts.pop();
+      continue;
+    }
+    parts.push(part);
+  }
+  return parts.join("/");
 }
 
 function safeMarkdownBaseName(value: string): string {

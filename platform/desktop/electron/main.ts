@@ -130,6 +130,11 @@ import {
   bufferToArrayBuffer,
   parseAppIconRequestUrl,
 } from "./app-icon-protocol";
+import {
+  LOCAL_IMAGE_PROTOCOL,
+  localImageMimeType,
+  parseLocalImageRequestUrl,
+} from "./local-image-protocol";
 
 // См. postmortems.md § 2026-05-30: focus-block dynamic chunk imports from
 // main.js after Vite/Rolldown code-splitting, so these helper APIs must remain
@@ -151,6 +156,14 @@ const isDev = !!process.env.VITE_DEV_SERVER_URL;
 protocol.registerSchemesAsPrivileged([
   {
     scheme: APP_ICON_PROTOCOL,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+    },
+  },
+  {
+    scheme: LOCAL_IMAGE_PROTOCOL,
     privileges: {
       standard: true,
       secure: true,
@@ -835,6 +848,32 @@ function registerAppIconProtocol(): void {
     } catch (e) {
       keplerLog.warn("app-icon", "kosmos-icon protocol lookup failed", {
         appId: appId ?? null,
+        err: String(e),
+      });
+      return new Response(null, { status: 404 });
+    }
+  });
+}
+
+function registerLocalImageProtocol(): void {
+  protocol.handle(LOCAL_IMAGE_PROTOCOL, async (request) => {
+    let imagePath: string | null = null;
+    try {
+      imagePath = parseLocalImageRequestUrl(request.url);
+      if (!imagePath || !existsSync(imagePath)) {
+        return new Response(null, { status: 404 });
+      }
+
+      const bytes = await readFile(imagePath);
+      return new Response(bufferToArrayBuffer(bytes), {
+        headers: {
+          "content-type": localImageMimeType(imagePath),
+          "cache-control": "max-age=3600",
+        },
+      });
+    } catch (e) {
+      keplerLog.warn("local-image", "kosmos-local-image protocol lookup failed", {
+        imagePath: imagePath ?? null,
         err: String(e),
       });
       return new Response(null, { status: 404 });
@@ -1817,6 +1856,7 @@ app.whenReady().then(async () => {
 
   spawnBackend();
   registerAppIconProtocol();
+  registerLocalImageProtocol();
   createLauncher();
   // Буфер обмена заморожен — см. CLIPBOARD_HISTORY_ENABLED в shared/ipc-types.
   if (CLIPBOARD_HISTORY_ENABLED) setClipboardHistoryShellOpener(showClipboardHistoryLauncher);
