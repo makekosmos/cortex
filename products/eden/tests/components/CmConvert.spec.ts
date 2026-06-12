@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { describe, expect, test, beforeEach, afterEach, vi } from "vitest";
 import { createMdConverter } from "../../src/editor-cm/mdConvert";
 
@@ -93,5 +95,14 @@ const a = 1;
     // Проверяем что подстроки "[ ]" и "[x]" сохранены в markdown
     expect(md2).toContain("[ ]");
     expect(md2).toContain("[x]");
+  });
+
+  test("round-trip изображения: markdown image syntax сохраняется", () => {
+    const md = "До\n\n![Обложка](file:///C:/vault/attachments/cover.png)\n\nПосле";
+
+    const json = converter.markdownToJson(md);
+    const md2 = converter.jsonToMarkdown(json);
+
+    expect(md2).toContain("![Обложка](file:///C:/vault/attachments/cover.png)");
   });
 });

@@ -141,6 +141,60 @@ class TaskCheckboxWidget extends WidgetType {
   }
 }
 
+class ImagePreviewWidget extends WidgetType {
+  constructor(
+    private readonly src: string,
+    private readonly alt: string,
+  ) {
+    super();
+  }
+
+  eq(other: ImagePreviewWidget): boolean {
+    return other.src === this.src && other.alt === this.alt;
+  }
+
+  toDOM(): HTMLElement {
+    const wrap = document.createElement("span");
+    wrap.className = "cm-image-preview";
+    wrap.setAttribute("contenteditable", "false");
+
+    const image = document.createElement("img");
+    image.className = "cm-image-preview-img";
+    image.src = this.src;
+    image.alt = this.alt;
+    image.loading = "lazy";
+    image.decoding = "async";
+
+    wrap.append(image);
+    return wrap;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+function parseMarkdownImage(raw: string): { src: string; alt: string } | null {
+  const inline = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)$/.exec(raw.trim());
+  if (inline) {
+    return {
+      alt: inline[1].trim(),
+      src: inline[2].trim(),
+    };
+  }
+
+  const wikilink = /^!\[\[([^|\]]+)(?:\|([^\]]+))?\]\]$/.exec(raw.trim());
+  if (wikilink) {
+    const target = wikilink[1].trim();
+    return {
+      alt: (wikilink[2] ?? target).trim(),
+      src: target,
+    };
+  }
+
+  return null;
+}
+
 function computeDecorations(view: EditorView): DecorationSet {
   const { state } = view;
 
@@ -179,6 +233,23 @@ function computeDecorations(view: EditorView): DecorationSet {
             }),
           });
           return;
+        }
+
+        if (name === "Image") {
+          if (selectionTouchesRange(state, node.from, node.to)) return false;
+          const raw = state.doc.sliceString(node.from, node.to);
+          const parsed = parseMarkdownImage(raw);
+          if (!parsed) return false;
+          pending.push({
+            from: node.from,
+            to: node.to,
+            deco: Decoration.replace({
+              widget: new ImagePreviewWidget(parsed.src, parsed.alt),
+              block: true,
+            }),
+          });
+          replacedLines.add(state.doc.lineAt(node.from).number);
+          return false;
         }
 
         // Only hide URL nodes that are link targets — preceded by `(`

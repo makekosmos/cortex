@@ -255,6 +255,54 @@ interface MarkdownFileSaveResult {
   path: string;
 }
 
+interface MarkdownVaultTextFile {
+  path: string;
+
+  relativePath: string;
+
+  name: string;
+
+  content: string;
+}
+
+interface MarkdownVaultImageFile {
+  path: string;
+
+  relativePath: string;
+
+  name: string;
+
+  fileUrl: string;
+
+  mimeType: string;
+
+  sizeBytes: number;
+
+  width: number | null;
+
+  height: number | null;
+}
+
+interface MarkdownVaultOpenResult {
+  rootPath: string;
+
+  files: MarkdownVaultTextFile[];
+
+  images: MarkdownVaultImageFile[];
+}
+
+interface MarkdownVaultExportFile {
+  relativePath: string;
+
+  content: string;
+}
+
+interface MarkdownVaultExportResult {
+  outputDir: string;
+
+  exportedCount: number;
+}
+
 interface VaultStorageInfo {
   textBytes: number;
 
@@ -319,8 +367,6 @@ interface Window {
 
     setVaultPath: (path: string) => Promise<boolean>;
 
-    exportMarkdownVault: () => Promise<ExportMarkdownVaultResult | null>;
-
     openMarkdownFile: () => Promise<MarkdownFileOpenResult | null>;
 
     saveMarkdownFile: (
@@ -328,6 +374,12 @@ interface Window {
 
       content: string,
     ) => Promise<MarkdownFileSaveResult | null>;
+
+    openMarkdownVault: () => Promise<MarkdownVaultOpenResult | null>;
+
+    exportMarkdownVault: (
+      files?: MarkdownVaultExportFile[],
+    ) => Promise<MarkdownVaultExportResult | ExportMarkdownVaultResult | null>;
 
     searchEntries: (query: string) => Promise<SearchResult[]>;
 
@@ -436,6 +488,8 @@ interface Window {
     markdownFiles?: {
       open: () => Promise<MarkdownFileOpenResult | null>;
       save: (suggestedName: string, content: string) => Promise<MarkdownFileSaveResult | null>;
+      openVault: () => Promise<MarkdownVaultOpenResult | null>;
+      exportVault: (files: MarkdownVaultExportFile[]) => Promise<MarkdownVaultExportResult | null>;
     };
   };
 }

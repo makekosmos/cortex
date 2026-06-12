@@ -8,9 +8,9 @@
 // data:URI.
 //
 // Имена иконок (`noteType.icon`) исторически совпадают с anytype icon ids:
-// "document", "document-text", "game-controller", "barbell", "fitness",
-// "page". Mapping ниже покрывает встречающиеся значения; всё что не нашлось
-// падает в `document` (FileText).
+// "document", "document-text", "game-controller", "image", "barbell",
+// "fitness", "page". Mapping ниже покрывает встречающиеся значения; всё что
+// не нашлось падает в `document` (FileText).
 //
 // SVG path data заимствован из `@lucide/vue` (v0.548) — встраиваем
 // inline чтобы избежать tree-shake'а Lucide через Vue-component сборку
@@ -42,6 +42,13 @@ const GAMEPAD_2: IconNode = [
       d: "M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z",
     },
   ],
+];
+
+const IMAGE: IconNode = [
+  ["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }],
+  ["circle", { cx: "8", cy: "8", r: "1.5" }],
+  ["path", { d: "M21 15l-5-5L5 21" }],
+  ["path", { d: "M3 17l5-5 3 3" }],
 ];
 
 const DUMBBELL: IconNode = [
@@ -76,6 +83,7 @@ const ICON_MAP: Record<string, IconNode> = {
   "document-text": FILE_TEXT,
   page: FILE,
   "game-controller": GAMEPAD_2,
+  image: IMAGE,
   barbell: DUMBBELL,
   fitness: ACTIVITY,
 };

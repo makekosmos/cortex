@@ -2,6 +2,7 @@ import { parseNoteTypeDefinition, parseNoteTypeUiSchema, type NoteType } from "@
 
 export const SYSTEM_TYPE_NOTE_ID = "note_obj";
 export const SYSTEM_TYPE_GAME_ID = "game_obj";
+export const SYSTEM_TYPE_IMAGE_ID = "image_obj";
 export const SYSTEM_TYPE_WORKOUT_ID = "system-type-workout";
 export const SYSTEM_TYPE_EXERCISE_ID = "system-type-exercise";
 export const SYSTEM_TYPE_JOURNAL_ID = "system-type-journal";
@@ -385,6 +386,121 @@ const exerciseHeaderTemplateJson = JSON.stringify({
   imageFieldId: null,
 });
 
+const imageSchemaJson = JSON.stringify({
+  fields: [
+    {
+      id: "image",
+      label: "Изображение",
+      kind: "image",
+      required: true,
+      visible: true,
+      read_only: false,
+      system: false,
+    },
+    {
+      id: "file_name",
+      label: "Имя файла",
+      kind: "text",
+      required: false,
+      visible: true,
+      read_only: false,
+      system: false,
+    },
+    {
+      id: "mime_type",
+      label: "MIME-тип",
+      kind: "text",
+      required: false,
+      visible: false,
+      read_only: true,
+      system: true,
+    },
+    {
+      id: "size_bytes",
+      label: "Размер (байт)",
+      kind: "number",
+      required: false,
+      visible: true,
+      read_only: true,
+      system: true,
+    },
+    {
+      id: "width",
+      label: "Ширина",
+      kind: "number",
+      required: false,
+      visible: true,
+      read_only: true,
+      system: true,
+    },
+    {
+      id: "height",
+      label: "Высота",
+      kind: "number",
+      required: false,
+      visible: true,
+      read_only: true,
+      system: true,
+    },
+    {
+      id: "resolution",
+      label: "Разрешение",
+      kind: "text",
+      required: false,
+      visible: true,
+      read_only: true,
+      system: true,
+    },
+    {
+      id: "source_path",
+      label: "Исходный путь",
+      kind: "text",
+      required: false,
+      visible: false,
+      read_only: true,
+      system: true,
+    },
+    {
+      id: "alt_text",
+      label: "Alt-текст",
+      kind: "text",
+      required: false,
+      visible: true,
+      read_only: false,
+      system: false,
+    },
+  ],
+});
+
+const imageHeaderTemplateJson = JSON.stringify({
+  kind: "default",
+  primaryFieldIds: ["image"],
+  secondaryFieldIds: ["file_name", "resolution", "size_bytes"],
+  imageFieldId: "image",
+});
+
+const imageUiSchemaJson = JSON.stringify({
+  featured_fields: ["file_name", "resolution"],
+  visible_fields: ["image", "file_name", "size_bytes", "width", "height", "resolution", "alt_text"],
+  hidden_fields: ["created_at", "updated_at", "deleted_at", "mime_type", "source_path"],
+  read_only_fields: ["mime_type", "source_path", "size_bytes", "width", "height", "resolution"],
+  field_order: [
+    "image",
+    "file_name",
+    "size_bytes",
+    "width",
+    "height",
+    "resolution",
+    "alt_text",
+    "mime_type",
+    "source_path",
+  ],
+  header_layout: "inline",
+  default_layout: "page",
+  default_template_id: null,
+  collection_name: "Изображения",
+});
+
 export const SYSTEM_TYPE_JOURNAL: NoteType = {
   id: SYSTEM_TYPE_JOURNAL_ID,
   name: "Дневник",
@@ -430,6 +546,19 @@ export const SYSTEM_TYPE_GAME: NoteType = {
   schema_json: gameSchemaJson,
   header_template_json: gameHeaderTemplateJson,
   ui_schema_json: gameUiSchemaJson,
+  created_at: 0,
+  updated_at: 0,
+};
+
+export const SYSTEM_TYPE_IMAGE: NoteType = {
+  id: SYSTEM_TYPE_IMAGE_ID,
+  name: "Изображение",
+  slug: "image",
+  icon: "image",
+  color: "#38bdf8",
+  schema_json: imageSchemaJson,
+  header_template_json: imageHeaderTemplateJson,
+  ui_schema_json: imageUiSchemaJson,
   created_at: 0,
   updated_at: 0,
 };
@@ -501,6 +630,7 @@ export const SYSTEM_TYPE_EXERCISE: NoteType = {
 export const SYSTEM_TYPES: NoteType[] = [
   SYSTEM_TYPE_NOTE,
   SYSTEM_TYPE_JOURNAL,
+  SYSTEM_TYPE_IMAGE,
   SYSTEM_TYPE_GAME,
   SYSTEM_TYPE_WORKOUT,
   SYSTEM_TYPE_EXERCISE,
@@ -531,6 +661,7 @@ export function isSystemType(noteTypeId: string): boolean {
   return (
     noteTypeId === SYSTEM_TYPE_NOTE_ID ||
     noteTypeId === SYSTEM_TYPE_JOURNAL_ID ||
+    noteTypeId === SYSTEM_TYPE_IMAGE_ID ||
     noteTypeId === SYSTEM_TYPE_GAME_ID ||
     noteTypeId === SYSTEM_TYPE_WORKOUT_ID ||
     noteTypeId === SYSTEM_TYPE_EXERCISE_ID

@@ -586,8 +586,14 @@ export async function selectFolder(): Promise<string | null> {
   return null;
 }
 
-async function exportMarkdownVault(): Promise<ExportMarkdownVaultResult | null> {
-  return null;
+async function openMarkdownVault(): Promise<MarkdownVaultOpenResult | null> {
+  return window.kepler?.markdownFiles?.openVault?.() ?? null;
+}
+
+async function saveMarkdownVault(
+  files: MarkdownVaultExportFile[],
+): Promise<MarkdownVaultExportResult | null> {
+  return window.kepler?.markdownFiles?.exportVault?.(files) ?? null;
 }
 
 async function openMarkdownFile(): Promise<MarkdownFileOpenResult | null> {
@@ -1126,9 +1132,10 @@ export function installKeplerApiShim(): void {
     getRecentVaultPaths,
     selectFolder,
     setVaultPath,
-    exportMarkdownVault,
+    exportMarkdownVault: saveMarkdownVault,
     openMarkdownFile,
     saveMarkdownFile,
+    openMarkdownVault,
     searchEntries,
     createFolder,
     listFolders,

@@ -119,6 +119,15 @@ const api = {
       ipcRenderer.invoke("kepler:extension:markdownFiles:save", suggestedName, content) as Promise<{
         path: string;
       } | null>,
+    openVault: (): Promise<unknown | null> =>
+      ipcRenderer.invoke("kepler:extension:markdownFiles:openVault") as Promise<unknown | null>,
+    exportVault: (
+      files: Array<{ relativePath: string; content: string }>,
+    ): Promise<{ outputDir: string; exportedCount: number } | null> =>
+      ipcRenderer.invoke("kepler:extension:markdownFiles:exportVault", files) as Promise<{
+        outputDir: string;
+        exportedCount: number;
+      } | null>,
   },
   navigation: {
     /** Subscribe to navigation events (`router.push(route)`). Initial route

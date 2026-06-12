@@ -22,6 +22,7 @@ export interface MdConverter {
 // U+FF3B не матчится, поэтому item парсится как обычный listItem.
 // Постпроцессинг в jsonToMarkdown восстанавливает `[` обратно.
 const CHECKBOX_PRE_RE = /^(\s*[-*+]\s+)\[([x ])\]/gim;
+const IMAGE_PRE_RE = /!\[/g;
 
 function textNode(text: string): JSONContent {
   return { type: "text", text };
@@ -70,14 +71,14 @@ function normalizeLegacyTaskNodes(node: JSONContent): JSONContent {
   return node;
 }
 
-// Рекурсивно заменяет U+FF3B (fullwidth `[`) обратно на ASCII `[` в text-нодах
-// ProseMirror JSON. Нужно чтобы content_json хранил корректные ASCII-чекбоксы.
-function restoreCheckboxBracketsInJson(node: JSONContent): JSONContent {
+// Рекурсивно заменяет временные fullwidth markers обратно на ASCII в text-нодах
+// ProseMirror JSON. Нужно чтобы content_json хранил корректный Markdown.
+function restoreMarkdownPlaceholdersInJson(node: JSONContent): JSONContent {
   if (node.type === "text" && typeof node.text === "string") {
-    return { ...node, text: node.text.replaceAll("［", "[") };
+    return { ...node, text: node.text.replaceAll("［", "[").replaceAll("！[", "![") };
   }
   if (Array.isArray(node.content)) {
-    return { ...node, content: node.content.map(restoreCheckboxBracketsInJson) };
+    return { ...node, content: node.content.map(restoreMarkdownPlaceholdersInJson) };
   }
   return node;
 }
@@ -107,6 +108,9 @@ export function createMdConverter(): MdConverter {
           .replace(/^(\s*[-*+]\s+)\\?［([x ])\]\\?/gm, "$1[$2]")
           // На случай если serializer экранировал ASCII `[` в начале listItem текста
           .replace(/^(\s*[-*+]\s+)\\\[([x ])\]/gm, "$1[$2]")
+          // Image markdown хранится как plain text через fullwidth placeholder.
+          .replaceAll("！[", "![")
+          .replaceAll("\\![", "![")
       );
     },
 
@@ -115,11 +119,11 @@ export function createMdConverter(): MdConverter {
       // U+FF3B не матчится listIsTask /^\[[ xX]\] +\S/ → нет task item →
       // listItem с текстом «［ ] текст» → serialize → «- ［ ] текст» →
       // postprocess jsonToMarkdown возвращает «- [ ] текст».
-      const preprocessed = md.replace(CHECKBOX_PRE_RE, "$1［$2]");
+      const preprocessed = md.replace(CHECKBOX_PRE_RE, "$1［$2]").replace(IMAGE_PRE_RE, "！[");
       const parsed = manager.parse(preprocessed) as JSONContent;
-      // Постпроцессинг: восстанавливаем ASCII-скобки в text-нодах,
-      // чтобы content_json хранил «[ ]» / «[x]» вместо fullwidth-символов.
-      return restoreCheckboxBracketsInJson(parsed);
+      // Постпроцессинг: восстанавливаем ASCII markers в text-нодах,
+      // чтобы content_json хранил обычный Markdown вместо fullwidth-символов.
+      return restoreMarkdownPlaceholdersInJson(parsed);
     },
 
     destroy(): void {
