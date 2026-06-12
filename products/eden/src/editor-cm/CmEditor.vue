@@ -361,7 +361,7 @@ onBeforeUnmount(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
   overflow-x: hidden;
   overscroll-behavior: contain;
 }
@@ -428,9 +428,9 @@ onBeforeUnmount(() => {
 }
 
 .cm-editor-container {
-  flex: 0 0 auto;
-  min-height: calc(100% - 56px);
-  overflow: visible;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }

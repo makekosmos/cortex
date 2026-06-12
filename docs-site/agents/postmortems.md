@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-12 — Eden CM scroller перестал скроллить заметки
+
+**Симптомы.** В заметках Eden больше не получалось скроллить текст.
+**Где жило.** `products/eden/src/editor-cm/cm-editor.css::.cm-editor .cm-scroller`, `products/eden/src/editor-cm/CmEditor.vue::.cm-editor-host`.
+**Root cause.** После переноса scroll ownership на внешний `.cm-editor-host` внутренний CodeMirror `.cm-scroller` получил `overflow-y: visible`, хотя CodeMirror ожидает scrollable `scrollDOM`. Wheel/scroll события приходили в `.cm-scroller`, но он сам не был scroll container, а внешний host не получал стабильный native scroll path.
+**Fix.** `.cm-editor-host` и `.cm-editor-container` стали non-scroll flex containers (`overflow: hidden`, `min-height: 0`), а `.cm-editor` / `.cm-scroller` снова занимают высоту редактора; `.cm-scroller` вернулся к `overflow-y: auto`, как scrollDOM CodeMirror.
+**Регрешн-защита.** Eden extension build проверяет CSS/Vue compile path; визуально проверяется HMR: длинная заметка должна скроллиться колесом/тачпадом внутри текста.
+**Prevention.** У CodeMirror не нужно переносить vertical scroll на внешний wrapper. Если внешний shell должен скрывать overflow, `EditorView.scrollDOM` всё равно должен оставаться единственным scroll container, иначе ломаются wheel, selection geometry и Vim/cursor positioning.
+
 ## 2026-06-12 — Eden CM normalization была привязана к одной записи
 
 **Симптомы.** После фикса `Мое пространство` та же поломка повторилась на записи `2026-05-22`: Vim не работал, шрифты/отступы отличались, запись открывалась через legacy TipTap вместо CodeMirror.
