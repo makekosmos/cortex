@@ -1,4 +1,31 @@
-# Kosmos — статус проекта (2026-06-10)
+# Kosmos — статус проекта (2026-06-12)
+
+## 2026-06-12 — Eden Obsidian vault + CodeMirror polish (Eden 0.1.12 → 0.2.0)
+
+Minor release Eden закрывает большой pass по редактору и переносимости заметок.
+
+- **Obsidian vault import/export**: Eden умеет импортировать папку `.md` заметок
+  с YAML frontmatter и `[[wikilinks]]`, а также экспортировать заметки обратно в
+  Markdown-файлы, пригодные для vault workflow.
+- **Изображения как объекты**: добавлен системный тип `image_obj`; импорт vault
+  подхватывает локальные изображения, сохраняет размер/разрешение и показывает
+  Markdown-картинки в CodeMirror preview.
+- **CodeMirror/Vim editor hardening**: старые TipTap/ProseMirror JSON-записи
+  нормализуются на entry-boundary, поэтому записи вроде `Мое пространство` и
+  дневниковых дат больше не проваливаются в legacy editor без Vim/cursor UX.
+- **Sidebar и focus polish**: Eden использует settings-like sidebar/chrome из
+  `@kosmos/visuals`, выбранные пункты получили читаемый background state, zen
+  mode показывает title в titlebar.
+- **Scroll fix перед релизом**: CodeMirror `scrollDOM` снова единственный
+  vertical scroll container; длинные заметки скроллятся колесом/тачпадом внутри
+  текста.
+
+Proof loop: `.agent/tasks/2026-06-12-eden-obsidian-vault/`.
+
+Checks: `bun test tests/cmGate.test.ts`, `bun test tests/obsidianVault.test.ts`,
+`bunx vitest run tests/components/CmConvert.spec.ts tests/systemTypes.test.ts --config vite.config.mjs`,
+`node scripts/check-ark-write-boundaries.mjs`, `node scripts/build-extensions.mjs --only eden`,
+`node scripts/check-docs-freshness.mjs`, `git diff --check`.
 
 ## 2026-06-10 — App icons refresh (Kosmos Desktop 0.4.5 → 0.4.6)
 
