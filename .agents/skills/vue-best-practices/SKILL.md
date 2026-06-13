@@ -1,6 +1,6 @@
 ---
 name: vue-best-practices
-description: MUST be used for Vue.js tasks. Strongly recommends Composition API with `<script setup>` and TypeScript as the standard approach. Covers Vue 3, SSR, Volar, vue-tsc. Load for any Vue, .vue files, Vue Router, Pinia, or Vite with Vue work. ALWAYS use Composition API unless the project explicitly requires Options API.
+description: "Vue 3 best-practices for non-trivial Vue work: new/refactored components, complex reactivity/composables, props/emits contracts, router/Pinia/Vite/Volar, SSR, or architectural review. For tiny local Vue edits, do not load this skill; use the project snippet-first checklist instead."
 license: MIT
 metadata:
   author: github.com/vuejs-ai
@@ -9,7 +9,7 @@ metadata:
 
 # Vue Best Practices Workflow
 
-Use this skill as an instruction set. Follow the workflow in order unless the user explicitly asks for a different order.
+Use this skill for non-trivial Vue work. For tiny local edits, prefer the repository snippet-first checklist and avoid loading deep Vue references.
 
 ## Core Principles
 
@@ -19,7 +19,7 @@ Use this skill as an instruction set. Follow the workflow in order unless the us
 - **Avoid unnecessary re-renders:** use computed properties and watchers wisely.
 - **Readability counts:** write clear, self-documenting code.
 
-## 1) Confirm architecture before coding (required)
+## 1) Confirm architecture before coding
 
 - Default stack: Vue 3 + Composition API + `<script setup lang="ts">`.
 - If the project explicitly uses Options API, load `vue-options-api-best-practices` skill if available.

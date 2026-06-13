@@ -14,14 +14,10 @@
               title="Vim-режим"
               description="Включает Vim-команды в CodeMirror-редакторе. Сами сочетания фиксированы."
               :model-value="preferences.state.vimModeEnabled"
-              :disabled="!preferences.state.cmEditorEnabled"
               data-testid="eden-vim-mode-toggle"
               @update:model-value="preferences.setVimModeEnabled"
             />
           </SettingsList>
-          <p v-if="!preferences.state.cmEditorEnabled" class="vim-settings-note">
-            Сначала включите Markdown-редактор в общих настройках.
-          </p>
         </div>
       </section>
 
@@ -62,13 +58,6 @@ const preferences = usePreferences();
 </script>
 
 <style scoped>
-.vim-settings-note {
-  margin: 10px 16px 0;
-  color: var(--text-tertiary);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 .vim-motion-body {
   gap: 18px;
   padding: 16px;

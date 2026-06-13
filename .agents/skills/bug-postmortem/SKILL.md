@@ -1,6 +1,6 @@
 ---
 name: bug-postmortem
-description: Стандартный workflow при работе с багом в Kosmos. ЕСЛИ БАГ → описать симптомы + root cause в docs-site/agents/postmortems.md. КОГДА ИСПРАВЛЕН → дополнить fix + регрешн-тест + prevention. Использовать ВСЕГДА при фикс-задачах, чтобы не повторять одни и те же ошибки.
+description: "Workflow для существенных или повторяемых багов в Kosmos: data loss/crash/persistence/sync/security, неочевидный root cause, несколько подсистем, или пользователь явно просит постмортем. Не использовать для мелких UI/CSS/Vue inconsistency, опечаток и очевидных one-line fixes."
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 ---
 

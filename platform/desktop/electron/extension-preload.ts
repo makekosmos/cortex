@@ -57,6 +57,10 @@ const api = {
     maximize: (): Promise<void> => ipcRenderer.invoke("kepler:extension:window:maximize"),
     isMaximized: (): Promise<boolean> =>
       ipcRenderer.invoke("kepler:extension:window:is-maximized") as Promise<boolean>,
+    zoomGet: (): Promise<number> =>
+      ipcRenderer.invoke("kepler:extension:window:zoom-get") as Promise<number>,
+    zoomSet: (factor: number): Promise<number> =>
+      ipcRenderer.invoke("kepler:extension:window:zoom-set", factor) as Promise<number>,
     /** Toggle floating-widget mode: always-on-top + top-right corner.
         Повторный вызов возвращает окно в исходное положение. */
     toggleDockCorner: (): Promise<void> =>

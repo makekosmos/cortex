@@ -1662,6 +1662,17 @@ ipcMain.handle("kepler:extension:window:is-maximized", (e): boolean => {
   return win ? win.isMaximized() : false;
 });
 
+ipcMain.handle("kepler:extension:window:zoom-get", (e): number => {
+  return e.sender.getZoomFactor();
+});
+
+ipcMain.handle("kepler:extension:window:zoom-set", (e, factor: number): number => {
+  const next = typeof factor === "number" && Number.isFinite(factor) ? factor : 1;
+  const clamped = Math.max(0.5, Math.min(2.0, next));
+  e.sender.setZoomFactor(clamped);
+  return clamped;
+});
+
 // Контроль возможности maximize для extension-окон.
 ipcMain.handle("kepler:extension:window:set-maximizable", (e, value: boolean) => {
   const win = windowForSender(e.sender);

@@ -177,7 +177,7 @@
           :note-type="activeCurrentType"
         />
         <CmEditor
-          v-else-if="eden.currentEntry && useCmEditorForCurrent"
+          v-else-if="eden.currentEntry"
           :key="`${eden.currentEntry.id}:${eden.currentEntry.type_id ?? 'note_obj'}`"
           :entry="eden.currentEntry"
           :all-entries="eden.entries"
@@ -193,20 +193,6 @@
           @live-char-count="liveCharCount = $event"
           @title-out-of-view-change="noteTitleOutOfView = $event"
           @type-change="onCmTypeChange"
-        />
-        <Editor
-          v-else-if="eden.currentEntry"
-          :key="eden.currentEntry.id"
-          :entry="eden.currentEntry"
-          :all-entries="eden.entries"
-          :note-types="eden.noteTypes"
-          :zen-mode="layout.isZenMode"
-          :reader-mode="preferences.state.readerModeEnabled"
-          :on-save="eden.handleSave"
-          :on-navigate="eden.navigateTo"
-          :on-open-type-settings="openTypeSettings"
-          @entry-draft-change="eden.updateEntryDraft"
-          @live-char-count="liveCharCount = $event"
         />
         <SpacesView
           v-else
@@ -283,14 +269,11 @@ import { useDockedWidget } from "@/composables/useDockedWidget";
 import { useNavigationHistory } from "@/composables/useNavigationHistory";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { usePreferences } from "@/composables/usePreferences";
-import { getCmEditorBlockers, shouldUseCmEditor } from "@/editor-cm/cmGate";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
 import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
-// Editor.vue таскает TipTap + lowlight + все code-block grammars (~1.3MB
-// gzipped). Lazy-load — основной bundle открывается быстрее, заметка-чанк
-// подгружается при первом открытии заметки.
-const Editor = defineAsyncComponent(() => import("./Editor.vue"));
+// CodeMirror editor lazy-load — основной bundle открывается быстрее,
+// заметка-чанк подгружается при первом открытии заметки.
 const CmEditor = defineAsyncComponent(() => import("./editor-cm/CmEditor.vue"));
 import SpacesView from "@/components/spaces/SpacesView.vue";
 import SettingsPage from "@/components/settings/SettingsPage.vue";
@@ -308,41 +291,25 @@ const eden = useEdenStore();
 const layout = useLayoutStore();
 const preferences = usePreferences();
 
-const useCmEditorForCurrent = computed(
-  () =>
-    eden.currentEntry != null &&
-    shouldUseCmEditor(
-      preferences.state.cmEditorEnabled || preferences.state.vimModeEnabled,
-      eden.currentEntry.content_json,
-    ),
-);
-const loggedCmBlockers = new Set<string>();
-
-function mountedEditorKind(): "cm" | "tiptap" | "spaces" | "other" {
+function mountedEditorKind(): "cm" | "spaces" | "other" {
   if (document.querySelector(".cm-editor-host")) return "cm";
-  if (document.querySelector(".editor-wrapper")) return "tiptap";
   if (document.querySelector(".spaces-view")) return "spaces";
   return "other";
 }
 
 function currentEdenDebug() {
   const entry = eden.currentEntry;
-  const prefEnabled = preferences.state.cmEditorEnabled || preferences.state.vimModeEnabled;
   return {
     activeScreen: eden.activeScreen,
     activeSpace: eden.activeSpace,
     editorKind: mountedEditorKind(),
-    prefEnabled,
-    cmEditorEnabled: preferences.state.cmEditorEnabled,
     vimModeEnabled: preferences.state.vimModeEnabled,
-    useCmEditor: useCmEditorForCurrent.value,
     entry: entry
       ? {
           id: entry.id,
           title: entry.title,
           typeId: entry.type_id,
           deletedAt: entry.deleted_at,
-          blockers: getCmEditorBlockers(entry.content_json),
           contentHead: entry.content_json.slice(0, 500),
         }
       : null,
@@ -351,36 +318,8 @@ function currentEdenDebug() {
 
 (window as unknown as { __edenDebug?: () => unknown }).__edenDebug = currentEdenDebug;
 
-watch(
-  [
-    () => eden.currentEntry?.id,
-    () => eden.currentEntry?.content_json,
-    () => preferences.state.cmEditorEnabled,
-    () => preferences.state.vimModeEnabled,
-  ],
-  () => {
-    const entry = eden.currentEntry;
-    const prefEnabled = preferences.state.cmEditorEnabled || preferences.state.vimModeEnabled;
-    if (!entry || !prefEnabled || useCmEditorForCurrent.value) return;
-
-    const blockers = getCmEditorBlockers(entry.content_json);
-    if (blockers.length === 0) return;
-
-    const key = `${entry.id}:${blockers.join(",")}`;
-    if (loggedCmBlockers.has(key)) return;
-
-    loggedCmBlockers.add(key);
-    console.warn("[eden] CM editor disabled for entry", {
-      id: entry.id,
-      title: entry.title,
-      blockers,
-    });
-  },
-  { immediate: true },
-);
-
 // Provide toast api на root уровне — useToast() из любого descendant'а
-// (Editor.vue и т.д.) увидит его. ToastHost дальше в template только
+// (CmEditor.vue и т.д.) увидит его. ToastHost дальше в template только
 // рендерит, не повторяет provide.
 provideToastHost();
 

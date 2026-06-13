@@ -41,23 +41,27 @@ export function useKeyboard() {
     // Zoom
 
     if (mod && window.api?.zoomGet) {
-      let next: number | null = null;
+      const zoomDirection =
+        e.code === "Equal" || e.code === "NumpadAdd"
+          ? 1
+          : e.code === "Minus" || e.code === "NumpadSubtract"
+            ? -1
+            : e.code === "Digit0" || e.code === "Numpad0"
+              ? 0
+              : null;
 
-      if (e.code === "Equal" || e.code === "NumpadAdd") {
-        const cur = await window.api.zoomGet();
-
-        next = Math.min(ZOOM_MAX, Math.round((cur + ZOOM_STEP) * 100) / 100);
-      } else if (e.code === "Minus" || e.code === "NumpadSubtract") {
-        const cur = await window.api.zoomGet();
-
-        next = Math.max(ZOOM_MIN, Math.round((cur - ZOOM_STEP) * 100) / 100);
-      } else if (e.code === "Digit0" || e.code === "Numpad0") {
-        next = 1;
-      }
-
-      if (next !== null) {
+      if (zoomDirection !== null) {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
 
+        const cur = zoomDirection === 0 ? 1 : await window.api.zoomGet();
+        const next =
+          zoomDirection === 0
+            ? 1
+            : zoomDirection > 0
+              ? Math.min(ZOOM_MAX, Math.round((cur + ZOOM_STEP) * 100) / 100)
+              : Math.max(ZOOM_MIN, Math.round((cur - ZOOM_STEP) * 100) / 100);
         const applied = await window.api.zoomSet(next);
 
         localStorage.setItem("eden-zoom", String(applied));

@@ -15,31 +15,33 @@
 
 ## Execution discipline
 
-Цель — не «экономить токены», а брать ровно тот контекст, который доказывает следующий шаг. Для `NO_LOOP` / `LIGHT_LOOP` работай snippet-first:
+Контекст бери в порядке доказательства, а не по области «на всякий случай»:
 
-- Сначала сформулируй вопрос к коду → `rtk grep` / `rg` → читай 40–120 строк вокруг найденного места.
-- Не открывай broad docs/skills “на всякий случай”. Читай только routing ниже для реально затронутой области.
-- Skill = progressive disclosure: короткий чеклист для `NO_LOOP`/`LIGHT_LOOP`, deep references только по триггеру или для `FULL_LOOP`.
-- Не запускай широкий `git diff` в dirty worktree; сначала `rtk git diff --stat`, потом `rtk git diff -- <one-file>`.
-- Если для простой правки нужно читать >3 больших файлов — остановись и спроси/эскалируй.
+1. Сформулируй конкретный вопрос к коду.
+2. `rtk grep` / `rg` по символу, CSS class, IPC/RPC channel, operation id, тексту ошибки.
+3. Читай только найденный snippet вокруг места.
+4. Открывай docs/skills только если snippet не отвечает на вопрос или задача затрагивает boundary.
+
+Для `NO_LOOP` / `LIGHT_LOOP` не открывай broad docs/skills заранее. Если простая задача внезапно требует архитектурных docs или нескольких подсистем — остановись и эскалируй в `FULL_LOOP`.
 
 Полный протокол: `docs-site/agents/execution-protocol.md`.
 
-## Read routing перед кодом
+## Routing: когда docs действительно нужны
 
-| Область                                  | Читать                                                                                                         |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| ARK/data/sync/schema                     | `docs-site/concepts/write-boundary.md`, `ark-objects.md`, `sync.md`, `agents/forbidden/ark.md`                 |
-| Eden UI/titlebar/sidebar                 | `docs-site/apps/eden/ui.md`, `docs-site/agents/forbidden/ui.md`, `docs-site/agents/forbidden/eden.md`          |
-| Eden editor/scroll/CM/TipTap             | `docs-site/apps/eden/editor.md`                                                                                |
-| Eden typed objects/person/game/image     | `docs-site/apps/eden/typed-notes.md`                                                                           |
-| Eden CRUD/import/search                  | `docs-site/apps/eden/data.md`, `concepts/write-boundary.md`                                                    |
-| Focus mode/helper/svc                    | `docs-site/concepts/focus-mode.md`, `agents/forbidden/focus-mode.md`                                           |
-| Shell windows/extension host/command bus | `docs-site/concepts/extension-host.md`, `extension-dev-mode.md`, `command-bus.md`, `agents/forbidden/shell.md` |
-| Tests/e2e/headless                       | `docs-site/agents/testing.md`, `agents/forbidden/tests.md`                                                     |
-| Release/bump/distribution                | skill `bump`, `agents/forbidden/distribution.md`                                                               |
-| Substantial фича/архитектура             | `docs-site/concepts/proof-loop.md` + `.agent/tasks/<DATE>-<slug>/spec.md`                                      |
-| Оценка срока                             | skill `estimate-calibration`                                                                                   |
+| Триггер                                                  | Читать                                                                                                                                   |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| ARK/data/sync/schema/write boundary                      | `docs-site/concepts/write-boundary.md`, `ark-objects.md`, `sync.md`, `agents/forbidden/ark.md`                                           |
+| Eden layout/titlebar/sidebar visual rules                | `docs-site/apps/eden/ui.md`; forbidden UI/Eden только если меняешь соответствующий запретный boundary                                    |
+| Eden editor/scroll/CM/TipTap internals                   | `docs-site/apps/eden/editor.md`                                                                                                          |
+| Eden typed objects/person/game/image model               | `docs-site/apps/eden/typed-notes.md`                                                                                                     |
+| Eden CRUD/import/search/data behavior                    | `docs-site/apps/eden/data.md`, `concepts/write-boundary.md`                                                                              |
+| Focus mode/helper/svc                                    | `docs-site/concepts/focus-mode.md`, `agents/forbidden/focus-mode.md`                                                                     |
+| Shell architecture: loader/dev mode/command bus/security | `extension-host.md`, `extension-dev-mode.md`, `command-bus.md`, `agents/forbidden/shell.md`                                              |
+| Shell local IPC/window controls                          | сначала grep snippets в `platform/desktop/electron/*preload*` и `extension-host.ts`; docs не нужны, если не меняешь архитектуру loader'а |
+| Tests/e2e/headless                                       | `docs-site/agents/testing.md`, `agents/forbidden/tests.md`                                                                               |
+| Release/bump/distribution                                | skill `bump`, `agents/forbidden/distribution.md`                                                                                         |
+| Substantial фича/архитектура                             | `docs-site/concepts/proof-loop.md` + `.agent/tasks/<DATE>-<slug>/spec.md`                                                                |
+| Оценка срока                                             | skill `estimate-calibration`                                                                                                             |
 
 ## Команды
 

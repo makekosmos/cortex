@@ -17,13 +17,6 @@
               data-testid="eden-spellcheck-toggle"
               @update:model-value="preferences.setSpellcheckEnabled"
             />
-            <SettingsToggleRow
-              title="Markdown-редактор (бета)"
-              description="CodeMirror 6 с live preview в стиле Obsidian."
-              :model-value="preferences.state.cmEditorEnabled"
-              data-testid="eden-cm-editor-toggle"
-              @update:model-value="preferences.setCmEditorEnabled"
-            />
           </SettingsList>
         </div>
       </section>

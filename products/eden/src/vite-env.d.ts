@@ -463,6 +463,8 @@ interface Window {
       close: () => void;
       minimize: () => void;
       maximize: () => void;
+      zoomGet?: () => Promise<number>;
+      zoomSet?: (factor: number) => Promise<number>;
       setMaximizable?: (value: boolean) => Promise<void>;
       setTitlebarSymbolColor?: (symbolColor: string) => Promise<void>;
       beginManualDrag?: (point: { screenX: number; screenY: number }) => Promise<void>;

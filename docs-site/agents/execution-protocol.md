@@ -4,11 +4,11 @@
 
 ## 0. Классифицируй до чтения больших файлов
 
-| Класс        | Когда                                                                                                      | Рабочий цикл                                                                  |
-| ------------ | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `NO_LOOP`    | опечатка, одна строка, локальная косметика                                                                 | grep → snippet → edit → быстрая проверка/объяснить почему не нужна            |
-| `LIGHT_LOOP` | один экран/компонент/скрипт, низкий риск                                                                   | routing docs → grep → snippets → edit → targeted check → visual verify для UI |
-| `FULL_LOOP`  | новая фича, несколько подсистем, ARK/data/sync/schema/focus/security/command bus, архитектура или сомнение | proof loop → spec/evidence → релевантные docs/skills → tests/guards           |
+| Класс        | Когда                                                                                                      | Рабочий цикл                                                                                   |
+| ------------ | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `NO_LOOP`    | опечатка, одна строка, локальная косметика                                                                 | grep → snippet → edit → быстрая проверка/объяснить почему не нужна                             |
+| `LIGHT_LOOP` | один экран/компонент/скрипт, низкий риск                                                                   | grep → snippets → docs only if boundary unclear → edit → targeted check → visual verify для UI |
+| `FULL_LOOP`  | новая фича, несколько подсистем, ARK/data/sync/schema/focus/security/command bus, архитектура или сомнение | proof loop → spec/evidence → релевантные docs/skills → tests/guards                            |
 
 Если задача стартовала как `LIGHT_LOOP`, но потребовала читать больше 3 крупных файлов или затронула boundary из `FULL_LOOP`, остановись и эскалируй.
 
@@ -26,8 +26,8 @@
 
 ## 2. Progressive disclosure для docs и skills
 
-- Сначала читай только routing docs из `claude-md-core.md` для затронутой области.
-- Skill загружай, только если его trigger совпал с задачей.
+- Для `NO_LOOP` / `LIGHT_LOOP` сначала grep/snippet; routing docs из `claude-md-core.md` открывай только если кодовый snippet не отвечает на вопрос или затронут boundary.
+- Skill загружай, только если его trigger точно совпал с задачей; не загружай skill из-за общего слова вроде “Vue” или “bug”, если правка локальная и очевидная.
 - Большие reference-файлы skill'а открывай только по конкретному вопросу или для `FULL_LOOP`.
 - Если skill требует читать энциклопедию для маленькой правки, применяй condensed checklist и зафиксируй в финале, что deep refs не нужны из-за класса задачи.
 
@@ -37,9 +37,9 @@
 
 ### Eden UI / titlebar / sidebar
 
-1. Читать: `docs-site/apps/eden/ui.md` + узкие forbidden при необходимости.
-2. `rtk grep` по компоненту/CSS/test id.
-3. Читать snippets только в `App.vue`, нужном child component и CSS.
+1. `rtk grep` по компоненту/CSS/test id/window IPC.
+2. Читать snippets только в `App.vue`, нужном child component/CSS или preload/host IPC.
+3. `docs-site/apps/eden/ui.md` и узкие forbidden открывай, если меняешь визуальные правила, titlebar/safe-area или tokens.
 4. Check: `rtk bun run desktop:typecheck`.
 5. Visual verify обязателен для layout/цветов/иконок; если не сделан — сказать явно.
 

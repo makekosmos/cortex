@@ -1,13 +1,13 @@
 ---
 name: visual-verify
-description: Verify Kosmos UI changes by launching or reusing a local dev target, driving it with Playwright, capturing screenshots, and visually inspecting the result. Use after frontend, Vue, CSS, icon, layout, table, responsive, titlebar, or visual polish changes where typecheck/build alone cannot prove the UI looks correct.
+description: Verify visible Kosmos UI changes after code edits by launching/reusing a dev target, driving Playwright, capturing screenshots, and inspecting the result. Use for CSS/layout/icon/table/responsive/titlebar/visual polish changes. Do not load during initial diagnosis or for non-visual TS/IPC/data fixes.
 ---
 
 # Visual Verify
 
 ## Workflow
 
-After UI changes, verify the visible result, not only the code:
+After visible UI changes, verify the result, not only the code:
 
 1. Prefer an existing local dev server if the relevant port is already listening. Do not kill unknown user processes.
 2. If no server is running and the app needs one, start the smallest suitable dev server and record the URL.

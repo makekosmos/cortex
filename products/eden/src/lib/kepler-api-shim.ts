@@ -62,6 +62,8 @@ interface KeplerWindowApi {
   close: () => void;
   minimize: () => void;
   maximize: () => void;
+  zoomGet?: () => Promise<number>;
+  zoomSet?: (factor: number) => Promise<number>;
 }
 
 interface KeplerNamespace {
@@ -786,6 +788,15 @@ async function getPlatform(): Promise<NodeJS.Platform> {
 const ZOOM_STORAGE_KEY = "eden-extension-zoom";
 
 async function zoomGet(): Promise<number> {
+  const nativeZoomGet = keplerWindow()?.zoomGet;
+  if (nativeZoomGet) {
+    try {
+      return await nativeZoomGet();
+    } catch {
+      // Fall back to browser/localStorage zoom below.
+    }
+  }
+
   const raw = localStorage.getItem(ZOOM_STORAGE_KEY);
   const parsed = raw ? parseFloat(raw) : NaN;
   return Number.isFinite(parsed) ? parsed : 1;
@@ -793,6 +804,22 @@ async function zoomGet(): Promise<number> {
 
 async function zoomSet(factor: number): Promise<number> {
   const clamped = Math.max(0.5, Math.min(2.0, factor));
+  const nativeZoomSet = keplerWindow()?.zoomSet;
+
+  if (nativeZoomSet) {
+    const applied = await nativeZoomSet(clamped);
+    try {
+      localStorage.setItem(ZOOM_STORAGE_KEY, String(applied));
+    } catch {
+      // ignore
+    }
+    // Старые сборки масштабировали <html> через CSS zoom. Если пользователь
+    // обновился без перезапуска renderer'а, убираем этот локальный shrink-layer:
+    // нативный webContents zoom должен масштабировать viewport целиком.
+    document.documentElement.style.zoom = "";
+    return applied;
+  }
+
   try {
     localStorage.setItem(ZOOM_STORAGE_KEY, String(clamped));
   } catch {

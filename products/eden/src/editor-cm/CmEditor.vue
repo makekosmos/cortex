@@ -51,6 +51,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { createMdConverter } from "./mdConvert";
+import { coerceToCmSafeDoc } from "./cmGate";
 import {
   getEditableEntryTitle,
   resolveStoredEntryTitle,
@@ -396,8 +397,8 @@ onMounted(() => {
 
   let initialMd = "";
   try {
-    const doc = JSON.parse(props.entry.content_json) as object;
-    initialMd = converter.jsonToMarkdown(doc);
+    const parsed = JSON.parse(props.entry.content_json) as unknown;
+    initialMd = converter.jsonToMarkdown(coerceToCmSafeDoc(parsed));
   } catch {
     initialMd = "";
   }
