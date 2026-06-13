@@ -311,7 +311,6 @@ const preferences = usePreferences();
 const useCmEditorForCurrent = computed(
   () =>
     eden.currentEntry != null &&
-    !preferences.state.readerModeEnabled &&
     shouldUseCmEditor(
       preferences.state.cmEditorEnabled || preferences.state.vimModeEnabled,
       eden.currentEntry.content_json,

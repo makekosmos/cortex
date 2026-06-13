@@ -3,6 +3,7 @@ import { userEvent } from "vitest/browser";
 import { render } from "vitest-browser-vue";
 import { defineComponent, ref } from "vue";
 import CmEditor from "../../src/editor-cm/CmEditor.vue";
+import { SYSTEM_TYPE_NOTE, SYSTEM_TYPE_PERSON } from "../../src/lib/systemTypes";
 
 function makeEntry(contentJson: Record<string, unknown>): Entry {
   return {
@@ -23,8 +24,9 @@ function makeEntry(contentJson: Record<string, unknown>): Entry {
 const EMPTY_DOC = { type: "doc", content: [{ type: "paragraph" }] };
 
 function cmContent(): HTMLElement {
-  const el = document.querySelector<HTMLElement>(".cm-content");
-  if (!el) throw new Error(".cm-content не найден — CodeMirror не смонтирован");
+  const el = document.querySelector<HTMLElement>(".cm-editor-container .cm-content");
+  if (!el)
+    throw new Error(".cm-editor-container .cm-content не найден — CodeMirror не смонтирован");
   return el;
 }
 
@@ -199,6 +201,53 @@ describe("CmEditor component", () => {
         { timeout: 4000 },
       )
       .toContain("[x]");
+  });
+
+  test("смена типа не откатывается unmount flush'ом CM editor", async () => {
+    // Regression: 2026-06-13. Optimistic type change remounts keyed CmEditor;
+    // old instance's onBeforeUnmount flush must not save the previous type back.
+    const saved: Entry[] = [];
+    const Parent = defineComponent({
+      components: { CmEditor },
+      setup() {
+        const entry = ref(makeEntry(EMPTY_DOC));
+        entry.value.type_id = SYSTEM_TYPE_NOTE.id;
+        return {
+          entry,
+          noteTypes: [SYSTEM_TYPE_NOTE, SYSTEM_TYPE_PERSON],
+          onSave: vi.fn(async (nextEntry: Entry) => {
+            saved.push(nextEntry);
+            entry.value = nextEntry;
+            return { ok: true };
+          }),
+          onDraft(nextEntry: Entry) {
+            entry.value = nextEntry;
+          },
+        };
+      },
+      template: `
+        <CmEditor
+          :key="entry.id + ':' + (entry.type_id ?? '')"
+          :entry="entry"
+          :note-types="noteTypes"
+          :on-save="onSave"
+          @entry-draft-change="onDraft"
+        />
+      `,
+    });
+
+    render(Parent);
+    await expect.poll(() => document.querySelector(".cm-content")).not.toBeNull();
+
+    await userEvent.click(document.querySelector(".typed-object-header__type-dropdown button")!);
+    await userEvent.click(
+      [...document.querySelectorAll<HTMLButtonElement>(".kosmos-dd__option")].find((button) =>
+        button.textContent?.includes(SYSTEM_TYPE_PERSON.name),
+      )!,
+    );
+
+    await expect.poll(() => saved.at(-1)?.type_id, { timeout: 4000 }).toBe(SYSTEM_TYPE_PERSON.id);
+    expect(saved.map((entry) => entry.type_id)).not.toContain(SYSTEM_TYPE_NOTE.id);
   });
 
   test("автосейв вызывает onSave с валидным PM JSON, содержащим набранный текст", async () => {

@@ -87,7 +87,10 @@
             :all-entries="allEntries"
             :current-entry-id="entry.id"
             :show-type-row="false"
-            :readonly="props.readerMode"
+            :note-types="noteTypes"
+            editable-type
+            :readonly="false"
+            @object-type-change="handleNoteTypeChange"
             @header-prop-change="handleHeaderPropChange"
             @relation-navigate="props.onNavigate"
           />
@@ -954,7 +957,7 @@ function markDocumentDirty() {
 }
 
 function markMetadataDirty() {
-  if (props.readerMode || isHydrating) return;
+  if (isHydrating) return;
   metadataRevision += 1;
   saveConflict.value = null;
   schedulePersistedStateReconciliation();
@@ -1028,7 +1031,6 @@ function scheduleAutoSave() {
  * teardown).
  */
 async function flushAutoSave(): Promise<void> {
-  if (props.readerMode) return;
   if (autosaveTimer !== null) {
     window.clearTimeout(autosaveTimer);
     autosaveTimer = null;
@@ -1335,7 +1337,6 @@ function openActiveTypeSettings() {
 }
 
 function handleHeaderPropChange(fieldId: string, value: unknown) {
-  if (props.readerMode) return;
   headerProps.value = { ...headerProps.value, [fieldId]: value };
 }
 
@@ -1360,7 +1361,6 @@ function shouldTrackTypingEvent(event: KeyboardEvent) {
 watch(
   [title, noteTypeId, headerLayout, headerProps],
   () => {
-    if (props.readerMode) return;
     markMetadataDirty();
     emitEntryDraftChange();
   },

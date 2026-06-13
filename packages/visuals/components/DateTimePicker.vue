@@ -21,12 +21,15 @@ interface Props {
    * Если не передано — формат остаётся полным («13 мая 2026, 14:30»).
    */
   reference?: string | number | Date | null;
+  /** Date-only mode: hides time controls and emits selected day at local midnight. */
+  dateOnly?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   placeholder: "Выбрать…",
   label: undefined,
   reference: null,
+  dateOnly: false,
 });
 
 const emit = defineEmits<{
@@ -44,6 +47,21 @@ const panelPosition = ref<{ top: number; left: number; placement: "below" | "abo
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");
+}
+
+function formatIsoYear(year: number): string {
+  if (year < 0) return `-${String(Math.abs(year)).padStart(6, "0")}`;
+  return String(year).padStart(4, "0");
+}
+
+function formatDisplayYear(year: number): string {
+  return year < 0 ? `${Math.abs(year)} до н.э.` : `${year} года`;
+}
+
+function localDateTime(s: DTState): Date {
+  const d = new Date(0, s.month, s.day, s.hour, s.minute, 0, 0);
+  d.setFullYear(s.year);
+  return d;
 }
 
 interface DTState {
@@ -68,7 +86,7 @@ function isoToLocal(iso: string | null): DTState | null {
 }
 
 function localToIso(s: DTState): string {
-  return new Date(s.year, s.month, s.day, s.hour, s.minute, 0, 0).toISOString();
+  return localDateTime(s).toISOString();
 }
 
 function emptyState(): DTState {
@@ -96,12 +114,30 @@ watch(
 );
 
 const dateIso = computed(() => {
-  return `${draft.value.year}-${pad(draft.value.month + 1)}-${pad(draft.value.day)}`;
+  return `${formatIsoYear(draft.value.year)}-${pad(draft.value.month + 1)}-${pad(draft.value.day)}`;
 });
 
+function parseDateOnlyIso(iso: string): { year: number; month: number; day: number } | null {
+  const match = /^([+-]?\d{4,6})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]) - 1,
+    day: Number(match[3]),
+  };
+}
+
 function onDatePick(iso: string) {
-  const [y, m, d] = iso.split("-").map(Number);
-  draft.value = { ...draft.value, year: y, month: m - 1, day: d };
+  const parsed = parseDateOnlyIso(iso);
+  if (!parsed) return;
+
+  const next = { ...draft.value, ...parsed };
+  draft.value = next;
+
+  if (props.dateOnly) {
+    emit("update:value", localToIso({ ...next, hour: 0, minute: 0 }));
+    open.value = false;
+  }
 }
 
 // --- text-based time input HH:MM ---
@@ -172,6 +208,20 @@ const RU_MONTHS_SHORT = [
   "ноя",
   "дек",
 ] as const;
+const RU_MONTHS_FULL_GENITIVE = [
+  "января",
+  "февраля",
+  "марта",
+  "апреля",
+  "мая",
+  "июня",
+  "июля",
+  "августа",
+  "сентября",
+  "октября",
+  "ноября",
+  "декабря",
+] as const;
 
 function refDate(): Date | null {
   const r = props.reference;
@@ -185,6 +235,9 @@ const displayLabel = computed(() => {
   const s = isoToLocal(props.value)!;
   const time = `${pad(s.hour)}:${pad(s.minute)}`;
   const ref = refDate();
+  if (props.dateOnly) {
+    return `${pad(s.day)} ${RU_MONTHS_FULL_GENITIVE[s.month]}, ${formatDisplayYear(s.year)}`;
+  }
   if (!ref) {
     // Без референса — полный формат, как раньше.
     return `${pad(s.day)} ${RU_MONTHS_SHORT[s.month]} ${s.year}, ${time}`;
@@ -250,6 +303,7 @@ function onDocPointerDown(e: PointerEvent) {
   if (t instanceof Node) {
     if (triggerRef.value?.contains(t)) return;
     if (panelRef.value?.contains(t)) return;
+    if (t instanceof Element && t.closest(".kosmos-dd__panel")) return;
   }
   open.value = false;
 }
@@ -314,7 +368,7 @@ onBeforeUnmount(() => {
       >
         <Calendar :value="dateIso" @pick="onDatePick" />
 
-        <div class="flex items-center border-t border-[var(--border)] px-4 py-2">
+        <div v-if="!dateOnly" class="flex items-center border-t border-[var(--border)] px-4 py-2">
           <input
             id="kosmos-dtp-time-input"
             class="h-8 flex-1 rounded-lg border-2 border-[var(--border)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] px-2 text-center font-[var(--font-mono,ui-monospace,monospace)] text-[1.0625rem] font-semibold tracking-[0.02em] text-[var(--foreground)] tabular-nums outline-none [corner-shape:var(--corner-shape)] focus:border-[color-mix(in_srgb,var(--accent)_55%,transparent)] focus:bg-[var(--background)]"
@@ -329,7 +383,10 @@ onBeforeUnmount(() => {
           />
         </div>
 
-        <footer class="flex items-center gap-2 border-t border-[var(--border)] px-4 py-2">
+        <footer
+          v-if="!dateOnly"
+          class="flex items-center gap-2 border-t border-[var(--border)] px-4 py-2"
+        >
           <button
             type="button"
             class="inline-flex h-8 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--destructive)_35%,transparent)] bg-transparent px-4 font-[inherit] text-[0.8125rem] font-medium text-[var(--destructive)] transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] hover:bg-[color-mix(in_srgb,var(--destructive)_14%,transparent)]"

@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-13 — Eden CM смена типа откатывалась unmount-save'ом
+
+**Симптомы.** При смене типа заметки в Eden визуально ничего не происходило или тип сразу возвращался назад.
+**Где жило.** `products/eden/src/editor-cm/CmEditor.vue::handleTypePick`, `products/eden/src/editor-cm/CmEditor.vue::buildEntryDraft`, `products/eden/src/editor-cm/CmEditor.vue::onBeforeUnmount`.
+**Root cause.** CM editor держал выбранный тип только в `props.entry.type_id`. `handleTypePick()` optimistic-обновлял parent draft, из-за `:key="id:type_id"` компонент размонтировался, а `onBeforeUnmount()` запускал `flushSave()`. Этот flush строил draft через `buildEntryDraft()` без нового `type_id` и мог сохранить старый тип поверх только что выбранного.
+**Fix.** `CmEditor` получил локальный `currentTypeId`, `buildEntryDraft()` всегда кладёт актуальный `type_id`, а prop-watchers синхронизируют локальный тип только при входящих entry changes.
+**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` проверяет keyed-remount сценарий: выбор `person_obj` не должен порождать последующий save со старым `note_obj`.
+**Prevention.** Если optimistic UI update меняет Vue key и вызывает unmount, cleanup/flush path обязан читать тот же локальный draft state, что и action path; нельзя полагаться только на старые props во время teardown.
+
 ## 2026-06-13 — Eden titlebar не показывал страницы людей при скролле
 
 **Симптомы** — у обычных страниц Eden после прокрутки заголовка вниз название всплывало в titlebar, но у страниц типа `Человек` titlebar оставался пустым; рядом с названием не было мини-аватара человека.

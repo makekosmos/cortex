@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { DateTimePicker, Dropdown } from "@kosmos/visuals";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { formatObjectFieldValue } from "@/lib/objectFieldFormatting";
 import type { ResolvedNoteTypeField } from "@/lib/typedNotes";
 import ObjectPropertyPicker from "./ObjectPropertyPicker.vue";
+
+interface PickerOption {
+  value: string;
+  label: string;
+  iconSrc?: string;
+  color?: string;
+}
 
 const props = withDefaults(
   defineProps<{
@@ -14,6 +22,8 @@ const props = withDefaults(
     entriesById: Map<string, Entry>;
     readonly?: boolean;
     variant?: "featured-inline" | "featured-column" | "secondary";
+    displayValue?: string;
+    pickerOptions?: PickerOption[];
   }>(),
   {
     variant: "secondary",
@@ -32,14 +42,27 @@ const isSelectLike = computed(
     props.field.kind === "multi_select" ||
     props.field.kind === "relation",
 );
-const usesCustomPicker = computed(() => isSelectLike.value);
+const usesCustomPicker = computed(
+  () => props.field.kind === "multi_select" || props.field.kind === "relation",
+);
+const dropdownValue = computed(() => {
+  const value = props.modelValue;
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+});
+const datePickerValue = computed(() => {
+  if (typeof props.modelValue === "string" && props.modelValue.trim().length > 0) {
+    return props.modelValue;
+  }
+
+  return null;
+});
 
 const inputType = computed(() => {
   switch (props.field.kind) {
     case "number":
       return "number";
     case "date":
-      return "date";
+      return "text";
     case "image":
       return "url";
     default:
@@ -92,6 +115,10 @@ const pickerOptions = computed(() => {
     return options;
   }
 
+  if (props.pickerOptions) {
+    return props.pickerOptions;
+  }
+
   return (props.field.options ?? []).map((option) => ({
     value: option,
     label: formatOptionLabel(option),
@@ -99,6 +126,10 @@ const pickerOptions = computed(() => {
 });
 
 const displayValue = computed(() => {
+  if (props.displayValue !== undefined) {
+    return props.displayValue;
+  }
+
   if (props.field.kind === "relation") {
     return relationIds.value
       .map((id) => {
@@ -120,7 +151,7 @@ const inputPlaceholder = computed(() => {
     case "number":
       return "Введите число";
     case "date":
-      return "Выберите дату";
+      return "выбери дату";
     case "select":
       return "Выбрать вариант";
     case "multi_select":
@@ -231,6 +262,22 @@ function formatOptionLabel(option: string) {
         />
       </div>
 
+      <Dropdown
+        v-else-if="field.kind === 'select'"
+        class="object-property-field__dropdown"
+        :data-testid="`typed-note-field-${field.id}`"
+        :model-value="dropdownValue"
+        :options="pickerOptions"
+        :placeholder="inputPlaceholder"
+        searchable="auto"
+        panel-align="start"
+        :match-trigger-width="false"
+        :show-chevron="false"
+        :max-height-px="260"
+        :disabled="isReadonly"
+        @update:model-value="emit('update:modelValue', $event)"
+      />
+
       <ObjectPropertyPicker
         v-else-if="usesCustomPicker"
         :data-testid="`typed-note-field-${field.id}`"
@@ -241,6 +288,15 @@ function formatOptionLabel(option: string) {
         :multiple="field.kind === 'multi_select'"
         :disabled="isReadonly"
         @update:model-value="emit('update:modelValue', $event)"
+      />
+
+      <DateTimePicker
+        v-else-if="field.kind === 'date'"
+        class="object-property-field__date-picker"
+        :value="datePickerValue"
+        :placeholder="inputPlaceholder"
+        date-only
+        @update:value="emit('update:modelValue', $event ?? '')"
       />
 
       <input
@@ -291,11 +347,6 @@ function formatOptionLabel(option: string) {
   min-height: 40px;
   padding: 8px 10px;
   border-radius: 10px;
-  transition: background-color 0.16s ease;
-}
-
-.object-property-field--secondary:hover {
-  background: color-mix(in srgb, var(--background) 82%, var(--secondary));
 }
 
 .object-property-field--secondary.object-property-field--wide {
@@ -304,8 +355,9 @@ function formatOptionLabel(option: string) {
 
 .object-property-field__label {
   color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: 14px;
+  line-height: 22px;
+  letter-spacing: -0.12px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -334,16 +386,48 @@ function formatOptionLabel(option: string) {
   min-width: 0;
   width: 100%;
   min-height: 24px;
-  color: var(--foreground);
-  font-size: 13px;
-  line-height: 1.4;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 22px;
+  letter-spacing: -0.12px;
   text-align: left;
 }
 
 .object-property-field--featured-column .object-property-field__label,
-.object-property-field--featured-column .object-property-field__value,
+.object-property-field--featured-column .object-property-field__value {
+  align-items: flex-start;
+}
+
 .object-property-field--secondary .object-property-field__label,
 .object-property-field--secondary .object-property-field__value {
+  align-items: center;
+  min-height: 24px;
+}
+
+.object-property-field--secondary .object-property-field__value {
+  margin: 0 -6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease,
+    outline-color 0.16s ease;
+}
+
+.object-property-field--secondary .object-property-field__value:hover,
+.object-property-field--secondary .object-property-field__value:focus-within {
+  background: color-mix(in srgb, var(--background) 82%, var(--secondary));
+}
+
+.object-property-field--secondary
+  .object-property-field__value:has(.object-property-field__input:focus) {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  color: var(--foreground);
+}
+
+.object-property-field--secondary.object-property-field--wide .object-property-field__label,
+.object-property-field--secondary.object-property-field--wide .object-property-field__value {
   align-items: flex-start;
 }
 
@@ -371,6 +455,8 @@ function formatOptionLabel(option: string) {
   background: var(--background);
   color: var(--foreground);
   font: inherit;
+  font-size: inherit;
+  line-height: inherit;
   transition:
     border-color 0.16s ease,
     box-shadow 0.16s ease,
@@ -381,17 +467,90 @@ function formatOptionLabel(option: string) {
   background: color-mix(in srgb, var(--background) 82%, var(--secondary));
 }
 
+.object-property-field__date-picker {
+  width: 100%;
+}
+
+.object-property-field__date-picker :deep(> button) {
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  justify-content: flex-start;
+}
+
+.object-property-field__date-picker :deep(> button:hover),
+.object-property-field__date-picker :deep(> button:focus-visible) {
+  border: none;
+  background: transparent;
+  color: inherit;
+}
+
+.object-property-field__date-picker :deep(> button > span) {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.object-property-field__date-picker :deep(> button > svg) {
+  display: none;
+}
+
+.object-property-field__dropdown {
+  width: 100%;
+}
+
+.object-property-field__dropdown :deep(> button) {
+  width: 100%;
+  height: 24px;
+  min-height: 24px;
+  justify-content: flex-start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.object-property-field__dropdown :deep(> button:hover),
+.object-property-field__dropdown :deep(> button:focus-visible) {
+  border: none;
+  background: transparent;
+  color: inherit;
+}
+
+.object-property-field__dropdown :deep(> button > span) {
+  flex: 1 1 auto;
+}
+
+.object-property-field__dropdown :deep(> button > svg) {
+  color: var(--muted-foreground);
+}
+
+.object-property-field--secondary .object-property-field__input,
 .object-property-field__input--textual {
-  min-height: 28px;
+  min-height: 24px;
   padding: 0;
   border: none;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  color: inherit;
   appearance: none;
   -webkit-appearance: none;
 }
 
+.object-property-field--secondary .object-property-field__input::-webkit-datetime-edit {
+  padding: 0;
+}
+
+.object-property-field--secondary .object-property-field__input:hover,
 .object-property-field__input--textual:hover {
   background: transparent;
 }
@@ -402,9 +561,11 @@ function formatOptionLabel(option: string) {
   box-shadow: 0 0 0 1px var(--ring);
 }
 
+.object-property-field--secondary .object-property-field__input:focus,
 .object-property-field__input--textual:focus {
   border-color: transparent;
   box-shadow: none;
+  color: var(--foreground);
 }
 
 .object-property-field__textarea {
@@ -442,7 +603,9 @@ function formatOptionLabel(option: string) {
   border-radius: 999px;
   background: var(--secondary);
   color: var(--secondary-foreground);
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 22px;
+  letter-spacing: -0.12px;
 }
 
 .object-property-field__chip {

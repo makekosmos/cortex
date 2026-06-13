@@ -27,8 +27,8 @@
         :all-entries="allEntries"
         :current-entry-id="entry.id"
         :note-types="noteTypes"
-        :editable-type="!props.readerMode"
-        :readonly="props.readerMode"
+        :editable-type="true"
+        :readonly="false"
         :show-type-row="false"
         :show-title="isPersonEntry"
         @header-prop-change="handleHeaderPropChange"
@@ -75,10 +75,10 @@ import "./cm-editor.css";
 
 interface Props {
   entry: Entry;
-  allEntries: Entry[];
-  noteTypes: NoteType[];
+  allEntries?: Entry[];
+  noteTypes?: NoteType[];
   onSave: (entry: Entry) => Promise<unknown>;
-  onNavigate: (entryId: string) => void;
+  onNavigate?: (entryId: string) => void;
   zenMode?: boolean;
   vimMode?: boolean;
   readerMode?: boolean;
@@ -93,7 +93,14 @@ interface Emits {
   typeChange: [entry: Entry];
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  allEntries: () => [],
+  noteTypes: () => [],
+  onNavigate: () => {},
+  zenMode: false,
+  vimMode: false,
+  readerMode: false,
+});
 const emit = defineEmits<Emits>();
 
 const AUTOSAVE_DEBOUNCE_MS = 300;
@@ -169,7 +176,7 @@ let titleOutOfView = false;
 let lastPersistedTitle = props.entry.title;
 let lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(props.entry.header_props_json);
 
-const currentTypeId = computed(() => props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID);
+const currentTypeId = ref(props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID);
 const activeNoteType = computed(
   () => props.noteTypes.find((noteType) => noteType.id === currentTypeId.value) ?? null,
 );
@@ -211,6 +218,7 @@ function buildEntryDraft(contentJson?: string): Entry {
   return {
     ...props.entry,
     title: normalizedTitle,
+    type_id: currentTypeId.value,
     header_layout: headerLayout.value,
     header_props_json: normalizedHeaderPropsJson,
     content_json: contentJson ?? props.entry.content_json,
@@ -231,7 +239,7 @@ function scheduleAutosave(): void {
 }
 
 async function flushSave(): Promise<void> {
-  if (props.readerMode || !view || !converter) return;
+  if (!view || !converter) return;
   const md = view.state.doc.toString();
   const contentJson = JSON.stringify(converter.markdownToJson(md));
   const entry = buildEntryDraft(contentJson);
@@ -245,11 +253,12 @@ async function handleTypePick(nextTypeId: string): Promise<void> {
   if (!view || !converter) return;
 
   const nextType = props.noteTypes.find((noteType) => noteType.id === nextTypeId) ?? null;
-  if (!nextType || nextTypeId === props.entry.type_id) return;
+  if (!nextType || nextTypeId === currentTypeId.value) return;
 
   const md = view.state.doc.toString();
   const contentJson = JSON.stringify(converter.markdownToJson(md));
   const nextHeaderProps = createHeaderPropsForTypeChange(nextType, getCurrentTitle());
+  currentTypeId.value = nextTypeId;
   headerProps.value = nextHeaderProps;
   headerLayout.value = resolveNoteTypeHeaderLayout(nextType);
   const entry: Entry = {
@@ -275,7 +284,6 @@ async function handleTypePick(nextTypeId: string): Promise<void> {
 }
 
 function handleHeaderPropChange(fieldId: string, value: unknown): void {
-  if (props.readerMode) return;
   headerProps.value = { ...headerProps.value, [fieldId]: value };
   emit("entryDraftChange", buildEntryDraft());
   scheduleAutosave();
@@ -442,10 +450,9 @@ onMounted(() => {
 watch(
   () => props.entry.id,
   () => {
-    const noteType =
-      props.noteTypes.find(
-        (candidate) => candidate.id === (props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID),
-      ) ?? null;
+    const normalizedTypeId = props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
+    const noteType = props.noteTypes.find((candidate) => candidate.id === normalizedTypeId) ?? null;
+    currentTypeId.value = normalizedTypeId;
     title.value = getEditableEntryTitle(props.entry.title, props.entry.header_props_json);
     headerProps.value = safeParseHeaderProps(noteType, props.entry.header_props_json);
     headerLayout.value = props.entry.header_layout ?? resolveNoteTypeHeaderLayout(noteType);
@@ -470,10 +477,9 @@ watch(
     () => props.noteTypes,
   ],
   () => {
-    const noteType =
-      props.noteTypes.find(
-        (candidate) => candidate.id === (props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID),
-      ) ?? null;
+    const normalizedTypeId = props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
+    const noteType = props.noteTypes.find((candidate) => candidate.id === normalizedTypeId) ?? null;
+    currentTypeId.value = normalizedTypeId;
     headerProps.value = safeParseHeaderProps(noteType, props.entry.header_props_json);
     headerLayout.value = props.entry.header_layout ?? resolveNoteTypeHeaderLayout(noteType);
     backfillPersonNameFromTitle(noteType);
@@ -650,11 +656,11 @@ onBeforeUnmount(() => {
 .cm-editor-title-shell :deep(.typed-object-header.is-person .typed-object-header__title) {
   max-width: 100%;
   color: var(--text-primary);
-  font-family: var(--font-mono);
+  font-family: "SF Pro Text", "SF Pro Display", Inter, var(--font-sans), system-ui, sans-serif;
   font-size: 28px;
-  line-height: 1.16;
-  font-weight: 600;
-  letter-spacing: 0;
+  line-height: 32px;
+  font-weight: 700;
+  letter-spacing: -0.56px;
   text-wrap: balance;
 }
 
@@ -673,8 +679,7 @@ onBeforeUnmount(() => {
 }
 
 .cm-editor-title-shell :deep(.object-property-field--featured-column),
-.cm-editor-title-shell :deep(.object-property-field--secondary),
-.cm-editor-title-shell :deep(.typed-object-header__meta-row) {
+.cm-editor-title-shell :deep(.object-property-field--secondary) {
   grid-template-columns: minmax(116px, 30%) minmax(0, 1fr);
   gap: 12px;
   min-height: 34px;
@@ -687,22 +692,53 @@ onBeforeUnmount(() => {
 
 .cm-editor-title-shell :deep(.object-property-field__label),
 .cm-editor-title-shell :deep(.object-property-field__value),
-.cm-editor-title-shell :deep(.typed-object-header__meta-label),
-.cm-editor-title-shell :deep(.typed-object-header__meta-value) {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 1.35;
+.cm-editor-title-shell :deep(.object-property-field__input),
+.cm-editor-title-shell :deep(.object-property-picker__trigger),
+.cm-editor-title-shell :deep(.object-property-picker__summary),
+.cm-editor-title-shell :deep(.object-property-picker__placeholder) {
+  font-family:
+    "SF Pro Text", "SF Pro Display", Inter, var(--font-sans), system-ui, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  line-height: 22px !important;
+  letter-spacing: -0.12px !important;
 }
 
 .cm-editor-title-shell :deep(.object-property-field__input) {
+  height: 30px;
   min-height: 30px;
   border-radius: 8px;
   background: transparent;
+  caret-color: var(--eden-accent-color, var(--accent, currentColor));
+}
+
+.cm-editor-title-shell :deep(.object-property-field__input::placeholder) {
+  font: inherit;
+  color: var(--muted-foreground);
+  opacity: 1;
 }
 
 .cm-editor-title-shell :deep(.object-property-picker__trigger) {
+  height: 30px;
   min-height: 30px;
+  padding: 0;
   background: transparent;
+}
+
+.cm-editor-title-shell :deep(.typed-object-header__avatar-picker .object-property-picker__trigger) {
+  width: 128px;
+  height: 128px;
+  min-height: 128px;
+  place-items: center;
+}
+
+.cm-editor-title-shell
+  :deep(.typed-object-header__avatar-picker .object-property-picker__placeholder) {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-size: 30px;
+  line-height: 1;
 }
 
 .cm-editor-container {

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Dropdown } from "@kosmos/visuals";
 import ObjectPropertyField from "./ObjectPropertyField.vue";
 import ObjectPropertyPicker from "./ObjectPropertyPicker.vue";
 import { UNTITLED_ENTRY_PLACEHOLDER, getEntryDisplayTitle } from "@/lib/entryTitles";
@@ -12,6 +11,7 @@ import {
   SYSTEM_TYPE_PERSON_ID,
 } from "@/lib/systemTypes";
 import { resolveObjectImageSrc } from "@/lib/objectImages";
+import { objectIconUri } from "@/lib/iconResolver";
 
 const props = withDefaults(
   defineProps<{
@@ -154,12 +154,22 @@ const tableFields = computed(() => {
   );
 });
 const hasTableFields = computed(() => tableFields.value.length > 0);
+const typeField = computed(() => ({
+  id: "__object_type",
+  label: "Тип объекта",
+  kind: "select" as const,
+  required: true,
+  visible: true,
+  read_only: props.readonly || !props.editableType,
+}));
 const typeOptions = computed(() =>
   props.noteTypes
     .filter((noteType) => noteType.id !== SYSTEM_TYPE_IMAGE_ID)
     .map((noteType) => ({
       value: noteType.id,
       label: noteType.name,
+      iconSrc: objectIconUri(noteType.icon),
+      color: noteType.color ?? "var(--text-secondary)",
     })),
 );
 const hasHeroContent = computed(
@@ -276,21 +286,18 @@ function handleObjectTypeChange(value: string | number) {
 
       <div v-if="hasTableFields || editableType" class="typed-object-header__secondary">
         <div class="typed-object-header__secondary-list">
-          <div class="typed-object-header__meta-row">
-            <div class="typed-object-header__meta-label">Тип объекта</div>
-            <div class="typed-object-header__meta-value">
-              <Dropdown
-                v-if="editableType && !readonly"
-                class="typed-object-header__type-dropdown"
-                :model-value="activeNoteType.id"
-                :options="typeOptions"
-                :max-height-px="260"
-                searchable="auto"
-                @update:model-value="handleObjectTypeChange"
-              />
-              <span v-else>{{ activeNoteType.name }}</span>
-            </div>
-          </div>
+          <ObjectPropertyField
+            :field="typeField"
+            :model-value="activeNoteType.id"
+            layout="column"
+            variant="secondary"
+            :display-value="activeNoteType.name"
+            :picker-options="typeOptions"
+            :relation-candidates="relationCandidates"
+            :entries-by-id="entriesById"
+            :readonly="readonly || !editableType"
+            @update:model-value="handleObjectTypeChange"
+          />
           <ObjectPropertyField
             v-for="field in tableFields"
             :key="field.id"
@@ -404,9 +411,12 @@ function handleObjectTypeChange(value: string | number) {
 }
 
 .typed-object-header.is-person .typed-object-header__visual {
+  --typed-object-header-avatar-bg: color-mix(in srgb, var(--background) 92%, var(--foreground) 8%);
   justify-content: center;
   width: 128px;
   min-height: 128px;
+  border-radius: 999px;
+  background: var(--typed-object-header-avatar-bg);
 }
 
 .typed-object-header.is-person .typed-object-header__cover {
@@ -425,7 +435,7 @@ function handleObjectTypeChange(value: string | number) {
 .typed-object-header__avatar-placeholder {
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  background: var(--typed-object-header-avatar-bg);
   color: color-mix(in srgb, var(--foreground) 42%, transparent);
   font-size: 30px;
   line-height: 1;
@@ -444,7 +454,7 @@ function handleObjectTypeChange(value: string | number) {
   place-items: center;
   padding: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  background: var(--typed-object-header-avatar-bg);
   color: color-mix(in srgb, var(--foreground) 42%, transparent);
   font-size: 30px;
   line-height: 1;
@@ -496,9 +506,9 @@ function handleObjectTypeChange(value: string | number) {
   margin: 0;
   color: var(--foreground);
   font-size: 36px;
-  line-height: 1.02;
-  font-weight: 600;
-  letter-spacing: -0.05em;
+  line-height: 40px;
+  font-weight: 700;
+  letter-spacing: -0.64px;
 }
 
 .typed-object-header__description-wrap {
@@ -552,88 +562,6 @@ function handleObjectTypeChange(value: string | number) {
   display: grid;
   gap: 0;
   width: 100%;
-}
-
-.typed-object-header__meta-row {
-  display: grid;
-  grid-template-columns: minmax(0, 30%) minmax(0, 70%);
-  gap: 14px;
-  align-items: center;
-  min-height: 40px;
-  padding: 8px 10px;
-}
-
-.typed-object-header__meta-label {
-  min-width: 0;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.typed-object-header__meta-value {
-  min-width: 0;
-  color: var(--foreground);
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.typed-object-header__type-dropdown {
-  width: 100%;
-}
-
-.typed-object-header__type-dropdown :deep(> div > button) {
-  min-height: 24px;
-  width: 100%;
-  justify-content: flex-start;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--foreground);
-  font: inherit;
-  text-align: left;
-}
-
-.typed-object-header__type-dropdown :deep(> div > button:hover),
-.typed-object-header__type-dropdown :deep(> div > button:focus-visible) {
-  border: none;
-  background: transparent;
-  color: var(--foreground);
-}
-
-.typed-object-header__type-dropdown :deep(> div > button > svg) {
-  display: none;
-}
-
-:global(.kosmos-dd__options) {
-  padding: 4px;
-  gap: 2px;
-}
-
-:global(.kosmos-dd__option) {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  padding: 7px 8px;
-  border: 0;
-  border-radius: var(--radius-input, 8px);
-  background: transparent;
-  color: var(--foreground);
-  font: inherit;
-  font-size: var(--kosmos-text-control-size, 13px);
-  font-weight: 500;
-  text-align: left;
-  transition:
-    background-color 100ms ease,
-    color 100ms ease;
-}
-
-:global(.kosmos-dd__option:hover),
-:global(.kosmos-dd__option--highlighted),
-:global(.kosmos-dd__option--selected) {
-  background: color-mix(in srgb, var(--foreground) 12%, transparent);
-  color: var(--foreground);
 }
 
 .typed-object-header__error {
