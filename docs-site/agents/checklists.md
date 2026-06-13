@@ -177,14 +177,16 @@
 ## Я делал `LIGHT_LOOP`
 
 - [ ] Классификация явно названа как `LIGHT_LOOP`, и задача не содержит триггеров `FULL_LOOP`.
-- [ ] Если появились ARK/data/sync/schema/write-boundary/focus/command bus/security/architecture признаки — задача эскалирована в `FULL_LOOP`.
+- [ ] Работал по [Execution protocol](/agents/execution-protocol): routing docs → grep → snippets, без broad file/docs reads «на всякий случай».
+- [ ] Если пришлось читать >3 крупных файлов или появились ARK/data/sync/schema/write-boundary/focus/command bus/security/architecture признаки — задача эскалирована в `FULL_LOOP`.
 - [ ] Прогнаны минимальные релевантные проверки для затронутой области.
-- [ ] Для UI/visual правки сделан visual verify, screenshot сохранён под `.tmp/`.
+- [ ] Для UI/visual правки сделан visual verify, screenshot сохранён под `.tmp/`, либо явно указано «не проверял визуально».
 - [ ] В финальном отчёте указано, что проверено и что не проверено.
 
 ## Я делал `NO_LOOP`
 
 - [ ] Правка действительно trivial/edit-level и не меняет правила, архитектуру, data path или user workflow.
+- [ ] Контекст получен snippet-first: grep/точечный read, без загрузки broad skills/docs.
 - [ ] Прогнана релевантная быстрая проверка или честно указано, почему она не нужна.
 
 ## Я делал `FULL_LOOP` / substantial задачу через proof loop

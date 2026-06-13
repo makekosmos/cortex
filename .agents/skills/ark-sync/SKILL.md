@@ -1,6 +1,6 @@
 ---
 name: ark-sync
-description: Ark sync protocol patterns — HLC, version vectors, WebSocket relay, P2P mesh, HMAC auth. Use when working on sync, real-time, or multi-device features in packages/ark/ or any client.
+description: Ark sync protocol patterns — HLC, version vectors, WebSocket relay, P2P mesh, HMAC auth. Use when working on sync, real-time, or multi-device features in core/ark/ or any client.
 ---
 
 # Ark Sync Skill

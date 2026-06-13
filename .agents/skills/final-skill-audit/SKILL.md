@@ -1,3 +1,8 @@
+---
+name: final-skill-audit
+description: Before the final answer for Kosmos coding/debugging tasks, check whether a repeated failure mode, workaround, command recipe, or debugging path should be captured as a skill or shortcut. Use after bugs, failed commands, Windows-specific workarounds, build/release issues, or repeated UI verification traps.
+---
+
 # Final Skill Audit
 
 Use this skill before the final answer for any coding/debugging task in Kosmos, especially after a bug, failed command, Windows-specific workaround, build/release issue, or repeated UI verification trap.

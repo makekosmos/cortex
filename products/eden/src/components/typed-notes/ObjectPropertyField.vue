@@ -56,6 +56,7 @@ const selectedValues = computed(() =>
 );
 
 const relationIds = computed(() => (props.field.kind === "relation" ? selectedValues.value : []));
+const relationAllowsMultiple = computed(() => props.field.multiple !== false);
 
 const filteredRelationCandidates = computed(() => {
   const allowedTypes = props.field.allowed_object_types?.filter(Boolean) ?? [];
@@ -163,7 +164,6 @@ function formatOptionLabel(option: string) {
   >
     <div class="object-property-field__label">
       <span class="object-property-field__label-text">{{ field.label }}</span>
-      <span v-if="isReadonly" class="object-property-field__lock" aria-hidden="true">🔒</span>
     </div>
 
     <div class="object-property-field__value">
@@ -221,11 +221,11 @@ function formatOptionLabel(option: string) {
         <ObjectPropertyPicker
           v-else
           :data-testid="`typed-note-field-${field.id}`"
-          :model-value="selectedValues"
+          :model-value="relationAllowsMultiple ? selectedValues : (selectedValues[0] ?? '')"
           :options="pickerOptions"
           :placeholder="inputPlaceholder"
           :variant="variant"
-          multiple
+          :multiple="relationAllowsMultiple"
           empty-options-label="Нет доступных объектов"
           @update:model-value="emit('update:modelValue', $event)"
         />

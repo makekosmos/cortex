@@ -13,6 +13,7 @@
 //     которые отвлекают»).
 //   - cmEditorEnabled — включает CM6 markdown-редактор за флагом.
 //   - vimModeEnabled — включает Vim motions внутри CM6-редактора.
+//   - readerModeEnabled — режим чтения: системные sans-шрифты, редактирование выключено.
 //
 // Расширение: добавь новое поле в `EdenPreferences`, default в
 // `DEFAULT_PREFERENCES`, экспортируй setter — composable сам подхватит.
@@ -29,12 +30,15 @@ export interface EdenPreferences {
   cmEditorEnabled: boolean;
   /** false по умолчанию — Vim mode включается пользователем явно. */
   vimModeEnabled: boolean;
+  /** false по умолчанию — Eden открывается в режиме писателя. */
+  readerModeEnabled: boolean;
 }
 
 const DEFAULT_PREFERENCES: EdenPreferences = {
   spellcheckEnabled: false,
   cmEditorEnabled: false,
   vimModeEnabled: false,
+  readerModeEnabled: false,
 };
 
 const state = reactive<EdenPreferences>({ ...DEFAULT_PREFERENCES });
@@ -62,6 +66,9 @@ function mergeIntoState(partial: Partial<EdenPreferences> | null | undefined): v
   }
   if (typeof partial.vimModeEnabled === "boolean") {
     state.vimModeEnabled = partial.vimModeEnabled;
+  }
+  if (typeof partial.readerModeEnabled === "boolean") {
+    state.readerModeEnabled = partial.readerModeEnabled;
   }
 }
 
@@ -157,6 +164,9 @@ export function usePreferences() {
     },
     setVimModeEnabled(value: boolean): void {
       state.vimModeEnabled = value;
+    },
+    setReaderModeEnabled(value: boolean): void {
+      state.readerModeEnabled = value;
     },
     /** Promise, который resolve'ит когда первичный read из userData завершился. */
     ready(): Promise<void> {

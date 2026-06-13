@@ -428,13 +428,61 @@ export function createDefaultHeaderProps(noteType: NoteType | null) {
         case "number":
           return [field.id, ""];
         case "multi_select":
-        case "relation":
           return [field.id, []];
+        case "relation":
+          return [field.id, field.multiple === false ? "" : []];
         default:
           return [field.id, ""];
       }
     }),
   );
+}
+
+function isPersonLikeNoteType(noteType: NoteType | null): boolean {
+  if (!noteType) {
+    return false;
+  }
+
+  try {
+    const definition = parseNoteTypeDefinition(noteType.schema_json);
+    const fieldIds = new Set(definition.fields.map((field) => field.id));
+    return (
+      noteType.slug === "person" ||
+      (fieldIds.has("first_name") && fieldIds.has("last_name") && fieldIds.has("patronymic"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function splitPersonTitle(title: string): {
+  firstName: string;
+  lastName: string;
+  patronymic: string;
+} {
+  const parts = title.trim().split(/\s+/).filter(Boolean);
+
+  return {
+    firstName: parts[0] ?? "",
+    lastName: parts[1] ?? "",
+    patronymic: parts.slice(2).join(" "),
+  };
+}
+
+export function createHeaderPropsForTypeChange(noteType: NoteType | null, sourceTitle: string) {
+  const props = createDefaultHeaderProps(noteType);
+  if (!isPersonLikeNoteType(noteType)) {
+    return props;
+  }
+
+  const { firstName, lastName, patronymic } = splitPersonTitle(sourceTitle);
+
+  return {
+    ...props,
+    first_name: firstName,
+    last_name: lastName,
+    patronymic,
+  };
 }
 
 function coerceHeaderFieldValue(field: NoteTypeField, value: unknown) {
@@ -494,6 +542,19 @@ function coerceHeaderFieldValue(field: NoteTypeField, value: unknown) {
 
       return [];
     case "relation":
+      if (field.multiple === false) {
+        if (typeof value === "string") {
+          return value.trim();
+        }
+
+        if (Array.isArray(value)) {
+          const firstValue = value.find((item): item is string => typeof item === "string");
+          return firstValue?.trim() ?? "";
+        }
+
+        return "";
+      }
+
       if (Array.isArray(value)) {
         return value
           .filter((item): item is string => typeof item === "string")
@@ -575,8 +636,10 @@ export function buildHeaderPropsSchema(noteType: NoteType | null) {
         schema = z.boolean();
         break;
       case "multi_select":
-      case "relation":
         schema = z.array(z.string());
+        break;
+      case "relation":
+        schema = field.multiple === false ? z.string() : z.array(z.string());
         break;
       default:
         schema = z.string();

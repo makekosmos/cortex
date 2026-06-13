@@ -25,14 +25,19 @@ Use this skill as an instruction set. Follow the workflow in order unless the us
 - If the project explicitly uses Options API, load `vue-options-api-best-practices` skill if available.
 - If the project explicitly uses JSX, load `vue-jsx-best-practices` skill if available.
 
-### 1.1 Must-read core references (required)
+### 1.1 Progressive references (required)
 
-- Before implementing any Vue task, make sure to read and apply these core references:
-  - `references/reactivity.md`
-  - `references/sfc.md`
-  - `references/component-data-flow.md`
-  - `references/composables.md`
-- Keep these references in active working context for the entire task, not only when a specific issue appears.
+Do **not** read every Vue reference by default. Use progressive disclosure:
+
+- For `NO_LOOP` / `LIGHT_LOOP` local Vue edits, apply the condensed checklist below and read only code snippets relevant to the change.
+- Read a specific reference only when the task touches that concern or the code is ambiguous:
+  - `references/reactivity.md` — non-trivial refs/reactive/computed/watch behavior.
+  - `references/sfc.md` — SFC structure/template/style concerns beyond a tiny edit.
+  - `references/component-data-flow.md` — new/changed props, emits, v-model, provide/inject contracts.
+  - `references/composables.md` — creating/refactoring composables or shared stateful logic.
+- For `FULL_LOOP`, broad Vue architecture, or repeated Vue bugs, read all relevant references fully.
+
+Condensed checklist for small Kosmos Vue edits: keep `<script setup lang="ts">`, use props down/events up, derive with `computed`, avoid heavy expressions in templates, cleanup listeners in `onBeforeUnmount`, use scoped/local CSS or project tokens, and run the targeted typecheck/build.
 
 ### 1.2 Plan component boundaries before coding (required)
 
@@ -46,18 +51,18 @@ Create a brief component map before implementation for any non-trivial feature.
 
 ## 2) Apply essential Vue foundations (required)
 
-These are essential, must-know foundations. Apply all of them in every Vue task using the core references already loaded in section `1.1`.
+These are essential foundations. Apply the rules below in every Vue task; load the matching reference from section `1.1` only when the task actually needs deeper detail.
 
 ### Reactivity
 
-- Must-read reference from `1.1`: [reactivity](references/reactivity.md)
+- Load [reactivity](references/reactivity.md) only for non-trivial reactivity/watch/computed changes.
 - Keep source state minimal (`ref`/`reactive`), derive everything possible with `computed`.
 - Use watchers for side effects if needed.
 - Avoid recomputing expensive logic in templates.
 
 ### SFC structure and template safety
 
-- Must-read reference from `1.1`: [sfc](references/sfc.md)
+- Load [sfc](references/sfc.md) only when structure/template/style decisions are part of the task.
 - Keep SFC sections in this order: `<script>` → `<template>` → `<style>`.
 - Keep SFC responsibilities focused; split large components.
 - Keep templates declarative; move branching/derivation to script.
@@ -90,7 +95,7 @@ Entry/root and route view rule:
 
 ### Component data flow
 
-- Must-read reference from `1.1`: [component-data-flow](references/component-data-flow.md)
+- Load [component-data-flow](references/component-data-flow.md) when adding/changing component contracts.
 - Use props down, events up as the primary model.
 - Use `v-model` only for true two-way component contracts.
 - Use provide/inject only for deep-tree dependencies or shared context.
@@ -98,7 +103,7 @@ Entry/root and route view rule:
 
 ### Composables
 
-- Must-read reference from `1.1`: [composables](references/composables.md)
+- Load [composables](references/composables.md) when creating/refactoring shared stateful logic.
 - Extract logic into composables when it is reused, stateful, or side-effect heavy.
 - Keep composable APIs small, typed, and predictable.
 - Separate feature logic from presentational components.

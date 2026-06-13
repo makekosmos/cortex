@@ -36,7 +36,7 @@
   width: 100%;
   max-width: var(--kosmos-page-max-width, 700px);
   margin: 0 auto;
-  padding-inline: var(--editor-inline-gutter);
+  padding-inline: var(--editor-inline-gutter, 48px);
 }
 
 .editor-header {
@@ -69,6 +69,21 @@
 
 .title-input::placeholder {
   color: color-mix(in srgb, var(--text-primary) 36%, transparent);
+}
+
+.editor-wrapper.reader-mode,
+.editor-wrapper.reader-mode .title-input,
+.editor-wrapper.reader-mode .ProseMirror {
+  font-family: "SF Pro Text", "SF Pro Display", Inter, var(--font-sans), system-ui, sans-serif;
+}
+
+.editor-wrapper.reader-mode .title-input,
+.editor-wrapper.reader-mode .ProseMirror {
+  cursor: default;
+}
+
+.editor-wrapper.reader-mode .ProseMirror {
+  caret-color: transparent;
 }
 
 .note-type-inline {

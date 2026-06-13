@@ -62,13 +62,16 @@
 5. **[Изоляция тестовых БД](docs-site/concepts/test-isolation.md)** — как писать тесты.
 6. **[Proof loop](docs-site/concepts/proof-loop.md)** — как оформлять substantial-задачи.
 7. **[Запреты и гварды](docs-site/agents/forbidden.md)** — список «никогда».
-8. **[Чек-листы по областям](docs-site/agents/checklists.md)** — что прогнать перед сдачей.
+8. **[Execution protocol](docs-site/agents/execution-protocol.md)** — как брать контекст, выбирать fast path и не раздувать итерации.
+9. **[Чек-листы по областям](docs-site/agents/checklists.md)** — что прогнать перед сдачей.
 
 ## Принципы работы
 
-### 1. Не угадывай — читай источник
+### 1. Не угадывай — читай источник, но snippet-first
 
-Перед правкой в `apps/<name>` прочитай `apps/<name>/AGENTS.md`. Перед правкой в data-слое — `docs/ARK-READONLY-SQL-BOUNDARY.md` и [Граница записи](docs-site/concepts/write-boundary.md).
+Перед правкой классифицируй задачу и иди по [Execution protocol](docs-site/agents/execution-protocol.md): конкретный вопрос к коду → `rtk grep` → 40–120 строк вокруг найденного места. Полные файлы/docs/skills открывай только когда это доказательно нужно.
+
+Перед правкой в `apps/<name>` прочитай app-local docs/AGENTS, если они существуют. Перед правкой в data-слое — [Граница записи](docs-site/concepts/write-boundary.md) и ARK routing docs.
 
 ### 2. Меньший defensible diff
 
@@ -161,6 +164,7 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 
 ## Дальше
 
+- [Execution protocol](docs-site/agents/execution-protocol.md) — основной рабочий цикл агента и fast paths.
 - [Чек-листы по областям](docs-site/agents/checklists.md) — что прогнать перед сдачей в каждой области.
 - [Запреты и гварды](docs-site/agents/forbidden.md) — список «никогда».
 - [Шаблоны спецификаций](docs-site/agents/spec-templates.md) — типовые `spec.md` для proof loop.
@@ -1822,14 +1826,16 @@ bun run ark:smoke
 ## Я делал `LIGHT_LOOP`
 
 - [ ] Классификация явно названа как `LIGHT_LOOP`, и задача не содержит триггеров `FULL_LOOP`.
-- [ ] Если появились ARK/data/sync/schema/write-boundary/focus/command bus/security/architecture признаки — задача эскалирована в `FULL_LOOP`.
+- [ ] Работал по [Execution protocol](docs-site/agents/execution-protocol.md): routing docs → grep → snippets, без broad file/docs reads «на всякий случай».
+- [ ] Если пришлось читать >3 крупных файлов или появились ARK/data/sync/schema/write-boundary/focus/command bus/security/architecture признаки — задача эскалирована в `FULL_LOOP`.
 - [ ] Прогнаны минимальные релевантные проверки для затронутой области.
-- [ ] Для UI/visual правки сделан visual verify, screenshot сохранён под `.tmp/`.
+- [ ] Для UI/visual правки сделан visual verify, screenshot сохранён под `.tmp/`, либо явно указано «не проверял визуально».
 - [ ] В финальном отчёте указано, что проверено и что не проверено.
 
 ## Я делал `NO_LOOP`
 
 - [ ] Правка действительно trivial/edit-level и не меняет правила, архитектуру, data path или user workflow.
+- [ ] Контекст получен snippet-first: grep/точечный read, без загрузки broad skills/docs.
 - [ ] Прогнана релевантная быстрая проверка или честно указано, почему она не нужна.
 
 ## Я делал `FULL_LOOP` / substantial задачу через proof loop

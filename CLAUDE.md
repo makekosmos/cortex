@@ -12,179 +12,101 @@
 # Core context для Claude Code
 
 ::: tip Что это
-Единственный источник корневых `AGENTS.md` и `CLAUDE.md`. Цель ≤ 200 строк по [Anthropic best-practices](https://code.claude.com/docs/en/best-practices) — эти файлы грузятся в агентский контекст по умолчанию, переполнение убивает следование правилам. Здесь только то, без чего агент **сделает ошибку**. Детали — за pointer'ами.
+Источник корневых `AGENTS.md` / `CLAUDE.md`. Держи этот файл коротким: он грузится в каждую сессию. Детали — только по pointer'ам ниже.
 :::
 
 ## За 30 секунд
 
-- **Kosmos** = внешний desktop product + монорепо личной экосистемы (Bun workspaces + Cargo workspace, Windows-only).
-- **Kepler** = legacy/internal namespace (`kepler:*`, `window.kepler`, `platform/runtime/`), не user-facing product name.
-- **ARK** = общий Rust+SQLite рантайм (`core/ark/crates/ark-core`, бинарь `ark-core-rpc`).
-- **Extensions** (`extensions/<id>/`) — Vue-приложения, грузятся в Kepler shell как отдельные окна.
-- **Apps говорят с ARK только** через `@kosmos/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в синхронизируемые таблицы — запрещены.
-- **Сначала классифицируй задачу**: `NO_LOOP`, `LIGHT_LOOP`, `FULL_LOOP`. Substantial-правки всегда `FULL_LOOP` через `.agent/tasks/<DATE>-<slug>/` proof loop.
+- **Kosmos** = Windows-only desktop product + монорепо (Bun workspaces + Cargo workspace).
+- **Kepler** = legacy/internal namespace (`kepler:*`, `window.kepler`, `platform/runtime/`), не user-facing brand.
+- **ARK** = общий Rust+SQLite рантайм (`core/ark/crates/ark-core`, `ark-core-rpc`).
+- **Extensions** (`products/<id>/` / legacy `extensions/<id>/`) — Vue-приложения внутри shell.
+- Apps говорят с ARK только через `@kosmos/ark` / Eden shim / `ark_core::db`; direct SQL writes в sync-таблицы запрещены.
+- Перед правкой классифицируй: `NO_LOOP`, `LIGHT_LOOP`, `FULL_LOOP`.
 
-## 🚨 Прежде чем менять код
+## Execution discipline
 
-| Область правки                                                                                       | Обязательно прочитать                                                              |
-| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Data-слой (`platform/desktop/electron`, `extensions/<id>/src`, `platform/runtime/src/usage_tracker`) | `docs-site/concepts/write-boundary.md` + `agents/forbidden.md` § ARK writes / Sync |
-| `extensions/<id>/src/`                                                                               | `docs-site/apps/<name>.md` + `forbidden.md` § per-app                              |
-| `platform/desktop/electron/focus-*`, `kepler-focus-helper/svc`                                       | `docs-site/concepts/focus-mode.md` + `forbidden.md` § Focus mode                   |
-| `platform/desktop/electron/extension-host.ts`, command bus                                           | `docs-site/concepts/command-bus.md`, `extension-host.md`, `extension-dev-mode.md`  |
-| Sync / schema / write-boundary                                                                       | `docs-site/concepts/sync.md` + `ark-objects.md`                                    |
-| Substantial-задача (фича / endpoint / архитектура)                                                   | `docs-site/concepts/proof-loop.md` + spec в `.agent/tasks/<DATE>-<slug>/`          |
-| Перед оценкой срока пользователю                                                                     | skill `estimate-calibration` (читать `log.jsonl`)                                  |
+Цель — не «экономить токены», а брать ровно тот контекст, который доказывает следующий шаг. Для `NO_LOOP` / `LIGHT_LOOP` работай snippet-first:
 
-## Команды (всегда под рукой)
+- Сначала сформулируй вопрос к коду → `rtk grep` / `rg` → читай 40–120 строк вокруг найденного места.
+- Не открывай broad docs/skills “на всякий случай”. Читай только routing ниже для реально затронутой области.
+- Skill = progressive disclosure: короткий чеклист для `NO_LOOP`/`LIGHT_LOOP`, deep references только по триггеру или для `FULL_LOOP`.
+- Не запускай широкий `git diff` в dirty worktree; сначала `rtk git diff --stat`, потом `rtk git diff -- <one-file>`.
+- Если для простой правки нужно читать >3 больших файлов — остановись и спроси/эскалируй.
+
+Полный протокол: `docs-site/agents/execution-protocol.md`.
+
+## Read routing перед кодом
+
+| Область                                  | Читать                                                                                                         |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| ARK/data/sync/schema                     | `docs-site/concepts/write-boundary.md`, `ark-objects.md`, `sync.md`, `agents/forbidden/ark.md`                 |
+| Eden UI/titlebar/sidebar                 | `docs-site/apps/eden/ui.md`, `docs-site/agents/forbidden/ui.md`, `docs-site/agents/forbidden/eden.md`          |
+| Eden editor/scroll/CM/TipTap             | `docs-site/apps/eden/editor.md`                                                                                |
+| Eden typed objects/person/game/image     | `docs-site/apps/eden/typed-notes.md`                                                                           |
+| Eden CRUD/import/search                  | `docs-site/apps/eden/data.md`, `concepts/write-boundary.md`                                                    |
+| Focus mode/helper/svc                    | `docs-site/concepts/focus-mode.md`, `agents/forbidden/focus-mode.md`                                           |
+| Shell windows/extension host/command bus | `docs-site/concepts/extension-host.md`, `extension-dev-mode.md`, `command-bus.md`, `agents/forbidden/shell.md` |
+| Tests/e2e/headless                       | `docs-site/agents/testing.md`, `agents/forbidden/tests.md`                                                     |
+| Release/bump/distribution                | skill `bump`, `agents/forbidden/distribution.md`                                                               |
+| Substantial фича/архитектура             | `docs-site/concepts/proof-loop.md` + `.agent/tasks/<DATE>-<slug>/spec.md`                                      |
+| Оценка срока                             | skill `estimate-calibration`                                                                                   |
+
+## Команды
 
 ```powershell
-bun run ark:guard:writes   # после правок в data-слой
-bun run ark:smoke          # после любой substantial-задачи
-bun run docs:check         # после правок docs-site/
-bun run docs:sync          # регенерация CLAUDE.md / AGENTS.md / llms.txt
-bunx playwright test --config platform/desktop/playwright.config.ts   # e2e (всегда headless)
+bun run ark:guard:writes
+bun run ark:smoke
+bun run docs:sync
+bun run docs:check
+bunx playwright test --config platform/desktop/playwright.config.ts  # headless only
 ```
 
-Полный набор скриптов — `docs-site/reference/commands.md`. Что прогонять перед PR — `docs-site/reference/smoke-matrix.md`.
+Noisy build output — через `rtk err <cmd>` или лог в `.tmp/*.log`, в чат только ошибки/хвост.
 
-## Карта (где что)
+## Карта
 
-| Имя                                           | Где                                                                                                                                         |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Eden (заметки, TipTap)                        | `products/eden/`                                                                                                                            |
-| Delphi (задачи)                               | `products/delphi/`                                                                                                                          |
-| Focus Session / Focus mode                    | `platform/desktop/electron/focus-*`, `platform/desktop/src/views/LauncherView.vue`, `platform/desktop/src/components/FocusCommandPanel.vue` |
-| Arrancador (игровая библиотека)               | `incubator/arrancador/`                                                                                                                     |
-| Kosmos desktop shell (лаунчер + focus widget) | `platform/desktop/`                                                                                                                         |
-| Kosmos Runtime / kepler-backend               | `platform/runtime/`                                                                                                                         |
-| Kosmos Helper / System Service                | `platform/native-services/kepler-focus-helper/`, `platform/native-services/kepler-focus-svc/`                                               |
-| ARK core (Rust runtime)                       | `core/ark/crates/ark-core/`                                                                                                                 |
-| `@kosmos/ark` (TS SDK)                        | `core/ark/packages/ark/`                                                                                                                    |
-| `@kosmos/visuals` (UI токены)                 | `packages/visuals/`                                                                                                                         |
-| Dashboard (встроенный shell view)             | `platform/desktop/src/views/Dashboard*.vue`                                                                                                 |
+| Имя               | Где                                                                            |
+| ----------------- | ------------------------------------------------------------------------------ |
+| Eden              | `products/eden/`                                                               |
+| Delphi            | `products/delphi/`                                                             |
+| Focus mode        | `platform/desktop/electron/focus-*`, `platform/native-services/kepler-focus-*` |
+| Arrancador        | `incubator/arrancador/`                                                        |
+| Desktop shell     | `platform/desktop/`                                                            |
+| Runtime/backend   | `platform/runtime/`                                                            |
+| ARK core          | `core/ark/crates/ark-core/`                                                    |
+| `@kosmos/ark`     | `core/ark/packages/ark/`                                                       |
+| `@kosmos/visuals` | `packages/visuals/`                                                            |
+| Dashboard         | `platform/desktop/src/views/Dashboard*.vue`                                    |
 
-Подробное описание — `docs-site/agents/index.md` (Карта приложений).
+## Universal never rules
 
-## Жёсткие запреты (universal)
+- ❌ Direct SQL writes в ARK sync tables из app TS / renderer; renderer не открывает SQLite.
+- ❌ Rust writer в sync table без version-vector bump (`record_local_upsert/delete` или equivalent).
+- ❌ Destructive migrations (`DROP TABLE`, несовместимый `ALTER COLUMN`). Только additive.
+- ❌ `Mutex::lock().unwrap()` в production Rust paths; нужен poison recovery.
+- ❌ E2E без `KOSMOS_HEADLESS=1`; BrowserWindow show/focus/always-on-top без headless guard.
+- ❌ User-facing UI на английском; hardcoded `#hex`/`rgb()`/fonts вместо `@kosmos/visuals` tokens.
+- ❌ Свой titlebar/safe-area вместо `<DesktopChrome>` / `<DesktopContentSurface>`.
+- ❌ `e.key === "<латинская буква>"` для Ctrl/Cmd shortcuts; используй `e.code === "KeyA"`.
+- ❌ `addEventListener` без cleanup в `onBeforeUnmount`.
+- ❌ `git add -A`, `--no-verify`, `git reset --hard`, force-push в main/master.
+- ❌ Bump/release/version change без явной команды пользователя.
+- ❌ Попутный рефакторинг; один логический change — один коммит.
+- ❌ Объявлять PASS без релевантных checks; для UI — visual verify или явно “не проверял визуально”.
 
-::: danger Никогда
-Полный список с обоснованиями (включая per-app: Eden / Delphi / Focus mode / Kepler Shell / Command bus / Distribution / usage-tracker / Brand / Spaces / Dashboard) — `docs-site/agents/forbidden.md`. **Читай соответствующую секцию перед работой в области.**
-:::
-
-### ARK / data
-
-- ❌ Прямой SQL `INSERT` / `UPDATE` / `DELETE` в `objects`, `object_types`, `object_links`, `tracked_apps`, `usage_sessions`, `usage_events`, `sync_kv` из app TS services.
-- ❌ Открытие ARK SQLite на запись через `better-sqlite3` / `sqlite3` / `node:sqlite`. Renderer — никакого SQLite вообще.
-- ❌ Direct Rust writer в синхронизируемую таблицу без `ark_core::db::bump_sync_version_vector` (или `record_local_upsert` / `record_local_delete` per-entity для legacy/batch handler'ов).
-- ❌ Destructive schema migration (`DROP TABLE`, несовместимый `ALTER COLUMN`). Только additive `CREATE TABLE IF NOT EXISTS`.
-
-### Rust
-
-- ❌ `Mutex::lock().unwrap()` в production paths. Только `lock().unwrap_or_else(|e| e.into_inner())` (poison recovery). См. `concepts/db-resilience.md`.
-- ❌ Spawn `kepler-backend` без `RUST_BACKTRACE=1`.
-- ❌ Удалять `crash_reporter::install`, `db_backup::maybe_backup_on_startup`, `db::check_integrity` из `platform/runtime/src/main.rs::setup`.
-
-### Тесты (всегда headless)
-
-- ❌ E2e без `KOSMOS_HEADLESS=1`. Любой `BrowserWindow` в `platform/desktop/electron/` обязан респектить `process.env.KOSMOS_HEADLESS === "1"` (`show: !headless`, `skipTaskbar: headless`).
-- ❌ `.show()` / `.showInactive()` / `.focus()` / `.setAlwaysOnTop(true)` без headless guard'а. Включая launcher, Settings, Dashboard, focus widget, install dialog.
-- ❌ Захардкоженный путь к user ARK DB (`%APPDATA%\Kosmos\ark.db`) в тестах. Override через `KOSMOS_DATA_DIR` под `tests/.e2e/<spec>/`.
-- ❌ `path.join(appData, "Kosmos"|"Kepler", ...)` где попало. Используй `resolveInstance()` / `keplerDataDir()` из `platform/desktop/electron/instance.ts` (slot-based изоляция prod/dev/test).
-
-### Focus mode
-
-- ❌ Прямые `BrowserWindow` манипуляции focus widget'ом вне `platform/desktop/electron/focus-widget.ts`. Только через IPC `kepler:focus-widget:*`.
-- ❌ Запись в `C:\Windows\System32\drivers\etc\hosts` вне `Kosmos Helper.exe` / `Kosmos System Service.exe` (dev: `kepler-focus-helper` / `kepler-focus-svc`) и вне маркерной секции `# === kepler-focus BEGIN/END ===` (иначе backup юзерских entries теряется).
-- ❌ Lifecycle pomodoro мимо `pomodoro_host` / `invokeOperation("pomodoro.<op>")`. Backend — source of truth.
-
-Остальное (UAC re-prompt, SDDL pipe, `setupFocusWidgetBackendSync` без teardown, applying блокировки из backend) — `forbidden.md` § Focus mode.
-
-### UI
-
-- ❌ Английский в user-facing UI приложений. Только русский (technical id'ы типа `task_obj` OK).
-- ❌ Hardcoded `#hex` / `rgb()` / кастомные шрифты. Только `var(--*)` из `@kosmos/visuals`.
-- ❌ Свой titlebar / safe-area. Используй `<DesktopChrome>` + `<DesktopContentSurface>`.
-- ❌ `e.key === "<латинская буква>"` для Ctrl/Cmd-shortcut'ов. Используй `e.code === "KeyA"` (RU-раскладка иначе ломает). Non-letter (`Enter`, `Escape`, arrows, F1-F12) — `e.key` OK.
-- ❌ `addEventListener` в `onMounted` без `removeEventListener` в `onBeforeUnmount` (HMR накапливает duplicate listeners).
-- ❌ Nested interactive elements (`role="button"` на `<span>` внутри `<button>`).
-
-### Git / tooling
-
-- ❌ `--no-verify` при коммите. `git push --force` в `main`/`master`. `git reset --hard` / `git checkout .` поверх чужих изменений.
-- ❌ Амендить уже опубликованные коммиты. Коммит секретов (`.env`, `credentials.json`, `GH_TOKEN`), `dist/`, `build/`, `coverage/`, `.tmp/`, `.e2e/`, `node_modules/`.
-- ❌ `git add -A` на shared working tree — забирает user WIP. Точечно `git add <file>` после `git status --short`.
-- ❌ `Move-Item -Force` / `Remove-Item -Recurse -Force` на `apps/<name>/` или `extensions/<id>/` пока внутри есть `node_modules/` (junction'ы → удаление таргета). Сначала удали `node_modules/`.
-
-### Bump / release
-
-- ❌ **Bump версии без явного запроса пользователя.** Никакого «попутно с фиксом» / «логически завершить релизом». Bump = release = пуш-уведомление пользователю. Менять `manifest.json::version` / `package.json::version` или запускать `ext:publish` / `electron-builder --publish` — только по команде («бамп eden», «релизни»). См. skill `bump`.
-
-### Framework / architecture
-
-- ❌ Предлагать миграцию с Electron на Tauri / Wails. Зафиксировано экспериментом 2026-05-19 (`docs-site/experiments/tauri-vs-electron.md`).
-- ❌ Массовый rename внутренних `kepler:*` / `window.kepler` / `platform/runtime` без отдельного proof loop. User-facing product — Kosmos; `Kepler` остаётся compat namespace'ом.
-
-### Дисциплина
-
-- ❌ Попутный рефакторинг вместе с задачей. Один логический change — один коммит.
-- ❌ Защитный код для невозможных случаев. Fallback'и «на всякий случай».
-- ❌ Новые `.md` файлы без явного запроса. Новые правила в `MEMORY.md` / `AGENTS.md` без согласования.
-- ❌ Объявление «готово» без PASS по AC, без прогона гвардов, без visual verify для UI правок (build/typecheck недостаточно — Playwright spec + screenshot или честно «не проверял»).
-- ❌ Игнорирование failing test'ов как «pre-existing». Чинить всегда.
+Полный список: `docs-site/agents/forbidden/index.md` и узкие файлы в `docs-site/agents/forbidden/`.
 
 ## Классификация задач
 
-Перед правками выбери класс:
+- `NO_LOOP` — точечная строка/опечатка/локальная косметика. Просто правь и проверь релевантно.
+- `LIGHT_LOOP` — маленькая low-risk правка в одном view/extension/script. Финал: классификация, проверки, что не проверено; UI — visual verify если возможно.
+- `FULL_LOOP` — новая фича, endpoint, schema/sync/write-boundary/focus/security/command-bus, несколько подсистем или сомнение. Нужен proof loop.
 
-- `NO_LOOP` — опечатка, форматирование, локальное переименование, edit-level правка одной строки, косметика README/docs без изменения правил. Просто правь и проверь релевантно.
-- `LIGHT_LOOP` — маленькая ограниченная low-risk правка, например визуальный/UI fix в одном extension/view или точечный script/tooling fix без архитектуры. Без `.agent/tasks/`, но с явным финальным отчётом: классификация, проверки, что не проверено; для UI — visual verify + screenshot под `.tmp/`.
-- `FULL_LOOP` — substantial-задача: новая фича / endpoint / изменение схемы / sync-протокола / write-boundary / data-слоя / focus-mode safety / command bus contract / архитектурное решение / нетривиальный багфикс / несколько подсистем. Нужен полный proof loop.
+`LIGHT_LOOP` эскалируется в `FULL_LOOP`, если затронуты ARK/data/sync/focus/command bus/schema/security или проверка локально невозможна.
 
-`LIGHT_LOOP` обязан эскалироваться в `FULL_LOOP`, если задача затронула ARK/data/sync/focus/command bus/schema/security boundary, расползлась на несколько подсистем, требует независимого verifier/evidence bundle, не проверяется локально, или есть сомнение в классификации.
+## Документация
 
-Полный flow — `docs-site/concepts/proof-loop.md`.
+Источник правды — `docs-site/`. Root `AGENTS.md` / `CLAUDE.md` генерируются: правь source docs → `bun run docs:sync` → `bun run docs:check`.
 
-## Поддержка документации
-
-Источник правды — `docs-site/`. После публичных правок: правь страницы (**не** root `AGENTS.md` / `CLAUDE.md` — auto-generated, затрутся) → `bun run docs:sync` → `bun run docs:check`.
-
-## Pointer'ы (читай по необходимости)
-
-::: tip Не загружаются автоматически
-Открывай по мере необходимости — когда задача коснулась области.
-:::
-
-**Главные:**
-
-- `docs-site/agents/forbidden.md` — **полный** список «никогда» с обоснованиями (per-app).
-- `docs-site/agents/index.md` — карта приложений + общие принципы.
-- `docs-site/agents/checklists.md` — чек-листы по областям перед сдачей.
-- `STATUS.md` (корень) — актуальный snapshot проекта.
-
-**Концепты:**
-
-- `docs-site/concepts/architecture.md`, `ark-objects.md`, `write-boundary.md`, `sync.md` — модель данных и граница записи.
-- `docs-site/concepts/proof-loop.md`, `test-isolation.md` — substantial-задачи и изоляция тестов.
-- `docs-site/concepts/command-bus.md`, `extension-host.md`, `extension-dev-mode.md` — runtime extensions (probe-based HMR, opt-in dev mode).
-- `docs-site/concepts/focus-mode.md` — focus widget, hosts write, helper/svc lifecycle.
-- `docs-site/concepts/instances.md` — slot-based изоляция (prod / dev / test).
-- `docs-site/concepts/db-resilience.md` — Mutex poison recovery, backup, integrity check.
-
-**Reference:**
-
-- `docs-site/reference/rules.md` — сжатый TL;DR.
-- `docs-site/reference/commands.md` — все bun scripts.
-- `docs-site/reference/glossary.md` — термины.
-- `docs-site/reference/decisions.md` — ADR журнал.
-- `docs-site/reference/smoke-matrix.md` — что прогонять перед PR.
-
-**Operational:**
-
-- `docs-site/agents/testing.md` — e2e правила (headless, universal contract).
-- `docs-site/agents/spec-templates.md` — шаблоны `spec.md`.
-- `docs-site/agents/estimation.md` — калибровка оценок.
-- `docs-site/agents/manual-tests-pending.md` — TODO визуальных проверок.
-- `docs-site/agents/docs-maintenance.md` — поддержка документации.
-
-Полный набор правил — страницы `docs-site/` и `docs-site/public/full-llms.txt` для редких случаев, когда нужен весь reference одним файлом.
+Pointer'ы: `docs-site/agents/index.md`, `execution-protocol.md`, `checklists.md`, `reference/commands.md`, `reference/smoke-matrix.md`, `STATUS.md`.

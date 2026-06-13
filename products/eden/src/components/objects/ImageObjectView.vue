@@ -53,7 +53,6 @@ function fieldValue(field: ResolvedNoteTypeField): string {
       </figure>
 
       <aside class="image-object-details" aria-label="Свойства изображения">
-        <h1 class="image-object-title">{{ titleText }}</h1>
         <dl v-if="detailFields.length > 0" class="image-object-fields kosmos-scroll">
           <div v-for="field in detailFields" :key="field.id" class="image-object-field">
             <dt class="image-object-field__label">{{ field.label }}</dt>
@@ -107,26 +106,14 @@ function fieldValue(field: ResolvedNoteTypeField): string {
 }
 
 .image-object-details {
-  display: grid;
-  grid-template-rows: auto auto;
   min-width: 0;
-}
-
-.image-object-title {
-  margin: 0;
-  padding: 0 0 14px;
-  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-  color: var(--foreground);
-  font-size: 18px;
-  line-height: 1.3;
-  font-weight: 650;
-  overflow-wrap: anywhere;
 }
 
 .image-object-fields {
   display: grid;
   gap: 0;
   margin: 0;
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
   padding: 2px 0 0;
 }
 

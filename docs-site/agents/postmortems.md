@@ -21,6 +21,33 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-13 — Eden titlebar не показывал страницы людей при скролле
+
+**Симптомы** — у обычных страниц Eden после прокрутки заголовка вниз название всплывало в titlebar, но у страниц типа `Человек` titlebar оставался пустым; рядом с названием не было мини-аватара человека.
+**Где жило** — `products/eden/src/editor-cm/CmEditor.vue::syncTitleScrollState`, `products/eden/src/App.vue::titlebarPageTitle`.
+**Root cause** — CM editor считал “заголовок вне viewport” только по высоте `.cm-editor-title-container`. Для `person_obj` этот контейнер намеренно скрыт (`showCmTitleEditor = false`), а настоящий заголовок рендерится в `TypedHeader`; из-за `offsetHeight = 0` событие `titleOutOfViewChange` никогда не эмитилось.
+**Fix** — для страниц людей scroll threshold теперь берётся по высоте всего `.cm-editor-title-shell` с `TypedHeader`. Titlebar для `person_obj` дополнительно рендерит мини-иконку: фото из поля `image`/`photo`, либо fallback-иконку пользователя.
+**Регрешн-защита** — `rtk bunx vite build --config platform/desktop/vite.extensions.config.mjs --mode eden` проверяет Vue/TS/CSS compile path; ручная проверка: открыть длинную страницу человека, прокрутить ниже паспорта — в titlebar появляется имя и мини-иконка.
+**Prevention** — Scroll-driven chrome не должен привязываться к одному DOM-узлу заголовка, если разные object types рендерят разные header layouts. Для typed objects threshold нужно считать от фактически видимого header container.
+
+## 2026-06-13 — Vite/Rolldown не резолвил lowlight GraphQL grammar
+
+**Симптомы** — `bun run --cwd platform/desktop dev` падал на `build:extensions`: Vite 8/Rolldown не мог resolve `highlight.js/lib/languages/graphql` из `lowlight/lib/common.js`, поэтому Eden extension не собирался.
+**Где жило** — `platform/desktop/vite.extensions.config.mjs::resolve.alias`, `node_modules/.bun/lowlight@3.3.0/node_modules/lowlight/lib/common.js`.
+**Root cause** — `lowlight@3.3.0` импортирует highlight.js grammars через extensionless subpath `highlight.js/lib/languages/graphql`; у `highlight.js@11.11.1` этот subpath разрешается через package `exports` wildcard в `./es/languages/*.js`, но Rolldown в Vite 8 на этом конкретном subpath не применил корректный exports/extension resolution. Остальные extension dependencies резолвятся через alias'ы shell config, а highlight.js grammar alias отсутствовал.
+**Fix** — `platform/desktop/vite.extensions.config.mjs` переведён на array alias rules и явно мапит `highlight.js/lib/*` / `highlight.js/lib/languages/*` на ESM files из Bun store; заодно сохранены prefix-alias'ы для `@/...`, `@kosmos/visuals/...` и `tailwindcss/...`, чтобы не сломать CSS/import subpaths.
+**Регрешн-защита** — `rtk proxy bun run --cwd platform/desktop build:extensions` теперь проходит все extension bundles, включая Eden с `lowlight/lib/common.js` и `lowlight/lib/all.js`.
+**Prevention** — Когда Vite config переходит с object alias на array/regex alias ради одного проблемного package, нужно переносить все прежние prefix semantics (`@/foo`, `tailwindcss/utilities.css`, package subpaths), а не только exact bare specifiers.
+
+## 2026-06-13 — Eden смена типа заметки на человека оставляла note UI
+
+**Симптомы** — пользователь выбирал тип `Человек` у обычной заметки; в логах entry уже приходил как `person_obj`, но визуально страница продолжала выглядеть как обычная заметка, без полноценного паспорта человека.
+**Где жило** — `products/eden/src/editor-cm/CmEditor.vue::handleTypePick`, `products/eden/src/Editor.vue::handleNoteTypeChange`.
+**Root cause** — смена типа была реализована в двух разных редакторах разными путями. CM-путь сохранял `type_id`, но создавал пустые header props; legacy TipTap-путь менял только локальные refs и не сохранял смену типа немедленно. При переходе `note_obj → person_obj` заголовок не раскладывался в поля человека, поэтому объект формально становился `person_obj`, но UI не получал meaningful person state.
+**Fix** — объектные поля теперь рендерятся прямо внутри CM editor через `TypedHeader`; `person_obj` больше не исключается из CM path, поэтому Vim/отступы/шрифт остаются теми же. Смена типа стала optimistic: header props и parent draft обновляются до фонового `saveNoteType`. Для человека текущий title раскладывается в `first_name` / `last_name` / `patronymic`, а уже сохранённые пустые person headers backfill'ятся при открытии.
+**Регрешн-защита** — `platform/desktop` TypeScript check покрывает новые Vue props/imports; manual HMR check: смена `Заметка → Человек` должна сразу остаться в CM editor без refresh и показать паспорт человека над markdown-телом.
+**Prevention** — Смена типа объекта должна иметь один общий metadata-путь независимо от активного редактора. Editor choice (`CM` vs legacy) не должен зависеть от object type, если пользовательские editing invariants (Vim, cursor, markdown layout) ожидаются одинаковыми для всех typed objects.
+
 ## 2026-06-12 — Eden Obsidian vault import создавал ссылки до объектов
 
 **Симптомы** — импорт папки Obsidian падал с `Error invoking remote method 'kepler:extension:ark:request': Error: FOREIGN KEY constraint failed`; во время импорта не было видимого прогресса, поэтому большой vault выглядел как зависание.

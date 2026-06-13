@@ -1,20 +1,29 @@
 <template>
-  <div :class="['editor-wrapper', 'kosmos-scroll', { 'focus-mode': zenMode }]">
+  <div
+    :class="[
+      'editor-wrapper',
+      'kosmos-scroll',
+      { 'focus-mode': zenMode, 'reader-mode': props.readerMode },
+    ]"
+  >
     <div class="editor-header">
       <div class="editor-rail editor-header-rail">
         <div class="editor-header-main">
           <input
+            v-if="!isPersonNoteType"
             ref="titleInput"
             v-model="title"
             class="title-input"
             :placeholder="UNTITLED_ENTRY_PLACEHOLDER"
+            :readonly="props.readerMode"
           />
-          <div ref="noteTypeMenu" class="note-type-inline">
+          <div v-if="!isPersonNoteType" ref="noteTypeMenu" class="note-type-inline">
             <button
               class="note-type-trigger"
               data-testid="typed-note-trigger"
               type="button"
               :style="{ '--note-type-accent': activeNoteType?.color ?? 'var(--text-tertiary)' }"
+              :disabled="props.readerMode"
               @click="toggleNoteTypeMenu"
             >
               {{ activeNoteType?.name ?? "Заметка" }}
@@ -78,6 +87,7 @@
             :all-entries="allEntries"
             :current-entry-id="entry.id"
             :show-type-row="false"
+            :readonly="props.readerMode"
             @header-prop-change="handleHeaderPropChange"
             @relation-navigate="props.onNavigate"
           />
@@ -136,11 +146,16 @@ import TypedHeader from "@/components/typed-notes/TypedHeader.vue";
 import CodeBlockView from "@/components/CodeBlockView.vue";
 import {
   createDefaultHeaderProps,
+  createHeaderPropsForTypeChange,
   resolveNoteTypeHeaderLayout,
   safeParseHeaderProps,
   validateHeaderProps,
 } from "@/lib/typedNotes";
-import { SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
+import {
+  SYSTEM_TYPE_IMAGE_ID,
+  SYSTEM_TYPE_NOTE_ID,
+  SYSTEM_TYPE_PERSON_ID,
+} from "@/lib/systemTypes";
 import { countCharsInProseMirrorDoc, countCharsInProseMirrorNode } from "@/lib/charCount";
 import { objectIconUri } from "@/lib/iconResolver";
 import {
@@ -176,6 +191,7 @@ const props = defineProps<{
   allEntries: Entry[];
   noteTypes: NoteType[];
   zenMode?: boolean;
+  readerMode?: boolean;
   onSave: (entry: Entry) => Promise<SaveEntryResult | null>;
   onNavigate: (entryId: string) => void;
   onOpenTypeSettings: (noteTypeId: string) => void;
@@ -254,9 +270,12 @@ watch(
 const activeNoteType = computed(
   () => props.noteTypes.find((noteType) => noteType.id === noteTypeId.value) ?? null,
 );
+const isPersonNoteType = computed(() => noteTypeId.value === SYSTEM_TYPE_PERSON_ID);
 
 const typePickerOptions = computed(() =>
-  props.noteTypes.filter((noteType) => Boolean(noteType.id)),
+  props.noteTypes.filter(
+    (noteType) => Boolean(noteType.id) && noteType.id !== SYSTEM_TYPE_IMAGE_ID,
+  ),
 );
 
 function getNoteTypeIconSrc(noteType: NoteType | null) {
@@ -777,7 +796,7 @@ const extensions = [
 const editor = useEditor({
   extensions,
   content: parseContentJson(lastPersistedContentJson),
-  editable: true,
+  editable: !props.readerMode,
   onUpdate: () => {
     const startedAt = performance.now();
     markDocumentDirty();
@@ -796,6 +815,13 @@ const editor = useEditor({
 
 // Test-only: expose editor instance для PM introspection в e2e specs.
 // Не несёт runtime overhead'а, но позволяет тестам читать selection state.
+watch(
+  () => props.readerMode,
+  (enabled) => {
+    editor.value?.setEditable(!enabled, false);
+  },
+);
+
 watch(
   editor,
   (instance) => {
@@ -920,7 +946,7 @@ function resetRevisionBaseline() {
 }
 
 function markDocumentDirty() {
-  if (isHydrating) return;
+  if (props.readerMode || isHydrating) return;
   documentRevision += 1;
   saveConflict.value = null;
   schedulePersistedStateReconciliation();
@@ -928,7 +954,7 @@ function markDocumentDirty() {
 }
 
 function markMetadataDirty() {
-  if (isHydrating) return;
+  if (props.readerMode || isHydrating) return;
   metadataRevision += 1;
   saveConflict.value = null;
   schedulePersistedStateReconciliation();
@@ -1002,6 +1028,7 @@ function scheduleAutoSave() {
  * teardown).
  */
 async function flushAutoSave(): Promise<void> {
+  if (props.readerMode) return;
   if (autosaveTimer !== null) {
     window.clearTimeout(autosaveTimer);
     autosaveTimer = null;
@@ -1283,10 +1310,13 @@ function handleNoteTypeChange(nextTypeId: string) {
   const nextNoteType = props.noteTypes.find((noteType) => noteType.id === normalizedTypeId) ?? null;
   noteTypeId.value = normalizedTypeId;
   headerLayout.value = nextNoteType ? resolveNoteTypeHeaderLayout(nextNoteType) : "inline";
-  headerProps.value = createDefaultHeaderProps(nextNoteType);
+  headerProps.value = createHeaderPropsForTypeChange(nextNoteType, title.value);
   headerValidationError.value = null;
   isNoteTypeMenuOpen.value = false;
   isTypePickerOpen.value = false;
+  markMetadataDirty();
+  emitEntryDraftChange();
+  void flushAutoSave();
 }
 
 function toggleNoteTypeMenu() {
@@ -1305,6 +1335,7 @@ function openActiveTypeSettings() {
 }
 
 function handleHeaderPropChange(fieldId: string, value: unknown) {
+  if (props.readerMode) return;
   headerProps.value = { ...headerProps.value, [fieldId]: value };
 }
 
@@ -1329,6 +1360,7 @@ function shouldTrackTypingEvent(event: KeyboardEvent) {
 watch(
   [title, noteTypeId, headerLayout, headerProps],
   () => {
+    if (props.readerMode) return;
     markMetadataDirty();
     emitEntryDraftChange();
   },

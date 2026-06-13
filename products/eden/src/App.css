@@ -4746,6 +4746,10 @@ span[data-wikilink]:hover {
   background: #18181b;
 }
 
+.app-container .kosmos-desktop-chrome-settings__header {
+  position: relative;
+}
+
 .app-container.focus-mode-active .kosmos-desktop-chrome-settings > div,
 .app-container.focus-mode-active .kosmos-desktop-chrome-settings__header {
   background: transparent !important;
@@ -4833,4 +4837,70 @@ span[data-wikilink]:hover {
   line-height: 1;
   pointer-events: none;
   text-align: center;
+}
+
+.eden-titlebar-page-title {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(42vw, 520px);
+  max-width: min(44vw, 520px);
+  overflow: hidden;
+  transform: translate(-50%, -50%);
+  color: color-mix(in srgb, var(--sidebar-foreground) 76%, transparent);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  pointer-events: none;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.eden-titlebar-page-title__icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  color: color-mix(in srgb, var(--sidebar-foreground) 70%, transparent);
+}
+
+.eden-titlebar-page-title__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.eden-titlebar-page-title__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.eden-titlebar-page-title-enter-active,
+.eden-titlebar-page-title-leave-active {
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+
+.eden-titlebar-page-title-enter-from,
+.eden-titlebar-page-title-leave-to {
+  opacity: 0;
+  transform: translate(-50%, calc(-50% + 5px));
+}
+
+.eden-titlebar-page-title-enter-to,
+.eden-titlebar-page-title-leave-from {
+  opacity: 1;
+  transform: translate(-50%, -50%);
 }

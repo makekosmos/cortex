@@ -42,9 +42,9 @@ Edit'ить код, чинить баги, обновлять документа
 
 ```powershell
 git status --short       # рабочее дерево clean? если нет — закоммить ОТДЕЛЬНО до bump'а
-bun run --cwd shell typecheck
+bun run --cwd platform/desktop typecheck
 # для extension-bump'а:
-bun run --cwd shell build:extensions
+bun run --cwd platform/desktop build:extensions
 ```
 
 Если typecheck / build fail — fix первым, потом bump. Bump чтобы «закрыть test-цикл» / «вытолкнуть фикс» — anti-pattern; bump = release для пользователя.
@@ -60,9 +60,9 @@ bun run --cwd shell build:extensions
     jq -r '.version' extensions/<id>/package.json
     # должны вернуть одно и то же
     ```
-- **kepler-shell** (`shell/`):
-  - `shell/package.json` → `"version"` — публикуется electron-updater в `latest.yml`, installed Kepler'ы прочтут как «доступно обновление».
-- **`packages/visuals` / `packages/ark`** — НЕ БАМПЯТСЯ. Это workspace internals (`"version": "0.1.0"` зафиксирована), extensions/shell зависят через `workspace:*`. Менять только если будет actual публикация на npm (не сейчас).
+- **Kosmos desktop shell** (`platform/desktop/`):
+  - `platform/desktop/package.json` → `"version"` — публикуется electron-updater в `latest.yml`, installed Kosmos'ы прочтут как «доступно обновление».
+- **`packages/visuals` / `core/ark/packages/ark`** — НЕ БАМПЯТСЯ. Это workspace internals (`"version": "0.1.0"` зафиксирована), extensions/shell зависят через `workspace:*`. Менять только если будет actual публикация на npm (не сейчас).
 - Patch increment (`0.1.2 → 0.1.3`), не minor/major. Minor — только по явной команде пользователя («бамп eden minor»).
 
 ### 3. Обновить документацию
@@ -104,7 +104,7 @@ git push
 #### Для extension (eden, delphi, horologion, arrancador):
 
 ```powershell
-bun run --cwd shell ext:publish <id>
+bun run --cwd platform/desktop ext:publish <id>
 ```
 
 Скрипт сам:
@@ -117,7 +117,7 @@ bun run --cwd shell ext:publish <id>
 После публикации — регенерация каталога:
 
 ```powershell
-bun run --cwd shell ext:catalog
+bun run --cwd platform/desktop ext:catalog
 ```
 
 И коммит обновлённого catalog.json в `kosmos-extensions` (если скрипт пишет локально), либо push если он его пушит сам — проверь output `ext:catalog`.
@@ -125,7 +125,7 @@ bun run --cwd shell ext:catalog
 #### Для kepler-shell (лаунчер):
 
 ```powershell
-bun run --cwd shell build
+bun run --cwd platform/desktop build
 ```
 
 ::: danger Windows build lock: не расследовать заново
@@ -146,7 +146,7 @@ Access is denied. (os error 5)
    sc.exe qc KeplerFocusSvc
    ```
    Если `BINARY_PATH_NAME` указывает в `D:\Personal\Hobby\Coding\kosmos\target\release\...`,
-   обычный `bun run --cwd shell build` будет ненадёжен.
+   обычный `bun run --cwd platform/desktop build` будет ненадёжен.
 2. Собери Rust backend/helper/service в alternate target dir:
    ```powershell
    $env:CARGO_TARGET_DIR = ".tmp\cargo-release"
@@ -154,7 +154,7 @@ Access is denied. (os error 5)
    ```
 3. Запускай electron-builder через временный config, где `extraResources` смотрит
    на `.tmp\cargo-release\release\*.exe`, а не на `target\release\*.exe`.
-   Не правь постоянный `shell/package.json` ради этого workaround'а.
+   Не правь постоянный `platform/desktop/package.json` ради этого workaround'а.
 4. В evidence/release notes фиксируй как environment workaround. Не называй bump
    завершённым, пока installer/latest.yml реально не собраны и не опубликованы.
 
@@ -215,10 +215,10 @@ shell + eden + horologion):
 - **STATUS.md / whats-new** — один комбинированный edit + один коммит с docs (можно объединить с bump-коммитом, см. шаблон ниже).
 - **Publish** — отдельно per-extension (`ext:publish` принимает один id), потом один `ext:catalog`:
   ```powershell
-  bun run --cwd shell ext:publish eden
-  bun run --cwd shell ext:publish horologion
-  # shell — отдельная процедура (build + manual gh release)
-  bun run --cwd shell ext:catalog
+  bun run --cwd platform/desktop ext:publish eden
+  bun run --cwd platform/desktop ext:publish horologion
+  # desktop shell — отдельная процедура (build + manual gh release)
+  bun run --cwd platform/desktop ext:catalog
   ```
 - **Каталог** перегенерируется один раз в конце — захватывает все свежие releases.
 
@@ -243,6 +243,6 @@ shell + eden + horologion):
 # eden 0.1.2 → 0.1.3:
 # 1. edit extensions/eden/{manifest.json,package.json}
 git add extensions/eden && git commit -m "chore(eden): bump eden 0.1.2 → 0.1.3" && git push
-bun run --cwd shell ext:publish eden
-bun run --cwd shell ext:catalog
+bun run --cwd platform/desktop ext:publish eden
+bun run --cwd platform/desktop ext:catalog
 ```

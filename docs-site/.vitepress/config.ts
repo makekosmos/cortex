@@ -239,6 +239,7 @@ export default defineConfig({
           text: "Для AI-агента",
           items: [
             { text: "Старт работы", link: "/agents/" },
+            { text: "Execution protocol", link: "/agents/execution-protocol" },
             { text: "Чек-листы по областям", link: "/agents/checklists" },
             { text: "Запреты и гварды", link: "/agents/forbidden" },
             { text: "Поддержка документации", link: "/agents/docs-maintenance" },

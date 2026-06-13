@@ -72,7 +72,45 @@
             @back="navigateBack"
             @forward="navigateForward"
           />
+          <button
+            v-if="!layout.isZenMode"
+            type="button"
+            class="eden-titlebar-button inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in [-webkit-app-region:no-drag] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)"
+            :title="preferences.state.readerModeEnabled ? 'Режим чтеца' : 'Режим писателя'"
+            :aria-label="
+              preferences.state.readerModeEnabled
+                ? 'Переключиться в режим писателя'
+                : 'Переключиться в режим чтеца'
+            "
+            :aria-pressed="preferences.state.readerModeEnabled"
+            data-testid="titlebar-reader-mode-toggle"
+            @click="preferences.setReaderModeEnabled(!preferences.state.readerModeEnabled)"
+          >
+            <BookOpen v-if="preferences.state.readerModeEnabled" :size="16" />
+            <Pencil v-else :size="16" />
+          </button>
         </div>
+      </template>
+
+      <template #titlebar-center>
+        <Transition name="eden-titlebar-page-title">
+          <div
+            v-if="showTitlebarPageTitle"
+            :key="titlebarPageTitle"
+            class="eden-titlebar-page-title"
+            data-testid="titlebar-page-title"
+          >
+            <span
+              v-if="showTitlebarPersonIcon"
+              class="eden-titlebar-page-title__icon"
+              aria-hidden="true"
+            >
+              <img v-if="titlebarPersonImageSrc" :src="titlebarPersonImageSrc" alt="" />
+              <User v-else :size="13" />
+            </span>
+            <span class="eden-titlebar-page-title__text">{{ titlebarPageTitle }}</span>
+          </div>
+        </Transition>
       </template>
 
       <template v-if="!layout.isZenMode" #sidebar>
@@ -140,15 +178,21 @@
         />
         <CmEditor
           v-else-if="eden.currentEntry && useCmEditorForCurrent"
-          :key="eden.currentEntry.id"
+          :key="`${eden.currentEntry.id}:${eden.currentEntry.type_id ?? 'note_obj'}`"
           :entry="eden.currentEntry"
+          :all-entries="eden.entries"
+          :note-types="eden.noteTypes"
           :zen-mode="layout.isZenMode"
           :vim-mode="preferences.state.vimModeEnabled"
+          :reader-mode="preferences.state.readerModeEnabled"
           :on-save="eden.handleSave"
+          :on-navigate="eden.navigateTo"
           @close-entry="closeCurrentEntry"
           @set-zen-mode="setZenMode"
           @entry-draft-change="eden.updateEntryDraft"
           @live-char-count="liveCharCount = $event"
+          @title-out-of-view-change="noteTitleOutOfView = $event"
+          @type-change="onCmTypeChange"
         />
         <Editor
           v-else-if="eden.currentEntry"
@@ -157,6 +201,7 @@
           :all-entries="eden.entries"
           :note-types="eden.noteTypes"
           :zen-mode="layout.isZenMode"
+          :reader-mode="preferences.state.readerModeEnabled"
           :on-save="eden.handleSave"
           :on-navigate="eden.navigateTo"
           :on-open-type-settings="openTypeSettings"
@@ -252,9 +297,11 @@ import SettingsPage from "@/components/settings/SettingsPage.vue";
 import ObjectTypesSettings from "@/components/settings/ObjectTypesSettings.vue";
 import TypeObjectsView from "@/components/objects/TypeObjectsView.vue";
 import ImageObjectView from "@/components/objects/ImageObjectView.vue";
-import { SYSTEM_TYPE_IMAGE_ID } from "@/lib/systemTypes";
+import { SYSTEM_TYPE_IMAGE_ID, SYSTEM_TYPE_PERSON_ID } from "@/lib/systemTypes";
+import { getResolvedNoteTypeField } from "@/lib/typedNotes";
+import { resolveObjectImageSrc } from "@/lib/objectImages";
 import { PhPottedPlant } from "@phosphor-icons/vue";
-import { PanelLeftOpen } from "@lucide/vue";
+import { BookOpen, PanelLeftOpen, Pencil, User } from "@lucide/vue";
 import "@/App.css";
 
 const eden = useEdenStore();
@@ -264,6 +311,7 @@ const preferences = usePreferences();
 const useCmEditorForCurrent = computed(
   () =>
     eden.currentEntry != null &&
+    !preferences.state.readerModeEnabled &&
     shouldUseCmEditor(
       preferences.state.cmEditorEnabled || preferences.state.vimModeEnabled,
       eden.currentEntry.content_json,
@@ -573,6 +621,7 @@ async function onDeleteContextEntry() {
 const { canGoBack, canGoForward, navigateBack, navigateForward } = useNavigationHistory(eden);
 const settingsInitialTab = shallowRef<SettingsTab>("general");
 const objectTypeCreateToken = shallowRef(0);
+const noteTitleOutOfView = shallowRef(false);
 
 function pickRecentEntries(entries: Entry[], limit: number) {
   const topEntries: Entry[] = [];
@@ -628,6 +677,39 @@ const activeCurrentType = computed(() =>
     ? (eden.noteTypes.find((noteType) => noteType.id === eden.currentEntry?.type_id) ?? null)
     : null,
 );
+const currentHeaderProps = computed<Record<string, unknown>>(() => {
+  if (!eden.currentEntry?.header_props_json) return {};
+
+  try {
+    const parsed = JSON.parse(eden.currentEntry.header_props_json) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+});
+const entriesById = computed(() => new Map(eden.entries.map((entry) => [entry.id, entry])));
+const isCurrentPersonEntry = computed(() => activeCurrentType.value?.id === SYSTEM_TYPE_PERSON_ID);
+const titlebarPersonImageSrc = computed(() => {
+  if (!isCurrentPersonEntry.value) return "";
+
+  const imageFieldId = getResolvedNoteTypeField(activeCurrentType.value, "image")?.visible
+    ? "image"
+    : "photo";
+  return resolveObjectImageSrc(currentHeaderProps.value[imageFieldId], entriesById.value);
+});
+const showTitlebarPersonIcon = computed(() => isCurrentPersonEntry.value);
+const titlebarPageTitle = computed(() => {
+  if (layout.isZenMode) return "";
+
+  if (activeCurrentType.value?.id === SYSTEM_TYPE_IMAGE_ID || noteTitleOutOfView.value) {
+    return currentTitlebarTitle.value;
+  }
+
+  return "";
+});
+const showTitlebarPageTitle = computed(() => titlebarPageTitle.value.length > 0);
 function openSettingsTab(tab: SettingsTab = "general") {
   settingsInitialTab.value = tab;
   eden.activeScreen = "settings";
@@ -649,6 +731,10 @@ function openTypeSettings(noteTypeId: string) {
 
 function closeCurrentEntry() {
   eden.currentEntry = null;
+}
+
+function onCmTypeChange(entry: Entry) {
+  eden.updateEntryDraft(entry);
 }
 
 function setZenMode(enabled: boolean) {
@@ -751,6 +837,13 @@ watch(
     if (eden.activeSpace === "my-space" && !eden.currentEntry) {
       void eden.openMySpace();
     }
+  },
+);
+
+watch(
+  () => eden.currentEntry?.id,
+  () => {
+    noteTitleOutOfView.value = false;
   },
 );
 

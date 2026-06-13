@@ -28,13 +28,16 @@
 5. **[Изоляция тестовых БД](/concepts/test-isolation)** — как писать тесты.
 6. **[Proof loop](/concepts/proof-loop)** — как оформлять substantial-задачи.
 7. **[Запреты и гварды](/agents/forbidden)** — список «никогда».
-8. **[Чек-листы по областям](/agents/checklists)** — что прогнать перед сдачей.
+8. **[Execution protocol](/agents/execution-protocol)** — как брать контекст, выбирать fast path и не раздувать итерации.
+9. **[Чек-листы по областям](/agents/checklists)** — что прогнать перед сдачей.
 
 ## Принципы работы
 
-### 1. Не угадывай — читай источник
+### 1. Не угадывай — читай источник, но snippet-first
 
-Перед правкой в `apps/<name>` прочитай `apps/<name>/AGENTS.md`. Перед правкой в data-слое — `docs/ARK-READONLY-SQL-BOUNDARY.md` и [Граница записи](/concepts/write-boundary).
+Перед правкой классифицируй задачу и иди по [Execution protocol](/agents/execution-protocol): конкретный вопрос к коду → `rtk grep` → 40–120 строк вокруг найденного места. Полные файлы/docs/skills открывай только когда это доказательно нужно.
+
+Перед правкой в `apps/<name>` прочитай app-local docs/AGENTS, если они существуют. Перед правкой в data-слое — [Граница записи](/concepts/write-boundary) и ARK routing docs.
 
 ### 2. Меньший defensible diff
 
@@ -127,6 +130,7 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 
 ## Дальше
 
+- [Execution protocol](/agents/execution-protocol) — основной рабочий цикл агента и fast paths.
 - [Чек-листы по областям](/agents/checklists) — что прогнать перед сдачей в каждой области.
 - [Запреты и гварды](/agents/forbidden) — список «никогда».
 - [Шаблоны спецификаций](/agents/spec-templates) — типовые `spec.md` для proof loop.

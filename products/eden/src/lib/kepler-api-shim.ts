@@ -20,7 +20,7 @@ import {
   validateHeaderProps,
   type NoteType,
 } from "@/lib/typedNotes";
-import { normalizeSystemNoteType } from "@/lib/systemTypes";
+import { isSystemType, normalizeSystemNoteType } from "@/lib/systemTypes";
 
 const DEFAULT_ARK_TYPE_ID = "note_obj";
 
@@ -258,7 +258,7 @@ function mapNoteTypeToArkObjectType(noteType: NoteType): ArkObjectTypeRecord {
     }),
     createdAt: millisToArkTimestamp(noteType.created_at),
     updatedAt: millisToArkTimestamp(noteType.updated_at),
-    systemLocked: noteType.id === "note_obj" || noteType.id === "game_obj",
+    systemLocked: isSystemType(noteType.id),
   };
 }
 

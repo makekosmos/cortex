@@ -1,9 +1,11 @@
 ---
 name: kotlin-android
-description: Android Kotlin + Jetpack Compose best practices for the Delphi app. Use for any Android/Kotlin/Compose/Room/Hilt work in apps/delphi/android/.
+description: Android Kotlin + Jetpack Compose best practices for Delphi Android. Use for any Android/Kotlin/Compose/Room/Hilt work in incubator/mobile/delphi/ or incubator/mobile/ark-service/.
 ---
 
-# Kotlin Android Skill — Delphi App
+# Kotlin Android Skill — Delphi Android
+
+Scope: `incubator/mobile/delphi/` and provider contract work in `incubator/mobile/ark-service/`.
 
 ## Stack
 

@@ -62,42 +62,82 @@ export default defineConfig(({ mode }) => {
     // у которых tailwind directives есть в их CSS entry.
     plugins: [vue({ features: { vaporInterop: true } }), tailwindcss()],
     resolve: {
-      alias: {
-        // Per-extension "@" alias → <extensionDir>/src. Совпадает с конвенцией
-        // legacy apps (Delphi, Eden), упрощает миграцию исходников
-        // как Vue extension без массового rewrite import-путей.
-        "@": path.resolve(extensionDir, "src"),
-        "@kosmos/ark": path.resolve(__dirname, "../../core/ark/packages/ark/src/index.ts"),
-        "@kosmos/visuals/theme/css": path.resolve(
-          __dirname,
-          "../../packages/visuals/theme/css-variables.css",
-        ),
-        "@kosmos/visuals": path.resolve(__dirname, "../../packages/visuals"),
-        // Extensions live at <repoRoot>/extensions/<id>/ and have no own
-        // node_modules. Bare-specifier deps used by extension sources
-        // (e.g. @lucide/vue, @phosphor-icons/vue, tailwindcss) resolve via shell's
-        // node_modules: point them explicitly so Rolldown does not walk
-        // up past the repo root and miss them.
-        "@lucide/vue": path.resolve(__dirname, "node_modules/@lucide/vue"),
-        "@phosphor-icons/vue": path.resolve(__dirname, "node_modules/@phosphor-icons/vue"),
-        // Tailwind CSS — extension'ы могут @import "tailwindcss" (или
-        // его submodules как `tailwindcss/utilities.css`). Bare specifier
-        // не резолвится из <extensionDir>/src без alias'а, потому что
-        // extension'ы не имеют локального node_modules.
-        tailwindcss: path.resolve(__dirname, "node_modules/tailwindcss"),
-        // Force vue-router/pinia resolve к extension'овской копии
-        // (extensions/<id>/node_modules/). Bun pinning creates separate
-        // copies in packages/visuals/node_modules (peer satisfy) → разные
-        // RouterLink injection symbols → primary/footer sidebar items не
-        // рендерятся. Alias привязывает к одной копии. Только для extension'ов
-        // у которых эта зависимость реально установлена.
+      alias: [
+        // Vite 8/Rolldown не резолвит extensionless highlight.js grammar subpaths из lowlight.
+        // См. docs-site/agents/postmortems.md § 2026-06-13.
+        {
+          find: /^highlight\.js\/lib\/languages\/(.+)$/,
+          replacement: path.resolve(
+            repoRoot,
+            "node_modules/.bun/highlight.js@11.11.1/node_modules/highlight.js/es/languages/$1.js",
+          ),
+        },
+        {
+          find: /^highlight\.js\/lib\/(.+)$/,
+          replacement: path.resolve(
+            repoRoot,
+            "node_modules/.bun/highlight.js@11.11.1/node_modules/highlight.js/es/$1.js",
+          ),
+        },
+        {
+          find: /^highlight\.js$/,
+          replacement: path.resolve(
+            repoRoot,
+            "node_modules/.bun/highlight.js@11.11.1/node_modules/highlight.js/es/index.js",
+          ),
+        },
+        {
+          find: /^@\/(.+)$/,
+          replacement: path.resolve(extensionDir, "src/$1"),
+        },
+        {
+          find: /^@$/,
+          replacement: path.resolve(extensionDir, "src"),
+        },
+        {
+          find: /^@kosmos\/ark$/,
+          replacement: path.resolve(__dirname, "../../core/ark/packages/ark/src/index.ts"),
+        },
+        {
+          find: /^@kosmos\/visuals\/theme\/css$/,
+          replacement: path.resolve(__dirname, "../../packages/visuals/theme/css-variables.css"),
+        },
+        {
+          find: /^@kosmos\/visuals\/(.+)$/,
+          replacement: path.resolve(__dirname, "../../packages/visuals/$1"),
+        },
+        {
+          find: /^@kosmos\/visuals$/,
+          replacement: path.resolve(__dirname, "../../packages/visuals"),
+        },
+        {
+          find: /^@lucide\/vue$/,
+          replacement: path.resolve(__dirname, "node_modules/@lucide/vue"),
+        },
+        {
+          find: /^@phosphor-icons\/vue$/,
+          replacement: path.resolve(__dirname, "node_modules/@phosphor-icons/vue"),
+        },
+        {
+          find: /^tailwindcss\/(.+)$/,
+          replacement: path.resolve(__dirname, "node_modules/tailwindcss/$1"),
+        },
+        {
+          find: /^tailwindcss$/,
+          replacement: path.resolve(__dirname, "node_modules/tailwindcss"),
+        },
         ...(existsSync(path.join(extensionDir, "node_modules/vue-router"))
-          ? { "vue-router": path.resolve(extensionDir, "node_modules/vue-router") }
-          : {}),
+          ? [
+              {
+                find: /^vue-router$/,
+                replacement: path.resolve(extensionDir, "node_modules/vue-router"),
+              },
+            ]
+          : []),
         ...(existsSync(path.join(extensionDir, "node_modules/pinia"))
-          ? { pinia: path.resolve(extensionDir, "node_modules/pinia") }
-          : {}),
-      },
+          ? [{ find: /^pinia$/, replacement: path.resolve(extensionDir, "node_modules/pinia") }]
+          : []),
+      ],
       dedupe: ["vue", "vue-router", "pinia"],
     },
     build: {

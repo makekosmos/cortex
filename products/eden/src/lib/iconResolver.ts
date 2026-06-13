@@ -9,8 +9,9 @@
 //
 // Имена иконок (`noteType.icon`) исторически совпадают с anytype icon ids:
 // "document", "document-text", "game-controller", "image", "barbell",
-// "fitness", "page". Mapping ниже покрывает встречающиеся значения; всё что
-// не нашлось падает в `document` (FileText).
+// "fitness", "page", "book", "calendar", "planet", "library", "folder",
+// "sparkles", "user". Mapping ниже покрывает встречающиеся значения; всё
+// что не нашлось падает в `document` (FileText).
 //
 // SVG path data заимствован из `@lucide/vue` (v0.548) — встраиваем
 // inline чтобы избежать tree-shake'а Lucide через Vue-component сборку
@@ -78,6 +79,63 @@ const ACTIVITY: IconNode = [
   ],
 ];
 
+const BOOK_OPEN: IconNode = [
+  ["path", { d: "M12 7v14" }],
+  [
+    "path",
+    {
+      d: "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z",
+    },
+  ],
+];
+
+const CALENDAR: IconNode = [
+  ["path", { d: "M8 2v4" }],
+  ["path", { d: "M16 2v4" }],
+  ["rect", { x: "3", y: "4", width: "18", height: "18", rx: "2" }],
+  ["path", { d: "M3 10h18" }],
+];
+
+const ORBIT: IconNode = [
+  ["circle", { cx: "12", cy: "12", r: "3" }],
+  ["circle", { cx: "19", cy: "5", r: "2" }],
+  ["circle", { cx: "5", cy: "19", r: "2" }],
+  ["path", { d: "M10.4 21.6a10 10 0 0 1-8-8" }],
+  ["path", { d: "M13.6 2.4a10 10 0 0 1 8 8" }],
+  ["path", { d: "M21.6 13.6a10 10 0 0 1-8 8" }],
+  ["path", { d: "M2.4 10.4a10 10 0 0 1 8-8" }],
+];
+
+const LIBRARY: IconNode = [
+  ["path", { d: "m16 6 4 14" }],
+  ["path", { d: "M12 6v14" }],
+  ["path", { d: "M8 8v12" }],
+  ["path", { d: "M4 4v16" }],
+];
+
+const FOLDER: IconNode = [
+  [
+    "path",
+    {
+      d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z",
+    },
+  ],
+];
+
+const SPARKLES: IconNode = [
+  [
+    "path",
+    { d: "M9.94 14.5 8.5 18.5 7.06 14.5 3.06 13.06 7.06 11.62 8.5 7.62 9.94 11.62 13.94 13.06z" },
+  ],
+  ["path", { d: "M17.5 6.5 16.6 9 14.1 9.9 16.6 10.8 17.5 13.3 18.4 10.8 20.9 9.9 18.4 9z" }],
+  ["path", { d: "M19 17.5 18.5 19 17 19.5 18.5 20 19 21.5 19.5 20 21 19.5 19.5 19z" }],
+];
+
+const USER: IconNode = [
+  ["path", { d: "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" }],
+  ["circle", { cx: "12", cy: "7", r: "4" }],
+];
+
 const ICON_MAP: Record<string, IconNode> = {
   document: FILE_TEXT,
   "document-text": FILE_TEXT,
@@ -86,6 +144,14 @@ const ICON_MAP: Record<string, IconNode> = {
   image: IMAGE,
   barbell: DUMBBELL,
   fitness: ACTIVITY,
+  book: BOOK_OPEN,
+  calendar: CALENDAR,
+  planet: ORBIT,
+  library: LIBRARY,
+  folder: FOLDER,
+  sparkles: SPARKLES,
+  user: USER,
+  person: USER,
 };
 
 function renderSvg(node: IconNode): string {

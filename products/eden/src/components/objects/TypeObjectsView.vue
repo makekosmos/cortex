@@ -11,7 +11,8 @@ import {
   resolveNoteTypeFields,
 } from "@/lib/typedNotes";
 import { objectIconUri } from "@/lib/iconResolver";
-import { toDisplayImageSrc } from "@/lib/localImages";
+import { resolveObjectImageSrc } from "@/lib/objectImages";
+import { SYSTEM_TYPE_PERSON_ID } from "@/lib/systemTypes";
 
 const props = defineProps<{
   noteType: NoteType;
@@ -46,12 +47,29 @@ function formatFieldValue(field: ResolvedNoteTypeField, value: unknown): string 
 const collectionTitle = computed(() => getNoteTypeCollectionName(props.noteType));
 const iconSrc = computed(() => objectIconUri(props.noteType.icon));
 const presentation = computed(() => getNoteTypePresentation(props.noteType));
+const isPersonCollection = computed(() => props.noteType.id === SYSTEM_TYPE_PERSON_ID);
+const entriesById = computed(
+  () => new Map(props.entries.map((entry) => [entry.id, entry] satisfies [string, Entry])),
+);
 
 function getEntryImageSrc(entry: Entry): string {
   const imageFieldId = presentation.value.imageFieldId;
   if (!imageFieldId) return "";
 
-  return toDisplayImageSrc(String(parseHeaderProps(entry)[imageFieldId] ?? ""));
+  return resolveObjectImageSrc(parseHeaderProps(entry)[imageFieldId], entriesById.value);
+}
+
+function getPersonDisplayName(entry: Entry): string {
+  const props = parseHeaderProps(entry);
+  const displayName = [
+    String(props.first_name ?? "").trim(),
+    String(props.patronymic ?? "").trim(),
+    String(props.last_name ?? "").trim(),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return displayName || getEntryDisplayTitle(entry.title, entry.header_props_json);
 }
 
 const collectionEntries = computed(() =>
@@ -145,6 +163,7 @@ const tableColumnsStyle = computed(() => ({
             v-for="entry in collectionEntries"
             :key="entry.id"
             class="type-objects-row"
+            :class="isPersonCollection && 'type-objects-row--person'"
             :style="tableColumnsStyle"
             type="button"
             @click="emit('openEntry', entry.id)"
@@ -157,6 +176,7 @@ const tableColumnsStyle = computed(() => ({
                 <img
                   v-if="getEntryImageSrc(entry)"
                   class="type-objects-row-thumb"
+                  :class="isPersonCollection && 'type-objects-row-thumb--avatar'"
                   :src="getEntryImageSrc(entry)"
                   :alt="getEntryDisplayTitle(entry.title, entry.header_props_json)"
                   draggable="false"
@@ -169,7 +189,11 @@ const tableColumnsStyle = computed(() => ({
                 />
               </span>
               <span class="type-objects-name-text">
-                {{ getEntryDisplayTitle(entry.title, entry.header_props_json) }}
+                {{
+                  isPersonCollection
+                    ? getPersonDisplayName(entry)
+                    : getEntryDisplayTitle(entry.title, entry.header_props_json)
+                }}
               </span>
             </span>
 
@@ -204,7 +228,8 @@ const tableColumnsStyle = computed(() => ({
   flex-direction: column;
   gap: 24px;
   padding: 36px 40px 40px;
-  overflow: hidden;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .type-objects-header {
@@ -212,6 +237,7 @@ const tableColumnsStyle = computed(() => ({
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
+  flex: 0 0 auto;
 }
 
 .type-objects-title-wrap {
@@ -231,6 +257,7 @@ const tableColumnsStyle = computed(() => ({
 .type-objects-icon-wrap {
   width: 28px;
   height: 28px;
+  flex-shrink: 0;
 }
 
 .type-objects-row-icon-wrap {
@@ -270,6 +297,10 @@ const tableColumnsStyle = computed(() => ({
   width: 20px;
   height: 20px;
   object-fit: cover;
+}
+
+.type-objects-row-thumb--avatar {
+  border-radius: 999px;
 }
 
 .type-objects-title-copy {
@@ -326,18 +357,18 @@ const tableColumnsStyle = computed(() => ({
 }
 
 .type-objects-panel {
-  flex: 1;
+  flex: 0 0 auto;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .type-objects-table {
   display: flex;
-  height: 100%;
+  width: 100%;
   min-height: 0;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .type-objects-table-head,
@@ -390,9 +421,9 @@ const tableColumnsStyle = computed(() => ({
 }
 
 .type-objects-table-body {
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
 }
 
 .type-objects-name-cell {
@@ -401,6 +432,15 @@ const tableColumnsStyle = computed(() => ({
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.type-objects-row--person .type-objects-name-cell {
+  align-items: center;
+  text-align: center;
+}
+
+.type-objects-row--person .type-objects-name-text {
+  text-align: center;
 }
 
 .type-objects-name-text {

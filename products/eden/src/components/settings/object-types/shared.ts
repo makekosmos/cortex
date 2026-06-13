@@ -30,9 +30,11 @@ export interface TypeDraft {
 
 export const ICON_OPTIONS = [
   "document",
+  "user",
   "book",
   "calendar",
   "game-controller",
+  "image",
   "barbell",
   "fitness",
   "planet",

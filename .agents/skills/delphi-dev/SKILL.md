@@ -1,18 +1,23 @@
 ---
 name: delphi-dev
-description: Запустить Delphi Electron (TypeScript) в dev-режиме
+description: Запустить Delphi Vue-extension в dev/HMR режиме внутри Kosmos desktop shell. Use when user asks to run Delphi desktop development UI.
 disable-model-invocation: true
 allowed-tools: Bash
 ---
 
-Запусти Delphi Electron приложение в dev-режиме.
+Запусти Delphi desktop как Vue-extension, а не standalone Electron app.
 
-1. Убей старый процесс если есть: `pkill -f "electron.*delphi" 2>/dev/null`
-2. Запусти:
+1. Для HMR dev server только Delphi extension:
 
 ```bash
-cd apps/delphi/ts && bun run dev 2>&1 &disown
+rtk bun run --cwd platform/desktop dev:extensions:only delphi
 ```
 
-3. Подожди 5 секунд, проверь что Vite поднялся (ищи "ready" в выводе).
-4. Сообщи что Delphi запущен.
+2. Если нужен полный Kosmos shell вместе с backend/runtime:
+
+```bash
+rtk bun run --cwd platform/desktop dev
+```
+
+3. Ожидаемый dev port Delphi из `products/delphi/manifest.json`: `http://localhost:5182/`.
+4. Сообщи пользователю, какой режим запущен и где смотреть ошибки.

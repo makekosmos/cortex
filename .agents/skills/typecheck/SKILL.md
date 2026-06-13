@@ -1,22 +1,30 @@
 ---
 name: typecheck
-description: Проверить TypeScript и Swift на ошибки компиляции
+description: Проверить актуальные TypeScript/Vue/ARK части Kosmos на ошибки компиляции. Use when user asks for typecheck or quick compile verification.
 disable-model-invocation: true
 allowed-tools: Bash
 ---
 
-Проверь все приложения на ошибки компиляции:
+Проверь актуальные desktop/ARK части репозитория. Не используй legacy пути `apps/delphi/ts` или `apps/delphi/swift`.
 
-1. **Delphi TS**:
+## Быстрая desktop-проверка
 
-   ```bash
-   cd apps/delphi/ts && npx tsc --noEmit
-   ```
+```bash
+rtk bun run desktop:typecheck
+rtk bun run --cwd core/ark/packages/ark typecheck
+```
 
-2. **Delphi Swift** (если xcodebuild доступен):
+## Если менялся Delphi desktop extension
 
-   ```bash
-   cd apps/delphi/swift && xcodebuild -scheme Delphi -destination 'platform=macOS' build 2>&1 | tail -20
-   ```
+```bash
+rtk bun run ext:build delphi
+```
 
-3. Выведи сводку: что прошло, что упало, какие ошибки.
+## Если менялся Android stack
+
+```bash
+cd incubator/mobile/ark-service && rtk ./gradlew build
+cd incubator/mobile/delphi && rtk ./gradlew build
+```
+
+В финале выведи краткую сводку: что прошло, что упало, первые релевантные ошибки.

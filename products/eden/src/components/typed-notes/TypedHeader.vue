@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { Dropdown } from "@kosmos/visuals";
 import ObjectPropertyField from "./ObjectPropertyField.vue";
-import { UNTITLED_ENTRY_PLACEHOLDER } from "@/lib/entryTitles";
+import ObjectPropertyPicker from "./ObjectPropertyPicker.vue";
+import { UNTITLED_ENTRY_PLACEHOLDER, getEntryDisplayTitle } from "@/lib/entryTitles";
 import { getNoteTypePresentation, getResolvedNoteTypeField } from "@/lib/typedNotes";
-import { SYSTEM_TYPE_GAME_ID, SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
-import { toDisplayImageSrc } from "@/lib/localImages";
+import {
+  SYSTEM_TYPE_GAME_ID,
+  SYSTEM_TYPE_IMAGE_ID,
+  SYSTEM_TYPE_NOTE_ID,
+  SYSTEM_TYPE_PERSON_ID,
+} from "@/lib/systemTypes";
+import { resolveObjectImageSrc } from "@/lib/objectImages";
 
 const props = withDefaults(
   defineProps<{
@@ -17,16 +24,21 @@ const props = withDefaults(
     readonly?: boolean;
     showTitle?: boolean;
     showTypeRow?: boolean;
+    noteTypes?: NoteType[];
+    editableType?: boolean;
   }>(),
   {
     showTitle: false,
     showTypeRow: true,
+    noteTypes: () => [],
+    editableType: false,
   },
 );
 
 const emit = defineEmits<{
   headerPropChange: [fieldId: string, value: unknown];
   relationNavigate: [entryId: string];
+  objectTypeChange: [noteTypeId: string];
 }>();
 
 const presentation = computed(() => getNoteTypePresentation(props.activeNoteType));
@@ -60,14 +72,27 @@ function hasMeaningfulValue(fieldId: string) {
   return String(value ?? "").trim().length > 0;
 }
 
+const imageFieldId = computed(() => presentation.value.imageFieldId ?? null);
 const coverImageSrc = computed(() => {
-  const imageFieldId = presentation.value.imageFieldId;
-  if (!imageFieldId) {
+  if (!imageFieldId.value) {
     return "";
   }
 
-  return toDisplayImageSrc(String(props.headerProps[imageFieldId] ?? ""));
+  return resolveObjectImageSrc(props.headerProps[imageFieldId.value], entriesById.value);
 });
+const avatarPickerValue = computed(() => {
+  if (!imageFieldId.value) return "";
+  const value = props.headerProps[imageFieldId.value];
+  return typeof value === "string" ? value : "";
+});
+const avatarPickerOptions = computed(() =>
+  relationCandidates.value
+    .filter((entry) => entry.type_id === SYSTEM_TYPE_IMAGE_ID)
+    .map((entry) => ({
+      value: entry.id,
+      label: getEntryDisplayTitle(entry.title, entry.header_props_json),
+    })),
+);
 const backgroundImageSrc = computed(() => {
   const field = getResolvedNoteTypeField(props.activeNoteType, "background_image");
   if (!field?.visible) {
@@ -81,6 +106,18 @@ const titleText = computed(
 );
 const isGameNoteType = computed(() => props.activeNoteType?.id === SYSTEM_TYPE_GAME_ID);
 const isPlainNoteType = computed(() => props.activeNoteType?.id === SYSTEM_TYPE_NOTE_ID);
+const isPersonNoteType = computed(() => props.activeNoteType?.id === SYSTEM_TYPE_PERSON_ID);
+const personDisplayName = computed(() =>
+  [
+    String(props.headerProps.first_name ?? "").trim(),
+    String(props.headerProps.last_name ?? "").trim(),
+    String(props.headerProps.patronymic ?? "").trim(),
+  ]
+    .filter(Boolean)
+    .join(" "),
+);
+const headerTitleText = computed(() => personDisplayName.value || titleText.value);
+const shouldShowHeaderTitle = computed(() => props.showTitle || isPersonNoteType.value);
 const shouldShowDescription = computed(() => {
   if (!presentation.value.descriptionField) {
     return false;
@@ -92,7 +129,7 @@ const shouldShowDescription = computed(() => {
 
   return !isPlainNoteType.value || Boolean(descriptionValue.value.trim());
 });
-const showVisual = computed(() => Boolean(coverImageSrc.value));
+const showVisual = computed(() => isPersonNoteType.value || Boolean(coverImageSrc.value));
 const allowEmptyHeaderFields = computed(() => !isPlainNoteType.value);
 const renderedFeaturedFields = computed(() =>
   isGameNoteType.value
@@ -107,18 +144,34 @@ const renderedSecondaryFields = computed(() =>
     : presentation.value.secondaryFields
   ).filter((field) => allowEmptyHeaderFields.value || hasMeaningfulValue(field.id)),
 );
-const hasFeaturedFields = computed(() => renderedFeaturedFields.value.length > 0);
-const hasSecondaryFields = computed(() => renderedSecondaryFields.value.length > 0);
+const tableFields = computed(() => {
+  const byId = new Map<string, (typeof renderedSecondaryFields.value)[number]>();
+  for (const field of [...renderedFeaturedFields.value, ...renderedSecondaryFields.value]) {
+    byId.set(field.id, field);
+  }
+  return [...byId.values()].filter(
+    (field) => !(isPersonNoteType.value && imageFieldId.value && field.id === imageFieldId.value),
+  );
+});
+const hasTableFields = computed(() => tableFields.value.length > 0);
+const typeOptions = computed(() =>
+  props.noteTypes
+    .filter((noteType) => noteType.id !== SYSTEM_TYPE_IMAGE_ID)
+    .map((noteType) => ({
+      value: noteType.id,
+      label: noteType.name,
+    })),
+);
 const hasHeroContent = computed(
-  () =>
-    props.showTitle || shouldShowDescription.value || hasFeaturedFields.value || showVisual.value,
+  () => shouldShowHeaderTitle.value || shouldShowDescription.value || showVisual.value,
 );
 const shouldRenderHeader = computed(
   () =>
     Boolean(props.activeNoteType) &&
     (props.showTypeRow ||
       hasHeroContent.value ||
-      hasSecondaryFields.value ||
+      hasTableFields.value ||
+      props.editableType ||
       Boolean(props.validationError) ||
       Boolean(backgroundImageSrc.value)),
 );
@@ -131,13 +184,21 @@ function updateDescription(event: Event) {
 
   emit("headerPropChange", fieldId, (event.target as HTMLTextAreaElement).value);
 }
+
+function handleObjectTypeChange(value: string | number) {
+  if (props.readonly || !props.editableType) {
+    return;
+  }
+
+  emit("objectTypeChange", String(value));
+}
 </script>
 
 <template>
   <section
     v-if="shouldRenderHeader && activeNoteType"
     class="typed-object-header"
-    :class="`typed-object-header--${presentation.headerLayout}`"
+    :class="[`typed-object-header--${presentation.headerLayout}`, isPersonNoteType && 'is-person']"
     data-testid="typed-note-header"
   >
     <div
@@ -161,16 +222,37 @@ function updateDescription(event: Event) {
         ]"
       >
         <div v-if="showVisual" class="typed-object-header__visual">
+          <ObjectPropertyPicker
+            v-if="isPersonNoteType && imageFieldId && !readonly"
+            class="typed-object-header__avatar-picker"
+            :class="coverImageSrc && 'has-cover'"
+            :model-value="avatarPickerValue"
+            :options="avatarPickerOptions"
+            placeholder="+"
+            variant="secondary"
+            empty-label="Без фотографии"
+            empty-options-label="Нет изображений"
+            @update:model-value="emit('headerPropChange', imageFieldId, $event)"
+          />
+          <div
+            v-else-if="isPersonNoteType"
+            class="typed-object-header__avatar-placeholder"
+            aria-hidden="true"
+          >
+            <span v-if="!coverImageSrc">+</span>
+          </div>
           <img
             v-if="coverImageSrc"
             class="typed-object-header__cover"
             :src="coverImageSrc"
-            :alt="titleText"
+            :alt="headerTitleText"
           />
         </div>
 
         <div class="typed-object-header__content">
-          <h2 v-if="showTitle" class="typed-object-header__title">{{ titleText }}</h2>
+          <h2 v-if="shouldShowHeaderTitle" class="typed-object-header__title">
+            {{ headerTitleText }}
+          </h2>
 
           <div v-if="shouldShowDescription" class="typed-object-header__description-wrap">
             <p
@@ -189,35 +271,28 @@ function updateDescription(event: Event) {
               @input="updateDescription"
             />
           </div>
-
-          <div
-            v-if="hasFeaturedFields"
-            class="typed-object-header__featured"
-            :class="`typed-object-header__featured--${presentation.headerLayout}`"
-          >
-            <ObjectPropertyField
-              v-for="field in renderedFeaturedFields"
-              :key="field.id"
-              :field="field"
-              :model-value="headerProps[field.id]"
-              :layout="presentation.headerLayout"
-              :variant="
-                presentation.headerLayout === 'column' ? 'featured-column' : 'featured-inline'
-              "
-              :relation-candidates="relationCandidates"
-              :entries-by-id="entriesById"
-              :readonly="readonly"
-              @update:model-value="emit('headerPropChange', field.id, $event)"
-              @relation-navigate="emit('relationNavigate', $event)"
-            />
-          </div>
         </div>
       </div>
 
-      <div v-if="hasSecondaryFields" class="typed-object-header__secondary">
+      <div v-if="hasTableFields || editableType" class="typed-object-header__secondary">
         <div class="typed-object-header__secondary-list">
+          <div class="typed-object-header__meta-row">
+            <div class="typed-object-header__meta-label">Тип объекта</div>
+            <div class="typed-object-header__meta-value">
+              <Dropdown
+                v-if="editableType && !readonly"
+                class="typed-object-header__type-dropdown"
+                :model-value="activeNoteType.id"
+                :options="typeOptions"
+                :max-height-px="260"
+                searchable="auto"
+                @update:model-value="handleObjectTypeChange"
+              />
+              <span v-else>{{ activeNoteType.name }}</span>
+            </div>
+          </div>
           <ObjectPropertyField
-            v-for="field in renderedSecondaryFields"
+            v-for="field in tableFields"
             :key="field.id"
             :field="field"
             :model-value="headerProps[field.id]"
@@ -305,6 +380,7 @@ function updateDescription(event: Event) {
 }
 
 .typed-object-header__visual {
+  position: relative;
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
@@ -319,6 +395,94 @@ function updateDescription(event: Event) {
 .typed-object-header__cover {
   display: block;
   object-fit: cover;
+}
+
+.typed-object-header.is-person .typed-object-header__hero {
+  justify-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  text-align: center;
+}
+
+.typed-object-header.is-person .typed-object-header__visual {
+  justify-content: center;
+  width: 128px;
+  min-height: 128px;
+}
+
+.typed-object-header.is-person .typed-object-header__cover {
+  width: 128px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.typed-object-header__avatar-placeholder,
+.typed-object-header__avatar-picker {
+  width: 128px;
+  aspect-ratio: 1 / 1;
+  border-radius: 999px;
+}
+
+.typed-object-header__avatar-placeholder {
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  color: color-mix(in srgb, var(--foreground) 42%, transparent);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.typed-object-header__avatar-picker {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.typed-object-header__avatar-picker :deep(.object-property-picker__trigger) {
+  width: 128px;
+  height: 128px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  color: color-mix(in srgb, var(--foreground) 42%, transparent);
+  font-size: 30px;
+  line-height: 1;
+  text-align: center;
+}
+
+.typed-object-header__avatar-picker :deep(.object-property-picker__summary),
+.typed-object-header__avatar-picker :deep(.object-property-picker__chevron) {
+  display: none;
+}
+
+.typed-object-header__avatar-picker :deep(.object-property-picker__placeholder) {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.typed-object-header__avatar-picker.has-cover :deep(.object-property-picker__trigger) {
+  background: transparent;
+  color: transparent;
+}
+
+.typed-object-header__avatar-picker + .typed-object-header__cover {
+  position: relative;
+}
+
+.typed-object-header.is-person .typed-object-header__content {
+  justify-items: center;
+}
+
+.typed-object-header.is-person .typed-object-header__title {
+  text-align: center;
+}
+
+.typed-object-header.is-person .typed-object-header__featured--column,
+.typed-object-header.is-person .typed-object-header__secondary-list {
+  width: min(100%, 680px);
+  text-align: left;
 }
 
 .typed-object-header__content {
@@ -388,6 +552,88 @@ function updateDescription(event: Event) {
   display: grid;
   gap: 0;
   width: 100%;
+}
+
+.typed-object-header__meta-row {
+  display: grid;
+  grid-template-columns: minmax(0, 30%) minmax(0, 70%);
+  gap: 14px;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.typed-object-header__meta-label {
+  min-width: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.typed-object-header__meta-value {
+  min-width: 0;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.typed-object-header__type-dropdown {
+  width: 100%;
+}
+
+.typed-object-header__type-dropdown :deep(> div > button) {
+  min-height: 24px;
+  width: 100%;
+  justify-content: flex-start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+}
+
+.typed-object-header__type-dropdown :deep(> div > button:hover),
+.typed-object-header__type-dropdown :deep(> div > button:focus-visible) {
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+}
+
+.typed-object-header__type-dropdown :deep(> div > button > svg) {
+  display: none;
+}
+
+:global(.kosmos-dd__options) {
+  padding: 4px;
+  gap: 2px;
+}
+
+:global(.kosmos-dd__option) {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--radius-input, 8px);
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: var(--kosmos-text-control-size, 13px);
+  font-weight: 500;
+  text-align: left;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+:global(.kosmos-dd__option:hover),
+:global(.kosmos-dd__option--highlighted),
+:global(.kosmos-dd__option--selected) {
+  background: color-mix(in srgb, var(--foreground) 12%, transparent);
+  color: var(--foreground);
 }
 
 .typed-object-header__error {

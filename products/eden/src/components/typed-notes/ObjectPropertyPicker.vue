@@ -34,10 +34,12 @@ const isOpen = shallowRef(false);
 const rootRef = useTemplateRef<HTMLDivElement>("root");
 const triggerRef = useTemplateRef<HTMLButtonElement>("trigger");
 const panelRef = useTemplateRef<HTMLDivElement>("panel");
+const searchInputRef = useTemplateRef<HTMLInputElement>("searchInput");
 const panelTop = shallowRef(0);
 const panelLeft = shallowRef(0);
 const panelWidth = shallowRef(220);
 const panelMaxHeight = shallowRef(260);
+const searchQuery = shallowRef("");
 
 const selectedValues = computed(() => {
   if (Array.isArray(props.modelValue)) {
@@ -66,6 +68,15 @@ const selectedOptions = computed(() =>
 const selectedLabels = computed(() => selectedOptions.value.map((option) => option.label));
 const hasSelection = computed(() => selectedLabels.value.length > 0);
 const summaryText = computed(() => selectedLabels.value.join(", "));
+const normalizedSearchQuery = computed(() => searchQuery.value.trim().toLowerCase());
+const filteredOptions = computed(() => {
+  const query = normalizedSearchQuery.value;
+  if (!query) {
+    return props.options;
+  }
+
+  return props.options.filter((option) => option.label.toLowerCase().includes(query));
+});
 const panelStyle = computed(() => ({
   top: `${panelTop.value}px`,
   left: `${panelLeft.value}px`,
@@ -100,6 +111,7 @@ function updatePanelPosition() {
 
 function closePicker() {
   isOpen.value = false;
+  searchQuery.value = "";
 }
 
 function togglePicker() {
@@ -147,6 +159,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
 
   await nextTick();
   updatePanelPosition();
+  searchInputRef.value?.focus();
 
   const handlePointerDown = (event: MouseEvent) => {
     if (
@@ -242,9 +255,18 @@ watch(isOpen, async (open, _previous, onCleanup) => {
           <span class="object-property-picker__option-label">{{ emptyLabel }}</span>
         </button>
 
-        <div v-if="options.length > 0" class="object-property-picker__options">
+        <input
+          v-if="options.length > 0"
+          ref="searchInput"
+          v-model="searchQuery"
+          class="object-property-picker__search"
+          type="search"
+          placeholder="Поиск..."
+        />
+
+        <div v-if="filteredOptions.length > 0" class="object-property-picker__options">
           <button
-            v-for="option in options"
+            v-for="option in filteredOptions"
             :key="option.value"
             type="button"
             class="object-property-picker__option"
@@ -260,7 +282,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
         </div>
 
         <div v-else class="object-property-picker__empty">
-          {{ emptyOptionsLabel }}
+          {{ options.length > 0 ? "Ничего не найдено" : emptyOptionsLabel }}
         </div>
       </div>
     </Teleport>
@@ -369,6 +391,23 @@ watch(isOpen, async (open, _previous, onCleanup) => {
   gap: 4px;
   max-height: inherit;
   overflow-y: auto;
+}
+
+.object-property-picker__search {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--input);
+  border-radius: 10px;
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+}
+
+.object-property-picker__search:focus {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 1px var(--ring);
 }
 
 .object-property-picker__option {

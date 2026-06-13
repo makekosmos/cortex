@@ -61,6 +61,8 @@ function mergeNoteTypesWithSystem(noteTypesData: NoteType[]) {
 
 const MY_SPACE_TITLE = "Мое пространство";
 
+const SYSTEM_TYPES_BY_ID = new Map(SYSTEM_TYPES.map((noteType) => [noteType.id, noteType]));
+
 interface QueuedSaveRequest {
   entry: Entry;
 
@@ -290,6 +292,16 @@ export const useEdenStore = defineStore("eden", () => {
     return newEntry;
   }
 
+  async function ensureSystemTypePersisted(noteTypeId: string): Promise<void> {
+    const systemType = SYSTEM_TYPES_BY_ID.get(noteTypeId);
+    if (!systemType || !window.api) return;
+
+    const result = await window.api.saveNoteType(systemType);
+    if (!result.ok) {
+      console.warn("[eden] persist system type failed:", result);
+    }
+  }
+
   function findMySpaceEntry(): Entry | null {
     return entries.value.find((e) => e.title.trim() === MY_SPACE_TITLE) ?? null;
   }
@@ -358,6 +370,8 @@ export const useEdenStore = defineStore("eden", () => {
     activeScreen.value = "notes";
 
     activeNoteTypeId.value = null;
+
+    await ensureSystemTypePersisted(noteTypeId);
 
     const newEntry = createEntry("", noteTypeId);
 

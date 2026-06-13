@@ -74,9 +74,11 @@ Kosmos — местo, которое унифицирует хранение в�
   <p>Задачи в Linear-стиле</p>
 </a>
 
+<a class="tile" href="/manual/extensions/horologion">
   <span class="tile-icon" aria-hidden="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/><path d="M12 10v3h3"/></svg>
   </span>
+  <h3>Horologion</h3>
   <p>Pomodoro и focus widget</p>
 </a>
 
