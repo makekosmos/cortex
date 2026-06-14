@@ -13,6 +13,7 @@
 const path = require("node:path");
 const fs = require("node:fs");
 const { rcedit } = require("rcedit");
+const sharp = require("sharp");
 const pngToIcoMod = require("png-to-ico");
 const pngToIco = pngToIcoMod.default || pngToIcoMod;
 
@@ -34,6 +35,31 @@ async function ensureIco(sourcePath, icoPath, label) {
   return true;
 }
 
+async function ensureTrayIcoFromSvg(svgPath, icoPath) {
+  if (!fs.existsSync(svgPath)) {
+    console.warn(`[afterPack] tray icon source not found: ${svgPath}`);
+    return false;
+  }
+  let needsBuild = !fs.existsSync(icoPath);
+  if (!needsBuild) {
+    const svgMtime = fs.statSync(svgPath).mtimeMs;
+    const icoMtime = fs.statSync(icoPath).mtimeMs;
+    if (svgMtime > icoMtime) needsBuild = true;
+  }
+  if (!needsBuild) return true;
+  console.log(`[afterPack] converting ${path.basename(svgPath)} → ${path.basename(icoPath)}`);
+  const pngBuffer = await sharp(fs.readFileSync(svgPath), { density: 384 })
+    .resize(256, 256, {
+      fit: "contain",
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
+    .png()
+    .toBuffer();
+  const icoBuffer = await pngToIco(pngBuffer);
+  fs.writeFileSync(icoPath, icoBuffer);
+  return true;
+}
+
 module.exports = async function afterPack(context) {
   if (context.electronPlatformName !== "win32") return;
 
@@ -48,13 +74,13 @@ module.exports = async function afterPack(context) {
   const buildDir = path.join(__dirname);
   const appPngPath = path.join(buildDir, "icon.png");
   const appIcoPath = path.join(buildDir, "icon.ico");
-  const trayPngPath = path.join(buildDir, "icon.png");
+  const traySvgPath = path.join(buildDir, "tray.svg");
   const trayIcoPath = path.join(buildDir, "tray.ico");
 
-  // Конвертируем PNG → ICO один раз и кэшируем рядом. Перегенерируем
-  // только если ICO старше PNG (или отсутствует).
+  // Конвертируем PNG → ICO / SVG → ICO один раз и кэшируем рядом.
+  // Перегенерируем только если источник новее ICO (или ICO отсутствует).
   const appIconReady = await ensureIco(appPngPath, appIcoPath, "app icon");
-  const trayIconReady = await ensureIco(trayPngPath, trayIcoPath, "tray icon");
+  const trayIconReady = await ensureTrayIcoFromSvg(traySvgPath, trayIcoPath);
   if (!appIconReady || !trayIconReady) return;
 
   const { productName, version, copyright, appId } = context.packager.appInfo;
