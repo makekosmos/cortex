@@ -1,4 +1,10 @@
-# Kosmos — статус проекта (2026-06-14)
+# Kosmos — статус проекта (2026-06-15)
+
+## 2026-06-15 — Tray icon repack (Kosmos Desktop 0.4.7 → 0.4.8)
+
+Patch-релиз перевыпускает desktop shell после обновления tray artwork: `tray.ico`
+снова генерируется из актуального `icon.png` и попадает в packaged app как
+`resources/tray.ico`.
 
 ## 2026-06-14 — Stage 2 release bump
 
@@ -591,7 +597,7 @@ Setting в Settings → Общие.
 
 | Артефакт                                            | Версия                                                                           |
 | --------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Kosmos Desktop (`platform/desktop/package.json`)    | **0.4.7**                                                                        |
+| Kosmos Desktop (`platform/desktop/package.json`)    | **0.4.8**                                                                        |
 | Akasha extension (`incubator/akasha/manifest.json`) | **0.1.2** (Vue EPUB reader; EPUB parser guardrails)                              |
 | Eden extension (`products/eden/manifest.json`)      | **0.2.1** (sidebar/object layout polish + дневник button + accent state cleanup) |
 | Delphi extension                                    | **0.1.7** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                |

@@ -16,6 +16,24 @@ const { rcedit } = require("rcedit");
 const pngToIcoMod = require("png-to-ico");
 const pngToIco = pngToIcoMod.default || pngToIcoMod;
 
+async function ensureIco(sourcePath, icoPath, label) {
+  if (!fs.existsSync(sourcePath)) {
+    console.warn(`[afterPack] ${label} source not found: ${sourcePath}`);
+    return false;
+  }
+  let needsBuild = !fs.existsSync(icoPath);
+  if (!needsBuild) {
+    const sourceMtime = fs.statSync(sourcePath).mtimeMs;
+    const icoMtime = fs.statSync(icoPath).mtimeMs;
+    if (sourceMtime > icoMtime) needsBuild = true;
+  }
+  if (!needsBuild) return true;
+  console.log(`[afterPack] converting ${path.basename(sourcePath)} → ${path.basename(icoPath)}`);
+  const buf = await pngToIco(sourcePath);
+  fs.writeFileSync(icoPath, buf);
+  return true;
+}
+
 module.exports = async function afterPack(context) {
   if (context.electronPlatformName !== "win32") return;
 
@@ -28,27 +46,21 @@ module.exports = async function afterPack(context) {
   }
 
   const buildDir = path.join(__dirname);
-  const pngPath = path.join(buildDir, "icon.png");
-  const icoPath = path.join(buildDir, "icon.ico");
+  const appPngPath = path.join(buildDir, "icon.png");
+  const appIcoPath = path.join(buildDir, "icon.ico");
+  const trayPngPath = path.join(buildDir, "icon.png");
+  const trayIcoPath = path.join(buildDir, "tray.ico");
 
   // Конвертируем PNG → ICO один раз и кэшируем рядом. Перегенерируем
   // только если ICO старше PNG (или отсутствует).
-  let needsBuild = !fs.existsSync(icoPath);
-  if (!needsBuild) {
-    const pngMtime = fs.statSync(pngPath).mtimeMs;
-    const icoMtime = fs.statSync(icoPath).mtimeMs;
-    if (pngMtime > icoMtime) needsBuild = true;
-  }
-  if (needsBuild) {
-    console.log("[afterPack] converting icon.png → icon.ico");
-    const buf = await pngToIco(pngPath);
-    fs.writeFileSync(icoPath, buf);
-  }
+  const appIconReady = await ensureIco(appPngPath, appIcoPath, "app icon");
+  const trayIconReady = await ensureIco(trayPngPath, trayIcoPath, "tray icon");
+  if (!appIconReady || !trayIconReady) return;
 
   const { productName, version, copyright, appId } = context.packager.appInfo;
   console.log(`[afterPack] embedding icon + metadata into ${exePath}`);
   await rcedit(exePath, {
-    icon: icoPath,
+    icon: appIcoPath,
     "version-string": {
       ProductName: productName,
       FileDescription: productName,

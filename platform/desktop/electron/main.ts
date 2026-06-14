@@ -694,7 +694,8 @@ function resolveTrayIconPath(): string | null {
   // <install>/resources/tray.ico через extraResources. process.resourcesPath
   // указывает на тот же `resources/` dir в production, поэтому это первый
   // кандидат и работает в installed Kepler. tray.ico — multi-size (16-48),
-  // отрендерен из build/tray.svg; Windows сам выбирает кадр под DPI.
+  // сгенерирован из актуального app artwork в build/; Windows сам выбирает
+  // кадр под DPI.
   // dev: __dirname = platform/desktop/dist-electron, нужен относительный путь к
   // build/ в source tree. В dev-сессии используем dev.png — визуально
   // отличает trayIcon разработческого инстанса от установленного.
