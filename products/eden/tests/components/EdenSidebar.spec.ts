@@ -12,7 +12,7 @@ import { userEvent } from "vitest/browser";
 import { render } from "vitest-browser-vue";
 import { defineComponent, shallowRef } from "vue";
 import EdenSidebar from "../../src/components/sidebar/EdenSidebar.vue";
-import { SYSTEM_TYPE_NOTE } from "../../src/lib/systemTypes";
+import { SYSTEM_TYPE_JOURNAL_ID, SYSTEM_TYPE_NOTE } from "../../src/lib/systemTypes";
 
 type EdenScreen = "notes" | "settings" | "object-types" | "type-collection";
 type SettingsTab = "general" | "trash" | "storage" | "vim" | "spaces";
@@ -73,6 +73,13 @@ const EdenSidebarFixture = defineComponent({
         `Начало текста заметки ${index + 1}. Второе предложение для превью.`,
       ),
     );
+    const journalEntry = makeEntry(
+      "entry-diary",
+      "Дневник",
+      SYSTEM_TYPE_JOURNAL_ID,
+      now + 1,
+      "Запись дневника",
+    );
     const currentEntry = shallowRef<Entry | null>(recentEntries[0]);
     const noteTypes = [SYSTEM_TYPE_NOTE, makeCustomType()];
 
@@ -113,6 +120,10 @@ const EdenSidebarFixture = defineComponent({
       },
       onCreateEntry() {
         createEntryCount.value += 1;
+      },
+      onOpenDiary() {
+        currentEntry.value = journalEntry;
+        activeScreen.value = "notes";
       },
       onToggleSearch() {
         toggleSearchCount.value += 1;
@@ -161,6 +172,7 @@ const EdenSidebarFixture = defineComponent({
         :sidebar-width="sidebarWidth"
         @create-entry="onCreateEntry"
         @toggle-search="onToggleSearch"
+        @open-diary="onOpenDiary"
         @open-entry="onOpenEntry"
         @entry-context-menu="onEntryContextMenu"
         @open-settings-tab="onOpenSettingsTab"
@@ -201,15 +213,21 @@ describe("EdenSidebar contract", () => {
     await expect.element(screen.getByTestId("sidebar-open-objects")).toBeInTheDocument();
     await expect.element(screen.getByTestId("sidebar-header-settings")).toBeInTheDocument();
     await expect.element(screen.getByTestId("recent-entry-entry-1")).toBeInTheDocument();
-    await expect.element(screen.getByTestId("recent-entry-entry-1")).toHaveTextContent("сегодня");
     await expect
       .element(screen.getByTestId("recent-entry-entry-1"))
-      .toHaveTextContent("Начало текста заметки 1");
+      .toHaveTextContent("Недавняя заметка 1");
+    await expect.element(screen.getByTestId("recent-entry-entry-1")).toHaveTextContent("Заметки");
     await expect.element(screen.getByTestId("note-type-custom-project")).not.toBeInTheDocument();
     await expect.element(screen.getByTestId("sidebar-header")).not.toHaveTextContent("Eden");
 
     await userEvent.click(screen.getByTestId("sidebar-create-entry"));
     await expect.element(screen.getByTestId("create-entry-count")).toHaveTextContent("1");
+
+    await userEvent.click(screen.getByTestId("sidebar-open-diary"));
+    await expect.element(screen.getByTestId("screen")).toHaveTextContent("notes");
+    await expect
+      .element(screen.getByTestId("sidebar-open-diary"))
+      .not.toHaveAttribute("data-active", "true");
 
     await userEvent.click(screen.getByTestId("widget-link-search"));
     await expect.element(screen.getByTestId("toggle-search-count")).toHaveTextContent("1");
@@ -244,6 +262,9 @@ describe("EdenSidebar contract", () => {
       .element(screen.getByTestId("selected-object-type-id"))
       .toHaveTextContent("custom-project");
     await expect.element(screen.getByTestId("screen")).toHaveTextContent("object-types");
+    await expect
+      .element(screen.getByTestId("custom-type-custom-project"))
+      .toHaveAttribute("data-active", "true");
     await expect.element(screen.getByTestId("sidebar-objects-modal")).not.toBeInTheDocument();
   });
 

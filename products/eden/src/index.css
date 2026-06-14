@@ -14,8 +14,8 @@
      `.focus-mode-active .app-container`). Вне zen-режима `.app-container`
      перекрашивается в solid `--bg-app`. Alpha 82% — лёгкая прозрачность
      для Win11 blur'а, чтобы текст оставался читаемым. */
-  --sidebar-bg-acrylic: color-mix(in srgb, oklch(0.15 0 0) 82%, transparent);
-  --sidebar-bg: oklch(0.135 0 0);
+  --sidebar-bg-acrylic: color-mix(in srgb, #1d1d1f 82%, transparent);
+  --sidebar-bg: #242426;
 
   /* Eden brand accent — оранжевый. Применяется к bullet/ordered-list
      маркерам в редакторе, и доступен для других орнаментов (checkmarks,
@@ -69,8 +69,8 @@
   --danger: #f55522;
   --danger-muted: rgba(245, 85, 34, 0.14);
 
-  --bg-app: oklch(0.16 0 0);
-  --bg-sidebar: var(--sidebar);
+  --bg-app: #1d1d1f;
+  --bg-sidebar: var(--sidebar-bg);
   --bg-sidebar-hover: var(--secondary);
   --bg-sidebar-active: var(--surface);
   --settings-sidebar-active: var(--sidebar-surface);

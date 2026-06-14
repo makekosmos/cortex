@@ -28,8 +28,7 @@ import { useLayoutStore } from "./layout";
 type ActiveScreen = "notes" | "settings" | "object-types" | "type-collection";
 
 // Persistence для last-visited entry id. Юзер reload'ит окно (Ctrl+R в
-// dev) и ожидает что вернётся в ту заметку которую читал. Без этого
-// hydrateVaultData всегда открывает дефолтную my-space.
+// dev) и ожидает что вернётся в ту заметку которую читал.
 const LAST_ENTRY_STORAGE_KEY = "eden:nav:lastEntryId";
 
 function readLastVisitedEntryId(): string | null {
@@ -58,8 +57,6 @@ function mergeNoteTypesWithSystem(noteTypesData: NoteType[]) {
   }
   return [...byId.values()];
 }
-
-const MY_SPACE_TITLE = "Мое пространство";
 
 const SYSTEM_TYPES_BY_ID = new Map(SYSTEM_TYPES.map((noteType) => [noteType.id, noteType]));
 
@@ -143,10 +140,9 @@ export const useEdenStore = defineStore("eden", () => {
   const currentEntry = ref<Entry | null>(null);
 
   // Persist last-visited entry id ВСЕГДА при изменении currentEntry,
-  // не только в navigateTo. openTodayJournal / openMySpace / createEntry
-  // / иные code paths тоже ставят currentEntry — без watch'а после
-  // refresh'а hydrateVaultData читает старый `lastEntryId` и открывает
-  // не ту заметку (например — вчерашний journal вместо today).
+  // не только в navigateTo. openTodayJournal / createEntry / иные code paths
+  // тоже ставят currentEntry — без watch'а после refresh'а hydrateVaultData
+  // читает старый `lastEntryId` и открывает не ту заметку.
   watch(currentEntry, (entry) => {
     if (entry?.id) writeLastVisitedEntryId(entry.id);
   });
@@ -160,7 +156,7 @@ export const useEdenStore = defineStore("eden", () => {
 
   const activeScreen = ref<ActiveScreen>("notes");
 
-  const activeSpace = ref<SpaceId>("my-space");
+  const activeSpace = ref<SpaceId>("diary");
 
   const activeNoteTypeId = ref<string | null>(null);
 
@@ -215,42 +211,19 @@ export const useEdenStore = defineStore("eden", () => {
       pruneTransientSaveState(latestSaveTimestamps, saveCoordinators, entriesData);
 
       // Restore last visited entry (persisted в navigateTo).
-      // Если id невалидный / entry удалена — fallback на my-space.
+      // If there is no valid last entry, leave the editor blank instead of
+      // bootstrapping a synthetic placeholder page.
       const lastVisitedId = readLastVisitedEntryId();
       if (lastVisitedId) {
         const lastEntry = entriesData.find((e) => e.id === lastVisitedId && !e.deleted_at);
         if (lastEntry) {
           currentEntry.value = await ensureEntryCmSafe(lastEntry);
-          activeSpace.value = "diary"; // не открываем my-space welcome
+          activeSpace.value = "diary";
           return;
         }
       }
 
-      const existingMySpace = entriesData.find((e) => e.title.trim() === MY_SPACE_TITLE) ?? null;
-
-      if (existingMySpace) {
-        const normalizedMySpace = await ensureEntryCmSafe(existingMySpace);
-        currentEntry.value = normalizedMySpace;
-        return;
-      }
-
-      const mySpaceEntry: Entry = {
-        id: uuidv4(),
-        title: MY_SPACE_TITLE,
-        content_json: JSON.stringify(writeEntryMarkdown("")),
-        created_at: Date.now(),
-        updated_at: Date.now(),
-        folder_id: null,
-        type_id: SYSTEM_TYPE_NOTE_ID,
-        header_layout: null,
-        header_props_json: "{}",
-        schema_version: 1,
-        deleted_at: null,
-      };
-
-      entries.value = [mySpaceEntry, ...entries.value];
-      void window.api.saveEntry(mySpaceEntry);
-      currentEntry.value = mySpaceEntry;
+      currentEntry.value = null;
     } finally {
       isHydratingVault.value = false;
     }
@@ -333,10 +306,6 @@ export const useEdenStore = defineStore("eden", () => {
     }
   }
 
-  function findMySpaceEntry(): Entry | null {
-    return entries.value.find((e) => e.title.trim() === MY_SPACE_TITLE) ?? null;
-  }
-
   // Markdown storage is read tolerantly by CM. Do not rewrite legacy/invalid bodies on open;
   // they become Markdown only through normal editor save.
   async function ensureEntryCmSafe(entry: Entry): Promise<Entry> {
@@ -369,23 +338,6 @@ export const useEdenStore = defineStore("eden", () => {
     return normalized;
   }
 
-  async function openMySpace() {
-    activeScreen.value = "notes";
-
-    activeSpace.value = "my-space";
-    activeNoteTypeId.value = null;
-
-    const existing = findMySpaceEntry();
-
-    if (existing) {
-      currentEntry.value = await ensureEntryCmSafe(existing);
-
-      return;
-    }
-
-    currentEntry.value = createEntry(MY_SPACE_TITLE);
-  }
-
   async function createNewEntry(noteTypeId: string = SYSTEM_TYPE_NOTE_ID) {
     activeScreen.value = "notes";
 
@@ -410,9 +362,7 @@ export const useEdenStore = defineStore("eden", () => {
   async function openTodayJournal() {
     activeScreen.value = "notes";
     activeNoteTypeId.value = null;
-    // activeSpace = "diary" — иначе watch в App.vue видит default
-    // "my-space" && currentEntry=null и openMySpace перебивает нашу
-    // загрузку journal entry'и.
+    // activeSpace = "diary" — фиксируем текущий вид на дневник при открытии.
     activeSpace.value = "diary";
 
     // SYSTEM_TYPE_JOURNAL — client-side system type (определён в systemTypes.ts).
@@ -534,7 +484,7 @@ export const useEdenStore = defineStore("eden", () => {
   function openTypeCollection(noteTypeId: string) {
     activeScreen.value = "type-collection";
     activeNoteTypeId.value = noteTypeId;
-    activeSpace.value = "all-objects";
+    activeSpace.value = "diary";
     currentEntry.value = null;
   }
 
@@ -559,7 +509,7 @@ export const useEdenStore = defineStore("eden", () => {
 
     currentEntry.value = null;
 
-    activeSpace.value = "my-space";
+    activeSpace.value = "diary";
     activeNoteTypeId.value = null;
 
     await refreshData();
@@ -576,7 +526,7 @@ export const useEdenStore = defineStore("eden", () => {
 
     currentEntry.value = null;
 
-    activeSpace.value = "my-space";
+    activeSpace.value = "diary";
 
     activeScreen.value = "notes";
     activeNoteTypeId.value = null;
@@ -791,8 +741,6 @@ export const useEdenStore = defineStore("eden", () => {
     initApp,
 
     createEntry,
-
-    openMySpace,
 
     createNewEntry,
 

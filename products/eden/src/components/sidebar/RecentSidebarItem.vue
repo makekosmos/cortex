@@ -14,10 +14,8 @@
     <span class="eden-recent-sidebar-item__body">
       <span class="eden-recent-sidebar-item__head">
         <span class="eden-recent-sidebar-item__title">{{ label }}</span>
-        <span v-if="updatedLabel" class="eden-recent-sidebar-item__date">{{ updatedLabel }}</span>
       </span>
       <span v-if="meta" class="eden-recent-sidebar-item__meta">{{ meta }}</span>
-      <span v-if="preview" class="eden-recent-sidebar-item__preview">{{ preview }}</span>
     </span>
   </button>
 </template>
@@ -29,8 +27,6 @@ defineProps<{
   icon: Component;
   label: string;
   meta?: string;
-  preview?: string;
-  updatedLabel?: string;
   active?: boolean;
   testId?: string;
 }>();
@@ -45,17 +41,17 @@ const emit = defineEmits<{
 .eden-recent-sidebar-item {
   position: relative;
   display: flex;
-  height: 72px;
+  height: 56px;
   width: 100%;
   min-width: 0;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.5rem;
   border: 0;
   border-radius: 0.375rem;
   background: transparent;
   color: color-mix(in srgb, var(--foreground) 78%, transparent);
   cursor: default;
-  padding: 0.5rem;
+  padding: 0.375rem 0.5rem;
   text-align: left;
 }
 
@@ -76,7 +72,7 @@ const emit = defineEmits<{
 
 .eden-recent-sidebar-item.is-active,
 .eden-recent-sidebar-item.is-active:hover {
-  background: var(--settings-sidebar-active);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--foreground);
 }
 
@@ -92,27 +88,25 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: center;
   color: color-mix(in srgb, var(--foreground) 70%, transparent);
-  margin-top: 0.125rem;
 }
 
 .eden-recent-sidebar-item__body {
   display: grid;
   min-width: 0;
   flex: 1 1 auto;
-  gap: 0.125rem;
+  gap: 0.0625rem;
 }
 
 .eden-recent-sidebar-item__head {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 0.375rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .eden-recent-sidebar-item__title,
-.eden-recent-sidebar-item__meta,
-.eden-recent-sidebar-item__preview {
+.eden-recent-sidebar-item__meta {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -126,28 +120,11 @@ const emit = defineEmits<{
   line-height: 1.25;
 }
 
-.eden-recent-sidebar-item__date {
-  color: color-mix(in srgb, var(--foreground) 42%, transparent);
-  font-family: var(--font-sans);
-  font-size: 10.5px;
-  font-weight: 500;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
 .eden-recent-sidebar-item__meta {
   color: color-mix(in srgb, var(--foreground) 48%, transparent);
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 500;
   line-height: 1.2;
-}
-
-.eden-recent-sidebar-item__preview {
-  color: color-mix(in srgb, var(--foreground) 38%, transparent);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 450;
-  line-height: 1.25;
 }
 </style>

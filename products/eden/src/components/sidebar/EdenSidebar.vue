@@ -58,7 +58,6 @@
           :key="item.id"
           :icon="item.icon"
           :label="item.label"
-          :active="item.active"
           :test-id="item.testId"
           icon-variant="plain"
           @click="item.onClick()"
@@ -122,8 +121,6 @@
                   :icon="virtualItem.item.icon"
                   :label="virtualItem.item.label"
                   :meta="virtualItem.item.meta"
-                  :preview="virtualItem.item.preview"
-                  :updated-label="virtualItem.item.updatedLabel"
                   :active="virtualItem.item.active"
                   :test-id="virtualItem.item.testId"
                   :style="{
@@ -140,6 +137,7 @@
             <SettingsSidebarButton
               v-for="item in group.items ?? []"
               :key="item.id"
+              :class="{ 'eden-sidebar-page-button--selected': item.active }"
               :icon="item.icon"
               :label="item.label"
               :active="item.active"
@@ -226,10 +224,9 @@ import {
   PhSparkle,
   PhUser,
 } from "@phosphor-icons/vue";
-import { readEntryMarkdown } from "@/editor-cm/content";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { getNoteTypeCollectionName } from "@/lib/typedNotes";
-import { isSystemType } from "@/lib/systemTypes";
+import { SYSTEM_TYPE_JOURNAL_ID, isSystemType } from "@/lib/systemTypes";
 import RecentSidebarItem from "./RecentSidebarItem.vue";
 
 type EdenScreen = "notes" | "settings" | "object-types" | "type-collection";
@@ -249,8 +246,6 @@ interface SidebarListItem {
   icon: Component;
   label: string;
   meta?: string;
-  preview?: string;
-  updatedLabel?: string;
   active?: boolean;
   testId?: string;
   onClick: () => void;
@@ -303,6 +298,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   createEntry: [];
+  openDiary: [];
   toggleSearch: [];
   toggleSidebar: [];
   openEntry: [entryId: string];
@@ -317,7 +313,7 @@ const emit = defineEmits<{
 
 const SIDEBAR_MIN_WIDTH = 240;
 const SIDEBAR_MAX_WIDTH = 420;
-const RECENT_ITEM_HEIGHT = 72;
+const RECENT_ITEM_HEIGHT = 56;
 const RECENT_MONTH_HEADER_HEIGHT = 26;
 const RECENT_ITEM_GAP = 4;
 const RECENT_ITEM_STRIDE = RECENT_ITEM_HEIGHT + RECENT_ITEM_GAP;
@@ -431,29 +427,6 @@ function formatMonthLabel(timestamp: number): string {
   );
 }
 
-function formatUpdatedLabel(timestamp: number): string {
-  const date = new Date(timestamp);
-  const now = new Date();
-  if (date.toDateString() === now.toDateString()) return "сегодня";
-
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "short",
-  }).format(date);
-}
-
-function entryPreview(entry: Entry): string {
-  const markdown = readEntryMarkdown(entry.content_json);
-  return markdown
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/!\[[^\]]*]\([^)]*\)/g, " ")
-    .replace(/\[[^\]]*]\([^)]*\)/g, " ")
-    .replace(/[#>*_`~\-[\]()]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 140);
-}
-
 function recentRowHeight(row: RecentTimelineRow): number {
   return row.kind === "month" ? RECENT_MONTH_HEADER_HEIGHT : RECENT_ITEM_HEIGHT;
 }
@@ -485,8 +458,6 @@ function buildEntryItem(entry: Entry, testId: string): SidebarListItem {
     icon: resolveNoteTypeIcon(noteType, ENTRY_ICON_COLOR),
     label: getEntryDisplayTitle(entry.title, entry.header_props_json),
     meta: noteType ? getNoteTypeCollectionName(noteType) : undefined,
-    preview: entryPreview(entry),
-    updatedLabel: formatUpdatedLabel(entry.updated_at),
     active: props.activeScreen === "notes" && props.currentEntry?.id === entry.id,
     onClick: () => emit("openEntry", entry.id),
     onContextMenu: (event: MouseEvent) => emit("entryContextMenu", event, entry.id),
@@ -562,6 +533,20 @@ onBeforeUnmount(() => {
 onMounted(() => {
   window.addEventListener("resize", syncRecentViewport);
   void nextTick(syncRecentViewport);
+});
+
+const diaryLauncherItem = computed<SidebarActionItem | null>(() => {
+  if (props.activeScreen !== "notes" && props.activeScreen !== "type-collection") return null;
+
+  return {
+    id: "diary",
+    icon: PhBookOpen,
+    label: "Дневник",
+    active:
+      props.activeScreen === "notes" && props.currentEntry?.type_id === SYSTEM_TYPE_JOURNAL_ID,
+    onClick: () => emit("openDiary"),
+    testId: "sidebar-open-diary",
+  };
 });
 
 const objectTypesLauncherItem = computed<SidebarActionItem | null>(() => {
@@ -658,7 +643,10 @@ const primaryItems = computed<SidebarActionItem[]>(() => {
   if (props.activeScreen === "object-types") {
     return [...topItems.value, ...objectTypesPrimaryItems.value];
   }
-  return objectTypesLauncherItem.value ? [objectTypesLauncherItem.value] : [];
+
+  return [diaryLauncherItem.value, objectTypesLauncherItem.value].filter(
+    (item): item is SidebarActionItem => item !== null,
+  );
 });
 
 const sortedRecentEntries = computed<Entry[]>(() => {
@@ -785,7 +773,7 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
   flex: 1 1 auto;
   flex-direction: column;
   gap: 1.5rem;
-  padding: 0.25rem 0 0.5rem;
+  padding: 0.25rem 0 0;
   overflow: hidden;
 }
 
@@ -793,9 +781,9 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
   display: flex;
   min-height: 0;
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 0;
 }
 
 .eden-sidebar-primary {
@@ -817,7 +805,10 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
 
 .eden-sidebar-group--recent {
   min-height: 0;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  margin-bottom: 0;
+  padding-bottom: 0;
+  gap: 0;
 }
 
 .eden-sidebar-objects-modal__list {
@@ -860,12 +851,20 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
   box-shadow: inset 0 -1px color-mix(in srgb, var(--foreground) 7%, transparent);
 }
 
+.eden-sidebar-page-button--selected {
+  background: color-mix(in srgb, var(--accent) 15%, transparent) !important;
+}
+
+.eden-sidebar-page-button--selected:hover {
+  background: color-mix(in srgb, var(--accent) 15%, transparent) !important;
+}
+
 .eden-sidebar-recent-list :deep(.eden-recent-sidebar-item) {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 72px;
+  height: 56px;
 }
 
 .eden-sidebar-resize-handle {
@@ -903,10 +902,10 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
 }
 
 :deep(.kosmos-settings-sidebar-button[data-active="true"]) {
-  background: var(--settings-sidebar-active);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 :deep(.kosmos-settings-sidebar-button[data-active="true"]:hover) {
-  background: var(--settings-sidebar-active);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 </style>

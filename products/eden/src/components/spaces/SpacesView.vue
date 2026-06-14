@@ -1,60 +1,4 @@
 <template>
-  <!-- my-space -->
-  <section v-if="activeSpace === 'my-space'" class="spaces-view" data-testid="space-view-my-space">
-    <EmptyState
-      title="Открываю заметку пространства"
-      description="Это пространство является обычной заметкой, а не отдельным обзорным экраном."
-    />
-  </section>
-
-  <!-- all-objects -->
-  <section
-    v-else-if="activeSpace === 'all-objects'"
-    class="spaces-view"
-    data-testid="space-view-all-objects"
-  >
-    <div class="space-page-header">
-      <div>
-        <p class="space-eyebrow">Обзор</p>
-        <h1>Все объекты</h1>
-        <p class="space-page-text">
-          Единая таблица заметок и объектных свойств, отсортированная по последним изменениям.
-        </p>
-      </div>
-    </div>
-    <section class="space-panel">
-      <div v-if="allObjects.length > 0" class="space-table">
-        <div class="space-table-head">
-          <span>Название</span>
-          <span>Тип</span>
-          <span>Обновлено</span>
-        </div>
-        <button
-          v-for="row in allObjects"
-          :key="row.id"
-          class="space-table-row"
-          type="button"
-          @click="emit('openEntry', row.id)"
-        >
-          <span>{{ row.title }}</span>
-          <span>{{ row.subtitle }}</span>
-          <time>{{ formatDate(row.updatedAt) }}</time>
-        </button>
-      </div>
-      <EmptyState
-        v-else
-        title="Нет объектов"
-        description="Добавь заметки или объектные свойства, чтобы здесь появилась таблица."
-      >
-        <template #action>
-          <button class="space-primary-btn" type="button" @click="emit('createEntry')">
-            Создать заметку
-          </button>
-        </template>
-      </EmptyState>
-    </section>
-  </section>
-
   <!-- all-properties -->
   <section
     v-else-if="activeSpace === 'all-properties'"
@@ -288,20 +232,6 @@ function todayDateString(): string {
 }
 
 const sortedEntries = computed(() => sortEntries(props.entries, props.sortMode));
-
-const allObjects = computed(() =>
-  props.entries
-    .map((entry) => {
-      const noteType = entry.type_id ? props.noteTypes.find((nt) => nt.id === entry.type_id) : null;
-      return {
-        id: entry.id,
-        title: getEntryDisplayTitle(entry.title, entry.header_props_json),
-        subtitle: noteType?.name ?? "Страница",
-        updatedAt: entry.updated_at,
-      };
-    })
-    .sort((a, b) => b.updatedAt - a.updatedAt),
-);
 
 const propertyTypes = computed(() => props.noteTypes.filter((nt) => nt.id !== "system-type-page"));
 

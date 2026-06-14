@@ -127,6 +127,7 @@
           :sidebar-width="layout.widgetSidebarWidth"
           @toggle-search="layout.isSearchOpen = !layout.isSearchOpen"
           @create-entry="eden.createNewEntry()"
+          @open-diary="eden.openTodayJournal()"
           @open-entry="(id) => eden.navigateTo(id)"
           @entry-context-menu="onEntryContextMenu"
           @open-settings-tab="openSettingsTab"
@@ -196,16 +197,9 @@
           @title-out-of-view-change="noteTitleOutOfView = $event"
           @type-change="onCmTypeChange"
         />
-        <SpacesView
-          v-else
-          :active-space="eden.activeSpace"
-          :entries="eden.entries"
-          :note-types="eden.noteTypes"
-          :sort-mode="eden.sortMode"
-          @sort-mode-change="eden.sortMode = $event"
-          @create-entry="eden.createNewEntry()"
-          @open-entry="(id) => eden.navigateTo(id)"
-        />
+        <div v-else class="app-empty-editor" data-testid="empty-editor-state" aria-live="polite">
+          Никакая страница не выбрана
+        </div>
       </main>
 
       <div
@@ -277,7 +271,6 @@ import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
 // CodeMirror editor lazy-load — основной bundle открывается быстрее,
 // заметка-чанк подгружается при первом открытии заметки.
 const CmEditor = defineAsyncComponent(() => import("./editor-cm/CmEditor.vue"));
-import SpacesView from "@/components/spaces/SpacesView.vue";
 import SettingsPage from "@/components/settings/SettingsPage.vue";
 import ObjectTypesSettings from "@/components/settings/ObjectTypesSettings.vue";
 import TypeObjectsView from "@/components/objects/TypeObjectsView.vue";
@@ -735,29 +728,6 @@ onUnmounted(() => {
     }
   }
 });
-
-// Auto-open my-space entry when needed
-watch(
-  [
-    () => eden.isInitializing,
-    () => eden.vaultPath,
-    () => eden.activeScreen,
-    () => eden.activeSpace,
-    () => eden.currentEntry,
-  ],
-  () => {
-    if (
-      eden.isInitializing ||
-      eden.isHydratingVault ||
-      !eden.vaultPath ||
-      eden.activeScreen !== "notes"
-    )
-      return;
-    if (eden.activeSpace === "my-space" && !eden.currentEntry) {
-      void eden.openMySpace();
-    }
-  },
-);
 
 watch(
   () => eden.currentEntry?.id,
