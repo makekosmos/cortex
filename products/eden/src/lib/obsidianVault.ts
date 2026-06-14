@@ -1,5 +1,6 @@
+import { writeEntryMarkdown } from "../editor-cm/content";
 import { buildEntryMarkdownDocument, type FrontmatterValue } from "./markdownFrontmatter";
-import type { NoteType } from "./typedNotes";
+import { parseHeaderTemplate, parseNoteTypeDefinition, type NoteType } from "./typedNotes";
 
 export interface ObsidianVaultMarkdownFile {
   path: string;
@@ -57,16 +58,47 @@ export interface ImportObsidianVaultResult {
   images: ObsidianImageObjectDraft[];
 }
 
+export interface ObsidianVaultFolder {
+  id: string;
+  name: string;
+  parent_id: string | null;
+}
+
 export interface BuildObsidianExportFilesArgs {
   entries: readonly Entry[];
   noteTypes: readonly NoteType[];
   bodyMarkdownById: (entry: Entry) => string;
   relatedEntryTitleLookup?: (entryId: string) => string | null | undefined;
+  selectedTypeIds?: readonly string[];
+  folderPathById?: ReadonlyMap<string, string>;
+}
+
+export interface ObsidianVaultAssetManifestEntry {
+  source: string;
+  sourcePath: string | null;
+  noteRelativePath: string;
+  targetRelativePath: string;
+  rewrittenRelativePath: string | null;
+  copyable: boolean;
+  limitation: string | null;
 }
 
 export interface ObsidianExportFile {
   relativePath: string;
-  content: string;
+  content?: string;
+  sourcePath?: string;
+}
+
+interface ObsidianExportAssetPlan {
+  targetRelativePath: string;
+  sourcePath: string | null;
+  assetKey: string | null;
+}
+
+interface HeaderImageAssetReference {
+  source: string;
+  preferredFileName?: string | null;
+  mimeType?: string | null;
 }
 
 type LooseFrontmatter = Record<string, FrontmatterValue | undefined>;
@@ -143,30 +175,138 @@ export function buildObsidianRelatedImportPlan(args: {
 
 export function buildObsidianExportFiles(args: BuildObsidianExportFilesArgs): ObsidianExportFile[] {
   const noteTypesById = new Map(args.noteTypes.map((noteType) => [noteType.id, noteType]));
+  const entriesById = new Map(args.entries.map((entry) => [entry.id, entry]));
   const usedPaths = new Set<string>();
+  const selectedTypeIds = args.selectedTypeIds ? new Set(args.selectedTypeIds) : null;
+  const assetManifestEntries: ObsidianVaultAssetManifestEntry[] = [];
+  const seenAssetManifestKeys = new Set<string>();
+  const assetFilesBySource = new Map<string, ObsidianExportFile>();
 
-  return args.entries
+  const files = args.entries
     .filter((entry) => !entry.deleted_at)
+    .filter((entry) => !selectedTypeIds || !entry.type_id || selectedTypeIds.has(entry.type_id))
     .map((entry) => {
-      const baseName = safeMarkdownBaseName(entry.title || entry.id);
-      let relativePath = `${baseName}.md`;
-      let suffix = 2;
-      while (usedPaths.has(relativePath.toLocaleLowerCase("ru"))) {
-        relativePath = `${baseName}-${suffix}.md`;
-        suffix += 1;
-      }
-      usedPaths.add(relativePath.toLocaleLowerCase("ru"));
+      const relativePath = buildObsidianExportRelativePath(entry, args.folderPathById, usedPaths);
+      const noteType = entry.type_id ? noteTypesById.get(entry.type_id) : null;
+      const rewrittenHeaderPropsJson = rewriteObsidianExportHeaderImageReferences({
+        entry,
+        noteType,
+        noteRelativePath: relativePath,
+        entriesById,
+        usedPaths,
+        assetFilesBySource,
+        assetManifestEntries,
+        seenAssetManifestKeys,
+      });
+      const exportEntry = rewrittenHeaderPropsJson
+        ? ({ ...entry, header_props_json: rewrittenHeaderPropsJson } as Entry)
+        : entry;
+      const rewrittenBody = rewriteObsidianExportImageReferences({
+        markdown: args.bodyMarkdownById(entry),
+        noteRelativePath: relativePath,
+        usedPaths,
+        assetFilesBySource,
+        assetManifestEntries,
+        seenAssetManifestKeys,
+      });
 
       return {
         relativePath,
         content: buildEntryMarkdownDocument({
-          entry,
-          noteType: entry.type_id ? noteTypesById.get(entry.type_id) : null,
-          bodyMarkdown: args.bodyMarkdownById(entry),
+          entry: exportEntry,
+          noteType,
+          bodyMarkdown: rewrittenBody,
           relatedEntryTitleLookup: args.relatedEntryTitleLookup,
         }),
-      };
+      } satisfies ObsidianExportFile;
     });
+
+  const assetFiles = [...assetFilesBySource.values()];
+  if (assetFiles.length === 0 && assetManifestEntries.length === 0) {
+    return files;
+  }
+
+  const output: ObsidianExportFile[] = [...files, ...assetFiles];
+  if (assetManifestEntries.length > 0) {
+    output.push({
+      relativePath: "assets/obsidian-asset-manifest.json",
+      content: JSON.stringify(
+        {
+          limitation:
+            "Some asset references cannot be resolved to a safe local source path; those references stay unchanged and are recorded here as export limitations.",
+          assets: assetManifestEntries,
+        },
+        null,
+        2,
+      ),
+    });
+  }
+
+  return output;
+}
+
+export function buildObsidianFolderPathLookup(
+  folders: readonly ObsidianVaultFolder[],
+): ReadonlyMap<string, string> {
+  const folderById = new Map(folders.map((folder) => [folder.id, folder]));
+  const pathById = new Map<string, string>();
+  const resolving = new Set<string>();
+
+  const resolveFolderPath = (folderId: string): string | null => {
+    const cached = pathById.get(folderId);
+    if (cached) return cached;
+
+    const folder = folderById.get(folderId);
+    if (!folder || resolving.has(folderId)) return null;
+
+    resolving.add(folderId);
+    const parentPath = folder.parent_id ? resolveFolderPath(folder.parent_id) : null;
+    resolving.delete(folderId);
+
+    const segment = safeVaultPathSegment(folder.name);
+    const resolved = parentPath ? `${parentPath}/${segment}` : segment;
+    pathById.set(folderId, resolved);
+    return resolved;
+  };
+
+  for (const folder of folders) {
+    resolveFolderPath(folder.id);
+  }
+
+  return pathById;
+}
+
+function buildObsidianExportRelativePath(
+  entry: Pick<Entry, "id" | "title" | "folder_id">,
+  folderPathById: ReadonlyMap<string, string> | undefined,
+  usedPaths: Set<string>,
+): string {
+  const baseName = safeMarkdownBaseName(entry.title || entry.id);
+  const folderPath = entry.folder_id ? (folderPathById?.get(entry.folder_id) ?? "") : "";
+
+  let relativePath = folderPath ? `${folderPath}/${baseName}.md` : `${baseName}.md`;
+  let suffix = 2;
+  while (usedPaths.has(relativePath.toLocaleLowerCase("ru"))) {
+    const leafName = `${baseName}-${suffix}.md`;
+    relativePath = folderPath ? `${folderPath}/${leafName}` : leafName;
+    suffix += 1;
+  }
+  usedPaths.add(relativePath.toLocaleLowerCase("ru"));
+  return relativePath;
+}
+
+function safeVaultPathSegment(value: string): string {
+  const safe = value
+    .trim()
+    .replace(/[<>:"/\\|?*]/g, "-")
+    .split("")
+    .map((char) => (char.charCodeAt(0) < 32 ? "-" : char))
+    .join("")
+    .replace(/\.+$/g, "")
+    .replace(/^\.+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return safe || "folder";
 }
 
 export function exportObsidianVaultMarkdownFiles(args: {
@@ -242,7 +382,7 @@ function buildImageObjectDraft(
     id: `image:${stableIdFromPath(image.relativePath)}`,
     title: image.name,
     typeId: imageTypeId,
-    contentJson: { type: "doc", content: [{ type: "paragraph" }] },
+    contentJson: writeEntryMarkdown(`![](${image.fileUrl})`),
     headerProps: {
       image: image.fileUrl,
       file_name: image.name,
@@ -530,6 +670,483 @@ function parseMarkdownImageTarget(value: string): string {
   }
 
   return trimmed;
+}
+
+function rewriteObsidianExportHeaderImageReferences(args: {
+  entry: Entry;
+  noteType: NoteType | null | undefined;
+  noteRelativePath: string;
+  entriesById: ReadonlyMap<string, Entry>;
+  usedPaths: Set<string>;
+  assetFilesBySource: Map<string, ObsidianExportFile>;
+  assetManifestEntries: ObsidianVaultAssetManifestEntry[];
+  seenAssetManifestKeys: Set<string>;
+}): string | null {
+  const headerProps = parseEntryHeaderPropsJsonLoose(args.entry.header_props_json);
+  if (!headerProps) return null;
+
+  const imageFieldIds = exportImageFieldIds(args.entry, args.noteType);
+  if (imageFieldIds.size === 0) return null;
+
+  let rewrittenHeaderProps: Record<string, unknown> | null = null;
+  for (const fieldId of imageFieldIds) {
+    if (!(fieldId in headerProps)) continue;
+
+    const reference = resolveHeaderImageAssetReference({
+      fieldId,
+      value: headerProps[fieldId],
+      headerProps,
+      entriesById: args.entriesById,
+    });
+    if (!reference) continue;
+
+    const registeredAsset = registerObsidianExportAssetReference({
+      source: reference.source,
+      noteRelativePath: args.noteRelativePath,
+      preferredFileName: reference.preferredFileName,
+      mimeType: reference.mimeType,
+      usedPaths: args.usedPaths,
+      assetFilesBySource: args.assetFilesBySource,
+      assetManifestEntries: args.assetManifestEntries,
+      seenAssetManifestKeys: args.seenAssetManifestKeys,
+    });
+    if (!registeredAsset) continue;
+
+    rewrittenHeaderProps ??= { ...headerProps };
+    rewrittenHeaderProps[fieldId] = rewriteHeaderImageValue(
+      headerProps[fieldId],
+      registeredAsset.rewrittenRelativePath,
+    );
+  }
+
+  return rewrittenHeaderProps ? JSON.stringify(rewrittenHeaderProps) : null;
+}
+
+function exportImageFieldIds(entry: Entry, noteType: NoteType | null | undefined): Set<string> {
+  const fieldIds = new Set<string>();
+  if (entry.type_id === "image_obj" || noteType?.slug === "image") {
+    fieldIds.add("image");
+  }
+
+  if (!noteType) return fieldIds;
+
+  try {
+    const headerTemplate = parseHeaderTemplate(noteType.header_template_json);
+    if (headerTemplate.imageFieldId) fieldIds.add(headerTemplate.imageFieldId);
+  } catch {
+    // Ignore malformed legacy templates during best-effort export.
+  }
+
+  try {
+    for (const field of parseNoteTypeDefinition(noteType.schema_json).fields) {
+      if (field.kind === "image") fieldIds.add(field.id);
+    }
+  } catch {
+    // Ignore malformed schemas during best-effort export.
+  }
+
+  return fieldIds;
+}
+
+function parseEntryHeaderPropsJsonLoose(raw: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(raw || "{}");
+    return isPlainObject(parsed) ? { ...parsed } : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveHeaderImageAssetReference(args: {
+  fieldId: string;
+  value: unknown;
+  headerProps: Record<string, unknown>;
+  entriesById: ReadonlyMap<string, Entry>;
+}): HeaderImageAssetReference | null {
+  const candidate = firstStringValue(args.value);
+  const inlineMetadata = extractHeaderImageAssetMetadata(args.value);
+  const linkedEntry = candidate ? args.entriesById.get(candidate) : null;
+  if (linkedEntry) {
+    const linkedProps = parseEntryHeaderPropsJsonLoose(linkedEntry.header_props_json) ?? {};
+    const source =
+      firstStringValue(linkedProps.source_path) ?? firstStringValue(linkedProps.image) ?? null;
+    if (!source) return null;
+    return {
+      source,
+      preferredFileName: firstStringValue(linkedProps.file_name),
+      mimeType: firstStringValue(linkedProps.mime_type),
+    };
+  }
+
+  const metadataSource =
+    args.fieldId === "image"
+      ? (firstStringValue(args.headerProps.source_path) ?? inlineMetadata?.source ?? null)
+      : (inlineMetadata?.source ?? null);
+  const source = metadataSource ?? candidate;
+  if (!source) return null;
+
+  return {
+    source,
+    preferredFileName:
+      args.fieldId === "image"
+        ? (firstStringValue(args.headerProps.file_name) ??
+          inlineMetadata?.preferredFileName ??
+          null)
+        : (inlineMetadata?.preferredFileName ?? null),
+    mimeType:
+      args.fieldId === "image"
+        ? (firstStringValue(args.headerProps.mime_type) ?? inlineMetadata?.mimeType ?? null)
+        : (inlineMetadata?.mimeType ?? null),
+  };
+}
+
+function extractHeaderImageAssetMetadata(value: unknown): HeaderImageAssetReference | null {
+  if (!isPlainObject(value)) return null;
+
+  const source = firstStringValue(value.source_path) ?? firstStringValue(value.image);
+  if (!source) return null;
+
+  return {
+    source,
+    preferredFileName: firstStringValue(value.file_name),
+    mimeType: firstStringValue(value.mime_type),
+  };
+}
+
+function firstStringValue(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const candidate = firstStringValue(item);
+      if (candidate) return candidate;
+    }
+  }
+
+  return null;
+}
+
+function rewriteHeaderImageValue(value: unknown, rewrittenRelativePath: string): unknown {
+  if (Array.isArray(value)) {
+    let replaced = false;
+    return value.map((item) => {
+      if (!replaced && typeof item === "string" && item.trim()) {
+        replaced = true;
+        return rewrittenRelativePath;
+      }
+      return item;
+    });
+  }
+
+  return rewrittenRelativePath;
+}
+
+function registerObsidianExportAssetReference(args: {
+  source: string;
+  noteRelativePath: string;
+  preferredFileName?: string | null;
+  mimeType?: string | null;
+  usedPaths: Set<string>;
+  assetFilesBySource: Map<string, ObsidianExportFile>;
+  assetManifestEntries: ObsidianVaultAssetManifestEntry[];
+  seenAssetManifestKeys: Set<string>;
+}): { targetRelativePath: string; rewrittenRelativePath: string; sourcePath: string } | null {
+  const noteDir = args.noteRelativePath.includes("/")
+    ? args.noteRelativePath.slice(0, args.noteRelativePath.lastIndexOf("/"))
+    : "";
+  const assetPlan = deriveObsidianExportAssetPlan(args.source, {
+    preferredFileName: args.preferredFileName,
+    mimeType: args.mimeType,
+  });
+  if (!assetPlan) return null;
+
+  const copyableSourcePath = assetPlan.sourcePath;
+  if (!copyableSourcePath) {
+    const manifestKey = `${args.source}\u0000${noteDir}\u0000${assetPlan.targetRelativePath}`;
+    if (!args.seenAssetManifestKeys.has(manifestKey)) {
+      args.seenAssetManifestKeys.add(manifestKey);
+      args.assetManifestEntries.push({
+        source: args.source,
+        sourcePath: null,
+        noteRelativePath: args.noteRelativePath,
+        targetRelativePath: assetPlan.targetRelativePath,
+        rewrittenRelativePath: null,
+        copyable: false,
+        limitation:
+          "The reference could not be resolved to a safe local source path, so the original Markdown reference was kept unchanged.",
+      });
+    }
+    return null;
+  }
+
+  const assetKey = assetPlan.assetKey ?? copyableSourcePath;
+  const existingAssetFile = args.assetFilesBySource.get(assetKey);
+  const targetRelativePath =
+    existingAssetFile?.relativePath ??
+    allocateUniqueExportPath(assetPlan.targetRelativePath, args.usedPaths);
+  const rewrittenRelativePath = relativePathBetween(noteDir, targetRelativePath);
+
+  if (!existingAssetFile) {
+    args.assetFilesBySource.set(assetKey, {
+      relativePath: targetRelativePath,
+      sourcePath: copyableSourcePath,
+    });
+  }
+
+  return { targetRelativePath, rewrittenRelativePath, sourcePath: copyableSourcePath };
+}
+
+function rewriteObsidianExportImageReferences(args: {
+  markdown: string;
+  noteRelativePath: string;
+  usedPaths: Set<string>;
+  assetFilesBySource: Map<string, ObsidianExportFile>;
+  assetManifestEntries: ObsidianVaultAssetManifestEntry[];
+  seenAssetManifestKeys: Set<string>;
+}): string {
+  return args.markdown.replace(
+    IMAGE_MARKDOWN_RE,
+    (raw, alt: string, inlineSrc: string, wikiSrc: string) => {
+      const source = parseMarkdownImageTarget(inlineSrc ?? wikiSrc ?? "");
+      const registeredAsset = registerObsidianExportAssetReference({
+        source,
+        noteRelativePath: args.noteRelativePath,
+        usedPaths: args.usedPaths,
+        assetFilesBySource: args.assetFilesBySource,
+        assetManifestEntries: args.assetManifestEntries,
+        seenAssetManifestKeys: args.seenAssetManifestKeys,
+      });
+      if (!registeredAsset) return raw;
+
+      const label = (alt || titleFromPath(registeredAsset.targetRelativePath)).trim();
+      return `![${label}](${registeredAsset.rewrittenRelativePath})`;
+    },
+  );
+}
+
+function deriveObsidianExportAssetPlan(
+  source: string,
+  options: { preferredFileName?: string | null; mimeType?: string | null } = {},
+): ObsidianExportAssetPlan | null {
+  const trimmed = source.trim();
+  if (!trimmed) return null;
+  if (/^(https?|mailto|data):/i.test(trimmed)) return null;
+
+  const rawPath = extractLocalAssetPath(trimmed);
+  if (!rawPath) return null;
+
+  const normalized = normalizePath(rawPath);
+  if (!normalized) return null;
+
+  const pathParts = normalized.split("/").filter(Boolean);
+  if (pathParts.length === 0) return null;
+
+  const sourcePath = resolveCopyableLocalAssetSourcePath(trimmed);
+  return {
+    targetRelativePath: buildObsidianExportAssetTargetRelativePath(trimmed, pathParts, options),
+    sourcePath,
+    assetKey: sourcePath ? canonicalLocalAssetKey(sourcePath) : null,
+  };
+}
+
+function buildObsidianExportAssetTargetRelativePath(
+  source: string,
+  pathParts: string[],
+  options: { preferredFileName?: string | null; mimeType?: string | null },
+): string {
+  const isAbsolutePath =
+    /^file:/i.test(source) ||
+    /^kosmos-local-image:/i.test(source) ||
+    /^[A-Za-z]:[\\/]/.test(source) ||
+    source.startsWith("/") ||
+    source.startsWith("\\\\");
+  const sourceLeaf = pathParts[pathParts.length - 1] ?? "asset";
+  const preferredLeaf = fileNameFromPathLike(options.preferredFileName ?? "");
+
+  if (preferredLeaf) {
+    return `assets/${finalizeAssetFileName(preferredLeaf, sourceLeaf, options.mimeType)}`;
+  }
+
+  if (isAbsolutePath) {
+    return `assets/${finalizeAssetFileName(sourceLeaf, null, options.mimeType)}`;
+  }
+
+  return `assets/${pathParts
+    .map((part, index) =>
+      index === pathParts.length - 1
+        ? finalizeAssetFileName(part, null, options.mimeType)
+        : safeVaultPathSegment(part),
+    )
+    .join("/")}`;
+}
+
+function finalizeAssetFileName(
+  candidate: string,
+  fallbackExtensionSource: string | null,
+  mimeType?: string | null,
+): string {
+  const safeCandidate = safeVaultPathSegment(fileNameFromPathLike(candidate) || "asset");
+  if (fileExtension(safeCandidate)) return safeCandidate;
+
+  const fallbackExtension =
+    (fallbackExtensionSource ? fileExtension(fallbackExtensionSource) : "") ||
+    imageExtensionFromMime(mimeType);
+  return fallbackExtension ? `${safeCandidate}${fallbackExtension}` : safeCandidate;
+}
+
+function fileNameFromPathLike(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? "";
+}
+
+function fileExtension(fileName: string): string {
+  const dotIndex = fileName.lastIndexOf(".");
+  if (dotIndex <= 0 || dotIndex === fileName.length - 1) return "";
+  return fileName.slice(dotIndex);
+}
+
+function imageExtensionFromMime(mimeType: string | null | undefined): string {
+  const normalized = mimeType?.trim().toLocaleLowerCase("ru") ?? "";
+  if (normalized === "image/jpeg" || normalized === "image/jpg") return ".jpg";
+  if (normalized === "image/png") return ".png";
+  if (normalized === "image/webp") return ".webp";
+  if (normalized === "image/gif") return ".gif";
+  if (normalized === "image/avif") return ".avif";
+  return "";
+}
+
+function canonicalLocalAssetKey(sourcePath: string): string {
+  const resolvedPath = extractCopyableLocalAssetFilesystemPath(sourcePath) ?? sourcePath.trim();
+  return normalizePath(resolvedPath).toLocaleLowerCase("ru");
+}
+
+function extractCopyableLocalAssetFilesystemPath(sourcePath: string): string | null {
+  const trimmed = sourcePath.trim();
+  if (!trimmed) return null;
+
+  if (/^file:/i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      return decodeLocalAssetUrlPath(url.pathname);
+    } catch {
+      return null;
+    }
+  }
+
+  if (/^kosmos-local-image:/i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      return decodeLocalAssetUrlPath(url.pathname);
+    } catch {
+      return null;
+    }
+  }
+
+  return trimmed;
+}
+
+function decodeLocalAssetUrlPath(pathname: string): string {
+  const decoded = decodeURIComponent(pathname || "");
+  return decoded.replace(/^\/([A-Za-z]:[\\/])/, "$1").replace(/^\/+/, "/");
+}
+
+function resolveCopyableLocalAssetSourcePath(source: string): string | null {
+  const trimmed = source.trim();
+  if (!trimmed) return null;
+
+  if (/^file:/i.test(trimmed) || /^kosmos-local-image:/i.test(trimmed)) {
+    try {
+      new URL(trimmed);
+      return trimmed;
+    } catch {
+      return null;
+    }
+  }
+
+  if (/^[A-Za-z]:[\\/]/.test(trimmed) || trimmed.startsWith("\\\\") || trimmed.startsWith("/")) {
+    return trimmed;
+  }
+
+  return null;
+}
+
+function extractLocalAssetPath(source: string): string | null {
+  const trimmed = source.trim();
+  if (!trimmed) return null;
+
+  if (/^file:/i.test(trimmed) || /^kosmos-local-image:/i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      const decoded = decodeURIComponent(url.pathname || "").replace(/^\/+/, "");
+      return decoded || null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (
+    /^[A-Za-z]:[\\/]/.test(trimmed) ||
+    trimmed.startsWith("\\\\") ||
+    trimmed.startsWith("/") ||
+    trimmed.startsWith("//")
+  ) {
+    return trimmed;
+  }
+
+  if (/^[a-z]+:/i.test(trimmed)) {
+    return null;
+  }
+
+  return trimmed;
+}
+
+function allocateUniqueExportPath(relativePath: string, usedPaths: Set<string>): string {
+  const key = relativePath.toLocaleLowerCase("ru");
+  if (!usedPaths.has(key)) {
+    usedPaths.add(key);
+    return relativePath;
+  }
+
+  const lastSlash = relativePath.lastIndexOf("/");
+  const folder = lastSlash >= 0 ? relativePath.slice(0, lastSlash + 1) : "";
+  const fileName = lastSlash >= 0 ? relativePath.slice(lastSlash + 1) : relativePath;
+  const dotIndex = fileName.lastIndexOf(".");
+  const stem = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
+  const ext = dotIndex > 0 ? fileName.slice(dotIndex) : "";
+
+  for (let suffix = 2; suffix < 1000; suffix += 1) {
+    const candidate = `${folder}${stem}-${suffix}${ext}`;
+    const candidateKey = candidate.toLocaleLowerCase("ru");
+    if (!usedPaths.has(candidateKey)) {
+      usedPaths.add(candidateKey);
+      return candidate;
+    }
+  }
+
+  throw new Error(
+    "[kepler-shell] Markdown vault export asset path collision could not be resolved",
+  );
+}
+
+function relativePathBetween(fromDir: string, toPath: string): string {
+  const fromParts = fromDir ? fromDir.split("/").filter(Boolean) : [];
+  const toParts = toPath.split("/").filter(Boolean);
+  let shared = 0;
+  while (
+    shared < fromParts.length &&
+    shared < toParts.length &&
+    fromParts[shared] === toParts[shared]
+  ) {
+    shared += 1;
+  }
+
+  const up = fromParts.length - shared;
+  const down = toParts.slice(shared);
+  return [...Array(up).fill(".."), ...down].join("/") || ".";
 }
 
 function buildImageAssetMap(

@@ -50,8 +50,7 @@ import { highlightActiveLine } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
-import { createMdConverter } from "./mdConvert";
-import { coerceToCmSafeDoc } from "./cmGate";
+import { readEntryMarkdown, writeEntryMarkdown } from "./content";
 import {
   getEditableEntryTitle,
   resolveStoredEntryTitle,
@@ -170,7 +169,6 @@ const titleEditableCompartment = new Compartment();
 
 let view: EditorView | null = null;
 let titleView: EditorView | null = null;
-let converter: ReturnType<typeof createMdConverter> | null = null;
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 let bodyScrollElement: HTMLElement | null = null;
 let titleOutOfView = false;
@@ -240,9 +238,9 @@ function scheduleAutosave(): void {
 }
 
 async function flushSave(): Promise<void> {
-  if (!view || !converter) return;
+  if (!view) return;
   const md = view.state.doc.toString();
-  const contentJson = JSON.stringify(converter.markdownToJson(md));
+  const contentJson = JSON.stringify(writeEntryMarkdown(md));
   const entry = buildEntryDraft(contentJson);
   emit("entryDraftChange", entry);
   await props.onSave(entry);
@@ -251,13 +249,13 @@ async function flushSave(): Promise<void> {
 }
 
 async function handleTypePick(nextTypeId: string): Promise<void> {
-  if (!view || !converter) return;
+  if (!view) return;
 
   const nextType = props.noteTypes.find((noteType) => noteType.id === nextTypeId) ?? null;
   if (!nextType || nextTypeId === currentTypeId.value) return;
 
   const md = view.state.doc.toString();
-  const contentJson = JSON.stringify(converter.markdownToJson(md));
+  const contentJson = JSON.stringify(writeEntryMarkdown(md));
   const nextHeaderProps = createHeaderPropsForTypeChange(nextType, getCurrentTitle());
   currentTypeId.value = nextTypeId;
   headerProps.value = nextHeaderProps;
@@ -393,15 +391,7 @@ onMounted(() => {
     getZenMode: () => !!props.zenMode,
   };
 
-  converter = createMdConverter();
-
-  let initialMd = "";
-  try {
-    const parsed = JSON.parse(props.entry.content_json) as unknown;
-    initialMd = converter.jsonToMarkdown(coerceToCmSafeDoc(parsed));
-  } catch {
-    initialMd = "";
-  }
+  const initialMd = readEntryMarkdown(props.entry.content_json);
 
   titleView = new EditorView({
     state: createTitleState(title.value),
@@ -530,9 +520,6 @@ onBeforeUnmount(() => {
   titleView = null;
   view?.destroy();
   view = null;
-  converter?.destroy();
-  converter = null;
-
   void unmountSave.catch((err) => {
     console.warn("[eden cm] unmount save failed:", err);
   });

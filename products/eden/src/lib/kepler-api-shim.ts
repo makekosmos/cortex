@@ -20,6 +20,7 @@ import {
   validateHeaderProps,
   type NoteType,
 } from "@/lib/typedNotes";
+import { writeEntryMarkdown } from "@/editor-cm/content";
 import { isSystemType, normalizeSystemNoteType } from "@/lib/systemTypes";
 
 const DEFAULT_ARK_TYPE_ID = "note_obj";
@@ -160,9 +161,7 @@ function mapArkObjectToEntry(
   return normalizeEntry({
     id: object.id,
     title: object.title,
-    content_json: JSON.stringify(
-      object.contentJson ?? { type: "doc", content: [{ type: "paragraph" }] },
-    ),
+    content_json: JSON.stringify(object.contentJson ?? writeEntryMarkdown("")),
     created_at: arkTimestampToMillis(object.createdAt),
     updated_at: arkTimestampToMillis(object.updatedAt),
     folder_id: null,
@@ -179,7 +178,7 @@ function mapArkObjectToEntry(
 function mapEntryToArkObject(entry: Entry): ArkObjectRecord {
   const headerProps = parseHeaderPropsJson(entry.header_props_json);
   const { related_notes: _ignored, ...propsJson } = headerProps;
-  let contentJson: unknown = { type: "doc", content: [{ type: "paragraph" }] };
+  let contentJson: unknown = writeEntryMarkdown("");
   try {
     contentJson = JSON.parse(entry.content_json || JSON.stringify(contentJson));
   } catch {
@@ -1061,7 +1060,7 @@ export async function createTask(
       id: taskId,
       typeId: EDEN_TASK_OBJECT_TYPE_ID,
       title: effectiveTitle,
-      contentJson: { type: "doc", content: [{ type: "paragraph" }] },
+      contentJson: writeEntryMarkdown(""),
       propsJson: {
         description: null,
         priority: 0,

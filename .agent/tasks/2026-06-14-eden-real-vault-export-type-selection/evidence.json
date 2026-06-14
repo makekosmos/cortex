@@ -1,0 +1,32 @@
+{
+  "taskId": "2026-06-14-eden-real-vault-export-type-selection",
+  "repair": "real-image-asset-files-for-eden-image-and-header-metadata",
+  "changedFiles": [
+    "products/eden/src/lib/obsidianVault.ts",
+    "products/eden/tests/obsidianVault.test.ts",
+    ".agent/tasks/2026-06-14-eden-real-vault-export-type-selection/evidence.md",
+    ".agent/tasks/2026-06-14-eden-real-vault-export-type-selection/evidence.json"
+  ],
+  "testsAddedOrUpdated": [
+    "products/eden/tests/obsidianVault.test.ts: added inline image metadata object coverage",
+    "products/eden/tests/obsidianVault.test.ts: confirmed image objects export as real asset files without manifest-only output"
+  ],
+  "commandsRun": [
+    {
+      "command": "cd products/eden && rtk bun test tests/obsidianVault.test.ts",
+      "result": "passed",
+      "summary": "12/12 obsidianVault tests passed after adding inline image-metadata coverage."
+    }
+  ],
+  "validationOutput": [
+    "obsidianVault suite: 12 pass, 0 fail, 51 expect() calls.",
+    "Image-object export now emits assets/Vacation Photo.JPG as a copyable sourcePath file entry.",
+    "Inline object-valued image metadata exports to assets/Portrait.png and rewrites frontmatter to that copied path.",
+    "Manifest output is absent for copyable local image assets in the focused tests."
+  ],
+  "residualRisks": [
+    "Remote/data URL images remain unresolved and are not copied.",
+    "Host-time filesystem read/copy failures are only known in Electron export; they are logged with a skipped-asset count rather than represented in the renderer-built payload."
+  ],
+  "diffSummary": "Vault export now creates real asset file-copy entries for local Eden image objects, header image fields, and inline image metadata objects, preserving filenames/extensions from metadata/source/mime where possible and keeping the manifest auxiliary for unresolved refs."
+}

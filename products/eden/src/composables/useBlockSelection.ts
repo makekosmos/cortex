@@ -14,8 +14,7 @@
 // - Esc clears, Delete/Backspace удаляет выделенные блоки.
 
 import { computed, ref, shallowRef } from "vue";
-import type { Editor as TiptapEditor } from "@tiptap/vue-3";
-import { TextSelection } from "@tiptap/pm/state";
+type TiptapEditor = any;
 
 export interface DragRect {
   /** Видимая часть rect в client coords (для overlay рендера). */
@@ -172,8 +171,11 @@ export function useBlockSelection() {
    */
   function collapseEditorSelection(editor: TiptapEditor): void {
     if (!editor.state.selection.empty) {
+      const selectionCtor = editor.state.selection.constructor as {
+        create: (doc: unknown, pos: number) => unknown;
+      };
       const tr = editor.state.tr.setSelection(
-        TextSelection.create(editor.state.doc, editor.state.selection.from),
+        selectionCtor.create(editor.state.doc, editor.state.selection.from),
       );
       editor.view.dispatch(tr);
     }

@@ -13,7 +13,7 @@ export const CM_SAFE_NODES = new Set([
   "hardBreak",
   "horizontalRule",
   // Legacy TipTap task nodes. CmEditor serializes them as plain markdown
-  // checklist text before handing the document to @tiptap/markdown.
+  // checklist text before handing the document to the legacy markdown converter.
   "taskList",
   "taskItem",
 ]);

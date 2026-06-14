@@ -294,7 +294,9 @@ interface MarkdownVaultOpenResult {
 interface MarkdownVaultExportFile {
   relativePath: string;
 
-  content: string;
+  content?: string;
+
+  sourcePath?: string;
 }
 
 interface MarkdownVaultExportResult {

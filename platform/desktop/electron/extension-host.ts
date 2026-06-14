@@ -36,6 +36,7 @@ import {
 } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -47,6 +48,7 @@ import {
 import path from "node:path";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
+import { parseLocalImageRequestUrl } from "./local-image-protocol";
 import { localImageUrl } from "./local-image-protocol";
 import { keplerDataDir } from "./data-dir";
 import { macWindowChrome } from "./mac-window";
@@ -1890,10 +1892,17 @@ type MarkdownVaultOpenResult = {
   images: MarkdownVaultImageFile[];
 };
 
-type MarkdownVaultExportFile = {
-  relativePath: string;
-  content: string;
-};
+type MarkdownVaultExportFile =
+  | {
+      relativePath: string;
+      content: string;
+      sourcePath?: never;
+    }
+  | {
+      relativePath: string;
+      sourcePath: string;
+      content?: never;
+    };
 
 function markdownDialogParent(sender: WebContents): BrowserWindow | undefined {
   return BrowserWindow.fromWebContents(sender) ?? undefined;
@@ -2085,6 +2094,31 @@ function safeVaultOutputPath(rootPath: string, relativePath: string): string {
   return outputPath;
 }
 
+function resolveMarkdownVaultSourcePath(sourcePath: string): string | null {
+  const trimmed = sourcePath.trim();
+  if (!trimmed) return null;
+
+  if (/^file:/i.test(trimmed)) {
+    try {
+      const resolved = fileURLToPath(trimmed);
+      return path.isAbsolute(resolved) ? resolved : null;
+    } catch {
+      return null;
+    }
+  }
+
+  const localImagePath = parseLocalImageRequestUrl(trimmed);
+  if (localImagePath) {
+    return path.isAbsolute(localImagePath) ? localImagePath : null;
+  }
+
+  if (path.isAbsolute(trimmed)) {
+    return path.resolve(trimmed);
+  }
+
+  return null;
+}
+
 ipcMain.handle(
   "kepler:extension:markdownFiles:open",
   async (e): Promise<{ path: string; name: string; content: string } | null> => {
@@ -2188,14 +2222,66 @@ ipcMain.handle(
     }
 
     let exportedCount = 0;
+    let skippedAssetCount = 0;
+    const writtenPaths = new Set<string>();
     for (const file of files as MarkdownVaultExportFile[]) {
-      if (!file || typeof file.relativePath !== "string" || typeof file.content !== "string") {
+      if (!file || typeof file.relativePath !== "string") {
         continue;
       }
+
       const outputPath = safeVaultOutputPath(outputDir, file.relativePath);
+      if (writtenPaths.has(outputPath)) {
+        throw new Error("[kepler-shell] Markdown vault export path already exists in payload");
+      }
+      writtenPaths.add(outputPath);
       mkdirSync(path.dirname(outputPath), { recursive: true });
-      writeFileSync(outputPath, file.content, "utf8");
-      exportedCount += 1;
+
+      if (typeof file.content === "string") {
+        writeFileSync(outputPath, file.content, "utf8");
+        exportedCount += 1;
+        continue;
+      }
+
+      if (typeof file.sourcePath === "string") {
+        const sourcePath = resolveMarkdownVaultSourcePath(file.sourcePath);
+        if (!sourcePath) {
+          skippedAssetCount += 1;
+          console.warn(
+            "[kepler-shell] Markdown vault export asset skipped: unsafe or unsupported source path",
+            file.sourcePath,
+          );
+          continue;
+        }
+
+        try {
+          const stat = statSync(sourcePath);
+          if (!stat.isFile()) {
+            skippedAssetCount += 1;
+            console.warn(
+              "[kepler-shell] Markdown vault export asset skipped: source is not a file",
+              sourcePath,
+            );
+            continue;
+          }
+
+          copyFileSync(sourcePath, outputPath);
+          exportedCount += 1;
+        } catch (error) {
+          skippedAssetCount += 1;
+          console.warn(
+            "[kepler-shell] Markdown vault export asset skipped: copy failed",
+            sourcePath,
+            error,
+          );
+        }
+        continue;
+      }
+    }
+
+    if (skippedAssetCount > 0) {
+      console.warn(
+        `[kepler-shell] Markdown vault export completed with ${skippedAssetCount} skipped asset(s)`,
+      );
     }
 
     return { outputDir, exportedCount };

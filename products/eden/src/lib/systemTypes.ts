@@ -1,4 +1,4 @@
-import { parseNoteTypeDefinition, parseNoteTypeUiSchema, type NoteType } from "@/lib/typedNotes";
+import { parseNoteTypeDefinition, parseNoteTypeUiSchema, type NoteType } from "./typedNotes";
 
 export const SYSTEM_TYPE_NOTE_ID = "note_obj";
 export const SYSTEM_TYPE_GAME_ID = "game_obj";

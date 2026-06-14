@@ -250,7 +250,7 @@ describe("CmEditor component", () => {
     expect(saved.map((entry) => entry.type_id)).not.toContain(SYSTEM_TYPE_NOTE.id);
   });
 
-  test("автосейв вызывает onSave с валидным PM JSON, содержащим набранный текст", async () => {
+  test("автосейв вызывает onSave с markdown content_json, содержащим набранный текст", async () => {
     const onSave = vi.fn(async () => null);
     render(CmEditor, {
       props: { entry: makeEntry(EMPTY_DOC), onSave, zenMode: false },
@@ -261,8 +261,8 @@ describe("CmEditor component", () => {
 
     await expect.poll(() => onSave.mock.calls.length, { timeout: 4000 }).toBeGreaterThan(0);
     const saved = onSave.mock.calls.at(-1)?.[0] as Entry;
-    const parsed = JSON.parse(saved.content_json) as { type?: string };
-    expect(parsed.type).toBe("doc");
-    expect(saved.content_json).toContain("привет мир");
+    const parsed = JSON.parse(saved.content_json) as { type?: string; text?: string };
+    expect(parsed.type).toBe("markdown");
+    expect(parsed.text).toContain("привет мир");
   });
 });

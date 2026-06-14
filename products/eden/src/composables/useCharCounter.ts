@@ -9,7 +9,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import type { useEdenStore } from "@/store/eden";
 import type { useLayoutStore } from "@/store/layout";
-import { countCharsInProseMirrorDoc } from "@/lib/charCount";
+import { readEntryMarkdown } from "@/editor-cm/content";
 
 export function useCharCounter(
   eden: ReturnType<typeof useEdenStore>,
@@ -27,7 +27,7 @@ export function useCharCounter(
   const currentEntryCharCount = computed<number | null>(() => {
     if (!eden.currentEntry) return null;
     if (liveCharCount.value !== null) return liveCharCount.value;
-    return countCharsInProseMirrorDoc(eden.currentEntry.content_json);
+    return [...readEntryMarkdown(eden.currentEntry.content_json)].length;
   });
 
   // Border-top на counter появляется когда last block доходит до counter top.

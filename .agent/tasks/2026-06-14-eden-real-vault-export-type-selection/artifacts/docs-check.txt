@@ -1,0 +1,3 @@
+$ node scripts/check-docs-freshness.mjs
+→ docs:check
+  ✓ всё свежо, stale references не найдено

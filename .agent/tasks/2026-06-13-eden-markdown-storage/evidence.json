@@ -1,0 +1,125 @@
+{
+  "taskId": "2026-06-13-eden-markdown-storage",
+  "overall": "PASS_WITH_RESIDUAL_RISK",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": "CmEditor.vue serializes with writeEntryMarkdown; store/import/export paths use writeEntryMarkdown; CmConvert.spec.ts covers the adapter."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": "readEntryMarkdown returns markdown .text unchanged; content.test.ts verifies exact-text and load→write preservation."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": "legacyProseMirrorToText is implemented in editor-cm/content.ts; grep for TipTap/mdConvert/createMdConverter returned no matches."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": "content.test.ts covers representative legacy nodes, nested unknown nodes, and image-only legacy content producing ![](src)."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": "content.test.ts confirms null/undefined/empty/invalid/unknown inputs return empty markdown without throwing."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "evidence": "GeneralSettings.vue now uses readEntryMarkdown/writeEntryMarkdown; mdConvert.ts was removed."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "evidence": "TipTap UI files and deps were removed after Eden build and grep proved no live imports remained."
+    },
+    {
+      "id": "AC8",
+      "status": "PASS",
+      "evidence": "Writes still flow through existing Eden/ARK save paths; no SQL/schema/migration changes were introduced."
+    }
+  ],
+  "changedFiles": [
+    "bun.lock",
+    "docs-site/apps/eden.md",
+    "docs-site/apps/eden/data.md",
+    "docs-site/apps/eden/editor.md",
+    "products/eden/package.json",
+    "products/eden/src/BlockSelectionDecoration.ts",
+    "products/eden/src/Editor.css",
+    "products/eden/src/Editor.vue",
+    "products/eden/src/InlineCaret.ts",
+    "products/eden/src/SlashCommand.ts",
+    "products/eden/src/SlashCommandList.vue",
+    "products/eden/src/TaskRef.ts",
+    "products/eden/src/TrailingParagraph.ts",
+    "products/eden/src/Wikilink.ts",
+    "products/eden/src/components/CodeBlockView.vue",
+    "products/eden/src/components/TaskRefView.vue",
+    "products/eden/src/components/settings/GeneralSettings.vue",
+    "products/eden/src/composables/useBlockSelection.ts",
+    "products/eden/src/composables/useCharCounter.ts",
+    "products/eden/src/editor-cm/CmEditor.vue",
+    "products/eden/src/editor-cm/cmGate.ts",
+    "products/eden/src/editor-cm/content.ts",
+    "products/eden/src/editor-cm/mdConvert.ts",
+    "products/eden/src/lib/kepler-api-shim.ts",
+    "products/eden/src/lib/obsidianVault.ts",
+    "products/eden/src/lib/systemTypes.ts",
+    "products/eden/src/store/eden.ts",
+    "products/eden/tests/components/CmConvert.spec.ts",
+    "products/eden/tests/components/CmEditor.spec.ts",
+    "products/eden/tests/content.test.ts",
+    ".agent/tasks/2026-06-13-eden-markdown-storage/evidence.md",
+    ".agent/tasks/2026-06-13-eden-markdown-storage/evidence.json",
+    ".agent/tasks/2026-06-13-eden-markdown-storage/validation-output.md"
+  ],
+  "testsAddedOrUpdated": [
+    "products/eden/tests/content.test.ts",
+    "products/eden/tests/components/CmConvert.spec.ts",
+    "products/eden/tests/components/CmEditor.spec.ts"
+  ],
+  "commandsRun": [
+    {
+      "command": "rtk bun test products/eden/tests/content.test.ts products/eden/tests/cmGate.test.ts products/eden/tests/obsidianVault.test.ts",
+      "result": "passed",
+      "summary": "24 pass / 0 fail."
+    },
+    {
+      "command": "rtk bun test products/eden/tests/components/CmConvert.spec.ts products/eden/tests/content.test.ts",
+      "result": "passed",
+      "summary": "5 pass / 0 fail."
+    },
+    {
+      "command": "rtk bun run products:build",
+      "result": "passed",
+      "summary": "Extension builds completed successfully."
+    },
+    {
+      "command": "rtk bun run docs:check",
+      "result": "passed",
+      "summary": "Docs freshness check clean."
+    },
+    {
+      "command": "rtk grep -R \"@tiptap\\|mdConvert\\|createMdConverter\" -n products/eden/src products/eden/tests products/eden/package.json bun.lock || true",
+      "result": "passed",
+      "summary": "No matches."
+    }
+  ],
+  "validationOutput": [
+    "Focused Eden unit tests passed: 24/24 and 5/5 cases for the markdown adapter and related CM/Obsidian helpers.",
+    "Eden extension build passed after TipTap removal.",
+    "Docs freshness check passed with no stale references.",
+    "No live TipTap/mdConvert/createMdConverter imports remain in Eden source/tests/package/lock."
+  ],
+  "residualRisks": [
+    "The broader Eden browser component suite still has known unrelated stale failures and was not required for this storage proof pass.",
+    "No manual desktop smoke against a live ARK vault was performed in this run."
+  ],
+  "changedFilesSummary": "Added a Markdown storage adapter and tests, rewired Eden CM/settings/store/shim write/read paths to use it, and removed legacy TipTap editor files/dependencies while updating docs and proof artifacts.",
+  "diffSummary": "Added Markdown-as-storage adapter logic and best-effort legacy PM reading, updated CM editor/save/import/export paths and ARK shims to emit {type:'markdown', version:1, text}, and removed legacy TipTap editor files plus deps after build/grep validation."
+}

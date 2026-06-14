@@ -13,14 +13,14 @@ Eden — приложение для записей: дневник, мысли,
 ```
 Kepler.exe (Electron host)
   └─ extension-host
-      └─ products/eden/  (Vue bundle, TipTap editor)
+      └─ products/eden/  (Vue bundle, CodeMirror editor)
             ↕
             kepler.ark.request(operation, params)  ─→  kepler-backend (WS)
                                                           ↓
                                                        ark-core-rpc (SQLite)
 ```
 
-- **`products/eden/src/`** — Vue 3.6 Vapor UI: редактор (TipTap), сайдбар, настройки, typed notes; shared visuals из `@kosmos/visuals`.
+- **`products/eden/src/`** — Vue 3.6 Vapor UI: редактор (CodeMirror), сайдбар, настройки, typed notes; shared visuals из `@kosmos/visuals`.
 - **`products/eden/src/lib/kepler-api-shim.ts`** — мост: эмулирует `window.api` (как у standalone Eden), внутри роутит ARK операции через `window.kepler.ark.request(...)`. Это позволяет сохранять Eden codebase без массового rewrite call-sites при миграции в extension. Прецедент — Delphi `electron-api-shim.ts`.
 - **`products/eden/src/lib/edenApi.ts`** — публичный фасад для note CRUD / folders / search / typed-notes, импортирует функции из shim'а.
 - **Heart Rust sidecar — удалён.** Search полностью через ARK FTS5 (`search_objects`). Vault filesystem manager стал не нужен — single ARK DB per user.
@@ -29,7 +29,7 @@ Kepler.exe (Electron host)
 
 | Слой      | Технология                                                                           |
 | --------- | ------------------------------------------------------------------------------------ |
-| UI        | Vue 3.6 **Vapor** + TipTap + Pinia                                                   |
+| UI        | Vue 3.6 **Vapor** + CodeMirror + Pinia                                               |
 | Транспорт | `window.kepler.ark.request` → kepler-backend WS → `ark-core-rpc`                     |
 | Storage   | ARK SQLite (через runtime, не direct access)                                         |
 | Search    | ARK FTS5 (`search_objects` endpoint)                                                 |
@@ -47,12 +47,11 @@ products/eden/
 └─ src/
    ├─ main.ts                 # installKeplerApiShim() → createApp(App).use(pinia).mount("#root")
    ├─ App.vue                 # корневой view
-   ├─ Editor.vue              # TipTap editor (lazy-load chunk)
+   ├─ editor-cm/              # CodeMirror editor + Markdown storage adapter
    ├─ Titlebar.vue
    ├─ lib/
    │  ├─ kepler-api-shim.ts   # window.api эмуляция поверх kepler.ark
    │  ├─ edenApi.ts           # тонкий фасад над shim
-   │  ├─ codeBlocks.ts        # язык-id mapping для TipTap CodeBlock
    │  ├─ entryTitles.ts
    │  ├─ systemTypes.ts       # системные note_obj / game_obj типы
    │  └─ typedNotes.ts        # zod schemas + header layout
@@ -209,16 +208,16 @@ Elevation surfaces (`dialog-card`, `search-overlay`, `note-type-menu`, etc.) о�
 
 Только utilities + theme (без preflight — иначе reset перебивает kosmos-tokens). Vite alias `tailwindcss → platform/desktop/node_modules/tailwindcss` живёт в `platform/desktop/vite.extensions.config.mjs` — чтобы extension резолвил тот же tailwind, что и shell, без дубль-install.
 
-### InlineCaret отключён
+### Legacy TipTap UI удалён
 
-`InlineCaret` TipTap extension больше **не подключается** в `Editor.vue` (widget-decoration ломал drag-selection). Файл `products/eden/src/InlineCaret.ts` оставлен в репо, но не импортируется ни одним call-site'ом — только комментарий в `Editor.vue` отмечает причину отключения. Кастомный курсор остаётся через `CustomCaret` из `@kosmos/visuals` (Vapor-friendly overlay над браузерным).
+Eden runtime editor path — CodeMirror (`products/eden/src/editor-cm/CmEditor.vue`). Legacy TipTap editor files and TipTap dependencies were removed after Markdown storage migration; body storage uses `editor-cm/content.ts`.
 
 ### Accent color
 
 Eden использует свой accent — `--eden-accent-color: #ff5c00` (orange), задан
 в `products/eden/src/index.css`. Применяется к:
 
-- `::marker` bullet / ordered list в TipTap редакторе.
+- `::marker` bullet / ordered list в Markdown editor.
 - Gradient border в dock-corner widget mode (`.app-container.eden-docked::before`).
 
 Launcher gradient `EDEN_GRADIENT` (в `platform/desktop/electron/commands.ts`) синхронно
@@ -263,13 +262,13 @@ widget mode](../concepts/eden-zen-mode#dock-corner-widget-mode).
 
 ## Ключевые решения и инварианты
 
-- **Vapor mode**: leaf-компоненты — `<script setup vapor lang="ts">`; TipTap-компоненты — обычный VDOM. Interop включён через `vaporInterop: true` в `platform/desktop/vite.extensions.config.mjs`.
+- **Vapor mode**: leaf-компоненты — `<script setup vapor lang="ts">`; interop включён через `vaporInterop: true` в `platform/desktop/vite.extensions.config.mjs`.
 - **Pinia stores**: `useEdenStore` (бизнес-логика, save coordinator) + `useLayoutStore` (UI/сайдбары).
 - **ARK FTS5** — единственный search engine. Не возвращаться к Tantivy/ripgrep.
 - **Storage hardening через ARK** — все писи идут через `upsert_object` с runtime валидацией; никаких прямых SQL write'ов из extension TS (см. [Граница записи](../concepts/write-boundary.md)).
-- **TipTap CodeBlock + lowlight** — синтакс highlight в блоках кода. Никаких runtime lint/format вызовов.
+- **Vault export** пишет выбранные object types в Obsidian-style папки и не подмешивает task_obj без явного выбора; локальные image/file refs переписываются в vault-relative пути и попадают в `assets/obsidian-asset-manifest.json`, а сам markdown-files bridge остаётся text-only, поэтому бинарные payloads копировать нечем.
 - **Desktop shell** строится через shared `DesktopChrome` и `DesktopContentSurface` из `@kosmos/visuals`.
-- **Lazy Editor.vue** — `defineAsyncComponent(() => import("./Editor.vue"))` в App.vue: main bundle ~350KB, editor chunk ~1.36MB lazy-loaded при открытии заметки.
+- **Lazy CmEditor.vue** — `defineAsyncComponent(() => import("./editor-cm/CmEditor.vue"))` в App.vue: main bundle stays small; editor chunk lazy-loads при открытии заметки.
 
 ## Будущее
 

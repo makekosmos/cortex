@@ -126,7 +126,10 @@ const api = {
     openVault: (): Promise<unknown | null> =>
       ipcRenderer.invoke("kepler:extension:markdownFiles:openVault") as Promise<unknown | null>,
     exportVault: (
-      files: Array<{ relativePath: string; content: string }>,
+      files: Array<
+        | { relativePath: string; content: string; sourcePath?: never }
+        | { relativePath: string; sourcePath: string; content?: never }
+      >,
     ): Promise<{ outputDir: string; exportedCount: number } | null> =>
       ipcRenderer.invoke("kepler:extension:markdownFiles:exportVault", files) as Promise<{
         outputDir: string;

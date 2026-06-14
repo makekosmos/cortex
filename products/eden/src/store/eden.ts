@@ -8,7 +8,7 @@ import { normalizeSlug } from "@/lib/typedNotes";
 
 import { createUntitledEntryHeaderProps } from "@/lib/entryTitles";
 
-import { coerceToCmSafeDoc, isCmSafeDoc } from "@/editor-cm/cmGate";
+import { writeEntryMarkdown } from "@/editor-cm/content";
 
 import {
   SYSTEM_TYPE_JOURNAL,
@@ -201,10 +201,7 @@ export const useEdenStore = defineStore("eden", () => {
       const mySpaceEntry: Entry = {
         id: uuidv4(),
         title: MY_SPACE_TITLE,
-        content_json: JSON.stringify({
-          type: "doc",
-          content: [{ type: "paragraph" }],
-        }),
+        content_json: JSON.stringify(writeEntryMarkdown("")),
         created_at: Date.now(),
         updated_at: Date.now(),
         folder_id: null,
@@ -255,10 +252,7 @@ export const useEdenStore = defineStore("eden", () => {
 
       title,
 
-      content_json: JSON.stringify({
-        type: "doc",
-        content: [{ type: "paragraph" }],
-      }),
+      content_json: JSON.stringify(writeEntryMarkdown("")),
 
       created_at: Date.now(),
 
@@ -306,27 +300,17 @@ export const useEdenStore = defineStore("eden", () => {
     return entries.value.find((e) => e.title.trim() === MY_SPACE_TITLE) ?? null;
   }
 
-  // См. postmortems.md § 2026-06-12 — CM normalization должна быть entry-wide.
+  // Markdown storage is read tolerantly by CM. Do not rewrite legacy/invalid bodies on open;
+  // they become Markdown only through normal editor save.
   async function ensureEntryCmSafe(entry: Entry): Promise<Entry> {
-    let parsed: unknown = null;
-    let contentSafe = false;
-
-    try {
-      parsed = JSON.parse(entry.content_json);
-      contentSafe = isCmSafeDoc(parsed);
-    } catch {
-      parsed = null;
-    }
-
     const nextTypeId = entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
-    if (contentSafe && entry.type_id === nextTypeId) {
+    if (entry.type_id === nextTypeId) {
       return entry;
     }
 
     const normalized: Entry = {
       ...entry,
       type_id: nextTypeId,
-      content_json: contentSafe ? entry.content_json : JSON.stringify(coerceToCmSafeDoc(parsed)),
       updated_at: Date.now(),
     };
 
@@ -473,10 +457,7 @@ export const useEdenStore = defineStore("eden", () => {
     const newEntry: Entry = {
       id: uuidv4(),
       title: todayTitle,
-      content_json: JSON.stringify({
-        type: "doc",
-        content: [{ type: "paragraph" }],
-      }),
+      content_json: JSON.stringify(writeEntryMarkdown("")),
       created_at: Date.now(),
       updated_at: Date.now(),
       folder_id: null,
