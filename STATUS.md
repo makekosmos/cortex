@@ -1,5 +1,14 @@
 # Kosmos — статус проекта (2026-06-15)
 
+## 2026-06-15 — Prod/dev source inversion fix (Kosmos Desktop 0.4.9 → 0.4.10)
+
+Patch-релиз исправляет классификацию built-in extensions: packaged
+`resources/extensions` больше не помечается как `source: dev`, поэтому Eden и
+другие bundled extensions снова идут как production/bundled copy, а не как
+репозиторный dev-tree. Из-за этого исчезают ложные `источник: репозиторий` /
+`dev` бейджи, и marketplace/update flow снова видит установленный Eden как
+обычный installed target вместо shadowed dev-версии.
+
 ## 2026-06-15 — Tray icon repack (Kosmos Desktop 0.4.8 → 0.4.9)
 
 Patch-релиз перевыпускает desktop shell после того, как pipeline сборки трея

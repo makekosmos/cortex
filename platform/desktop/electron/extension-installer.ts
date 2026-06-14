@@ -16,6 +16,7 @@
 
 import { existsSync, renameSync } from "node:fs";
 import * as fs from "node:fs/promises";
+import { app } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
@@ -541,10 +542,15 @@ export interface InstalledExtensionInfo {
 
 /** Repo dev tree root для extensions. Если папка существует — мы запущены
  *  из repo (developer flow), и extension'ы оттуда автоматически считаются
- *  "installed". Это устраняет нужду качать extension с marketplace в dev. */
-function repoDevExtensionsRoot(): string | null {
-  // platform/desktop/electron/ → platform/desktop/ → <repoRoot>/, extensions at <repoRoot>/extensions/
-  const candidate = path.resolve(__dirname, "..", "..", "extensions");
+ *  "installed". Это устраняет нужду качать extension с marketplace в dev.
+ *
+ *  В packaged build dev-tree detection отключён: иначе `resources/extensions`
+ *  (bundled first-party extensions) ошибочно попадает в source="dev".
+ */
+export function repoDevExtensionsRoot(): string | null {
+  if (app.isPackaged) return null;
+  // platform/desktop/dist-electron/ → platform/desktop/ → platform/ → <repoRoot>/
+  const candidate = path.resolve(__dirname, "..", "..", "..", "extensions");
   return existsSync(candidate) ? candidate : null;
 }
 

@@ -499,12 +499,15 @@ function resolveExtensionRootEntries(): ExtensionRootEntry[] {
   const roots: ExtensionRootEntry[] = [];
   // Repo dev tree: __dirname is platform/desktop/electron/ (or dist-electron/).
   // Source packages can live under products/*, incubator/*, or the deprecated
-  // extensions/* compatibility root. User-installed runtime extensions still
-  // live in <dataDir>/extensions and are handled below.
-  const repoRoot = path.resolve(__dirname, "..", "..", "..");
-  for (const rootName of ["products", "incubator", "extensions"]) {
-    const dev = path.join(repoRoot, rootName);
-    if (existsSync(dev)) roots.push({ dir: dev, source: "dev" });
+  // extensions/* compatibility root. In packaged builds we MUST skip this
+  // branch entirely: otherwise `resources/extensions` (bundled first-party)
+  // gets misclassified as dev and hides the prod/update flow.
+  if (!app.isPackaged) {
+    const repoRoot = path.resolve(__dirname, "..", "..", "..");
+    for (const rootName of ["products", "incubator", "extensions"]) {
+      const dev = path.join(repoRoot, rootName);
+      if (existsSync(dev)) roots.push({ dir: dev, source: "dev" });
+    }
   }
   const userRoot = path.join(keplerDataDir(), "extensions");
   if (!roots.some((root) => root.dir === userRoot)) roots.push({ dir: userRoot, source: "user" });
