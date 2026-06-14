@@ -1,10 +1,11 @@
 # Kosmos — статус проекта (2026-06-15)
 
-## 2026-06-15 — Tray icon repack (Kosmos Desktop 0.4.7 → 0.4.8)
+## 2026-06-15 — Tray icon repack (Kosmos Desktop 0.4.8 → 0.4.9)
 
-Patch-релиз перевыпускает desktop shell после обновления tray artwork: `tray.ico`
-снова генерируется из актуального `icon.png` и попадает в packaged app как
-`resources/tray.ico`.
+Patch-релиз перевыпускает desktop shell после того, как pipeline сборки трея
+стал генерировать `tray.ico` из `tray.svg`. Это гарантирует, что новая иконка
+попадает в packaged app как `resources/tray.ico`, а не остаётся на старом
+артефакте.
 
 ## 2026-06-14 — Stage 2 release bump
 
