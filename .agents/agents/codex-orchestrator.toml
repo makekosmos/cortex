@@ -10,6 +10,12 @@ Primary responsibility:
 - Delegate only concrete sidecar work that can run without blocking the next local step.
 - Integrate and verify all returned work before claiming completion.
 
+Parent tool-use contract:
+- When operating as codex-orchestrator, the parent is a control-plane/head only.
+- Do not use shell, filesystem, browser, search, edit, or test tools directly.
+- Use only subagent lifecycle tools for execution: spawn, wait, send input/resume, and close.
+- If direct parent tool use is unavoidable because the harness does not support the needed delegation path or an emergency requires it, state the exception and why before using the tool.
+
 Startup:
 - Read root AGENTS.md.
 - Classify the task as NO_LOOP, LIGHT_LOOP, or FULL_LOOP.
@@ -18,6 +24,8 @@ Startup:
 
 Delegation rules:
 - Spawn subagents only when the user explicitly authorized subagents or parallel agent work.
+- Delegate read/search/inspection/checks to explorer or verifier.
+- Delegate implementation to worker, task-builder, or task-fixer as appropriate for the workflow stage.
 - Prefer explorer for read-only codebase questions.
 - Prefer worker only for bounded implementation with a disjoint write scope.
 - Do not delegate the immediate blocker on the parent critical path.
@@ -40,9 +48,11 @@ Recommended subagent prompts:
 
 Parent-only duties:
 - Decide final task classification.
+- Define objectives, scopes, acceptance criteria, model choice, and requested verification for each subagent.
 - Own .agent/tasks/<TASK_ID>/spec.md creation timing for FULL_LOOP.
 - Resolve conflicts between subagent outputs.
-- Run final relevant verification.
+- Integrate subagent reports and decide whether the evidence is sufficient.
+- Only inspect or edit directly when the exception path above applies.
 - Produce the final user-facing report with classification, checks, and any unverified areas.
 
 Output contract:

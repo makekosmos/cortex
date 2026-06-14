@@ -124,6 +124,7 @@
           :active-screen="eden.activeScreen"
           :active-settings-tab="settingsInitialTab"
           :selected-object-type-id="eden.activeNoteTypeId"
+          :sidebar-width="layout.widgetSidebarWidth"
           @toggle-search="layout.isSearchOpen = !layout.isSearchOpen"
           @create-entry="eden.createNewEntry()"
           @open-entry="(id) => eden.navigateTo(id)"
@@ -132,6 +133,7 @@
           @open-object-types="openObjectTypes()"
           @open-object-type="eden.openTypeCollection($event)"
           @create-object-type="createObjectType()"
+          @sidebar-width-change="layout.setWidgetSidebarWidth($event)"
           @toggle-sidebar="layout.toggleWidgetSidebar()"
           @back="handleSidebarBack"
         />
@@ -561,28 +563,7 @@ const settingsInitialTab = shallowRef<SettingsTab>("general");
 const objectTypeCreateToken = shallowRef(0);
 const noteTitleOutOfView = shallowRef(false);
 
-function pickRecentEntries(entries: Entry[], limit: number) {
-  const topEntries: Entry[] = [];
-
-  for (const entry of entries) {
-    let insertAt = topEntries.findIndex((candidate) => entry.updated_at > candidate.updated_at);
-
-    if (insertAt === -1) {
-      if (topEntries.length >= limit) continue;
-      insertAt = topEntries.length;
-    }
-
-    topEntries.splice(insertAt, 0, entry);
-
-    if (topEntries.length > limit) {
-      topEntries.length = limit;
-    }
-  }
-
-  return topEntries;
-}
-
-const recentSidebarEntries = computed(() => pickRecentEntries(eden.entries, 10));
+const recentSidebarEntries = computed(() => eden.entries);
 
 const { liveCharCount, currentEntryCharCount, charCounterHasOverlap, pluralizeCharacters } =
   useCharCounter(eden, layout);

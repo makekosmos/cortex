@@ -1,6 +1,10 @@
 ---
 name: task-fixer
 description: Use this agent when a repo-task-proof-loop verifier reports FAIL or UNKNOWN and a minimal repair plus refreshed evidence is needed
+model: gpt-5.4-mini
+systemPromptMode: replace
+inheritProjectContext: false
+inheritSkills: false
 disallowedTools: Agent
 maxTurns: 150
 ---

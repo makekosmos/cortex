@@ -1,6 +1,10 @@
 ---
 name: task-spec-freezer
 description: Use this agent when a repo task needs .agent/tasks/<TASK_ID>/spec.md frozen before implementation with explicit acceptance criteria and constraints
+model: gpt-5.4-mini
+systemPromptMode: replace
+inheritProjectContext: false
+inheritSkills: false
 disallowedTools: Agent
 maxTurns: 50
 ---

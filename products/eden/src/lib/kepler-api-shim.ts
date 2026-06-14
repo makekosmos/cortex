@@ -101,10 +101,10 @@ function ensureList<T>(value: unknown): T[] {
   return [];
 }
 
-function arkTimestampToMillis(value?: string | null): number {
-  if (!value) return Date.now();
+function arkTimestampToMillis(value: string | null | undefined, fallback: number): number {
+  if (!value) return fallback;
   const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : Date.now();
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function millisToArkTimestamp(value: number | null | undefined): string {
@@ -151,6 +151,8 @@ function mapArkObjectToEntry(
   links: ArkObjectLinkRecord[],
   objectType?: ArkObjectTypeRecord,
 ): Entry {
+  const createdAt = arkTimestampToMillis(object.createdAt, 0);
+  const updatedAt = arkTimestampToMillis(object.updatedAt, createdAt);
   const headerProps = {
     ...object.propsJson,
     related_notes: links
@@ -162,8 +164,8 @@ function mapArkObjectToEntry(
     id: object.id,
     title: object.title,
     content_json: JSON.stringify(object.contentJson ?? writeEntryMarkdown("")),
-    created_at: arkTimestampToMillis(object.createdAt),
-    updated_at: arkTimestampToMillis(object.updatedAt),
+    created_at: createdAt,
+    updated_at: updatedAt,
     folder_id: null,
     type_id: object.typeId,
     header_layout: objectType
@@ -171,7 +173,7 @@ function mapArkObjectToEntry(
       : "default",
     header_props_json: stringifyHeaderProps(headerProps),
     schema_version: 1,
-    deleted_at: object.deletedAt ? arkTimestampToMillis(object.deletedAt) : null,
+    deleted_at: object.deletedAt ? arkTimestampToMillis(object.deletedAt, updatedAt) : null,
   });
 }
 
@@ -198,6 +200,8 @@ function mapEntryToArkObject(entry: Entry): ArkObjectRecord {
 }
 
 function mapArkObjectTypeToNoteType(objectType: ArkObjectTypeRecord): NoteType {
+  const createdAt = arkTimestampToMillis(objectType.createdAt, 0);
+  const updatedAt = arkTimestampToMillis(objectType.updatedAt, createdAt);
   const uiSchema = parseNoteTypeUiSchema(objectType.uiSchemaJson);
   const headerTemplate = {
     kind: uiSchema.header_layout === "column" ? "centered_profile" : "default",
@@ -226,8 +230,8 @@ function mapArkObjectTypeToNoteType(objectType: ArkObjectTypeRecord): NoteType {
       schema_json: objectType.schemaJson,
       header_template_json: JSON.stringify(headerTemplate),
       ui_schema_json: objectType.uiSchemaJson,
-      created_at: arkTimestampToMillis(objectType.createdAt),
-      updated_at: arkTimestampToMillis(objectType.updatedAt),
+      created_at: createdAt,
+      updated_at: updatedAt,
     }),
   );
 }

@@ -3648,7 +3648,7 @@ span[data-wikilink]:hover {
 .editor-wrapper,
 .editor-content-area,
 .ProseMirror {
-  background: var(--sidebar-bg);
+  background: var(--bg-app);
   color: var(--text-primary);
 }
 
@@ -3888,9 +3888,8 @@ span[data-wikilink]:hover {
 
 /* Anytype Dark Exactness */
 
-/* Сurface'ы которые сидят внутри DesktopChrome (titlebar + sidebar — общий
-   sidebar-bg). app-container/app-main/editor-* сливаются с этим фоном,
-   чтобы между titlebar/sidebar и контентом не было визуального шва. */
+/* Основные surface'ы Eden теперь solid: content использует --bg-app,
+   sidebar ниже переопределяется на более тёмный --sidebar-bg. */
 .app-container,
 .app-main,
 .editor-wrapper,
@@ -3899,8 +3898,8 @@ span[data-wikilink]:hover {
 .setup-container,
 .setup-box,
 .ProseMirror {
-  background: transparent;
-  background-color: transparent;
+  background: var(--bg-app);
+  background-color: var(--bg-app);
   color: var(--color-text-primary);
 }
 
@@ -4739,11 +4738,16 @@ span[data-wikilink]:hover {
 }
 
 .app-container .kosmos-desktop-chrome-settings > div {
-  background: #18181b;
+  background: var(--bg-app);
 }
 
 .app-container .app-main {
-  background: #18181b;
+  background: var(--bg-app);
+}
+
+.app-container .kosmos-settings-sidebar {
+  background: var(--sidebar-bg);
+  background-color: var(--sidebar-bg);
 }
 
 .app-container .kosmos-desktop-chrome-settings__header {

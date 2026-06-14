@@ -81,6 +81,18 @@ describe("CmEditor component", () => {
     await expect.poll(() => cmContent().textContent).toContain("Привет");
   });
 
+  test("открытие и закрытие без правок не вызывает save и не двигает updated_at", async () => {
+    const onSave = vi.fn(async () => null);
+    const screen = render(CmEditor, {
+      props: { entry: makeEntry(EMPTY_DOC), onSave, zenMode: false },
+    });
+
+    await expect.poll(() => document.querySelector(".cm-content")).not.toBeNull();
+    screen.unmount();
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   test("ввод текста эмитит liveCharCount > 0", async () => {
     const counts: number[] = [];
     render(CmEditor, {

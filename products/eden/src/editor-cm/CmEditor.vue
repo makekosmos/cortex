@@ -225,6 +225,32 @@ function buildEntryDraft(contentJson?: string): Entry {
   };
 }
 
+function normalizedEntryTypeId(entry: Entry): string {
+  return entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
+}
+
+function normalizedEntryHeaderLayout(entry: Entry): string | null {
+  if (entry.header_layout !== null && entry.header_layout !== undefined) return entry.header_layout;
+
+  const noteType =
+    props.noteTypes.find((candidate) => candidate.id === normalizedEntryTypeId(entry)) ?? null;
+  return resolveNoteTypeHeaderLayout(noteType);
+}
+
+function hasEntryDraftChanges(entry: Entry): boolean {
+  if (entry.title !== props.entry.title) return true;
+  if (normalizedEntryTypeId(entry) !== normalizedEntryTypeId(props.entry)) return true;
+  if (normalizedEntryHeaderLayout(entry) !== normalizedEntryHeaderLayout(props.entry)) return true;
+  if (
+    normalizeHeaderPropsJson(entry.header_props_json) !==
+    normalizeHeaderPropsJson(props.entry.header_props_json)
+  ) {
+    return true;
+  }
+
+  return readEntryMarkdown(entry.content_json) !== readEntryMarkdown(props.entry.content_json);
+}
+
 function scheduleAutosave(): void {
   if (autosaveTimer !== null) {
     clearTimeout(autosaveTimer);
@@ -242,6 +268,8 @@ async function flushSave(): Promise<void> {
   const md = view.state.doc.toString();
   const contentJson = JSON.stringify(writeEntryMarkdown(md));
   const entry = buildEntryDraft(contentJson);
+  if (!hasEntryDraftChanges(entry)) return;
+
   emit("entryDraftChange", entry);
   await props.onSave(entry);
   lastPersistedTitle = entry.title;

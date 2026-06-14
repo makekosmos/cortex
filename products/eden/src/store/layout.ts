@@ -2,7 +2,9 @@ import { defineStore } from "pinia";
 
 import { ref } from "vue";
 
-const EDEN_SETTINGS_SIDEBAR_WIDTH = 228;
+const EDEN_SIDEBAR_DEFAULT_WIDTH = 280;
+const EDEN_SIDEBAR_MIN_WIDTH = 240;
+const EDEN_SIDEBAR_MAX_WIDTH = 420;
 
 // LocalStorage key для persistence zen mode'а. Юзер ожидает что reload
 // окна (особенно дев-HMR) сохраняет состояние «я был в zen режиме».
@@ -28,8 +30,15 @@ function writePersistedZenMode(value: boolean): void {
   }
 }
 
+function clampSidebarWidth(width: number): number {
+  if (!Number.isFinite(width)) return EDEN_SIDEBAR_DEFAULT_WIDTH;
+  return Math.min(EDEN_SIDEBAR_MAX_WIDTH, Math.max(EDEN_SIDEBAR_MIN_WIDTH, Math.round(width)));
+}
+
 export const useLayoutStore = defineStore("layout", () => {
   const widgetSidebarHidden = ref(false);
+
+  const widgetSidebarWidth = ref(EDEN_SIDEBAR_DEFAULT_WIDTH);
 
   const isSearchOpen = ref(false);
 
@@ -46,7 +55,20 @@ export const useLayoutStore = defineStore("layout", () => {
       await window.api.updateSidebarConfig({
         widget: {
           hidden: widgetSidebarHidden.value,
-          width: EDEN_SETTINGS_SIDEBAR_WIDTH,
+          width: widgetSidebarWidth.value,
+        },
+      });
+    }
+  }
+
+  async function setWidgetSidebarWidth(width: number) {
+    widgetSidebarWidth.value = clampSidebarWidth(width);
+
+    if (window.api) {
+      await window.api.updateSidebarConfig({
+        widget: {
+          hidden: widgetSidebarHidden.value,
+          width: widgetSidebarWidth.value,
         },
       });
     }
@@ -86,16 +108,19 @@ export const useLayoutStore = defineStore("layout", () => {
 
   async function onWidgetConfigChange(config: { width: number; hidden: boolean }) {
     widgetSidebarHidden.value = config.hidden;
+    widgetSidebarWidth.value = clampSidebarWidth(config.width);
 
     if (window.api) {
       await window.api.updateSidebarConfig({
-        widget: { hidden: config.hidden, width: EDEN_SETTINGS_SIDEBAR_WIDTH },
+        widget: { hidden: config.hidden, width: widgetSidebarWidth.value },
       });
     }
   }
 
   return {
     widgetSidebarHidden,
+
+    widgetSidebarWidth,
 
     isSearchOpen,
 
@@ -106,6 +131,8 @@ export const useLayoutStore = defineStore("layout", () => {
     searchResults,
 
     toggleWidgetSidebar,
+
+    setWidgetSidebarWidth,
 
     openSearch,
 

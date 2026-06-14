@@ -12,7 +12,7 @@
   "height": 750,
   "minWidth": 450,
   "minHeight": 400,
-  "windowEffect": "acrylic",
+  "windowEffect": "none",
   "permissions": [
     "objects.read",
     "objects.write",

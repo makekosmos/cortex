@@ -1,6 +1,10 @@
 ---
 name: task-builder
 description: Use this agent when implementing a frozen repo-task-proof-loop task and then resuming that same task in evidence mode
+model: gpt-5.4-mini
+systemPromptMode: replace
+inheritProjectContext: false
+inheritSkills: false
 disallowedTools: Agent
 maxTurns: 200
 ---

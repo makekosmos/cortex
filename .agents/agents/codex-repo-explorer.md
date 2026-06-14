@@ -1,6 +1,10 @@
 ---
 name: codex-repo-explorer
 description: Read-only Codex explorer for specific Kosmos codebase questions
+model: gpt-5.3-codex-spark
+systemPromptMode: replace
+inheritProjectContext: false
+inheritSkills: false
 disallowedTools: Agent
 maxTurns: 40
 ---

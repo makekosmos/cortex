@@ -8,7 +8,7 @@ import { normalizeSlug } from "@/lib/typedNotes";
 
 import { createUntitledEntryHeaderProps } from "@/lib/entryTitles";
 
-import { writeEntryMarkdown } from "@/editor-cm/content";
+import { readEntryMarkdown, writeEntryMarkdown } from "@/editor-cm/content";
 
 import {
   SYSTEM_TYPE_JOURNAL,
@@ -62,6 +62,42 @@ function mergeNoteTypesWithSystem(noteTypesData: NoteType[]) {
 const MY_SPACE_TITLE = "Мое пространство";
 
 const SYSTEM_TYPES_BY_ID = new Map(SYSTEM_TYPES.map((noteType) => [noteType.id, noteType]));
+
+function normalizedEntryTypeId(entry: Entry): string {
+  return entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
+}
+
+function normalizedEntryHeaderLayout(entry: Entry): string | null {
+  return entry.header_layout ?? null;
+}
+
+function normalizeHeaderPropsJson(raw: string | null | undefined): string {
+  if (!raw?.trim()) return JSON.stringify({});
+
+  try {
+    return JSON.stringify(JSON.parse(raw) as Record<string, unknown>);
+  } catch {
+    return JSON.stringify({});
+  }
+}
+
+function hasUserVisibleEntryChanges(nextEntry: Entry, previousEntry: Entry): boolean {
+  if (nextEntry.title !== previousEntry.title) return true;
+  if (normalizedEntryTypeId(nextEntry) !== normalizedEntryTypeId(previousEntry)) return true;
+  if (normalizedEntryHeaderLayout(nextEntry) !== normalizedEntryHeaderLayout(previousEntry)) {
+    return true;
+  }
+  if (
+    normalizeHeaderPropsJson(nextEntry.header_props_json) !==
+    normalizeHeaderPropsJson(previousEntry.header_props_json)
+  ) {
+    return true;
+  }
+
+  return (
+    readEntryMarkdown(nextEntry.content_json) !== readEntryMarkdown(previousEntry.content_json)
+  );
+}
 
 interface QueuedSaveRequest {
   entry: Entry;
@@ -238,6 +274,7 @@ export const useEdenStore = defineStore("eden", () => {
     const layout = useLayoutStore();
 
     layout.widgetSidebarHidden = sidebarConfig.widget.hidden;
+    layout.widgetSidebarWidth = sidebarConfig.widget.width;
 
     isInitializing.value = false;
 
@@ -311,7 +348,6 @@ export const useEdenStore = defineStore("eden", () => {
     const normalized: Entry = {
       ...entry,
       type_id: nextTypeId,
-      updated_at: Date.now(),
     };
 
     const idx = entries.value.findIndex((candidate) => candidate.id === entry.id);
@@ -615,6 +651,11 @@ export const useEdenStore = defineStore("eden", () => {
   async function handleSave(entry: Entry): Promise<SaveEntryResult | null> {
     if (!window.api) return null;
 
+    const previousEntry = entries.value.find((candidate) => candidate.id === entry.id);
+    if (previousEntry && !hasUserVisibleEntryChanges(entry, previousEntry)) {
+      return { ok: true, entryId: entry.id };
+    }
+
     const persistEntry = async (entryToPersist: Entry): Promise<SaveEntryResult | null> => {
       latestSaveTimestamps.set(entryToPersist.id, entryToPersist.updated_at);
 
@@ -709,6 +750,7 @@ export const useEdenStore = defineStore("eden", () => {
     const idx = entries.value.findIndex((candidate) => candidate.id === entry.id);
 
     if (idx >= 0) {
+      if (!hasUserVisibleEntryChanges(entry, entries.value[idx])) return;
       entries.value[idx] = entry;
     } else {
       entries.value = [entry, ...entries.value];

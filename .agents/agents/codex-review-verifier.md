@@ -1,6 +1,10 @@
 ---
 name: codex-review-verifier
 description: Optional read-only Codex review for non-FULL_LOOP work or pre-verifier review
+model: gpt-5.3-codex-spark
+systemPromptMode: replace
+inheritProjectContext: false
+inheritSkills: false
 disallowedTools: Agent
 maxTurns: 80
 ---

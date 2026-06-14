@@ -1,6 +1,10 @@
 ---
 name: task-classifier
 description: Use this agent before proof-loop creation to classify a Kosmos repo task as NO_LOOP, LIGHT_LOOP, or FULL_LOOP and recommend the minimum verification path
+model: gpt-5.4-mini
+systemPromptMode: replace
+inheritProjectContext: false
+inheritSkills: false
 disallowedTools: Agent
 maxTurns: 30
 ---

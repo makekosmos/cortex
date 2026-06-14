@@ -2,7 +2,7 @@
 //
 // This spec intentionally keys off the stable `data-testid` contract that the
 // Eden sidebar exposes today: `sidebar-create-entry`, `widget-link-search`,
-// `open-settings-btn`, and `settings-nav-*`.
+// `sidebar-open-objects`, `sidebar-header-settings`, and `settings-nav-*`.
 //
 // The goal is to keep the tests resilient now that EdenSidebar uses the
 // SettingsSidebar / SettingsSidebarButton API from @kosmos/visuals.
@@ -32,13 +32,19 @@ function makeCustomType(): NoteType {
   };
 }
 
-function makeEntry(id: string, title: string, typeId: string | null = SYSTEM_TYPE_NOTE.id): Entry {
+function makeEntry(
+  id: string,
+  title: string,
+  typeId: string | null = SYSTEM_TYPE_NOTE.id,
+  updatedAt = Date.now(),
+  body = "Текст заметки для превью",
+): Entry {
   return {
     id,
     title,
-    content_json: JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] }),
-    created_at: Date.now(),
-    updated_at: Date.now(),
+    content_json: JSON.stringify({ type: "markdown", version: 1, text: body }),
+    created_at: updatedAt,
+    updated_at: updatedAt,
     folder_id: null,
     type_id: typeId,
     header_layout: "default",
@@ -56,8 +62,18 @@ const EdenSidebarFixture = defineComponent({
     const activeScreen = shallowRef<EdenScreen>("notes");
     const activeSettingsTab = shallowRef<SettingsTab>("general");
     const selectedObjectTypeId = shallowRef<string | null>(null);
-    const currentEntry = shallowRef<Entry | null>(makeEntry("entry-1", "Первая заметка"));
-    const recentEntries = [currentEntry.value!];
+    const sidebarWidth = shallowRef(280);
+    const now = Date.now();
+    const recentEntries = Array.from({ length: 120 }, (_, index) =>
+      makeEntry(
+        `entry-${index + 1}`,
+        `Недавняя заметка ${index + 1}`,
+        SYSTEM_TYPE_NOTE.id,
+        now - index * 24 * 60 * 60 * 1000,
+        `Начало текста заметки ${index + 1}. Второе предложение для превью.`,
+      ),
+    );
+    const currentEntry = shallowRef<Entry | null>(recentEntries[0]);
     const noteTypes = [SYSTEM_TYPE_NOTE, makeCustomType()];
 
     const createEntryCount = shallowRef(0);
@@ -80,6 +96,7 @@ const EdenSidebarFixture = defineComponent({
       activeScreen,
       activeSettingsTab,
       selectedObjectTypeId,
+      sidebarWidth,
       currentEntry,
       recentEntries,
       noteTypes,
@@ -121,6 +138,9 @@ const EdenSidebarFixture = defineComponent({
       onCreateObjectType() {
         createObjectTypeCount.value += 1;
       },
+      onSidebarWidthChange(width: number) {
+        sidebarWidth.value = width;
+      },
       onBack() {
         backCount.value += 1;
         setNotesScreen();
@@ -138,6 +158,7 @@ const EdenSidebarFixture = defineComponent({
         :active-screen="activeScreen"
         :active-settings-tab="activeSettingsTab"
         :selected-object-type-id="selectedObjectTypeId"
+        :sidebar-width="sidebarWidth"
         @create-entry="onCreateEntry"
         @toggle-search="onToggleSearch"
         @open-entry="onOpenEntry"
@@ -146,6 +167,7 @@ const EdenSidebarFixture = defineComponent({
         @open-object-types="onOpenObjectTypes"
         @open-object-type="onOpenObjectType"
         @create-object-type="onCreateObjectType"
+        @sidebar-width-change="onSidebarWidthChange"
         @back="onBack"
       />
 
@@ -157,6 +179,7 @@ const EdenSidebarFixture = defineComponent({
       <output data-testid="open-object-types-count">{{ openObjectTypesCount }}</output>
       <output data-testid="create-object-type-count">{{ createObjectTypeCount }}</output>
       <output data-testid="selected-object-type-id">{{ selectedObjectTypeId ?? "" }}</output>
+      <output data-testid="sidebar-width">{{ sidebarWidth }}</output>
       <output data-testid="open-entry-id">{{ openEntryId }}</output>
       <output data-testid="last-settings-tab">{{ lastSettingsTab }}</output>
     </div>
@@ -167,10 +190,23 @@ describe("EdenSidebar contract", () => {
   test("notes screen exposes create/search/settings actions and opens settings", async () => {
     const screen = render(EdenSidebarFixture);
 
+    await expect.element(screen.getByTestId("sidebar-header")).toBeInTheDocument();
+    expect(document.querySelector('[data-testid="sidebar-main-scroll"]')).toBeNull();
+    await expect.element(screen.getByTestId("sidebar-recent-virtual-list")).toBeInTheDocument();
+    await expect.element(screen.getByText("В этом месяце")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("Недавние");
+    await expect.element(screen.getByTestId("eden-sidebar-resize-handle")).toBeInTheDocument();
     await expect.element(screen.getByTestId("sidebar-create-entry")).toBeInTheDocument();
     await expect.element(screen.getByTestId("widget-link-search")).toBeInTheDocument();
-    await expect.element(screen.getByTestId("open-settings-btn")).toBeInTheDocument();
+    await expect.element(screen.getByTestId("sidebar-open-objects")).toBeInTheDocument();
+    await expect.element(screen.getByTestId("sidebar-header-settings")).toBeInTheDocument();
     await expect.element(screen.getByTestId("recent-entry-entry-1")).toBeInTheDocument();
+    await expect.element(screen.getByTestId("recent-entry-entry-1")).toHaveTextContent("сегодня");
+    await expect
+      .element(screen.getByTestId("recent-entry-entry-1"))
+      .toHaveTextContent("Начало текста заметки 1");
+    await expect.element(screen.getByTestId("note-type-custom-project")).not.toBeInTheDocument();
+    await expect.element(screen.getByTestId("sidebar-header")).not.toHaveTextContent("Eden");
 
     await userEvent.click(screen.getByTestId("sidebar-create-entry"));
     await expect.element(screen.getByTestId("create-entry-count")).toHaveTextContent("1");
@@ -178,14 +214,12 @@ describe("EdenSidebar contract", () => {
     await userEvent.click(screen.getByTestId("widget-link-search"));
     await expect.element(screen.getByTestId("toggle-search-count")).toHaveTextContent("1");
 
-    await userEvent.click(screen.getByTestId("open-settings-btn"));
+    await userEvent.click(screen.getByTestId("sidebar-header-settings"));
     await expect.element(screen.getByTestId("screen")).toHaveTextContent("settings");
     await expect.element(screen.getByTestId("settings-nav-back")).toBeInTheDocument();
     await expect.element(screen.getByTestId("settings-nav-general")).toBeInTheDocument();
     await expect.element(screen.getByTestId("settings-nav-trash")).toBeInTheDocument();
-    await expect.element(screen.getByTestId("settings-nav-storage")).toBeInTheDocument();
     await expect.element(screen.getByTestId("settings-nav-vim")).toBeInTheDocument();
-    await expect.element(screen.getByTestId("settings-nav-spaces")).toBeInTheDocument();
     await expect.element(screen.getByTestId("settings-nav-object-types")).toBeInTheDocument();
 
     await userEvent.click(screen.getByTestId("settings-nav-vim"));
@@ -193,10 +227,48 @@ describe("EdenSidebar contract", () => {
     await expect.element(screen.getByTestId("last-settings-tab")).toHaveTextContent("vim");
   });
 
+  test("objects button opens all object types in a modal", async () => {
+    const screen = render(EdenSidebarFixture);
+
+    await userEvent.click(screen.getByTestId("sidebar-open-objects"));
+    await expect.element(screen.getByTestId("sidebar-objects-modal")).toBeInTheDocument();
+    await expect
+      .element(screen.getByTestId(`objects-modal-note-type-${SYSTEM_TYPE_NOTE.id}`))
+      .toBeInTheDocument();
+    await expect
+      .element(screen.getByTestId("objects-modal-note-type-custom-project"))
+      .toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId("objects-modal-note-type-custom-project"));
+    await expect
+      .element(screen.getByTestId("selected-object-type-id"))
+      .toHaveTextContent("custom-project");
+    await expect.element(screen.getByTestId("screen")).toHaveTextContent("object-types");
+    await expect.element(screen.getByTestId("sidebar-objects-modal")).not.toBeInTheDocument();
+  });
+
+  test("recent entries are virtualized and keep updated order while scrolling", async () => {
+    const screen = render(EdenSidebarFixture);
+
+    await expect.element(screen.getByTestId("recent-entry-entry-1")).toBeInTheDocument();
+    await expect.element(screen.getByTestId("recent-entry-entry-120")).not.toBeInTheDocument();
+
+    const recentList = document.querySelector<HTMLElement>(
+      '[data-testid="sidebar-recent-virtual-list"]',
+    );
+    if (!recentList) throw new Error("sidebar-recent-virtual-list not found");
+    recentList.scrollTop = recentList.scrollHeight;
+    recentList.dispatchEvent(new Event("scroll"));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    await expect.element(screen.getByTestId("recent-entry-entry-120")).toBeInTheDocument();
+    await expect.element(screen.getByTestId("recent-entry-entry-1")).not.toBeInTheDocument();
+  });
+
   test("settings navigation returns to notes and object types keeps its own back action", async () => {
     const screen = render(EdenSidebarFixture);
 
-    await userEvent.click(screen.getByTestId("open-settings-btn"));
+    await userEvent.click(screen.getByTestId("sidebar-header-settings"));
     await userEvent.click(screen.getByTestId("settings-nav-object-types"));
 
     await expect.element(screen.getByTestId("screen")).toHaveTextContent("object-types");
@@ -206,7 +278,7 @@ describe("EdenSidebar contract", () => {
 
     await userEvent.click(screen.getByTestId("object-types-nav-back"));
     await expect.element(screen.getByTestId("screen")).toHaveTextContent("notes");
-    await expect.element(screen.getByTestId("open-settings-btn")).toBeInTheDocument();
+    await expect.element(screen.getByTestId("sidebar-header-settings")).toBeInTheDocument();
     await expect.element(screen.getByTestId("back-count")).toHaveTextContent("1");
   });
 });

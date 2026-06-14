@@ -15,7 +15,7 @@
      перекрашивается в solid `--bg-app`. Alpha 82% — лёгкая прозрачность
      для Win11 blur'а, чтобы текст оставался читаемым. */
   --sidebar-bg-acrylic: color-mix(in srgb, oklch(0.15 0 0) 82%, transparent);
-  --sidebar-bg: oklch(0.15 0 0);
+  --sidebar-bg: oklch(0.135 0 0);
 
   /* Eden brand accent — оранжевый. Применяется к bullet/ordered-list
      маркерам в редакторе, и доступен для других орнаментов (checkmarks,
@@ -69,12 +69,12 @@
   --danger: #f55522;
   --danger-muted: rgba(245, 85, 34, 0.14);
 
-  --bg-app: #18181b;
+  --bg-app: oklch(0.16 0 0);
   --bg-sidebar: var(--sidebar);
   --bg-sidebar-hover: var(--secondary);
   --bg-sidebar-active: var(--surface);
   --settings-sidebar-active: var(--sidebar-surface);
-  --bg-editor: #18181b;
+  --bg-editor: var(--bg-app);
   --bg-elevated: var(--card);
   --bg-surface: var(--surface);
   --bg-input: var(--input);
@@ -135,10 +135,7 @@ body {
   font-size: 16px;
   line-height: 1.57;
   color: var(--text-primary);
-  /* transparent для просвечивания backgroundMaterial:acrylic
-     (см. manifest.json `windowEffect`). Слой над — `.app-container` /
-     `.eden-content-surface` дают цвет через --sidebar-bg с alpha. */
-  background: transparent;
+  background: var(--bg-app);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
