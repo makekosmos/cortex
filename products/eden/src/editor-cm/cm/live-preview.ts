@@ -1,6 +1,6 @@
 // Портировано из ZenNotes (MIT, © 2026 Adib Hanna and ZenNotes contributors), адаптировано для Eden.
 import { syntaxTree } from "@codemirror/language";
-import { RangeSetBuilder, StateEffect } from "@codemirror/state";
+import { Facet, RangeSetBuilder, StateEffect } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -49,6 +49,10 @@ const PREFIX_HIDE_WITH_SPACE = new Set(["HeaderMark", "QuoteMark"]);
 
 const hide = Decoration.replace({});
 const visibleSyntaxMarker = Decoration.mark({ class: "cm-markdown-syntax-marker" });
+
+export const livePreviewReaderModeFacet = Facet.define<boolean, boolean>({
+  combine: (values) => values.some(Boolean),
+});
 
 type PendingDecoration = {
   from: number;
@@ -198,6 +202,7 @@ function parseMarkdownImage(raw: string): { src: string; alt: string } | null {
 
 function computeDecorations(view: EditorView): DecorationSet {
   const { state } = view;
+  const readerMode = state.facet(livePreviewReaderModeFacet);
 
   const activeLines = new Set<number>();
   for (const r of state.selection.ranges) {
@@ -223,7 +228,7 @@ function computeDecorations(view: EditorView): DecorationSet {
         if (name === TASK_MARKER_NODE) {
           const line = state.doc.lineAt(node.from).number;
           if (replacedLines.has(line)) return;
-          if (selectionTouchesRange(state, node.from, node.to)) return;
+          if (!readerMode && selectionTouchesRange(state, node.from, node.to)) return;
           const markerText = state.doc.sliceString(node.from, node.to);
           const checked = markerText.length >= 2 && /[xX]/.test(markerText[1] ?? "");
           pending.push({
@@ -237,7 +242,7 @@ function computeDecorations(view: EditorView): DecorationSet {
         }
 
         if (name === "Image") {
-          if (selectionTouchesRange(state, node.from, node.to)) return false;
+          if (!readerMode && selectionTouchesRange(state, node.from, node.to)) return false;
           const raw = state.doc.sliceString(node.from, node.to);
           const parsed = parseMarkdownImage(raw);
           if (!parsed) return false;
@@ -268,13 +273,13 @@ function computeDecorations(view: EditorView): DecorationSet {
 
         const line = state.doc.lineAt(node.from).number;
         if (replacedLines.has(line)) return;
-        if (isLinkSyntax) {
+        if (!readerMode && isLinkSyntax) {
           const linkRange = enclosingLinkRange(node);
           if (linkRange && selectionTouchesRange(state, linkRange.from, linkRange.to)) {
             pending.push({ from: node.from, to: node.to, deco: visibleSyntaxMarker });
             return;
           }
-        } else if (activeLines.has(line)) {
+        } else if (!readerMode && activeLines.has(line)) {
           const keepHeadingMarkerHidden =
             name === "HeaderMark" && !selectionTouchesRange(state, node.from, node.to);
           if (!keepHeadingMarkerHidden) {

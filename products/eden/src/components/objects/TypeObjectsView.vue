@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { Button, EmptyState } from "@kosmos/visuals";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { formatObjectFieldValue, formatReadableRussianDate } from "@/lib/objectFieldFormatting";
 import {
@@ -138,12 +139,10 @@ const tableColumnsStyle = computed(() => ({
       </div>
 
       <div class="type-objects-actions">
-        <button class="type-objects-secondary-btn" type="button" @click="emit('editType')">
+        <Button variant="ghost" size="sm" type="button" @click="emit('editType')">
           Редактировать тип
-        </button>
-        <button class="type-objects-primary-btn" type="button" @click="emit('createEntry')">
-          Новый
-        </button>
+        </Button>
+        <Button size="sm" type="button" @click="emit('createEntry')">Новый</Button>
       </div>
     </header>
 
@@ -159,14 +158,18 @@ const tableColumnsStyle = computed(() => ({
         </div>
 
         <div class="type-objects-table-body kosmos-scroll">
-          <button
+          <div
             v-for="entry in collectionEntries"
             :key="entry.id"
             class="type-objects-row"
             :class="isPersonCollection && 'type-objects-row--person'"
             :style="tableColumnsStyle"
-            type="button"
+            tabindex="0"
+            role="button"
+            :data-testid="`type-object-row-${entry.id}`"
             @click="emit('openEntry', entry.id)"
+            @keydown.enter.prevent="emit('openEntry', entry.id)"
+            @keydown.space.prevent="emit('openEntry', entry.id)"
           >
             <span class="type-objects-name-cell">
               <span
@@ -202,19 +205,20 @@ const tableColumnsStyle = computed(() => ({
             </span>
 
             <time>{{ formatDate(entry.updated_at) }}</time>
-          </button>
+          </div>
         </div>
       </div>
 
-      <div v-else class="type-objects-empty">
-        <h2>Пока нет объектов этого типа</h2>
-        <p>
-          Создай первый объект типа «{{ noteType.name }}», и здесь появится полноценная коллекция.
-        </p>
-        <button class="type-objects-primary-btn" type="button" @click="emit('createEntry')">
-          Создать объект
-        </button>
-      </div>
+      <EmptyState
+        v-else
+        data-testid="type-objects-empty"
+        title="Пока нет объектов этого типа"
+        :description="`Создай первый объект типа «${noteType.name}», и здесь появится полноценная коллекция.`"
+      >
+        <template #action>
+          <Button size="sm" type="button" @click="emit('createEntry')">Создать объект</Button>
+        </template>
+      </EmptyState>
     </section>
   </section>
 </template>
@@ -323,39 +327,6 @@ const tableColumnsStyle = computed(() => ({
   gap: 10px;
 }
 
-.type-objects-primary-btn,
-.type-objects-secondary-btn {
-  min-height: 38px;
-  padding: 0 14px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  transition:
-    background-color 140ms ease,
-    border-color 140ms ease,
-    color 140ms ease;
-}
-
-.type-objects-primary-btn {
-  border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-
-.type-objects-primary-btn:hover {
-  background: color-mix(in srgb, var(--accent) 88%, black);
-}
-
-.type-objects-secondary-btn {
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--foreground);
-}
-
-.type-objects-secondary-btn:hover {
-  background: color-mix(in srgb, var(--foreground) 6%, var(--surface));
-}
-
 .type-objects-panel {
   flex: 0 0 auto;
   min-width: 0;
@@ -406,10 +377,9 @@ const tableColumnsStyle = computed(() => ({
   min-height: 36px;
   padding: 4px 20px;
   border-bottom: 1px solid color-mix(in srgb, var(--border-color-strong) 72%, transparent);
-  background: transparent;
   color: var(--foreground);
   font-size: 13px;
-  text-align: left;
+  cursor: default;
 }
 
 .type-objects-row:last-child {
@@ -418,6 +388,11 @@ const tableColumnsStyle = computed(() => ({
 
 .type-objects-row:hover {
   background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.type-objects-row:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  outline-offset: -2px;
 }
 
 .type-objects-table-body {
@@ -461,23 +436,6 @@ const tableColumnsStyle = computed(() => ({
   white-space: nowrap;
 }
 
-.type-objects-empty {
-  display: grid;
-  gap: 10px;
-  justify-items: start;
-  padding: 28px;
-  background: transparent;
-}
-
-.type-objects-empty h2,
-.type-objects-empty p {
-  margin: 0;
-}
-
-.type-objects-empty p {
-  color: var(--muted-foreground);
-}
-
 @media (max-width: 920px) {
   .type-objects-view {
     height: 100%;
@@ -496,7 +454,7 @@ const tableColumnsStyle = computed(() => ({
   .type-objects-table-head,
   .type-objects-row {
     gap: 12px;
-    padding: 8px 14px;
+    padding-inline: 14px;
   }
 }
 </style>

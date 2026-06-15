@@ -1,5 +1,5 @@
 // useNavigationHistory — back/forward stack для Eden's activeScreen +
-// currentEntryId + activeSpace + activeNoteTypeId. Snapshots сохраняются
+// currentEntryId + activeSpace. Snapshots сохраняются
 // при каждом изменении `currentHistorySnapshot`, кроме случаев когда сам
 // `applyHistorySnapshot` мутирует store ("suppressHistoryRecording").
 //
@@ -14,10 +14,9 @@ import type { SpaceId } from "@/components/sidebar/types";
 const MAX_NAVIGATION_HISTORY = 30;
 
 export interface EdenHistorySnapshot {
-  activeScreen: "notes" | "settings" | "object-types" | "type-collection";
+  activeScreen: "notes" | "settings";
   currentEntryId: string | null;
   activeSpace: SpaceId;
-  activeNoteTypeId: string | null;
 }
 
 function appendHistorySnapshot(
@@ -36,8 +35,7 @@ function snapshotsEqual(a: EdenHistorySnapshot | null, b: EdenHistorySnapshot | 
   return (
     a.activeScreen === b.activeScreen &&
     a.currentEntryId === b.currentEntryId &&
-    a.activeSpace === b.activeSpace &&
-    a.activeNoteTypeId === b.activeNoteTypeId
+    a.activeSpace === b.activeSpace
   );
 }
 
@@ -53,7 +51,6 @@ export function useNavigationHistory(eden: ReturnType<typeof useEdenStore>) {
       activeScreen: eden.activeScreen,
       currentEntryId: eden.currentEntry?.id ?? null,
       activeSpace: eden.activeSpace,
-      activeNoteTypeId: eden.activeNoteTypeId,
     };
   });
 
@@ -65,7 +62,6 @@ export function useNavigationHistory(eden: ReturnType<typeof useEdenStore>) {
     try {
       eden.activeSpace = snapshot.activeSpace;
       eden.activeScreen = snapshot.activeScreen;
-      eden.activeNoteTypeId = snapshot.activeNoteTypeId;
 
       if (!snapshot.currentEntryId) {
         eden.currentEntry = null;

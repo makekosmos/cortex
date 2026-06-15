@@ -101,8 +101,13 @@ import {
 } from "./settings-window";
 import { registerMarketplaceIpc, startPeriodicCatalogCheck } from "./extension-marketplace";
 // Side-effect: регистрирует kepler:focus-widget:* IPC handlers.
-import { setupFocusWidgetBackendSync, teardownFocusWidgetBackendSync } from "./focus-widget";
 import {
+  setFocusWidgetFocusSessionOpener,
+  setupFocusWidgetBackendSync,
+  teardownFocusWidgetBackendSync,
+} from "./focus-widget";
+import {
+  openFocusSessionShell,
   setupFocusSessionBackendSync,
   setFocusSessionShellOpener,
   setBlockedAppNotifier,
@@ -134,7 +139,10 @@ import {
   LOCAL_IMAGE_PROTOCOL,
   localImageMimeType,
   parseLocalImageRequestUrl,
+  resolveLocalImagePath,
 } from "./local-image-protocol";
+
+setFocusWidgetFocusSessionOpener(openFocusSessionShell);
 
 // См. postmortems.md § 2026-05-30: focus-block dynamic chunk imports from
 // main.js after Vite/Rolldown code-splitting, so these helper APIs must remain
@@ -861,14 +869,19 @@ function registerLocalImageProtocol(): void {
     let imagePath: string | null = null;
     try {
       imagePath = parseLocalImageRequestUrl(request.url);
-      if (!imagePath || !existsSync(imagePath)) {
+      if (!imagePath) {
         return new Response(null, { status: 404 });
       }
 
-      const bytes = await readFile(imagePath);
+      const resolvedPath = resolveLocalImagePath(imagePath);
+      if (!resolvedPath) {
+        return new Response(null, { status: 404 });
+      }
+
+      const bytes = await readFile(resolvedPath);
       return new Response(bufferToArrayBuffer(bytes), {
         headers: {
-          "content-type": localImageMimeType(imagePath),
+          "content-type": localImageMimeType(resolvedPath),
           "cache-control": "max-age=3600",
         },
       });
@@ -936,15 +949,9 @@ async function initArkClient(): Promise<void> {
     });
     if (state.kind !== "connected") {
       console.error(`[kepler-shell] kepler-backend ${state.kind}: ArkClient unavailable`);
-      // Без reject pending awaitArkReady() висят 15s и потом получают
-      // generic "timeout" вместо реальной причины. Сбрасываем promise чтобы
-      // следующий ensureArkReadyPromise() (после backend respawn) попробовал
-      // заново.
-      const err = new Error(`kepler-backend ${state.kind}`);
-      arkClientReadyReject?.(err);
-      arkClientReadyResolve = null;
-      arkClientReadyReject = null;
-      arkClientReady = null;
+      // Backend child can be alive but not yet published through kepler.lock.json.
+      // Keep the shared readiness promise pending so renderer IPC waits for the
+      // retry instead of receiving a burst of false "not-installed" errors.
       scheduleArkClientInitRetry(state.kind);
       return;
     }

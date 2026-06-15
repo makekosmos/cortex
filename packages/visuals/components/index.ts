@@ -97,3 +97,5 @@ export { default as HotkeyCapture } from "./HotkeyCapture.vue";
 export { default as KbdKey } from "./KbdKey.vue";
 
 export { default as ActionsPanel } from "./ActionsPanel.vue";
+
+export { default as Skeleton } from "./Skeleton.vue";

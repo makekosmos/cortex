@@ -122,81 +122,58 @@
           :note-types="eden.noteTypes"
           :current-entry="eden.currentEntry"
           :active-screen="eden.activeScreen"
-          :active-settings-tab="settingsInitialTab"
           :selected-object-type-id="eden.activeNoteTypeId"
           :sidebar-width="layout.widgetSidebarWidth"
+          :resizable="true"
           @toggle-search="layout.isSearchOpen = !layout.isSearchOpen"
           @create-entry="eden.createNewEntry()"
           @open-diary="eden.openTodayJournal()"
           @open-entry="(id) => eden.navigateTo(id)"
           @entry-context-menu="onEntryContextMenu"
-          @open-settings-tab="openSettingsTab"
-          @open-object-types="openObjectTypes()"
-          @open-object-type="eden.openTypeCollection($event)"
-          @create-object-type="createObjectType()"
+          @open-settings="openSettings"
+          @open-object-type="openObjectCollection"
           @sidebar-width-change="layout.setWidgetSidebarWidth($event)"
           @toggle-sidebar="layout.toggleWidgetSidebar()"
-          @back="handleSidebarBack"
         />
       </template>
 
       <main class="app-main">
-        <div
-          v-if="
-            eden.isHydratingVault &&
-            eden.activeScreen !== 'settings' &&
-            eden.activeScreen !== 'object-types' &&
-            !eden.currentEntry
-          "
-          class="app-main-loading"
-        >
+        <div v-if="eden.isHydratingVault && !eden.currentEntry" class="app-main-loading">
           Загрузка данных...
         </div>
-        <ObjectTypesSettings
-          v-else-if="eden.activeScreen === 'object-types'"
-          :note-types="eden.noteTypes"
-          :initial-selected-type-id="eden.activeNoteTypeId"
-          :create-draft-token="objectTypeCreateToken"
-          :on-note-type-save="eden.saveNoteType"
-          :on-note-type-delete="eden.deleteNoteType"
-          @selected-type-change="onSelectedTypeChange"
-        />
         <TypeObjectsView
-          v-else-if="eden.activeScreen === 'type-collection' && activeCollectionType"
+          v-else-if="isCollectionViewActive && activeCollectionType"
           :note-type="activeCollectionType"
           :entries="eden.entries"
           @open-entry="(id) => eden.navigateTo(id)"
           @create-entry="eden.createNewEntry(activeCollectionType.id)"
-          @edit-type="openTypeSettings(activeCollectionType.id)"
         />
-        <SettingsPage
-          v-else-if="eden.activeScreen === 'settings'"
-          :initial-tab="settingsInitialTab"
-          @refresh-data="eden.refreshData()"
-        />
-        <ImageObjectView
-          v-else-if="eden.currentEntry && activeCurrentType?.id === SYSTEM_TYPE_IMAGE_ID"
-          :entry="eden.currentEntry"
-          :note-type="activeCurrentType"
-        />
-        <CmEditor
-          v-else-if="eden.currentEntry"
-          :key="`${eden.currentEntry.id}:${eden.currentEntry.type_id ?? 'note_obj'}`"
-          :entry="eden.currentEntry"
-          :all-entries="eden.entries"
-          :note-types="eden.noteTypes"
-          :zen-mode="layout.isZenMode"
-          :vim-mode="preferences.state.vimModeEnabled"
-          :reader-mode="preferences.state.readerModeEnabled"
-          :on-save="eden.handleSave"
-          :on-navigate="eden.navigateTo"
-          @close-entry="closeCurrentEntry"
-          @set-zen-mode="setZenMode"
-          @entry-draft-change="eden.updateEntryDraft"
-          @live-char-count="liveCharCount = $event"
-          @title-out-of-view-change="noteTitleOutOfView = $event"
-          @type-change="onCmTypeChange"
-        />
+        <template v-else-if="eden.currentEntry">
+          <ImageObjectView
+            v-if="activeCurrentType?.id === SYSTEM_TYPE_IMAGE_ID"
+            :entry="eden.currentEntry"
+            :note-type="activeCurrentType"
+          />
+          <CmEditor
+            v-else
+            :key="`${eden.currentEntry.id}:${eden.currentEntry.type_id ?? 'note_obj'}`"
+            :entry="eden.currentEntry"
+            :all-entries="eden.entries"
+            :note-types="eden.noteTypes"
+            :zen-mode="layout.isZenMode"
+            :vim-mode="preferences.state.vimModeEnabled"
+            :reader-mode="preferences.state.readerModeEnabled"
+            :body-loading="eden.loadingEntryId === eden.currentEntry.id"
+            :on-save="eden.handleSave"
+            :on-navigate="eden.navigateTo"
+            @close-entry="closeCurrentEntry"
+            @set-zen-mode="setZenMode"
+            @entry-draft-change="eden.updateEntryDraft"
+            @live-char-count="liveCharCount = $event"
+            @title-out-of-view-change="noteTitleOutOfView = $event"
+            @type-change="onCmTypeChange"
+          />
+        </template>
         <div v-else class="app-empty-editor" data-testid="empty-editor-state" aria-live="polite">
           Никакая страница не выбрана
         </div>
@@ -271,11 +248,13 @@ import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
 // CodeMirror editor lazy-load — основной bundle открывается быстрее,
 // заметка-чанк подгружается при первом открытии заметки.
 const CmEditor = defineAsyncComponent(() => import("./editor-cm/CmEditor.vue"));
-import SettingsPage from "@/components/settings/SettingsPage.vue";
-import ObjectTypesSettings from "@/components/settings/ObjectTypesSettings.vue";
-import TypeObjectsView from "@/components/objects/TypeObjectsView.vue";
 import ImageObjectView from "@/components/objects/ImageObjectView.vue";
-import { SYSTEM_TYPE_IMAGE_ID, SYSTEM_TYPE_PERSON_ID } from "@/lib/systemTypes";
+import TypeObjectsView from "@/components/objects/TypeObjectsView.vue";
+import {
+  SYSTEM_TYPE_COLLECTION_ID,
+  SYSTEM_TYPE_IMAGE_ID,
+  SYSTEM_TYPE_PERSON_ID,
+} from "@/lib/systemTypes";
 import { getResolvedNoteTypeField } from "@/lib/typedNotes";
 import { resolveObjectImageSrc } from "@/lib/objectImages";
 import { PhPottedPlant } from "@phosphor-icons/vue";
@@ -317,8 +296,6 @@ function currentEdenDebug() {
 // (CmEditor.vue и т.д.) увидит его. ToastHost дальше в template только
 // рендерит, не повторяет provide.
 provideToastHost();
-
-type SettingsTab = "general" | "trash" | "vim";
 
 usePlatform();
 useKeyboard();
@@ -520,11 +497,14 @@ function removeFocusTitlebarListeners(): void {
   focusTitlebarHovered.value = false;
 }
 
-// В focus mode maximize должен оставаться доступным через native window controls.
+function syncWindowMaximizeAvailability(): void {
+  void window.kepler?.window?.setMaximizable?.(true);
+}
+
 watch(
   () => layout.isZenMode,
   (isZenMode) => {
-    void window.kepler?.window?.setMaximizable?.(true);
+    syncWindowMaximizeAvailability();
     void window.kepler?.window?.setTitlebarHoverTracking?.(isZenMode, FOCUS_TITLEBAR_HOVER_HEIGHT);
     if (isZenMode) {
       installFocusTitlebarListeners();
@@ -535,6 +515,13 @@ watch(
     }
   },
   { immediate: true },
+);
+
+watch(
+  () => eden.activeScreen,
+  () => {
+    syncWindowMaximizeAvailability();
+  },
 );
 
 async function onDeleteContextEntry() {
@@ -552,11 +539,17 @@ async function onDeleteContextEntry() {
   }
 }
 const { canGoBack, canGoForward, navigateBack, navigateForward } = useNavigationHistory(eden);
-const settingsInitialTab = shallowRef<SettingsTab>("general");
-const objectTypeCreateToken = shallowRef(0);
 const noteTitleOutOfView = shallowRef(false);
 
 const recentSidebarEntries = computed(() => eden.entries);
+
+function openObjectCollection(noteTypeId: string, collectionEntryId?: string): void {
+  if (collectionEntryId) {
+    void eden.navigateTo(collectionEntryId);
+    return;
+  }
+  eden.openTypeCollection(noteTypeId);
+}
 
 const { liveCharCount, currentEntryCharCount, charCounterHasOverlap, pluralizeCharacters } =
   useCharCounter(eden, layout);
@@ -581,9 +574,6 @@ const chromePlatform = computed<TitlebarPlatform>(() => {
   return "windows";
 });
 
-const activeCollectionType = computed(
-  () => eden.noteTypes.find((noteType) => noteType.id === eden.activeNoteTypeId) ?? null,
-);
 const activeCurrentType = computed(() =>
   eden.currentEntry
     ? (eden.noteTypes.find((noteType) => noteType.id === eden.currentEntry?.type_id) ?? null)
@@ -601,6 +591,20 @@ const currentHeaderProps = computed<Record<string, unknown>>(() => {
     return {};
   }
 });
+const currentCollectionTypeId = computed(() => {
+  if (eden.currentEntry?.type_id !== SYSTEM_TYPE_COLLECTION_ID) return null;
+  const objectTypeId = currentHeaderProps.value.object_type_id;
+  return typeof objectTypeId === "string" && objectTypeId.trim() ? objectTypeId : null;
+});
+const activeCollectionType = computed(() => {
+  const collectionTypeId = currentCollectionTypeId.value ?? eden.activeNoteTypeId;
+  return eden.noteTypes.find((noteType) => noteType.id === collectionTypeId) ?? null;
+});
+const isCollectionViewActive = computed(
+  () =>
+    eden.activeScreen === "type-collection" ||
+    eden.currentEntry?.type_id === SYSTEM_TYPE_COLLECTION_ID,
+);
 const entriesById = computed(() => new Map(eden.entries.map((entry) => [entry.id, entry])));
 const isCurrentPersonEntry = computed(() => activeCurrentType.value?.id === SYSTEM_TYPE_PERSON_ID);
 const titlebarPersonImageSrc = computed(() => {
@@ -622,23 +626,12 @@ const titlebarPageTitle = computed(() => {
   return "";
 });
 const showTitlebarPageTitle = computed(() => titlebarPageTitle.value.length > 0);
-function openSettingsTab(tab: SettingsTab = "general") {
-  settingsInitialTab.value = tab;
-  eden.activeScreen = "settings";
-}
-
-function openObjectTypes(noteTypeId: string | null = null) {
-  eden.openObjectTypes(noteTypeId);
-}
-
-function createObjectType() {
-  eden.activeNoteTypeId = null;
-  objectTypeCreateToken.value += 1;
-  eden.activeScreen = "object-types";
-}
-
-function openTypeSettings(noteTypeId: string) {
-  openObjectTypes(noteTypeId);
+async function openSettings() {
+  layout.closeSearch();
+  pendingQuery.value = "";
+  layout.searchQuery = "";
+  layout.searchResults = [];
+  await window.kepler?.edenSettings?.open?.();
 }
 
 function closeCurrentEntry() {
@@ -656,21 +649,6 @@ function setZenMode(enabled: boolean) {
   }
 
   layout.disableZenMode();
-}
-
-function handleSidebarBack() {
-  if (eden.activeScreen === "object-types") {
-    eden.activeScreen = "settings";
-    return;
-  }
-
-  if (eden.activeScreen === "settings") {
-    eden.activeScreen = "notes";
-  }
-}
-
-function onSelectedTypeChange(noteTypeId: string | null) {
-  eden.activeNoteTypeId = noteTypeId;
 }
 
 const commandUnsubscribers: Array<() => void> = [];
@@ -741,14 +719,14 @@ watch([() => layout.isZenMode, () => eden.activeScreen], ([isZenMode, activeScre
 
   layout.closeSearch();
 
-  // Auto-disable zen mode ТОЛЬКО при уходе с notes screen (в Настройки,
-  // типы объектов и т.п.). Не дёргаем на transitions currentEntry
-  // (null → noteB → noteA), потому что во время навигации между
-  // заметками currentEntry кратковременно null'ится, что валило zen
-  // mode мид-navigation и ломало dock-corner dblclick на следующей
-  // странице. Если юзер сам не находится ни на каком entry в notes
-  // screen — пусть смотрит пустой editor, выйти можно кнопкой titlebar
-  // или явным hotkey toggle.
+  // Auto-disable zen mode only when the app genuinely leaves notes mode.
+  // Не дёргаем на transitions currentEntry (null → noteB → noteA),
+  // потому что во время навигации между заметками currentEntry
+  // кратковременно null'ится, что валило zen mode мид-navigation и
+  // ломало dock-corner dblclick на следующей странице. Если юзер
+  // сам не находится ни на каком entry в notes screen — пусть
+  // смотрит пустой editor, выйти можно кнопкой titlebar или явным
+  // hotkey toggle.
   if (activeScreen !== "notes") {
     layout.disableZenMode();
   }

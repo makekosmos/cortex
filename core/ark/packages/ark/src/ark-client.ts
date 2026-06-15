@@ -122,6 +122,16 @@ export interface ArkObjectRecord {
   deletedAt: string | null;
 }
 
+export interface ArkObjectSummaryRecord {
+  id: string;
+  typeId: string;
+  title: string;
+  propsJson: JsonValue;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
 export interface CommandManifest {
   id: string;
   title: string;
@@ -371,7 +381,9 @@ export interface ArkUsageApi {
 
 export interface ArkObjectsApi {
   list(): Promise<ArkObjectRecord[]>;
+  listSummaries(): Promise<ArkObjectSummaryRecord[]>;
   listByType(typeId: string): Promise<ArkObjectRecord[]>;
+  listSummariesByType(typeId: string): Promise<ArkObjectSummaryRecord[]>;
   /**
    * Возвращает только running time_entry_obj (props.endedAt IS NULL),
    * опционально отфильтрованные по props.source. SQL-уровневый фильтр
@@ -488,9 +500,16 @@ export class ArkClient {
     this.delegateRequest = opts.requestFn ?? null;
     this.objects = {
       list: () => this.requestAfterInit<ArkObjectRecord[]>({ operation: "list_objects" }),
+      listSummaries: () =>
+        this.requestAfterInit<ArkObjectSummaryRecord[]>({ operation: "list_object_summaries" }),
       listByType: (typeId) =>
         this.requestAfterInit<ArkObjectRecord[]>({
           operation: "list_objects_by_type",
+          type_id: typeId,
+        }),
+      listSummariesByType: (typeId) =>
+        this.requestAfterInit<ArkObjectSummaryRecord[]>({
+          operation: "list_object_summaries_by_type",
           type_id: typeId,
         }),
       listRunningTimeEntries: (opts) =>

@@ -26,7 +26,9 @@ const TRUSTED_SOURCES = new Set<ExtensionSource>(["dev", "bundled"]);
 const OBJECT_READ_OPS = new Set([
   "load_all",
   "list_objects",
+  "list_object_summaries",
   "list_objects_by_type",
+  "list_object_summaries_by_type",
   "list_running_time_entries",
   "get_objects_by_ids",
   "search_objects",

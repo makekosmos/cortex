@@ -56,15 +56,6 @@
               @click="exportCurrentEntryMarkdown"
             />
             <SettingsButtonRow
-              title="Импорт объекта"
-              description="Создаёт или обновляет объект из Markdown-файла с YAML frontmatter."
-              button-label="Импорт"
-              :disabled="markdownBusy"
-              :loading="markdownBusy && markdownOperation === 'import'"
-              data-testid="eden-import-markdown"
-              @click="importEntryMarkdown"
-            />
-            <SettingsButtonRow
               title="Импорт Obsidian vault"
               description="Рекурсивно импортирует Markdown-файлы и изображения из выбранной папки."
               button-label="Импорт vault"
@@ -135,7 +126,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { v4 as uuidv4 } from "uuid";
 import { SettingsButtonRow, SettingsList, SettingsToggleRow } from "@kosmos/visuals";
 import { usePreferences } from "@/composables/usePreferences";
-import { buildEntryMarkdownDocument, parseEntryMarkdownDocument } from "@/lib/markdownFrontmatter";
+import { buildEntryMarkdownDocument } from "@/lib/markdownFrontmatter";
 import {
   buildObsidianRelatedImportPlan,
   buildObsidianExportFiles,
@@ -151,7 +142,7 @@ import { useEdenStore } from "@/store/eden";
 const preferences = usePreferences();
 const eden = useEdenStore();
 const markdownBusy = ref(false);
-const markdownOperation = ref<"export" | "import" | "import-vault" | "export-vault" | null>(null);
+const markdownOperation = ref<"export" | "import-vault" | "export-vault" | null>(null);
 const markdownStatus = ref("");
 const markdownProgress = ref<{
   label: string;
@@ -257,24 +248,8 @@ function markdownFileName(title: string): string {
   return `${safeTitle || "eden-object"}.md`;
 }
 
-function resolveImportedRelatedNotes(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-
-  const byId = new Map(eden.entries.map((entry) => [entry.id, entry.id]));
-  const byTitle = new Map(
-    eden.entries.map((entry) => [entry.title.trim().toLocaleLowerCase("ru"), entry.id]),
-  );
-
-  return value
-    .filter((item): item is string => typeof item === "string")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .map((target) => byId.get(target) ?? byTitle.get(target.toLocaleLowerCase("ru")) ?? null)
-    .filter((target): target is string => Boolean(target));
-}
-
 async function withMarkdownOperation<T>(
-  operation: "export" | "import" | "import-vault" | "export-vault",
+  operation: "export" | "import-vault" | "export-vault",
   action: () => Promise<T>,
 ): Promise<T | null> {
   if (markdownBusy.value) return null;
@@ -313,61 +288,6 @@ async function exportCurrentEntryMarkdown(): Promise<void> {
     });
     const result = await window.api.saveMarkdownFile(markdownFileName(entry.title), document);
     markdownStatus.value = result ? `Экспортировано: ${result.path}` : "Экспорт отменён.";
-  });
-}
-
-async function importEntryMarkdown(): Promise<void> {
-  await withMarkdownOperation("import", async () => {
-    const picked = await window.api.openMarkdownFile();
-    if (!picked) {
-      markdownStatus.value = "Импорт отменён.";
-      return;
-    }
-
-    const parsed = parseEntryMarkdownDocument(picked.content, {
-      noteTypes: eden.noteTypes,
-    });
-    const typeId = parsed.entryPatch.typeId;
-    const noteType = typeId ? noteTypesById.value.get(typeId) : null;
-    if (!typeId || !noteType) {
-      throw new Error("Тип объекта из frontmatter не найден в Eden.");
-    }
-
-    const headerProps = { ...parsed.entryPatch.headerProps };
-    const relatedNotes = resolveImportedRelatedNotes(headerProps.related_notes);
-    if (relatedNotes.length > 0) {
-      headerProps.related_notes = relatedNotes;
-    } else {
-      delete headerProps.related_notes;
-    }
-
-    const existingEntry = parsed.entryPatch.id
-      ? eden.entries.find((entry) => entry.id === parsed.entryPatch.id)
-      : null;
-    const now = Date.now();
-    const entry: Entry = {
-      id: existingEntry?.id ?? parsed.entryPatch.id ?? uuidv4(),
-      title: parsed.entryPatch.title,
-      content_json: JSON.stringify(writeEntryMarkdown(parsed.bodyMarkdown)),
-      created_at: existingEntry?.created_at ?? now,
-      updated_at: now,
-      folder_id: existingEntry?.folder_id ?? null,
-      type_id: typeId,
-      header_layout: existingEntry?.header_layout ?? null,
-      header_props_json: JSON.stringify(normalizeHeaderProps(noteType, headerProps)),
-      schema_version: existingEntry?.schema_version ?? 1,
-      deleted_at: null,
-    };
-
-    const result = await window.api.saveEntry(entry);
-    if (!result.ok) {
-      throw new Error(result.message ?? "Не удалось сохранить импортированный объект.");
-    }
-
-    await eden.refreshData();
-    const loaded = await window.api.loadEntry(entry.id);
-    eden.currentEntry = loaded ?? entry;
-    markdownStatus.value = `Импортировано: ${picked.name}`;
   });
 }
 

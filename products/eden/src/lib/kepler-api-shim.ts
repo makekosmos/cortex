@@ -18,10 +18,17 @@ import {
   parseNoteTypeDefinition,
   parseNoteTypeUiSchema,
   validateHeaderProps,
+  getNoteTypeCollectionName,
   type NoteType,
 } from "@/lib/typedNotes";
 import { writeEntryMarkdown } from "@/editor-cm/content";
-import { isSystemType, normalizeSystemNoteType } from "@/lib/systemTypes";
+import {
+  SYSTEM_TYPE_COLLECTION,
+  SYSTEM_TYPE_COLLECTION_ID,
+  isSystemType,
+  normalizeSystemNoteType,
+  shouldShowAsEdenCollection,
+} from "@/lib/systemTypes";
 
 const DEFAULT_ARK_TYPE_ID = "note_obj";
 
@@ -30,6 +37,16 @@ interface ArkObjectRecord {
   typeId: string;
   title: string;
   contentJson: unknown;
+  propsJson: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
+interface ArkObjectSummaryRecord {
+  id: string;
+  typeId: string;
+  title: string;
   propsJson: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -177,6 +194,37 @@ function mapArkObjectToEntry(
   });
 }
 
+function mapArkObjectSummaryToEntry(
+  object: ArkObjectSummaryRecord,
+  links: ArkObjectLinkRecord[],
+  objectType?: ArkObjectTypeRecord,
+): Entry {
+  const createdAt = arkTimestampToMillis(object.createdAt, 0);
+  const updatedAt = arkTimestampToMillis(object.updatedAt, createdAt);
+  const headerProps = {
+    ...object.propsJson,
+    related_notes: links
+      .filter((l) => l.sourceObjectId === object.id && l.linkType === "related")
+      .map((l) => l.targetObjectId),
+  };
+
+  return normalizeEntry({
+    id: object.id,
+    title: object.title,
+    content_json: JSON.stringify(writeEntryMarkdown("")),
+    created_at: createdAt,
+    updated_at: updatedAt,
+    folder_id: null,
+    type_id: object.typeId,
+    header_layout: objectType
+      ? (parseNoteTypeUiSchema(objectType.uiSchemaJson).header_layout ?? "default")
+      : "default",
+    header_props_json: stringifyHeaderProps(headerProps),
+    schema_version: 1,
+    deleted_at: object.deletedAt ? arkTimestampToMillis(object.deletedAt, updatedAt) : null,
+  });
+}
+
 function mapEntryToArkObject(entry: Entry): ArkObjectRecord {
   const headerProps = parseHeaderPropsJson(entry.header_props_json);
   const { related_notes: _ignored, ...propsJson } = headerProps;
@@ -260,11 +308,52 @@ function mapNoteTypeToArkObjectType(noteType: NoteType): ArkObjectTypeRecord {
       header_layout: uiSchema.header_layout ?? "inline",
       default_layout: uiSchema.default_layout ?? "page",
       default_template_id: uiSchema.default_template_id ?? null,
+      collection_name: uiSchema.collection_name,
     }),
     createdAt: millisToArkTimestamp(noteType.created_at),
     updatedAt: millisToArkTimestamp(noteType.updated_at),
     systemLocked: isSystemType(noteType.id),
   };
+}
+
+function collectionObjectIdForType(noteTypeId: string): string {
+  return `collection:${noteTypeId}`;
+}
+
+function mapNoteTypeToCollectionEntry(
+  noteType: NoteType,
+  existing?: ArkObjectRecord | null,
+): Entry {
+  const now = Date.now();
+  const createdAt = existing ? arkTimestampToMillis(existing.createdAt, now) : now;
+  const updatedAt = existing ? arkTimestampToMillis(existing.updatedAt, createdAt) : now;
+
+  return normalizeEntry({
+    id: collectionObjectIdForType(noteType.id),
+    title: getNoteTypeCollectionName(noteType),
+    content_json: JSON.stringify(writeEntryMarkdown("")),
+    created_at: createdAt,
+    updated_at: updatedAt,
+    folder_id: null,
+    type_id: SYSTEM_TYPE_COLLECTION_ID,
+    header_layout:
+      parseNoteTypeUiSchema(SYSTEM_TYPE_COLLECTION.ui_schema_json).header_layout ?? "inline",
+    header_props_json: stringifyHeaderProps({
+      ...existing?.propsJson,
+      object_type_id: noteType.id,
+    }),
+    schema_version: 1,
+    deleted_at: existing?.deletedAt ? arkTimestampToMillis(existing.deletedAt, updatedAt) : null,
+  });
+}
+
+function shouldIncludeObjectInEdenList(object: {
+  typeId: string;
+  propsJson?: Record<string, unknown>;
+}): boolean {
+  if (object.typeId !== SYSTEM_TYPE_COLLECTION_ID) return true;
+  const objectTypeId = object.propsJson?.object_type_id;
+  return typeof objectTypeId === "string" && shouldShowAsEdenCollection(objectTypeId);
 }
 
 // ---------------------------------------------------------------------------
@@ -273,16 +362,44 @@ function mapNoteTypeToArkObjectType(noteType: NoteType): ArkObjectTypeRecord {
 
 export async function listEntries(): Promise<Entry[]> {
   const visibleTypeIds = readVisibleObjectTypeIds();
-  const [objects, links, objectTypes] = await Promise.all([
-    listObjectsForVisibleTypes(visibleTypeIds),
-    ark<unknown>("list_object_links").then(ensureList<ArkObjectLinkRecord>),
-    ark<unknown>("list_object_types").then(ensureList<ArkObjectTypeRecord>),
-  ]);
+  const objects = await listObjectSummariesForVisibleTypes(visibleTypeIds);
 
-  const typesById = new Map(objectTypes.map((t) => [t.id, t]));
   return objects
-    .map((o) => mapArkObjectToEntry(o, links, typesById.get(o.typeId)))
+    .filter((o) => !o.deletedAt)
+    .filter(shouldIncludeObjectInEdenList)
+    .map((o) => mapArkObjectSummaryToEntry(o, [], undefined))
     .sort((a, b) => b.updated_at - a.updated_at);
+}
+
+async function listObjectSummariesForVisibleTypes(
+  typeIds: string[],
+): Promise<ArkObjectSummaryRecord[]> {
+  try {
+    if (typeIds.length === 0) {
+      return await ark<unknown>("list_object_summaries").then(ensureList<ArkObjectSummaryRecord>);
+    }
+
+    const chunks = await Promise.all(
+      typeIds.map((typeId) =>
+        ark<unknown>("list_object_summaries_by_type", { type_id: typeId }).then(
+          ensureList<ArkObjectSummaryRecord>,
+        ),
+      ),
+    );
+    return chunks.flat();
+  } catch (err) {
+    console.warn("[eden-extension] list_object_summaries unavailable, using full objects:", err);
+    const fullObjects = await listObjectsForVisibleTypes(typeIds);
+    return fullObjects.map((object) => ({
+      id: object.id,
+      typeId: object.typeId,
+      title: object.title,
+      propsJson: object.propsJson,
+      createdAt: object.createdAt,
+      updatedAt: object.updatedAt,
+      deletedAt: object.deletedAt ?? null,
+    }));
+  }
 }
 
 async function listObjectsForVisibleTypes(typeIds: string[]): Promise<ArkObjectRecord[]> {
@@ -299,15 +416,16 @@ async function listObjectsForVisibleTypes(typeIds: string[]): Promise<ArkObjectR
 }
 
 export async function loadEntry(id: string): Promise<Entry | undefined> {
-  const [object, links, objectTypes] = await Promise.all([
+  const [object, links] = await Promise.all([
     ark<ArkObjectRecord | null>("get_object", { id }),
     ark<unknown>("list_object_links").then(ensureList<ArkObjectLinkRecord>),
-    ark<unknown>("list_object_types").then(ensureList<ArkObjectTypeRecord>),
   ]);
 
-  if (!object) return undefined;
-  const typesById = new Map(objectTypes.map((t) => [t.id, t]));
-  return mapArkObjectToEntry(object, links, typesById.get(object.typeId));
+  if (!object || object.deletedAt) return undefined;
+  const objectType = await ark<ArkObjectTypeRecord | null>("get_object_type", {
+    id: object.typeId,
+  }).catch(() => null);
+  return mapArkObjectToEntry(object, links, objectType ?? undefined);
 }
 
 async function syncRelatedLinks(entry: Entry): Promise<void> {
@@ -446,20 +564,72 @@ export async function saveEntry(entry: Entry): Promise<SaveEntryResult> {
 
 export async function deleteEntry(entryId: string): Promise<DeleteEntryResult> {
   const existing = await ark<ArkObjectRecord | null>("get_object", { id: entryId });
-  if (!existing) {
+  if (!existing || existing.deletedAt) {
     return {
       ok: false,
       reason: "entry_not_found",
       message: "Заметка не найдена в ARK",
     };
   }
-  await ark<boolean>("delete_object", { id: entryId });
+  const deletedAt = millisToArkTimestamp(Date.now());
+  await ark<boolean>("upsert_object", {
+    object: {
+      ...existing,
+      updatedAt: deletedAt,
+      deletedAt,
+    },
+  });
   return { ok: true, entryId };
 }
 
 export async function listNoteTypes(): Promise<NoteType[]> {
   const types = await ark<unknown>("list_object_types").then(ensureList<ArkObjectTypeRecord>);
   return types.map(mapArkObjectTypeToNoteType);
+}
+
+export async function ensureCollectionObjects(noteTypes: NoteType[]): Promise<Entry[]> {
+  const collectionType = mapNoteTypeToArkObjectType(SYSTEM_TYPE_COLLECTION);
+  await ark<boolean>("upsert_object_type", {
+    object_type: {
+      id: collectionType.id,
+      name: collectionType.name,
+      schemaJson: collectionType.schemaJson,
+      uiSchemaJson: collectionType.uiSchemaJson,
+      createdAt: collectionType.createdAt,
+      updatedAt: collectionType.updatedAt,
+      systemLocked: collectionType.systemLocked,
+    },
+  });
+
+  const entries: Entry[] = [];
+  for (const noteType of noteTypes) {
+    if (!shouldShowAsEdenCollection(noteType.id)) continue;
+
+    const existing = await ark<ArkObjectRecord | null>("get_object", {
+      id: collectionObjectIdForType(noteType.id),
+    }).catch(() => null);
+    const entry = mapNoteTypeToCollectionEntry(noteType, existing);
+    const arkObject = mapEntryToArkObject({
+      ...entry,
+      deleted_at: null,
+    });
+
+    await ark<boolean>("upsert_object", {
+      object: {
+        id: arkObject.id,
+        typeId: arkObject.typeId,
+        title: arkObject.title,
+        contentJson: arkObject.contentJson,
+        propsJson: arkObject.propsJson,
+        createdAt: arkObject.createdAt,
+        updatedAt: arkObject.updatedAt,
+        deletedAt: null,
+      },
+    });
+    entries.push({ ...entry, deleted_at: null });
+  }
+
+  return entries;
 }
 
 export async function saveNoteType(noteType: NoteType): Promise<SaveNoteTypeResult> {
@@ -743,10 +913,8 @@ async function restoreEntry(entryId: string): Promise<{ ok: boolean; entryId?: s
 }
 
 async function permanentDeleteEntry(entryId: string): Promise<{ ok: boolean; entryId?: string }> {
-  // ARK `delete_object` уже выполняет soft-delete; для extension'а трактуем
-  // «удалить навсегда» как повторный hard-delete — backend выкидывает запись
-  // окончательно через тот же endpoint после soft-state. Полноценный hard-purge
-  // endpoint в roadmap (Phase 7+ purge tooling в Kepler shell).
+  // Hard-delete is only exposed from Trash UI after explicit confirmation.
+  // Normal deleteEntry above is a soft delete via upsert_object(deletedAt).
   await ark<boolean>("delete_object", { id: entryId });
   return { ok: true, entryId };
 }
@@ -1138,11 +1306,19 @@ export function subscribeObjectChanges(
 }
 
 export async function softDeleteTask(taskId: string): Promise<void> {
-  // delete_object у ARK — soft delete (выставляет deletedAt). Объект исчезает
-  // из listObjects, но физически остаётся → audit trail. Backspace на пустом
-  // TaskRef в Eden зовёт это (через edenApi.softDeleteTask).
+  // ARK delete_object is a hard delete. Backspace на пустом TaskRef в Eden
+  // должен только скрыть task_obj из активных списков.
   try {
-    await ark("delete_object", { id: taskId });
+    const existing = await ark<ArkObjectRecord | null>("get_object", { id: taskId });
+    if (!existing || existing.deletedAt) return;
+    const deletedAt = millisToArkTimestamp(Date.now());
+    await ark("upsert_object", {
+      object: {
+        ...existing,
+        updatedAt: deletedAt,
+        deletedAt,
+      },
+    });
   } catch (err) {
     console.warn("[eden-extension] softDeleteTask failed:", taskId, err);
     throw err;
@@ -1170,6 +1346,7 @@ export function installKeplerApiShim(): void {
     createFolder,
     listFolders,
     listNoteTypes,
+    ensureCollectionObjects,
     saveNoteType,
     deleteNoteType,
     moveEntryToFolder,

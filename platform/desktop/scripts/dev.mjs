@@ -10,7 +10,7 @@
 // children, чтобы Ctrl+C корректно убивал всё дерево.
 
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

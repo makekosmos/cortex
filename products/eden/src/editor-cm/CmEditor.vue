@@ -36,12 +36,32 @@
         @relation-navigate="props.onNavigate"
       />
     </div>
-    <div ref="containerRef" class="cm-editor-container"></div>
+    <div
+      v-show="!props.bodyLoading"
+      ref="containerRef"
+      class="cm-editor-container"
+      :class="{ 'cm-editor-container--loading': props.bodyLoading }"
+      :aria-hidden="props.bodyLoading ? 'true' : undefined"
+    ></div>
+    <div
+      v-if="props.bodyLoading"
+      class="cm-editor-body-skeleton"
+      data-testid="cm-editor-body-skeleton"
+      aria-label="Текст заметки загружается"
+      aria-busy="true"
+    >
+      <Skeleton class="h-4 w-[92%]" />
+      <Skeleton class="h-4 w-[78%]" />
+      <Skeleton class="h-4 w-[86%]" />
+      <Skeleton class="h-4 w-[54%]" />
+      <Skeleton class="mt-5 h-28 w-full rounded-lg" />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { Skeleton } from "@kosmos/visuals";
 import TypedHeader from "@/components/typed-notes/TypedHeader.vue";
 import { Compartment, EditorState, Prec } from "@codemirror/state";
 import { drawSelection, EditorView, keymap } from "@codemirror/view";
@@ -62,7 +82,11 @@ import {
   safeParseHeaderProps,
 } from "@/lib/typedNotes";
 import { SYSTEM_TYPE_NOTE_ID, SYSTEM_TYPE_PERSON_ID } from "@/lib/systemTypes";
-import { livePreviewPlugin } from "./cm/live-preview";
+import {
+  livePreviewPlugin,
+  livePreviewReaderModeFacet,
+  refreshLivePreviewEffect,
+} from "./cm/live-preview";
 import { codeBlockFontPlugin } from "./cm/code-block-font";
 import { fatCursorFixPlugin } from "./cm/fat-cursor-fix";
 import { markdownListIndentPlugin } from "./cm/list-indent";
@@ -82,6 +106,7 @@ interface Props {
   zenMode?: boolean;
   vimMode?: boolean;
   readerMode?: boolean;
+  bodyLoading?: boolean;
 }
 
 interface Emits {
@@ -100,6 +125,7 @@ const props = withDefaults(defineProps<Props>(), {
   zenMode: false,
   vimMode: false,
   readerMode: false,
+  bodyLoading: false,
 });
 const emit = defineEmits<Emits>();
 
@@ -166,6 +192,7 @@ const vimCompartment = new Compartment();
 const titleVimCompartment = new Compartment();
 const editableCompartment = new Compartment();
 const titleEditableCompartment = new Compartment();
+const livePreviewReaderModeCompartment = new Compartment();
 
 let view: EditorView | null = null;
 let titleView: EditorView | null = null;
@@ -174,6 +201,7 @@ let bodyScrollElement: HTMLElement | null = null;
 let titleOutOfView = false;
 let lastPersistedTitle = props.entry.title;
 let lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(props.entry.header_props_json);
+let suppressBodySyncSave = false;
 
 const currentTypeId = ref(props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID);
 const activeNoteType = computed(
@@ -408,6 +436,57 @@ function createTitleState(initialTitle: string): EditorState {
   });
 }
 
+function focusBodyStart(): void {
+  if (props.bodyLoading) return;
+  if (!view || props.readerMode) return;
+
+  view.dispatch({
+    selection: { anchor: 0 },
+    scrollIntoView: true,
+  });
+  view.focus();
+}
+
+function focusBodyStartSoon(): void {
+  void nextTick(() => {
+    window.requestAnimationFrame(focusBodyStart);
+  });
+}
+
+function focusBodyEnd(): void {
+  if (props.bodyLoading) return;
+  if (!view || props.readerMode) return;
+
+  view.dispatch({
+    selection: { anchor: view.state.doc.length },
+    scrollIntoView: false,
+  });
+  view.focus();
+}
+
+function shouldFocusBodyEndFromPointer(event: PointerEvent): boolean {
+  if (props.readerMode || event.button !== 0) return false;
+  const target = event.target;
+  if (!(target instanceof Element)) return false;
+  if (titleShellRef.value?.contains(target)) return false;
+  if (props.bodyLoading || !containerRef.value?.contains(target)) return false;
+  if (
+    target.closest(
+      "button, a, input, textarea, select, [role='button'], .cm-content, .cm-line, .cm-task-checkbox, .cm-image-preview",
+    )
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function handleHostPointerDown(event: PointerEvent): void {
+  if (!shouldFocusBodyEndFromPointer(event)) return;
+  event.preventDefault();
+  focusBodyEnd();
+}
+
 onMounted(() => {
   if (!containerRef.value || !titleContainerRef.value) return;
 
@@ -438,6 +517,7 @@ onMounted(() => {
       markdown({ base: markdownLanguage, codeLanguages: resolveCodeLanguage, addKeymap: true }),
       syntaxHighlighting(edenHighlight),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+      livePreviewReaderModeCompartment.of(livePreviewReaderModeFacet.of(props.readerMode)),
       livePreviewPlugin,
       codeBlockFontPlugin,
       fatCursorFixPlugin,
@@ -447,7 +527,7 @@ onMounted(() => {
       keymap.of([...defaultKeymap, ...historyKeymap, ...completionKeymap]),
       EditorView.contentAttributes.of({ spellcheck: "false" }),
       EditorView.updateListener.of((update) => {
-        if (update.docChanged && !props.readerMode) {
+        if (update.docChanged && !props.readerMode && !suppressBodySyncSave) {
           emit("liveCharCount", update.state.doc.length);
           scheduleAutosave();
         }
@@ -462,9 +542,26 @@ onMounted(() => {
   bodyScrollElement = hostRef.value;
   bodyScrollElement.classList.add("kosmos-scroll");
   bodyScrollElement.addEventListener("scroll", syncTitleScrollState, { passive: true });
+  hostRef.value?.addEventListener("pointerdown", handleHostPointerDown);
   backfillPersonNameFromTitle(activeNoteType.value);
   syncTitleScrollState();
+  if (!props.bodyLoading) focusBodyStartSoon();
 });
+
+function syncBodyFromEntry(): void {
+  if (!view) return;
+  const nextMarkdown = readEntryMarkdown(props.entry.content_json);
+  if (view.state.doc.toString() === nextMarkdown) return;
+  suppressBodySyncSave = true;
+  try {
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: nextMarkdown },
+    });
+  } finally {
+    suppressBodySyncSave = false;
+  }
+  emit("liveCharCount", nextMarkdown.length);
+}
 
 watch(
   () => props.entry.id,
@@ -483,10 +580,16 @@ watch(
         changes: { from: 0, to: titleView.state.doc.length, insert: title.value },
       });
     }
+    syncBodyFromEntry();
     lastPersistedTitle = props.entry.title;
     lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(props.entry.header_props_json);
   },
 );
+
+watch([() => props.entry.content_json, () => props.bodyLoading], () => {
+  if (props.bodyLoading) return;
+  syncBodyFromEntry();
+});
 
 watch(
   [
@@ -510,11 +613,16 @@ watch(
   (enabled) => {
     const extension = EditorView.editable.of(!enabled);
     view?.dispatch({
-      effects: [editableCompartment.reconfigure(extension)],
+      effects: [
+        editableCompartment.reconfigure(extension),
+        livePreviewReaderModeCompartment.reconfigure(livePreviewReaderModeFacet.of(enabled)),
+        refreshLivePreviewEffect.of(null),
+      ],
     });
     titleView?.dispatch({
       effects: [titleEditableCompartment.reconfigure(extension)],
     });
+    if (!enabled) focusBodyStartSoon();
   },
 );
 
@@ -543,6 +651,7 @@ onBeforeUnmount(() => {
 
   const unmountSave = flushSave();
   bodyScrollElement?.removeEventListener("scroll", syncTitleScrollState);
+  hostRef.value?.removeEventListener("pointerdown", handleHostPointerDown);
   bodyScrollElement = null;
   titleView?.destroy();
   titleView = null;
@@ -580,6 +689,22 @@ onBeforeUnmount(() => {
 .cm-editor-title-container {
   width: 100%;
   min-width: 0;
+}
+
+.cm-editor-container--loading {
+  display: none;
+  pointer-events: none;
+}
+
+.cm-editor-body-skeleton {
+  box-sizing: border-box;
+  width: min(100%, 760px);
+  margin: 0 auto;
+  padding: 14px 32px 32px;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .cm-editor-host.is-focus-mode .cm-editor-title-shell {

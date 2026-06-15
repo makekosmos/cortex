@@ -21,9 +21,8 @@
           :class="SIDEBAR_ICON_BUTTON_CLASS"
           title="Настройки"
           aria-label="Настройки"
-          :aria-pressed="props.activeScreen === 'settings' || props.activeScreen === 'object-types'"
           data-testid="sidebar-header-settings"
-          @click="emit('openSettingsTab', 'general')"
+          @click="emit('openSettings')"
         >
           <Settings :size="16" />
         </button>
@@ -56,8 +55,10 @@
         <SettingsSidebarButton
           v-for="item in primaryItems"
           :key="item.id"
+          :class="{ 'eden-sidebar-page-button--selected': item.active }"
           :icon="item.icon"
           :label="item.label"
+          :active="item.active"
           :test-id="item.testId"
           icon-variant="plain"
           @click="item.onClick()"
@@ -152,6 +153,7 @@
     </div>
 
     <div
+      v-if="props.resizable"
       class="eden-sidebar-resize-handle"
       data-testid="eden-sidebar-resize-handle"
       role="separator"
@@ -181,34 +183,13 @@
         @click="openObjectTypeFromModal(item)"
       />
     </div>
-
-    <template #footer>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        data-testid="objects-modal-create-type"
-        @click="createObjectTypeFromModal"
-      >
-        Новый тип
-      </Button>
-    </template>
   </Modal>
 </template>
 
 <script setup lang="ts">
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from "vue";
 import { Button, Modal, SettingsSidebar, SettingsSidebarButton } from "@kosmos/visuals";
-import {
-  ArrowLeft,
-  Keyboard,
-  PanelLeftClose,
-  Plus,
-  Search,
-  Settings,
-  Shapes,
-  Trash2,
-} from "@lucide/vue";
+import { PanelLeftClose, Plus, Search, Settings, Shapes } from "@lucide/vue";
 import {
   PhBarbell,
   PhBookOpen,
@@ -226,11 +207,14 @@ import {
 } from "@phosphor-icons/vue";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { getNoteTypeCollectionName } from "@/lib/typedNotes";
-import { SYSTEM_TYPE_JOURNAL_ID, isSystemType } from "@/lib/systemTypes";
+import {
+  SYSTEM_TYPE_COLLECTION_ID,
+  SYSTEM_TYPE_JOURNAL_ID,
+  shouldShowAsEdenCollection,
+} from "@/lib/systemTypes";
 import RecentSidebarItem from "./RecentSidebarItem.vue";
 
-type EdenScreen = "notes" | "settings" | "object-types" | "type-collection";
-type SettingsTab = "general" | "trash" | "vim";
+type EdenScreen = "notes" | "settings" | "type-collection";
 
 interface SidebarActionItem {
   id: string;
@@ -283,18 +267,24 @@ interface SidebarGroup {
   };
 }
 
-const props = defineProps<{
-  hidden: boolean;
-  isSearchOpen?: boolean;
-  searchQuery: string;
-  recentEntries: Entry[];
-  noteTypes: NoteType[];
-  currentEntry: Entry | null;
-  activeScreen: EdenScreen;
-  activeSettingsTab: SettingsTab;
-  selectedObjectTypeId: string | null;
-  sidebarWidth: number;
-}>();
+const props = withDefaults(
+  defineProps<{
+    hidden: boolean;
+    isSearchOpen?: boolean;
+    searchQuery: string;
+    recentEntries: Entry[];
+    noteTypes: NoteType[];
+    currentEntry: Entry | null;
+    activeScreen: EdenScreen;
+    selectedObjectTypeId?: string | null;
+    sidebarWidth: number;
+    resizable?: boolean;
+  }>(),
+  {
+    isSearchOpen: false,
+    resizable: true,
+  },
+);
 
 const emit = defineEmits<{
   createEntry: [];
@@ -303,12 +293,9 @@ const emit = defineEmits<{
   toggleSidebar: [];
   openEntry: [entryId: string];
   entryContextMenu: [event: MouseEvent, entryId: string];
-  openSettingsTab: [tab: SettingsTab];
-  openObjectTypes: [];
-  openObjectType: [noteTypeId: string];
-  createObjectType: [];
+  openSettings: [];
+  openObjectType: [noteTypeId: string, collectionEntryId?: string];
   sidebarWidthChange: [width: number];
-  back: [];
 }>();
 
 const SIDEBAR_MIN_WIDTH = 240;
@@ -319,7 +306,6 @@ const RECENT_ITEM_GAP = 4;
 const RECENT_ITEM_STRIDE = RECENT_ITEM_HEIGHT + RECENT_ITEM_GAP;
 const RECENT_LIST_OVERSCAN = 6;
 const RECENT_LIST_INITIAL_VISIBLE_COUNT = 12;
-const TYPE_ICON_COLOR_FALLBACK = "var(--accent)";
 const ENTRY_ICON_COLOR = "var(--muted-foreground)";
 const SIDEBAR_ICON_BUTTON_CLASS =
   "inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in [-webkit-app-region:no-drag] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)";
@@ -355,16 +341,6 @@ const NOTE_TYPE_ICON_COMPONENTS: Record<string, Component> = {
   person: PhUser,
 };
 
-const sortedNoteTypes = computed(() =>
-  [...props.noteTypes].sort((left, right) => left.name.localeCompare(right.name, "ru")),
-);
-
-const systemNoteTypes = computed(() =>
-  sortedNoteTypes.value.filter((noteType) => isSystemType(noteType.id)),
-);
-const customNoteTypes = computed(() =>
-  sortedNoteTypes.value.filter((noteType) => !isSystemType(noteType.id)),
-);
 const noteTypesById = computed(
   () => new Map(props.noteTypes.map((noteType) => [noteType.id, noteType] as const)),
 );
@@ -451,44 +427,53 @@ function findRecentRowIndex(metrics: RecentVirtualRow[], offset: number): number
 }
 
 function buildEntryItem(entry: Entry, testId: string): SidebarListItem {
-  const noteType = noteTypesById.value.get(entry.type_id);
+  const collectionTypeId =
+    entry.type_id === SYSTEM_TYPE_COLLECTION_ID ? collectionObjectTypeId(entry) : null;
+  const targetCollectionType = collectionTypeId ? noteTypesById.value.get(collectionTypeId) : null;
+  const noteType = targetCollectionType ?? noteTypesById.value.get(entry.type_id);
+  const isCollectionEntry = entry.type_id === SYSTEM_TYPE_COLLECTION_ID;
 
   return {
     id: entry.id,
-    icon: resolveNoteTypeIcon(noteType, ENTRY_ICON_COLOR),
+    icon: resolveNoteTypeIcon(
+      noteType,
+      isCollectionEntry ? (noteType?.color ?? ENTRY_ICON_COLOR) : ENTRY_ICON_COLOR,
+    ),
     label: getEntryDisplayTitle(entry.title, entry.header_props_json),
-    meta: noteType ? getNoteTypeCollectionName(noteType) : undefined,
-    active: props.activeScreen === "notes" && props.currentEntry?.id === entry.id,
+    meta: isCollectionEntry
+      ? "Коллекции"
+      : noteType
+        ? getNoteTypeCollectionName(noteType)
+        : undefined,
+    active:
+      props.currentEntry?.id === entry.id ||
+      (props.activeScreen === "type-collection" &&
+        collectionTypeId !== null &&
+        props.selectedObjectTypeId === collectionTypeId),
     onClick: () => emit("openEntry", entry.id),
     onContextMenu: (event: MouseEvent) => emit("entryContextMenu", event, entry.id),
     testId,
   };
 }
 
-function buildTypeItem(noteType: NoteType, testId: string): SidebarListItem {
-  return {
-    id: noteType.id,
-    icon: resolveNoteTypeIcon(noteType, noteType.color ?? TYPE_ICON_COLOR_FALLBACK),
-    label: getNoteTypeCollectionName(noteType),
-    active:
-      (props.activeScreen === "type-collection" || props.activeScreen === "object-types") &&
-      props.selectedObjectTypeId === noteType.id,
-    onClick: () => emit("openObjectType", noteType.id),
-    testId,
-  };
+function parseEntryHeaderProps(entry: Entry): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(entry.header_props_json || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
 }
 
-function openObjectTypeFromModal(item: SidebarListItem): void {
-  objectTypesModalOpen.value = false;
-  item.onClick();
-}
-
-function createObjectTypeFromModal(): void {
-  objectTypesModalOpen.value = false;
-  emit("createObjectType");
+function collectionObjectTypeId(entry: Entry): string | null {
+  const objectTypeId = parseEntryHeaderProps(entry).object_type_id;
+  return typeof objectTypeId === "string" && objectTypeId.trim() ? objectTypeId : null;
 }
 
 function beginSidebarResize(event: PointerEvent): void {
+  if (!props.resizable) return;
   if (event.button !== 0) return;
 
   event.preventDefault();
@@ -564,97 +549,53 @@ const objectTypesLauncherItem = computed<SidebarActionItem | null>(() => {
   };
 });
 
-const settingsPrimaryItems = computed<SidebarActionItem[]>(() => [
-  {
-    id: "general",
-    icon: Settings,
-    label: "Общие",
-    active: props.activeScreen === "settings" && props.activeSettingsTab === "general",
-    onClick: () => emit("openSettingsTab", "general"),
-    testId: "settings-nav-general",
-  },
-  {
-    id: "trash",
-    icon: Trash2,
-    label: "Корзина",
-    active: props.activeScreen === "settings" && props.activeSettingsTab === "trash",
-    onClick: () => emit("openSettingsTab", "trash"),
-    testId: "settings-nav-trash",
-  },
-  {
-    id: "vim",
-    icon: Keyboard,
-    label: "Vim",
-    active: props.activeScreen === "settings" && props.activeSettingsTab === "vim",
-    onClick: () => emit("openSettingsTab", "vim"),
-    testId: "settings-nav-vim",
-  },
-  {
-    id: "object-types",
-    icon: Shapes,
-    label: "Типы объектов",
-    active: props.activeScreen === "object-types",
-    onClick: () => emit("openObjectTypes"),
-    testId: "settings-nav-object-types",
-  },
-]);
-
-const objectTypesPrimaryItems = computed<SidebarActionItem[]>(() => [
-  {
-    id: "create-object-type",
-    icon: Plus,
-    label: "Новый тип",
-    active: props.activeScreen === "object-types" && props.selectedObjectTypeId === null,
-    onClick: () => emit("createObjectType"),
-    testId: "object-types-create",
-  },
-]);
-
-const topItems = computed<SidebarActionItem[]>(() => {
-  if (props.activeScreen === "settings") {
-    return [
-      {
-        id: "settings-back",
-        icon: ArrowLeft,
-        label: "Назад к заметкам",
-        onClick: () => emit("back"),
-        testId: "settings-nav-back",
-      },
-    ];
-  }
-
-  if (props.activeScreen === "object-types") {
-    return [
-      {
-        id: "object-types-back",
-        icon: ArrowLeft,
-        label: "Назад к настройкам",
-        onClick: () => emit("back"),
-        testId: "object-types-nav-back",
-      },
-    ];
-  }
-
-  return [];
-});
-
 const primaryItems = computed<SidebarActionItem[]>(() => {
-  if (props.activeScreen === "settings") return [...topItems.value, ...settingsPrimaryItems.value];
-  if (props.activeScreen === "object-types") {
-    return [...topItems.value, ...objectTypesPrimaryItems.value];
-  }
-
   return [diaryLauncherItem.value, objectTypesLauncherItem.value].filter(
     (item): item is SidebarActionItem => item !== null,
   );
 });
 
+const noteObjectTypeItems = computed<SidebarListItem[]>(() =>
+  props.noteTypes
+    .filter((noteType) => shouldShowAsEdenCollection(noteType.id))
+    .map((noteType) => {
+      const collectionEntry = props.recentEntries.find(
+        (entry) =>
+          entry.type_id === SYSTEM_TYPE_COLLECTION_ID &&
+          collectionObjectTypeId(entry) === noteType.id,
+      );
+
+      return {
+        id: collectionEntry?.id ?? noteType.id,
+        icon: resolveNoteTypeIcon(noteType, noteType.color ?? "var(--accent)"),
+        label: collectionEntry
+          ? getEntryDisplayTitle(collectionEntry.title, collectionEntry.header_props_json)
+          : getNoteTypeCollectionName(noteType),
+        active:
+          props.activeScreen === "type-collection" && props.selectedObjectTypeId === noteType.id,
+        onClick: () => emit("openObjectType", noteType.id, collectionEntry?.id),
+        testId: `object-type-${noteType.id}`,
+      };
+    }),
+);
+
+function openObjectTypeFromModal(item: SidebarListItem): void {
+  objectTypesModalOpen.value = false;
+  item.onClick();
+}
+
+const recentNavigationEntries = computed(() =>
+  props.activeScreen === "type-collection"
+    ? props.recentEntries.filter((entry) => entry.type_id === SYSTEM_TYPE_COLLECTION_ID)
+    : props.recentEntries.filter((entry) => entry.type_id !== SYSTEM_TYPE_COLLECTION_ID),
+);
+
 const sortedRecentEntries = computed<Entry[]>(() => {
   const currentEntry = props.currentEntry;
   const entries =
-    currentEntry && !props.recentEntries.some((entry) => entry.id === currentEntry.id)
-      ? [currentEntry, ...props.recentEntries]
-      : props.recentEntries;
+    currentEntry && !recentNavigationEntries.value.some((entry) => entry.id === currentEntry.id)
+      ? [currentEntry, ...recentNavigationEntries.value]
+      : recentNavigationEntries.value;
 
   return isSortedByUpdatedAtDesc(entries)
     ? entries
@@ -737,26 +678,7 @@ watch(
   },
 );
 
-const noteObjectTypeItems = computed<SidebarListItem[]>(() =>
-  sortedNoteTypes.value.map((noteType) => buildTypeItem(noteType, `note-type-${noteType.id}`)),
-);
-
-const objectTypesSystemItems = computed<SidebarListItem[]>(() =>
-  systemNoteTypes.value.map((noteType) => buildTypeItem(noteType, `system-type-${noteType.id}`)),
-);
-
-const objectTypesCustomItems = computed<SidebarListItem[]>(() =>
-  customNoteTypes.value.map((noteType) => buildTypeItem(noteType, `custom-type-${noteType.id}`)),
-);
-
 const sidebarGroups = computed<SidebarGroup[]>(() => {
-  if (props.activeScreen === "object-types") {
-    return [
-      { id: "system-types", label: "Системные типы", items: objectTypesSystemItems.value },
-      { id: "custom-types", label: "Пользовательские", items: objectTypesCustomItems.value },
-    ].filter((group) => group.items?.length);
-  }
-
   if (props.activeScreen === "notes" || props.activeScreen === "type-collection") {
     return sortedRecentEntries.value.length > 0 ? [{ id: "recent", label: "Недавние" }] : [];
   }
@@ -772,7 +694,7 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
   padding: 0.25rem 0 0;
   overflow: hidden;
 }
@@ -781,7 +703,7 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
   display: flex;
   min-height: 0;
   min-width: 0;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 0;
 }
@@ -805,7 +727,7 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
 
 .eden-sidebar-group--recent {
   min-height: 0;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   margin-bottom: 0;
   padding-bottom: 0;
   gap: 0;
@@ -821,9 +743,9 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
 .eden-sidebar-recent-list {
   position: relative;
   min-width: 0;
-  height: max(160px, calc(100vh - 152px));
+  height: 100%;
   min-height: 0;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable both-edges;

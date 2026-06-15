@@ -74,6 +74,19 @@ let widgetWindow: BrowserWindow | null = null;
 let currentState: FocusState = { ...DEFAULT_STATE };
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let tickTimer: ReturnType<typeof setInterval> | null = null;
+let focusSessionOpener: (() => void) | null = null;
+
+export function setFocusWidgetFocusSessionOpener(opener: () => void): void {
+  focusSessionOpener = opener;
+}
+
+function openFocusSessionFromWidget(): void {
+  if (!focusSessionOpener) {
+    console.warn("[focus-widget] focus session opener is not registered");
+    return;
+  }
+  focusSessionOpener();
+}
 
 // --- Position persistence ---------------------------------------------------
 
@@ -343,8 +356,7 @@ ipcMain.handle("kepler:focus-widget:hide", () => {
 });
 
 ipcMain.handle("kepler:focus-widget:open-focus-session", async () => {
-  const { openFocusSessionShell } = await import("./focus-session");
-  openFocusSessionShell();
+  openFocusSessionFromWidget();
 });
 
 ipcMain.handle("kepler:focus-widget:show-menu", () => {
@@ -354,9 +366,7 @@ ipcMain.handle("kepler:focus-widget:show-menu", () => {
     {
       label: "Редактировать",
       click: () => {
-        void import("./focus-session").then(({ openFocusSessionShell }) => {
-          openFocusSessionShell();
-        });
+        openFocusSessionFromWidget();
       },
     },
     {

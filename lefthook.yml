@@ -41,7 +41,7 @@ pre-commit:
       run: bunx oxfmt --check .
 
 pre-push:
-  parallel: true
+  parallel: false
   commands:
     test-ark-core:
       glob: "core/ark/crates/ark-core/rust/**/*.rs"

@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-06-15-eden-cm-autosave-data-loss",
+  "verified_at": "2026-06-15T14:12:00+03:00",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "rtk bunx vitest run tests/components/CmEditor.spec.ts"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "code path + store regression"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "rtk bunx vitest run tests/components/CmEditor.spec.ts -t \"store handleSave\""
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "node scripts/check-ark-write-boundaries.mjs"
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "command": "node scripts/check-docs-freshness.mjs"
+    }
+  ]
+}

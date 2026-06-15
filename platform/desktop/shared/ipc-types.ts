@@ -643,6 +643,11 @@ export interface KeplerApi {
       onStateChanged(listener: (state: UpdateState) => void): () => void;
     };
   };
+  /** Eden settings window — отдельное окно поверх extension host. */
+  edenSettings: {
+    open(): Promise<void>;
+    close(): Promise<void>;
+  };
   focusOverlay: {
     ready(): void;
     onShow(

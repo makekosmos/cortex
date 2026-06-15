@@ -58,6 +58,7 @@ export {
   HotkeyCapture,
   KbdKey,
   ActionsPanel,
+  Skeleton,
 } from "./components";
 
 // Composables

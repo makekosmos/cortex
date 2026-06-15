@@ -6,6 +6,10 @@ export function localImageUrl(filePath: string): string {
 
 export function toDisplayImageSrc(src: string): string {
   const trimmed = src.trim();
+  if (/^[A-Za-z]:[\\/]/.test(trimmed) || trimmed.startsWith("\\\\")) {
+    return localImageUrl(trimmed);
+  }
+
   if (!trimmed.startsWith("file:")) {
     return trimmed;
   }

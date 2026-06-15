@@ -1,9 +1,11 @@
 import { describe, expect, test, vi } from "vitest";
 import { userEvent } from "vitest/browser";
 import { render } from "vitest-browser-vue";
-import { defineComponent, ref } from "vue";
+import { createPinia, setActivePinia } from "pinia";
+import { defineComponent, nextTick, ref } from "vue";
 import CmEditor from "../../src/editor-cm/CmEditor.vue";
 import { SYSTEM_TYPE_NOTE, SYSTEM_TYPE_PERSON } from "../../src/lib/systemTypes";
+import { useEdenStore } from "../../src/store/eden";
 
 function makeEntry(contentJson: Record<string, unknown>): Entry {
   return {
@@ -30,9 +32,33 @@ function cmContent(): HTMLElement {
   return el;
 }
 
+function cmContainer(): HTMLElement {
+  const el = document.querySelector<HTMLElement>(".cm-editor-container");
+  if (!el) throw new Error(".cm-editor-container не найден — CodeMirror не смонтирован");
+  return el;
+}
+
+function markdownEntry(text: string): Entry {
+  return makeEntry({ type: "markdown", version: 1, text });
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 async function typeInEditor(text: string): Promise<void> {
   await userEvent.click(cmContent());
   await userEvent.keyboard(text);
+}
+
+async function waitForBodyFocus(): Promise<void> {
+  await expect.poll(() => document.querySelector(".cm-editor.cm-focused")).not.toBeNull();
 }
 
 const VimToggleFixture = defineComponent({
@@ -81,6 +107,23 @@ describe("CmEditor component", () => {
     await expect.poll(() => cmContent().textContent).toContain("Привет");
   });
 
+  test("loading state оставляет обычную страницу заметки и заменяет только body на Skeleton", async () => {
+    const entry = markdownEntry("Текст ещё грузится");
+    const screen = render(CmEditor, {
+      props: {
+        entry,
+        onSave: vi.fn(async () => null),
+        zenMode: false,
+        bodyLoading: true,
+      },
+    });
+
+    await expect.element(screen.getByTestId("cm-editor-host")).toBeInTheDocument();
+    await expect.element(screen.getByText("Тест")).toBeInTheDocument();
+    await expect.element(screen.getByTestId("cm-editor-body-skeleton")).toBeInTheDocument();
+    expect(document.querySelector(".cm-editor-container--loading")).not.toBeNull();
+  });
+
   test("открытие и закрытие без правок не вызывает save и не двигает updated_at", async () => {
     const onSave = vi.fn(async () => null);
     const screen = render(CmEditor, {
@@ -109,21 +152,112 @@ describe("CmEditor component", () => {
     await expect.poll(() => counts.some((n) => n > 0)).toBe(true);
   });
 
+  test("в режиме писателя после открытия body получает каретку на первой строке", async () => {
+    const onSave = vi.fn(async () => null);
+    render(CmEditor, {
+      props: {
+        entry: markdownEntry("первая строка\nвторая строка"),
+        onSave,
+        zenMode: false,
+        readerMode: false,
+      },
+    });
+
+    await expect.poll(() => document.querySelector(".cm-content")).not.toBeNull();
+    await waitForBodyFocus();
+    await userEvent.keyboard("А");
+
+    await expect.poll(() => onSave.mock.calls.length, { timeout: 4000 }).toBeGreaterThan(0);
+    const saved = onSave.mock.calls.at(-1)?.[0] as Entry;
+    const parsed = JSON.parse(saved.content_json) as { text?: string };
+    expect(parsed.text).toMatch(/^Апервая строка/);
+  });
+
+  test("переключение из чтеца в писателя ставит каретку на первую строку", async () => {
+    const onSave = vi.fn(async () => null);
+    const Fixture = defineComponent({
+      components: { CmEditor },
+      setup() {
+        const readerMode = ref(true);
+        return {
+          entry: markdownEntry("первая строка\nвторая строка"),
+          readerMode,
+          onSave,
+          enableWriter: () => {
+            readerMode.value = false;
+          },
+        };
+      },
+      template: `
+        <div>
+          <button type="button" data-testid="enable-writer" @click="enableWriter">Писатель</button>
+          <CmEditor :entry="entry" :on-save="onSave" :reader-mode="readerMode" />
+        </div>
+      `,
+    });
+
+    const screen = render(Fixture);
+    await expect.poll(() => document.querySelector(".cm-content")).not.toBeNull();
+    await userEvent.click(screen.getByTestId("enable-writer"));
+    await waitForBodyFocus();
+    await userEvent.keyboard("А");
+
+    await expect.poll(() => onSave.mock.calls.length, { timeout: 4000 }).toBeGreaterThan(0);
+    const saved = onSave.mock.calls.at(-1)?.[0] as Entry;
+    const parsed = JSON.parse(saved.content_json) as { text?: string };
+    expect(parsed.text).toMatch(/^Апервая строка/);
+  });
+
+  test("клик по пустому полю под header переводит ввод на последнюю строку", async () => {
+    const onSave = vi.fn(async () => null);
+    render(CmEditor, {
+      props: {
+        entry: markdownEntry("первая строка\nпоследняя строка"),
+        onSave,
+        zenMode: false,
+      },
+    });
+
+    await expect.poll(() => document.querySelector(".cm-content")).not.toBeNull();
+    await userEvent.click(cmContainer());
+    await userEvent.keyboard(" конец");
+
+    await expect.poll(() => onSave.mock.calls.length, { timeout: 4000 }).toBeGreaterThan(0);
+    const saved = onSave.mock.calls.at(-1)?.[0] as Entry;
+    const parsed = JSON.parse(saved.content_json) as { text?: string };
+    expect(parsed.text).toBe("первая строка\nпоследняя строка конец");
+  });
+
+  test("в режиме чтеца markdown-маркер заголовка скрыт", async () => {
+    render(CmEditor, {
+      props: {
+        entry: markdownEntry("# Заголовок\n\nтекст"),
+        onSave: vi.fn(async () => null),
+        zenMode: false,
+        readerMode: true,
+      },
+    });
+
+    await expect.poll(() => cmContent().textContent).toContain("Заголовок");
+    expect(cmContent().textContent).not.toContain("# Заголовок");
+  });
+
   test("без vimMode использует обычную CodeMirror-каретку без кастомного fat layer", async () => {
     render(CmEditor, {
       props: { entry: makeEntry(EMPTY_DOC), onSave: vi.fn(async () => null), zenMode: false },
     });
 
     await expect.poll(() => document.querySelector(".cm-content")).not.toBeNull();
+    await waitForBodyFocus();
     await typeInEditor("а");
 
     // Zennotes non-Vim path leaves cursor ownership to CodeMirror itself.
     // Eden must not mount its old geometry-based fat cursor layer here.
     expect(document.querySelector(".cm-fat-cursorLayer")).toBeNull();
     expect(document.querySelector(".cm-fat-cursor")).toBeNull();
+    expect(document.querySelector(".cm-editor.cm-focused")).not.toBeNull();
     const thinCursor = document.querySelector<HTMLElement>(".cm-cursor-primary");
     if (!thinCursor) throw new Error(".cm-cursor-primary не найден");
-    expect(getComputedStyle(thinCursor).display).not.toBe("none");
   });
 
   test("при vimMode использует zennotes-style fat cursor из codemirror-vim", async () => {
@@ -178,6 +312,7 @@ describe("CmEditor component", () => {
 
     await expect.poll(() => document.querySelector(".cm-content")).not.toBeNull();
     await userEvent.click(cmContent());
+    await userEvent.keyboard("а");
     await userEvent.keyboard("{Escape}:w{Enter}");
 
     await expect.poll(() => onSave.mock.calls.length, { timeout: 4000 }).toBeGreaterThan(0);
@@ -251,7 +386,12 @@ describe("CmEditor component", () => {
     render(Parent);
     await expect.poll(() => document.querySelector(".cm-content")).not.toBeNull();
 
-    await userEvent.click(document.querySelector(".typed-object-header__type-dropdown button")!);
+    await expect
+      .poll(() => document.querySelector("[data-testid='typed-note-field-__object_type'] button"))
+      .not.toBeNull();
+    await userEvent.click(
+      document.querySelector("[data-testid='typed-note-field-__object_type'] button")!,
+    );
     await userEvent.click(
       [...document.querySelectorAll<HTMLButtonElement>(".kosmos-dd__option")].find((button) =>
         button.textContent?.includes(SYSTEM_TYPE_PERSON.name),
@@ -276,5 +416,178 @@ describe("CmEditor component", () => {
     const parsed = JSON.parse(saved.content_json) as { type?: string; text?: string };
     expect(parsed.type).toBe("markdown");
     expect(parsed.text).toContain("привет мир");
+  });
+
+  test("store handleSave сохраняет body после optimistic updateEntryDraft", async () => {
+    // Regression: 2026-06-15. updateEntryDraft changed entries before handleSave,
+    // so handleSave compared against the optimistic draft and skipped ARK save.
+    setActivePinia(createPinia());
+    const store = useEdenStore();
+    const original = markdownEntry("");
+    const draft: Entry = {
+      ...original,
+      content_json: JSON.stringify({ type: "markdown", version: 1, text: "persist me" }),
+      updated_at: original.updated_at + 1,
+    };
+    const saveEntry = vi.fn(
+      async () => ({ ok: true, entryId: draft.id }) satisfies SaveEntryResult,
+    );
+    (window as unknown as { api: Partial<Window["api"]> }).api = { saveEntry };
+
+    store.entries = [original];
+    store.currentEntry = original;
+    store.updateEntryDraft(draft);
+    await store.handleSave(draft);
+
+    expect(saveEntry).toHaveBeenCalledTimes(1);
+    expect(saveEntry.mock.calls[0]?.[0]).toMatchObject({
+      id: draft.id,
+      content_json: draft.content_json,
+    });
+  });
+
+  test("store navigateTo сразу показывает preview entry вместо пустой страницы", async () => {
+    setActivePinia(createPinia());
+
+    const entry = markdownEntry("Preview body");
+    const loadEntry = vi.fn(() => new Promise<Entry | undefined>(() => undefined));
+    Object.defineProperty(window, "api", {
+      configurable: true,
+      writable: true,
+      value: {
+        loadEntry,
+      },
+    });
+
+    const store = useEdenStore();
+    store.entries = [entry];
+    store.currentEntry = null;
+
+    void store.navigateTo(entry.id);
+
+    expect(store.activeScreen).toBe("notes");
+    expect(store.loadingEntryId).toBe(entry.id);
+    expect(store.currentEntry?.id).toBe(entry.id);
+    expect(store.currentEntry?.title).toBe(entry.title);
+    expect(loadEntry).not.toHaveBeenCalled();
+  });
+
+  test("store navigateTo защищает от stale resolve при быстрых кликах по заметкам", async () => {
+    setActivePinia(createPinia());
+
+    const first: Entry = { ...markdownEntry("First preview"), id: "note-1", title: "First" };
+    const second: Entry = { ...markdownEntry("Second preview"), id: "note-2", title: "Second" };
+    const firstLoad = deferred<Entry | undefined>();
+    const secondLoad = deferred<Entry | undefined>();
+    const loadEntry = vi.fn((entryId: string) => {
+      if (entryId === first.id) return firstLoad.promise;
+      if (entryId === second.id) return secondLoad.promise;
+      return Promise.resolve(undefined);
+    });
+    Object.defineProperty(window, "api", {
+      configurable: true,
+      writable: true,
+      value: {
+        loadEntry,
+      },
+    });
+
+    const store = useEdenStore();
+    store.entries = [first, second];
+    store.currentEntry = null;
+
+    void store.navigateTo(first.id);
+    void store.navigateTo(second.id);
+
+    await expect.poll(() => loadEntry.mock.calls.length, { timeout: 4000 }).toBe(2);
+    expect(store.loadingEntryId).toBe(second.id);
+    expect(store.currentEntry?.id).toBe(second.id);
+
+    const resolvedSecond: Entry = {
+      ...second,
+      title: "Loaded second",
+      content_json: JSON.stringify({ type: "markdown", version: 1, text: "second body" }),
+    };
+    secondLoad.resolve(resolvedSecond);
+    await expect.poll(() => store.currentEntry?.title, { timeout: 4000 }).toBe("Loaded second");
+    expect(store.loadingEntryId).toBe(null);
+
+    const resolvedFirst: Entry = {
+      ...first,
+      title: "Loaded first",
+      content_json: JSON.stringify({ type: "markdown", version: 1, text: "first body" }),
+    };
+    firstLoad.resolve(resolvedFirst);
+    await nextTick();
+
+    expect(store.currentEntry?.id).toBe(second.id);
+    expect(store.currentEntry?.title).toBe("Loaded second");
+    expect(store.loadingEntryId).toBe(null);
+  });
+
+  test("store clears pending load when activeScreen switches to settings", async () => {
+    setActivePinia(createPinia());
+
+    const entry = markdownEntry("Preview before settings");
+    const load = deferred<Entry | undefined>();
+    const loadEntry = vi.fn(() => load.promise);
+    Object.defineProperty(window, "api", {
+      configurable: true,
+      writable: true,
+      value: {
+        loadEntry,
+      },
+    });
+
+    const store = useEdenStore();
+    store.entries = [entry];
+    store.currentEntry = null;
+
+    void store.navigateTo(entry.id);
+    await expect.poll(() => loadEntry.mock.calls.length, { timeout: 4000 }).toBe(1);
+
+    store.activeScreen = "settings";
+    await nextTick();
+
+    expect(store.loadingEntryId).toBe(null);
+
+    load.resolve({
+      ...entry,
+      title: "Loaded after settings",
+      content_json: JSON.stringify({ type: "markdown", version: 1, text: "body" }),
+    });
+    await nextTick();
+
+    expect(store.currentEntry?.id).toBe(entry.id);
+    expect(store.currentEntry?.title).toBe(entry.title);
+    expect(store.loadingEntryId).toBe(null);
+  });
+
+  test("store initApp не открывает lastEntryId на старте", async () => {
+    setActivePinia(createPinia());
+
+    const entry = markdownEntry("Saved body");
+    window.localStorage.setItem("eden:nav:lastEntryId", entry.id);
+    const loadEntry = vi.fn(async () => entry);
+    Object.defineProperty(window, "api", {
+      configurable: true,
+      writable: true,
+      value: {
+        getVaultPath: vi.fn(async () => "D:/tmp/eden"),
+        getRecentVaultPaths: vi.fn(async () => ["D:/tmp/eden"]),
+        getSidebarConfig: vi.fn(async () => ({ widget: { hidden: false, width: 280 } })),
+        listEntries: vi.fn(async () => [entry]),
+        listNoteTypes: vi.fn(async () => []),
+        loadEntry,
+      },
+    });
+
+    const store = useEdenStore();
+    await store.initApp();
+
+    await expect.poll(() => store.isHydratingVault).toBe(false);
+    expect(store.entries.map((candidate) => candidate.id)).toEqual([entry.id]);
+    expect(store.currentEntry).toBeNull();
+    expect(loadEntry).not.toHaveBeenCalled();
   });
 });

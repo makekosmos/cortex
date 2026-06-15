@@ -1023,6 +1023,18 @@ fn map_ark_object_row(row: &Row<'_>) -> rusqlite::Result<ArkObject> {
     })
 }
 
+fn map_ark_object_summary_row(row: &Row<'_>) -> rusqlite::Result<ArkObjectSummary> {
+    Ok(ArkObjectSummary {
+        id: row.get(0)?,
+        type_id: row.get(1)?,
+        title: row.get(2)?,
+        props_json: parse_json_or_default(row.get(3)?),
+        created_at: row.get(4)?,
+        updated_at: row.get(5)?,
+        deleted_at: row.get(6)?,
+    })
+}
+
 pub fn list_objects(conn: &Connection) -> Result<Vec<ArkObject>, String> {
     let mut stmt = conn
         .prepare(
@@ -1033,6 +1045,21 @@ pub fn list_objects(conn: &Connection) -> Result<Vec<ArkObject>, String> {
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], map_ark_object_row)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+pub fn list_object_summaries(conn: &Connection) -> Result<Vec<ArkObjectSummary>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, type_id, title, props_json, created_at, updated_at, deleted_at
+             FROM objects
+             ORDER BY updated_at DESC, created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], map_ark_object_summary_row)
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())
@@ -1049,6 +1076,25 @@ pub fn list_objects_by_type(conn: &Connection, type_id: &str) -> Result<Vec<ArkO
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map(params![type_id], map_ark_object_row)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+pub fn list_object_summaries_by_type(
+    conn: &Connection,
+    type_id: &str,
+) -> Result<Vec<ArkObjectSummary>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, type_id, title, props_json, created_at, updated_at, deleted_at
+             FROM objects
+             WHERE type_id = ?1
+             ORDER BY updated_at DESC, created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![type_id], map_ark_object_summary_row)
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())
@@ -4030,6 +4076,38 @@ mod tests {
         assert!(returned_ids.contains(&"obj-3"));
         assert!(returned_ids.contains(&"obj-1"));
         assert!(get_objects_by_ids(&conn, &[]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn object_summary_queries_skip_body_and_filter_by_type() {
+        let conn = setup_db();
+        let object_type = make_object_type("book_obj", "Book");
+        upsert_object_type(&conn, &object_type).unwrap();
+
+        let mut older = make_object("obj-1", "note_obj", "Journal");
+        older.content_json = json!({ "text": "large body that must not be selected by summaries" });
+        older.props_json = json!({ "kind": "note" });
+        older.created_at = "2026-01-01T00:00:00.000Z".to_string();
+        older.updated_at = "2026-01-01T00:00:00.000Z".to_string();
+        upsert_object(&conn, &older).unwrap();
+
+        let mut newer = make_object("obj-2", "book_obj", "Clean Code");
+        newer.content_json = json!({ "text": "another body" });
+        newer.props_json = json!({ "kind": "book" });
+        newer.created_at = "2026-01-02T00:00:00.000Z".to_string();
+        newer.updated_at = "2026-01-02T00:00:00.000Z".to_string();
+        upsert_object(&conn, &newer).unwrap();
+
+        let summaries = list_object_summaries(&conn).unwrap();
+        assert_eq!(summaries.len(), 2);
+        assert_eq!(summaries[0].id, "obj-2");
+        assert_eq!(summaries[0].props_json, json!({ "kind": "book" }));
+        assert_eq!(summaries[1].id, "obj-1");
+
+        let book_summaries = list_object_summaries_by_type(&conn, "book_obj").unwrap();
+        assert_eq!(book_summaries.len(), 1);
+        assert_eq!(book_summaries[0].id, "obj-2");
+        assert_eq!(book_summaries[0].type_id, "book_obj");
     }
 
     fn make_time_entry(

@@ -20,6 +20,11 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { app, BrowserWindow } from "electron";
 import { fileURLToPath } from "node:url";
+import { getServiceStatus, pingService, runServiceCliElevated, sendViaPipe } from "./focus-service";
+import {
+  isFocusServiceAutoInstallDeclined,
+  setFocusServiceAutoInstallDeclined,
+} from "./settings-window";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -167,10 +172,6 @@ async function runHelperElevated(req: HelperRequest): Promise<HelperResponse> {
 let autoInstallAttemptedThisSession = false;
 
 async function tryAutoInstallService(): Promise<boolean> {
-  const { runServiceCliElevated, getServiceStatus, pingService } = await import("./focus-service");
-  const { setFocusServiceAutoInstallDeclined, isFocusServiceAutoInstallDeclined } =
-    await import("./settings-window");
-
   if (autoInstallAttemptedThisSession) return false;
   if (isFocusServiceAutoInstallDeclined()) return false;
   autoInstallAttemptedThisSession = true;
@@ -215,7 +216,6 @@ async function tryAutoInstallService(): Promise<boolean> {
 
 async function trySendViaPipe(req: HelperRequest): Promise<HelperResponse | null> {
   try {
-    const { sendViaPipe, pingService } = await import("./focus-service");
     if (!(await pingService())) return null;
     const resp = await sendViaPipe(req);
     if (resp.ok || resp.error) {

@@ -73,6 +73,7 @@ import {
   assertExtensionHostPermission,
   type ExtensionSource as ExtensionPermissionSource,
 } from "./extension-permissions";
+import { applyFocusBlock } from "./focus-block";
 import { loadRaycastPackageManifest, type RaycastPackageManifest } from "./raycast/manifest";
 
 // ESM shim — __dirname / __filename не определены в Node ESM bundles.
@@ -268,6 +269,7 @@ export interface ExtensionManifest {
 interface ExtensionWindowEntry {
   win: BrowserWindow;
   id: string;
+  windowKey: string;
   /** Если true — close скрывает окно вместо destroy (см. ExtensionManifest.keepAliveInBackground). */
   keepAliveInBackground: boolean;
   /** Initial route переданный в `openExtension(id, route)` для cold start.
@@ -292,6 +294,7 @@ app.on("before-quit", () => {
 });
 interface ExtensionRendererContext {
   id: string;
+  windowKey: string;
   source: ExtensionPermissionSource;
   manifestPermissions?: readonly string[];
 }
@@ -961,8 +964,9 @@ function escapeHtml(s: string): string {
 export function isExtensionRunning(id: string): boolean {
   const native = nativeExtensions.get(id);
   if (native && !native.child.killed && native.child.exitCode === null) return true;
-  const entry = extensionWindows.get(id);
-  return !!entry && !entry.win.isDestroyed();
+  return Array.from(extensionWindows.values()).some(
+    (entry) => entry.id === id && !entry.win.isDestroyed(),
+  );
 }
 
 /**
@@ -1013,13 +1017,13 @@ function focusExistingExtensionWindow(win: BrowserWindow): void {
 // и `extensionWindows.set` теперь есть `await resolveExtensionSource` (probe).
 const openInflight = new Map<string, Promise<void>>();
 
-export function openExtension(id: string, route?: string): Promise<void> {
-  const existing = openInflight.get(id);
+export function openExtension(id: string, route?: string, windowKey = id): Promise<void> {
+  const existing = openInflight.get(windowKey);
   if (existing) return existing;
-  const promise = openExtensionImpl(id, route).finally(() => {
-    openInflight.delete(id);
+  const promise = openExtensionImpl(id, route, windowKey).finally(() => {
+    openInflight.delete(windowKey);
   });
-  openInflight.set(id, promise);
+  openInflight.set(windowKey, promise);
   return promise;
 }
 
@@ -1030,7 +1034,7 @@ export function reloadExtensionWindow(id: string): boolean {
   return true;
 }
 
-async function openExtensionImpl(id: string, route?: string): Promise<void> {
+async function openExtensionImpl(id: string, route?: string, windowKey = id): Promise<void> {
   const manifest = loadExtensionManifest(id);
   if (!manifest) {
     console.warn(`[kepler-shell] extension not found: ${id}`);
@@ -1046,7 +1050,7 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
     );
     return;
   }
-  const existing = extensionWindows.get(id);
+  const existing = extensionWindows.get(windowKey);
   if (existing && !existing.win.isDestroyed()) {
     if (process.env.KOSMOS_HEADLESS !== "1") {
       focusExistingExtensionWindow(existing.win);
@@ -1258,6 +1262,7 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
   const wcId = win.webContents.id;
   webContentsToExtensionContext.set(wcId, {
     id,
+    windowKey,
     source: location.source,
     manifestPermissions: manifest.permissions,
   });
@@ -1265,11 +1270,12 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
     clearExtensionTitlebarHoverTracker(wcId);
     extensionWindowDrags.delete(wcId);
     webContentsToExtensionContext.delete(wcId);
-    extensionWindows.delete(id);
+    extensionWindows.delete(windowKey);
   });
-  extensionWindows.set(id, {
+  extensionWindows.set(windowKey, {
     win,
     id,
+    windowKey,
     keepAliveInBackground: manifest.keepAliveInBackground === true,
     initialRoute: route,
   });
@@ -1304,10 +1310,10 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
   // работает с любым vue-router history mode (memory / hash / web).
   if (source.kind === "dev-server" && source.url) {
     console.log(`[kepler-shell] extension '${id}' dev mode → ${source.url}`);
-    void win.loadURL(source.url);
+    void win.loadURL(route?.startsWith("#") ? `${source.url}${route}` : source.url);
     win.webContents.openDevTools({ mode: "detach" });
   } else if (source.file) {
-    void win.loadFile(source.file);
+    void win.loadFile(source.file, route?.startsWith("#") ? { hash: route.slice(1) } : undefined);
   }
 }
 
@@ -1430,6 +1436,10 @@ function extensionIdForSender(sender: WebContents): string | null {
   return webContentsToExtensionContext.get(sender.id)?.id ?? null;
 }
 
+function extensionWindowKeyForSender(sender: WebContents): string | null {
+  return webContentsToExtensionContext.get(sender.id)?.windowKey ?? null;
+}
+
 function extensionContextForSender(sender: WebContents): ExtensionRendererContext {
   const context = webContentsToExtensionContext.get(sender.id);
   if (!context) {
@@ -1482,6 +1492,16 @@ export function assertExtensionSenderHostPermissionIfExtension(
 ipcMain.handle("kepler:extension:list", () => listExtensions());
 ipcMain.handle("kepler:extension:open", async (_e, id: string) => {
   await openExtension(id);
+});
+ipcMain.handle("kepler:eden-settings:open", async () => {
+  await openExtension("eden", "#/settings", "eden:settings");
+});
+ipcMain.handle("kepler:eden-settings:close", (e) => {
+  const key = extensionWindowKeyForSender(e.sender) ?? "eden:settings";
+  const entry = extensionWindows.get(key);
+  if (entry && !entry.win.isDestroyed()) {
+    entry.win.close();
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -1537,9 +1557,6 @@ async function onFocusStateChanged(
 ): Promise<void> {
   const active = !!params?.active;
   const blocklistId = (params?.blocklist_id as string | null | undefined) ?? null;
-
-  // Lazy import — avoid cycle на startup time.
-  const { applyFocusBlock } = await import("./focus-block");
 
   if (!active) {
     await applyFocusBlock({ active: false, domains: [] });
@@ -1636,9 +1653,9 @@ ipcMain.handle("kepler:extension:ark:unsubscribe", (e, event: string) => {
 ipcMain.handle("kepler:extension:meta:id", (e) => extensionIdForSender(e.sender));
 
 ipcMain.handle("kepler:extension:navigation:initial", (e): string | null => {
-  const id = extensionIdForSender(e.sender);
-  if (!id) return null;
-  const entry = extensionWindows.get(id);
+  const windowKey = extensionWindowKeyForSender(e.sender);
+  if (!windowKey) return null;
+  const entry = extensionWindows.get(windowKey);
   return entry?.initialRoute ?? null;
 });
 

@@ -4,7 +4,7 @@
       <div>
         <h1 class="settings-tab-title">Корзина</h1>
         <p class="settings-tab-subtitle">
-          Удалённые заметки хранятся 30 дней, затем удаляются навсегда.
+          Удалённые заметки остаются здесь, пока вы не очистите корзину.
         </p>
       </div>
       <button
@@ -35,10 +35,7 @@
               <span class="trash-item-title">{{
                 getEntryDisplayTitle(entry.title, entry.header_props_json)
               }}</span>
-              <span class="trash-item-meta">
-                Удалено {{ formatTimeAgo(entry.deleted_at!) }} · осталось
-                {{ daysRemaining(entry.deleted_at!) }} дн.
-              </span>
+              <span class="trash-item-meta"> Удалено {{ formatTimeAgo(entry.deleted_at!) }} </span>
             </div>
           </div>
           <div class="trash-item-actions">
@@ -79,15 +76,17 @@ function formatTimeAgo(deletedAt: number): string {
   return `${Math.floor(days / 7)} нед. назад`;
 }
 
-function daysRemaining(deletedAt: number): number {
-  return Math.max(0, 30 - Math.floor((Date.now() - deletedAt) / (1000 * 60 * 60 * 24)));
-}
-
 async function loadTrash() {
-  if (!window.api?.listTrashEntries) return;
+  if (!window.api?.listTrashEntries) {
+    loading.value = false;
+    return;
+  }
   loading.value = true;
-  trashEntries.value = await window.api.listTrashEntries();
-  loading.value = false;
+  try {
+    trashEntries.value = await window.api.listTrashEntries();
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function handleRestore(entryId: string) {
@@ -97,15 +96,21 @@ async function handleRestore(entryId: string) {
 }
 
 async function handlePermanentDelete(entryId: string) {
+  const confirmed = window.confirm("Удалить заметку навсегда? Это действие нельзя отменить.");
+  if (!confirmed) return;
   await window.api.permanentDeleteEntry(entryId);
   await loadTrash();
+  emit("refreshData");
 }
 
 async function handleEmptyTrash() {
+  const confirmed = window.confirm("Очистить корзину? Все заметки будут удалены навсегда.");
+  if (!confirmed) return;
   for (const entry of trashEntries.value) {
     await window.api.permanentDeleteEntry(entry.id);
   }
   await loadTrash();
+  emit("refreshData");
 }
 
 onMounted(() => {

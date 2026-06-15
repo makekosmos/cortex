@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 
-import { ref, computed, watch } from "vue";
+import { ref, computed, nextTick, watch } from "vue";
 
 import { v4 as uuidv4 } from "uuid";
 
@@ -11,6 +11,7 @@ import { createUntitledEntryHeaderProps } from "@/lib/entryTitles";
 import { readEntryMarkdown, writeEntryMarkdown } from "@/editor-cm/content";
 
 import {
+  SYSTEM_TYPE_COLLECTION_ID,
   SYSTEM_TYPE_JOURNAL,
   SYSTEM_TYPE_JOURNAL_ID,
   SYSTEM_TYPE_NOTE_ID,
@@ -25,19 +26,11 @@ import type { SortMode } from "@/components/sidebar/types";
 
 import { useLayoutStore } from "./layout";
 
-type ActiveScreen = "notes" | "settings" | "object-types" | "type-collection";
+type ActiveScreen = "notes" | "settings" | "type-collection";
 
 // Persistence для last-visited entry id. Юзер reload'ит окно (Ctrl+R в
 // dev) и ожидает что вернётся в ту заметку которую читал.
 const LAST_ENTRY_STORAGE_KEY = "eden:nav:lastEntryId";
-
-function readLastVisitedEntryId(): string | null {
-  try {
-    return window.localStorage.getItem(LAST_ENTRY_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
 
 function writeLastVisitedEntryId(id: string): void {
   try {
@@ -62,6 +55,32 @@ const SYSTEM_TYPES_BY_ID = new Map(SYSTEM_TYPES.map((noteType) => [noteType.id, 
 
 function normalizedEntryTypeId(entry: Entry): string {
   return entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
+}
+
+function parseEntryHeaderProps(entry: Entry): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(entry.header_props_json || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function getCollectionTargetTypeId(entry: Entry | null | undefined): string | null {
+  if (!entry || entry.type_id !== SYSTEM_TYPE_COLLECTION_ID) return null;
+  const objectTypeId = parseEntryHeaderProps(entry).object_type_id;
+  return typeof objectTypeId === "string" && objectTypeId.trim() ? objectTypeId : null;
+}
+
+function mergeEntriesById(entries: Entry[], additions: Entry[]): Entry[] {
+  if (additions.length === 0) return entries;
+  const byId = new Map(entries.map((entry) => [entry.id, entry] as const));
+  for (const entry of additions) {
+    byId.set(entry.id, entry);
+  }
+  return [...byId.values()].sort((left, right) => right.updated_at - left.updated_at);
 }
 
 function normalizedEntryHeaderLayout(entry: Entry): string | null {
@@ -112,6 +131,24 @@ interface EntrySaveCoordinator {
   queued: QueuedSaveRequest | null;
 }
 
+function waitForLoadingFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof window.requestAnimationFrame === "function") {
+      // `requestAnimationFrame()` fires before paint. Use two frame turns and
+      // only then queue the macrotask so the loading shell has a real chance to
+      // hit the screen before IPC/loadEntry blocks the renderer again.
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          window.setTimeout(resolve, 0);
+        });
+      });
+      return;
+    }
+
+    window.setTimeout(resolve, 0);
+  });
+}
+
 function pruneTransientSaveState(
   latestSaveTimestamps: Map<string, number>,
   saveCoordinators: Record<string, EntrySaveCoordinator>,
@@ -134,10 +171,16 @@ function pruneTransientSaveState(
 
 export const useEdenStore = defineStore("eden", () => {
   const entries = ref<Entry[]>([]);
+  const entriesLoaded = ref(false);
 
   const noteTypes = ref<NoteType[]>([]);
 
   const currentEntry = ref<Entry | null>(null);
+
+  // Пока впервые догружаем тело заметки через loadEntry(), показываем
+  // skeleton по уже известным данным из entries вместо визуального "зависания"
+  // на предыдущей/пустой странице.
+  const loadingEntryId = ref<string | null>(null);
 
   // Persist last-visited entry id ВСЕГДА при изменении currentEntry,
   // не только в navigateTo. openTodayJournal / createEntry / иные code paths
@@ -156,17 +199,39 @@ export const useEdenStore = defineStore("eden", () => {
 
   const activeScreen = ref<ActiveScreen>("notes");
 
-  const activeSpace = ref<SpaceId>("diary");
-
   const activeNoteTypeId = ref<string | null>(null);
 
+  let navigationRequestSeq = 0;
+
+  function cancelPendingNavigation(): void {
+    navigationRequestSeq += 1;
+    loadingEntryId.value = null;
+  }
+
+  const activeSpace = ref<SpaceId>("diary");
+
   const sortMode = ref<SortMode>("updated_at");
+
+  watch(activeScreen, (screen) => {
+    if (screen !== "notes") {
+      cancelPendingNavigation();
+    }
+  });
 
   // Non-reactive save coordination state (mutable internal mechanism)
 
   const latestSaveTimestamps = new Map<string, number>();
 
   const saveCoordinators: Record<string, EntrySaveCoordinator> = {};
+
+  function upsertEntryBaseline(entry: Entry): void {
+    const idx = entries.value.findIndex((candidate) => candidate.id === entry.id);
+    if (idx >= 0) {
+      entries.value[idx] = entry;
+    } else {
+      entries.value = [entry, ...entries.value];
+    }
+  }
 
   const vaultName = computed(() => {
     if (!vaultPath.value) return null;
@@ -183,16 +248,25 @@ export const useEdenStore = defineStore("eden", () => {
       window.api.listNoteTypes(),
     ]);
 
-    entries.value = entriesData;
-
     noteTypes.value = mergeNoteTypesWithSystem(noteTypesData);
-    pruneTransientSaveState(latestSaveTimestamps, saveCoordinators, entriesData);
+    const collectionEntries = await window.api.ensureCollectionObjects(noteTypes.value);
 
     if (currentEntry.value) {
       const refreshed =
         entriesData.find((e) => e.id === currentEntry.value!.id) ?? currentEntry.value;
-      currentEntry.value = await ensureEntryCmSafe(refreshed);
+      const safeCurrentEntry = await ensureEntryCmSafe({
+        ...refreshed,
+        content_json: currentEntry.value.content_json,
+      });
+      currentEntry.value = safeCurrentEntry;
+      const idx = entriesData.findIndex((entry) => entry.id === safeCurrentEntry.id);
+      if (idx >= 0) entriesData[idx] = safeCurrentEntry;
     }
+
+    const nextEntries = mergeEntriesById(entriesData, collectionEntries);
+    entries.value = nextEntries;
+    entriesLoaded.value = true;
+    pruneTransientSaveState(latestSaveTimestamps, saveCoordinators, nextEntries);
   }
 
   async function hydrateVaultData() {
@@ -206,23 +280,15 @@ export const useEdenStore = defineStore("eden", () => {
         window.api.listNoteTypes(),
       ]);
 
-      entries.value = entriesData;
       noteTypes.value = mergeNoteTypesWithSystem(noteTypesData);
-      pruneTransientSaveState(latestSaveTimestamps, saveCoordinators, entriesData);
+      const collectionEntries = await window.api.ensureCollectionObjects(noteTypes.value);
+      const nextEntries = mergeEntriesById(entriesData, collectionEntries);
+      entries.value = nextEntries;
+      entriesLoaded.value = true;
+      pruneTransientSaveState(latestSaveTimestamps, saveCoordinators, nextEntries);
 
-      // Restore last visited entry (persisted в navigateTo).
-      // If there is no valid last entry, leave the editor blank instead of
-      // bootstrapping a synthetic placeholder page.
-      const lastVisitedId = readLastVisitedEntryId();
-      if (lastVisitedId) {
-        const lastEntry = entriesData.find((e) => e.id === lastVisitedId && !e.deleted_at);
-        if (lastEntry) {
-          currentEntry.value = await ensureEntryCmSafe(lastEntry);
-          activeSpace.value = "diary";
-          return;
-        }
-      }
-
+      // См. postmortems.md § 2026-06-15. Startup must not mount CodeMirror
+      // or load a note body just because an old lastEntryId exists.
       currentEntry.value = null;
     } finally {
       isHydratingVault.value = false;
@@ -341,8 +407,6 @@ export const useEdenStore = defineStore("eden", () => {
   async function createNewEntry(noteTypeId: string = SYSTEM_TYPE_NOTE_ID) {
     activeScreen.value = "notes";
 
-    activeNoteTypeId.value = null;
-
     await ensureSystemTypePersisted(noteTypeId);
 
     const newEntry = createEntry("", noteTypeId);
@@ -361,7 +425,6 @@ export const useEdenStore = defineStore("eden", () => {
    */
   async function openTodayJournal() {
     activeScreen.value = "notes";
-    activeNoteTypeId.value = null;
     // activeSpace = "diary" — фиксируем текущий вид на дневник при открытии.
     activeSpace.value = "diary";
 
@@ -384,18 +447,11 @@ export const useEdenStore = defineStore("eden", () => {
     const dd = String(now.getDate()).padStart(2, "0");
     const todayTitle = `${yyyy}-${mm}-${dd}`;
 
-    // ВСЕГДА перезагружаем entries из ARK перед lookup'ом existing journal.
-    // Раньше делали `if (entries.value.length === 0)` — но это ловило только
-    // cold-start. В реальном dev-сценарии (HMR App.vue, повторный mount,
-    // initApp гонка с user typing) entries.value мог быть устаревшим
-    // snapshot'ом без сегодняшнего journal'а → find возвращал null → создавался
-    // дубликат пустой записи поверх той, куда пользователь только что писал.
-    // listEntries дёшев (in-process WS), стоит лишних ~5ms за надёжность.
-    if (window.api) {
+    if (window.api && !entriesLoaded.value) {
       try {
         const fresh = await window.api.listEntries();
         entries.value = fresh;
-        console.log("[eden] openTodayJournal: listEntries refreshed,", fresh.length, "entries");
+        entriesLoaded.value = true;
       } catch (err) {
         console.warn("[eden] listEntries before today-journal failed:", err);
       }
@@ -407,12 +463,6 @@ export const useEdenStore = defineStore("eden", () => {
         entry.title.trim() === todayTitle &&
         entry.deleted_at === null,
     );
-    console.log(
-      "[eden] openTodayJournal: lookup for",
-      todayTitle,
-      "→",
-      existing ? `found id=${existing.id}` : "not found, will create new",
-    );
     if (existing) {
       // Fresh state из ARK — entries.value может быть устаревший snapshot
       // (autosave в Editor.vue обновляет entries[idx] post-persist, но
@@ -422,16 +472,7 @@ export const useEdenStore = defineStore("eden", () => {
       // а не от stale in-memory.
       const fresh = window.api ? await window.api.loadEntry(existing.id) : null;
       const target = fresh ?? existing;
-      const idx = entries.value.findIndex((e) => e.id === target.id);
-      if (idx >= 0 && fresh) entries.value[idx] = fresh;
-      console.log(
-        "[eden] openTodayJournal: opening existing journal id=",
-        target.id,
-        "content length=",
-        target.content_json?.length ?? 0,
-        "content[:200]=",
-        target.content_json?.slice(0, 200) ?? "",
-      );
+      if (fresh) upsertEntryBaseline(fresh);
       currentEntry.value = await ensureEntryCmSafe(target);
       return;
     }
@@ -453,7 +494,6 @@ export const useEdenStore = defineStore("eden", () => {
       schema_version: 1,
       deleted_at: null,
     };
-    console.log("[eden] openTodayJournal: creating new journal id=", newEntry.id);
     entries.value = [newEntry, ...entries.value];
     currentEntry.value = newEntry;
 
@@ -481,19 +521,6 @@ export const useEdenStore = defineStore("eden", () => {
     }
   }
 
-  function openTypeCollection(noteTypeId: string) {
-    activeScreen.value = "type-collection";
-    activeNoteTypeId.value = noteTypeId;
-    activeSpace.value = "diary";
-    currentEntry.value = null;
-  }
-
-  function openObjectTypes(noteTypeId: string | null = null) {
-    activeScreen.value = "object-types";
-    activeNoteTypeId.value = noteTypeId ?? activeNoteTypeId.value ?? noteTypes.value[0]?.id ?? null;
-    currentEntry.value = null;
-  }
-
   async function selectFolder() {
     if (!window.api) return;
 
@@ -508,9 +535,9 @@ export const useEdenStore = defineStore("eden", () => {
     recentVaultPaths.value = await window.api.getRecentVaultPaths();
 
     currentEntry.value = null;
+    entriesLoaded.value = false;
 
     activeSpace.value = "diary";
-    activeNoteTypeId.value = null;
 
     await refreshData();
   }
@@ -525,11 +552,11 @@ export const useEdenStore = defineStore("eden", () => {
     recentVaultPaths.value = await window.api.getRecentVaultPaths();
 
     currentEntry.value = null;
+    entriesLoaded.value = false;
 
     activeSpace.value = "diary";
 
     activeScreen.value = "notes";
-    activeNoteTypeId.value = null;
 
     await refreshData();
   }
@@ -537,15 +564,66 @@ export const useEdenStore = defineStore("eden", () => {
   async function navigateTo(entryId: string) {
     if (!window.api) return;
 
-    const entry = await window.api.loadEntry(entryId);
-
-    if (entry) {
-      activeScreen.value = "notes";
-      activeNoteTypeId.value = null;
-
-      currentEntry.value = await ensureEntryCmSafe(entry);
-      writeLastVisitedEntryId(entryId);
+    const requestSeq = ++navigationRequestSeq;
+    const previewEntry = entries.value.find((entry) => entry.id === entryId) ?? null;
+    const previewCollectionTypeId = getCollectionTargetTypeId(previewEntry);
+    if (previewCollectionTypeId) {
+      openTypeCollection(previewCollectionTypeId);
+      return;
     }
+
+    activeScreen.value = "notes";
+    loadingEntryId.value = entryId;
+    currentEntry.value = previewEntry;
+
+    try {
+      // Важно: дать Vue и браузеру реально нарисовать skeleton до IPC/loadEntry.
+      // Иначе синхронная часть bridge/IPC может заблокировать поток, и визуально
+      // страница откроется только через ~1s вместе с уже загруженной заметкой.
+      await nextTick();
+      await waitForLoadingFrame();
+
+      if (requestSeq !== navigationRequestSeq) return;
+
+      const entry = await window.api.loadEntry(entryId);
+
+      // Пользователь мог быстро кликнуть другую заметку, пока эта грузилась,
+      // или уйти в settings, что инвалидирует pending navigation.
+      if (requestSeq !== navigationRequestSeq) return;
+
+      if (entry) {
+        const safeEntry = await ensureEntryCmSafe(entry);
+        const collectionTypeId = getCollectionTargetTypeId(safeEntry);
+        if (collectionTypeId) {
+          openTypeCollection(collectionTypeId);
+          return;
+        }
+        upsertEntryBaseline(safeEntry);
+        currentEntry.value = safeEntry;
+        writeLastVisitedEntryId(entryId);
+      } else {
+        currentEntry.value = null;
+      }
+    } catch (err) {
+      console.warn("[eden] loadEntry failed:", err);
+    } finally {
+      if (requestSeq === navigationRequestSeq) {
+        loadingEntryId.value = null;
+      }
+    }
+  }
+
+  function openTypeCollection(noteTypeId: string) {
+    cancelPendingNavigation();
+    activeScreen.value = "type-collection";
+    activeNoteTypeId.value = noteTypeId;
+    activeSpace.value = "diary";
+    currentEntry.value =
+      entries.value.find(
+        (entry) =>
+          entry.type_id === SYSTEM_TYPE_COLLECTION_ID &&
+          getCollectionTargetTypeId(entry) === noteTypeId,
+      ) ?? null;
   }
 
   async function saveNoteType(
@@ -601,11 +679,8 @@ export const useEdenStore = defineStore("eden", () => {
   async function handleSave(entry: Entry): Promise<SaveEntryResult | null> {
     if (!window.api) return null;
 
-    const previousEntry = entries.value.find((candidate) => candidate.id === entry.id);
-    if (previousEntry && !hasUserVisibleEntryChanges(entry, previousEntry)) {
-      return { ok: true, entryId: entry.id };
-    }
-
+    // См. postmortems.md § 2026-06-15. `entries` contains optimistic drafts
+    // from updateEntryDraft, so it is not a safe persisted baseline for skipping saves.
     const persistEntry = async (entryToPersist: Entry): Promise<SaveEntryResult | null> => {
       latestSaveTimestamps.set(entryToPersist.id, entryToPersist.updated_at);
 
@@ -718,6 +793,8 @@ export const useEdenStore = defineStore("eden", () => {
 
     currentEntry,
 
+    loadingEntryId,
+
     vaultPath,
 
     recentVaultPaths,
@@ -728,9 +805,9 @@ export const useEdenStore = defineStore("eden", () => {
 
     activeScreen,
 
-    activeSpace,
-
     activeNoteTypeId,
+
+    activeSpace,
 
     sortMode,
 
@@ -746,15 +823,13 @@ export const useEdenStore = defineStore("eden", () => {
 
     openTodayJournal,
 
-    openTypeCollection,
-
-    openObjectTypes,
-
     selectFolder,
 
     selectVaultPath,
 
     navigateTo,
+
+    openTypeCollection,
 
     saveNoteType,
 

@@ -210,6 +210,25 @@ pub struct ArkObject {
     feature = "ts-rs",
     ts(export, export_to = "../../../../packages/ark/src/generated/")
 )]
+pub struct ArkObjectSummary {
+    pub id: String,
+    pub type_id: String,
+    pub title: String,
+    #[serde(default = "default_props_json")]
+    #[cfg_attr(feature = "ts-rs", ts(type = "Record<string, unknown>"))]
+    pub props_json: Value,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(
+    feature = "ts-rs",
+    ts(export, export_to = "../../../../packages/ark/src/generated/")
+)]
 pub struct ObjectType {
     pub id: String,
     pub name: String,

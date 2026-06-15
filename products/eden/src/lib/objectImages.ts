@@ -20,6 +20,12 @@ function firstImageCandidate(value: unknown): string {
   return String(value ?? "");
 }
 
+function isDirectImageRef(value: string): boolean {
+  return (
+    /^[a-z][a-z0-9+.-]*:/i.test(value) || /^[A-Za-z]:[\\/]/.test(value) || value.startsWith("\\\\")
+  );
+}
+
 export function resolveObjectImageSrc(value: unknown, entriesById: Map<string, Entry>): string {
   const candidate = firstImageCandidate(value).trim();
   if (!candidate) return "";
@@ -27,7 +33,9 @@ export function resolveObjectImageSrc(value: unknown, entriesById: Map<string, E
   const linkedEntry = entriesById.get(candidate);
   if (linkedEntry?.type_id === SYSTEM_TYPE_IMAGE_ID) {
     const linkedProps = parseHeaderProps(linkedEntry);
-    return toDisplayImageSrc(String(linkedProps.image ?? ""));
+    const image = String(linkedProps.image ?? "").trim();
+    const sourcePath = String(linkedProps.source_path ?? "").trim();
+    return toDisplayImageSrc(isDirectImageRef(image) ? image : sourcePath || image);
   }
 
   return toDisplayImageSrc(candidate);

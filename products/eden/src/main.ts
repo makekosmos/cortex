@@ -12,7 +12,7 @@
 //   3. Heart sidecar / code tools / vault picker — удалены в Phase 6.0.A.
 //      Trash работает поверх ARK soft-delete (см. shim).
 
-import { createApp, vaporInteropPlugin } from "vue";
+import { createApp, h, ref, vaporInteropPlugin } from "vue";
 import { createPinia } from "pinia";
 import { PiniaColada } from "@pinia/colada";
 import { installScrollFadeListener } from "@kosmos/visuals";
@@ -25,15 +25,32 @@ installKeplerApiShim();
 installScrollFadeListener();
 
 import App from "./App.vue";
+import EdenSettingsView from "./views/EdenSettingsView.vue";
 
 import "./index.css";
 import "./composables/useTheme";
+
+const hash = ref(window.location.hash);
+window.addEventListener("hashchange", () => {
+  hash.value = window.location.hash;
+});
+
+function rootView() {
+  if (hash.value.startsWith("#/settings")) return EdenSettingsView;
+  return App;
+}
 
 // Pinia Colada — server-state layer над Pinia (queries / mutations / cache).
 // Установлен 2026-05-19 в рамках Phase 14 (pilot). Сейчас не используется
 // — еще нет ни одной useQuery/useMutation; store/eden.ts продолжает работать
 // на обычной Pinia. Миграция отдельных queries — отдельный proof loop.
-createApp(App).use(createPinia()).use(PiniaColada).use(vaporInteropPlugin).mount("#root");
+createApp({
+  render: () => h(rootView()),
+})
+  .use(createPinia())
+  .use(PiniaColada)
+  .use(vaporInteropPlugin)
+  .mount("#root");
 
 // ---------------------------------------------------------------------------
 // Deep-link routing — static open-команды Kepler shell'а вызывают
@@ -51,6 +68,9 @@ interface KeplerNamespace {
 
 function handleRoute(route: string | null): void {
   if (!route) return;
+  if (route === "/settings" || route === "#/settings") {
+    return;
+  }
   console.log("[eden-extension] route:", route);
   if (route === "/today") {
     dispatchEdenCommand("eden:cmd:note:open-today", null);

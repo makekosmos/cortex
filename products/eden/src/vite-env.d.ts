@@ -397,6 +397,8 @@ interface Window {
 
     listNoteTypes: () => Promise<NoteType[]>;
 
+    ensureCollectionObjects: (noteTypes: NoteType[]) => Promise<Entry[]>;
+
     saveNoteType: (noteType: NoteType) => Promise<SaveNoteTypeResult>;
 
     deleteNoteType: (noteTypeId: string) => Promise<boolean>;
@@ -478,6 +480,10 @@ interface Window {
     navigation?: {
       initialRoute: () => Promise<string | null>;
       onNavigate: (handler: (route: string) => void) => () => void;
+    };
+    edenSettings?: {
+      open: () => Promise<void>;
+      close: () => Promise<void>;
     };
     meta?: {
       id: () => Promise<string>;

@@ -8,6 +8,7 @@ import {
   type ResolvedNoteTypeField,
 } from "@/lib/typedNotes";
 import { toDisplayImageSrc } from "@/lib/localImages";
+import { readEntryMarkdown } from "@/editor-cm/content";
 
 const props = defineProps<{
   entry: Entry;
@@ -20,7 +21,22 @@ const headerProps = computed(() =>
 const titleText = computed(() =>
   getEntryDisplayTitle(props.entry.title, props.entry.header_props_json),
 );
-const imageSrc = computed(() => toDisplayImageSrc(String(headerProps.value.image ?? "")));
+function firstMarkdownImageSrc(markdown: string): string {
+  const inline = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/.exec(markdown);
+  if (inline?.[1]) return inline[1].trim();
+
+  const wikilink = /!\[\[([^|\]]+)(?:\|[^\]]+)?\]\]/.exec(markdown);
+  return wikilink?.[1]?.trim() ?? "";
+}
+
+const imageSrc = computed(() => {
+  const image = String(headerProps.value.image ?? "").trim();
+  const sourcePath = String(headerProps.value.source_path ?? "").trim();
+  const bodyImage = firstMarkdownImageSrc(readEntryMarkdown(props.entry.content_json));
+  const imageLooksResolvable =
+    /^[a-z][a-z0-9+.-]*:/i.test(image) || /^[A-Za-z]:[\\/]/.test(image) || image.startsWith("\\\\");
+  return toDisplayImageSrc(imageLooksResolvable ? image : sourcePath || bodyImage || image);
+});
 const altText = computed(() => String(headerProps.value.alt_text ?? titleText.value).trim());
 const detailFields = computed(() =>
   resolveNoteTypeFields(props.noteType).filter(

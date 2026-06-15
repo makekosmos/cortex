@@ -7,9 +7,9 @@
 // UI: ни tray, ни launcher, ни окна. Только:
 //   * singleton lock (одна копия kepler-backend на машину),
 //   * spawn ark-core-rpc child,
-//   * start_sync (если не KEPLER_SKIP_SYNC=1),
 //   * WS server 127.0.0.1:<port>,
 //   * lock-file `kepler.lock.json` для discovery.
+//   * start_sync в фоне (если не KEPLER_SKIP_SYNC=1),
 //
 // Завершается на Ctrl+C / parent SIGTERM / shutdown signal от родителя.
 
@@ -223,32 +223,6 @@ async fn setup() -> Result<SetupState, DynError> {
     let ark = Arc::new(ArkHost::spawn(&ark_binary, &db_path).await?);
     tracing::info!("ark-core-rpc spawned and initialized");
 
-    if std::env::var("KEPLER_SKIP_SYNC").as_deref() == Ok("1") {
-        tracing::info!("KEPLER_SKIP_SYNC=1 — start_sync пропущен");
-    } else {
-        let space_id = sync::resolve_space_id();
-        let device_id = match sync::resolve_device_id(&lock_dir) {
-            Ok(id) => id,
-            Err(e) => {
-                tracing::warn!(error = %e, "device_id resolve failed; fallback 'kepler-fallback'");
-                "kepler-fallback".to_string()
-            }
-        };
-        let device_name = sync::resolve_device_name();
-        match sync::start_lan_sync(&ark, &space_id, &device_id, &device_name).await {
-            Ok(()) => tracing::info!(
-                space_id = %space_id,
-                device_id = %device_id,
-                device_name = ?device_name,
-                "LAN sync started"
-            ),
-            Err(e) => tracing::warn!(
-                error = %e,
-                "start_sync failed; ARK ops продолжат работать, sync — нет"
-            ),
-        }
-    }
-
     let token = auth::generate_token();
     let usage_diagnostics = Arc::new(UsageTrackerDiagnosticsState::default());
 
@@ -303,6 +277,44 @@ async fn setup() -> Result<SetupState, DynError> {
     };
     lock_file::write_atomic(&lock_path, &lock)?;
     tracing::info!(path = ?lock_path, "lock-file written");
+
+    // LAN sync must not gate local readiness. If its fixed discovery port is
+    // busy or slow, Eden/launcher still need immediate local ARK access.
+    {
+        let ark_for_sync = ark.clone();
+        let lock_dir_for_sync = lock_dir.clone();
+        tokio::spawn(async move {
+            if std::env::var("KEPLER_SKIP_SYNC").as_deref() == Ok("1") {
+                tracing::info!("KEPLER_SKIP_SYNC=1 — start_sync пропущен");
+                return;
+            }
+
+            let space_id = sync::resolve_space_id();
+            let device_id = match sync::resolve_device_id(&lock_dir_for_sync) {
+                Ok(id) => id,
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        "device_id resolve failed; fallback 'kepler-fallback'"
+                    );
+                    "kepler-fallback".to_string()
+                }
+            };
+            let device_name = sync::resolve_device_name();
+            match sync::start_lan_sync(&ark_for_sync, &space_id, &device_id, &device_name).await {
+                Ok(()) => tracing::info!(
+                    space_id = %space_id,
+                    device_id = %device_id,
+                    device_name = ?device_name,
+                    "LAN sync started"
+                ),
+                Err(e) => tracing::warn!(
+                    error = %e,
+                    "start_sync failed; ARK ops продолжат работать, sync — нет"
+                ),
+            }
+        });
+    }
 
     // App discovery is useful but not part of backend readiness. Start it only
     // after WS + lock-file are ready, otherwise extension IPC requests can time

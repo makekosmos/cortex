@@ -21,6 +21,24 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-15 — Eden pending note load ломал chrome после быстрых переходов
+
+**Симптомы.** После быстрого прокликивания разных заметок Eden переставал реагировать на клики; при попытке открыть настройки пропадал titlebar/chrome, reload возвращал нормальное состояние.
+**Где жило.** `products/eden/src/store/eden.ts::navigateTo`, `products/eden/src/App.vue::openSettingsTab`, `products/eden/src/editor-cm/CmEditor.vue::bodyLoading`.
+**Root cause.** `navigateTo()` держал глобальный `loadingEntryId` для skeleton body и очищал его только completion'ом самой note-навигации. Быстрые переходы `note A → note B → settings` могли оставить in-flight load валидным относительно UI screen: settings прятал note chrome, но pending note load всё ещё управлял `currentEntry/loadingEntryId`, из-за чего окно выглядело зависшим.
+**Fix.** `navigateTo()` получил monotonic `navigationRequestSeq`: каждый новый переход инвалидирует старые completion'ы, а watcher `activeScreen` сбрасывает pending load при уходе с notes screen. Stale `loadEntry()` больше не может перезаписать `currentEntry` или держать `loadingEntryId`.
+**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` проверяет быстрый `navigateTo(note-1) → navigateTo(note-2)` со stale resolve и сценарий `navigateTo(note) → activeScreen=settings`.
+**Prevention.** Любой UI loading-state, который переживает route/screen transition, должен иметь явную cancellation identity. Одного `loadingId` недостаточно: нужен sequence/token, который инвалидируется не только новой загрузкой, но и уходом в другой screen.
+
+## 2026-06-15 — Eden CM optimistic draft скрывал unsaved body
+
+**Симптомы.** Пользователь писал текст в заметке Eden, выходил из неё и при повторном открытии видел, что введённый текст исчез.
+**Где жило.** `products/eden/src/editor-cm/CmEditor.vue::hasEntryDraftChanges`, `products/eden/src/editor-cm/CmEditor.vue::flushSave`, `products/eden/src/store/eden.ts::updateEntryDraft`.
+**Root cause.** CM editor на каждом `docChanged` эмитил optimistic draft в parent, а parent сразу заменял `entries/currentEntry` на этот draft через `updateEntryDraft`. Отложенный autosave затем вызывал `eden.handleSave()` с тем же entry, но store сравнивал его с уже optimistic `entries.value`; сравнение возвращало “изменений нет”, `window.api.saveEntry` не вызывался, и текст оставался только в памяти Vue.
+**Fix.** `products/eden/src/store/eden.ts::handleSave` больше не short-circuit'ит save по сравнению с `entries.value`: этот массив является optimistic cache, а не persisted baseline. Persist по-прежнему идёт через `window.api.saveEntry` и существующий coordinator.
+**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` проверяет store-сценарий: `updateEntryDraft()` сначала кладёт новый markdown body в optimistic state, затем `handleSave()` всё равно обязан вызвать `window.api.saveEntry`.
+**Prevention.** Optimistic UI state нельзя использовать как источник истины для “уже сохранено”. Любой save-skip должен сравнивать draft с явно tracked persisted baseline или backend version, а не с reactive cache, который уже мог принять unsaved изменения.
+
 ## 2026-06-13 — Eden CM смена типа откатывалась unmount-save'ом
 
 **Симптомы.** При смене типа заметки в Eden визуально ничего не происходило или тип сразу возвращался назад.

@@ -282,6 +282,10 @@ const api: KeplerApi = {
       },
     },
   },
+  edenSettings: {
+    open: () => ipcRenderer.invoke("kepler:eden-settings:open"),
+    close: () => ipcRenderer.invoke("kepler:eden-settings:close"),
+  },
   focusOverlay: {
     ready: () => ipcRenderer.send("kepler:focus-overlay:ready"),
     onShow: (listener) => {

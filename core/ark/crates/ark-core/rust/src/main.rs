@@ -180,7 +180,11 @@ enum Request {
         range_end: Option<String>,
     },
     ListObjects,
+    ListObjectSummaries,
     ListObjectsByType {
+        type_id: String,
+    },
+    ListObjectSummariesByType {
         type_id: String,
     },
     ListRunningTimeEntries {
@@ -675,8 +679,16 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let objects = db::list_objects(conn)?;
             serde_json::to_value(objects).map_err(|e| e.to_string())
         }),
+        Request::ListObjectSummaries => with_conn(|conn| {
+            let objects = db::list_object_summaries(conn)?;
+            serde_json::to_value(objects).map_err(|e| e.to_string())
+        }),
         Request::ListObjectsByType { type_id } => with_conn(|conn| {
             let objects = db::list_objects_by_type(conn, &type_id)?;
+            serde_json::to_value(objects).map_err(|e| e.to_string())
+        }),
+        Request::ListObjectSummariesByType { type_id } => with_conn(|conn| {
+            let objects = db::list_object_summaries_by_type(conn, &type_id)?;
             serde_json::to_value(objects).map_err(|e| e.to_string())
         }),
         Request::ListRunningTimeEntries { source } => with_conn(|conn| {

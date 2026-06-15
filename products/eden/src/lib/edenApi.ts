@@ -32,6 +32,8 @@ export const edenApi = {
 
   listNoteTypes: () => shim.listNoteTypes(),
 
+  ensureCollectionObjects: (noteTypes: NoteType[]) => shim.ensureCollectionObjects(noteTypes),
+
   saveNoteType: (noteType: NoteType) => shim.saveNoteType(noteType),
 
   deleteNoteType: (noteTypeId: string) => shim.deleteNoteType(noteTypeId),

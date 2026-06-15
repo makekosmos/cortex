@@ -7,6 +7,15 @@ export const SYSTEM_TYPE_PERSON_ID = "person_obj";
 export const SYSTEM_TYPE_WORKOUT_ID = "system-type-workout";
 export const SYSTEM_TYPE_EXERCISE_ID = "system-type-exercise";
 export const SYSTEM_TYPE_JOURNAL_ID = "system-type-journal";
+export const SYSTEM_TYPE_COLLECTION_ID = "collection_obj";
+
+const HIDDEN_EDEN_COLLECTION_TYPE_IDS = new Set([
+  SYSTEM_TYPE_COLLECTION_ID,
+  "blocklist_obj",
+  "tag_obj",
+  "task_obj",
+  "time_entry_obj",
+]);
 
 const noteSchemaJson = JSON.stringify({
   fields: [
@@ -49,6 +58,48 @@ const noteUiSchemaJson = JSON.stringify({
   default_layout: "page",
   default_template_id: null,
   collection_name: "Заметки",
+});
+
+const collectionSchemaJson = JSON.stringify({
+  fields: [
+    {
+      id: "object_type_id",
+      label: "Тип объектов",
+      kind: "text",
+      required: true,
+      visible: true,
+      read_only: true,
+      system: true,
+    },
+    {
+      id: "description",
+      label: "Описание",
+      kind: "long_text",
+      required: false,
+      visible: true,
+      read_only: false,
+      system: false,
+    },
+  ],
+});
+
+const collectionHeaderTemplateJson = JSON.stringify({
+  kind: "default",
+  primaryFieldIds: ["object_type_id"],
+  secondaryFieldIds: [],
+  imageFieldId: null,
+});
+
+const collectionUiSchemaJson = JSON.stringify({
+  featured_fields: ["object_type_id"],
+  visible_fields: ["object_type_id"],
+  hidden_fields: ["description", "created_at", "updated_at", "deleted_at"],
+  read_only_fields: ["object_type_id"],
+  field_order: ["object_type_id", "description"],
+  header_layout: "inline",
+  default_layout: "page",
+  default_template_id: null,
+  collection_name: "Коллекции",
 });
 
 const gameSchemaJson = JSON.stringify({
@@ -590,7 +641,7 @@ export const SYSTEM_TYPE_JOURNAL: NoteType = {
     header_layout: "inline",
     default_layout: "page",
     default_template_id: null,
-    collection_name: "Дневник",
+    collection_name: "Дневники",
   }),
   created_at: 0,
   updated_at: 0,
@@ -605,6 +656,19 @@ export const SYSTEM_TYPE_NOTE: NoteType = {
   schema_json: noteSchemaJson,
   header_template_json: noteHeaderTemplateJson,
   ui_schema_json: noteUiSchemaJson,
+  created_at: 0,
+  updated_at: 0,
+};
+
+export const SYSTEM_TYPE_COLLECTION: NoteType = {
+  id: SYSTEM_TYPE_COLLECTION_ID,
+  name: "Коллекция",
+  slug: "collection",
+  icon: "folder",
+  color: "#a855f7",
+  schema_json: collectionSchemaJson,
+  header_template_json: collectionHeaderTemplateJson,
+  ui_schema_json: collectionUiSchemaJson,
   created_at: 0,
   updated_at: 0,
 };
@@ -714,6 +778,7 @@ export const SYSTEM_TYPE_EXERCISE: NoteType = {
 
 export const SYSTEM_TYPES: NoteType[] = [
   SYSTEM_TYPE_NOTE,
+  SYSTEM_TYPE_COLLECTION,
   SYSTEM_TYPE_JOURNAL,
   SYSTEM_TYPE_IMAGE,
   SYSTEM_TYPE_PERSON,
@@ -755,6 +820,7 @@ export function normalizeSystemNoteType(noteType: NoteType): NoteType {
 export function isSystemType(noteTypeId: string): boolean {
   return (
     noteTypeId === SYSTEM_TYPE_NOTE_ID ||
+    noteTypeId === SYSTEM_TYPE_COLLECTION_ID ||
     noteTypeId === SYSTEM_TYPE_JOURNAL_ID ||
     noteTypeId === SYSTEM_TYPE_IMAGE_ID ||
     noteTypeId === SYSTEM_TYPE_PERSON_ID ||
@@ -762,4 +828,8 @@ export function isSystemType(noteTypeId: string): boolean {
     noteTypeId === SYSTEM_TYPE_WORKOUT_ID ||
     noteTypeId === SYSTEM_TYPE_EXERCISE_ID
   );
+}
+
+export function shouldShowAsEdenCollection(noteTypeId: string): boolean {
+  return !HIDDEN_EDEN_COLLECTION_TYPE_IDS.has(noteTypeId);
 }
