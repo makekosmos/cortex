@@ -578,6 +578,7 @@ describe("CmEditor component", () => {
         getSidebarConfig: vi.fn(async () => ({ widget: { hidden: false, width: 280 } })),
         listEntries: vi.fn(async () => [entry]),
         listNoteTypes: vi.fn(async () => []),
+        ensureCollectionObjects: vi.fn(async () => []),
         loadEntry,
       },
     });

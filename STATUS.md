@@ -1,5 +1,18 @@
 # Kosmos — статус проекта (2026-06-15)
 
+## 2026-06-15 — Eden loading/test hardening (Kosmos Desktop 0.4.10 → 0.4.11)
+
+Patch-релиз закрепляет свежий pass по Eden loading/settings стабильности и
+обновляет regression fixture после появления collection objects bootstrap.
+`CmEditor.spec.ts::store initApp не открывает lastEntryId на старте` снова
+мокает полный `window.api` контракт, включая `ensureCollectionObjects`, поэтому
+тест проверяет именно startup-инвариант: Eden не открывает старую заметку
+автоматически при запуске и не монтирует editor body до явного выбора.
+
+Связанный долг: sidebar object-type picker test пока оставлен в техдолге, потому
+что его ожидаемый контракт после перехода к collection navigation нужно уточнить
+отдельно от релизного фикса.
+
 ## 2026-06-15 — Prod/dev source inversion fix (Kosmos Desktop 0.4.9 → 0.4.10)
 
 Patch-релиз исправляет классификацию built-in extensions: packaged
@@ -730,6 +743,7 @@ In-process facade (subprocess removal) — отложено: subprocess нуже
 - **Export tab** скрыт в Settings (whitescreen на production 0.1.11). См. `docs-site/agents/manual-tests-pending.md` → tech debt entry. Возврат после DevTools debug.
 - **`vue-router` mock в Storybook preview** — Sidebar/SidebarButton stories skipped (зависят от RouterLink).
 - **Light theme** — TODO в `packages/visuals/.storybook/preview.ts` (theme toolbar item закомментирован).
+- **Eden sidebar object-type picker test** — `products/eden/tests/components/EdenSidebar.spec.ts::objects button opens object type picker` рассинхронизирован с новым collection navigation contract: после выбора `note_obj` fixture уже переходит в `type-collection`, но test всё ещё ждёт `object-type-note_obj` в текущем DOM. Нужно отдельно зафиксировать контракт sidebar в collection mode и обновить fixture/assertion.
 
 Итог архитектурного pivot'а от standalone Electron-апок к Kepler-host архитектуре с Vue extensions. **Все 5 апок мигрированы** (Eden — Phase 6.0 + 6.0.A, 2026-05-17). После 2026-05-15: концепция spaces убрана (single DB per user), Dashboard встроен в shell, e2e Playwright suite зелёный. После 2026-05-17 (Phase 6.0.A): standalone `apps/eden/ts/` удалён, Hevy/code-tools убраны из Eden (Hevy → Olympia позже).
 
