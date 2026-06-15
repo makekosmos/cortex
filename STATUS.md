@@ -1,5 +1,14 @@
 # Kosmos — статус проекта (2026-06-15)
 
+## 2026-06-15 — Eden loading release (Eden 0.2.1 → 0.2.2)
+
+Patch-релиз Eden публикует свежий pass по загрузке списка заметок через ARK
+summaries, ленивой догрузке body при выборе заметки, soft-delete/trash
+семантике и settings/collections cleanup из `a71695e2`. Отдельный regression
+fix `d6339ab4` обновил startup test fixture под новый `ensureCollectionObjects`
+bootstrap, чтобы тест снова проверял пользовательский invariant, а не падал на
+неполном mock'е.
+
 ## 2026-06-15 — Eden loading/test hardening (Kosmos Desktop 0.4.10 → 0.4.11)
 
 Patch-релиз закрепляет свежий pass по Eden loading/settings стабильности и
