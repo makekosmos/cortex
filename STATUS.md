@@ -1,4 +1,35 @@
-# Kosmos — статус проекта (2026-06-15)
+# Kosmos — статус проекта (2026-06-16)
+
+| Компонент      | Версия |
+| -------------- | ------ |
+| Kosmos Desktop | 0.4.11 |
+| Eden           | 0.2.4  |
+| Delphi         | 0.1.8  |
+| Arrancador     | 0.1.4  |
+| Akasha         | 0.1.2  |
+
+## 2026-06-16 — Eden settings chrome + Delphi task schema (Eden 0.2.3 → 0.2.4, Delphi 0.1.7 → 0.1.8)
+
+Patch-релиз собирает два user-visible хвоста из одного pass по extension shell и
+typed object metadata.
+
+- **Eden settings как отдельное окно**: шестерёнка теперь открывает
+  самостоятельное компактное acrylic-окно в стиле Kosmos Settings вместо
+  повторного использования bounds основного Eden-окна. Общая settings-обвязка
+  (`.settings` / `.settings-shell` / `content-header`) вынесена в
+  `@kosmos/visuals`, поэтому Eden и Kosmos Settings теперь реально используют
+  один и тот же chrome/layout.
+- **Delphi task schema с deadline**: extension eager-регистрирует `task_obj` с
+  явным `schemaJson` / `uiSchemaJson`, включая поле `deadline`. Это убирает race
+  на пустом object-type metadata в первом upsert/contract smoke и делает дедлайн
+  частью канонического task schema, а не ad-hoc props-only поля.
+
+В ту же итерацию вошёл feature-gated `iroh-spike` в `ark-core`
+(`.agent/tasks/2026-06-16-iroh-transport/`) и regression hardening для shared
+extension settings window / Eden preload bridge
+(`2026-06-15-shell-settings-open-broken`, `2026-06-16-eden-settings-window-chrome`,
+`2026-06-16-eden-settings-kepler-parity`), но эти части не меняют release-номер
+desktop shell.
 
 ## 2026-06-16 — Eden editor draft persistence release (Eden 0.2.2 → 0.2.3)
 
