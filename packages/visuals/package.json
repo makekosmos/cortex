@@ -9,7 +9,8 @@
     "./components": "./components/index.ts",
     "./patterns": "./patterns/index.ts",
     "./theme/css": "./theme/css-variables.css",
-    "./components/sidebar.css": "./components/sidebar.css"
+    "./components/sidebar.css": "./components/sidebar.css",
+    "./components/settings-shell.css": "./components/settings-shell.css"
   },
   "scripts": {
     "format": "powershell -NoProfile -Command \"& ..\\..\\node_modules\\.bin\\oxfmt.exe components/ composables/ patterns/ runtime/ *.ts\"",

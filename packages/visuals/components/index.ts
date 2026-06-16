@@ -72,6 +72,8 @@ export { default as SettingsSidebar } from "./SettingsSidebar.vue";
 
 export { default as SettingsSidebarButton } from "./SettingsSidebarButton.vue";
 
+export { default as SettingsContentHeader } from "./SettingsContentHeader.vue";
+
 export { default as SettingsSearchInput } from "./SettingsSearchInput.vue";
 
 export { default as SettingsAdvancedIntro } from "./SettingsAdvancedIntro.vue";

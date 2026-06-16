@@ -58,7 +58,7 @@ function onKeydown(e: KeyboardEvent) {
     >
       <span
         :class="[
-          'absolute top-0.5 left-0.5 size-4 rounded-full bg-[color-mix(in_srgb,var(--foreground)_62%,var(--background)_38%)] shadow-[0_1px_3px_color-mix(in_srgb,var(--background)_24%,transparent)] transition-transform duration-150 ease-[cubic-bezier(0.2,0,0,1)]',
+          'absolute top-0.5 left-0.5 size-4 rounded-full bg-[var(--foreground)] shadow-[0_1px_3px_color-mix(in_srgb,var(--background)_24%,transparent)] transition-transform duration-150 ease-[cubic-bezier(0.2,0,0,1)]',
           checked ? 'translate-x-5' : '',
         ]"
       />

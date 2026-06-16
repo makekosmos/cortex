@@ -11,6 +11,8 @@ pub mod events;
 pub mod ffi;
 pub mod hlc;
 pub mod host;
+#[cfg(feature = "iroh-spike")]
+pub mod iroh_transport;
 pub mod mesh;
 pub mod net;
 pub mod pomodoro;

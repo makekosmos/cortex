@@ -248,9 +248,17 @@ function mapEntryToArkObject(entry: Entry): ArkObjectRecord {
 }
 
 function mapArkObjectTypeToNoteType(objectType: ArkObjectTypeRecord): NoteType {
+  const schemaJson =
+    objectType.id === EDEN_TASK_OBJECT_TYPE_ID
+      ? normalizeTaskObjectTypeSchemaJson(objectType.schemaJson)
+      : objectType.schemaJson;
+  const uiSchemaJson =
+    objectType.id === EDEN_TASK_OBJECT_TYPE_ID
+      ? normalizeTaskObjectTypeUiSchemaJson(objectType.uiSchemaJson)
+      : objectType.uiSchemaJson;
   const createdAt = arkTimestampToMillis(objectType.createdAt, 0);
   const updatedAt = arkTimestampToMillis(objectType.updatedAt, createdAt);
-  const uiSchema = parseNoteTypeUiSchema(objectType.uiSchemaJson);
+  const uiSchema = parseNoteTypeUiSchema(uiSchemaJson);
   const headerTemplate = {
     kind: uiSchema.header_layout === "column" ? "centered_profile" : "default",
     primaryFieldIds: uiSchema.featured_fields ?? [],
@@ -275,9 +283,9 @@ function mapArkObjectTypeToNoteType(objectType: ArkObjectTypeRecord): NoteType {
       slug: normalizeSlug(objectType.id),
       icon,
       color,
-      schema_json: objectType.schemaJson,
+      schema_json: schemaJson,
       header_template_json: JSON.stringify(headerTemplate),
-      ui_schema_json: objectType.uiSchemaJson,
+      ui_schema_json: uiSchemaJson,
       created_at: createdAt,
       updated_at: updatedAt,
     }),
@@ -1091,6 +1099,52 @@ function onCommand(channel: EdenCommandChannel, handler: (params: unknown) => vo
 // attribute). Idempotent через `upsert_object`.
 
 const EDEN_TASK_OBJECT_TYPE_ID = "task_obj";
+const TASK_OBJECT_TYPE_SCHEMA_JSON = JSON.stringify({
+  fields: [
+    {
+      id: "deadline",
+      label: "Дедлайн",
+      kind: "date",
+      required: false,
+      visible: true,
+      read_only: false,
+    },
+  ],
+});
+const TASK_OBJECT_TYPE_UI_SCHEMA_JSON = JSON.stringify({
+  featured_fields: ["deadline"],
+  visible_fields: ["deadline"],
+  hidden_fields: ["created_at", "updated_at", "deleted_at"],
+  read_only_fields: [],
+  field_order: ["deadline"],
+  header_layout: "inline",
+  default_layout: "page",
+  collection_name: "Задачи",
+});
+
+function normalizeTaskObjectTypeSchemaJson(schemaJson: string): string {
+  try {
+    parseNoteTypeDefinition(schemaJson);
+    return schemaJson;
+  } catch {
+    return TASK_OBJECT_TYPE_SCHEMA_JSON;
+  }
+}
+
+function normalizeTaskObjectTypeUiSchemaJson(uiSchemaJson: string): string {
+  try {
+    const uiSchema = parseNoteTypeUiSchema(uiSchemaJson);
+    if (
+      uiSchema.featured_fields?.includes("deadline") &&
+      uiSchema.visible_fields?.includes("deadline")
+    ) {
+      return uiSchemaJson;
+    }
+  } catch {
+    // fall through to canonical task metadata
+  }
+  return TASK_OBJECT_TYPE_UI_SCHEMA_JSON;
+}
 
 let taskObjectTypeRegisterPromise: Promise<void> | null = null;
 
@@ -1101,8 +1155,8 @@ export function ensureTaskObjectTypeRegistered(): Promise<void> {
     object_type: {
       id: EDEN_TASK_OBJECT_TYPE_ID,
       name: "Задача",
-      schemaJson: "{}",
-      uiSchemaJson: "{}",
+      schemaJson: TASK_OBJECT_TYPE_SCHEMA_JSON,
+      uiSchemaJson: TASK_OBJECT_TYPE_UI_SCHEMA_JSON,
       systemLocked: false,
       createdAt: now,
       updatedAt: now,

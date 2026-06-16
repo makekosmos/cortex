@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { ChevronLeft, ChevronRight } from "@lucide/vue";
 import {
   appCommandSettings,
   HIDDEN_COMMANDS_KEY,
@@ -32,8 +31,10 @@ import {
   resolveAutostartApplySuccess,
 } from "./settings/autostart-ui";
 import { useKeplerUpdate } from "./settings/composables/useKeplerUpdate";
+import "@kosmos/visuals/components/settings-shell.css";
 import "./settings/settings-shared.css";
 import {
+  SettingsContentHeader,
   SettingsSearchInput,
   SettingsSidebar,
   SettingsSidebarButton,
@@ -465,23 +466,8 @@ onBeforeUnmount(() => {
       </SettingsSidebar>
 
       <div class="settings-content">
-        <header v-if="!isMac" class="content-header">
-          <div class="content-header__nav">
-            <button type="button" class="chrome-control" disabled title="Назад" aria-label="Назад">
-              <ChevronLeft :size="14" :stroke-width="2" />
-            </button>
-            <button
-              type="button"
-              class="chrome-control"
-              disabled
-              title="Вперёд"
-              aria-label="Вперёд"
-            >
-              <ChevronRight :size="14" :stroke-width="2" />
-            </button>
-          </div>
-
-          <div class="content-header__right">
+        <SettingsContentHeader v-if="!isMac">
+          <template #right>
             <button
               v-if="showAdvancedToggle"
               type="button"
@@ -494,8 +480,8 @@ onBeforeUnmount(() => {
             >
               <span class="advanced-feature-toggle__thumb" />
             </button>
-          </div>
-        </header>
+          </template>
+        </SettingsContentHeader>
 
         <div v-if="searchQuery && !activeTab" class="empty">Ничего не найдено</div>
 

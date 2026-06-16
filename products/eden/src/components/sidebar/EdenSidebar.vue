@@ -55,7 +55,6 @@
         <SettingsSidebarButton
           v-for="item in primaryItems"
           :key="item.id"
-          :class="{ 'eden-sidebar-page-button--selected': item.active }"
           :icon="item.icon"
           :label="item.label"
           :active="item.active"
@@ -138,7 +137,6 @@
             <SettingsSidebarButton
               v-for="item in group.items ?? []"
               :key="item.id"
-              :class="{ 'eden-sidebar-page-button--selected': item.active }"
               :icon="item.icon"
               :label="item.label"
               :active="item.active"
@@ -713,8 +711,8 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
   min-width: 0;
   flex-shrink: 0;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: 0 0.5rem;
+  gap: 2px;
+  padding: 0 8px;
 }
 
 .eden-sidebar-group {
@@ -722,7 +720,8 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
   min-width: 0;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 8px;
+  padding: 0 8px;
 }
 
 .eden-sidebar-group--recent {
@@ -773,14 +772,6 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
   box-shadow: inset 0 -1px color-mix(in srgb, var(--foreground) 7%, transparent);
 }
 
-.eden-sidebar-page-button--selected {
-  background: color-mix(in srgb, var(--accent) 15%, transparent) !important;
-}
-
-.eden-sidebar-page-button--selected:hover {
-  background: color-mix(in srgb, var(--accent) 15%, transparent) !important;
-}
-
 .eden-sidebar-recent-list :deep(.eden-recent-sidebar-item) {
   position: absolute;
   top: 0;
@@ -817,17 +808,5 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
 .eden-sidebar-resize-handle:hover .eden-sidebar-resize-handle__line {
   opacity: 1;
   background: color-mix(in srgb, var(--foreground) 36%, transparent);
-}
-
-:deep(.kosmos-settings-sidebar-button:hover) {
-  background: color-mix(in srgb, var(--foreground) 6%, transparent);
-}
-
-:deep(.kosmos-settings-sidebar-button[data-active="true"]) {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-}
-
-:deep(.kosmos-settings-sidebar-button[data-active="true"]:hover) {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 </style>

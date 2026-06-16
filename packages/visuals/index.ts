@@ -46,6 +46,7 @@ export {
   SettingsAdvancedIntro,
   SettingsSidebar,
   SettingsSidebarButton,
+  SettingsContentHeader,
   SettingsSearchInput,
   EmptyState,
   BlocklistCard,

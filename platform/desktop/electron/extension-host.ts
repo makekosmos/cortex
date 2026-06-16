@@ -60,6 +60,11 @@ import {
 } from "./window-effects";
 import { KEPLER_API_VERSION, satisfiesSemver } from "./kepler-api";
 import {
+  settingsWindowBounds,
+  windowProfileTraits,
+  type ExtensionWindowProfile,
+} from "./extension-window-profile";
+import {
   installFromPath,
   listInstalledUserExtensions,
   previewSource,
@@ -1017,10 +1022,15 @@ function focusExistingExtensionWindow(win: BrowserWindow): void {
 // и `extensionWindows.set` теперь есть `await resolveExtensionSource` (probe).
 const openInflight = new Map<string, Promise<void>>();
 
-export function openExtension(id: string, route?: string, windowKey = id): Promise<void> {
+export function openExtension(
+  id: string,
+  route?: string,
+  windowKey = id,
+  profile: ExtensionWindowProfile = "default",
+): Promise<void> {
   const existing = openInflight.get(windowKey);
   if (existing) return existing;
-  const promise = openExtensionImpl(id, route, windowKey).finally(() => {
+  const promise = openExtensionImpl(id, route, windowKey, profile).finally(() => {
     openInflight.delete(windowKey);
   });
   openInflight.set(windowKey, promise);
@@ -1034,7 +1044,13 @@ export function reloadExtensionWindow(id: string): boolean {
   return true;
 }
 
-async function openExtensionImpl(id: string, route?: string, windowKey = id): Promise<void> {
+async function openExtensionImpl(
+  id: string,
+  route?: string,
+  windowKey = id,
+  profile: ExtensionWindowProfile = "default",
+): Promise<void> {
+  const traits = windowProfileTraits(profile);
   const manifest = loadExtensionManifest(id);
   if (!manifest) {
     console.warn(`[kepler-shell] extension not found: ${id}`);
@@ -1084,8 +1100,12 @@ async function openExtensionImpl(id: string, route?: string, windowKey = id): Pr
   const source = await resolveExtensionSource(id, manifest, extensionDir);
   if (!source) return;
   const display = screen.getPrimaryDisplay().workAreaSize;
-  const defaultWidth = manifest.width ?? 1200;
-  const defaultHeight = manifest.height ?? 800;
+  // "settings" profile (Eden settings и т.п.) — компактное центрированное окно
+  // в стиле Kepler settings: фиксированный размер, не наследует и не перезаписывает
+  // per-id window-state.json основного окна расширения.
+  const settingsBounds = profile === "settings" ? settingsWindowBounds(display) : null;
+  const defaultWidth = settingsBounds?.width ?? manifest.width ?? 1200;
+  const defaultHeight = settingsBounds?.height ?? manifest.height ?? 800;
   const preload = resolvePreloadForManifest(manifest, extensionDir);
 
   // Restore window bounds из persistent user data, если есть и валидны.
@@ -1099,7 +1119,7 @@ async function openExtensionImpl(id: string, route?: string, windowKey = id): Pr
     y?: number;
     isMaximized?: boolean;
   } = {};
-  if (existsSync(stateFile)) {
+  if (traits.persistWindowState && existsSync(stateFile)) {
     try {
       savedState = JSON.parse(readFileSync(stateFile, "utf8")) as typeof savedState;
     } catch (e) {
@@ -1146,14 +1166,18 @@ async function openExtensionImpl(id: string, route?: string, windowKey = id): Pr
     manifest.windowEffect === "acrylic" || manifest.windowEffect === "mica"
       ? manifest.windowEffect
       : "none";
-  const backgroundMaterial = resolveWindowMaterial(manifestFallback);
+  const backgroundMaterial = traits.forceAcrylic
+    ? resolveWindowMaterial("acrylic")
+    : resolveWindowMaterial(manifestFallback);
   const wantsBackdrop = backgroundMaterial === "acrylic" || backgroundMaterial === "mica";
 
   const win = new BrowserWindow({
     width,
     height,
-    minWidth: manifest.minWidth ?? 800,
-    minHeight: manifest.minHeight ?? 600,
+    minWidth: settingsBounds?.minWidth ?? manifest.minWidth ?? 800,
+    minHeight: settingsBounds?.minHeight ?? manifest.minHeight ?? 600,
+    maximizable: traits.maximizable,
+    fullscreenable: traits.fullscreenable,
     x: initialX,
     y: initialY,
     show: !headless,
@@ -1186,7 +1210,7 @@ async function openExtensionImpl(id: string, route?: string, windowKey = id): Pr
   applyWindowMaterial(win, backgroundMaterial, `extension '${id}'`);
 
   // Если в saved state окно было maximized — восстановим после ready-to-show.
-  if (savedState.isMaximized) {
+  if (traits.persistWindowState && savedState.isMaximized) {
     win.once("ready-to-show", () => {
       if (!win.isDestroyed()) win.maximize();
     });
@@ -1195,6 +1219,9 @@ async function openExtensionImpl(id: string, route?: string, windowKey = id): Pr
   // Persist window bounds на disk. Debounced для resized/moved (часто), sync
   // для maximize/unmaximize/close (редко, важно поймать финальное состояние).
   const saveWindowState = (): void => {
+    // "settings" profile не персистит геометрию — иначе бы перезаписал
+    // window-state.json основного окна расширения (общий `id`).
+    if (!traits.persistWindowState) return;
     try {
       if (win.isDestroyed()) return;
       // getBounds возвращает текущие, а не «нормальные» bounds —
@@ -1494,7 +1521,7 @@ ipcMain.handle("kepler:extension:open", async (_e, id: string) => {
   await openExtension(id);
 });
 ipcMain.handle("kepler:eden-settings:open", async () => {
-  await openExtension("eden", "#/settings", "eden:settings");
+  await openExtension("eden", "#/settings", "eden:settings", "settings");
 });
 ipcMain.handle("kepler:eden-settings:close", (e) => {
   const key = extensionWindowKeyForSender(e.sender) ?? "eden:settings";

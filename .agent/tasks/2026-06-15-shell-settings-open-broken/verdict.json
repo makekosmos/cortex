@@ -1,0 +1,66 @@
+{
+  "task_id": "2026-06-15-shell-settings-open-broken",
+  "verifier": "task-verifier",
+  "overall_verdict": "PASS",
+  "summary": "Focused headless e2e coverage passes, and headed Electron visual verification now proves the user-visible Settings behavior: in a session launched with KEPLER_INSTANCE=dev-visual and KOSMOS_DATA_DIR=.tmp/settings-open-verify-data, with no KOSMOS_HEADLESS/KOSMOS_TEST_MODE, `window.kepler.commands.invoke(\"settings:open\")` opens Settings visible/focused, restores+focuses after minimize, and shows+focuses after hide.",
+  "commands": [
+    {
+      "command": "rtk bun run desktop:typecheck",
+      "status": "PASS",
+      "result": "`tsc --noEmit` completed successfully."
+    },
+    {
+      "command": "set KOSMOS_HEADLESS=1 && rtk bunx playwright test --config platform/desktop/playwright.config.ts platform/desktop/e2e/tests/e2e/headless-window-repeat-open.spec.ts",
+      "status": "PASS",
+      "result": "1 test passed; the spec exercises both `window.kepler.commands.invoke('settings:open')` and `window.kepler.settings.open()` and keeps the Settings window count at 1."
+    },
+    {
+      "command": "headed Electron visual verification with KEPLER_INSTANCE=dev-visual, KOSMOS_DATA_DIR=.tmp/settings-open-verify-data, no KOSMOS_HEADLESS/KOSMOS_TEST_MODE; invoked window.kepler.commands.invoke(\"settings:open\")",
+      "status": "PASS",
+      "result": "Settings opens visible/focused, restores+focuses after minimize, and shows+focuses after hide. Evidence: `.tmp/logs/settings-open-verify.log`, `.tmp/visual/2026-06-16-settings-open-verify/settings-after-first-command.png`, `.tmp/visual/2026-06-16-settings-open-verify/settings-after-refocus-from-minimized.png`, `.tmp/visual/2026-06-16-settings-open-verify/settings-after-refocus-from-hidden.png`."
+    }
+  ],
+  "diff_summary": {
+    "modified": ["platform/desktop/electron/settings-window.ts"],
+    "untracked": [
+      "platform/desktop/e2e/tests/e2e/headless-window-repeat-open.spec.ts",
+      ".agent/tasks/2026-06-15-shell-settings-open-broken/spec.md",
+      ".agent/tasks/2026-06-15-shell-settings-open-broken/evidence.md",
+      ".agent/tasks/2026-06-15-shell-settings-open-broken/evidence.json",
+      ".agent/tasks/2026-06-15-shell-settings-open-broken/problems.md",
+      ".agent/tasks/2026-06-15-shell-settings-open-broken/verdict.json"
+    ],
+    "notes": [
+      "`platform/desktop/electron/settings-window.ts` adds `restore()` and `show()` before `focus()` when reusing an existing Settings window.",
+      "The new focused e2e coverage lives at `platform/desktop/e2e/tests/e2e/headless-window-repeat-open.spec.ts`."
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Headed Electron visual verification confirmed the current UI command path opens Settings visible/focused, restores+focuses from minimized, and shows+focuses from hidden. Evidence: `.tmp/logs/settings-open-verify.log` and screenshots under `.tmp/visual/2026-06-16-settings-open-verify/`."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "The updated e2e explicitly invokes `window.kepler.commands.invoke('settings:open')` and verifies one Settings window exists."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "The updated e2e explicitly invokes `window.kepler.settings.open()` after the command-bus path and still verifies one Settings window exists."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Repeated open calls remain single-window safe in headless mode; the existing Settings window count stays at 1 and no visible windows appear in headless/test mode."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Current code changes are limited to the focused Settings-window reuse logic plus the new targeted e2e coverage; no unrelated command-bus or ARK changes were found."
+    }
+  ],
+  "residual_risks": []
+}

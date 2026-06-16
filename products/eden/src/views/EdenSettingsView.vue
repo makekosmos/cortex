@@ -1,46 +1,47 @@
 <template>
-  <div class="eden-settings" tabindex="0" @keydown="onKey">
+  <div class="settings" tabindex="0" @keydown="onKey">
     <ToastHost />
 
-    <SettingsSidebar title="Eden" tone="strong">
-      <div class="eden-settings-sidebar-header">
-        <div class="eden-settings-sidebar-title">Настройки</div>
-        <div class="eden-settings-sidebar-subtitle">Параметры заметок и хранения</div>
-      </div>
+    <div class="settings-shell">
+      <SettingsSidebar title="Настройки">
+        <div class="settings-sidebar-scroll kosmos-scroll">
+          <div class="settings-sidebar-group">
+            <SettingsSidebarButton
+              v-for="item in navigationItems"
+              :key="item.id"
+              :icon="item.icon"
+              :label="item.label"
+              :active="tab === item.id"
+              :test-id="item.testId"
+              @click="tab = item.id"
+            />
+          </div>
+        </div>
+      </SettingsSidebar>
 
-      <div class="eden-settings-sidebar-scroll kosmos-scroll">
-        <SettingsSidebarButton
-          v-for="item in navigationItems"
-          :key="item.id"
-          :icon="item.icon"
-          :label="item.label"
-          :active="tab === item.id"
-          :test-id="item.testId"
-          icon-variant="plain"
-          @click="tab = item.id"
-        />
+      <div class="settings-content">
+        <SettingsContentHeader />
+        <SettingsPage :initial-tab="tab" @refresh-data="eden.refreshData()" />
       </div>
-    </SettingsSidebar>
-
-    <div class="eden-settings-content">
-      <SettingsPage :initial-tab="tab" @refresh-data="eden.refreshData()" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { shallowRef } from "vue";
-import { Keyboard, Settings, Trash2 } from "@lucide/vue";
+import { onMounted, shallowRef } from "vue";
+import { FileDown, Keyboard, Settings, Trash2 } from "@lucide/vue";
 import {
+  SettingsContentHeader,
   SettingsSidebar,
   SettingsSidebarButton,
   ToastHost,
   provideToastHost,
 } from "@kosmos/visuals";
+import "@kosmos/visuals/components/settings-shell.css";
 import SettingsPage from "@/components/settings/SettingsPage.vue";
 import { useEdenStore } from "@/store/eden";
 
-type SettingsTab = "general" | "trash" | "vim";
+type SettingsTab = "general" | "export" | "trash" | "vim";
 
 const eden = useEdenStore();
 const tab = shallowRef<SettingsTab>("general");
@@ -51,6 +52,12 @@ const navigationItems = [
     icon: Settings,
     label: "Общие",
     testId: "eden-settings-general",
+  },
+  {
+    id: "export" as const,
+    icon: FileDown,
+    label: "Экспорт",
+    testId: "eden-settings-export",
   },
   {
     id: "trash" as const,
@@ -68,6 +75,13 @@ const navigationItems = [
 
 provideToastHost();
 
+// Окно настроек — отдельный вью (не App.vue), поэтому стор Eden тут не
+// инициализирован: без этого `eden.noteTypes`/`eden.entries` пусты и секции
+// «Отображаемые типы» / «Типы для vault-экспорта» рендерятся пустыми.
+onMounted(() => {
+  void eden.refreshData();
+});
+
 function onKey(event: KeyboardEvent): void {
   if (event.key !== "Escape") return;
   event.preventDefault();
@@ -76,49 +90,9 @@ function onKey(event: KeyboardEvent): void {
 </script>
 
 <style scoped>
-.eden-settings {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  width: 100vw;
+/* Окно настроек Eden — отдельный вью без full-height цепочки html/#root,
+   поэтому фиксируем высоту по вьюпорту (shared `.settings` использует 100%). */
+.settings {
   height: 100vh;
-  background: var(--color-bg-primary);
-}
-
-.eden-settings-sidebar-header {
-  display: grid;
-  gap: 2px;
-  padding: 12px 12px 8px;
-}
-
-.eden-settings-sidebar-title {
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.3;
-}
-
-.eden-settings-sidebar-subtitle {
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.eden-settings-sidebar-scroll {
-  display: flex;
-  min-height: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 4px;
-  padding: 0 8px 12px;
-  overflow-y: auto;
-}
-
-.eden-settings-content {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
 }
 </style>

@@ -125,6 +125,8 @@ function isHeadlessOrTest(): boolean {
 export function openSettings(): void {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     if (isHeadlessOrTest()) return;
+    if (settingsWindow.isMinimized()) settingsWindow.restore();
+    if (!settingsWindow.isVisible()) settingsWindow.show();
     settingsWindow.focus();
     return;
   }

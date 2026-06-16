@@ -73,7 +73,8 @@
   --bg-sidebar: var(--sidebar-bg);
   --bg-sidebar-hover: var(--secondary);
   --bg-sidebar-active: var(--surface);
-  --settings-sidebar-active: var(--sidebar-surface);
+  /* --settings-sidebar-active НЕ переопределяем — берём канон @kosmos/visuals
+     (#343434), чтобы активный пункт сайдбара настроек выглядел как в Kepler. */
   --bg-editor: var(--bg-app);
   --bg-elevated: var(--card);
   --bg-surface: var(--surface);

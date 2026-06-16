@@ -112,6 +112,14 @@ const api = {
     invoke: (action: string, payload?: unknown): Promise<boolean> =>
       ipcRenderer.invoke("kepler:extension:invoke-host", action, payload),
   },
+  // Eden settings window controls. Живут на shared extension preload (а не
+  // только на главном preload.ts), потому что Eden рендерится в extension-окне
+  // с этим preload'ом — без этого `window.kepler.edenSettings` undefined и
+  // кнопка настроек / закрытие настроек молча не работают.
+  edenSettings: {
+    open: (): Promise<void> => ipcRenderer.invoke("kepler:eden-settings:open") as Promise<void>,
+    close: (): Promise<void> => ipcRenderer.invoke("kepler:eden-settings:close") as Promise<void>,
+  },
   markdownFiles: {
     open: (): Promise<{ path: string; name: string; content: string } | null> =>
       ipcRenderer.invoke("kepler:extension:markdownFiles:open") as Promise<{

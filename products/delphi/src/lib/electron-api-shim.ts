@@ -40,6 +40,28 @@ function kepler(): KeplerArk | null {
 }
 
 const DELPHI_TASK_OBJECT_TYPE_ID = "task_obj";
+const TASK_OBJECT_TYPE_SCHEMA_JSON = JSON.stringify({
+  fields: [
+    {
+      id: "deadline",
+      label: "Дедлайн",
+      kind: "date",
+      required: false,
+      visible: true,
+      read_only: false,
+    },
+  ],
+});
+const TASK_OBJECT_TYPE_UI_SCHEMA_JSON = JSON.stringify({
+  featured_fields: ["deadline"],
+  visible_fields: ["deadline"],
+  hidden_fields: ["created_at", "updated_at", "deleted_at"],
+  read_only_fields: [],
+  field_order: ["deadline"],
+  header_layout: "inline",
+  default_layout: "page",
+  collection_name: "Задачи",
+});
 
 function isoNow(): string {
   return new Date().toISOString();
@@ -237,8 +259,8 @@ function ensureTaskObjectTypeRegistered(ark: KeplerArk): Promise<void> {
       object_type: {
         id: DELPHI_TASK_OBJECT_TYPE_ID,
         name: "Задача",
-        schemaJson: "{}",
-        uiSchemaJson: "{}",
+        schemaJson: TASK_OBJECT_TYPE_SCHEMA_JSON,
+        uiSchemaJson: TASK_OBJECT_TYPE_UI_SCHEMA_JSON,
         systemLocked: false,
         createdAt: now,
         updatedAt: now,

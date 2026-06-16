@@ -1,23 +1,7 @@
 <template>
-  <div class="settings-tab">
-    <div class="settings-tab-header-row">
-      <div>
-        <h1 class="settings-tab-title">Корзина</h1>
-        <p class="settings-tab-subtitle">
-          Удалённые заметки остаются здесь, пока вы не очистите корзину.
-        </p>
-      </div>
-      <button
-        v-if="trashEntries.length > 0"
-        class="settings-btn-danger"
-        type="button"
-        @click="handleEmptyTrash"
-      >
-        Очистить корзину
-      </button>
-    </div>
-
-    <div class="settings-sections">
+  <div class="settings-scroll kosmos-scroll">
+    <div>
+      <div class="ext-section-header">Корзина</div>
       <div v-if="loading" class="settings-empty">Загрузка...</div>
       <div v-else-if="trashEntries.length === 0" class="settings-empty">Корзина пуста</div>
       <div v-else class="trash-list">
@@ -52,6 +36,12 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <div v-if="trashEntries.length > 0" class="settings-row-actions">
+      <button class="settings-btn-danger" type="button" @click="handleEmptyTrash">
+        Очистить корзину
+      </button>
     </div>
   </div>
 </template>

@@ -1,50 +1,39 @@
 <template>
-  <div class="settings-tab vim-settings">
-    <h1 class="settings-tab-title">Vim</h1>
-    <p class="settings-tab-subtitle">Режим команд для Markdown-редактора Eden</p>
+  <div class="settings-scroll kosmos-scroll vim-settings">
+    <div>
+      <div class="ext-section-header">Режим</div>
+      <SettingsList>
+        <SettingsToggleRow
+          title="Vim-режим"
+          description="Включает Vim-команды в CodeMirror-редакторе. Сами сочетания фиксированы."
+          :model-value="preferences.state.vimModeEnabled"
+          data-testid="eden-vim-mode-toggle"
+          @update:model-value="preferences.setVimModeEnabled"
+        />
+      </SettingsList>
+    </div>
 
-    <div class="settings-sections">
-      <section class="settings-section">
-        <div class="settings-section-header">
-          <h2>Режим</h2>
-        </div>
-        <div class="settings-section-body">
-          <SettingsList>
-            <SettingsToggleRow
-              title="Vim-режим"
-              description="Включает Vim-команды в CodeMirror-редакторе. Сами сочетания фиксированы."
-              :model-value="preferences.state.vimModeEnabled"
-              data-testid="eden-vim-mode-toggle"
-              @update:model-value="preferences.setVimModeEnabled"
-            />
-          </SettingsList>
-        </div>
-      </section>
-
-      <section class="settings-section">
-        <div class="settings-section-header">
-          <h2>Действия</h2>
-        </div>
-        <div class="settings-section-body vim-motion-body">
-          <div
-            v-for="group in VIM_MOTION_GROUPS"
-            :key="group.id"
-            class="vim-motion-group"
-            :data-testid="`vim-motion-group-${group.id}`"
-          >
-            <h3 class="vim-motion-group-title">{{ group.title }}</h3>
-            <div class="vim-motion-list">
-              <div v-for="item in group.items" :key="item.keys" class="vim-motion-row">
-                <kbd class="vim-motion-key">{{ item.keys }}</kbd>
-                <div class="vim-motion-copy">
-                  <div class="vim-motion-title">{{ item.title }}</div>
-                  <div class="vim-motion-description">{{ item.description }}</div>
-                </div>
+    <div>
+      <div class="ext-section-header">Действия</div>
+      <div class="vim-motion-body">
+        <div
+          v-for="group in VIM_MOTION_GROUPS"
+          :key="group.id"
+          class="vim-motion-group"
+          :data-testid="`vim-motion-group-${group.id}`"
+        >
+          <h3 class="vim-motion-group-title">{{ group.title }}</h3>
+          <div class="vim-motion-list">
+            <div v-for="item in group.items" :key="item.keys" class="vim-motion-row">
+              <kbd class="vim-motion-key">{{ item.keys }}</kbd>
+              <div class="vim-motion-copy">
+                <div class="vim-motion-title">{{ item.title }}</div>
+                <div class="vim-motion-description">{{ item.description }}</div>
               </div>
             </div>
           </div>
         </div>
-      </section>
+      </div>
     </div>
   </div>
 </template>
@@ -59,8 +48,9 @@ const preferences = usePreferences();
 
 <style scoped>
 .vim-motion-body {
+  display: flex;
+  flex-direction: column;
   gap: 18px;
-  padding: 16px;
 }
 
 .vim-motion-group {

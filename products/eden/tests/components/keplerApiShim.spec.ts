@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   deleteEntry,
+  ensureTaskObjectTypeRegistered,
   installKeplerApiShim,
   loadEntry,
   listEntries,
+  listNoteTypes,
   softDeleteTask,
 } from "@/lib/kepler-api-shim";
 
@@ -334,5 +336,71 @@ describe("kepler-api-shim delete semantics", () => {
     await softDeleteTask("task-1");
 
     expect(calls).toEqual(["get_object"]);
+  });
+});
+
+describe("kepler-api-shim task object metadata", () => {
+  test("normalizes legacy empty task_obj metadata before the editor renders it", async () => {
+    installArkMock((operation) => {
+      if (operation === "list_object_types") {
+        return [
+          {
+            id: "task_obj",
+            name: "Задача",
+            schemaJson: "{}",
+            uiSchemaJson: "{}",
+            createdAt: "2024-01-02T03:04:05.000Z",
+            updatedAt: "2024-01-02T03:04:05.000Z",
+            systemLocked: false,
+          },
+        ];
+      }
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+
+    const [taskType] = await listNoteTypes();
+
+    expect(JSON.parse(taskType.schema_json)).toMatchObject({
+      fields: [{ id: "deadline", kind: "date" }],
+    });
+    expect(JSON.parse(taskType.ui_schema_json ?? "{}")).toMatchObject({
+      featured_fields: ["deadline"],
+      visible_fields: ["deadline"],
+    });
+  });
+
+  test("registers task_obj with an editable deadline field for Eden object pages", async () => {
+    const calls: Array<{ operation: string; params?: Record<string, unknown> }> = [];
+
+    installArkMock((operation, params) => {
+      calls.push({ operation, params });
+      if (operation === "upsert_object_type") return true;
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+
+    await ensureTaskObjectTypeRegistered();
+
+    const objectType = calls[0]?.params?.object_type as
+      | { schemaJson?: string; uiSchemaJson?: string }
+      | undefined;
+    expect(calls.map((call) => call.operation)).toEqual(["upsert_object_type"]);
+    expect(JSON.parse(objectType?.schemaJson ?? "{}")).toMatchObject({
+      fields: [
+        {
+          id: "deadline",
+          label: "Дедлайн",
+          kind: "date",
+          visible: true,
+          read_only: false,
+        },
+      ],
+    });
+    expect(JSON.parse(objectType?.uiSchemaJson ?? "{}")).toMatchObject({
+      featured_fields: ["deadline"],
+      visible_fields: ["deadline"],
+      field_order: ["deadline"],
+      default_layout: "page",
+      collection_name: "Задачи",
+    });
   });
 });

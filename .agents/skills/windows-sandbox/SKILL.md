@@ -16,6 +16,7 @@ translate the intent, not the literal API, when using another harness.
 - If an important command fails with `windows sandbox: setup refresh failed with status exit code: 1`, rerun the same command once with `sandbox_permissions: "require_escalated"` and a short justification. Do not spend tokens trying equivalent commands first.
 - Keep escalation scoped: use the narrowest safe `prefix_rule` such as `["bun","run","shell:build"]`, `["bunx","playwright","test"]`, or a specific script path. Do not request broad `python`, destructive, or arbitrary shell prefixes.
 - If a network/install/build/test command fails with DNS, registry, permission, or sandbox-looking errors, rerun with escalation before diagnosing product code.
+- If `bun run <script>` reports `Script not found` despite `package.json` containing the script, or `bun pm pkg get scripts` fails with `EACCES` on `package.json`, treat it as sandbox/package-metadata access. Rerun the same Bun command with escalation. On this Windows setup, avoid `rtk proxy bun --cwd ...`; set the tool `workdir` instead, because the proxy can make Bun print help / `No package.json found`.
 - If a command uses heredoc/herestring, broad scripting, or destructive operations, do not add `prefix_rule`; ask only for the one command when needed.
 - When rerunning after an escalated sandbox failure, record the original failure and the successful escalated rerun in proof-loop evidence.
 

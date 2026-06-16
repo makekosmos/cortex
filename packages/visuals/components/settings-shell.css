@@ -1,0 +1,395 @@
+/* settings-shell.css — общая (cross-app) обвязка страницы настроек Kosmos.
+ *
+ * Источник правды для layout settings-окна: используется и Kepler shell
+ * (`platform/desktop` SettingsView), и extension'ами (Eden и др.), чтобы все
+ * настройки выглядели идентично. Раньше эти правила жили в
+ * `platform/desktop/.../settings-shared.css`; вынесены сюда, чтобы extension'ы
+ * (отдельные workspace'ы) использовали ровно те же стили, а не копии.
+ *
+ * Все правила scoped под `.settings` / `.settings-shell` — корневые классы,
+ * которые консьюмер ставит на корень settings-области. App-специфичные классы
+ * (Kepler: hotkey/autostart/stats/security и т. п.) остаются в локальном
+ * `settings-shared.css` соответствующего приложения. */
+
+/* === Layout: settings shell + sidebar === */
+
+.settings {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--main-background-color);
+  outline: none;
+}
+
+.settings-shell {
+  --kosmos-settings-font-size-base: 0.875rem;
+  font-size: var(--kosmos-settings-font-size-base);
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.settings-content {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  background: var(--main-background-color);
+}
+
+.settings-shell .settings-sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-shell .settings-sidebar-search {
+  padding: 0 8px;
+}
+
+.settings-shell .settings-sidebar-scroll {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+  padding-bottom: 8px;
+  scrollbar-gutter: stable both-edges;
+}
+
+.settings-shell .settings-sidebar-empty {
+  padding: 4px 6px;
+  color: var(--second-text-color);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+/* === Header: navigation + chrome controls === */
+
+.settings-shell .content-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  padding: 8px 140px 4px 10px;
+  -webkit-app-region: drag;
+  gap: 16px;
+}
+
+.settings-shell .content-header__nav,
+.settings-shell .content-header__right {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.settings-shell .chrome-control {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: color-mix(in srgb, var(--foreground) 72%, transparent);
+  -webkit-app-region: no-drag;
+}
+
+.settings-shell .chrome-control:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  color: var(--foreground);
+}
+
+.settings-shell .chrome-control:disabled {
+  cursor: default;
+  opacity: 0.32;
+}
+
+.settings-shell .chrome-control--danger:hover:not(:disabled) {
+  background: #c42b1c;
+  color: #fff;
+}
+
+.settings-shell .advanced-feature-toggle {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  margin-right: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  cursor: default;
+  opacity: 0.55;
+  -webkit-app-region: no-drag;
+}
+
+.settings-shell .advanced-feature-toggle::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--foreground) 18%, transparent);
+}
+
+.settings-shell .advanced-feature-toggle__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 62%, #000 38%);
+  box-shadow: 0 1px 3px color-mix(in srgb, #000 24%, transparent);
+}
+
+/* === Tabs: simple scroll-column page (section captions + SettingsList) === */
+
+.settings-shell .settings-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  /* flex: 1 + min-height: 0 — чтобы overflow:auto работал в flex-родителе
+   * (.settings-content). Тот же паттерн, что .security-page / .advanced-page. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Секции внутри .settings-scroll обёрнуты в блоки, расстояние между которыми
+ * задаёт `gap: 16px`. Поэтому top-margin у заголовка секции убираем — иначе он
+ * складывается с gap и даёт двойной отступ (в Kepler такого нет). */
+.settings-shell .settings-scroll .ext-section-header {
+  margin-top: 0;
+}
+
+/* === Tabs: advanced-page layout === */
+
+.settings-shell .advanced-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 60px 16px 16px;
+}
+
+.settings-shell .advanced-page__body {
+  margin-top: 60px;
+  gap: 30px;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-shell .advanced-section-title {
+  margin: 0 0 10px;
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.settings-shell .advanced-page .rows {
+  flex: initial;
+  overflow: visible;
+  padding: 0;
+}
+
+.settings-shell .advanced-page .ext-list {
+  flex: initial;
+  overflow: visible;
+  padding: 0;
+}
+
+.settings-shell .advanced-page .ext-footer {
+  padding: 12px 0 0;
+}
+
+.settings-shell .advanced-page__body .kosmos-settings-list {
+  margin-bottom: 12px;
+}
+
+/* === Rows: legacy generic row layout (label + actions) === */
+
+.settings-shell .rows {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.settings-shell .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 12px;
+  background: var(--settings-list-background);
+  border-bottom: 1px solid var(--border-color-strong);
+}
+
+.settings-shell .rows > .row:first-child {
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+
+.settings-shell .row:last-child {
+  border-bottom: none;
+}
+
+.settings-shell .rows > .row:last-child {
+  border-bottom-right-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+
+.settings-shell .row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settings-shell .row-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* === Typography utilities === */
+
+.settings-shell .label {
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.settings-shell .hint {
+  color: var(--second-text-color);
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.settings-shell .error,
+.settings-shell .error-banner {
+  color: oklch(0.65 0.22 25);
+  font-size: 0.6875rem;
+  margin-top: 2px;
+}
+
+.settings-shell .error-banner {
+  padding: 8px 12px;
+  background: color-mix(in srgb, oklch(0.65 0.22 25) 12%, transparent);
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+
+.settings-shell .value {
+  font-size: 0.75rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+
+.settings-shell .value.lock {
+  font-size: 0.6875rem;
+  max-width: 320px;
+  direction: rtl;
+  text-align: left;
+}
+
+.settings-shell .value.muted {
+  background: transparent;
+  color: color-mix(in srgb, var(--foreground) 40%, transparent);
+}
+
+.settings-shell .empty {
+  padding: 32px 22px;
+  text-align: center;
+  color: color-mix(in srgb, var(--foreground) 40%, transparent);
+  font-size: 0.8125rem;
+}
+
+.settings-shell .empty code {
+  font-size: 0.6875rem;
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* === Buttons: legacy `.btn` family === */
+
+.settings-shell .btn {
+  font: inherit;
+  font-size: 0.6875rem;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--foreground);
+}
+
+.settings-shell .btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.settings-shell .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-shell .btn.ghost {
+  background: transparent;
+}
+
+.settings-shell .btn.danger {
+  color: oklch(0.7 0.18 25);
+  border-color: color-mix(in srgb, oklch(0.65 0.22 25) 30%, transparent);
+}
+
+.settings-shell .btn.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, oklch(0.65 0.22 25) 14%, transparent);
+}
+
+/* === Section titles (used by Extensions, Focus, Export tabs) === */
+
+.settings-shell .ext-section-title {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+  padding: 8px 4px 4px;
+  margin-top: 4px;
+}
+
+.settings-shell .ext-section-title:first-child {
+  margin-top: 0;
+}
+
+.settings-shell .ext-section-header {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
+  margin: 16px 0 4px;
+  padding: 0 2px;
+}
