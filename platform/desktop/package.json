@@ -9,7 +9,7 @@
   "scripts": {
     "build:backend": "node scripts/build-backend.mjs",
     "build:native:macos": "node scripts/build-macos-native.mjs",
-    "build:backend:dev": "cargo build --manifest-path ../../Cargo.toml --bin kepler-backend",
+    "build:backend:dev": "node scripts/build-backend-dev.mjs",
     "build:extensions": "node scripts/build-extensions.mjs",
     "build:extension": "node scripts/build-extensions.mjs --only",
     "build:extensions:only": "node scripts/build-extensions.mjs --only",

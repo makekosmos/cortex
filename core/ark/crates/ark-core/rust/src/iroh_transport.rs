@@ -5,12 +5,16 @@
 //! этот транспорт в `mesh.rs`. См. spec:
 //! `.agent/tasks/2026-06-16-iroh-transport/spec.md`.
 //!
-//! Реализация фазы 0: один прямой peer (без discovery/pairing UI), loopback
-//! на одной машине без relay/internet (нужно для CI) — `Endpoint::builder`
-//! строится через `Builder::empty()`, который по умолчанию уже даёт
-//! `RelayMode::Disabled` и пустой address lookup; единственное, что нужно
-//! добавить вручную — `crypto_provider` (по умолчанию `Builder::empty()` не
-//! выбирает его за нас, в отличие от presets).
+//! Реализация фазы 0: один прямой peer (без discovery/pairing UI).
+//! `Endpoint::builder` строится через `presets::Minimal`, который не тащит
+//! address lookup (DNS/pkarr), но по умолчанию даёт `RelayMode::Disabled`.
+//!
+//! Dev-flow cross-network шаг: `IrohConfig::relay_mode` управляет этим —
+//! `None` (все production call sites) резолвится в `start()` в
+//! `RelayMode::Default` (n0 production relay servers), нужный для NAT
+//! traversal между двумя реальными машинами за разными NAT/firewall.
+//! `Some(RelayMode::Disabled)` остаётся только у offline-тестов (нужно для
+//! CI без сетевого доступа) — см. `tests/iroh_round_trip.rs`.
 //!
 //! Device-id маппинг — фаза 0 упрощение: на accept-стороне `from_device_id`
 //! читается из самого сообщения (`protocol::message_origin_device_id`), а не
@@ -74,6 +78,14 @@ pub struct IrohConfig {
     /// имеет приоритет (явный адрес важнее тикета на случай, если задано
     /// и то, и другое).
     pub peer_ticket: Option<String>,
+    /// Dev-flow cross-network step: relay mode override for `start()`.
+    /// `None` => production default — `RelayMode::Default` (n0 relay
+    /// servers), needed for real NAT traversal between two machines.
+    /// `Some(RelayMode::Disabled)` is for tests only (`iroh_round_trip.rs`):
+    /// offline loopback on one machine must not depend on network/relay
+    /// availability in CI. Production call sites (`main.rs::handle_start_sync`,
+    /// `ffi.rs`) leave this `None`.
+    pub relay_mode: Option<RelayMode>,
 }
 
 // ---------------------------------------------------------------------------
@@ -205,12 +217,34 @@ impl IrohTransport {
     /// Возвращает нашу ticket-строку — то, что нужно передать другому
     /// устройству для pairing вместо сырого `EndpointAddr` (см.
     /// `IrohConfig::peer_ticket`/`from_ticket`). Требует, чтобы транспорт
-    /// уже был запущен (иначе `endpoint_addr()` недоступен).
-    pub fn our_ticket(&self) -> Result<String, String> {
-        let addr = self
-            .endpoint_addr()
+    /// уже был запущен.
+    ///
+    /// Cross-network step (dev-flow pairing code): когда relay включён
+    /// (`config.relay_mode` не `Some(RelayMode::Disabled)`, т.е. production
+    /// путь), `endpoint_addr()`'s hardcoded `127.0.0.1` бесполезен другому
+    /// физическому хосту — тикет должен нести relay URL, который iroh
+    /// заполняет в `Endpoint::addr()` только после того, как endpoint
+    /// "online" (см. `Endpoint::online()`/`watch_addr()` doc). Поэтому здесь
+    /// ждём `online()` и берём `endpoint.addr()` напрямую, а не
+    /// `endpoint_addr()` (который остаётся loopback-only хелпером для теста
+    /// `iroh_round_trip.rs`, где relay явно `Disabled`).
+    pub async fn our_ticket(&self) -> Result<String, String> {
+        let relay_disabled = matches!(self.config.relay_mode, Some(RelayMode::Disabled));
+        if relay_disabled {
+            let addr = self.endpoint_addr().ok_or_else(|| {
+                "iroh transport: our_ticket() called before start()".to_string()
+            })?;
+            return Ok(ticket_string(&addr));
+        }
+
+        let endpoint = self
+            .endpoint
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
             .ok_or_else(|| "iroh transport: our_ticket() called before start()".to_string())?;
-        Ok(ticket_string(&addr))
+        endpoint.online().await;
+        Ok(ticket_string(&endpoint.addr()))
     }
 
     /// Резолвит эффективный адрес пира для `send()`: явный `peer_addr` имеет
@@ -255,16 +289,26 @@ impl IrohTransport {
 
 #[async_trait::async_trait]
 impl SyncTransport for IrohTransport {
-    /// Запускает транспорт: байндит `Endpoint` на loopback без relay/discovery
-    /// (`RelayMode::Disabled`), поднимает accept-loop для входящих
-    /// bi-стримов и (если `config.peer_addr` задан) исходящее соединение.
-    /// События доставляются через `event_tx` — аналог `RelayTransport::start`.
+    /// Запускает транспорт: байндит `Endpoint`, поднимает accept-loop для
+    /// входящих bi-стримов и (если `config.peer_addr` задан) исходящее
+    /// соединение. События доставляются через `event_tx` — аналог
+    /// `RelayTransport::start`.
+    ///
+    /// Relay mode: `config.relay_mode` управляет NAT traversal. Production
+    /// call sites (`main.rs::handle_start_sync`, `ffi.rs`) оставляют его
+    /// `None`, что здесь резолвится в `RelayMode::Default` (n0 production
+    /// relay servers) — без этого два узла за разными NAT/firewall не могут
+    /// соединиться через интернет, только в одной LAN/loopback. Тест
+    /// `iroh_round_trip.rs` явно передаёт `Some(RelayMode::Disabled)`, чтобы
+    /// остаться offline (CI без сетевого доступа к relay).
     async fn start(&self, event_tx: mpsc::UnboundedSender<TransportEvent>) -> Result<(), String> {
+        let relay_mode = self.config.relay_mode.clone().unwrap_or(RelayMode::Default);
+
         // Builder — ТОЛЬКО presets::Minimal (см. модульную документацию и
         // iroh_loopback_smoke.rs): empty() падает без crypto_provider, N0
         // тянет DNS/pkarr lookup даже с relay Disabled.
         let mut builder = Endpoint::builder(presets::Minimal)
-            .relay_mode(RelayMode::Disabled)
+            .relay_mode(relay_mode)
             .alpns(vec![ARK_SYNC_ALPN.to_vec()]);
 
         if let Some(secret_key) = self.config.secret_key.clone() {

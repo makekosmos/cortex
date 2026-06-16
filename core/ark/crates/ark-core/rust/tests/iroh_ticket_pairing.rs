@@ -18,6 +18,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};
+use iroh::RelayMode;
 use ark_core::protocol::LanSyncMessage;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 
@@ -33,6 +34,7 @@ async fn iroh_ticket_pairing_round_trip() {
         secret_key: None,
         peer_addr: None,
         peer_ticket: None,
+        relay_mode: Some(RelayMode::Disabled),
     });
 
     transport_b
@@ -44,6 +46,7 @@ async fn iroh_ticket_pairing_round_trip() {
     // передать пиру для pairing (вместо сырого EndpointAddr).
     let ticket_b = transport_b
         .our_ticket()
+        .await
         .expect("transport B should produce a ticket after start()");
     assert!(
         !ticket_b.is_empty(),
@@ -60,6 +63,7 @@ async fn iroh_ticket_pairing_round_trip() {
         secret_key: None,
         peer_addr: None,
         peer_ticket: Some(ticket_b),
+        relay_mode: Some(RelayMode::Disabled),
     });
 
     transport_a

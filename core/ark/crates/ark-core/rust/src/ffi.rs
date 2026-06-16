@@ -529,6 +529,7 @@ impl ArkCore {
                                     secret_key: Some(secret_key),
                                     peer_addr,
                                     peer_ticket: config.iroh_peer_ticket.clone(),
+                                    relay_mode: None,
                                 },
                             ));
                             let relay_sync = RelaySync::with_transport(
@@ -546,7 +547,7 @@ impl ArkCore {
                             );
                             self_arc.install_relay_callbacks(&relay_sync).await;
                             relay_sync.start().await.map_err(ArkCoreError::from)?;
-                            iroh_our_ticket = match iroh_transport.our_ticket() {
+                            iroh_our_ticket = match iroh_transport.our_ticket().await {
                                 Ok(ticket) => Some(ticket),
                                 Err(e) => {
                                     eprintln!("[ArkCore::start_sync] our_ticket() failed: {e}");

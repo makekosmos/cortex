@@ -302,12 +302,15 @@ async fn setup() -> Result<SetupState, DynError> {
             };
             let device_name = sync::resolve_device_name();
             match sync::start_lan_sync(&ark_for_sync, &space_id, &device_id, &device_name).await {
-                Ok(()) => tracing::info!(
-                    space_id = %space_id,
-                    device_id = %device_id,
-                    device_name = ?device_name,
-                    "LAN sync started"
-                ),
+                Ok(()) => {
+                    tracing::info!(
+                        space_id = %space_id,
+                        device_id = %device_id,
+                        device_name = ?device_name,
+                        "LAN sync started"
+                    );
+                    sync::print_iroh_pairing_code_if_enabled(&ark_for_sync).await;
+                }
                 Err(e) => tracing::warn!(
                     error = %e,
                     "start_sync failed; ARK ops продолжат работать, sync — нет"

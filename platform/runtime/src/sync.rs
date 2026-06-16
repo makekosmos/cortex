@@ -111,3 +111,50 @@ pub async fn start_lan_sync(
     }
     Ok(())
 }
+
+/// Dev-flow cross-network step: when iroh was requested (`KOSMOS_IROH=1`),
+/// fetch our own pairing ticket from the sidecar (`GetOwnIrohTicket`) and
+/// print it BIG and unmistakable to stderr so the dev can copy it into the
+/// other machine's `KOSMOS_IROH_PEER_TICKET`. No-op (and cheap — no RPC
+/// call) when iroh wasn't requested, so the default dev flow is unaffected.
+///
+/// Call this only after `start_lan_sync` returns `Ok(())` — `GetOwnIrohTicket`
+/// returns `null` until sync has actually started with iroh selected (see
+/// `ark-core-rpc`'s `handle_get_own_iroh_ticket`).
+pub async fn print_iroh_pairing_code_if_enabled(ark: &ArkHost) {
+    let iroh_requested = std::env::var("KOSMOS_IROH")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if !iroh_requested {
+        return;
+    }
+
+    match ark.request("get_own_iroh_ticket", json!({})).await {
+        Ok(response) if response.ok => {
+            match response.data.as_str() {
+                Some(ticket) if !ticket.is_empty() => {
+                    let banner = "=".repeat(ticket.len().max(24) + 22);
+                    eprintln!("\n{banner}");
+                    eprintln!("=== IROH PAIRING CODE: {ticket} ===");
+                    eprintln!("{banner}\n");
+                }
+                _ => {
+                    tracing::warn!(
+                        "KOSMOS_IROH set, but get_own_iroh_ticket returned no ticket \
+                         (sidecar likely built without --features iroh-spike, or sync \
+                         did not select the iroh transport)"
+                    );
+                }
+            }
+        }
+        Ok(response) => {
+            tracing::warn!(
+                error = ?response.error,
+                "get_own_iroh_ticket rejected by ark-core-rpc"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "get_own_iroh_ticket request failed");
+        }
+    }
+}

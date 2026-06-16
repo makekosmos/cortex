@@ -16,6 +16,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};
+use iroh::RelayMode;
 use ark_core::protocol::LanSyncMessage;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 
@@ -33,6 +34,9 @@ async fn iroh_round_trip() {
         secret_key: None,
         peer_addr: None,
         peer_ticket: None,
+        // Offline loopback на одной машине — CI не должен зависеть от
+        // сетевого доступа к production relay (см. iroh_transport.rs doc).
+        relay_mode: Some(RelayMode::Disabled),
     });
 
     transport_b
@@ -54,6 +58,7 @@ async fn iroh_round_trip() {
         secret_key: None,
         peer_addr: Some(peer_addr_b),
         peer_ticket: None,
+        relay_mode: Some(RelayMode::Disabled),
     });
 
     transport_a

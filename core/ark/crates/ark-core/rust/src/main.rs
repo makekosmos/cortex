@@ -1092,6 +1092,7 @@ async fn handle_start_sync(
                     secret_key: Some(secret_key),
                     peer_addr,
                     peer_ticket: iroh_peer_ticket.clone(),
+                    relay_mode: None,
                 },
             ));
             // RelaySyncConfig.relay_url is unused by `with_transport` (only
@@ -1115,7 +1116,7 @@ async fn handle_start_sync(
             // Snapshot it onto `SyncRuntime` for `GetOwnIrohTicket` — capture
             // failures are logged but not fatal (pairing UI degrades to "no
             // ticket yet" rather than aborting an otherwise-successful start).
-            iroh_our_ticket = match iroh_transport.our_ticket() {
+            iroh_our_ticket = match iroh_transport.our_ticket().await {
                 Ok(ticket) => Some(ticket),
                 Err(e) => {
                     eprintln!("[handle_start_sync] our_ticket() failed: {e}");
