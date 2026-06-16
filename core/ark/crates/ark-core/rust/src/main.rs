@@ -1093,6 +1093,7 @@ async fn handle_start_sync(
                     peer_addr,
                     peer_ticket: iroh_peer_ticket.clone(),
                     relay_mode: None,
+                    auth_secret: auth_secret.clone(),
                 },
             ));
             // RelaySyncConfig.relay_url is unused by `with_transport` (only

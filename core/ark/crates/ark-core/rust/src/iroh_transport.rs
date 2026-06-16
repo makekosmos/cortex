@@ -1,25 +1,40 @@
-//! Iroh p2p QUIC transport — Фаза 0 spike (GREEN stage).
+//! Iroh p2p QUIC transport — Фаза 0 spike (GREEN stage — bidirectional).
 //!
 //! Зеркалит публичную форму `relay_transport.rs` (`RelayConfig`/`RelayEvent`/
 //! `RelayTransport`), чтобы фаза 1 могла относительно механически встроить
 //! этот транспорт в `mesh.rs`. См. spec:
 //! `.agent/tasks/2026-06-16-iroh-transport/spec.md`.
 //!
-//! Реализация фазы 0: один прямой peer (без discovery/pairing UI).
-//! `Endpoint::builder` строится через `presets::Minimal`, который не тащит
-//! address lookup (DNS/pkarr), но по умолчанию даёт `RelayMode::Disabled`.
+//! ## Дизайн (GREEN bidirectional revision)
 //!
-//! Dev-flow cross-network шаг: `IrohConfig::relay_mode` управляет этим —
-//! `None` (все production call sites) резолвится в `start()` в
-//! `RelayMode::Default` (n0 production relay servers), нужный для NAT
-//! traversal между двумя реальными машинами за разными NAT/firewall.
-//! `Some(RelayMode::Disabled)` остаётся только у offline-тестов (нужно для
-//! CI без сетевого доступа) — см. `tests/iroh_round_trip.rs`.
+//! Каждое QUIC-соединение (входящее или исходящее) живёт долго: один bi-стрим
+//! на всё время соединения, кадры идут back-to-back без finish() между ними.
+//! Это зеркалит `RelayTransport`: один WebSocket-стрим на соединение.
 //!
-//! Device-id маппинг — фаза 0 упрощение: на accept-стороне `from_device_id`
-//! читается из самого сообщения (`protocol::message_origin_device_id`), а не
-//! из EndpointId пира — полноценный device_id ↔ EndpointId реестр (нужен для
-//! пар "кто это вообще такой до получения первого сообщения") — это фаза 1.
+//! `send()` не диалит новый conn на каждый вызов — он кладёт сообщение в
+//! `broadcast::Sender`, на который подписывается каждая активная connection-
+//! задача. Если подписчиков нет (нет соединения) — сообщение молча дропается:
+//! пропущенные pre-connect live-changes будут скомпенсированы VersionVector
+//! обменом при (ре)коннекте.
+//!
+//! При подключении транспорт автоматически инжектирует аутентифицированный
+//! `Hello` как первый фрейм (аналогично `relay_transport.rs` строки 128-148).
+//! Это запускает CRDT-рукопожатие через `RelaySync::handle_message` без
+//! явного вызова `send(Hello)` сверху.
+//!
+//! Dial-loop (если `config.peer_addr/peer_ticket`) пересоединяется с
+//! экспоненциальным backoff (1s → 2s → ... → 60s) при обрыве — зеркалит
+//! RelayTransport.
+//!
+//! Shutdown: `tokio::sync::watch::channel(false)` позволяет нескольким задачам
+//! одновременно наблюдать сигнал остановки (в отличие от oneshot).
+//!
+//! Relay mode: `config.relay_mode` управляет NAT traversal. Production
+//! call sites (`main.rs::handle_start_sync`, `ffi.rs`) оставляют его
+//! `None`, что резолвится в `RelayMode::Default` (n0 production relay
+//! servers) — без этого два узла за разными NAT/firewall не могут
+//! соединиться. Тест `iroh_round_trip.rs` явно передаёт
+//! `Some(RelayMode::Disabled)`, чтобы остаться offline в CI.
 //!
 //! Доступен только под feature `iroh-spike` — production build (`cargo build`
 //! без флагов) не подтягивает крейт `iroh` и не компилирует этот файл.
@@ -27,17 +42,19 @@
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Mutex;
+use std::time::Duration;
 
 use iroh::endpoint::presets;
 use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode};
 use iroh_tickets::endpoint::EndpointTicket;
 use iroh_tickets::Ticket;
 use rusqlite::Connection;
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc, watch};
 
 use crate::db::{get_sync_kv, set_sync_kv};
 use crate::protocol::{
-    deserialize_message, message_origin_device_id, serialize_message, LanSyncMessage,
+    compute_hello_auth_hmac, deserialize_message, generate_auth_nonce, message_origin_device_id,
+    normalize_auth_secret, serialize_message, LanSyncMessage, PROTOCOL_VERSION,
 };
 use crate::sync_transport::{SyncTransport, TransportEvent};
 
@@ -50,6 +67,12 @@ const IROH_SECRET_KEY_KV_KEY: &str = "iroh.secret_key";
 /// ALPN-идентификатор протокола ark-sync поверх iroh QUIC-стримов.
 /// Версионируем отдельно от `protocol::PROTOCOL_VERSION` (см. spec §3.3).
 pub const ARK_SYNC_ALPN: &[u8] = b"ark-sync/1";
+
+/// Ёмкость broadcast-канала исходящих сообщений. Выбрана щедро: реальные
+/// CRDT-потоки не достигают такого burst. При `RecvError::Lagged` задача
+/// просто пропускает старые кадры — они будут компенсированы VV-обменом
+/// при следующем (ре)коннекте (см. модульный doc).
+const OUTGOING_BROADCAST_CAPACITY: usize = 256;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -74,9 +97,8 @@ pub struct IrohConfig {
     pub peer_addr: Option<iroh::EndpointAddr>,
     /// Шаг 3: альтернатива `peer_addr` — единая ticket-строка (см.
     /// `our_ticket()`/`from_ticket()`), из которой `EndpointAddr` пира
-    /// извлекается лениво при первом `send()`. Если задан `peer_addr`, он
-    /// имеет приоритет (явный адрес важнее тикета на случай, если задано
-    /// и то, и другое).
+    /// извлекается лениво при первом подключении. Если задан `peer_addr`,
+    /// он имеет приоритет (явный адрес важнее тикета).
     pub peer_ticket: Option<String>,
     /// Dev-flow cross-network step: relay mode override for `start()`.
     /// `None` => production default — `RelayMode::Default` (n0 relay
@@ -86,6 +108,9 @@ pub struct IrohConfig {
     /// availability in CI. Production call sites (`main.rs::handle_start_sync`,
     /// `ffi.rs`) leave this `None`.
     pub relay_mode: Option<RelayMode>,
+    /// Опциональный секрет для HMAC-аутентификации Hello (аналог
+    /// `RelayConfig::auth_secret`). `None` => Hello отправляется без HMAC.
+    pub auth_secret: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -119,10 +144,8 @@ pub fn from_ticket(ticket: &str) -> Result<EndpointAddr, String> {
 
 /// In-memory соответствие CRDT `device_id` (как в `LanSyncMessage::Hello`) и
 /// транспортного `EndpointId` пира. Заполняется на принимающей стороне при
-/// первом входящем `Hello` от соединения (см. accept-loop в `start()`) —
-/// до этого момента `EndpointId` пира известен, но какой это CRDT-девайс —
-/// нет (см. doc-comment модуля, открытый вопрос §4.3/фаза 1 в исходной
-/// версии файла).
+/// первом входящем `Hello` от соединения — до этого момента `EndpointId`
+/// пира известен, но какой это CRDT-девайс — нет.
 ///
 /// Хранит обе проекции (`EndpointId -> device_id` и `device_id ->
 /// EndpointId`), а не одну с линейным поиском — обе стороны нужны: accept-
@@ -175,27 +198,31 @@ impl DeviceRegistry {
 // IrohTransport
 // ---------------------------------------------------------------------------
 
-/// Handles connection lifecycle for the iroh p2p transport. См. модульную
-/// документацию — реализация отложена на GREEN-стадию.
+/// Handles connection lifecycle for the iroh p2p transport.
 pub struct IrohTransport {
     config: IrohConfig,
-    /// Запущенный `Endpoint` после `start()` — нужен для `endpoint_id()`/
-    /// `endpoint_addr()`/`send()`. `None` до старта.
+    /// Запущенный `Endpoint` после `start()`. `None` до старта.
     endpoint: Mutex<Option<Endpoint>>,
-    /// Shutdown signal sender (по аналогии с `RelayTransport::stop_tx`).
-    stop_tx: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    /// Broadcast-канал исходящих сообщений — `send()` кладёт сюда, каждая
+    /// активная connection-задача подписывается и пишет в свой QUIC bi-стрим.
+    out_tx: broadcast::Sender<LanSyncMessage>,
+    /// Shutdown watch channel. `true` = нужно остановиться.
+    stop_tx: watch::Sender<bool>,
+    stop_rx: watch::Receiver<bool>,
     /// Шаг 3: device_id ↔ EndpointId реестр, заполняется по входящим Hello.
-    /// `Arc`, потому что accept-loop живёт в спавненной `'static`-задаче и не
-    /// может держать `&self` транспорта.
     registry: std::sync::Arc<DeviceRegistry>,
 }
 
 impl IrohTransport {
     pub fn new(config: IrohConfig) -> Self {
+        let (out_tx, _) = broadcast::channel(OUTGOING_BROADCAST_CAPACITY);
+        let (stop_tx, stop_rx) = watch::channel(false);
         IrohTransport {
             config,
             endpoint: Mutex::new(None),
-            stop_tx: Mutex::new(None),
+            out_tx,
+            stop_tx,
+            stop_rx,
             registry: std::sync::Arc::new(DeviceRegistry::new()),
         }
     }
@@ -207,27 +234,14 @@ impl IrohTransport {
     }
 
     /// Тестовый хук: то же кодирование, что использует `our_ticket()`, но
-    /// без необходимости поднимать реальный `Endpoint` — позволяет unit-тесту
-    /// проверить чистый round-trip кодек тикета.
+    /// без необходимости поднимать реальный `Endpoint`.
     #[doc(hidden)]
     pub fn ticket_string_for_addr(addr: &EndpointAddr) -> String {
         ticket_string(addr)
     }
 
     /// Возвращает нашу ticket-строку — то, что нужно передать другому
-    /// устройству для pairing вместо сырого `EndpointAddr` (см.
-    /// `IrohConfig::peer_ticket`/`from_ticket`). Требует, чтобы транспорт
-    /// уже был запущен.
-    ///
-    /// Cross-network step (dev-flow pairing code): когда relay включён
-    /// (`config.relay_mode` не `Some(RelayMode::Disabled)`, т.е. production
-    /// путь), `endpoint_addr()`'s hardcoded `127.0.0.1` бесполезен другому
-    /// физическому хосту — тикет должен нести relay URL, который iroh
-    /// заполняет в `Endpoint::addr()` только после того, как endpoint
-    /// "online" (см. `Endpoint::online()`/`watch_addr()` doc). Поэтому здесь
-    /// ждём `online()` и берём `endpoint.addr()` напрямую, а не
-    /// `endpoint_addr()` (который остаётся loopback-only хелпером для теста
-    /// `iroh_round_trip.rs`, где relay явно `Disabled`).
+    /// устройству для pairing. Требует, чтобы транспорт уже был запущен.
     pub async fn our_ticket(&self) -> Result<String, String> {
         let relay_disabled = matches!(self.config.relay_mode, Some(RelayMode::Disabled));
         if relay_disabled {
@@ -247,8 +261,8 @@ impl IrohTransport {
         Ok(ticket_string(&endpoint.addr()))
     }
 
-    /// Резолвит эффективный адрес пира для `send()`: явный `peer_addr` имеет
-    /// приоритет, иначе парсим `peer_ticket` (см. `IrohConfig` doc-comment).
+    /// Резолвит эффективный адрес пира: явный `peer_addr` имеет приоритет,
+    /// иначе парсим `peer_ticket`.
     fn resolve_peer_addr(&self) -> Result<EndpointAddr, String> {
         if let Some(addr) = self.config.peer_addr.clone() {
             return Ok(addr);
@@ -260,7 +274,6 @@ impl IrohTransport {
     }
 
     /// Возвращает локальный `EndpointId` транспорта, если он уже запущен.
-    /// Нужен тесту, чтобы передать адрес одного узла другому без discovery.
     pub fn endpoint_id(&self) -> Option<EndpointId> {
         self.endpoint
             .lock()
@@ -271,9 +284,7 @@ impl IrohTransport {
 
     /// Возвращает локальный адрес транспорта (для ручной передачи пиру в
     /// фазе 0, без pairing UI/discovery). Использует `bound_sockets()` +
-    /// явную подстановку `127.0.0.1` — см. модульную документацию и
-    /// `iroh_loopback_smoke.rs`: `endpoint.addr()` (watcher) в офлайн-режиме
-    /// ненадёжен, `bound_sockets()` отдаёт реальный забинженный порт сразу.
+    /// явную подстановку `127.0.0.1`.
     pub fn endpoint_addr(&self) -> Option<EndpointAddr> {
         let guard = self.endpoint.lock().unwrap_or_else(|e| e.into_inner());
         let ep = guard.as_ref()?;
@@ -285,28 +296,177 @@ impl IrohTransport {
         let socket: SocketAddr = (Ipv4Addr::LOCALHOST, port).into();
         Some(EndpointAddr::new(ep.id()).with_ip_addr(socket))
     }
+
+    /// Строит аутентифицированный `Hello` для инжекции при подключении.
+    /// Зеркалит `relay_transport.rs` строки 128-148.
+    fn make_hello(&self) -> LanSyncMessage {
+        let auth_secret = normalize_auth_secret(self.config.auth_secret.clone());
+        let (auth_nonce, auth_hmac) = match auth_secret.as_ref() {
+            Some(secret) => {
+                let nonce = generate_auth_nonce();
+                let hmac = compute_hello_auth_hmac(
+                    secret,
+                    &self.config.space_id,
+                    &self.config.device_id,
+                    &nonce,
+                );
+                (Some(nonce), Some(hmac))
+            }
+            None => (None, None),
+        };
+        LanSyncMessage::Hello {
+            protocol_version: PROTOCOL_VERSION,
+            device_id: self.config.device_id.clone(),
+            device_name: self.config.device_name.clone(),
+            space_id: self.config.space_id.clone(),
+            addresses: None,
+            auth_nonce,
+            auth_hmac,
+        }
+    }
+}
+
+/// Общий обработчик одного долгоживущего QUIC-соединения (inbound или
+/// outbound). Вызывается из accept-loop (is_dialer=false) и dial-loop
+/// (is_dialer=true).
+///
+/// Логика:
+/// 1. Получает bi-стрим (dialer открывает, listener принимает).
+/// 2. Инжектирует аутентифицированный Hello как первый исходящий фрейм.
+/// 3. Эмитит `TransportEvent::Connected`.
+/// 4. Запускает select!-loop: параллельно пишет из broadcast + читает входящие.
+/// 5. При выходе из loop'а эмитит `TransportEvent::Disconnected`.
+async fn handle_connection(
+    conn: iroh::endpoint::Connection,
+    is_dialer: bool,
+    hello: LanSyncMessage,
+    mut out_rx: broadcast::Receiver<LanSyncMessage>,
+    mut stop_rx: watch::Receiver<bool>,
+    event_tx: mpsc::UnboundedSender<TransportEvent>,
+    registry: std::sync::Arc<DeviceRegistry>,
+) {
+    let remote_endpoint_id = conn.remote_id();
+
+    // Получаем единственный bi-стрим для всего соединения.
+    let (mut send, mut recv) = if is_dialer {
+        match conn.open_bi().await {
+            Ok(streams) => streams,
+            Err(e) => {
+                eprintln!("[IrohTransport] open_bi failed: {e}");
+                return;
+            }
+        }
+    } else {
+        match conn.accept_bi().await {
+            Ok(streams) => streams,
+            Err(e) => {
+                eprintln!("[IrohTransport] accept_bi failed: {e}");
+                return;
+            }
+        }
+    };
+
+    // Инжектируем Hello как первый фрейм — запускает CRDT-рукопожатие
+    // через RelaySync::handle_message без явного send() сверху.
+    let hello_payload = serialize_message(&hello);
+    if let Err(e) = write_frame(&mut send, hello_payload.as_bytes()).await {
+        eprintln!("[IrohTransport] write Hello frame failed: {e}");
+        return;
+    }
+
+    // Резолвим наш device_id для Connected/Disconnected событий.
+    let our_device_id = match &hello {
+        LanSyncMessage::Hello { device_id, .. } => device_id.clone(),
+        _ => String::new(),
+    };
+
+    let _ = event_tx.send(TransportEvent::Connected {
+        device_id: our_device_id.clone(),
+    });
+
+    // Select!-loop: параллельно пишем исходящие + читаем входящие.
+    loop {
+        tokio::select! {
+            // Shutdown signal.
+            _ = stop_rx.changed() => {
+                if *stop_rx.borrow() {
+                    let _ = send.finish();
+                    break;
+                }
+            }
+
+            // Исходящее сообщение из broadcast-канала.
+            recv_result = out_rx.recv() => {
+                match recv_result {
+                    Ok(msg) => {
+                        let payload = serialize_message(&msg);
+                        if let Err(e) = write_frame(&mut send, payload.as_bytes()).await {
+                            eprintln!("[IrohTransport] write_frame failed: {e}");
+                            break;
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(_)) => {
+                        // Burst превысил ёмкость канала — пропускаем старые кадры;
+                        // они будут скомпенсированы VV-обменом при следующем
+                        // коннекте. Продолжаем работу без прерывания.
+                        continue;
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        // Sender дропнут — транспорт остановлен.
+                        break;
+                    }
+                }
+            }
+
+            // Входящий фрейм от пира.
+            frame_result = read_frame(&mut recv) => {
+                match frame_result {
+                    Ok(raw) => {
+                        if let Some(msg) = deserialize_message(&raw) {
+                            // На Hello учим реестр (EndpointId → CRDT device_id).
+                            if let LanSyncMessage::Hello { device_id, .. } = &msg {
+                                registry.insert(remote_endpoint_id, device_id.clone());
+                            }
+                            // Резолвим from_device_id: сначала из самого сообщения
+                            // (Hello/VersionVector/LiveChange с origin_device_id),
+                            // иначе — из реестра по EndpointId соединения.
+                            let from_device_id = message_origin_device_id(&msg)
+                                .or_else(|| registry.device_id_for(&remote_endpoint_id))
+                                .unwrap_or_default();
+                            let _ = event_tx.send(TransportEvent::MessageReceived {
+                                from_device_id,
+                                msg,
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        // Стрим закрыт или сброшен — выходим, эмитим Disconnected.
+                        eprintln!("[IrohTransport] read_frame ended: {e}");
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Резолвируем финальный device_id для Disconnected из реестра (может
+    // быть заполнен, если Hello уже пришёл).
+    let disconnected_device_id = registry
+        .device_id_for(&remote_endpoint_id)
+        .unwrap_or(our_device_id);
+    let _ = event_tx.send(TransportEvent::Disconnected {
+        device_id: disconnected_device_id,
+    });
 }
 
 #[async_trait::async_trait]
 impl SyncTransport for IrohTransport {
     /// Запускает транспорт: байндит `Endpoint`, поднимает accept-loop для
-    /// входящих bi-стримов и (если `config.peer_addr` задан) исходящее
-    /// соединение. События доставляются через `event_tx` — аналог
-    /// `RelayTransport::start`.
-    ///
-    /// Relay mode: `config.relay_mode` управляет NAT traversal. Production
-    /// call sites (`main.rs::handle_start_sync`, `ffi.rs`) оставляют его
-    /// `None`, что здесь резолвится в `RelayMode::Default` (n0 production
-    /// relay servers) — без этого два узла за разными NAT/firewall не могут
-    /// соединиться через интернет, только в одной LAN/loopback. Тест
-    /// `iroh_round_trip.rs` явно передаёт `Some(RelayMode::Disabled)`, чтобы
-    /// остаться offline (CI без сетевого доступа к relay).
+    /// входящих соединений и (если `config.peer_addr/peer_ticket`) dial-loop
+    /// с экспоненциальным backoff.
     async fn start(&self, event_tx: mpsc::UnboundedSender<TransportEvent>) -> Result<(), String> {
         let relay_mode = self.config.relay_mode.clone().unwrap_or(RelayMode::Default);
 
-        // Builder — ТОЛЬКО presets::Minimal (см. модульную документацию и
-        // iroh_loopback_smoke.rs): empty() падает без crypto_provider, N0
-        // тянет DNS/pkarr lookup даже с relay Disabled.
         let mut builder = Endpoint::builder(presets::Minimal)
             .relay_mode(relay_mode)
             .alpns(vec![ARK_SYNC_ALPN.to_vec()]);
@@ -322,160 +482,156 @@ impl SyncTransport for IrohTransport {
 
         *self.endpoint.lock().unwrap_or_else(|e| e.into_inner()) = Some(endpoint.clone());
 
-        let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
-        *self.stop_tx.lock().unwrap_or_else(|e| e.into_inner()) = Some(stop_tx);
+        // ── Accept-loop ───────────────────────────────────────────────────────
+        // Каждое входящее соединение порождает `handle_connection(is_dialer=false)`.
+        {
+            let accept_endpoint = endpoint.clone();
+            let accept_event_tx = event_tx.clone();
+            let accept_registry = self.registry.clone();
+            let mut accept_stop = self.stop_rx.clone();
+            let out_tx = self.out_tx.clone();
+            let hello = self.make_hello();
 
-        // Accept-loop: каждое входящее соединение читает один framed
-        // LanSyncMessage и эмитит MessageReceived. Фаза 0: один прямой peer,
-        // поэтому цикл просто продолжает принимать (на случай нескольких
-        // стримов/реконнектов в рамках теста), пока не придёт stop-сигнал.
-        let accept_endpoint = endpoint.clone();
-        let accept_event_tx = event_tx.clone();
-        let accept_registry = self.registry.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = &mut stop_rx => {
+            tokio::spawn(async move {
+                loop {
+                    tokio::select! {
+                        _ = accept_stop.changed() => {
+                            if *accept_stop.borrow() { return; }
+                        }
+                        incoming = accept_endpoint.accept() => {
+                            let Some(incoming) = incoming else {
+                                // Endpoint закрыт.
+                                return;
+                            };
+                            let event_tx = accept_event_tx.clone();
+                            let registry = accept_registry.clone();
+                            let out_rx = out_tx.subscribe();
+                            let stop_rx = accept_stop.clone();
+                            let hello = hello.clone();
+
+                            tokio::spawn(async move {
+                                let conn = match incoming.await {
+                                    Ok(conn) => conn,
+                                    Err(e) => {
+                                        eprintln!("[IrohTransport] incoming connection failed: {e}");
+                                        return;
+                                    }
+                                };
+                                handle_connection(
+                                    conn,
+                                    false, // is_dialer
+                                    hello,
+                                    out_rx,
+                                    stop_rx,
+                                    event_tx,
+                                    registry,
+                                )
+                                .await;
+                            });
+                        }
+                    }
+                }
+            });
+        }
+
+        // ── Dial-loop (если задан peer) ───────────────────────────────────────
+        // Подключается к пиру, запускает `handle_connection(is_dialer=true)`,
+        // при разрыве переподключается с экспоненциальным backoff.
+        if self.config.peer_addr.is_some() || self.config.peer_ticket.is_some() {
+            let peer_addr = self.resolve_peer_addr()?;
+            let dial_endpoint = endpoint.clone();
+            let dial_event_tx = event_tx.clone();
+            let dial_registry = self.registry.clone();
+            let mut dial_stop = self.stop_rx.clone();
+            let out_tx = self.out_tx.clone();
+            let hello = self.make_hello();
+
+            tokio::spawn(async move {
+                let mut backoff_secs: u64 = 1;
+
+                loop {
+                    // Проверяем stop до попытки коннекта.
+                    if *dial_stop.borrow() {
                         return;
                     }
-                    incoming = accept_endpoint.accept() => {
-                        let Some(incoming) = incoming else {
-                            // Endpoint закрыт.
-                            return;
-                        };
-                        let event_tx = accept_event_tx.clone();
-                        let registry = accept_registry.clone();
-                        tokio::spawn(async move {
-                            let conn = match incoming.await {
-                                Ok(conn) => conn,
-                                Err(e) => {
-                                    eprintln!("[IrohTransport] incoming connection failed: {e}");
-                                    return;
-                                }
-                            };
-                            let remote_endpoint_id = conn.remote_id();
 
-                            let (_send, mut recv) = match conn.accept_bi().await {
-                                Ok(streams) => streams,
-                                Err(e) => {
-                                    eprintln!("[IrohTransport] accept_bi failed: {e}");
-                                    return;
-                                }
-                            };
-
-                            match read_frame(&mut recv).await {
-                                Ok(raw) => {
-                                    if let Some(msg) = deserialize_message(&raw) {
-                                        // Шаг 3: на Hello учим реестр (EndpointId
-                                        // соединения -> CRDT device_id из payload) —
-                                        // это единственное сообщение, которое
-                                        // достоверно несёт device_id отправителя
-                                        // независимо от заполненности
-                                        // origin_device_id. Для остальных типов
-                                        // сообщений сперва пробуем
-                                        // origin_device_id из самого сообщения,
-                                        // а если его нет — резолвим по реестру
-                                        // через EndpointId этого соединения (а не
-                                        // пустую строку — см. doc-comment
-                                        // `DeviceRegistry`).
-                                        if let LanSyncMessage::Hello { device_id, .. } = &msg {
-                                            registry.insert(remote_endpoint_id, device_id.clone());
-                                        }
-                                        let from_device_id = message_origin_device_id(&msg)
-                                            .or_else(|| registry.device_id_for(&remote_endpoint_id))
-                                            .unwrap_or_default();
-                                        let _ = event_tx.send(TransportEvent::MessageReceived {
-                                            from_device_id,
-                                            msg,
-                                        });
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!("[IrohTransport] read_frame failed: {e}");
+                    match dial_endpoint
+                        .connect(peer_addr.clone(), ARK_SYNC_ALPN)
+                        .await
+                    {
+                        Err(e) => {
+                            eprintln!(
+                                "[IrohTransport] connect to peer failed: {e}; retry in {backoff_secs}s"
+                            );
+                            tokio::select! {
+                                _ = tokio::time::sleep(Duration::from_secs(backoff_secs)) => {}
+                                _ = dial_stop.changed() => {
+                                    if *dial_stop.borrow() { return; }
                                 }
                             }
-                        });
+                            backoff_secs = (backoff_secs * 2).min(60);
+                        }
+                        Ok(conn) => {
+                            backoff_secs = 1; // сбрасываем backoff при успехе
+                            let out_rx = out_tx.subscribe();
+                            let stop_rx = dial_stop.clone();
+                            handle_connection(
+                                conn,
+                                true, // is_dialer
+                                hello.clone(),
+                                out_rx,
+                                stop_rx,
+                                dial_event_tx.clone(),
+                                dial_registry.clone(),
+                            )
+                            .await;
+
+                            // handle_connection вернулась — соединение закрыто.
+                            // Переподключаемся с backoff (если не остановлены).
+                            if *dial_stop.borrow() {
+                                return;
+                            }
+                            tokio::select! {
+                                _ = tokio::time::sleep(Duration::from_secs(backoff_secs)) => {}
+                                _ = dial_stop.changed() => {
+                                    if *dial_stop.borrow() { return; }
+                                }
+                            }
+                            backoff_secs = (backoff_secs * 2).min(60);
+                        }
                     }
                 }
-            }
-        });
-
-        // Если задан peer_addr, мы не открываем соединение заранее — `send()`
-        // коннектится лениво при первой отправке (см. doc-comment send()).
-        let _ = &self.config;
+            });
+        }
 
         Ok(())
     }
 
-    /// Отправляет сообщение через активный QUIC bi-стрим к пиру. Сигнатура
-    /// не требует активного соединения как предусловие — реализация лениво
-    /// коннектится к `config.peer_addr` при каждом вызове (фаза 0: один
-    /// прямой peer, без connection pooling/outbox — это решение фазы 1, см.
-    /// spec §3.4).
-    ///
-    /// `send()` остаётся синхронным по сигнатуре (как `RelayTransport::send`):
-    /// фактическое соединение и запись выполняются в спавненной задаче
-    /// (fire-and-forget), ошибки логируются в stderr, а не возвращаются
-    /// вызывающему — `Ok(())` здесь означает "сообщение поставлено в очередь
-    /// на отправку", а не "доставлено".
+    /// Ставит сообщение в broadcast-канал исходящих. Все активные соединения
+    /// получат его через свои `out_rx`. Если подписчиков нет (соединение ещё
+    /// не установлено), сообщение молча дропается: pre-connect live-changes
+    /// будут скомпенсированы VersionVector обменом при (ре)коннекте.
     fn send(&self, msg: LanSyncMessage) -> Result<(), String> {
-        let endpoint = self
-            .endpoint
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
-            .ok_or_else(|| "iroh transport: send() called before start()".to_string())?;
-
-        let peer_addr = self.resolve_peer_addr()?;
-
-        tokio::spawn(async move {
-            let conn = match endpoint.connect(peer_addr, ARK_SYNC_ALPN).await {
-                Ok(conn) => conn,
-                Err(e) => {
-                    eprintln!("[IrohTransport] connect to peer failed: {e}");
-                    return;
-                }
-            };
-
-            let (mut send, mut recv) = match conn.open_bi().await {
-                Ok(streams) => streams,
-                Err(e) => {
-                    eprintln!("[IrohTransport] open_bi failed: {e}");
-                    return;
-                }
-            };
-            let _ = &mut recv; // фаза 0: ответный поток не используется
-
-            let payload = serialize_message(&msg);
-            if let Err(e) = write_frame(&mut send, payload.as_bytes()).await {
-                eprintln!("[IrohTransport] write_frame failed: {e}");
-                return;
-            }
-            if let Err(e) = send.finish() {
-                eprintln!("[IrohTransport] finish send stream failed: {e}");
-                return;
-            }
-            // Дожидаемся, что receiver реально дочитал стрим, прежде чем
-            // отпустить `conn` (drop закрывает соединение немедленно и может
-            // гонкой обрезать ещё не прочитанные байты на стороне приёмника —
-            // именно так и было: `accept_bi` на B падал с "closed by peer").
-            if let Err(e) = send.stopped().await {
-                eprintln!("[IrohTransport] waiting for stream stop failed: {e}");
-            }
-        });
-
+        // send() возвращает Err только если нет подписчиков — это нормально
+        // (нет активного соединения). Не возвращаем ошибку вызывающему.
+        let _ = self.out_tx.send(msg);
         Ok(())
     }
 
-    /// Сигнализирует фоновому accept-loop остановиться и закрывает `Endpoint`.
+    /// Сигнализирует всем фоновым задачам остановиться и закрывает `Endpoint`.
     fn stop(&self) {
-        if let Some(tx) = self
-            .stop_tx
+        let _ = self.stop_tx.send(true);
+        // Закрываем endpoint явно — это разбудит accept_endpoint.accept().
+        if let Some(ep) = self
+            .endpoint
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .take()
         {
-            let _ = tx.send(());
+            // close() — async fn, но мы на sync пути. Spawn best-effort close.
+            tokio::spawn(async move {
+                ep.close().await;
+            });
         }
     }
 }
@@ -533,18 +689,10 @@ async fn read_frame(recv: &mut iroh::endpoint::RecvStream) -> Result<String, Str
 /// Загружает persisted iroh `SecretKey` из `sync_kv` (ключ
 /// `iroh.secret_key`) либо генерирует новый и сохраняет его туда же.
 ///
-/// Это даёт стабильный `EndpointId` между рестартами процесса — без этого
-/// каждый старт `IrohTransport` получал бы новый случайный identity (см.
-/// `IrohConfig::secret_key` doc-comment, открытый вопрос §4.3 в spec) и пир
-/// не смог бы узнать устройство по `EndpointId` повторно.
+/// Это даёт стабильный `EndpointId` между рестартами процесса.
 ///
 /// Принимает `&Connection` напрямую (как `get_sync_kv`/`set_sync_kv` в
-/// `db.rs`), а не `Arc<dyn StorageBackend>`: чтение/запись `sync_kv` в этом
-/// крейте не выведены в `StorageBackend` trait — это узкие функции над
-/// сырым `rusqlite::Connection`, и весь остальной код (`relay_sync.rs`,
-/// `sync_client.rs`, `sync_server.rs`, тесты в `db.rs`) обращается к ним
-/// так же напрямую. Эта функция повторяет тот же паттерн ради
-/// консистентности, а не вводит новый.
+/// `db.rs`), а не `Arc<dyn StorageBackend>`.
 pub fn load_or_generate_secret_key(conn: &Connection) -> Result<iroh::SecretKey, String> {
     if let Some(stored) = get_sync_kv(conn, IROH_SECRET_KEY_KV_KEY)? {
         let bytes = hex_decode_32(&stored)
@@ -584,11 +732,7 @@ fn hex_decode_32(s: &str) -> Option<[u8; 32]> {
 }
 
 // ---------------------------------------------------------------------------
-// Tests — Фаза 1 шаг 1: постоянная identity.
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Tests — Шаг 3: ticket-based pairing + device_id ↔ EndpointId реестр (RED).
+// Tests — unit-тесты (ticket codec, registry, identity).
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]

@@ -530,6 +530,7 @@ impl ArkCore {
                                     peer_addr,
                                     peer_ticket: config.iroh_peer_ticket.clone(),
                                     relay_mode: None,
+                                    auth_secret: config.auth_secret.clone(),
                                 },
                             ));
                             let relay_sync = RelaySync::with_transport(
