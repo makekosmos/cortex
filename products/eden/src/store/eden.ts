@@ -220,6 +220,8 @@ export const useEdenStore = defineStore("eden", () => {
 
   // Non-reactive save coordination state (mutable internal mechanism)
 
+  // Latest local draft/save timestamp per entry. Optimistic drafts must count
+  // here too, otherwise an older in-flight save can overwrite live editor text.
   const latestSaveTimestamps = new Map<string, number>();
 
   const saveCoordinators: Record<string, EntrySaveCoordinator> = {};
@@ -230,6 +232,13 @@ export const useEdenStore = defineStore("eden", () => {
       entries.value[idx] = entry;
     } else {
       entries.value = [entry, ...entries.value];
+    }
+  }
+
+  function markLatestLocalEntry(entry: Entry): void {
+    const previous = latestSaveTimestamps.get(entry.id);
+    if (previous === undefined || previous <= entry.updated_at) {
+      latestSaveTimestamps.set(entry.id, entry.updated_at);
     }
   }
 
@@ -349,16 +358,6 @@ export const useEdenStore = defineStore("eden", () => {
 
     entries.value = [newEntry, ...entries.value];
 
-    if (window.api) {
-      void window.api.saveEntry(newEntry).then((result) => {
-        if (!result.ok) {
-          entries.value = entries.value.filter((e) => e.id !== newEntry.id);
-
-          if (currentEntry.value?.id === newEntry.id) currentEntry.value = null;
-        }
-      });
-    }
-
     return newEntry;
   }
 
@@ -410,6 +409,23 @@ export const useEdenStore = defineStore("eden", () => {
     await ensureSystemTypePersisted(noteTypeId);
 
     const newEntry = createEntry("", noteTypeId);
+
+    // См. postmortems.md § 2026-06-16. Первичное пустое сохранение должно
+    // завершиться до mount редактора, иначе оно гоняется с первым autosave.
+    if (window.api) {
+      try {
+        const result = await window.api.saveEntry(newEntry);
+        if (!result.ok) {
+          console.warn("[eden] save new entry failed:", result);
+          entries.value = entries.value.filter((e) => e.id !== newEntry.id);
+          return;
+        }
+      } catch (err) {
+        console.error("[eden] save new entry threw:", err);
+        entries.value = entries.value.filter((e) => e.id !== newEntry.id);
+        return;
+      }
+    }
 
     currentEntry.value = newEntry;
   }
@@ -682,7 +698,7 @@ export const useEdenStore = defineStore("eden", () => {
     // См. postmortems.md § 2026-06-15. `entries` contains optimistic drafts
     // from updateEntryDraft, so it is not a safe persisted baseline for skipping saves.
     const persistEntry = async (entryToPersist: Entry): Promise<SaveEntryResult | null> => {
-      latestSaveTimestamps.set(entryToPersist.id, entryToPersist.updated_at);
+      markLatestLocalEntry(entryToPersist);
 
       const result = await window.api.saveEntry(entryToPersist);
 
@@ -772,6 +788,10 @@ export const useEdenStore = defineStore("eden", () => {
   }
 
   function updateEntryDraft(entry: Entry) {
+    // См. postmortems.md § 2026-06-16. Live editor draft is newer than any
+    // older in-flight save completion until the same draft is persisted.
+    markLatestLocalEntry(entry);
+
     const idx = entries.value.findIndex((candidate) => candidate.id === entry.id);
 
     if (idx >= 0) {

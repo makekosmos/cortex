@@ -201,6 +201,7 @@ let bodyScrollElement: HTMLElement | null = null;
 let titleOutOfView = false;
 let lastPersistedTitle = props.entry.title;
 let lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(props.entry.header_props_json);
+let lastDraftUpdatedAt = props.entry.updated_at;
 let suppressBodySyncSave = false;
 
 const currentTypeId = ref(props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID);
@@ -226,6 +227,12 @@ function normalizeHeaderPropsJson(headerPropsJson: string | null | undefined): s
   }
 }
 
+function nextDraftUpdatedAt(): number {
+  const now = Date.now();
+  lastDraftUpdatedAt = Math.max(now, lastDraftUpdatedAt + 1);
+  return lastDraftUpdatedAt;
+}
+
 function buildEntryDraft(contentJson?: string): Entry {
   const editedTitle = getCurrentTitle();
   const normalizedTitle = resolveStoredEntryTitle(
@@ -249,7 +256,7 @@ function buildEntryDraft(contentJson?: string): Entry {
     header_layout: headerLayout.value,
     header_props_json: normalizedHeaderPropsJson,
     content_json: contentJson ?? props.entry.content_json,
-    updated_at: Date.now(),
+    updated_at: nextDraftUpdatedAt(),
   };
 }
 
@@ -529,6 +536,8 @@ onMounted(() => {
       EditorView.updateListener.of((update) => {
         if (update.docChanged && !props.readerMode && !suppressBodySyncSave) {
           emit("liveCharCount", update.state.doc.length);
+          const contentJson = JSON.stringify(writeEntryMarkdown(update.state.doc.toString()));
+          emit("entryDraftChange", buildEntryDraft(contentJson));
           scheduleAutosave();
         }
       }),
@@ -583,6 +592,7 @@ watch(
     syncBodyFromEntry();
     lastPersistedTitle = props.entry.title;
     lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(props.entry.header_props_json);
+    lastDraftUpdatedAt = props.entry.updated_at;
   },
 );
 

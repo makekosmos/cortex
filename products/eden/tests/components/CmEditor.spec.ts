@@ -152,6 +152,29 @@ describe("CmEditor component", () => {
     await expect.poll(() => counts.some((n) => n > 0)).toBe(true);
   });
 
+  test("ввод текста сразу эмитит body draft до autosave", async () => {
+    // Regression: 2026-06-16. Live CodeMirror body must be the local source of
+    // truth while debounced remote save is still pending.
+    const drafts: Entry[] = [];
+    const onSave = vi.fn(async () => null);
+    render(CmEditor, {
+      props: {
+        entry: makeEntry(EMPTY_DOC),
+        onSave,
+        zenMode: false,
+        onEntryDraftChange: (entry: Entry) => drafts.push(entry),
+      },
+    });
+
+    await expect.poll(() => document.querySelector(".cm-content")).not.toBeNull();
+    await typeInEditor("ж");
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(drafts.length).toBeGreaterThan(0);
+    const parsed = JSON.parse(drafts.at(-1)?.content_json ?? "{}") as { text?: string };
+    expect(parsed.text).toContain("ж");
+  });
+
   test("в режиме писателя после открытия body получает каретку на первой строке", async () => {
     const onSave = vi.fn(async () => null);
     render(CmEditor, {
@@ -444,6 +467,71 @@ describe("CmEditor component", () => {
       id: draft.id,
       content_json: draft.content_json,
     });
+  });
+
+  test("store ignores stale save completion after a newer optimistic draft", async () => {
+    // Regression: 2026-06-16. A save that started before a newer local draft
+    // must not push its older body back into currentEntry.
+    setActivePinia(createPinia());
+    const original = markdownEntry("");
+    original.updated_at = 100;
+    const olderDraft: Entry = {
+      ...original,
+      content_json: JSON.stringify({ type: "markdown", version: 1, text: "old save" }),
+      updated_at: 101,
+    };
+    const newerDraft: Entry = {
+      ...original,
+      content_json: JSON.stringify({ type: "markdown", version: 1, text: "new local draft" }),
+      updated_at: 102,
+    };
+    const pendingSave = deferred<SaveEntryResult>();
+    const saveEntry = vi.fn(() => pendingSave.promise);
+    (window as unknown as { api: Partial<Window["api"]> }).api = { saveEntry };
+
+    const store = useEdenStore();
+    store.entries = [original];
+    store.currentEntry = original;
+
+    const savePromise = store.handleSave(olderDraft);
+    await expect.poll(() => saveEntry.mock.calls.length, { timeout: 4000 }).toBe(1);
+
+    store.updateEntryDraft(newerDraft);
+    pendingSave.resolve({ ok: true, entryId: olderDraft.id });
+    await savePromise;
+
+    expect(store.currentEntry?.content_json).toBe(newerDraft.content_json);
+    expect(store.entries.find((entry) => entry.id === original.id)?.content_json).toBe(
+      newerDraft.content_json,
+    );
+  });
+
+  test("store createNewEntry waits for initial empty save before mounting editor", async () => {
+    // Regression: 2026-06-16. The initial empty save must not race the first
+    // editor autosave with user text.
+    setActivePinia(createPinia());
+    const initialSave = deferred<SaveEntryResult>();
+    const saveEntry = vi.fn(() => initialSave.promise);
+    Object.defineProperty(window, "api", {
+      configurable: true,
+      writable: true,
+      value: {
+        saveEntry,
+        saveNoteType: vi.fn(async () => ({ ok: true })),
+      },
+    });
+
+    const store = useEdenStore();
+    const createPromise = store.createNewEntry();
+
+    await expect.poll(() => saveEntry.mock.calls.length, { timeout: 4000 }).toBe(1);
+    expect(store.currentEntry).toBeNull();
+
+    const newEntry = saveEntry.mock.calls[0]?.[0] as Entry;
+    initialSave.resolve({ ok: true, entryId: newEntry.id });
+    await createPromise;
+
+    expect(store.currentEntry?.id).toBe(newEntry.id);
   });
 
   test("store navigateTo сразу показывает preview entry вместо пустой страницы", async () => {

@@ -21,6 +21,24 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-16 — Eden stale inbound body перерисовывал live draft
+
+**Симптомы.** Во время обычного набора в Eden текст мог сразу исчезнуть, а через некоторое время появиться обратно. Это происходило не только на первом вводе в новой заметке, а во время дальнейшей работы.
+**Где жило.** `products/eden/src/editor-cm/CmEditor.vue::EditorView.updateListener`, `products/eden/src/editor-cm/CmEditor.vue::syncBodyFromEntry`, `products/eden/src/store/eden.ts::updateEntryDraft`, `products/eden/src/store/eden.ts::handleSave`.
+**Root cause.** CodeMirror держал самый свежий текст только внутри `EditorView`: body `entryDraftChange` эмитился лишь при `flushSave()`, а не при каждом `docChanged`. Пока debounce-save ещё не сработал, `store.currentEntry.content_json` оставался старым. Любой входящий store update или completion старого save мог снова прислать этот старый `content_json` в props; `syncBodyFromEntry()` без dirty/version fence считал props authoritative и целиком заменял live CodeMirror doc. Дополнительно `handleSave()` защищал только порядок уже начатых save-запросов через `latestSaveTimestamps`; новый optimistic draft между save completion и следующим debounce-save не помечался как latest local state, поэтому старый save completion мог перезаписать его в `currentEntry`.
+**Fix.** `CmEditor` теперь эмитит body `entryDraftChange` сразу на каждый `docChanged` до debounce-save, а draft `updated_at` делается локально монотонным. Store помечает `updateEntryDraft()` как latest local state через тот же timestamp fence, который использует save coordinator; завершение более старого save больше не может записать старый body обратно в `entries/currentEntry`.
+**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` проверяет два контракта: ввод сразу публикует body draft до autosave, и stale save completion не откатывает более новый optimistic draft.
+**Prevention.** В live editor локальный draft должен быть canonical state для renderer'а до момента успешного reconcile с backend. Inbound props/save completions/load results можно применять к body только через version fence; debounce-save сам по себе не является защитой от stale render.
+
+## 2026-06-16 — Eden обычная новая заметка откатывала первый ввод
+
+**Симптомы.** При наборе текста в Eden введённые символы могли появляться, затем исчезать или заменяться старой версией, как будто поверх применился предыдущий save.
+**Где жило.** `products/eden/src/store/eden.ts::createEntry`, `products/eden/src/store/eden.ts::createNewEntry`, `products/eden/src/editor-cm/CmEditor.vue::syncBodyFromEntry`.
+**Root cause.** Обычный путь `createNewEntry()` создавал entry через `createEntry()`, а `createEntry()` запускал первичный пустой `window.api.saveEntry(newEntry)` fire-and-forget, вне `handleSave()` coordinator. Если пользователь успевал начать ввод и autosave с контентом проходил раньше, запоздалый initial empty-save мог записать пустой `content_json` после него. Затем reactive `currentEntry.content_json` приходил обратно в `CmEditor`, и `syncBodyFromEntry()` целиком заменял CodeMirror doc старой/пустой версией.
+**Fix.** `createEntry()` больше не делает самостоятельный fire-and-forget persist. `createNewEntry()` теперь повторяет строгий порядок дневникового пути: создаёт optimistic draft, синхронно дожидается первичного `window.api.saveEntry(newEntry)`, и только после успешного save выставляет `currentEntry`, чтобы CodeMirror вообще не монтировался до завершения empty-save.
+**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` проверяет, что `createNewEntry()` не выставляет `currentEntry`, пока initial `saveEntry` не завершился.
+**Prevention.** Любой initial create/save, который создаёт пустую версию объекта, должен идти через тот же порядок или coordinator, что и последующие autosave. Fire-and-forget persist для объекта, который сразу открывается в live editor, запрещён: renderer может начать писать пользовательский draft раньше, чем первичная пустая запись долетит до backend.
+
 ## 2026-06-15 — Eden pending note load ломал chrome после быстрых переходов
 
 **Симптомы.** После быстрого прокликивания разных заметок Eden переставал реагировать на клики; при попытке открыть настройки пропадал titlebar/chrome, reload возвращал нормальное состояние.
