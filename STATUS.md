@@ -2,11 +2,34 @@
 
 | Компонент      | Версия |
 | -------------- | ------ |
-| Kosmos Desktop | 0.4.11 |
+| Kosmos Desktop | 0.4.12 |
 | Eden           | 0.2.4  |
 | Delphi         | 0.1.8  |
 | Arrancador     | 0.1.4  |
 | Akasha         | 0.1.2  |
+
+## 2026-06-16 — Desktop host parity for Eden settings (Kosmos Desktop 0.4.11 → 0.4.12)
+
+Patch-релиз добирает вторую половину уже опубликованного Eden settings-flow:
+предыдущий extension bump доставил новый `EdenSettingsView`, но установленный
+desktop host оставался на `0.4.11` и не умел открыть отдельное окно настроек по
+`window.kepler.edenSettings`. В результате extension обновлялся, а user-visible
+поведение в prod не менялось.
+
+- **Host API для Eden settings**: в shared preload и extension preload добавлен
+  `window.kepler.edenSettings.{open,close}`, а в `extension-host.ts` —
+  `kepler:eden-settings:open/close` и отдельный `openExtension("eden",
+"#/settings", "eden:settings", "settings")`.
+- **Отдельное settings-окно в проде**: теперь установленный Kosmos Desktop
+  действительно может открыть компактное окно настроек Eden с профилем
+  `settings`, вместо того чтобы оставлять extension без нужного host bridge.
+- **Root cause зафиксирован**: прошлый релизный pass разнёс одну user-visible
+  фичу между extension и desktop, но выпустил только extension. После этого
+  `eden 0.2.4` на машинах пользователей был новым по bundle, но неполным по
+  desktop API.
+
+Checks: desktop `tsc --noEmit`, `node scripts/build-extensions.mjs`,
+Windows installer build / `latest.yml` refresh, manual GitHub release.
 
 ## 2026-06-16 — Eden settings chrome + Delphi task schema (Eden 0.2.3 → 0.2.4, Delphi 0.1.7 → 0.1.8)
 
