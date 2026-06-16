@@ -178,6 +178,16 @@ impl ArkHost {
         let events_for_reader = events_tx.clone();
         tokio::spawn(reader_loop(stdout, pending_for_reader, events_for_reader));
 
+        // Stderr drain task: ark-core-rpc пишет диагностику (в т.ч. `[iroh]`
+        // логи) в свой stderr. Pipe ОБЯЗАТЕЛЬНО надо вычитывать: иначе при
+        // заполнении OS-буфера (~64 KB на macOS/Linux) синхронный `eprintln!`
+        // внутри сайдкара заблокируется на write в полный pipe, повесив его
+        // tokio-воркер — и весь sync/RPC встанет. Форвардим построчно в наш
+        // stderr с префиксом, чтобы строки были видны в общем логе backend'а.
+        if let Some(stderr) = child.stderr.take() {
+            tokio::spawn(stderr_loop(stderr));
+        }
+
         let host = ArkHost {
             next_req_id: AtomicU64::new(0),
             pending,
@@ -285,6 +295,19 @@ async fn reader_loop(
                 // Малформированная строка — лог в Phase 2, сейчас игнор.
             }
         }
+    }
+}
+
+/// Вычитывает stderr сайдкара `ark-core-rpc` построчно и форвардит в наш
+/// stderr с префиксом `[ark-core-rpc]`. Существует ради двух целей: (1) не дать
+/// недренируемому pipe заполниться и заблокировать `eprintln!` внутри сайдкара
+/// (см. `spawn()`), (2) сделать диагностику сайдкара (включая `[iroh]` логи)
+/// видимой в общем логе backend'а.
+async fn stderr_loop(stderr: tokio::process::ChildStderr) {
+    let reader = BufReader::new(stderr);
+    let mut lines = reader.lines();
+    while let Ok(Some(line)) = lines.next_line().await {
+        eprintln!("[ark-core-rpc] {line}");
     }
 }
 
