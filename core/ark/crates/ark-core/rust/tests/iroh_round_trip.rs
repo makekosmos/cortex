@@ -15,15 +15,16 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 
-use ark_core::iroh_transport::{IrohConfig, IrohEvent, IrohTransport};
+use ark_core::iroh_transport::{IrohConfig, IrohTransport};
 use ark_core::protocol::LanSyncMessage;
+use ark_core::sync_transport::{SyncTransport, TransportEvent};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn iroh_round_trip() {
     // 1. B стартует первым — в реализации (GREEN) тест узнает её endpoint
     // addr через `endpoint_addr()` после `start()`. На RED-стадии `start()`
     // паникует через `todo!()` раньше, чем мы дойдём до отправки.
-    let (b_events_tx, mut b_events_rx) = mpsc::unbounded_channel::<IrohEvent>();
+    let (b_events_tx, mut b_events_rx) = mpsc::unbounded_channel::<TransportEvent>();
 
     let transport_b = IrohTransport::new(IrohConfig {
         device_id: "device-B".to_string(),
@@ -31,6 +32,7 @@ async fn iroh_round_trip() {
         space_id: "test-space-iroh-round-trip".to_string(),
         secret_key: None,
         peer_addr: None,
+        peer_ticket: None,
     });
 
     transport_b
@@ -43,7 +45,7 @@ async fn iroh_round_trip() {
         .expect("transport B should expose its endpoint addr after start()");
 
     // 2. A стартует, зная адрес B напрямую (без discovery/pairing UI).
-    let (a_events_tx, _a_events_rx) = mpsc::unbounded_channel::<IrohEvent>();
+    let (a_events_tx, _a_events_rx) = mpsc::unbounded_channel::<TransportEvent>();
 
     let transport_a = IrohTransport::new(IrohConfig {
         device_id: "device-A".to_string(),
@@ -51,6 +53,7 @@ async fn iroh_round_trip() {
         space_id: "test-space-iroh-round-trip".to_string(),
         secret_key: None,
         peer_addr: Some(peer_addr_b),
+        peer_ticket: None,
     });
 
     transport_a
@@ -90,7 +93,7 @@ async fn iroh_round_trip() {
         .expect("channel closed");
 
     match received {
-        IrohEvent::MessageReceived { from_device_id, msg } => {
+        TransportEvent::MessageReceived { from_device_id, msg } => {
             assert_eq!(from_device_id, "device-A");
             match msg {
                 LanSyncMessage::LiveChange { entity, .. } => {

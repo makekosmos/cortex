@@ -20,6 +20,7 @@ use crate::protocol::{
     compute_hello_auth_hmac, deserialize_message, generate_auth_nonce, message_origin_device_id,
     normalize_auth_secret, serialize_message, LanSyncMessage, PROTOCOL_VERSION,
 };
+use crate::sync_transport::{SyncTransport, TransportEvent};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -34,20 +35,6 @@ pub struct RelayConfig {
     pub device_name: String,
     pub api_key: String,
     pub auth_secret: Option<String>,
-}
-
-#[derive(Debug)]
-pub enum RelayEvent {
-    Connected {
-        device_id: String,
-    },
-    Disconnected {
-        device_id: String,
-    },
-    MessageReceived {
-        from_device_id: String,
-        msg: LanSyncMessage,
-    },
 }
 
 // ---------------------------------------------------------------------------
@@ -86,10 +73,13 @@ impl RelayTransport {
             self.config.url, self.config.space_id, self.config.device_id, self.config.api_key,
         )
     }
+}
 
+#[async_trait::async_trait]
+impl SyncTransport for RelayTransport {
     /// Start the relay transport. Returns immediately; background tasks drive
     /// the actual connection.  Events are forwarded through `event_tx`.
-    pub async fn start(&self, event_tx: mpsc::UnboundedSender<RelayEvent>) -> Result<(), String> {
+    async fn start(&self, event_tx: mpsc::UnboundedSender<TransportEvent>) -> Result<(), String> {
         // Create a fresh send channel and a shutdown channel.
         let (send_tx, mut send_rx) = mpsc::unbounded_channel::<LanSyncMessage>();
         let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
@@ -170,7 +160,7 @@ impl RelayTransport {
                             }
                         }
 
-                        let _ = event_tx.send(RelayEvent::Connected {
+                        let _ = event_tx.send(TransportEvent::Connected {
                             device_id: device_id.clone(),
                         });
 
@@ -194,7 +184,7 @@ impl RelayTransport {
                                                 let from =
                                                     message_origin_device_id(&lan_msg)
                                                         .unwrap_or_default();
-                                                let _ = event_tx.send(RelayEvent::MessageReceived {
+                                                let _ = event_tx.send(TransportEvent::MessageReceived {
                                                     from_device_id: from,
                                                     msg: lan_msg,
                                                 });
@@ -208,7 +198,7 @@ impl RelayTransport {
                             }
                         }
 
-                        let _ = event_tx.send(RelayEvent::Disconnected {
+                        let _ = event_tx.send(TransportEvent::Disconnected {
                             device_id: device_id.clone(),
                         });
                     }
@@ -228,7 +218,7 @@ impl RelayTransport {
 
     /// Enqueue a message. If the transport is connected, it goes immediately;
     /// if disconnected, it is stored in the offline outbox (capped at 500 entries).
-    pub fn send(&self, msg: LanSyncMessage) -> Result<(), String> {
+    fn send(&self, msg: LanSyncMessage) -> Result<(), String> {
         let tx = self.send_tx.lock().unwrap_or_else(|e| e.into_inner());
         if tx.send(msg.clone()).is_err() {
             // Channel closed (not yet started or stopped) — use offline outbox.
@@ -242,7 +232,7 @@ impl RelayTransport {
     }
 
     /// Signal the background loop to stop.
-    pub fn stop(&self) {
+    fn stop(&self) {
         if let Some(tx) = self
             .stop_tx
             .lock()

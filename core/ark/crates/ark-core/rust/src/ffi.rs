@@ -106,6 +106,17 @@ pub struct FfiSyncConfig {
     /// Optional shared secret for LAN/P2P hello HMAC authentication.
     #[uniffi(default = None)]
     pub auth_secret: Option<String>,
+    /// Step 4a: select the iroh p2p transport instead of relay. Present on
+    /// the UniFFI surface in every build (stable struct shape); only acted
+    /// on behind `#[cfg(feature = "iroh-spike")]` in `start_sync` — a build
+    /// without the feature returns an error if this is `true` instead of
+    /// silently falling back to relay/LAN.
+    #[uniffi(default = false)]
+    pub use_iroh: bool,
+    /// Pairing ticket string for the iroh peer (see
+    /// `iroh_transport::IrohTransport::our_ticket`/`from_ticket`).
+    #[uniffi(default = None)]
+    pub iroh_peer_ticket: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -147,6 +158,9 @@ struct SyncRuntime {
     storage: Arc<SqliteStorageBackend>,
     clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
     relay: Option<Arc<RelaySync>>,
+    /// Step 4a: our iroh pairing ticket, captured when the iroh transport
+    /// was selected (mirrors `main.rs::SyncRuntime::iroh_our_ticket`).
+    iroh_our_ticket: Option<String>,
     beacon: Arc<BroadcastDiscovery>,
     device_id: String,
     device_name: String,
@@ -435,7 +449,7 @@ impl ArkCore {
                 let result_tx = result_tx;
 
                 let setup_result = runtime_handle.block_on(async {
-                    let storage = Arc::new(SqliteStorageBackend::new(shared_conn));
+                    let storage = Arc::new(SqliteStorageBackend::new(shared_conn.clone()));
                     storage.set_device_id(&config.device_id);
 
                     let device_name = config
@@ -467,7 +481,17 @@ impl ArkCore {
                         .await
                         .map_err(ArkCoreError::from)?;
 
-                    let relay = if let Some(relay_url) = config.relay_url.clone() {
+                    let transport_choice =
+                        crate::transport_select::select_transport(config.use_iroh, &config.relay_url);
+                    #[allow(unused_mut, unused_assignments)]
+                    let mut iroh_our_ticket: Option<String> = None;
+
+                    let relay = if transport_choice == crate::transport_select::TransportChoice::Relay
+                    {
+                        let relay_url = config
+                            .relay_url
+                            .clone()
+                            .expect("Relay choice implies relay_url");
                         let relay_sync = RelaySync::new(
                             storage.clone() as Arc<dyn StorageBackend>,
                             RelaySyncConfig {
@@ -482,6 +506,63 @@ impl ArkCore {
                         self_arc.install_relay_callbacks(&relay_sync).await;
                         relay_sync.start().await.map_err(ArkCoreError::from)?;
                         Some(relay_sync)
+                    } else if transport_choice == crate::transport_select::TransportChoice::Iroh {
+                        #[cfg(feature = "iroh-spike")]
+                        {
+                            let secret_key = {
+                                let conn = shared_conn.lock().unwrap_or_else(|e| e.into_inner());
+                                crate::iroh_transport::load_or_generate_secret_key(&conn)
+                                    .map_err(ArkCoreError::from)?
+                            };
+                            let peer_addr = match config.iroh_peer_ticket.as_deref() {
+                                Some(ticket) => {
+                                    Some(crate::iroh_transport::from_ticket(ticket)
+                                        .map_err(ArkCoreError::from)?)
+                                }
+                                None => None,
+                            };
+                            let iroh_transport = Arc::new(crate::iroh_transport::IrohTransport::new(
+                                crate::iroh_transport::IrohConfig {
+                                    device_id: config.device_id.clone(),
+                                    device_name: device_name.clone(),
+                                    space_id: config.space_id.clone(),
+                                    secret_key: Some(secret_key),
+                                    peer_addr,
+                                    peer_ticket: config.iroh_peer_ticket.clone(),
+                                },
+                            ));
+                            let relay_sync = RelaySync::with_transport(
+                                storage.clone() as Arc<dyn StorageBackend>,
+                                RelaySyncConfig {
+                                    relay_url: String::new(),
+                                    relay_api_key: None,
+                                    space_id: config.space_id.clone(),
+                                    device_id: config.device_id.clone(),
+                                    device_name: device_name.clone(),
+                                    auth_secret: config.auth_secret.clone(),
+                                },
+                                iroh_transport.clone()
+                                    as Arc<dyn crate::sync_transport::SyncTransport>,
+                            );
+                            self_arc.install_relay_callbacks(&relay_sync).await;
+                            relay_sync.start().await.map_err(ArkCoreError::from)?;
+                            iroh_our_ticket = match iroh_transport.our_ticket() {
+                                Ok(ticket) => Some(ticket),
+                                Err(e) => {
+                                    eprintln!("[ArkCore::start_sync] our_ticket() failed: {e}");
+                                    None
+                                }
+                            };
+                            Some(relay_sync)
+                        }
+                        #[cfg(not(feature = "iroh-spike"))]
+                        {
+                            return Err(err(
+                                "iroh transport requested (use_iroh) but this build was \
+                                 compiled without the iroh-spike feature; rebuild with \
+                                 --features iroh-spike or use relay_url instead",
+                            ));
+                        }
                     } else {
                         None
                     };
@@ -572,6 +653,7 @@ impl ArkCore {
                         storage,
                         clients,
                         relay,
+                        iroh_our_ticket,
                         beacon,
                         device_id: config.device_id.clone(),
                         device_name,
@@ -627,6 +709,16 @@ impl ArkCore {
 
     pub fn leave_space(&self) -> Result<bool> {
         self.stop_sync()
+    }
+
+    /// Step 4a: our iroh pairing ticket, if the running sync selected the
+    /// iroh transport. `None` when sync isn't running, relay/no transport
+    /// was selected instead, or this build lacks `iroh-spike`.
+    pub fn get_own_iroh_ticket(&self) -> Result<Option<String>> {
+        self.runtime.block_on(async {
+            let guard = self.sync.lock().await;
+            Ok(guard.as_ref().and_then(|r| r.iroh_our_ticket.clone()))
+        })
     }
 
     pub fn broadcast_change_json(&self, entity_json: String) -> Result<bool> {

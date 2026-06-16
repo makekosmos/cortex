@@ -81,6 +81,24 @@ pub async fn start_lan_sync(
         }
     }
 
+    // Step 4a: iroh transport selection, mirrors KOSMOS_RELAY_URL above.
+    // Reading these env vars is unconditional (cheap, no transport
+    // construction here — this crate talks to the ark-core-rpc sidecar over
+    // JSON-RPC, it never links iroh directly); they are only ACTED ON by
+    // ark-core-rpc when it was built with the `iroh-spike` Rust feature. A
+    // non-iroh-spike sidecar rejects start_sync with an explicit error if
+    // KOSMOS_IROH=1 is set, rather than silently ignoring it.
+    if let Ok(flag) = std::env::var("KOSMOS_IROH") {
+        if flag == "1" || flag.eq_ignore_ascii_case("true") {
+            params["use_iroh"] = serde_json::Value::Bool(true);
+        }
+    }
+    if let Ok(ticket) = std::env::var("KOSMOS_IROH_PEER_TICKET") {
+        if !ticket.is_empty() {
+            params["iroh_peer_ticket"] = serde_json::Value::String(ticket);
+        }
+    }
+
     let response = ark.request("start_sync", params).await?;
     if !response.ok {
         return Err(format!(

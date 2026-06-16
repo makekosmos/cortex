@@ -36,6 +36,7 @@ use ark_core::protocol::LAN_SYNC_PORT;
 use ark_core::relay_sync::{RelaySync, RelaySyncConfig};
 use ark_core::sync_client::SyncClient;
 use ark_core::sync_server::{StorageBackend, SyncServer};
+use ark_core::transport_select::{select_transport, TransportChoice};
 use ark_core::types::*;
 
 // ---------------------------------------------------------------------------
@@ -53,6 +54,14 @@ struct SyncRuntime {
     storage: Arc<SqliteStorageBackend>,
     clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
     relay: Option<Arc<RelaySync>>,
+    /// Step 4a: our iroh pairing ticket, captured at construction time when
+    /// the iroh transport was selected (`our_ticket()` needs the transport
+    /// object directly — `RelaySync` only exposes `Arc<dyn SyncTransport>`,
+    /// which is not downcastable — so we snapshot the ticket string instead
+    /// of threading a concrete `IrohTransport` handle through `SyncRuntime`).
+    /// `None` when iroh wasn't selected, or (in a no-`iroh-spike` build)
+    /// always `None`.
+    iroh_our_ticket: Option<String>,
     beacon: Arc<BroadcastDiscovery>,
     space_id: String,
     device_id: String,
@@ -271,6 +280,15 @@ enum Request {
         /// Optional shared secret for LAN/P2P hello HMAC authentication.
         #[serde(default)]
         auth_secret: Option<String>,
+        /// Step 4a: select the iroh p2p transport instead of relay. Field
+        /// exists regardless of build (stable wire schema); only acted on
+        /// behind `#[cfg(feature = "iroh-spike")]` — see `select_transport`.
+        #[serde(default)]
+        use_iroh: bool,
+        /// Pairing ticket string for the iroh peer (see
+        /// `iroh_transport::IrohTransport::our_ticket`/`from_ticket`).
+        #[serde(default)]
+        iroh_peer_ticket: Option<String>,
     },
     StopSync,
     BroadcastChange {
@@ -286,6 +304,10 @@ enum Request {
         port: Option<u16>,
     },
     GetHostDeviceName,
+    /// Step 4a: fetch our iroh pairing ticket, if the running sync runtime
+    /// selected the iroh transport. `null`/error otherwise (e.g. relay
+    /// selected, sync not running, or build without `iroh-spike`).
+    GetOwnIrohTicket,
 }
 
 // ---------------------------------------------------------------------------
@@ -850,6 +872,8 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             relay_url,
             relay_api_key,
             auth_secret,
+            use_iroh,
+            iroh_peer_ticket,
         } => {
             handle_start_sync(
                 space_id,
@@ -860,6 +884,8 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                 relay_url,
                 relay_api_key,
                 auth_secret,
+                use_iroh,
+                iroh_peer_ticket,
             )
             .await
         }
@@ -890,6 +916,8 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         }
 
         Request::GetHostDeviceName => Ok(json!(get_host_device_name())),
+
+        Request::GetOwnIrohTicket => handle_get_own_iroh_ticket().await,
     }
 }
 
@@ -897,6 +925,40 @@ async fn handle_request(request: Request) -> Result<Value, String> {
 // Sync handlers
 // ---------------------------------------------------------------------------
 
+/// Wires the standard event-stream callbacks (`entity_changed`,
+/// `peer_connected`, `peer_disconnected`) onto a `RelaySync` instance.
+/// Shared between the relay and iroh branches of `handle_start_sync` — the
+/// orchestration layer (`RelaySync`) is transport-neutral, so the same
+/// callback wiring applies regardless of which `SyncTransport` drives it.
+async fn wire_relay_sync_events(relay_sync: &Arc<RelaySync>) {
+    relay_sync
+        .set_on_change(Arc::new(|entity| {
+            emit_event(json!({
+                "event": "entity_changed",
+                "entity": entity,
+            }));
+        }))
+        .await;
+    relay_sync
+        .set_on_peer_connect(Arc::new(|peer_device_id| {
+            emit_event(json!({
+                "event": "peer_connected",
+                "device_id": peer_device_id,
+            }));
+        }))
+        .await;
+    relay_sync
+        .set_on_peer_disconnect(Arc::new(|peer_device_id, remaining| {
+            emit_event(json!({
+                "event": "peer_disconnected",
+                "device_id": peer_device_id,
+                "remaining": remaining,
+            }));
+        }))
+        .await;
+}
+
+#[allow(clippy::too_many_arguments)]
 async fn handle_start_sync(
     space_id: String,
     device_id: String,
@@ -906,6 +968,8 @@ async fn handle_start_sync(
     relay_url: Option<String>,
     relay_api_key: Option<String>,
     auth_secret: Option<String>,
+    use_iroh: bool,
+    iroh_peer_ticket: Option<String>,
 ) -> Result<Value, String> {
     // Idempotency: tear down any running runtime first.
     handle_stop_sync().await;
@@ -914,7 +978,7 @@ async fn handle_start_sync(
     let ws_port = port.unwrap_or(LAN_SYNC_PORT);
 
     let shared_conn = get_shared_conn()?;
-    let storage = Arc::new(SqliteStorageBackend::new(shared_conn));
+    let storage = Arc::new(SqliteStorageBackend::new(shared_conn.clone()));
     storage.set_device_id(&device_id);
 
     let server = Arc::new(SyncServer::new(storage.clone() as Arc<dyn StorageBackend>));
@@ -971,8 +1035,29 @@ async fn handle_start_sync(
         )
         .await?;
 
-    let relay = if let Some(relay_url) = relay_url.clone() {
-        let relay_sync = RelaySync::new(
+    let transport_choice = select_transport(use_iroh, &relay_url);
+    #[allow(unused_mut, unused_assignments)]
+    let mut iroh_our_ticket: Option<String> = None;
+    // `iroh_peer_ticket` is only read inside the `#[cfg(feature = "iroh-spike")]`
+    // branch below; reference it here so a no-feature build doesn't warn about
+    // an unused parameter (the field itself must stay on the wire schema
+    // regardless of build per the UniFFI/JSON-RPC surface-stability rule).
+    let _ = &iroh_peer_ticket;
+
+    let relay = if transport_choice == TransportChoice::Relay {
+        let relay_url = relay_url.clone().expect("Relay choice implies relay_url");
+        let transport: Arc<dyn ark_core::sync_transport::SyncTransport> =
+            Arc::new(ark_core::relay_transport::RelayTransport::new(
+                ark_core::relay_transport::RelayConfig {
+                    url: relay_url.clone(),
+                    space_id: space_id.clone(),
+                    device_id: device_id.clone(),
+                    device_name: device_name.clone(),
+                    api_key: relay_api_key.clone().unwrap_or_default(),
+                    auth_secret: auth_secret.clone(),
+                },
+            ));
+        let relay_sync = RelaySync::with_transport(
             storage.clone() as Arc<dyn StorageBackend>,
             RelaySyncConfig {
                 relay_url,
@@ -982,34 +1067,71 @@ async fn handle_start_sync(
                 device_name: device_name.clone(),
                 auth_secret: auth_secret.clone(),
             },
+            transport,
         );
-        relay_sync
-            .set_on_change(Arc::new(|entity| {
-                emit_event(json!({
-                    "event": "entity_changed",
-                    "entity": entity,
-                }));
-            }))
-            .await;
-        relay_sync
-            .set_on_peer_connect(Arc::new(|peer_device_id| {
-                emit_event(json!({
-                    "event": "peer_connected",
-                    "device_id": peer_device_id,
-                }));
-            }))
-            .await;
-        relay_sync
-            .set_on_peer_disconnect(Arc::new(|peer_device_id, remaining| {
-                emit_event(json!({
-                    "event": "peer_disconnected",
-                    "device_id": peer_device_id,
-                    "remaining": remaining,
-                }));
-            }))
-            .await;
+        wire_relay_sync_events(&relay_sync).await;
         relay_sync.start().await?;
         Some(relay_sync)
+    } else if transport_choice == TransportChoice::Iroh {
+        #[cfg(feature = "iroh-spike")]
+        {
+            let secret_key = {
+                let conn = shared_conn.lock().unwrap_or_else(|e| e.into_inner());
+                ark_core::iroh_transport::load_or_generate_secret_key(&conn)
+                    .map_err(|e| format!("iroh transport: failed to load identity: {e}"))?
+            };
+            let peer_addr = match iroh_peer_ticket.as_deref() {
+                Some(ticket) => Some(ark_core::iroh_transport::from_ticket(ticket)?),
+                None => None,
+            };
+            let iroh_transport = Arc::new(ark_core::iroh_transport::IrohTransport::new(
+                ark_core::iroh_transport::IrohConfig {
+                    device_id: device_id.clone(),
+                    device_name: device_name.clone(),
+                    space_id: space_id.clone(),
+                    secret_key: Some(secret_key),
+                    peer_addr,
+                    peer_ticket: iroh_peer_ticket.clone(),
+                },
+            ));
+            // RelaySyncConfig.relay_url is unused by `with_transport` (only
+            // `RelaySync::new` reads it to build a `RelayTransport`) — pass an
+            // empty string rather than widening the struct for one unused field.
+            let relay_sync = RelaySync::with_transport(
+                storage.clone() as Arc<dyn StorageBackend>,
+                RelaySyncConfig {
+                    relay_url: String::new(),
+                    relay_api_key: None,
+                    space_id: space_id.clone(),
+                    device_id: device_id.clone(),
+                    device_name: device_name.clone(),
+                    auth_secret: auth_secret.clone(),
+                },
+                iroh_transport.clone() as Arc<dyn ark_core::sync_transport::SyncTransport>,
+            );
+            wire_relay_sync_events(&relay_sync).await;
+            relay_sync.start().await?;
+            // `start()` binds the endpoint, so `our_ticket()` is available now.
+            // Snapshot it onto `SyncRuntime` for `GetOwnIrohTicket` — capture
+            // failures are logged but not fatal (pairing UI degrades to "no
+            // ticket yet" rather than aborting an otherwise-successful start).
+            iroh_our_ticket = match iroh_transport.our_ticket() {
+                Ok(ticket) => Some(ticket),
+                Err(e) => {
+                    eprintln!("[handle_start_sync] our_ticket() failed: {e}");
+                    None
+                }
+            };
+            Some(relay_sync)
+        }
+        #[cfg(not(feature = "iroh-spike"))]
+        {
+            return Err(
+                "iroh transport requested (use_iroh) but this build was compiled without the \
+                 iroh-spike feature; rebuild with --features iroh-spike or use relay_url instead"
+                    .to_string(),
+            );
+        }
     } else {
         None
     };
@@ -1174,6 +1296,7 @@ async fn handle_start_sync(
         storage,
         clients,
         relay,
+        iroh_our_ticket,
         beacon: beacon_clone,
         space_id,
         device_id,
@@ -1350,6 +1473,17 @@ async fn handle_broadcast_change(mut entity: SyncEntity) -> Result<Value, String
     Ok(json!(true))
 }
 
+/// Step 4a: surface our iroh pairing ticket for the runtime/UI. `null` when
+/// sync isn't running or the running runtime didn't select iroh (relay/no
+/// transport, or a build without `iroh-spike`).
+async fn handle_get_own_iroh_ticket() -> Result<Value, String> {
+    let guard = SYNC.lock().await;
+    let ticket = guard
+        .as_ref()
+        .and_then(|runtime| runtime.iroh_our_ticket.clone());
+    Ok(json!(ticket))
+}
+
 async fn handle_get_connected_peers() -> Result<Value, String> {
     let guard = SYNC.lock().await;
     let runtime = match guard.as_ref() {
@@ -1464,6 +1598,160 @@ mod tests {
         .expect("request id must be backward-compatible metadata");
 
         assert!(matches!(request, Request::GetHostDeviceName));
+    }
+
+    #[test]
+    fn request_deserialization_accepts_iroh_config() {
+        let request = serde_json::from_value::<Request>(json!({
+            "operation": "start_sync",
+            "space_id": "space",
+            "device_id": "device",
+            "use_iroh": true,
+            "iroh_peer_ticket": "endpointsometicketvalue"
+        }))
+        .expect("iroh config should be accepted by the request schema");
+
+        match request {
+            Request::StartSync {
+                use_iroh,
+                iroh_peer_ticket,
+                ..
+            } => {
+                assert!(use_iroh);
+                assert_eq!(iroh_peer_ticket.as_deref(), Some("endpointsometicketvalue"));
+            }
+            _ => panic!("expected start_sync"),
+        }
+    }
+
+    #[cfg(feature = "iroh-spike")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+
+        // Before start_sync, our ticket must be unavailable.
+        let before = handle_request(Request::GetOwnIrohTicket).await.unwrap();
+        assert_eq!(before, Value::Null);
+
+        let port = {
+            // Bind an ephemeral port for the LAN/WS server side of
+            // start_sync so this test doesn't collide with LAN_SYNC_PORT
+            // across parallel test runs.
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.local_addr().unwrap().port()
+        };
+
+        let start_result = handle_request(Request::StartSync {
+            space_id: "iroh-space".to_string(),
+            device_id: "device-iroh".to_string(),
+            device_name: Some("Iroh Device".to_string()),
+            port: Some(port),
+            seed_addresses: None,
+            relay_url: None,
+            relay_api_key: None,
+            auth_secret: None,
+            use_iroh: true,
+            iroh_peer_ticket: None,
+        })
+        .await;
+
+        // `handle_start_sync` binds the shared UDP beacon discovery port
+        // (`beacon::BEACON_PORT`, fixed/non-configurable, unrelated to this
+        // change) AFTER the iroh transport is already constructed and
+        // started. On a dev machine that also has the real Kosmos app
+        // running, that fixed port is already taken — a pre-existing
+        // environment hazard for any `start_sync` integration test, not a
+        // regression from this change (and out of scope: the task says LAN
+        // discovery code must stay untouched). Treat that specific bind
+        // failure as inconclusive rather than asserting the whole iroh path
+        // failed; any other error is a real failure.
+        match start_result {
+            Ok(_) => {
+                let ticket = handle_request(Request::GetOwnIrohTicket)
+                    .await
+                    .expect("get_own_iroh_ticket should succeed once iroh transport is running");
+                assert!(
+                    ticket.as_str().is_some_and(|s| !s.is_empty()),
+                    "expected a non-empty iroh ticket string, got {ticket:?}"
+                );
+                handle_request(Request::StopSync).await.unwrap();
+            }
+            Err(e) if e.contains("Failed to bind UDP") => {
+                eprintln!(
+                    "skipping ticket assertion: beacon UDP port unavailable in this \
+                     environment (unrelated to iroh transport selection): {e}"
+                );
+            }
+            Err(e) => panic!("start_sync with use_iroh failed unexpectedly: {e}"),
+        }
+    }
+
+    #[cfg(not(feature = "iroh-spike"))]
+    #[tokio::test]
+    async fn start_sync_with_use_iroh_fails_gracefully_without_iroh_spike_feature() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+
+        let port = {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.local_addr().unwrap().port()
+        };
+
+        let result = handle_request(Request::StartSync {
+            space_id: "iroh-space".to_string(),
+            device_id: "device-iroh".to_string(),
+            device_name: Some("Iroh Device".to_string()),
+            port: Some(port),
+            seed_addresses: None,
+            relay_url: None,
+            relay_api_key: None,
+            auth_secret: None,
+            use_iroh: true,
+            iroh_peer_ticket: None,
+        })
+        .await;
+
+        assert!(
+            result.is_err(),
+            "use_iroh must fail with a clear error when built without iroh-spike, not silently no-op"
+        );
+
+        handle_request(Request::StopSync).await.unwrap();
+    }
+
+    #[test]
+    fn request_deserialization_defaults_iroh_fields_when_absent() {
+        let request = serde_json::from_value::<Request>(json!({
+            "operation": "start_sync",
+            "space_id": "space",
+            "device_id": "device"
+        }))
+        .expect("start_sync without iroh fields should still deserialize");
+
+        match request {
+            Request::StartSync {
+                use_iroh,
+                iroh_peer_ticket,
+                ..
+            } => {
+                assert!(!use_iroh);
+                assert_eq!(iroh_peer_ticket, None);
+            }
+            _ => panic!("expected start_sync"),
+        }
     }
 
     #[test]

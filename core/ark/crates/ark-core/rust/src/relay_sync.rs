@@ -5,10 +5,11 @@ use tokio::sync::{mpsc, Mutex};
 
 use crate::hlc::HLC;
 use crate::protocol::*;
-use crate::relay_transport::{RelayConfig, RelayEvent, RelayTransport};
+use crate::relay_transport::{RelayConfig, RelayTransport};
 use crate::sync_server::{
     OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback, StorageBackend,
 };
+use crate::sync_transport::{SyncTransport, TransportEvent};
 use crate::types::{PeerRecord, SyncEntity, VersionVector};
 
 const TAG: &str = "[RelaySync]";
@@ -32,7 +33,7 @@ struct RelayPeerState {
 
 pub struct RelaySync {
     storage: Arc<dyn StorageBackend>,
-    transport: Arc<RelayTransport>,
+    transport: Arc<dyn SyncTransport>,
     config: RelaySyncConfig,
     auth_secret: Option<String>,
     peers: Arc<Mutex<HashMap<String, RelayPeerState>>>,
@@ -44,7 +45,7 @@ pub struct RelaySync {
 impl RelaySync {
     pub fn new(storage: Arc<dyn StorageBackend>, config: RelaySyncConfig) -> Arc<Self> {
         let auth_secret = normalize_auth_secret(config.auth_secret.clone());
-        let transport = Arc::new(RelayTransport::new(RelayConfig {
+        let transport: Arc<dyn SyncTransport> = Arc::new(RelayTransport::new(RelayConfig {
             url: config.relay_url.clone(),
             space_id: config.space_id.clone(),
             device_id: config.device_id.clone(),
@@ -52,6 +53,20 @@ impl RelaySync {
             api_key: config.relay_api_key.clone().unwrap_or_default(),
             auth_secret: auth_secret.clone(),
         }));
+        Self::with_transport(storage, config, transport)
+    }
+
+    /// Generalized constructor: build `RelaySync` over an already-constructed
+    /// transport. Lets callers (e.g. `handle_start_sync`) drive the same CRDT
+    /// orchestration with `RelayTransport`, `IrohTransport` (behind
+    /// `iroh-spike`), or any other `SyncTransport` impl, instead of always
+    /// constructing a `RelayTransport` internally from `config.relay_url`.
+    pub fn with_transport(
+        storage: Arc<dyn StorageBackend>,
+        config: RelaySyncConfig,
+        transport: Arc<dyn SyncTransport>,
+    ) -> Arc<Self> {
+        let auth_secret = normalize_auth_secret(config.auth_secret.clone());
 
         Arc::new(Self {
             storage,
@@ -78,7 +93,7 @@ impl RelaySync {
     }
 
     pub async fn start(self: &Arc<Self>) -> Result<(), String> {
-        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<RelayEvent>();
+        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<TransportEvent>();
         self.transport.start(event_tx).await?;
 
         let this = self.clone();
@@ -118,9 +133,9 @@ impl RelaySync {
             .collect()
     }
 
-    async fn handle_event(&self, event: RelayEvent) {
+    async fn handle_event(&self, event: TransportEvent) {
         match event {
-            RelayEvent::MessageReceived {
+            TransportEvent::MessageReceived {
                 from_device_id,
                 msg,
             } => {
@@ -134,8 +149,8 @@ impl RelaySync {
                 }
                 self.handle_message(from, msg).await;
             }
-            RelayEvent::Connected { .. } => {}
-            RelayEvent::Disconnected { device_id } => {
+            TransportEvent::Connected { .. } => {}
+            TransportEvent::Disconnected { device_id } => {
                 if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
                     handler(device_id, self.peers.lock().await.len());
                 }

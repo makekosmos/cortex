@@ -20,11 +20,14 @@
 //! Доступен только под feature `iroh-spike` — production build (`cargo build`
 //! без флагов) не подтягивает крейт `iroh` и не компилирует этот файл.
 
+use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Mutex;
 
 use iroh::endpoint::presets;
 use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode};
+use iroh_tickets::endpoint::EndpointTicket;
+use iroh_tickets::Ticket;
 use rusqlite::Connection;
 use tokio::sync::mpsc;
 
@@ -32,6 +35,7 @@ use crate::db::{get_sync_kv, set_sync_kv};
 use crate::protocol::{
     deserialize_message, message_origin_device_id, serialize_message, LanSyncMessage,
 };
+use crate::sync_transport::{SyncTransport, TransportEvent};
 
 /// `sync_kv` ключ для персистентного iroh identity secret key (см. spec
 /// фазы 1 шаг 1). Хранится hex-кодированием 32 байт `SecretKey::to_bytes()`
@@ -64,20 +68,95 @@ pub struct IrohConfig {
     /// Адрес пира, с которым нужно установить прямое соединение. В фазе 0
     /// передаётся явно тестом/вызывающим кодом, без discovery.
     pub peer_addr: Option<iroh::EndpointAddr>,
+    /// Шаг 3: альтернатива `peer_addr` — единая ticket-строка (см.
+    /// `our_ticket()`/`from_ticket()`), из которой `EndpointAddr` пира
+    /// извлекается лениво при первом `send()`. Если задан `peer_addr`, он
+    /// имеет приоритет (явный адрес важнее тикета на случай, если задано
+    /// и то, и другое).
+    pub peer_ticket: Option<String>,
 }
 
-#[derive(Debug)]
-pub enum IrohEvent {
-    Connected {
-        device_id: String,
-    },
-    Disconnected {
-        device_id: String,
-    },
-    MessageReceived {
-        from_device_id: String,
-        msg: LanSyncMessage,
-    },
+// ---------------------------------------------------------------------------
+// Ticket-based pairing — Шаг 3.
+// ---------------------------------------------------------------------------
+
+/// Строит ticket-строку из `EndpointAddr` — обратная сторона `from_ticket`.
+/// Свободная функция (а не метод `IrohTransport`), чтобы unit-тест мог
+/// проверить round-trip без поднятия реального `Endpoint`.
+fn ticket_string(addr: &EndpointAddr) -> String {
+    EndpointTicket::new(addr.clone()).encode_string()
+}
+
+/// Парсит ticket-строку (см. `IrohTransport::our_ticket`) обратно в
+/// `EndpointAddr`, который можно использовать для `endpoint.connect(...)`.
+///
+/// Тип тикета — `iroh_tickets::endpoint::EndpointTicket` (крейт
+/// `iroh-tickets` 1.0.0; `iroh` 1.0.0 сам его не реэкспортирует — проверено
+/// по исходникам `iroh-1.0.0/src/lib.rs`, там нет `Ticket`/`ticket`).
+/// Канонический строковый вид — префикс `"endpoint"` + base32 без паддинга
+/// (см. `Ticket::encode_string`/`decode_string` в `iroh-tickets`).
+pub fn from_ticket(ticket: &str) -> Result<EndpointAddr, String> {
+    EndpointTicket::decode_string(ticket.trim())
+        .map(|t| t.endpoint_addr().clone())
+        .map_err(|e| format!("iroh transport: invalid ticket: {e}"))
+}
+
+// ---------------------------------------------------------------------------
+// device_id ↔ EndpointId реестр — Шаг 3.
+// ---------------------------------------------------------------------------
+
+/// In-memory соответствие CRDT `device_id` (как в `LanSyncMessage::Hello`) и
+/// транспортного `EndpointId` пира. Заполняется на принимающей стороне при
+/// первом входящем `Hello` от соединения (см. accept-loop в `start()`) —
+/// до этого момента `EndpointId` пира известен, но какой это CRDT-девайс —
+/// нет (см. doc-comment модуля, открытый вопрос §4.3/фаза 1 в исходной
+/// версии файла).
+///
+/// Хранит обе проекции (`EndpointId -> device_id` и `device_id ->
+/// EndpointId`), а не одну с линейным поиском — обе стороны нужны: accept-
+/// loop резолвит `from_device_id` по `EndpointId` соединения,
+/// потенциальный будущий outbound-routing — наоборот.
+#[derive(Default)]
+pub struct DeviceRegistry {
+    by_endpoint: Mutex<HashMap<EndpointId, String>>,
+    by_device: Mutex<HashMap<String, EndpointId>>,
+}
+
+impl DeviceRegistry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Записывает/перезаписывает маппинг для пары (endpoint_id, device_id).
+    /// Перезапись поддержана осознанно: устройство может переподключиться с
+    /// тем же `EndpointId`, но потенциально другим заявленным `device_id`
+    /// (переименование) — последний `Hello` должен победить.
+    pub fn insert(&self, endpoint_id: EndpointId, device_id: String) {
+        self.by_endpoint
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(endpoint_id, device_id.clone());
+        self.by_device
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(device_id, endpoint_id);
+    }
+
+    pub fn device_id_for(&self, endpoint_id: &EndpointId) -> Option<String> {
+        self.by_endpoint
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(endpoint_id)
+            .cloned()
+    }
+
+    pub fn endpoint_id_for(&self, device_id: &str) -> Option<EndpointId> {
+        self.by_device
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(device_id)
+            .copied()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +172,10 @@ pub struct IrohTransport {
     endpoint: Mutex<Option<Endpoint>>,
     /// Shutdown signal sender (по аналогии с `RelayTransport::stop_tx`).
     stop_tx: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    /// Шаг 3: device_id ↔ EndpointId реестр, заполняется по входящим Hello.
+    /// `Arc`, потому что accept-loop живёт в спавненной `'static`-задаче и не
+    /// может держать `&self` транспорта.
+    registry: std::sync::Arc<DeviceRegistry>,
 }
 
 impl IrohTransport {
@@ -101,7 +184,45 @@ impl IrohTransport {
             config,
             endpoint: Mutex::new(None),
             stop_tx: Mutex::new(None),
+            registry: std::sync::Arc::new(DeviceRegistry::new()),
         }
+    }
+
+    /// Текущий снимок реестра device_id ↔ EndpointId (для тестов/диагностики).
+    #[doc(hidden)]
+    pub fn registry(&self) -> &DeviceRegistry {
+        &self.registry
+    }
+
+    /// Тестовый хук: то же кодирование, что использует `our_ticket()`, но
+    /// без необходимости поднимать реальный `Endpoint` — позволяет unit-тесту
+    /// проверить чистый round-trip кодек тикета.
+    #[doc(hidden)]
+    pub fn ticket_string_for_addr(addr: &EndpointAddr) -> String {
+        ticket_string(addr)
+    }
+
+    /// Возвращает нашу ticket-строку — то, что нужно передать другому
+    /// устройству для pairing вместо сырого `EndpointAddr` (см.
+    /// `IrohConfig::peer_ticket`/`from_ticket`). Требует, чтобы транспорт
+    /// уже был запущен (иначе `endpoint_addr()` недоступен).
+    pub fn our_ticket(&self) -> Result<String, String> {
+        let addr = self
+            .endpoint_addr()
+            .ok_or_else(|| "iroh transport: our_ticket() called before start()".to_string())?;
+        Ok(ticket_string(&addr))
+    }
+
+    /// Резолвит эффективный адрес пира для `send()`: явный `peer_addr` имеет
+    /// приоритет, иначе парсим `peer_ticket` (см. `IrohConfig` doc-comment).
+    fn resolve_peer_addr(&self) -> Result<EndpointAddr, String> {
+        if let Some(addr) = self.config.peer_addr.clone() {
+            return Ok(addr);
+        }
+        let ticket = self.config.peer_ticket.as_deref().ok_or_else(|| {
+            "iroh transport: send() requires config.peer_addr or config.peer_ticket".to_string()
+        })?;
+        from_ticket(ticket)
     }
 
     /// Возвращает локальный `EndpointId` транспорта, если он уже запущен.
@@ -130,12 +251,15 @@ impl IrohTransport {
         let socket: SocketAddr = (Ipv4Addr::LOCALHOST, port).into();
         Some(EndpointAddr::new(ep.id()).with_ip_addr(socket))
     }
+}
 
+#[async_trait::async_trait]
+impl SyncTransport for IrohTransport {
     /// Запускает транспорт: байндит `Endpoint` на loopback без relay/discovery
     /// (`RelayMode::Disabled`), поднимает accept-loop для входящих
     /// bi-стримов и (если `config.peer_addr` задан) исходящее соединение.
     /// События доставляются через `event_tx` — аналог `RelayTransport::start`.
-    pub async fn start(&self, event_tx: mpsc::UnboundedSender<IrohEvent>) -> Result<(), String> {
+    async fn start(&self, event_tx: mpsc::UnboundedSender<TransportEvent>) -> Result<(), String> {
         // Builder — ТОЛЬКО presets::Minimal (см. модульную документацию и
         // iroh_loopback_smoke.rs): empty() падает без crypto_provider, N0
         // тянет DNS/pkarr lookup даже с relay Disabled.
@@ -163,6 +287,7 @@ impl IrohTransport {
         // стримов/реконнектов в рамках теста), пока не придёт stop-сигнал.
         let accept_endpoint = endpoint.clone();
         let accept_event_tx = event_tx.clone();
+        let accept_registry = self.registry.clone();
         tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -175,6 +300,7 @@ impl IrohTransport {
                             return;
                         };
                         let event_tx = accept_event_tx.clone();
+                        let registry = accept_registry.clone();
                         tokio::spawn(async move {
                             let conn = match incoming.await {
                                 Ok(conn) => conn,
@@ -183,6 +309,7 @@ impl IrohTransport {
                                     return;
                                 }
                             };
+                            let remote_endpoint_id = conn.remote_id();
 
                             let (_send, mut recv) = match conn.accept_bi().await {
                                 Ok(streams) => streams,
@@ -195,14 +322,25 @@ impl IrohTransport {
                             match read_frame(&mut recv).await {
                                 Ok(raw) => {
                                     if let Some(msg) = deserialize_message(&raw) {
-                                        // Фаза 0: from_device_id читается из самого
-                                        // сообщения (origin_device_id), а не из
-                                        // EndpointId пира — полноценный device_id
-                                        // ↔ EndpointId реестр это фаза 1 (см.
-                                        // модульную документацию).
-                                        let from_device_id =
-                                            message_origin_device_id(&msg).unwrap_or_default();
-                                        let _ = event_tx.send(IrohEvent::MessageReceived {
+                                        // Шаг 3: на Hello учим реестр (EndpointId
+                                        // соединения -> CRDT device_id из payload) —
+                                        // это единственное сообщение, которое
+                                        // достоверно несёт device_id отправителя
+                                        // независимо от заполненности
+                                        // origin_device_id. Для остальных типов
+                                        // сообщений сперва пробуем
+                                        // origin_device_id из самого сообщения,
+                                        // а если его нет — резолвим по реестру
+                                        // через EndpointId этого соединения (а не
+                                        // пустую строку — см. doc-comment
+                                        // `DeviceRegistry`).
+                                        if let LanSyncMessage::Hello { device_id, .. } = &msg {
+                                            registry.insert(remote_endpoint_id, device_id.clone());
+                                        }
+                                        let from_device_id = message_origin_device_id(&msg)
+                                            .or_else(|| registry.device_id_for(&remote_endpoint_id))
+                                            .unwrap_or_default();
+                                        let _ = event_tx.send(TransportEvent::MessageReceived {
                                             from_device_id,
                                             msg,
                                         });
@@ -236,7 +374,7 @@ impl IrohTransport {
     /// (fire-and-forget), ошибки логируются в stderr, а не возвращаются
     /// вызывающему — `Ok(())` здесь означает "сообщение поставлено в очередь
     /// на отправку", а не "доставлено".
-    pub fn send(&self, msg: LanSyncMessage) -> Result<(), String> {
+    fn send(&self, msg: LanSyncMessage) -> Result<(), String> {
         let endpoint = self
             .endpoint
             .lock()
@@ -244,11 +382,7 @@ impl IrohTransport {
             .clone()
             .ok_or_else(|| "iroh transport: send() called before start()".to_string())?;
 
-        let peer_addr = self
-            .config
-            .peer_addr
-            .clone()
-            .ok_or_else(|| "iroh transport: send() requires config.peer_addr".to_string())?;
+        let peer_addr = self.resolve_peer_addr()?;
 
         tokio::spawn(async move {
             let conn = match endpoint.connect(peer_addr, ARK_SYNC_ALPN).await {
@@ -290,7 +424,7 @@ impl IrohTransport {
     }
 
     /// Сигнализирует фоновому accept-loop остановиться и закрывает `Endpoint`.
-    pub fn stop(&self) {
+    fn stop(&self) {
         if let Some(tx) = self
             .stop_tx
             .lock()
@@ -305,6 +439,13 @@ impl IrohTransport {
 // ---------------------------------------------------------------------------
 // Framing: 4-байтовый big-endian length prefix + JSON
 // ---------------------------------------------------------------------------
+
+/// Верхняя граница для длины фрейма на чтении — без неё `len` из 4-байтового
+/// префикса (приходит от пира, untrusted) напрямую идёт в `vec![0u8; len]`,
+/// то есть hostile/corrupted префикс (`u32::MAX`) выделяет до ~4 GiB за один
+/// `read_frame`. Реальные CRDT JSON-сообщения (`LanSyncMessage`) на порядки
+/// меньше; 16 MiB — щедрый запас, не специфичная для протокола константа.
+const MAX_FRAME_LEN: usize = 16 * 1024 * 1024;
 
 async fn write_frame(
     send: &mut iroh::endpoint::SendStream,
@@ -327,6 +468,11 @@ async fn read_frame(recv: &mut iroh::endpoint::RecvStream) -> Result<String, Str
         .await
         .map_err(|e| format!("iroh transport: read frame length failed: {e}"))?;
     let len = u32::from_be_bytes(len_buf) as usize;
+    if len > MAX_FRAME_LEN {
+        return Err(format!(
+            "iroh transport: frame length {len} exceeds max {MAX_FRAME_LEN}"
+        ));
+    }
 
     let mut payload = vec![0u8; len];
     recv.read_exact(&mut payload)
@@ -396,6 +542,100 @@ fn hex_decode_32(s: &str) -> Option<[u8; 32]> {
 // ---------------------------------------------------------------------------
 // Tests — Фаза 1 шаг 1: постоянная identity.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Tests — Шаг 3: ticket-based pairing + device_id ↔ EndpointId реестр (RED).
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod ticket_tests {
+    use std::net::{Ipv4Addr, SocketAddr};
+
+    use iroh::{EndpointAddr, SecretKey};
+
+    use super::{from_ticket, IrohTransport};
+
+    fn sample_addr() -> EndpointAddr {
+        let secret = SecretKey::generate();
+        let socket: SocketAddr = (Ipv4Addr::LOCALHOST, 4242).into();
+        EndpointAddr::new(secret.public()).with_ip_addr(socket)
+    }
+
+    #[test]
+    fn ticket_round_trips_through_string() {
+        let addr = sample_addr();
+        let expected_id = addr.id;
+
+        let ticket_str = IrohTransport::ticket_string_for_addr(&addr);
+        let parsed = from_ticket(&ticket_str).expect("ticket should parse back");
+
+        assert_eq!(
+            parsed.id, expected_id,
+            "round-tripped ticket should preserve EndpointId"
+        );
+    }
+
+    #[test]
+    fn from_ticket_rejects_garbage_string() {
+        let result = from_ticket("not-a-real-ticket");
+        assert!(result.is_err(), "garbage string must not parse as a ticket");
+    }
+}
+
+#[cfg(test)]
+mod registry_tests {
+    use iroh::SecretKey;
+
+    use super::DeviceRegistry;
+
+    #[test]
+    fn resolves_device_id_by_endpoint_id_after_insert() {
+        let registry = DeviceRegistry::new();
+        let endpoint_id = SecretKey::generate().public();
+
+        registry.insert(endpoint_id, "device-A".to_string());
+
+        assert_eq!(
+            registry.device_id_for(&endpoint_id),
+            Some("device-A".to_string())
+        );
+    }
+
+    #[test]
+    fn resolves_endpoint_id_by_device_id_after_insert() {
+        let registry = DeviceRegistry::new();
+        let endpoint_id = SecretKey::generate().public();
+
+        registry.insert(endpoint_id, "device-A".to_string());
+
+        assert_eq!(
+            registry.endpoint_id_for("device-A"),
+            Some(endpoint_id)
+        );
+    }
+
+    #[test]
+    fn unknown_endpoint_id_resolves_to_none() {
+        let registry = DeviceRegistry::new();
+        let endpoint_id = SecretKey::generate().public();
+
+        assert_eq!(registry.device_id_for(&endpoint_id), None);
+    }
+
+    #[test]
+    fn later_insert_overwrites_earlier_mapping_for_same_endpoint_id() {
+        let registry = DeviceRegistry::new();
+        let endpoint_id = SecretKey::generate().public();
+
+        registry.insert(endpoint_id, "device-A".to_string());
+        registry.insert(endpoint_id, "device-A-renamed".to_string());
+
+        assert_eq!(
+            registry.device_id_for(&endpoint_id),
+            Some("device-A-renamed".to_string())
+        );
+    }
+}
 
 #[cfg(test)]
 mod identity_tests {

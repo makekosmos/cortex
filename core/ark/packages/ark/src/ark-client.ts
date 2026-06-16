@@ -16,6 +16,22 @@ export interface ArkClientOptions {
   relayUrl?: string;
   relayApiKey?: string;
   /**
+   * Step 4a (iroh-spike): select the iroh p2p QUIC transport instead of
+   * relay/LAN. Only effective when the ark-core-rpc sidecar was built with
+   * the `iroh-spike` Rust feature — a build without it rejects `start_sync`
+   * with an explicit error when `useIroh` is set, rather than silently
+   * falling back to relay/LAN. Existing `relayUrl`/`relayApiKey` callers are
+   * unaffected: `useIroh` defaults to falsy and wins over `relayUrl` only
+   * when explicitly set.
+   */
+  useIroh?: boolean;
+  /**
+   * Pairing ticket string for the iroh peer to connect to (see
+   * `IrohTransport::our_ticket()`/`from_ticket()` on the Rust side). Only
+   * read when `useIroh` is set.
+   */
+  irohPeerTicket?: string;
+  /**
    * Optional shared secret for ARK LAN/P2P hello HMAC authentication.
    *
    * When provided, ark-core-rpc includes an HMAC proof in outbound hello
@@ -765,7 +781,19 @@ export class ArkClient {
       relay_url: this.opts.relayUrl ?? null,
       relay_api_key: this.opts.relayApiKey ?? null,
       auth_secret: this.opts.authSecret ?? null,
+      use_iroh: this.opts.useIroh ?? false,
+      iroh_peer_ticket: this.opts.irohPeerTicket ?? null,
     });
+  }
+
+  /**
+   * Step 4a: fetch our iroh pairing ticket from the running sidecar, so the
+   * runtime/UI can surface it for pairing (e.g. show a QR/copy-paste code).
+   * Returns `null` when sync isn't running, a different transport was
+   * selected, or the sidecar build lacks `iroh-spike`.
+   */
+  async getOwnIrohTicket(): Promise<string | null> {
+    return this.request<string | null>({ operation: "get_own_iroh_ticket" });
   }
 
   async stop(): Promise<void> {

@@ -23,6 +23,8 @@ pub mod schema;
 pub mod space;
 pub mod sync_client;
 pub mod sync_server;
+pub mod sync_transport;
+pub mod transport_select;
 pub mod types;
 
 uniffi::setup_scaffolding!();
