@@ -1,5 +1,20 @@
 # Kosmos — статус проекта (2026-06-15)
 
+## 2026-06-16 — Eden editor draft persistence release (Eden 0.2.2 → 0.2.3)
+
+Patch-релиз Eden закрывает критичный race в CodeMirror editor persistence:
+локальный текст теперь сразу становится authoritative draft в renderer store, а
+запоздалые save completion'ы не могут перерисовать body старым `content_json`.
+Это убирает пользовательский симптом “написал текст → он исчез → потом появился
+обратно”, который проявлялся не только на первом вводе, а при обычной работе с
+заметкой.
+
+В релиз вошли два regression-контракта в `CmEditor.spec.ts`: body draft эмитится
+сразу на `docChanged` до debounce-save, и stale save completion не откатывает
+более новый optimistic draft. Связанный postmortem:
+`docs-site/agents/postmortems.md` § `2026-06-16 — Eden stale inbound body
+перерисовывал live draft`.
+
 ## 2026-06-15 — Eden loading release (Eden 0.2.1 → 0.2.2)
 
 Patch-релиз Eden публикует свежий pass по загрузке списка заметок через ARK
