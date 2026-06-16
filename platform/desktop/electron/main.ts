@@ -74,6 +74,7 @@ import {
   openExtension,
   raycastRuntimeContext,
   setExtensionArkBridge,
+  setExtensionArkBridgeReadyTimeoutMs,
   type DeclaredCommand,
 } from "./extension-host";
 import { runRaycastNoViewCommand, type RaycastCommandLaunchProps } from "./raycast/command-runner";
@@ -226,8 +227,12 @@ const BACKEND_RESPAWN_DELAYS_MS = [1000, 5000, 30_000, 60_000, 120_000];
 const BACKEND_SUCCESSFUL_RUN_MS = 5 * 60 * 1000;
 const BACKEND_MAX_CRASH_STREAK = BACKEND_RESPAWN_DELAYS_MS.length;
 const ARK_CLIENT_LOCK_WAIT_MS = 30_000;
-const ARK_READY_REQUEST_TIMEOUT_MS = ARK_CLIENT_LOCK_WAIT_MS + 5_000;
 const ARK_INIT_RETRY_DELAYS_MS = [1000, 2000, 5000, 10_000];
+// Один пользовательский запрос должен переживать не только первичное окно
+// ожидания lock-файла, но и первый bounded retry после delayed backend startup.
+// См. postmortems.md § 2026-06-16.
+const ARK_READY_REQUEST_TIMEOUT_MS =
+  ARK_CLIENT_LOCK_WAIT_MS + (ARK_INIT_RETRY_DELAYS_MS[0] ?? 0) + ARK_CLIENT_LOCK_WAIT_MS + 5_000;
 let backendCrashStreak = 0;
 let backendStartedAt = 0;
 let backendRespawnTimer: NodeJS.Timeout | null = null;
@@ -948,7 +953,8 @@ async function initArkClient(): Promise<void> {
       autoLaunch: false,
     });
     if (state.kind !== "connected") {
-      console.error(`[kepler-shell] kepler-backend ${state.kind}: ArkClient unavailable`);
+      const detail = "reason" in state ? ` (${state.reason})` : "";
+      console.error(`[kepler-shell] kepler-backend ${state.kind}: ArkClient unavailable${detail}`);
       // Backend child can be alive but not yet published through kepler.lock.json.
       // Keep the shared readiness promise pending so renderer IPC waits for the
       // retry instead of receiving a burst of false "not-installed" errors.
@@ -1863,6 +1869,7 @@ app.whenReady().then(async () => {
   }
 
   spawnBackend();
+  setExtensionArkBridgeReadyTimeoutMs(ARK_READY_REQUEST_TIMEOUT_MS);
   registerAppIconProtocol();
   registerLocalImageProtocol();
   createLauncher();

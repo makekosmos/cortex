@@ -121,7 +121,13 @@ export async function ensureKeplerRunning(opts: EnsureKeplerOptions): Promise<Ke
       }
       await sleep(250);
     }
-    return { kind: "not-installed", checkedPaths: [] };
+    // autoLaunch=false = caller already spawned backend и ждёт только lock-file.
+    // Если lock не появился вовремя, installation не исчезла — это startup
+    // failure/timeout, а не not-installed. См. postmortems.md § 2026-06-16.
+    return {
+      kind: "launch-failed",
+      reason: `self-managed backend did not publish lock-file ${lockPath} within ${waitMs}ms`,
+    };
   }
 
   // 2. Auto-launch.

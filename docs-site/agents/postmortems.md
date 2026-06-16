@@ -21,6 +21,24 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-16 — Shell ARK startup timeout маскировался под not-installed
+
+**Симптомы.** В production shell логировал `[kepler-shell] kepler-backend not-installed: ArkClient unavailable`, затем extension IPC падал с `ark bridge not ready (timeout)`, а generic shell IPC — с `ArkClient not ready (timeout)`, хотя runtime binaries уже были установлены.
+**Где жило.** `core/ark/packages/ark/src/ensure-kepler.ts::ensureKeplerRunning`, `platform/desktop/electron/main.ts::awaitArkReady`, `platform/desktop/electron/extension-host.ts::awaitArkBridgeReady`.
+**Root cause.** `ensureKeplerRunning({ autoLaunch: false })` использовался shell'ом в self-managed режиме, где backend уже спавнится отдельно. Если lock-файл не появлялся в первое wait-окно, helper возвращал `not-installed`, хотя installation уже существовала и проблема была в delayed/failed startup publication. Поверх этого extension bridge ждал только 15s, а shell request — 35s; оба timeout'а были короче полного bounded retry budget `initArkClient()`, поэтому renderer успевал перейти в error-state ещё до первого полезного retry.
+**Fix.** Для `autoLaunch: false` timeout helper теперь возвращает `launch-failed` с явной причиной про lock-file publication вместо ложного `not-installed`. Shell-level readiness budget расширен так, чтобы один пользовательский запрос переживал initial wait и первый retry `initArkClient()`. Extension-host получил настраиваемый bridge timeout и теперь выравнивается с тем же shell budget, чтобы extension IPC не падал раньше generic `kepler:ark:request`.
+**Регрешн-защита.** `core/ark/packages/ark/tests/ensure-kepler.test.ts` теперь фиксирует self-managed timeout как `launch-failed`, а не `not-installed`. Дополнительно прогнаны `bun test tests/ensure-kepler.test.ts`, `bun run shell:build`, `bunx vitest run --browser chromium tests/components/CmEditor.spec.ts` и `node scripts/build-extensions.mjs --only eden`.
+**Prevention.** Self-managed startup state нельзя кодировать теми же enum-значениями, что и install discovery: “не нашли exe” и “caller уже заспавнил backend, но lock не появился” — это разные классы отказа и требуют разного UX/retry поведения. Любой readiness timeout в extension/shell должен считаться от полного retry budget родительского state machine, а не жить отдельной короткой магической константой.
+
+## 2026-06-16 — Eden unmount save skipped after optimistic draft
+
+**Симптомы.** Пользователь пишет текст в заметке, сразу уходит из неё и возвращается; свежий текст пропадает, хотя в этой же сессии draft уже был виден в редакторе.
+**Где жило.** `products/eden/src/editor-cm/CmEditor.vue::hasEntryDraftChanges`, `products/eden/src/editor-cm/CmEditor.vue::flushSave`, `products/eden/src/store/eden.ts::updateEntryDraft`.
+**Root cause.** `CmEditor` эмитил `entryDraftChange` на каждый ввод, а parent/store сразу прокидывал optimistic draft обратно в `props.entry`. При `blur`/`onBeforeUnmount` `flushSave()` сравнивал новый draft именно с `props.entry`, видел “изменений нет” и пропускал `onSave`. Поэтому быстрый выход из заметки до debounce-сейва оставлял текст только в in-memory draft и не доводил его до ARK.
+**Fix.** `CmEditor` получил собственный persisted baseline (`title`, `type_id`, `header_layout`, `header_props_json`, body markdown) и теперь `flushSave()` сравнивает draft именно с ним, а не с reactive `props.entry`. Baseline синхронизируется только после успешного `onSave()` или при входе в новую заметку.
+**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` проверяет unmount-сценарий: parent отражает optimistic `entryDraftChange` обратно в props, затем `screen.unmount()` всё равно обязан вызвать `onSave` с набранным текстом.
+**Prevention.** Reactive props из optimistic cache нельзя использовать как persisted baseline для cleanup/blur/unmount save paths. Если editor публикует draft наверх до backend-save, компонент обязан отдельно помнить последнюю подтверждённую persisted версию.
+
 ## 2026-06-16 — Eden stale inbound body перерисовывал live draft
 
 **Симптомы.** Во время обычного набора в Eden текст мог сразу исчезнуть, а через некоторое время появиться обратно. Это происходило не только на первом вводе в новой заметке, а во время дальнейшей работы.
@@ -374,9 +392,9 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 **Симптомы** — при `bun run --cwd platform/desktop dev` shell логирует `[kepler-shell] kepler-backend not-installed: ArkClient unavailable`, затем backend через несколько секунд пишет `WS listening` и `lock-file written`, но renderer IPC `kepler:ark:request` продолжает падать с `ArkClient not ready (timeout)`.
 **Где жило** — `platform/desktop/electron/main.ts::initArkClient`, `platform/desktop/electron/main.ts::awaitArkReady`, cold-start порядок `spawnBackend()` → `initArkClient()`.
 **Root cause** — `initArkClient()` делал один handshake через `ensureKeplerRunning({ autoLaunch: false, waitMs: 10000 })`. Если dev backend писал lock позже этого окна, `initArkClient()` reject'ил ready promise и возвращался. Backend уже запускался, но shell не ставил новый retry на lock-ready/child-alive состояние, поэтому последующие `awaitArkReady()` создавали fresh promise, который никто больше не resolve'ил.
-**Fix** — WIP: увеличено self-managed lock wait окно и добавлен bounded retry `initArkClient()` пока backend child жив, чтобы shell повторил handshake после delayed lock.
-**Регрешн-защита** — TBD: нужно добавить тест/ручной dev-start proof на сценарий delayed backend lock.
-**Prevention** — TBD после проверки.
+**Fix** — Первичный фикс на 2026-06-05 увеличил self-managed lock wait окно и добавил bounded retry `initArkClient()` пока backend child жив. Production остаток этого класса багов добит отдельной записью `2026-06-16 — Shell ARK startup timeout маскировался под not-installed`: там readiness budget выровнен между shell и extension-host, а self-managed timeout больше не маскируется под `not-installed`.
+**Регрешн-защита** — см. `core/ark/packages/ark/tests/ensure-kepler.test.ts` и запись от 2026-06-16.
+**Prevention** — Retry сам по себе недостаточен, если downstream request timeout'ы короче его полного бюджета. Для стартовых handshake state machine нужно проектировать целиком: initial wait, retries и пользовательские timeout'ы должны считаться вместе.
 
 ---
 

@@ -136,6 +136,44 @@ describe("CmEditor component", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
+  test("unmount flush сохраняет draft даже если parent уже отразил optimistic entry обратно в props", async () => {
+    // Regression: 2026-06-16. onBeforeUnmount must compare against the last
+    // persisted baseline, not against props.entry that may already hold the
+    // same optimistic draft via entryDraftChange.
+    const onSave = vi.fn(async () => null);
+    const Parent = defineComponent({
+      components: { CmEditor },
+      setup() {
+        const entry = ref(makeEntry(EMPTY_DOC));
+        return {
+          entry,
+          onSave,
+          onDraft(nextEntry: Entry) {
+            entry.value = nextEntry;
+          },
+        };
+      },
+      template: `
+        <CmEditor
+          :entry="entry"
+          :on-save="onSave"
+          @entry-draft-change="onDraft"
+        />
+      `,
+    });
+
+    const screen = render(Parent);
+    await expect.poll(() => document.querySelector(".cm-content")).not.toBeNull();
+    await typeInEditor("persist on close");
+
+    screen.unmount();
+
+    await expect.poll(() => onSave.mock.calls.length, { timeout: 4000 }).toBe(1);
+    const saved = onSave.mock.calls[0]?.[0] as Entry;
+    const parsed = JSON.parse(saved.content_json) as { text?: string };
+    expect(parsed.text).toContain("persist on close");
+  });
+
   test("ввод текста эмитит liveCharCount > 0", async () => {
     const counts: number[] = [];
     render(CmEditor, {

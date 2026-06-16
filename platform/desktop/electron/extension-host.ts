@@ -330,6 +330,9 @@ let arkSubscribe: ArkSubscribeFn | null = null;
 // или timeout'нутся.
 let arkBridgeReady!: Promise<void>;
 let arkBridgeReadyResolve: (() => void) | null = null;
+// Не даём extension IPC timeout'нуться раньше shell-level awaitArkReady budget;
+// см. postmortems.md § 2026-06-16.
+let arkBridgeReadyTimeoutMs = 15_000;
 function resetArkBridgeReady(): void {
   arkBridgeReady = new Promise<void>((resolve) => {
     arkBridgeReadyResolve = resolve;
@@ -337,7 +340,7 @@ function resetArkBridgeReady(): void {
 }
 resetArkBridgeReady();
 
-async function awaitArkBridgeReady(timeoutMs = 15000): Promise<void> {
+async function awaitArkBridgeReady(timeoutMs = arkBridgeReadyTimeoutMs): Promise<void> {
   if (arkRequest) return;
   await Promise.race([
     arkBridgeReady,
@@ -345,6 +348,12 @@ async function awaitArkBridgeReady(timeoutMs = 15000): Promise<void> {
       setTimeout(() => rej(new Error("ark bridge not ready (timeout)")), timeoutMs),
     ),
   ]);
+}
+
+export function setExtensionArkBridgeReadyTimeoutMs(timeoutMs: number): void {
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    arkBridgeReadyTimeoutMs = timeoutMs;
+  }
 }
 
 /**

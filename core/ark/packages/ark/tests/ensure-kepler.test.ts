@@ -1,7 +1,7 @@
 // AC5 + AC6 (TS unit) для Phase 2.
 //
 // AC5: incompatible MAJOR → "incompatible-version" state.
-// AC6: lock-файл отсутствует + autoLaunch off → "not-installed" (фолбэк апки на self-managed).
+// AC6: self-managed wait timeout не должен маскироваться под "not-installed".
 
 import { describe, test, expect } from "bun:test";
 import fs from "node:fs";
@@ -35,7 +35,7 @@ function cleanup(dir: string) {
 }
 
 describe("ensureKeplerRunning", () => {
-  test("AC6: no lock + no exe + autoLaunch off → not-installed", async () => {
+  test("AC6: no lock + no exe + autoLaunch off → launch-failed", async () => {
     const appdata = makeTempAppData();
     try {
       const state = await ensureKeplerRunning({
@@ -44,7 +44,10 @@ describe("ensureKeplerRunning", () => {
         autoLaunch: false,
         conventionalPaths: [],
       });
-      expect(state.kind).toBe("not-installed");
+      expect(state.kind).toBe("launch-failed");
+      if (state.kind === "launch-failed") {
+        expect(state.reason).toContain("did not publish lock-file");
+      }
     } finally {
       cleanup(appdata);
     }
@@ -120,7 +123,7 @@ describe("ensureKeplerRunning", () => {
     }
   });
 
-  test("stale lock (dead PID) + autoLaunch off → cleaned + not-installed", async () => {
+  test("stale lock (dead PID) + autoLaunch off → cleaned + launch-failed", async () => {
     const appdata = makeTempAppData();
     try {
       const lockPath = writeLock(appdata, {
@@ -142,7 +145,7 @@ describe("ensureKeplerRunning", () => {
         // первой итерации, доп. polling смысла не имеет → 0.
         waitMs: 0,
       });
-      expect(state.kind).toBe("not-installed");
+      expect(state.kind).toBe("launch-failed");
       // Stale lock должен быть удалён readLockIfAlive
       expect(fs.existsSync(lockPath)).toBe(false);
     } finally {
@@ -150,7 +153,7 @@ describe("ensureKeplerRunning", () => {
     }
   });
 
-  test("malformed lock JSON → not-installed (treated as missing)", async () => {
+  test("malformed lock JSON + autoLaunch off → launch-failed", async () => {
     const appdata = makeTempAppData();
     try {
       const lockPath = resolveLockPath(appdata);
@@ -162,7 +165,7 @@ describe("ensureKeplerRunning", () => {
         autoLaunch: false,
         waitMs: 0,
       });
-      expect(state.kind).toBe("not-installed");
+      expect(state.kind).toBe("launch-failed");
     } finally {
       cleanup(appdata);
     }

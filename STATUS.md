@@ -2,11 +2,40 @@
 
 | Компонент      | Версия |
 | -------------- | ------ |
-| Kosmos Desktop | 0.4.12 |
-| Eden           | 0.2.4  |
+| Kosmos Desktop | 0.4.13 |
+| Eden           | 0.2.5  |
 | Delphi         | 0.1.8  |
 | Arrancador     | 0.1.4  |
 | Akasha         | 0.1.2  |
+
+## 2026-06-16 — ARK readiness timeout hardening + Eden unmount save fix (Kosmos Desktop 0.4.12 → 0.4.13, Eden 0.2.4 → 0.2.5)
+
+Patch-релиз закрывает два реальных production-срыва из одного пользовательского
+цикла: shell больше не путает delayed backend startup с отсутствующей
+установкой, а Eden больше не теряет свежий текст, если выйти из заметки до
+debounce-autosave.
+
+- **Desktop: честный ARK startup state + длиннее readiness budget**:
+  `ensureKeplerRunning({ autoLaunch: false })` теперь возвращает
+  `launch-failed`, если self-managed backend не успел опубликовать
+  `kepler.lock.json`, вместо ложного `not-installed`. Shell-level
+  `awaitArkReady()` и extension bridge выровнены по одному retry budget, чтобы
+  extension IPC не падал на `ark bridge not ready (timeout)` раньше первого
+  полезного reconnect.
+- **Eden: flush-save на unmount больше не skip'ается**: CodeMirror editor держит
+  отдельный persisted baseline и сравнивает draft именно с ним, а не с
+  optimistic `props.entry`, который store уже успел отразить обратно в UI.
+  Быстрый выход из заметки или закрытие окна больше не оставляет текст только в
+  in-memory draft.
+- **Постмортемы и regression coverage**: баги задокументированы в
+  `docs-site/agents/postmortems.md` (`Shell ARK startup timeout маскировался под
+not-installed`, `Eden unmount save skipped after optimistic draft`). Regression
+  тесты: `core/ark/packages/ark/tests/ensure-kepler.test.ts`,
+  `products/eden/tests/components/CmEditor.spec.ts`.
+
+Checks: `bun test core/ark/packages/ark/tests/ensure-kepler.test.ts`,
+`bun run shell:build`, `bunx vitest run --browser chromium tests/components/CmEditor.spec.ts`,
+`node scripts/build-extensions.mjs --only eden`, `node scripts/check-docs-freshness.mjs`.
 
 ## 2026-06-16 — Desktop host parity for Eden settings (Kosmos Desktop 0.4.11 → 0.4.12)
 

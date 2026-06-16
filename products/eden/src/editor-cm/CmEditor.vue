@@ -200,7 +200,10 @@ let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 let bodyScrollElement: HTMLElement | null = null;
 let titleOutOfView = false;
 let lastPersistedTitle = props.entry.title;
+let lastPersistedTypeId = props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
+let lastPersistedHeaderLayout = normalizedEntryHeaderLayout(props.entry);
 let lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(props.entry.header_props_json);
+let lastPersistedBodyMarkdown = readEntryMarkdown(props.entry.content_json);
 let lastDraftUpdatedAt = props.entry.updated_at;
 let suppressBodySyncSave = false;
 
@@ -273,17 +276,25 @@ function normalizedEntryHeaderLayout(entry: Entry): string | null {
 }
 
 function hasEntryDraftChanges(entry: Entry): boolean {
-  if (entry.title !== props.entry.title) return true;
-  if (normalizedEntryTypeId(entry) !== normalizedEntryTypeId(props.entry)) return true;
-  if (normalizedEntryHeaderLayout(entry) !== normalizedEntryHeaderLayout(props.entry)) return true;
-  if (
-    normalizeHeaderPropsJson(entry.header_props_json) !==
-    normalizeHeaderPropsJson(props.entry.header_props_json)
-  ) {
+  // См. postmortems.md § 2026-06-16. props.entry может уже содержать тот же
+  // optimistic draft через entryDraftChange, поэтому flush paths сравнивают
+  // не с props, а с последним подтверждённым persisted baseline.
+  if (entry.title !== lastPersistedTitle) return true;
+  if (normalizedEntryTypeId(entry) !== lastPersistedTypeId) return true;
+  if (normalizedEntryHeaderLayout(entry) !== lastPersistedHeaderLayout) return true;
+  if (normalizeHeaderPropsJson(entry.header_props_json) !== lastPersistedHeaderPropsJson) {
     return true;
   }
 
-  return readEntryMarkdown(entry.content_json) !== readEntryMarkdown(props.entry.content_json);
+  return readEntryMarkdown(entry.content_json) !== lastPersistedBodyMarkdown;
+}
+
+function syncPersistedBaseline(entry: Entry): void {
+  lastPersistedTitle = entry.title;
+  lastPersistedTypeId = entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
+  lastPersistedHeaderLayout = normalizedEntryHeaderLayout(entry);
+  lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(entry.header_props_json);
+  lastPersistedBodyMarkdown = readEntryMarkdown(entry.content_json);
 }
 
 function scheduleAutosave(): void {
@@ -307,8 +318,7 @@ async function flushSave(): Promise<void> {
 
   emit("entryDraftChange", entry);
   await props.onSave(entry);
-  lastPersistedTitle = entry.title;
-  lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(entry.header_props_json);
+  syncPersistedBaseline(entry);
 }
 
 async function handleTypePick(nextTypeId: string): Promise<void> {
@@ -341,8 +351,7 @@ async function handleTypePick(nextTypeId: string): Promise<void> {
   if (result && typeof result === "object" && "ok" in result && result.ok === false) {
     console.warn("[eden cm] type change save failed:", result);
   }
-  lastPersistedTitle = entry.title;
-  lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(entry.header_props_json);
+  syncPersistedBaseline(entry);
 }
 
 function handleHeaderPropChange(fieldId: string, value: unknown): void {
@@ -590,8 +599,7 @@ watch(
       });
     }
     syncBodyFromEntry();
-    lastPersistedTitle = props.entry.title;
-    lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(props.entry.header_props_json);
+    syncPersistedBaseline(props.entry);
     lastDraftUpdatedAt = props.entry.updated_at;
   },
 );
