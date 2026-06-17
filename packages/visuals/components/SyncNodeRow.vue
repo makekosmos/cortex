@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Cpu, Laptop, Monitor, Smartphone } from "@lucide/vue";
+import { Laptop, Monitor, Smartphone } from "@lucide/vue";
 import Button from "./Button.vue";
 import StatusDot from "./StatusDot.vue";
 
@@ -34,48 +34,51 @@ const icon = computed(() => {
       return Smartphone;
     case "laptop":
       return Laptop;
-    case "desktop":
-      return Monitor;
     default:
-      return Cpu;
+      return Monitor;
   }
 });
 
 const tone = computed(() =>
-  props.status === "online" ? "success" : props.status === "connecting" ? "warning" : "neutral",
+  props.status === "online" ? "success" : props.status === "connecting" ? "warning" : "danger",
 );
 </script>
 
 <template>
   <div
-    class="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--foreground)_3%,var(--background))] px-4 py-3"
+    class="group flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--settings-list-background)] px-4 py-3"
   >
     <div
-      class="flex size-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] text-[var(--foreground)]"
+      class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--settings-list-background)] text-[var(--foreground)]"
     >
       <component :is="icon" :size="18" :stroke-width="2" />
     </div>
 
     <div class="min-w-0 flex-1">
-      <div class="truncate text-[0.95rem] font-medium text-[var(--foreground)]">
+      <div
+        class="truncate font-[var(--font-sans)] text-[length:var(--kosmos-text-body-size)] leading-[1.4] font-medium text-[var(--foreground)]"
+      >
         {{ name }}
       </div>
-      <div class="mt-0.5 text-[0.8125rem] text-[var(--muted-foreground)]">
+      <div
+        class="mt-0.5 font-[var(--font-sans)] text-[length:var(--kosmos-text-caption-size)] leading-[1.4] text-[var(--muted-foreground)]"
+      >
         {{ lastSeenLabel }}
       </div>
     </div>
 
-    <div class="flex items-center gap-3">
-      <StatusDot :tone="tone" :label="statusLabel ?? status" />
+    <div class="flex shrink-0 items-center gap-3">
       <Button
         size="sm"
         variant="danger"
         :loading="disconnecting"
         :disabled="disabled || disconnecting"
+        class="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
         @click="emit('disconnect')"
       >
         {{ disconnectLabel }}
       </Button>
+      <StatusDot :tone="tone" :label="statusLabel ?? status" />
     </div>
   </div>
 </template>
