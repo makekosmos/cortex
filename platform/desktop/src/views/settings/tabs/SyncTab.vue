@@ -208,13 +208,7 @@ onBeforeUnmount(() => {
         :key="peer.deviceId"
         :device-kind="peer.deviceKind"
         :name="peer.deviceName || 'Неизвестное устройство'"
-        :last-seen-label="
-          peer.status === 'online'
-            ? 'Сейчас подключено'
-            : peer.lastSeen
-              ? `Последнее подключение: ${new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(peer.lastSeen))}`
-              : 'Последнее подключение неизвестно'
-        "
+        :last-seen-label="peer.status === 'online' ? 'Сейчас подключено' : 'Был в сети'"
         :status="peer.status"
         :status-label="peer.status === 'online' ? 'Онлайн' : 'Оффлайн'"
         :disconnecting="disconnecting.has(peer.deviceId)"

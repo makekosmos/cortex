@@ -61,7 +61,7 @@ const tone = computed(() =>
         {{ name }}
       </div>
       <div
-        class="mt-0.5 font-[var(--font-sans)] text-[length:var(--kosmos-text-caption-size)] leading-[1.4] text-[var(--muted-foreground)]"
+        class="mt-0.5 font-[var(--font-mono)] tabular-nums text-[length:var(--kosmos-text-caption-size)] leading-[1.4] text-[var(--muted-foreground)]"
       >
         {{ lastSeenLabel }}
       </div>
