@@ -65,4 +65,6 @@ export const edenApi = {
       typeId?: string;
     }) => void,
   ) => shim.subscribeObjectChanges(handler),
+
+  loadListableEntry: (id: string, typeIdHint?: string) => shim.loadListableEntry(id, typeIdHint),
 };

@@ -674,21 +674,35 @@ export const useEdenStore = defineStore("eden", () => {
 
   /**
    * Подписывается на ARK events object_upserted / object_deleted и обновляет
-   * currentEntry если пришло удалённое изменение.
+   * список entries и currentEntry при удалённых изменениях.
+   *
+   * Структура обработчика:
+   * 1. СПИСОК-уровень (для любого id):
+   *    - object_deleted → удаляем из entries.value.
+   *    - object_upserted, id УЖЕ в entries → обновляем title/updated_at в списке.
+   *    - object_upserted, id НЕТ в entries → загружаем через loadListableEntry
+   *      (применяет фильтры listEntries: visibleTypeIds + shouldIncludeObjectInEdenList)
+   *      и добавляем если объект подходит.
+   * 2. currentEntry-уровень (только если id совпадает с открытой заметкой):
+   *    - object_deleted → закрываем заметку.
+   *    - object_upserted → re-hydrate с dirty-guard и self-echo guard.
    *
    * Гарантии:
    * - Self-echo guard: content-equality — если markdown не изменился, noop.
    * - Dirty guard: если редактор dirty, не затираем пользовательский ввод.
-   * - object_deleted для currentEntry: закрываем заметку (currentEntry = null).
+   * - Фильтрация чужих типов через loadListableEntry (task_obj, game_obj не попадают
+   *   в список при настроенных visibleTypeIds).
    * - Cleanup через onScopeDispose (Pinia scope dispose при unmount стора).
    */
   function startLiveRefreshSubscription(): void {
     const unsubscribe = edenApi.subscribeObjectChanges(async (payload) => {
-      const activeEntry = currentEntry.value;
-      if (!activeEntry || activeEntry.id !== payload.id) return;
+      // ── 1. СПИСОК-уровень ────────────────────────────────────────────────
 
       if (payload.event === "object_deleted") {
-        // Открытая заметка удалена с другого устройства — закрыть без краша.
+        // Удаляем из списка.
+        entries.value = entries.value.filter((e) => e.id !== payload.id);
+
+        // currentEntry-уровень: закрываем если открыта.
         if (currentEntry.value?.id === payload.id) {
           currentEntry.value = null;
           isCurrentEntryDirty.value = false;
@@ -696,38 +710,56 @@ export const useEdenStore = defineStore("eden", () => {
         return;
       }
 
-      // object_upserted — загружаем свежую версию и решаем применять ли.
-      if (!window.api) return;
-      let fresh: Entry | undefined;
-      try {
-        fresh = await window.api.loadEntry(payload.id);
-      } catch (err) {
-        console.warn("[eden] live-refresh: loadEntry failed:", err);
-        return;
+      // object_upserted — обновляем список.
+      const existingIdx = entries.value.findIndex((e) => e.id === payload.id);
+
+      if (existingIdx >= 0) {
+        // Объект уже в списке — обновляем метаданные (title, updated_at) через loadEntry.
+        // Это нужно чтобы порядок ленты и превью были актуальны.
+        // Загрузка происходит ниже вместе с currentEntry-гидратацией.
+        void (async () => {
+          if (!window.api) return;
+          let fresh: Entry | undefined;
+          try {
+            fresh = await window.api.loadEntry(payload.id);
+          } catch (err) {
+            console.warn("[eden] live-refresh: loadEntry (list update) failed:", err);
+            return;
+          }
+          if (!fresh) return;
+          // Обновляем запись в списке (title, updated_at, header_props).
+          const idx = entries.value.findIndex((e) => e.id === payload.id);
+          if (idx >= 0) {
+            entries.value[idx] = fresh;
+          }
+
+          // currentEntry-уровень: если это открытая заметка — применяем с guards.
+          if (currentEntry.value?.id !== payload.id) return;
+          const decision = shouldApplyRemoteEntry({
+            fresh,
+            currentContentJson: currentEntry.value.content_json,
+            isEditorDirty: isCurrentEntryDirty.value,
+          });
+          if (decision !== "apply") return;
+          upsertEntryBaseline(fresh);
+          currentEntry.value = fresh;
+        })();
+      } else {
+        // Новый объект — загружаем только если он подходит для Eden-списка.
+        void (async () => {
+          if (!window.api) return;
+          let listable: Entry | undefined;
+          try {
+            listable = await edenApi.loadListableEntry(payload.id, payload.typeId);
+          } catch (err) {
+            console.warn("[eden] live-refresh: loadListableEntry failed:", err);
+            return;
+          }
+          if (!listable) return;
+          // Добавляем в начало списка (самый свежий).
+          entries.value = [listable, ...entries.value].sort((a, b) => b.updated_at - a.updated_at);
+        })();
       }
-
-      if (!fresh) return;
-
-      // Перепроверяем после await: пользователь мог переключиться на другую заметку.
-      if (currentEntry.value?.id !== payload.id) return;
-
-      const decision = shouldApplyRemoteEntry({
-        fresh,
-        currentContentJson: currentEntry.value.content_json,
-        isEditorDirty: isCurrentEntryDirty.value,
-      });
-
-      if (decision !== "apply") {
-        // skip-same-content: self-echo или нет изменений.
-        // skip-dirty: пользователь редактирует — не затираем.
-        return;
-      }
-
-      // Безопасно применяем удалённое изменение.
-      upsertEntryBaseline(fresh);
-      currentEntry.value = fresh;
-      // Сброс dirty не нужен — после применения baseline редактор синхронизируется
-      // через watch в CmEditor и suppressBodySyncSave не вызовет autosave.
     });
 
     onScopeDispose(() => {

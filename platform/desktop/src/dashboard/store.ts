@@ -187,6 +187,32 @@ function toUsageRow(rec: RawTopAppEntry, appIcons: Map<string, string>): Dashboa
   };
 }
 
+/**
+ * Инвалидирует кэш объектов для затронутого type_id и обновляет objects.value
+ * если сейчас открыт этот тип (или «Все объекты» — null).
+ *
+ * Вызывается из DashboardView при получении object_upserted / object_deleted.
+ */
+export async function handleObjectChangeEvent(typeId: string | null | undefined): Promise<void> {
+  // Инвалидируем кэш для затронутого типа и для «Все объекты» (null).
+  if (typeId) {
+    objectRowsCache.delete(objectCacheKey(typeId));
+  }
+  objectRowsCache.delete(objectCacheKey(null));
+
+  // Перезагружаем только если открыт затронутый тип или «Все объекты».
+  const cur = currentTypeId.value;
+  if (cur === "__usage__") return;
+  if (typeId && cur !== typeId && cur !== null) return;
+
+  // object_deleted приходит без type_id — тогда кэш конкретного типа выше не
+  // инвалидируется. Сбрасываем кэш текущего вида явно, иначе loadObjects вернёт
+  // устаревший cached-снимок (с уже удалённой строкой) и reload будет no-op.
+  objectRowsCache.delete(objectCacheKey(cur));
+
+  await loadObjects(cur);
+}
+
 export async function loadUsageRows(): Promise<void> {
   currentTypeId.value = "__usage__";
   if (usageRowsLoaded) {

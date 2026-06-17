@@ -11,6 +11,7 @@
 // Trash работает поверх ARK soft-delete (deletedAt != null).
 
 import { normalizeStatus, type TaskStatus } from "./taskStatus";
+import { shouldIncludeTypeInEdenListForLiveUpdate } from "../store/liveListFilter";
 import {
   normalizeSlug,
   noteTypeSchema,
@@ -362,6 +363,51 @@ function shouldIncludeObjectInEdenList(object: {
   if (object.typeId !== SYSTEM_TYPE_COLLECTION_ID) return true;
   const objectTypeId = object.propsJson?.object_type_id;
   return typeof objectTypeId === "string" && shouldShowAsEdenCollection(objectTypeId);
+}
+
+/**
+ * Загружает объект по id и возвращает Entry только если объект подходит для
+ * Eden-списка (те же фильтры, что listEntries). Иначе undefined.
+ * Используется в startLiveRefreshSubscription для добавления нового объекта.
+ */
+export async function loadListableEntry(
+  id: string,
+  typeIdHint?: string,
+): Promise<Entry | undefined> {
+  const visibleTypeIds = readVisibleObjectTypeIds();
+
+  // Быстрая проверка по hint'у если type_id пришёл в событии.
+  if (typeIdHint !== undefined && typeIdHint !== SYSTEM_TYPE_COLLECTION_ID) {
+    const quickCheck = shouldIncludeTypeInEdenListForLiveUpdate({
+      typeId: typeIdHint,
+      propsJson: {},
+      visibleTypeIds,
+    });
+    if (!quickCheck) return undefined;
+  }
+
+  // Загружаем полный объект через loadEntry (включает propsJson для коллекций).
+  const entry = await loadEntry(id);
+  if (!entry || entry.deleted_at) return undefined;
+
+  // Парсим propsJson из header_props_json для фильтра коллекций.
+  let propsJson: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(entry.header_props_json || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      propsJson = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // ignore
+  }
+
+  const listable = shouldIncludeTypeInEdenListForLiveUpdate({
+    typeId: entry.type_id ?? "",
+    propsJson,
+    visibleTypeIds,
+  });
+
+  return listable ? entry : undefined;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, h, onMounted, type Component } from "vue";
+import { computed, h, onMounted, onUnmounted, type Component } from "vue";
 import { PhCaretLeft, PhCaretRight, PhClock, PhDatabase } from "@phosphor-icons/vue";
 import { SettingsSidebar, SettingsSidebarButton } from "@kosmos/visuals";
 import ObjectTable from "../dashboard/ObjectTable.vue";
 import UsageTable from "../dashboard/UsageTable.vue";
 import {
   currentTypeId,
+  handleObjectChangeEvent,
   loadObjects,
   loadObjectTypes,
   loadUsageRows,
@@ -37,9 +38,35 @@ function sidebarIconForType(id: string, active: boolean): Component {
   return phosphorSidebarIcon(typeVisualFor(id).icon, active ? "fill" : "duotone");
 }
 
+// Подписка на live-события ARK: новый/удалённый объект → инвалидировать кэш.
+type ArkSubscribeFn = (event: string, handler: (payload: unknown) => void) => () => void;
+let unsubscribeObjectUpserted: (() => void) | null = null;
+let unsubscribeObjectDeleted: (() => void) | null = null;
+
 onMounted(async () => {
   await loadObjectTypes();
   await loadObjects(null);
+
+  const subscribe = (window as unknown as { kepler?: { ark?: { subscribe?: ArkSubscribeFn } } })
+    .kepler?.ark?.subscribe;
+
+  if (subscribe) {
+    unsubscribeObjectUpserted = subscribe("object_upserted", (payload) => {
+      const p = payload as { type_id?: string };
+      void handleObjectChangeEvent(p.type_id ?? null);
+    });
+    unsubscribeObjectDeleted = subscribe("object_deleted", (payload) => {
+      const p = payload as { type_id?: string };
+      void handleObjectChangeEvent(p.type_id ?? null);
+    });
+  }
+});
+
+onUnmounted(() => {
+  unsubscribeObjectUpserted?.();
+  unsubscribeObjectDeleted?.();
+  unsubscribeObjectUpserted = null;
+  unsubscribeObjectDeleted = null;
 });
 
 function selectAll(): void {
