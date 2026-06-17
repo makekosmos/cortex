@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 
-import { ref, computed, nextTick, watch } from "vue";
+import { ref, computed, nextTick, onScopeDispose, watch } from "vue";
 
 import { v4 as uuidv4 } from "uuid";
 
@@ -8,7 +8,7 @@ import { normalizeSlug } from "@/lib/typedNotes";
 
 import { createUntitledEntryHeaderProps } from "@/lib/entryTitles";
 
-import { readEntryMarkdown, writeEntryMarkdown } from "@/editor-cm/content";
+import { writeEntryMarkdown } from "@/editor-cm/content";
 
 import {
   SYSTEM_TYPE_COLLECTION_ID,
@@ -25,6 +25,12 @@ import type { SpaceId } from "@/components/sidebar/types";
 import type { SortMode } from "@/components/sidebar/types";
 
 import { useLayoutStore } from "./layout";
+
+import { edenApi } from "@/lib/edenApi";
+
+import { shouldApplyRemoteEntry } from "./liveRefresh";
+
+import { hasUserVisibleEntryChanges } from "./entryChanges";
 
 type ActiveScreen = "notes" | "settings" | "type-collection";
 
@@ -53,10 +59,6 @@ function mergeNoteTypesWithSystem(noteTypesData: NoteType[]) {
 
 const SYSTEM_TYPES_BY_ID = new Map(SYSTEM_TYPES.map((noteType) => [noteType.id, noteType]));
 
-function normalizedEntryTypeId(entry: Entry): string {
-  return entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
-}
-
 function parseEntryHeaderProps(entry: Entry): Record<string, unknown> {
   try {
     const parsed = JSON.parse(entry.header_props_json || "{}");
@@ -81,38 +83,6 @@ function mergeEntriesById(entries: Entry[], additions: Entry[]): Entry[] {
     byId.set(entry.id, entry);
   }
   return [...byId.values()].sort((left, right) => right.updated_at - left.updated_at);
-}
-
-function normalizedEntryHeaderLayout(entry: Entry): string | null {
-  return entry.header_layout ?? null;
-}
-
-function normalizeHeaderPropsJson(raw: string | null | undefined): string {
-  if (!raw?.trim()) return JSON.stringify({});
-
-  try {
-    return JSON.stringify(JSON.parse(raw) as Record<string, unknown>);
-  } catch {
-    return JSON.stringify({});
-  }
-}
-
-function hasUserVisibleEntryChanges(nextEntry: Entry, previousEntry: Entry): boolean {
-  if (nextEntry.title !== previousEntry.title) return true;
-  if (normalizedEntryTypeId(nextEntry) !== normalizedEntryTypeId(previousEntry)) return true;
-  if (normalizedEntryHeaderLayout(nextEntry) !== normalizedEntryHeaderLayout(previousEntry)) {
-    return true;
-  }
-  if (
-    normalizeHeaderPropsJson(nextEntry.header_props_json) !==
-    normalizeHeaderPropsJson(previousEntry.header_props_json)
-  ) {
-    return true;
-  }
-
-  return (
-    readEntryMarkdown(nextEntry.content_json) !== readEntryMarkdown(previousEntry.content_json)
-  );
 }
 
 interface QueuedSaveRequest {
@@ -218,6 +188,12 @@ export const useEdenStore = defineStore("eden", () => {
     }
   });
 
+  // Флаг: редактор содержит несохранённые изменения текущей заметки.
+  // Выставляется в true когда updateEntryDraft получает черновик с реальными изменениями.
+  // Сбрасывается в false когда handleSave успешно завершает.
+  // Используется в live-refresh guard: не применять удалённые изменения пока пользователь редактирует.
+  const isCurrentEntryDirty = ref(false);
+
   // Non-reactive save coordination state (mutable internal mechanism)
 
   // Latest local draft/save timestamp per entry. Optimistic drafts must count
@@ -306,6 +282,10 @@ export const useEdenStore = defineStore("eden", () => {
 
   async function initApp() {
     if (!window.api) return;
+
+    // Запускаем live-refresh подписку один раз на lifecycle стора.
+    // onScopeDispose внутри обеспечивает cleanup при unmount Pinia scope.
+    startLiveRefreshSubscription();
 
     const [path, recentPaths, sidebarConfig] = await Promise.all([
       window.api.getVaultPath(),
@@ -692,6 +672,69 @@ export const useEdenStore = defineStore("eden", () => {
     await refreshData();
   }
 
+  /**
+   * Подписывается на ARK events object_upserted / object_deleted и обновляет
+   * currentEntry если пришло удалённое изменение.
+   *
+   * Гарантии:
+   * - Self-echo guard: content-equality — если markdown не изменился, noop.
+   * - Dirty guard: если редактор dirty, не затираем пользовательский ввод.
+   * - object_deleted для currentEntry: закрываем заметку (currentEntry = null).
+   * - Cleanup через onScopeDispose (Pinia scope dispose при unmount стора).
+   */
+  function startLiveRefreshSubscription(): void {
+    const unsubscribe = edenApi.subscribeObjectChanges(async (payload) => {
+      const activeEntry = currentEntry.value;
+      if (!activeEntry || activeEntry.id !== payload.id) return;
+
+      if (payload.event === "object_deleted") {
+        // Открытая заметка удалена с другого устройства — закрыть без краша.
+        if (currentEntry.value?.id === payload.id) {
+          currentEntry.value = null;
+          isCurrentEntryDirty.value = false;
+        }
+        return;
+      }
+
+      // object_upserted — загружаем свежую версию и решаем применять ли.
+      if (!window.api) return;
+      let fresh: Entry | undefined;
+      try {
+        fresh = await window.api.loadEntry(payload.id);
+      } catch (err) {
+        console.warn("[eden] live-refresh: loadEntry failed:", err);
+        return;
+      }
+
+      if (!fresh) return;
+
+      // Перепроверяем после await: пользователь мог переключиться на другую заметку.
+      if (currentEntry.value?.id !== payload.id) return;
+
+      const decision = shouldApplyRemoteEntry({
+        fresh,
+        currentContentJson: currentEntry.value.content_json,
+        isEditorDirty: isCurrentEntryDirty.value,
+      });
+
+      if (decision !== "apply") {
+        // skip-same-content: self-echo или нет изменений.
+        // skip-dirty: пользователь редактирует — не затираем.
+        return;
+      }
+
+      // Безопасно применяем удалённое изменение.
+      upsertEntryBaseline(fresh);
+      currentEntry.value = fresh;
+      // Сброс dirty не нужен — после применения baseline редактор синхронизируется
+      // через watch в CmEditor и suppressBodySyncSave не вызовет autosave.
+    });
+
+    onScopeDispose(() => {
+      unsubscribe();
+    });
+  }
+
   async function handleSave(entry: Entry): Promise<SaveEntryResult | null> {
     if (!window.api) return null;
 
@@ -716,6 +759,8 @@ export const useEdenStore = defineStore("eden", () => {
 
       if (currentEntry.value?.id === entryToPersist.id) {
         currentEntry.value = entryToPersist;
+        // Сохранение успешно завершено — редактор больше не dirty.
+        isCurrentEntryDirty.value = false;
       }
 
       return result;
@@ -795,7 +840,7 @@ export const useEdenStore = defineStore("eden", () => {
     const idx = entries.value.findIndex((candidate) => candidate.id === entry.id);
 
     if (idx >= 0) {
-      if (!hasUserVisibleEntryChanges(entry, entries.value[idx])) return;
+      if (!hasUserVisibleEntryChanges(entry, entries.value[idx], noteTypes.value)) return;
       entries.value[idx] = entry;
     } else {
       entries.value = [entry, ...entries.value];
@@ -803,6 +848,8 @@ export const useEdenStore = defineStore("eden", () => {
 
     if (currentEntry.value?.id === entry.id) {
       currentEntry.value = entry;
+      // Черновик содержит изменения — редактор dirty.
+      isCurrentEntryDirty.value = true;
     }
   }
 
@@ -814,6 +861,8 @@ export const useEdenStore = defineStore("eden", () => {
     currentEntry,
 
     loadingEntryId,
+
+    isCurrentEntryDirty,
 
     vaultPath,
 
