@@ -1,0 +1,25 @@
+[package]
+name = "kepler-focus-helper"
+version = "0.1.0"
+edition.workspace = true
+description = "Kosmos Helper — elevated short-lived helper for hosts file changes."
+
+[[bin]]
+name = "kepler-focus-helper"
+path = "src/main.rs"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[target.'cfg(windows)'.build-dependencies]
+embed-manifest = "1.4"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

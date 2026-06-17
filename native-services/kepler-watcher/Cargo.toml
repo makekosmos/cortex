@@ -1,0 +1,12 @@
+[package]
+name = "kepler-watcher"
+version = "0.1.0"
+edition.workspace = true
+description = "Watchdog для Kosmos Kepler — держит kepler.exe child + respawn с exp backoff."
+
+[[bin]]
+name = "kepler-watcher"
+path = "src/main.rs"
+
+[lints]
+workspace = true

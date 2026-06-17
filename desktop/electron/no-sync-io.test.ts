@@ -1,0 +1,41 @@
+import { expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+// Regression: 2026-06-10, .agent/tasks/2026-06-10-electron-main-async-io.
+// Синхронный fs/child_process I/O в IPC/protocol handler'ах вешает все окна shell'а.
+// Для каждого файла — список запрещённых синхронных вызовов на его горячих путях.
+// Файлы вне списка (focus-widget, dashboard-window и т.п.) осознанно не покрыты:
+// их sync-вызовы — мелкие одноразовые JSON state read/write (см. spec § Scope).
+const bannedByFile: Record<string, string[]> = {
+  "extension-installer.ts": [
+    "readFileSync",
+    "writeFileSync",
+    "copyFileSync",
+    "rmSync",
+    "readdirSync",
+    "statSync",
+    "mkdirSync",
+    "cpSync",
+    "copyDirSync",
+  ],
+  "diagnostics.ts": [
+    "readFileSync",
+    "writeFileSync",
+    "copyFileSync",
+    "rmSync",
+    "readdirSync",
+    "statSync",
+    "spawnSync",
+  ],
+  "extension-marketplace.ts": ["readFileSync"],
+  "settings-window.ts": ["execFileSync"],
+};
+
+for (const [file, banned] of Object.entries(bannedByFile)) {
+  test(`${file}: нет синхронного I/O на горячих путях`, async () => {
+    const source = await readFile(path.join(import.meta.dir, file), "utf8");
+    const found = banned.filter((name) => source.includes(name));
+    expect(found).toEqual([]);
+  });
+}

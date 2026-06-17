@@ -1,0 +1,169 @@
+/* settings-shared.css — Kepler-СПЕЦИФИЧНЫЕ utility-классы для SettingsView'a и
+ * его per-tab компонентов. Импортируется один раз в `SettingsView.vue`.
+ *
+ * Общая (cross-app) обвязка страницы настроек — layout `.settings`/
+ * `.settings-shell`/`.settings-content`, `content-header`, `.rows`, секции,
+ * типографика, `.btn` — вынесена в `@kosmos/visuals/components/settings-shell.css`
+ * (чтобы extension'ы вроде Eden использовали ровно те же стили). Здесь остаются
+ * только классы, специфичные для Kepler shell'а (hotkey/autostart, security,
+ * stats-карточки dictation и т. п.).
+ *
+ * Все правила scoped под `.settings-shell` — корневой класс settings-области.
+ * Когда добавляешь общий (нужный и другим приложениям) utility — клади его в
+ * visuals settings-shell.css, а не сюда. */
+
+/* === Misc inputs (launcher state TTL) === */
+
+.settings-shell .ttl-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: var(--kosmos-muted-fg);
+  font-size: 0.8125rem;
+}
+
+.settings-shell .ttl-input input {
+  width: 64px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  color: var(--kosmos-fg);
+  background: var(--vp-c-bg-soft, var(--kosmos-sidebar-surface));
+  border: 1px solid var(--kosmos-border);
+  border-radius: 6px;
+  text-align: right;
+}
+
+.settings-shell .ttl-input input:focus {
+  outline: none;
+  border-color: var(--vp-c-brand-1, var(--kosmos-fg));
+}
+
+.settings-shell .hotkey-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-shell .hotkey-capture {
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  background: transparent;
+  color: var(--foreground);
+  min-width: 110px;
+  text-align: center;
+}
+
+.settings-shell .hotkey-capture.capturing {
+  background: color-mix(in srgb, oklch(0.55 0.15 250) 28%, transparent);
+  border-color: oklch(0.55 0.15 250);
+  outline: none;
+}
+
+/* === Security / Secrets pages — flexbox column === */
+
+.settings-shell .security-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  /* flex: 1 + min-height: 0 чтобы overflow:auto реально работал
+   * в flex-родителе (.settings-shell). Без этого контент ужимается до
+   * available height, scroll не появляется. Тот же паттерн что
+   * advanced-page. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.settings-shell .security-page__intro {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+.settings-shell .control-stack {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.settings-shell .control-hint {
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+}
+
+/* === Stats cards (Dictation tab — three-card row, Raycast-style) === */
+
+.settings-shell .stats-header {
+  display: flex;
+  align-items: center;
+  margin: 0 2px 0;
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+}
+
+.settings-shell .stats-header__title {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.settings-shell .stats-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 16px;
+  background: var(--settings-list-background, var(--background));
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.settings-shell .stats-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  /* Внутренние карты прозрачны — bg даёт контейнер. Между ними тонкий
+   * разделитель border-left начиная со второй. */
+  background: transparent;
+}
+
+.settings-shell .stats-card + .stats-card {
+  border-left: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.settings-shell .stats-card__label {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+
+.settings-shell .stats-card__value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.settings-shell .stats-card__number {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.settings-shell .stats-card__unit {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
