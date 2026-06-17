@@ -1,6 +1,6 @@
 {
   "name": "@kosmos/extension-eden",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "private": true,
   "description": "Eden (заметки + CodeMirror editor) — Vue extension для Kepler shell.",
   "type": "module",

@@ -725,14 +725,14 @@ Setting в Settings → Общие.
 
 ## Текущие версии
 
-| Артефакт                                            | Версия                                                                           |
-| --------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Kosmos Desktop (`platform/desktop/package.json`)    | **0.4.8**                                                                        |
-| Akasha extension (`incubator/akasha/manifest.json`) | **0.1.2** (Vue EPUB reader; EPUB parser guardrails)                              |
-| Eden extension (`products/eden/manifest.json`)      | **0.2.1** (sidebar/object layout polish + дневник button + accent state cleanup) |
-| Delphi extension                                    | **0.1.7** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                |
-| Arrancador extension                                | **0.1.4**                                                                        |
-| Dashboard                                           | встроен в shell (не extension)                                                   |
+| Артефакт                                            | Версия                                                               |
+| --------------------------------------------------- | -------------------------------------------------------------------- |
+| Kosmos Desktop (`platform/desktop/package.json`)    | **0.4.8**                                                            |
+| Akasha extension (`incubator/akasha/manifest.json`) | **0.1.2** (Vue EPUB reader; EPUB parser guardrails)                  |
+| Eden extension (`products/eden/manifest.json`)      | **0.3.0** (live sync / object refresh + Eden live-list sync updates) |
+| Delphi extension                                    | **0.1.7** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)    |
+| Arrancador extension                                | **0.1.4**                                                            |
+| Dashboard                                           | встроен в shell (не extension)                                       |
 
 1. Floating focus widget переставал тикать (renderer push'ил state, renderer dead → no push'ей; main process autonomous tick не обновлял phaseEndsAtMs на phase boundary).
 2. `time_entry_obj` оставались `endedAt: null` навсегда (close/create логика жила в `usePomodoroSession` renderer'е).
