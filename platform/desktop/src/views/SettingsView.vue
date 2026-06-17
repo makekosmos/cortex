@@ -22,6 +22,7 @@ import FocusTab from "./settings/tabs/FocusTab.vue";
 import GeneralTab from "./settings/tabs/GeneralTab.vue";
 import SecretsTab from "./settings/tabs/SecretsTab.vue";
 import SecurityTab from "./settings/tabs/SecurityTab.vue";
+import SyncTab from "./settings/tabs/SyncTab.vue";
 import {
   createDictationConfig,
   DictationConfigKey,
@@ -538,6 +539,10 @@ onBeforeUnmount(() => {
 
         <template v-else-if="activeTab === 'secrets'">
           <SecretsTab />
+        </template>
+
+        <template v-else-if="activeTab === 'sync'">
+          <SyncTab />
         </template>
 
         <template v-else-if="activeTab === 'dictation'">

@@ -51,6 +51,23 @@ pub fn resolve_device_id(lock_dir: &Path) -> std::io::Result<String> {
     Ok(short)
 }
 
+fn resolve_use_iroh_by_default() -> bool {
+    match std::env::var("KOSMOS_IROH") {
+        Ok(flag) if flag == "0" || flag.eq_ignore_ascii_case("false") => false,
+        Ok(flag) if flag == "1" || flag.eq_ignore_ascii_case("true") => true,
+        Ok(_) => true,
+        Err(_) => true,
+    }
+}
+
+fn start_sync_unsupported_iroh_error(err: &str) -> bool {
+    let err = err.to_ascii_lowercase();
+    err.contains("iroh-spike")
+        || err.contains("unsupported iroh transport")
+        || err.contains("use_iroh")
+        || err.contains("compiled without")
+}
+
 pub async fn start_lan_sync(
     ark: &ArkHost,
     space_id: &str,
@@ -63,6 +80,7 @@ pub async fn start_lan_sync(
         "device_name": device_name,
         "port": null,
         "seed_addresses": null,
+        "use_iroh": resolve_use_iroh_by_default(),
     });
 
     if let Ok(url) = std::env::var("KOSMOS_RELAY_URL") {
@@ -88,28 +106,44 @@ pub async fn start_lan_sync(
     // ark-core-rpc when it was built with the `iroh-spike` Rust feature. A
     // non-iroh-spike sidecar rejects start_sync with an explicit error if
     // KOSMOS_IROH=1 is set, rather than silently ignoring it.
-    if let Ok(flag) = std::env::var("KOSMOS_IROH") {
-        if flag == "1" || flag.eq_ignore_ascii_case("true") {
-            params["use_iroh"] = serde_json::Value::Bool(true);
-        }
-    }
     if let Ok(ticket) = std::env::var("KOSMOS_IROH_PEER_TICKET") {
         if !ticket.is_empty() {
             params["iroh_peer_ticket"] = serde_json::Value::String(ticket);
         }
     }
 
-    let response = ark.request("start_sync", params).await?;
-    if !response.ok {
+    let response = ark.request("start_sync", params.clone()).await?;
+    if response.ok {
+        return Ok(());
+    }
+
+    let error = response
+        .error
+        .clone()
+        .unwrap_or_else(|| "(no error message)".to_string());
+    if params
+        .get("use_iroh")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+        && start_sync_unsupported_iroh_error(&error)
+    {
+        tracing::warn!(error = %error, "iroh start_sync unsupported; retrying with LAN fallback");
+        let mut fallback = params;
+        fallback["use_iroh"] = serde_json::Value::Bool(false);
+        let retry = ark.request("start_sync", fallback).await?;
+        if retry.ok {
+            return Ok(());
+        }
         return Err(format!(
-            "ark-core-rpc rejected start_sync: {}",
-            response
+            "ark-core-rpc rejected fallback start_sync: {}",
+            retry
                 .error
                 .unwrap_or_else(|| "(no error message)".to_string())
         )
         .into());
     }
-    Ok(())
+
+    Err(format!("ark-core-rpc rejected start_sync: {error}").into())
 }
 
 /// Dev-flow cross-network step: when iroh was requested (`KOSMOS_IROH=1`),
@@ -130,23 +164,21 @@ pub async fn print_iroh_pairing_code_if_enabled(ark: &ArkHost) {
     }
 
     match ark.request("get_own_iroh_ticket", json!({})).await {
-        Ok(response) if response.ok => {
-            match response.data.as_str() {
-                Some(ticket) if !ticket.is_empty() => {
-                    let banner = "=".repeat(ticket.len().max(24) + 22);
-                    eprintln!("\n{banner}");
-                    eprintln!("=== IROH PAIRING CODE: {ticket} ===");
-                    eprintln!("{banner}\n");
-                }
-                _ => {
-                    tracing::warn!(
-                        "KOSMOS_IROH set, but get_own_iroh_ticket returned no ticket \
+        Ok(response) if response.ok => match response.data.as_str() {
+            Some(ticket) if !ticket.is_empty() => {
+                let banner = "=".repeat(ticket.len().max(24) + 22);
+                eprintln!("\n{banner}");
+                eprintln!("=== IROH PAIRING CODE: {ticket} ===");
+                eprintln!("{banner}\n");
+            }
+            _ => {
+                tracing::warn!(
+                    "KOSMOS_IROH set, but get_own_iroh_ticket returned no ticket \
                          (sidecar likely built without --features iroh-spike, or sync \
                          did not select the iroh transport)"
-                    );
-                }
+                );
             }
-        }
+        },
         Ok(response) => {
             tracing::warn!(
                 error = ?response.error,

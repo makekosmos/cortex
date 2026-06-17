@@ -49,11 +49,27 @@ static DB: StdMutex<Option<Arc<StdMutex<rusqlite::Connection>>>> = StdMutex::new
 // и не держал глобальный DB mutex на всё копирование.
 static DB_PATH: StdMutex<Option<String>> = StdMutex::new(None);
 
+#[derive(Clone, Debug)]
+struct SyncStartParams {
+    space_id: String,
+    device_id: String,
+    device_name: String,
+    port: Option<u16>,
+    seed_addresses: Option<Vec<String>>,
+    relay_url: Option<String>,
+    relay_api_key: Option<String>,
+    auth_secret: Option<String>,
+    use_iroh: bool,
+    iroh_peer_ticket: Option<String>,
+}
+
 struct SyncRuntime {
     server: Arc<SyncServer>,
     storage: Arc<SqliteStorageBackend>,
     clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
     relay: Option<Arc<RelaySync>>,
+    transport_choice: Option<TransportChoice>,
+    start_params: SyncStartParams,
     /// Step 4a: our iroh pairing ticket, captured at construction time when
     /// the iroh transport was selected (`our_ticket()` needs the transport
     /// object directly — `RelaySync` only exposes `Arc<dyn SyncTransport>`,
@@ -295,6 +311,14 @@ enum Request {
         entity: SyncEntity,
     },
     GetConnectedPeers,
+    GetSyncSnapshot,
+    DisconnectPeer {
+        device_id: String,
+    },
+    ConnectWithPairingCode {
+        #[serde(alias = "code")]
+        pairing_code: String,
+    },
     LeaveSpace,
     AddSeedPeer {
         addresses: Vec<String>,
@@ -626,12 +650,19 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::upsert_todo(conn, &todo)?;
                 let hlc = record_local_upsert(conn, "todo", &todo.id, device_id)?;
-                let entity = make_sync_entity("todo", &todo.id,
-                    serde_json::to_value(&todo).unwrap_or(json!({})), hlc, None);
+                let entity = make_sync_entity(
+                    "todo",
+                    &todo.id,
+                    serde_json::to_value(&todo).unwrap_or(json!({})),
+                    hlc,
+                    None,
+                );
                 Ok(entity)
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -643,7 +674,9 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                 Ok(make_sync_entity("todo", &id, json!({}), hlc, Some(true)))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -654,8 +687,13 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                 let mut entities = Vec::with_capacity(todos.len());
                 for todo in &todos {
                     let hlc = record_local_upsert(conn, "todo", &todo.id, device_id.clone())?;
-                    entities.push(make_sync_entity("todo", &todo.id,
-                        serde_json::to_value(todo).unwrap_or(json!({})), hlc, None));
+                    entities.push(make_sync_entity(
+                        "todo",
+                        &todo.id,
+                        serde_json::to_value(todo).unwrap_or(json!({})),
+                        hlc,
+                        None,
+                    ));
                 }
                 Ok(entities)
             });
@@ -673,11 +711,18 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::upsert_project(conn, &project)?;
                 let hlc = record_local_upsert(conn, "project", &project.id, device_id)?;
-                Ok(make_sync_entity("project", &project.id,
-                    serde_json::to_value(&project).unwrap_or(json!({})), hlc, None))
+                Ok(make_sync_entity(
+                    "project",
+                    &project.id,
+                    serde_json::to_value(&project).unwrap_or(json!({})),
+                    hlc,
+                    None,
+                ))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -689,7 +734,9 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                 Ok(make_sync_entity("project", &id, json!({}), hlc, Some(true)))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -698,11 +745,18 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::upsert_area(conn, &area)?;
                 let hlc = record_local_upsert(conn, "area", &area.id, device_id)?;
-                Ok(make_sync_entity("area", &area.id,
-                    serde_json::to_value(&area).unwrap_or(json!({})), hlc, None))
+                Ok(make_sync_entity(
+                    "area",
+                    &area.id,
+                    serde_json::to_value(&area).unwrap_or(json!({})),
+                    hlc,
+                    None,
+                ))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -711,11 +765,18 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::upsert_tag(conn, &tag)?;
                 let hlc = record_local_upsert(conn, "tag", &tag.id, device_id)?;
-                Ok(make_sync_entity("tag", &tag.id,
-                    serde_json::to_value(&tag).unwrap_or(json!({})), hlc, None))
+                Ok(make_sync_entity(
+                    "tag",
+                    &tag.id,
+                    serde_json::to_value(&tag).unwrap_or(json!({})),
+                    hlc,
+                    None,
+                ))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -724,11 +785,18 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::upsert_heading(conn, &heading)?;
                 let hlc = record_local_upsert(conn, "heading", &heading.id, device_id)?;
-                Ok(make_sync_entity("heading", &heading.id,
-                    serde_json::to_value(&heading).unwrap_or(json!({})), hlc, None))
+                Ok(make_sync_entity(
+                    "heading",
+                    &heading.id,
+                    serde_json::to_value(&heading).unwrap_or(json!({})),
+                    hlc,
+                    None,
+                ))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -740,7 +808,9 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                 Ok(make_sync_entity("heading", &id, json!({}), hlc, Some(true)))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -752,11 +822,18 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::upsert_tracked_app(conn, &tracked_app)?;
                 let hlc = record_local_upsert(conn, "tracked_app", &tracked_app.id, device_id)?;
-                Ok(make_sync_entity("tracked_app", &tracked_app.id,
-                    serde_json::to_value(&tracked_app).unwrap_or(json!({})), hlc, None))
+                Ok(make_sync_entity(
+                    "tracked_app",
+                    &tracked_app.id,
+                    serde_json::to_value(&tracked_app).unwrap_or(json!({})),
+                    hlc,
+                    None,
+                ))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -765,10 +842,18 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::delete_tracked_app(conn, &id)?;
                 let hlc = record_local_delete(conn, "tracked_app", &id, device_id)?;
-                Ok(make_sync_entity("tracked_app", &id, json!({}), hlc, Some(true)))
+                Ok(make_sync_entity(
+                    "tracked_app",
+                    &id,
+                    json!({}),
+                    hlc,
+                    Some(true),
+                ))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -780,11 +865,18 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::upsert_usage_session(conn, &usage_session)?;
                 let hlc = record_local_upsert(conn, "usage_session", &usage_session.id, device_id)?;
-                Ok(make_sync_entity("usage_session", &usage_session.id,
-                    serde_json::to_value(&usage_session).unwrap_or(json!({})), hlc, None))
+                Ok(make_sync_entity(
+                    "usage_session",
+                    &usage_session.id,
+                    serde_json::to_value(&usage_session).unwrap_or(json!({})),
+                    hlc,
+                    None,
+                ))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -793,10 +885,18 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::delete_usage_session(conn, &id)?;
                 let hlc = record_local_delete(conn, "usage_session", &id, device_id)?;
-                Ok(make_sync_entity("usage_session", &id, json!({}), hlc, Some(true)))
+                Ok(make_sync_entity(
+                    "usage_session",
+                    &id,
+                    json!({}),
+                    hlc,
+                    Some(true),
+                ))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -808,11 +908,18 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::upsert_usage_event(conn, &usage_event)?;
                 let hlc = record_local_upsert(conn, "usage_event", &usage_event.id, device_id)?;
-                Ok(make_sync_entity("usage_event", &usage_event.id,
-                    serde_json::to_value(&usage_event).unwrap_or(json!({})), hlc, None))
+                Ok(make_sync_entity(
+                    "usage_event",
+                    &usage_event.id,
+                    serde_json::to_value(&usage_event).unwrap_or(json!({})),
+                    hlc,
+                    None,
+                ))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -821,10 +928,18 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::delete_usage_event(conn, &id)?;
                 let hlc = record_local_delete(conn, "usage_event", &id, device_id)?;
-                Ok(make_sync_entity("usage_event", &id, json!({}), hlc, Some(true)))
+                Ok(make_sync_entity(
+                    "usage_event",
+                    &id,
+                    json!({}),
+                    hlc,
+                    Some(true),
+                ))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -904,13 +1019,20 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::upsert_object(conn, &object)?;
                 let hlc = record_local_upsert(conn, "object", &object.id, device_id)?;
-                Ok(make_sync_entity("object", &object.id,
-                    serde_json::to_value(&object).unwrap_or(json!({})), hlc, None))
+                Ok(make_sync_entity(
+                    "object",
+                    &object.id,
+                    serde_json::to_value(&object).unwrap_or(json!({})),
+                    hlc,
+                    None,
+                ))
             });
             if let Ok(entity) = result {
                 let eid = object_id.clone();
                 let etid = object_type_id.clone();
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
                 emit_event(json!({
                     "event": "object_upserted",
                     "id": eid,
@@ -928,7 +1050,9 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             });
             if let Ok(entity) = result {
                 let eid = object_id.clone();
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
                 emit_event(json!({
                     "event": "object_deleted",
                     "id": eid,
@@ -951,11 +1075,18 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::upsert_object_type(conn, &object_type)?;
                 let hlc = record_local_upsert(conn, "object_type", &object_type.id, device_id)?;
-                Ok(make_sync_entity("object_type", &object_type.id,
-                    serde_json::to_value(&object_type).unwrap_or(json!({})), hlc, None))
+                Ok(make_sync_entity(
+                    "object_type",
+                    &object_type.id,
+                    serde_json::to_value(&object_type).unwrap_or(json!({})),
+                    hlc,
+                    None,
+                ))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -963,10 +1094,18 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::delete_object_type(conn, &id)?;
                 let hlc = record_local_delete(conn, "object_type", &id, device_id)?;
-                Ok(make_sync_entity("object_type", &id, json!({}), hlc, Some(true)))
+                Ok(make_sync_entity(
+                    "object_type",
+                    &id,
+                    json!({}),
+                    hlc,
+                    Some(true),
+                ))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -981,11 +1120,18 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::upsert_object_link(conn, &object_link)?;
                 let hlc = record_local_upsert(conn, "object_link", &object_link.id, device_id)?;
-                Ok(make_sync_entity("object_link", &object_link.id,
-                    serde_json::to_value(&object_link).unwrap_or(json!({})), hlc, None))
+                Ok(make_sync_entity(
+                    "object_link",
+                    &object_link.id,
+                    serde_json::to_value(&object_link).unwrap_or(json!({})),
+                    hlc,
+                    None,
+                ))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -993,10 +1139,18 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let result = with_conn(|conn| {
                 db::delete_object_link(conn, &id)?;
                 let hlc = record_local_delete(conn, "object_link", &id, device_id)?;
-                Ok(make_sync_entity("object_link", &id, json!({}), hlc, Some(true)))
+                Ok(make_sync_entity(
+                    "object_link",
+                    &id,
+                    json!({}),
+                    hlc,
+                    Some(true),
+                ))
             });
             if let Ok(entity) = result {
-                tokio::spawn(async move { broadcast_local_change(entity).await; });
+                tokio::spawn(async move {
+                    broadcast_local_change(entity).await;
+                });
             }
             Ok(json!(true))
         }
@@ -1095,6 +1249,14 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         Request::BroadcastChange { entity } => handle_broadcast_change(entity).await,
 
         Request::GetConnectedPeers => handle_get_connected_peers().await,
+
+        Request::GetSyncSnapshot => handle_get_sync_snapshot().await,
+
+        Request::DisconnectPeer { device_id } => handle_disconnect_peer(device_id).await,
+
+        Request::ConnectWithPairingCode { pairing_code } => {
+            handle_connect_with_pairing_code(pairing_code).await
+        }
 
         Request::LeaveSpace => {
             handle_stop_sync().await;
@@ -1260,6 +1422,19 @@ async fn handle_start_sync(
     // regardless of build per the UniFFI/JSON-RPC surface-stability rule).
     let _ = &iroh_peer_ticket;
 
+    let transport_state = Some(transport_choice.clone());
+    let start_params = SyncStartParams {
+        space_id: space_id.clone(),
+        device_id: device_id.clone(),
+        device_name: device_name.clone(),
+        port,
+        seed_addresses: seed_addresses.clone(),
+        relay_url: relay_url.clone(),
+        relay_api_key: relay_api_key.clone(),
+        auth_secret: auth_secret.clone(),
+        use_iroh,
+        iroh_peer_ticket: iroh_peer_ticket.clone(),
+    };
     let relay = if transport_choice == TransportChoice::Relay {
         let relay_url = relay_url.clone().expect("Relay choice implies relay_url");
         let transport: Arc<dyn ark_core::sync_transport::SyncTransport> =
@@ -1358,8 +1533,9 @@ async fn handle_start_sync(
     let clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>> =
         Arc::new(TokioMutex::new(HashMap::new()));
     let known_peers = server.get_known_peers().await;
+    let removed_peer_ids = server.get_removed_peer_ids().await;
     for peer in known_peers {
-        if peer.device_id == device_id {
+        if peer.device_id == device_id || removed_peer_ids.iter().any(|id| id == &peer.device_id) {
             continue;
         }
         let reachable: Vec<String> = peer
@@ -1444,6 +1620,14 @@ async fn handle_start_sync(
                 if reachable.is_empty() {
                     return;
                 }
+                if server
+                    .get_removed_peer_ids()
+                    .await
+                    .iter()
+                    .any(|id| id == &peer.device_id)
+                {
+                    return;
+                }
                 server
                     .register_external_peer(&peer.device_id, &peer.device_name, reachable.clone())
                     .await;
@@ -1514,6 +1698,8 @@ async fn handle_start_sync(
         storage,
         clients,
         relay,
+        transport_choice: transport_state,
+        start_params,
         iroh_our_ticket,
         beacon: beacon_clone,
         space_id,
@@ -1651,12 +1837,38 @@ async fn handle_stop_sync() {
         if let Some(relay) = runtime.relay.as_ref() {
             relay.stop();
         }
-        runtime.server.stop().await;
-        let clients = runtime.clients.lock().await;
-        for client in clients.values() {
-            client.stop();
+        let clients: Vec<Arc<SyncClient>> = {
+            let clients = runtime.clients.lock().await;
+            clients.values().cloned().collect()
+        };
+        for client in clients {
+            client.disconnect().await;
         }
+        runtime.server.stop().await;
     }
+}
+
+async fn handle_start_sync_with_params(params: SyncStartParams) -> Result<Value, String> {
+    handle_start_sync(
+        params.space_id,
+        params.device_id,
+        Some(params.device_name),
+        params.port,
+        params.seed_addresses,
+        params.relay_url,
+        params.relay_api_key,
+        params.auth_secret,
+        params.use_iroh,
+        params.iroh_peer_ticket,
+    )
+    .await
+}
+
+fn build_pairing_restart_params(runtime: &SyncRuntime, pairing_code: &str) -> SyncStartParams {
+    let mut params = runtime.start_params.clone();
+    params.use_iroh = true;
+    params.iroh_peer_ticket = Some(pairing_code.trim().to_string());
+    params
 }
 
 async fn handle_broadcast_change(mut entity: SyncEntity) -> Result<Value, String> {
@@ -1700,6 +1912,136 @@ async fn handle_get_own_iroh_ticket() -> Result<Value, String> {
         .as_ref()
         .and_then(|runtime| runtime.iroh_our_ticket.clone());
     Ok(json!(ticket))
+}
+
+async fn handle_get_sync_snapshot() -> Result<Value, String> {
+    let guard = SYNC.lock().await;
+    let runtime = match guard.as_ref() {
+        Some(r) => r.clone(),
+        None => {
+            return Ok(json!({
+                "running": false,
+                "transport": "unknown",
+                "pairing_available": false,
+                "own_pairing_code_available": false,
+                "peers": [],
+            }))
+        }
+    };
+
+    let connected = runtime.server.get_connected_peer_entries().await;
+    let known = runtime.server.get_known_peers().await;
+    let connected_ids: std::collections::HashSet<String> =
+        connected.iter().map(|(id, _)| id.clone()).collect();
+    let peers: Vec<Value> = known
+        .into_iter()
+        .filter(|peer| peer.device_id != runtime.device_id)
+        .map(|peer| {
+            let status = if connected_ids.contains(&peer.device_id) {
+                "online"
+            } else {
+                "offline"
+            };
+            json!({
+                "device_id": peer.device_id,
+                "device_name": peer.device_name,
+                "last_seen": peer.last_seen,
+                "status": status,
+            })
+        })
+        .collect();
+
+    Ok(json!({
+        "running": true,
+        "transport": match runtime.transport_choice {
+            Some(TransportChoice::Iroh) => "iroh",
+            Some(TransportChoice::Relay) => "relay",
+            Some(TransportChoice::None) => "lan",
+            None => "unknown",
+        },
+        "pairing_available": runtime.iroh_our_ticket.is_some(),
+        "own_pairing_code_available": runtime.iroh_our_ticket.is_some(),
+        "peers": peers,
+    }))
+}
+
+async fn handle_disconnect_peer(device_id: String) -> Result<Value, String> {
+    let guard = SYNC.lock().await;
+    let runtime = match guard.as_ref() {
+        Some(r) => r.clone(),
+        None => return Err("Sync not running".to_string()),
+    };
+    drop(guard);
+    let device_id = device_id.trim();
+    if device_id.is_empty() {
+        return Err("device_id is empty".to_string());
+    }
+
+    let _ = runtime.server.disconnect_peer(device_id).await;
+
+    let client_entries: Vec<(String, Arc<SyncClient>)> = {
+        let clients = runtime.clients.lock().await;
+        clients
+            .iter()
+            .map(|(key, client)| (key.clone(), client.clone()))
+            .collect()
+    };
+    let mut removed_client_ids: Vec<String> = Vec::new();
+    for (client_key, client) in client_entries {
+        let peer = client.current_peer().await;
+        if peer.device_id == device_id {
+            client.disconnect().await;
+            removed_client_ids.push(client_key);
+        }
+    }
+    if !removed_client_ids.is_empty() {
+        let mut clients = runtime.clients.lock().await;
+        for client_id in removed_client_ids {
+            clients.remove(&client_id);
+        }
+    }
+
+    let remaining = runtime.server.connected_peer_count().await;
+    emit_event(json!({
+        "event": "peer_disconnected",
+        "device_id": device_id,
+        "remaining": remaining,
+    }));
+    emit_event(json!({"event": "peer_list_updated"}));
+    Ok(json!(true))
+}
+
+async fn handle_connect_with_pairing_code(pairing_code: String) -> Result<Value, String> {
+    let code = pairing_code.trim();
+    if code.is_empty() {
+        return Err("pairing code is empty".to_string());
+    }
+
+    let runtime = {
+        let guard = SYNC.lock().await;
+        match guard.as_ref() {
+            Some(r) => r.clone(),
+            None => return Err("Sync not running".to_string()),
+        }
+    };
+
+    let restart_params = build_pairing_restart_params(&runtime, code);
+    let restore_params = runtime.start_params.clone();
+
+    handle_stop_sync().await;
+    match handle_start_sync_with_params(restart_params).await {
+        Ok(result) => Ok(result),
+        Err(err) => {
+            if let Err(restore_err) = handle_start_sync_with_params(restore_params).await {
+                return Err(format!(
+                    "connect_with_pairing_code failed: {err}; restoring previous sync also failed: {restore_err}"
+                ));
+            }
+            Err(format!(
+                "connect_with_pairing_code failed: {err}; previous sync restored"
+            ))
+        }
+    }
 }
 
 async fn handle_get_connected_peers() -> Result<Value, String> {
@@ -1784,6 +2126,7 @@ mod tests {
     use super::*;
 
     static TEST_DB_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    static TEST_EVENT_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     #[test]
     fn response_omits_id_for_legacy_request() {
@@ -1840,6 +2183,64 @@ mod tests {
             }
             _ => panic!("expected start_sync"),
         }
+    }
+
+    #[test]
+    fn request_deserialization_accepts_code_alias_for_pairing() {
+        let request = serde_json::from_value::<Request>(json!({
+            "operation": "connect_with_pairing_code",
+            "code": "endpointdemo123"
+        }))
+        .expect("code alias should deserialize for pairing requests");
+
+        match request {
+            Request::ConnectWithPairingCode { pairing_code } => {
+                assert_eq!(pairing_code, "endpointdemo123");
+            }
+            _ => panic!("expected connect_with_pairing_code"),
+        }
+    }
+
+    #[test]
+    fn pairing_restart_params_force_iroh_and_replace_ticket() {
+        let storage = Arc::new(ark_core::db::SqliteStorageBackend::new(Arc::new(
+            StdMutex::new(rusqlite::Connection::open_in_memory().unwrap()),
+        )));
+        let runtime = SyncRuntime {
+            server: Arc::new(ark_core::sync_server::SyncServer::new(
+                storage.clone() as Arc<dyn ark_core::sync_server::StorageBackend>
+            )),
+            storage,
+            clients: Arc::new(TokioMutex::new(HashMap::new())),
+            relay: None,
+            transport_choice: Some(TransportChoice::None),
+            start_params: SyncStartParams {
+                space_id: "space-a".to_string(),
+                device_id: "device-a".to_string(),
+                device_name: "Device A".to_string(),
+                port: Some(21531),
+                seed_addresses: Some(vec!["127.0.0.1:21531".to_string()]),
+                relay_url: Some("ws://relay.example".to_string()),
+                relay_api_key: Some("relay-key".to_string()),
+                auth_secret: Some("secret".to_string()),
+                use_iroh: false,
+                iroh_peer_ticket: None,
+            },
+            iroh_our_ticket: None,
+            beacon: Arc::new(ark_core::beacon::BroadcastDiscovery::new()),
+            space_id: "space-a".to_string(),
+            device_id: "device-a".to_string(),
+            device_name: "Device A".to_string(),
+            auth_secret: Some("secret".to_string()),
+            own_addresses: Arc::new(TokioMutex::new(Vec::new())),
+        };
+
+        let params = build_pairing_restart_params(&runtime, "  endpointdemo123  ");
+        assert!(params.use_iroh);
+        assert_eq!(params.iroh_peer_ticket.as_deref(), Some("endpointdemo123"));
+        assert_eq!(params.relay_url.as_deref(), Some("ws://relay.example"));
+        assert_eq!(params.space_id, "space-a");
+        assert_eq!(params.device_id, "device-a");
     }
 
     #[cfg(feature = "iroh-spike")]
@@ -2458,9 +2859,7 @@ mod tests {
     impl ark_core::sync_transport::SyncTransport for CapturingTransport {
         async fn start(
             &self,
-            _event_tx: tokio::sync::mpsc::UnboundedSender<
-                ark_core::sync_transport::TransportEvent,
-            >,
+            _event_tx: tokio::sync::mpsc::UnboundedSender<ark_core::sync_transport::TransportEvent>,
         ) -> Result<(), String> {
             Ok(())
         }
@@ -2469,7 +2868,10 @@ mod tests {
             // `send` — sync, но нам нужен lock на TokioMutex из sync контекста.
             // Используем blocking_lock через spawn_blocking или try_lock; в тестах
             // конкурентности нет, try_lock гарантированно успевает.
-            self.sent.try_lock().expect("CapturingTransport: lock").push(msg);
+            self.sent
+                .try_lock()
+                .expect("CapturingTransport: lock")
+                .push(msg);
             Ok(())
         }
 
@@ -2508,7 +2910,7 @@ mod tests {
         relay.start().await.unwrap();
 
         let server = Arc::new(ark_core::sync_server::SyncServer::new(
-            backend.clone() as Arc<dyn StorageBackend>,
+            backend.clone() as Arc<dyn StorageBackend>
         ));
 
         let runtime = SyncRuntime {
@@ -2516,6 +2918,19 @@ mod tests {
             storage: backend,
             clients: Arc::new(TokioMutex::new(std::collections::HashMap::new())),
             relay: Some(relay),
+            transport_choice: Some(TransportChoice::Relay),
+            start_params: SyncStartParams {
+                space_id: "test-space".to_string(),
+                device_id: "test-device".to_string(),
+                device_name: "Test Device".to_string(),
+                port: None,
+                seed_addresses: None,
+                relay_url: None,
+                relay_api_key: None,
+                auth_secret: None,
+                use_iroh: false,
+                iroh_peer_ticket: None,
+            },
             iroh_our_ticket: None,
             beacon: Arc::new(ark_core::beacon::BroadcastDiscovery::new()),
             space_id: "test-space".to_string(),
@@ -2527,6 +2942,108 @@ mod tests {
         *SYNC.lock().await = Some(Arc::new(runtime));
 
         captured
+    }
+
+    #[tokio::test]
+    async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let _event_guard = TEST_EVENT_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+
+        let shared = get_shared_conn().unwrap();
+        let backend = Arc::new(ark_core::db::SqliteStorageBackend::new(shared));
+        backend.set_device_id("device-local");
+
+        let peer = PeerRecord {
+            device_id: "peer-123".to_string(),
+            device_name: "Peer 123".to_string(),
+            addresses: vec!["192.168.1.20:21531".to_string()],
+            last_seen: "2026-06-17T00:00:00.000Z".to_string(),
+            last_address: None,
+        };
+        let client = Arc::new(SyncClient::new(
+            backend.clone() as Arc<dyn ark_core::sync_server::StorageBackend>,
+            peer,
+            "device-local".to_string(),
+            "Local Device".to_string(),
+            "space-a".to_string(),
+            vec![],
+            None,
+        ));
+
+        let clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>> = Arc::new(TokioMutex::new(
+            HashMap::from([("peer-123".to_string(), client.clone())]),
+        ));
+        let runtime = SyncRuntime {
+            server: Arc::new(ark_core::sync_server::SyncServer::new(
+                backend.clone() as Arc<dyn ark_core::sync_server::StorageBackend>
+            )),
+            storage: backend,
+            clients: clients.clone(),
+            relay: None,
+            transport_choice: Some(TransportChoice::None),
+            start_params: SyncStartParams {
+                space_id: "space-a".to_string(),
+                device_id: "device-local".to_string(),
+                device_name: "Local Device".to_string(),
+                port: None,
+                seed_addresses: None,
+                relay_url: None,
+                relay_api_key: None,
+                auth_secret: None,
+                use_iroh: false,
+                iroh_peer_ticket: None,
+            },
+            iroh_our_ticket: None,
+            beacon: Arc::new(ark_core::beacon::BroadcastDiscovery::new()),
+            space_id: "space-a".to_string(),
+            device_id: "device-local".to_string(),
+            device_name: "Local Device".to_string(),
+            auth_secret: None,
+            own_addresses: Arc::new(TokioMutex::new(Vec::new())),
+        };
+        *SYNC.lock().await = Some(Arc::new(runtime));
+
+        let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel::<serde_json::Value>();
+        ark_core::events::set_event_sender(event_tx);
+
+        handle_disconnect_peer("peer-123".to_string())
+            .await
+            .unwrap();
+
+        assert!(client.is_stopped());
+        assert!(clients.lock().await.is_empty());
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let mut saw_disconnect = false;
+        let mut saw_list = false;
+        while !(saw_disconnect && saw_list) {
+            match event_rx.try_recv() {
+                Ok(event) => {
+                    if event["event"] == "peer_disconnected" {
+                        assert_eq!(event["device_id"], "peer-123");
+                        saw_disconnect = true;
+                    } else if event["event"] == "peer_list_updated" {
+                        saw_list = true;
+                    }
+                }
+                Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
+                    if std::time::Instant::now() > deadline {
+                        panic!("timed out waiting for disconnect events");
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                }
+                Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                    panic!("event channel disconnected unexpectedly");
+                }
+            }
+        }
     }
 
     #[tokio::test]

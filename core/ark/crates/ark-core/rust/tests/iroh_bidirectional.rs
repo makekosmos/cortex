@@ -40,7 +40,10 @@ where
             return None;
         }
         match tokio::time::timeout(remaining, rx.recv()).await {
-            Ok(Some(TransportEvent::MessageReceived { from_device_id, msg })) => {
+            Ok(Some(TransportEvent::MessageReceived {
+                from_device_id,
+                msg,
+            })) => {
                 if predicate(&from_device_id, &msg) {
                     return Some((from_device_id, msg));
                 }
@@ -105,26 +108,24 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
     // Транспорт ДОЛЖЕН инжектировать Hello как первый фрейм на подключении.
     // B должна получить Hello от A, A должна получить Hello от B.
 
-    let (b_got_hello_from, _b_hello_msg) = find_message(
-        &mut b_events_rx,
-        Duration::from_secs(5),
-        |_from, msg| matches!(msg, LanSyncMessage::Hello { .. }),
-    )
-    .await
-    .expect("B must receive a Hello from A (auto-injected by transport) within 5 s");
+    let (b_got_hello_from, _b_hello_msg) =
+        find_message(&mut b_events_rx, Duration::from_secs(5), |_from, msg| {
+            matches!(msg, LanSyncMessage::Hello { .. })
+        })
+        .await
+        .expect("B must receive a Hello from A (auto-injected by transport) within 5 s");
 
     assert_eq!(
         b_got_hello_from, "device-A",
         "B должна получить Hello с from_device_id == device-A"
     );
 
-    let (a_got_hello_from, _a_hello_msg) = find_message(
-        &mut a_events_rx,
-        Duration::from_secs(5),
-        |_from, msg| matches!(msg, LanSyncMessage::Hello { .. }),
-    )
-    .await
-    .expect("A must receive a Hello from B (auto-injected by transport) within 5 s");
+    let (a_got_hello_from, _a_hello_msg) =
+        find_message(&mut a_events_rx, Duration::from_secs(5), |_from, msg| {
+            matches!(msg, LanSyncMessage::Hello { .. })
+        })
+        .await
+        .expect("A must receive a Hello from B (auto-injected by transport) within 5 s");
 
     assert_eq!(
         a_got_hello_from, "device-B",
@@ -159,16 +160,17 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         origin_device_id: None, // намеренно None — registry должен резолвить
     };
 
-    transport_b.send(live_change).expect("B send LiveChange to A");
+    transport_b
+        .send(live_change)
+        .expect("B send LiveChange to A");
 
     // A должна получить LiveChange от B через обратный стрим.
-    let (a_got_from, a_msg) = find_message(
-        &mut a_events_rx,
-        Duration::from_secs(5),
-        |_from, msg| matches!(msg, LanSyncMessage::LiveChange { .. }),
-    )
-    .await
-    .expect("A must receive LiveChange from B within 5 s (reverse direction)");
+    let (a_got_from, a_msg) =
+        find_message(&mut a_events_rx, Duration::from_secs(5), |_from, msg| {
+            matches!(msg, LanSyncMessage::LiveChange { .. })
+        })
+        .await
+        .expect("A must receive LiveChange from B within 5 s (reverse direction)");
 
     assert_eq!(
         a_got_from, "device-B",
@@ -176,7 +178,11 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
     );
 
     match a_msg {
-        LanSyncMessage::LiveChange { change_id: cid, entity: ent, .. } => {
+        LanSyncMessage::LiveChange {
+            change_id: cid,
+            entity: ent,
+            ..
+        } => {
             assert_eq!(cid, change_id, "change_id mismatch");
             assert_eq!(ent.id, entity.id, "entity.id mismatch");
         }

@@ -59,7 +59,8 @@ async fn run() {
         .find(|addr| addr.is_ipv4())
         .expect("endpoint A should have an IPv4 bound socket")
         .port();
-    let endpoint_a_socket: std::net::SocketAddr = (std::net::Ipv4Addr::LOCALHOST, endpoint_a_port).into();
+    let endpoint_a_socket: std::net::SocketAddr =
+        (std::net::Ipv4Addr::LOCALHOST, endpoint_a_port).into();
 
     let endpoint_a_addr = EndpointAddr::new(endpoint_a_id).with_ip_addr(endpoint_a_socket);
     eprintln!("[smoke] endpoint A id={endpoint_a_id} sockets={endpoint_a_sockets:?}");
@@ -111,7 +112,9 @@ async fn run() {
 
     let (mut send, mut recv) = conn.open_bi().await.expect("endpoint B: open_bi");
 
-    send.write_all(b"ping").await.expect("endpoint B: write ping");
+    send.write_all(b"ping")
+        .await
+        .expect("endpoint B: write ping");
     send.finish().expect("endpoint B: finish send stream");
 
     let mut buf = [0u8; 4];

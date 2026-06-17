@@ -47,6 +47,7 @@ export {
   SettingsSidebar,
   SettingsSidebarButton,
   SettingsContentHeader,
+  SyncNodeRow,
   SettingsSearchInput,
   EmptyState,
   BlocklistCard,

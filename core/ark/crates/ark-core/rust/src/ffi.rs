@@ -481,12 +481,15 @@ impl ArkCore {
                         .await
                         .map_err(ArkCoreError::from)?;
 
-                    let transport_choice =
-                        crate::transport_select::select_transport(config.use_iroh, &config.relay_url);
+                    let transport_choice = crate::transport_select::select_transport(
+                        config.use_iroh,
+                        &config.relay_url,
+                    );
                     #[allow(unused_mut, unused_assignments)]
                     let mut iroh_our_ticket: Option<String> = None;
 
-                    let relay = if transport_choice == crate::transport_select::TransportChoice::Relay
+                    let relay = if transport_choice
+                        == crate::transport_select::TransportChoice::Relay
                     {
                         let relay_url = config
                             .relay_url
@@ -515,24 +518,25 @@ impl ArkCore {
                                     .map_err(ArkCoreError::from)?
                             };
                             let peer_addr = match config.iroh_peer_ticket.as_deref() {
-                                Some(ticket) => {
-                                    Some(crate::iroh_transport::from_ticket(ticket)
-                                        .map_err(ArkCoreError::from)?)
-                                }
+                                Some(ticket) => Some(
+                                    crate::iroh_transport::from_ticket(ticket)
+                                        .map_err(ArkCoreError::from)?,
+                                ),
                                 None => None,
                             };
-                            let iroh_transport = Arc::new(crate::iroh_transport::IrohTransport::new(
-                                crate::iroh_transport::IrohConfig {
-                                    device_id: config.device_id.clone(),
-                                    device_name: device_name.clone(),
-                                    space_id: config.space_id.clone(),
-                                    secret_key: Some(secret_key),
-                                    peer_addr,
-                                    peer_ticket: config.iroh_peer_ticket.clone(),
-                                    relay_mode: None,
-                                    auth_secret: config.auth_secret.clone(),
-                                },
-                            ));
+                            let iroh_transport =
+                                Arc::new(crate::iroh_transport::IrohTransport::new(
+                                    crate::iroh_transport::IrohConfig {
+                                        device_id: config.device_id.clone(),
+                                        device_name: device_name.clone(),
+                                        space_id: config.space_id.clone(),
+                                        secret_key: Some(secret_key),
+                                        peer_addr,
+                                        peer_ticket: config.iroh_peer_ticket.clone(),
+                                        relay_mode: None,
+                                        auth_secret: config.auth_secret.clone(),
+                                    },
+                                ));
                             let relay_sync = RelaySync::with_transport(
                                 storage.clone() as Arc<dyn StorageBackend>,
                                 RelaySyncConfig {

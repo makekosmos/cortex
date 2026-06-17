@@ -254,6 +254,19 @@ const api: KeplerApi = {
       get: () => ipcRenderer.invoke("kepler:settings:tray-icon:get"),
       set: (enabled) => ipcRenderer.invoke("kepler:settings:tray-icon:set", enabled),
     },
+    sync: {
+      snapshot: () => ipcRenderer.invoke("kepler:settings:sync:snapshot"),
+      getPairingCode: () => ipcRenderer.invoke("kepler:settings:sync:get-pairing-code"),
+      disconnectPeer: (deviceId) => ipcRenderer.invoke("kepler:settings:sync:disconnect", deviceId),
+      connectWithPairingCode: (code) =>
+        ipcRenderer.invoke("kepler:settings:sync:connect-with-pairing-code", code),
+      copyPairingCode: (code) => ipcRenderer.invoke("kepler:settings:sync:copy-pairing-code", code),
+      onUpdated: (listener) => {
+        const handler = () => listener();
+        ipcRenderer.on("kepler:settings:sync:updated", handler);
+        return () => ipcRenderer.removeListener("kepler:settings:sync:updated", handler);
+      },
+    },
     developerMode: {
       get: () => ipcRenderer.invoke("kepler:settings:developer-mode:get"),
       set: (enabled) => ipcRenderer.invoke("kepler:settings:developer-mode:set", enabled),

@@ -41,7 +41,10 @@ where
             return None;
         }
         match tokio::time::timeout(remaining, rx.recv()).await {
-            Ok(Some(TransportEvent::MessageReceived { from_device_id, msg })) => {
+            Ok(Some(TransportEvent::MessageReceived {
+                from_device_id,
+                msg,
+            })) => {
                 if predicate(&from_device_id, &msg) {
                     return Some((from_device_id, msg));
                 }
@@ -103,11 +106,9 @@ async fn iroh_round_trip() {
     // 3. Ждём подтверждения рукопожатия: B должна получить auto-Hello от A.
     // Это гарантирует, что dial-соединение A установлено и broadcast-подписчик
     // (handle_connection задача A) уже активен и готов принимать send().
-    find_message(
-        &mut b_events_rx,
-        Duration::from_secs(5),
-        |from, msg| from == "device-A" && matches!(msg, LanSyncMessage::Hello { .. }),
-    )
+    find_message(&mut b_events_rx, Duration::from_secs(5), |from, msg| {
+        from == "device-A" && matches!(msg, LanSyncMessage::Hello { .. })
+    })
     .await
     .expect("B must receive Hello from A (auto-injected) within 5s — connection not established");
 

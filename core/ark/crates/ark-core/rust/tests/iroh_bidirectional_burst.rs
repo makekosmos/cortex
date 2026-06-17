@@ -116,7 +116,10 @@ async fn iroh_bidirectional_burst_no_desync() {
         auth_secret: None,
     });
 
-    transport_b.start(b_events_tx).await.expect("transport B start");
+    transport_b
+        .start(b_events_tx)
+        .await
+        .expect("transport B start");
 
     let ticket_b = transport_b
         .our_ticket()
@@ -137,7 +140,10 @@ async fn iroh_bidirectional_burst_no_desync() {
         auth_secret: None,
     });
 
-    transport_a.start(a_events_tx).await.expect("transport A start");
+    transport_a
+        .start(a_events_tx)
+        .await
+        .expect("transport A start");
 
     // ── 3. Wait for the mutual Hello handshake before bursting. ───────────────
     // We need both connections to be established so the broadcast subscriber is
@@ -167,7 +173,10 @@ async fn iroh_bidirectional_burst_no_desync() {
         }
         found
     };
-    assert!(b_got_hello, "B must receive Hello from A within {hello_timeout:?}");
+    assert!(
+        b_got_hello,
+        "B must receive Hello from A within {hello_timeout:?}"
+    );
 
     // Wait for A to receive B's Hello.
     let a_got_hello = {
@@ -192,7 +201,10 @@ async fn iroh_bidirectional_burst_no_desync() {
         }
         found
     };
-    assert!(a_got_hello, "A must receive Hello from B within {hello_timeout:?}");
+    assert!(
+        a_got_hello,
+        "A must receive Hello from B within {hello_timeout:?}"
+    );
 
     // ── 4. Build burst payloads. ───────────────────────────────────────────────
     let mut a_sent_ids = HashSet::new();

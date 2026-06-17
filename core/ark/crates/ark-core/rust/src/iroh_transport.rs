@@ -270,9 +270,9 @@ impl IrohTransport {
     pub async fn our_ticket(&self) -> Result<String, String> {
         let relay_disabled = matches!(self.config.relay_mode, Some(RelayMode::Disabled));
         if relay_disabled {
-            let addr = self.endpoint_addr().ok_or_else(|| {
-                "iroh transport: our_ticket() called before start()".to_string()
-            })?;
+            let addr = self
+                .endpoint_addr()
+                .ok_or_else(|| "iroh transport: our_ticket() called before start()".to_string())?;
             return Ok(ticket_string(&addr));
         }
 
@@ -674,7 +674,10 @@ impl SyncTransport for IrohTransport {
                         return;
                     }
 
-                    eprintln!("[iroh] dial attempt peer={} (retry_in={backoff_secs}s if fail)", peer_addr.id);
+                    eprintln!(
+                        "[iroh] dial attempt peer={} (retry_in={backoff_secs}s if fail)",
+                        peer_addr.id
+                    );
                     match dial_endpoint
                         .connect(peer_addr.clone(), ARK_SYNC_ALPN)
                         .await
@@ -788,10 +791,7 @@ fn message_variant_name(msg: &LanSyncMessage) -> &'static str {
 /// меньше; 16 MiB — щедрый запас, не специфичная для протокола константа.
 const MAX_FRAME_LEN: usize = 16 * 1024 * 1024;
 
-async fn write_frame(
-    send: &mut iroh::endpoint::SendStream,
-    payload: &[u8],
-) -> Result<(), String> {
+async fn write_frame(send: &mut iroh::endpoint::SendStream, payload: &[u8]) -> Result<(), String> {
     let len = u32::try_from(payload.len())
         .map_err(|_| "iroh transport: frame payload too large".to_string())?;
     send.write_all(&len.to_be_bytes())
@@ -937,10 +937,7 @@ mod registry_tests {
 
         registry.insert(endpoint_id, "device-A".to_string());
 
-        assert_eq!(
-            registry.endpoint_id_for("device-A"),
-            Some(endpoint_id)
-        );
+        assert_eq!(registry.endpoint_id_for("device-A"), Some(endpoint_id));
     }
 
     #[test]

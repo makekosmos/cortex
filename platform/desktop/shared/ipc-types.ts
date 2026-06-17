@@ -28,6 +28,41 @@ export interface BackendStatus {
   lockFilePath: string;
 }
 
+export type SyncPeerStatus = "online" | "offline";
+export type SyncPeerDeviceKind = "desktop" | "laptop" | "phone" | "unknown";
+
+export interface SyncPeerInfo {
+  deviceId: string;
+  deviceName: string;
+  lastSeen: string | null;
+  status: SyncPeerStatus;
+  deviceKind: SyncPeerDeviceKind;
+}
+
+export interface SyncStatusSnapshot {
+  running: boolean;
+  transport: "iroh" | "relay" | "lan" | "unknown";
+  pairingAvailable: boolean;
+  ownPairingCodeAvailable: boolean;
+  peers: SyncPeerInfo[];
+}
+
+export interface SyncSnapshot {
+  transport: "iroh" | "relay" | "offline";
+  spaceId: string | null;
+  deviceId: string | null;
+  deviceName: string | null;
+  ownTicket: string | null;
+  connectedPeers: SyncPeerInfo[];
+  removedPeers: SyncPeerInfo[];
+  supportsIroh: boolean;
+}
+
+export interface SyncConnectResult {
+  ok: boolean;
+  error?: string;
+}
+
 export interface DiagnosticsWindowInfo {
   id: number;
   title: string;
@@ -602,6 +637,15 @@ export interface KeplerApi {
     trayIcon: {
       get(): Promise<boolean>;
       set(enabled: boolean): Promise<void>;
+    };
+    /** Sync state for the Settings → Sync tab. */
+    sync: {
+      snapshot(): Promise<SyncStatusSnapshot>;
+      getPairingCode(): Promise<string | null>;
+      disconnectPeer(deviceId: string): Promise<void>;
+      connectWithPairingCode(code: string): Promise<void>;
+      copyPairingCode(code: string): Promise<void>;
+      onUpdated(listener: () => void): () => void;
     };
     /** Developer mode — hot reload extension'ов через Vite dev server +
         F12 для DevTools на extension window. Применяется при следующем

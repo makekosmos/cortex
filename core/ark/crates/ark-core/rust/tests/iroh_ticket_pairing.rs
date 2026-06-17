@@ -46,7 +46,10 @@ where
             return None;
         }
         match tokio::time::timeout(remaining, rx.recv()).await {
-            Ok(Some(TransportEvent::MessageReceived { from_device_id, msg })) => {
+            Ok(Some(TransportEvent::MessageReceived {
+                from_device_id,
+                msg,
+            })) => {
                 if predicate(&from_device_id, &msg) {
                     return Some((from_device_id, msg));
                 }
@@ -109,13 +112,12 @@ async fn iroh_ticket_pairing_round_trip() {
     // 4. Ждём auto-инжектированного Hello от A (транспорт инжектирует его
     // при подключении, до любого явного send()). Это гарантирует, что реестр
     // device_id ↔ EndpointId заполнен до LiveChange.
-    let (hello_from, _hello_msg) = find_message(
-        &mut b_events_rx,
-        Duration::from_secs(5),
-        |from, msg| from == "device-A" && matches!(msg, LanSyncMessage::Hello { .. }),
-    )
-    .await
-    .expect("B must receive Hello from A (auto-injected by transport) within 5s");
+    let (hello_from, _hello_msg) =
+        find_message(&mut b_events_rx, Duration::from_secs(5), |from, msg| {
+            from == "device-A" && matches!(msg, LanSyncMessage::Hello { .. })
+        })
+        .await
+        .expect("B must receive Hello from A (auto-injected by transport) within 5s");
 
     assert_eq!(hello_from, "device-A", "hello must carry real device_id");
 
@@ -145,19 +147,16 @@ async fn iroh_ticket_pairing_round_trip() {
 
     transport_a.send(msg).expect("A send live_change");
 
-    let (live_change_from, received) = find_message(
-        &mut b_events_rx,
-        Duration::from_secs(5),
-        |from, msg| {
+    let (live_change_from, received) =
+        find_message(&mut b_events_rx, Duration::from_secs(5), |from, msg| {
             from == "device-A"
                 && matches!(msg, LanSyncMessage::LiveChange {
                     entity,
                     ..
                 } if entity.id == "test-entity-iroh-ticket-001")
-        },
-    )
-    .await
-    .expect("timed out waiting for iroh message");
+        })
+        .await
+        .expect("timed out waiting for iroh message");
 
     assert_eq!(
         live_change_from, "device-A",
@@ -165,7 +164,10 @@ async fn iroh_ticket_pairing_round_trip() {
     );
     match received {
         LanSyncMessage::LiveChange { entity, .. } => {
-            assert_eq!(entity.id, "test-entity-iroh-ticket-001", "entity id mismatch");
+            assert_eq!(
+                entity.id, "test-entity-iroh-ticket-001",
+                "entity id mismatch"
+            );
         }
         other => panic!("expected LiveChange, got {:?}", other),
     }

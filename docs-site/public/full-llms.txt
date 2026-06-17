@@ -726,6 +726,21 @@ sequenceDiagram
 
 ## LAN sync
 
+### Production pairing in Kepler Settings
+
+В production pairing code больше не нужно искать в stderr/logs. В Kepler доступна вкладка **Settings → Синхронизация**, где можно:
+
+- увидеть список известных устройств и их статус;
+- открыть модалку с текущим pairing code;
+- скопировать код кликом или кнопкой;
+- отключить устройство из списка.
+
+Если iroh-capable sidecar не доступен в сборке, синхронизация продолжает работать через LAN/relay fallback, а код подключения может быть недоступен.
+
+`auth_secret` остаётся только HMAC-auth для hello/auth flow и не шифрует payload.
+
+Production build `ark-core-rpc` должен собираться с iroh feature (`iroh-spike`), иначе pairing UI будет fail-closed.
+
 UDP-beacon (`beacon.rs`) рассылает discovery в подсеть. Пиры, услышавшие beacon, открывают WebSocket-соединение и обмениваются sync-фреймами.
 
 Self-peer фильтрация и фильтрация routable addresses — **обязательные инварианты**. Не ослабляй их при изменениях в sync startup.

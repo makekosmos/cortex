@@ -217,6 +217,33 @@ let backendProc: ChildProcess | null = null;
 let backendLockPath = "";
 let isQuiting = false;
 let arkClient: ArkClient | null = null;
+let syncEventsUnsubscribe: (() => void) | null = null;
+
+function broadcastSettingsSyncUpdated(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      try {
+        win.webContents.send("kepler:settings:sync:updated");
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+function wireSyncEventBroadcast(client: ArkClient): void {
+  syncEventsUnsubscribe?.();
+  syncEventsUnsubscribe = client.onArkEvent((event) => {
+    if (
+      event.event === "peer_connected" ||
+      event.event === "peer_disconnected" ||
+      event.event === "peer_list_updated" ||
+      event.event === "sync_error"
+    ) {
+      broadcastSettingsSyncUpdated();
+    }
+  });
+}
 
 // --- Backend supervisor (hardening proof loop #5) ---------------------------
 // Backend crash → exponential backoff respawn (1s → 5s → 30s → 1min → 2min).
@@ -467,7 +494,9 @@ function scheduleBackendRespawn(lastRanForMs: number): void {
   backendRespawnTimer = setTimeout(() => {
     backendRespawnTimer = null;
     if (isQuiting) return;
-    keplerLog.warn("supervisor", "respawning backend", { streak: backendCrashStreak });
+    keplerLog.warn("supervisor", "respawning backend", {
+      streak: backendCrashStreak,
+    });
     spawnBackend();
     // Дёргаем ARK reinit — старый promise сброшен в resetArkClient,
     // initArkClient создаст новый.
@@ -811,6 +840,8 @@ async function resetArkClient(reason: string): Promise<void> {
   arkClient = null;
   appIconBytesCache.clear();
   setExtensionArkBridge({ request: null, subscribe: null });
+  syncEventsUnsubscribe?.();
+  syncEventsUnsubscribe = null;
   if (wasConnected) broadcastBackendEvent("kepler:backend:disconnected");
   // pomodoro-notifier + focus-widget держат ref на старый arkClient через
   // onArkEvent callback'и — отписываем до stop(), иначе при следующем setup
@@ -839,7 +870,10 @@ function registerAppIconProtocol(): void {
       const cached = appIconBytesCache.get(appId);
       if (cached) {
         return new Response(bufferToArrayBuffer(cached), {
-          headers: { "content-type": "image/png", "cache-control": "max-age=3600" },
+          headers: {
+            "content-type": "image/png",
+            "cache-control": "max-age=3600",
+          },
         });
       }
 
@@ -857,7 +891,10 @@ function registerAppIconProtocol(): void {
       const bytes = await readFile(iconPath);
       appIconBytesCache.set(appId, bytes);
       return new Response(bufferToArrayBuffer(bytes), {
-        headers: { "content-type": "image/png", "cache-control": "max-age=3600" },
+        headers: {
+          "content-type": "image/png",
+          "cache-control": "max-age=3600",
+        },
       });
     } catch (e) {
       keplerLog.warn("app-icon", "kosmos-icon protocol lookup failed", {
@@ -915,7 +952,10 @@ function scheduleArkClientInitRetry(reason: string): void {
     arkInitRetryTimer = null;
     void initArkClient();
   }, delay);
-  keplerLog.warn("ark", "scheduled ArkClient init retry", { reason, delayMs: delay });
+  keplerLog.warn("ark", "scheduled ArkClient init retry", {
+    reason,
+    delayMs: delay,
+  });
 }
 
 export async function awaitArkReady(timeoutMs = ARK_READY_REQUEST_TIMEOUT_MS): Promise<ArkClient> {
@@ -990,12 +1030,16 @@ async function initArkClient(): Promise<void> {
     try {
       setupFocusWidgetBackendSync({ arkClient: client });
     } catch (e) {
-      keplerLog.error("focus-widget", "backend sync setup failed", { err: String(e) });
+      keplerLog.error("focus-widget", "backend sync setup failed", {
+        err: String(e),
+      });
     }
     try {
       setupFocusSessionBackendSync({ arkClient: client });
     } catch (e) {
-      keplerLog.error("focus-session", "backend sync setup failed", { err: String(e) });
+      keplerLog.error("focus-session", "backend sync setup failed", {
+        err: String(e),
+      });
     }
     // Dictation hotkey — registers globalShortcut из dictation-config'а
     // backend'а и подписывается на `dictation_config_changed` для
@@ -1018,6 +1062,7 @@ async function initArkClient(): Promise<void> {
         });
       },
     });
+    wireSyncEventBroadcast(client);
     // Subscribe на commands_changed → пушим renderer'у сигнал перефетчить
     // список (он сам вызовет kepler:commands:list). Сам список не шлём —
     // renderer должен пройти через тот же merge-pipeline (static + dynamic).
@@ -1290,7 +1335,9 @@ safeHandle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
       });
     }
   } catch (e) {
-    keplerLog.error("commands", "loadDeclaredCommands failed", { err: String(e) });
+    keplerLog.error("commands", "loadDeclaredCommands failed", {
+      err: String(e),
+    });
   }
 
   // 3) Runtime dynamic (commands.register от running extension'ов).
@@ -1312,7 +1359,10 @@ safeHandle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
       if (Array.isArray(dynamic)) {
         for (const c of dynamic) {
           if (byId.has(c.id)) continue; // internal/manifest priority
-          const d = c as CommandRecord & { kind?: "app" | "command"; appName?: string };
+          const d = c as CommandRecord & {
+            kind?: "app" | "command";
+            appName?: string;
+          };
           byId.set(c.id, {
             id: c.id,
             title: c.title,
@@ -1326,7 +1376,9 @@ safeHandle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
         console.warn("[kepler-shell] commands.list returned non-array:", dynamic);
       }
     } catch (e) {
-      keplerLog.warn("commands", "commands.list (dynamic) failed", { err: String(e) });
+      keplerLog.warn("commands", "commands.list (dynamic) failed", {
+        err: String(e),
+      });
     }
   }
 
@@ -1735,7 +1787,10 @@ safeHandle("kepler:file-search:ignore:remove", async (_e, pattern: string) => {
     throw new Error("kepler:file-search:ignore:remove invalid pattern");
   }
   const client = await awaitArkReady();
-  await client.invokeOperation({ operation: "file_index.ignore_remove", pattern });
+  await client.invokeOperation({
+    operation: "file_index.ignore_remove",
+    pattern,
+  });
 });
 
 safeHandle("kepler:file-search:rescan", async () => {
@@ -1791,6 +1846,85 @@ ipcMain.handle("kepler:settings:update:install", () => {
   return true;
 });
 ipcMain.handle("kepler:settings:update:state", () => getUpdateState());
+
+function normalizeSyncSnapshot(raw: unknown) {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const peersRaw = Array.isArray(obj.peers) ? obj.peers : [];
+  const peers = peersRaw.map((peer) => {
+    const p = peer && typeof peer === "object" ? (peer as Record<string, unknown>) : {};
+    return {
+      deviceId: String(p.deviceId ?? p.device_id ?? ""),
+      deviceName: String(p.deviceName ?? p.device_name ?? "Неизвестное устройство"),
+      lastSeen:
+        typeof p.lastSeen === "string"
+          ? p.lastSeen
+          : typeof p.last_seen === "string"
+            ? p.last_seen
+            : null,
+      status: p.status === "online" ? "online" : "offline",
+      deviceKind: "unknown",
+    };
+  });
+  return {
+    running: obj.running === true,
+    transport:
+      obj.transport === "iroh" || obj.transport === "relay" || obj.transport === "lan"
+        ? obj.transport
+        : "unknown",
+    pairingAvailable: obj.pairingAvailable === true || obj.pairing_available === true,
+    ownPairingCodeAvailable:
+      obj.ownPairingCodeAvailable === true || obj.own_pairing_code_available === true,
+    peers,
+  };
+}
+
+ipcMain.handle("kepler:settings:sync:snapshot", async () => {
+  const raw = arkClient
+    ? await arkClient.invokeOperation<unknown>({
+        operation: "get_sync_snapshot",
+      })
+    : null;
+  return normalizeSyncSnapshot(raw);
+});
+
+ipcMain.handle("kepler:settings:sync:get-pairing-code", async () => {
+  if (!arkClient) return null;
+  try {
+    const code = await arkClient.getOwnIrohTicket();
+    return typeof code === "string" && code.length > 0 ? code : null;
+  } catch {
+    return null;
+  }
+});
+
+ipcMain.handle("kepler:settings:sync:disconnect", async (_e, deviceId: string) => {
+  if (typeof deviceId !== "string" || deviceId.trim().length === 0) {
+    throw new Error("deviceId must be a non-empty string");
+  }
+  if (arkClient) {
+    await arkClient.invokeOperation({
+      operation: "disconnect_peer",
+      device_id: deviceId.trim(),
+    });
+  }
+  broadcastSettingsSyncUpdated();
+});
+
+ipcMain.handle("kepler:settings:sync:connect-with-pairing-code", async (_e, code: string) => {
+  if (typeof code !== "string" || code.trim().length < 8) {
+    throw new Error("Некорректный код синхронизации");
+  }
+  if (!arkClient) throw new Error("ARK unavailable");
+  await arkClient.invokeOperation({
+    operation: "connect_with_pairing_code",
+    pairing_code: code.trim(),
+  });
+  broadcastSettingsSyncUpdated();
+});
+
+ipcMain.handle("kepler:settings:sync:copy-pairing-code", async (_e, code: string) => {
+  if (typeof code === "string" && code.trim()) clipboard.writeText(code.trim());
+});
 
 // --- Focus service control (Phase 2) -----------------------------------------
 // Soft Windows Service для hosts file management — опционально устанавливается

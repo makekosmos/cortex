@@ -20,6 +20,7 @@ import {
   Shield,
   ShieldCheck,
   Timer,
+  RefreshCw,
 } from "@lucide/vue";
 import delphiSvg from "../../assets/delphi.svg";
 import delphiAddSvg from "../../assets/delphi-add.svg";
@@ -35,6 +36,7 @@ export type Tab =
   | "about"
   | "debug"
   | "security"
+  | "sync"
   | "secrets"
   | "notes"
   | "tasks"
@@ -88,7 +90,12 @@ const ARRANCADOR_COMMAND_GRADIENT = {
 
 export const appCommandSettings: Record<AppSettingsTab, AppCommandSetting[]> = {
   notes: [
-    { id: "eden:open", title: "Открыть Eden", icon: edenSvg, ...EDEN_COMMAND_GRADIENT },
+    {
+      id: "eden:open",
+      title: "Открыть Eden",
+      icon: edenSvg,
+      ...EDEN_COMMAND_GRADIENT,
+    },
     {
       id: "eden:note:create",
       title: "Создать заметку",
@@ -103,7 +110,12 @@ export const appCommandSettings: Record<AppSettingsTab, AppCommandSetting[]> = {
     },
   ],
   tasks: [
-    { id: "delphi:open", title: "Открыть Delphi", icon: delphiSvg, ...DELPHI_COMMAND_GRADIENT },
+    {
+      id: "delphi:open",
+      title: "Открыть Delphi",
+      icon: delphiSvg,
+      ...DELPHI_COMMAND_GRADIENT,
+    },
     {
       id: "delphi:inbox",
       title: "Открыть входящие",
@@ -167,6 +179,25 @@ export const settingsNavigationItems: SettingsNavigationItem[] = [
     icon: ShieldCheck,
     description: "Сеть для AI-провайдеров и доступ к данным.",
     keywords: ["безопасность", "сеть", "dns", "doh", "ai", "groq", "прокси", "блокировки", "рф"],
+  },
+  {
+    tab: "sync",
+    label: "Синхронизация",
+    group: "main",
+    layout: "basic",
+    icon: RefreshCw,
+    description: "Устройства, код подключения и состояние синхронизации.",
+    keywords: [
+      "синхронизация",
+      "sync",
+      "устройства",
+      "ноды",
+      "nodes",
+      "код",
+      "подключение",
+      "pairing",
+      "iroh",
+    ],
   },
   {
     tab: "secrets",

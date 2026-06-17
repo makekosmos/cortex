@@ -16,6 +16,7 @@ use crate::types::*;
 const TAG: &str = "[SyncServer]";
 const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
 const KNOWN_PEERS_KEY: &str = "sync.peers";
+const REMOVED_PEERS_KEY: &str = "sync.removed_peers";
 
 // ---------------------------------------------------------------------------
 // StorageBackend trait
@@ -118,6 +119,72 @@ impl SyncServer {
         self.known_peer_records.lock().await.clone()
     }
 
+    pub async fn get_removed_peer_ids(&self) -> Vec<String> {
+        load_removed_peer_ids(&self.storage).await
+    }
+
+    pub async fn block_peer(&self, device_id: &str) {
+        let device_id = device_id.trim();
+        if device_id.is_empty() {
+            return;
+        }
+        let mut removed = load_removed_peer_ids(&self.storage).await;
+        if !removed.iter().any(|id| id == device_id) {
+            removed.push(device_id.to_string());
+            save_removed_peer_ids(&self.storage, &removed).await;
+        }
+        let mut known = self.known_peer_records.lock().await;
+        let before = known.len();
+        known.retain(|peer| peer.device_id != device_id);
+        if known.len() != before {
+            save_known_peers(&self.storage, &known).await;
+        }
+    }
+
+    /// Block a peer and explicitly tear down any live inbound sessions for it.
+    /// Returns the number of active sessions that were closed.
+    pub async fn disconnect_peer(&self, device_id: &str) -> usize {
+        let device_id = device_id.trim();
+        if device_id.is_empty() {
+            return 0;
+        }
+        self.block_peer(device_id).await;
+
+        let mut peers = self.peers.lock().await;
+        let peer_ids: Vec<usize> = peers
+            .iter()
+            .filter_map(|(peer_id, peer)| {
+                if peer.device_id == device_id {
+                    Some(*peer_id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let mut closed = 0usize;
+        for peer_id in &peer_ids {
+            if let Some(peer) = peers.get_mut(peer_id) {
+                if peer.authenticated {
+                    peer.authenticated = false;
+                    let _ = peer.tx.send(Message::Close(None));
+                    closed += 1;
+                }
+            }
+        }
+        for peer_id in peer_ids {
+            peers.remove(&peer_id);
+        }
+        closed
+    }
+
+    async fn is_peer_blocked(&self, device_id: &str) -> bool {
+        load_removed_peer_ids(&self.storage)
+            .await
+            .iter()
+            .any(|id| id == device_id)
+    }
+
     /// Dedup connected peers by device_id. Matches the `getConnectedPeerEntries`
     /// semantics of the TS sync server. Order: LinkedHashMap insertion order.
     pub async fn get_connected_peer_entries(&self) -> Vec<(String, String)> {
@@ -172,6 +239,9 @@ impl SyncServer {
             return;
         }
 
+        if self.is_peer_blocked(device_id).await {
+            return;
+        }
         let new_record = PeerRecord {
             device_id: device_id.to_string(),
             device_name: device_name.to_string(),
@@ -445,7 +515,11 @@ impl SyncServer {
             if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&raw) {
                 if parsed.is_array() {
                     if let Ok(peers) = serde_json::from_str::<Vec<PeerRecord>>(&raw) {
-                        *self.known_peer_records.lock().await = peers;
+                        let removed = load_removed_peer_ids(&self.storage).await;
+                        *self.known_peer_records.lock().await = peers
+                            .into_iter()
+                            .filter(|peer| !removed.iter().any(|id| id == &peer.device_id))
+                            .collect();
                     }
                 }
             }
@@ -503,6 +577,18 @@ async fn save_version_vector(storage: &Arc<dyn StorageBackend>, vector: &Version
 async fn save_known_peers(storage: &Arc<dyn StorageBackend>, peers: &[PeerRecord]) {
     let json = serde_json::to_string(peers).unwrap_or_default();
     storage.set_kv(KNOWN_PEERS_KEY, &json).await;
+}
+
+async fn load_removed_peer_ids(storage: &Arc<dyn StorageBackend>) -> Vec<String> {
+    match storage.get_kv(REMOVED_PEERS_KEY).await {
+        Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
+        None => Vec::new(),
+    }
+}
+
+async fn save_removed_peer_ids(storage: &Arc<dyn StorageBackend>, peer_ids: &[String]) {
+    let json = serde_json::to_string(peer_ids).unwrap_or_default();
+    storage.set_kv(REMOVED_PEERS_KEY, &json).await;
 }
 
 fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {
@@ -579,6 +665,13 @@ async fn handle_message(
                 peers_guard.remove(&peer_id);
                 return;
             }
+            let removed = load_removed_peer_ids(storage).await;
+            if !peer_device_id.is_empty() && removed.iter().any(|id| id == &peer_device_id) {
+                eprintln!("{TAG} Rejecting blocked peer: {peer_device_id}");
+                let mut peers_guard = peers.lock().await;
+                peers_guard.remove(&peer_id);
+                return;
+            }
 
             // Evict any prior authenticated sessions from the same device — a
             // new hello means a fresh connection, and the old session is stale.
@@ -640,9 +733,12 @@ async fn handle_message(
                             .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
                         last_address: None,
                     };
-                    let mut known = known_peer_records.lock().await;
-                    *known = merge_peer_records(&known, &[new_record]);
-                    save_known_peers(storage, &known).await;
+                    let removed = load_removed_peer_ids(storage).await;
+                    if !removed.iter().any(|id| id == &new_record.device_id) {
+                        let mut known = known_peer_records.lock().await;
+                        *known = merge_peer_records(&known, &[new_record]);
+                        save_known_peers(storage, &known).await;
+                    }
                 }
             }
 
@@ -1145,6 +1241,97 @@ mod tests {
         assert_eq!(known.len(), 1);
         assert_eq!(known[0].device_id, "other");
         assert_eq!(known[0].addresses, vec!["192.168.1.20:21531".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn block_peer_persists_removed_peer_and_filters_known_list() {
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let server = SyncServer::new(storage.clone());
+        *server.known_peer_records.lock().await = vec![peer_rec("other", &["192.168.1.20:21531"])];
+
+        server.block_peer("other").await;
+
+        assert!(server.get_known_peers().await.is_empty());
+        assert_eq!(
+            server.get_removed_peer_ids().await,
+            vec!["other".to_string()]
+        );
+        assert!(server.is_peer_blocked("other").await);
+    }
+
+    #[tokio::test]
+    async fn register_external_peer_ignores_blocked_peer() {
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let server = SyncServer::new(storage.clone());
+        *server.device_id.write().await = "me".to_string();
+        *server.own_addresses.write().await = vec!["10.0.0.1:21531".to_string()];
+        server.block_peer("blocked").await;
+
+        server
+            .register_external_peer("blocked", "Blocked", vec!["192.168.1.21:21531".to_string()])
+            .await;
+
+        assert!(server.get_known_peers().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn disconnect_peer_closes_matching_sessions_and_persists_blocklist() {
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let server = SyncServer::new(storage.clone());
+
+        let (tx1, _rx1) = mpsc::unbounded_channel::<Message>();
+        let (tx2, _rx2) = mpsc::unbounded_channel::<Message>();
+        let (tx3, _rx3) = mpsc::unbounded_channel::<Message>();
+
+        server.peers.lock().await.insert(
+            1,
+            PeerState {
+                device_id: "blocked".to_string(),
+                device_name: "Blocked One".to_string(),
+                addresses: vec!["192.168.1.20:21531".to_string()],
+                authenticated: true,
+                sync_complete: true,
+                queued_live_changes: vec![],
+                tx: tx1,
+            },
+        );
+        server.peers.lock().await.insert(
+            2,
+            PeerState {
+                device_id: "blocked".to_string(),
+                device_name: "Blocked Two".to_string(),
+                addresses: vec!["192.168.1.21:21531".to_string()],
+                authenticated: true,
+                sync_complete: true,
+                queued_live_changes: vec![],
+                tx: tx2,
+            },
+        );
+        server.peers.lock().await.insert(
+            3,
+            PeerState {
+                device_id: "keep".to_string(),
+                device_name: "Keep".to_string(),
+                addresses: vec!["192.168.1.22:21531".to_string()],
+                authenticated: true,
+                sync_complete: true,
+                queued_live_changes: vec![],
+                tx: tx3,
+            },
+        );
+
+        let closed = server.disconnect_peer("blocked").await;
+        assert_eq!(closed, 2);
+        assert_eq!(
+            server.get_removed_peer_ids().await,
+            vec!["blocked".to_string()]
+        );
+        assert_eq!(server.connected_peer_count().await, 1);
+        assert_eq!(
+            server.get_connected_peer_entries().await,
+            vec![("keep".to_string(), "Keep".to_string())]
+        );
+        assert_eq!(server.peers.lock().await.len(), 1);
     }
 
     #[tokio::test]

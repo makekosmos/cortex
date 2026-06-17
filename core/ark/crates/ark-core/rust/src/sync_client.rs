@@ -533,6 +533,15 @@ impl SyncClient {
             .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 
+    /// Actively close the current connection, if any, and stop reconnects.
+    pub async fn disconnect(&self) {
+        self.stopped
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(tx) = self.authenticated_tx.lock().await.take() {
+            let _ = tx.send(Message::Close(None));
+        }
+    }
+
     /// Replace the current peer record (typically used when the beacon
     /// discovers updated addresses for a known device).
     pub async fn update_peer(&self, peer: PeerRecord) {
