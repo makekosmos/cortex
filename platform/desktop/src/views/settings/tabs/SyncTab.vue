@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, computed } from "vue";
-import { Copy, Link2 } from "@lucide/vue";
+import { Copy, Link2, Monitor } from "@lucide/vue";
 import {
   Button,
   EmptyState,
@@ -29,6 +29,7 @@ interface SyncStatusSnapshot {
   pairingAvailable: boolean;
   ownPairingCodeAvailable: boolean;
   peers: SyncPeerInfo[];
+  localDevice: { deviceId: string; deviceName: string } | null;
 }
 
 const toast = useToast();
@@ -45,6 +46,7 @@ const pairingInput = ref("");
 const connectBusy = ref(false);
 
 const peers = computed(() => snapshot.value?.peers ?? []);
+const localDevice = computed(() => snapshot.value?.localDevice ?? null);
 
 function inferDeviceKind(name: string): SyncPeerDeviceKind {
   const n = name.toLowerCase();
@@ -72,6 +74,14 @@ function normalizeSnapshot(raw: any): SyncStatusSnapshot {
             : inferDeviceKind(String(p?.deviceName ?? p?.device_name ?? "")),
       }))
     : [];
+  const ld = raw?.localDevice ?? raw?.local_device;
+  const localDevice =
+    ld && typeof ld === "object"
+      ? {
+          deviceId: String(ld.deviceId ?? ld.device_id ?? ""),
+          deviceName: String(ld.deviceName ?? ld.device_name ?? ""),
+        }
+      : null;
   return {
     running: !!raw?.running,
     transport:
@@ -81,6 +91,7 @@ function normalizeSnapshot(raw: any): SyncStatusSnapshot {
     pairingAvailable: !!raw?.pairingAvailable,
     ownPairingCodeAvailable: !!raw?.ownPairingCodeAvailable,
     peers,
+    localDevice,
   };
 }
 
@@ -182,6 +193,35 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="security-page kosmos-scroll">
+    <!-- Секция: Это устройство -->
+    <template v-if="localDevice">
+      <div class="ext-section-title" style="padding-left: 0">Это устройство</div>
+      <div class="mb-4">
+        <div
+          class="flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--settings-list-background)] px-4 py-3"
+        >
+          <div
+            class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--settings-list-background)] text-[var(--foreground)]"
+          >
+            <Monitor :size="18" :stroke-width="2" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <div
+              class="truncate font-[var(--font-sans)] text-[length:var(--kosmos-text-body-size)] font-medium text-[var(--foreground)]"
+            >
+              {{ localDevice.deviceName || "Это устройство" }}
+            </div>
+            <div
+              class="mt-0.5 font-[var(--font-mono)] text-[length:var(--kosmos-text-caption-size)] text-[var(--muted-foreground)]"
+            >
+              Это устройство
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Секция: Код подключения -->
     <SettingsList class="mb-4">
       <SettingsRow title="Код подключения">
         <template #control>
@@ -193,13 +233,14 @@ onBeforeUnmount(() => {
       </SettingsRow>
     </SettingsList>
 
-    <div class="ext-section-title" style="padding-left: 0">Устройства</div>
+    <!-- Секция: Другие устройства -->
+    <div class="ext-section-title" style="padding-left: 0">Другие устройства</div>
 
     <div v-if="loading" class="text-[var(--muted-foreground)] text-[0.85rem] py-2">Загрузка…</div>
     <div v-else-if="error" class="text-[var(--destructive)] text-[0.85rem] py-2">{{ error }}</div>
     <EmptyState
       v-else-if="!peers.length"
-      title="Подключённых устройств пока нет."
+      title="Других устройств пока нет."
       description="Когда другое устройство подключится к этому Kosmos, оно появится здесь."
     />
     <div v-else class="flex flex-col gap-2">

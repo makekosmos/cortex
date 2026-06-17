@@ -45,6 +45,7 @@ export interface SyncStatusSnapshot {
   pairingAvailable: boolean;
   ownPairingCodeAvailable: boolean;
   peers: SyncPeerInfo[];
+  localDevice?: { deviceId: string; deviceName: string } | null;
 }
 
 export interface SyncSnapshot {

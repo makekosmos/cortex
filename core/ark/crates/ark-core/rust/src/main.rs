@@ -1962,6 +1962,10 @@ async fn handle_get_sync_snapshot() -> Result<Value, String> {
         "pairing_available": runtime.iroh_our_ticket.is_some(),
         "own_pairing_code_available": runtime.iroh_our_ticket.is_some(),
         "peers": peers,
+        "local_device": {
+            "device_id": runtime.device_id.clone(),
+            "device_name": runtime.device_name.clone(),
+        },
     }))
 }
 

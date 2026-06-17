@@ -53,6 +53,7 @@ if (process.platform === "darwin") {
   app.commandLine.appendSwitch("disable-renderer-backgrounding");
 }
 import { spawn, type ChildProcess } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -444,6 +445,7 @@ function spawnBackend() {
       // crash log'и и (в перспективе) device id под slot.
       KEPLER_INSTANCE: KEPLER_INSTANCE.slot,
       KEPLER_USAGE_TRACKER: trackerEnabled ? "1" : "0",
+      KOSMOS_DEVICE_NAME: process.env.KOSMOS_DEVICE_NAME || os.hostname(),
       // RUST_BACKTRACE=1 → crash_reporter::install получает полный backtrace
       // в `<data_dir>/crashes/panic-*.log`. Production cost ~50KB на panic,
       // приемлемо для responsible shipping.
@@ -1865,6 +1867,22 @@ function normalizeSyncSnapshot(raw: unknown) {
       deviceKind: "unknown",
     };
   });
+  const ldRaw = obj.localDevice ?? obj.local_device;
+  const localDevice =
+    ldRaw && typeof ldRaw === "object"
+      ? {
+          deviceId: String(
+            (ldRaw as Record<string, unknown>).deviceId ??
+              (ldRaw as Record<string, unknown>).device_id ??
+              "",
+          ),
+          deviceName: String(
+            (ldRaw as Record<string, unknown>).deviceName ??
+              (ldRaw as Record<string, unknown>).device_name ??
+              "",
+          ),
+        }
+      : null;
   return {
     running: obj.running === true,
     transport:
@@ -1875,6 +1893,7 @@ function normalizeSyncSnapshot(raw: unknown) {
     ownPairingCodeAvailable:
       obj.ownPairingCodeAvailable === true || obj.own_pairing_code_available === true,
     peers,
+    localDevice,
   };
 }
 
