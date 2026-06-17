@@ -521,10 +521,11 @@ fn record_local_upsert(
     _entity_type: &str,
     entity_id: &str,
     device_id: Option<String>,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let device_id = local_write_device_id(device_id);
-    db::bump_sync_version_vector(conn, entity_id, &device_id)?;
-    db::delete_sync_tombstone(conn, entity_id)
+    let hlc = db::bump_sync_version_vector(conn, entity_id, &device_id)?;
+    db::delete_sync_tombstone(conn, entity_id)?;
+    Ok(hlc)
 }
 
 fn record_local_delete(
@@ -532,10 +533,66 @@ fn record_local_delete(
     entity_type: &str,
     entity_id: &str,
     device_id: Option<String>,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let device_id = local_write_device_id(device_id);
     let hlc = db::bump_sync_version_vector(conn, entity_id, &device_id)?;
-    db::record_sync_tombstone(conn, entity_type, entity_id, &hlc)
+    db::record_sync_tombstone(conn, entity_type, entity_id, &hlc)?;
+    Ok(hlc)
+}
+
+/// Строит SyncEntity из сырого serde_json::Value объекта (уже сериализованного).
+/// `data_value` ожидается `Value::Object`; "id" удаляется как в `to_data_map` в db.rs.
+/// Для delete: передавай `Value::Object(Map::new())` + `deleted = Some(true)`.
+fn make_sync_entity(
+    entity_type: &str,
+    id: &str,
+    data_value: Value,
+    hlc: String,
+    deleted: Option<bool>,
+) -> SyncEntity {
+    let data = match data_value {
+        Value::Object(mut map) => {
+            map.remove("id");
+            map
+        }
+        _ => serde_json::Map::new(),
+    };
+    SyncEntity {
+        entity_type: entity_type.to_string(),
+        id: id.to_string(),
+        data,
+        hlc,
+        deleted,
+    }
+}
+
+/// Fan-out локального изменения всем подключённым пирам (server sessions +
+/// outbound clients + relay/iroh). Не применяет entity к storage и не
+/// перебивает HLC — данные уже записаны через `record_local_*`.
+/// Если SYNC не запущен — тихий no-op.
+async fn broadcast_local_change(entity: SyncEntity) {
+    let guard = SYNC.lock().await;
+    let runtime = match guard.as_ref() {
+        Some(r) => r.clone(),
+        None => return,
+    };
+    drop(guard);
+
+    runtime
+        .server
+        .broadcast_live_change(entity.clone(), None)
+        .await;
+
+    let clients = runtime.clients.lock().await;
+    for client in clients.values() {
+        client.broadcast_live_change(entity.clone()).await;
+    }
+    if let Some(relay) = runtime.relay.as_ref() {
+        // Ошибку отправки логируем, но не пробрасываем — live broadcast best-effort.
+        if let Err(e) = relay.broadcast_live_change(entity.clone()) {
+            eprintln!("[ark-core] broadcast_local_change relay error: {e}");
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -563,106 +620,214 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         // heading через LAN sync. Тихий data loss bug. Все новые handler'ы
         // (UpsertObject, UpsertUsageSession и т.д.) делают это правильно;
         // приводим legacy к тому же контракту.
-        Request::UpsertTodo { todo, device_id } => with_conn(|conn| {
-            db::upsert_todo(conn, &todo)?;
-            record_local_upsert(conn, "todo", &todo.id, device_id)?;
-            Ok(json!(true))
-        }),
-
-        Request::DeleteTodo { id, device_id } => with_conn(|conn| {
-            db::delete_todo(conn, &id)?;
-            record_local_delete(conn, "todo", &id, device_id)?;
-            Ok(json!(true))
-        }),
-
-        Request::BatchUpsertTodos { todos, device_id } => with_conn(|conn| {
-            db::batch_upsert_todos(conn, &todos)?;
-            for todo in &todos {
-                record_local_upsert(conn, "todo", &todo.id, device_id.clone())?;
+        // 2026-06-17: все write-handlers теперь рассылают LiveChange через
+        // broadcast_local_change — фикс live-sync gap.
+        Request::UpsertTodo { todo, device_id } => {
+            let result = with_conn(|conn| {
+                db::upsert_todo(conn, &todo)?;
+                let hlc = record_local_upsert(conn, "todo", &todo.id, device_id)?;
+                let entity = make_sync_entity("todo", &todo.id,
+                    serde_json::to_value(&todo).unwrap_or(json!({})), hlc, None);
+                Ok(entity)
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
             }
             Ok(json!(true))
-        }),
+        }
 
-        Request::UpsertProject { project, device_id } => with_conn(|conn| {
-            db::upsert_project(conn, &project)?;
-            record_local_upsert(conn, "project", &project.id, device_id)?;
+        Request::DeleteTodo { id, device_id } => {
+            let result = with_conn(|conn| {
+                db::delete_todo(conn, &id)?;
+                let hlc = record_local_delete(conn, "todo", &id, device_id)?;
+                Ok(make_sync_entity("todo", &id, json!({}), hlc, Some(true)))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
+        }
 
-        Request::DeleteProject { id, device_id } => with_conn(|conn| {
-            db::delete_project(conn, &id)?;
-            record_local_delete(conn, "project", &id, device_id)?;
+        Request::BatchUpsertTodos { todos, device_id } => {
+            let result = with_conn(|conn| {
+                db::batch_upsert_todos(conn, &todos)?;
+                let mut entities = Vec::with_capacity(todos.len());
+                for todo in &todos {
+                    let hlc = record_local_upsert(conn, "todo", &todo.id, device_id.clone())?;
+                    entities.push(make_sync_entity("todo", &todo.id,
+                        serde_json::to_value(todo).unwrap_or(json!({})), hlc, None));
+                }
+                Ok(entities)
+            });
+            if let Ok(entities) = result {
+                tokio::spawn(async move {
+                    for entity in entities {
+                        broadcast_local_change(entity).await;
+                    }
+                });
+            }
             Ok(json!(true))
-        }),
+        }
 
-        Request::UpsertArea { area, device_id } => with_conn(|conn| {
-            db::upsert_area(conn, &area)?;
-            record_local_upsert(conn, "area", &area.id, device_id)?;
+        Request::UpsertProject { project, device_id } => {
+            let result = with_conn(|conn| {
+                db::upsert_project(conn, &project)?;
+                let hlc = record_local_upsert(conn, "project", &project.id, device_id)?;
+                Ok(make_sync_entity("project", &project.id,
+                    serde_json::to_value(&project).unwrap_or(json!({})), hlc, None))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
+        }
 
-        Request::UpsertTag { tag, device_id } => with_conn(|conn| {
-            db::upsert_tag(conn, &tag)?;
-            record_local_upsert(conn, "tag", &tag.id, device_id)?;
+        Request::DeleteProject { id, device_id } => {
+            let result = with_conn(|conn| {
+                db::delete_project(conn, &id)?;
+                let hlc = record_local_delete(conn, "project", &id, device_id)?;
+                Ok(make_sync_entity("project", &id, json!({}), hlc, Some(true)))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
+        }
 
-        Request::UpsertHeading { heading, device_id } => with_conn(|conn| {
-            db::upsert_heading(conn, &heading)?;
-            record_local_upsert(conn, "heading", &heading.id, device_id)?;
+        Request::UpsertArea { area, device_id } => {
+            let result = with_conn(|conn| {
+                db::upsert_area(conn, &area)?;
+                let hlc = record_local_upsert(conn, "area", &area.id, device_id)?;
+                Ok(make_sync_entity("area", &area.id,
+                    serde_json::to_value(&area).unwrap_or(json!({})), hlc, None))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
+        }
 
-        Request::DeleteHeading { id, device_id } => with_conn(|conn| {
-            db::delete_heading(conn, &id)?;
-            record_local_delete(conn, "heading", &id, device_id)?;
+        Request::UpsertTag { tag, device_id } => {
+            let result = with_conn(|conn| {
+                db::upsert_tag(conn, &tag)?;
+                let hlc = record_local_upsert(conn, "tag", &tag.id, device_id)?;
+                Ok(make_sync_entity("tag", &tag.id,
+                    serde_json::to_value(&tag).unwrap_or(json!({})), hlc, None))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
+        }
+
+        Request::UpsertHeading { heading, device_id } => {
+            let result = with_conn(|conn| {
+                db::upsert_heading(conn, &heading)?;
+                let hlc = record_local_upsert(conn, "heading", &heading.id, device_id)?;
+                Ok(make_sync_entity("heading", &heading.id,
+                    serde_json::to_value(&heading).unwrap_or(json!({})), hlc, None))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
+            Ok(json!(true))
+        }
+
+        Request::DeleteHeading { id, device_id } => {
+            let result = with_conn(|conn| {
+                db::delete_heading(conn, &id)?;
+                let hlc = record_local_delete(conn, "heading", &id, device_id)?;
+                Ok(make_sync_entity("heading", &id, json!({}), hlc, Some(true)))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
+            Ok(json!(true))
+        }
 
         Request::UpsertTrackedApp {
             tracked_app,
             device_id,
-        } => with_conn(|conn| {
-            db::upsert_tracked_app(conn, &tracked_app)?;
-            record_local_upsert(conn, "tracked_app", &tracked_app.id, device_id)?;
+        } => {
+            let result = with_conn(|conn| {
+                db::upsert_tracked_app(conn, &tracked_app)?;
+                let hlc = record_local_upsert(conn, "tracked_app", &tracked_app.id, device_id)?;
+                Ok(make_sync_entity("tracked_app", &tracked_app.id,
+                    serde_json::to_value(&tracked_app).unwrap_or(json!({})), hlc, None))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
+        }
 
-        Request::DeleteTrackedApp { id, device_id } => with_conn(|conn| {
-            db::delete_tracked_app(conn, &id)?;
-            record_local_delete(conn, "tracked_app", &id, device_id)?;
+        Request::DeleteTrackedApp { id, device_id } => {
+            let result = with_conn(|conn| {
+                db::delete_tracked_app(conn, &id)?;
+                let hlc = record_local_delete(conn, "tracked_app", &id, device_id)?;
+                Ok(make_sync_entity("tracked_app", &id, json!({}), hlc, Some(true)))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
+        }
 
         Request::UpsertUsageSession {
             usage_session,
             device_id,
-        } => with_conn(|conn| {
-            db::upsert_usage_session(conn, &usage_session)?;
-            record_local_upsert(conn, "usage_session", &usage_session.id, device_id)?;
+        } => {
+            let result = with_conn(|conn| {
+                db::upsert_usage_session(conn, &usage_session)?;
+                let hlc = record_local_upsert(conn, "usage_session", &usage_session.id, device_id)?;
+                Ok(make_sync_entity("usage_session", &usage_session.id,
+                    serde_json::to_value(&usage_session).unwrap_or(json!({})), hlc, None))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
+        }
 
-        Request::DeleteUsageSession { id, device_id } => with_conn(|conn| {
-            db::delete_usage_session(conn, &id)?;
-            record_local_delete(conn, "usage_session", &id, device_id)?;
+        Request::DeleteUsageSession { id, device_id } => {
+            let result = with_conn(|conn| {
+                db::delete_usage_session(conn, &id)?;
+                let hlc = record_local_delete(conn, "usage_session", &id, device_id)?;
+                Ok(make_sync_entity("usage_session", &id, json!({}), hlc, Some(true)))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
+        }
 
         Request::UpsertUsageEvent {
             usage_event,
             device_id,
-        } => with_conn(|conn| {
-            db::upsert_usage_event(conn, &usage_event)?;
-            record_local_upsert(conn, "usage_event", &usage_event.id, device_id)?;
+        } => {
+            let result = with_conn(|conn| {
+                db::upsert_usage_event(conn, &usage_event)?;
+                let hlc = record_local_upsert(conn, "usage_event", &usage_event.id, device_id)?;
+                Ok(make_sync_entity("usage_event", &usage_event.id,
+                    serde_json::to_value(&usage_event).unwrap_or(json!({})), hlc, None))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
+        }
 
-        Request::DeleteUsageEvent { id, device_id } => with_conn(|conn| {
-            db::delete_usage_event(conn, &id)?;
-            record_local_delete(conn, "usage_event", &id, device_id)?;
+        Request::DeleteUsageEvent { id, device_id } => {
+            let result = with_conn(|conn| {
+                db::delete_usage_event(conn, &id)?;
+                let hlc = record_local_delete(conn, "usage_event", &id, device_id)?;
+                Ok(make_sync_entity("usage_event", &id, json!({}), hlc, Some(true)))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
+        }
         Request::GetUsageAnalytics {
             range_days,
             top_apps_limit,
@@ -732,38 +897,44 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         Request::UpsertObject { object, device_id } => {
             let object_id = object.id.clone();
             let object_type_id = object.type_id.clone();
-            let result = with_conn(|conn| {
-                db::upsert_object(conn, &object)?;
-                record_local_upsert(conn, "object", &object.id, device_id)?;
-                Ok(json!(true))
-            });
             // Emit ТОЛЬКО на успешный local write. `set_on_change` (sync_server)
             // эмитит entity_changed на incoming peer-write — это другой код path,
             // не дублирует это событие. Cross-app live updates (Eden TaskRef
             // подписан на object_upserted) — это primary consumer.
-            if result.is_ok() {
+            let result = with_conn(|conn| {
+                db::upsert_object(conn, &object)?;
+                let hlc = record_local_upsert(conn, "object", &object.id, device_id)?;
+                Ok(make_sync_entity("object", &object.id,
+                    serde_json::to_value(&object).unwrap_or(json!({})), hlc, None))
+            });
+            if let Ok(entity) = result {
+                let eid = object_id.clone();
+                let etid = object_type_id.clone();
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
                 emit_event(json!({
                     "event": "object_upserted",
-                    "id": object_id,
-                    "type_id": object_type_id,
+                    "id": eid,
+                    "type_id": etid,
                 }));
             }
-            result
+            Ok(json!(true))
         }
         Request::DeleteObject { id, device_id } => {
             let object_id = id.clone();
             let result = with_conn(|conn| {
                 db::delete_object(conn, &id)?;
-                record_local_delete(conn, "object", &id, device_id)?;
-                Ok(json!(true))
+                let hlc = record_local_delete(conn, "object", &id, device_id)?;
+                Ok(make_sync_entity("object", &id, json!({}), hlc, Some(true)))
             });
-            if result.is_ok() {
+            if let Ok(entity) = result {
+                let eid = object_id.clone();
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
                 emit_event(json!({
                     "event": "object_deleted",
-                    "id": object_id,
+                    "id": eid,
                 }));
             }
-            result
+            Ok(json!(true))
         }
         Request::ListObjectTypes => with_conn(|conn| {
             let object_types = db::list_object_types(conn)?;
@@ -776,16 +947,29 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         Request::UpsertObjectType {
             object_type,
             device_id,
-        } => with_conn(|conn| {
-            db::upsert_object_type(conn, &object_type)?;
-            record_local_upsert(conn, "object_type", &object_type.id, device_id)?;
+        } => {
+            let result = with_conn(|conn| {
+                db::upsert_object_type(conn, &object_type)?;
+                let hlc = record_local_upsert(conn, "object_type", &object_type.id, device_id)?;
+                Ok(make_sync_entity("object_type", &object_type.id,
+                    serde_json::to_value(&object_type).unwrap_or(json!({})), hlc, None))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
-        Request::DeleteObjectType { id, device_id } => with_conn(|conn| {
-            db::delete_object_type(conn, &id)?;
-            record_local_delete(conn, "object_type", &id, device_id)?;
+        }
+        Request::DeleteObjectType { id, device_id } => {
+            let result = with_conn(|conn| {
+                db::delete_object_type(conn, &id)?;
+                let hlc = record_local_delete(conn, "object_type", &id, device_id)?;
+                Ok(make_sync_entity("object_type", &id, json!({}), hlc, Some(true)))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
+        }
         Request::ListObjectLinks => with_conn(|conn| {
             let object_links = db::list_object_links(conn)?;
             serde_json::to_value(object_links).map_err(|e| e.to_string())
@@ -793,16 +977,29 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         Request::UpsertObjectLink {
             object_link,
             device_id,
-        } => with_conn(|conn| {
-            db::upsert_object_link(conn, &object_link)?;
-            record_local_upsert(conn, "object_link", &object_link.id, device_id)?;
+        } => {
+            let result = with_conn(|conn| {
+                db::upsert_object_link(conn, &object_link)?;
+                let hlc = record_local_upsert(conn, "object_link", &object_link.id, device_id)?;
+                Ok(make_sync_entity("object_link", &object_link.id,
+                    serde_json::to_value(&object_link).unwrap_or(json!({})), hlc, None))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
-        Request::DeleteObjectLink { id, device_id } => with_conn(|conn| {
-            db::delete_object_link(conn, &id)?;
-            record_local_delete(conn, "object_link", &id, device_id)?;
+        }
+        Request::DeleteObjectLink { id, device_id } => {
+            let result = with_conn(|conn| {
+                db::delete_object_link(conn, &id)?;
+                let hlc = record_local_delete(conn, "object_link", &id, device_id)?;
+                Ok(make_sync_entity("object_link", &id, json!({}), hlc, Some(true)))
+            });
+            if let Ok(entity) = result {
+                tokio::spawn(async move { broadcast_local_change(entity).await; });
+            }
             Ok(json!(true))
-        }),
+        }
 
         Request::GetSyncKv { key } => with_conn(|conn| {
             let value = db::get_sync_kv(conn, &key)?;
@@ -2227,5 +2424,229 @@ mod tests {
             )
             .unwrap();
         assert_eq!(todo_tombstone, 1, "DeleteTodo должен записать tombstone");
+    }
+
+    // -----------------------------------------------------------------------
+    // RED-тесты: локальная запись должна рассылать LiveChange пирам
+    // -----------------------------------------------------------------------
+
+    /// Fake SyncTransport: захватывает все отправленные LanSyncMessage в shared buf.
+    struct CapturingTransport {
+        sent: Arc<TokioMutex<Vec<ark_core::protocol::LanSyncMessage>>>,
+    }
+
+    #[async_trait::async_trait]
+    impl ark_core::sync_transport::SyncTransport for CapturingTransport {
+        async fn start(
+            &self,
+            _event_tx: tokio::sync::mpsc::UnboundedSender<
+                ark_core::sync_transport::TransportEvent,
+            >,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn send(&self, msg: ark_core::protocol::LanSyncMessage) -> Result<(), String> {
+            // `send` — sync, но нам нужен lock на TokioMutex из sync контекста.
+            // Используем blocking_lock через spawn_blocking или try_lock; в тестах
+            // конкурентности нет, try_lock гарантированно успевает.
+            self.sent.try_lock().expect("CapturingTransport: lock").push(msg);
+            Ok(())
+        }
+
+        fn stop(&self) {}
+    }
+
+    /// Вспомогательная функция: строит минимальный SyncRuntime с CapturingTransport
+    /// и выставляет в глобальный SYNC. Возвращает буфер перехваченных сообщений.
+    async fn setup_sync_with_capturing_transport(
+        shared_conn: Arc<StdMutex<rusqlite::Connection>>,
+    ) -> Arc<TokioMutex<Vec<ark_core::protocol::LanSyncMessage>>> {
+        use ark_core::relay_sync::{RelaySync, RelaySyncConfig};
+        use ark_core::sync_server::StorageBackend;
+
+        let captured: Arc<TokioMutex<Vec<ark_core::protocol::LanSyncMessage>>> =
+            Arc::new(TokioMutex::new(Vec::new()));
+        let transport = Arc::new(CapturingTransport {
+            sent: captured.clone(),
+        });
+
+        let backend = Arc::new(ark_core::db::SqliteStorageBackend::new(shared_conn));
+        backend.set_device_id("test-device");
+
+        let relay = RelaySync::with_transport(
+            backend.clone() as Arc<dyn StorageBackend>,
+            RelaySyncConfig {
+                relay_url: String::new(),
+                relay_api_key: None,
+                space_id: "test-space".to_string(),
+                device_id: "test-device".to_string(),
+                device_name: "Test Device".to_string(),
+                auth_secret: None,
+            },
+            transport as Arc<dyn ark_core::sync_transport::SyncTransport>,
+        );
+        relay.start().await.unwrap();
+
+        let server = Arc::new(ark_core::sync_server::SyncServer::new(
+            backend.clone() as Arc<dyn StorageBackend>,
+        ));
+
+        let runtime = SyncRuntime {
+            server,
+            storage: backend,
+            clients: Arc::new(TokioMutex::new(std::collections::HashMap::new())),
+            relay: Some(relay),
+            iroh_our_ticket: None,
+            beacon: Arc::new(ark_core::beacon::BroadcastDiscovery::new()),
+            space_id: "test-space".to_string(),
+            device_id: "test-device".to_string(),
+            device_name: "Test Device".to_string(),
+            auth_secret: None,
+            own_addresses: Arc::new(TokioMutex::new(Vec::new())),
+        };
+        *SYNC.lock().await = Some(Arc::new(runtime));
+
+        captured
+    }
+
+    #[tokio::test]
+    async fn upsert_object_broadcasts_live_change_to_peers() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+
+        // Нужен объектный тип перед вставкой объекта (FK constraint)
+        handle_request(Request::UpsertObjectType {
+            object_type: ObjectType {
+                id: "note".to_string(),
+                name: "Note".to_string(),
+                schema_json: "{}".to_string(),
+                ui_schema_json: "{}".to_string(),
+                created_at: "2026-06-17T00:00:00.000Z".to_string(),
+                updated_at: "2026-06-17T00:00:00.000Z".to_string(),
+                system_locked: false,
+            },
+            device_id: Some("test-device".to_string()),
+        })
+        .await
+        .unwrap();
+
+        let shared = get_shared_conn().unwrap();
+        let captured = setup_sync_with_capturing_transport(shared).await;
+
+        let object = ArkObject {
+            id: "live-obj-1".to_string(),
+            type_id: "note".to_string(),
+            title: "Live Test".to_string(),
+            content_json: json!({ "type": "doc", "content": [] }),
+            props_json: json!({}),
+            created_at: "2026-06-17T00:00:00.000Z".to_string(),
+            updated_at: "2026-06-17T00:00:00.000Z".to_string(),
+            deleted_at: None,
+        };
+        handle_request(Request::UpsertObject {
+            object,
+            device_id: Some("test-device".to_string()),
+        })
+        .await
+        .unwrap();
+
+        // Небольшая пауза — broadcast_local_change запускается как spawn
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        let msgs = captured.lock().await;
+        let live_change = msgs.iter().find(|m| {
+            matches!(m, ark_core::protocol::LanSyncMessage::LiveChange { entity, .. }
+                if entity.id == "live-obj-1" && entity.entity_type == "object" && entity.deleted.is_none())
+        });
+        assert!(
+            live_change.is_some(),
+            "UpsertObject должен рассылать LiveChange(entity_type=object, id=live-obj-1, deleted=None); \
+             получено сообщений: {}, содержимое: {:?}",
+            msgs.len(),
+            msgs.iter().map(|m| format!("{m:?}")).collect::<Vec<_>>()
+        );
+
+        handle_request(Request::StopSync).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn delete_object_broadcasts_live_change_with_deleted_flag() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+
+        // Нужен объектный тип
+        handle_request(Request::UpsertObjectType {
+            object_type: ObjectType {
+                id: "note".to_string(),
+                name: "Note".to_string(),
+                schema_json: "{}".to_string(),
+                ui_schema_json: "{}".to_string(),
+                created_at: "2026-06-17T00:00:00.000Z".to_string(),
+                updated_at: "2026-06-17T00:00:00.000Z".to_string(),
+                system_locked: false,
+            },
+            device_id: Some("test-device".to_string()),
+        })
+        .await
+        .unwrap();
+
+        // Создаём объект сначала
+        let object = ArkObject {
+            id: "live-obj-del".to_string(),
+            type_id: "note".to_string(),
+            title: "To Delete".to_string(),
+            content_json: json!({}),
+            props_json: json!({}),
+            created_at: "2026-06-17T00:00:00.000Z".to_string(),
+            updated_at: "2026-06-17T00:00:00.000Z".to_string(),
+            deleted_at: None,
+        };
+        handle_request(Request::UpsertObject {
+            object,
+            device_id: Some("test-device".to_string()),
+        })
+        .await
+        .unwrap();
+
+        let shared = get_shared_conn().unwrap();
+        let captured = setup_sync_with_capturing_transport(shared).await;
+
+        handle_request(Request::DeleteObject {
+            id: "live-obj-del".to_string(),
+            device_id: Some("test-device".to_string()),
+        })
+        .await
+        .unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        let msgs = captured.lock().await;
+        let live_change = msgs.iter().find(|m| {
+            matches!(m, ark_core::protocol::LanSyncMessage::LiveChange { entity, .. }
+                if entity.id == "live-obj-del"
+                    && entity.entity_type == "object"
+                    && entity.deleted == Some(true))
+        });
+        assert!(
+            live_change.is_some(),
+            "DeleteObject должен рассылать LiveChange(deleted=Some(true)); \
+             получено: {:?}",
+            msgs.iter().map(|m| format!("{m:?}")).collect::<Vec<_>>()
+        );
+
+        handle_request(Request::StopSync).await.unwrap();
     }
 }
