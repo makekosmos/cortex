@@ -1130,10 +1130,29 @@ async fn handle_request(request: Request) -> Result<Value, String> {
 async fn wire_relay_sync_events(relay_sync: &Arc<RelaySync>) {
     relay_sync
         .set_on_change(Arc::new(|entity| {
+            // Incoming peer-write notification. `entity_changed` — общее событие
+            // (raw consumers). Но renderer-подписчики (Eden) слушают типизированные
+            // `object_upserted`/`object_deleted` — те же, что эмитит локальная
+            // запись (`Request::UpsertObject`/`DeleteObject`). Без этого входящий
+            // sync долетает в БД, но UI не перерисовывается до перезагрузки.
             emit_event(json!({
                 "event": "entity_changed",
                 "entity": entity,
             }));
+            if entity.entity_type == "object" {
+                if entity.deleted == Some(true) {
+                    emit_event(json!({
+                        "event": "object_deleted",
+                        "id": entity.id,
+                    }));
+                } else {
+                    emit_event(json!({
+                        "event": "object_upserted",
+                        "id": entity.id,
+                        "type_id": entity.data.get("type_id").cloned().unwrap_or(Value::Null),
+                    }));
+                }
+            }
         }))
         .await;
     relay_sync
