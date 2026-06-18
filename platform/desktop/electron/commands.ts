@@ -8,6 +8,7 @@
 // extension-команды объявляются в их manifest.commands[] и резолвятся
 // через `loadDeclaredCommands` (extension-host.ts).
 import { openDashboardWindow } from "./dashboard-window";
+import { openMyCosmosWindow } from "./my-cosmos-window";
 import { openClipboardHistoryShell } from "./clipboard-history";
 import { CLIPBOARD_HISTORY_ENABLED } from "../shared/ipc-types";
 import {
@@ -69,6 +70,15 @@ export const COMMANDS: InternalCommand[] = [
     kind: "command",
     appName: "Kepler",
     exec: () => openDashboardWindow(),
+  },
+  {
+    id: "kosmos:my-cosmos",
+    title: "Мой космос",
+    subtitle: "Граф объектов ARK",
+    category: "open",
+    kind: "command",
+    appName: "Kosmos",
+    exec: () => openMyCosmosWindow(),
   },
   // Буфер обмена заморожен — команда скрыта (CLIPBOARD_HISTORY_ENABLED).
   ...(CLIPBOARD_HISTORY_ENABLED

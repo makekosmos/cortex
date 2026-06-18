@@ -37,6 +37,7 @@
     "test:e2e:headed": "bun run build:js && playwright test --config playwright.config.ts --headed"
   },
   "dependencies": {
+    "@cosmos.gl/graph": "^3.0.0",
     "@kosmos/ark": "workspace:*",
     "@kosmos/visuals": "workspace:*",
     "@lucide/vue": "^1.16.0",

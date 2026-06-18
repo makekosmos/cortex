@@ -32,6 +32,11 @@ function rootView() {
     const DashboardRoot = defineAsyncComponent(() => import("./views/DashboardRoot.vue"));
     return DashboardRoot;
   }
+  if (currentHash.startsWith("#/my-cosmos")) {
+    // Async — cosmos.gl + граф не нужны в launcher / settings бандлах.
+    const MyCosmosView = defineAsyncComponent(() => import("./my-cosmos/MyCosmosView.vue"));
+    return MyCosmosView;
+  }
   if (currentHash.startsWith("#raycast-host") || currentHash.startsWith("#command-host")) {
     const RaycastHostView = defineAsyncComponent(() => import("./views/RaycastHostView.vue"));
     return RaycastHostView;
