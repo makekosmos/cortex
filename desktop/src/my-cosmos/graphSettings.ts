@@ -1,0 +1,52 @@
+// Shared types and helpers for graph settings persistence.
+
+export interface GraphSettings {
+  gravity: number;
+  repulsion: number;
+  linkDistance: number;
+  friction: number;
+  pointSizeScale: number;
+  linkOpacity: number;
+  curvedLinks: boolean;
+  highlightNeighbors: boolean;
+  frozen: boolean;
+  antiOverlap: boolean;
+  gap: number;
+}
+
+export const DEFAULT_GRAPH_SETTINGS: GraphSettings = {
+  gravity: 0.1,
+  repulsion: 2.0,
+  linkDistance: 18,
+  friction: 0.85,
+  pointSizeScale: 1,
+  linkOpacity: 0.35,
+  curvedLinks: false,
+  highlightNeighbors: true,
+  frozen: false,
+  antiOverlap: true,
+  gap: 8,
+};
+
+const LS_KEY = "kosmos.myCosmos.graphSettings";
+
+export function loadGraphSettings(): GraphSettings {
+  try {
+    if (typeof localStorage === "undefined") return { ...DEFAULT_GRAPH_SETTINGS };
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return { ...DEFAULT_GRAPH_SETTINGS };
+    const parsed = JSON.parse(raw) as Partial<GraphSettings>;
+    return { ...DEFAULT_GRAPH_SETTINGS, ...parsed };
+  } catch {
+    return { ...DEFAULT_GRAPH_SETTINGS };
+  }
+}
+
+export function saveGraphSettings(settings: GraphSettings): void {
+  try {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(LS_KEY, JSON.stringify(settings));
+  } catch {
+    // storage might be full or unavailable — silently ignore
+  }
+}
