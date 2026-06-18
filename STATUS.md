@@ -2,12 +2,40 @@
 
 | Компонент               | Версия |
 | ----------------------- | ------ |
-| Kepler / Kosmos Desktop | 0.5.3  |
+| Kepler / Kosmos Desktop | 0.5.4  |
 | Eden                    | 0.3.0  |
 | Delphi                  | 0.1.8  |
 | Horologion              | 0.1.4  |
 | Arrancador              | 0.1.4  |
 | Akasha                  | 0.1.2  |
+
+## 2026-06-18 — Fix: sync UI мёртв на macOS из-за tray `.ico` краша (Kosmos Desktop 0.5.3 → 0.5.4)
+
+На macOS экран «Синхронизация» всегда показывал «код подключения появится, когда
+синхронизация запустится», хотя backend на самом деле синхронизировался (LAN
+sync был ESTABLISHED с пиром). Root cause — UI/handshake, не sync-движок.
+
+- **Root cause**: Electron `new Tray(path)` на macOS не умеет `.ico` и бросал
+  исключение. В `platform/desktop/electron/main.ts` `setTrayVisible()` вызывается
+  в startup **до** `initArkClient()`, поэтому исключение обрывало startup раньше
+  handshake. ArkClient никогда не подключался → `get_sync_snapshot` таймаутил
+  (`ArkClient not ready (timeout)` в prod-логах) → UI показывал пустой экран.
+  Сам `kepler-backend` при этом стартовал и поднимал LAN sync независимо в
+  фоновой tokio-таске, так что данные синхронизировались — врал только UI.
+- **Fix** (`platform/desktop/electron/main.ts`): platform-specific tray asset
+  (`win32` → `tray.ico`, macOS/prod → `icon.png`, dev → `dev.png`) + `try/catch`
+  вокруг `new Tray()` с fallback на `nativeImage.createEmpty()`. Плюс defensive
+  `try/catch` вокруг `get_sync_snapshot`, чтобы недоступная операция не валила
+  snapshot. Hotkey-нормализация (`normalizeHotkeyAccelerator`) и macOS-дефолт
+  `Command+Space` в `instance.ts` / `settings-window.ts` доведены до общего
+  состояния.
+- **Verify (macOS dev, один инстанс)**: `globalShortcut registered`,
+  `[SyncServer] Server listening on 0.0.0.0:21531`, `ArkClient connected`,
+  `INFO LAN sync started device_name="MacBook-Pro-Kirill.local"`. Windows-путь
+  не затронут (там по-прежнему `tray.ico`).
+
+Checks: `bun run --cwd platform/desktop typecheck`, ручной запуск macOS dev с
+проверкой sync-логов.
 
 ## 2026-06-18 — ARK write-RPC fail-closed release (Kepler 0.5.2 → 0.5.3)
 

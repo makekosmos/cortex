@@ -70,7 +70,7 @@ export function setTrayIconEnabled(enabled: boolean): void {
   writeSettings({ showTrayIcon: !!enabled });
 }
 
-export const DEFAULT_HOTKEY_PROD = process.platform === "darwin" ? "Command+Shift+K" : "Alt+Space";
+export const DEFAULT_HOTKEY_PROD = process.platform === "darwin" ? "Command+Space" : "Alt+Space";
 export const DEFAULT_HOTKEY_DEV = "Alt+`";
 // Slot-aware default. prod = platform-native launcher hotkey; dev = Alt+`
 // (не конфликтует с installed Kepler); dev-<x> / test-<x> = пусто (hotkey
@@ -78,12 +78,65 @@ export const DEFAULT_HOTKEY_DEV = "Alt+`";
 // напрямую для решения «регистрировать или нет».
 export const DEFAULT_HOTKEY = resolveInstance().hotkey ?? DEFAULT_HOTKEY_PROD;
 
+const MODIFIER_ALIASES: Record<string, string> = {
+  cmd: "Command",
+  command: "Command",
+  meta: process.platform === "darwin" ? "Command" : "Super",
+  super: process.platform === "darwin" ? "Command" : "Super",
+  win: "Super",
+  windows: "Super",
+  option: "Alt",
+  alt: "Alt",
+  ctrl: "Control",
+  control: "Control",
+  shift: "Shift",
+};
+
+const MODIFIER_ORDER = ["Command", "Control", "Alt", "Shift", "Super"];
+
+function normalizeHotkeyPart(part: string): string {
+  const trimmed = part.trim();
+  if (!trimmed) return "";
+  const alias = MODIFIER_ALIASES[trimmed.toLowerCase()];
+  if (alias) return alias;
+  if (trimmed.length === 1) return trimmed.toUpperCase();
+  if (trimmed.toLowerCase() === "space") return "Space";
+  if (trimmed.toLowerCase() === "escape") return "Escape";
+  return trimmed;
+}
+
+export function normalizeHotkeyAccelerator(value: string): string {
+  const parts = String(value || "")
+    .split("+")
+    .map(normalizeHotkeyPart)
+    .filter(Boolean);
+  if (parts.length === 0) return "";
+
+  const modifiers = new Set<string>();
+  let main = "";
+  for (const part of parts) {
+    if (MODIFIER_ORDER.includes(part)) {
+      modifiers.add(part);
+    } else if (!main) {
+      main = part;
+    }
+  }
+  if (!main) return "";
+  return [...MODIFIER_ORDER.filter((part) => modifiers.has(part)), main].join("+");
+}
+
 export function getStoredHotkey(): string {
-  return readSettings().hotkey ?? DEFAULT_HOTKEY;
+  const raw = readSettings().hotkey ?? DEFAULT_HOTKEY;
+  const normalized = normalizeHotkeyAccelerator(raw);
+  if (normalized && normalized !== raw) {
+    writeSettings({ hotkey: normalized });
+  }
+  return normalized || DEFAULT_HOTKEY;
 }
 
 export function setStoredHotkey(value: string): void {
-  writeSettings({ hotkey: value });
+  const normalized = normalizeHotkeyAccelerator(value);
+  writeSettings({ hotkey: normalized || DEFAULT_HOTKEY });
 }
 
 function settingsFilePath(): string {
@@ -375,7 +428,7 @@ ipcMain.handle("kepler:settings:hotkey", () => getStoredHotkey());
 ipcMain.handle(
   "kepler:settings:hotkey:set",
   (_e, value: string): { ok: boolean; error?: string } => {
-    const normalized = String(value || "").trim();
+    const normalized = normalizeHotkeyAccelerator(String(value || "").trim());
     if (!normalized) return { ok: false, error: "empty" };
     try {
       const success = reregisterHotkeyCallback?.(normalized) ?? false;
