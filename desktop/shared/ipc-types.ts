@@ -669,12 +669,12 @@ export interface KeplerApi {
     };
     /** Версия Kepler из app.getVersion(). */
     version(): Promise<string>;
-    /** Текущий глобальный хоткей. По умолчанию `Alt+Space`. */
+    /** Текущий глобальный хоткей. По умолчанию `Command+Space` на macOS и `Alt+Space` на Windows. */
     hotkey(): Promise<string>;
     /** Зарегистрировать новый accelerator. Возвращает `{ok: true}` если
         OS приняла регистрацию; иначе `{ok: false, error}`. */
     hotkeySet(value: string): Promise<{ ok: boolean; error?: string }>;
-    /** Сбросить хоткей в дефолт (`Alt+Space`). Возвращает применённое значение. */
+    /** Сбросить хоткей в дефолт (`Command+Space` на macOS, `Alt+Space` на Windows). Возвращает применённое значение. */
     hotkeyReset(): Promise<string>;
     /** autoUpdater control + state subscription. */
     update: {

@@ -94,6 +94,7 @@ import { LaunchType, type AlertOptions, type LaunchCommandOptions } from "@rayca
 import {
   openSettings,
   getStoredHotkey,
+  normalizeHotkeyAccelerator,
   setHotkeyReregisterCallback,
   setTrayVisibilityController,
   isUsageTrackerEnabled,
@@ -734,16 +735,18 @@ function setLauncherExpanded(_expanded: boolean) {
 // --- tray --------------------------------------------------------------------
 
 function resolveTrayIconPath(): string | null {
-  // production install: electron-builder копирует build/tray.ico в
-  // <install>/resources/tray.ico через extraResources. process.resourcesPath
-  // указывает на тот же `resources/` dir в production, поэтому это первый
-  // кандидат и работает в installed Kepler. tray.ico — multi-size (16-48),
-  // сгенерирован из актуального app artwork в build/; Windows сам выбирает
-  // кадр под DPI.
-  // dev: __dirname = platform/desktop/dist-electron, нужен относительный путь к
-  // build/ в source tree. В dev-сессии используем dev.png — визуально
-  // отличает trayIcon разработческого инстанса от установленного.
-  const iconName = isDev ? "dev.png" : "tray.ico";
+  // Windows tray требует .ico. На macOS `new Tray(path)` не умеет такой файл
+  // и бросает исключение, из-за чего startup обрывается раньше регистрации
+  // global hotkey. Поэтому platform-specific asset: Windows → tray.ico,
+  // macOS/prod → icon.png, dev → dev.png.
+  const iconName =
+    process.platform === "win32"
+      ? isDev
+        ? "dev.png"
+        : "tray.ico"
+      : isDev
+        ? "dev.png"
+        : "icon.png";
   const candidates: string[] = [];
   if (process.resourcesPath) {
     candidates.push(path.join(process.resourcesPath, iconName));
@@ -759,9 +762,15 @@ function resolveTrayIconPath(): string | null {
 function createTray() {
   if (tray) return;
   const iconPath = resolveTrayIconPath();
-  // Путь передаём строкой: nativeImage.createFromPath не декодирует .ico,
-  // а Tray(path) на Windows сам выбирает нужный кадр из multi-size ICO.
-  tray = new Tray(iconPath ?? nativeImage.createEmpty());
+  try {
+    // Путь передаём строкой на Windows: nativeImage.createFromPath не
+    // декодирует .ico, а Tray(path) сам выбирает нужный кадр из multi-size
+    // ICO. На macOS сюда приходит PNG path.
+    tray = new Tray(iconPath ?? nativeImage.createEmpty());
+  } catch (e) {
+    console.error("[kepler-shell] tray create failed:", e);
+    tray = new Tray(nativeImage.createEmpty());
+  }
   tray.setToolTip(KEPLER_INSTANCE.productName);
   tray.setContextMenu(
     Menu.buildFromTemplate([
@@ -1898,11 +1907,17 @@ function normalizeSyncSnapshot(raw: unknown) {
 }
 
 ipcMain.handle("kepler:settings:sync:snapshot", async () => {
-  const raw = arkClient
-    ? await arkClient.invokeOperation<unknown>({
+  let raw: unknown = null;
+  if (arkClient) {
+    try {
+      raw = await arkClient.invokeOperation<unknown>({
         operation: "get_sync_snapshot",
-      })
-    : null;
+      });
+    } catch {
+      // Backend не поддерживает операцию (старая версия / не-Windows платформа).
+      // Возвращаем пустой snapshot — UI покажет "синхронизация не запущена".
+    }
+  }
   return normalizeSyncSnapshot(raw);
 });
 
@@ -2152,14 +2167,16 @@ app.whenReady().then(async () => {
   if (KEPLER_INSTANCE.hotkey !== null) {
     let currentAccelerator = getStoredHotkey();
     function tryRegister(accelerator: string): boolean {
+      const normalized = normalizeHotkeyAccelerator(accelerator);
+      if (!normalized) return false;
       try {
         if (globalShortcut.isRegistered(currentAccelerator)) {
           globalShortcut.unregister(currentAccelerator);
         }
-        const reg = globalShortcut.register(accelerator, showHide);
+        const reg = globalShortcut.register(normalized, showHide);
         if (reg) {
-          currentAccelerator = accelerator;
-          console.log(`[kepler-shell] globalShortcut ${accelerator} registered`);
+          currentAccelerator = normalized;
+          console.log(`[kepler-shell] globalShortcut ${normalized} registered`);
           return true;
         }
         // Откатываемся на предыдущий, если новая регистрация не удалась.

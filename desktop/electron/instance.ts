@@ -132,7 +132,7 @@ export function resolveInstance(): Instance {
   // (legacy, не конфликтует с prod-инстансом). dev-<x> и test-<x> =
   // disabled (несколько dev-инстансов не могут поделить один accelerator;
   // пользователь активирует launcher через tray click).
-  const prodHotkey = process.platform === "darwin" ? "Command+Shift+K" : "Alt+Space";
+  const prodHotkey = process.platform === "darwin" ? "Command+Space" : "Alt+Space";
   const hotkey = slot === "prod" ? prodHotkey : slot === "dev" ? "Alt+`" : null;
 
   return (cached = {
