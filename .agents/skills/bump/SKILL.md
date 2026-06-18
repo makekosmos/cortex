@@ -61,7 +61,14 @@ bun run --cwd platform/desktop build:extensions
     # должны вернуть одно и то же
     ```
 - **Kosmos desktop shell** (`platform/desktop/`):
-  - `platform/desktop/package.json` → `"version"` — публикуется electron-updater в `latest.yml`, installed Kosmos'ы прочтут как «доступно обновление».
+  - `platform/desktop/release-versions.json` — источник правды. Ключи `"win"` и `"mac"`, каждый `"MAJOR.MINOR.PATCH"`.
+  - `platform/desktop/package.json → "version"` НЕ трогаем — версия инжектируется через `-c.extraMetadata.version` при сборке.
+  - Бамп через CLI: `node scripts/release-version.mjs bump --platform <win|mac>` (patch default, `--minor` для minor-parity).
+    - Patch: `node scripts/release-version.mjs bump --platform win` (Windows) или `--platform mac` (Mac).
+    - Minor parity (оба платформы разом): `node scripts/release-version.mjs bump --minor`.
+    - Minor одна платформа: `node scripts/release-version.mjs bump --platform mac --minor`.
+  - **Build + publish**: `bun run --cwd platform/desktop build` (Windows) / `bun run --cwd platform/desktop build:mac` (Mac).
+    - Скрипт сам читает версию из `release-versions.json`, инжектирует в electron-builder и запускает verify guard.
 - **`packages/visuals` / `core/ark/packages/ark`** — НЕ БАМПЯТСЯ. Это workspace internals (`"version": "0.1.0"` зафиксирована), extensions/shell зависят через `workspace:*`. Менять только если будет actual публикация на npm (не сейчас).
 - Patch increment (`0.1.2 → 0.1.3`), не minor/major. Minor — только по явной команде пользователя («бамп eden minor»).
 
@@ -125,8 +132,15 @@ bun run --cwd platform/desktop ext:catalog
 #### Для kepler-shell (лаунчер):
 
 ```powershell
+# Windows:
 bun run --cwd platform/desktop build
+
+# Mac:
+bun run --cwd platform/desktop build:mac
 ```
+
+Версия берётся автоматически из `platform/desktop/release-versions.json` —
+убедись, что перед build'ом сделал `bump --platform win` (или `mac`).
 
 ::: danger Windows build lock: не расследовать заново
 На этой машине установленный/запущенный `KeplerFocusSvc` может держать workspace

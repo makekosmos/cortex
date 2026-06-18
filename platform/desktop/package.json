@@ -24,7 +24,9 @@
     "dev:no-build": "node scripts/dev.mjs",
     "build:js:shell": "tsc && vite build --configLoader native",
     "build:js": "tsc && vite build --configLoader native && bun run build:extensions",
-    "build": "bun run build:backend && bun run build:native:macos && bun run build:js && bun run stage:bundled-extensions && electron-builder --win nsis --publish always",
+    "build": "bun run build:backend && bun run build:native:macos && bun run build:js && bun run stage:bundled-extensions && node scripts/build-desktop.mjs --platform win",
+    "build:mac": "bun run build:backend && bun run build:native:macos && bun run build:js && bun run stage:bundled-extensions && node scripts/build-desktop.mjs --platform mac",
+    "verify:channel": "node scripts/verify-release-channel.mjs",
     "typecheck": "tsc --noEmit",
     "package:dir": "bun run build:js && bun run stage:bundled-extensions && electron-builder --dir",
     "package:mac": "bun run build:backend && bun run build:native:macos && bun run build:js && bun run stage:bundled-extensions && electron-builder --mac dmg",
@@ -75,20 +77,6 @@
       "output": "release",
       "buildResources": "build"
     },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "makekosmos",
-        "repo": "desktop",
-        "releaseType": "release"
-      },
-      {
-        "provider": "github",
-        "owner": "yoso-industries",
-        "repo": "kepler-releases",
-        "releaseType": "release"
-      }
-    ],
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
@@ -111,6 +99,20 @@
       "icon": "build/icon.png",
       "target": "nsis",
       "signAndEditExecutable": false,
+      "publish": [
+        {
+          "provider": "github",
+          "owner": "makekosmos",
+          "repo": "desktop",
+          "releaseType": "release"
+        },
+        {
+          "provider": "github",
+          "owner": "yoso-industries",
+          "repo": "kepler-releases",
+          "releaseType": "release"
+        }
+      ],
       "extraResources": [
         {
           "from": "../../target/release/kepler-backend.exe",
@@ -133,6 +135,14 @@
     "mac": {
       "icon": "build/icon.png",
       "target": "dmg",
+      "publish": [
+        {
+          "provider": "github",
+          "owner": "makekosmos",
+          "repo": "desktop-mac",
+          "releaseType": "release"
+        }
+      ],
       "extraResources": [
         {
           "from": "../../target/release/kepler-backend",

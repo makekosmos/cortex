@@ -43,15 +43,24 @@ marketplace catalog.
   «Перезапустить сейчас?» появляется как **fallback через 5 минут**, если
   пользователь не нажал banner.
 
-Конфиг publish'а — в `platform/desktop/package.json → build.publish`: primary
-provider `makekosmos/desktop`, bridge provider `yoso-industries/kepler-releases`
-для перехода уже установленных клиентов на новый update channel.
+Конфиг publish'а — в `platform/desktop/package.json` как **per-platform** массивы
+(`build.win.publish` / `build.mac.publish`). Верхнеуровневый `build.publish` удалён.
 
-Bridge release rule: `makekosmos/desktop` должен идти первым в publish array,
+- Windows: `build.win.publish[0]` = `makekosmos/desktop` (primary), `[1]` = `yoso-industries/kepler-releases` (bridge).
+- Mac: `build.mac.publish[0]` = `makekosmos/desktop-mac`.
+
+Bridge release rule (Windows): `makekosmos/desktop` должен идти первым в массиве,
 чтобы новая установленная сборка уже проверяла обновления из makekosmos. Старый
 `yoso-industries/kepler-releases` временно получает тот же artifact/latest.yml,
 чтобы текущие установки нашли эту миграционную версию. После переходного окна
 legacy provider можно удалить.
+
+Mac migration bridge: существующие Mac установки имеют `app-update.yml` с
+`makekosmos/desktop` (не `desktop-mac`). Чтобы мигрировать их на новый канал,
+нужно опубликовать **один переходный Mac release в ОБА** репозитория —
+`makekosmos/desktop` и `makekosmos/desktop-mac` — аналогично yoso→makekosmos bridge
+для Windows. После этого окна все новые Mac установки будут смотреть только на
+`makekosmos/desktop-mac`.
 
 ### State machine
 
@@ -149,20 +158,65 @@ const off = window.kepler.settings.update.onStateChanged((s) => {
 `__dirname` указывал на `<install>/resources/app.asar/dist-electron/` и
 относительный путь не резолвился.
 
+### Per-platform versioning
+
+**Rationale**: `electron-updater`'s GitHubProvider resolves a single "latest release"
+per repo — interleaving Windows-only and Mac-only releases in one repo breaks the
+other platform's updater (it reads a `latest.yml` / `latest-mac.yml` that may not
+be present in the "latest" release).
+
+**Solution**: Windows and Mac publish to separate repos; each repo has its own
+independent "latest release".
+
+**Version scheme**:
+
+- `MAJOR.MINOR` is a shared **feature-parity line** — bumped together when a feature
+  ships on both platforms.
+- `PATCH` is **independent per platform** — each platform ships its own bug-fix
+  patches without waiting for the other.
+- Example: Windows `0.5.32` and Mac `0.5.5` are both on the "0.5" parity line.
+
+**Source of truth**: `platform/desktop/release-versions.json`
+
+```json
+{ "win": "0.5.3", "mac": "0.5.1" }
+```
+
+**Bump CLI** (`platform/desktop/scripts/release-version.mjs`):
+
+| Command                                                        | Effect                                              |
+| -------------------------------------------------------------- | --------------------------------------------------- |
+| `node scripts/release-version.mjs get <win\|mac>`              | Print current version (used by build wrapper)       |
+| `node scripts/release-version.mjs bump --platform win`         | Windows PATCH +1 (default)                          |
+| `node scripts/release-version.mjs bump --platform mac --minor` | Mac MINOR +1, PATCH → 0                             |
+| `node scripts/release-version.mjs bump --minor`                | Both platforms MINOR +1, PATCH → 0 (parity release) |
+| `node scripts/release-version.mjs bump --major`                | Both platforms MAJOR +1, MINOR 0, PATCH 0           |
+
+Default bump = PATCH. `--minor` / `--major` must be explicit.
+
 ### Релиз launcher'а
 
 ```powershell
 # Один раз: $env:GH_TOKEN = (& "C:\Program Files\GitHub CLI\gh.exe" auth token)
+
+# Windows release:
 bun run --cwd platform/desktop build
+
+# Mac release:
+bun run --cwd platform/desktop build:mac
 ```
 
-Что делает:
+Что делает `bun run build` (Windows):
 
 1. `cargo build --release` для `kepler-backend.exe` + `ark-core-rpc.exe`.
 2. `tsc && vite build` для renderer / main / preload.
 3. `vite build` для каждого extension (`build:extensions`).
-4. `electron-builder --win nsis` — NSIS installer.
-5. **`electron-builder publish`** — push installer + `latest.yml` в release.
+4. `node scripts/build-desktop.mjs --platform win`:
+   - Читает версию из `release-versions.json["win"]`.
+   - `electron-builder --win nsis --publish always -c.extraMetadata.version=<v>` — NSIS installer + `latest.yml` в `makekosmos/desktop` и `yoso-industries/kepler-releases`.
+   - После 0-exit: `node scripts/verify-release-channel.mjs --platform win --version <v>` — проверяет целостность опубликованного релиза.
+
+Mac (`bun run build:mac`) аналогично, но `electron-builder --mac dmg --publish always` и publish в `makekosmos/desktop-mac`, verify на `latest-mac.yml`.
 
 **Extensions НЕ bundled** в installer — это lean distribution. После
 установки Kepler пустой, пользователь сам ставит расширения через
@@ -245,12 +299,18 @@ Settings → **Расширения** — плоский список устан
 
 ## Команды
 
-| Команда                                                  | Описание                                                               |
-| -------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `bun run --cwd platform/desktop build`                   | Полный build launcher'а + publish в desktop channel (нужен `GH_TOKEN`) |
-| `bun run --cwd platform/desktop ext:publish ID`          | Build extension → .kext → release в makekosmos/extensions              |
-| `bun run --cwd platform/desktop ext:publish-all`         | То же для всех extensions                                              |
-| `bun run --cwd platform/desktop ext:catalog -- OUT_PATH` | Регенерация catalog.json из GitHub releases                            |
+| Команда                                                                       | Описание                                                                            |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `bun run --cwd platform/desktop build`                                        | Полный build Windows launcher'а + publish в `makekosmos/desktop` (нужен `GH_TOKEN`) |
+| `bun run --cwd platform/desktop build:mac`                                    | Полный build Mac launcher'а + publish в `makekosmos/desktop-mac` (нужен `GH_TOKEN`) |
+| `node scripts/release-version.mjs bump --platform win`                        | Windows PATCH +1 (patch default)                                                    |
+| `node scripts/release-version.mjs bump --platform mac --minor`                | Mac MINOR +1, PATCH → 0                                                             |
+| `node scripts/release-version.mjs bump --minor`                               | Оба платформы MINOR +1 (parity release)                                             |
+| `bun run --cwd platform/desktop verify:channel -- --platform win --version X` | Проверить целостность Windows release                                               |
+| `bun run --cwd platform/desktop verify:channel -- --platform mac --version X` | Проверить целостность Mac release                                                   |
+| `bun run --cwd platform/desktop ext:publish ID`                               | Build extension → .kext → release в makekosmos/extensions                           |
+| `bun run --cwd platform/desktop ext:publish-all`                              | То же для всех extensions                                                           |
+| `bun run --cwd platform/desktop ext:catalog -- OUT_PATH`                      | Регенерация catalog.json из GitHub releases                                         |
 
 `platform/desktop/scripts/publish-extension.mjs` использует `gh release create` —
 автоматически берёт `gh auth token` если `KEPLER_GH_PATH` не указан.
