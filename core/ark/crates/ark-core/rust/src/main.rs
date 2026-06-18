@@ -460,6 +460,28 @@ where
     f(&inner)
 }
 
+/// Выполняет write-замыкание в одной SQLite-транзакции поверх shared conn.
+/// COMMIT при Ok, ROLLBACK при Err. Гарантирует атомарность entity + FTS + sync-meta:
+/// вложенные SAVEPOINT внутри db::* работают внутри этого BEGIN, при ошибке откатывается всё.
+fn with_write_tx<T, F>(f: F) -> Result<T, String>
+where
+    F: FnOnce(&rusqlite::Connection) -> Result<T, String>,
+{
+    with_conn(|conn| {
+        conn.execute_batch("BEGIN IMMEDIATE").map_err(|e| e.to_string())?;
+        match f(conn) {
+            Ok(v) => {
+                conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+                Ok(v)
+            }
+            Err(e) => {
+                let _ = conn.execute_batch("ROLLBACK");
+                Err(e)
+            }
+        }
+    })
+}
+
 fn get_shared_conn() -> Result<Arc<StdMutex<rusqlite::Connection>>, String> {
     let guard = DB.lock().unwrap_or_else(|e| e.into_inner());
     guard
@@ -647,42 +669,40 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         // 2026-06-17: все write-handlers теперь рассылают LiveChange через
         // broadcast_local_change — фикс live-sync gap.
         Request::UpsertTodo { todo, device_id } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::upsert_todo(conn, &todo)?;
                 let hlc = record_local_upsert(conn, "todo", &todo.id, device_id)?;
-                let entity = make_sync_entity(
+                Ok(make_sync_entity(
                     "todo",
                     &todo.id,
                     serde_json::to_value(&todo).unwrap_or(json!({})),
                     hlc,
                     None,
-                );
-                Ok(entity)
+                ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
 
         Request::DeleteTodo { id, device_id } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::delete_todo(conn, &id)?;
                 let hlc = record_local_delete(conn, "todo", &id, device_id)?;
                 Ok(make_sync_entity("todo", &id, json!({}), hlc, Some(true)))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
 
         Request::BatchUpsertTodos { todos, device_id } => {
-            let result = with_conn(|conn| {
+            // db::batch_upsert_todos использует SAVEPOINT ark_batch_upsert_todos,
+            // поэтому вкладывается в BEGIN IMMEDIATE из with_write_tx.
+            // entity-батч + sync-meta записываются атомарно в одной транзакции.
+            let entities = with_write_tx(|conn| {
                 db::batch_upsert_todos(conn, &todos)?;
                 let mut entities = Vec::with_capacity(todos.len());
                 for todo in &todos {
@@ -696,19 +716,17 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     ));
                 }
                 Ok(entities)
+            })?;
+            tokio::spawn(async move {
+                for entity in entities {
+                    broadcast_local_change(entity).await;
+                }
             });
-            if let Ok(entities) = result {
-                tokio::spawn(async move {
-                    for entity in entities {
-                        broadcast_local_change(entity).await;
-                    }
-                });
-            }
             Ok(json!(true))
         }
 
         Request::UpsertProject { project, device_id } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::upsert_project(conn, &project)?;
                 let hlc = record_local_upsert(conn, "project", &project.id, device_id)?;
                 Ok(make_sync_entity(
@@ -718,31 +736,27 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     None,
                 ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
 
         Request::DeleteProject { id, device_id } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::delete_project(conn, &id)?;
                 let hlc = record_local_delete(conn, "project", &id, device_id)?;
                 Ok(make_sync_entity("project", &id, json!({}), hlc, Some(true)))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
 
         Request::UpsertArea { area, device_id } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::upsert_area(conn, &area)?;
                 let hlc = record_local_upsert(conn, "area", &area.id, device_id)?;
                 Ok(make_sync_entity(
@@ -752,17 +766,15 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     None,
                 ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
 
         Request::UpsertTag { tag, device_id } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::upsert_tag(conn, &tag)?;
                 let hlc = record_local_upsert(conn, "tag", &tag.id, device_id)?;
                 Ok(make_sync_entity(
@@ -772,17 +784,15 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     None,
                 ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
 
         Request::UpsertHeading { heading, device_id } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::upsert_heading(conn, &heading)?;
                 let hlc = record_local_upsert(conn, "heading", &heading.id, device_id)?;
                 Ok(make_sync_entity(
@@ -792,26 +802,22 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     None,
                 ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
 
         Request::DeleteHeading { id, device_id } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::delete_heading(conn, &id)?;
                 let hlc = record_local_delete(conn, "heading", &id, device_id)?;
                 Ok(make_sync_entity("heading", &id, json!({}), hlc, Some(true)))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
 
@@ -819,7 +825,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             tracked_app,
             device_id,
         } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::upsert_tracked_app(conn, &tracked_app)?;
                 let hlc = record_local_upsert(conn, "tracked_app", &tracked_app.id, device_id)?;
                 Ok(make_sync_entity(
@@ -829,17 +835,15 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     None,
                 ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
 
         Request::DeleteTrackedApp { id, device_id } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::delete_tracked_app(conn, &id)?;
                 let hlc = record_local_delete(conn, "tracked_app", &id, device_id)?;
                 Ok(make_sync_entity(
@@ -849,12 +853,10 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     Some(true),
                 ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
 
@@ -862,7 +864,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             usage_session,
             device_id,
         } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::upsert_usage_session(conn, &usage_session)?;
                 let hlc = record_local_upsert(conn, "usage_session", &usage_session.id, device_id)?;
                 Ok(make_sync_entity(
@@ -872,17 +874,15 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     None,
                 ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
 
         Request::DeleteUsageSession { id, device_id } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::delete_usage_session(conn, &id)?;
                 let hlc = record_local_delete(conn, "usage_session", &id, device_id)?;
                 Ok(make_sync_entity(
@@ -892,12 +892,10 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     Some(true),
                 ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
 
@@ -905,7 +903,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             usage_event,
             device_id,
         } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::upsert_usage_event(conn, &usage_event)?;
                 let hlc = record_local_upsert(conn, "usage_event", &usage_event.id, device_id)?;
                 Ok(make_sync_entity(
@@ -915,17 +913,15 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     None,
                 ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
 
         Request::DeleteUsageEvent { id, device_id } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::delete_usage_event(conn, &id)?;
                 let hlc = record_local_delete(conn, "usage_event", &id, device_id)?;
                 Ok(make_sync_entity(
@@ -935,12 +931,10 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     Some(true),
                 ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
         Request::GetUsageAnalytics {
@@ -1016,7 +1010,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             // эмитит entity_changed на incoming peer-write — это другой код path,
             // не дублирует это событие. Cross-app live updates (Eden TaskRef
             // подписан на object_upserted) — это primary consumer.
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::upsert_object(conn, &object)?;
                 let hlc = record_local_upsert(conn, "object", &object.id, device_id)?;
                 Ok(make_sync_entity(
@@ -1026,38 +1020,34 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     None,
                 ))
+            })?;
+            let eid = object_id.clone();
+            let etid = object_type_id.clone();
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                let eid = object_id.clone();
-                let etid = object_type_id.clone();
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-                emit_event(json!({
-                    "event": "object_upserted",
-                    "id": eid,
-                    "type_id": etid,
-                }));
-            }
+            emit_event(json!({
+                "event": "object_upserted",
+                "id": eid,
+                "type_id": etid,
+            }));
             Ok(json!(true))
         }
         Request::DeleteObject { id, device_id } => {
             let object_id = id.clone();
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::delete_object(conn, &id)?;
                 let hlc = record_local_delete(conn, "object", &id, device_id)?;
                 Ok(make_sync_entity("object", &id, json!({}), hlc, Some(true)))
+            })?;
+            let eid = object_id.clone();
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                let eid = object_id.clone();
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-                emit_event(json!({
-                    "event": "object_deleted",
-                    "id": eid,
-                }));
-            }
+            emit_event(json!({
+                "event": "object_deleted",
+                "id": eid,
+            }));
             Ok(json!(true))
         }
         Request::ListObjectTypes => with_conn(|conn| {
@@ -1072,7 +1062,10 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             object_type,
             device_id,
         } => {
-            let result = with_conn(|conn| {
+            // replay_pending_for_type теперь использует SAVEPOINT ark_replay_pending
+            // вместо BEGIN IMMEDIATE, поэтому вкладывается в транзакцию из with_write_tx.
+            // entity-строка + sync-meta записываются атомарно.
+            let entity = with_write_tx(|conn| {
                 db::upsert_object_type(conn, &object_type)?;
                 let hlc = record_local_upsert(conn, "object_type", &object_type.id, device_id)?;
                 Ok(make_sync_entity(
@@ -1082,16 +1075,14 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     None,
                 ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
         Request::DeleteObjectType { id, device_id } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::delete_object_type(conn, &id)?;
                 let hlc = record_local_delete(conn, "object_type", &id, device_id)?;
                 Ok(make_sync_entity(
@@ -1101,12 +1092,10 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     Some(true),
                 ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
         Request::ListObjectLinks => with_conn(|conn| {
@@ -1117,7 +1106,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             object_link,
             device_id,
         } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::upsert_object_link(conn, &object_link)?;
                 let hlc = record_local_upsert(conn, "object_link", &object_link.id, device_id)?;
                 Ok(make_sync_entity(
@@ -1127,16 +1116,14 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     None,
                 ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
         Request::DeleteObjectLink { id, device_id } => {
-            let result = with_conn(|conn| {
+            let entity = with_write_tx(|conn| {
                 db::delete_object_link(conn, &id)?;
                 let hlc = record_local_delete(conn, "object_link", &id, device_id)?;
                 Ok(make_sync_entity(
@@ -1146,12 +1133,10 @@ async fn handle_request(request: Request) -> Result<Value, String> {
                     hlc,
                     Some(true),
                 ))
+            })?;
+            tokio::spawn(async move {
+                broadcast_local_change(entity).await;
             });
-            if let Ok(entity) = result {
-                tokio::spawn(async move {
-                    broadcast_local_change(entity).await;
-                });
-            }
             Ok(json!(true))
         }
 
@@ -3188,5 +3173,108 @@ mod tests {
         );
 
         handle_request(Request::StopSync).await.unwrap();
+    }
+
+    // -----------------------------------------------------------------------
+    // RED-тесты: fail-closed + атомарность entity/sync-meta (2026-06-18)
+    // -----------------------------------------------------------------------
+
+    /// FK violation → handle_request должен возвращать Err.
+    /// Текущий код проглатывает ошибку и возвращает Ok(true) → RED.
+    #[tokio::test]
+    async fn upsert_object_with_invalid_type_id_is_err() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+
+        // type_id "nonexistent_type" не существует → FK violation в db::upsert_object
+        let object = ArkObject {
+            id: "obj-bad-type".to_string(),
+            type_id: "nonexistent_type".to_string(),
+            title: "Bad Object".to_string(),
+            content_json: json!({}),
+            props_json: json!({}),
+            created_at: "2026-06-18T00:00:00.000Z".to_string(),
+            updated_at: "2026-06-18T00:00:00.000Z".to_string(),
+            deleted_at: None,
+        };
+
+        let result = handle_request(Request::UpsertObject {
+            object,
+            device_id: None,
+        })
+        .await;
+
+        assert!(
+            result.is_err(),
+            "UpsertObject с несуществующим type_id должен возвращать Err (FK violation); \
+             получено: {:?}",
+            result
+        );
+    }
+
+    /// После неудачного upsert строки в objects нет И нет записи в sync
+    /// version-vector для этого id (атомарность, дефект №2).
+    #[tokio::test]
+    async fn failed_upsert_object_persists_nothing() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+
+        // type_id "ghost_type" не существует → upsert упадёт на FK
+        let object = ArkObject {
+            id: "obj-ghost".to_string(),
+            type_id: "ghost_type".to_string(),
+            title: "Ghost".to_string(),
+            content_json: json!({}),
+            props_json: json!({}),
+            created_at: "2026-06-18T00:00:00.000Z".to_string(),
+            updated_at: "2026-06-18T00:00:00.000Z".to_string(),
+            deleted_at: None,
+        };
+
+        // Ожидаем Err; после него проверяем что ничего не записалось
+        let _ = handle_request(Request::UpsertObject {
+            object,
+            device_id: Some("test-device".to_string()),
+        })
+        .await;
+
+        let shared = get_shared_conn().unwrap();
+        let guard = shared.lock().unwrap();
+
+        // Объект не должен быть в таблице objects
+        let obj_count: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM objects WHERE id = ?1",
+                rusqlite::params!["obj-ghost"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(obj_count, 0, "objects не должны содержать строку для obj-ghost после провального upsert");
+
+        // Version-vector не должен содержать запись для этого id
+        let vv_raw = db::get_sync_kv(&guard, "lan_sync.version_vector").unwrap();
+        if let Some(raw) = vv_raw {
+            let vector: std::collections::HashMap<String, serde_json::Value> =
+                serde_json::from_str(&raw).unwrap_or_default();
+            assert!(
+                !vector.contains_key("obj-ghost"),
+                "version_vector не должен содержать запись для obj-ghost после провального upsert; \
+                 vector: {:?}",
+                vector
+            );
+        }
+        // Если vv_raw == None — version_vector ещё не создавался, тест проходит
     }
 }

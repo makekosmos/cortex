@@ -542,14 +542,16 @@ pub fn upsert_todo(conn: &Connection, todo: &TodoItem) -> Result<(), String> {
 }
 
 pub fn batch_upsert_todos(conn: &Connection, todos: &[TodoItem]) -> Result<(), String> {
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
+    conn.execute_batch("SAVEPOINT ark_batch_upsert_todos")
+        .map_err(|e| e.to_string())?;
     for todo in todos {
         if let Err(e) = upsert_todo(conn, todo) {
-            let _ = conn.execute_batch("ROLLBACK");
+            rollback_savepoint(conn, "ark_batch_upsert_todos");
             return Err(e);
         }
     }
-    conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+    conn.execute_batch("RELEASE SAVEPOINT ark_batch_upsert_todos")
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -771,7 +773,7 @@ pub fn replay_pending_for_type(conn: &Connection, type_id: &str) -> Result<usize
         .map_err(|e| e.to_string())?;
     drop(stmt);
 
-    conn.execute_batch("BEGIN IMMEDIATE")
+    conn.execute_batch("SAVEPOINT ark_replay_pending")
         .map_err(|e| e.to_string())?;
     let mut replayed = 0usize;
     let result = (|| {
@@ -794,10 +796,11 @@ pub fn replay_pending_for_type(conn: &Connection, type_id: &str) -> Result<usize
     })();
     match result {
         Ok(()) => {
-            conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+            conn.execute_batch("RELEASE SAVEPOINT ark_replay_pending")
+                .map_err(|e| e.to_string())?;
         }
         Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
+            rollback_savepoint(conn, "ark_replay_pending");
             return Err(e);
         }
     }
@@ -5087,5 +5090,43 @@ mod tests {
         );
         assert_eq!(objects[0].id, "obj-chunked");
         assert_eq!(objects[0].title, "Chunked backup");
+    }
+
+    // Фаза B — тесты вложенности (RED до замены BEGIN→SAVEPOINT).
+
+    #[test]
+    fn batch_upsert_todos_nests_in_outer_transaction() {
+        let conn = setup_db();
+        // Открываем внешнюю транзакцию — имитируем вызов из with_write_tx.
+        conn.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let todos = vec![make_todo("bt1", "Nested todo A"), make_todo("bt2", "Nested todo B")];
+        // До Фазы B падает: "cannot start a transaction within a transaction".
+        // После Фазы B (SAVEPOINT) должно пройти без ошибки.
+        batch_upsert_todos(&conn, &todos)
+            .expect("batch_upsert_todos должен работать внутри внешней транзакции");
+        conn.execute_batch("COMMIT").unwrap();
+        // Проверяем, что todo действительно записаны.
+        let data = load_all(&conn).unwrap();
+        assert_eq!(data.todos.len(), 2, "оба todo должны быть записаны");
+    }
+
+    #[test]
+    fn upsert_object_type_nests_in_outer_transaction() {
+        let conn = setup_db();
+        let ot = make_object_type("ot-nested", "Тип вложенный");
+        // Открываем внешнюю транзакцию — имитируем вызов из with_write_tx.
+        conn.execute_batch("BEGIN IMMEDIATE").unwrap();
+        // До Фазы B падает через replay_pending_for_type → BEGIN IMMEDIATE:
+        // "cannot start a transaction within a transaction".
+        // После Фазы B (SAVEPOINT) должно пройти без ошибки.
+        upsert_object_type(&conn, &ot)
+            .expect("upsert_object_type должен работать внутри внешней транзакции");
+        conn.execute_batch("COMMIT").unwrap();
+        // Проверяем, что тип записан.
+        let types = list_object_types(&conn).unwrap();
+        assert!(
+            types.iter().any(|t| t.id == "ot-nested"),
+            "object_type должен быть записан"
+        );
     }
 }
