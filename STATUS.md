@@ -1,13 +1,38 @@
 # Kosmos — статус проекта (2026-06-18)
 
-| Компонент               | Версия |
-| ----------------------- | ------ |
-| Kepler / Kosmos Desktop | 0.5.4  |
-| Eden                    | 0.3.0  |
-| Delphi                  | 0.1.8  |
-| Horologion              | 0.1.4  |
-| Arrancador              | 0.1.4  |
-| Akasha                  | 0.1.2  |
+| Компонент                  | Версия        |
+| -------------------------- | ------------- |
+| Kosmos Desktop (win / mac) | 0.5.4 / 0.5.1 |
+| Eden                       | 0.3.0         |
+| Delphi                     | 0.1.8         |
+| Horologion                 | 0.1.4         |
+| Arrancador                 | 0.1.4         |
+| Akasha                     | 0.1.2         |
+
+## 2026-06-18 — Per-platform release channels + Windows 0.5.4 (восстановление автообновления)
+
+Десктоп переведён на per-platform версионирование: `MAJOR.MINOR` — общая
+фича-паритетная линия, `PATCH` расходится по платформам. Источник версий —
+`platform/desktop/release-versions.json` (`win` / `mac`), инжектится в билд через
+`-c.extraMetadata.version` (`build-desktop.mjs`). Каналы обновлений разнесены:
+Windows → `makekosmos/desktop` (+ yoso bridge), macOS → `makekosmos/desktop-mac`.
+Причина — electron-updater резолвит один «latest release» на репо, поэтому
+независимые patch-линии требуют раздельных репозиториев. Подробности —
+`docs-site/concepts/distribution.md`.
+
+- **Windows 0.5.3 → 0.5.4**: 0.5.3 был сломан для всех клиентов — `latest.yml`
+  содержал sha512/size от другого билда, чем загруженный `.exe` (non-atomic
+  re-publish), все получали `sha512 checksum mismatch`. 0.5.4 — чистый
+  одно-проходный перевыпуск, восстанавливает автообновление.
+- **Channel-guard** (`platform/desktop/scripts/verify-release-channel.mjs`): после
+  publish скачивает channel-файл + ассеты и валит билд при рассинхроне
+  sha512/size/blockmap или большом разбросе времён загрузки — ловит ровно тот
+  класс поломки, что убил 0.5.3.
+- **macOS**: остаётся на 0.5.1 до отдельного релиза; репо `makekosmos/desktop-mac`
+  создаётся, нужен переходный bridge-релиз для уже установленных mac-сборок.
+
+Checks: `node --check` новых скриптов, `verify-release-channel.mjs` против
+известных релизов (win 0.5.1 PASS, win 0.5.3 FAIL-детект), `docs:check` / `docs:sync`.
 
 ## 2026-06-18 — Fix: sync UI мёртв на macOS из-за tray `.ico` краша (Kosmos Desktop 0.5.3 → 0.5.4)
 
