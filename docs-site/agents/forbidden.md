@@ -179,10 +179,10 @@
 
 - ❌ Коммитить `GH_TOKEN` (или любой PAT) в repo. Если случайно — rotate immediately.
 - ❌ Bundle'ить extensions в Kepler installer (`platform/desktop/package.json → build.extraResources`). Lean installer — marketplace flow обеспечивает установку. Нарушение → лишний размер инсталлера + рассинхрон версий extension'ов между installer'ом и marketplace.
-- ❌ Push release tag в `makekosmos/desktop`, `makekosmos/extensions` или legacy bridge `yoso-industries/kepler-releases` manually без `electron-builder publish` (launcher) / `ext:publish` (extensions). Эти скрипты генерируют `sha256` + `latest.yml` — autoUpdater сломается без них.
+- ❌ Push release tag в `makekosmos/desktop` или `makekosmos/extensions` manually без `electron-builder publish` (launcher) / `ext:publish` (extensions). Эти скрипты генерируют `sha256` + `latest.yml` — autoUpdater сломается без них.
 - ❌ Менять wire format `catalog.json` без bump `schemaVersion`. Installed Kepler'ы должны продолжать читать старый format (tolerant к unknown fields).
 - ❌ Удалять published GitHub releases retroactive. Installed Kepler'ы (или offline users) могут пытаться downgrade / re-install; ломается trust в URL'ы из cached catalog.json.
-- ❌ Менять release/update channel без обновления `platform/desktop/package.json → build.publish` + `extension-marketplace.ts → CATALOG_URL` + `publish-extension.mjs → RELEASES_REPO` + `generate-catalog.mjs → RELEASES_REPO`. Primary desktop provider — `makekosmos/desktop`; legacy `yoso-industries/kepler-releases` допускается только как временный bridge target.
+- ❌ Менять release/update channel без обновления `platform/desktop/package.json → build.win.publish` / `build.mac.publish` + `extension-marketplace.ts → CATALOG_URL` + `publish-extension.mjs → RELEASES_REPO` + `generate-catalog.mjs → RELEASES_REPO`. Desktop providers — `makekosmos/desktop` (win) и `makekosmos/desktop-mac` (mac); yoso как канал десктопа больше не используется.
 
 ### usage-tracker
 

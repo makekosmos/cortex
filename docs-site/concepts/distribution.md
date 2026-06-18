@@ -46,20 +46,13 @@ marketplace catalog.
 Конфиг publish'а — в `platform/desktop/package.json` как **per-platform** массивы
 (`build.win.publish` / `build.mac.publish`). Верхнеуровневый `build.publish` удалён.
 
-- Windows: `build.win.publish[0]` = `makekosmos/desktop` (primary), `[1]` = `yoso-industries/kepler-releases` (bridge).
+- Windows: `build.win.publish[0]` = `makekosmos/desktop` (единственный канал).
 - Mac: `build.mac.publish[0]` = `makekosmos/desktop-mac`.
-
-Bridge release rule (Windows): `makekosmos/desktop` должен идти первым в массиве,
-чтобы новая установленная сборка уже проверяла обновления из makekosmos. Старый
-`yoso-industries/kepler-releases` временно получает тот же artifact/latest.yml,
-чтобы текущие установки нашли эту миграционную версию. После переходного окна
-legacy provider можно удалить.
 
 Mac migration bridge: существующие Mac установки имеют `app-update.yml` с
 `makekosmos/desktop` (не `desktop-mac`). Чтобы мигрировать их на новый канал,
 нужно опубликовать **один переходный Mac release в ОБА** репозитория —
-`makekosmos/desktop` и `makekosmos/desktop-mac` — аналогично yoso→makekosmos bridge
-для Windows. После этого окна все новые Mac установки будут смотреть только на
+`makekosmos/desktop` и `makekosmos/desktop-mac`. После этого окна все новые Mac установки будут смотреть только на
 `makekosmos/desktop-mac`.
 
 ### State machine
@@ -213,7 +206,7 @@ bun run --cwd platform/desktop build:mac
 3. `vite build` для каждого extension (`build:extensions`).
 4. `node scripts/build-desktop.mjs --platform win`:
    - Читает версию из `release-versions.json["win"]`.
-   - `electron-builder --win nsis --publish always -c.extraMetadata.version=<v>` — NSIS installer + `latest.yml` в `makekosmos/desktop` и `yoso-industries/kepler-releases`.
+   - `electron-builder --win nsis --publish always -c.extraMetadata.version=<v>` — NSIS installer + `latest.yml` в `makekosmos/desktop`.
    - После 0-exit: `node scripts/verify-release-channel.mjs --platform win --version <v>` — проверяет целостность опубликованного релиза.
 
 Mac (`bun run build:mac`) аналогично, но `electron-builder --mac dmg --publish always` и publish в `makekosmos/desktop-mac`, verify на `latest-mac.yml`.

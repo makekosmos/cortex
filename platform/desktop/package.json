@@ -105,12 +105,6 @@
           "owner": "makekosmos",
           "repo": "desktop",
           "releaseType": "release"
-        },
-        {
-          "provider": "github",
-          "owner": "yoso-industries",
-          "repo": "kepler-releases",
-          "releaseType": "release"
         }
       ],
       "extraResources": [

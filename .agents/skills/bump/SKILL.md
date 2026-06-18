@@ -192,7 +192,7 @@ shell/release/latest.yml
 
 ```powershell
 cd shell/release
-gh release create v<version> -R yoso-industries/kepler-releases `
+gh release create v<version> -R makekosmos/desktop `
   --title "v<version>" `
   --notes "<краткий changelog>" `
   "Kepler Setup <version>.exe" `
@@ -239,7 +239,7 @@ shell + eden + horologion):
 ### 6. Verify
 
 - `gh release view <id>-v<version> -R yoso-industries/kosmos-extensions` (для extension) или
-  `gh release view v<version> -R yoso-industries/kepler-releases` (для shell).
+  `gh release view v<version> -R makekosmos/desktop` (для shell).
 - Подтверди что `.kext` / `.exe` + `latest.yml` / `sha256` приложены.
 
 ## Запреты (из forbidden.md)
