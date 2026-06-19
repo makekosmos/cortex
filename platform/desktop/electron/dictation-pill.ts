@@ -89,7 +89,8 @@ function createPill(): BrowserWindow {
     transparent: true,
     backgroundColor: "#00000000",
     ...backgroundMaterialOption(backgroundMaterial),
-    roundedCorners: true,
+    hasShadow: false,
+    roundedCorners: false,
     // КРИТИЧНО: focusable: false — pill НЕ ворует фокус с активного окна.
     // Иначе Ctrl+V после inject улетит в pill (а не в Telegram / редактор).
     focusable: false,
@@ -104,6 +105,7 @@ function createPill(): BrowserWindow {
   });
 
   win.setAlwaysOnTop(true, "screen-saver", 1);
+  win.setBackgroundColor("#00000000");
   applyWindowMaterial(win, backgroundMaterial, "dictation-pill");
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;

@@ -468,7 +468,8 @@ where
     F: FnOnce(&rusqlite::Connection) -> Result<T, String>,
 {
     with_conn(|conn| {
-        conn.execute_batch("BEGIN IMMEDIATE").map_err(|e| e.to_string())?;
+        conn.execute_batch("BEGIN IMMEDIATE")
+            .map_err(|e| e.to_string())?;
         match f(conn) {
             Ok(v) => {
                 conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
@@ -3261,7 +3262,10 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(obj_count, 0, "objects не должны содержать строку для obj-ghost после провального upsert");
+        assert_eq!(
+            obj_count, 0,
+            "objects не должны содержать строку для obj-ghost после провального upsert"
+        );
 
         // Version-vector не должен содержать запись для этого id
         let vv_raw = db::get_sync_kv(&guard, "lan_sync.version_vector").unwrap();

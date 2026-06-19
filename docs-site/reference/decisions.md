@@ -171,6 +171,21 @@ Roadmap дальше (Phase 3+):
 - Backend-pushed state events → renderer без polling (для live «attempts N/3» на pill во время retry).
 - Persistent история **успешных** транскриптов через ARK objects (история ≠ recovery-queue).
 
+### 2026-06-19 — Dictation local models + AI settings
+
+Источник: `concepts/dictation.md` + `.agent/tasks/2026-06-19-local-dictation-ai-settings/spec.md`.
+
+После проверки Handy workflow принято решение добавить локальный STT без ручного выбора файлов пользователем:
+
+- Settings → AI отвечает за online/local AI: Groq status/test/model, local model catalogue, download progress, storage summary.
+- Settings → Диктация отвечает за поведение диктации: hotkey/language/inject mode/provider (`online` или `local`).
+- Local model storage — только `<dataDir>/dictation/models/`. Это переживает app update/reinstall и изолируется по instance/data dir; Settings → About показывает, сколько занимают DB/backups/models.
+- Download manager делает resumable download и показывает progress. Long-running download не должен идти через короткий 30s Ark IPC timeout.
+- Local STT adapter запускает whisper.cpp runner как runtime detail. UI не знает, какой executable внутри; выбирает только provider/model.
+- Groq остаётся online fallback: тот же pending/retry/network/proxy путь, API key по-прежнему только в Credential Manager / Keychain.
+
+Причина: желаемый UX такой же, как в Handy — выбрать модель из списка, скачать, использовать. Ручные пути к `.bin` и `whisper-cli.exe` оставлены только как debug/advanced escape hatch, не как основной workflow.
+
 ## Шаблон для нового решения
 
 Все новые архитектурные/безопасностные решения **обязаны** попадать сюда. Минимальный шаблон ADR:

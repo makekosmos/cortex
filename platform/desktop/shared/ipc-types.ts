@@ -100,6 +100,22 @@ export interface DiagnosticsWindowMoveBenchmarkResult {
   frames_over_50ms: number;
 }
 
+export interface StorageSummaryItem {
+  id: string;
+  label: string;
+  path: string;
+  bytes: number;
+  exists: boolean;
+  description?: string;
+}
+
+export interface StorageSummary {
+  dataDir: string;
+  userDataDir: string;
+  totalBytes: number;
+  items: StorageSummaryItem[];
+}
+
 export interface SearchResult {
   id: string;
   title: string;
@@ -403,6 +419,7 @@ export interface KeplerApi {
       проксирует на ArkClient (см. main.ts). */
   ark: {
     request<T = unknown>(operation: string, params?: Record<string, unknown>): Promise<T>;
+    onEvent(listener: (event: Record<string, unknown>) => void): () => void;
   };
 
   /** Command registry — то что показывает launcher: список запуска апок +
@@ -671,6 +688,8 @@ export interface KeplerApi {
     };
     /** Версия Kepler из app.getVersion(). */
     version(): Promise<string>;
+    /** Сводка занимаемого места в папках данных Kosmos. */
+    storageSummary(): Promise<StorageSummary>;
     /** Текущий глобальный хоткей. По умолчанию `Command+Space` на macOS и `Alt+Space` на Windows. */
     hotkey(): Promise<string>;
     /** Зарегистрировать новый accelerator. Возвращает `{ok: true}` если

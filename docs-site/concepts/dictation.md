@@ -4,9 +4,9 @@
 
 ## За 30 секунд
 
-Dictation — голосовой ввод по образцу [Raycast Dictation](https://manual.raycast.com/ai/dictation). Global hotkey → плавающая **pill** (320×64, frameless, alwaysOnTop, `focusable: false`) → запись микрофона через Web Audio API → транскрипция в **Groq Cloud** (whisper-large-v3) → **auto-paste** транскрипта в активное окно через симуляцию Ctrl+V.
+Dictation — голосовой ввод по образцу [Raycast Dictation](https://manual.raycast.com/ai/dictation). Global hotkey → плавающая **pill** (120×36, frameless, alwaysOnTop, `focusable: false`) → запись микрофона через Web Audio API → транскрипция через выбранный provider (**Groq Cloud** или локальный **whisper.cpp**) → **auto-paste** транскрипта в активное окно через симуляцию Ctrl+V.
 
-Phase 1 — облачная транскрипция. Phase 2 (roadmap) — локальные модели через whisper.cpp / Parakeet V3.
+По умолчанию можно работать через Groq. Локальный режим настраивается в Settings → AI: пользователь выбирает модель, жмёт «Скачать», backend кладёт `.bin` в `<dataDir>/dictation/models/` и использует bundled/downloaded whisper.cpp runner без ручного указания путей в обычном workflow.
 
 ## Поток
 
@@ -38,7 +38,9 @@ dictation.submit_audio { audioB64 }  →  state: Recording → Transcribing
 backend split на ≤30s WAV chunks для long-form audio
    │
    ▼
-POST api.groq.com/openai/v1/audio/transcriptions  (reqwest + опциональный DoH resolver)
+selected provider:
+  • Groq → POST api.groq.com/openai/v1/audio/transcriptions (reqwest + опциональный DoH/proxy)
+  • Local → whisper.cpp executable + downloaded ggml model from <dataDir>/dictation/models/
    │
    ▼
 broadcast event dictation_transcript { text, language, durationMs }
@@ -59,16 +61,19 @@ state: Transcribing → Idle  +  pill.pillFinished() → hide window
 
 ## Компоненты
 
-| Файл                                                                          | Что делает                                                                                                                                                                                                                    |
-| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `platform/runtime/src/dictation/host.rs`                                      | State machine `Idle → Recording → Transcribing → Idle\|Error`. Dispatch для `dictation.*` operations. `broadcast::Sender<Value>` для WS events.                                                                               |
-| `platform/runtime/src/dictation/groq.rs`                                      | Multipart POST к `/openai/v1/audio/transcriptions`. `language="auto"` → пропускаем поле (Whisper auto-detect). Long-form WAV режется на ≤30s chunks и склеивается обратно в один transcript.                                  |
-| `platform/runtime/src/dictation/inject.rs`                                    | `enigo` Ctrl+V симуляция + `arboard` clipboard save/restore + `windows::Win32 GetForegroundWindow/SetForegroundWindow` для возврата фокуса. Все sleep'ы 80ms.                                                                 |
-| `platform/runtime/src/dictation/config.rs`                                    | JSON (`<data_dir>/dictation-config.json`) для не-секретов + `keyring` (Windows Credential Manager target `kosmos-kepler` / user `groq-api-key`) для API ключа.                                                                |
-| `platform/runtime/src/dictation/network.rs`                                   | Фабрика `reqwest::Client` с переключаемым DNS resolver'ом (System / Cloudflare DoH / Google DoH / custom DoH URL) через `hickory-resolver`. Scope: только AI HTTP.                                                            |
-| `platform/desktop/electron/dictation-pill.ts`                                 | BrowserWindow lifecycle (`focusable: false`, alwaysOnTop, transparent), global hotkey регистрация, IPC `kepler:dictation:toggle/cancel/pill-finished/command`. Hotkey перерегистрируется на event `dictation_config_changed`. |
-| `platform/desktop/src/views/DictationPillView.vue`                            | Audio capture (Web Audio API), waveform (AnalyserNode → 12 bars), таймер, WAV encode, base64, отправка через `window.kepler.ark.request("dictation.submit_audio", ...)`.                                                      |
-| `platform/desktop/src/views/SettingsView.vue` (tabs "security" + "dictation") | UI настроек: DNS resolver выбор (Безопасность, main group), hotkey / язык / inject mode / API key / тест (Диктация, advanced group).                                                                                          |
+| Файл                                                         | Что делает                                                                                                                                                                                                                    |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `platform/runtime/src/dictation/host.rs`                     | State machine `Idle → Recording → Transcribing → Idle\|Error`. Dispatch для `dictation.*` operations, provider selection, local model lifecycle/download orchestration. `broadcast::Sender<Value>` для WS events.             |
+| `platform/runtime/src/dictation/groq.rs`                     | Multipart POST к `/openai/v1/audio/transcriptions`. `language="auto"` → пропускаем поле (Whisper auto-detect). Long-form WAV режется на ≤30s chunks и склеивается обратно в один transcript.                                  |
+| `platform/runtime/src/dictation/local.rs`                    | Local STT adapter: запускает whisper.cpp runner, передаёт WAV/model/language, нормализует stdout в transcript.                                                                                                                |
+| `platform/runtime/src/dictation/local_models.rs`             | Каталог локальных моделей, storage path `<dataDir>/dictation/models/`, resumable download, checksum/size metadata и прогресс для Settings → AI.                                                                               |
+| `platform/runtime/src/dictation/inject.rs`                   | `enigo` Ctrl+V симуляция + `arboard` clipboard save/restore + `windows::Win32 GetForegroundWindow/SetForegroundWindow` для возврата фокуса. Все sleep'ы 80ms.                                                                 |
+| `platform/runtime/src/dictation/config.rs`                   | JSON (`<data_dir>/dictation-config.json`) для не-секретов + `keyring` (Windows Credential Manager target `kosmos-kepler` / user `groq-api-key`) для API ключа.                                                                |
+| `platform/runtime/src/dictation/network.rs`                  | Фабрика `reqwest::Client` с переключаемым DNS resolver'ом (System / Cloudflare DoH / Google DoH / custom DoH URL) через `hickory-resolver`. Scope: только AI HTTP.                                                            |
+| `platform/desktop/electron/dictation-pill.ts`                | BrowserWindow lifecycle (`focusable: false`, alwaysOnTop, transparent), global hotkey регистрация, IPC `kepler:dictation:toggle/cancel/pill-finished/command`. Hotkey перерегистрируется на event `dictation_config_changed`. |
+| `platform/desktop/src/views/DictationPillView.vue`           | Audio capture (Web Audio API), 16-bar pill states (idle/recording/transcribing/waiting/error), timer, WAV encode, base64, отправка через `window.kepler.ark.request("dictation.submit_audio", ...)`.                          |
+| `platform/desktop/src/views/settings/tabs/AISettingsTab.vue` | UI для online/local AI: Groq enable/model/status/test, local model catalogue/download progress, storage summary.                                                                                                              |
+| `platform/desktop/src/views/settings/tabs/DictationTab.vue`  | UI настроек диктации: hotkey / язык / inject mode / provider selection / retry queue.                                                                                                                                         |
 
 ## Безопасность ключа
 
@@ -175,15 +180,13 @@ Groq/Whisper file-based STT принимает длинные файлы, но l
 структуру и отправляет файл одним запросом — это fallback для будущих источников
 аудио, но нормальный renderer path всегда генерирует поддерживаемый PCM WAV.
 
-## Выбор модели
+## Выбор provider / модели
 
-UI не даёт менять модель — вшит **`whisper-large-v3`**. Почему именно он:
+Settings → Диктация выбирает provider: `online` (Groq) или `local` (whisper.cpp). Settings → AI управляет конкретными моделями и подготовкой локального runtime.
 
-- **whisper-large-v3** — самая качественная среди Groq Whisper'ов: лучше держит длинный контекст и пунктуацию, корректнее работает с не-английской речью. Дороже на токен, но не критично.
-- **whisper-large-v3-turbo** — ~2.5× быстрее, но на русской речи замечены пропуски слов и более частые галлюцинации на низкоуровневом шуме. Не подходит для default'а.
-- **distil-whisper-large-v3-en** — только английский.
-
-Если ручка нужна — можно вручную поправить `model` в `dictation-config.json` (configurable hook сохраняется). При появлении локальных моделей в Phase 2 модель снова окажется в UI.
+- **Groq** — online fallback/default для машин без скачанной модели; API key хранится только в Credential Manager / Keychain.
+- **Local whisper.cpp** — offline path. Модель скачивается из каталога в `<dataDir>/dictation/models/`; config хранит model id/path metadata, но не требует от пользователя ручного полного пути.
+- **Storage** — модели лежат в user data dir Kosmos и переживают update/reinstall приложения. При обычном uninstall ОС может оставить data dir; Settings → About показывает storage summary, чтобы пользователь видел, сколько занимают DB/backups/models.
 
 ## Post-mortems (0.3.0 → 0.3.1)
 
@@ -315,9 +318,8 @@ UI рендерит чек-листом + подсказку для первой
 
 ---
 
-## Что НЕ делает Phase 1 / 1.5
+## Что НЕ делает текущая диктация
 
-- Локальные модели (whisper.cpp, Parakeet V3) — отдельный proof-loop Phase 2.
 - LLM post-processing транскрипта (filler-word cleanup, пунктуация, стиль) — Phase 3.
 - DoH для не-AI запросов (sync / RAWG / прочее) — out of scope.
 - Linux порт — Win32 `GetForegroundWindow` + `WH_KEYBOARD_LL` специфичны; native helpers есть только под macOS.
@@ -338,4 +340,4 @@ macOS `CGKeyCode` ≠ Windows VK: фронтовый `vkToKeyName` ждёт Wind
 
 ## ADR
 
-См. `reference/decisions.md` § 2026-05-24 — «Phase 1 STT — облачный Groq, не локальный whisper.cpp».
+См. `reference/decisions.md` § 2026-05-24 — «Phase 1 STT — облачный Groq, не локальный whisper.cpp» и § 2026-06-19 — «Dictation local models + AI settings».

@@ -221,6 +221,7 @@ let backendLockPath = "";
 let isQuiting = false;
 let arkClient: ArkClient | null = null;
 let syncEventsUnsubscribe: (() => void) | null = null;
+let arkRendererEventsUnsubscribe: (() => void) | null = null;
 
 function broadcastSettingsSyncUpdated(): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -911,6 +912,8 @@ async function resetArkClient(reason: string): Promise<void> {
   setExtensionArkBridge({ request: null, subscribe: null });
   syncEventsUnsubscribe?.();
   syncEventsUnsubscribe = null;
+  arkRendererEventsUnsubscribe?.();
+  arkRendererEventsUnsubscribe = null;
   if (wasConnected) broadcastBackendEvent("kepler:backend:disconnected");
   // pomodoro-notifier + focus-widget держат ref на старый arkClient через
   // onArkEvent callback'и — отписываем до stop(), иначе при следующем setup
@@ -1130,6 +1133,18 @@ async function initArkClient(): Promise<void> {
           if (e.event === event) handler(e);
         });
       },
+    });
+    arkRendererEventsUnsubscribe?.();
+    arkRendererEventsUnsubscribe = client.onArkEvent((e) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) {
+          try {
+            win.webContents.send("kepler:ark:event", e);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
     });
     wireSyncEventBroadcast(client);
     // Subscribe на commands_changed → пушим renderer'у сигнал перефетчить

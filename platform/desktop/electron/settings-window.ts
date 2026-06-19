@@ -8,7 +8,15 @@
 // `openSettings()` из main process (tray menu).
 
 import { app, BrowserWindow, ipcMain, screen } from "electron";
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
@@ -23,6 +31,7 @@ import {
   backgroundMaterialOption,
   resolveWindowMaterial,
 } from "./window-effects";
+import type { StorageSummary, StorageSummaryItem } from "../shared/ipc-types";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -164,6 +173,143 @@ function writeSettings(patch: Partial<KeplerShellSettings>): void {
   } catch (e) {
     console.error("[kepler-shell] settings write failed:", e);
   }
+}
+
+function safeSizeOfPath(target: string): number {
+  try {
+    if (!existsSync(target)) return 0;
+    const stat = lstatSync(target);
+    if (stat.isSymbolicLink()) return 0;
+    if (stat.isFile()) return stat.size;
+    if (!stat.isDirectory()) return 0;
+    let total = 0;
+    for (const entry of readdirSync(target, { withFileTypes: true })) {
+      const child = path.join(target, entry.name);
+      try {
+        if (entry.isSymbolicLink()) continue;
+        if (entry.isDirectory()) {
+          total += safeSizeOfPath(child);
+        } else if (entry.isFile()) {
+          total += statSync(child).size;
+        }
+      } catch {
+        // Best-effort summary: skip files that are locked or disappear mid-scan.
+      }
+    }
+    return total;
+  } catch {
+    return 0;
+  }
+}
+
+function safeSizeOfFiles(dir: string, names: string[]): number {
+  return names.reduce((sum, name) => sum + safeSizeOfPath(path.join(dir, name)), 0);
+}
+
+function isPathInside(parent: string, child: string): boolean {
+  const rel = path.relative(parent, child);
+  return Boolean(rel) && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+function storageSummaryItem(
+  id: string,
+  label: string,
+  target: string,
+  description?: string,
+): StorageSummaryItem {
+  return {
+    id,
+    label,
+    path: target,
+    bytes: safeSizeOfPath(target),
+    exists: existsSync(target),
+    description,
+  };
+}
+
+function buildStorageSummary(): StorageSummary {
+  const dataDir = keplerDataDir();
+  const userDataDir = app.getPath("userData");
+  const dataDirBytes = safeSizeOfPath(dataDir);
+  const userDataBytes = safeSizeOfPath(userDataDir);
+  const arkBytes = safeSizeOfFiles(dataDir, ["ark.db", "ark.db-wal", "ark.db-shm"]);
+  const indexBytes = safeSizeOfFiles(dataDir, [
+    "app-index.db",
+    "app-index.db-wal",
+    "app-index.db-shm",
+    "file-index.db",
+    "file-index.db-wal",
+    "file-index.db-shm",
+  ]);
+
+  const items: StorageSummaryItem[] = [
+    {
+      id: "ark-db",
+      label: "База ARK",
+      path: path.join(dataDir, "ark.db"),
+      bytes: arkBytes,
+      exists: existsSync(path.join(dataDir, "ark.db")),
+      description: "Основная база объектов и синхронизации.",
+    },
+    {
+      id: "indexes",
+      label: "Индексы поиска",
+      path: dataDir,
+      bytes: indexBytes,
+      exists:
+        existsSync(path.join(dataDir, "app-index.db")) ||
+        existsSync(path.join(dataDir, "file-index.db")),
+      description: "Индексы приложений и файлов, их можно пересоздать.",
+    },
+    storageSummaryItem(
+      "dictation-models",
+      "Локальные модели диктации",
+      path.join(dataDir, "models", "dictation"),
+      "Скачанные Whisper-модели.",
+    ),
+    storageSummaryItem(
+      "dictation-tools",
+      "Локальные инструменты диктации",
+      path.join(dataDir, "tools", "dictation"),
+      "whisper.cpp и вспомогательные файлы.",
+    ),
+    storageSummaryItem("extensions", "Установленные расширения", path.join(dataDir, "extensions")),
+    storageSummaryItem(
+      "extensions-data",
+      "Данные расширений",
+      path.join(dataDir, "extensions-data"),
+    ),
+    storageSummaryItem("logs", "Логи", path.join(dataDir, "logs")),
+    storageSummaryItem("crashes", "Краши", path.join(dataDir, "crashes")),
+  ];
+
+  const knownDataBytes = items.reduce((sum, item) => sum + item.bytes, 0);
+  items.push({
+    id: "other-data",
+    label: "Прочие данные Kosmos",
+    path: dataDir,
+    bytes: Math.max(0, dataDirBytes - knownDataBytes),
+    exists: existsSync(dataDir),
+  });
+  items.push({
+    id: "electron-user-data",
+    label: "Состояние окна и Chromium",
+    path: userDataDir,
+    bytes: userDataBytes,
+    exists: existsSync(userDataDir),
+    description: "Electron userData: кэши, Local Storage, состояние UI.",
+  });
+
+  const totalBytes = isPathInside(dataDir, userDataDir)
+    ? dataDirBytes
+    : dataDirBytes + userDataBytes;
+
+  return {
+    dataDir,
+    userDataDir,
+    totalBytes,
+    items,
+  };
 }
 
 const SETTINGS_WIDTH = 880;
@@ -422,6 +568,8 @@ ipcMain.handle("kepler:settings:tray-icon:set", (_e, enabled: boolean) => {
 });
 
 ipcMain.handle("kepler:settings:version", () => app.getVersion());
+
+ipcMain.handle("kepler:settings:storage-summary", () => buildStorageSummary());
 
 ipcMain.handle("kepler:settings:hotkey", () => getStoredHotkey());
 

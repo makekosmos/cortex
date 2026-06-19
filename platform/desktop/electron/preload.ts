@@ -64,6 +64,12 @@ const api: KeplerApi = {
   },
   ark: {
     request: (operation, params) => ipcRenderer.invoke("kepler:ark:request", operation, params),
+    onEvent: (listener) => {
+      const handler = (_e: Electron.IpcRendererEvent, event: unknown) =>
+        listener(event as Record<string, unknown>);
+      ipcRenderer.on("kepler:ark:event", handler);
+      return () => ipcRenderer.removeListener("kepler:ark:event", handler);
+    },
   },
   commands: {
     list: () => ipcRenderer.invoke("kepler:commands:list"),
@@ -281,6 +287,7 @@ const api: KeplerApi = {
         ipcRenderer.invoke("kepler:settings:launcher-state-ttl:set", minutes),
     },
     version: () => ipcRenderer.invoke("kepler:settings:version"),
+    storageSummary: () => ipcRenderer.invoke("kepler:settings:storage-summary"),
     hotkey: () => ipcRenderer.invoke("kepler:settings:hotkey"),
     hotkeySet: (value) => ipcRenderer.invoke("kepler:settings:hotkey:set", value),
     hotkeyReset: () => ipcRenderer.invoke("kepler:settings:hotkey:reset"),

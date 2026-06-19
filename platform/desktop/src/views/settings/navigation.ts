@@ -14,6 +14,7 @@ import {
   ListTodo,
   KeyRound,
   Mic,
+  MicVocal,
   Puzzle,
   Search,
   Settings,
@@ -45,6 +46,7 @@ export type Tab =
   | "extensions"
   | "focus"
   | "clipboard"
+  | "ai"
   | "dictation"
   | "file-search"
   | "export";
@@ -268,6 +270,27 @@ export const settingsNavigationItems: SettingsNavigationItem[] = [
       ".git",
       "переиндексация",
       "локальные диски",
+    ],
+  },
+  {
+    tab: "ai",
+    label: "AI",
+    group: "advanced",
+    layout: "advanced",
+    icon: MicVocal,
+    iconGradient: { from: "#F472B6", to: "#BE185D" },
+    description: "Провайдеры, модели и локальная транскрипция.",
+    keywords: [
+      "ai",
+      "искусственный интеллект",
+      "модель",
+      "модели",
+      "локальная модель",
+      "локально",
+      "groq",
+      "whisper",
+      "speech to text",
+      "stt",
     ],
   },
   {

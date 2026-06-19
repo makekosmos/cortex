@@ -15,6 +15,7 @@ import AppCommandsTab from "./settings/tabs/AppCommandsTab.vue";
 import ClipboardSettingsTab from "./settings/tabs/ClipboardSettingsTab.vue";
 import DebugTab from "./settings/tabs/DebugTab.vue";
 import DictationTab from "./settings/tabs/DictationTab.vue";
+import AISettingsTab from "./settings/tabs/AISettingsTab.vue";
 import ExportTab from "./settings/tabs/ExportTab.vue";
 import ExtensionsTab from "./settings/tabs/ExtensionsTab.vue";
 import FileSearchTab from "./settings/tabs/FileSearchTab.vue";
@@ -541,6 +542,10 @@ onBeforeUnmount(() => {
 
         <template v-else-if="activeTab === 'security'">
           <SecurityTab />
+        </template>
+
+        <template v-else-if="activeTab === 'ai'">
+          <AISettingsTab :intro="activeAdvancedIntro" />
         </template>
 
         <template v-else-if="activeTab === 'secrets'">

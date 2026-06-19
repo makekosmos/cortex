@@ -133,11 +133,33 @@ pub fn build_client(
     //     быстро инкрементятся, пользователь видит прогресс.
     //   - timeout 30s — реальная Groq транскрипция ~1-3с, 30s даёт запас на
     //     long upload (>30s аудио) без перехода в зависание.
-    let mut builder = reqwest::Client::builder()
+    let builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
         .connect_timeout(Duration::from_secs(5))
         .user_agent("Kosmos/Kepler dictation");
 
+    finish_client_builder(builder, profile, http_proxy)
+}
+
+/// Builds a client for large local model downloads. Unlike `build_client`, this
+/// intentionally does not set a whole-request timeout: model bodies can be 1GB+
+/// and must be allowed to stream for minutes while retaining connect timeout.
+pub fn build_download_client(
+    profile: &NetworkProfile,
+    http_proxy: Option<&str>,
+) -> Result<reqwest::Client, NetworkError> {
+    let builder = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .user_agent("Kosmos/Kepler dictation download");
+
+    finish_client_builder(builder, profile, http_proxy)
+}
+
+fn finish_client_builder(
+    mut builder: reqwest::ClientBuilder,
+    profile: &NetworkProfile,
+    http_proxy: Option<&str>,
+) -> Result<reqwest::Client, NetworkError> {
     if let Some(resolver) = build_resolver(profile)? {
         debug!(?profile, "dictation: using custom DNS resolver");
         builder = builder.dns_resolver(resolver);

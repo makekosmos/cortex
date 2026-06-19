@@ -5099,7 +5099,10 @@ mod tests {
         let conn = setup_db();
         // Открываем внешнюю транзакцию — имитируем вызов из with_write_tx.
         conn.execute_batch("BEGIN IMMEDIATE").unwrap();
-        let todos = vec![make_todo("bt1", "Nested todo A"), make_todo("bt2", "Nested todo B")];
+        let todos = vec![
+            make_todo("bt1", "Nested todo A"),
+            make_todo("bt2", "Nested todo B"),
+        ];
         // До Фазы B падает: "cannot start a transaction within a transaction".
         // После Фазы B (SAVEPOINT) должно пройти без ошибки.
         batch_upsert_todos(&conn, &todos)

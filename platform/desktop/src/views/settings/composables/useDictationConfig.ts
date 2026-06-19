@@ -1,12 +1,12 @@
-// useDictationConfig — единый state + handlers для диктации (Phase 1, Groq).
-// Используется тремя tab'ами: Dictation, Security (DNS profile + proxy),
-// Secrets (API key). Поэтому composable должен быть SINGLETON на уровне owner'а
-// SettingsView'а — иначе три копии state разойдутся. Реализуем через
-// `provide`/`inject` (DictationConfigKey).
+// useDictationConfig — единый state + handlers для диктации и AI settings.
+// Используется несколькими tab'ами SettingsView'а, поэтому composable должен
+// быть SINGLETON на уровне owner'а — иначе копии state разойдутся. Реализуем
+// через `provide`/`inject` (DictationConfigKey).
 
 import { computed, type InjectionKey, ref } from "vue";
 
 export type DnsKind = "system" | "cloudflare_doh" | "google_doh" | "custom_doh";
+export type DictationProvider = "groq" | "mock" | "local";
 
 export interface DictationConfigData {
   hotkey: string;
@@ -16,9 +16,13 @@ export interface DictationConfigData {
   networkProfile: { kind: DnsKind; url?: string };
   httpProxy: string | null;
   transcriptionPrompt: string;
-  provider: string;
+  provider: DictationProvider;
   providerEnabled: boolean;
   model: string;
+  localModelPath: string | null;
+  localCommandPath: string | null;
+  localModelId: string;
+  localEngine: string;
   microphoneDeviceId: string | null;
 }
 
@@ -48,6 +52,28 @@ export interface DictationStatsData {
   timeSavedSeconds: number;
 }
 
+export interface DictationLocalModelInfo {
+  id: string;
+  name: string;
+  description: string;
+  filename: string;
+  url: string;
+  sizeMb: number;
+  accuracyScore: number;
+  speedScore: number;
+  recommended: boolean;
+  downloaded: boolean;
+  selected: boolean;
+  path: string | null;
+}
+
+export interface DictationLocalModelsSnapshot {
+  modelsDir: string;
+  commandPath: string | null;
+  commandInstalled: boolean;
+  models: DictationLocalModelInfo[];
+}
+
 const DEFAULT_DICTATION_CFG: DictationConfigData = {
   hotkey: "Ctrl+Shift+;",
   triggerMode: "toggle",
@@ -58,7 +84,11 @@ const DEFAULT_DICTATION_CFG: DictationConfigData = {
   transcriptionPrompt: "",
   provider: "groq",
   providerEnabled: true,
-  model: "whisper-large-v3-turbo",
+  model: "whisper-large-v3",
+  localModelPath: null,
+  localCommandPath: null,
+  localModelId: "whisper-large-v3",
+  localEngine: "whisper.cpp",
   microphoneDeviceId: null,
 };
 
@@ -129,7 +159,14 @@ export const DICTATION_LANGUAGE_OPTIONS = [
   { value: "el", label: "Ελληνικά" },
 ] as const;
 
-export const DICTATION_PROVIDER_OPTIONS = [{ value: "groq", label: "Groq Cloud" }] as const;
+export const DICTATION_PROVIDER_OPTIONS = [
+  { value: "groq", label: "Groq Cloud" },
+  { value: "local", label: "Локальная модель" },
+] as const;
+
+export const DICTATION_LOCAL_ENGINE_OPTIONS = [
+  { value: "whisper.cpp", label: "Whisper.cpp" },
+] as const;
 
 function vkToKeyName(vk: number): string {
   if ((vk >= 0x41 && vk <= 0x5a) || (vk >= 0x30 && vk <= 0x39)) {
@@ -217,16 +254,94 @@ export function createDictationConfig() {
   const dictationCustomDohError = ref<string | null>(null);
   const dictationMicDevices = ref<{ deviceId: string; label: string }[]>([]);
   const dictationMicError = ref<string>("");
+  const dictationLocalModels = ref<DictationLocalModelsSnapshot | null>(null);
+  const dictationLocalModelsBusy = ref<string | null>(null);
+  const dictationLocalModelsError = ref<string>("");
+  const dictationLocalModelDownloadProgress = ref<
+    Record<
+      string,
+      {
+        phase: string;
+        downloadedBytes: number;
+        totalBytes: number | null;
+        percent: number | null;
+      }
+    >
+  >({});
 
   const dictationCaptureAccelerator = ref<string | null>(null);
   const dictationCaptureCancelTick = ref(0);
   let dictationCaptureUnsubscribe: (() => void) | null = null;
+  let dictationArkUnsubscribe: (() => void) | null = null;
 
-  const dictationProviderDescription = computed(() =>
-    dictationHasApiKey.value
-      ? "Ключ установлен в разделе «Секреты»."
-      : "Не задан API-ключ — добавьте его в разделе «Секреты».",
-  );
+  function ensureDictationEventSubscription() {
+    if (dictationArkUnsubscribe) return;
+    dictationArkUnsubscribe = window.kepler.ark.onEvent((event) => {
+      const kind = event.event;
+      const modelId = typeof event.modelId === "string" ? event.modelId : "";
+      if (!modelId) return;
+      if (kind === "dictation_local_model_download_started") {
+        dictationLocalModelsError.value = "";
+        dictationLocalModelDownloadProgress.value = {
+          ...dictationLocalModelDownloadProgress.value,
+          [modelId]: {
+            phase: "model",
+            downloadedBytes: 0,
+            totalBytes: null,
+            percent: null,
+          },
+        };
+      } else if (kind === "dictation_local_model_download_progress") {
+        dictationLocalModelDownloadProgress.value = {
+          ...dictationLocalModelDownloadProgress.value,
+          [modelId]: {
+            phase: typeof event.phase === "string" ? event.phase : "download",
+            downloadedBytes: typeof event.downloadedBytes === "number" ? event.downloadedBytes : 0,
+            totalBytes: typeof event.totalBytes === "number" ? event.totalBytes : null,
+            percent: typeof event.percent === "number" ? event.percent : null,
+          },
+        };
+      } else if (kind === "dictation_local_model_download_complete") {
+        if (event.config && typeof event.config === "object") {
+          const config = event.config as Partial<DictationConfigData>;
+          dictationConfig.value = {
+            ...DEFAULT_DICTATION_CFG,
+            ...config,
+            networkProfile: config.networkProfile ?? { kind: "system" },
+            localModelPath: config.localModelPath ?? null,
+            localCommandPath: config.localCommandPath ?? null,
+            localModelId: config.localModelId ?? DEFAULT_DICTATION_CFG.localModelId,
+            localEngine: config.localEngine ?? DEFAULT_DICTATION_CFG.localEngine,
+          };
+        }
+        if (event.localModels && typeof event.localModels === "object") {
+          dictationLocalModels.value = event.localModels as DictationLocalModelsSnapshot;
+        } else {
+          void loadDictationLocalModels();
+        }
+        const next = { ...dictationLocalModelDownloadProgress.value };
+        delete next[modelId];
+        dictationLocalModelDownloadProgress.value = next;
+      } else if (kind === "dictation_local_model_download_failed") {
+        const next = { ...dictationLocalModelDownloadProgress.value };
+        delete next[modelId];
+        dictationLocalModelDownloadProgress.value = next;
+        dictationLocalModelsError.value =
+          typeof event.error === "string" ? event.error : "Скачивание не удалось.";
+      }
+    });
+  }
+
+  const dictationProviderDescription = computed(() => {
+    switch (dictationConfig.value.provider) {
+      case "local":
+        return dictationLocalStatus.value;
+      case "mock":
+        return "Тестовый режим: mock provider используется только для автоматических smoke-прогонов.";
+      default:
+        return dictationGroqStatus.value;
+    }
+  });
 
   const dictationMicOptions = computed(() => {
     const opts: { value: string; label: string }[] = [
@@ -249,7 +364,79 @@ export function createDictationConfig() {
     ];
   });
 
+  const dictationModelName = computed<string>({
+    get: () => dictationConfig.value.model,
+    set: (value) => {
+      dictationConfig.value.model = value;
+    },
+  });
+
+  const dictationLocalModelPath = computed<string>({
+    get: () => dictationConfig.value.localModelPath ?? "",
+    set: (value) => {
+      dictationConfig.value.localModelPath = value;
+    },
+  });
+
+  const dictationLocalCommandPath = computed<string>({
+    get: () => dictationConfig.value.localCommandPath ?? "",
+    set: (value) => {
+      dictationConfig.value.localCommandPath = value;
+    },
+  });
+
+  const dictationLocalModelId = computed<string>({
+    get: () => dictationConfig.value.localModelId,
+    set: (value) => {
+      dictationConfig.value.localModelId = value;
+    },
+  });
+
+  const dictationLocalEngine = computed<string>({
+    get: () => dictationConfig.value.localEngine,
+    set: (value) => {
+      dictationConfig.value.localEngine = value;
+    },
+  });
+
+  const dictationGroqStatus = computed(() => {
+    if (dictationConfig.value.provider !== "groq") {
+      return dictationHasApiKey.value
+        ? "Groq-ключ сохранён, но сейчас выбран другой провайдер."
+        : "Groq-ключ не задан.";
+    }
+    return dictationHasApiKey.value
+      ? "Groq-ключ установлен."
+      : "Groq-ключ не задан — добавьте его в разделе «Секреты».";
+  });
+
+  const dictationLocalStatus = computed(() => {
+    const path = dictationLocalModelPath.value.trim();
+    const commandPath = dictationLocalCommandPath.value.trim();
+    if (dictationConfig.value.provider !== "local") {
+      return path && commandPath
+        ? `Локальная модель подготовлена: ${dictationLocalEngine.value} · ${dictationLocalModelId.value}`
+        : "Локальный режим ещё не настроен.";
+    }
+    if (!path) return "Не задан путь к локальной модели.";
+    if (!commandPath) return "Не задан путь к whisper.cpp executable.";
+    return `${dictationLocalEngine.value} · ${dictationLocalModelId.value} · путь задан`;
+  });
+
+  async function loadDictationLocalModels() {
+    dictationLocalModelsError.value = "";
+    try {
+      dictationLocalModels.value = (await window.kepler.ark.request(
+        "dictation.list_local_models",
+        {},
+      )) as DictationLocalModelsSnapshot;
+    } catch (e) {
+      dictationLocalModelsError.value = (e as Error).message;
+    }
+  }
+
   async function loadDictationConfig() {
+    ensureDictationEventSubscription();
     try {
       const resp = (await window.kepler.ark.request("dictation.get_config", {})) as {
         config?: Partial<DictationConfigData>;
@@ -260,12 +447,17 @@ export function createDictationConfig() {
           ...DEFAULT_DICTATION_CFG,
           ...resp.config,
           networkProfile: resp.config.networkProfile ?? { kind: "system" },
+          localModelPath: resp.config.localModelPath ?? null,
+          localCommandPath: resp.config.localCommandPath ?? null,
+          localModelId: resp.config.localModelId ?? DEFAULT_DICTATION_CFG.localModelId,
+          localEngine: resp.config.localEngine ?? DEFAULT_DICTATION_CFG.localEngine,
         };
         if (dictationConfig.value.networkProfile.kind === "custom_doh") {
           dictationCustomDohUrl.value = dictationConfig.value.networkProfile.url ?? "";
         }
       }
       dictationHasApiKey.value = resp.hasApiKey ?? false;
+      await loadDictationLocalModels();
     } catch (e) {
       console.error("[settings] loadDictationConfig failed:", e);
     }
@@ -333,12 +525,134 @@ export function createDictationConfig() {
     await patchDictationConfig({ triggerMode: v });
   }
 
-  async function onDictationProviderChange(v: string) {
+  async function onDictationProviderChange(v: DictationProvider) {
     await patchDictationConfig({ provider: v });
   }
 
   async function onDictationProviderEnabledChange(enabled: boolean) {
     await patchDictationConfig({ providerEnabled: enabled });
+  }
+
+  async function onDictationModelBlur() {
+    const model = dictationModelName.value.trim();
+    await patchDictationConfig({ model: model || DEFAULT_DICTATION_CFG.model });
+  }
+
+  async function onDictationLocalModelPathBlur() {
+    const path = dictationLocalModelPath.value.trim();
+    await patchDictationConfig({ localModelPath: path || null });
+  }
+
+  async function onDictationLocalCommandPathBlur() {
+    const path = dictationLocalCommandPath.value.trim();
+    await patchDictationConfig({ localCommandPath: path || null });
+  }
+
+  async function onDictationLocalModelIdBlur() {
+    const modelId = dictationLocalModelId.value.trim();
+    await patchDictationConfig({ localModelId: modelId || DEFAULT_DICTATION_CFG.localModelId });
+  }
+
+  async function onDictationLocalEngineChange(v: string) {
+    await patchDictationConfig({ localEngine: v });
+  }
+
+  async function onDictationDownloadLocalModel(modelId: string) {
+    dictationLocalModelsBusy.value = modelId;
+    dictationLocalModelsError.value = "";
+    dictationLocalModelDownloadProgress.value = {
+      ...dictationLocalModelDownloadProgress.value,
+      [modelId]: {
+        phase: "model",
+        downloadedBytes: 0,
+        totalBytes: null,
+        percent: null,
+      },
+    };
+    try {
+      const resp = (await window.kepler.ark.request("dictation.download_local_model", {
+        modelId,
+        select: true,
+        installTool: true,
+      })) as {
+        config?: Partial<DictationConfigData> | null;
+        localModels?: DictationLocalModelsSnapshot;
+      };
+      if (resp.config) {
+        dictationConfig.value = {
+          ...DEFAULT_DICTATION_CFG,
+          ...resp.config,
+          networkProfile: resp.config.networkProfile ?? { kind: "system" },
+          localModelPath: resp.config.localModelPath ?? null,
+          localCommandPath: resp.config.localCommandPath ?? null,
+          localModelId: resp.config.localModelId ?? DEFAULT_DICTATION_CFG.localModelId,
+          localEngine: resp.config.localEngine ?? DEFAULT_DICTATION_CFG.localEngine,
+        };
+      }
+      if (resp.localModels) dictationLocalModels.value = resp.localModels;
+    } catch (e) {
+      dictationLocalModelsError.value = (e as Error).message;
+    } finally {
+      dictationLocalModelsBusy.value = null;
+    }
+  }
+
+  async function onDictationUseLocalModel(modelId: string) {
+    dictationLocalModelsBusy.value = modelId;
+    dictationLocalModelsError.value = "";
+    try {
+      const resp = (await window.kepler.ark.request("dictation.use_local_model", {
+        modelId,
+      })) as {
+        config?: Partial<DictationConfigData>;
+        localModels?: DictationLocalModelsSnapshot;
+      };
+      if (resp.config) {
+        dictationConfig.value = {
+          ...DEFAULT_DICTATION_CFG,
+          ...resp.config,
+          networkProfile: resp.config.networkProfile ?? { kind: "system" },
+          localModelPath: resp.config.localModelPath ?? null,
+          localCommandPath: resp.config.localCommandPath ?? null,
+          localModelId: resp.config.localModelId ?? DEFAULT_DICTATION_CFG.localModelId,
+          localEngine: resp.config.localEngine ?? DEFAULT_DICTATION_CFG.localEngine,
+        };
+      }
+      if (resp.localModels) dictationLocalModels.value = resp.localModels;
+    } catch (e) {
+      dictationLocalModelsError.value = (e as Error).message;
+    } finally {
+      dictationLocalModelsBusy.value = null;
+    }
+  }
+
+  async function onDictationDeleteLocalModel(modelId: string) {
+    dictationLocalModelsBusy.value = modelId;
+    dictationLocalModelsError.value = "";
+    try {
+      const resp = (await window.kepler.ark.request("dictation.delete_local_model", {
+        modelId,
+      })) as {
+        config?: Partial<DictationConfigData>;
+        localModels?: DictationLocalModelsSnapshot;
+      };
+      if (resp.config) {
+        dictationConfig.value = {
+          ...DEFAULT_DICTATION_CFG,
+          ...resp.config,
+          networkProfile: resp.config.networkProfile ?? { kind: "system" },
+          localModelPath: resp.config.localModelPath ?? null,
+          localCommandPath: resp.config.localCommandPath ?? null,
+          localModelId: resp.config.localModelId ?? DEFAULT_DICTATION_CFG.localModelId,
+          localEngine: resp.config.localEngine ?? DEFAULT_DICTATION_CFG.localEngine,
+        };
+      }
+      if (resp.localModels) dictationLocalModels.value = resp.localModels;
+    } catch (e) {
+      dictationLocalModelsError.value = (e as Error).message;
+    } finally {
+      dictationLocalModelsBusy.value = null;
+    }
   }
 
   async function onDictationHotkeyCapture(acc: string) {
@@ -496,6 +810,15 @@ export function createDictationConfig() {
     dictationApiKeyBusy,
     dictationApiKeyMsg,
     dictationCustomDohUrl,
+    dictationModelName,
+    dictationLocalModelPath,
+    dictationLocalCommandPath,
+    dictationLocalModelId,
+    dictationLocalEngine,
+    dictationLocalModels,
+    dictationLocalModelsBusy,
+    dictationLocalModelsError,
+    dictationLocalModelDownloadProgress,
     dictationConnTestBusy,
     dictationConnTestResult,
     dictationConnReport,
@@ -506,7 +829,10 @@ export function createDictationConfig() {
     dictationProviderDescription,
     dictationMicOptions,
     statsCards,
+    dictationGroqStatus,
+    dictationLocalStatus,
     loadDictationConfig,
+    loadDictationLocalModels,
     loadDictationStats,
     loadDictationMicrophones,
     onDictationMicChange,
@@ -515,6 +841,14 @@ export function createDictationConfig() {
     onDictationTriggerModeChange,
     onDictationProviderChange,
     onDictationProviderEnabledChange,
+    onDictationModelBlur,
+    onDictationLocalModelPathBlur,
+    onDictationLocalCommandPathBlur,
+    onDictationLocalModelIdBlur,
+    onDictationLocalEngineChange,
+    onDictationDownloadLocalModel,
+    onDictationUseLocalModel,
+    onDictationDeleteLocalModel,
     onDictationHotkeyCapture,
     onDictationCaptureStart,
     onDictationCaptureEnd,
