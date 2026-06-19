@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use super::groq::GroqError;
 use super::host::SubmitError;
+use super::local::LocalError;
 
 /// Решение «повторять или fail-fast». Для Fatal — `user_msg` уже
 /// локализован для показа в UI (не raw error string).
@@ -31,6 +32,7 @@ impl FailureKind {
 ///
 /// Правила:
 /// - `NoApiKey` / `AudioDecode` / `Inject*` → Fatal (caller bug / unrecoverable).
+/// - `Local(*)` → Fatal с явным сообщением о missing path / unsupported runtime.
 /// - `Network(reqwest::Error)` → Retryable. Reqwest сам по себе bookkeep'ит
 ///   `is_timeout/is_connect/is_request`; consider conservative — лучше повторим
 ///   и потеряем пару секунд, чем выкинем аудио.
@@ -50,6 +52,30 @@ pub(crate) fn classify(err: &SubmitError) -> FailureKind {
             user_msg: "Битое аудио".into(),
         },
         SubmitError::Network(_) => FailureKind::Retryable,
+        SubmitError::Local(LocalError::MissingModelPath) => FailureKind::Fatal {
+            user_msg: "Укажи путь к локальной Whisper-модели".into(),
+        },
+        SubmitError::Local(LocalError::ModelPathNotFound { path }) => FailureKind::Fatal {
+            user_msg: format!("Локальная модель не найдена: {path}"),
+        },
+        SubmitError::Local(LocalError::MissingCommandPath) => FailureKind::Fatal {
+            user_msg: "Укажи путь к whisper.cpp executable".into(),
+        },
+        SubmitError::Local(LocalError::CommandPathNotFound { path }) => FailureKind::Fatal {
+            user_msg: format!("Локальный executable не найден: {path}"),
+        },
+        SubmitError::Local(LocalError::UnsupportedEngine { engine }) => FailureKind::Fatal {
+            user_msg: format!("Локальный движок '{engine}' пока не поддерживается"),
+        },
+        SubmitError::Local(LocalError::TempAudio(message)) => FailureKind::Fatal {
+            user_msg: format!("Не удалось подготовить аудио для локальной модели: {message}"),
+        },
+        SubmitError::Local(LocalError::CommandFailed(message)) => FailureKind::Fatal {
+            user_msg: format!("Локальная транскрипция не удалась: {message}"),
+        },
+        SubmitError::Local(LocalError::EmptyTranscript) => FailureKind::Fatal {
+            user_msg: "Локальная модель не вернула текст".into(),
+        },
         SubmitError::Groq(GroqError::Http(_)) => FailureKind::Retryable,
         SubmitError::Groq(GroqError::Api { status, .. }) => match *status {
             429 => FailureKind::Retryable,
@@ -260,6 +286,15 @@ mod tests {
             expected: 4,
         });
         assert!(matches!(classify(&err), FailureKind::Fatal { .. }));
+    }
+
+    #[test]
+    fn classify_local_missing_model_path_is_fatal() {
+        let err = SubmitError::Local(LocalError::MissingModelPath);
+        match classify(&err) {
+            FailureKind::Fatal { user_msg } => assert!(user_msg.contains("путь")),
+            _ => panic!("local missing path must be fatal"),
+        }
     }
 
     #[tokio::test]

@@ -9,7 +9,7 @@
 //   { kind: "stop" }   → encode WAV + submit → pillFinished
 //   { kind: "cancel" } → drop buffer + pillFinished
 
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 type PillStatus = "idle" | "recording" | "transcribing" | "waiting" | "error";
 
@@ -19,7 +19,11 @@ const errorText = ref<string>("");
 /// pill самодостаточен (waveform / dots).
 const subText = ref<string>("");
 const elapsedSec = ref<number>(0);
-const levelBars = ref<number[]>(Array.from({ length: 12 }, () => 0));
+const WAVE_BAR_COUNT = 16;
+const WAVE_HEIGHT_PX = 30;
+const WAVE_PEAK = 0.78;
+const RECORDING_PEAK = 0.68;
+const levelBars = ref<number[]>(Array.from({ length: WAVE_BAR_COUNT }, () => 0));
 
 // Audio capture lifecycle:
 //   • `mediaStream` + `audioCtx` — warm-cache. Создаются при первой записи и
@@ -47,6 +51,170 @@ const TARGET_SAMPLE_RATE = 16000;
 /** После этого окна тишины stream закрывается полностью (track.stop),
  *  Windows mic indicator гаснет. На следующий hotkey — ~80-500ms cold start. */
 const STREAM_KEEP_ALIVE_MS = 30_000;
+
+const hasDictationBridge = () => Boolean(window.kepler?.dictation);
+const isPreview =
+  new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("preview") === "1" ||
+  !hasDictationBridge();
+const idleBars = Array.from({ length: WAVE_BAR_COUNT }, () => 0.2);
+const previewBars = [
+  0.12, 0.32, 0.72, 0.42, 0.92, 0.58, 0.36, 0.8, 0.5, 0.22, 0.64, 0.28, 0.46, 0.7, 0.34, 0.18,
+];
+const transcribingWaveIndex = ref(0);
+const transcribingBars = computed(() =>
+  idleBars.map((base, i) => {
+    const distance = Math.abs(i - transcribingWaveIndex.value);
+    if (distance === 0) return WAVE_PEAK;
+    if (distance === 1) return 0.54;
+    if (distance === 2) return 0.36;
+    return base;
+  }),
+);
+const waitingWaveIndex = ref(0);
+const waitingBars = computed(() =>
+  idleBars.map((base, i) => {
+    const distance = Math.abs(i - waitingWaveIndex.value);
+    if (distance === 0) return WAVE_PEAK;
+    if (distance === 1) return 0.54;
+    if (distance === 2) return 0.36;
+    return base;
+  }),
+);
+const errorWaveIndex = ref(0);
+const errorBars = computed(() =>
+  idleBars.map((base, i) => {
+    const left = Math.floor((WAVE_BAR_COUNT - 1) / 2) - errorWaveIndex.value;
+    const right = Math.ceil((WAVE_BAR_COUNT - 1) / 2) + errorWaveIndex.value;
+    const distance = Math.min(Math.abs(i - left), Math.abs(i - right));
+    if (distance === 0) return WAVE_PEAK;
+    if (distance === 1) return 0.5;
+    return base;
+  }),
+);
+let transcribingWaveDirection = 1;
+let transcribingWaveHandle: ReturnType<typeof setInterval> | null = null;
+let waitingWaveDirection = 1;
+let waitingWaveHandle: ReturnType<typeof setInterval> | null = null;
+let errorWaveDirection = 1;
+let errorWaveHandle: ReturnType<typeof setInterval> | null = null;
+const previewStates: {
+  status: PillStatus;
+  label: string;
+  subText?: string;
+  errorText?: string;
+  bars?: number[];
+}[] = [
+  { status: "idle", label: "idle" },
+  { status: "recording", label: "recording", bars: previewBars },
+  { status: "transcribing", label: "transcribing" },
+  { status: "waiting", label: "waiting", subText: "Жду сеть… (попытка 2)" },
+  { status: "error", label: "error", errorText: "Сеть не вернулась" },
+];
+
+function startTranscribingWave(): void {
+  if (transcribingWaveHandle) return;
+  transcribingWaveHandle = setInterval(() => {
+    const next = transcribingWaveIndex.value + transcribingWaveDirection;
+    if (next >= idleBars.length - 1) {
+      transcribingWaveIndex.value = idleBars.length - 1;
+      transcribingWaveDirection = -1;
+    } else if (next <= 0) {
+      transcribingWaveIndex.value = 0;
+      transcribingWaveDirection = 1;
+    } else {
+      transcribingWaveIndex.value = next;
+    }
+  }, 55);
+}
+
+function stopTranscribingWave(): void {
+  if (transcribingWaveHandle) {
+    clearInterval(transcribingWaveHandle);
+    transcribingWaveHandle = null;
+  }
+  transcribingWaveIndex.value = 0;
+  transcribingWaveDirection = 1;
+}
+
+function startWaitingWave(): void {
+  if (waitingWaveHandle) return;
+  waitingWaveHandle = setInterval(() => {
+    const next = waitingWaveIndex.value + waitingWaveDirection;
+    if (next >= idleBars.length - 1) {
+      waitingWaveIndex.value = idleBars.length - 1;
+      waitingWaveDirection = -1;
+    } else if (next <= 0) {
+      waitingWaveIndex.value = 0;
+      waitingWaveDirection = 1;
+    } else {
+      waitingWaveIndex.value = next;
+    }
+  }, 55);
+}
+
+function stopWaitingWave(): void {
+  if (waitingWaveHandle) {
+    clearInterval(waitingWaveHandle);
+    waitingWaveHandle = null;
+  }
+  waitingWaveIndex.value = 0;
+  waitingWaveDirection = 1;
+}
+
+function startErrorWave(): void {
+  if (errorWaveHandle) return;
+  errorWaveHandle = setInterval(() => {
+    const max = Math.floor((WAVE_BAR_COUNT - 1) / 2);
+    const next = errorWaveIndex.value + errorWaveDirection;
+    if (next >= max) {
+      errorWaveIndex.value = max;
+      errorWaveDirection = -1;
+    } else if (next <= 0) {
+      errorWaveIndex.value = 0;
+      errorWaveDirection = 1;
+    } else {
+      errorWaveIndex.value = next;
+    }
+  }, 65);
+}
+
+function stopErrorWave(): void {
+  if (errorWaveHandle) {
+    clearInterval(errorWaveHandle);
+    errorWaveHandle = null;
+  }
+  errorWaveIndex.value = 0;
+  errorWaveDirection = 1;
+}
+
+function formatElapsed(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return `${minutes}:${rest.toString().padStart(2, "0")}`;
+}
+
+const elapsedLabel = computed(() => formatElapsed(elapsedSec.value));
+
+function barHeight(value: number): string {
+  return `${Math.max(3, value * WAVE_HEIGHT_PX)}px`;
+}
+
+function recordingBarHeight(value: number): string {
+  return barHeight(Math.min(value, RECORDING_PEAK));
+}
+
+function handleCancelClick(event: MouseEvent): void {
+  event.stopPropagation();
+  if (isPreview) return;
+  void cancelCapture();
+}
+
+function handleSubmitClick(event: MouseEvent): void {
+  event.stopPropagation();
+  if (isPreview) return;
+  void stopAndSubmit();
+}
 
 function statusText(): string {
   switch (status.value) {
@@ -251,7 +419,7 @@ function teardownCapture(): void {
     }
     source = null;
   }
-  levelBars.value = Array.from({ length: 12 }, () => 0);
+  levelBars.value = Array.from({ length: WAVE_BAR_COUNT }, () => 0);
 }
 
 function concatPcm(chunks: Int16Array[]): Int16Array {
@@ -423,6 +591,12 @@ function handleKeydown(e: KeyboardEvent): void {
 }
 
 onMounted(() => {
+  if (isPreview) {
+    startTranscribingWave();
+    startWaitingWave();
+    startErrorWave();
+    return;
+  }
   unsubscribeCommand = window.kepler.dictation.onCommand((cmd) => {
     if (cmd.kind === "start") {
       void startCapture();
@@ -435,8 +609,35 @@ onMounted(() => {
   window.addEventListener("keydown", handleKeydown);
 });
 
+const stopStatusWatch = watch(
+  status,
+  (value) => {
+    if (isPreview) return;
+    if (value === "transcribing") {
+      startTranscribingWave();
+    } else {
+      stopTranscribingWave();
+    }
+    if (value === "waiting") {
+      startWaitingWave();
+    } else {
+      stopWaitingWave();
+    }
+    if (value === "error") {
+      startErrorWave();
+    } else {
+      stopErrorWave();
+    }
+  },
+  { immediate: true },
+);
+
 onBeforeUnmount(() => {
   unsubscribeCommand?.();
+  stopStatusWatch();
+  stopTranscribingWave();
+  stopWaitingWave();
+  stopErrorWave();
   window.removeEventListener("keydown", handleKeydown);
   teardownCapture();
   // Окно демонтируется (Kepler закрывают) — hard-close без grace-периода.
@@ -449,7 +650,84 @@ const exposeStatusText = computed(() => statusText());
 </script>
 
 <template>
-  <div class="stage">
+  <div v-if="isPreview" class="preview-page">
+    <div class="preview-list">
+      <div v-for="item in previewStates" :key="item.status" class="preview-item">
+        <div class="preview-label">{{ item.label }}</div>
+        <div class="preview-frame">
+          <div class="pill" :class="`status-${item.status}`">
+            <div v-if="item.status === 'recording'" class="waveform">
+              <span
+                v-for="(b, i) in item.bars ?? []"
+                :key="i"
+                class="wave-bar"
+                :style="{
+                  height: recordingBarHeight(b),
+                }"
+              />
+            </div>
+            <div v-else-if="item.status === 'transcribing'" class="waveform transcribing-wave">
+              <span
+                v-for="(b, i) in transcribingBars"
+                :key="i"
+                class="wave-bar"
+                :style="{
+                  height: barHeight(b),
+                }"
+              />
+            </div>
+            <div
+              v-else-if="item.status === 'waiting'"
+              class="waveform waiting-wave"
+              :title="item.subText"
+            >
+              <span
+                v-for="(b, i) in waitingBars"
+                :key="i"
+                class="wave-bar"
+                :style="{ height: barHeight(b) }"
+              />
+            </div>
+            <div
+              v-else-if="item.status === 'error'"
+              class="waveform error-wave"
+              :title="item.errorText"
+            >
+              <span
+                v-for="(b, i) in errorBars"
+                :key="i"
+                class="wave-bar"
+                :style="{ height: barHeight(b) }"
+              />
+            </div>
+            <div v-else class="waveform idle-wave">
+              <span
+                v-for="(b, i) in idleBars"
+                :key="i"
+                class="wave-bar"
+                :style="{ height: barHeight(b) }"
+              />
+            </div>
+            <div v-if="item.status === 'recording'" class="pill-hover-controls">
+              <button class="pill-action" type="button" title="Отменить" @click="handleCancelClick">
+                ×
+              </button>
+              <span class="pill-time">{{ formatElapsed(3) }}</span>
+              <button
+                class="pill-action"
+                type="button"
+                title="Отправить"
+                @click="handleSubmitClick"
+              >
+                ✓
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div v-else class="stage">
     <div class="pill" :class="`status-${status}`" :title="exposeStatusText">
       <!-- Waveform внутри пилюли: вертикальные бары разной высоты, по центру. -->
       <div v-if="status === 'recording'" class="waveform">
@@ -458,30 +736,110 @@ const exposeStatusText = computed(() => statusText());
           :key="i"
           class="wave-bar"
           :style="{
-            height: `${Math.max(3, b * 32)}px`,
-            opacity: 0.55 + b * 0.45,
+            height: recordingBarHeight(b),
           }"
         />
       </div>
-      <div v-else-if="status === 'transcribing'" class="dots">
-        <span class="dot" />
-        <span class="dot" />
-        <span class="dot" />
+      <div v-else-if="status === 'transcribing'" class="waveform transcribing-wave">
+        <span
+          v-for="(b, i) in transcribingBars"
+          :key="i"
+          class="wave-bar"
+          :style="{
+            height: barHeight(b),
+          }"
+        />
       </div>
-      <div v-else-if="status === 'waiting'" class="waiting-row">
-        <span class="spinner" />
-        <span class="waiting-text">{{ subText }}</span>
+      <div v-else-if="status === 'waiting'" class="waveform waiting-wave" :title="subText">
+        <span
+          v-for="(b, i) in waitingBars"
+          :key="i"
+          class="wave-bar"
+          :style="{ height: barHeight(b) }"
+        />
       </div>
-      <div v-else-if="status === 'error'" class="error-row" :title="errorText">
-        <span class="idle-mark error-mark">!</span>
-        <span class="error-text">{{ errorText }}</span>
+      <div v-else-if="status === 'error'" class="waveform error-wave" :title="errorText">
+        <span
+          v-for="(b, i) in errorBars"
+          :key="i"
+          class="wave-bar"
+          :style="{ height: barHeight(b) }"
+        />
       </div>
-      <div v-else class="idle-mark"></div>
+      <div v-else class="waveform idle-wave">
+        <span
+          v-for="(b, i) in idleBars"
+          :key="i"
+          class="wave-bar"
+          :style="{ height: barHeight(b) }"
+        />
+      </div>
+      <div v-if="status === 'recording'" class="pill-hover-controls">
+        <button class="pill-action" type="button" title="Отменить" @click="handleCancelClick">
+          ×
+        </button>
+        <span class="pill-time">{{ elapsedLabel }}</span>
+        <button class="pill-action" type="button" title="Отправить" @click="handleSubmitClick">
+          ✓
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+.preview-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.preview-list {
+  width: min(720px, 100%);
+  display: grid;
+  gap: 14px;
+}
+
+.preview-item {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.preview-label {
+  font-family: var(--font-sans, -apple-system, sans-serif);
+  font-size: 12px;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+  text-transform: uppercase;
+}
+
+.preview-frame {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+  border-radius: 12px;
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--foreground) 4%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--foreground) 4%, transparent) 1px,
+      transparent 1px
+    ),
+    color-mix(in srgb, var(--background) 88%, var(--surface) 12%);
+  background-size: 16px 16px;
+}
+
 .stage {
   position: fixed;
   inset: 0;
@@ -494,31 +852,33 @@ const exposeStatusText = computed(() => statusText());
 }
 
 .pill {
+  position: relative;
   pointer-events: auto;
   /* Базовая ширина для idle/recording/transcribing. Для waiting/error pill
    * расширяется по контенту, ограничен `.stage` (max-width в window). */
-  min-width: 200px;
-  max-width: calc(100vw - 32px);
-  width: max-content;
-  height: 56px;
+  width: 120px;
+  max-width: calc(100vw - 24px);
+  height: 36px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 20px;
+  padding: 2px;
   /* Глянцевый чёрный — тонкий светлый highlight сверху, тёмный низ. */
-  background: linear-gradient(180deg, #2a2a2c 0%, #141416 55%, #0a0a0b 100%);
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--surface) 58%, var(--background) 42%);
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
   /* Без drop-shadow по запросу — оставляем только тонкий inset bevel внутри. */
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.55);
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 8%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--background) 70%, transparent);
   /* `-webkit-app-region: drag` УБРАН: BrowserWindow создаётся с
    * `movable: false`, так что drag всё равно ничего не делает. Но
    * `app-region: drag` на parent блокирует click events для всех
    * детей (Electron на Windows глючит с nested `no-drag`),
    * из-за чего retry-кнопка на error state не нажималась. */
   user-select: none;
+  overflow: hidden;
   transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1.4);
   animation: pill-in 260ms cubic-bezier(0.2, 0.7, 0.2, 1.4);
 }
@@ -535,125 +895,98 @@ const exposeStatusText = computed(() => statusText());
 }
 
 .waveform {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 3px;
   width: 100%;
-  height: 32px;
+  height: 30px;
+  transition: opacity 120ms linear;
 }
 
 .wave-bar {
   display: block;
   width: 2px;
   min-height: 3px;
-  background: #f5f5f7;
+  background: #fff;
   border-radius: 2px;
-  transition:
-    height 70ms linear,
-    opacity 120ms linear;
+  opacity: 1;
+  transition: height 30ms linear;
 }
 
-/* Idle (зашли в pill но запись ещё не пошла) — тонкая горизонтальная линия. */
-.idle-mark {
-  width: 36px;
-  height: 2px;
-  background: rgba(245, 245, 247, 0.35);
-  border-radius: 2px;
+.idle-wave .wave-bar,
+.transcribing-wave .wave-bar {
+  background: #fff;
 }
 
-.error-mark {
-  width: auto;
-  height: auto;
-  background: transparent;
+.waiting-wave .wave-bar {
+  background: #f5a524;
+}
+
+.error-wave .wave-bar {
+  background: #ff453a;
+}
+
+.pill-hover-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 30px 1fr 30px;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms linear;
+}
+
+.pill.status-recording:hover .waveform {
+  opacity: 0;
+}
+
+.pill.status-recording:hover .pill-hover-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pill-action {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--foreground) 9%, transparent);
+  color: #fff;
   font-family: var(--font-sans, -apple-system, sans-serif);
-  font-size: 18px;
-  font-weight: 700;
-  color: #f5a524;
+  font-size: 14px;
+  line-height: 1;
+  cursor: default;
 }
 
-.dots {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 32px;
+.pill-action:hover {
+  background: color-mix(in srgb, var(--foreground) 16%, transparent);
 }
 
-.dots .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #f5f5f7;
-  animation: dot-bounce 1s infinite;
+.pill-action:first-child {
+  justify-self: start;
 }
 
-.dots .dot:nth-child(2) {
-  animation-delay: 0.15s;
+.pill-action:last-child {
+  justify-self: end;
 }
 
-.dots .dot:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-.waiting-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 32px;
-}
-
-.spinner {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid color-mix(in srgb, #f5a524 30%, transparent);
-  border-top-color: #f5a524;
-  animation: spin 1s linear infinite;
-  flex-shrink: 0;
-}
-
-.waiting-text {
+.pill-time {
+  min-width: 0;
+  text-align: center;
   font-family: var(--font-sans, -apple-system, sans-serif);
   font-size: 12px;
-  color: color-mix(in srgb, #f5a524 90%, #f5f5f7 10%);
-  white-space: nowrap;
-}
-
-.error-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 100%;
-  min-width: 0;
-}
-
-.error-text {
-  font-family: var(--font-sans, -apple-system, sans-serif);
-  font-size: 11px;
-  color: #f5a524;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  flex: 1;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes dot-bounce {
-  0%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.4;
-  }
-  50% {
-    transform: translateY(-4px);
-    opacity: 1;
-  }
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  line-height: 1;
 }
 </style>

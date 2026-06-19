@@ -74,6 +74,18 @@ pub struct DictationConfig {
     /// Это UI-level availability switch, не удаление секрета.
     pub provider_enabled: bool,
     pub model: String,
+    /// Локальный runtime для on-device STT. MVP: external `whisper.cpp`.
+    pub local_engine: String,
+    /// User-provided путь к локальной модели Whisper / совместимому весу.
+    #[serde(default)]
+    pub local_model_path: Option<String>,
+    /// User-provided путь к локальному STT executable (`whisper-cli`, `main.exe`).
+    #[serde(default)]
+    pub local_command_path: Option<String>,
+    /// UI/model identifier для локального движка. Храним отдельно от cloud
+    /// `model`, потому что у local path и model-id разные жизненные циклы.
+    #[serde(default)]
+    pub local_model: Option<String>,
     /// `deviceId` микрофона из `navigator.mediaDevices.enumerateDevices()`.
     /// `None` или пустая строка — использовать системный default. Хранится в
     /// JSON чтобы выбор пользователя пережил рестарт shell'а.
@@ -94,6 +106,10 @@ impl Default for DictationConfig {
             provider: "groq".into(),
             provider_enabled: true,
             model: "whisper-large-v3".into(),
+            local_engine: "whisper.cpp".into(),
+            local_model_path: None,
+            local_command_path: None,
+            local_model: None,
             microphone_device_id: None,
         }
     }
@@ -240,6 +256,10 @@ mod tests {
             provider: "groq".into(),
             provider_enabled: true,
             model: "whisper-large-v3".into(),
+            local_engine: "whisper.cpp".into(),
+            local_model_path: Some("C:/models/ggml-base.bin".into()),
+            local_command_path: Some("C:/tools/whisper-cli.exe".into()),
+            local_model: Some("ggml-base".into()),
             microphone_device_id: None,
         };
         save_to(&path, &cfg).expect("save");
@@ -249,6 +269,16 @@ mod tests {
         assert_eq!(loaded.network_profile, NetworkProfile::CloudflareDoh);
         assert_eq!(loaded.http_proxy.as_deref(), Some("http://127.0.0.1:8888"));
         assert_eq!(loaded.transcription_prompt, "Kepler Kosmos Groq");
+        assert_eq!(loaded.local_engine, "whisper.cpp");
+        assert_eq!(
+            loaded.local_model_path.as_deref(),
+            Some("C:/models/ggml-base.bin")
+        );
+        assert_eq!(
+            loaded.local_command_path.as_deref(),
+            Some("C:/tools/whisper-cli.exe")
+        );
+        assert_eq!(loaded.local_model.as_deref(), Some("ggml-base"));
     }
 
     #[test]
@@ -266,6 +296,10 @@ mod tests {
         assert_eq!(loaded.hotkey, "Ctrl+Shift+;");
         assert!(loaded.http_proxy.is_none());
         assert!(loaded.transcription_prompt.is_empty());
+        assert_eq!(loaded.local_engine, "whisper.cpp");
+        assert!(loaded.local_model_path.is_none());
+        assert!(loaded.local_command_path.is_none());
+        assert!(loaded.local_model.is_none());
     }
 
     #[test]

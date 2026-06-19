@@ -206,6 +206,36 @@ async function launchKepler(): Promise<ElectronApplication> {
   });
 }
 
+async function launchKeplerWithFakeMedia(
+  dataDir: string,
+  extraEnv: Record<string, string>,
+): Promise<ElectronApplication> {
+  const userDataDir = path.join(dataDir, "electron-userdata");
+  fs.mkdirSync(userDataDir, { recursive: true });
+  return electron.launch({
+    executablePath: electronBinary,
+    cwd: appRoot,
+    args: [
+      "--use-fake-device-for-media-stream",
+      "--use-fake-ui-for-media-stream",
+      path.join(appRoot, "dist-electron", "main.js"),
+      `--user-data-dir=${userDataDir}`,
+    ],
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      KEPLER_SKIP_SYNC: "1",
+      KOSMOS_HEADLESS: "1",
+      KOSMOS_TEST_MODE: "1",
+      KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
+      KOSMOS_DATA_DIR: dataDir,
+      KEPLER_USAGE_TRACKER: "0",
+      ...extraEnv,
+    },
+    timeout: 20_000,
+  });
+}
+
 test.describe("dictation Phase 1", () => {
   test("AC10: globalShortcut для диктации НЕ зарегистрирован в headless mode", async () => {
     const app = await launchKepler();
@@ -234,7 +264,7 @@ test.describe("dictation Phase 1", () => {
     try {
       const launcher = await app.firstWindow();
       await launcher.waitForLoadState("domcontentloaded");
-      await waitForBackendReady(launcher);
+      await waitForBackendReady(launcher, 45_000);
 
       // Триггерим toggle через IPC → main создаёт pill window если ещё нет.
       // В headless'е showInactive() пропускается (см. dictation-pill.ts isHeadless).
@@ -541,6 +571,189 @@ test.describe("dictation mock STT", () => {
       await app.close();
     }
   });
+
+  test("local provider path completes through host state machine in headless mode", async () => {
+    const dataDir = freshDataDir("dictation-local-stt-headless");
+    const app = await launchKeplerWithDataDir(dataDir, {
+      KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT: "локальная диктовка",
+    });
+    try {
+      const launcher = await app.firstWindow();
+      await launcher.waitForLoadState("domcontentloaded");
+      await waitForBackendReady(launcher);
+
+      await dictationRequest(launcher, "dictation.update_config", {
+        provider: "local",
+        injectMode: "clipboard_only",
+        providerEnabled: true,
+        localEngine: "whisper.cpp",
+        localModelId: "whisper-test",
+        localModelPath: "C:/models/whisper-test.bin",
+        localCommandPath: "C:/tools/whisper-cli.exe",
+      });
+
+      const configBefore = await getDictationState(launcher);
+      expect(configBefore.config?.provider).toBe("local");
+      expect(configBefore.config?.injectMode).toBe("clipboard_only");
+      expect(configBefore.hasApiKey).toBe(false);
+
+      const startResp = await dictationRequest<{ state?: string }>(
+        launcher,
+        "dictation.start_recording",
+      );
+      expect(startResp.state).toBe("recording");
+      await waitForDictationStateWithContext(launcher, "recording", 10_000);
+
+      const submitResp = await dictationRequest<{
+        uuid?: string;
+        state?: string;
+        queued?: boolean;
+        error?: string;
+      }>(launcher, "dictation.submit_audio", {
+        audioB64: makeSmokeWavBase64(),
+        durationSec: 1,
+      });
+
+      expect(submitResp.state).toBe("idle");
+      expect(submitResp.queued).toBeUndefined();
+      expect(submitResp.error).toBeUndefined();
+
+      const state = await getDictationState(launcher);
+      expect(state.state).toBe("idle");
+      expect(state.activeUuid ?? null).toBeNull();
+
+      const pending = await dictationRequest<{ items?: unknown[] }>(
+        launcher,
+        "dictation.list_pending",
+      );
+      expect((pending.items ?? []).length).toBe(0);
+    } finally {
+      await app.close();
+    }
+  });
+
+  test("local provider records through dictation pill with fake microphone", async () => {
+    test.setTimeout(45_000);
+    const dataDir = freshDataDir("dictation-local-pill-fake-media");
+    const transcript = "voice from fake mic";
+    const app = await launchKeplerWithFakeMedia(dataDir, {
+      KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT: transcript,
+    });
+    try {
+      await app.evaluate(({ clipboard }) => clipboard.writeText(""));
+      const launcher = await app.firstWindow();
+      await launcher.waitForLoadState("domcontentloaded");
+      await waitForBackendReady(launcher);
+
+      await dictationRequest(launcher, "dictation.update_config", {
+        provider: "local",
+        injectMode: "clipboard_only",
+        providerEnabled: true,
+        localEngine: "whisper.cpp",
+        localModelId: "fake-media-local",
+        localModelPath: "C:/models/fake-media-local.bin",
+        localCommandPath: "C:/tools/whisper-cli.exe",
+      });
+
+      await launcher.evaluate(async () => {
+        const api = window as unknown as {
+          kepler?: {
+            commands?: {
+              invoke?: (id: string) => Promise<void>;
+            };
+          };
+        };
+        await api.kepler?.commands?.invoke?.("kepler:dictation");
+      });
+      await waitForDictationStateWithContext(launcher, "recording", 10_000);
+      await launcher.waitForTimeout(900);
+
+      await launcher.evaluate(async () => {
+        const api = window as unknown as {
+          kepler?: {
+            commands?: {
+              invoke?: (id: string) => Promise<void>;
+            };
+          };
+        };
+        await api.kepler?.commands?.invoke?.("kepler:dictation");
+      });
+
+      await waitForDictationStateWithContext(launcher, "idle", 20_000);
+      const clipboardText = await app.evaluate(({ clipboard }) => clipboard.readText());
+      expect(clipboardText).toBe(transcript);
+
+      const pending = await dictationRequest<{ items?: unknown[] }>(
+        launcher,
+        "dictation.list_pending",
+      );
+      expect((pending.items ?? []).length).toBe(0);
+
+      const stats = await dictationRequest<{
+        totalSessions?: number;
+        totalWords?: number;
+        totalRecordSeconds?: number;
+      }>(launcher, "dictation.get_stats");
+      expect(stats.totalSessions).toBe(1);
+      expect(stats.totalWords).toBe(4);
+      expect(stats.totalRecordSeconds ?? 0).toBeGreaterThan(0);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+test.describe("AI settings", () => {
+  test("advanced AI page shows local dictation model settings", async () => {
+    test.setTimeout(60_000);
+    const dataDir = freshDataDir("dictation-ai-settings-page");
+    const app = await launchKeplerWithDataDir(dataDir);
+    try {
+      const launcher = await app.firstWindow();
+      await launcher.waitForLoadState("domcontentloaded");
+      await waitForBackendReady(launcher);
+
+      await dictationRequest(launcher, "dictation.update_config", {
+        provider: "local",
+        localEngine: "whisper.cpp",
+        localModelId: "whisper-test",
+        localModelPath: "C:/models/whisper-test.bin",
+        localCommandPath: "C:/tools/whisper-cli.exe",
+      });
+
+      await launcher.evaluate(async () => {
+        const api = window as unknown as {
+          kepler?: {
+            commands?: {
+              invoke?: (id: string) => Promise<void>;
+            };
+          };
+        };
+        await api.kepler?.commands?.invoke?.("settings:open");
+      });
+
+      const settings = await app.waitForEvent("window", { timeout: 10_000 });
+      await settings.waitForLoadState("domcontentloaded");
+      const aiTabButton = settings.getByRole("button", { name: "AI" });
+      await expect(aiTabButton).toBeVisible();
+      await aiTabButton.click();
+
+      await expect(settings.getByText("Groq", { exact: true })).toBeVisible();
+      await expect(settings.getByRole("heading", { name: "Локально" })).toBeVisible();
+      await expect(settings.getByText("Папка моделей", { exact: true })).toBeVisible();
+      await expect(settings.getByText("Whisper Small", { exact: true })).toBeVisible();
+      await expect(settings.getByText("Whisper Large v3 Turbo", { exact: true })).toBeVisible();
+      await expect(settings.getByText("Путь к модели", { exact: true })).toBeVisible();
+      await expect(settings.getByText("Путь к whisper.cpp", { exact: true })).toBeVisible();
+      const inputValues = await settings
+        .locator("input")
+        .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value));
+      expect(inputValues).toContain("C:/models/whisper-test.bin");
+      expect(inputValues).toContain("C:/tools/whisper-cli.exe");
+    } finally {
+      await app.close();
+    }
+  });
 });
 
 test.describe("dictation Groq smoke", () => {
@@ -636,6 +849,84 @@ test.describe("dictation Groq smoke", () => {
       await app.evaluate(({ clipboard }, text) => {
         clipboard.writeText(text);
       }, originalClipboardText);
+      await app.close();
+    }
+  });
+});
+
+test.describe("dictation local smoke", () => {
+  test("opt-in real local whisper.cpp provider works headless without microphone", async () => {
+    test.setTimeout(120_000);
+    const commandPath = getRequiredEnv("KOSMOS_TEST_LOCAL_DICTATION_COMMAND_PATH");
+    const modelPath = getRequiredEnv("KOSMOS_TEST_LOCAL_DICTATION_MODEL_PATH");
+    const audioPath = getRequiredEnv("KOSMOS_TEST_DICTATION_AUDIO_PATH");
+    const audioB64 =
+      getRequiredEnv("KOSMOS_TEST_DICTATION_AUDIO_B64") ??
+      (audioPath ? fs.readFileSync(audioPath).toString("base64") : null);
+    const expectedSubstring =
+      process.env.KOSMOS_TEST_DICTATION_EXPECTED_TRANSCRIPT_SUBSTRING?.trim() || null;
+    test.skip(
+      !commandPath || !modelPath || !audioB64,
+      "Set KOSMOS_TEST_LOCAL_DICTATION_COMMAND_PATH, KOSMOS_TEST_LOCAL_DICTATION_MODEL_PATH, and KOSMOS_TEST_DICTATION_AUDIO_PATH or KOSMOS_TEST_DICTATION_AUDIO_B64 to run local dictation smoke.",
+    );
+
+    const dataDir = freshDataDir("dictation-local-opt-in-smoke");
+    const app = await launchKeplerWithDataDir(dataDir);
+    try {
+      const launcher = await app.firstWindow();
+      await launcher.waitForLoadState("domcontentloaded");
+      await waitForBackendReady(launcher);
+
+      await dictationRequest(launcher, "dictation.update_config", {
+        provider: "local",
+        injectMode: "clipboard_only",
+        providerEnabled: true,
+        language: "en",
+        localEngine: "whisper.cpp",
+        localModelId: "whisper-local-smoke",
+        localModelPath: modelPath!,
+        localCommandPath: commandPath!,
+      });
+
+      const configBefore = await getDictationState(launcher);
+      expect(configBefore.config?.provider).toBe("local");
+      expect(configBefore.config?.injectMode).toBe("clipboard_only");
+      expect(configBefore.hasApiKey).toBe(false);
+
+      const startResp = await dictationRequest<{ state?: string }>(
+        launcher,
+        "dictation.start_recording",
+      );
+      expect(startResp.state).toBe("recording");
+      await waitForDictationStateWithContext(launcher, "recording", 10_000);
+
+      const submitResp = await submitAudioWithContext(
+        launcher,
+        {
+          audioB64: audioB64!,
+          durationSec: 4,
+        },
+        120_000,
+      );
+      expect(submitResp.queued).not.toBe(true);
+      expect(submitResp.state).toBe("idle");
+
+      await waitForDictationStateWithContext(launcher, "idle", 20_000);
+      const state = await getDictationState(launcher);
+      expect(state.state).toBe("idle");
+      expect(state.activeUuid ?? null).toBeNull();
+
+      const pending = await dictationRequest<{ items?: unknown[] }>(
+        launcher,
+        "dictation.list_pending",
+      );
+      expect((pending.items ?? []).length).toBe(0);
+
+      if (expectedSubstring) {
+        const clipboardText = await app.evaluate(({ clipboard }) => clipboard.readText());
+        expect(clipboardText.toLowerCase()).toContain(expectedSubstring.toLowerCase());
+      }
+    } finally {
       await app.close();
     }
   });

@@ -24,6 +24,8 @@ use super::groq::{self, GroqError};
 #[cfg(windows)]
 use super::hotkey_hook;
 use super::inject::{self, InjectError};
+use super::local::{self, DEFAULT_LOCAL_ENGINE};
+use super::local_models;
 use super::network;
 use super::stats::{self, DictationStats};
 
@@ -230,6 +232,11 @@ fn config_to_value(cfg: &DictationConfig) -> Value {
         "provider": cfg.provider,
         "providerEnabled": cfg.provider_enabled,
         "model": cfg.model,
+        "localEngine": cfg.local_engine,
+        "localModelPath": cfg.local_model_path,
+        "localCommandPath": cfg.local_command_path,
+        "localModel": cfg.local_model,
+        "localModelId": cfg.local_model,
         "microphoneDeviceId": cfg.microphone_device_id,
     })
 }
@@ -292,10 +299,35 @@ pub(crate) enum SubmitError {
     AudioDecode(#[from] base64::DecodeError),
     #[error("network: {0}")]
     Network(#[from] network::NetworkError),
+    #[error("local: {0}")]
+    Local(#[from] local::LocalError),
     #[error("groq: {0}")]
     Groq(#[from] GroqError),
     #[error("inject: {0}")]
     Inject(#[from] InjectError),
+}
+
+fn provider_uses_local_runtime(provider: &str) -> bool {
+    provider == "local"
+}
+
+fn provider_needs_api_key(cfg: &DictationConfig) -> bool {
+    if provider_uses_local_runtime(&cfg.provider) {
+        return false;
+    }
+    mock_dictation_transcript_override(&cfg.provider, Some(cfg.transcription_prompt.as_str()))
+        .is_none()
+}
+
+fn effective_model_for_submit(cfg: &DictationConfig) -> String {
+    if provider_uses_local_runtime(&cfg.provider) {
+        return cfg
+            .local_model
+            .clone()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| cfg.model.clone());
+    }
+    cfg.model.clone()
 }
 
 // ---------------------------------------------------------------------------
@@ -336,8 +368,243 @@ pub async fn handle_dictation_op(
         "native_status" => op_native_status().await,
         "ensure_native_permissions" => op_ensure_native_permissions(params).await,
         "native_audio_ping" => op_native_audio_ping().await,
+        "list_local_models" => op_list_local_models(host).await,
+        "download_local_model" => op_download_local_model(params, host).await,
+        "use_local_model" => op_use_local_model(params, host).await,
+        "delete_local_model" => op_delete_local_model(params, host).await,
         other => DictationResponse::err(format!("dictation.{other}: unknown sub-operation")),
     }
+}
+
+async fn apply_local_model_selection(
+    host: &DictationHost,
+    model_id: &str,
+    model_path: std::path::PathBuf,
+    command_path: std::path::PathBuf,
+) -> Result<DictationConfig, String> {
+    apply_local_model_selection_to_config(
+        &host.config,
+        &host.events_tx,
+        model_id,
+        model_path,
+        command_path,
+    )
+    .await
+}
+
+async fn apply_local_model_selection_to_config(
+    config_state: &Arc<Mutex<DictationConfig>>,
+    events_tx: &broadcast::Sender<Value>,
+    model_id: &str,
+    model_path: std::path::PathBuf,
+    command_path: std::path::PathBuf,
+) -> Result<DictationConfig, String> {
+    let mut cfg = config_state.lock().await;
+    cfg.provider = "local".into();
+    cfg.provider_enabled = true;
+    cfg.local_engine = DEFAULT_LOCAL_ENGINE.into();
+    cfg.local_model = Some(model_id.to_owned());
+    cfg.local_model_path = Some(model_path.to_string_lossy().to_string());
+    cfg.local_command_path = Some(command_path.to_string_lossy().to_string());
+    config::save(&cfg).map_err(|e| format!("save failed: {e}"))?;
+    let snapshot = cfg.clone();
+    drop(cfg);
+    apply_ptt_hook(&snapshot, events_tx);
+    let _ = events_tx.send(json!({ "event": "dictation_config_changed" }));
+    Ok(snapshot)
+}
+
+async fn op_list_local_models(host: &DictationHost) -> DictationResponse {
+    let cfg = host.snapshot_config().await;
+    DictationResponse::ok(json!(local_models::snapshot(&host.data_dir, &cfg)))
+}
+
+async fn op_download_local_model(params: Value, host: &DictationHost) -> DictationResponse {
+    let model_id = match params.get("modelId").and_then(|v| v.as_str()) {
+        Some(value) if !value.trim().is_empty() => value.trim().to_owned(),
+        _ => return DictationResponse::err("download_local_model: missing modelId"),
+    };
+    let select = params
+        .get("select")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let install_tool = params
+        .get("installTool")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let cfg = host.snapshot_config().await;
+    let client =
+        match network::build_download_client(&cfg.network_profile, cfg.http_proxy.as_deref()) {
+            Ok(client) => client,
+            Err(e) => return DictationResponse::err(format!("download_local_model: {e}")),
+        };
+    let events_tx = host.events_tx.clone();
+    let data_dir = host.data_dir.clone();
+    let config_state = host.config.clone();
+    let model_id_for_task = model_id.clone();
+    tokio::spawn(async move {
+        let model_id = model_id_for_task;
+        let mut progress = |progress: local_models::DownloadProgress| {
+            let _ = events_tx.send(json!({
+                "event": "dictation_local_model_download_progress",
+                "modelId": model_id,
+                "phase": progress.phase,
+                "downloadedBytes": progress.downloaded_bytes,
+                "totalBytes": progress.total_bytes,
+                "percent": progress.percent,
+            }));
+        };
+        let _ = events_tx.send(json!({
+            "event": "dictation_local_model_download_started",
+            "modelId": model_id,
+        }));
+        let model_path = match local_models::ensure_model_with_progress(
+            &client,
+            &data_dir,
+            &model_id,
+            &mut progress,
+        )
+        .await
+        {
+            Ok(path) => path,
+            Err(e) => {
+                let msg = format!("download_local_model: {e}");
+                let _ = events_tx.send(json!({
+                    "event": "dictation_local_model_download_failed",
+                    "modelId": model_id,
+                    "error": msg,
+                }));
+                return;
+            }
+        };
+        let command_path = if install_tool {
+            match local_models::ensure_whisper_cpp_with_progress(&client, &data_dir, &mut progress)
+                .await
+            {
+                Ok(path) => path,
+                Err(e) => {
+                    let msg = format!("download_local_model: {e}");
+                    let _ = events_tx.send(json!({
+                        "event": "dictation_local_model_download_failed",
+                        "modelId": model_id,
+                        "error": msg,
+                    }));
+                    return;
+                }
+            }
+        } else if let Some(path) = local_models::command_path(&data_dir) {
+            path
+        } else {
+            let msg = "download_local_model: whisper.cpp is unavailable".to_string();
+            let _ = events_tx.send(json!({
+                "event": "dictation_local_model_download_failed",
+                "modelId": model_id,
+                "error": msg,
+            }));
+            return;
+        };
+
+        if select {
+            if let Err(e) = apply_local_model_selection_to_config(
+                &config_state,
+                &events_tx,
+                &model_id,
+                model_path,
+                command_path,
+            )
+            .await
+            {
+                let msg = format!("download_local_model: {e}");
+                let _ = events_tx.send(json!({
+                    "event": "dictation_local_model_download_failed",
+                    "modelId": model_id,
+                    "error": msg,
+                }));
+                return;
+            }
+        }
+        let cfg = config_state.lock().await.clone();
+        let _ = events_tx.send(json!({
+            "event": "dictation_local_model_download_complete",
+            "modelId": model_id,
+            "config": select.then(|| config_to_value(&cfg)),
+            "localModels": local_models::snapshot(&data_dir, &cfg),
+        }));
+    });
+    DictationResponse::ok(json!({
+        "started": true,
+        "modelId": model_id,
+    }))
+}
+
+async fn op_use_local_model(params: Value, host: &DictationHost) -> DictationResponse {
+    let model_id = match params.get("modelId").and_then(|v| v.as_str()) {
+        Some(value) if !value.trim().is_empty() => value.trim(),
+        _ => return DictationResponse::err("use_local_model: missing modelId"),
+    };
+    let model_path = match local_models::MODEL_CATALOG
+        .iter()
+        .find(|model| model.id == model_id)
+        .map(|spec| local_models::model_path(&host.data_dir, spec))
+    {
+        Some(path) if path.is_file() => path,
+        Some(_) => {
+            return DictationResponse::err(format!(
+                "use_local_model: model is not downloaded: {model_id}"
+            ))
+        }
+        None => {
+            return DictationResponse::err(format!("use_local_model: model not found: {model_id}"))
+        }
+    };
+    let command_path = match local_models::command_path(&host.data_dir) {
+        Some(path) if path.is_file() => path,
+        _ => return DictationResponse::err("use_local_model: whisper.cpp is not installed"),
+    };
+    match apply_local_model_selection(host, model_id, model_path, command_path).await {
+        Ok(cfg) => DictationResponse::ok(json!({
+            "config": config_to_value(&cfg),
+            "localModels": local_models::snapshot(&host.data_dir, &cfg),
+        })),
+        Err(e) => DictationResponse::err(format!("use_local_model: {e}")),
+    }
+}
+
+async fn op_delete_local_model(params: Value, host: &DictationHost) -> DictationResponse {
+    let model_id = match params.get("modelId").and_then(|v| v.as_str()) {
+        Some(value) if !value.trim().is_empty() => value.trim(),
+        _ => return DictationResponse::err("delete_local_model: missing modelId"),
+    };
+    let deleted_path = match local_models::delete_model(&host.data_dir, model_id) {
+        Ok(path) => path,
+        Err(e) => return DictationResponse::err(format!("delete_local_model: {e}")),
+    };
+
+    let mut changed_config = false;
+    {
+        let mut cfg = host.config.lock().await;
+        let deleted_path_text = deleted_path.to_string_lossy();
+        let selected_by_id = cfg.local_model.as_deref() == Some(model_id);
+        let selected_by_path = cfg.local_model_path.as_deref() == Some(deleted_path_text.as_ref());
+        if selected_by_id || selected_by_path {
+            cfg.provider_enabled = false;
+            cfg.local_model = None;
+            cfg.local_model_path = None;
+            if let Err(e) = config::save(&cfg) {
+                return DictationResponse::err(format!("delete_local_model: save failed: {e}"));
+            }
+            changed_config = true;
+        }
+    }
+    if changed_config {
+        host.emit_config_changed();
+    }
+
+    let cfg = host.snapshot_config().await;
+    DictationResponse::ok(json!({
+        "config": config_to_value(&cfg),
+        "localModels": local_models::snapshot(&host.data_dir, &cfg),
+    }))
 }
 
 /// Валидация patch'а до применения. Возвращает первое найденное нарушение
@@ -446,6 +713,73 @@ async fn op_update_config(params: Value, host: &DictationHost) -> DictationRespo
     }
     if let Some(s) = params.get("model").and_then(|v| v.as_str()) {
         cfg.model = s.to_owned();
+    }
+    if let Some(s) = params.get("localEngine").and_then(|v| v.as_str()) {
+        let trimmed = s.trim();
+        cfg.local_engine = if trimmed.is_empty() {
+            DEFAULT_LOCAL_ENGINE.to_owned()
+        } else {
+            trimmed.to_owned()
+        };
+    }
+    if params.get("localModelPath").is_some() {
+        cfg.local_model_path = params
+            .get("localModelPath")
+            .and_then(|v| {
+                if v.is_null() {
+                    None
+                } else {
+                    v.as_str().map(|s| {
+                        let trimmed = s.trim();
+                        if trimmed.is_empty() {
+                            None
+                        } else {
+                            Some(trimmed.to_owned())
+                        }
+                    })
+                }
+            })
+            .unwrap_or(None);
+    }
+    if params.get("localCommandPath").is_some() {
+        cfg.local_command_path = params
+            .get("localCommandPath")
+            .and_then(|v| {
+                if v.is_null() {
+                    None
+                } else {
+                    v.as_str().map(|s| {
+                        let trimmed = s.trim();
+                        if trimmed.is_empty() {
+                            None
+                        } else {
+                            Some(trimmed.to_owned())
+                        }
+                    })
+                }
+            })
+            .unwrap_or(None);
+    }
+    if params.get("localModel").is_some() || params.get("localModelId").is_some() {
+        let value = params
+            .get("localModel")
+            .or_else(|| params.get("localModelId"))
+            .and_then(|v| {
+                if v.is_null() {
+                    None
+                } else {
+                    v.as_str().map(|s| {
+                        let trimmed = s.trim();
+                        if trimmed.is_empty() {
+                            None
+                        } else {
+                            Some(trimmed.to_owned())
+                        }
+                    })
+                }
+            })
+            .unwrap_or(None);
+        cfg.local_model = value;
     }
     if params.get("microphoneDeviceId").is_some() {
         cfg.microphone_device_id = params
@@ -645,7 +979,7 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
             InjectMode::AutoPaste => "auto_paste".into(),
             InjectMode::ClipboardOnly => "clipboard_only".into(),
         },
-        model: cfg.model.clone(),
+        model: effective_model_for_submit(&cfg),
         prev_hwnd,
     };
     let uuid = match super::pending::enqueue(&host.data_dir, &wav_bytes, record_seconds, opts) {
@@ -677,14 +1011,7 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
         host.emit_pending_changed();
         return DictationResponse::err("submit_audio: provider disabled");
     }
-    let api_key = if mock_dictation_transcript_override(
-        &cfg.provider,
-        Some(cfg.transcription_prompt.as_str()),
-    )
-    .is_some()
-    {
-        String::new()
-    } else {
+    let api_key = if provider_needs_api_key(&cfg) {
         match config::get_api_key() {
             Some(k) => k,
             None => {
@@ -693,6 +1020,8 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
                 return DictationResponse::err("submit_audio: API key не задан");
             }
         }
+    } else {
+        String::new()
     };
 
     // Одна inline-попытка — pill показывает «Распознаю…» ~1s в happy-path.
@@ -898,30 +1227,45 @@ async fn process_one_attempt(
         return AttemptOutcome::Success;
     }
 
-    let client = match network::build_client(&cfg.network_profile, cfg.http_proxy.as_deref()) {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::error!(%uuid, error = %e, "dictation: build_client failed");
-            let _ = super::pending::bump_attempt(&host.data_dir, uuid, &e.to_string());
-            return AttemptOutcome::Fatal; // конфиг сломан — retry не поможет
-        }
+    let result: Result<String, SubmitError> = if provider_uses_local_runtime(&cfg.provider) {
+        local::transcribe(local::LocalRequest {
+            wav_bytes: &wav,
+            language: &language,
+            prompt: &prompt,
+            engine: &cfg.local_engine,
+            model_id: cfg.local_model.as_deref().or(Some(model.as_str())),
+            model_path: cfg.local_model_path.as_deref(),
+            command_path: cfg.local_command_path.as_deref(),
+        })
+        .await
+        .map(|transcript| transcript.text)
+        .map_err(SubmitError::from)
+    } else {
+        let client = match network::build_client(&cfg.network_profile, cfg.http_proxy.as_deref()) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!(%uuid, error = %e, "dictation: build_client failed");
+                let _ = super::pending::bump_attempt(&host.data_dir, uuid, &e.to_string());
+                return AttemptOutcome::Fatal; // конфиг сломан — retry не поможет
+            }
+        };
+
+        groq::transcribe(
+            &client,
+            &host.groq_endpoint,
+            api_key,
+            wav,
+            &language,
+            &model,
+            &prompt,
+        )
+        .await
+        .map(|transcript| transcript.text)
+        .map_err(SubmitError::from)
     };
 
-    let result = groq::transcribe(
-        &client,
-        &host.groq_endpoint,
-        api_key,
-        wav,
-        &language,
-        &model,
-        &prompt,
-    )
-    .await
-    .map_err(SubmitError::from);
-
     match result {
-        Ok(transcript) => {
-            let text = transcript.text;
+        Ok(text) => {
             let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
             tracing::info!(%uuid, duration_ms, "dictation: transcribed");
 
@@ -1065,9 +1409,14 @@ async fn op_retry(params: Value, host: &Arc<DictationHost>) -> DictationResponse
         Some(i) => i.clone(),
         None => return DictationResponse::err(format!("retry: uuid '{uuid}' не найден")),
     };
-    let api_key = match config::get_api_key() {
-        Some(k) => k,
-        None => return DictationResponse::err("retry: API key не задан"),
+    let cfg = host.snapshot_config().await;
+    let api_key = if provider_needs_api_key(&cfg) {
+        match config::get_api_key() {
+            Some(k) => k,
+            None => return DictationResponse::err("retry: API key не задан"),
+        }
+    } else {
+        String::new()
     };
     let host_clone = host.clone();
     let uuid_for_task = uuid.clone();
@@ -1116,9 +1465,14 @@ async fn op_retry_all(host: &Arc<DictationHost>) -> DictationResponse {
         Ok(v) => v,
         Err(e) => return DictationResponse::err(format!("retry_all: list: {e}")),
     };
-    let api_key = match config::get_api_key() {
-        Some(k) => k,
-        None => return DictationResponse::err("retry_all: API key не задан"),
+    let cfg = host.snapshot_config().await;
+    let api_key = if provider_needs_api_key(&cfg) {
+        match config::get_api_key() {
+            Some(k) => k,
+            None => return DictationResponse::err("retry_all: API key не задан"),
+        }
+    } else {
+        String::new()
     };
     let count = items.len();
     for item in items {
@@ -1798,6 +2152,10 @@ mod tests {
             provider: "groq".into(),
             provider_enabled: true,
             model: "whisper-large-v3".into(),
+            local_engine: DEFAULT_LOCAL_ENGINE.into(),
+            local_model_path: None,
+            local_command_path: None,
+            local_model: None,
             http_proxy: None,
             transcription_prompt: String::new(),
             microphone_device_id: None,
@@ -2210,7 +2568,7 @@ mod tests {
         let host = DictationHost::new();
         let resp = handle_dictation_op("get_state", Value::Null, &host).await;
         assert!(resp.ok);
-        assert_eq!(resp.data["state"], "idle");
+        assert_eq!(resp.data["state"], "idle", "resp: {:?}", resp.data);
     }
 
     #[tokio::test]
@@ -2473,6 +2831,118 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn submit_audio_local_transcript_succeeds_without_api_key_and_cleans_up() {
+        let _guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        std::env::set_var("KOSMOS_TEST_MODE", "1");
+        std::env::set_var(
+            "KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT",
+            "локальная расшифровка",
+        );
+
+        let td = tempfile::TempDir::new().unwrap();
+        let mut cfg = test_cfg();
+        cfg.provider = "local".into();
+        cfg.local_model = Some("whisper-large-v3-turbo".into());
+        cfg.local_model_path = Some("C:/models/whisper-large-v3-turbo.bin".into());
+        cfg.local_command_path = Some("C:/tools/whisper-cli.exe".into());
+        let host = DictationHost::new_for_test(
+            td.path().into(),
+            "http://127.0.0.1:1/openai/v1/audio/transcriptions".into(),
+            cfg,
+        );
+        let mut rx = host.subscribe();
+        let wav = make_wav();
+        let audio_b64 = base64::engine::general_purpose::STANDARD.encode(&wav);
+
+        let start = handle_dictation_op("start_recording", Value::Null, &host).await;
+        assert!(start.ok, "start_recording failed: {:?}", start.error);
+
+        let resp = handle_dictation_op(
+            "submit_audio",
+            json!({ "audioB64": audio_b64, "durationSec": 3.0 }),
+            &host,
+        )
+        .await;
+        assert!(resp.ok, "submit_audio failed: {:?}", resp.error);
+        assert_eq!(resp.data["state"], "idle");
+
+        let mut saw_transcribing = false;
+        let mut saw_transcript = None;
+        for _ in 0..6 {
+            let evt = tokio::time::timeout(std::time::Duration::from_millis(250), rx.recv())
+                .await
+                .expect("event timeout")
+                .expect("event recv");
+            match evt["event"].as_str() {
+                Some("dictation_state_changed") if evt["state"] == "transcribing" => {
+                    saw_transcribing = true;
+                }
+                Some("dictation_transcript") => {
+                    saw_transcript = Some(evt);
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        assert!(
+            saw_transcribing,
+            "submit_audio must emit transcribing state"
+        );
+        let transcript_evt = saw_transcript.expect("missing dictation_transcript event");
+        assert_eq!(transcript_evt["text"], "локальная расшифровка");
+        assert_eq!(transcript_evt["language"], "ru");
+        assert_eq!(transcript_evt["injected"], true);
+
+        let pending = op_list_pending(&host).await;
+        assert!(pending.ok);
+        assert_eq!(pending.data["items"].as_array().unwrap().len(), 0);
+
+        std::env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
+        std::env::remove_var("KOSMOS_TEST_MODE");
+    }
+
+    #[tokio::test]
+    async fn submit_audio_local_missing_model_path_returns_error_and_keeps_pending() {
+        let td = tempfile::TempDir::new().unwrap();
+        let mut cfg = test_cfg();
+        cfg.provider = "local".into();
+        cfg.local_model = Some("whisper-base".into());
+        cfg.local_model_path = None;
+        let host = DictationHost::new_for_test(
+            td.path().into(),
+            "http://127.0.0.1:1/openai/v1/audio/transcriptions".into(),
+            cfg,
+        );
+        let wav = make_wav();
+        let audio_b64 = base64::engine::general_purpose::STANDARD.encode(&wav);
+
+        let start = handle_dictation_op("start_recording", Value::Null, &host).await;
+        assert!(start.ok, "start_recording failed: {:?}", start.error);
+
+        let resp = handle_dictation_op(
+            "submit_audio",
+            json!({ "audioB64": audio_b64, "durationSec": 2.0 }),
+            &host,
+        )
+        .await;
+        assert!(resp.ok, "submit_audio failed: {:?}", resp.error);
+        assert_eq!(resp.data["state"], "error");
+        assert!(
+            resp.data["error"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("путь"),
+            "error: {}",
+            resp.data["error"]
+        );
+
+        let pending = op_list_pending(&host).await;
+        assert!(pending.ok);
+        assert_eq!(pending.data["items"].as_array().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
     async fn unknown_subop_errors() {
         let host = DictationHost::new();
         let resp = handle_dictation_op("nope", Value::Null, &host).await;
@@ -2496,7 +2966,15 @@ mod tests {
         let mut rx = host.subscribe();
         let resp = handle_dictation_op(
             "update_config",
-            json!({ "language": "auto", "injectMode": "clipboard_only" }),
+            json!({
+                "language": "auto",
+                "injectMode": "clipboard_only",
+                "provider": "local",
+                "localEngine": "whisper.cpp",
+                "localModelPath": "C:/models/local-whisper.bin",
+                "localCommandPath": "C:/tools/whisper-cli.exe",
+                "localModelId": "whisper-base"
+            }),
             &host,
         )
         .await;
@@ -2513,6 +2991,68 @@ mod tests {
         let state = handle_dictation_op("get_state", Value::Null, &host2).await;
         assert_eq!(state.data["config"]["language"], "auto");
         assert_eq!(state.data["config"]["injectMode"], "clipboard_only");
+        assert_eq!(state.data["config"]["provider"], "local");
+        assert_eq!(state.data["config"]["localEngine"], "whisper.cpp");
+        assert_eq!(
+            state.data["config"]["localModelPath"],
+            "C:/models/local-whisper.bin"
+        );
+        assert_eq!(
+            state.data["config"]["localCommandPath"],
+            "C:/tools/whisper-cli.exe"
+        );
+        assert_eq!(state.data["config"]["localModel"], "whisper-base");
+        assert_eq!(state.data["config"]["localModelId"], "whisper-base");
+
+        std::env::remove_var("KOSMOS_DATA_DIR");
+    }
+
+    #[tokio::test]
+    async fn local_models_list_and_use_downloaded_model_updates_config() {
+        let _guard = ENV_DATA_DIR_LOCK.lock().await;
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        std::env::set_var("KOSMOS_DATA_DIR", tmp.path());
+
+        let host = DictationHost::new();
+        let list = handle_dictation_op("list_local_models", Value::Null, &host).await;
+        assert!(list.ok, "list_local_models failed: {:?}", list.error);
+        assert!(list.data["models"].as_array().unwrap().len() >= 4);
+        assert_eq!(list.data["commandInstalled"], false);
+
+        let small = local_models::MODEL_CATALOG
+            .iter()
+            .find(|model| model.id == "small")
+            .expect("small model in catalog");
+        let model_path = local_models::model_path(tmp.path(), small);
+        std::fs::create_dir_all(model_path.parent().unwrap()).expect("model dir");
+        std::fs::write(&model_path, b"fake model").expect("model file");
+
+        let command_path = local_models::command_path(tmp.path()).expect("windows command path");
+        std::fs::create_dir_all(command_path.parent().unwrap()).expect("command dir");
+        std::fs::write(&command_path, b"fake exe").expect("command file");
+
+        let used =
+            handle_dictation_op("use_local_model", json!({ "modelId": "small" }), &host).await;
+        assert!(used.ok, "use_local_model failed: {:?}", used.error);
+        assert_eq!(used.data["config"]["provider"], "local");
+        assert_eq!(used.data["config"]["localEngine"], "whisper.cpp");
+        assert_eq!(used.data["config"]["localModelId"], "small");
+        assert_eq!(
+            used.data["config"]["localModelPath"].as_str(),
+            Some(model_path.to_string_lossy().as_ref())
+        );
+        assert_eq!(
+            used.data["config"]["localCommandPath"].as_str(),
+            Some(command_path.to_string_lossy().as_ref())
+        );
+        assert_eq!(used.data["localModels"]["commandInstalled"], true);
+        assert!(used.data["localModels"]["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|model| model["id"] == "small"
+                && model["downloaded"] == true
+                && model["selected"] == true));
 
         std::env::remove_var("KOSMOS_DATA_DIR");
     }
