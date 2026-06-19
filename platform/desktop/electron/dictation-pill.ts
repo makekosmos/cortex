@@ -24,7 +24,7 @@ import { BrowserWindow, ipcMain, screen, webContents as electronWebContents } fr
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { awaitArkReady } from "./main";
+import { awaitArkReady, broadcastCommandsUpdated, setDictationHotkeyCache } from "./main";
 import {
   applyWindowMaterial,
   backgroundMaterialOption,
@@ -50,6 +50,12 @@ let isRecording = false;
  * `start_recording` пока первый ещё в полёте — backend отвечает
  * `state must be idle, got recording`. */
 let toggleInFlight = false;
+type DictationCommandInvoker = () => Promise<void> | void;
+let dictationCommandInvoker: DictationCommandInvoker | null = null;
+
+export function setDictationCommandInvoker(invoker: DictationCommandInvoker | null): void {
+  dictationCommandInvoker = invoker;
+}
 
 function isHeadless(): boolean {
   return process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
@@ -170,6 +176,14 @@ async function callBackend(
   return ark.invokeOperation({ operation, ...params });
 }
 
+async function invokeDictationCommand(): Promise<void> {
+  if (dictationCommandInvoker) {
+    await dictationCommandInvoker();
+    return;
+  }
+  await toggleDictation();
+}
+
 /** Главный entry-point из hotkey'я и UI "Тест" кнопки. */
 export async function toggleDictation(): Promise<void> {
   if (toggleInFlight) {
@@ -281,17 +295,13 @@ ipcMain.handle("kepler:dictation:pill-finished", async () => {
 // `RegisterHotKey`, который не может занять системные shortcut'ы.
 // ---------------------------------------------------------------------------
 
-/** Текущий trigger_mode из backend config'а — для diff'а при config_changed. */
-let currentTriggerMode: "toggle" | "push_to_talk" = "toggle";
-
 /** Unsubscribe от прошлой ARK подписки. setupDictationHotkey может быть
  * вызван повторно (например при reconnect ARK client'а) — без cleanup
  * подписка дублируется и каждый hook event обрабатывается несколько раз,
  * что приводит к `state must be idle, got recording`. */
 let arkUnsubscribe: (() => void) | null = null;
 
-function applyHotkeyForMode(_hotkey: string, mode: "toggle" | "push_to_talk"): void {
-  currentTriggerMode = mode;
+function applyHotkeyForMode(_hotkey: string, _mode: "toggle" | "push_to_talk"): void {
   // Hook сам перерегистрируется на backend стороне (`apply_ptt_hook` в
   // host.rs вызывается на каждый update_config). Тут ничего не делаем —
   // функция оставлена для future expansion (например smoke-test'а).
@@ -319,6 +329,7 @@ export async function setupDictationHotkey(): Promise<void> {
       | undefined;
     const hotkey = cfg?.config?.hotkey ?? "Ctrl+Shift+;";
     const mode = cfg?.config?.triggerMode ?? "toggle";
+    setDictationHotkeyCache(hotkey);
     applyHotkeyForMode(hotkey, mode);
     // Idle warmup: отложить создание pill window на 3s после старта shell'а
     // и сделать его только когда event loop свободен. Цель — не платить за
@@ -351,9 +362,9 @@ export async function setupDictationHotkey(): Promise<void> {
               | undefined;
             const nextHotkey = updated?.config?.hotkey ?? "Ctrl+Shift+;";
             const nextMode = updated?.config?.triggerMode ?? "toggle";
-            if (nextMode !== currentTriggerMode) {
-              applyHotkeyForMode(nextHotkey, nextMode);
-            }
+            setDictationHotkeyCache(nextHotkey);
+            applyHotkeyForMode(nextHotkey, nextMode);
+            broadcastCommandsUpdated();
           } catch (err) {
             console.error("[dictation-pill] re-apply hotkey mode failed:", err);
           }
@@ -364,7 +375,7 @@ export async function setupDictationHotkey(): Promise<void> {
       // нажатие, семантика идентична globalShortcut callback'у.
       if (e.event === "dictation_toggle_trigger") {
         console.log("[dictation-pill] hook event: toggle");
-        void toggleDictation();
+        void invokeDictationCommand();
         return;
       }
       // 3. PTT trigger от Rust hook'а (PTT mode): эквивалент press/release.
@@ -375,7 +386,7 @@ export async function setupDictationHotkey(): Promise<void> {
       // поменять в Settings → Диктация → Режим триггера.
       if (e.event === "dictation_ptt_trigger") {
         console.log(`[dictation-pill] hook event: ptt ${e.phase}`);
-        void toggleDictation();
+        void invokeDictationCommand();
         return;
       }
       // 4. Capture events для Settings → Диктация → Горячая клавиша.

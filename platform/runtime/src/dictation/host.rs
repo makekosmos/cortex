@@ -677,12 +677,21 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
         host.emit_pending_changed();
         return DictationResponse::err("submit_audio: provider disabled");
     }
-    let api_key = match config::get_api_key() {
-        Some(k) => k,
-        None => {
-            host.fail_session(&uuid, "API key не задан", false).await;
-            host.emit_pending_changed();
-            return DictationResponse::err("submit_audio: API key не задан");
+    let api_key = if mock_dictation_transcript_override(
+        &cfg.provider,
+        Some(cfg.transcription_prompt.as_str()),
+    )
+    .is_some()
+    {
+        String::new()
+    } else {
+        match config::get_api_key() {
+            Some(k) => k,
+            None => {
+                host.fail_session(&uuid, "API key не задан", false).await;
+                host.emit_pending_changed();
+                return DictationResponse::err("submit_audio: API key не задан");
+            }
         }
     };
 
@@ -764,6 +773,38 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
 /// на пустом месте. После 5 retry'ев pending остаётся на диске.
 const AUTO_RETRY_DELAYS_SEC: [u64; 5] = [1, 5, 10, 20, 40];
 
+fn is_dictation_test_mode() -> bool {
+    matches!(std::env::var("KOSMOS_TEST_MODE").as_deref(), Ok("1"))
+        || matches!(std::env::var("KOSMOS_HEADLESS").as_deref(), Ok("1"))
+}
+
+fn mock_dictation_transcript_override(provider: &str, fallback: Option<&str>) -> Option<String> {
+    if !is_dictation_test_mode() || provider != "mock" {
+        return None;
+    }
+    if let Ok(transcript) = std::env::var("KOSMOS_TEST_DICTATION_TRANSCRIPT") {
+        let transcript = transcript.trim();
+        if !transcript.is_empty() {
+            return Some(transcript.to_string());
+        }
+    }
+    let transcript = fallback?.trim();
+    if transcript.is_empty() {
+        return None;
+    }
+    Some(transcript.to_string())
+}
+
+fn resolve_attempt_inject_mode(raw_mode: &str, mock_transcript: Option<&str>) -> InjectMode {
+    if mock_transcript.is_some() {
+        return InjectMode::ClipboardOnly;
+    }
+    match raw_mode {
+        "clipboard_only" => InjectMode::ClipboardOnly,
+        _ => InjectMode::AutoPaste,
+    }
+}
+
 /// Результат одной попытки `process_one_attempt`.
 #[derive(Debug, PartialEq)]
 enum AttemptOutcome {
@@ -811,12 +852,52 @@ async fn process_one_attempt(
     let language = item.opts.language.clone();
     let prompt = item.opts.prompt.clone();
     let model = item.opts.model.clone();
-    let inject_mode = match item.opts.inject_mode.as_str() {
-        "clipboard_only" => InjectMode::ClipboardOnly,
-        _ => InjectMode::AutoPaste,
-    };
-
     let cfg = host.snapshot_config().await;
+    let mock_transcript =
+        mock_dictation_transcript_override(&cfg.provider, Some(cfg.transcription_prompt.as_str()));
+    let inject_mode =
+        resolve_attempt_inject_mode(item.opts.inject_mode.as_str(), mock_transcript.as_deref());
+
+    if let Some(text) = mock_transcript {
+        tracing::info!(%uuid, "dictation: using mock transcript override");
+        let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+        let _ = inject_mode;
+        let _ = prev_hwnd;
+        tracing::info!(%uuid, "dictation: skipping OS inject for mock transcript");
+
+        let _ = super::pending::drop_item(&host.data_dir, uuid);
+
+        {
+            let mut stats_guard = host.stats.lock().await;
+            stats_guard.record_session(&text, record_seconds.round() as u64);
+            if let Err(e) = stats::save(&stats_guard) {
+                tracing::warn!(error = %e, "dictation: stats save failed");
+            }
+        }
+
+        let _ = host.events_tx.send(json!({
+            "event": "dictation_transcript",
+            "text": text,
+            "language": language,
+            "durationMs": duration_ms,
+            "uuid": uuid,
+            "injected": false,
+        }));
+        let _ = host
+            .events_tx
+            .send(json!({ "event": "dictation_stats_changed" }));
+        host.emit_pending_changed();
+
+        let mut s = host.state.lock().await;
+        if s.active_uuid.as_deref() == Some(uuid) {
+            *s = HostState::idle();
+            let snap = s.clone();
+            drop(s);
+            host.emit_state(&snap).await;
+        }
+        return AttemptOutcome::Success;
+    }
+
     let client = match network::build_client(&cfg.network_profile, cfg.http_proxy.as_deref()) {
         Ok(c) => c,
         Err(e) => {
@@ -2168,6 +2249,227 @@ mod tests {
             handle_dictation_op("submit_audio", json!({ "audioB64": "aGVsbG8=" }), &host).await;
         assert!(!resp.ok);
         assert!(resp.error.unwrap_or_default().contains("recording"));
+    }
+
+    static ENV_DICTATION_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    #[tokio::test]
+    async fn mock_transcript_override_requires_test_mode() {
+        let _guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        std::env::remove_var("KOSMOS_TEST_MODE");
+        std::env::remove_var("KOSMOS_HEADLESS");
+        std::env::set_var(
+            "KOSMOS_TEST_DICTATION_TRANSCRIPT",
+            "детерминированный текст",
+        );
+
+        assert_eq!(mock_dictation_transcript_override("mock", None), None);
+
+        std::env::set_var("KOSMOS_TEST_MODE", "1");
+        assert_eq!(
+            mock_dictation_transcript_override("mock", None).as_deref(),
+            Some("детерминированный текст")
+        );
+        assert_eq!(mock_dictation_transcript_override("groq", None), None);
+
+        std::env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
+        std::env::remove_var("KOSMOS_TEST_MODE");
+    }
+
+    #[test]
+    fn resolve_attempt_inject_mode_forces_clipboard_only_for_mock() {
+        assert_eq!(
+            resolve_attempt_inject_mode("auto_paste", Some("mock transcript")),
+            InjectMode::ClipboardOnly
+        );
+        assert_eq!(
+            resolve_attempt_inject_mode("auto_paste", None),
+            InjectMode::AutoPaste
+        );
+        assert_eq!(
+            resolve_attempt_inject_mode("clipboard_only", None),
+            InjectMode::ClipboardOnly
+        );
+    }
+
+    #[tokio::test]
+    async fn submit_audio_mock_transcript_succeeds_without_api_key_and_cleans_up() {
+        let _guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        std::env::set_var("KOSMOS_TEST_MODE", "1");
+        std::env::set_var("KOSMOS_TEST_DICTATION_TRANSCRIPT", "привет из теста");
+
+        let td = tempfile::TempDir::new().unwrap();
+        let mut cfg = test_cfg();
+        cfg.provider = "mock".into();
+        let host = DictationHost::new_for_test(
+            td.path().into(),
+            "http://127.0.0.1:1/openai/v1/audio/transcriptions".into(),
+            cfg,
+        );
+        let mut rx = host.subscribe();
+        let wav = make_wav();
+        let audio_b64 = base64::engine::general_purpose::STANDARD.encode(&wav);
+
+        let start = handle_dictation_op("start_recording", Value::Null, &host).await;
+        assert!(start.ok, "start_recording failed: {:?}", start.error);
+
+        let resp = handle_dictation_op(
+            "submit_audio",
+            json!({ "audioB64": audio_b64, "durationSec": 4.0 }),
+            &host,
+        )
+        .await;
+        assert!(resp.ok, "submit_audio failed: {:?}", resp.error);
+        assert_eq!(resp.data["state"], "idle");
+
+        let mut saw_transcribing = false;
+        let mut saw_transcript = None;
+        for _ in 0..6 {
+            let evt = tokio::time::timeout(std::time::Duration::from_millis(250), rx.recv())
+                .await
+                .expect("event timeout")
+                .expect("event recv");
+            match evt["event"].as_str() {
+                Some("dictation_state_changed") if evt["state"] == "transcribing" => {
+                    saw_transcribing = true;
+                }
+                Some("dictation_transcript") => {
+                    saw_transcript = Some(evt);
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        assert!(
+            saw_transcribing,
+            "submit_audio must emit transcribing state"
+        );
+        let transcript_evt = saw_transcript.expect("missing dictation_transcript event");
+        assert_eq!(transcript_evt["text"], "привет из теста");
+        assert_eq!(transcript_evt["language"], "ru");
+        assert_eq!(transcript_evt["injected"], false);
+
+        let state = handle_dictation_op("get_state", Value::Null, &host).await;
+        assert_eq!(state.data["state"], "idle");
+        assert_eq!(state.data["activeUuid"], Value::Null);
+
+        let pending = op_list_pending(&host).await;
+        assert!(pending.ok);
+        assert_eq!(pending.data["items"].as_array().unwrap().len(), 0);
+
+        let stats = handle_dictation_op("get_stats", Value::Null, &host).await;
+        assert!(stats.ok);
+        assert_eq!(stats.data["totalSessions"], 1);
+        assert_eq!(stats.data["totalWords"], 3);
+        assert_eq!(stats.data["totalRecordSeconds"], 4);
+
+        std::env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
+        std::env::remove_var("KOSMOS_TEST_MODE");
+    }
+
+    #[tokio::test]
+    async fn submit_audio_groq_transcript_succeeds_with_test_api_key_and_cleans_up() {
+        let _guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        std::env::set_var("KOSMOS_TEST_MODE", "1");
+        std::env::set_var("KOSMOS_TEST_GROQ_API_KEY", "test-groq-api-key");
+        std::env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
+
+        use httpmock::prelude::*;
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST).path("/openai/v1/audio/transcriptions");
+                then.status(200).header("content-type", "application/json").body(
+                    r#"{"text":"groq runtime transcript","segments":[{"text":"groq runtime transcript","no_speech_prob":0.05,"avg_logprob":-0.2}]}"#,
+                );
+            })
+            .await;
+
+        let td = tempfile::TempDir::new().unwrap();
+        let mut cfg = test_cfg();
+        cfg.provider = "groq".into();
+        cfg.inject_mode = InjectMode::ClipboardOnly;
+        let host = DictationHost::new_for_test(
+            td.path().into(),
+            format!("{}/openai/v1/audio/transcriptions", server.base_url()),
+            cfg,
+        );
+        let mut rx = host.subscribe();
+        let wav = make_wav();
+        let audio_b64 = base64::engine::general_purpose::STANDARD.encode(&wav);
+
+        let start = handle_dictation_op("start_recording", Value::Null, &host).await;
+        assert!(start.ok, "start_recording failed: {:?}", start.error);
+
+        let resp = handle_dictation_op(
+            "submit_audio",
+            json!({ "audioB64": audio_b64, "durationSec": 4.0 }),
+            &host,
+        )
+        .await;
+        assert!(resp.ok, "submit_audio failed: {:?}", resp.error);
+        assert_eq!(resp.data["state"], "idle");
+
+        let mut saw_transcribing = false;
+        let mut saw_transcript = None;
+        let mut saw_stats = false;
+        let mut saw_idle = false;
+        for _ in 0..8 {
+            let evt = tokio::time::timeout(std::time::Duration::from_millis(250), rx.recv())
+                .await
+                .expect("event timeout")
+                .expect("event recv");
+            match evt["event"].as_str() {
+                Some("dictation_state_changed") if evt["state"] == "transcribing" => {
+                    saw_transcribing = true;
+                }
+                Some("dictation_transcript") => {
+                    saw_transcript = Some(evt);
+                }
+                Some("dictation_stats_changed") => {
+                    saw_stats = true;
+                }
+                Some("dictation_state_changed") if evt["state"] == "idle" => {
+                    saw_idle = true;
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        assert!(
+            saw_transcribing,
+            "submit_audio must emit transcribing state"
+        );
+        let transcript_evt = saw_transcript.expect("missing dictation_transcript event");
+        assert_eq!(transcript_evt["text"], "groq runtime transcript");
+        assert_eq!(transcript_evt["language"], "ru");
+        assert_eq!(transcript_evt["uuid"], resp.data["uuid"]);
+        assert_eq!(transcript_evt["injected"], true);
+        assert!(saw_stats, "submit_audio must emit dictation_stats_changed");
+        assert!(saw_idle, "submit_audio must return the host to idle");
+
+        mock.assert_async().await;
+
+        let state = handle_dictation_op("get_state", Value::Null, &host).await;
+        assert_eq!(state.data["state"], "idle");
+        assert_eq!(state.data["activeUuid"], Value::Null);
+        assert_eq!(state.data["config"]["injectMode"], "clipboard_only");
+
+        let pending = op_list_pending(&host).await;
+        assert!(pending.ok);
+        assert_eq!(pending.data["items"].as_array().unwrap().len(), 0);
+
+        let stats = handle_dictation_op("get_stats", Value::Null, &host).await;
+        assert!(stats.ok);
+        assert_eq!(stats.data["totalSessions"], 1);
+        assert_eq!(stats.data["totalWords"], 3);
+        assert_eq!(stats.data["totalRecordSeconds"], 4);
+
+        std::env::remove_var("KOSMOS_TEST_GROQ_API_KEY");
+        std::env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
+        std::env::remove_var("KOSMOS_TEST_MODE");
     }
 
     #[tokio::test]

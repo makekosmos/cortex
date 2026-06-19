@@ -24,6 +24,7 @@ import {
   clipboard,
   globalShortcut,
   ipcMain,
+  type IpcMainInvokeEvent,
   shell,
   Tray,
   Menu,
@@ -66,7 +67,7 @@ import { safeHandle } from "./ipc-safe";
 import "./diagnostics";
 import type { BackendStatus, CommandRecord, SearchResult } from "../shared/ipc-types";
 import { CLIPBOARD_HISTORY_ENABLED } from "../shared/ipc-types";
-import { COMMANDS, findCommand } from "./commands";
+import { COMMANDS, findCommand, setDictationShortcutResolver } from "./commands";
 import {
   findDeclaredCommand,
   extensionUserDataDir,
@@ -117,7 +118,7 @@ import {
   teardownFocusSessionBackendSync,
 } from "./focus-session";
 import { showFocusBlockOverlay } from "./focus-overlay";
-import { setupDictationHotkey } from "./dictation-pill";
+import { setDictationCommandInvoker, setupDictationHotkey } from "./dictation-pill";
 import { getServiceStatus, runServiceCliElevated, pingService } from "./focus-service";
 import { findKextInArgv, openInstallExtensionWindow } from "./install-extension-window";
 import {
@@ -233,6 +234,18 @@ function broadcastSettingsSyncUpdated(): void {
   }
 }
 
+export function broadcastCommandsUpdated(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      try {
+        win.webContents.send("kepler:commands:updated");
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
 function wireSyncEventBroadcast(client: ArkClient): void {
   syncEventsUnsubscribe?.();
   syncEventsUnsubscribe = client.onArkEvent((event) => {
@@ -246,6 +259,40 @@ function wireSyncEventBroadcast(client: ArkClient): void {
     }
   });
 }
+
+async function resolveLiveDictationShortcut(timeoutMs = 1500): Promise<string | undefined> {
+  const client = arkClient;
+  if (!client) return dictationHotkeyCache ?? undefined;
+  let timer: NodeJS.Timeout | null = null;
+  try {
+    const resp = await Promise.race([
+      client.invokeOperation<{ config?: { hotkey?: string } }>({
+        operation: "dictation.get_config",
+      }),
+      new Promise<never>((_, rej) => {
+        timer = setTimeout(() => rej(new Error("dictation shortcut timeout")), timeoutMs);
+      }),
+    ]);
+    const hotkey = resp?.config?.hotkey;
+    const normalized = typeof hotkey === "string" && hotkey.trim() ? hotkey.trim() : undefined;
+    if (normalized) {
+      dictationHotkeyCache = normalized;
+      return normalized;
+    }
+    return dictationHotkeyCache ?? undefined;
+  } catch {
+    return dictationHotkeyCache ?? undefined;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+export function setDictationHotkeyCache(hotkey?: string | null): void {
+  dictationHotkeyCache = typeof hotkey === "string" && hotkey.trim() ? hotkey.trim() : null;
+}
+
+setDictationShortcutResolver(() => resolveLiveDictationShortcut());
+setDictationCommandInvoker(() => invokeCommandById("kepler:dictation"));
 
 // --- Backend supervisor (hardening proof loop #5) ---------------------------
 // Backend crash → exponential backoff respawn (1s → 5s → 30s → 1min → 2min).
@@ -268,6 +315,7 @@ let backendRespawnTimer: NodeJS.Timeout | null = null;
 let backendCrashDialogShown = false;
 let arkInitRetryTimer: NodeJS.Timeout | null = null;
 let arkInitRetryAttempt = 0;
+let dictationHotkeyCache: string | null = null;
 // Идёт ли прямо сейчас initArkClient handshake — чтобы recoverBackendIfDead не
 // вмешивался в штатный (re)connect и не плодил дублирующий backend.
 let arkInitInFlight = false;
@@ -432,26 +480,36 @@ function spawnBackend() {
   backendLockPath = path.join(dataDir, "kepler.lock.json");
   keplerLog.info("backend", "spawning backend", { exe, dataDir });
   const trackerEnabled = isUsageTrackerEnabled();
+  const testModeEnabled = process.env.KOSMOS_TEST_MODE === "1";
+  const headlessEnabled = process.env.KOSMOS_HEADLESS === "1";
+  const testGroqApiKey =
+    testModeEnabled || headlessEnabled ? (process.env.KOSMOS_TEST_GROQ_API_KEY?.trim() ?? "") : "";
+  const backendEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    KOSMOS_DATA_DIR: dataDir,
+    // Explicitly forward test-only dictation auth into the backend child when
+    // the shell is running in test/headless mode. Production keeps this unset.
+    KOSMOS_TEST_MODE: testModeEnabled ? "1" : process.env.KOSMOS_TEST_MODE,
+    KOSMOS_HEADLESS: headlessEnabled ? "1" : process.env.KOSMOS_HEADLESS,
+    // KEPLER_INSTANCE прокидывается backend'у чтобы он мог tag'нуть
+    // crash log'и и (в перспективе) device id под slot.
+    KEPLER_INSTANCE: KEPLER_INSTANCE.slot,
+    KEPLER_USAGE_TRACKER: trackerEnabled ? "1" : "0",
+    KOSMOS_DEVICE_NAME: process.env.KOSMOS_DEVICE_NAME || os.hostname(),
+    // RUST_BACKTRACE=1 → crash_reporter::install получает полный backtrace
+    // в `<data_dir>/crashes/panic-*.log`. Production cost ~50KB на panic,
+    // приемлемо для responsible shipping.
+    RUST_BACKTRACE: "1",
+  };
+  if (testGroqApiKey) {
+    backendEnv.KOSMOS_TEST_GROQ_API_KEY = testGroqApiKey;
+  } else {
+    delete backendEnv.KOSMOS_TEST_GROQ_API_KEY;
+  }
   backendProc = spawn(exe, [], {
     detached: false,
     stdio: ["ignore", "pipe", "pipe"],
-    // Forwarder KOSMOS_DATA_DIR в backend — обязательно для dev/test
-    // изоляции. Production: env пустой, backend defaults к %APPDATA%/Kosmos.
-    // KEPLER_USAGE_TRACKER — toggle из Settings; "0" выключает фоновый
-    // трекинг активных окон. Изменения применяются после рестарта Kepler.
-    env: {
-      ...process.env,
-      KOSMOS_DATA_DIR: dataDir,
-      // KEPLER_INSTANCE прокидывается backend'у чтобы он мог tag'нуть
-      // crash log'и и (в перспективе) device id под slot.
-      KEPLER_INSTANCE: KEPLER_INSTANCE.slot,
-      KEPLER_USAGE_TRACKER: trackerEnabled ? "1" : "0",
-      KOSMOS_DEVICE_NAME: process.env.KOSMOS_DEVICE_NAME || os.hostname(),
-      // RUST_BACKTRACE=1 → crash_reporter::install получает полный backtrace
-      // в `<data_dir>/crashes/panic-*.log`. Production cost ~50KB на panic,
-      // приемлемо для responsible shipping.
-      RUST_BACKTRACE: "1",
-    },
+    env: backendEnv,
   });
   backendProc.stdout?.on("data", (b) => process.stderr.write(`[kepler-backend] ${b.toString()}`));
   backendProc.stderr?.on("data", (b) => process.stderr.write(`[kepler-backend] ${b.toString()}`));
@@ -1078,9 +1136,7 @@ async function initArkClient(): Promise<void> {
     // список (он сам вызовет kepler:commands:list). Сам список не шлём —
     // renderer должен пройти через тот же merge-pipeline (static + dynamic).
     client.commands.onChanged(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("kepler:commands:updated");
-      }
+      broadcastCommandsUpdated();
     });
   } catch (e) {
     keplerLog.error("ark", "ArkClient init failed", { err: String(e) });
@@ -1307,8 +1363,15 @@ async function staticCommands(): Promise<CommandRecord[]> {
     installedIds = new Set();
   }
 
-  return COMMANDS.filter((c) => !c.requiresExtension || installedIds.has(c.requiresExtension)).map(
-    (c) => ({
+  const records: CommandRecord[] = [];
+  for (const c of COMMANDS.filter(
+    (cmd) => !cmd.requiresExtension || installedIds.has(cmd.requiresExtension),
+  )) {
+    const shortcut =
+      typeof c.shortcut === "function"
+        ? await Promise.resolve(c.shortcut()).catch(() => undefined)
+        : c.shortcut;
+    records.push({
       id: c.id,
       title: c.title,
       subtitle: c.subtitle,
@@ -1316,8 +1379,10 @@ async function staticCommands(): Promise<CommandRecord[]> {
       kind: c.kind,
       appName: c.appName,
       icon: c.icon?.(),
-    }),
-  );
+      shortcut,
+    });
+  }
+  return records;
 }
 
 /**
@@ -1343,6 +1408,7 @@ safeHandle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
         kind: cmd.kind,
         appName: cmd.appName,
         icon: cmd.icon,
+        shortcut: (cmd as CommandRecord).shortcut,
       });
     }
   } catch (e) {
@@ -1381,6 +1447,7 @@ safeHandle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
             category: c.category,
             kind: d.kind,
             appName: d.appName,
+            shortcut: d.shortcut,
           });
         }
       } else {
@@ -1546,7 +1613,7 @@ async function launchRaycastDeclaredCommand(
   return true;
 }
 
-safeHandle("kepler:commands:invoke", async (event, id: string): Promise<void> => {
+async function invokeCommandById(id: string, event?: IpcMainInvokeEvent): Promise<void> {
   // 1) Internal commands win — exec локально.
   const internal = findCommand(id);
   if (internal) {
@@ -1633,6 +1700,10 @@ safeHandle("kepler:commands:invoke", async (event, id: string): Promise<void> =>
     console.warn(`[kepler-shell] unknown command (no arkClient): ${id}`);
   }
   hideLauncher();
+}
+
+safeHandle("kepler:commands:invoke", async (event, id: string): Promise<void> => {
+  await invokeCommandById(id, event);
 });
 
 safeHandle(

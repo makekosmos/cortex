@@ -6,6 +6,7 @@ import { Check } from "@lucide/vue";
 import AdvancedPageLayout, { type IntroDescriptor } from "../components/AdvancedPageLayout.vue";
 import LegacyRow from "../components/LegacyRow.vue";
 import LegacyToggle from "../components/LegacyToggle.vue";
+import type { AppSettingsTab } from "../navigation";
 
 export interface AppCommandSetting {
   id: string;
@@ -13,11 +14,12 @@ export interface AppCommandSetting {
   icon: string;
   iconFrom: string;
   iconTo: string;
+  shortcut?: string;
 }
 
 defineProps<{
   intro: IntroDescriptor | null;
-  activeTab: "notes" | "tasks" | "time-tracker" | "games";
+  activeTab: AppSettingsTab;
   commands: AppCommandSetting[];
   usageTracker: boolean;
   isCommandVisible: (id: string) => boolean;
@@ -58,7 +60,12 @@ defineEmits<{
             >
               <img :src="command.icon" alt="" />
             </span>
-            <div class="label">{{ command.title }}</div>
+            <div class="command-row-text">
+              <div class="label">{{ command.title }}</div>
+              <code v-if="command.shortcut" class="command-row-shortcut">{{
+                command.shortcut
+              }}</code>
+            </div>
           </div>
           <label class="command-checkbox" :aria-label="`Показывать ${command.title}`">
             <input
@@ -90,6 +97,16 @@ defineEmits<{
   min-width: 0;
   align-items: center;
   gap: 10px;
+  flex: 1 1 auto;
+}
+
+.command-row-text {
+  display: inline-flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex: 1 1 auto;
 }
 
 .command-row-icon {
@@ -114,6 +131,21 @@ defineEmits<{
   width: 16px;
   height: 16px;
   object-fit: contain;
+}
+
+.command-row-shortcut {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: color-mix(in srgb, var(--foreground) 78%, transparent);
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .command-checkbox {

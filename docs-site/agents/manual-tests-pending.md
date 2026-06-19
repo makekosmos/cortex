@@ -13,6 +13,48 @@
 
 ---
 
+## 🟠 Pending — dictation real Windows/macOS smoke (2026-06-19)
+
+Proof loop — `.agent/tasks/2026-06-19-dictation-mock-stt/`.
+
+Automated proof is already done in `.agent/tasks/2026-06-19-dictation-mock-stt/evidence.md`.
+
+**Opt-in real Groq smoke, already runnable but secret-gated:**
+
+- `KOSMOS_TEST_GROQ_API_KEY`
+- optional `KOSMOS_TEST_DICTATION_AUDIO_B64`
+- optional `KOSMOS_TEST_DICTATION_EXPECTED_TRANSCRIPT_SUBSTRING`
+
+Preferred wrapper:
+
+```powershell
+node scripts/run-dictation-groq-smoke.mjs
+```
+
+The wrapper only requires `KOSMOS_TEST_GROQ_API_KEY`; if
+`KOSMOS_TEST_DICTATION_AUDIO_B64` is missing, it generates a tiny synthetic WAV
+fixture automatically. `KOSMOS_TEST_DICTATION_EXPECTED_TRANSCRIPT_SUBSTRING`
+turns on an exact transcript substring assertion.
+
+Direct command:
+
+```powershell
+node <resolved-playwright-cli> test --config platform/desktop/playwright.config.ts --reporter=line --output <temp> platform/desktop/e2e/dictation.spec.ts -g "opt-in real provider path works headless without microphone"
+```
+
+The wrapper resolves the installed Playwright CLI path at runtime, so the exact
+path is printed before launch.
+
+**Осталось ручное и real-device only:**
+
+- [ ] Запустить диктовку с global hotkey с любого экрана и убедиться, что pill стартует и останавливается без лишних окон.
+- [ ] Проверить permissions для микрофона и один короткий Groq cloud transcript на реальном устройстве.
+- [ ] Прогнать `auto_paste` и `clipboard_only`: auto_paste вставляет текст в целевое приложение, clipboard_only оставляет transcript в clipboard без forced paste.
+- [ ] Поменять диктовочный shortcut в Settings и убедиться, что label в App Commands обновляется live.
+- [ ] На macOS проверить adapter sanity: capture изменённого shortcut в Settings и отображение нового accelerator после save.
+- [ ] На macOS выдать microphone / accessibility / input-monitoring permissions и прогнать одну Groq диктовку из внешнего приложения.
+- [ ] На macOS повторить `clipboard_only` и `auto_paste`, включая возврат focus к исходному target app после transcription.
+
 ## 🟠 Pending — Eden CM6 markdown-редактор, фаза 1 (2026-06-11)
 
 CodeMirror 6 редактор за фичефлагом. Proof loop — `.agent/tasks/2026-06-11-eden-cm6-editor/`.
