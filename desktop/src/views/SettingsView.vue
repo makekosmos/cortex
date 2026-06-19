@@ -123,7 +123,13 @@ const activeAppCommands = computed<AppCommandSetting[]>(() => {
 });
 
 function isAppSettingsTab(value: Tab): value is AppSettingsTab {
-  return value === "notes" || value === "tasks" || value === "time-tracker" || value === "games";
+  return (
+    value === "notes" ||
+    value === "tasks" ||
+    value === "time-tracker" ||
+    value === "games" ||
+    value === "dictation"
+  );
 }
 
 function loadHiddenCommandIds(): string[] {
@@ -546,7 +552,14 @@ onBeforeUnmount(() => {
         </template>
 
         <template v-else-if="activeTab === 'dictation'">
-          <DictationTab :intro="activeAdvancedIntro" />
+          <DictationTab
+            :intro="activeAdvancedIntro"
+            :commands="activeAppCommands"
+            :usage-tracker="usageTracker"
+            :is-command-visible="isCommandVisible"
+            @toggle-usage-tracker="onToggleUsageTracker"
+            @toggle-command-visibility="onToggleCommandVisibility"
+          />
         </template>
 
         <template

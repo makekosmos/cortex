@@ -237,6 +237,8 @@ export interface CommandRecord {
   /** Опциональная иконка команды. Data URI (`data:image/png;base64,...`)
       для open-команд extension'ов; undefined для action-команд. */
   icon?: string;
+  /** Опциональный глобальный хоткей/accelerator, если команда имеет binding. */
+  shortcut?: string;
 }
 
 export interface ClipboardHistoryItem {

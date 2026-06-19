@@ -154,17 +154,29 @@ fn keyring_entry() -> Result<keyring::Entry, keyring::Error> {
     keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER_GROQ)
 }
 
+fn test_api_key_override() -> Option<String> {
+    let is_test_like = matches!(std::env::var("KOSMOS_TEST_MODE").as_deref(), Ok("1"))
+        || matches!(std::env::var("KOSMOS_HEADLESS").as_deref(), Ok("1"));
+    if !is_test_like {
+        return None;
+    }
+    std::env::var("KOSMOS_TEST_GROQ_API_KEY")
+        .ok()
+        .filter(|key| !key.trim().is_empty())
+}
+
 #[cfg(not(test))]
 pub fn get_api_key() -> Option<String> {
+    if let Some(key) = test_api_key_override() {
+        return Some(key);
+    }
     let entry = keyring_entry().ok()?;
     entry.get_password().ok()
 }
 
 #[cfg(test)]
 pub fn get_api_key() -> Option<String> {
-    std::env::var("KOSMOS_TEST_GROQ_API_KEY")
-        .ok()
-        .filter(|key| !key.trim().is_empty())
+    test_api_key_override()
 }
 
 pub fn has_api_key() -> bool {

@@ -62,7 +62,7 @@ export interface SettingsNavigationItem {
   keywords: string[];
 }
 
-export type AppSettingsTab = "notes" | "tasks" | "time-tracker" | "games";
+export type AppSettingsTab = "notes" | "tasks" | "time-tracker" | "games" | "dictation";
 
 export interface AppCommandSetting {
   id: string;
@@ -70,6 +70,7 @@ export interface AppCommandSetting {
   icon: string;
   iconFrom: string;
   iconTo: string;
+  shortcut?: string;
 }
 
 export const HIDDEN_COMMANDS_KEY = "kepler.launcher.hiddenCommandIds";
@@ -86,6 +87,10 @@ const FOCUS_COMMAND_GRADIENT = {
 const ARRANCADOR_COMMAND_GRADIENT = {
   iconFrom: "oklch(0.7 0.2 25)",
   iconTo: "oklch(0.45 0.18 20)",
+};
+const DICTATION_COMMAND_GRADIENT = {
+  iconFrom: "#F472B6",
+  iconTo: "#BE185D",
 };
 
 export const appCommandSettings: Record<AppSettingsTab, AppCommandSetting[]> = {
@@ -149,6 +154,14 @@ export const appCommandSettings: Record<AppSettingsTab, AppCommandSetting[]> = {
       title: "Открыть Arrancador",
       icon: arraSvg,
       ...ARRANCADOR_COMMAND_GRADIENT,
+    },
+  ],
+  dictation: [
+    {
+      id: "kepler:dictation",
+      title: "Переключить диктовку",
+      icon: kosmosIconPng,
+      ...DICTATION_COMMAND_GRADIENT,
     },
   ],
 };

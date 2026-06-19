@@ -19,7 +19,8 @@ import {
   stopFocusSessionCommand,
   toggleFocusSessionCommand,
 } from "./focus-session";
-import { openSettings } from "./settings-window";
+import { toggleDictation } from "./dictation-pill";
+import { DEFAULT_HOTKEY, openSettings } from "./settings-window";
 import { check as checkUpdates } from "./autoupdater-host";
 import type { IpcMainInvokeEvent } from "electron";
 
@@ -46,8 +47,25 @@ export interface InternalCommand {
    * результат кешируется в extension-host.
    */
   icon?: () => string | undefined;
+  shortcut?: string | (() => string | undefined | Promise<string | undefined>);
   keepsLauncherOpen?: boolean;
   exec: (event?: IpcMainInvokeEvent) => Promise<void> | void;
+}
+
+type DictationShortcutResolver = () => string | undefined | Promise<string | undefined>;
+let dictationShortcutResolver: DictationShortcutResolver | null = null;
+
+export function setDictationShortcutResolver(resolver: DictationShortcutResolver | null): void {
+  dictationShortcutResolver = resolver;
+}
+
+async function resolveDictationShortcut(): Promise<string> {
+  try {
+    const live = await dictationShortcutResolver?.();
+    return typeof live === "string" && live.trim() ? live.trim() : DEFAULT_HOTKEY;
+  } catch {
+    return DEFAULT_HOTKEY;
+  }
 }
 
 async function runCheckUpdates(): Promise<void> {
@@ -157,6 +175,16 @@ export const COMMANDS: InternalCommand[] = [
     exec: async () => {
       await stopFocusSessionCommand();
     },
+  },
+  {
+    id: "kepler:dictation",
+    title: "Переключить диктовку",
+    subtitle: "Начать или остановить голосовой ввод",
+    category: "action",
+    kind: "command",
+    appName: "Kosmos",
+    shortcut: () => resolveDictationShortcut(),
+    exec: () => toggleDictation(),
   },
   {
     id: "settings:open",
