@@ -1,12 +1,18 @@
 // useFileSearchTab — state + handlers File Search tab'а: roots, ignore patterns,
-// noise/gitignore/hidden/NTFS toggles, rescan + scan-progress toasts.
+// diagnostics, root estimation, noise/gitignore/hidden/NTFS toggles, rescan +
+// scan-progress toasts.
 //
 // Composable принимает `toast` api (от parent's `provideToastHost`), так как
 // прогресс индексации показывается toast'ом, который должен жить дольше mount'а
 // этого таба.
 
-import { ref } from "vue";
-import type { FileIndexSettings } from "@shared/ipc-types";
+import { computed, ref } from "vue";
+import type {
+  FileIndexSettings,
+  FileSearchDiagnosticsReport,
+  FileSearchRootEstimate,
+  FileSearchRootWarning,
+} from "@shared/ipc-types";
 import type { ToastApi } from "@kosmos/visuals";
 
 interface FileSearchPatch {
@@ -18,6 +24,19 @@ interface FileSearchPatch {
 
 function formatCount(value: number): string {
   return new Intl.NumberFormat("ru-RU").format(value);
+}
+
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0 Б";
+  const units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+  let current = value;
+  let unit = 0;
+  while (current >= 1024 && unit < units.length - 1) {
+    current /= 1024;
+    unit += 1;
+  }
+  const digits = unit === 0 || current >= 100 ? 0 : current >= 10 ? 1 : 2;
+  return `${current.toFixed(digits)} ${units[unit]}`;
 }
 
 function shortenPath(path: string): string {
@@ -45,11 +64,87 @@ function describeFileSearchError(err: unknown, fallback: string): string {
 
 export function useFileSearchTab(toast: ToastApi) {
   const fileSearchSettings = ref<FileIndexSettings | null>(null);
+  const fileSearchDiagnostics = ref<FileSearchDiagnosticsReport | null>(null);
   const fileSearchBusy = ref<boolean>(false);
   const fileSearchError = ref<string>("");
   const fileSearchNewIgnore = ref<string>("");
+  const fileSearchRootModalOpen = ref<boolean>(false);
+  const fileSearchRootEstimate = ref<FileSearchRootEstimate | null>(null);
+  const fileSearchRootEstimateLoading = ref<boolean>(false);
+  const fileSearchRootEstimateError = ref<string>("");
+  const fileSearchRootPendingPath = ref<string>("");
   let fileSearchPollTimer: number | null = null;
   let fileSearchToastId: number | null = null;
+
+  const fileSearchRootWarnings = computed<FileSearchRootWarning[]>(() => {
+    const diagnostics = fileSearchDiagnostics.value;
+    if (!diagnostics || diagnostics.risk_level === "ok" || diagnostics.risk_reasons.length === 0) {
+      return [];
+    }
+    return diagnostics.roots.map((root) => ({
+      path: root,
+      risk_level: diagnostics.risk_level === "danger" ? "danger" : "warning",
+      risk_reasons: diagnostics.risk_reasons,
+    }));
+  });
+  const fileSearchIndexTotalBytes = computed(
+    () => fileSearchDiagnostics.value?.total_size_bytes ?? 0,
+  );
+  const fileSearchIndexFilesCount = computed(() => fileSearchDiagnostics.value?.files_count ?? 0);
+  const fileSearchIndexTotalBytesLabel = computed(() =>
+    fileSearchDiagnostics.value ? formatBytes(fileSearchIndexTotalBytes.value) : "—",
+  );
+  const fileSearchIndexFilesCountLabel = computed(() =>
+    fileSearchDiagnostics.value ? formatCount(fileSearchIndexFilesCount.value) : "—",
+  );
+  const fileSearchScanStateLabel = computed(() => {
+    if (
+      fileSearchDiagnostics.value?.scan_in_progress ||
+      fileSearchSettings.value?.scan_in_progress
+    ) {
+      return "Идёт сканирование";
+    }
+    return "Готов";
+  });
+  const fileSearchRootConfirmLabel = computed(() => {
+    const estimate = fileSearchRootEstimate.value;
+    if (!estimate) return "Добавить папку";
+    return estimate.risk_level === "ok" ? "Добавить папку" : "Добавить всё равно";
+  });
+  const fileSearchRootConfirmTone = computed<"primary" | "danger">(() => {
+    const estimate = fileSearchRootEstimate.value;
+    return estimate && estimate.risk_level === "danger" ? "danger" : "primary";
+  });
+  const fileSearchRootEstimateSummary = computed(() => {
+    const estimate = fileSearchRootEstimate.value;
+    if (!estimate) return null;
+    const mediaLimitation =
+      estimate.metadata_only_media_files_count > 0
+        ? "Медиа-файлы индексируются только по имени и пути, без чтения содержимого."
+        : null;
+    const limitations = Array.from(
+      new Set(
+        [...(estimate.limitations ?? []), mediaLimitation].filter((item): item is string => !!item),
+      ),
+    );
+    const showTruncatedHint =
+      estimate.truncated &&
+      !estimate.risk_reasons.some((reason) => reason.toLowerCase().includes("усеч"));
+    return {
+      indexBytes: formatBytes(estimate.estimated_index_size_bytes),
+      textFiles: formatCount(estimate.indexable_text_files_count),
+      textBytes: formatBytes(estimate.indexable_text_bytes),
+      mediaFiles: formatCount(estimate.metadata_only_media_files_count),
+      otherFiles: formatCount(estimate.metadata_only_other_files_count),
+      skippedFiles: formatCount(estimate.ignored_or_skipped_files),
+      scannedEntries: formatCount(estimate.scanned_dirs + estimate.scanned_files),
+      riskLevel: estimate.risk_level,
+      isTruncated: estimate.truncated,
+      showTruncatedHint,
+      riskReasons: estimate.risk_reasons,
+      limitations,
+    };
+  });
 
   function formatFileSearchProgress(settings: FileIndexSettings | null): string {
     const progress = settings?.scan_progress;
@@ -80,6 +175,20 @@ export function useFileSearchTab(toast: ToastApi) {
       console.warn("file_index.settings_get failed", err);
       fileSearchError.value = "Настройки поиска файлов пока недоступны";
     }
+  }
+
+  async function loadFileSearchDiagnostics() {
+    try {
+      fileSearchDiagnostics.value = await window.kepler.fileSearch.diagnostics();
+    } catch (err) {
+      console.warn("file_index.diagnostics failed", err);
+      fileSearchDiagnostics.value = null;
+    }
+  }
+
+  async function loadFileSearchState() {
+    await loadFileSearchSettings();
+    void loadFileSearchDiagnostics();
   }
 
   function clearFileSearchPoll() {
@@ -121,6 +230,7 @@ export function useFileSearchTab(toast: ToastApi) {
           });
         }
         if (!next.scan_in_progress) {
+          void loadFileSearchDiagnostics();
           if (fileSearchToastId !== null) {
             toast.update(fileSearchToastId, {
               title: "Поиск файлов",
@@ -166,6 +276,106 @@ export function useFileSearchTab(toast: ToastApi) {
     fileSearchPollTimer = window.setTimeout(poll, 1200);
   }
 
+  function showFileSearchBusyToast(message: string, description?: string): number {
+    clearFileSearchPoll();
+    fileSearchToastId = toast.show({
+      title: "Поиск файлов",
+      message,
+      description: description ?? formatFileSearchProgress(fileSearchSettings.value),
+      tone: "info",
+      duration: 0,
+      loading: true,
+      closable: true,
+    });
+    return fileSearchToastId;
+  }
+
+  function finishFileSearchBusyToast(
+    id: number,
+    message: string,
+    tone: "success" | "info" = "success",
+    description?: string,
+  ) {
+    if (fileSearchToastId !== id) return;
+    toast.update(id, {
+      title: "Поиск файлов",
+      message,
+      description: description ?? formatFileSearchProgress(fileSearchSettings.value),
+      tone,
+      duration: 3200,
+      loading: false,
+      closable: true,
+    });
+    fileSearchToastId = null;
+  }
+
+  function openFileSearchRootModal(path: string, estimate: FileSearchRootEstimate) {
+    fileSearchRootPendingPath.value = path;
+    fileSearchRootEstimate.value = estimate;
+    fileSearchRootEstimateLoading.value = false;
+    fileSearchRootModalOpen.value = true;
+  }
+
+  function closeFileSearchRootModal() {
+    if (fileSearchRootEstimateLoading.value) return;
+    fileSearchRootModalOpen.value = false;
+    fileSearchRootPendingPath.value = "";
+    fileSearchRootEstimate.value = null;
+    fileSearchRootEstimateError.value = "";
+  }
+
+  async function prepareFileSearchRootAddition(path: string) {
+    fileSearchRootEstimateLoading.value = true;
+    fileSearchRootEstimateError.value = "";
+    try {
+      const estimate = await window.kepler.fileSearch.estimateRoot(path);
+      openFileSearchRootModal(path, estimate);
+    } catch (err) {
+      console.warn("file_index.estimate_root failed", err);
+      const errorMessage = describeFileSearchError(err, "Не удалось оценить корень");
+      fileSearchRootEstimateError.value = errorMessage;
+      openFileSearchRootModal(path, {
+        path,
+        scanned_dirs: 0,
+        scanned_files: 0,
+        ignored_or_skipped_files: 0,
+        indexable_text_files_count: 0,
+        indexable_text_bytes: 0,
+        metadata_only_media_files_count: 0,
+        metadata_only_other_files_count: 0,
+        estimated_indexed_entries_count: 0,
+        estimated_index_size_bytes: 0,
+        truncated: false,
+        risk_level: "warning",
+        risk_reasons: [errorMessage],
+        limitations: [errorMessage],
+      });
+    } finally {
+      fileSearchRootEstimateLoading.value = false;
+    }
+  }
+
+  async function confirmFileSearchRootAddition() {
+    const path = fileSearchRootPendingPath.value;
+    if (!path) return;
+    fileSearchBusy.value = true;
+    fileSearchError.value = "";
+    const toastId = showFileSearchBusyToast("Добавляем папку поиска", shortenPath(path));
+    try {
+      await window.kepler.fileSearch.scopeAdd(path);
+      closeFileSearchRootModal();
+      await loadFileSearchState();
+      watchFileSearchProgress("Папка добавлена, индексация запущена");
+    } catch (err) {
+      console.warn("file_index.scope_add failed", err);
+      fileSearchRootEstimateError.value = describeFileSearchError(err, "Не удалось добавить папку");
+      fileSearchError.value = describeFileSearchError(err, "Не удалось добавить папку поиска");
+      finishFileSearchBusyToast(toastId, "Не удалось добавить папку", "info");
+    } finally {
+      fileSearchBusy.value = false;
+    }
+  }
+
   async function updateFileSearchSettings(patch: FileSearchPatch) {
     const snapshot = fileSearchSettings.value ? { ...fileSearchSettings.value } : null;
     if (fileSearchSettings.value) {
@@ -175,15 +385,13 @@ export function useFileSearchTab(toast: ToastApi) {
     fileSearchError.value = "";
     try {
       await window.kepler.fileSearch.settingsSet(patch);
-      await loadFileSearchSettings();
-      if (fileSearchSettings.value?.scan_in_progress) {
-        watchFileSearchProgress("Настройка сохранена, индекс обновляется");
-      }
+      await loadFileSearchState();
+      watchFileSearchProgress("Настройка сохранена, индекс обновляется");
     } catch (err) {
       console.warn("file_index.settings_set failed", err);
       if (snapshot) fileSearchSettings.value = snapshot;
       fileSearchError.value = describeFileSearchError(err, "Не удалось применить настройку");
-      await loadFileSearchSettings();
+      await loadFileSearchState();
     } finally {
       fileSearchBusy.value = false;
     }
@@ -217,17 +425,7 @@ export function useFileSearchTab(toast: ToastApi) {
     fileSearchError.value = "";
     const picked = await window.kepler.fileSearch.pickScope();
     if (!picked) return;
-    fileSearchBusy.value = true;
-    try {
-      await window.kepler.fileSearch.scopeAdd(picked);
-      await loadFileSearchSettings();
-      watchFileSearchProgress("Папка добавлена, индексация запущена");
-    } catch (err) {
-      console.warn("file_index.scope_add failed", err);
-      fileSearchError.value = "Не удалось добавить папку поиска";
-    } finally {
-      fileSearchBusy.value = false;
-    }
+    await prepareFileSearchRootAddition(picked);
   }
 
   async function onRemoveFileSearchScope(path: string) {
@@ -237,13 +435,18 @@ export function useFileSearchTab(toast: ToastApi) {
     if (!confirmed) return;
     fileSearchBusy.value = true;
     fileSearchError.value = "";
+    const toastId = showFileSearchBusyToast(
+      "Удаляем папку из индекса",
+      `${shortenPath(path)} · очистка кеша продолжится в фоне`,
+    );
     try {
       await window.kepler.fileSearch.scopeRemove(path);
-      await loadFileSearchSettings();
+      await loadFileSearchState();
       watchFileSearchProgress("Папка удалена, индекс обновляется");
     } catch (err) {
       console.warn("file_index.scope_remove failed", err);
       fileSearchError.value = describeFileSearchError(err, "Не удалось удалить папку поиска");
+      finishFileSearchBusyToast(toastId, "Не удалось удалить папку", "info");
     } finally {
       fileSearchBusy.value = false;
     }
@@ -259,14 +462,16 @@ export function useFileSearchTab(toast: ToastApi) {
     }
     fileSearchBusy.value = true;
     fileSearchError.value = "";
+    const toastId = showFileSearchBusyToast("Добавляем шаблон исключения", pattern);
     try {
       await window.kepler.fileSearch.ignoreAdd(pattern);
       fileSearchNewIgnore.value = "";
-      await loadFileSearchSettings();
+      await loadFileSearchState();
       watchFileSearchProgress("Шаблон добавлен, индекс обновляется");
     } catch (err) {
       console.warn("file_index.ignore_add failed", err);
       fileSearchError.value = describeFileSearchError(err, "Не удалось добавить шаблон");
+      finishFileSearchBusyToast(toastId, "Не удалось добавить шаблон", "info");
     } finally {
       fileSearchBusy.value = false;
     }
@@ -275,13 +480,15 @@ export function useFileSearchTab(toast: ToastApi) {
   async function onRemoveFileSearchIgnore(pattern: string) {
     fileSearchBusy.value = true;
     fileSearchError.value = "";
+    const toastId = showFileSearchBusyToast("Удаляем шаблон исключения", pattern);
     try {
       await window.kepler.fileSearch.ignoreRemove(pattern);
-      await loadFileSearchSettings();
+      await loadFileSearchState();
       watchFileSearchProgress("Шаблон удалён, индекс обновляется");
     } catch (err) {
       console.warn("file_index.ignore_remove failed", err);
       fileSearchError.value = describeFileSearchError(err, "Не удалось удалить шаблон");
+      finishFileSearchBusyToast(toastId, "Не удалось удалить шаблон", "info");
     } finally {
       fileSearchBusy.value = false;
     }
@@ -294,13 +501,44 @@ export function useFileSearchTab(toast: ToastApi) {
     }
     fileSearchBusy.value = true;
     fileSearchError.value = "";
+    const toastId = showFileSearchBusyToast("Запускаем переиндексацию");
     try {
       await window.kepler.fileSearch.rescan();
-      await loadFileSearchSettings();
+      await loadFileSearchState();
       watchFileSearchProgress("Переиндексация запущена");
     } catch (err) {
       console.warn("file_index.rescan failed", err);
       fileSearchError.value = describeFileSearchError(err, "Не удалось переиндексировать файлы");
+      finishFileSearchBusyToast(toastId, "Не удалось запустить переиндексацию", "info");
+    } finally {
+      fileSearchBusy.value = false;
+    }
+  }
+
+  async function onClearFileSearchCache() {
+    const confirmed = window.confirm(
+      "Очистить кеш поиска файлов? Папки поиска и настройки сохранятся, но результаты исчезнут до следующей переиндексации.",
+    );
+    if (!confirmed) return;
+    fileSearchBusy.value = true;
+    fileSearchError.value = "";
+    const toastId = showFileSearchBusyToast(
+      "Очищаем индекс",
+      "Папки поиска и настройки сохранятся.",
+    );
+    try {
+      await window.kepler.fileSearch.clearCache();
+      await loadFileSearchState();
+      finishFileSearchBusyToast(
+        toastId,
+        "Индекс очищен",
+        "success",
+        "Запусти переиндексацию вручную.",
+      );
+    } catch (err) {
+      console.warn("file_index.clear_cache failed", err);
+      fileSearchError.value = describeFileSearchError(err, "Не удалось очистить индекс");
+      finishFileSearchBusyToast(toastId, "Не удалось очистить индекс", "info");
     } finally {
       fileSearchBusy.value = false;
     }
@@ -308,11 +546,28 @@ export function useFileSearchTab(toast: ToastApi) {
 
   return {
     fileSearchSettings,
+    fileSearchDiagnostics,
     fileSearchBusy,
     fileSearchError,
     fileSearchNewIgnore,
     loadFileSearchSettings,
+    loadFileSearchDiagnostics,
+    loadFileSearchState,
     clearFileSearchPoll,
+    fileSearchRootModalOpen,
+    fileSearchRootEstimate,
+    fileSearchRootEstimateLoading,
+    fileSearchRootEstimateError,
+    fileSearchRootPendingPath,
+    fileSearchRootWarnings,
+    fileSearchIndexTotalBytes,
+    fileSearchIndexFilesCount,
+    fileSearchIndexTotalBytesLabel,
+    fileSearchIndexFilesCountLabel,
+    fileSearchScanStateLabel,
+    fileSearchRootConfirmLabel,
+    fileSearchRootConfirmTone,
+    fileSearchRootEstimateSummary,
     onToggleFileSearchNoise,
     onToggleFileSearchGitignore,
     onToggleFileSearchHidden,
@@ -322,5 +577,8 @@ export function useFileSearchTab(toast: ToastApi) {
     onAddFileSearchIgnore,
     onRemoveFileSearchIgnore,
     onRescanFileSearch,
+    onClearFileSearchCache,
+    confirmFileSearchRootAddition,
+    closeFileSearchRootModal,
   };
 }

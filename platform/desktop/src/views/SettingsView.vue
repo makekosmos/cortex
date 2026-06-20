@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   appCommandSettings,
   HIDDEN_COMMANDS_KEY,
@@ -333,6 +333,13 @@ function onKey(e: KeyboardEvent) {
 function selectTab(t: Tab) {
   tab.value = t;
 }
+
+watch(activeTab, (next) => {
+  if (!searchQuery.value || !next) return;
+  if (tab.value !== next) {
+    tab.value = next;
+  }
+});
 
 // --- autoUpdater state ------------------------------------------------------
 

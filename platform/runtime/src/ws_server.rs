@@ -1462,6 +1462,37 @@ async fn handle_file_index_op(
             },
             Err(e) => LocalResponse::err(format!("file_index.rescan: {e}")),
         },
+        "clear_cache" => match file_index.clear_cache() {
+            Ok(stats) => match serde_json::to_value(stats) {
+                Ok(value) => LocalResponse::ok(value),
+                Err(e) => LocalResponse::err(format!("file_index.clear_cache: serialize: {e}")),
+            },
+            Err(e) => LocalResponse::err(format!("file_index.clear_cache: {e}")),
+        },
+        "diagnostics" => match file_index.diagnostics() {
+            Ok(diag) => match serde_json::to_value(diag) {
+                Ok(value) => LocalResponse::ok(value),
+                Err(e) => LocalResponse::err(format!("file_index.diagnostics: serialize: {e}")),
+            },
+            Err(e) => LocalResponse::err(format!("file_index.diagnostics: {e}")),
+        },
+        "estimate_root" => {
+            let path = match params.get("path").and_then(|v| v.as_str()) {
+                Some(path) => path.to_string(),
+                None => return LocalResponse::err("file_index.estimate_root: missing 'path'"),
+            };
+            let index = file_index.clone();
+            match tokio::task::spawn_blocking(move || index.estimate_root(&path)).await {
+                Ok(Ok(estimate)) => match serde_json::to_value(estimate) {
+                    Ok(value) => LocalResponse::ok(value),
+                    Err(e) => {
+                        LocalResponse::err(format!("file_index.estimate_root: serialize: {e}"))
+                    }
+                },
+                Ok(Err(e)) => LocalResponse::err(format!("file_index.estimate_root: {e}")),
+                Err(e) => LocalResponse::err(format!("file_index.estimate_root: join: {e}")),
+            }
+        }
         "settings_get" => match file_index.settings() {
             Ok(settings) => match serde_json::to_value(settings) {
                 Ok(value) => LocalResponse::ok(value),
@@ -1688,5 +1719,43 @@ mod tests {
 
         assert_eq!(entry["icon_path"], serde_json::Value::Null);
         assert_eq!(entry["icon_ref"], "kosmos-icon://app/calc");
+    }
+
+    #[tokio::test]
+    async fn file_index_diagnostics_op_returns_enriched_payload() {
+        let data = tempfile::tempdir().unwrap();
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("diag-note.md"), "v1").unwrap();
+        let index =
+            Arc::new(FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap());
+        index.rescan().await.unwrap();
+
+        let response = handle_file_index_op("diagnostics", serde_json::Value::Null, &index).await;
+
+        assert!(response.ok);
+        assert_eq!(response.data["roots_count"], 1);
+        assert_eq!(response.data["files_count"], 1);
+        assert!(response.data.get("db_size_bytes").is_some());
+    }
+
+    #[tokio::test]
+    async fn file_index_estimate_root_op_returns_estimate_payload() {
+        let data = tempfile::tempdir().unwrap();
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("notes.md"), "v1").unwrap();
+        std::fs::write(root.path().join("photo.png"), "v1").unwrap();
+        let index =
+            Arc::new(FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap());
+
+        let response = handle_file_index_op(
+            "estimate_root",
+            serde_json::json!({ "path": root.path().to_string_lossy() }),
+            &index,
+        )
+        .await;
+
+        assert!(response.ok);
+        assert_eq!(response.data["indexable_text_files_count"], 1);
+        assert_eq!(response.data["metadata_only_media_files_count"], 1);
     }
 }

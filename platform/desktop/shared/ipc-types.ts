@@ -218,6 +218,62 @@ export interface FileIndexSettingsPatch {
   ntfs_accelerated?: boolean;
 }
 
+export type FileSearchRiskLevel = "ok" | "warning" | "danger";
+
+export interface FileIndexLastScanSnapshot {
+  finished_at_unix_ms: number;
+  duration_ms: number;
+  indexed_file_count: number;
+  roots_count: number;
+  exclude_noisy_folders: boolean;
+  respect_gitignore: boolean;
+  include_hidden: boolean;
+  ntfs_accelerated: boolean;
+}
+
+export interface FileIndexDiagnosticsSnapshot {
+  db_size_bytes: number;
+  wal_size_bytes: number;
+  total_size_bytes: number;
+  scan_in_progress: boolean;
+  scan_progress: FileIndexSettings["scan_progress"];
+  roots: string[];
+  roots_count: number;
+  files_count: number;
+  risk_level: FileSearchRiskLevel;
+  risk_reasons: string[];
+  last_scan_ms: number;
+  last_scan: FileIndexLastScanSnapshot | null;
+  search_count: number;
+  like_search_count: number;
+  query_len_histogram: Record<string, number>;
+}
+
+export interface FileSearchRootEstimate {
+  path: string;
+  scanned_dirs: number;
+  scanned_files: number;
+  ignored_or_skipped_files: number;
+  indexable_text_files_count: number;
+  indexable_text_bytes: number;
+  metadata_only_media_files_count: number;
+  metadata_only_other_files_count: number;
+  estimated_indexed_entries_count: number;
+  estimated_index_size_bytes: number;
+  truncated: boolean;
+  risk_level: FileSearchRiskLevel;
+  risk_reasons: string[];
+  limitations: string[];
+}
+
+export interface FileSearchRootWarning {
+  path: string;
+  risk_level: Exclude<FileSearchRiskLevel, "ok">;
+  risk_reasons: string[];
+}
+
+export type FileSearchDiagnosticsReport = FileIndexDiagnosticsSnapshot;
+
 export interface InstalledExtensionInfo {
   id: string;
   name: string;
@@ -529,11 +585,14 @@ export interface KeplerApi {
   fileSearch: {
     settingsGet(): Promise<FileIndexSettings>;
     settingsSet(patch: FileIndexSettingsPatch): Promise<void>;
+    diagnostics(): Promise<FileSearchDiagnosticsReport>;
+    estimateRoot(path: string): Promise<FileSearchRootEstimate>;
     scopeAdd(path: string): Promise<void>;
     scopeRemove(path: string): Promise<void>;
     ignoreAdd(pattern: string): Promise<void>;
     ignoreRemove(pattern: string): Promise<void>;
     rescan(): Promise<void>;
+    clearCache(): Promise<void>;
     pickScope(): Promise<string | null>;
   };
 
