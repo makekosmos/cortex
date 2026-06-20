@@ -95,10 +95,10 @@ export function useFileSearchTab(toast: ToastApi) {
   );
   const fileSearchIndexFilesCount = computed(() => fileSearchDiagnostics.value?.files_count ?? 0);
   const fileSearchIndexTotalBytesLabel = computed(() =>
-    fileSearchDiagnostics.value ? formatBytes(fileSearchIndexTotalBytes.value) : "—",
+    formatBytes(fileSearchIndexTotalBytes.value),
   );
   const fileSearchIndexFilesCountLabel = computed(() =>
-    fileSearchDiagnostics.value ? formatCount(fileSearchIndexFilesCount.value) : "—",
+    formatCount(fileSearchIndexFilesCount.value),
   );
   const fileSearchScanStateLabel = computed(() => {
     if (fileSearchSettings.value?.enabled === false) {

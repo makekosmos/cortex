@@ -302,18 +302,20 @@ impl FileIndex {
             return self.current_stats();
         }
         self.invalidate_running_scan();
-        let mut should_rescan = true;
+        let mut should_rescan = patch.enabled.is_none();
         if let Some(value) = patch.exclude_noisy_folders {
             self.store.set_exclude_noisy_folders(value)?;
         }
         if let Some(value) = patch.enabled {
             self.store.set_enabled(value)?;
-            should_rescan = value;
             if !value {
+                should_rescan = false;
                 self.clear_progress_after_disable();
                 self.stop_watcher();
             } else {
                 self.restart_watcher()?;
+                let snap = self.store.stats_snapshot()?;
+                should_rescan = snap.total == 0 && !snap.roots.is_empty();
             }
         }
         if let Some(value) = patch.respect_gitignore {
@@ -1427,6 +1429,35 @@ mod tests {
             .unwrap();
         index.rescan().await.unwrap();
         assert_eq!(index.search("toggle-note", 10).unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn enabling_existing_index_does_not_force_rescan() {
+        let data = tempdir().unwrap();
+        let root = tempdir().unwrap();
+        std::fs::write(root.path().join("old-note.txt"), "v1").unwrap();
+
+        let index = FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap();
+        index.rescan().await.unwrap();
+        std::fs::write(root.path().join("new-note.txt"), "v1").unwrap();
+
+        index
+            .set_settings(FileIndexSettingsPatch {
+                enabled: Some(false),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        index
+            .set_settings(FileIndexSettingsPatch {
+                enabled: Some(true),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(index.search("old-note", 10).unwrap().len(), 1);
+        assert!(index.search("new-note", 10).unwrap().is_empty());
     }
 
     #[test]
