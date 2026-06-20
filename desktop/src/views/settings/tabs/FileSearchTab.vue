@@ -28,6 +28,11 @@ const {
   fileSearchIndexTotalBytesLabel,
   fileSearchIndexFilesCountLabel,
   fileSearchScanStateLabel,
+  fileSearchProgressVisible,
+  fileSearchProgressTitle,
+  fileSearchProgressPercent,
+  fileSearchProgressDetails,
+  fileSearchProgressStallLabel,
   fileSearchRootConfirmLabel,
   fileSearchRootConfirmTone,
   fileSearchRootEstimateSummary,
@@ -77,6 +82,19 @@ onBeforeUnmount(() => {
         <div class="file-search-summary__label">Скан</div>
         <div class="file-search-summary__value">{{ fileSearchScanStateLabel }}</div>
       </div>
+    </div>
+    <div v-if="fileSearchProgressVisible" class="file-search-progress" role="status">
+      <div class="file-search-progress__topline">
+        <span class="file-search-progress__title">{{ fileSearchProgressTitle }}</span>
+        <span class="file-search-progress__activity">{{ fileSearchProgressStallLabel }}</span>
+      </div>
+      <div class="file-search-progress__bar" aria-hidden="true">
+        <div
+          class="file-search-progress__fill"
+          :style="{ width: `${fileSearchProgressPercent}%` }"
+        />
+      </div>
+      <div class="file-search-progress__details">{{ fileSearchProgressDetails }}</div>
     </div>
     <div v-if="fileSearchSettings" class="row file-search-row file-search-row--scopes">
       <div class="row-label file-search-wide">
@@ -422,6 +440,92 @@ onBeforeUnmount(() => {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--foreground);
+}
+
+.file-search-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: -2px 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 24%, transparent);
+  background: color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 9%, transparent);
+}
+
+.file-search-progress__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.file-search-progress__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.file-search-progress__activity {
+  flex: 0 0 auto;
+  font-size: 0.6875rem;
+  color: color-mix(in srgb, var(--foreground) 58%, transparent);
+}
+
+.file-search-progress__bar {
+  position: relative;
+  overflow: hidden;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.file-search-progress__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 38%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 42%, transparent),
+    transparent
+  );
+  animation: file-search-progress-sweep 1.4s linear infinite;
+}
+
+.file-search-progress__fill {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  min-width: 8px;
+  border-radius: inherit;
+  background: var(--accent, oklch(0.7 0.18 250));
+  transition: width 180ms ease;
+}
+
+.file-search-progress__details {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--foreground) 72%, transparent);
+}
+
+@keyframes file-search-progress-sweep {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(280%);
+  }
 }
 
 .file-search-row {

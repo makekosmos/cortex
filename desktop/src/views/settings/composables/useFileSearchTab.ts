@@ -73,8 +73,11 @@ export function useFileSearchTab(toast: ToastApi) {
   const fileSearchRootEstimateLoading = ref<boolean>(false);
   const fileSearchRootEstimateError = ref<string>("");
   const fileSearchRootPendingPath = ref<string>("");
+  const fileSearchProgressLastChangedAt = ref<number>(Date.now());
+  const fileSearchProgressNow = ref<number>(Date.now());
   let fileSearchPollTimer: number | null = null;
   let fileSearchToastId: number | null = null;
+  let fileSearchProgressSignature = "";
 
   const fileSearchRootWarnings = computed<FileSearchRootWarning[]>(() => {
     const diagnostics = fileSearchDiagnostics.value;
@@ -108,6 +111,31 @@ export function useFileSearchTab(toast: ToastApi) {
       return "Идёт сканирование";
     }
     return "Готов";
+  });
+  const fileSearchProgressVisible = computed(() => {
+    const settings = fileSearchSettings.value;
+    return Boolean(settings?.enabled !== false && settings?.scan_in_progress);
+  });
+  const fileSearchProgressTitle = computed(() => {
+    const progress = fileSearchSettings.value?.scan_progress;
+    return progress?.message || "Индексируем файлы";
+  });
+  const fileSearchProgressPercent = computed(() => {
+    const progress = fileSearchSettings.value?.scan_progress;
+    if (!progress || progress.roots_total <= 0) return 0;
+    return Math.max(0, Math.min(100, (progress.roots_done / progress.roots_total) * 100));
+  });
+  const fileSearchProgressDetails = computed(() =>
+    formatFileSearchProgress(fileSearchSettings.value),
+  );
+  const fileSearchProgressStallLabel = computed(() => {
+    if (!fileSearchProgressVisible.value) return "";
+    const elapsedSec = Math.floor(
+      Math.max(0, fileSearchProgressNow.value - fileSearchProgressLastChangedAt.value) / 1000,
+    );
+    if (elapsedSec < 8) return "обновляется";
+    if (elapsedSec < 30) return `без изменений ${elapsedSec} с`;
+    return `без изменений ${elapsedSec} с · возможно большой каталог`;
   });
   const fileSearchRootConfirmLabel = computed(() => {
     const estimate = fileSearchRootEstimate.value;
@@ -170,10 +198,38 @@ export function useFileSearchTab(toast: ToastApi) {
     return parts.length > 0 ? parts.join(" · ") : "Индексатор готовится.";
   }
 
+  function rememberFileSearchProgress(settings: FileIndexSettings | null) {
+    fileSearchProgressNow.value = Date.now();
+    if (!settings?.scan_in_progress) {
+      fileSearchProgressSignature = "";
+      fileSearchProgressLastChangedAt.value = fileSearchProgressNow.value;
+      return;
+    }
+    const progress = settings.scan_progress;
+    const nextSignature = [
+      progress.phase,
+      progress.root ?? "",
+      progress.roots_done,
+      progress.roots_total,
+      progress.files_seen,
+      progress.files_indexed,
+      progress.message,
+    ].join("|");
+    if (nextSignature !== fileSearchProgressSignature) {
+      fileSearchProgressSignature = nextSignature;
+      fileSearchProgressLastChangedAt.value = fileSearchProgressNow.value;
+    }
+  }
+
+  function applyFileSearchSettings(settings: FileIndexSettings) {
+    fileSearchSettings.value = settings;
+    rememberFileSearchProgress(settings);
+  }
+
   async function loadFileSearchSettings() {
     fileSearchError.value = "";
     try {
-      fileSearchSettings.value = await window.kepler.fileSearch.settingsGet();
+      applyFileSearchSettings(await window.kepler.fileSearch.settingsGet());
     } catch (err) {
       console.warn("file_index.settings_get failed", err);
       fileSearchError.value = "Настройки поиска файлов пока недоступны";
@@ -192,6 +248,7 @@ export function useFileSearchTab(toast: ToastApi) {
   async function loadFileSearchState() {
     await loadFileSearchSettings();
     void loadFileSearchDiagnostics();
+    watchFileSearchProgressInline();
   }
 
   function clearFileSearchPoll() {
@@ -220,7 +277,7 @@ export function useFileSearchTab(toast: ToastApi) {
     const poll = async () => {
       try {
         const next = await window.kepler.fileSearch.settingsGet();
-        fileSearchSettings.value = next;
+        applyFileSearchSettings(next);
         if (fileSearchToastId !== null) {
           toast.update(fileSearchToastId, {
             title: "Индексируем файлы",
@@ -277,6 +334,25 @@ export function useFileSearchTab(toast: ToastApi) {
       fileSearchPollTimer = window.setTimeout(poll, 2000);
     };
     fileSearchPollTimer = window.setTimeout(poll, 1200);
+  }
+
+  function watchFileSearchProgressInline() {
+    if (fileSearchPollTimer || !fileSearchSettings.value?.scan_in_progress) return;
+    const poll = async () => {
+      try {
+        const next = await window.kepler.fileSearch.settingsGet();
+        applyFileSearchSettings(next);
+        if (!next.scan_in_progress) {
+          void loadFileSearchDiagnostics();
+          fileSearchPollTimer = null;
+          return;
+        }
+      } catch (err) {
+        console.warn("file_index inline progress poll failed", err);
+      }
+      fileSearchPollTimer = window.setTimeout(poll, 2000);
+    };
+    fileSearchPollTimer = window.setTimeout(poll, 1000);
   }
 
   function showFileSearchBusyToast(message: string, description?: string): number {
@@ -572,6 +648,11 @@ export function useFileSearchTab(toast: ToastApi) {
     fileSearchIndexTotalBytesLabel,
     fileSearchIndexFilesCountLabel,
     fileSearchScanStateLabel,
+    fileSearchProgressVisible,
+    fileSearchProgressTitle,
+    fileSearchProgressPercent,
+    fileSearchProgressDetails,
+    fileSearchProgressStallLabel,
     fileSearchRootConfirmLabel,
     fileSearchRootConfirmTone,
     fileSearchRootEstimateSummary,
