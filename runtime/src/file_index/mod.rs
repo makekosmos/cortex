@@ -50,6 +50,7 @@ pub struct FileSearchResult {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ScanStats {
+    pub enabled: bool,
     pub total: usize,
     pub roots: usize,
     pub exclude_noisy_folders: bool,
@@ -60,6 +61,7 @@ pub struct ScanStats {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FileIndexSettings {
+    pub enabled: bool,
     pub exclude_noisy_folders: bool,
     pub roots: Vec<String>,
     pub ignore_patterns: Vec<String>,
@@ -103,6 +105,7 @@ pub struct ScanProgressSnapshot {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct FileIndexSettingsPatch {
+    pub enabled: Option<bool>,
     pub exclude_noisy_folders: Option<bool>,
     pub respect_gitignore: Option<bool>,
     pub include_hidden: Option<bool>,
@@ -263,6 +266,7 @@ impl FileIndex {
 
     pub fn settings(&self) -> Result<FileIndexSettings> {
         let options = self.scan_options()?;
+        let enabled = self.index_enabled()?;
         let ntfs_status = if !options.ntfs_accelerated {
             NtfsStatus::Disabled
         } else {
@@ -272,6 +276,7 @@ impl FileIndex {
                 .status
         };
         Ok(FileIndexSettings {
+            enabled,
             exclude_noisy_folders: options.exclude_noisy_folders,
             roots: self.root_strings()?,
             ignore_patterns: options.ignore_patterns,
@@ -297,8 +302,19 @@ impl FileIndex {
             return self.current_stats();
         }
         self.invalidate_running_scan();
+        let mut should_rescan = true;
         if let Some(value) = patch.exclude_noisy_folders {
             self.store.set_exclude_noisy_folders(value)?;
+        }
+        if let Some(value) = patch.enabled {
+            self.store.set_enabled(value)?;
+            should_rescan = value;
+            if !value {
+                self.clear_progress_after_disable();
+                self.stop_watcher();
+            } else {
+                self.restart_watcher()?;
+            }
         }
         if let Some(value) = patch.respect_gitignore {
             self.store.set_respect_gitignore(value)?;
@@ -309,7 +325,9 @@ impl FileIndex {
         if let Some(value) = patch.ntfs_accelerated {
             self.store.set_ntfs_accelerated(value)?;
         }
-        self.spawn_rescan();
+        if should_rescan && self.index_enabled()? {
+            self.spawn_rescan();
+        }
         self.current_stats()
     }
 
@@ -325,8 +343,10 @@ impl FileIndex {
         }
         self.invalidate_running_scan();
         self.store.add_root(path)?;
-        self.restart_watcher()?;
-        self.spawn_rescan();
+        if self.index_enabled()? {
+            self.restart_watcher()?;
+            self.spawn_rescan();
+        }
         self.current_stats()
     }
 
@@ -336,9 +356,13 @@ impl FileIndex {
         }
         self.invalidate_running_scan();
         let removed_root = self.store.remove_root_record(path)?;
-        self.restart_watcher()?;
+        if self.index_enabled()? {
+            self.restart_watcher()?;
+        }
         self.spawn_removed_root_cleanup(removed_root);
-        self.spawn_rescan();
+        if self.index_enabled()? {
+            self.spawn_rescan();
+        }
         self.current_stats()
     }
 
@@ -349,7 +373,9 @@ impl FileIndex {
         scanner::validate_ignore_pattern(pattern)?;
         self.invalidate_running_scan();
         self.store.add_ignore_pattern(pattern)?;
-        self.spawn_rescan();
+        if self.index_enabled()? {
+            self.spawn_rescan();
+        }
         self.current_stats()
     }
 
@@ -359,12 +385,14 @@ impl FileIndex {
         }
         self.invalidate_running_scan();
         self.store.remove_ignore_pattern(pattern)?;
-        self.spawn_rescan();
+        if self.index_enabled()? {
+            self.spawn_rescan();
+        }
         self.current_stats()
     }
 
     pub async fn rescan(&self) -> Result<ScanStats> {
-        if !self.enabled {
+        if !self.enabled || !self.index_enabled()? {
             return self.current_stats();
         }
         let _guard = self.scan_lock.lock().await;
@@ -372,7 +400,7 @@ impl FileIndex {
     }
 
     pub fn request_rescan(&self) -> Result<ScanStats> {
-        if !self.enabled {
+        if !self.enabled || !self.index_enabled()? {
             return self.current_stats();
         }
         self.spawn_rescan();
@@ -545,6 +573,7 @@ impl FileIndex {
             ntfs_accelerated: options.ntfs_accelerated,
         });
         Ok(ScanStats {
+            enabled: true,
             total,
             roots,
             exclude_noisy_folders: options.exclude_noisy_folders,
@@ -555,7 +584,7 @@ impl FileIndex {
     }
 
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<FileSearchResult>> {
-        if !self.enabled {
+        if !self.enabled || !self.index_enabled()? {
             return Ok(Vec::new());
         }
         self.observe_search(query);
@@ -592,6 +621,10 @@ impl FileIndex {
         self.store.roots()
     }
 
+    fn index_enabled(&self) -> Result<bool> {
+        Ok(self.enabled && self.store.enabled()?)
+    }
+
     pub fn has_roots(&self) -> Result<bool> {
         Ok(!self.root_strings()?.is_empty())
     }
@@ -617,10 +650,16 @@ impl FileIndex {
         Ok(())
     }
 
+    fn stop_watcher(&self) {
+        let mut watcher = self.watcher.lock().unwrap_or_else(|e| e.into_inner());
+        *watcher = None;
+    }
+
     fn current_stats(&self) -> Result<ScanStats> {
         if !self.enabled {
             let options = self.scan_options()?;
             return Ok(ScanStats {
+                enabled: false,
                 total: 0,
                 roots: 0,
                 exclude_noisy_folders: options.exclude_noisy_folders,
@@ -633,6 +672,7 @@ impl FileIndex {
         // separate lock() acquisitions racing with chunked remove_tree windows.
         let snap = self.store.stats_snapshot()?;
         Ok(ScanStats {
+            enabled: snap.enabled,
             total: snap.total,
             roots: snap.roots.len(),
             exclude_noisy_folders: snap.exclude_noisy_folders,
@@ -701,6 +741,15 @@ impl FileIndex {
     fn set_progress(&self, snapshot: ScanProgressSnapshot) {
         let mut progress = self.scan_progress.lock().unwrap_or_else(|e| e.into_inner());
         *progress = snapshot;
+    }
+
+    fn clear_progress_after_disable(&self) {
+        self.scan_in_progress.store(false, Ordering::SeqCst);
+        self.set_progress(ScanProgressSnapshot {
+            phase: "disabled".to_string(),
+            message: "Поиск файлов выключен".to_string(),
+            ..Default::default()
+        });
     }
 
     fn remember_last_scan(&self, snapshot: LastScanSnapshot) {
@@ -1345,6 +1394,39 @@ mod tests {
         assert!(disabled.search("persisted", 10).unwrap().is_empty());
         assert_eq!(disabled.request_rescan().unwrap().total, 0);
         assert_eq!(disabled.rescan().await.unwrap().roots, 0);
+    }
+
+    #[tokio::test]
+    async fn settings_enabled_false_disables_search_without_losing_roots() {
+        let data = tempdir().unwrap();
+        let root = tempdir().unwrap();
+        std::fs::write(root.path().join("toggle-note.txt"), "v1").unwrap();
+
+        let index = FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap();
+        index.rescan().await.unwrap();
+        assert_eq!(index.search("toggle-note", 10).unwrap().len(), 1);
+
+        index
+            .set_settings(FileIndexSettingsPatch {
+                enabled: Some(false),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert!(!index.settings().unwrap().enabled);
+        assert_eq!(index.settings().unwrap().roots.len(), 1);
+        assert!(index.search("toggle-note", 10).unwrap().is_empty());
+        assert_eq!(index.request_rescan().unwrap().total, 1);
+
+        index
+            .set_settings(FileIndexSettingsPatch {
+                enabled: Some(true),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        index.rescan().await.unwrap();
+        assert_eq!(index.search("toggle-note", 10).unwrap().len(), 1);
     }
 
     #[test]

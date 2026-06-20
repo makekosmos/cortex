@@ -275,7 +275,12 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="btn"
-          :disabled="!fileSearchSettings || fileSearchBusy || fileSearchSettings?.scan_in_progress"
+          :disabled="
+            !fileSearchSettings ||
+            fileSearchBusy ||
+            fileSearchSettings?.scan_in_progress ||
+            fileSearchSettings?.enabled === false
+          "
           @click="onRescanFileSearch"
         >
           {{

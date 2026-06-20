@@ -98,6 +98,9 @@ export function useFileSearchTab(toast: ToastApi) {
     fileSearchDiagnostics.value ? formatCount(fileSearchIndexFilesCount.value) : "—",
   );
   const fileSearchScanStateLabel = computed(() => {
+    if (fileSearchSettings.value?.enabled === false) {
+      return "Выключен";
+    }
     if (
       fileSearchDiagnostics.value?.scan_in_progress ||
       fileSearchSettings.value?.scan_in_progress
@@ -495,6 +498,10 @@ export function useFileSearchTab(toast: ToastApi) {
   }
 
   async function onRescanFileSearch() {
+    if (fileSearchSettings.value?.enabled === false) {
+      fileSearchError.value = "Поиск файлов выключен";
+      return;
+    }
     if (fileSearchSettings.value?.scan_in_progress) {
       fileSearchError.value = "Индексация уже идёт";
       return;
