@@ -5,7 +5,7 @@
 
 import { onBeforeUnmount, onMounted } from "vue";
 import { Folder, Plus } from "@lucide/vue";
-import { Button, Modal, useToast } from "@kosmos/visuals";
+import { useToast } from "@kosmos/visuals";
 import AdvancedPageLayout, { type IntroDescriptor } from "../components/AdvancedPageLayout.vue";
 import LegacyRow from "../components/LegacyRow.vue";
 import LegacyToggle from "../components/LegacyToggle.vue";
@@ -20,22 +20,7 @@ const {
   fileSearchBusy,
   fileSearchError,
   fileSearchNewIgnore,
-  fileSearchRootModalOpen,
-  fileSearchRootEstimateLoading,
-  fileSearchRootEstimateError,
-  fileSearchRootPendingPath,
   fileSearchRootWarnings,
-  fileSearchIndexTotalBytesLabel,
-  fileSearchIndexFilesCountLabel,
-  fileSearchScanStateLabel,
-  fileSearchProgressVisible,
-  fileSearchProgressTitle,
-  fileSearchProgressPercent,
-  fileSearchProgressDetails,
-  fileSearchProgressStallLabel,
-  fileSearchRootConfirmLabel,
-  fileSearchRootConfirmTone,
-  fileSearchRootEstimateSummary,
   loadFileSearchState,
   clearFileSearchPoll,
   onToggleFileSearchNoise,
@@ -48,8 +33,6 @@ const {
   onRemoveFileSearchIgnore,
   onRescanFileSearch,
   onClearFileSearchCache,
-  confirmFileSearchRootAddition,
-  closeFileSearchRootModal,
 } = useFileSearchTab(toast);
 
 onMounted(() => {
@@ -68,33 +51,6 @@ onBeforeUnmount(() => {
            misleading "no folders chosen" while settings load. -->
     <div v-if="fileSearchSettings === null && !fileSearchError" class="hint">
       Загрузка настроек поиска…
-    </div>
-    <div v-if="fileSearchSettings" class="file-search-summary">
-      <div class="file-search-summary__item">
-        <div class="file-search-summary__label">Индекс (DB+WAL)</div>
-        <div class="file-search-summary__value">{{ fileSearchIndexTotalBytesLabel }}</div>
-      </div>
-      <div class="file-search-summary__item">
-        <div class="file-search-summary__label">Файлов в индексе</div>
-        <div class="file-search-summary__value">{{ fileSearchIndexFilesCountLabel }}</div>
-      </div>
-      <div class="file-search-summary__item">
-        <div class="file-search-summary__label">Скан</div>
-        <div class="file-search-summary__value">{{ fileSearchScanStateLabel }}</div>
-      </div>
-    </div>
-    <div v-if="fileSearchProgressVisible" class="file-search-progress" role="status">
-      <div class="file-search-progress__topline">
-        <span class="file-search-progress__title">{{ fileSearchProgressTitle }}</span>
-        <span class="file-search-progress__activity">{{ fileSearchProgressStallLabel }}</span>
-      </div>
-      <div class="file-search-progress__bar" aria-hidden="true">
-        <div
-          class="file-search-progress__fill"
-          :style="{ width: `${fileSearchProgressPercent}%` }"
-        />
-      </div>
-      <div class="file-search-progress__details">{{ fileSearchProgressDetails }}</div>
     </div>
     <div v-if="fileSearchSettings" class="row file-search-row file-search-row--scopes">
       <div class="row-label file-search-wide">
@@ -307,238 +263,17 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </LegacyRow>
-
-    <Modal
-      :open="fileSearchRootModalOpen"
-      title="Подтвердите добавление корня"
-      :width="'min(620px, 92vw)'"
-      @close="closeFileSearchRootModal"
-    >
-      <div class="file-search-root-modal">
-        <div class="file-search-root-modal__path">
-          <div class="label">Папка</div>
-          <code>{{ fileSearchRootPendingPath }}</code>
-        </div>
-
-        <div v-if="fileSearchRootEstimateLoading" class="hint">Считаем оценку корня…</div>
-
-        <div v-else-if="fileSearchRootEstimateSummary" class="file-search-root-modal__metrics">
-          <div class="file-search-root-modal__metric">
-            <div class="file-search-root-modal__metric-label">Индекс</div>
-            <div class="file-search-root-modal__metric-value">
-              {{ fileSearchRootEstimateSummary.indexBytes }}
-            </div>
-          </div>
-          <div class="file-search-root-modal__metric">
-            <div class="file-search-root-modal__metric-label">Текстовые файлы</div>
-            <div class="file-search-root-modal__metric-value">
-              {{ fileSearchRootEstimateSummary.textFiles }} ·
-              {{ fileSearchRootEstimateSummary.textBytes }}
-            </div>
-          </div>
-          <div class="file-search-root-modal__metric">
-            <div class="file-search-root-modal__metric-label">Медиа</div>
-            <div class="file-search-root-modal__metric-value">
-              {{ fileSearchRootEstimateSummary.mediaFiles }}
-            </div>
-          </div>
-          <div class="file-search-root-modal__metric">
-            <div class="file-search-root-modal__metric-label">Прочие файлы</div>
-            <div class="file-search-root-modal__metric-value">
-              {{ fileSearchRootEstimateSummary.otherFiles }}
-            </div>
-          </div>
-          <div class="file-search-root-modal__metric">
-            <div class="file-search-root-modal__metric-label">Объектов в дереве</div>
-            <div class="file-search-root-modal__metric-value">
-              {{ fileSearchRootEstimateSummary.scannedEntries }}
-            </div>
-          </div>
-        </div>
-
-        <div v-if="fileSearchRootEstimateError" class="file-search-root-modal__error">
-          {{ fileSearchRootEstimateError }}
-        </div>
-
-        <div
-          v-if="
-            fileSearchRootEstimateSummary &&
-            (fileSearchRootEstimateSummary.riskLevel !== 'ok' ||
-              fileSearchRootEstimateSummary.isTruncated ||
-              fileSearchRootEstimateSummary.limitations.length > 0)
-          "
-          class="file-search-root-modal__warning"
-          :class="{
-            'file-search-root-modal__warning--danger':
-              fileSearchRootEstimateSummary.riskLevel === 'danger',
-          }"
-        >
-          <div class="file-search-root-modal__warning-title">Нужна проверка</div>
-          <div
-            v-if="fileSearchRootEstimateSummary.riskReasons.length > 0"
-            class="file-search-root-modal__warning-list"
-          >
-            <div v-for="reason in fileSearchRootEstimateSummary.riskReasons" :key="reason">
-              {{ reason }}
-            </div>
-          </div>
-          <div v-if="fileSearchRootEstimateSummary.showTruncatedHint" class="hint">
-            Оценка усечена, реальные значения могут быть выше.
-          </div>
-          <div
-            v-if="fileSearchRootEstimateSummary.limitations.length > 0"
-            class="file-search-root-modal__warning-list"
-          >
-            <div v-for="limitation in fileSearchRootEstimateSummary.limitations" :key="limitation">
-              {{ limitation }}
-            </div>
-          </div>
-          <div v-if="fileSearchRootEstimateSummary.skippedFiles !== '0'" class="hint">
-            Пропущено правилами индексации: {{ fileSearchRootEstimateSummary.skippedFiles }}.
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <Button variant="ghost" size="sm" @click="closeFileSearchRootModal">Отмена</Button>
-        <Button
-          :variant="fileSearchRootConfirmTone"
-          size="sm"
-          :loading="fileSearchRootEstimateLoading || fileSearchBusy"
-          :disabled="fileSearchRootEstimateLoading || fileSearchBusy"
-          @click="confirmFileSearchRootAddition"
-        >
-          {{ fileSearchRootConfirmLabel }}
-        </Button>
-      </template>
-    </Modal>
   </AdvancedPageLayout>
 </template>
 
 <style scoped>
 /* Tab-specific File Search CSS (мигрировано из родительского scoped-style). */
-.file-search-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.file-search-summary__item {
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--foreground) 5%, transparent);
-  border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
-}
-
-.file-search-summary__label {
-  font-size: 0.6875rem;
-  color: color-mix(in srgb, var(--foreground) 60%, transparent);
-  margin-bottom: 4px;
-}
-
-.file-search-summary__value {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--foreground);
-}
-
-.file-search-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  margin: -2px 0 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 24%, transparent);
-  background: color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 9%, transparent);
-}
-
-.file-search-progress__topline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-
-.file-search-progress__title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--foreground);
-}
-
-.file-search-progress__activity {
-  flex: 0 0 auto;
-  font-size: 0.6875rem;
-  color: color-mix(in srgb, var(--foreground) 58%, transparent);
-}
-
-.file-search-progress__bar {
-  position: relative;
-  overflow: hidden;
-  height: 4px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--foreground) 10%, transparent);
-}
-
-.file-search-progress__bar::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  width: 38%;
-  border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 42%, transparent),
-    transparent
-  );
-  animation: file-search-progress-sweep 1.4s linear infinite;
-}
-
-.file-search-progress__fill {
-  position: relative;
-  z-index: 1;
-  height: 100%;
-  min-width: 8px;
-  border-radius: inherit;
-  background: var(--accent, oklch(0.7 0.18 250));
-  transition: width 180ms ease;
-}
-
-.file-search-progress__details {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.75rem;
-  color: color-mix(in srgb, var(--foreground) 72%, transparent);
-}
-
-@keyframes file-search-progress-sweep {
-  from {
-    transform: translateX(-110%);
-  }
-  to {
-    transform: translateX(280%);
-  }
-}
-
 .file-search-row {
   align-items: flex-start;
 }
 
 .file-search-row--scopes {
   position: relative;
-}
-
-.file-search-summary + .file-search-row--scopes {
-  border-top-left-radius: 12px;
-  border-top-right-radius: 12px;
 }
 
 .file-search-wide {
@@ -720,86 +455,5 @@ onBeforeUnmount(() => {
 
 .ntfs-status-fallback strong {
   color: oklch(0.7 0.15 80);
-}
-
-.file-search-root-modal {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.file-search-root-modal__path code {
-  display: block;
-  margin-top: 4px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--foreground) 5%, transparent);
-  border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.75rem;
-  word-break: break-all;
-}
-
-.file-search-root-modal__metrics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.file-search-root-modal__metric {
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--foreground) 5%, transparent);
-  border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
-}
-
-.file-search-root-modal__metric-label {
-  font-size: 0.6875rem;
-  color: color-mix(in srgb, var(--foreground) 60%, transparent);
-  margin-bottom: 4px;
-}
-
-.file-search-root-modal__metric-value {
-  font-size: 0.8125rem;
-  line-height: 1.35;
-  color: var(--foreground);
-}
-
-.file-search-root-modal__error {
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, #fda4af 35%, transparent);
-  background: color-mix(in srgb, #fda4af 10%, transparent);
-  color: color-mix(in srgb, #fecdd3 55%, var(--foreground) 45%);
-  font-size: 0.8125rem;
-}
-
-.file-search-root-modal__warning {
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, oklch(0.7 0.12 85) 35%, transparent);
-  background: color-mix(in srgb, oklch(0.7 0.12 85) 12%, transparent);
-}
-
-.file-search-root-modal__warning--danger {
-  border-color: color-mix(in srgb, #fda4af 35%, transparent);
-  background: color-mix(in srgb, #fda4af 10%, transparent);
-}
-
-.file-search-root-modal__warning-title {
-  font-size: 0.6875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: color-mix(in srgb, var(--foreground) 60%, transparent);
-  margin-bottom: 6px;
-}
-
-.file-search-root-modal__warning-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.75rem;
-  color: color-mix(in srgb, var(--foreground) 88%, transparent);
-  margin-bottom: 6px;
 }
 </style>
