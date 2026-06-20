@@ -1794,6 +1794,22 @@ safeHandle("kepler:file-search:settings:get", async () => {
   return client.invokeOperation({ operation: "file_index.settings_get" });
 });
 
+safeHandle("kepler:file-search:diagnostics", async () => {
+  const client = await awaitArkReady();
+  return client.invokeOperation({ operation: "file_index.diagnostics" });
+});
+
+safeHandle("kepler:file-search:estimate-root", async (_e, pathInput: string) => {
+  if (typeof pathInput !== "string" || pathInput.trim().length === 0) {
+    throw new Error("kepler:file-search:estimate-root invalid path");
+  }
+  const client = await awaitArkReady();
+  return client.invokeOperation({
+    operation: "file_index.estimate_root",
+    path: pathInput,
+  });
+});
+
 safeHandle("kepler:file-search:settings:set", async (_e, patch: Record<string, unknown>) => {
   // Regression H9 (2026-05-24): strict allowlist of bool fields. Old handler
   // spread arbitrary keys into the WS payload — any random key from renderer
@@ -1828,36 +1844,13 @@ function isLikelyUnsafeScope(raw: string): { ok: true } | { ok: false; reason: s
   return { ok: true };
 }
 
-function isDriveRoot(raw: string): boolean {
-  const trimmed = raw.trim().replace(/[\\/]+$/, "");
-  return /^[A-Za-z]:$/.test(trimmed);
-}
-
-safeHandle("kepler:file-search:scope:add", async (e, path: string) => {
+safeHandle("kepler:file-search:scope:add", async (_e, path: string) => {
   if (typeof path !== "string" || path.trim().length === 0) {
     throw new Error("kepler:file-search:scope:add invalid path");
   }
   const safety = isLikelyUnsafeScope(path);
   if (!safety.ok) {
     throw new Error(safety.reason);
-  }
-  if (isDriveRoot(path) && process.env.KOSMOS_HEADLESS !== "1") {
-    const win = BrowserWindow.fromWebContents(e.sender);
-    const choice = win
-      ? await dialog.showMessageBox(win, {
-          type: "warning",
-          buttons: ["Добавить", "Отмена"],
-          defaultId: 1,
-          cancelId: 1,
-          title: "Подтвердите добавление диска",
-          message: `Добавить весь диск «${path}» как папку поиска?`,
-          detail:
-            "Индексация целого диска может занять много времени и места. Стандартные исключения (AppData, кэши, временные файлы) применяются автоматически.",
-        })
-      : { response: 0 };
-    if (choice.response !== 0) {
-      return;
-    }
   }
   const client = await awaitArkReady();
   await client.invokeOperation({ operation: "file_index.scope_add", path });
@@ -1893,6 +1886,11 @@ safeHandle("kepler:file-search:ignore:remove", async (_e, pattern: string) => {
 safeHandle("kepler:file-search:rescan", async () => {
   const client = await awaitArkReady();
   await client.invokeOperation({ operation: "file_index.rescan" });
+});
+
+safeHandle("kepler:file-search:clear-cache", async () => {
+  const client = await awaitArkReady();
+  await client.invokeOperation({ operation: "file_index.clear_cache" });
 });
 
 safeHandle("kepler:file-search:pickScope", async (e): Promise<string | null> => {

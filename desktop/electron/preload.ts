@@ -175,11 +175,14 @@ const api: KeplerApi = {
   fileSearch: {
     settingsGet: () => ipcRenderer.invoke("kepler:file-search:settings:get"),
     settingsSet: (patch) => ipcRenderer.invoke("kepler:file-search:settings:set", patch),
+    diagnostics: () => ipcRenderer.invoke("kepler:file-search:diagnostics"),
+    estimateRoot: (path) => ipcRenderer.invoke("kepler:file-search:estimate-root", path),
     scopeAdd: (path) => ipcRenderer.invoke("kepler:file-search:scope:add", path),
     scopeRemove: (path) => ipcRenderer.invoke("kepler:file-search:scope:remove", path),
     ignoreAdd: (pattern) => ipcRenderer.invoke("kepler:file-search:ignore:add", pattern),
     ignoreRemove: (pattern) => ipcRenderer.invoke("kepler:file-search:ignore:remove", pattern),
     rescan: () => ipcRenderer.invoke("kepler:file-search:rescan"),
+    clearCache: () => ipcRenderer.invoke("kepler:file-search:clear-cache"),
     pickScope: () => ipcRenderer.invoke("kepler:file-search:pickScope"),
   },
   focusWidget: {
