@@ -192,6 +192,7 @@ export interface ExportResult {
 export type NtfsStatus = "unknown" | "disabled" | "active" | "fallback" | "unavailable";
 
 export interface FileIndexSettings {
+  enabled: boolean;
   exclude_noisy_folders: boolean;
   roots: string[];
   ignore_patterns: string[];
@@ -212,6 +213,7 @@ export interface FileIndexSettings {
 }
 
 export interface FileIndexSettingsPatch {
+  enabled?: boolean;
   exclude_noisy_folders?: boolean;
   respect_gitignore?: boolean;
   include_hidden?: boolean;

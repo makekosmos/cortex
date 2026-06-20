@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 const EXCLUDE_NOISY_FOLDERS_KEY: &str = "exclude_noisy_folders";
+const ENABLED_KEY: &str = "enabled";
 const RESPECT_GITIGNORE_KEY: &str = "respect_gitignore";
 const INCLUDE_HIDDEN_KEY: &str = "include_hidden";
 const NTFS_ACCELERATED_KEY: &str = "ntfs_accelerated";
@@ -15,6 +16,7 @@ pub struct FileStore {
 
 #[derive(Debug, Clone)]
 pub struct StatsSnapshot {
+    pub enabled: bool,
     pub total: usize,
     pub roots: Vec<String>,
     pub exclude_noisy_folders: bool,
@@ -279,11 +281,13 @@ impl FileStore {
                 roots.push(row?);
             }
         }
+        let enabled = bool_setting_with_conn(&conn, ENABLED_KEY, true)?;
         let exclude_noisy_folders = bool_setting_with_conn(&conn, EXCLUDE_NOISY_FOLDERS_KEY, true)?;
         let respect_gitignore = bool_setting_with_conn(&conn, RESPECT_GITIGNORE_KEY, true)?;
         let include_hidden = bool_setting_with_conn(&conn, INCLUDE_HIDDEN_KEY, false)?;
         let ntfs_accelerated = bool_setting_with_conn(&conn, NTFS_ACCELERATED_KEY, false)?;
         Ok(StatsSnapshot {
+            enabled,
             total: total.max(0) as usize,
             roots,
             exclude_noisy_folders,
@@ -312,6 +316,14 @@ impl FileStore {
 
     pub fn exclude_noisy_folders(&self) -> Result<bool> {
         self.bool_setting(EXCLUDE_NOISY_FOLDERS_KEY, true)
+    }
+
+    pub fn enabled(&self) -> Result<bool> {
+        self.bool_setting(ENABLED_KEY, true)
+    }
+
+    pub fn set_enabled(&self, enabled: bool) -> Result<()> {
+        self.set_bool_setting(ENABLED_KEY, enabled)
     }
 
     pub fn set_exclude_noisy_folders(&self, exclude: bool) -> Result<()> {

@@ -131,12 +131,21 @@
   -webkit-app-region: no-drag;
 }
 
+.settings-shell .advanced-feature-toggle:not(:disabled) {
+  opacity: 0.82;
+}
+
 .settings-shell .advanced-feature-toggle::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background: color-mix(in srgb, var(--foreground) 18%, transparent);
+  transition: background 140ms ease;
+}
+
+.settings-shell .advanced-feature-toggle[aria-checked="true"]::before {
+  background: color-mix(in srgb, var(--accent, oklch(0.62 0.18 250)) 72%, transparent);
 }
 
 .settings-shell .advanced-feature-toggle__thumb {
@@ -148,6 +157,14 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--foreground) 62%, #000 38%);
   box-shadow: 0 1px 3px color-mix(in srgb, #000 24%, transparent);
+  transition:
+    background 140ms ease,
+    transform 140ms ease;
+}
+
+.settings-shell .advanced-feature-toggle[aria-checked="true"] .advanced-feature-toggle__thumb {
+  background: #fff;
+  transform: translateX(14px);
 }
 
 /* === Tabs: simple scroll-column page (section captions + SettingsList) === */

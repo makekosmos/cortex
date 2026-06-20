@@ -1815,6 +1815,7 @@ safeHandle("kepler:file-search:settings:set", async (_e, patch: Record<string, u
   // spread arbitrary keys into the WS payload — any random key from renderer
   // would reach the backend.
   const ALLOWED_BOOL_FIELDS = [
+    "enabled",
     "exclude_noisy_folders",
     "respect_gitignore",
     "include_hidden",

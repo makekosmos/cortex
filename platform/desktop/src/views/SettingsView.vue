@@ -107,7 +107,21 @@ const activeLayout = computed<"basic" | "advanced">(
   () => activeNavigationItem.value?.layout ?? "basic",
 );
 
-const showAdvancedToggle = computed(() => activeLayout.value === "advanced");
+const fileSearchFeatureEnabled = ref<boolean | null>(null);
+const featureToggleBusy = ref<boolean>(false);
+const fileSearchTabRevision = ref(0);
+
+const activeFeatureToggle = computed(() => {
+  if (activeTab.value !== "file-search" || fileSearchFeatureEnabled.value === null) {
+    return null;
+  }
+  return {
+    enabled: fileSearchFeatureEnabled.value,
+    label: fileSearchFeatureEnabled.value ? "Выключить поиск файлов" : "Включить поиск файлов",
+  };
+});
+
+const showAdvancedToggle = computed(() => activeFeatureToggle.value !== null);
 
 const activeAdvancedIntro = computed(() => {
   const item = activeNavigationItem.value;
@@ -334,12 +348,50 @@ function selectTab(t: Tab) {
   tab.value = t;
 }
 
+async function refreshActiveFeatureToggle() {
+  if (activeTab.value !== "file-search") {
+    return;
+  }
+  try {
+    const settings = await window.kepler.fileSearch.settingsGet();
+    fileSearchFeatureEnabled.value = settings.enabled;
+  } catch (err) {
+    console.warn("file search feature toggle load failed", err);
+    fileSearchFeatureEnabled.value = null;
+  }
+}
+
+async function onToggleActiveFeature() {
+  const toggle = activeFeatureToggle.value;
+  if (!toggle || featureToggleBusy.value) return;
+  featureToggleBusy.value = true;
+  const nextEnabled = !toggle.enabled;
+  try {
+    await window.kepler.fileSearch.settingsSet({ enabled: nextEnabled });
+    fileSearchFeatureEnabled.value = nextEnabled;
+    fileSearchTabRevision.value += 1;
+  } catch (err) {
+    console.warn("feature toggle set failed", err);
+    await refreshActiveFeatureToggle();
+  } finally {
+    featureToggleBusy.value = false;
+  }
+}
+
 watch(activeTab, (next) => {
   if (!searchQuery.value || !next) return;
   if (tab.value !== next) {
     tab.value = next;
   }
 });
+
+watch(
+  activeTab,
+  () => {
+    void refreshActiveFeatureToggle();
+  },
+  { immediate: true },
+);
 
 // --- autoUpdater state ------------------------------------------------------
 
@@ -487,11 +539,12 @@ onBeforeUnmount(() => {
               v-if="showAdvancedToggle"
               type="button"
               class="advanced-feature-toggle"
-              disabled
+              :disabled="featureToggleBusy"
               role="switch"
-              aria-checked="false"
-              aria-label="Включить функцию"
-              title="Скоро можно будет включать и выключать эту функцию"
+              :aria-checked="String(activeFeatureToggle?.enabled ?? false)"
+              :aria-label="activeFeatureToggle?.label ?? 'Переключить функцию'"
+              :title="activeFeatureToggle?.label ?? 'Переключить функцию'"
+              @click="onToggleActiveFeature"
             >
               <span class="advanced-feature-toggle__thumb" />
             </button>
@@ -594,7 +647,7 @@ onBeforeUnmount(() => {
         </template>
 
         <template v-else-if="activeTab === 'file-search'">
-          <FileSearchTab :intro="activeAdvancedIntro" />
+          <FileSearchTab :key="fileSearchTabRevision" :intro="activeAdvancedIntro" />
         </template>
 
         <template v-else-if="activeTab === 'clipboard'">
