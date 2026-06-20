@@ -204,13 +204,13 @@ function recordingBarHeight(value: number): string {
   return barHeight(Math.min(value, RECORDING_PEAK));
 }
 
-function handleCancelClick(event: MouseEvent): void {
+function handleCancelClick(event: Event): void {
   event.stopPropagation();
   if (isPreview) return;
   void cancelCapture();
 }
 
-function handleSubmitClick(event: MouseEvent): void {
+function handleSubmitClick(event: Event): void {
   event.stopPropagation();
   if (isPreview) return;
   void stopAndSubmit();
@@ -709,7 +709,12 @@ const exposeStatusText = computed(() => statusText());
               />
             </div>
             <div v-if="item.status === 'recording'" class="pill-hover-controls">
-              <button class="pill-action" type="button" title="Отменить" @click="handleCancelClick">
+              <button
+                class="pill-action"
+                type="button"
+                title="Отменить"
+                @pointerdown.stop.prevent="handleCancelClick"
+              >
                 ×
               </button>
               <span class="pill-time">{{ formatElapsed(3) }}</span>
@@ -717,7 +722,7 @@ const exposeStatusText = computed(() => statusText());
                 class="pill-action"
                 type="button"
                 title="Отправить"
-                @click="handleSubmitClick"
+                @pointerdown.stop.prevent="handleSubmitClick"
               >
                 ✓
               </button>
@@ -775,11 +780,21 @@ const exposeStatusText = computed(() => statusText());
         />
       </div>
       <div v-if="status === 'recording'" class="pill-hover-controls">
-        <button class="pill-action" type="button" title="Отменить" @click="handleCancelClick">
+        <button
+          class="pill-action"
+          type="button"
+          title="Отменить"
+          @pointerdown.stop.prevent="handleCancelClick"
+        >
           ×
         </button>
         <span class="pill-time">{{ elapsedLabel }}</span>
-        <button class="pill-action" type="button" title="Отправить" @click="handleSubmitClick">
+        <button
+          class="pill-action"
+          type="button"
+          title="Отправить"
+          @pointerdown.stop.prevent="handleSubmitClick"
+        >
           ✓
         </button>
       </div>
@@ -788,6 +803,12 @@ const exposeStatusText = computed(() => statusText());
 </template>
 
 <style scoped>
+:global(html),
+:global(body),
+:global(#app) {
+  background: transparent !important;
+}
+
 .preview-page {
   min-height: 100vh;
   display: flex;
@@ -840,9 +861,16 @@ const exposeStatusText = computed(() => statusText());
   background-size: 16px 16px;
 }
 
+.preview-frame .pill {
+  width: 120px;
+  height: 36px;
+}
+
 .stage {
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -852,13 +880,15 @@ const exposeStatusText = computed(() => statusText());
 }
 
 .pill {
+  /* Заполняем родителя целиком (как `.widget` у focus-widget). В overlay
+   * родитель — `.stage` (100vw/100vh = окно), окно само размером с пилюлю
+   * (см. dictation-pill.ts). Fill гарантирует, что прозрачной области вокруг
+   * пилюли нет в принципе — значит Win32 нечего композитить белым. На preview
+   * `.preview-frame .pill` переопределяет размер на 120×36. */
   position: relative;
   pointer-events: auto;
-  /* Базовая ширина для idle/recording/transcribing. Для waiting/error pill
-   * расширяется по контенту, ограничен `.stage` (max-width в window). */
-  width: 120px;
-  max-width: calc(100vw - 24px);
-  height: 36px;
+  width: 100%;
+  height: 100%;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -866,8 +896,8 @@ const exposeStatusText = computed(() => statusText());
   padding: 2px;
   /* Глянцевый чёрный — тонкий светлый highlight сверху, тёмный низ. */
   background: color-mix(in srgb, var(--surface) 58%, var(--background) 42%);
-  border-radius: 4px;
-  border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+  border-radius: 8px;
+  border: 2px solid color-mix(in srgb, var(--foreground) 18%, transparent);
   /* Без drop-shadow по запросу — оставляем только тонкий inset bevel внутри. */
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--foreground) 8%, transparent),
@@ -884,12 +914,14 @@ const exposeStatusText = computed(() => statusText());
 }
 
 @keyframes pill-in {
+  /* No translateY: window is now exactly pill-sized, so a vertical slide would
+   * be clipped at the window edge. Pure fade + inward scale stays in bounds. */
   from {
-    transform: translateY(12px) scale(0.96);
+    transform: scale(0.96);
     opacity: 0;
   }
   to {
-    transform: translateY(0) scale(1);
+    transform: scale(1);
     opacity: 1;
   }
 }

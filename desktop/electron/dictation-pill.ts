@@ -25,20 +25,19 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { awaitArkReady, broadcastCommandsUpdated, setDictationHotkeyCache } from "./main";
-import {
-  applyWindowMaterial,
-  backgroundMaterialOption,
-  resolveWindowMaterial,
-} from "./window-effects";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 420px — компромисс между визуальной деликатностью (узкий overlay над
-// активным окном) и читаемостью error/waiting подписей. На idle/recording
-// pill CSS-узкий (200px min-width), окно с прозрачным фоном.
-const WIDTH = 420;
-const HEIGHT = 72;
+const PILL_WIDTH = 120;
+const PILL_HEIGHT = 36;
+// Window == pill size. Any transparent padding around the pill is composited
+// white by DWM on Win32 for tiny transparent always-on-top windows (the same
+// reason focus-widget keeps its content filling the whole window). Native
+// `roundedCorners` rounds the corners; the renderer root fills edge-to-edge.
+const WINDOW_PADDING = 0;
+const WIDTH = PILL_WIDTH + WINDOW_PADDING * 2;
+const HEIGHT = PILL_HEIGHT + WINDOW_PADDING * 2;
 const BOTTOM_MARGIN = 100;
 
 let pillWindow: BrowserWindow | null = null;
@@ -70,7 +69,6 @@ function createPill(): BrowserWindow {
   const x = area.x + Math.floor((area.width - WIDTH) / 2);
   // Снизу экрана, с отступом BOTTOM_MARGIN. `workArea` уже исключает taskbar.
   const y = area.y + area.height - HEIGHT - BOTTOM_MARGIN;
-  const backgroundMaterial = resolveWindowMaterial("none");
 
   const win = new BrowserWindow({
     width: WIDTH,
@@ -88,26 +86,33 @@ function createPill(): BrowserWindow {
     alwaysOnTop: true,
     transparent: true,
     backgroundColor: "#00000000",
-    ...backgroundMaterialOption(backgroundMaterial),
-    hasShadow: false,
+    // ВАЖНО: НЕ задаём backgroundMaterial и НЕ зовём setBackgroundMaterial.
+    // На Win11 это включает DWM systembackdrop, который заливает прозрачные
+    // пиксели окна белым — а у pill видны прозрачные скруглённые углы
+    // (border-radius в CSS), и они светились белым. У focus-widget material
+    // тоже есть, но его контент заполняет окно целиком, так что прозрачных
+    // зон не видно. Скругление окна делает CSS (DWM roundedCorners на
+    // transparent frameless-окне всё равно не работает), поэтому опцию не
+    // ставим.
     roundedCorners: false,
-    // КРИТИЧНО: focusable: false — pill НЕ ворует фокус с активного окна.
-    // Иначе Ctrl+V после inject улетит в pill (а не в Telegram / редактор).
-    focusable: false,
+    // focusable: true — как у focus-widget. На Win32 non-focusable прозрачное
+    // окно композитит белую подложку/кайму по краям (это и был последний
+    // источник «белых краёв»). Фокус при этом НЕ воруется: окно показывается
+    // через showInactive() (см. showPill), foreground-приложение остаётся
+    // активным, и Ctrl+V после inject уходит в него, а не в pill.
+    focusable: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,
       nodeIntegration: false,
-      // Audio capture не должен throttle'иться когда pill теряет focus
-      // (а он его никогда и не получает с focusable: false).
+      // Audio capture не должен throttle'иться: окно показывается через
+      // showInactive() и фактический focus не получает, так что без этого
+      // флага Chromium бы прибил таймеры/аудио-граф.
       backgroundThrottling: false,
     },
   });
 
   win.setAlwaysOnTop(true, "screen-saver", 1);
-  win.setBackgroundColor("#00000000");
-  applyWindowMaterial(win, backgroundMaterial, "dictation-pill");
-
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) {
     void win.loadURL(`${devUrl}#dictation-pill`);
@@ -161,6 +166,7 @@ async function sendPillCommand(cmd: { kind: "start" | "stop" | "cancel" }): Prom
 function showPill(): void {
   const win = ensureWindow();
   if (isHeadless()) return;
+  win.setIgnoreMouseEvents(false);
   if (!win.isVisible()) win.showInactive();
 }
 
