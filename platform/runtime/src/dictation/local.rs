@@ -23,6 +23,7 @@ use super::local_sidecar_protocol::{
     LocalSttAccelerator, LocalSttModelSpec, LocalSttProfile, LocalSttRequest,
     LocalSttRequestEnvelope, LocalSttResponse, LocalSttResponseEnvelope, LocalSttStatus,
 };
+use super::{config, local_models};
 
 pub const DEFAULT_LOCAL_ENGINE: &str = "whisper.cpp";
 pub const FASTER_WHISPER_ENGINE: &str = "faster-whisper";
@@ -1253,6 +1254,13 @@ fn run_faster_whisper(
         LocalSttProfile::Accurate => "5",
     };
     let language = whisper_language_arg(&req.language).unwrap_or_default();
+    let download_root = local_models::faster_whisper_dir(&config::data_dir());
+    if let Err(e) = fs::create_dir_all(&download_root) {
+        cleanup_temp_outputs(&wav_path, &out_base);
+        return Err(LocalError::CommandFailed(format!(
+            "failed to create faster-whisper cache dir: {e}"
+        )));
+    }
     let script = r#"
 import json
 import sys
@@ -1263,9 +1271,9 @@ except Exception as exc:
     print(json.dumps({"error": f"faster-whisper Python package is not installed: {exc}"}), flush=True)
     sys.exit(2)
 
-model_path, wav_path, language, prompt, device, compute_type, beam_size = sys.argv[1:8]
+model_path, wav_path, language, prompt, device, compute_type, beam_size, download_root = sys.argv[1:9]
 try:
-    model = WhisperModel(model_path, device=device, compute_type=compute_type)
+    model = WhisperModel(model_path, device=device, compute_type=compute_type, download_root=download_root)
     kwargs = {
         "beam_size": int(beam_size),
         "vad_filter": False,
@@ -1292,6 +1300,7 @@ except Exception as exc:
         .arg(device)
         .arg(compute_type)
         .arg(beam_size)
+        .arg(&download_root)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

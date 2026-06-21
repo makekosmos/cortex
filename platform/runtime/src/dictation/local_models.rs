@@ -12,12 +12,14 @@ use reqwest::Client;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
+use tokio::process::Command as TokioCommand;
 
 use super::config;
 
 const MODELS_DIR: &str = "models/dictation";
 const TOOLS_DIR: &str = "tools/dictation/whisper.cpp";
 const CUDA_TOOLS_DIR: &str = "tools/dictation/whisper.cpp-cublas";
+const FASTER_WHISPER_DIR: &str = "tools/dictation/faster-whisper";
 const DOWNLOAD_MAX_ATTEMPTS: usize = 8;
 
 #[cfg(windows)]
@@ -80,6 +82,8 @@ pub enum LocalModelsError {
     UnsupportedPlatform,
     #[error("download failed: {0}")]
     Download(String),
+    #[error("faster-whisper setup failed: {0}")]
+    FasterWhisper(String),
     #[error("io: {0}")]
     Io(#[from] io::Error),
     #[error("zip: {0}")]
@@ -179,6 +183,22 @@ pub fn models_dir(data_dir: &Path) -> PathBuf {
 
 pub fn tools_dir(data_dir: &Path) -> PathBuf {
     data_dir.join(TOOLS_DIR)
+}
+
+pub fn faster_whisper_dir(data_dir: &Path) -> PathBuf {
+    data_dir.join(FASTER_WHISPER_DIR)
+}
+
+pub fn faster_whisper_model_id(model_id: &str) -> Result<&'static str, LocalModelsError> {
+    match model_id.trim().to_ascii_lowercase().as_str() {
+        "tiny" | "tiny-q5_1" | "whisper-tiny" => Ok("tiny"),
+        "base" | "whisper-base" => Ok("base"),
+        "small" | "whisper-small" => Ok("small"),
+        "medium" | "whisper-medium" => Ok("medium"),
+        "turbo" | "large-v3-turbo" | "whisper-large-v3-turbo" => Ok("large-v3-turbo"),
+        "large" | "large-v3" | "whisper-large-v3" => Ok("large-v3"),
+        _ => Err(LocalModelsError::ModelNotFound(model_id.to_owned())),
+    }
 }
 
 #[cfg(windows)]
@@ -560,6 +580,108 @@ pub async fn ensure_model_with_progress(
         verify_sha256(&path, expected)?;
     }
     Ok(path)
+}
+
+fn faster_whisper_python() -> String {
+    std::env::var("KOSMOS_FASTER_WHISPER_PYTHON")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "python".into())
+}
+
+fn faster_whisper_prepare_timeout() -> Duration {
+    std::env::var("KOSMOS_FASTER_WHISPER_PREPARE_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .map(|millis| millis.clamp(30_000, 30 * 60 * 1000))
+        .map(Duration::from_millis)
+        .unwrap_or_else(|| Duration::from_secs(15 * 60))
+}
+
+pub async fn ensure_faster_whisper_with_progress(
+    data_dir: &Path,
+    model_id: &str,
+    progress: &mut ProgressCallback<'_>,
+) -> Result<String, LocalModelsError> {
+    let backend_model = faster_whisper_model_id(model_id)?;
+    let cache_dir = faster_whisper_dir(data_dir);
+    fs::create_dir_all(&cache_dir)?;
+    progress(DownloadProgress {
+        phase: "faster-whisper",
+        downloaded_bytes: 0,
+        total_bytes: None,
+        percent: None,
+    });
+
+    let script = r#"
+import json
+import sys
+
+model_id = sys.argv[1]
+download_root = sys.argv[2]
+
+try:
+    from faster_whisper import WhisperModel
+except Exception as exc:
+    print(json.dumps({"error": f"faster-whisper Python package is not installed: {exc}"}))
+    raise SystemExit(0)
+
+try:
+    WhisperModel(model_id, device="cpu", compute_type="int8", download_root=download_root)
+    print(json.dumps({"ok": True, "model": model_id, "downloadRoot": download_root}))
+except Exception as exc:
+    print(json.dumps({"error": str(exc)}))
+"#;
+
+    let mut command = TokioCommand::new(faster_whisper_python());
+    command
+        .arg("-c")
+        .arg(script)
+        .arg(backend_model)
+        .arg(path_string(&cache_dir))
+        .kill_on_drop(true);
+    let timeout = faster_whisper_prepare_timeout();
+    let output = match tokio::time::timeout(timeout, command.output()).await {
+        Ok(Ok(output)) => output,
+        Ok(Err(e)) => {
+            return Err(LocalModelsError::FasterWhisper(format!(
+                "failed to launch Python: {e}"
+            )))
+        }
+        Err(_) => {
+            return Err(LocalModelsError::FasterWhisper(format!(
+                "model preparation timed out after {}s",
+                timeout.as_secs()
+            )))
+        }
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !output.status.success() {
+        return Err(LocalModelsError::FasterWhisper(format!(
+            "python exited with status {}: {}",
+            output.status,
+            stderr.trim()
+        )));
+    }
+    let value: serde_json::Value = serde_json::from_str(stdout.trim()).map_err(|e| {
+        LocalModelsError::FasterWhisper(format!(
+            "invalid setup response: {e}; stdout={}; stderr={}",
+            stdout.trim(),
+            stderr.trim()
+        ))
+    })?;
+    if let Some(error) = value.get("error").and_then(|value| value.as_str()) {
+        return Err(LocalModelsError::FasterWhisper(error.to_owned()));
+    }
+    progress(DownloadProgress {
+        phase: "faster-whisper",
+        downloaded_bytes: 1,
+        total_bytes: Some(1),
+        percent: Some(100.0),
+    });
+    Ok(backend_model.to_owned())
 }
 
 pub fn delete_model(data_dir: &Path, model_id: &str) -> Result<PathBuf, LocalModelsError> {
