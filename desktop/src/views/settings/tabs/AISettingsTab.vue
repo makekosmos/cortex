@@ -296,7 +296,7 @@ onMounted(() => {
       <SettingsTextInputRow
         v-model="dictationLocalCommandPath"
         title="Путь к whisper.cpp"
-        description="Executable локального распознавания: whisper-cli.exe или main.exe."
+        description="Executable нужен для Whisper.cpp. Faster Whisper использует Python runtime и этот путь не требует."
         placeholder="D:\Tools\whisper.cpp\whisper-cli.exe"
         :muted="!isLocalProvider"
         @blur="onDictationLocalCommandPathBlur"
