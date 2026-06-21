@@ -1193,17 +1193,60 @@ fn faster_whisper_python() -> String {
         .unwrap_or_else(|| "python".into())
 }
 
-fn run_faster_whisper(
-    req: OwnedLocalRequest,
-    cancel_flag: Option<Arc<AtomicBool>>,
-) -> Result<TranscriptionResult, LocalError> {
-    let model_path = req
+fn faster_whisper_timeout() -> Duration {
+    env::var("KOSMOS_FASTER_WHISPER_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .map(|millis| millis.clamp(5_000, 55_000))
+        .map(Duration::from_millis)
+        .unwrap_or_else(|| Duration::from_secs(55))
+}
+
+fn faster_whisper_model_arg(req: &OwnedLocalRequest) -> Result<String, LocalError> {
+    let raw_model = req
         .model_path
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .ok_or(LocalError::MissingModelPath)?
-        .to_owned();
+        .ok_or(LocalError::MissingModelPath)?;
+    let path = Path::new(raw_model);
+    if path.is_dir() {
+        return Ok(raw_model.to_owned());
+    }
+    if path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("bin"))
+    {
+        return req
+            .model_id
+            .as_deref()
+            .and_then(faster_whisper_model_id)
+            .ok_or_else(|| {
+                LocalError::CommandFailed(
+                    "faster-whisper requires a CTranslate2 model directory or known model id, not a ggml .bin path".into(),
+                )
+            });
+    }
+    Ok(raw_model.to_owned())
+}
+
+fn faster_whisper_model_id(model_id: &str) -> Option<String> {
+    match model_id.trim().to_ascii_lowercase().as_str() {
+        "tiny" | "tiny-q5_1" | "whisper-tiny" => Some("tiny".into()),
+        "base" | "whisper-base" => Some("base".into()),
+        "small" | "whisper-small" => Some("small".into()),
+        "medium" | "whisper-medium" => Some("medium".into()),
+        "turbo" | "large-v3-turbo" | "whisper-large-v3-turbo" => Some("large-v3-turbo".into()),
+        "large-v3" | "whisper-large-v3" => Some("large-v3".into()),
+        _ => None,
+    }
+}
+
+fn run_faster_whisper(
+    req: OwnedLocalRequest,
+    cancel_flag: Option<Arc<AtomicBool>>,
+) -> Result<TranscriptionResult, LocalError> {
+    let model_arg = faster_whisper_model_arg(&req)?;
     let (wav_path, out_base) = temp_audio_paths()?;
     fs::write(&wav_path, &req.wav_bytes).map_err(|e| LocalError::TempAudio(e.to_string()))?;
 
@@ -1253,7 +1296,7 @@ except Exception as exc:
     let mut child = Command::new(faster_whisper_python())
         .arg("-c")
         .arg(script)
-        .arg(&model_path)
+        .arg(&model_arg)
         .arg(&wav_path)
         .arg(language)
         .arg(req.prompt.trim())
@@ -1267,6 +1310,8 @@ except Exception as exc:
             cleanup_temp_outputs(&wav_path, &out_base);
             LocalError::CommandFailed(format!("failed to launch faster-whisper python: {e}"))
         })?;
+    let timeout = faster_whisper_timeout();
+    let deadline = Instant::now() + timeout;
 
     loop {
         if cancel_flag
@@ -1277,6 +1322,15 @@ except Exception as exc:
             let _ = child.wait();
             cleanup_temp_outputs(&wav_path, &out_base);
             return Err(LocalError::CommandFailed("faster-whisper cancelled".into()));
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            cleanup_temp_outputs(&wav_path, &out_base);
+            return Err(LocalError::CommandFailed(format!(
+                "faster-whisper timed out after {}s",
+                timeout.as_secs()
+            )));
         }
         if child
             .try_wait()
@@ -1869,6 +1923,26 @@ mod tests {
         assert!(
             err.to_string().contains("faster-whisper python"),
             "error: {err}"
+        );
+    }
+
+    #[test]
+    fn faster_whisper_maps_managed_ggml_model_to_backend_id() {
+        let req = OwnedLocalRequest {
+            wav_bytes: Vec::new(),
+            language: "ru".into(),
+            prompt: String::new(),
+            engine: FASTER_WHISPER_ENGINE.into(),
+            model_id: Some("turbo".into()),
+            model_path: Some("C:/models/ggml-large-v3-turbo.bin".into()),
+            command_path: None,
+            accelerator: LocalSttAccelerator::Gpu,
+            profile: LocalSttProfile::Fast,
+        };
+
+        assert_eq!(
+            faster_whisper_model_arg(&req).expect("model arg"),
+            "large-v3-turbo"
         );
     }
 
