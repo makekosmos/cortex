@@ -1203,6 +1203,13 @@ fn faster_whisper_timeout() -> Duration {
 }
 
 fn faster_whisper_model_arg(req: &OwnedLocalRequest) -> Result<String, LocalError> {
+    if let Ok(model) = env::var("KOSMOS_FASTER_WHISPER_MODEL") {
+        let model = model.trim();
+        if !model.is_empty() {
+            return Ok(model.to_owned());
+        }
+    }
+
     let raw_model = req
         .model_path
         .as_deref()
@@ -1217,29 +1224,11 @@ fn faster_whisper_model_arg(req: &OwnedLocalRequest) -> Result<String, LocalErro
         .extension()
         .is_some_and(|ext| ext.eq_ignore_ascii_case("bin"))
     {
-        return req
-            .model_id
-            .as_deref()
-            .and_then(faster_whisper_model_id)
-            .ok_or_else(|| {
-                LocalError::CommandFailed(
-                    "faster-whisper requires a CTranslate2 model directory or known model id, not a ggml .bin path".into(),
-                )
-            });
+        return Err(LocalError::CommandFailed(
+            "faster-whisper requires a CTranslate2 model directory; whisper.cpp ggml .bin models are not compatible".into(),
+        ));
     }
     Ok(raw_model.to_owned())
-}
-
-fn faster_whisper_model_id(model_id: &str) -> Option<String> {
-    match model_id.trim().to_ascii_lowercase().as_str() {
-        "tiny" | "tiny-q5_1" | "whisper-tiny" => Some("tiny".into()),
-        "base" | "whisper-base" => Some("base".into()),
-        "small" | "whisper-small" => Some("small".into()),
-        "medium" | "whisper-medium" => Some("medium".into()),
-        "turbo" | "large-v3-turbo" | "whisper-large-v3-turbo" => Some("large-v3-turbo".into()),
-        "large-v3" | "whisper-large-v3" => Some("large-v3".into()),
-        _ => None,
-    }
 }
 
 fn run_faster_whisper(
@@ -1926,8 +1915,35 @@ mod tests {
         );
     }
 
-    #[test]
-    fn faster_whisper_maps_managed_ggml_model_to_backend_id() {
+    #[tokio::test]
+    async fn faster_whisper_rejects_managed_ggml_model() {
+        let _guard = ENV_LOCAL_LOCK.lock().await;
+        env::remove_var("KOSMOS_FASTER_WHISPER_MODEL");
+        let req = OwnedLocalRequest {
+            wav_bytes: Vec::new(),
+            language: "ru".into(),
+            prompt: String::new(),
+            engine: FASTER_WHISPER_ENGINE.into(),
+            model_id: Some("turbo".into()),
+            model_path: Some("C:/models/ggml-large-v3-turbo.bin".into()),
+            command_path: None,
+            accelerator: LocalSttAccelerator::Gpu,
+            profile: LocalSttProfile::Fast,
+        };
+
+        let err = faster_whisper_model_arg(&req).expect_err("ggml is incompatible");
+        assert!(err
+            .to_string()
+            .contains("ggml .bin models are not compatible"));
+    }
+
+    #[tokio::test]
+    async fn faster_whisper_model_env_overrides_managed_ggml_model() {
+        let _guard = ENV_LOCAL_LOCK.lock().await;
+        env::set_var(
+            "KOSMOS_FASTER_WHISPER_MODEL",
+            "C:/models/faster-large-v3-turbo",
+        );
         let req = OwnedLocalRequest {
             wav_bytes: Vec::new(),
             language: "ru".into(),
@@ -1942,8 +1958,9 @@ mod tests {
 
         assert_eq!(
             faster_whisper_model_arg(&req).expect("model arg"),
-            "large-v3-turbo"
+            "C:/models/faster-large-v3-turbo"
         );
+        env::remove_var("KOSMOS_FASTER_WHISPER_MODEL");
     }
 
     #[tokio::test]
