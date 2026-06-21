@@ -113,6 +113,10 @@
           "to": "Kosmos Runtime.exe"
         },
         {
+          "from": "../../target/release/kosmos-local-stt.exe",
+          "to": "Kosmos Local STT.exe"
+        },
+        {
           "from": "../../target/release/ark-core-rpc.exe",
           "to": "Kosmos Data Engine.exe"
         },
@@ -141,6 +145,10 @@
         {
           "from": "../../target/release/kepler-backend",
           "to": "Kosmos Runtime"
+        },
+        {
+          "from": "../../target/release/kosmos-local-stt",
+          "to": "Kosmos Local STT"
         },
         {
           "from": "../../target/release/ark-core-rpc",

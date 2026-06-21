@@ -17,6 +17,9 @@ pub mod hotkey_hook;
 pub mod inject;
 pub mod local;
 pub mod local_models;
+pub mod local_sidecar;
+pub mod local_sidecar_protocol;
+pub mod local_whisper_dll;
 #[cfg(target_os = "macos")]
 pub mod macos_native;
 pub mod network;

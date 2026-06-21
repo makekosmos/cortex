@@ -229,7 +229,7 @@ function storageSummaryItem(
 
 function buildStorageSummary(): StorageSummary {
   const dataDir = keplerDataDir();
-  const userDataDir = app.getPath("userData");
+  const userDataDir = resolveInstance().userDataDir;
   const dataDirBytes = safeSizeOfPath(dataDir);
   const userDataBytes = safeSizeOfPath(userDataDir);
   const arkBytes = safeSizeOfFiles(dataDir, ["ark.db", "ark.db-wal", "ark.db-shm"]);

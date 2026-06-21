@@ -89,7 +89,13 @@ pub struct DictationHost {
 
 impl DictationHost {
     pub fn new() -> Arc<Self> {
-        let cfg = config::load();
+        let data_dir = config::data_dir();
+        let mut cfg = config::load();
+        if local_models::refresh_managed_command_path(&data_dir, &mut cfg) {
+            if let Err(e) = config::save(&cfg) {
+                tracing::warn!(error = %e, "failed to save refreshed dictation local command path");
+            }
+        }
         let stats = stats::load();
         let (events_tx, _) = broadcast::channel::<Value>(64);
         let host = Arc::new(Self {
@@ -97,7 +103,7 @@ impl DictationHost {
             config: Arc::new(Mutex::new(cfg.clone())),
             stats: Arc::new(Mutex::new(stats)),
             events_tx: events_tx.clone(),
-            data_dir: config::data_dir(),
+            data_dir,
             groq_endpoint: groq::GROQ_ENDPOINT.to_string(),
         });
         // Активируем PTT hook соответственно текущему trigger_mode.
@@ -366,6 +372,7 @@ pub async fn handle_dictation_op(
         "begin_hotkey_capture" => op_begin_hotkey_capture(host).await,
         "end_hotkey_capture" => op_end_hotkey_capture(host).await,
         "native_status" => op_native_status().await,
+        "local_status" => op_local_status().await,
         "ensure_native_permissions" => op_ensure_native_permissions(params).await,
         "native_audio_ping" => op_native_audio_ping().await,
         "list_local_models" => op_list_local_models(host).await,
@@ -655,6 +662,8 @@ async fn op_update_config(params: Value, host: &DictationHost) -> DictationRespo
     }
     // Принимаем patch — частичный объект, мерджим поверх текущего.
     let mut cfg = host.config.lock().await;
+    let was_using_local_runtime =
+        cfg.provider_enabled && provider_uses_local_runtime(&cfg.provider);
     if let Some(s) = params.get("hotkey").and_then(|v| v.as_str()) {
         cfg.hotkey = s.to_owned();
     }
@@ -825,7 +834,19 @@ async fn op_update_config(params: Value, host: &DictationHost) -> DictationRespo
         return DictationResponse::err(format!("update_config: save failed: {e}"));
     }
     let snapshot = cfg.clone();
+    let should_unload_local_runtime = was_using_local_runtime
+        && !(snapshot.provider_enabled && provider_uses_local_runtime(&snapshot.provider));
     drop(cfg);
+    if should_unload_local_runtime {
+        tokio::spawn(async {
+            if let Err(e) = local::unload_sidecar().await {
+                tracing::warn!(
+                    error = %e,
+                    "dictation: local STT unload after provider change failed"
+                );
+            }
+        });
+    }
     // Перерегистрируем PTT hook (на случай смены trigger_mode или hotkey).
     apply_ptt_hook(&snapshot, &host.events_tx);
     host.emit_config_changed();
@@ -909,6 +930,31 @@ async fn op_capture_foreground(host: &DictationHost) -> DictationResponse {
     DictationResponse::ok(json!({ "captured": hwnd.is_some() }))
 }
 
+async fn preload_local_runtime_for_recording(host: &DictationHost) {
+    #[cfg(test)]
+    {
+        if !local::has_test_sidecar_mock_for_host() {
+            return;
+        }
+    }
+
+    let cfg = host.snapshot_config().await;
+    if !cfg.provider_enabled || !provider_uses_local_runtime(&cfg.provider) {
+        return;
+    }
+
+    let engine = cfg.local_engine.clone();
+    let model_path = cfg.local_model_path.clone();
+    let command_path = cfg.local_command_path.clone();
+    tokio::spawn(async move {
+        if let Err(e) =
+            local::preload_server(&engine, model_path.as_deref(), command_path.as_deref()).await
+        {
+            tracing::warn!(error = %e, "dictation: local STT preload failed");
+        }
+    });
+}
+
 async fn op_start_recording(host: &DictationHost) -> DictationResponse {
     let mut s = host.state.lock().await;
     if !matches!(s.name, DictationStateName::Idle | DictationStateName::Error) {
@@ -922,16 +968,20 @@ async fn op_start_recording(host: &DictationHost) -> DictationResponse {
     let snapshot = s.clone();
     drop(s);
     host.emit_state(&snapshot).await;
+    preload_local_runtime_for_recording(host).await;
     DictationResponse::ok(json!({ "state": "recording" }))
 }
 
 async fn op_cancel(host: &DictationHost) -> DictationResponse {
     let mut s = host.state.lock().await;
-    s.name = DictationStateName::Idle;
-    s.prev_hwnd = None;
-    s.last_error = None;
+    *s = HostState::idle();
     let snapshot = s.clone();
     drop(s);
+    tokio::spawn(async {
+        if let Err(e) = local::cancel_sidecar().await {
+            tracing::warn!(error = %e, "dictation: local STT cancel failed");
+        }
+    });
     host.emit_state(&snapshot).await;
     DictationResponse::ok(json!({ "state": "idle" }))
 }
@@ -1033,6 +1083,12 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
             // process_one_attempt уже перевёл state в Idle.
             DictationResponse::ok(json!({ "uuid": uuid, "state": "idle" }))
         }
+        AttemptOutcome::Cancelled => DictationResponse::ok(json!({
+            "uuid": uuid,
+            "state": "idle",
+            "queued": false,
+            "cancelled": true,
+        })),
         AttemptOutcome::Fatal => {
             // Фатально (401/400/403/etc) — НЕ спавним auto-retry. Возвращаем
             // pill state="error" с user_msg чтобы он показал понятную ошибку
@@ -1139,6 +1195,8 @@ fn resolve_attempt_inject_mode(raw_mode: &str, mock_transcript: Option<&str>) ->
 enum AttemptOutcome {
     /// Транскрибировано + inject выполнен (или fallback'нут в clipboard).
     Success,
+    /// Пользователь отменил активную попытку; не inject'им и не удаляем pending.
+    Cancelled,
     /// Retryable error — стоит повторить через delay.
     Retryable,
     /// Fatal error — не повторяем (401/400/конфиг).
@@ -1266,6 +1324,13 @@ async fn process_one_attempt(
 
     match result {
         Ok(text) => {
+            {
+                let s = host.state.lock().await;
+                if s.active_uuid.as_deref() != Some(uuid) {
+                    tracing::info!(%uuid, "dictation: transcription finished after cancel; skipping inject");
+                    return AttemptOutcome::Cancelled;
+                }
+            }
             let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
             tracing::info!(%uuid, duration_ms, "dictation: transcribed");
 
@@ -1310,6 +1375,13 @@ async fn process_one_attempt(
             AttemptOutcome::Success
         }
         Err(e) => {
+            {
+                let s = host.state.lock().await;
+                if s.active_uuid.is_some() && s.active_uuid.as_deref() != Some(uuid) {
+                    tracing::info!(%uuid, error = %e, "dictation: transcription failed after cancel; ignoring result");
+                    return AttemptOutcome::Cancelled;
+                }
+            }
             let kind = super::retry::classify(&e);
             let _ = super::pending::bump_attempt(&host.data_dir, uuid, &e.to_string());
             host.emit_pending_changed();
@@ -1363,6 +1435,7 @@ async fn auto_retry_loop(
 
         match process_one_attempt(&host, &uuid, &api_key, record_seconds).await {
             AttemptOutcome::Success => return,
+            AttemptOutcome::Cancelled => return,
             AttemptOutcome::Fatal => return,
             AttemptOutcome::Retryable => continue,
         }
@@ -1434,7 +1507,7 @@ async fn op_retry(params: Value, host: &Arc<DictationHost>) -> DictationResponse
                 )
                 .await;
             }
-            AttemptOutcome::Success | AttemptOutcome::Fatal => {}
+            AttemptOutcome::Success | AttemptOutcome::Cancelled | AttemptOutcome::Fatal => {}
         }
     });
     DictationResponse::ok(json!({ "uuid": uuid, "started": true }))
@@ -1564,6 +1637,30 @@ async fn op_native_status() -> DictationResponse {
             "helpers": [],
             "supported": false,
         }))
+    }
+}
+
+async fn op_local_status() -> DictationResponse {
+    match local::status().await {
+        Ok(status) => DictationResponse::ok(json!({
+            "warm": status.warm,
+            "loadedModel": status.loaded_model,
+            "backend": status.backend,
+            "accelerator": status.accelerator,
+            "device": status.device,
+            "profile": status.profile,
+            "idleUnloadAfterMs": status.idle_unload_after_ms,
+        })),
+        Err(e) => DictationResponse::ok(json!({
+            "warm": false,
+            "loadedModel": null,
+            "backend": null,
+            "accelerator": "auto",
+            "device": null,
+            "profile": "fast",
+            "idleUnloadAfterMs": null,
+            "error": e.to_string(),
+        })),
     }
 }
 
@@ -2581,6 +2678,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn start_recording_preloads_local_sidecar() {
+        let _guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        let td = tempfile::TempDir::new().unwrap();
+        let mut cfg = test_cfg();
+        cfg.provider = "local".into();
+        cfg.local_model_path = Some("Z:/missing/model.bin".into());
+        cfg.local_command_path = Some("Z:/missing/whisper-cli.exe".into());
+        local::install_test_sidecar_mock_for_host(None);
+        let host = DictationHost::new_for_test(
+            td.path().into(),
+            "http://127.0.0.1:1/openai/v1/audio/transcriptions".into(),
+            cfg,
+        );
+
+        let resp = handle_dictation_op("start_recording", Value::Null, &host).await;
+        assert!(resp.ok, "start_recording failed: {:?}", resp.error);
+
+        let mut saw_preload = false;
+        for _ in 0..20 {
+            if local::recorded_test_sidecar_ops_for_host()
+                .iter()
+                .any(|op| op == "preload")
+            {
+                saw_preload = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+
+        local::clear_test_sidecar_mock_for_host();
+        assert!(saw_preload, "start_recording must preload local sidecar");
+    }
+
+    #[tokio::test]
     async fn start_recording_from_non_idle_errors() {
         let host = DictationHost::new();
         handle_dictation_op("start_recording", Value::Null, &host).await;
@@ -2594,10 +2725,19 @@ mod tests {
     async fn cancel_returns_to_idle() {
         let host = DictationHost::new();
         handle_dictation_op("start_recording", Value::Null, &host).await;
+        {
+            let mut state = host.state.lock().await;
+            state.active_uuid = Some("cancel-me".into());
+            state.attempts = 1;
+            state.can_retry = true;
+        }
         let resp = handle_dictation_op("cancel", Value::Null, &host).await;
         assert!(resp.ok);
         let state = handle_dictation_op("get_state", Value::Null, &host).await;
         assert_eq!(state.data["state"], "idle");
+        assert!(state.data["activeUuid"].is_null());
+        assert_eq!(state.data["attempts"], 0);
+        assert_eq!(state.data["canRetry"], false);
     }
 
     #[tokio::test]
@@ -2943,6 +3083,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn submit_audio_local_sidecar_unavailable_keeps_pending() {
+        let _guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        let td = tempfile::TempDir::new().unwrap();
+        let mut cfg = test_cfg();
+        cfg.provider = "local".into();
+        cfg.local_model = Some("whisper-base".into());
+        cfg.local_model_path = Some("Z:/missing/model.bin".into());
+        cfg.local_command_path = Some("Z:/missing/whisper-cli.exe".into());
+        let host = DictationHost::new_for_test(
+            td.path().into(),
+            "http://127.0.0.1:1/openai/v1/audio/transcriptions".into(),
+            cfg,
+        );
+        {
+            let mut state = host.state.lock().await;
+            state.name = DictationStateName::Recording;
+        }
+        local::install_test_sidecar_unavailable_for_host(2);
+
+        let wav = make_wav();
+        let audio_b64 = base64::engine::general_purpose::STANDARD.encode(&wav);
+        let resp = handle_dictation_op(
+            "submit_audio",
+            json!({ "audioB64": audio_b64, "durationSec": 2.0 }),
+            &host,
+        )
+        .await;
+
+        local::clear_test_sidecar_mock_for_host();
+        assert!(resp.ok, "submit_audio failed: {:?}", resp.error);
+        assert_eq!(resp.data["state"], "error");
+        assert!(
+            resp.data["error"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("sidecar"),
+            "error: {}",
+            resp.data["error"]
+        );
+
+        let pending = op_list_pending(&host).await;
+        assert!(pending.ok);
+        assert_eq!(pending.data["items"].as_array().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
     async fn unknown_subop_errors() {
         let host = DictationHost::new();
         let resp = handle_dictation_op("nope", Value::Null, &host).await;
@@ -3005,6 +3191,40 @@ mod tests {
         assert_eq!(state.data["config"]["localModelId"], "whisper-base");
 
         std::env::remove_var("KOSMOS_DATA_DIR");
+    }
+
+    #[tokio::test]
+    async fn update_config_unloads_local_sidecar_when_provider_switches_away() {
+        let _data_guard = ENV_DATA_DIR_LOCK.lock().await;
+        let _dictation_guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        std::env::set_var("KOSMOS_DATA_DIR", tmp.path());
+
+        let mut cfg = test_cfg();
+        cfg.provider = "local".into();
+        cfg.provider_enabled = true;
+        let host = DictationHost::new_for_test(
+            tmp.path().into(),
+            "http://127.0.0.1:1/openai/v1/audio/transcriptions".into(),
+            cfg,
+        );
+        local::install_test_sidecar_mock_for_host(None);
+
+        let resp = handle_dictation_op("update_config", json!({ "provider": "groq" }), &host).await;
+        assert!(resp.ok, "update_config failed: {:?}", resp.error);
+
+        let mut ops = Vec::new();
+        for _ in 0..20 {
+            ops = local::recorded_test_sidecar_ops_for_host();
+            if ops.iter().any(|op| op == "unload") {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+
+        local::clear_test_sidecar_mock_for_host();
+        std::env::remove_var("KOSMOS_DATA_DIR");
+        assert!(ops.iter().any(|op| op == "unload"), "ops: {ops:?}");
     }
 
     #[tokio::test]

@@ -1,6 +1,8 @@
 use std::fs::{self, OpenOptions};
 use std::io::{self, Cursor, Write};
 use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use reqwest::header::{
@@ -15,11 +17,18 @@ use super::config;
 
 const MODELS_DIR: &str = "models/dictation";
 const TOOLS_DIR: &str = "tools/dictation/whisper.cpp";
+const CUDA_TOOLS_DIR: &str = "tools/dictation/whisper.cpp-cublas";
 const DOWNLOAD_MAX_ATTEMPTS: usize = 8;
 
 #[cfg(windows)]
-const WHISPER_CPP_ZIP_URL: &str =
+const WHISPER_CPP_CPU_ZIP_URL: &str =
     "https://github.com/ggml-org/whisper.cpp/releases/download/v1.8.4/whisper-bin-x64.zip";
+#[cfg(windows)]
+const WHISPER_CPP_CUDA_ZIP_URL: &str =
+    "https://sourceforge.net/projects/whisper-cpp.mirror/files/v1.8.5/whisper-cublas-12.4.0-bin-x64.zip/download";
+
+#[cfg(windows)]
+static NVIDIA_GPU_AVAILABLE: OnceLock<bool> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy)]
 pub struct ModelSpec {
@@ -172,6 +181,11 @@ pub fn tools_dir(data_dir: &Path) -> PathBuf {
     data_dir.join(TOOLS_DIR)
 }
 
+#[cfg(windows)]
+fn cuda_tools_dir(data_dir: &Path) -> PathBuf {
+    data_dir.join(CUDA_TOOLS_DIR)
+}
+
 pub fn model_path(data_dir: &Path, spec: &ModelSpec) -> PathBuf {
     models_dir(data_dir).join(spec.filename)
 }
@@ -183,12 +197,109 @@ pub fn model_path_by_id(data_dir: &Path, model_id: &str) -> Result<PathBuf, Loca
 pub fn command_path(data_dir: &Path) -> Option<PathBuf> {
     #[cfg(windows)]
     {
-        Some(tools_dir(data_dir).join("Release").join("whisper-cli.exe"))
+        let preferred = preferred_command_path(data_dir);
+        if preferred.is_file() {
+            return Some(preferred);
+        }
+        let cpu = cpu_command_path(data_dir);
+        if cpu.is_file() {
+            return Some(cpu);
+        }
+        Some(preferred)
     }
     #[cfg(not(windows))]
     {
         let _ = data_dir;
         None
+    }
+}
+
+#[cfg(windows)]
+fn cpu_command_path(data_dir: &Path) -> PathBuf {
+    tools_dir(data_dir).join("Release").join("whisper-cli.exe")
+}
+
+#[cfg(windows)]
+fn cuda_command_path(data_dir: &Path) -> PathBuf {
+    cuda_tools_dir(data_dir)
+        .join("Release")
+        .join("whisper-cli.exe")
+}
+
+#[cfg(windows)]
+fn preferred_command_path(data_dir: &Path) -> PathBuf {
+    if nvidia_gpu_available() {
+        cuda_command_path(data_dir)
+    } else {
+        cpu_command_path(data_dir)
+    }
+}
+
+#[cfg(windows)]
+fn managed_command_paths(data_dir: &Path) -> [PathBuf; 2] {
+    [cpu_command_path(data_dir), cuda_command_path(data_dir)]
+}
+
+#[cfg(windows)]
+fn nvidia_gpu_available() -> bool {
+    *NVIDIA_GPU_AVAILABLE.get_or_init(|| {
+        if std::env::var("KOSMOS_DICTATION_DISABLE_CUDA").as_deref() == Ok("1") {
+            return false;
+        }
+        Command::new("nvidia-smi")
+            .arg("-L")
+            .output()
+            .map(|output| output.status.success() && !output.stdout.is_empty())
+            .unwrap_or(false)
+    })
+}
+
+#[cfg(windows)]
+pub fn refresh_managed_command_path(data_dir: &Path, cfg: &mut config::DictationConfig) -> bool {
+    let Some(command_path) = command_path(data_dir) else {
+        return false;
+    };
+    if !command_path.is_file() {
+        return false;
+    }
+
+    let current = cfg.local_command_path.as_deref().map(PathBuf::from);
+    let current_is_managed = current.as_ref().is_none_or(|path| {
+        managed_command_paths(data_dir)
+            .iter()
+            .any(|managed| same_path_or_text(managed, path))
+    });
+    if !current_is_managed {
+        return false;
+    }
+
+    if current
+        .as_ref()
+        .is_some_and(|path| same_path_or_text(path, &command_path))
+    {
+        return false;
+    }
+
+    cfg.local_command_path = Some(path_string(&command_path));
+    true
+}
+
+#[cfg(not(windows))]
+pub fn refresh_managed_command_path(_data_dir: &Path, _cfg: &mut config::DictationConfig) -> bool {
+    false
+}
+
+fn same_path_or_text(left: &Path, right: &Path) -> bool {
+    if left == right {
+        return true;
+    }
+    let left_canonical = fs::canonicalize(left).ok();
+    let right_canonical = fs::canonicalize(right).ok();
+    match (left_canonical, right_canonical) {
+        (Some(left), Some(right)) => left == right,
+        _ => left
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&right.to_string_lossy()),
     }
 }
 
@@ -477,14 +588,26 @@ pub async fn ensure_whisper_cpp_with_progress(
     data_dir: &Path,
     progress: &mut ProgressCallback<'_>,
 ) -> Result<PathBuf, LocalModelsError> {
-    let command = command_path(data_dir).ok_or(LocalModelsError::UnsupportedPlatform)?;
+    let command = preferred_command_path(data_dir);
     if command.is_file() {
         return Ok(command);
     }
-    let dir = tools_dir(data_dir);
+    let (dir, archive_name, url) = if nvidia_gpu_available() {
+        (
+            cuda_tools_dir(data_dir),
+            "whisper-cublas-12.4.0-bin-x64.zip",
+            WHISPER_CPP_CUDA_ZIP_URL,
+        )
+    } else {
+        (
+            tools_dir(data_dir),
+            "whisper-bin-x64.zip",
+            WHISPER_CPP_CPU_ZIP_URL,
+        )
+    };
     fs::create_dir_all(&dir)?;
-    let archive_path = dir.join("whisper-bin-x64.zip");
-    download_file(client, WHISPER_CPP_ZIP_URL, &archive_path, "tool", progress).await?;
+    let archive_path = dir.join(archive_name);
+    download_file(client, url, &archive_path, "tool", progress).await?;
     progress(DownloadProgress {
         phase: "extract",
         downloaded_bytes: 0,
