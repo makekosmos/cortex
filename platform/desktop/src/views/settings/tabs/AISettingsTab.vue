@@ -68,6 +68,10 @@ const providerLabel = computed(() => {
 
 const isGroqProvider = computed(() => dictationConfig.value.provider === "groq");
 const isLocalProvider = computed(() => dictationConfig.value.provider === "local");
+const isFasterWhisperEngine = computed(() => {
+  const engine = dictationLocalEngine.value.trim().toLowerCase();
+  return engine === "faster-whisper" || engine === "faster_whisper";
+});
 
 const groqConnectionLabel = computed(() =>
   dictationConnTestBusy.value ? "Проверяю…" : "Проверить соединение",
@@ -79,6 +83,20 @@ const groqConnectionDescription = computed(
     "Проверяет доступность Groq через текущие DNS/Proxy настройки.",
 );
 
+const localModelsFolderDescription = computed(() => {
+  const base =
+    dictationLocalModels.value?.modelsDir || "Модели будут храниться в папке данных Kosmos.";
+  if (!isFasterWhisperEngine.value) return base;
+  return "Faster Whisper использует отдельный CTranslate2 cache в папке данных Kosmos.";
+});
+
+const localModelsFolderStatus = computed(() => {
+  if (isFasterWhisperEngine.value) return "Faster Whisper cache";
+  return dictationLocalModels.value?.commandInstalled
+    ? "whisper.cpp установлен"
+    : "whisper.cpp будет скачан";
+});
+
 function localModelDescription(model: {
   id: string;
   description: string;
@@ -88,12 +106,33 @@ function localModelDescription(model: {
   downloaded: boolean;
   selected: boolean;
 }) {
-  const state = model.selected ? "используется" : model.downloaded ? "скачана" : "не скачана";
+  const stateModel = localModelUiState(model);
+  const state = stateModel.selected
+    ? "используется"
+    : stateModel.downloaded
+      ? "подготовлена"
+      : "не подготовлена";
+  const engineLabel = isFasterWhisperEngine.value
+    ? "Faster Whisper cache"
+    : `ggml · ${model.sizeMb} MB`;
   const progress = dictationLocalModelDownloadProgress.value[model.id];
   const progressText = progress ? ` · ${downloadProgressLabel(progress)}` : "";
-  return `${model.description} · ${model.sizeMb} MB · скорость ${Math.round(
+  return `${model.description} · ${engineLabel} · скорость ${Math.round(
     model.speedScore * 100,
   )}% · качество ${Math.round(model.accuracyScore * 100)}% · ${state}${progressText}`;
+}
+
+function fasterWhisperModelId(modelId: string) {
+  switch (modelId) {
+    case "tiny-q5_1":
+      return "tiny";
+    case "turbo":
+      return "large-v3-turbo";
+    case "large":
+      return "large-v3";
+    default:
+      return modelId;
+  }
 }
 
 function formatBytes(bytes: number): string {
@@ -131,9 +170,10 @@ function downloadProgressLabel(progress: {
 function localModelButtonLabel(model: { id: string; downloaded: boolean; selected: boolean }) {
   const progress = dictationLocalModelDownloadProgress.value[model.id];
   if (progress) return progress.percent !== null ? `${Math.round(progress.percent)}%` : "Скачиваю…";
-  if (model.selected) return "Используется";
-  if (model.downloaded) return "Использовать";
-  return "Скачать и использовать";
+  const state = localModelUiState(model);
+  if (state.selected) return "Используется";
+  if (state.downloaded) return "Использовать";
+  return isFasterWhisperEngine.value ? "Подготовить и использовать" : "Скачать и использовать";
 }
 
 function hasAnyLocalModelDownload() {
@@ -145,9 +185,22 @@ function localModelProgressPercent(modelId: string) {
   return Math.max(0, Math.min(100, progress?.percent ?? 0));
 }
 
+function localModelUiState(model: { id: string; downloaded: boolean; selected: boolean }) {
+  if (!isFasterWhisperEngine.value) return model;
+  const backendModelId = fasterWhisperModelId(model.id);
+  const selected =
+    dictationLocalModelId.value === model.id && dictationLocalModelPath.value === backendModelId;
+  return {
+    ...model,
+    downloaded: selected,
+    selected,
+  };
+}
+
 function onLocalModelAction(model: { id: string; downloaded: boolean; selected: boolean }) {
-  if (model.selected || hasAnyLocalModelDownload()) return;
-  if (model.downloaded) {
+  const state = localModelUiState(model);
+  if (state.selected || hasAnyLocalModelDownload()) return;
+  if (state.downloaded) {
     void onDictationUseLocalModel(model.id);
   } else {
     void onDictationDownloadLocalModel(model.id);
@@ -155,6 +208,7 @@ function onLocalModelAction(model: { id: string; downloaded: boolean; selected: 
 }
 
 function onLocalModelDelete(model: { id: string; downloaded: boolean }) {
+  if (isFasterWhisperEngine.value) return;
   if (!model.downloaded) return;
   void onDictationDeleteLocalModel(model.id);
 }
@@ -214,18 +268,9 @@ onMounted(() => {
 
     <h2 class="advanced-section-title">Локально</h2>
     <SettingsList>
-      <SettingsRow
-        title="Папка моделей"
-        :description="
-          dictationLocalModels?.modelsDir || 'Модели будут храниться в папке данных Kosmos.'
-        "
-      >
+      <SettingsRow title="Папка моделей" :description="localModelsFolderDescription">
         <template #control>
-          <span>{{
-            dictationLocalModels?.commandInstalled
-              ? "whisper.cpp установлен"
-              : "whisper.cpp будет скачан"
-          }}</span>
+          <span>{{ localModelsFolderStatus }}</span>
         </template>
       </SettingsRow>
       <SettingsRow
@@ -243,20 +288,28 @@ onMounted(() => {
           <div class="local-model-actions">
             <Button
               size="sm"
-              :variant="model.selected ? 'ghost' : model.downloaded ? 'primary' : 'ghost'"
+              :variant="
+                localModelUiState(model).selected
+                  ? 'ghost'
+                  : localModelUiState(model).downloaded
+                    ? 'primary'
+                    : 'ghost'
+              "
               :loading="
                 dictationLocalModelsBusy === model.id ||
                 Boolean(dictationLocalModelDownloadProgress[model.id])
               "
               :disabled="
-                Boolean(dictationLocalModelsBusy) || hasAnyLocalModelDownload() || model.selected
+                Boolean(dictationLocalModelsBusy) ||
+                hasAnyLocalModelDownload() ||
+                localModelUiState(model).selected
               "
               @click="onLocalModelAction(model)"
             >
               {{ localModelButtonLabel(model) }}
             </Button>
             <Button
-              v-if="model.downloaded"
+              v-if="!isFasterWhisperEngine && model.downloaded"
               size="sm"
               variant="danger"
               :disabled="Boolean(dictationLocalModelsBusy) || hasAnyLocalModelDownload()"
