@@ -1,0 +1,17 @@
+﻿sidecar: C:\Users\kirill\Coding\kosmos\target\debug\kosmos-local-stt.exe
+wav: C:\Users\kirill\AppData\Roaming\Kosmos-dev\dictation\pending\20aef3cd-17b0-4fb0-85be-169450482db0.wav
+model: C:\Users\kirill\AppData\Roaming\Kosmos-dev\models\dictation\ggml-large-v3-turbo.bin
+command: C:\Users\kirill\AppData\Roaming\Kosmos-dev\tools\dictation\whisper.cpp-cublas\Release\whisper-cli.exe
+timeoutMs: 30000
+preloadMs: 1765
+transcribeMs: 403
+statusMs: 37
+unloadMs: 98
+shutdownMs: 0
+transcript: Спасибо.
+backend: whisper_dll
+statusWarm: True
+statusAccelerator: gpu
+statusDevice: NVIDIA GeForce RTX 5070
+statusProfile: fast
+exitCode: 0

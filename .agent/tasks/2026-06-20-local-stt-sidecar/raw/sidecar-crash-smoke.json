@@ -1,0 +1,36 @@
+﻿{
+  "generatedAt": "2026-06-21T14:58:51.5848246+03:00",
+  "sidecar": "C:\\Users\\kirill\\Coding\\kosmos\\target\\debug\\kosmos-local-stt.exe",
+  "wav": "C:\\Users\\kirill\\AppData\\Roaming\\Kosmos-dev\\dictation\\pending\\20aef3cd-17b0-4fb0-85be-169450482db0.wav",
+  "repeatedWavFactor": 80,
+  "killedProcessId": 25840,
+  "killMs": 199,
+  "killedExitCode": -1,
+  "pendingWavExistsBefore": true,
+  "pendingWavExistsAfter": true,
+  "restartProcessId": 15236,
+  "statusAfterRestart": {
+    "requestId": 1,
+    "ok": true,
+    "response": {
+      "kind": "status",
+      "warm": false,
+      "loadedModel": null,
+      "backend": null,
+      "accelerator": "auto",
+      "device": null,
+      "profile": "fast",
+      "idleUnloadAfterMs": null
+    }
+  },
+  "shutdownAfterRestart": {
+    "requestId": 2,
+    "ok": true,
+    "response": {
+      "kind": "ack",
+      "accepted": true,
+      "message": "shutdown"
+    }
+  },
+  "restartExitCode": 0
+}

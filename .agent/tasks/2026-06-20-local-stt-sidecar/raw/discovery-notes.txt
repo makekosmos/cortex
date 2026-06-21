@@ -1,0 +1,31 @@
+DG2 machine/config snapshot
+- `dictation-config.json`:
+  - provider: `local`
+  - model: `whisper-large-v3-turbo`
+  - localEngine: `whisper.cpp`
+  - localModelPath: `C:\Users\kirill\AppData\Roaming\Kosmos-dev\models\dictation\ggml-large-v3-turbo.bin`
+  - localCommandPath: `C:\\Users\\kirill\\AppData\\Roaming\\Kosmos-dev\\tools/dictation/whisper.cpp-cublas/Release/whisper-cli.exe`
+- `dictation-stats.json`: `totalWords=302`, `totalRecordSeconds=473`, `totalSessions=88`
+- `nvidia-smi -L`:
+  - `GPU 0: NVIDIA GeForce RTX 5070 (UUID: GPU-198504d0-822f-45d3-2e23-1fa49291722e)`
+
+DG3 code/dependency inspection
+- `rg -n "transcribe-rs|whisper-rs|whisper_rs|whisper-cpp|whisper.cpp" Cargo.toml Cargo.lock platform core packages products extensions`
+  - no `transcribe-rs` or `whisper-rs` entries found in the tree/lockfile; only current whisper.cpp paths and references.
+- `platform/runtime/src/dictation/local.rs`
+  - `transcribe()` uses `whisper-server.exe` when present and falls back to `whisper-cli.exe` in a blocking worker.
+  - `start_whisper_server()` spawns `whisper-server.exe` with `--host`, `--port`, `--inference-path /inference`, `-m`, `-t`, `-nt`, `-bo 1`, `-bs 1`.
+  - `run_whisper_cpp()` shells out to `whisper-cli.exe` with `-m`, `-f`, `-otxt`, `-of`, `-nt`, `-np`, `-t`, `-bo 1`, `-bs 1`, plus language/prompt flags.
+- `platform/runtime/src/dictation/local_models.rs`
+  - Windows packaging is already split into CPU and CUDA whisper.cpp zips.
+  - `nvidia_gpu_available()` switches to CUDA build when `nvidia-smi -L` succeeds and CUDA is not disabled.
+
+DG4 IPC transport inspection
+- `core/ark/crates/ark-core/AGENTS.md` and `core/ark/crates/ark-core/rust/src/main.rs`
+  - existing sidecar contract is newline-delimited JSON-RPC over stdin/stdout.
+  - stdout is protocol output; logs should not mix with framing.
+- `platform/runtime/src/file_index/scanner/ntfs.rs`
+  - repo also has a named-pipe framed JSON request/response pattern for service helpers.
+- Transport conclusion:
+  - stdio JSON-RPC is enough for `status`, `load_model`, `preload`, `transcribe`, `cancel`, `unload`, crash detection, timeout handling, stderr logging, and future event/notification streaming.
+  - This matches the repo's existing sidecar convention and avoids extra Windows named-pipe ACL/lifecycle work for the first cut.

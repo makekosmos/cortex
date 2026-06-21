@@ -55,6 +55,7 @@
 | --------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Electron host**           | `Kosmos.exe` (Chromium 144 + Node 24)                    | —                                                                                                                                                 |
 | **Runtime**                 | `Kosmos Runtime.exe` (packaged `kepler-backend`)         | —                                                                                                                                                 |
+| **Local STT**               | `Kosmos Local STT.exe` (packaged `kosmos-local-stt`)     | —                                                                                                                                                 |
 | **ARK storage**             | `Kosmos Data Engine.exe` (packaged `ark-core-rpc`)       | —                                                                                                                                                 |
 | **Focus / file svc**        | `Kosmos System Service.exe` (Windows Service, AutoStart) | **Один UAC при первой установке service** — дальше zero UAC через named pipe: hosts-блокировка для Focus и быстрый NTFS/MFT scan для File Search. |
 | **Focus helper** (fallback) | `Kosmos Helper.exe` (admin elevation manifest)           | UAC per toggle — используется только если юзер отклонил auto-install service'а                                                                    |
@@ -68,6 +69,7 @@
   ├─ Kosmos.exe                          ~225 MB (Electron runtime)
   ├─ resources\app.asar                  ~40 MB  (shell + extensions bundles)
   ├─ resources\Kosmos Runtime.exe        ~8 MB
+  ├─ resources\Kosmos Local STT.exe       ~8 MB
   ├─ resources\Kosmos Data Engine.exe    ~6 MB
   ├─ resources\Kosmos Helper.exe         ~1 MB
   ├─ resources\Kosmos System Service.exe ~1 MB

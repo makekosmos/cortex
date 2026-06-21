@@ -73,6 +73,9 @@ pub(crate) fn classify(err: &SubmitError) -> FailureKind {
         SubmitError::Local(LocalError::CommandFailed(message)) => FailureKind::Fatal {
             user_msg: format!("Локальная транскрипция не удалась: {message}"),
         },
+        SubmitError::Local(LocalError::SidecarUnavailable(message)) => FailureKind::Fatal {
+            user_msg: format!("Локальный STT sidecar недоступен: {message}"),
+        },
         SubmitError::Local(LocalError::EmptyTranscript) => FailureKind::Fatal {
             user_msg: "Локальная модель не вернула текст".into(),
         },

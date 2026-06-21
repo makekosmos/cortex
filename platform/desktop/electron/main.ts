@@ -694,7 +694,9 @@ function createLauncher() {
     // detached DevTools — отдельное окно, не блокирует launcher.
     // activate: false — не отдаём фокус DevTools при открытии: иначе
     // DevTools берёт фокус через ~1-2с и триггерит blur → hideLauncher.
-    mainWindow.webContents.openDevTools({ mode: "detach", activate: false });
+    if (process.env.KOSMOS_DEVTOOLS === "1") {
+      mainWindow.webContents.openDevTools({ mode: "detach", activate: false });
+    }
   } else {
     void mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
