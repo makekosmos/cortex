@@ -19,6 +19,8 @@ Kosmos local transcription is slow, and Handy appears faster because it keeps an
 - If the managed CUDA package has `whisper.dll` next to `whisper-cli.exe`, the sidecar can load it dynamically without adding CMake/libclang to the Rust build. On Windows, use DLL load flags equivalent to `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` so sibling CUDA/ggml DLLs resolve.
 - For cancellation inside native Whisper inference, `JoinHandle::abort()` is not enough once execution is inside blocking C code. Wire `whisper_full_params.abort_callback` to an atomic cancel flag and avoid falling back to `whisper-server.exe` after that flag is set.
 - Match Handy's idle behavior with an active watcher, not only lazy request-time checks. Handy checks every 10s; Kosmos sidecar should unload after `idle_unload_after_ms` even if no further `status`/`transcribe` request arrives. Also unload immediately when the user switches dictation provider away from `local`.
+- `faster-whisper` cannot consume whisper.cpp `ggml-*.bin` files directly. If the user selects a managed `.bin` model, map the known Kosmos model id to a faster-whisper model id such as `large-v3-turbo`; only pass filesystem paths when they point to a CTranslate2 model directory.
+- Keep `dictation.submit_audio` timeouts short for desktop UX. A useful split is 60s for Electron/ARK IPC and a lower internal faster-whisper child timeout, so a stuck Python backend returns a local STT error before the transport times out.
 - If using the existing external binary path, preload/reuse `whisper-server.exe` at recording start and submit audio to `/inference`.
 - On NVIDIA machines, the managed CPU `whisper-bin-x64.zip` path is the main speed trap. Prefer a CUDA `whisper.cpp` package and keep the server warm. In one RTX 5070 check, CUDA server startup was about 3s and warm `/inference` on a tiny WAV was about 370ms.
 - If GitHub release asset downloads reset before the first byte, try the SourceForge whisper.cpp mirror for the same CUDA zip.
@@ -30,6 +32,7 @@ Kosmos local transcription is slow, and Handy appears faster because it keeps an
 - Before attempting embedded `whisper-rs`/`transcribe-rs`/`whispercpp`, check `cmake --version`, `clang --version`, and `cl`. In the 2026-06-21 sidecar proof-loop, none were on PATH, while the managed CUDA package had `whisper.dll` but no `.lib` import library.
 - Do not treat server startup as the full latency problem; model inference can dominate after the process is already warm.
 - Do not run real-whisper perf scripts from the agent loop unless both the outer tool call and the script itself have hard timeouts.
+- Do not “fix” faster-whisper hangs by only raising IPC timeout. First verify Python package availability, model format, and whether the child process has its own deadline.
 - Do not run broad e2e without a fresh renderer build, and do not leave timed-out `bunx`/`electron`/`node` children running. Kill only processes started after the failed run's timestamp.
 - Do not assume every nested protocol field is camelCase just because the envelope is camelCase; check `local_sidecar_protocol.rs` or use Rust serialization output.
 - Do not use PowerShell `$vars` inside a double-quoted `rtk proxy powershell -Command` payload; the outer shell can expand them away. Use Node for timing scripts or avoid `$` in the inner command.
