@@ -326,6 +326,10 @@ onMounted(() => {
             <div
               v-if="dictationLocalModelDownloadProgress[model.id]"
               class="local-model-progress"
+              :class="{
+                'local-model-progress--indeterminate':
+                  dictationLocalModelDownloadProgress[model.id].percent === null,
+              }"
               role="progressbar"
               :aria-valuemin="0"
               :aria-valuemax="100"
@@ -412,5 +416,21 @@ onMounted(() => {
   border-radius: inherit;
   background: currentColor;
   transition: width 160ms ease;
+}
+
+.local-model-progress--indeterminate .local-model-progress-fill {
+  width: 42% !important;
+  min-width: 42%;
+  animation: local-model-progress-indeterminate 1.1s ease-in-out infinite;
+}
+
+@keyframes local-model-progress-indeterminate {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  100% {
+    transform: translateX(245%);
+  }
 }
 </style>
