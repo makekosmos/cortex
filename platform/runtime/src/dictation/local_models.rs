@@ -20,6 +20,7 @@ const MODELS_DIR: &str = "models/dictation";
 const TOOLS_DIR: &str = "tools/dictation/whisper.cpp";
 const CUDA_TOOLS_DIR: &str = "tools/dictation/whisper.cpp-cublas";
 const FASTER_WHISPER_DIR: &str = "tools/dictation/faster-whisper";
+const FASTER_WHISPER_VENV_DIR: &str = ".venv";
 const DOWNLOAD_MAX_ATTEMPTS: usize = 8;
 
 #[cfg(windows)]
@@ -187,6 +188,30 @@ pub fn tools_dir(data_dir: &Path) -> PathBuf {
 
 pub fn faster_whisper_dir(data_dir: &Path) -> PathBuf {
     data_dir.join(FASTER_WHISPER_DIR)
+}
+
+pub fn faster_whisper_venv_dir(data_dir: &Path) -> PathBuf {
+    faster_whisper_dir(data_dir).join(FASTER_WHISPER_VENV_DIR)
+}
+
+pub fn faster_whisper_python_path(data_dir: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        faster_whisper_venv_dir(data_dir)
+            .join("Scripts")
+            .join("python.exe")
+    }
+    #[cfg(not(windows))]
+    {
+        faster_whisper_venv_dir(data_dir).join("bin").join("python")
+    }
+}
+
+pub fn faster_whisper_python_command(data_dir: &Path) -> String {
+    std::env::var("KOSMOS_FASTER_WHISPER_PYTHON")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| path_string(&faster_whisper_python_path(data_dir)))
 }
 
 pub fn faster_whisper_model_id(model_id: &str) -> Result<&'static str, LocalModelsError> {
@@ -582,13 +607,6 @@ pub async fn ensure_model_with_progress(
     Ok(path)
 }
 
-fn faster_whisper_python() -> String {
-    std::env::var("KOSMOS_FASTER_WHISPER_PYTHON")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| "python".into())
-}
-
 fn faster_whisper_prepare_timeout() -> Duration {
     std::env::var("KOSMOS_FASTER_WHISPER_PREPARE_TIMEOUT_MS")
         .ok()
@@ -596,6 +614,155 @@ fn faster_whisper_prepare_timeout() -> Duration {
         .map(|millis| millis.clamp(30_000, 30 * 60 * 1000))
         .map(Duration::from_millis)
         .unwrap_or_else(|| Duration::from_secs(15 * 60))
+}
+
+async fn run_faster_whisper_setup_command(
+    mut command: TokioCommand,
+    timeout: Duration,
+    label: &str,
+) -> Result<(), LocalModelsError> {
+    let output = match tokio::time::timeout(timeout, command.output()).await {
+        Ok(Ok(output)) => output,
+        Ok(Err(e)) => {
+            return Err(LocalModelsError::FasterWhisper(format!(
+                "{label}: failed to launch: {e}"
+            )));
+        }
+        Err(_) => {
+            return Err(LocalModelsError::FasterWhisper(format!(
+                "{label}: timed out after {}s",
+                timeout.as_secs()
+            )));
+        }
+    };
+    if output.status.success() {
+        return Ok(());
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    Err(LocalModelsError::FasterWhisper(format!(
+        "{label}: exited with status {}; stdout={}; stderr={}",
+        output.status,
+        stdout.trim(),
+        stderr.trim()
+    )))
+}
+
+#[cfg(windows)]
+fn detected_python_paths_for_faster_whisper() -> Vec<PathBuf> {
+    let output = match Command::new("py").arg("-0p").output() {
+        Ok(output) if output.status.success() => output,
+        _ => return Vec::new(),
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout
+        .lines()
+        .filter(|line| {
+            line.contains("3.10")
+                || line.contains("3.11")
+                || line.contains("3.12")
+                || line.contains("3.13")
+        })
+        .filter_map(|line| {
+            line.find("C:\\")
+                .map(|idx| PathBuf::from(line[idx..].trim()))
+        })
+        .filter(|path| path.is_file())
+        .collect()
+}
+
+async fn create_faster_whisper_venv(
+    data_dir: &Path,
+    timeout: Duration,
+) -> Result<(), LocalModelsError> {
+    let venv_dir = faster_whisper_venv_dir(data_dir);
+    fs::create_dir_all(faster_whisper_dir(data_dir))?;
+    let mut attempts: Vec<(String, TokioCommand)> = Vec::new();
+
+    #[cfg(windows)]
+    {
+        for path in detected_python_paths_for_faster_whisper() {
+            let label = format!("create venv with {}", path_string(&path));
+            let mut command = TokioCommand::new(path);
+            command.arg("-m").arg("venv").arg(&venv_dir);
+            attempts.push((label, command));
+        }
+
+        let mut py311 = TokioCommand::new("py");
+        py311.arg("-3.11").arg("-m").arg("venv").arg(&venv_dir);
+        attempts.push(("create venv with py -3.11".into(), py311));
+
+        let mut py312 = TokioCommand::new("py");
+        py312.arg("-3.12").arg("-m").arg("venv").arg(&venv_dir);
+        attempts.push(("create venv with py -3.12".into(), py312));
+    }
+
+    let mut python = TokioCommand::new("python");
+    python.arg("-m").arg("venv").arg(&venv_dir);
+    attempts.push(("create venv with python".into(), python));
+
+    let mut errors = Vec::new();
+    for (label, command) in attempts {
+        match run_faster_whisper_setup_command(command, timeout, &label).await {
+            Ok(()) => return Ok(()),
+            Err(e) => errors.push(e.to_string()),
+        }
+    }
+
+    Err(LocalModelsError::FasterWhisper(format!(
+        "failed to create managed Python venv: {}",
+        errors.join(" | ")
+    )))
+}
+
+async fn ensure_faster_whisper_python(
+    data_dir: &Path,
+    progress: &mut ProgressCallback<'_>,
+) -> Result<String, LocalModelsError> {
+    if let Ok(python) = std::env::var("KOSMOS_FASTER_WHISPER_PYTHON") {
+        let python = python.trim();
+        if !python.is_empty() {
+            return Ok(python.to_owned());
+        }
+    }
+
+    let python = faster_whisper_python_path(data_dir);
+    if !python.is_file() {
+        progress(DownloadProgress {
+            phase: "python",
+            downloaded_bytes: 0,
+            total_bytes: None,
+            percent: None,
+        });
+        create_faster_whisper_venv(data_dir, faster_whisper_prepare_timeout()).await?;
+    }
+    if !python.is_file() {
+        return Err(LocalModelsError::FasterWhisper(format!(
+            "managed Python venv did not create {}",
+            path_string(&python)
+        )));
+    }
+
+    progress(DownloadProgress {
+        phase: "package",
+        downloaded_bytes: 0,
+        total_bytes: None,
+        percent: None,
+    });
+    let mut pip = TokioCommand::new(&python);
+    pip.arg("-m")
+        .arg("pip")
+        .arg("install")
+        .arg("--upgrade")
+        .arg("faster-whisper");
+    run_faster_whisper_setup_command(
+        pip,
+        faster_whisper_prepare_timeout(),
+        "install faster-whisper",
+    )
+    .await?;
+
+    Ok(path_string(&python))
 }
 
 pub async fn ensure_faster_whisper_with_progress(
@@ -606,6 +773,7 @@ pub async fn ensure_faster_whisper_with_progress(
     let backend_model = faster_whisper_model_id(model_id)?;
     let cache_dir = faster_whisper_dir(data_dir);
     fs::create_dir_all(&cache_dir)?;
+    let python = ensure_faster_whisper_python(data_dir, progress).await?;
     progress(DownloadProgress {
         phase: "faster-whisper",
         downloaded_bytes: 0,
@@ -633,7 +801,7 @@ except Exception as exc:
     print(json.dumps({"error": str(exc)}))
 "#;
 
-    let mut command = TokioCommand::new(faster_whisper_python());
+    let mut command = TokioCommand::new(python);
     command
         .arg("-c")
         .arg(script)

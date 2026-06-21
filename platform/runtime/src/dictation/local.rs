@@ -1191,7 +1191,7 @@ fn faster_whisper_python() -> String {
         .ok()
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "python".into())
+        .unwrap_or_else(|| local_models::faster_whisper_python_command(&config::data_dir()))
 }
 
 fn faster_whisper_timeout() -> Duration {

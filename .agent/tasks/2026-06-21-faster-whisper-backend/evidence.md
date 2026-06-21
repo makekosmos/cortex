@@ -8,12 +8,13 @@ faster-whisper timeout follow-up.
 `whisper.cpp` remains the default. `faster-whisper` is available as an optional
 local engine value and is routed through the same `kosmos-local-stt` sidecar
 boundary. The current implementation expects an existing Python environment
-with the `faster_whisper` package. Managed whisper.cpp `.bin` files are not
-passed to faster-whisper; when the faster-whisper engine is selected,
-`dictation.download_local_model` prepares the corresponding CTranslate2/HF cache
-under `<dataDir>/tools/dictation/faster-whisper/` and stores the backend model
-id as `localModelPath`. `KOSMOS_FASTER_WHISPER_MODEL` remains an explicit
-diagnostic override.
+Managed whisper.cpp `.bin` files are not passed to faster-whisper; when the
+faster-whisper engine is selected, `dictation.download_local_model` creates a
+managed Python venv under `<dataDir>/tools/dictation/faster-whisper/.venv/`,
+installs `faster-whisper`, prepares the corresponding CTranslate2/HF cache under
+`<dataDir>/tools/dictation/faster-whisper/`, and stores the backend model id as
+`localModelPath`. `KOSMOS_FASTER_WHISPER_PYTHON` and
+`KOSMOS_FASTER_WHISPER_MODEL` remain explicit diagnostic overrides.
 
 ## Acceptance Criteria
 
