@@ -110,6 +110,10 @@ impl DictationHost {
         apply_ptt_hook(&cfg, &events_tx);
         // GC pending queue + emit notifier если есть items.
         host.bootstrap_pending();
+        let prewarm_host = Arc::clone(&host);
+        tokio::spawn(async move {
+            preload_local_runtime_for_recording(&prewarm_host).await;
+        });
         host
     }
 
@@ -941,6 +945,8 @@ async fn op_update_config(params: Value, host: &DictationHost) -> DictationRespo
                 );
             }
         });
+    } else if snapshot.provider_enabled && provider_uses_local_runtime(&snapshot.provider) {
+        preload_local_runtime_for_recording(host).await;
     }
     // Перерегистрируем PTT hook (на случай смены trigger_mode или hotkey).
     apply_ptt_hook(&snapshot, &host.events_tx);
@@ -1042,10 +1048,15 @@ async fn preload_local_runtime_for_recording(host: &DictationHost) {
     let model_path = cfg.local_model_path.clone();
     let command_path = cfg.local_command_path.clone();
     tokio::spawn(async move {
-        if let Err(e) =
-            local::preload_server(&engine, model_path.as_deref(), command_path.as_deref()).await
-        {
-            tracing::warn!(error = %e, "dictation: local STT preload failed");
+        let start = std::time::Instant::now();
+        match local::preload_server(&engine, model_path.as_deref(), command_path.as_deref()).await {
+            Ok(warm) => {
+                let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+                tracing::info!(engine = %engine, warm, duration_ms, "dictation: local STT preload finished");
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "dictation: local STT preload failed");
+            }
         }
     });
 }
@@ -1069,14 +1080,20 @@ async fn op_start_recording(host: &DictationHost) -> DictationResponse {
 
 async fn op_cancel(host: &DictationHost) -> DictationResponse {
     let mut s = host.state.lock().await;
+    let should_cancel_sidecar = matches!(
+        s.name,
+        DictationStateName::Recording | DictationStateName::Transcribing
+    );
     *s = HostState::idle();
     let snapshot = s.clone();
     drop(s);
-    tokio::spawn(async {
-        if let Err(e) = local::cancel_sidecar().await {
-            tracing::warn!(error = %e, "dictation: local STT cancel failed");
-        }
-    });
+    if should_cancel_sidecar {
+        tokio::spawn(async {
+            if let Err(e) = local::cancel_sidecar().await {
+                tracing::warn!(error = %e, "dictation: local STT cancel failed");
+            }
+        });
+    }
     host.emit_state(&snapshot).await;
     DictationResponse::ok(json!({ "state": "idle" }))
 }
