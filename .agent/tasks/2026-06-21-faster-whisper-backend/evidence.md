@@ -9,21 +9,23 @@ faster-whisper timeout follow-up.
 local engine value and is routed through the same `kosmos-local-stt` sidecar
 boundary. The current implementation expects an existing Python environment
 with the `faster_whisper` package. Managed whisper.cpp `.bin` selections are
-mapped to equivalent faster-whisper model ids where possible; custom paths must
-be compatible CTranslate2 model directories. Automatic conversion/download is
+rejected for faster-whisper instead of being mapped to remote model ids, because
+that can trigger an implicit first-run model download/prep. Custom paths must be
+compatible CTranslate2 model directories; `KOSMOS_FASTER_WHISPER_MODEL` can be
+used as an explicit diagnostic override. Automatic conversion/download is
 intentionally out of scope for this slice.
 
 ## Acceptance Criteria
 
-| AC  | Verdict | Evidence                                                                                                                                                                                                                                                                           |
-| --- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AC1 | PASS    | Existing default config still uses `localEngine = "whisper.cpp"`.                                                                                                                                                                                                                  |
-| AC2 | PASS    | Settings exposes `Faster Whisper`; existing `localEngine` persistence path stores the selected value and host no longer resets it when selecting a downloaded model.                                                                                                               |
-| AC3 | PASS    | Sidecar protocol carries `engine`; `request_roundtrip_preserves_faster_whisper_engine` covers the `faster-whisper` value.                                                                                                                                                          |
-| AC4 | PASS    | Sidecar `preload` marks faster-whisper warm without loading whisper.cpp; `transcribe` routes faster-whisper to the Python runner and whisper.cpp to the existing DLL/server path. Managed ggml `.bin` models map to faster-whisper model ids.                                      |
-| AC5 | PASS    | Missing faster-whisper Python runtime returns a controlled `faster-whisper failed` / launch error and does not fall back to whisper.cpp. The Python child has a 55s default timeout below the 60s desktop IPC cap. Host pending behavior is covered by existing local error tests. |
-| AC6 | PASS    | Faster-whisper uses the same sidecar request/status/unload lifecycle surface. Sidecar cancel passes an atomic flag to the faster-whisper runner and kills the Python child process.                                                                                                |
-| AC7 | PASS    | `docs-site/concepts/dictation.md` documents default backend, faster-whisper requirements, and no silent fallback.                                                                                                                                                                  |
+| AC  | Verdict | Evidence                                                                                                                                                                                                                                                                                                       |
+| --- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AC1 | PASS    | Existing default config still uses `localEngine = "whisper.cpp"`.                                                                                                                                                                                                                                              |
+| AC2 | PASS    | Settings exposes `Faster Whisper`; existing `localEngine` persistence path stores the selected value and host no longer resets it when selecting a downloaded model.                                                                                                                                           |
+| AC3 | PASS    | Sidecar protocol carries `engine`; `request_roundtrip_preserves_faster_whisper_engine` covers the `faster-whisper` value.                                                                                                                                                                                      |
+| AC4 | PASS    | Sidecar `preload` marks faster-whisper warm without loading whisper.cpp; `transcribe` routes faster-whisper to the Python runner and whisper.cpp to the existing DLL/server path. Managed ggml `.bin` models return a controlled incompatibility error unless `KOSMOS_FASTER_WHISPER_MODEL` is explicitly set. |
+| AC5 | PASS    | Missing faster-whisper Python runtime returns a controlled `faster-whisper failed` / launch error and does not fall back to whisper.cpp. The Python child has a 55s default timeout below the 60s desktop IPC cap. Host pending behavior is covered by existing local error tests.                             |
+| AC6 | PASS    | Faster-whisper uses the same sidecar request/status/unload lifecycle surface. Sidecar cancel passes an atomic flag to the faster-whisper runner and kills the Python child process.                                                                                                                            |
+| AC7 | PASS    | `docs-site/concepts/dictation.md` documents default backend, faster-whisper requirements, and no silent fallback.                                                                                                                                                                                              |
 
 ## Verification Commands
 
