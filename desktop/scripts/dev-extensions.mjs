@@ -12,7 +12,7 @@
 // SIGINT/SIGTERM пробрасывается всем children. Каждый child запускается из
 // `extensions/<id>/` со своим `vite.config.mjs`.
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -114,15 +114,27 @@ const children = extensions.map(({ id, devPort, dir }) =>
 );
 
 let shuttingDown = false;
+function killProcessTree(child) {
+  if (child.killed) return;
+  if (process.platform === "win32" && child.pid) {
+    spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    return;
+  }
+  try {
+    child.kill();
+  } catch {
+    /* already exited */
+  }
+}
+
 function cleanup() {
   if (shuttingDown) return;
   shuttingDown = true;
   for (const c of children) {
-    try {
-      c.kill();
-    } catch {
-      /* already exited */
-    }
+    killProcessTree(c);
   }
   process.exit(0);
 }

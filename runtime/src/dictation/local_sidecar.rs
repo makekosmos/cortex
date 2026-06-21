@@ -15,8 +15,8 @@ use tokio::task::JoinHandle;
 
 use super::local::{
     is_faster_whisper_engine, preload_with_whisper_backend_model,
-    transcribe_faster_whisper_backend_model, transcribe_with_whisper_backend_model,
-    unload_whisper_backend, LocalError, TranscriptionResult,
+    transcribe_with_whisper_backend_model, unload_whisper_backend, FasterWhisperWorker, LocalError,
+    TranscriptionResult,
 };
 use super::local_sidecar_protocol::{
     LocalSttAccelerator, LocalSttAck, LocalSttModelSpec, LocalSttProfile, LocalSttRequest,
@@ -31,6 +31,7 @@ struct WarmState {
     backend: Option<String>,
     last_used_at: Option<Instant>,
     embedded: Option<WhisperDllEngine>,
+    faster_whisper: Option<FasterWhisperWorker>,
 }
 
 pub struct LocalSttSidecarService {
@@ -80,6 +81,10 @@ impl LocalSttSidecarService {
             LocalSttRequest::Status => Ok(LocalSttResponse::Status(self.status())),
             LocalSttRequest::LoadModel { model } | LocalSttRequest::Preload { model } => {
                 if is_faster_whisper_engine(&model.engine) {
+                    #[cfg(not(test))]
+                    {
+                        self.load_faster_whisper_worker(&model).await?;
+                    }
                     self.state.loaded_model = Some(model);
                     self.state.backend = Some("faster_whisper".into());
                     self.state.last_used_at = Some(Instant::now());
@@ -107,7 +112,7 @@ impl LocalSttSidecarService {
                     .map_err(|e| LocalError::CommandFailed(format!("invalid wav_base64: {e}")))?;
                 let TranscriptionResult { text, backend } =
                     if is_faster_whisper_engine(&model.engine) {
-                        transcribe_faster_whisper_backend_model(
+                        self.transcribe_faster_whisper(
                             &model,
                             &wav,
                             &language,
@@ -242,6 +247,62 @@ impl LocalSttSidecarService {
         engine.transcribe(model, wav, language, prompt, cancel_flag)
     }
 
+    async fn load_faster_whisper_worker(
+        &mut self,
+        model: &LocalSttModelSpec,
+    ) -> Result<(), LocalError> {
+        let start = Instant::now();
+        if self
+            .state
+            .faster_whisper
+            .as_ref()
+            .is_some_and(|worker| worker.matches_model(model))
+        {
+            eprintln!("[kosmos-local-stt] faster-whisper worker reused");
+            return Ok(());
+        }
+        self.state.faster_whisper = None;
+        let worker = FasterWhisperWorker::start(model).await?;
+        eprintln!(
+            "[kosmos-local-stt] faster-whisper worker loaded duration_ms={}",
+            start.elapsed().as_millis()
+        );
+        self.state.faster_whisper = Some(worker);
+        Ok(())
+    }
+
+    async fn transcribe_faster_whisper(
+        &mut self,
+        model: &LocalSttModelSpec,
+        wav: &[u8],
+        language: &str,
+        prompt: &str,
+        cancel_flag: Option<Arc<AtomicBool>>,
+    ) -> Result<TranscriptionResult, LocalError> {
+        let start = Instant::now();
+        self.load_faster_whisper_worker(model).await?;
+        let load_ms = start.elapsed().as_millis();
+        let worker = self.state.faster_whisper.as_mut().ok_or_else(|| {
+            LocalError::SidecarUnavailable("faster-whisper worker is not loaded".into())
+        })?;
+        match worker.transcribe(wav, language, prompt, cancel_flag).await {
+            Ok(result) => {
+                eprintln!(
+                    "[kosmos-local-stt] faster-whisper transcribe done load_ms={} total_ms={}",
+                    load_ms,
+                    start.elapsed().as_millis()
+                );
+                Ok(result)
+            }
+            Err(error) => {
+                if should_drop_faster_whisper_worker(&error) {
+                    self.state.faster_whisper = None;
+                }
+                Err(error)
+            }
+        }
+    }
+
     async fn unload_if_idle(&mut self) {
         let Some(model) = self.state.loaded_model.as_ref() else {
             return;
@@ -260,6 +321,18 @@ impl LocalSttSidecarService {
 
     fn reset(&mut self) {
         self.state = WarmState::default();
+    }
+}
+
+fn should_drop_faster_whisper_worker(error: &LocalError) -> bool {
+    match error {
+        LocalError::EmptyTranscript => false,
+        LocalError::CommandFailed(message)
+            if message.contains("cancelled") || message.contains("EmptyTranscript") =>
+        {
+            false
+        }
+        _ => true,
     }
 }
 
@@ -289,8 +362,15 @@ fn spawn_idle_unload_watcher(
 
 struct ActiveSidecarRequest {
     request_id: u64,
+    kind: ActiveSidecarRequestKind,
     handle: JoinHandle<()>,
     cancel_flag: Arc<AtomicBool>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ActiveSidecarRequestKind {
+    Preload,
+    Transcribe,
 }
 
 fn send_envelope(
@@ -398,6 +478,11 @@ pub async fn run_stdio_service() -> io::Result<()> {
         let request_id = envelope.request_id;
         match envelope.request {
             LocalSttRequest::Preload { .. } | LocalSttRequest::Transcribe { .. } => {
+                let kind = match envelope.request {
+                    LocalSttRequest::Preload { .. } => ActiveSidecarRequestKind::Preload,
+                    LocalSttRequest::Transcribe { .. } => ActiveSidecarRequestKind::Transcribe,
+                    _ => unreachable!(),
+                };
                 let service = Arc::clone(&service);
                 let tx_task = tx.clone();
                 let active_task = Arc::clone(&active);
@@ -419,26 +504,41 @@ pub async fn run_stdio_service() -> io::Result<()> {
                     }
                 });
                 let mut active_guard = active.lock().await;
-                if let Some(previous) = active_guard.take() {
-                    previous.cancel_flag.store(true, Ordering::SeqCst);
-                    previous.handle.abort();
+                let previous = active_guard.take();
+                if let Some(previous) = previous {
+                    if previous.kind == ActiveSidecarRequestKind::Preload
+                        && kind == ActiveSidecarRequestKind::Transcribe
+                    {
+                        // Keep the recording-start warm-up alive. The transcribe task will wait
+                        // on the service mutex and reuse the warmed faster-whisper worker instead
+                        // of cancelling preload and paying cold-start latency on short utterances.
+                    } else {
+                        previous.cancel_flag.store(true, Ordering::SeqCst);
+                        previous.handle.abort();
+                    }
                 }
                 *active_guard = Some(ActiveSidecarRequest {
                     request_id,
+                    kind,
                     handle,
                     cancel_flag,
                 });
             }
             LocalSttRequest::Cancel { .. } => {
-                if let Some(previous) = active.lock().await.take() {
+                let cancelled_active = if let Some(previous) = active.lock().await.take() {
                     previous.cancel_flag.store(true, Ordering::SeqCst);
                     previous.handle.abort();
+                    true
+                } else {
+                    false
+                };
+                if cancelled_active {
+                    unload_whisper_backend().await;
+                    let service_reset = Arc::clone(&service);
+                    tokio::spawn(async move {
+                        service_reset.lock().await.reset();
+                    });
                 }
-                unload_whisper_backend().await;
-                let service_reset = Arc::clone(&service);
-                tokio::spawn(async move {
-                    service_reset.lock().await.reset();
-                });
                 send_envelope(
                     &tx,
                     LocalSttResponseEnvelope {
@@ -446,7 +546,11 @@ pub async fn run_stdio_service() -> io::Result<()> {
                         ok: true,
                         response: Some(LocalSttResponse::Ack(LocalSttAck {
                             accepted: true,
-                            message: Some("cancelled".into()),
+                            message: Some(if cancelled_active {
+                                "cancelled".into()
+                            } else {
+                                "nothing to cancel".into()
+                            }),
                         })),
                         error: None,
                     },
@@ -517,6 +621,7 @@ mod tests {
             backend: Some("whisper_server".into()),
             last_used_at: Some(Instant::now()),
             embedded: None,
+            faster_whisper: None,
         };
         service
     }
@@ -591,6 +696,19 @@ mod tests {
                 .map(|model| model.engine.as_str()),
             Some("faster-whisper")
         );
+    }
+
+    #[test]
+    fn faster_whisper_empty_transcript_does_not_drop_worker() {
+        assert!(!should_drop_faster_whisper_worker(
+            &LocalError::EmptyTranscript
+        ));
+        assert!(!should_drop_faster_whisper_worker(
+            &LocalError::CommandFailed("faster-whisper cancelled".into())
+        ));
+        assert!(should_drop_faster_whisper_worker(
+            &LocalError::CommandFailed("faster-whisper worker timed out".into())
+        ));
     }
 
     #[tokio::test]
