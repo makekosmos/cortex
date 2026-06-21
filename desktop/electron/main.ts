@@ -865,7 +865,7 @@ function setTrayVisible(enabled: boolean) {
 // на юзера. Передаём backend'у через ArkClient как фиксированный id, чтобы LAN
 // sync namespace был стабильным между запусками.
 const KEPLER_SPACE_ID = "kepler-default";
-const ARK_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+const ARK_REQUEST_TIMEOUT_MS = 60 * 1000;
 
 function ensureArkReadyPromise(): Promise<ArkClient> {
   if (arkClient) return Promise.resolve(arkClient);
