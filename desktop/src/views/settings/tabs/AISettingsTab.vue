@@ -159,7 +159,13 @@ function downloadProgressLabel(progress: {
       ? "скачиваю whisper.cpp"
       : progress.phase === "extract"
         ? "распаковываю whisper.cpp"
-        : "скачиваю модель";
+        : progress.phase === "python"
+          ? "создаю Python env"
+          : progress.phase === "package"
+            ? "ставлю faster-whisper"
+            : progress.phase === "faster-whisper"
+              ? "готовлю Faster Whisper"
+              : "скачиваю модель";
   if (progress.percent !== null) return `${phase} ${Math.round(progress.percent)}%`;
   if (progress.totalBytes) {
     return `${phase} ${formatBytes(progress.downloadedBytes)} / ${formatBytes(progress.totalBytes)}`;
