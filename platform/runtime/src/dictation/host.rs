@@ -409,7 +409,9 @@ async fn apply_local_model_selection_to_config(
     let mut cfg = config_state.lock().await;
     cfg.provider = "local".into();
     cfg.provider_enabled = true;
-    cfg.local_engine = DEFAULT_LOCAL_ENGINE.into();
+    if cfg.local_engine.trim().is_empty() {
+        cfg.local_engine = DEFAULT_LOCAL_ENGINE.into();
+    }
     cfg.local_model = Some(model_id.to_owned());
     cfg.local_model_path = Some(model_path.to_string_lossy().to_string());
     cfg.local_command_path = Some(command_path.to_string_lossy().to_string());

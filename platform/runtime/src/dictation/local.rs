@@ -3,7 +3,10 @@ use std::fs;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex, OnceLock,
+};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -22,6 +25,7 @@ use super::local_sidecar_protocol::{
 };
 
 pub const DEFAULT_LOCAL_ENGINE: &str = "whisper.cpp";
+pub const FASTER_WHISPER_ENGINE: &str = "faster-whisper";
 
 #[derive(Debug)]
 pub struct TranscriptionResult {
@@ -532,8 +536,19 @@ fn is_supported_engine(engine: &str) -> bool {
     normalized.is_empty()
         || matches!(
             normalized.as_str(),
-            DEFAULT_LOCAL_ENGINE | "whisper" | "whisper-cpp"
+            DEFAULT_LOCAL_ENGINE
+                | "whisper"
+                | "whisper-cpp"
+                | FASTER_WHISPER_ENGINE
+                | "faster_whisper"
         )
+}
+
+pub(crate) fn is_faster_whisper_engine(engine: &str) -> bool {
+    matches!(
+        engine.trim().to_ascii_lowercase().as_str(),
+        FASTER_WHISPER_ENGINE | "faster_whisper"
+    )
 }
 
 fn ensure_existing_file(path: &str, missing: LocalError) -> Result<PathBuf, LocalError> {
@@ -1170,6 +1185,148 @@ fn run_whisper_cpp(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalE
     })
 }
 
+fn faster_whisper_python() -> String {
+    env::var("KOSMOS_FASTER_WHISPER_PYTHON")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "python".into())
+}
+
+fn run_faster_whisper(
+    req: OwnedLocalRequest,
+    cancel_flag: Option<Arc<AtomicBool>>,
+) -> Result<TranscriptionResult, LocalError> {
+    let model_path = req
+        .model_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or(LocalError::MissingModelPath)?
+        .to_owned();
+    let (wav_path, out_base) = temp_audio_paths()?;
+    fs::write(&wav_path, &req.wav_bytes).map_err(|e| LocalError::TempAudio(e.to_string()))?;
+
+    let device = match req.accelerator {
+        LocalSttAccelerator::Cpu => "cpu",
+        LocalSttAccelerator::Gpu => "cuda",
+        LocalSttAccelerator::Auto => "auto",
+    };
+    let compute_type = match req.accelerator {
+        LocalSttAccelerator::Cpu => "int8",
+        _ => "float16",
+    };
+    let beam_size = match req.profile {
+        LocalSttProfile::Fast => "1",
+        LocalSttProfile::Accurate => "5",
+    };
+    let language = whisper_language_arg(&req.language).unwrap_or_default();
+    let script = r#"
+import json
+import sys
+
+try:
+    from faster_whisper import WhisperModel
+except Exception as exc:
+    print(json.dumps({"error": f"faster-whisper Python package is not installed: {exc}"}), flush=True)
+    sys.exit(2)
+
+model_path, wav_path, language, prompt, device, compute_type, beam_size = sys.argv[1:8]
+try:
+    model = WhisperModel(model_path, device=device, compute_type=compute_type)
+    kwargs = {
+        "beam_size": int(beam_size),
+        "vad_filter": False,
+    }
+    if language:
+        kwargs["language"] = language
+    if prompt:
+        kwargs["initial_prompt"] = prompt
+    segments, _info = model.transcribe(wav_path, **kwargs)
+    text = " ".join(segment.text.strip() for segment in segments).strip()
+    print(json.dumps({"text": text}, ensure_ascii=False), flush=True)
+except Exception as exc:
+    print(json.dumps({"error": str(exc)}), flush=True)
+    sys.exit(1)
+"#;
+
+    let mut child = Command::new(faster_whisper_python())
+        .arg("-c")
+        .arg(script)
+        .arg(&model_path)
+        .arg(&wav_path)
+        .arg(language)
+        .arg(req.prompt.trim())
+        .arg(device)
+        .arg(compute_type)
+        .arg(beam_size)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| {
+            cleanup_temp_outputs(&wav_path, &out_base);
+            LocalError::CommandFailed(format!("failed to launch faster-whisper python: {e}"))
+        })?;
+
+    loop {
+        if cancel_flag
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::SeqCst))
+        {
+            let _ = child.kill();
+            let _ = child.wait();
+            cleanup_temp_outputs(&wav_path, &out_base);
+            return Err(LocalError::CommandFailed("faster-whisper cancelled".into()));
+        }
+        if child
+            .try_wait()
+            .map_err(|e| LocalError::CommandFailed(format!("faster-whisper wait failed: {e}")))?
+            .is_some()
+        {
+            break;
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+
+    let output = child.wait_with_output().map_err(|e| {
+        cleanup_temp_outputs(&wav_path, &out_base);
+        LocalError::CommandFailed(format!("faster-whisper output failed: {e}"))
+    })?;
+
+    cleanup_temp_outputs(&wav_path, &out_base);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed = serde_json::from_str::<Value>(stdout.trim()).ok();
+    if !output.status.success() {
+        let message = parsed
+            .as_ref()
+            .and_then(|value| value.get("error"))
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .filter(|value| !value.is_empty())
+            .or_else(|| {
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+                (!stderr.is_empty()).then_some(stderr)
+            })
+            .unwrap_or_else(|| format!("exit code {:?}", output.status.code()));
+        return Err(LocalError::CommandFailed(format!(
+            "faster-whisper failed: {message}"
+        )));
+    }
+
+    let text = parsed
+        .and_then(|value| value.get("text").and_then(Value::as_str).map(str::to_owned))
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    if text.is_empty() {
+        return Err(LocalError::EmptyTranscript);
+    }
+    Ok(TranscriptionResult {
+        text,
+        backend: "faster_whisper".into(),
+    })
+}
+
 pub(crate) async fn transcribe_with_whisper_backend(
     req: LocalRequest<'_>,
 ) -> Result<TranscriptionResult, LocalError> {
@@ -1188,6 +1345,19 @@ pub(crate) async fn transcribe_with_whisper_backend_model(
     .await
 }
 
+pub(crate) async fn transcribe_faster_whisper_backend_model(
+    model: &LocalSttModelSpec,
+    wav_bytes: &[u8],
+    language: &str,
+    prompt: &str,
+    cancel_flag: Option<Arc<AtomicBool>>,
+) -> Result<TranscriptionResult, LocalError> {
+    let owned = owned_request_from_model(model, wav_bytes, language, prompt);
+    tokio::task::spawn_blocking(move || run_faster_whisper(owned, cancel_flag))
+        .await
+        .map_err(|e| LocalError::CommandFailed(format!("worker join failed: {e}")))?
+}
+
 async fn transcribe_owned_with_whisper_backend(
     owned: OwnedLocalRequest,
 ) -> Result<TranscriptionResult, LocalError> {
@@ -1195,6 +1365,12 @@ async fn transcribe_owned_with_whisper_backend(
         return Err(LocalError::UnsupportedEngine {
             engine: owned.engine.clone(),
         });
+    }
+
+    if is_faster_whisper_engine(&owned.engine) {
+        return tokio::task::spawn_blocking(move || run_faster_whisper(owned, None))
+            .await
+            .map_err(|e| LocalError::CommandFailed(format!("worker join failed: {e}")))?;
     }
 
     let command_path = owned.command_path.clone();
@@ -1222,7 +1398,7 @@ pub async fn preload_server(
     if model_path.is_none_or(|path| path.trim().is_empty()) {
         return Err(LocalError::MissingModelPath);
     }
-    if command_path.is_none_or(|path| path.trim().is_empty()) {
+    if !is_faster_whisper_engine(engine) && command_path.is_none_or(|path| path.trim().is_empty()) {
         return Err(LocalError::MissingCommandPath);
     }
 
@@ -1246,6 +1422,11 @@ pub async fn preload_server(
         // Explicit debug escape hatch: managed product path must use the Kosmos-owned
         // sidecar. Direct whisper-server/cli execution is available only when the
         // developer opts in with KOSMOS_LOCAL_STT_ALLOW_DIRECT_FALLBACK=1.
+        Err(LocalError::SidecarUnavailable(_))
+            if direct_sidecar_fallback_allowed() && is_faster_whisper_engine(engine) =>
+        {
+            Ok(false)
+        }
         Err(LocalError::SidecarUnavailable(_)) if direct_sidecar_fallback_allowed() => {
             preload_with_whisper_backend(engine, model_path, command_path).await
         }
@@ -1303,7 +1484,9 @@ pub async fn transcribe(req: LocalRequest<'_>) -> Result<TranscriptionResult, Lo
     if req.model_path.is_none_or(|path| path.trim().is_empty()) {
         return Err(LocalError::MissingModelPath);
     }
-    if req.command_path.is_none_or(|path| path.trim().is_empty()) {
+    if !is_faster_whisper_engine(req.engine)
+        && req.command_path.is_none_or(|path| path.trim().is_empty())
+    {
         return Err(LocalError::MissingCommandPath);
     }
 
@@ -1663,6 +1846,30 @@ mod tests {
             vec!["transcribe", "transcribe"]
         );
         install_test_sidecar_mock(None);
+    }
+
+    #[tokio::test]
+    async fn faster_whisper_missing_python_returns_controlled_error() {
+        let _guard = ENV_LOCAL_LOCK.lock().await;
+        env::set_var("KOSMOS_FASTER_WHISPER_PYTHON", "Z:/missing/python.exe");
+
+        let err = transcribe_with_whisper_backend(LocalRequest {
+            wav_bytes: &fake_wav(16_000, 1, 16, 16_000),
+            language: "ru",
+            prompt: "",
+            engine: FASTER_WHISPER_ENGINE,
+            model_id: Some("turbo"),
+            model_path: Some("faster-whisper-large-v3-turbo"),
+            command_path: None,
+        })
+        .await
+        .unwrap_err();
+
+        env::remove_var("KOSMOS_FASTER_WHISPER_PYTHON");
+        assert!(
+            err.to_string().contains("faster-whisper python"),
+            "error: {err}"
+        );
     }
 
     #[tokio::test]

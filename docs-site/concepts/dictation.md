@@ -194,6 +194,7 @@ Settings → Диктация выбирает provider: `online` (Groq) или 
 
 - `platform/runtime` владеет dictation state, pending queue, retries, config и injection.
 - `Kosmos Local STT` sidecar владеет native STT engine lifecycle: загрузкой модели, выбором backend/accelerator, preload/transcribe/cancel/unload и teardown после idle.
+- По умолчанию local backend — `whisper.cpp`. Advanced settings могут переключить `localEngine` на `faster-whisper`: host продолжает писать WAV на диск и говорить с sidecar, а sidecar запускает Python `faster_whisper.WhisperModel`. Если Python package или совместимая CTranslate2 model directory отсутствуют, запрос возвращает controlled local STT error, pending WAV не удаляется, и explicit `faster-whisper` выбор не падает обратно на `whisper.cpp`.
 - Sidecar сам запускает idle watcher: по умолчанию он проверяет бездействие каждые 10 секунд и выгружает модель после `idle_unload_after_ms`, не дожидаясь следующего `status`/`transcribe` запроса. При переключении dictation provider с `local` на online provider host отправляет sidecar `unload`.
 
 Host общается с sidecar только через локальный IPC с шестью операциями:

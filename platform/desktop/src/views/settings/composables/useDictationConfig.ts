@@ -166,6 +166,7 @@ export const DICTATION_PROVIDER_OPTIONS = [
 
 export const DICTATION_LOCAL_ENGINE_OPTIONS = [
   { value: "whisper.cpp", label: "Whisper.cpp" },
+  { value: "faster-whisper", label: "Faster Whisper" },
 ] as const;
 
 function vkToKeyName(vk: number): string {
@@ -413,13 +414,18 @@ export function createDictationConfig() {
   const dictationLocalStatus = computed(() => {
     const path = dictationLocalModelPath.value.trim();
     const commandPath = dictationLocalCommandPath.value.trim();
+    const normalizedEngine = dictationLocalEngine.value.trim().toLowerCase();
+    const needsWhisperCppCommand =
+      normalizedEngine !== "faster-whisper" && normalizedEngine !== "faster_whisper";
     if (dictationConfig.value.provider !== "local") {
-      return path && commandPath
+      return path && (!needsWhisperCppCommand || commandPath)
         ? `Локальная модель подготовлена: ${dictationLocalEngine.value} · ${dictationLocalModelId.value}`
         : "Локальный режим ещё не настроен.";
     }
     if (!path) return "Не задан путь к локальной модели.";
-    if (!commandPath) return "Не задан путь к whisper.cpp executable.";
+    if (needsWhisperCppCommand && !commandPath) {
+      return "Не задан путь к whisper.cpp executable.";
+    }
     return `${dictationLocalEngine.value} · ${dictationLocalModelId.value} · путь задан`;
   });
 
