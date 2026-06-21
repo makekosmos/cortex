@@ -1290,7 +1290,8 @@ except Exception as exc:
     sys.exit(1)
 "#;
 
-    let mut child = Command::new(faster_whisper_python())
+    let mut command = Command::new(faster_whisper_python());
+    command
         .arg("-c")
         .arg(script)
         .arg(&model_arg)
@@ -1302,12 +1303,12 @@ except Exception as exc:
         .arg(beam_size)
         .arg(&download_root)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| {
-            cleanup_temp_outputs(&wav_path, &out_base);
-            LocalError::CommandFailed(format!("failed to launch faster-whisper python: {e}"))
-        })?;
+        .stderr(Stdio::piped());
+    augment_faster_whisper_environment(&mut command);
+    let mut child = command.spawn().map_err(|e| {
+        cleanup_temp_outputs(&wav_path, &out_base);
+        LocalError::CommandFailed(format!("failed to launch faster-whisper python: {e}"))
+    })?;
     let timeout = faster_whisper_timeout();
     let deadline = Instant::now() + timeout;
 
@@ -1323,11 +1324,18 @@ except Exception as exc:
         }
         if Instant::now() >= deadline {
             let _ = child.kill();
-            let _ = child.wait();
+            let output = child.wait_with_output().ok();
             cleanup_temp_outputs(&wav_path, &out_base);
+            let stderr = output
+                .as_ref()
+                .map(|output| String::from_utf8_lossy(&output.stderr).trim().to_owned())
+                .filter(|value| !value.is_empty())
+                .map(|value| format!("; stderr={value}"))
+                .unwrap_or_default();
             return Err(LocalError::CommandFailed(format!(
-                "faster-whisper timed out after {}s",
-                timeout.as_secs()
+                "faster-whisper timed out after {}s{}",
+                timeout.as_secs(),
+                stderr
             )));
         }
         if child
@@ -1377,6 +1385,25 @@ except Exception as exc:
         text,
         backend: "faster_whisper".into(),
     })
+}
+
+fn augment_faster_whisper_environment(command: &mut Command) {
+    let data_dir = config::data_dir();
+    let Some(command_path) = local_models::command_path(&data_dir) else {
+        return;
+    };
+    let Some(release_dir) = command_path.parent() else {
+        return;
+    };
+    if !release_dir.is_dir() {
+        return;
+    }
+    let current_path = env::var_os("PATH").unwrap_or_default();
+    let mut paths = vec![release_dir.to_path_buf()];
+    paths.extend(env::split_paths(&current_path));
+    if let Ok(joined) = env::join_paths(paths) {
+        command.env("PATH", joined);
+    }
 }
 
 pub(crate) async fn transcribe_with_whisper_backend(
