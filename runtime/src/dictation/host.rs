@@ -370,6 +370,7 @@ pub async fn handle_dictation_op(
         "list_pending" => op_list_pending(host).await,
         "retry" => op_retry(params, host).await,
         "discard" => op_discard(params, host).await,
+        "discard_all" => op_discard_all(host).await,
         "retry_all" => op_retry_all(host).await,
         "get_stats" => op_get_stats(host).await,
         "reset_stats" => op_reset_stats(host).await,
@@ -681,7 +682,8 @@ async fn op_delete_local_model(params: Value, host: &DictationHost) -> Dictation
         Some(value) if !value.trim().is_empty() => value.trim(),
         _ => return DictationResponse::err("delete_local_model: missing modelId"),
     };
-    let deleted_path = match local_models::delete_model(&host.data_dir, model_id) {
+    let cfg = host.snapshot_config().await;
+    let deleted_path = match local_models::delete_model(&host.data_dir, model_id, &cfg.local_engine) {
         Ok(path) => path,
         Err(e) => return DictationResponse::err(format!("delete_local_model: {e}")),
     };
@@ -1643,6 +1645,39 @@ async fn op_discard(params: Value, host: &DictationHost) -> DictationResponse {
         host.emit_state(&snap).await;
     }
     DictationResponse::ok(json!({ "uuid": uuid, "discarded": true }))
+}
+
+async fn op_discard_all(host: &DictationHost) -> DictationResponse {
+    let items = match super::pending::list(&host.data_dir) {
+        Ok(v) => v,
+        Err(e) => return DictationResponse::err(format!("discard_all: list: {e}")),
+    };
+    let active_uuid = {
+        let s = host.state.lock().await;
+        s.active_uuid.clone()
+    };
+    let mut discarded = 0usize;
+    let mut active_discarded = false;
+
+    for item in items {
+        if let Err(e) = super::pending::drop_item(&host.data_dir, &item.uuid) {
+            return DictationResponse::err(format!("discard_all: {}: {e}", item.uuid));
+        }
+        if active_uuid.as_deref() == Some(item.uuid.as_str()) {
+            active_discarded = true;
+        }
+        discarded += 1;
+    }
+
+    host.emit_pending_changed();
+    if active_discarded {
+        let mut s = host.state.lock().await;
+        *s = HostState::idle();
+        let snap = s.clone();
+        drop(s);
+        host.emit_state(&snap).await;
+    }
+    DictationResponse::ok(json!({ "discarded": discarded }))
 }
 
 async fn op_retry_all(host: &Arc<DictationHost>) -> DictationResponse {
@@ -2686,6 +2721,54 @@ mod tests {
             DictationHost::new_for_test(td.path().into(), "http://localhost/".into(), test_cfg());
         let resp = op_discard(json!({ "uuid": "nope" }), &host).await;
         assert!(!resp.ok);
+    }
+
+    #[tokio::test]
+    async fn op_discard_all_removes_items_and_resets_active_state() {
+        let td = tempfile::TempDir::new().unwrap();
+        let host =
+            DictationHost::new_for_test(td.path().into(), "http://localhost/".into(), test_cfg());
+        let first = super::super::pending::enqueue(
+            &host.data_dir,
+            &make_wav(),
+            1.0,
+            super::super::pending::EnqueueOpts {
+                language: "ru".into(),
+                prompt: "".into(),
+                inject_mode: "auto_paste".into(),
+                model: "whisper-large-v3".into(),
+                prev_hwnd: None,
+            },
+        )
+        .unwrap();
+        super::super::pending::enqueue(
+            &host.data_dir,
+            &make_wav(),
+            2.0,
+            super::super::pending::EnqueueOpts {
+                language: "ru".into(),
+                prompt: "".into(),
+                inject_mode: "auto_paste".into(),
+                model: "whisper-large-v3".into(),
+                prev_hwnd: None,
+            },
+        )
+        .unwrap();
+        {
+            let mut s = host.state.lock().await;
+            s.name = DictationStateName::Error;
+            s.active_uuid = Some(first);
+            s.last_error = Some("test".into());
+        }
+
+        let resp = op_discard_all(&host).await;
+        assert!(resp.ok);
+        assert_eq!(resp.data["discarded"], 2);
+        assert!(super::super::pending::list(&host.data_dir)
+            .unwrap()
+            .is_empty());
+        let snap = host.current_state().await;
+        assert_eq!(snap["state"], "idle");
     }
 
     // ---- verify_api_key ----

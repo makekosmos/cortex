@@ -12,7 +12,6 @@ import {
   Gamepad2,
   Info,
   ListTodo,
-  KeyRound,
   Mic,
   MicVocal,
   Puzzle,
@@ -215,15 +214,6 @@ export const settingsNavigationItems: SettingsNavigationItem[] = [
     ],
   },
   {
-    tab: "secrets",
-    label: "Секреты",
-    group: "main",
-    layout: "basic",
-    icon: KeyRound,
-    description: "API-ключи для AI-провайдеров. Хранятся в Windows Credential Manager.",
-    keywords: ["секреты", "api", "ключ", "key", "credential", "groq", "token", "пароль"],
-  },
-  {
     tab: "debug",
     label: "Дебаг",
     group: "main",
@@ -279,7 +269,7 @@ export const settingsNavigationItems: SettingsNavigationItem[] = [
     layout: "advanced",
     icon: MicVocal,
     iconGradient: { from: "#F472B6", to: "#BE185D" },
-    description: "Провайдеры, модели и локальная транскрипция.",
+    description: "Модели и API-ключи для AI.",
     keywords: [
       "ai",
       "искусственный интеллект",
@@ -320,7 +310,7 @@ export const settingsNavigationItems: SettingsNavigationItem[] = [
     layout: "advanced",
     icon: Mic,
     iconGradient: { from: "#F472B6", to: "#7C2D12" },
-    description: "Голосовой ввод через Groq (whisper-large-v3-turbo).",
+    description: "Голосовой ввод локально или через подключённый провайдер.",
     keywords: [
       "диктация",
       "stt",

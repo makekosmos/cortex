@@ -74,6 +74,13 @@ export interface DictationLocalModelsSnapshot {
   models: DictationLocalModelInfo[];
 }
 
+export interface DictationVoiceModelOption {
+  value: string;
+  label: string;
+  description?: string;
+  disabled?: boolean;
+}
+
 const DEFAULT_DICTATION_CFG: DictationConfigData = {
   hotkey: "Ctrl+Shift+;",
   triggerMode: "toggle",
@@ -159,14 +166,9 @@ export const DICTATION_LANGUAGE_OPTIONS = [
   { value: "el", label: "Ελληνικά" },
 ] as const;
 
-export const DICTATION_PROVIDER_OPTIONS = [
-  { value: "groq", label: "Groq Cloud" },
-  { value: "local", label: "Локальная модель" },
-] as const;
-
-export const DICTATION_LOCAL_ENGINE_OPTIONS = [
-  { value: "whisper.cpp", label: "Whisper.cpp" },
-  { value: "faster-whisper", label: "Faster Whisper" },
+const DICTATION_GROQ_SPEECH_MODELS = [
+  { id: "whisper-large-v3-turbo", label: "Groq · Whisper Large V3 Turbo" },
+  { id: "whisper-large-v3", label: "Groq · Whisper Large V3" },
 ] as const;
 
 function vkToKeyName(vk: number): string {
@@ -333,17 +335,6 @@ export function createDictationConfig() {
     });
   }
 
-  const dictationProviderDescription = computed(() => {
-    switch (dictationConfig.value.provider) {
-      case "local":
-        return dictationLocalStatus.value;
-      case "mock":
-        return "Тестовый режим: mock provider используется только для автоматических smoke-прогонов.";
-      default:
-        return dictationGroqStatus.value;
-    }
-  });
-
   const dictationMicOptions = computed(() => {
     const opts: { value: string; label: string }[] = [
       { value: "default", label: "Системный по умолчанию" },
@@ -400,15 +391,50 @@ export function createDictationConfig() {
     },
   });
 
+  const dictationVoiceModelOptions = computed<DictationVoiceModelOption[]>(() => {
+    const options: DictationVoiceModelOption[] = [];
+
+    if (dictationHasApiKey.value) {
+      for (const model of DICTATION_GROQ_SPEECH_MODELS) {
+        options.push({
+          value: `groq:${model.id}`,
+          label: model.label,
+          description: "Онлайн-распознавание речи через Groq",
+        });
+      }
+    }
+
+    for (const model of dictationLocalModels.value?.models ?? []) {
+      if (!model.downloaded && !model.selected) continue;
+      options.push({
+        value: `local:${model.id}`,
+        label: `OpenAI · ${model.name}`,
+        description: "Локальное распознавание речи",
+      });
+    }
+
+    return options;
+  });
+
+  const dictationVoiceModelValue = computed(() => {
+    if (dictationConfig.value.provider === "groq") {
+      return `groq:${dictationConfig.value.model || DEFAULT_DICTATION_CFG.model}`;
+    }
+    if (dictationConfig.value.provider === "local") {
+      return `local:${dictationConfig.value.localModelId || DEFAULT_DICTATION_CFG.localModelId}`;
+    }
+    return "";
+  });
+
   const dictationGroqStatus = computed(() => {
     if (dictationConfig.value.provider !== "groq") {
       return dictationHasApiKey.value
-        ? "Groq-ключ сохранён, но сейчас выбран другой провайдер."
+        ? "Groq-ключ сохранён, но сейчас выбрана локальная модель."
         : "Groq-ключ не задан.";
     }
     return dictationHasApiKey.value
       ? "Groq-ключ установлен."
-      : "Groq-ключ не задан — добавьте его в разделе «Секреты».";
+      : "Groq-ключ не задан — добавьте его в разделе «AI».";
   });
 
   const dictationLocalStatus = computed(() => {
@@ -531,8 +557,22 @@ export function createDictationConfig() {
     await patchDictationConfig({ triggerMode: v });
   }
 
-  async function onDictationProviderChange(v: DictationProvider) {
-    await patchDictationConfig({ provider: v });
+  async function onDictationVoiceModelChange(value: string) {
+    const [source, modelId] = value.split(":", 2);
+    if (!modelId) return;
+
+    if (source === "groq") {
+      await patchDictationConfig({
+        provider: "groq",
+        providerEnabled: true,
+        model: modelId,
+      });
+      return;
+    }
+
+    if (source === "local") {
+      await onDictationUseLocalModel(modelId);
+    }
   }
 
   async function onDictationProviderEnabledChange(enabled: boolean) {
@@ -542,25 +582,6 @@ export function createDictationConfig() {
   async function onDictationModelBlur() {
     const model = dictationModelName.value.trim();
     await patchDictationConfig({ model: model || DEFAULT_DICTATION_CFG.model });
-  }
-
-  async function onDictationLocalModelPathBlur() {
-    const path = dictationLocalModelPath.value.trim();
-    await patchDictationConfig({ localModelPath: path || null });
-  }
-
-  async function onDictationLocalCommandPathBlur() {
-    const path = dictationLocalCommandPath.value.trim();
-    await patchDictationConfig({ localCommandPath: path || null });
-  }
-
-  async function onDictationLocalModelIdBlur() {
-    const modelId = dictationLocalModelId.value.trim();
-    await patchDictationConfig({ localModelId: modelId || DEFAULT_DICTATION_CFG.localModelId });
-  }
-
-  async function onDictationLocalEngineChange(v: string) {
-    await patchDictationConfig({ localEngine: v });
   }
 
   async function onDictationDownloadLocalModel(modelId: string) {
@@ -578,7 +599,7 @@ export function createDictationConfig() {
     try {
       const resp = (await window.kepler.ark.request("dictation.download_local_model", {
         modelId,
-        select: true,
+        select: false,
         installTool: true,
       })) as {
         config?: Partial<DictationConfigData> | null;
@@ -818,9 +839,10 @@ export function createDictationConfig() {
     dictationCustomDohUrl,
     dictationModelName,
     dictationLocalModelPath,
-    dictationLocalCommandPath,
     dictationLocalModelId,
     dictationLocalEngine,
+    dictationVoiceModelOptions,
+    dictationVoiceModelValue,
     dictationLocalModels,
     dictationLocalModelsBusy,
     dictationLocalModelsError,
@@ -832,7 +854,6 @@ export function createDictationConfig() {
     dictationMicError,
     dictationCaptureAccelerator,
     dictationCaptureCancelTick,
-    dictationProviderDescription,
     dictationMicOptions,
     statsCards,
     dictationGroqStatus,
@@ -845,13 +866,9 @@ export function createDictationConfig() {
     onDictationLanguageChange,
     onDictationInjectModeChange,
     onDictationTriggerModeChange,
-    onDictationProviderChange,
+    onDictationVoiceModelChange,
     onDictationProviderEnabledChange,
     onDictationModelBlur,
-    onDictationLocalModelPathBlur,
-    onDictationLocalCommandPathBlur,
-    onDictationLocalModelIdBlur,
-    onDictationLocalEngineChange,
     onDictationDownloadLocalModel,
     onDictationUseLocalModel,
     onDictationDeleteLocalModel,

@@ -5,6 +5,7 @@
 //   dictation.list_pending → { items: [{ uuid, createdAt, attempts, ... }] }
 //   dictation.retry { uuid } → { uuid, started: true }
 //   dictation.discard { uuid } → { uuid, discarded: true }
+//   dictation.discard_all → { discarded: number }
 //   dictation.retry_all → { started: number }
 
 import { onMounted, onUnmounted, ref } from "vue";
@@ -71,6 +72,18 @@ export function useDictationPending() {
     }
   }
 
+  async function discardAllPending(): Promise<void> {
+    busyUuid.value = "__all__";
+    try {
+      await window.kepler.ark.request("dictation.discard_all", {});
+      await loadPending();
+    } catch (e) {
+      pendingError.value = (e as Error)?.message ?? String(e);
+    } finally {
+      busyUuid.value = null;
+    }
+  }
+
   async function retryAllPending(): Promise<void> {
     try {
       await window.kepler.ark.request("dictation.retry_all", {});
@@ -122,6 +135,7 @@ export function useDictationPending() {
     loadPending,
     retryPending,
     discardPending,
+    discardAllPending,
     retryAllPending,
     formatCreatedAt,
     formatDuration,
