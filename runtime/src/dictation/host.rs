@@ -90,6 +90,13 @@ pub struct DictationHost {
 impl DictationHost {
     pub fn new() -> Arc<Self> {
         let data_dir = config::data_dir();
+        match local_models::migrate_legacy_assets(&data_dir) {
+            Ok(true) => tracing::info!("migrated legacy dictation local STT assets"),
+            Ok(false) => {}
+            Err(e) => {
+                tracing::warn!(error = %e, "failed to migrate legacy dictation local STT assets")
+            }
+        }
         let mut cfg = config::load();
         if local_models::refresh_managed_command_path(&data_dir, &mut cfg) {
             if let Err(e) = config::save(&cfg) {
@@ -629,6 +636,11 @@ async fn op_use_local_model(params: Value, host: &DictationHost) -> DictationRes
     };
     let cfg = host.snapshot_config().await;
     if is_faster_whisper_engine(&cfg.local_engine) {
+        if !local_models::faster_whisper_model_is_prepared(&host.data_dir, model_id) {
+            return DictationResponse::err(format!(
+                "use_local_model: faster-whisper model is not prepared: {model_id}"
+            ));
+        }
         let model_arg = match local_models::faster_whisper_model_id(model_id) {
             Ok(model_arg) => model_arg.to_owned(),
             Err(e) => return DictationResponse::err(format!("use_local_model: {e}")),
@@ -683,7 +695,8 @@ async fn op_delete_local_model(params: Value, host: &DictationHost) -> Dictation
         _ => return DictationResponse::err("delete_local_model: missing modelId"),
     };
     let cfg = host.snapshot_config().await;
-    let deleted_path = match local_models::delete_model(&host.data_dir, model_id, &cfg.local_engine) {
+    let deleted_path = match local_models::delete_model(&host.data_dir, model_id, &cfg.local_engine)
+    {
         Ok(path) => path,
         Err(e) => return DictationResponse::err(format!("delete_local_model: {e}")),
     };

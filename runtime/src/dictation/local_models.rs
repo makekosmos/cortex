@@ -202,6 +202,70 @@ fn shared_assets_root(data_dir: &Path) -> PathBuf {
     default_shared_assets_root()
 }
 
+fn merge_legacy_dir_into_shared(legacy: &Path, shared: &Path) -> io::Result<bool> {
+    if !legacy.is_dir() || same_path_or_text(legacy, shared) {
+        return Ok(false);
+    }
+    if !shared.exists() {
+        if let Some(parent) = shared.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::rename(legacy, shared)?;
+        return Ok(true);
+    }
+
+    let mut changed = false;
+    fs::create_dir_all(shared)?;
+    for entry in fs::read_dir(legacy)? {
+        let entry = entry?;
+        let source = entry.path();
+        let destination = shared.join(entry.file_name());
+        if destination.exists() {
+            if source.is_dir() && destination.is_dir() {
+                changed |= merge_legacy_dir_into_shared(&source, &destination)?;
+                if fs::read_dir(&source)?.next().is_none() {
+                    fs::remove_dir(&source)?;
+                    changed = true;
+                }
+            } else if source.is_file() && destination.is_file() {
+                fs::remove_file(&source)?;
+                changed = true;
+            }
+            continue;
+        }
+        fs::rename(&source, &destination)?;
+        changed = true;
+    }
+    if fs::read_dir(legacy)?.next().is_none() {
+        fs::remove_dir(legacy)?;
+        changed = true;
+    }
+    Ok(changed)
+}
+
+pub fn migrate_legacy_assets(data_dir: &Path) -> io::Result<bool> {
+    let shared_root = shared_assets_root(data_dir);
+    if same_path_or_text(data_dir, &shared_root) {
+        return Ok(false);
+    }
+
+    let mut changed = false;
+    changed |= merge_legacy_dir_into_shared(&data_dir.join(MODELS_DIR), &models_dir(data_dir))?;
+    changed |= merge_legacy_dir_into_shared(
+        &data_dir.join(FASTER_WHISPER_DIR),
+        &faster_whisper_dir(data_dir),
+    )?;
+    changed |= merge_legacy_dir_into_shared(&data_dir.join(TOOLS_DIR), &tools_dir(data_dir))?;
+    #[cfg(windows)]
+    {
+        changed |= merge_legacy_dir_into_shared(
+            &data_dir.join(CUDA_TOOLS_DIR),
+            &cuda_tools_dir(data_dir),
+        )?;
+    }
+    Ok(changed)
+}
+
 pub fn models_dir(data_dir: &Path) -> PathBuf {
     shared_assets_root(data_dir).join(MODELS_DIR)
 }
@@ -376,6 +440,10 @@ fn path_string(path: &Path) -> String {
     path.to_string_lossy().to_string()
 }
 
+pub fn faster_whisper_model_is_prepared(data_dir: &Path, model_id: &str) -> bool {
+    faster_whisper_model_marker_path(data_dir, model_id).is_file()
+}
+
 pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSnapshot {
     let models_dir = models_dir(data_dir);
     let command_path = command_path(data_dir);
@@ -395,9 +463,12 @@ pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSn
                     && faster_whisper_model_id(spec.id)
                         .ok()
                         .is_some_and(|model| selected_path == Some(model)));
-            let faster_whisper_downloaded =
-                faster_whisper_model_marker_path(data_dir, spec.id).is_file()
-                    || (faster_whisper_selected && selected);
+            let faster_whisper_downloaded = faster_whisper_model_is_prepared(data_dir, spec.id);
+            let downloaded = if faster_whisper_selected {
+                faster_whisper_downloaded
+            } else {
+                path.is_file()
+            };
             LocalModelInfo {
                 id: spec.id.to_owned(),
                 name: spec.name.to_owned(),
@@ -408,7 +479,7 @@ pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSn
                 accuracy_score: spec.accuracy_score,
                 speed_score: spec.speed_score,
                 recommended: spec.recommended,
-                downloaded: path.is_file() || faster_whisper_downloaded,
+                downloaded,
                 selected,
                 path: path.is_file().then_some(path_text),
             }
@@ -815,6 +886,10 @@ async fn ensure_faster_whisper_python(
         .arg("install")
         .arg("--upgrade")
         .arg("faster-whisper");
+    #[cfg(windows)]
+    if nvidia_gpu_available() {
+        pip.arg("nvidia-cublas-cu12").arg("nvidia-cudnn-cu12");
+    }
     run_faster_whisper_setup_command(
         pip,
         faster_whisper_prepare_timeout(),
