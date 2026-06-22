@@ -14,7 +14,6 @@
 import { BrowserWindow, ipcMain, screen, app, Menu } from "electron";
 import type { ArkClient } from "@kosmos/ark";
 import { assertExtensionSenderHostPermissionIfExtension } from "./extension-host";
-import { awaitArkReady } from "./main";
 import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -75,9 +74,24 @@ let currentState: FocusState = { ...DEFAULT_STATE };
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let tickTimer: ReturnType<typeof setInterval> | null = null;
 let focusSessionOpener: (() => void) | null = null;
+type FocusWidgetRuntime = {
+  awaitArkReady: () => Promise<ArkClient>;
+};
+let focusWidgetRuntime: FocusWidgetRuntime | null = null;
 
 export function setFocusWidgetFocusSessionOpener(opener: () => void): void {
   focusSessionOpener = opener;
+}
+
+export function setFocusWidgetRuntime(runtime: FocusWidgetRuntime | null): void {
+  focusWidgetRuntime = runtime;
+}
+
+function requireFocusWidgetRuntime(): FocusWidgetRuntime {
+  if (!focusWidgetRuntime) {
+    throw new Error("focus widget runtime bridge is not initialized");
+  }
+  return focusWidgetRuntime;
 }
 
 function openFocusSessionFromWidget(): void {
@@ -422,7 +436,7 @@ interface ArkObjectLike {
 
 async function invokePomodoro(op: "pause" | "resume" | "skip" | "stop"): Promise<void> {
   try {
-    const client = await awaitArkReady();
+    const client = await requireFocusWidgetRuntime().awaitArkReady();
     const state = await client.invokeOperation<PomodoroEventState>({
       operation: `pomodoro.${op}`,
     });
@@ -438,7 +452,7 @@ async function invokePomodoro(op: "pause" | "resume" | "skip" | "stop"): Promise
 
 async function stopManualStopwatch(): Promise<void> {
   try {
-    const client = await awaitArkReady();
+    const client = await requireFocusWidgetRuntime().awaitArkReady();
     // SQL-уровневый фильтр endedAt IS NULL + source='manual' через json_extract
     // в ARK (`list_running_time_entries`). До 2026-05-21 здесь был
     // list_objects_by_type + client-side фильтр/сортировка — на больших

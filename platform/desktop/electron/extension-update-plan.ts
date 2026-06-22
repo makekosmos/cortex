@@ -1,4 +1,3 @@
-import type { Catalog } from "./extension-marketplace";
 import type { InstalledExtensionInfo } from "./extension-installer";
 
 export interface ExtensionUpdateCandidate {
@@ -14,6 +13,15 @@ interface SemVer {
   major: number;
   minor: number;
   patch: number;
+}
+
+interface UpdateCatalog {
+  extensions: Array<{
+    id: string;
+    version: string;
+    downloadUrl: string;
+    sha256: string | null;
+  }>;
 }
 
 function parseSemver(v: string | null | undefined): SemVer | null {
@@ -35,7 +43,7 @@ function compareSemver(a: SemVer, b: SemVer): number {
 
 export function findExtensionUpdates(
   installed: InstalledExtensionInfo[],
-  catalog: Catalog,
+  catalog: UpdateCatalog,
 ): ExtensionUpdateCandidate[] {
   const byId = new Map(catalog.extensions.map((ext) => [ext.id, ext]));
   const out: ExtensionUpdateCandidate[] = [];

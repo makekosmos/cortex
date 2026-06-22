@@ -69,7 +69,12 @@ async function renderMermaid() {
     const wrap = document.createElement("div");
     wrap.className = "mermaid mermaid-rendered";
     wrap.setAttribute("data-mermaid-rendered", "1");
-    wrap.innerHTML = svg;
+    const parsedSvg = new DOMParser().parseFromString(svg, "image/svg+xml").querySelector("svg");
+    if (!parsedSvg) {
+      console.warn("mermaid render produced no svg");
+      continue;
+    }
+    wrap.replaceChildren(document.importNode(parsedSvg, true));
     block.replaceWith(wrap);
 
     // pan/zoom

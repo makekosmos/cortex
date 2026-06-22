@@ -852,15 +852,18 @@ impl ArkCore {
     }
 
     async fn stop_sync_inner(&self) {
-        let mut guard = self.sync.lock().await;
-        if let Some(runtime) = guard.take() {
+        let runtime = {
+            let mut guard = self.sync.lock().await;
+            guard.take()
+        };
+        if let Some(runtime) = runtime {
             runtime.beacon.stop().await;
             if let Some(relay) = runtime.relay.as_ref() {
                 relay.stop();
             }
             runtime.server.stop().await;
-            let clients = runtime.clients.lock().await;
-            for client in clients.values() {
+            let clients: Vec<_> = runtime.clients.lock().await.values().cloned().collect();
+            for client in clients {
                 client.stop();
             }
         }
@@ -1110,8 +1113,8 @@ impl ArkCore {
                         return;
                     }
 
-                    let guard = clients.lock().await;
-                    if let Some(existing) = guard.get(&peer.device_id) {
+                    let existing = clients.lock().await.get(&peer.device_id).cloned();
+                    if let Some(existing) = existing {
                         existing
                             .update_peer(PeerRecord {
                                 device_id: peer.device_id.clone(),
@@ -1124,7 +1127,6 @@ impl ArkCore {
                             .await;
                         return;
                     }
-                    drop(guard);
 
                     // Instantiate a fresh SyncClient.
                     let client = Arc::new(SyncClient::new(

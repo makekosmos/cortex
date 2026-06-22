@@ -70,9 +70,8 @@ function quoteForDisplay(value) {
 const apiKey = process.env.KOSMOS_TEST_GROQ_API_KEY?.trim();
 
 if (!apiKey) {
-  console.error("Missing required env var: KOSMOS_TEST_GROQ_API_KEY");
-  console.error("Set it and rerun:");
-  console.error('  $env:KOSMOS_TEST_GROQ_API_KEY = "..."');
+  console.error("Missing required Groq smoke-test API key.");
+  console.error("Set the configured smoke-test environment variable and rerun.");
   process.exit(1);
 }
 

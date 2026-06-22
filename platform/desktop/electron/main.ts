@@ -107,6 +107,7 @@ import { registerMarketplaceIpc, startPeriodicCatalogCheck } from "./extension-m
 // Side-effect: регистрирует kepler:focus-widget:* IPC handlers.
 import {
   setFocusWidgetFocusSessionOpener,
+  setFocusWidgetRuntime,
   setupFocusWidgetBackendSync,
   teardownFocusWidgetBackendSync,
 } from "./focus-widget";
@@ -114,11 +115,16 @@ import {
   openFocusSessionShell,
   setupFocusSessionBackendSync,
   setFocusSessionShellOpener,
+  setFocusSessionRuntime,
   setBlockedAppNotifier,
   teardownFocusSessionBackendSync,
 } from "./focus-session";
 import { showFocusBlockOverlay } from "./focus-overlay";
-import { setDictationCommandInvoker, setupDictationHotkey } from "./dictation-pill";
+import {
+  setDictationCommandInvoker,
+  setDictationRuntime,
+  setupDictationHotkey,
+} from "./dictation-pill";
 import { getServiceStatus, runServiceCliElevated, pingService } from "./focus-service";
 import { findKextInArgv, openInstallExtensionWindow } from "./install-extension-window";
 import {
@@ -147,6 +153,7 @@ import {
 } from "./local-image-protocol";
 
 setFocusWidgetFocusSessionOpener(openFocusSessionShell);
+setFocusWidgetRuntime({ awaitArkReady });
 
 // См. postmortems.md § 2026-05-30: focus-block dynamic chunk imports from
 // main.js after Vite/Rolldown code-splitting, so these helper APIs must remain
@@ -294,6 +301,7 @@ export function setDictationHotkeyCache(hotkey?: string | null): void {
 
 setDictationShortcutResolver(() => resolveLiveDictationShortcut());
 setDictationCommandInvoker(() => invokeCommandById("kepler:dictation"));
+setDictationRuntime({ awaitArkReady, broadcastCommandsUpdated, setDictationHotkeyCache });
 
 // --- Backend supervisor (hardening proof loop #5) ---------------------------
 // Backend crash → exponential backoff respawn (1s → 5s → 30s → 1min → 2min).
@@ -2133,6 +2141,7 @@ app.whenReady().then(async () => {
   // Буфер обмена заморожен — см. CLIPBOARD_HISTORY_ENABLED в shared/ipc-types.
   if (CLIPBOARD_HISTORY_ENABLED) setClipboardHistoryShellOpener(showClipboardHistoryLauncher);
   setFocusSessionShellOpener(showFocusSessionLauncher);
+  setFocusSessionRuntime({ awaitArkReady });
   setBlockedAppNotifier((app) => {
     showFocusBlockOverlay(app);
   });

@@ -24,7 +24,7 @@ import { BrowserWindow, ipcMain, screen, webContents as electronWebContents } fr
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { awaitArkReady, broadcastCommandsUpdated, setDictationHotkeyCache } from "./main";
+import type { ArkClient } from "@kosmos/ark";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -51,9 +51,26 @@ let isRecording = false;
 let toggleInFlight = false;
 type DictationCommandInvoker = () => Promise<void> | void;
 let dictationCommandInvoker: DictationCommandInvoker | null = null;
+type DictationRuntime = {
+  awaitArkReady: () => Promise<ArkClient>;
+  broadcastCommandsUpdated: () => void;
+  setDictationHotkeyCache: (hotkey?: string | null) => void;
+};
+let dictationRuntime: DictationRuntime | null = null;
 
 export function setDictationCommandInvoker(invoker: DictationCommandInvoker | null): void {
   dictationCommandInvoker = invoker;
+}
+
+export function setDictationRuntime(runtime: DictationRuntime | null): void {
+  dictationRuntime = runtime;
+}
+
+function requireDictationRuntime(): DictationRuntime {
+  if (!dictationRuntime) {
+    throw new Error("dictation runtime bridge is not initialized");
+  }
+  return dictationRuntime;
 }
 
 function isHeadless(): boolean {
@@ -180,7 +197,7 @@ async function callBackend(
   operation: string,
   params: Record<string, unknown> = {},
 ): Promise<unknown> {
-  const ark = await awaitArkReady();
+  const ark = await requireDictationRuntime().awaitArkReady();
   return ark.invokeOperation({ operation, ...params });
 }
 
@@ -331,13 +348,14 @@ function warmupPill(): void {
     для PTT-режима. */
 export async function setupDictationHotkey(): Promise<void> {
   try {
-    const ark = await awaitArkReady();
+    const runtime = requireDictationRuntime();
+    const ark = await runtime.awaitArkReady();
     const cfg = (await ark.invokeOperation({ operation: "dictation.get_config" })) as
       | { config?: { hotkey?: string; triggerMode?: "toggle" | "push_to_talk" } }
       | undefined;
     const hotkey = cfg?.config?.hotkey ?? "Ctrl+Shift+;";
     const mode = cfg?.config?.triggerMode ?? "toggle";
-    setDictationHotkeyCache(hotkey);
+    runtime.setDictationHotkeyCache(hotkey);
     applyHotkeyForMode(hotkey, mode);
     // Idle warmup: отложить создание pill window на 3s после старта shell'а
     // и сделать его только когда event loop свободен. Цель — не платить за
@@ -370,9 +388,9 @@ export async function setupDictationHotkey(): Promise<void> {
               | undefined;
             const nextHotkey = updated?.config?.hotkey ?? "Ctrl+Shift+;";
             const nextMode = updated?.config?.triggerMode ?? "toggle";
-            setDictationHotkeyCache(nextHotkey);
+            runtime.setDictationHotkeyCache(nextHotkey);
             applyHotkeyForMode(nextHotkey, nextMode);
-            broadcastCommandsUpdated();
+            runtime.broadcastCommandsUpdated();
           } catch (err) {
             console.error("[dictation-pill] re-apply hotkey mode failed:", err);
           }

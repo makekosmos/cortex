@@ -134,13 +134,22 @@ export const noteTypeSchema = z.object({
   updated_at: z.number(),
 });
 
+function parseJsonWithContext(json: string, label: string): unknown {
+  try {
+    return JSON.parse(json);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${label}: invalid JSON (${message})`);
+  }
+}
+
 export function parseNoteTypeDefinition(schemaJson: string) {
-  const parsed = JSON.parse(schemaJson);
+  const parsed = parseJsonWithContext(schemaJson, "note type schema");
   return noteTypeDefinitionSchema.parse(parsed);
 }
 
 export function parseHeaderTemplate(templateJson: string) {
-  const parsed = JSON.parse(templateJson);
+  const parsed = parseJsonWithContext(templateJson, "note type header template");
   return headerTemplateSchema.parse(parsed);
 }
 
@@ -181,7 +190,7 @@ export function parseNoteTypeUiSchema(uiSchemaJson?: string | null): NoteTypeUiS
     return defaults;
   }
 
-  const parsed = noteTypeUiSchema.parse(JSON.parse(uiSchemaJson));
+  const parsed = noteTypeUiSchema.parse(parseJsonWithContext(uiSchemaJson, "note type UI schema"));
   return {
     ...defaults,
     ...parsed,

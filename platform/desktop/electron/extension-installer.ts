@@ -21,7 +21,23 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
 import { KEPLER_API_VERSION, satisfiesSemver } from "./kepler-api";
-import type { ExtensionManifest } from "./extension-host";
+
+interface ExtensionManifest {
+  id: string;
+  name: string;
+  kind?: "app" | "native" | string;
+  version?: string;
+  description?: string;
+  author?: string;
+  icon?: string;
+  entryHtml?: string;
+  keplerApiVersion?: string;
+  keepAliveInBackground?: boolean;
+  native?: {
+    executable?: string;
+    devExecutable?: string;
+  };
+}
 
 // ESM shim — __dirname / __filename не определены в Node ESM bundles
 // (extension-installer.ts bundle'ится через vite-plugin-electron в .mjs).

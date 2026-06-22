@@ -672,7 +672,18 @@ function unquoteYamlKey(key: string, lineNumber: number): string {
         `Unsupported YAML frontmatter at line ${lineNumber}: unterminated quoted key`,
       );
     }
-    return JSON.parse(key);
+    try {
+      const parsed = JSON.parse(key);
+      if (typeof parsed === "string") return parsed;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Unsupported YAML frontmatter at line ${lineNumber}: invalid quoted key (${message})`,
+      );
+    }
+    throw new Error(
+      `Unsupported YAML frontmatter at line ${lineNumber}: quoted key must be a string`,
+    );
   }
   if (key.startsWith("'")) {
     if (!key.endsWith("'")) {

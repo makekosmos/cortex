@@ -59,14 +59,10 @@ type LiveVoiceTaskHandle = {
   stop: () => Promise<void>;
 };
 
-function getGeminiApiKey() {
-  const key = import.meta.env.VITE_GEMINI_API_KEY?.trim();
-
-  if (!key) {
-    throw new Error("VITE_GEMINI_API_KEY is missing. Add Gemini API key before using voice tasks.");
-  }
-
-  return key;
+function getGeminiApiKey(): never {
+  throw new Error(
+    "Gemini Live voice tasks are disabled: API keys must not be exposed in renderer code. Use a backend proxy before enabling this feature.",
+  );
 }
 
 function toErrorMessage(error: unknown) {
