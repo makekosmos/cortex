@@ -1,13 +1,33 @@
-# Kosmos — статус проекта (2026-06-18)
+# Kosmos — статус проекта (2026-06-22)
 
 | Компонент                  | Версия        |
 | -------------------------- | ------------- |
-| Kosmos Desktop (win / mac) | 0.5.4 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.0 / 0.5.1 |
 | Eden                       | 0.3.0         |
 | Delphi                     | 0.1.8         |
 | Horologion                 | 0.1.4         |
 | Arrancador                 | 0.1.4         |
 | Akasha                     | 0.1.2         |
+
+## 2026-06-22 — Dictation local STT + recording pill polish (Kosmos Desktop win 0.6.0)
+
+Windows desktop bump до `0.6.0` покрывает итерацию по локальной диктовке и
+визуальному состоянию pill overlay:
+
+- **Local STT**: whisper.cpp остаётся базовым fallback, faster-whisper работает
+  как NVIDIA/CUDA-ускоренный backend без повторной загрузки модели на каждый
+  короткий запрос. Runtime sidecar и модельные ассеты проверены на dev-машине.
+- **Модели диктовки**: локальные модели вынесены в общий каталог, который не
+  зависит от dev/prod data dir, чтобы не скачивать одни и те же файлы дважды.
+  UI управления моделями показывает скачивание/удаление отдельно от выбора
+  активной голосовой модели.
+- **Recording pill**: waveform переведён на canvas-подход по мотивам
+  ElevenLabs LiveWaveform без React-зависимости. Footer стал отдельной нижней
+  секцией с реальными action-кнопками; отправка показывает актуальный hotkey
+  из `dictation.get_config`, а не фиктивные `Esc`/`Enter`.
+
+Checks: `bun run --cwd platform/desktop typecheck`, visual preview screenshots
+в `.tmp/visual/2026-06-22-*`, ручная runtime-проверка faster-whisper диктовки.
 
 ## 2026-06-18 — Per-platform release channels + Windows 0.5.4 (восстановление автообновления)
 
