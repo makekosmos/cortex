@@ -8,10 +8,10 @@ use std::path::{Path, PathBuf};
 
 use super::config::data_dir;
 
-/// Допущение: средняя скорость machine-typing'а (для расчёта Time Saved).
-/// Сознательно консервативное значение — кто-то печатает быстрее, кто-то
-/// медленнее. 40 WPM ≈ медианный пользователь по open keystroke datasets.
-pub const ASSUMED_TYPING_WPM: f64 = 40.0;
+/// Допущение: средняя скорость набора текста для расчёта Time Saved.
+/// 50 WPM = практичная базовая оценка для обычного пользователя: 750 слов
+/// набирались бы примерно 15 минут. Фактическое время диктовки вычитается.
+pub const ASSUMED_TYPING_WPM: f64 = 50.0;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -125,19 +125,19 @@ mod tests {
 
     #[test]
     fn time_saved_positive_when_speech_faster_than_typing() {
-        // 200 слов на 60s. Печатая 40 WPM, понадобилось бы 5 минут (300s).
-        // Saved = 300 - 60 = 240s.
+        // 750 слов на 300s. Печатая 50 WPM, понадобилось бы 15 минут (900s).
+        // Saved = 900 - 300 = 600s.
         let s = DictationStats {
-            total_words: 200,
-            total_record_seconds: 60,
+            total_words: 750,
+            total_record_seconds: 300,
             total_sessions: 1,
         };
-        assert_eq!(s.time_saved_seconds(), 240);
+        assert_eq!(s.time_saved_seconds(), 600);
     }
 
     #[test]
     fn time_saved_zero_when_speech_slower_than_typing() {
-        // 10 слов на 60s = 10 WPM. Печатая 40 WPM — 15s. Запись медленнее →
+        // 10 слов на 60s = 10 WPM. Печатая 50 WPM — 12s. Запись медленнее →
         // saved обрезается до 0 (не показываем отрицательное).
         let s = DictationStats {
             total_words: 10,

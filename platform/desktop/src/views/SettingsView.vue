@@ -55,6 +55,8 @@ const { isMac } = usePlatform();
 
 const tab = ref<Tab>("general");
 const searchQuery = ref<string>("");
+const backStack = ref<Tab[]>([]);
+const forwardStack = ref<Tab[]>([]);
 
 function normalizeSearchValue(value: string): string {
   return value.trim().toLowerCase();
@@ -122,6 +124,8 @@ const activeFeatureToggle = computed(() => {
 });
 
 const showAdvancedToggle = computed(() => activeFeatureToggle.value !== null);
+const canGoBack = computed(() => backStack.value.length > 0);
+const canGoForward = computed(() => forwardStack.value.length > 0);
 
 const activeAdvancedIntro = computed(() => {
   const item = activeNavigationItem.value;
@@ -344,8 +348,35 @@ function onKey(e: KeyboardEvent) {
 // useFocusTab, useExtensionsTab, useFileSearchTab, useDictationConfig).
 // SettingsView больше не загружает tab data сам.
 
-function selectTab(t: Tab) {
+function navigateToTab(t: Tab, recordHistory = true) {
+  if (tab.value === t) return;
+  if (recordHistory) {
+    backStack.value = [...backStack.value, tab.value];
+    forwardStack.value = [];
+  }
   tab.value = t;
+}
+
+function selectTab(t: Tab) {
+  navigateToTab(t);
+}
+
+function goBack() {
+  const previous = backStack.value.at(-1);
+  if (!previous) return;
+  searchQuery.value = "";
+  backStack.value = backStack.value.slice(0, -1);
+  forwardStack.value = [...forwardStack.value, tab.value];
+  navigateToTab(previous, false);
+}
+
+function goForward() {
+  const next = forwardStack.value.at(-1);
+  if (!next) return;
+  searchQuery.value = "";
+  forwardStack.value = forwardStack.value.slice(0, -1);
+  backStack.value = [...backStack.value, tab.value];
+  navigateToTab(next, false);
 }
 
 async function refreshActiveFeatureToggle() {
@@ -533,7 +564,13 @@ onBeforeUnmount(() => {
       </SettingsSidebar>
 
       <div class="settings-content">
-        <SettingsContentHeader v-if="!isMac">
+        <SettingsContentHeader
+          v-if="!isMac"
+          :back-disabled="!canGoBack"
+          :forward-disabled="!canGoForward"
+          @back="goBack"
+          @forward="goForward"
+        >
           <template #right>
             <button
               v-if="showAdvancedToggle"

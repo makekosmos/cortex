@@ -21,6 +21,7 @@ const TOOLS_DIR: &str = "tools/dictation/whisper.cpp";
 const CUDA_TOOLS_DIR: &str = "tools/dictation/whisper.cpp-cublas";
 const FASTER_WHISPER_DIR: &str = "tools/dictation/faster-whisper";
 const FASTER_WHISPER_VENV_DIR: &str = ".venv";
+const FASTER_WHISPER_MARKERS_DIR: &str = "prepared-models";
 const DOWNLOAD_MAX_ATTEMPTS: usize = 8;
 
 #[cfg(windows)]
@@ -178,16 +179,39 @@ fn model_spec(model_id: &str) -> Result<&'static ModelSpec, LocalModelsError> {
         .ok_or_else(|| LocalModelsError::ModelNotFound(model_id.to_owned()))
 }
 
+fn default_shared_assets_root() -> PathBuf {
+    let base = std::env::var("APPDATA")
+        .ok()
+        .map(PathBuf::from)
+        .or_else(|| std::env::var("XDG_CONFIG_HOME").ok().map(PathBuf::from))
+        .or_else(|| std::env::var("HOME").ok().map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("."));
+    base.join("Kosmos")
+}
+
+fn shared_assets_root(data_dir: &Path) -> PathBuf {
+    if let Ok(dir) = std::env::var("KOSMOS_LOCAL_STT_DIR") {
+        let trimmed = dir.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+    if cfg!(test) {
+        return data_dir.to_path_buf();
+    }
+    default_shared_assets_root()
+}
+
 pub fn models_dir(data_dir: &Path) -> PathBuf {
-    data_dir.join(MODELS_DIR)
+    shared_assets_root(data_dir).join(MODELS_DIR)
 }
 
 pub fn tools_dir(data_dir: &Path) -> PathBuf {
-    data_dir.join(TOOLS_DIR)
+    shared_assets_root(data_dir).join(TOOLS_DIR)
 }
 
 pub fn faster_whisper_dir(data_dir: &Path) -> PathBuf {
-    data_dir.join(FASTER_WHISPER_DIR)
+    shared_assets_root(data_dir).join(FASTER_WHISPER_DIR)
 }
 
 pub fn faster_whisper_venv_dir(data_dir: &Path) -> PathBuf {
@@ -228,7 +252,7 @@ pub fn faster_whisper_model_id(model_id: &str) -> Result<&'static str, LocalMode
 
 #[cfg(windows)]
 fn cuda_tools_dir(data_dir: &Path) -> PathBuf {
-    data_dir.join(CUDA_TOOLS_DIR)
+    shared_assets_root(data_dir).join(CUDA_TOOLS_DIR)
 }
 
 pub fn model_path(data_dir: &Path, spec: &ModelSpec) -> PathBuf {
@@ -357,11 +381,23 @@ pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSn
     let command_path = command_path(data_dir);
     let command_installed = command_path.as_ref().is_some_and(|path| path.is_file());
     let selected_path = cfg.local_model_path.as_deref();
+    let faster_whisper_selected = cfg.local_engine.eq_ignore_ascii_case("faster-whisper")
+        || cfg.local_engine.eq_ignore_ascii_case("faster_whisper");
     let models = MODEL_CATALOG
         .iter()
         .map(|spec| {
             let path = model_path(data_dir, spec);
             let path_text = path_string(&path);
+            let selected = cfg.local_model.as_deref() == Some(spec.id)
+                || selected_path == Some(path_text.as_str())
+                || (faster_whisper_selected
+                    && cfg.local_model.as_deref() == Some(spec.id)
+                    && faster_whisper_model_id(spec.id)
+                        .ok()
+                        .is_some_and(|model| selected_path == Some(model)));
+            let faster_whisper_downloaded =
+                faster_whisper_model_marker_path(data_dir, spec.id).is_file()
+                    || (faster_whisper_selected && selected);
             LocalModelInfo {
                 id: spec.id.to_owned(),
                 name: spec.name.to_owned(),
@@ -372,9 +408,8 @@ pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSn
                 accuracy_score: spec.accuracy_score,
                 speed_score: spec.speed_score,
                 recommended: spec.recommended,
-                downloaded: path.is_file(),
-                selected: cfg.local_model.as_deref() == Some(spec.id)
-                    || selected_path == Some(path_text.as_str()),
+                downloaded: path.is_file() || faster_whisper_downloaded,
+                selected,
                 path: path.is_file().then_some(path_text),
             }
         })
@@ -605,6 +640,31 @@ pub async fn ensure_model_with_progress(
         verify_sha256(&path, expected)?;
     }
     Ok(path)
+}
+
+fn faster_whisper_model_marker_path(data_dir: &Path, model_id: &str) -> PathBuf {
+    faster_whisper_dir(data_dir)
+        .join(FASTER_WHISPER_MARKERS_DIR)
+        .join(format!("{model_id}.json"))
+}
+
+fn write_faster_whisper_model_marker(
+    data_dir: &Path,
+    model_id: &str,
+    backend_model: &str,
+) -> Result<(), LocalModelsError> {
+    let path = faster_whisper_model_marker_path(data_dir, model_id);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let payload = serde_json::json!({
+        "modelId": model_id,
+        "backendModel": backend_model,
+        "preparedAt": chrono::Utc::now().to_rfc3339(),
+    });
+    let bytes = serde_json::to_vec_pretty(&payload).map_err(io::Error::other)?;
+    fs::write(path, bytes)?;
+    Ok(())
 }
 
 fn faster_whisper_prepare_timeout() -> Duration {
@@ -849,10 +909,15 @@ except Exception as exc:
         total_bytes: Some(1),
         percent: Some(100.0),
     });
+    write_faster_whisper_model_marker(data_dir, model_id, backend_model)?;
     Ok(backend_model.to_owned())
 }
 
-pub fn delete_model(data_dir: &Path, model_id: &str) -> Result<PathBuf, LocalModelsError> {
+pub fn delete_model(
+    data_dir: &Path,
+    model_id: &str,
+    local_engine: &str,
+) -> Result<PathBuf, LocalModelsError> {
     let path = model_path_by_id(data_dir, model_id)?;
     if path.is_file() {
         fs::remove_file(&path)?;
@@ -860,6 +925,14 @@ pub fn delete_model(data_dir: &Path, model_id: &str) -> Result<PathBuf, LocalMod
     let part_path = path.with_extension("part");
     if part_path.is_file() {
         fs::remove_file(&part_path)?;
+    }
+    if local_engine.eq_ignore_ascii_case("faster-whisper")
+        || local_engine.eq_ignore_ascii_case("faster_whisper")
+    {
+        let marker_path = faster_whisper_model_marker_path(data_dir, model_id);
+        if marker_path.is_file() {
+            fs::remove_file(marker_path)?;
+        }
     }
     Ok(path)
 }
