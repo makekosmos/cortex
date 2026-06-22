@@ -189,12 +189,23 @@ fn local_stt_server_ready_timeout() -> Duration {
     Duration::from_millis(millis)
 }
 
-fn local_stt_sidecar_binary_name() -> &'static str {
+fn local_stt_sidecar_binary_names() -> &'static [&'static str] {
     if cfg!(windows) {
-        "kosmos-local-stt.exe"
+        &["kosmos-local-stt.exe", "Kosmos Local STT.exe"]
     } else {
-        "kosmos-local-stt"
+        &["kosmos-local-stt"]
     }
+}
+
+fn local_stt_sidecar_candidate_paths(current_exe: &Path) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    for name in local_stt_sidecar_binary_names() {
+        candidates.push(current_exe.with_file_name(name));
+        if let Some(parent) = current_exe.parent().and_then(Path::parent) {
+            candidates.push(parent.join(name));
+        }
+    }
+    candidates
 }
 
 fn local_stt_sidecar_path() -> Result<PathBuf, LocalError> {
@@ -208,21 +219,20 @@ fn local_stt_sidecar_path() -> Result<PathBuf, LocalError> {
     let current_exe = env::current_exe().map_err(|e| {
         LocalError::SidecarUnavailable(format!("не удалось определить путь текущего процесса: {e}"))
     })?;
-    let sibling = current_exe.with_file_name(local_stt_sidecar_binary_name());
-    if sibling.is_file() {
-        return Ok(sibling);
-    }
-
-    if let Some(parent) = current_exe.parent().and_then(Path::parent) {
-        let parent_sibling = parent.join(local_stt_sidecar_binary_name());
-        if parent_sibling.is_file() {
-            return Ok(parent_sibling);
+    let candidates = local_stt_sidecar_candidate_paths(&current_exe);
+    for candidate in &candidates {
+        if candidate.is_file() {
+            return Ok(candidate.clone());
         }
     }
 
+    let searched = candidates
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
     Err(LocalError::SidecarUnavailable(format!(
-        "binary not found at {}",
-        sibling.display()
+        "binary not found; searched: {searched}"
     )))
 }
 
@@ -2032,6 +2042,25 @@ mod tests {
     use super::*;
 
     static ENV_LOCAL_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    #[test]
+    fn sidecar_candidates_include_packaged_windows_name() {
+        let candidates =
+            local_stt_sidecar_candidate_paths(Path::new(r"C:\Kosmos\resources\Kosmos Runtime.exe"));
+        let rendered = candidates
+            .iter()
+            .map(|path| path.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+
+        assert!(rendered
+            .iter()
+            .any(|path| path.ends_with("kosmos-local-stt.exe")));
+        if cfg!(windows) {
+            assert!(rendered
+                .iter()
+                .any(|path| path.ends_with("Kosmos Local STT.exe")));
+        }
+    }
 
     fn install_test_sidecar_mock(mock: Option<TestSidecarMock>) {
         let guard = match test_sidecar_mock_state().lock() {
