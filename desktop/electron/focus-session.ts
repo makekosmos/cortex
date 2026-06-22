@@ -4,7 +4,6 @@ import os from "node:os";
 import { spawn } from "node:child_process";
 import { writeFileSync, unlinkSync } from "node:fs";
 import type { ArkClient } from "@kosmos/ark";
-import { awaitArkReady } from "./main";
 import { applyFocusBlock } from "./focus-block";
 import { setFocusState, type FocusState } from "./focus-widget";
 
@@ -104,6 +103,10 @@ let shellOpener: (() => void) | null = null;
 let blockedAppNotifier:
   | ((app: { id: string; title: string; icon?: string | null }) => void)
   | null = null;
+type FocusSessionRuntime = {
+  awaitArkReady: () => Promise<ArkClient>;
+};
+let focusSessionRuntime: FocusSessionRuntime | null = null;
 const snoozedBlockedApps = new Map<string, number>();
 const lastNotifiedAt = new Map<string, number>();
 const SNOOZE_MS = 5 * 60 * 1000;
@@ -118,6 +121,17 @@ export function setBlockedAppNotifier(
   notifier: (app: { id: string; title: string; icon?: string | null }) => void,
 ): void {
   blockedAppNotifier = notifier;
+}
+
+export function setFocusSessionRuntime(runtime: FocusSessionRuntime | null): void {
+  focusSessionRuntime = runtime;
+}
+
+function requireFocusSessionRuntime(): FocusSessionRuntime {
+  if (!focusSessionRuntime) {
+    throw new Error("focus session runtime bridge is not initialized");
+  }
+  return focusSessionRuntime;
 }
 
 export function snoozeBlockedFocusApp(appId: string): void {
@@ -196,7 +210,7 @@ async function invoke<T = unknown>(
   operation: string,
   params?: Record<string, unknown>,
 ): Promise<T> {
-  const client = await awaitArkReady();
+  const client = await requireFocusSessionRuntime().awaitArkReady();
   return client.invokeOperation({ operation, ...params } as {
     operation: string;
     [key: string]: unknown;

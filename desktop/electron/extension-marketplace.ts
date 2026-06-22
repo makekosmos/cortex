@@ -122,7 +122,12 @@ export async function fetchCatalog(force = false): Promise<Catalog> {
     return cachedCatalog.data;
   }
   const raw = await httpsGetText(CATALOG_URL);
-  const parsed = JSON.parse(raw) as Catalog;
+  let parsed: Catalog;
+  try {
+    parsed = JSON.parse(raw) as Catalog;
+  } catch (e) {
+    throw new Error(`catalog.json: invalid JSON (${(e as Error).message})`);
+  }
   if (!parsed || typeof parsed.schemaVersion !== "number") {
     throw new Error("catalog.json: invalid format (no schemaVersion)");
   }
