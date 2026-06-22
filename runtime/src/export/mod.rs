@@ -19,6 +19,9 @@ pub mod tag_json;
 pub mod task_csv;
 pub mod task_md;
 pub mod time_entry_csv;
+mod util;
+
+pub(crate) use util::{csv_safe_cell, sanitize_filename, unique_path};
 
 /// Результат одного `convert` вызова — что записали, сколько байт, какие
 /// ошибки встретили (но не упали — partial success возможен).
@@ -109,64 +112,6 @@ pub fn find_converter(converter_id: &str) -> Option<&'static dyn Converter> {
         .map(|b| b.as_ref())
 }
 
-/// Sanitize строку для использования в имени файла (Windows-safe).
-/// Замечание: не трогает пробелы — markdown OK с пробелами на Win.
-pub(crate) fn sanitize_filename(input: &str) -> String {
-    let banned = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
-    let mut out: String = input
-        .chars()
-        .filter(|c| !banned.contains(c) && !c.is_control())
-        .collect();
-    out = out.trim().trim_matches('.').to_string();
-    if out.is_empty() {
-        out = "untitled".to_string();
-    }
-    if out.len() > 120 {
-        // Truncate at char boundary to avoid splitting multi-byte characters.
-        let mut boundary = 120;
-        while !out.is_char_boundary(boundary) {
-            boundary -= 1;
-        }
-        out.truncate(boundary);
-    }
-    out
-}
-
-/// Sanitize CSV cell value to prevent formula injection in spreadsheet apps.
-///
-/// Spreadsheet applications (Excel, Google Sheets) interpret cells that start
-/// with `=`, `+`, `-`, or `@` as formulas, which can execute arbitrary code.
-/// Prefix such values with a TAB character to force literal interpretation.
-pub(crate) fn csv_safe_cell(value: &str) -> std::borrow::Cow<'_, str> {
-    if value.starts_with(['=', '+', '-', '@']) {
-        std::borrow::Cow::Owned(format!("\t{value}"))
-    } else {
-        std::borrow::Cow::Borrowed(value)
-    }
-}
-
-/// Подобрать уникальное имя файла в dest_dir с заданным stem + extension.
-/// Если файл существует — добавляет суффикс `-2`, `-3`, ...
-/// Если все суффиксы до 9999 заняты — использует timestamp суффикс.
-pub(crate) fn unique_path(dest_dir: &Path, stem: &str, ext: &str) -> PathBuf {
-    let candidate = dest_dir.join(format!("{stem}.{ext}"));
-    if !candidate.exists() {
-        return candidate;
-    }
-    for n in 2..10_000 {
-        let c = dest_dir.join(format!("{stem}-{n}.{ext}"));
-        if !c.exists() {
-            return c;
-        }
-    }
-    // All numeric suffixes exhausted — use epoch-millis as guaranteed-unique fallback.
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    dest_dir.join(format!("{stem}-{ts}.{ext}"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,57 +136,36 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_filename_strips_banned_chars() {
-        assert_eq!(sanitize_filename("foo/bar:baz?.md"), "foobarbaz.md");
-        assert_eq!(sanitize_filename(""), "untitled");
-        assert_eq!(sanitize_filename("...."), "untitled");
-        assert_eq!(sanitize_filename("Привет мир"), "Привет мир");
-    }
-
-    #[test]
-    fn sanitize_filename_truncates_at_char_boundary() {
-        // Each Cyrillic character is 2 bytes. 61 chars = 122 bytes > 120.
-        // truncate(120) would split the 61st char without boundary check → panic.
-        let input = "А".repeat(61);
-        let out = sanitize_filename(&input);
-        assert!(out.len() <= 120, "len={}", out.len());
-        assert!(
-            std::str::from_utf8(out.as_bytes()).is_ok(),
-            "not valid UTF-8"
-        );
-        // 120 bytes / 2 bytes-per-char = 60 chars
-        assert_eq!(out, "А".repeat(60));
-    }
-
-    #[test]
-    fn csv_safe_cell_sanitizes_formula_prefix() {
-        assert_eq!(csv_safe_cell("=SUM(1+1)"), "\t=SUM(1+1)");
-        assert_eq!(csv_safe_cell("+bad"), "\t+bad");
-        assert_eq!(csv_safe_cell("-also-bad"), "\t-also-bad");
-        assert_eq!(csv_safe_cell("@user"), "\t@user");
-        // Safe values unchanged.
-        assert_eq!(csv_safe_cell("Hello"), "Hello");
-        assert_eq!(csv_safe_cell("Buy milk"), "Buy milk");
-        assert_eq!(csv_safe_cell(""), "");
-        assert_eq!(csv_safe_cell("100"), "100");
-    }
-
-    #[test]
-    fn test_unique_path_exhaustion_fallback() {
-        use tempfile::TempDir;
-        let tmp = TempDir::new().unwrap();
-        let dir = tmp.path();
-        // Create stem.ext and stem-2.ext … stem-9999.ext.
-        std::fs::write(dir.join("title.md"), b"").unwrap();
-        for n in 2..10_000u32 {
-            std::fs::write(dir.join(format!("title-{n}.md")), b"").unwrap();
+    fn converter_metadata_matches_registry_entries() {
+        for info in list_converters() {
+            let converter = find_converter(&info.converter_id).expect("listed converter resolves");
+            assert_eq!(info.converter_id, converter.id());
+            assert_eq!(info.object_type, converter.object_type());
+            assert_eq!(info.display_name, converter.display_name());
+            assert_eq!(info.default_format, converter.default_format());
+            assert_eq!(
+                info.supported_formats,
+                converter
+                    .supported_formats()
+                    .iter()
+                    .map(|format| format.to_string())
+                    .collect::<Vec<_>>()
+            );
         }
-        let path = unique_path(dir, "title", "md");
-        // Must not return a path that already exists.
-        assert!(
-            !path.exists(),
-            "unique_path returned an existing path: {:?}",
-            path
+    }
+
+    #[test]
+    fn convert_result_accumulates_files_bytes_and_errors() {
+        let mut result = ConvertResult::default();
+        result.push_file(PathBuf::from("first.md"), 10);
+        result.push_file(PathBuf::from("second.md"), 7);
+        result.push_error("bad row");
+
+        assert_eq!(
+            result.files_written,
+            vec![PathBuf::from("first.md"), PathBuf::from("second.md")]
         );
+        assert_eq!(result.bytes, 17);
+        assert_eq!(result.errors, vec!["bad row"]);
     }
 }
