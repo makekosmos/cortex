@@ -1211,7 +1211,10 @@ fn faster_whisper_timeout() -> Duration {
 fn faster_whisper_runtime_dirs() -> Vec<PathBuf> {
     let data_dir = config::data_dir();
     let mut dll_dirs = Vec::<PathBuf>::new();
-    for key in ["KOSMOS_FASTER_WHISPER_DLL_DIRS", "KOSMOS_FASTER_WHISPER_DLL_DIR"] {
+    for key in [
+        "KOSMOS_FASTER_WHISPER_DLL_DIRS",
+        "KOSMOS_FASTER_WHISPER_DLL_DIR",
+    ] {
         if let Some(value) = env::var_os(key) {
             for dir in env::split_paths(&value) {
                 if dir.is_dir() && !dll_dirs.iter().any(|existing| existing == &dir) {
@@ -1220,20 +1223,48 @@ fn faster_whisper_runtime_dirs() -> Vec<PathBuf> {
             }
         }
     }
-    if let Some(command_path) = local_models::command_path(&data_dir) {
-        if let Some(release_dir) = command_path.parent() {
-            if release_dir.is_dir() {
-                dll_dirs.push(release_dir.to_path_buf());
-            }
+    let venv_dir = local_models::faster_whisper_venv_dir(&data_dir);
+    let venv_dll_dirs = if cfg!(windows) {
+        vec![
+            venv_dir
+                .join("Lib")
+                .join("site-packages")
+                .join("nvidia")
+                .join("cublas")
+                .join("bin"),
+            venv_dir
+                .join("Lib")
+                .join("site-packages")
+                .join("nvidia")
+                .join("cudnn")
+                .join("bin"),
+            venv_dir
+                .join("Lib")
+                .join("site-packages")
+                .join("ctranslate2"),
+        ]
+    } else {
+        vec![
+            venv_dir
+                .join("lib")
+                .join("python")
+                .join("site-packages")
+                .join("nvidia")
+                .join("cublas")
+                .join("lib"),
+            venv_dir
+                .join("lib")
+                .join("python")
+                .join("site-packages")
+                .join("nvidia")
+                .join("cudnn")
+                .join("lib"),
+        ]
+    };
+    for dir in venv_dll_dirs {
+        if dir.is_dir() && !dll_dirs.iter().any(|existing| existing == &dir) {
+            dll_dirs.push(dir);
         }
-    }
-    let cuda_release_dir = data_dir
-        .join("tools")
-        .join("dictation")
-        .join("whisper.cpp-cublas")
-        .join("Release");
-    if cuda_release_dir.is_dir() && !dll_dirs.iter().any(|dir| dir == &cuda_release_dir) {
-        dll_dirs.push(cuda_release_dir);
     }
     dll_dirs
 }
@@ -1663,8 +1694,12 @@ impl FasterWhisperWorker {
         let mut line = String::new();
         let read = tokio::time::timeout(faster_whisper_timeout(), self.stdout.read_line(&mut line))
             .await
-            .map_err(|_| LocalError::CommandFailed("faster-whisper worker preload timed out".into()))?
-            .map_err(|e| LocalError::CommandFailed(format!("faster-whisper worker read failed: {e}")))?;
+            .map_err(|_| {
+                LocalError::CommandFailed("faster-whisper worker preload timed out".into())
+            })?
+            .map_err(|e| {
+                LocalError::CommandFailed(format!("faster-whisper worker read failed: {e}"))
+            })?;
         if read == 0 {
             return Err(LocalError::CommandFailed(
                 "faster-whisper worker exited during preload".into(),
@@ -1723,7 +1758,9 @@ impl FasterWhisperWorker {
         let read = tokio::time::timeout(faster_whisper_timeout(), self.stdout.read_line(&mut line))
             .await
             .map_err(|_| LocalError::CommandFailed("faster-whisper worker timed out".into()))?
-            .map_err(|e| LocalError::CommandFailed(format!("faster-whisper worker read failed: {e}")))?;
+            .map_err(|e| {
+                LocalError::CommandFailed(format!("faster-whisper worker read failed: {e}"))
+            })?;
         let elapsed_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
         cleanup_temp_outputs(&wav_path, &out_base);
         if read == 0 {
