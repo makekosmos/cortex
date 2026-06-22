@@ -30,7 +30,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PILL_WIDTH = 248;
-const PILL_HEIGHT = 56;
+const PILL_HEIGHT = 48;
 // Window == pill size. Any transparent padding around the pill is composited
 // white by DWM on Win32 for tiny transparent always-on-top windows (the same
 // reason focus-widget keeps its content filling the whole window). Native

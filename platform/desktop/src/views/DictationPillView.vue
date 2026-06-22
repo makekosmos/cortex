@@ -19,10 +19,11 @@ const errorText = ref<string>("");
 /// pill самодостаточен (waveform / dots).
 const subText = ref<string>("");
 const elapsedSec = ref<number>(0);
-const WAVE_BAR_COUNT = 16;
+const WAVE_BAR_COUNT = 24;
+const WAVE_DOT_PX = 4;
 const WAVE_HEIGHT_PX = 30;
-const WAVE_PEAK = 0.78;
-const RECORDING_PEAK = 0.68;
+const WAVE_PEAK = 0.82;
+const RECORDING_PEAK = 1;
 const levelBars = ref<number[]>(Array.from({ length: WAVE_BAR_COUNT }, () => 0));
 
 // Audio capture lifecycle:
@@ -56,17 +57,18 @@ const hasDictationBridge = () => Boolean(window.kepler?.dictation);
 const isPreview =
   new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("preview") === "1" ||
   !hasDictationBridge();
-const idleBars = Array.from({ length: WAVE_BAR_COUNT }, () => 0.2);
+const idleBars = Array.from({ length: WAVE_BAR_COUNT }, () => 0);
 const previewBars = [
-  0.12, 0.32, 0.72, 0.42, 0.92, 0.58, 0.36, 0.8, 0.5, 0.22, 0.64, 0.28, 0.46, 0.7, 0.34, 0.18,
+  0, 0, 0.08, 0.24, 0.44, 0.68, 0.38, 0.16, 0.52, 0.82, 0.46, 0.2, 0.34, 0.58, 0.28, 0.1, 0.5, 0.72,
+  0.36, 0.18, 0.3, 0.48, 0.14, 0,
 ];
 const transcribingWaveIndex = ref(0);
 const transcribingBars = computed(() =>
   idleBars.map((base, i) => {
     const distance = Math.abs(i - transcribingWaveIndex.value);
     if (distance === 0) return WAVE_PEAK;
-    if (distance === 1) return 0.54;
-    if (distance === 2) return 0.36;
+    if (distance === 1) return 0.48;
+    if (distance === 2) return 0.22;
     return base;
   }),
 );
@@ -75,8 +77,8 @@ const waitingBars = computed(() =>
   idleBars.map((base, i) => {
     const distance = Math.abs(i - waitingWaveIndex.value);
     if (distance === 0) return WAVE_PEAK;
-    if (distance === 1) return 0.54;
-    if (distance === 2) return 0.36;
+    if (distance === 1) return 0.48;
+    if (distance === 2) return 0.22;
     return base;
   }),
 );
@@ -87,7 +89,7 @@ const errorBars = computed(() =>
     const right = Math.ceil((WAVE_BAR_COUNT - 1) / 2) + errorWaveIndex.value;
     const distance = Math.min(Math.abs(i - left), Math.abs(i - right));
     if (distance === 0) return WAVE_PEAK;
-    if (distance === 1) return 0.5;
+    if (distance === 1) return 0.36;
     return base;
   }),
 );
@@ -197,11 +199,16 @@ function formatElapsed(seconds: number): string {
 const elapsedLabel = computed(() => formatElapsed(elapsedSec.value));
 
 function barHeight(value: number): string {
-  return `${Math.max(3, value * WAVE_HEIGHT_PX)}px`;
+  const normalized = Math.min(WAVE_HEIGHT_PX, Math.max(WAVE_DOT_PX, value * WAVE_HEIGHT_PX));
+  return `${normalized}px`;
 }
 
 function recordingBarHeight(value: number): string {
   return barHeight(Math.min(value, RECORDING_PEAK));
+}
+
+function barOpacity(value: number): string {
+  return `${Math.min(1, 0.4 + Math.max(0, value) * 0.6)}`;
 }
 
 function handleCancelClick(event: Event): void {
@@ -343,8 +350,8 @@ async function startCapture(): Promise<void> {
 
   source = audioCtx.createMediaStreamSource(stream);
   analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 64;
-  analyser.smoothingTimeConstant = 0.5;
+  analyser.fftSize = 256;
+  analyser.smoothingTimeConstant = 0.85;
   source.connect(analyser);
 
   // ScriptProcessorNode deprecated, но работает без AudioWorklet boilerplate.
@@ -370,13 +377,23 @@ async function startCapture(): Promise<void> {
   }, 200);
   levelHandle = setInterval(() => {
     if (!analyser) return;
-    const buf = new Uint8Array(analyser.frequencyBinCount);
-    analyser.getByteFrequencyData(buf);
-    const bars: number[] = [];
-    const step = Math.max(1, Math.floor(buf.length / levelBars.value.length));
-    for (let i = 0; i < levelBars.value.length; i++) {
-      const v = buf[i * step] ?? 0;
-      bars.push(v / 255);
+    const spectrum = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(spectrum);
+    const bars = Array.from({ length: WAVE_BAR_COUNT }, () => 0);
+    const startFreq = Math.floor(spectrum.length * 0.05);
+    const endFreq = Math.floor(spectrum.length * 0.4);
+    const relevantData = spectrum.slice(startFreq, endFreq);
+    const halfCount = Math.floor(WAVE_BAR_COUNT / 2);
+    const sensitivity = 0.8;
+    for (let i = halfCount - 1; i >= 0; i--) {
+      const dataIndex = Math.floor((i / halfCount) * relevantData.length);
+      const value = Math.min(1, ((relevantData[dataIndex] ?? 0) / 255) * sensitivity);
+      bars[halfCount - 1 - i] = Math.max(0, value);
+    }
+    for (let i = 0; i < halfCount; i++) {
+      const dataIndex = Math.floor((i / halfCount) * relevantData.length);
+      const value = Math.min(1, ((relevantData[dataIndex] ?? 0) / 255) * sensitivity);
+      bars[halfCount + i] = Math.max(0, value);
     }
     levelBars.value = bars;
   }, 80);
@@ -663,6 +680,7 @@ const exposeStatusText = computed(() => statusText());
                 class="wave-bar"
                 :style="{
                   height: recordingBarHeight(b),
+                  opacity: barOpacity(b),
                 }"
               />
             </div>
@@ -673,6 +691,7 @@ const exposeStatusText = computed(() => statusText());
                 class="wave-bar"
                 :style="{
                   height: barHeight(b),
+                  opacity: barOpacity(b),
                 }"
               />
             </div>
@@ -685,7 +704,7 @@ const exposeStatusText = computed(() => statusText());
                 v-for="(b, i) in waitingBars"
                 :key="i"
                 class="wave-bar"
-                :style="{ height: barHeight(b) }"
+                :style="{ height: barHeight(b), opacity: barOpacity(b) }"
               />
             </div>
             <div
@@ -697,7 +716,7 @@ const exposeStatusText = computed(() => statusText());
                 v-for="(b, i) in errorBars"
                 :key="i"
                 class="wave-bar"
-                :style="{ height: barHeight(b) }"
+                :style="{ height: barHeight(b), opacity: barOpacity(b) }"
               />
             </div>
             <div v-else class="waveform idle-wave">
@@ -705,7 +724,7 @@ const exposeStatusText = computed(() => statusText());
                 v-for="(b, i) in idleBars"
                 :key="i"
                 class="wave-bar"
-                :style="{ height: barHeight(b) }"
+                :style="{ height: barHeight(b), opacity: barOpacity(b) }"
               />
             </div>
             <div v-if="item.status === 'recording'" class="pill-hover-controls">
@@ -742,6 +761,7 @@ const exposeStatusText = computed(() => statusText());
           class="wave-bar"
           :style="{
             height: recordingBarHeight(b),
+            opacity: barOpacity(b),
           }"
         />
       </div>
@@ -752,6 +772,7 @@ const exposeStatusText = computed(() => statusText());
           class="wave-bar"
           :style="{
             height: barHeight(b),
+            opacity: barOpacity(b),
           }"
         />
       </div>
@@ -760,7 +781,7 @@ const exposeStatusText = computed(() => statusText());
           v-for="(b, i) in waitingBars"
           :key="i"
           class="wave-bar"
-          :style="{ height: barHeight(b) }"
+          :style="{ height: barHeight(b), opacity: barOpacity(b) }"
         />
       </div>
       <div v-else-if="status === 'error'" class="waveform error-wave" :title="errorText">
@@ -768,7 +789,7 @@ const exposeStatusText = computed(() => statusText());
           v-for="(b, i) in errorBars"
           :key="i"
           class="wave-bar"
-          :style="{ height: barHeight(b) }"
+          :style="{ height: barHeight(b), opacity: barOpacity(b) }"
         />
       </div>
       <div v-else class="waveform idle-wave">
@@ -776,7 +797,7 @@ const exposeStatusText = computed(() => statusText());
           v-for="(b, i) in idleBars"
           :key="i"
           class="wave-bar"
-          :style="{ height: barHeight(b) }"
+          :style="{ height: barHeight(b), opacity: barOpacity(b) }"
         />
       </div>
       <div v-if="status === 'recording'" class="pill-hover-controls">
@@ -863,7 +884,7 @@ const exposeStatusText = computed(() => statusText());
 
 .preview-frame .pill {
   width: 248px;
-  height: 56px;
+  height: 48px;
 }
 
 .stage {
@@ -893,18 +914,15 @@ const exposeStatusText = computed(() => statusText());
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 8px;
+  padding: 2px;
   /* Глянцевый чёрный — тонкий светлый highlight сверху, тёмный низ. */
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--foreground) 8%, transparent), transparent 42%),
-    color-mix(in srgb, var(--surface) 70%, var(--background) 30%);
-  border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
-  /* Thin floating capsule treatment: small outer lift plus inset bevel. */
+  background: color-mix(in srgb, var(--surface) 58%, var(--background) 42%);
+  border-radius: 8px;
+  border: 2px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  /* No outer shadow: the overlay window is pill-sized, so shadows create a visible composited square. */
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--foreground) 10%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, var(--background) 70%, transparent),
-    0 10px 28px color-mix(in srgb, var(--background) 42%, transparent);
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 8%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--background) 70%, transparent);
   /* `-webkit-app-region: drag` УБРАН: BrowserWindow создаётся с
    * `movable: false`, так что drag всё равно ничего не делает. Но
    * `app-region: drag` на parent блокирует click events для всех
@@ -935,37 +953,48 @@ const exposeStatusText = computed(() => statusText());
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 2px;
   width: 100%;
-  height: 100%;
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  height: 36px;
+  padding: 0 8px;
   transition: opacity 120ms linear;
+  overflow: hidden;
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 32px,
+    #000 calc(100% - 32px),
+    transparent 100%
+  );
 }
 
 .wave-bar {
   display: block;
-  width: 4px;
-  min-height: 3px;
-  background: color-mix(in srgb, var(--foreground) 92%, transparent);
-  border-radius: 2px;
-  opacity: 1;
-  transition: height 30ms linear;
+  width: 5px;
+  min-width: 5px;
+  background: #71717a;
+  border-radius: 8px;
+  opacity: 0.4;
+  transition:
+    height 80ms linear,
+    background 150ms linear,
+    opacity 150ms linear;
 }
 
 .idle-wave .wave-bar,
 .transcribing-wave .wave-bar {
-  background: color-mix(in srgb, var(--foreground) 88%, transparent);
+  background: color-mix(in srgb, var(--foreground) 92%, transparent);
+  opacity: 0.95;
 }
 
 .waiting-wave .wave-bar {
   background: #f5a524;
+  opacity: 0.95;
 }
 
 .error-wave .wave-bar {
   background: #ff453a;
+  opacity: 0.95;
 }
 
 .pill-hover-controls {
@@ -973,15 +1002,13 @@ const exposeStatusText = computed(() => statusText());
   inset: 0;
   z-index: 2;
   display: grid;
-  grid-template-columns: 38px 1fr 38px;
+  grid-template-columns: 34px 1fr 34px;
   align-items: center;
-  gap: 8px;
-  padding: 8px;
+  gap: 4px;
+  padding: 4px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms linear;
-  background: color-mix(in srgb, var(--surface) 78%, transparent);
-  backdrop-filter: blur(10px);
 }
 
 .pill.status-recording:hover .waveform {
@@ -994,22 +1021,21 @@ const exposeStatusText = computed(() => statusText());
 }
 
 .pill-action {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--foreground) 9%, transparent);
-  color: color-mix(in srgb, var(--foreground) 94%, transparent);
+  border: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+  color: color-mix(in srgb, var(--foreground) 96%, transparent);
   font-family: var(--font-sans, -apple-system, sans-serif);
   font-size: 0;
   line-height: 1;
   cursor: default;
   transition:
     background 120ms linear,
-    border-color 120ms linear,
     transform 120ms cubic-bezier(0.2, 0.7, 0.2, 1.2);
 }
 
@@ -1027,9 +1053,7 @@ const exposeStatusText = computed(() => statusText());
 }
 
 .pill-action:hover {
-  background: color-mix(in srgb, var(--foreground) 16%, transparent);
-  border-color: color-mix(in srgb, var(--foreground) 22%, transparent);
-  transform: scale(1.03);
+  background: color-mix(in srgb, var(--foreground) 18%, transparent);
 }
 
 .pill-action:active {
@@ -1050,10 +1074,7 @@ const exposeStatusText = computed(() => statusText());
   font-family: var(--font-sans, -apple-system, sans-serif);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: color-mix(in srgb, var(--foreground) 88%, transparent);
+  color: color-mix(in srgb, var(--foreground) 96%, transparent);
   line-height: 1;
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--foreground) 7%, transparent);
 }
 </style>
