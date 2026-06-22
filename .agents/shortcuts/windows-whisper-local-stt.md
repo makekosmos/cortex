@@ -20,12 +20,21 @@ Unable to find libclang ... set the LIBCLANG_PATH environment variable
   user-configured `whisper-cli.exe` path + user-configured ggml model path.
 - Verify with a small model under `sample/`, for example `ggml-tiny-q5_1.bin`, and a
   generated WAV before claiming the local path works.
+- For faster-whisper regressions, build `kosmos-local-stt.exe` into a separate
+  `CARGO_TARGET_DIR`, then smoke it as a real stdio sidecar with `KOSMOS_DATA_DIR`
+  pointing at the dev data dir and without `KOSMOS_FASTER_WHISPER_DLL_DIRS`,
+  `KOSMOS_FASTER_WHISPER_PYTHON`, or `KOSMOS_LOCAL_STT_DIR`. Send `preload` and
+  `transcribe` requests against a generated WAV; a valid smoke should report
+  `backend=faster_whisper`, `accelerator=gpu` on NVIDIA machines, and a non-empty
+  transcript.
 
 ## Avoid
 
 - Do not make `transcribe-rs` a required dependency of `kepler-backend` unless CI and
   developer Windows machines have `LIBCLANG_PATH` configured.
 - Do not call a deterministic test transcript path a real local-model smoke.
+- Do not rely on `whisper.cpp-cublas/Release` as a hidden source of faster-whisper
+  CUDA DLLs; the managed faster-whisper venv should provide its own runtime DLLs.
 
 ## Promote To Skill When
 
