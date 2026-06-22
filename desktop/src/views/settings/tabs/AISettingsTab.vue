@@ -532,7 +532,7 @@ onMounted(() => {
                   </button>
                   <button
                     v-else
-                    class="model-icon-button"
+                    class="model-icon-button model-icon-button--delete"
                     type="button"
                     aria-label="Удалить модель"
                     :disabled="Boolean(dictationLocalModelsBusy) || hasAnyLocalModelDownload()"
@@ -989,7 +989,8 @@ onMounted(() => {
   background: color-mix(in srgb, currentColor 10%, transparent);
 }
 
-.model-icon-button--download {
+.model-icon-button--download,
+.model-icon-button--delete {
   cursor: default;
 }
 
