@@ -886,10 +886,10 @@ struct WhisperServerProcess {
 impl WhisperServerProcess {
     fn is_running(&self) -> bool {
         lock_child(&self.child)
-            .and_then(|mut child| match child.try_wait() {
-                Ok(None) => Some(true),
-                Ok(Some(_)) => Some(false),
-                Err(_) => Some(false),
+            .map(|mut child| match child.try_wait() {
+                Ok(None) => true,
+                Ok(Some(_)) => false,
+                Err(_) => false,
             })
             .unwrap_or(false)
     }
@@ -1223,45 +1223,7 @@ fn faster_whisper_runtime_dirs() -> Vec<PathBuf> {
             }
         }
     }
-    let venv_dir = local_models::faster_whisper_venv_dir(&data_dir);
-    let venv_dll_dirs = if cfg!(windows) {
-        vec![
-            venv_dir
-                .join("Lib")
-                .join("site-packages")
-                .join("nvidia")
-                .join("cublas")
-                .join("bin"),
-            venv_dir
-                .join("Lib")
-                .join("site-packages")
-                .join("nvidia")
-                .join("cudnn")
-                .join("bin"),
-            venv_dir
-                .join("Lib")
-                .join("site-packages")
-                .join("ctranslate2"),
-        ]
-    } else {
-        vec![
-            venv_dir
-                .join("lib")
-                .join("python")
-                .join("site-packages")
-                .join("nvidia")
-                .join("cublas")
-                .join("lib"),
-            venv_dir
-                .join("lib")
-                .join("python")
-                .join("site-packages")
-                .join("nvidia")
-                .join("cudnn")
-                .join("lib"),
-        ]
-    };
-    for dir in venv_dll_dirs {
+    for dir in local_models::faster_whisper_cuda_runtime_dirs(&data_dir) {
         if dir.is_dir() && !dll_dirs.iter().any(|existing| existing == &dir) {
             dll_dirs.push(dir);
         }
@@ -1283,6 +1245,12 @@ fn apply_faster_whisper_environment_to_tokio(command: &mut TokioCommand) {
     if let Ok(joined) = env::join_paths(paths) {
         command.env("PATH", joined);
     }
+}
+
+fn faster_whisper_cuda_runtime_available() -> bool {
+    static CUDA_RUNTIME_AVAILABLE: OnceLock<bool> = OnceLock::new();
+    *CUDA_RUNTIME_AVAILABLE
+        .get_or_init(|| local_models::faster_whisper_cuda_runtime_available(&config::data_dir()))
 }
 
 fn faster_whisper_model_arg(req: &OwnedLocalRequest) -> Result<String, LocalError> {
@@ -1322,6 +1290,14 @@ fn temp_python_script_path() -> Result<PathBuf, LocalError> {
     Ok(env::temp_dir().join(format!("kosmos-faster-whisper-worker-{stamp}.py")))
 }
 
+fn faster_whisper_runtime_args(accelerator: &LocalSttAccelerator) -> (&'static str, &'static str) {
+    match accelerator {
+        LocalSttAccelerator::Gpu => ("cuda", "float16"),
+        LocalSttAccelerator::Auto if faster_whisper_cuda_runtime_available() => ("cuda", "float16"),
+        LocalSttAccelerator::Cpu | LocalSttAccelerator::Auto => ("cpu", "int8"),
+    }
+}
+
 fn run_faster_whisper(
     req: OwnedLocalRequest,
     cancel_flag: Option<Arc<AtomicBool>>,
@@ -1330,15 +1306,7 @@ fn run_faster_whisper(
     let (wav_path, out_base) = temp_audio_paths()?;
     fs::write(&wav_path, &req.wav_bytes).map_err(|e| LocalError::TempAudio(e.to_string()))?;
 
-    let device = match req.accelerator {
-        LocalSttAccelerator::Cpu => "cpu",
-        LocalSttAccelerator::Gpu => "cuda",
-        LocalSttAccelerator::Auto => "auto",
-    };
-    let compute_type = match req.accelerator {
-        LocalSttAccelerator::Cpu => "int8",
-        _ => "float16",
-    };
+    let (device, compute_type) = faster_whisper_runtime_args(&req.accelerator);
     let beam_size = match req.profile {
         LocalSttProfile::Fast => "1",
         LocalSttProfile::Accurate => "5",
@@ -1406,22 +1374,12 @@ try:
     trace_event("load_start", model_path=model_path, device=device, compute_type=compute_type, download_root=download_root)
     model = WhisperModel(model_path, device=device, compute_type=compute_type, download_root=download_root)
     trace_event("load_done")
-    duration_seconds = 0.0
-    try:
-        import wave
-        with wave.open(wav_path, "rb") as wav:
-            framerate = wav.getframerate() or 16000
-            duration_seconds = wav.getnframes() / float(framerate)
-    except Exception:
-        duration_seconds = 0.0
-    use_vad = duration_seconds >= 8.0
     kwargs = {
         "beam_size": int(beam_size),
         "condition_on_previous_text": False,
-        "vad_filter": use_vad,
+        "vad_filter": True,
+        "vad_parameters": {"min_silence_duration_ms": 500},
     }
-    if use_vad:
-        kwargs["vad_parameters"] = {"min_silence_duration_ms": 500}
     if language:
         kwargs["language"] = language
     if prompt:
@@ -1606,15 +1564,7 @@ impl FasterWhisperWorker {
         let start = Instant::now();
         let key = faster_whisper_worker_key(model)?;
         let model_arg = key.model_arg.clone();
-        let device = match model.accelerator {
-            LocalSttAccelerator::Cpu => "cpu",
-            LocalSttAccelerator::Gpu => "cuda",
-            LocalSttAccelerator::Auto => "auto",
-        };
-        let compute_type = match model.accelerator {
-            LocalSttAccelerator::Cpu => "int8",
-            _ => "float16",
-        };
+        let (device, compute_type) = faster_whisper_runtime_args(&model.accelerator);
         let beam_size = match model.profile {
             LocalSttProfile::Fast => "1",
             LocalSttProfile::Accurate => "5",
@@ -1871,21 +1821,12 @@ for raw_line in sys.stdin:
     try:
         request = json.loads(raw_line)
         request_id = request.get("id")
-        duration_seconds = 0.0
-        try:
-            with wave.open(request["wav_path"], "rb") as wav:
-                framerate = wav.getframerate() or 16000
-                duration_seconds = wav.getnframes() / float(framerate)
-        except Exception:
-            duration_seconds = 0.0
-        use_vad = duration_seconds >= 8.0
         kwargs = {
             "beam_size": beam_size,
             "condition_on_previous_text": False,
-            "vad_filter": use_vad,
+            "vad_filter": True,
+            "vad_parameters": {"min_silence_duration_ms": 500},
         }
-        if use_vad:
-            kwargs["vad_parameters"] = {"min_silence_duration_ms": 500}
         language = request.get("language") or ""
         prompt = request.get("prompt") or ""
         if language:
@@ -1896,7 +1837,7 @@ for raw_line in sys.stdin:
         segments, _info = model.transcribe(request["wav_path"], **kwargs)
         text = " ".join(segment.text.strip() for segment in segments).strip()
         duration_ms = int((time.time() - transcribe_started) * 1000)
-        print(json.dumps({"id": request_id, "ok": True, "text": text, "duration_ms": duration_ms, "vad_filter": use_vad}), flush=True)
+        print(json.dumps({"id": request_id, "ok": True, "text": text, "duration_ms": duration_ms, "vad_filter": True}), flush=True)
     except Exception as exc:
         print(json.dumps({"id": request.get("id") if "request" in locals() else None, "ok": False, "error": str(exc)}), flush=True)
 "#;
@@ -2172,6 +2113,27 @@ mod tests {
         assert_eq!(
             faster_whisper_worker_key(&preload_model).expect("preload key"),
             faster_whisper_worker_key(&transcribe_model).expect("transcribe key")
+        );
+    }
+
+    #[test]
+    fn faster_whisper_runtime_args_resolve_safe_defaults() {
+        assert_eq!(
+            faster_whisper_runtime_args(&LocalSttAccelerator::Cpu),
+            ("cpu", "int8")
+        );
+        assert_eq!(
+            faster_whisper_runtime_args(&LocalSttAccelerator::Gpu),
+            ("cuda", "float16")
+        );
+        let expected_auto = if faster_whisper_cuda_runtime_available() {
+            ("cuda", "float16")
+        } else {
+            ("cpu", "int8")
+        };
+        assert_eq!(
+            faster_whisper_runtime_args(&LocalSttAccelerator::Auto),
+            expected_auto
         );
     }
 

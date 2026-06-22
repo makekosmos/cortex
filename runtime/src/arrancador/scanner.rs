@@ -459,7 +459,7 @@ pub fn scan_all(steam_library_override: Option<&Path>) -> Vec<DiscoveredGame> {
             deduped.push(g);
         }
     }
-    deduped.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    deduped.sort_by_key(|a| a.name.to_lowercase());
     deduped
 }
 

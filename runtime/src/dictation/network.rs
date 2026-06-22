@@ -117,8 +117,8 @@ pub fn validate_custom_doh_url(url: &str) -> Result<ParsedCustomDoh, String> {
 
 /// Билдит reqwest клиент с timeout 60s + опциональный DoH resolver
 /// + опциональный HTTP/SOCKS proxy. Proxy применяется ПОВЕРХ DNS-настройки:
-/// сначала резолвится host (через выбранный resolver), потом подключение
-/// идёт через proxy (если задан). Это покрывает три сценария РФ-обхода:
+///   сначала резолвится host (через выбранный resolver), потом подключение
+///   идёт через proxy (если задан). Это покрывает три сценария РФ-обхода:
 ///   1. DoH only — DNS poisoning (Cloudflare 1.1.1.1).
 ///   2. Proxy only — IP/SNI block без DNS issue.
 ///   3. DoH + Proxy — двойная защита, если оба слоя проблемные.
@@ -470,10 +470,7 @@ mod tests {
             },
             None,
         );
-        match r {
-            Err(NetworkError::CustomDohInvalid(_)) => {}
-            other => panic!("expected CustomDohInvalid, got {other:?}"),
-        }
+        assert!(matches!(r, Err(NetworkError::CustomDohInvalid(_))));
     }
 
     #[test]
@@ -660,8 +657,6 @@ mod tests {
         // Конкретно проверяем https://dns.malw.link/dns-query — юзер просил.
         let (ok, msg) = try_doh("malw.link", "https://dns.malw.link/dns-query").await;
         println!("\n=== malw.link DoH ===\n  {msg}\n=====================\n");
-        if !ok {
-            panic!("malw.link DoH не пропустил к Groq: {msg}");
-        }
+        assert!(ok, "malw.link DoH не пропустил к Groq: {msg}");
     }
 }

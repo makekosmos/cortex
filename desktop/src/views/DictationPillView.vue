@@ -54,6 +54,9 @@ let levelHandle: ReturnType<typeof setInterval> | null = null;
 let unsubscribeCommand: (() => void) | null = null;
 let recordStartMs = 0;
 let streamShutdownTimer: ReturnType<typeof setTimeout> | null = null;
+let startInFlight = false;
+let stopAfterStart = false;
+let captureGeneration = 0;
 
 const TARGET_SAMPLE_RATE = 16000;
 /** После этого окна тишины stream закрывается полностью (track.stop),
@@ -441,7 +444,9 @@ function closeStream(): void {
 }
 
 async function startCapture(): Promise<void> {
-  if (status.value === "recording") return;
+  if (status.value === "recording" || startInFlight) return;
+  const generation = ++captureGeneration;
+  startInFlight = true;
   pcmChunks = [];
   errorText.value = "";
   elapsedSec.value = 0;
@@ -450,6 +455,7 @@ async function startCapture(): Promise<void> {
   try {
     stream = await ensureStream();
   } catch (e) {
+    startInFlight = false;
     status.value = "error";
     errorText.value = "Нет доступа к микрофону";
     console.error("[dictation-pill] getUserMedia failed:", e);
@@ -459,6 +465,11 @@ async function startCapture(): Promise<void> {
       /* ignore */
     }
     void window.kepler.dictation.pillFinished();
+    return;
+  }
+  startInFlight = false;
+  if (generation !== captureGeneration) {
+    scheduleStreamShutdown();
     return;
   }
 
@@ -515,6 +526,10 @@ async function startCapture(): Promise<void> {
     }
     levelBars.value = bars;
   }, 80);
+  if (stopAfterStart) {
+    stopAfterStart = false;
+    void stopAndSubmit();
+  }
 }
 
 /** Останавливает per-session graph'а (processor / analyser / source / timers),
@@ -609,7 +624,10 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 async function stopAndSubmit(): Promise<void> {
-  if (status.value !== "recording") return;
+  if (status.value !== "recording") {
+    if (startInFlight) stopAfterStart = true;
+    return;
+  }
   const sampleRate = audioCtx?.sampleRate ?? TARGET_SAMPLE_RATE;
   teardownCapture();
   if (pcmChunks.length === 0) {
@@ -640,6 +658,10 @@ async function stopAndSubmit(): Promise<void> {
       // с error mark. Pending всё ещё на диске — юзер увидит в Settings.
       status.value = "error";
       errorText.value = resp.error ?? "Не удалось распознать";
+      console.warn("[dictation-pill] submit_audio returned error:", {
+        uuid: resp.uuid,
+        error: errorText.value,
+      });
     } else if (resp.queued && resp.uuid) {
       // Первая попытка fail → backend запустил auto-retry в фоне.
       // Поллим очередь со спиннером "Жду сеть…".
@@ -705,6 +727,9 @@ async function waitForQueueResolve(uuid: string, timeoutMs: number): Promise<voi
 }
 
 async function cancelCapture(): Promise<void> {
+  captureGeneration++;
+  startInFlight = false;
+  stopAfterStart = false;
   teardownCapture();
   pcmChunks = [];
   status.value = "idle";

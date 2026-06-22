@@ -210,7 +210,7 @@ fn scan_dir(root: &Path, by_id: &mut HashMap<String, App>) {
 /// 1) `link_info().local_base_path()` (most reliable)
 /// 2) `link_info().local_base_path_unicode()`
 /// 3) `working_dir()` + `relative_path()` (RELATIVE_PATH stringdata)
-/// Затем — env var expansion.
+///    Затем — env var expansion.
 fn parse_lnk(path: &Path) -> std::result::Result<Option<String>, String> {
     let shell_link = lnk::ShellLink::open(path).map_err(|e| format!("{e:?}"))?;
 

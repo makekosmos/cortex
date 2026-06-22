@@ -174,10 +174,10 @@ mod tests {
     #[test]
     fn classify_no_api_key_is_fatal() {
         let err = SubmitError::NoApiKey;
-        match classify(&err) {
-            FailureKind::Fatal { user_msg } => assert!(user_msg.contains("API key")),
-            _ => panic!("expected Fatal for NoApiKey"),
-        }
+        assert!(matches!(
+            classify(&err),
+            FailureKind::Fatal { user_msg } if user_msg.contains("API key")
+        ));
     }
 
     #[test]
@@ -221,10 +221,10 @@ mod tests {
             status: 401,
             body: "unauthorized".into(),
         });
-        match classify(&err) {
-            FailureKind::Fatal { user_msg } => assert!(user_msg.contains("API key")),
-            _ => panic!("401 must be Fatal"),
-        }
+        assert!(matches!(
+            classify(&err),
+            FailureKind::Fatal { user_msg } if user_msg.contains("API key")
+        ));
     }
 
     #[test]
@@ -233,10 +233,10 @@ mod tests {
             status: 413,
             body: "too large".into(),
         });
-        match classify(&err) {
-            FailureKind::Fatal { user_msg } => assert!(user_msg.contains("длинное")),
-            _ => panic!("413 must be Fatal"),
-        }
+        assert!(matches!(
+            classify(&err),
+            FailureKind::Fatal { user_msg } if user_msg.contains("длинное")
+        ));
     }
 
     #[test]
@@ -245,10 +245,10 @@ mod tests {
             status: 400,
             body: "bad request".into(),
         });
-        match classify(&err) {
-            FailureKind::Fatal { user_msg } => assert!(user_msg.contains("отклонил")),
-            _ => panic!("400 must be Fatal"),
-        }
+        assert!(matches!(
+            classify(&err),
+            FailureKind::Fatal { user_msg } if user_msg.contains("отклонил")
+        ));
     }
 
     #[test]
@@ -259,13 +259,12 @@ mod tests {
             status: 403,
             body: "forbidden".into(),
         });
-        match classify(&err) {
-            FailureKind::Fatal { user_msg } => {
-                assert!(user_msg.contains("403"));
-                assert!(user_msg.contains("DoH") || user_msg.contains("прокси"));
-            }
-            _ => panic!("403 must be Fatal"),
-        }
+        assert!(matches!(
+            classify(&err),
+            FailureKind::Fatal { user_msg }
+                if user_msg.contains("403")
+                    && (user_msg.contains("DoH") || user_msg.contains("прокси"))
+        ));
     }
 
     #[test]
@@ -275,10 +274,10 @@ mod tests {
             status: 418,
             body: "im a teapot".into(),
         });
-        match classify(&err) {
-            FailureKind::Fatal { user_msg } => assert!(user_msg.contains("418")),
-            _ => panic!("418 must be Fatal"),
-        }
+        assert!(matches!(
+            classify(&err),
+            FailureKind::Fatal { user_msg } if user_msg.contains("418")
+        ));
     }
 
     #[test]
@@ -294,10 +293,10 @@ mod tests {
     #[test]
     fn classify_local_missing_model_path_is_fatal() {
         let err = SubmitError::Local(LocalError::MissingModelPath);
-        match classify(&err) {
-            FailureKind::Fatal { user_msg } => assert!(user_msg.contains("путь")),
-            _ => panic!("local missing path must be fatal"),
-        }
+        assert!(matches!(
+            classify(&err),
+            FailureKind::Fatal { user_msg } if user_msg.contains("путь")
+        ));
     }
 
     #[tokio::test]

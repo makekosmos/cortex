@@ -323,11 +323,9 @@ mod tests {
         };
         save_to(&path, &cfg).expect("save");
         let loaded = load_from(&path);
-        match loaded.network_profile {
-            NetworkProfile::CustomDoh { url } => {
-                assert!(url.contains("comss"));
-            }
-            other => panic!("expected CustomDoh, got {other:?}"),
-        }
+        assert!(matches!(
+            loaded.network_profile,
+            NetworkProfile::CustomDoh { ref url } if url.contains("comss")
+        ));
     }
 }

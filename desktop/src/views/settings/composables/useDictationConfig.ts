@@ -370,13 +370,6 @@ export function createDictationConfig() {
     },
   });
 
-  const dictationLocalCommandPath = computed<string>({
-    get: () => dictationConfig.value.localCommandPath ?? "",
-    set: (value) => {
-      dictationConfig.value.localCommandPath = value;
-    },
-  });
-
   const dictationLocalModelId = computed<string>({
     get: () => dictationConfig.value.localModelId,
     set: (value) => {
@@ -384,12 +377,7 @@ export function createDictationConfig() {
     },
   });
 
-  const dictationLocalEngine = computed<string>({
-    get: () => dictationConfig.value.localEngine,
-    set: (value) => {
-      dictationConfig.value.localEngine = value;
-    },
-  });
+  const dictationLocalEngine = computed(() => dictationConfig.value.localEngine);
 
   const dictationVoiceModelOptions = computed<DictationVoiceModelOption[]>(() => {
     const options: DictationVoiceModelOption[] = [];
@@ -404,8 +392,13 @@ export function createDictationConfig() {
       }
     }
 
+    const engine = dictationConfig.value.localEngine.trim().toLowerCase();
+    const needsCommand = engine !== "faster-whisper" && engine !== "faster_whisper";
+    const localRuntimeReady =
+      !needsCommand || Boolean(dictationLocalModels.value?.commandInstalled);
     for (const model of dictationLocalModels.value?.models ?? []) {
       if (!model.downloaded && !model.selected) continue;
+      if (!localRuntimeReady && !model.selected) continue;
       options.push({
         value: `local:${model.id}`,
         label: `OpenAI · ${model.name}`,
@@ -439,20 +432,13 @@ export function createDictationConfig() {
 
   const dictationLocalStatus = computed(() => {
     const path = dictationLocalModelPath.value.trim();
-    const commandPath = dictationLocalCommandPath.value.trim();
-    const normalizedEngine = dictationLocalEngine.value.trim().toLowerCase();
-    const needsWhisperCppCommand =
-      normalizedEngine !== "faster-whisper" && normalizedEngine !== "faster_whisper";
     if (dictationConfig.value.provider !== "local") {
-      return path && (!needsWhisperCppCommand || commandPath)
-        ? `Локальная модель подготовлена: ${dictationLocalEngine.value} · ${dictationLocalModelId.value}`
+      return path
+        ? `Локальная модель подготовлена: ${dictationLocalModelId.value}`
         : "Локальный режим ещё не настроен.";
     }
-    if (!path) return "Не задан путь к локальной модели.";
-    if (needsWhisperCppCommand && !commandPath) {
-      return "Не задан путь к whisper.cpp executable.";
-    }
-    return `${dictationLocalEngine.value} · ${dictationLocalModelId.value} · путь задан`;
+    if (!path) return "Локальная модель не выбрана.";
+    return `${dictationLocalModelId.value} · готово`;
   });
 
   async function loadDictationLocalModels() {
@@ -600,7 +586,6 @@ export function createDictationConfig() {
       const resp = (await window.kepler.ark.request("dictation.download_local_model", {
         modelId,
         select: false,
-        installTool: true,
       })) as {
         config?: Partial<DictationConfigData> | null;
         localModels?: DictationLocalModelsSnapshot;

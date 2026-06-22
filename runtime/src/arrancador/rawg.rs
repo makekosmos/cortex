@@ -495,10 +495,7 @@ mod tests {
         let err = search_with_base("x", "bad-key", &server.base_url())
             .await
             .unwrap_err();
-        match err {
-            RawgError::Status(code, _) => assert_eq!(code, 401),
-            other => panic!("expected Status, got {other:?}"),
-        }
+        assert!(matches!(err, RawgError::Status(401, _)));
     }
 
     #[tokio::test]
