@@ -157,9 +157,10 @@ async function loadDictationConfig(): Promise<void> {
     const cfg = (await window.kepler.ark.request("dictation.get_config", {})) as {
       config?: { hotkey?: string | null };
     };
-    dictationHotkey.value = cfg.config?.hotkey?.trim() || DEFAULT_DICTATION_HOTKEY;
+    const hotkey = cfg.config?.hotkey?.trim();
+    if (hotkey) dictationHotkey.value = hotkey;
   } catch {
-    dictationHotkey.value = DEFAULT_DICTATION_HOTKEY;
+    /* keep last known backend value */
   }
 }
 
@@ -450,6 +451,7 @@ async function startCapture(): Promise<void> {
   pcmChunks = [];
   errorText.value = "";
   elapsedSec.value = 0;
+  await loadDictationConfig();
 
   let stream: MediaStream;
   try {
