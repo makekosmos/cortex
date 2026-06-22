@@ -820,7 +820,7 @@ const exposeStatusText = computed(() => statusText());
 }
 
 .preview-list {
-  width: min(720px, 100%);
+  width: min(760px, 100%);
   display: grid;
   gap: 14px;
 }
@@ -840,7 +840,7 @@ const exposeStatusText = computed(() => statusText());
 }
 
 .preview-frame {
-  min-height: 72px;
+  min-height: 92px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -862,8 +862,8 @@ const exposeStatusText = computed(() => statusText());
 }
 
 .preview-frame .pill {
-  width: 120px;
-  height: 36px;
+  width: 248px;
+  height: 56px;
 }
 
 .stage {
@@ -893,15 +893,18 @@ const exposeStatusText = computed(() => statusText());
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2px;
+  padding: 6px 8px;
   /* Глянцевый чёрный — тонкий светлый highlight сверху, тёмный низ. */
-  background: color-mix(in srgb, var(--surface) 58%, var(--background) 42%);
-  border-radius: 8px;
-  border: 2px solid color-mix(in srgb, var(--foreground) 18%, transparent);
-  /* Без drop-shadow по запросу — оставляем только тонкий inset bevel внутри. */
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--foreground) 8%, transparent), transparent 42%),
+    color-mix(in srgb, var(--surface) 70%, var(--background) 30%);
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  /* Thin floating capsule treatment: small outer lift plus inset bevel. */
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--foreground) 8%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, var(--background) 70%, transparent);
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 10%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--background) 70%, transparent),
+    0 10px 28px color-mix(in srgb, var(--background) 42%, transparent);
   /* `-webkit-app-region: drag` УБРАН: BrowserWindow создаётся с
    * `movable: false`, так что drag всё равно ничего не делает. Но
    * `app-region: drag` на parent блокирует click events для всех
@@ -932,17 +935,21 @@ const exposeStatusText = computed(() => statusText());
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   width: 100%;
-  height: 30px;
+  height: 100%;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
   transition: opacity 120ms linear;
 }
 
 .wave-bar {
   display: block;
-  width: 2px;
+  width: 4px;
   min-height: 3px;
-  background: #fff;
+  background: color-mix(in srgb, var(--foreground) 92%, transparent);
   border-radius: 2px;
   opacity: 1;
   transition: height 30ms linear;
@@ -950,7 +957,7 @@ const exposeStatusText = computed(() => statusText());
 
 .idle-wave .wave-bar,
 .transcribing-wave .wave-bar {
-  background: #fff;
+  background: color-mix(in srgb, var(--foreground) 88%, transparent);
 }
 
 .waiting-wave .wave-bar {
@@ -966,13 +973,15 @@ const exposeStatusText = computed(() => statusText());
   inset: 0;
   z-index: 2;
   display: grid;
-  grid-template-columns: 30px 1fr 30px;
+  grid-template-columns: 38px 1fr 38px;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
+  gap: 8px;
+  padding: 8px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms linear;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter: blur(10px);
 }
 
 .pill.status-recording:hover .waveform {
@@ -985,23 +994,46 @@ const exposeStatusText = computed(() => statusText());
 }
 
 .pill-action {
-  width: 30px;
-  height: 30px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
   padding: 0;
-  border: 0;
-  border-radius: 2px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+  border-radius: 10px;
   background: color-mix(in srgb, var(--foreground) 9%, transparent);
-  color: #fff;
+  color: color-mix(in srgb, var(--foreground) 94%, transparent);
   font-family: var(--font-sans, -apple-system, sans-serif);
-  font-size: 14px;
+  font-size: 0;
   line-height: 1;
   cursor: default;
+  transition:
+    background 120ms linear,
+    border-color 120ms linear,
+    transform 120ms cubic-bezier(0.2, 0.7, 0.2, 1.2);
+}
+
+.pill-action::before {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.pill-action:first-child::before {
+  content: "×";
+}
+
+.pill-action:last-child::before {
+  content: "✓";
 }
 
 .pill-action:hover {
   background: color-mix(in srgb, var(--foreground) 16%, transparent);
+  border-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+  transform: scale(1.03);
+}
+
+.pill-action:active {
+  transform: scale(0.98);
 }
 
 .pill-action:first-child {
@@ -1018,7 +1050,10 @@ const exposeStatusText = computed(() => statusText());
   font-family: var(--font-sans, -apple-system, sans-serif);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: #fff;
+  color: color-mix(in srgb, var(--foreground) 88%, transparent);
   line-height: 1;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
 }
 </style>
