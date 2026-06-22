@@ -113,6 +113,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::panic, reason = "test must trigger the panic hook")]
     fn format_panic_log_includes_message_and_location() {
         // Реалистичный способ получить PanicHookInfo для теста — catch_unwind
         // c custom hook'ом, который перехватит payload.

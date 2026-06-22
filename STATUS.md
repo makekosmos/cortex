@@ -2,12 +2,33 @@
 
 | Компонент                  | Версия        |
 | -------------------------- | ------------- |
-| Kosmos Desktop (win / mac) | 0.6.0 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.1 / 0.5.1 |
 | Eden                       | 0.3.0         |
 | Delphi                     | 0.1.8         |
 | Horologion                 | 0.1.4         |
 | Arrancador                 | 0.1.4         |
 | Akasha                     | 0.1.2         |
+
+## 2026-06-22 — Faster-whisper production hardening (Kosmos Desktop win 0.6.1)
+
+Patch-релиз закрывает production-проблемы локальной диктовки на Windows после перехода на faster-whisper:
+
+- **Backend policy**: Windows больше не предлагает ручной выбор backend'а. Локальная диктовка использует
+  faster-whisper, а backend ставится только при подготовке модели, чтобы не держать лишний runtime без
+  скачанных локальных моделей.
+- **Managed faster-whisper runtime**: подготовка модели теперь проверяет не только marker-файл, но и реальный
+  managed Python/CUDA runtime. На NVIDIA-машинах venv доустанавливает `nvidia-cublas-cu12` и
+  `nvidia-cudnn-cu12==9.*`; stale-конфиг без модели или без runtime очищается и больше не пытается запускать
+  несуществующий worker.
+- **Anti-hallucination defaults**: faster-whisper всегда запускается с `condition_on_previous_text=false` и
+  `vad_filter=true` (`min_silence_duration_ms=500`), чтобы тишина реже превращалась в текст.
+- **Diagnostics**: ошибки `provider disabled` / `local model is not ready` теперь логируются с `uuid`,
+  `provider`, `local_engine` и `local_model`; pill renderer тоже пишет штатный `state=error`, чтобы UI-ошибка
+  больше не была “тихой”.
+
+Checks: `cargo test --manifest-path platform/runtime/Cargo.toml dictation::local`,
+`dictation::local_models`, `dictation::host`, `cargo clippy --manifest-path platform/runtime/Cargo.toml
+--all-targets -- -D warnings`, `bun run --cwd platform/desktop typecheck`.
 
 ## 2026-06-22 — Dictation local STT + recording pill polish (Kosmos Desktop win 0.6.0)
 

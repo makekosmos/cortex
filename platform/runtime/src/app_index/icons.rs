@@ -218,9 +218,8 @@ mod win32 {
         // .lnk → resolve target, prefer icon_location если выставлен.
         let (icon_source, icon_index) = resolve_icon_source(exec_path);
 
-        let hicon = unsafe { extract_hicon(&icon_source, icon_index) }.ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::Other, "ExtractIconExW: no icon")
-        })?;
+        let hicon = unsafe { extract_hicon(&icon_source, icon_index) }
+            .ok_or_else(|| std::io::Error::other("ExtractIconExW: no icon"))?;
         let res = unsafe { hicon_to_png(hicon, out_path) };
         unsafe {
             let _ = DestroyIcon(hicon);
@@ -255,9 +254,8 @@ mod win32 {
 
     /// Helper: extract HICON → PNG, единым шагом с cleanup.
     fn try_extract_and_save(source: &str, icon_index: i32, out_path: &Path) -> std::io::Result<()> {
-        let hicon = unsafe { extract_hicon(source, icon_index) }.ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::Other, "ExtractIconExW: no icon")
-        })?;
+        let hicon = unsafe { extract_hicon(source, icon_index) }
+            .ok_or_else(|| std::io::Error::other("ExtractIconExW: no icon"))?;
 
         // Гарантируем DestroyIcon на любом exit path.
         let res = unsafe { hicon_to_png(hicon, out_path) };
@@ -347,9 +345,8 @@ mod win32 {
 
     unsafe fn hicon_to_png(hicon: HICON, out_path: &Path) -> std::io::Result<()> {
         let mut info = ICONINFO::default();
-        GetIconInfo(hicon, &mut info as *mut _).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("GetIconInfo: {e}"))
-        })?;
+        GetIconInfo(hicon, &mut info as *mut _)
+            .map_err(|e| std::io::Error::other(format!("GetIconInfo: {e}")))?;
 
         // Guard для GDI bitmap handles.
         struct BitmapGuards {
@@ -375,8 +372,7 @@ mod win32 {
 
         if info.hbmColor.is_invalid() {
             // Monochrome icon — пропускаем (редко, fallback caller'а).
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            return Err(std::io::Error::other(
                 "icon has no color bitmap (monochrome)",
             ));
         }
@@ -389,35 +385,31 @@ mod win32 {
             Some(&mut bm as *mut _ as *mut _),
         );
         if got == 0 {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "GetObjectW(BITMAP) failed",
-            ));
+            return Err(std::io::Error::other("GetObjectW(BITMAP) failed"));
         }
 
         let width = bm.bmWidth;
         let height = bm.bmHeight;
         if width <= 0 || height <= 0 {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "bitmap has zero dimensions",
-            ));
+            return Err(std::io::Error::other("bitmap has zero dimensions"));
         }
 
         // BITMAPINFOHEADER: top-down 32bpp BI_RGB.
-        let mut bmi = BITMAPINFO::default();
-        bmi.bmiHeader = BITMAPINFOHEADER {
-            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-            biWidth: width,
-            biHeight: -height, // negative => top-down DIB
-            biPlanes: 1,
-            biBitCount: 32,
-            biCompression: BI_RGB.0,
-            biSizeImage: 0,
-            biXPelsPerMeter: 0,
-            biYPelsPerMeter: 0,
-            biClrUsed: 0,
-            biClrImportant: 0,
+        let mut bmi = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: width,
+                biHeight: -height, // negative => top-down DIB
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB.0,
+                biSizeImage: 0,
+                biXPelsPerMeter: 0,
+                biYPelsPerMeter: 0,
+                biClrUsed: 0,
+                biClrImportant: 0,
+            },
+            ..Default::default()
         };
 
         let pixel_count = (width as usize) * (height as usize);
@@ -426,10 +418,7 @@ mod win32 {
         // ScreenDC — компatible с экраном, для GetDIBits достаточно.
         let hdc = GetDC(None);
         if hdc.is_invalid() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "GetDC failed",
-            ));
+            return Err(std::io::Error::other("GetDC failed"));
         }
 
         let lines = GetDIBits(
@@ -445,10 +434,7 @@ mod win32 {
         ReleaseDC(None, hdc);
 
         if lines == 0 {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "GetDIBits returned 0 lines",
-            ));
+            return Err(std::io::Error::other("GetDIBits returned 0 lines"));
         }
 
         // BGRA → RGBA swap. Если alpha-channel везде 0 (некоторые legacy icons),
@@ -472,15 +458,11 @@ mod win32 {
 
         let image_buf =
             image::ImageBuffer::<image::Rgba<u8>, _>::from_raw(width as u32, height as u32, buf)
-                .ok_or_else(|| {
-                    std::io::Error::new(std::io::ErrorKind::Other, "ImageBuffer::from_raw failed")
-                })?;
+                .ok_or_else(|| std::io::Error::other("ImageBuffer::from_raw failed"))?;
 
         image_buf
             .save_with_format(out_path, image::ImageFormat::Png)
-            .map_err(|e| {
-                std::io::Error::new(std::io::ErrorKind::Other, format!("png save: {e}"))
-            })?;
+            .map_err(|e| std::io::Error::other(format!("png save: {e}")))?;
 
         Ok(())
     }
@@ -501,17 +483,14 @@ mod uwp {
     /// Logo от GetLogo обычно уже PNG (manifest icon scaled assets).
     pub(super) fn extract_logo_to_png(package: &Package, out_path: &Path) -> std::io::Result<()> {
         let map_err = |ctx: &'static str| {
-            move |e: windows::core::Error| {
-                std::io::Error::new(std::io::ErrorKind::Other, format!("{ctx}: {e}"))
-            }
+            move |e: windows::core::Error| std::io::Error::other(format!("{ctx}: {e}"))
         };
 
         // 1) AppListEntry → DisplayInfo → GetLogo(64×64) — даёт scaled asset.
         //    Fallback на package.Logo() если AppListEntries недоступен.
         let stream_ref = entry_logo(package).or_else(|| package_logo(package));
-        let stream_ref = stream_ref.ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::Other, "no logo source on package")
-        })?;
+        let stream_ref =
+            stream_ref.ok_or_else(|| std::io::Error::other("no logo source on package"))?;
 
         let open_op = stream_ref
             .OpenReadAsync()
@@ -520,10 +499,7 @@ mod uwp {
 
         let size = stream.Size().map_err(map_err("Size"))? as u32;
         if size == 0 {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "logo stream empty",
-            ));
+            return Err(std::io::Error::other("logo stream empty"));
         }
 
         let reader = DataReader::CreateDataReader(&stream).map_err(map_err("CreateDataReader"))?;
@@ -532,10 +508,7 @@ mod uwp {
         let load_op = reader.LoadAsync(size).map_err(map_err("LoadAsync"))?;
         let loaded = load_op.get().map_err(map_err("LoadAsync.get"))?;
         if loaded == 0 {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "DataReader loaded 0 bytes",
-            ));
+            return Err(std::io::Error::other("DataReader loaded 0 bytes"));
         }
 
         let mut buf = vec![0u8; loaded as usize];
@@ -556,9 +529,8 @@ mod uwp {
     /// Если нет ни одного непрозрачного пикселя — возвращаем входной buf.
     fn trim_transparent_png(input: &[u8]) -> std::io::Result<Vec<u8>> {
         use image::ImageFormat;
-        let img = image::load_from_memory(input).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("decode png: {e}"))
-        })?;
+        let img = image::load_from_memory(input)
+            .map_err(|e| std::io::Error::other(format!("decode png: {e}")))?;
         let rgba = img.to_rgba8();
         let (w, h) = rgba.dimensions();
         let mut min_x = w;
@@ -596,9 +568,7 @@ mod uwp {
         let dyn_img = image::DynamicImage::ImageRgba8(cropped);
         dyn_img
             .write_to(&mut std::io::Cursor::new(&mut out), ImageFormat::Png)
-            .map_err(|e| {
-                std::io::Error::new(std::io::ErrorKind::Other, format!("encode png: {e}"))
-            })?;
+            .map_err(|e| std::io::Error::other(format!("encode png: {e}")))?;
         Ok(out)
     }
 

@@ -38,6 +38,12 @@ pub struct LocalSttSidecarService {
     state: WarmState,
 }
 
+impl Default for LocalSttSidecarService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LocalSttSidecarService {
     pub fn new() -> Self {
         Self {
@@ -193,7 +199,7 @@ impl LocalSttSidecarService {
             warm: loaded_model.is_some(),
             accelerator: loaded_model
                 .as_ref()
-                .map(|model| effective_accelerator(model))
+                .map(effective_accelerator)
                 .unwrap_or_default(),
             device: loaded_model.as_ref().and_then(selected_device),
             profile: loaded_model
@@ -590,12 +596,7 @@ pub async fn run_stdio_service() -> io::Result<()> {
     drop(tx);
     match writer_thread.join() {
         Ok(result) => result?,
-        Err(_) => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "sidecar writer panicked",
-            ))
-        }
+        Err(_) => return Err(io::Error::other("sidecar writer panicked")),
     }
     Ok(())
 }
@@ -636,8 +637,9 @@ mod tests {
             })
             .await;
 
-        let Some(LocalSttResponse::Status(status)) = response.response else {
-            panic!("expected status response: {response:?}");
+        let LocalSttResponse::Status(status) = response.response.expect("expected status response")
+        else {
+            unreachable!("expected status response");
         };
         assert!(status.warm);
         assert_eq!(status.accelerator, LocalSttAccelerator::Gpu);
@@ -657,8 +659,8 @@ mod tests {
             })
             .await;
 
-        let Some(LocalSttResponse::Ack(ack)) = response.response else {
-            panic!("expected ack response: {response:?}");
+        let LocalSttResponse::Ack(ack) = response.response.expect("expected ack response") else {
+            unreachable!("expected ack response");
         };
         assert!(ack.accepted);
         assert!(!service.status().warm);
@@ -684,8 +686,9 @@ mod tests {
             })
             .await;
 
-        let Some(LocalSttResponse::Status(status)) = response.response else {
-            panic!("expected status response: {response:?}");
+        let LocalSttResponse::Status(status) = response.response.expect("expected status response")
+        else {
+            unreachable!("expected status response");
         };
         assert!(status.warm);
         assert_eq!(status.backend.as_deref(), Some("faster_whisper"));
@@ -743,8 +746,9 @@ mod tests {
             })
             .await;
 
-        let Some(LocalSttResponse::Status(status)) = response.response else {
-            panic!("expected status response: {response:?}");
+        let LocalSttResponse::Status(status) = response.response.expect("expected status response")
+        else {
+            unreachable!("expected status response");
         };
         assert!(!status.warm);
         assert!(status.loaded_model.is_none());

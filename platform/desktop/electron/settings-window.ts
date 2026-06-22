@@ -208,7 +208,16 @@ function safeSizeOfFiles(dir: string, names: string[]): number {
 
 function isPathInside(parent: string, child: string): boolean {
   const rel = path.relative(parent, child);
-  return Boolean(rel) && !rel.startsWith("..") && !path.isAbsolute(rel);
+  return rel === "" || (Boolean(rel) && !rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+function dictationSharedAssetsRoot(): string {
+  const override = process.env.KOSMOS_LOCAL_STT_DIR?.trim();
+  if (override) return override;
+  return path.join(
+    process.env.APPDATA || process.env.XDG_CONFIG_HOME || process.env.HOME || ".",
+    "Kosmos",
+  );
 }
 
 function storageSummaryItem(
@@ -230,6 +239,9 @@ function storageSummaryItem(
 function buildStorageSummary(): StorageSummary {
   const dataDir = keplerDataDir();
   const userDataDir = resolveInstance().userDataDir;
+  const dictationAssetsRoot = dictationSharedAssetsRoot();
+  const dictationModelsPath = path.join(dictationAssetsRoot, "models", "dictation");
+  const dictationToolsPath = path.join(dictationAssetsRoot, "tools", "dictation");
   const dataDirBytes = safeSizeOfPath(dataDir);
   const userDataBytes = safeSizeOfPath(userDataDir);
   const arkBytes = safeSizeOfFiles(dataDir, ["ark.db", "ark.db-wal", "ark.db-shm"]);
@@ -264,13 +276,13 @@ function buildStorageSummary(): StorageSummary {
     storageSummaryItem(
       "dictation-models",
       "Локальные модели диктации",
-      path.join(dataDir, "models", "dictation"),
+      dictationModelsPath,
       "Скачанные Whisper-модели.",
     ),
     storageSummaryItem(
       "dictation-tools",
       "Локальные инструменты диктации",
-      path.join(dataDir, "tools", "dictation"),
+      dictationToolsPath,
       "whisper.cpp и вспомогательные файлы.",
     ),
     storageSummaryItem("extensions", "Установленные расширения", path.join(dataDir, "extensions")),
@@ -283,7 +295,9 @@ function buildStorageSummary(): StorageSummary {
     storageSummaryItem("crashes", "Краши", path.join(dataDir, "crashes")),
   ];
 
-  const knownDataBytes = items.reduce((sum, item) => sum + item.bytes, 0);
+  const knownDataBytes = items
+    .filter((item) => isPathInside(dataDir, item.path))
+    .reduce((sum, item) => sum + item.bytes, 0);
   items.push({
     id: "other-data",
     label: "Прочие данные Kosmos",
@@ -300,9 +314,12 @@ function buildStorageSummary(): StorageSummary {
     description: "Electron userData: кэши, Local Storage, состояние UI.",
   });
 
-  const totalBytes = isPathInside(dataDir, userDataDir)
-    ? dataDirBytes
-    : dataDirBytes + userDataBytes;
+  const totalBytes =
+    dataDirBytes +
+    (isPathInside(dataDir, userDataDir) ? 0 : userDataBytes) +
+    [dictationModelsPath, dictationToolsPath]
+      .filter((p) => !isPathInside(dataDir, p) && !isPathInside(userDataDir, p))
+      .reduce((sum, p) => sum + safeSizeOfPath(p), 0);
 
   return {
     dataDir,

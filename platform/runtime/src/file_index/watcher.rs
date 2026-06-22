@@ -152,6 +152,22 @@ fn scan_options(store: &FileStore) -> super::Result<super::ScanOptions> {
     })
 }
 
+fn indexed_file(path: &Path) -> Option<IndexedFile> {
+    let name = path.file_name()?.to_string_lossy().into_owned();
+    let mtime = path
+        .metadata()
+        .ok()
+        .and_then(|meta| meta.modified().ok())
+        .and_then(|mtime| mtime.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|mtime| mtime.as_secs() as i64)
+        .unwrap_or_default();
+    Some(IndexedFile {
+        path: path.to_string_lossy().into_owned(),
+        name,
+        mtime,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,20 +207,4 @@ mod tests {
         assert!(!watcher_enabled_from(Some("0")));
         assert!(watcher_enabled_from(Some("1")));
     }
-}
-
-fn indexed_file(path: &Path) -> Option<IndexedFile> {
-    let name = path.file_name()?.to_string_lossy().into_owned();
-    let mtime = path
-        .metadata()
-        .ok()
-        .and_then(|meta| meta.modified().ok())
-        .and_then(|mtime| mtime.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|mtime| mtime.as_secs() as i64)
-        .unwrap_or_default();
-    Some(IndexedFile {
-        path: path.to_string_lossy().into_owned(),
-        name,
-        mtime,
-    })
 }

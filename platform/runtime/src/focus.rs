@@ -82,7 +82,7 @@ pub struct BlockedApp {
     pub icon: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ActiveState {
     pub active: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -93,18 +93,6 @@ pub struct ActiveState {
     pub blocked_app_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocked_apps: Vec<BlockedApp>,
-}
-
-impl Default for ActiveState {
-    fn default() -> Self {
-        Self {
-            active: false,
-            blocklist_id: None,
-            started_at: None,
-            blocked_app_ids: Vec::new(),
-            blocked_apps: Vec::new(),
-        }
-    }
 }
 
 // ---------- Validation ----------

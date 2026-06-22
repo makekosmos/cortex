@@ -215,6 +215,10 @@ impl WsServer {
         })
     }
 
+    #[allow(
+        clippy::result_large_err,
+        reason = "public API returns the local server error enum"
+    )]
     pub fn local_addr(&self) -> Result<SocketAddr, WsServerError> {
         Ok(self.listener.local_addr()?)
     }
@@ -255,6 +259,10 @@ impl WsServer {
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "connection task wires existing shared services"
+)]
 async fn handle_connection(
     stream: tokio::net::TcpStream,
     ark_host: Arc<ArkHost>,
@@ -910,11 +918,7 @@ async fn handle_export_op(
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| converter.default_format().to_string());
-            if !converter
-                .supported_formats()
-                .iter()
-                .any(|f| *f == format.as_str())
-            {
+            if !converter.supported_formats().contains(&format.as_str()) {
                 return LocalResponse::err(format!(
                     "export.run: format '{format}' not supported by '{converter_id}'"
                 ));
@@ -1584,108 +1588,113 @@ mod tests {
         }
     }
 
+    fn accepted_compat(outcome: HelloOutcome) -> Compatibility {
+        let HelloOutcome::Accept(compatibility) = outcome else {
+            assert!(
+                matches!(outcome, HelloOutcome::Accept(_)),
+                "expected accept"
+            );
+            unreachable!();
+        };
+        compatibility
+    }
+
+    fn rejected_code(outcome: HelloOutcome) -> &'static str {
+        let HelloOutcome::Reject { code, .. } = outcome else {
+            assert!(
+                matches!(outcome, HelloOutcome::Reject { .. }),
+                "expected reject"
+            );
+            unreachable!();
+        };
+        code
+    }
+
     #[test]
     fn valid_hello_accepted() {
         let hello = baseline_hello();
         let outcome = validate_hello(&hello, "test-token");
-        match outcome {
-            HelloOutcome::Accept(c) => assert_eq!(c, Compatibility::Exact),
-            HelloOutcome::Reject { code, message } => panic!("rejected: {code} {message}"),
-        }
+        assert_eq!(accepted_compat(outcome), Compatibility::Exact);
     }
 
     #[test]
     fn missing_protocol_version_rejected() {
         let mut hello = baseline_hello();
         hello.protocol_version = None;
-        match validate_hello(&hello, "test-token") {
-            HelloOutcome::Reject { code, .. } => {
-                assert_eq!(code, handshake_errors::MISSING_PROTOCOL_VERSION);
-            }
-            HelloOutcome::Accept(_) => panic!("should reject"),
-        }
+        assert_eq!(
+            rejected_code(validate_hello(&hello, "test-token")),
+            handshake_errors::MISSING_PROTOCOL_VERSION
+        );
     }
 
     #[test]
     fn malformed_protocol_version_rejected() {
         let mut hello = baseline_hello();
         hello.protocol_version = Some("not-a-version".into());
-        match validate_hello(&hello, "test-token") {
-            HelloOutcome::Reject { code, .. } => {
-                assert_eq!(code, handshake_errors::MALFORMED_PROTOCOL_VERSION);
-            }
-            HelloOutcome::Accept(_) => panic!("should reject"),
-        }
+        assert_eq!(
+            rejected_code(validate_hello(&hello, "test-token")),
+            handshake_errors::MALFORMED_PROTOCOL_VERSION
+        );
     }
 
     #[test]
     fn major_mismatch_rejected_as_incompatible() {
         let mut hello = baseline_hello();
         hello.protocol_version = Some("2.0.0".into());
-        match validate_hello(&hello, "test-token") {
-            HelloOutcome::Reject { code, .. } => {
-                assert_eq!(code, handshake_errors::INCOMPATIBLE_PROTOCOL_VERSION);
-            }
-            HelloOutcome::Accept(_) => panic!("MAJOR mismatch must be rejected"),
-        }
+        assert_eq!(
+            rejected_code(validate_hello(&hello, "test-token")),
+            handshake_errors::INCOMPATIBLE_PROTOCOL_VERSION
+        );
     }
 
     #[test]
     fn minor_mismatch_accepted() {
         let mut hello = baseline_hello();
         hello.protocol_version = Some("1.99.0".into());
-        match validate_hello(&hello, "test-token") {
-            HelloOutcome::Accept(c) => assert_eq!(c, Compatibility::MinorMismatch),
-            HelloOutcome::Reject { code, message } => panic!("rejected: {code} {message}"),
-        }
+        assert_eq!(
+            accepted_compat(validate_hello(&hello, "test-token")),
+            Compatibility::MinorMismatch
+        );
     }
 
     #[test]
     fn missing_token_rejected() {
         let mut hello = baseline_hello();
         hello.token = None;
-        match validate_hello(&hello, "test-token") {
-            HelloOutcome::Reject { code, .. } => {
-                assert_eq!(code, handshake_errors::MISSING_TOKEN);
-            }
-            HelloOutcome::Accept(_) => panic!("should reject"),
-        }
+        assert_eq!(
+            rejected_code(validate_hello(&hello, "test-token")),
+            handshake_errors::MISSING_TOKEN
+        );
     }
 
     #[test]
     fn invalid_token_rejected() {
         let mut hello = baseline_hello();
         hello.token = Some("wrong-token".into());
-        match validate_hello(&hello, "test-token") {
-            HelloOutcome::Reject { code, .. } => {
-                assert_eq!(code, handshake_errors::INVALID_TOKEN);
-            }
-            HelloOutcome::Accept(_) => panic!("should reject"),
-        }
+        assert_eq!(
+            rejected_code(validate_hello(&hello, "test-token")),
+            handshake_errors::INVALID_TOKEN
+        );
     }
 
     #[test]
     fn missing_pid_rejected() {
         let mut hello = baseline_hello();
         hello.pid = None;
-        match validate_hello(&hello, "test-token") {
-            HelloOutcome::Reject { code, .. } => {
-                assert_eq!(code, handshake_errors::MISSING_PID);
-            }
-            HelloOutcome::Accept(_) => panic!("should reject"),
-        }
+        assert_eq!(
+            rejected_code(validate_hello(&hello, "test-token")),
+            handshake_errors::MISSING_PID
+        );
     }
 
     #[test]
     fn nonexistent_pid_rejected() {
         let mut hello = baseline_hello();
         hello.pid = Some(0x7FFFFFFF); // impossibly high
-        match validate_hello(&hello, "test-token") {
-            HelloOutcome::Reject { code, .. } => {
-                assert_eq!(code, handshake_errors::INVALID_PID);
-            }
-            HelloOutcome::Accept(_) => panic!("should reject"),
-        }
+        assert_eq!(
+            rejected_code(validate_hello(&hello, "test-token")),
+            handshake_errors::INVALID_PID
+        );
     }
 
     #[test]

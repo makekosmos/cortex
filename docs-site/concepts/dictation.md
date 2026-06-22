@@ -6,7 +6,7 @@
 
 Dictation — голосовой ввод по образцу [Raycast Dictation](https://manual.raycast.com/ai/dictation). Global hotkey → плавающая **pill** (120×36, frameless, alwaysOnTop, `focusable: false`) → запись микрофона через Web Audio API → транскрипция через выбранный provider (**Groq Cloud** или локальный **Kosmos Local STT** sidecar) → **auto-paste** транскрипта в активное окно через симуляцию Ctrl+V.
 
-По умолчанию можно работать через Groq. Локальный режим настраивается в Settings → AI: пользователь выбирает модель, жмёт «Скачать», backend кладёт `.bin` в `<dataDir>/dictation/models/` и запускает отдельный `Kosmos Local STT` sidecar без ручного указания путей в обычном workflow.
+По умолчанию можно работать через Groq. Локальный режим настраивается в Settings → AI: пользователь выбирает модель, жмёт «Скачать», backend кладёт assets в shared `<APPDATA>/Kosmos/models|tools/dictation/` (или `KOSMOS_LOCAL_STT_DIR`) и запускает отдельный `Kosmos Local STT` sidecar без ручного указания путей в обычном workflow.
 
 ## Поток
 
@@ -40,7 +40,7 @@ backend split на ≤30s WAV chunks для long-form audio
    ▼
 selected provider:
   • Groq → POST api.groq.com/openai/v1/audio/transcriptions (reqwest + опциональный DoH/proxy)
-  • Local → `Kosmos Local STT` sidecar + downloaded ggml model from <dataDir>/dictation/models/
+  • Local → `Kosmos Local STT` sidecar + downloaded local assets from shared <APPDATA>/Kosmos/models|tools/dictation/
    │
    ▼
 broadcast event dictation_transcript { text, language, durationMs }
@@ -62,11 +62,11 @@ state: Transcribing → Idle  +  pill.pillFinished() → hide window
 ## Компоненты
 
 | Файл                                                         | Что делает                                                                                                                                                                                                                    |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `platform/runtime/src/dictation/host.rs`                     | State machine `Idle → Recording → Transcribing → Idle\|Error`. Dispatch для `dictation.*` operations, provider selection, local model lifecycle/download orchestration. `broadcast::Sender<Value>` для WS events.             |
 | `platform/runtime/src/dictation/groq.rs`                     | Multipart POST к `/openai/v1/audio/transcriptions`. `language="auto"` → пропускаем поле (Whisper auto-detect). Long-form WAV режется на ≤30s chunks и склеивается обратно в один transcript.                                  |
 | `platform/runtime/src/dictation/local.rs`                    | Local STT client: owns IPC to `Kosmos Local STT`, forwards status/load_model/preload/transcribe/cancel/unload and normalizes responses for `host.rs`.                                                                         |
-| `platform/runtime/src/dictation/local_models.rs`             | Каталог локальных моделей, storage path `<dataDir>/dictation/models/`, resumable download, checksum/size metadata и прогресс для Settings → AI.                                                                               |
+| `platform/runtime/src/dictation/local_models.rs`             | Каталог локальных моделей, shared storage path `<APPDATA>/Kosmos/models                                                                                                                                                       | tools/dictation/`или`KOSMOS_LOCAL_STT_DIR`, resumable download, checksum/size metadata и прогресс для Settings → AI. |
 | `platform/runtime/src/dictation/inject.rs`                   | `enigo` Ctrl+V симуляция + `arboard` clipboard save/restore + `windows::Win32 GetForegroundWindow/SetForegroundWindow` для возврата фокуса. Все sleep'ы 80ms.                                                                 |
 | `platform/runtime/src/dictation/config.rs`                   | JSON (`<data_dir>/dictation-config.json`) для не-секретов + `keyring` (Windows Credential Manager target `kosmos-kepler` / user `groq-api-key`) для API ключа.                                                                |
 | `platform/runtime/src/dictation/network.rs`                  | Фабрика `reqwest::Client` с переключаемым DNS resolver'ом (System / Cloudflare DoH / Google DoH / custom DoH URL) через `hickory-resolver`. Scope: только AI HTTP.                                                            |
@@ -185,7 +185,7 @@ Groq/Whisper file-based STT принимает длинные файлы, но l
 Settings → Диктация выбирает provider: `online` (Groq) или `local` (Kosmos Local STT sidecar). Settings → AI управляет конкретными моделями и подготовкой локального runtime.
 
 - **Groq** — online fallback/default для машин без скачанной модели; API key хранится только в Credential Manager / Keychain.
-- **Local STT sidecar** — offline path. Модель скачивается из каталога в `<dataDir>/dictation/models/`; config хранит model id/path metadata, но не требует от пользователя ручного полного пути.
+- **Local STT sidecar** — offline path. Модель скачивается из каталога в shared `<APPDATA>/Kosmos/models|tools/dictation/` или `KOSMOS_LOCAL_STT_DIR`; config хранит model id/path metadata, но не требует от пользователя ручного полного пути.
 - **Storage** — модели лежат в user data dir Kosmos и переживают update/reinstall приложения. При обычном uninstall ОС может оставить data dir; Settings → About показывает storage summary, чтобы пользователь видел, сколько занимают DB/backups/models.
 
 ## Local STT sidecar
@@ -194,10 +194,11 @@ Settings → Диктация выбирает provider: `online` (Groq) или 
 
 - `platform/runtime` владеет dictation state, pending queue, retries, config и injection.
 - `Kosmos Local STT` sidecar владеет native STT engine lifecycle: загрузкой модели, выбором backend/accelerator, preload/transcribe/cancel/unload и teardown после idle.
-- По умолчанию local backend — `whisper.cpp`. Advanced settings могут переключить `localEngine` на `faster-whisper`: host продолжает писать WAV на диск и говорить с sidecar, а sidecar запускает Python `faster_whisper.WhisperModel`. `faster-whisper` не умеет читать `ggml-*.bin` напрямую, поэтому кнопка «Скачать» создаёт managed Python venv в `<dataDir>/tools/dictation/faster-whisper/.venv/`, ставит `faster-whisper`, готовит отдельный CTranslate2/HF cache в `<dataDir>/tools/dictation/faster-whisper/` и сохраняет backend model id (`large-v3-turbo` и т.п.) вместо пути к `.bin`. `KOSMOS_FASTER_WHISPER_PYTHON` остаётся escape hatch для явного Python runtime. Если Python/package/model setup падает, запрос возвращает controlled local STT error, pending WAV не удаляется, и explicit `faster-whisper` выбор не падает обратно на `whisper.cpp`.
+- Local backend не выбирается пользователем: prod policy берёт `faster-whisper` на Windows и `whisper.cpp` на macOS. Backend/tool ставится только в операции «Скачать модель»: Windows создаёт managed Python venv в shared `<APPDATA>/Kosmos/tools/dictation/faster-whisper/.venv/`, ставит `faster-whisper`, готовит отдельный CTranslate2/HF cache рядом и сохраняет backend model id (`large-v3-turbo` и т.п.). `KOSMOS_FASTER_WHISPER_PYTHON` остаётся escape hatch для явного Python runtime. Если setup падает, запрос возвращает controlled local STT error, pending WAV не удаляется, и backend не переключается на другой движок.
 - Managed whisper.cpp по умолчанию ставит CPU build. CUDA build скачивается только при `KOSMOS_DICTATION_ENABLE_CUDA=1`; уже установленный CUDA `whisper-cli.exe` остаётся fallback'ом.
 - Managed faster-whisper ставит только `faster-whisper` и CTranslate2/HF cache. CUDA wheels (`nvidia-cublas-cu12` / `nvidia-cudnn-cu12`) не ставятся автоматически: они раздувают локальные инструменты на гигабайты. Для GPU-экспериментов используйте `KOSMOS_FASTER_WHISPER_DLL_DIRS` / `KOSMOS_FASTER_WHISPER_DLL_DIR` с явным каталогом CUDA DLL.
 - Desktop IPC для `dictation.submit_audio` ограничен 60 секундами. Внутренний Python child у `faster-whisper` имеет отдельный предел 55 секунд (`KOSMOS_FASTER_WHISPER_TIMEOUT_MS`, clamped 5-55s), чтобы зависший backend завершался раньше transport timeout.
+- Tech debt: macOS policy уже выбирает `whisper.cpp`, но managed download flow ждёт packaged macOS `whisper.cpp` tool artifact. До добавления артефакта macOS локальный backend остаётся controlled unsupported, без fallback на другой движок.
 - Sidecar сам запускает idle watcher: по умолчанию он проверяет бездействие каждые 10 секунд и выгружает модель после `idle_unload_after_ms`, не дожидаясь следующего `status`/`transcribe` запроса. При переключении dictation provider с `local` на online provider host отправляет sidecar `unload`.
 
 Host общается с sidecar только через локальный IPC с шестью операциями:

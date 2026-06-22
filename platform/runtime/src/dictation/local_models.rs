@@ -1,5 +1,5 @@
 use std::fs::{self, OpenOptions};
-use std::io::{self, Cursor, Write};
+use std::io::{self, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
@@ -231,7 +231,11 @@ fn merge_legacy_dir_into_shared(legacy: &Path, shared: &Path) -> io::Result<bool
                     changed = true;
                 }
             } else if source.is_file() && destination.is_file() {
-                fs::remove_file(&source)?;
+                if same_file_contents(&source, &destination)? {
+                    fs::remove_file(&source)?;
+                } else {
+                    fs::rename(&source, unique_legacy_destination(&destination))?;
+                }
                 changed = true;
             }
             continue;
@@ -244,6 +248,44 @@ fn merge_legacy_dir_into_shared(legacy: &Path, shared: &Path) -> io::Result<bool
         changed = true;
     }
     Ok(changed)
+}
+
+fn same_file_contents(left: &Path, right: &Path) -> io::Result<bool> {
+    if left.metadata()?.len() != right.metadata()?.len() {
+        return Ok(false);
+    }
+
+    let mut left = fs::File::open(left)?;
+    let mut right = fs::File::open(right)?;
+    let mut left_buf = [0; 64 * 1024];
+    let mut right_buf = [0; 64 * 1024];
+    loop {
+        let left_read = left.read(&mut left_buf)?;
+        let right_read = right.read(&mut right_buf)?;
+        if left_read != right_read || left_buf[..left_read] != right_buf[..right_read] {
+            return Ok(false);
+        }
+        if left_read == 0 {
+            return Ok(true);
+        }
+    }
+}
+
+fn unique_legacy_destination(destination: &Path) -> PathBuf {
+    for i in 1.. {
+        let candidate = destination.with_extension(format!(
+            "{}legacy-{i}",
+            destination
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| format!("{ext}."))
+                .unwrap_or_default()
+        ));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    unreachable!()
 }
 
 pub fn migrate_legacy_assets(data_dir: &Path) -> io::Result<bool> {
@@ -314,6 +356,47 @@ pub fn faster_whisper_python_path(data_dir: &Path) -> PathBuf {
     #[cfg(not(windows))]
     {
         faster_whisper_venv_dir(data_dir).join("bin").join("python")
+    }
+}
+
+pub fn faster_whisper_cuda_runtime_dirs(data_dir: &Path) -> Vec<PathBuf> {
+    let venv_dir = faster_whisper_venv_dir(data_dir);
+    if cfg!(windows) {
+        vec![
+            venv_dir
+                .join("Lib")
+                .join("site-packages")
+                .join("nvidia")
+                .join("cublas")
+                .join("bin"),
+            venv_dir
+                .join("Lib")
+                .join("site-packages")
+                .join("nvidia")
+                .join("cudnn")
+                .join("bin"),
+            venv_dir
+                .join("Lib")
+                .join("site-packages")
+                .join("ctranslate2"),
+        ]
+    } else {
+        vec![
+            venv_dir
+                .join("lib")
+                .join("python")
+                .join("site-packages")
+                .join("nvidia")
+                .join("cublas")
+                .join("lib"),
+            venv_dir
+                .join("lib")
+                .join("python")
+                .join("site-packages")
+                .join("nvidia")
+                .join("cudnn")
+                .join("lib"),
+        ]
     }
 }
 
@@ -419,6 +502,29 @@ fn cuda_tools_enabled() -> bool {
 }
 
 #[cfg(windows)]
+fn faster_whisper_should_install_cuda_runtime() -> bool {
+    nvidia_gpu_available()
+}
+
+#[cfg(not(windows))]
+fn faster_whisper_should_install_cuda_runtime() -> bool {
+    false
+}
+
+pub fn faster_whisper_cuda_runtime_available(data_dir: &Path) -> bool {
+    let dll_name = if cfg!(windows) {
+        "cublas64_12.dll"
+    } else {
+        "libcublas.so.12"
+    };
+    let mut dirs = faster_whisper_cuda_runtime_dirs(data_dir);
+    dirs.extend(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    ));
+    dirs.iter().any(|dir| dir.join(dll_name).is_file())
+}
+
+#[cfg(windows)]
 pub fn refresh_managed_command_path(data_dir: &Path, cfg: &mut config::DictationConfig) -> bool {
     let Some(command_path) = command_path(data_dir) else {
         return false;
@@ -473,6 +579,60 @@ fn path_string(path: &Path) -> String {
 
 pub fn faster_whisper_model_is_prepared(data_dir: &Path, model_id: &str) -> bool {
     faster_whisper_model_marker_path(data_dir, model_id).is_file()
+        && faster_whisper_python_path(data_dir).is_file()
+        && (!faster_whisper_should_install_cuda_runtime()
+            || faster_whisper_cuda_runtime_available(data_dir))
+}
+
+fn faster_whisper_markers_dir(data_dir: &Path) -> PathBuf {
+    faster_whisper_dir(data_dir).join(FASTER_WHISPER_MARKERS_DIR)
+}
+
+fn has_prepared_faster_whisper_models(data_dir: &Path) -> bool {
+    if !faster_whisper_python_path(data_dir).is_file() {
+        return false;
+    }
+    if faster_whisper_should_install_cuda_runtime()
+        && !faster_whisper_cuda_runtime_available(data_dir)
+    {
+        return false;
+    }
+    fs::read_dir(faster_whisper_markers_dir(data_dir))
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .any(|entry| entry.path().is_file())
+}
+
+pub fn has_downloaded_model_assets(data_dir: &Path) -> bool {
+    MODEL_CATALOG
+        .iter()
+        .any(|spec| model_path(data_dir, spec).is_file())
+        || has_prepared_faster_whisper_models(data_dir)
+}
+
+pub fn cleanup_unused_backends(data_dir: &Path) -> io::Result<bool> {
+    if has_downloaded_model_assets(data_dir) {
+        return Ok(false);
+    }
+
+    let mut changed = false;
+    for path in [tools_dir(data_dir), faster_whisper_dir(data_dir)] {
+        if path.exists() {
+            fs::remove_dir_all(path)?;
+            changed = true;
+        }
+    }
+    #[cfg(windows)]
+    {
+        let path = cuda_tools_dir(data_dir);
+        if path.exists() {
+            fs::remove_dir_all(path)?;
+            changed = true;
+        }
+    }
+    Ok(changed)
 }
 
 pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSnapshot {
@@ -924,6 +1084,28 @@ async fn ensure_faster_whisper_python(
     )
     .await?;
 
+    if faster_whisper_should_install_cuda_runtime() {
+        progress(DownloadProgress {
+            phase: "cuda",
+            downloaded_bytes: 0,
+            total_bytes: None,
+            percent: None,
+        });
+        let mut cuda = TokioCommand::new(&python);
+        cuda.arg("-m")
+            .arg("pip")
+            .arg("install")
+            .arg("--upgrade")
+            .arg("nvidia-cublas-cu12")
+            .arg("nvidia-cudnn-cu12==9.*");
+        run_faster_whisper_setup_command(
+            cuda,
+            faster_whisper_prepare_timeout(),
+            "install faster-whisper CUDA runtime",
+        )
+        .await?;
+    }
+
     Ok(path_string(&python))
 }
 
@@ -1015,11 +1197,7 @@ except Exception as exc:
     Ok(backend_model.to_owned())
 }
 
-pub fn delete_model(
-    data_dir: &Path,
-    model_id: &str,
-    local_engine: &str,
-) -> Result<PathBuf, LocalModelsError> {
+pub fn delete_model(data_dir: &Path, model_id: &str) -> Result<PathBuf, LocalModelsError> {
     let path = model_path_by_id(data_dir, model_id)?;
     if path.is_file() {
         fs::remove_file(&path)?;
@@ -1028,14 +1206,11 @@ pub fn delete_model(
     if part_path.is_file() {
         fs::remove_file(&part_path)?;
     }
-    if local_engine.eq_ignore_ascii_case("faster-whisper")
-        || local_engine.eq_ignore_ascii_case("faster_whisper")
-    {
-        let marker_path = faster_whisper_model_marker_path(data_dir, model_id);
-        if marker_path.is_file() {
-            fs::remove_file(marker_path)?;
-        }
+    let marker_path = faster_whisper_model_marker_path(data_dir, model_id);
+    if marker_path.is_file() {
+        fs::remove_file(marker_path)?;
     }
+    cleanup_unused_backends(data_dir)?;
     Ok(path)
 }
 
@@ -1125,7 +1300,7 @@ mod tests {
                 when.method(GET).path("/model.bin");
                 then.status(200)
                     .header("content-type", "application/octet-stream")
-                    .header("content-length", &body.len().to_string())
+                    .header("content-length", body.len().to_string())
                     .body(body.as_slice());
             })
             .await;
@@ -1243,5 +1418,70 @@ mod tests {
                 .any(|event| event.downloaded_bytes == 11 && event.percent == Some(100.0)),
             "missing resumed complete progress event: {events:?}"
         );
+    }
+
+    #[test]
+    fn legacy_merge_keeps_conflicting_files() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let legacy = tmp.path().join("legacy");
+        let shared = tmp.path().join("shared");
+        fs::create_dir_all(&legacy).expect("legacy dir");
+        fs::create_dir_all(&shared).expect("shared dir");
+        fs::write(legacy.join("ggml.bin"), b"old!").expect("legacy model");
+        fs::write(shared.join("ggml.bin"), b"new!").expect("shared model");
+
+        assert!(merge_legacy_dir_into_shared(&legacy, &shared).expect("merge"));
+        assert_eq!(fs::read(shared.join("ggml.bin")).expect("shared"), b"new!");
+        assert_eq!(
+            fs::read(shared.join("ggml.bin.legacy-1")).expect("legacy copy"),
+            b"old!"
+        );
+        assert!(!legacy.exists());
+    }
+
+    #[test]
+    fn delete_last_model_removes_unused_backend_dirs() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let small = model_spec("small").expect("small model");
+        let model_path = model_path(tmp.path(), small);
+        fs::create_dir_all(model_path.parent().expect("model parent")).expect("model dir");
+        fs::write(&model_path, b"model").expect("model file");
+        fs::create_dir_all(tools_dir(tmp.path())).expect("tools dir");
+        fs::create_dir_all(faster_whisper_dir(tmp.path())).expect("faster dir");
+
+        let deleted = delete_model(tmp.path(), "small").expect("delete model");
+
+        assert_eq!(deleted, model_path);
+        assert!(!tools_dir(tmp.path()).exists());
+        assert!(!faster_whisper_dir(tmp.path()).exists());
+    }
+
+    #[test]
+    fn faster_whisper_marker_without_python_is_not_prepared() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        write_faster_whisper_model_marker(tmp.path(), "small", "small").expect("marker");
+
+        assert!(!faster_whisper_model_is_prepared(tmp.path(), "small"));
+        assert!(!has_downloaded_model_assets(tmp.path()));
+        assert!(cleanup_unused_backends(tmp.path()).expect("cleanup"));
+        assert!(!faster_whisper_dir(tmp.path()).exists());
+    }
+
+    #[test]
+    fn faster_whisper_cuda_runtime_detects_managed_cublas() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let dll_name = if cfg!(windows) {
+            "cublas64_12.dll"
+        } else {
+            "libcublas.so.12"
+        };
+        let cublas_dir = faster_whisper_cuda_runtime_dirs(tmp.path())
+            .into_iter()
+            .find(|path| path.to_string_lossy().contains("cublas"))
+            .expect("cublas dir");
+        fs::create_dir_all(&cublas_dir).expect("cublas dir");
+        fs::write(cublas_dir.join(dll_name), b"dll").expect("cublas dll");
+
+        assert!(faster_whisper_cuda_runtime_available(tmp.path()));
     }
 }

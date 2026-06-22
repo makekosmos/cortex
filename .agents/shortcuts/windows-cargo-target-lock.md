@@ -2,25 +2,31 @@
 
 ## Trigger
 
-`cargo test` or `cargo fmt` fails on Windows with `failed to open ... target\debug\.cargo-lock` and `Access is denied`.
+`cargo test`, `cargo build`, or `cargo fmt` fails on Windows with `failed to open ... target\debug\.cargo-lock` or `failed to remove file ... target\debug\*.exe` and `Access is denied`.
 
 ## Symptom
 
-The workspace build starts, then Cargo exits before running tests because it cannot open the shared target lock file.
+The workspace build starts, then Cargo exits before running tests because it cannot open the shared target lock file or replace a binary still held by a running dev backend.
 
 ## Do This
 
-Rerun the same Cargo command with escalated permissions so it can touch the workspace target lock:
+First check whether a running dev process owns the workspace target executable:
 
 ```powershell
-cargo test --manifest-path platform/runtime/Cargo.toml --lib dictation::host::tests::submit_audio_groq_transcript_succeeds_with_test_api_key_and_cleans_up -- --exact --nocapture
+Get-Process | Where-Object { $_.ProcessName -like "*kepler*" -or $_.ProcessName -like "*kosmos*" -or $_.ProcessName -like "*stt*" } | Select-Object Id,ProcessName,Path
 ```
 
-If the sandbox blocks it again, rerun outside the sandbox rather than changing the command shape.
+If the user is actively running dev, do not kill it just to test. Use a separate target dir:
+
+```powershell
+$env:CARGO_TARGET_DIR='target/codex-check'; cargo test --manifest-path platform/runtime/Cargo.toml dictation::host
+```
+
+If the process is a stale binary from your own aborted command, stop only that specific PID and rerun.
 
 ## Avoid
 
-Do not treat the lock-file denial as a Rust test failure. It is usually a Windows workspace permission issue, not a code regression.
+Do not treat the lock denial as a Rust test failure. Do not kill the user's live dev app unless they asked you to restart it.
 
 ## Promote To Skill When
 

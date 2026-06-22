@@ -1302,7 +1302,7 @@ fn search_objects_fallback(
         ));
     }
 
-    matches.sort_by(|left, right| right.0.cmp(&left.0));
+    matches.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
     matches.truncate(30);
 
     Ok(matches.into_iter().map(|(_, result)| result).collect())

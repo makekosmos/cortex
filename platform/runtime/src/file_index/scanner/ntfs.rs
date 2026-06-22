@@ -45,12 +45,12 @@ struct IndexedFileWire {
 
 fn scan_via_service(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFile>, String> {
     match scan_via_service_pipe(SYSTEM_SERVICE_PIPE, root, exclude_noisy) {
-        Ok(files) => return Ok(files),
+        Ok(files) => Ok(files),
         Err(primary) => {
             let legacy = scan_via_service_pipe(LEGACY_FOCUS_SERVICE_PIPE, root, exclude_noisy);
-            return legacy.map_err(|legacy_error| {
+            legacy.map_err(|legacy_error| {
                 format!("primary pipe failed: {primary}; legacy pipe failed: {legacy_error}")
-            });
+            })
         }
     }
 }

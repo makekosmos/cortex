@@ -2162,17 +2162,16 @@ mod tests {
         }))
         .expect("iroh config should be accepted by the request schema");
 
-        match request {
-            Request::StartSync {
-                use_iroh,
-                iroh_peer_ticket,
-                ..
-            } => {
-                assert!(use_iroh);
-                assert_eq!(iroh_peer_ticket.as_deref(), Some("endpointsometicketvalue"));
-            }
-            _ => panic!("expected start_sync"),
-        }
+        let Request::StartSync {
+            use_iroh,
+            iroh_peer_ticket,
+            ..
+        } = request
+        else {
+            unreachable!("expected start_sync");
+        };
+        assert!(use_iroh);
+        assert_eq!(iroh_peer_ticket.as_deref(), Some("endpointsometicketvalue"));
     }
 
     #[test]
@@ -2183,12 +2182,10 @@ mod tests {
         }))
         .expect("code alias should deserialize for pairing requests");
 
-        match request {
-            Request::ConnectWithPairingCode { pairing_code } => {
-                assert_eq!(pairing_code, "endpointdemo123");
-            }
-            _ => panic!("expected connect_with_pairing_code"),
-        }
+        let Request::ConnectWithPairingCode { pairing_code } = request else {
+            unreachable!("expected connect_with_pairing_code");
+        };
+        assert_eq!(pairing_code, "endpointdemo123");
     }
 
     #[test]
@@ -2298,7 +2295,7 @@ mod tests {
                      environment (unrelated to iroh transport selection): {e}"
                 );
             }
-            Err(e) => panic!("start_sync with use_iroh failed unexpectedly: {e}"),
+            Err(e) => assert!(false, "start_sync with use_iroh failed unexpectedly: {e}"),
         }
     }
 
@@ -2350,17 +2347,16 @@ mod tests {
         }))
         .expect("start_sync without iroh fields should still deserialize");
 
-        match request {
-            Request::StartSync {
-                use_iroh,
-                iroh_peer_ticket,
-                ..
-            } => {
-                assert!(!use_iroh);
-                assert_eq!(iroh_peer_ticket, None);
-            }
-            _ => panic!("expected start_sync"),
-        }
+        let Request::StartSync {
+            use_iroh,
+            iroh_peer_ticket,
+            ..
+        } = request
+        else {
+            unreachable!("expected start_sync");
+        };
+        assert!(!use_iroh);
+        assert_eq!(iroh_peer_ticket, None);
     }
 
     #[test]
@@ -2375,19 +2371,18 @@ mod tests {
         }))
         .expect("relay config should be accepted by the request schema");
 
-        match request {
-            Request::StartSync {
-                relay_url,
-                relay_api_key,
-                auth_secret,
-                ..
-            } => {
-                assert_eq!(relay_url.as_deref(), Some("ws://127.0.0.1:8765"));
-                assert_eq!(relay_api_key.as_deref(), Some("key"));
-                assert_eq!(auth_secret.as_deref(), Some("secret"));
-            }
-            _ => panic!("expected start_sync"),
-        }
+        let Request::StartSync {
+            relay_url,
+            relay_api_key,
+            auth_secret,
+            ..
+        } = request
+        else {
+            unreachable!("expected start_sync");
+        };
+        assert_eq!(relay_url.as_deref(), Some("ws://127.0.0.1:8765"));
+        assert_eq!(relay_api_key.as_deref(), Some("key"));
+        assert_eq!(auth_secret.as_deref(), Some("secret"));
     }
 
     #[tokio::test]
@@ -3024,13 +3019,14 @@ mod tests {
                     }
                 }
                 Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
-                    if std::time::Instant::now() > deadline {
-                        panic!("timed out waiting for disconnect events");
-                    }
+                    assert!(
+                        std::time::Instant::now() <= deadline,
+                        "timed out waiting for disconnect events"
+                    );
                     tokio::time::sleep(std::time::Duration::from_millis(5)).await;
                 }
                 Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
-                    panic!("event channel disconnected unexpectedly");
+                    assert!(false, "event channel disconnected unexpectedly");
                 }
             }
         }

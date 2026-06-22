@@ -317,7 +317,7 @@ fn scan_walk_root(
             name,
             mtime,
         });
-        if seen == 1 || seen % 500 == 0 {
+        if seen == 1 || seen.is_multiple_of(500) {
             on_progress(ScanProgress {
                 phase: "scanning".to_string(),
                 root: Some(root.to_string_lossy().into_owned()),

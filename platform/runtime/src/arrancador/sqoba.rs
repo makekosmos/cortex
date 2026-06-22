@@ -624,10 +624,10 @@ mod tests {
         let dest_root = tmp.path().join("backups");
         let manual: Vec<PathBuf> = vec![tmp.path().join("does-not-exist")];
         let err = backup_with_root("g6", "GameSix", Some(&manual), &dest_root, 10).unwrap_err();
-        match err {
-            SqobaError::NoSavePathsFound { game_id } => assert_eq!(game_id, "g6"),
-            other => panic!("expected NoSavePathsFound, got {:?}", other),
-        }
+        assert!(matches!(
+            err,
+            SqobaError::NoSavePathsFound { game_id } if game_id == "g6"
+        ));
     }
 
     #[test]

@@ -35,6 +35,9 @@ Unable to find libclang ... set the LIBCLANG_PATH environment variable
 - Do not call a deterministic test transcript path a real local-model smoke.
 - Do not rely on `whisper.cpp-cublas/Release` as a hidden source of faster-whisper
   CUDA DLLs; the managed faster-whisper venv should provide its own runtime DLLs.
+- Do not "fix" `cublas64_12.dll is not found` by making faster-whisper Auto always
+  CPU. On NVIDIA Windows machines, model preparation should install the managed
+  CUDA runtime or mark the model unprepared.
 
 ## Promote To Skill When
 

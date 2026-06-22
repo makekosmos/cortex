@@ -322,7 +322,14 @@ function scoreSegmentClass(score: number, index: number) {
 }
 
 function localModelUiState(model: { id: string; downloaded: boolean; selected: boolean }) {
-  if (!isFasterWhisperEngine.value) return model;
+  if (!isFasterWhisperEngine.value) {
+    return {
+      ...model,
+      downloaded:
+        model.selected ||
+        (model.downloaded && Boolean(dictationLocalModels.value?.commandInstalled)),
+    };
+  }
   const backendModelId = fasterWhisperModelId(model.id);
   const selected =
     dictationLocalModelId.value === model.id && dictationLocalModelPath.value === backendModelId;
