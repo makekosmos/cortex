@@ -27,6 +27,9 @@ Unable to find libclang ... set the LIBCLANG_PATH environment variable
   `transcribe` requests against a generated WAV; a valid smoke should report
   `backend=faster_whisper`, `accelerator=gpu` on NVIDIA machines, and a non-empty
   transcript.
+- If dev works but the installed build fails immediately, compare the packaged
+  `extraResources` name with runtime lookup. The installer ships `Kosmos Local STT.exe`,
+  while dev builds use `kosmos-local-stt.exe`; runtime must accept both names.
 
 ## Avoid
 
@@ -38,6 +41,9 @@ Unable to find libclang ... set the LIBCLANG_PATH environment variable
 - Do not "fix" `cublas64_12.dll is not found` by making faster-whisper Auto always
   CPU. On NVIDIA Windows machines, model preparation should install the managed
   CUDA runtime or mark the model unprepared.
+- Do not validate local STT only through `bun run --cwd platform/desktop dev`;
+  packaged resource names are different enough to need a release-folder smoke or
+  a unit test for candidate path generation.
 
 ## Promote To Skill When
 

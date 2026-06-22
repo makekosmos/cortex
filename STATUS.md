@@ -2,12 +2,24 @@
 
 | Компонент                  | Версия        |
 | -------------------------- | ------------- |
-| Kosmos Desktop (win / mac) | 0.6.1 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.2 / 0.5.1 |
 | Eden                       | 0.3.0         |
 | Delphi                     | 0.1.8         |
 | Horologion                 | 0.1.4         |
 | Arrancador                 | 0.1.4         |
 | Akasha                     | 0.1.2         |
+
+## 2026-06-22 — Packaged local STT sidecar hotfix (Kosmos Desktop win 0.6.2)
+
+Patch-релиз исправляет расхождение dev/prod упаковки локальной диктовки на Windows. В dev runtime запускал
+`target/.../kosmos-local-stt.exe`, а installer кладёт sidecar в `resources/Kosmos Local STT.exe`; из-за этого
+packaged build не мог стартовать локальный STT при той же модели и настройках, которые работали в dev.
+
+`platform/runtime/src/dictation/local.rs` теперь проверяет оба имени sidecar-а и в ошибке печатает все paths,
+которые реально искал. Добавлен unit-test на packaged Windows имя.
+
+Checks: `bun run --cwd platform/desktop typecheck`, `cargo test --manifest-path platform/runtime/Cargo.toml
+dictation::local`, `cargo clippy --manifest-path platform/runtime/Cargo.toml --all-targets -- -D warnings`.
 
 ## 2026-06-22 — Faster-whisper production hardening (Kosmos Desktop win 0.6.1)
 
