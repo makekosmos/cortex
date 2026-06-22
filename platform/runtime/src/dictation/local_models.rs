@@ -179,14 +179,17 @@ fn model_spec(model_id: &str) -> Result<&'static ModelSpec, LocalModelsError> {
         .ok_or_else(|| LocalModelsError::ModelNotFound(model_id.to_owned()))
 }
 
-fn default_shared_assets_root() -> PathBuf {
-    let base = std::env::var("APPDATA")
+fn default_shared_assets_base() -> PathBuf {
+    std::env::var("APPDATA")
         .ok()
         .map(PathBuf::from)
         .or_else(|| std::env::var("XDG_CONFIG_HOME").ok().map(PathBuf::from))
         .or_else(|| std::env::var("HOME").ok().map(PathBuf::from))
-        .unwrap_or_else(|| PathBuf::from("."));
-    base.join("Kosmos")
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+fn default_shared_assets_root() -> PathBuf {
+    default_shared_assets_base().join("Kosmos")
 }
 
 fn shared_assets_root(data_dir: &Path) -> PathBuf {
@@ -245,23 +248,42 @@ fn merge_legacy_dir_into_shared(legacy: &Path, shared: &Path) -> io::Result<bool
 
 pub fn migrate_legacy_assets(data_dir: &Path) -> io::Result<bool> {
     let shared_root = shared_assets_root(data_dir);
-    if same_path_or_text(data_dir, &shared_root) {
-        return Ok(false);
+    let mut changed = false;
+    let mut roots = vec![data_dir.to_path_buf()];
+    if std::env::var("KOSMOS_LOCAL_STT_DIR").is_err()
+        && !cfg!(test)
+        && same_path_or_text(&shared_root, &default_shared_assets_root())
+    {
+        if let Ok(entries) = fs::read_dir(default_shared_assets_base()) {
+            for entry in entries {
+                let path = entry?.path();
+                let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                    continue;
+                };
+                if path.is_dir() && name.starts_with("Kosmos-dev") {
+                    roots.push(path);
+                }
+            }
+        }
     }
 
-    let mut changed = false;
-    changed |= merge_legacy_dir_into_shared(&data_dir.join(MODELS_DIR), &models_dir(data_dir))?;
-    changed |= merge_legacy_dir_into_shared(
-        &data_dir.join(FASTER_WHISPER_DIR),
-        &faster_whisper_dir(data_dir),
-    )?;
-    changed |= merge_legacy_dir_into_shared(&data_dir.join(TOOLS_DIR), &tools_dir(data_dir))?;
-    #[cfg(windows)]
-    {
+    for root in roots {
+        if same_path_or_text(&root, &shared_root) {
+            continue;
+        }
+        changed |= merge_legacy_dir_into_shared(&root.join(MODELS_DIR), &models_dir(data_dir))?;
         changed |= merge_legacy_dir_into_shared(
-            &data_dir.join(CUDA_TOOLS_DIR),
-            &cuda_tools_dir(data_dir),
+            &root.join(FASTER_WHISPER_DIR),
+            &faster_whisper_dir(data_dir),
         )?;
+        changed |= merge_legacy_dir_into_shared(&root.join(TOOLS_DIR), &tools_dir(data_dir))?;
+        #[cfg(windows)]
+        {
+            changed |= merge_legacy_dir_into_shared(
+                &root.join(CUDA_TOOLS_DIR),
+                &cuda_tools_dir(data_dir),
+            )?;
+        }
     }
     Ok(changed)
 }
@@ -338,6 +360,10 @@ pub fn command_path(data_dir: &Path) -> Option<PathBuf> {
         if cpu.is_file() {
             return Some(cpu);
         }
+        let cuda = cuda_command_path(data_dir);
+        if cuda.is_file() {
+            return Some(cuda);
+        }
         Some(preferred)
     }
     #[cfg(not(windows))]
@@ -361,7 +387,7 @@ fn cuda_command_path(data_dir: &Path) -> PathBuf {
 
 #[cfg(windows)]
 fn preferred_command_path(data_dir: &Path) -> PathBuf {
-    if nvidia_gpu_available() {
+    if cuda_tools_enabled() {
         cuda_command_path(data_dir)
     } else {
         cpu_command_path(data_dir)
@@ -385,6 +411,11 @@ fn nvidia_gpu_available() -> bool {
             .map(|output| output.status.success() && !output.stdout.is_empty())
             .unwrap_or(false)
     })
+}
+
+#[cfg(windows)]
+fn cuda_tools_enabled() -> bool {
+    std::env::var("KOSMOS_DICTATION_ENABLE_CUDA").as_deref() == Ok("1") && nvidia_gpu_available()
 }
 
 #[cfg(windows)]
@@ -886,10 +917,6 @@ async fn ensure_faster_whisper_python(
         .arg("install")
         .arg("--upgrade")
         .arg("faster-whisper");
-    #[cfg(windows)]
-    if nvidia_gpu_available() {
-        pip.arg("nvidia-cublas-cu12").arg("nvidia-cudnn-cu12");
-    }
     run_faster_whisper_setup_command(
         pip,
         faster_whisper_prepare_timeout(),
@@ -1030,7 +1057,7 @@ pub async fn ensure_whisper_cpp_with_progress(
     if command.is_file() {
         return Ok(command);
     }
-    let (dir, archive_name, url) = if nvidia_gpu_available() {
+    let (dir, archive_name, url) = if cuda_tools_enabled() {
         (
             cuda_tools_dir(data_dir),
             "whisper-cublas-12.4.0-bin-x64.zip",
