@@ -443,6 +443,66 @@ fn vulkan_zip_sha256() -> Option<String> {
 }
 
 #[cfg(windows)]
+fn bundled_whisper_cpp_runtime_dir(runtime_name: &str) -> Option<PathBuf> {
+    std::env::var("KOSMOS_RESOURCES_DIR")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .map(|root| root.join("local-stt").join(runtime_name))
+        .filter(|path| path.is_dir())
+}
+
+#[cfg(windows)]
+fn install_bundled_whisper_cpp_runtime(destination: &Path, runtime_name: &str) -> io::Result<bool> {
+    let Some(source) = bundled_whisper_cpp_runtime_dir(runtime_name) else {
+        return Ok(false);
+    };
+
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let staging = destination.with_file_name(format!(
+        "{}.installing",
+        destination
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("whisper.cpp")
+    ));
+    remove_path_if_exists(&staging)?;
+    copy_dir_all(&source, &staging)?;
+    remove_path_if_exists(destination)?;
+    fs::rename(staging, destination)?;
+    Ok(true)
+}
+
+#[cfg(windows)]
+fn copy_dir_all(source: &Path, destination: &Path) -> io::Result<()> {
+    fs::create_dir_all(destination)?;
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let source_path = entry.path();
+        let destination_path = destination.join(entry.file_name());
+        if source_path.is_dir() {
+            copy_dir_all(&source_path, &destination_path)?;
+        } else {
+            fs::copy(&source_path, &destination_path)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn remove_path_if_exists(path: &Path) -> io::Result<()> {
+    if path.is_dir() {
+        fs::remove_dir_all(path)?;
+    } else if path.exists() {
+        fs::remove_file(path)?;
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
 pub fn refresh_managed_command_path(data_dir: &Path, cfg: &mut config::DictationConfig) -> bool {
     let Some(command_path) = command_path(data_dir) else {
         return false;
@@ -834,6 +894,23 @@ pub async fn ensure_whisper_cpp_with_progress(
     }
     if vulkan_tools_enabled() {
         let vulkan = vulkan_command_path(data_dir);
+        if !vulkan.is_file() {
+            match install_bundled_whisper_cpp_runtime(
+                &vulkan_tools_dir(data_dir),
+                "whisper.cpp-vulkan",
+            ) {
+                Ok(true) if vulkan.is_file() => return Ok(vulkan),
+                Ok(true) => tracing::warn!(
+                    path = %path_string(&vulkan),
+                    "dictation: bundled Vulkan whisper.cpp runtime did not contain command"
+                ),
+                Ok(false) => {}
+                Err(error) => tracing::warn!(
+                    error = %error,
+                    "dictation: bundled Vulkan whisper.cpp install failed, falling back"
+                ),
+            }
+        }
         if vulkan.is_file() {
             return Ok(vulkan);
         }
@@ -865,6 +942,21 @@ pub async fn ensure_whisper_cpp_with_progress(
         "whisper-bin-x64.zip",
         WHISPER_CPP_CPU_ZIP_URL,
     );
+    let cpu_command = cpu_command_path(data_dir);
+    if !cpu_command.is_file() {
+        match install_bundled_whisper_cpp_runtime(&dir, "whisper.cpp") {
+            Ok(true) if cpu_command.is_file() => return Ok(cpu_command),
+            Ok(true) => tracing::warn!(
+                path = %path_string(&cpu_command),
+                "dictation: bundled CPU whisper.cpp runtime did not contain command"
+            ),
+            Ok(false) => {}
+            Err(error) => tracing::warn!(
+                error = %error,
+                "dictation: bundled CPU whisper.cpp install failed, falling back to download"
+            ),
+        }
+    }
     install_whisper_cpp_zip(client, &dir, archive_name, url, None, progress).await?;
     let command = preferred_command_path(data_dir);
     if command.is_file() {
@@ -928,6 +1020,8 @@ mod tests {
     use httpmock::Method::GET;
     use httpmock::MockServer;
 
+    static ENV_LOCAL_MODELS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[cfg(windows)]
     fn touch(path: &Path) {
         fs::create_dir_all(path.parent().expect("parent")).expect("parent dir");
@@ -953,6 +1047,33 @@ mod tests {
         assert!(WHISPER_CPP_VULKAN_ZIP_URL.contains("makekosmos/local-ai-runtimes"));
         assert!(WHISPER_CPP_VULKAN_ZIP_URL.contains("whisper-vulkan-win-x64-v1.9.1"));
         assert_eq!(WHISPER_CPP_VULKAN_ZIP_SHA256.len(), 64);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn installs_bundled_whisper_cpp_runtime() {
+        let _guard = ENV_LOCAL_MODELS_TEST_LOCK.lock().expect("env lock");
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let resources = tmp.path().join("resources");
+        let bundled_command = resources
+            .join("local-stt")
+            .join("whisper.cpp-vulkan")
+            .join("Release")
+            .join("whisper-cli.exe");
+        touch(&bundled_command);
+        std::env::set_var("KOSMOS_RESOURCES_DIR", &resources);
+
+        let destination = tmp.path().join("shared").join("whisper.cpp-vulkan");
+        assert!(
+            install_bundled_whisper_cpp_runtime(&destination, "whisper.cpp-vulkan")
+                .expect("install bundled runtime")
+        );
+
+        assert!(destination
+            .join("Release")
+            .join("whisper-cli.exe")
+            .is_file());
+        std::env::remove_var("KOSMOS_RESOURCES_DIR");
     }
 
     #[cfg(windows)]

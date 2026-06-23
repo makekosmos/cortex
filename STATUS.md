@@ -1,13 +1,25 @@
-# Kosmos — статус проекта (2026-06-23)
+# Kosmos — статус проекта (2026-06-24)
 
 | Компонент                  | Версия        |
 | -------------------------- | ------------- |
-| Kosmos Desktop (win / mac) | 0.6.4 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.5 / 0.5.1 |
 | Eden                       | 0.3.0         |
 | Delphi                     | 0.1.8         |
 | Horologion                 | 0.1.4         |
 | Arrancador                 | 0.1.4         |
 | Akasha                     | 0.1.2         |
+
+## 2026-06-24 — Bundled local STT runtime hotfix (Kosmos Desktop win 0.6.5)
+
+Patch-релиз исправляет production-сценарий, где скачивание локальной модели доходило до установки `whisper.cpp`
+runtime и падало на прямом скачивании GitHub Release asset (`error sending request`, TLS/timeout на
+`whisper-bin-x64.zip`). Теперь Windows installer включает CPU и Vulkan `whisper.cpp` runtimes как `extraResources`,
+а backend при подготовке модели сначала копирует bundled runtime в общий `%APPDATA%\Kosmos` cache. Сетевой download
+runtime остаётся только запасным путём для нестандартных сборок.
+
+Checks: `bun run --cwd platform/desktop stage:local-stt-runtimes`,
+`cargo test --release --no-run -p kepler-backend --lib dictation::local_models::tests::installs_bundled_whisper_cpp_runtime`
+(запуск test exe заблокирован Windows App Control `os error 4551`; компиляция теста прошла).
 
 ## 2026-06-23 — Local STT stale model cleanup hotfix (Kosmos Desktop win 0.6.4)
 
