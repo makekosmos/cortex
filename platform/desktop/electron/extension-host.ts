@@ -48,8 +48,6 @@ import {
 import path from "node:path";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
-import { parseLocalImageRequestUrl } from "./local-image-protocol";
-import { localImageUrl } from "./local-image-protocol";
 import { keplerDataDir } from "./data-dir";
 import { macWindowChrome } from "./mac-window";
 import {
@@ -80,6 +78,15 @@ import {
 } from "./extension-permissions";
 import { applyFocusBlock } from "./focus-block";
 import { loadRaycastPackageManifest, type RaycastPackageManifest } from "./raycast/manifest";
+import {
+  MARKDOWN_FILE_MAX_BYTES,
+  resolveMarkdownVaultSourcePath,
+  safeMarkdownDefaultName,
+  safeVaultOutputPath,
+  scanMarkdownVault,
+  type MarkdownVaultExportFile,
+  type MarkdownVaultOpenResult,
+} from "./extension-markdown-vault";
 
 // ESM shim — __dirname / __filename не определены в Node ESM bundles.
 const __filename = fileURLToPath(import.meta.url);
@@ -456,6 +463,18 @@ function isShellInDevSession(): boolean {
   return !!process.env.VITE_DEV_SERVER_URL;
 }
 
+function envFlag(name: string): boolean {
+  return process.env[name] === "1";
+}
+
+function isHeadless(): boolean {
+  return envFlag("KOSMOS_HEADLESS");
+}
+
+function isHeadlessOrTest(): boolean {
+  return isHeadless() || envFlag("KOSMOS_TEST_MODE");
+}
+
 interface ExtensionSource {
   kind: "dev-server" | "dist";
   url?: string;
@@ -700,13 +719,12 @@ const iconDataUriCache = new Map<string, IconCacheEntry>();
  */
 export function extensionIconDataUri(id: string): string | undefined {
   const manifest = loadExtensionManifest(id);
-  if (!manifest || !manifest.icon) return undefined;
+  if (!manifest || !manifest.icon) return;
   const dir = resolveExtensionDir(id);
-  if (!dir) return undefined;
+  if (!dir) return;
   const iconPath = path.resolve(path.join(dir, manifest.icon));
-  if (!iconPath.startsWith(path.resolve(dir) + path.sep) && iconPath !== path.resolve(dir))
-    return undefined;
-  if (!existsSync(iconPath)) return undefined;
+  if (!iconPath.startsWith(path.resolve(dir) + path.sep) && iconPath !== path.resolve(dir)) return;
+  if (!existsSync(iconPath)) return;
   const stat = statSync(iconPath);
   const cached = iconDataUriCache.get(id);
   if (cached && cached.mtimeMs === stat.mtimeMs) {
@@ -727,7 +745,7 @@ export function extensionIconDataUri(id: string): string | undefined {
   } catch (e) {
     console.error(`[kepler-shell] failed to read icon for ${id}:`, e);
     iconDataUriCache.set(id, { uri: null, mtimeMs: stat.mtimeMs });
-    return undefined;
+    return;
   }
 }
 
@@ -737,14 +755,14 @@ export function extensionIconDataUri(id: string): string | undefined {
  * если файл отсутствует / выходит за пределы extension dir / unreadable.
  */
 function readManifestIconAsDataUri(id: string, iconRel: string): string | undefined {
-  if (!iconRel || typeof iconRel !== "string") return undefined;
+  if (!iconRel || typeof iconRel !== "string") return;
   const dir = resolveExtensionDir(id);
-  if (!dir) return undefined;
+  if (!dir) return;
   const resolved = path.resolve(path.join(dir, iconRel));
   // Path traversal guard: icon должна оставаться внутри extension dir.
   const dirResolved = path.resolve(dir);
-  if (!resolved.startsWith(dirResolved + path.sep) && resolved !== dirResolved) return undefined;
-  if (!existsSync(resolved)) return undefined;
+  if (!resolved.startsWith(dirResolved + path.sep) && resolved !== dirResolved) return;
+  if (!existsSync(resolved)) return;
   try {
     const buf = readFileSync(resolved);
     const ext = path.extname(resolved).toLowerCase();
@@ -758,7 +776,7 @@ function readManifestIconAsDataUri(id: string, iconRel: string): string | undefi
             : "image/png";
     return `data:${mime};base64,${buf.toString("base64")}`;
   } catch {
-    return undefined;
+    return;
   }
 }
 
@@ -1004,7 +1022,7 @@ function focusExistingExtensionWindow(win: BrowserWindow): void {
   if (win.isDestroyed()) return;
   // Headless / test mode: окна не показываем, Playwright работает через
   // webContents без paint'а.
-  if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1") {
+  if (isHeadlessOrTest()) {
     return;
   }
   try {
@@ -1077,7 +1095,7 @@ async function openExtensionImpl(
   }
   const existing = extensionWindows.get(windowKey);
   if (existing && !existing.win.isDestroyed()) {
-    if (process.env.KOSMOS_HEADLESS !== "1") {
+    if (!isHeadless()) {
       focusExistingExtensionWindow(existing.win);
     }
     if (route) {
@@ -1167,7 +1185,7 @@ async function openExtensionImpl(
   // KOSMOS_HEADLESS=1 (test mode) — окна создаются с show:false и skipTaskbar.
   // Playwright всё равно может evaluate() и locator() работать через
   // webContents без visible render. См. tests/e2e/helpers/launch.ts.
-  const headless = process.env.KOSMOS_HEADLESS === "1";
+  const headless = isHeadless();
 
   // Windows backdrop material: manifest remains per-extension fallback, while
   // KOSMOS_WINDOW_EFFECTS is the global benchmark/runtime override.
@@ -1410,7 +1428,7 @@ async function openNativeExtension(
   const exe = resolveNativeExecutable(manifest, extensionDir);
   if (!exe) return;
 
-  if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1") {
+  if (isHeadlessOrTest()) {
     console.log(`[kepler-shell] headless: skip native extension spawn '${id}'`);
     return;
   }
@@ -1615,15 +1633,15 @@ async function onFocusStateChanged(
         operation: "focus.resolve_blocklist_domains",
         id: blocklistId,
       })) as { domains?: string[] } | null;
-      domains = resolved?.domains ?? [];
+      domains = Array.isArray(resolved?.domains) ? resolved.domains : [];
     } catch {
       // Older backend без resolve op — fallback на raw list.
       const resp = (await request({ operation: "focus.list_blocklists" })) as {
         blocklists?: Array<{ id: string; domains: string[] }>;
       } | null;
-      const list = resp?.blocklists ?? [];
+      const list = Array.isArray(resp?.blocklists) ? resp.blocklists : [];
       const found = list.find((b) => b.id === blocklistId);
-      domains = found?.domains ?? [];
+      domains = Array.isArray(found?.domains) ? found.domains : [];
     }
     await applyFocusBlock({ active: true, domains });
   } catch (e) {
@@ -1919,260 +1937,8 @@ ipcMain.handle("kepler:extension:invoke-host", (_e, action: string, _payload?: u
 // IPC: Markdown file dialogs
 // ---------------------------------------------------------------------------
 
-const MARKDOWN_FILE_MAX_BYTES = 5 * 1024 * 1024;
-const MARKDOWN_VAULT_MAX_FILES = 5_000;
-const MARKDOWN_VAULT_MAX_IMAGES = 5_000;
-const MARKDOWN_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif"]);
-
-type MarkdownVaultTextFile = {
-  path: string;
-  relativePath: string;
-  name: string;
-  content: string;
-};
-
-type MarkdownVaultImageFile = {
-  path: string;
-  relativePath: string;
-  name: string;
-  fileUrl: string;
-  mimeType: string;
-  sizeBytes: number;
-  width: number | null;
-  height: number | null;
-};
-
-type MarkdownVaultOpenResult = {
-  rootPath: string;
-  files: MarkdownVaultTextFile[];
-  images: MarkdownVaultImageFile[];
-};
-
-type MarkdownVaultExportFile =
-  | {
-      relativePath: string;
-      content: string;
-      sourcePath?: never;
-    }
-  | {
-      relativePath: string;
-      sourcePath: string;
-      content?: never;
-    };
-
 function markdownDialogParent(sender: WebContents): BrowserWindow | undefined {
   return BrowserWindow.fromWebContents(sender) ?? undefined;
-}
-
-function safeMarkdownDefaultName(name: unknown): string {
-  const fallback = "eden-object.md";
-  if (typeof name !== "string") return fallback;
-  const base = path
-    .basename(name)
-    .replace(/[<>:"/\\|?*]/g, "-")
-    .replace(/./g, (char) => (char.charCodeAt(0) < 32 ? "-" : char))
-    .trim();
-  if (!base) return fallback;
-  return base.toLowerCase().endsWith(".md") ? base : `${base}.md`;
-}
-
-function normalizeVaultRelativePath(root: string, filePath: string): string {
-  return path.relative(root, filePath).split(path.sep).join("/");
-}
-
-function isIgnoredVaultDir(name: string): boolean {
-  return name.startsWith(".") || name === "node_modules";
-}
-
-function imageMimeType(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext === ".png") return "image/png";
-  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
-  if (ext === ".gif") return "image/gif";
-  if (ext === ".webp") return "image/webp";
-  if (ext === ".avif") return "image/avif";
-  return "application/octet-stream";
-}
-
-function readUInt24LE(buffer: Buffer, offset: number): number {
-  return buffer[offset] + (buffer[offset + 1] << 8) + (buffer[offset + 2] << 16);
-}
-
-function readImageDimensions(filePath: string): { width: number; height: number } | null {
-  try {
-    const buffer = readFileSync(filePath);
-    if (
-      buffer.length >= 24 &&
-      buffer[0] === 0x89 &&
-      buffer[1] === 0x50 &&
-      buffer[2] === 0x4e &&
-      buffer[3] === 0x47
-    ) {
-      return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
-    }
-
-    if (buffer.length >= 10 && buffer.toString("ascii", 0, 6) === "GIF87a") {
-      return { width: buffer.readUInt16LE(6), height: buffer.readUInt16LE(8) };
-    }
-    if (buffer.length >= 10 && buffer.toString("ascii", 0, 6) === "GIF89a") {
-      return { width: buffer.readUInt16LE(6), height: buffer.readUInt16LE(8) };
-    }
-
-    if (buffer.length >= 12 && buffer[0] === 0xff && buffer[1] === 0xd8) {
-      let offset = 2;
-      while (offset + 9 < buffer.length) {
-        if (buffer[offset] !== 0xff) {
-          offset += 1;
-          continue;
-        }
-        const marker = buffer[offset + 1];
-        const size = buffer.readUInt16BE(offset + 2);
-        if (size < 2) return null;
-        if (
-          (marker >= 0xc0 && marker <= 0xc3) ||
-          (marker >= 0xc5 && marker <= 0xc7) ||
-          (marker >= 0xc9 && marker <= 0xcb) ||
-          (marker >= 0xcd && marker <= 0xcf)
-        ) {
-          return {
-            height: buffer.readUInt16BE(offset + 5),
-            width: buffer.readUInt16BE(offset + 7),
-          };
-        }
-        offset += 2 + size;
-      }
-    }
-
-    if (
-      buffer.length >= 30 &&
-      buffer.toString("ascii", 0, 4) === "RIFF" &&
-      buffer.toString("ascii", 8, 12) === "WEBP"
-    ) {
-      const chunk = buffer.toString("ascii", 12, 16);
-      if (chunk === "VP8X" && buffer.length >= 30) {
-        return {
-          width: readUInt24LE(buffer, 24) + 1,
-          height: readUInt24LE(buffer, 27) + 1,
-        };
-      }
-      if (chunk === "VP8 " && buffer.length >= 30) {
-        return {
-          width: buffer.readUInt16LE(26) & 0x3fff,
-          height: buffer.readUInt16LE(28) & 0x3fff,
-        };
-      }
-      if (chunk === "VP8L" && buffer.length >= 25) {
-        const bits = buffer.readUInt32LE(21);
-        return {
-          width: (bits & 0x3fff) + 1,
-          height: ((bits >> 14) & 0x3fff) + 1,
-        };
-      }
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
-
-function scanMarkdownVault(rootPath: string): MarkdownVaultOpenResult {
-  const files: MarkdownVaultTextFile[] = [];
-  const images: MarkdownVaultImageFile[] = [];
-
-  const visit = (dir: string) => {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (!isIgnoredVaultDir(entry.name)) visit(fullPath);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-
-      const ext = path.extname(entry.name).toLowerCase();
-      if (ext === ".md" || ext === ".markdown") {
-        if (files.length >= MARKDOWN_VAULT_MAX_FILES) continue;
-        const stat = statSync(fullPath);
-        if (stat.size > MARKDOWN_FILE_MAX_BYTES) continue;
-        files.push({
-          path: fullPath,
-          relativePath: normalizeVaultRelativePath(rootPath, fullPath),
-          name: entry.name,
-          content: readFileSync(fullPath, "utf8"),
-        });
-        continue;
-      }
-
-      if (MARKDOWN_IMAGE_EXTENSIONS.has(ext)) {
-        if (images.length >= MARKDOWN_VAULT_MAX_IMAGES) continue;
-        const stat = statSync(fullPath);
-        const dimensions = readImageDimensions(fullPath);
-        images.push({
-          path: fullPath,
-          relativePath: normalizeVaultRelativePath(rootPath, fullPath),
-          name: entry.name,
-          fileUrl: localImageUrl(fullPath),
-          mimeType: imageMimeType(fullPath),
-          sizeBytes: stat.size,
-          width: dimensions?.width ?? null,
-          height: dimensions?.height ?? null,
-        });
-      }
-    }
-  };
-
-  visit(rootPath);
-
-  return {
-    rootPath,
-    files,
-    images,
-  };
-}
-
-function safeVaultOutputPath(rootPath: string, relativePath: string): string {
-  const normalizedRelative = relativePath.replace(/\\/g, "/");
-  if (
-    normalizedRelative.startsWith("/") ||
-    normalizedRelative.includes("../") ||
-    normalizedRelative === ".." ||
-    /^[a-zA-Z]:/.test(normalizedRelative)
-  ) {
-    throw new Error("[kepler-shell] unsafe Markdown export relative path");
-  }
-
-  const outputPath = path.resolve(rootPath, normalizedRelative);
-  const root = path.resolve(rootPath);
-  if (outputPath !== root && !outputPath.startsWith(`${root}${path.sep}`)) {
-    throw new Error("[kepler-shell] Markdown export path escapes output directory");
-  }
-  return outputPath;
-}
-
-function resolveMarkdownVaultSourcePath(sourcePath: string): string | null {
-  const trimmed = sourcePath.trim();
-  if (!trimmed) return null;
-
-  if (/^file:/i.test(trimmed)) {
-    try {
-      const resolved = fileURLToPath(trimmed);
-      return path.isAbsolute(resolved) ? resolved : null;
-    } catch {
-      return null;
-    }
-  }
-
-  const localImagePath = parseLocalImageRequestUrl(trimmed);
-  if (localImagePath) {
-    return path.isAbsolute(localImagePath) ? localImagePath : null;
-  }
-
-  if (path.isAbsolute(trimmed)) {
-    return path.resolve(trimmed);
-  }
-
-  return null;
 }
 
 ipcMain.handle(
@@ -2459,7 +2225,7 @@ ipcMain.handle("kepler:extension:install:preview", async (_e, sourcePath: string
   if (typeof sourcePath !== "string") {
     throw new Error("install:preview: sourcePath must be a string");
   }
-  return await previewSource(sourcePath);
+  return previewSource(sourcePath);
 });
 
 /**
@@ -2488,7 +2254,7 @@ ipcMain.handle("kepler:extension:install:do", async (_e, sourcePath: string) => 
 });
 
 ipcMain.handle("kepler:extension:installed:list", async () => {
-  return await listInstalledUserExtensions();
+  return listInstalledUserExtensions();
 });
 
 ipcMain.handle("kepler:extension:revert", async (_e, id: string, timestamp?: string) => {
@@ -2504,7 +2270,7 @@ ipcMain.handle("kepler:extension:backups:list", async (_e, id: string) => {
   if (typeof id !== "string") {
     throw new Error("backups:list: id must be a string");
   }
-  return await listBackups(id);
+  return listBackups(id);
 });
 
 ipcMain.handle("kepler:extension:uninstall", async (_e, id: string) => {
