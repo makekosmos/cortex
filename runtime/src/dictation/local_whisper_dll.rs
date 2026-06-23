@@ -136,6 +136,7 @@ type WhisperFree = unsafe extern "C" fn(*mut c_void);
 type WhisperFull = unsafe extern "C" fn(*mut c_void, WhisperFullParams, *const f32, c_int) -> c_int;
 type WhisperFullNSegments = unsafe extern "C" fn(*mut c_void) -> c_int;
 type WhisperFullGetSegmentText = unsafe extern "C" fn(*mut c_void, c_int) -> *const c_char;
+type GgmlBackendLoadAllFromPath = unsafe extern "C" fn(*const c_char);
 
 #[derive(Clone, Copy)]
 struct WhisperApi {
@@ -150,6 +151,7 @@ struct WhisperApi {
 
 pub(crate) struct WhisperDllEngine {
     _library: Library,
+    _ggml_library: Option<Library>,
     api: WhisperApi,
     ctx: *mut c_void,
     model_path: PathBuf,
@@ -183,6 +185,12 @@ impl WhisperDllEngine {
         let dll_path = fs::canonicalize(whisper_dll_path(&command_path)?).map_err(|e| {
             LocalError::SidecarUnavailable(format!("failed to canonicalize whisper.dll path: {e}"))
         })?;
+        let dll_dir = dll_path.parent().ok_or_else(|| {
+            LocalError::SidecarUnavailable(format!(
+                "whisper.dll has no parent directory: {}",
+                dll_path.display()
+            ))
+        })?;
 
         let library = unsafe { load_library(&dll_path) }.map_err(|e| {
             LocalError::SidecarUnavailable(format!(
@@ -191,6 +199,7 @@ impl WhisperDllEngine {
             ))
         })?;
         let api = unsafe { load_api(&library)? };
+        let ggml_library = load_ggml_backends(dll_dir)?;
         let model_c = cstring_path(&model_path)?;
         let mut params = unsafe { (api.context_default_params)() };
         params.use_gpu = !matches!(model.accelerator, LocalSttAccelerator::Cpu);
@@ -206,6 +215,7 @@ impl WhisperDllEngine {
 
         Ok(Self {
             _library: library,
+            _ggml_library: ggml_library,
             api,
             ctx,
             model_path,
@@ -270,6 +280,13 @@ impl WhisperDllEngine {
         if let Some(prompt_c) = prompt_c.as_ref() {
             params.initial_prompt = prompt_c.as_ptr();
         }
+        let vad_model_c = whisper_vad_model_path(&model.command_path)
+            .map(|path| cstring_path(&path))
+            .transpose()?;
+        if let Some(vad_model_c) = vad_model_c.as_ref() {
+            params.vad = true;
+            params.vad_model_path = vad_model_c.as_ptr();
+        }
         if let Some(cancel_flag) = cancel_flag {
             params.abort_callback = Some(whisper_abort_callback);
             params.abort_callback_user_data =
@@ -311,6 +328,21 @@ impl WhisperDllEngine {
     }
 }
 
+fn whisper_vad_model_path(command_path: &Option<String>) -> Option<PathBuf> {
+    if let Ok(path) = std::env::var("KOSMOS_WHISPER_CPP_VAD_MODEL") {
+        let path = PathBuf::from(path.trim());
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    command_path
+        .as_deref()
+        .map(Path::new)
+        .and_then(Path::parent)
+        .map(|dir| dir.join("ggml-silero-v6.2.0.bin"))
+        .filter(|path| path.is_file())
+}
+
 unsafe extern "C" fn whisper_abort_callback(data: *mut c_void) -> bool {
     if data.is_null() {
         return false;
@@ -335,6 +367,41 @@ fn whisper_dll_path(command_path: &Path) -> Result<PathBuf, LocalError> {
             "whisper.dll not found at {}",
             path.display()
         )))
+    }
+}
+
+fn load_ggml_backends(dll_dir: &Path) -> Result<Option<Library>, LocalError> {
+    let ggml_path = dll_dir.join("ggml.dll");
+    if !ggml_path.is_file() {
+        return Ok(None);
+    }
+    prepend_process_path(dll_dir);
+    let library = unsafe { load_library(&ggml_path) }.map_err(|e| {
+        LocalError::SidecarUnavailable(format!(
+            "failed to load ggml.dll at {}: {e}",
+            ggml_path.display()
+        ))
+    })?;
+    let dll_dir_c = cstring_path(dll_dir)?;
+    unsafe {
+        let load_all = library
+            .get::<GgmlBackendLoadAllFromPath>(b"ggml_backend_load_all_from_path\0")
+            .map_err(|e| {
+                LocalError::SidecarUnavailable(format!(
+                    "ggml.dll missing symbol ggml_backend_load_all_from_path: {e}"
+                ))
+            })?;
+        load_all(dll_dir_c.as_ptr());
+    }
+    Ok(Some(library))
+}
+
+fn prepend_process_path(dir: &Path) {
+    let current_path = std::env::var_os("PATH").unwrap_or_default();
+    let mut paths = vec![dir.to_path_buf()];
+    paths.extend(std::env::split_paths(&current_path));
+    if let Ok(joined) = std::env::join_paths(paths) {
+        std::env::set_var("PATH", joined);
     }
 }
 
@@ -433,4 +500,23 @@ fn wav_pcm16_to_f32_16k_mono(wav: &[u8]) -> Result<Vec<f32>, LocalError> {
     }
 
     Err(LocalError::CommandFailed("WAV data chunk not found".into()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vad_model_is_discovered_next_to_whisper_command() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let command = tmp.path().join("whisper-cli.exe");
+        let vad = tmp.path().join("ggml-silero-v6.2.0.bin");
+        fs::write(&command, b"exe").expect("command");
+        fs::write(&vad, b"vad").expect("vad");
+
+        assert_eq!(
+            whisper_vad_model_path(&Some(command.to_string_lossy().into_owned())),
+            Some(vad)
+        );
+    }
 }

@@ -24,7 +24,7 @@ use super::groq::{self, GroqError};
 #[cfg(windows)]
 use super::hotkey_hook;
 use super::inject::{self, InjectError};
-use super::local::{self, DEFAULT_LOCAL_ENGINE, FASTER_WHISPER_ENGINE};
+use super::local::{self, DEFAULT_LOCAL_ENGINE};
 use super::local_models;
 use super::network;
 use super::stats::{self, DictationStats};
@@ -96,6 +96,12 @@ impl DictationHost {
             Err(e) => {
                 tracing::warn!(error = %e, "failed to migrate legacy dictation local STT assets")
             }
+        }
+        if local_models::cleanup_obsolete_local_stt_assets(&data_dir).unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "failed to cleanup obsolete local STT assets");
+            false
+        }) {
+            tracing::info!("removed obsolete local STT assets");
         }
         let mut cfg = config::load();
         let mut config_changed = normalize_platform_local_engine(&mut cfg);
@@ -367,14 +373,9 @@ fn effective_model_for_submit(cfg: &DictationConfig) -> String {
 const LOCAL_MODEL_NOT_READY_MSG: &str =
     "Локальная модель не подготовлена. Скачайте модель заново в Settings -> AI.";
 
-fn local_config_is_ready(data_dir: &std::path::Path, cfg: &DictationConfig) -> bool {
+fn local_config_is_ready(_data_dir: &std::path::Path, cfg: &DictationConfig) -> bool {
     if !cfg.provider_enabled || !provider_uses_local_runtime(&cfg.provider) {
         return true;
-    }
-    if is_faster_whisper_engine(&cfg.local_engine) {
-        return cfg.local_model.as_deref().is_some_and(|model_id| {
-            local_models::faster_whisper_model_is_prepared(data_dir, model_id)
-        });
     }
     let model_ok = cfg
         .local_model_path
@@ -450,7 +451,6 @@ pub async fn handle_dictation_op(
         "native_audio_ping" => op_native_audio_ping().await,
         "list_local_models" => op_list_local_models(host).await,
         "download_local_model" => op_download_local_model(params, host).await,
-        "install_faster_whisper_cuda" => op_install_faster_whisper_cuda(host).await,
         "use_local_model" => op_use_local_model(params, host).await,
         "delete_local_model" => op_delete_local_model(params, host).await,
         other => DictationResponse::err(format!("dictation.{other}: unknown sub-operation")),
@@ -512,12 +512,6 @@ async fn apply_local_model_selection_values_to_config(
     Ok(snapshot)
 }
 
-fn is_faster_whisper_engine(engine: &str) -> bool {
-    let engine = engine.trim();
-    engine.eq_ignore_ascii_case(FASTER_WHISPER_ENGINE)
-        || engine.eq_ignore_ascii_case("faster_whisper")
-}
-
 fn platform_local_engine() -> &'static str {
     #[cfg(test)]
     {
@@ -531,7 +525,6 @@ fn platform_local_engine() -> &'static str {
 
 fn platform_local_engine_for_os(os: &str) -> &'static str {
     match os {
-        "windows" => FASTER_WHISPER_ENGINE,
         "macos" => DEFAULT_LOCAL_ENGINE,
         _ => DEFAULT_LOCAL_ENGINE,
     }
@@ -564,7 +557,6 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
     let cfg = host.snapshot_config().await;
-    let local_engine = platform_local_engine().to_owned();
     let client =
         match network::build_download_client(&cfg.network_profile, cfg.http_proxy.as_deref()) {
             Ok(client) => client,
@@ -590,54 +582,6 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
             "event": "dictation_local_model_download_started",
             "modelId": model_id,
         }));
-        if is_faster_whisper_engine(&local_engine) {
-            let model_arg = match local_models::ensure_faster_whisper_with_progress(
-                &client,
-                &data_dir,
-                &model_id,
-                &mut progress,
-            )
-            .await
-            {
-                Ok(model_arg) => model_arg,
-                Err(e) => {
-                    let msg = format!("download_local_model: {e}");
-                    let _ = events_tx.send(json!({
-                        "event": "dictation_local_model_download_failed",
-                        "modelId": model_id,
-                        "error": msg,
-                    }));
-                    return;
-                }
-            };
-            if select {
-                if let Err(e) = apply_local_model_selection_values_to_config(
-                    &config_state,
-                    &events_tx,
-                    &model_id,
-                    model_arg,
-                    None,
-                )
-                .await
-                {
-                    let msg = format!("download_local_model: {e}");
-                    let _ = events_tx.send(json!({
-                        "event": "dictation_local_model_download_failed",
-                        "modelId": model_id,
-                        "error": msg,
-                    }));
-                    return;
-                }
-            }
-            let cfg = config_state.lock().await.clone();
-            let _ = events_tx.send(json!({
-                "event": "dictation_local_model_download_complete",
-                "modelId": model_id,
-                "config": select.then(|| config_to_value(&cfg)),
-                "localModels": local_models::snapshot(&data_dir, &cfg),
-            }));
-            return;
-        }
         let model_path = match local_models::ensure_model_with_progress(
             &client,
             &data_dir,
@@ -706,93 +650,11 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
     }))
 }
 
-async fn op_install_faster_whisper_cuda(host: &DictationHost) -> DictationResponse {
-    let cfg = host.snapshot_config().await;
-    let client =
-        match network::build_download_client(&cfg.network_profile, cfg.http_proxy.as_deref()) {
-            Ok(client) => client,
-            Err(e) => return DictationResponse::err(format!("install_faster_whisper_cuda: {e}")),
-        };
-    let events_tx = host.events_tx.clone();
-    let data_dir = host.data_dir.clone();
-    tokio::spawn(async move {
-        let model_id = "__faster_whisper_cuda__".to_owned();
-        let mut progress = |progress: local_models::DownloadProgress| {
-            let _ = events_tx.send(json!({
-                "event": "dictation_local_model_download_progress",
-                "modelId": model_id,
-                "phase": progress.phase,
-                "downloadedBytes": progress.downloaded_bytes,
-                "totalBytes": progress.total_bytes,
-                "percent": progress.percent,
-            }));
-        };
-        let _ = events_tx.send(json!({
-            "event": "dictation_local_model_download_started",
-            "modelId": model_id,
-        }));
-        match local_models::ensure_faster_whisper_cuda_with_progress(
-            &client,
-            &data_dir,
-            &mut progress,
-        )
-        .await
-        {
-            Ok(()) => {
-                let cfg = config::load();
-                let _ = events_tx.send(json!({
-                    "event": "dictation_local_model_download_complete",
-                    "modelId": model_id,
-                    "config": Value::Null,
-                    "localModels": local_models::snapshot(&data_dir, &cfg),
-                }));
-            }
-            Err(e) => {
-                let _ = events_tx.send(json!({
-                    "event": "dictation_local_model_download_failed",
-                    "modelId": model_id,
-                    "error": format!("install_faster_whisper_cuda: {e}"),
-                }));
-            }
-        }
-    });
-    DictationResponse::ok(json!({
-        "started": true,
-        "modelId": "__faster_whisper_cuda__",
-    }))
-}
-
 async fn op_use_local_model(params: Value, host: &DictationHost) -> DictationResponse {
     let model_id = match params.get("modelId").and_then(|v| v.as_str()) {
         Some(value) if !value.trim().is_empty() => value.trim(),
         _ => return DictationResponse::err("use_local_model: missing modelId"),
     };
-    if is_faster_whisper_engine(platform_local_engine()) {
-        if !local_models::faster_whisper_model_is_prepared(&host.data_dir, model_id) {
-            return DictationResponse::err(format!(
-                "use_local_model: faster-whisper model is not prepared: {model_id}"
-            ));
-        }
-        let model_arg = match local_models::faster_whisper_model_id(model_id) {
-            Ok(model_arg) => model_arg.to_owned(),
-            Err(e) => return DictationResponse::err(format!("use_local_model: {e}")),
-        };
-        return match apply_local_model_selection_values_to_config(
-            &host.config,
-            &host.events_tx,
-            model_id,
-            model_arg,
-            None,
-        )
-        .await
-        {
-            Ok(cfg) => DictationResponse::ok(json!({
-                "config": config_to_value(&cfg),
-                "localModels": local_models::snapshot(&host.data_dir, &cfg),
-            })),
-            Err(e) => DictationResponse::err(format!("use_local_model: {e}")),
-        };
-    }
     let model_path = match local_models::MODEL_CATALOG
         .iter()
         .find(|model| model.id == model_id)
@@ -3623,11 +3485,8 @@ mod tests {
     static ENV_DATA_DIR_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     #[test]
-    fn platform_engine_policy_maps_windows_to_faster_whisper() {
-        assert_eq!(
-            platform_local_engine_for_os("windows"),
-            FASTER_WHISPER_ENGINE
-        );
+    fn platform_engine_policy_maps_windows_to_whisper_cpp() {
+        assert_eq!(platform_local_engine_for_os("windows"), DEFAULT_LOCAL_ENGINE);
         assert_eq!(platform_local_engine_for_os("macos"), DEFAULT_LOCAL_ENGINE);
     }
 
@@ -3650,7 +3509,7 @@ mod tests {
                 "language": "auto",
                 "injectMode": "clipboard_only",
                 "provider": "local",
-                "localEngine": "faster-whisper",
+                "localEngine": "whisper.cpp",
                 "localModelPath": model_path.to_string_lossy(),
                 "localCommandPath": command_path.to_string_lossy(),
                 "localModelId": "whisper-base"
