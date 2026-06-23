@@ -543,6 +543,7 @@ fn normalize_platform_local_engine(cfg: &mut DictationConfig) -> bool {
 }
 
 async fn op_list_local_models(host: &DictationHost) -> DictationResponse {
+    let _ = clear_unready_local_config(host).await;
     let cfg = host.snapshot_config().await;
     DictationResponse::ok(json!(local_models::snapshot(&host.data_dir, &cfg)))
 }
@@ -688,6 +689,11 @@ async fn op_delete_local_model(params: Value, host: &DictationHost) -> Dictation
         Some(value) if !value.trim().is_empty() => value.trim(),
         _ => return DictationResponse::err("delete_local_model: missing modelId"),
     };
+
+    if let Err(e) = local::unload_sidecar().await {
+        tracing::warn!(error = %e, "dictation: local STT unload before model delete failed");
+    }
+
     let deleted_path = match local_models::delete_model(&host.data_dir, model_id) {
         Ok(path) => path,
         Err(e) => return DictationResponse::err(format!("delete_local_model: {e}")),
@@ -2975,6 +2981,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn list_local_models_clears_stale_missing_local_selection() {
+        let _guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        let td = tempfile::TempDir::new().unwrap();
+        let mut cfg = test_cfg();
+        cfg.provider = "local".into();
+        cfg.provider_enabled = true;
+        cfg.local_model = Some("turbo".into());
+        cfg.local_model_path = Some(
+            td.path()
+                .join("missing-model.bin")
+                .to_string_lossy()
+                .to_string(),
+        );
+        cfg.local_command_path = Some(
+            td.path()
+                .join("missing-whisper-cli.exe")
+                .to_string_lossy()
+                .to_string(),
+        );
+        let host = DictationHost::new_for_test(
+            td.path().into(),
+            "http://127.0.0.1:1/openai/v1/audio/transcriptions".into(),
+            cfg,
+        );
+
+        let resp = handle_dictation_op("list_local_models", Value::Null, &host).await;
+        assert!(resp.ok, "list_local_models failed: {:?}", resp.error);
+        let cfg = host.snapshot_config().await;
+        assert!(!cfg.provider_enabled);
+        assert_eq!(cfg.local_model, None);
+        assert_eq!(cfg.local_model_path, None);
+        assert_eq!(cfg.local_command_path, None);
+    }
+
+    #[tokio::test]
     async fn start_recording_from_non_idle_errors() {
         let host = DictationHost::new();
         handle_dictation_op("start_recording", Value::Null, &host).await;
@@ -3486,7 +3527,10 @@ mod tests {
 
     #[test]
     fn platform_engine_policy_maps_windows_to_whisper_cpp() {
-        assert_eq!(platform_local_engine_for_os("windows"), DEFAULT_LOCAL_ENGINE);
+        assert_eq!(
+            platform_local_engine_for_os("windows"),
+            DEFAULT_LOCAL_ENGINE
+        );
         assert_eq!(platform_local_engine_for_os("macos"), DEFAULT_LOCAL_ENGINE);
     }
 

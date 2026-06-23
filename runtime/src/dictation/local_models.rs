@@ -548,9 +548,10 @@ pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSn
         .map(|spec| {
             let path = model_path(data_dir, spec);
             let path_text = path_string(&path);
-            let selected = cfg.local_model.as_deref() == Some(spec.id)
-                || selected_path == Some(path_text.as_str());
             let downloaded = path.is_file();
+            let selected = downloaded
+                && (cfg.local_model.as_deref() == Some(spec.id)
+                    || selected_path == Some(path_text.as_str()));
             LocalModelInfo {
                 id: spec.id.to_owned(),
                 name: spec.name.to_owned(),
@@ -804,7 +805,12 @@ pub fn delete_model(data_dir: &Path, model_id: &str) -> Result<PathBuf, LocalMod
     if part_path.is_file() {
         fs::remove_file(&part_path)?;
     }
-    cleanup_unused_backends(data_dir)?;
+    if let Err(error) = cleanup_unused_backends(data_dir) {
+        tracing::warn!(
+            error = %error,
+            "dictation: cleanup of unused local STT backends failed after model delete"
+        );
+    }
     Ok(path)
 }
 
@@ -965,6 +971,51 @@ mod tests {
             cfg.local_command_path.as_deref(),
             Some(path_string(&vulkan_command_path(tmp.path())).as_str())
         );
+    }
+
+    #[test]
+    fn snapshot_does_not_mark_missing_selected_model() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let spec = MODEL_CATALOG
+            .iter()
+            .find(|model| model.id == "turbo")
+            .expect("turbo model");
+        let path = model_path(tmp.path(), spec);
+        let cfg = config::DictationConfig {
+            provider: "local".into(),
+            provider_enabled: true,
+            local_model: Some(spec.id.to_owned()),
+            local_model_path: Some(path_string(&path)),
+            ..Default::default()
+        };
+
+        let snapshot = snapshot(tmp.path(), &cfg);
+        let model = snapshot
+            .models
+            .iter()
+            .find(|model| model.id == spec.id)
+            .expect("snapshot model");
+        assert!(!model.downloaded);
+        assert!(!model.selected);
+    }
+
+    #[test]
+    fn delete_model_ignores_backend_cleanup_failure_after_file_delete() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let spec = MODEL_CATALOG
+            .iter()
+            .find(|model| model.id == "small")
+            .expect("small model");
+        let path = model_path(tmp.path(), spec);
+        fs::create_dir_all(path.parent().expect("model parent")).expect("model dir");
+        fs::write(&path, b"model").expect("model file");
+        fs::create_dir_all(tools_dir(tmp.path()).parent().expect("tools parent"))
+            .expect("tools parent");
+        fs::write(tools_dir(tmp.path()), b"not a directory").expect("cleanup blocker");
+
+        let deleted = delete_model(tmp.path(), spec.id).expect("delete model");
+        assert_eq!(deleted, path);
+        assert!(!deleted.exists());
     }
 
     #[tokio::test]
