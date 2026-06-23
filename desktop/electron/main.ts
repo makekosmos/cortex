@@ -24,7 +24,6 @@ import {
   clipboard,
   globalShortcut,
   ipcMain,
-  type IpcMainInvokeEvent,
   shell,
   nativeTheme,
   powerMonitor,
@@ -61,31 +60,21 @@ import { keplerLog } from "./logging";
 import { safeHandle } from "./ipc-safe";
 // Side-effect import: регистрирует kepler:diagnostics:* IPC handlers.
 import "./diagnostics";
-import type { BackendStatus, CommandRecord, SearchResult } from "../shared/ipc-types";
+import type { BackendStatus, SearchResult } from "../shared/ipc-types";
 import { CLIPBOARD_HISTORY_ENABLED } from "../shared/ipc-types";
-import { COMMANDS, findCommand, setDictationShortcutResolver } from "./commands";
+import { setDictationShortcutResolver } from "./commands";
 import {
-  findDeclaredCommand,
-  extensionUserDataDir,
-  isExtensionRunning,
-  loadDeclaredCommands,
   openExtension,
-  raycastRuntimeContext,
   setExtensionArkBridge,
   setExtensionArkBridgeReadyTimeoutMs,
-  type DeclaredCommand,
 } from "./extension-host";
-import { runRaycastNoViewCommand, type RaycastCommandLaunchProps } from "./raycast/command-runner";
-import { listInstalledUserExtensions } from "./extension-installer";
 import { openDashboardWindow } from "./dashboard-window";
-import { openRaycastViewCommand } from "./raycast/view-host";
 import {
   registerClipboardHistoryIpc,
   setClipboardHistoryShellOpener,
   startClipboardHistory,
   stopClipboardHistory,
 } from "./clipboard-history";
-import { LaunchType, type AlertOptions, type LaunchCommandOptions } from "@raycast/api";
 // Side-effect import — регистрирует IPC handlers для окна настроек
 // (kepler:settings:*). Окно создаётся лениво из openSettings().
 import {
@@ -143,6 +132,7 @@ import {
   resolveLocalImagePath,
 } from "./local-image-protocol";
 import { createLauncherController } from "./main-launcher";
+import { registerMainCommands } from "./main-commands";
 
 setFocusWidgetFocusSessionOpener(openFocusSessionShell);
 setFocusWidgetRuntime({ awaitArkReady });
@@ -274,6 +264,11 @@ export function broadcastCommandsUpdated(): void {
   }
 }
 
+const commandsController = registerMainCommands({
+  getArkClient: () => arkClient,
+  hideLauncher,
+});
+
 function wireSyncEventBroadcast(client: ArkClient): void {
   syncEventsUnsubscribe?.();
   syncEventsUnsubscribe = client.onArkEvent((event) => {
@@ -320,7 +315,7 @@ export function setDictationHotkeyCache(hotkey?: string | null): void {
 }
 
 setDictationShortcutResolver(() => resolveLiveDictationShortcut());
-setDictationCommandInvoker(() => invokeCommandById("kepler:dictation"));
+setDictationCommandInvoker(() => commandsController.invokeCommandById("kepler:dictation"));
 setDictationRuntime({ awaitArkReady, broadcastCommandsUpdated, setDictationHotkeyCache });
 
 // --- Backend supervisor (hardening proof loop #5) ---------------------------
@@ -1149,361 +1144,6 @@ safeHandle("kepler:search:query", async (_e, text: string): Promise<SearchResult
     keplerLog.warn("search", "ARK search failed", { err: String(e) });
     return [];
   }
-});
-
-async function staticCommands(): Promise<CommandRecord[]> {
-  // Filter: команды с requiresExtension показываются только если этот
-  // extension реально установлен (manifest.json в %APPDATA%\Kosmos\extensions\).
-  // Snapshot installed ids per-call — listInstalledUserExtensions делает
-  // disk scan, дёшево (4-10 dir entries).
-  let installedIds: Set<string>;
-  try {
-    installedIds = new Set((await listInstalledUserExtensions()).map((e) => e.id));
-  } catch {
-    installedIds = new Set();
-  }
-
-  const records: CommandRecord[] = [];
-  for (const c of COMMANDS.filter(
-    (cmd) => !cmd.requiresExtension || installedIds.has(cmd.requiresExtension),
-  )) {
-    const shortcut =
-      typeof c.shortcut === "function"
-        ? await Promise.resolve(c.shortcut()).catch(() => undefined)
-        : c.shortcut;
-    records.push({
-      id: c.id,
-      title: c.title,
-      subtitle: c.subtitle,
-      category: c.category,
-      kind: c.kind,
-      appName: c.appName,
-      icon: c.icon?.(),
-      shortcut,
-    });
-  }
-  return records;
-}
-
-/**
- * Resolve три источника команд в единый список (priority: internal >
- * manifest-declared > runtime-dynamic). См.
- * `docs-site/concepts/command-bus.md`.
- */
-safeHandle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
-  const byId = new Map<string, CommandRecord>();
-
-  // 1) Kepler-internal (settings/dashboard/check-updates).
-  for (const c of await staticCommands()) byId.set(c.id, c);
-
-  // 2) Manifest-declared из всех установленных + dev-tree extension'ов.
-  try {
-    for (const cmd of loadDeclaredCommands()) {
-      if (byId.has(cmd.id)) continue; // internal priority
-      byId.set(cmd.id, {
-        id: cmd.id,
-        title: cmd.title,
-        subtitle: cmd.subtitle,
-        category: cmd.category,
-        kind: cmd.kind,
-        appName: cmd.appName,
-        icon: cmd.icon,
-        shortcut: (cmd as CommandRecord).shortcut,
-      });
-    }
-  } catch (e) {
-    keplerLog.error("commands", "loadDeclaredCommands failed", {
-      err: String(e),
-    });
-  }
-
-  // 3) Runtime dynamic (commands.register от running extension'ов).
-  //    Видны только пока соответствующий extension запущен.
-  //    ВАЖНО: динамический ark-вызов ограничен коротким таймаутом. Если backend
-  //    мёртв (например после сна), `arkClient.commands.list()` висит ~30s на
-  //    собственном ark-таймауте и блокирует возврат даже статических команд —
-  //    лаунчер выглядит полностью пустым. Built-in команды (Настройки/Фокус/
-  //    Дашборд) обязаны показываться мгновенно при любом состоянии backend'а.
-  if (arkClient) {
-    try {
-      const COMMANDS_DYNAMIC_TIMEOUT_MS = 2000;
-      const dynamic = await Promise.race([
-        arkClient.commands.list(),
-        new Promise<never>((_, rej) =>
-          setTimeout(() => rej(new Error("dynamic commands timeout")), COMMANDS_DYNAMIC_TIMEOUT_MS),
-        ),
-      ]);
-      if (Array.isArray(dynamic)) {
-        for (const c of dynamic) {
-          if (byId.has(c.id)) continue; // internal/manifest priority
-          const d = c as CommandRecord & {
-            kind?: "app" | "command";
-            appName?: string;
-          };
-          byId.set(c.id, {
-            id: c.id,
-            title: c.title,
-            subtitle: c.subtitle,
-            category: c.category,
-            kind: d.kind,
-            appName: d.appName,
-            shortcut: d.shortcut,
-          });
-        }
-      } else {
-        console.warn("[kepler-shell] commands.list returned non-array:", dynamic);
-      }
-    } catch (e) {
-      keplerLog.warn("commands", "commands.list (dynamic) failed", {
-        err: String(e),
-      });
-    }
-  }
-
-  return Array.from(byId.values());
-});
-
-/**
- * Auto-launch helper: если extension не запущен, openExtension + ждём пока
- * mount успеет зарегистрировать command listener'ы. Используется V2
- * dynamic action invoke flow (см. `kepler:commands:invoke` ниже).
- *
- * Через ARK we опрашиваем commands.list пока в нём не появится команда —
- * это надёжнее чем polling по extensionWindows (window появляется до того
- * как Vue mount + commands.register IPC отработал).
- */
-async function awaitExtensionCommand(
-  _extensionId: string,
-  fullCommandId: string,
-  timeoutMs = 5000,
-): Promise<boolean> {
-  if (!arkClient) return false;
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      const list = await arkClient.commands.list();
-      if (Array.isArray(list) && list.some((c) => c.id === fullCommandId)) {
-        return true;
-      }
-    } catch {
-      // ARK rpc race — retry
-    }
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  return false;
-}
-
-function raycastLaunchFromOptions(options: LaunchCommandOptions): RaycastCommandLaunchProps {
-  return {
-    launchType: options.type ?? LaunchType.LaunchCommand,
-    arguments: options.arguments ?? {},
-    fallbackText: options.fallbackText,
-    launchContext: options.context,
-  };
-}
-
-async function launchRaycastCommandFromOptions(
-  originExtensionId: string,
-  options: LaunchCommandOptions,
-): Promise<void> {
-  const extensionId = options.extensionName ?? originExtensionId;
-  const target = findDeclaredCommand(`${extensionId}:${options.name}`);
-  if (!target) {
-    console.warn(
-      `[kepler-shell] Raycast launchCommand target not found: ${extensionId}:${options.name}`,
-    );
-    return;
-  }
-  await launchRaycastDeclaredCommand(target, raycastLaunchFromOptions(options));
-}
-
-async function openRaycastSystemTarget(target: string): Promise<void> {
-  if (/^https?:\/\//i.test(target)) {
-    await shell.openExternal(target);
-    return;
-  }
-
-  const error = await shell.openPath(target);
-  if (error) throw new Error(error);
-}
-
-function raycastSystemAdapter(): {
-  open(target: string): Promise<void>;
-  showInFinder(path: string): Promise<void>;
-  trash(path: string): Promise<void>;
-} {
-  return {
-    open: openRaycastSystemTarget,
-    async showInFinder(target) {
-      shell.showItemInFolder(target);
-    },
-    async trash(target) {
-      await shell.trashItem(target);
-    },
-  };
-}
-
-async function confirmRaycastAlert(alert: AlertOptions): Promise<boolean> {
-  const result = await dialog.showMessageBox({
-    type: "question",
-    buttons: [alert.primaryAction?.title ?? "OK", alert.dismissAction?.title ?? "Отмена"],
-    defaultId: 0,
-    cancelId: 1,
-    title: alert.title,
-    message: alert.title,
-    detail: alert.message,
-  });
-  return result.response === 0;
-}
-
-async function launchRaycastDeclaredCommand(
-  declared: DeclaredCommand,
-  launch?: RaycastCommandLaunchProps,
-): Promise<boolean> {
-  if (declared.mode === "open") {
-    await openExtension(declared.extensionId, declared.route);
-    return true;
-  }
-
-  if (
-    declared.mode !== "raycast-view" &&
-    declared.mode !== "raycast-no-view" &&
-    declared.mode !== "raycast-menu-bar"
-  ) {
-    return false;
-  }
-
-  const context = raycastRuntimeContext(declared.extensionId);
-  if (!context || !declared.raycastCommandName) {
-    console.warn(`[kepler-shell] Raycast command context not found: ${declared.id}`);
-    return false;
-  }
-
-  const launchCommand = (options: LaunchCommandOptions) =>
-    launchRaycastCommandFromOptions(declared.extensionId, options);
-
-  if (declared.mode === "raycast-view" || declared.mode === "raycast-menu-bar") {
-    await openRaycastViewCommand({
-      extensionId: declared.extensionId,
-      extensionName: declared.appName,
-      commandName: declared.raycastCommandName,
-      commandTitle: declared.title,
-      commandMode: declared.mode === "raycast-menu-bar" ? "menu-bar" : "view",
-      extensionDir: context.dir,
-      source: context.source,
-      launch,
-      system: raycastSystemAdapter(),
-      launchCommand,
-    });
-    return true;
-  }
-
-  await runRaycastNoViewCommand({
-    extensionId: declared.extensionId,
-    commandName: declared.raycastCommandName,
-    extensionDir: context.dir,
-    userDataDir: extensionUserDataDir(declared.extensionId),
-    source: context.source,
-    launch,
-    clipboard,
-    system: raycastSystemAdapter(),
-    confirmAlert: confirmRaycastAlert,
-    launchCommand,
-  });
-  return true;
-}
-
-async function invokeCommandById(id: string, event?: IpcMainInvokeEvent): Promise<void> {
-  // 1) Internal commands win — exec локально.
-  const internal = findCommand(id);
-  if (internal) {
-    try {
-      await internal.exec(event);
-    } catch (e) {
-      console.error(`[kepler-shell] command ${id} failed:`, e);
-    }
-    if (!internal.keepsLauncherOpen) hideLauncher();
-    return;
-  }
-
-  // 2) Manifest-declared — open или action mode.
-  const declared = findDeclaredCommand(id);
-  if (declared) {
-    if (declared.mode === "open") {
-      await openExtension(declared.extensionId, declared.route);
-      hideLauncher();
-      return;
-    }
-    if (declared.mode === "raycast-view" || declared.mode === "raycast-menu-bar") {
-      try {
-        await launchRaycastDeclaredCommand(declared);
-      } catch (e) {
-        console.error(`[kepler-shell] Raycast UI command ${id} failed:`, e);
-      }
-      hideLauncher();
-      return;
-    }
-    if (declared.mode === "raycast-no-view") {
-      try {
-        await launchRaycastDeclaredCommand(declared);
-      } catch (e) {
-        console.error(`[kepler-shell] Raycast no-view command ${id} failed:`, e);
-      }
-      hideLauncher();
-      return;
-    }
-    // action mode: dynamic invoke через ARK. Auto-launch если extension
-    // не запущен — окно открывается, ждём commands.register, dispatch'им.
-    if (!isExtensionRunning(declared.extensionId)) {
-      await openExtension(declared.extensionId, declared.route);
-      const ready = await awaitExtensionCommand(declared.extensionId, id);
-      if (!ready) {
-        console.warn(
-          `[kepler-shell] auto-launch для action команды ${id}: extension не зарегистрировал её в течение 5s`,
-        );
-        hideLauncher();
-        return;
-      }
-    }
-    if (arkClient) {
-      try {
-        await arkClient.commands.invoke(id);
-      } catch (e) {
-        console.error(`[kepler-shell] declared action invoke ${id} failed:`, e);
-      }
-    }
-    hideLauncher();
-    return;
-  }
-
-  // 3) Runtime dynamic — backend broadcasts command_invoked.
-  if (arkClient) {
-    // Auto-launch: если id начинается с `<extId>:` и extension установлен
-    // но не running — ткнуть openExtension + ждать. Это покрывает кейс
-    // когда extension через `commands.register` объявил action-команду в
-    // manifest.tests, а пользователь её триггерит из launcher'а после
-    // того как extension успел зарегистрировать (история launcher'а).
-    const colonIdx = id.indexOf(":");
-    if (colonIdx > 0) {
-      const extId = id.slice(0, colonIdx);
-      if (!isExtensionRunning(extId)) {
-        await openExtension(extId);
-        await awaitExtensionCommand(extId, id);
-      }
-    }
-    try {
-      await arkClient.commands.invoke(id);
-    } catch (e) {
-      console.error(`[kepler-shell] dynamic command ${id} invoke failed:`, e);
-    }
-  } else {
-    console.warn(`[kepler-shell] unknown command (no arkClient): ${id}`);
-  }
-  hideLauncher();
-}
-
-safeHandle("kepler:commands:invoke", async (event, id: string): Promise<void> => {
-  await invokeCommandById(id, event);
 });
 
 safeHandle(
