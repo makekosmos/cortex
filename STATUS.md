@@ -1,13 +1,28 @@
-# Kosmos — статус проекта (2026-06-22)
+# Kosmos — статус проекта (2026-06-23)
 
 | Компонент                  | Версия        |
 | -------------------------- | ------------- |
-| Kosmos Desktop (win / mac) | 0.6.2 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.3 / 0.5.1 |
 | Eden                       | 0.3.0         |
 | Delphi                     | 0.1.8         |
 | Horologion                 | 0.1.4         |
 | Arrancador                 | 0.1.4         |
 | Akasha                     | 0.1.2         |
+
+## 2026-06-23 — Vulkan-first local STT (Kosmos Desktop win 0.6.3)
+
+Patch-релиз переводит Windows local STT с faster-whisper/Python/CTranslate2 на один production path через `whisper.cpp`.
+Windows policy теперь выбирает `whisper.cpp`, а managed runtime при скачивании локальной модели сначала ставит Vulkan build
+из `makekosmos/local-ai-runtimes` (`whisper-vulkan-bin-x64-v1.9.1.zip`, pinned SHA-256), если в системе доступен Vulkan runtime.
+Если Vulkan runtime или скачивание недоступны, установка откатывается на официальный CPU `whisper.cpp` zip.
+
+Удалён product-flow для CUDA/faster-whisper: UI больше не показывает кнопку NVIDIA/CUDA, sidecar не запускает Python worker,
+а старые CT2/CUDA assets (`models/whisper`, `runtimes/faster-whisper`, `runtimes/cuda-libs`,
+`tools/dictation/whisper.cpp-cublas`) автоматически очищаются при старте. VAD остаётся включённым через Silero model рядом
+с `whisper-cli.exe`.
+
+Checks: `cargo test -p kepler-backend dictation`, `bun run --cwd platform/desktop typecheck`,
+`bun run --cwd platform/desktop build:backend:dev`.
 
 ## 2026-06-22 — Packaged local STT sidecar hotfix (Kosmos Desktop win 0.6.2)
 
