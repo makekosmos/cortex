@@ -2,12 +2,21 @@
 
 | Компонент                  | Версия        |
 | -------------------------- | ------------- |
-| Kosmos Desktop (win / mac) | 0.6.3 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.4 / 0.5.1 |
 | Eden                       | 0.3.0         |
 | Delphi                     | 0.1.8         |
 | Horologion                 | 0.1.4         |
 | Arrancador                 | 0.1.4         |
 | Akasha                     | 0.1.2         |
+
+## 2026-06-23 — Local STT stale model cleanup hotfix (Kosmos Desktop win 0.6.4)
+
+Patch-релиз исправляет production-сценарий, где удаление локальной модели могло удалить сам `.bin`, затем упасть на cleanup runtime с `Access denied`, потому что `Kosmos Local STT.exe` ещё держал файлы открытыми. В результате config продолжал ссылаться на отсутствующую модель, и следующая диктовка уходила в ошибку.
+
+Теперь backend выгружает local STT sidecar перед удалением модели, cleanup не ломает уже выполненное удаление модели, а список локальных моделей очищает stale selection, если выбранного файла больше нет.
+
+Checks: `cargo test --release -p kepler-backend --lib dictation::local_models::tests`,
+`cargo test --release -p kepler-backend --lib dictation::host::tests::list_local_models_clears_stale_missing_local_selection`.
 
 ## 2026-06-23 — Vulkan-first local STT (Kosmos Desktop win 0.6.3)
 
