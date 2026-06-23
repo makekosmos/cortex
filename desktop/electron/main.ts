@@ -52,7 +52,6 @@ import { spawn, type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { ArkClient, ensureKeplerRunning } from "@kosmos/ark";
 import { keplerDataDir } from "./data-dir";
@@ -120,19 +119,11 @@ import {
 } from "./autoupdater-host";
 import { setupPomodoroNotifier, teardownPomodoroNotifier } from "./pomodoro-notifier";
 import { resolveWindowMaterial, type KosmosWindowMaterial } from "./window-effects";
-import {
-  APP_ICON_PROTOCOL,
-  bufferToArrayBuffer,
-  parseAppIconRequestUrl,
-} from "./app-icon-protocol";
-import {
-  LOCAL_IMAGE_PROTOCOL,
-  localImageMimeType,
-  parseLocalImageRequestUrl,
-  resolveLocalImagePath,
-} from "./local-image-protocol";
+import { APP_ICON_PROTOCOL } from "./app-icon-protocol";
+import { LOCAL_IMAGE_PROTOCOL } from "./local-image-protocol";
 import { createLauncherController } from "./main-launcher";
 import { registerMainCommands } from "./main-commands";
+import { clearMainProtocolCaches, registerMainProtocols } from "./main-protocols";
 
 setFocusWidgetFocusSessionOpener(openFocusSessionShell);
 setFocusWidgetRuntime({ awaitArkReady });
@@ -357,7 +348,6 @@ let recoveringBackend = false;
 let arkClientReady: Promise<ArkClient> | null = null;
 let arkClientReadyResolve: ((c: ArkClient) => void) | null = null;
 let arkClientReadyReject: ((e: Error) => void) | null = null;
-const appIconBytesCache = new Map<string, Buffer>();
 // --- single instance ---------------------------------------------------------
 
 if (!app.requestSingleInstanceLock()) {
@@ -687,7 +677,7 @@ async function resetArkClient(reason: string): Promise<void> {
   arkClientReady = null;
   const prev = arkClient;
   arkClient = null;
-  appIconBytesCache.clear();
+  clearMainProtocolCaches();
   setExtensionArkBridge({ request: null, subscribe: null });
   syncEventsUnsubscribe?.();
   syncEventsUnsubscribe = null;
@@ -707,85 +697,6 @@ async function resetArkClient(reason: string): Promise<void> {
       keplerLog.warn("ark", "ArkClient stop failed", { err: String(e) });
     }
   }
-}
-
-function registerAppIconProtocol(): void {
-  protocol.handle(APP_ICON_PROTOCOL, async (request) => {
-    let appId: string | null = null;
-    try {
-      appId = parseAppIconRequestUrl(request.url);
-      if (!appId) {
-        return new Response(null, { status: 404 });
-      }
-
-      const cached = appIconBytesCache.get(appId);
-      if (cached) {
-        return new Response(bufferToArrayBuffer(cached), {
-          headers: {
-            "content-type": "image/png",
-            "cache-control": "max-age=3600",
-          },
-        });
-      }
-
-      const client = await awaitArkReady(5_000);
-      const resp = (await client.invokeOperation({
-        operation: "app_index.icon_path",
-        id: appId,
-      })) as { path?: unknown };
-      const iconPath = typeof resp?.path === "string" ? resp.path : "";
-      if (!iconPath || !existsSync(iconPath)) {
-        return new Response(null, { status: 404 });
-      }
-
-      // См. postmortems.md § 2026-06-09: only visible <img> requests touch icon files.
-      const bytes = await readFile(iconPath);
-      appIconBytesCache.set(appId, bytes);
-      return new Response(bufferToArrayBuffer(bytes), {
-        headers: {
-          "content-type": "image/png",
-          "cache-control": "max-age=3600",
-        },
-      });
-    } catch (e) {
-      keplerLog.warn("app-icon", "kosmos-icon protocol lookup failed", {
-        appId: appId ?? null,
-        err: String(e),
-      });
-      return new Response(null, { status: 404 });
-    }
-  });
-}
-
-function registerLocalImageProtocol(): void {
-  protocol.handle(LOCAL_IMAGE_PROTOCOL, async (request) => {
-    let imagePath: string | null = null;
-    try {
-      imagePath = parseLocalImageRequestUrl(request.url);
-      if (!imagePath) {
-        return new Response(null, { status: 404 });
-      }
-
-      const resolvedPath = resolveLocalImagePath(imagePath);
-      if (!resolvedPath) {
-        return new Response(null, { status: 404 });
-      }
-
-      const bytes = await readFile(resolvedPath);
-      return new Response(bufferToArrayBuffer(bytes), {
-        headers: {
-          "content-type": localImageMimeType(resolvedPath),
-          "cache-control": "max-age=3600",
-        },
-      });
-    } catch (e) {
-      keplerLog.warn("local-image", "kosmos-local-image protocol lookup failed", {
-        imagePath: imagePath ?? null,
-        err: String(e),
-      });
-      return new Response(null, { status: 404 });
-    }
-  });
 }
 
 function scheduleArkClientInitRetry(reason: string): void {
@@ -1548,8 +1459,7 @@ app.whenReady().then(async () => {
 
   spawnBackend();
   setExtensionArkBridgeReadyTimeoutMs(ARK_READY_REQUEST_TIMEOUT_MS);
-  registerAppIconProtocol();
-  registerLocalImageProtocol();
+  registerMainProtocols({ awaitArkReady });
   createLauncher();
   // Буфер обмена заморожен — см. CLIPBOARD_HISTORY_ENABLED в shared/ipc-types.
   if (CLIPBOARD_HISTORY_ENABLED) setClipboardHistoryShellOpener(showClipboardHistoryLauncher);
