@@ -556,7 +556,10 @@ async fn send_sidecar_request(request: LocalSttRequest) -> Result<LocalSttRespon
 fn is_supported_engine(engine: &str) -> bool {
     let normalized = engine.trim().to_ascii_lowercase();
     normalized.is_empty()
-        || matches!(normalized.as_str(), DEFAULT_LOCAL_ENGINE | "whisper" | "whisper-cpp")
+        || matches!(
+            normalized.as_str(),
+            DEFAULT_LOCAL_ENGINE | "whisper" | "whisper-cpp"
+        )
 }
 
 fn ensure_existing_file(path: &str, missing: LocalError) -> Result<PathBuf, LocalError> {

@@ -501,7 +501,6 @@ function spawnBackend() {
   const backendEnv: NodeJS.ProcessEnv = {
     ...process.env,
     KOSMOS_DATA_DIR: dataDir,
-    KOSMOS_RESOURCES_DIR: process.resourcesPath ?? path.resolve(__dirname, ".."),
     // Explicitly forward test-only dictation auth into the backend child when
     // the shell is running in test/headless mode. Production keeps this unset.
     KOSMOS_TEST_MODE: testModeEnabled ? "1" : process.env.KOSMOS_TEST_MODE,

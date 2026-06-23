@@ -2,12 +2,28 @@
 
 | Компонент                  | Версия        |
 | -------------------------- | ------------- |
-| Kosmos Desktop (win / mac) | 0.6.5 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.6 / 0.5.1 |
 | Eden                       | 0.3.0         |
 | Delphi                     | 0.1.8         |
 | Horologion                 | 0.1.4         |
 | Arrancador                 | 0.1.4         |
 | Akasha                     | 0.1.2         |
+
+## 2026-06-24 — Lean local STT runtime delivery (Kosmos Desktop win 0.6.6)
+
+Patch-релиз откатывает packaging-решение `0.6.5`: CPU/Vulkan `whisper.cpp` runtimes больше не входят в Windows
+installer как `extraResources`. Это возвращает installer к компактному размеру и убирает лишние вложенные unsigned
+`whisper-cli.exe`/DLL из первого запуска, из-за которых Windows Smart App Control чаще показывал reputation/block
+warnings.
+
+Runtime всё ещё ставится автоматически при скачивании локальной модели, но теперь качается лениво в общий
+`%APPDATA%\Kosmos` cache из публичного static CDN `makekosmos.github.io/local-ai-runtimes`. Оба архива pinned по SHA-256:
+CPU `whisper-cpu-bin-x64-v1.9.1.zip` (`7a17d804ab6e0fc992d356b4d3c434764f9191c13f0da6b8c219e7bc19e8ffcf`) и Vulkan
+`whisper-vulkan-bin-x64-v1.9.1.zip` (`d9be5497fae76a35eff0a44141d51bfe30aa8961afe9a13dea7f66b425fa4ca7`). CDN assets
+опубликованы в `makekosmos/local-ai-runtimes` через GitHub Pages; release assets GitHub больше не используются в
+production URL.
+
+Checks: runtime CDN `HEAD` returned 200 for both zip assets with expected sizes (`1116526`, `24532865` bytes).
 
 ## 2026-06-24 — Bundled local STT runtime hotfix (Kosmos Desktop win 0.6.5)
 
@@ -17,9 +33,9 @@ runtime и падало на прямом скачивании GitHub Release as
 а backend при подготовке модели сначала копирует bundled runtime в общий `%APPDATA%\Kosmos` cache. Сетевой download
 runtime остаётся только запасным путём для нестандартных сборок.
 
-Checks: `bun run --cwd platform/desktop stage:local-stt-runtimes`,
-`cargo test --release --no-run -p kepler-backend --lib dictation::local_models::tests::installs_bundled_whisper_cpp_runtime`
-(запуск test exe заблокирован Windows App Control `os error 4551`; компиляция теста прошла).
+Checks at release time: local runtime staging script, plus release test compilation for the bundled-runtime regression
+(запуск test exe был заблокирован Windows App Control `os error 4551`; компиляция теста прошла). Этот staging script
+удалён в `0.6.6`, потому что runtime больше не поставляется внутри installer.
 
 ## 2026-06-23 — Local STT stale model cleanup hotfix (Kosmos Desktop win 0.6.4)
 
