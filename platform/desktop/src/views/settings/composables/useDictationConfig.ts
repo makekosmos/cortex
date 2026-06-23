@@ -71,9 +71,6 @@ export interface DictationLocalModelsSnapshot {
   modelsDir: string;
   commandPath: string | null;
   commandInstalled: boolean;
-  fasterWhisperRuntimeInstalled: boolean;
-  fasterWhisperCudaInstalled: boolean;
-  fasterWhisperCudaSupported: boolean;
   models: DictationLocalModelInfo[];
 }
 
@@ -109,8 +106,6 @@ const DEFAULT_DICTATION_STATS: DictationStatsData = {
   wpm: 0,
   timeSavedSeconds: 0,
 };
-
-export const FASTER_WHISPER_CUDA_PROGRESS_ID = "__faster_whisper_cuda__";
 
 export const DNS_PROFILE_OPTIONS = [
   { value: "system", label: "Системный" },
@@ -411,10 +406,7 @@ export function createDictationConfig() {
       }
     }
 
-    const engine = dictationConfig.value.localEngine.trim().toLowerCase();
-    const needsCommand = engine !== "faster-whisper" && engine !== "faster_whisper";
-    const localRuntimeReady =
-      !needsCommand || Boolean(dictationLocalModels.value?.commandInstalled);
+    const localRuntimeReady = Boolean(dictationLocalModels.value?.commandInstalled);
     for (const model of dictationLocalModels.value?.models ?? []) {
       if (!model.downloaded && !model.selected) continue;
       if (!localRuntimeReady && !model.selected) continue;
@@ -688,36 +680,6 @@ export function createDictationConfig() {
     }
   }
 
-  async function onInstallFasterWhisperCuda() {
-    dictationLocalModelsBusy.value = FASTER_WHISPER_CUDA_PROGRESS_ID;
-    dictationLocalModelsError.value = "";
-    dictationLocalModelDownloadProgress.value = {
-      ...dictationLocalModelDownloadProgress.value,
-      [FASTER_WHISPER_CUDA_PROGRESS_ID]: {
-        phase: "cuda",
-        downloadedBytes: 0,
-        totalBytes: null,
-        percent: null,
-      },
-    };
-    try {
-      const resp = (await window.kepler.ark.request(
-        "dictation.install_faster_whisper_cuda",
-        {},
-      )) as {
-        localModels?: DictationLocalModelsSnapshot;
-      };
-      if (resp.localModels) dictationLocalModels.value = resp.localModels;
-    } catch (e) {
-      dictationLocalModelsError.value = (e as Error).message;
-      const next = { ...dictationLocalModelDownloadProgress.value };
-      delete next[FASTER_WHISPER_CUDA_PROGRESS_ID];
-      dictationLocalModelDownloadProgress.value = next;
-    } finally {
-      dictationLocalModelsBusy.value = null;
-    }
-  }
-
   async function onDictationHotkeyCapture(acc: string) {
     if (!acc) return;
     await patchDictationConfig({ hotkey: acc });
@@ -910,7 +872,6 @@ export function createDictationConfig() {
     onDictationDownloadLocalModel,
     onDictationUseLocalModel,
     onDictationDeleteLocalModel,
-    onInstallFasterWhisperCuda,
     onDictationHotkeyCapture,
     onDictationCaptureStart,
     onDictationCaptureEnd,

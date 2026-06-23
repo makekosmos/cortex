@@ -24,7 +24,6 @@ const {
   dictationModelName,
   dictationLocalModelPath,
   dictationLocalModelId,
-  dictationLocalEngine,
   dictationLocalModels,
   dictationLocalModelsBusy,
   dictationLocalModelsError,
@@ -58,11 +57,6 @@ const activeIntro = computed(() =>
 );
 
 const isGroqProvider = computed(() => dictationConfig.value.provider === "groq");
-const isFasterWhisperEngine = computed(() => {
-  const engine = dictationLocalEngine.value.trim().toLowerCase();
-  return engine === "faster-whisper" || engine === "faster_whisper";
-});
-
 const modelSortOptions: Array<{ id: ModelSortMode; label: string }> = [
   { id: "brand", label: "По бренду" },
   { id: "speed", label: "По скорости" },
@@ -255,19 +249,6 @@ const modelCatalogSections = computed<CatalogModelSection[]>(() => {
     }));
 });
 
-function fasterWhisperModelId(modelId: string) {
-  switch (modelId) {
-    case "tiny-q5_1":
-      return "tiny";
-    case "turbo":
-      return "large-v3-turbo";
-    case "large":
-      return "large-v3";
-    default:
-      return modelId;
-  }
-}
-
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 Б";
   const units = ["Б", "КБ", "МБ", "ГБ"];
@@ -290,19 +271,11 @@ function downloadProgressLabel(progress: {
   const phase =
     progress.phase === "runtime"
       ? "скачиваю STT runtime"
-      : progress.phase === "cuda"
-        ? "скачиваю NVIDIA runtime"
-        : progress.phase === "tool"
-          ? "скачиваю whisper.cpp"
-          : progress.phase === "extract"
-            ? "распаковываю whisper.cpp"
-            : progress.phase === "python"
-              ? "создаю Python env"
-              : progress.phase === "package"
-                ? "ставлю faster-whisper"
-                : progress.phase === "faster-whisper"
-                  ? "готовлю Faster Whisper"
-                  : "скачиваю модель";
+      : progress.phase === "tool"
+        ? "скачиваю whisper.cpp"
+        : progress.phase === "extract"
+          ? "распаковываю whisper.cpp"
+          : "скачиваю модель";
   if (progress.percent !== null) return `${phase} ${Math.round(progress.percent)}%`;
   if (progress.totalBytes) {
     return `${phase} ${formatBytes(progress.downloadedBytes)} / ${formatBytes(progress.totalBytes)}`;
@@ -326,21 +299,10 @@ function scoreSegmentClass(score: number, index: number) {
 }
 
 function localModelUiState(model: { id: string; downloaded: boolean; selected: boolean }) {
-  if (!isFasterWhisperEngine.value) {
-    return {
-      ...model,
-      downloaded:
-        model.selected ||
-        (model.downloaded && Boolean(dictationLocalModels.value?.commandInstalled)),
-    };
-  }
-  const backendModelId = fasterWhisperModelId(model.id);
-  const selected =
-    dictationLocalModelId.value === model.id && dictationLocalModelPath.value === backendModelId;
   return {
     ...model,
-    downloaded: model.downloaded || selected,
-    selected,
+    downloaded:
+      model.selected || (model.downloaded && Boolean(dictationLocalModels.value?.commandInstalled)),
   };
 }
 

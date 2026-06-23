@@ -140,31 +140,6 @@ mod tests {
     }
 
     #[test]
-    fn request_roundtrip_preserves_faster_whisper_engine() {
-        let envelope = LocalSttRequestEnvelope {
-            request_id: 43,
-            request: LocalSttRequest::Preload {
-                model: LocalSttModelSpec {
-                    engine: "faster-whisper".into(),
-                    model_id: Some("turbo".into()),
-                    model_path: Some("C:/models/faster-whisper-large-v3-turbo".into()),
-                    command_path: None,
-                    accelerator: LocalSttAccelerator::Gpu,
-                    profile: LocalSttProfile::Fast,
-                    idle_unload_after_ms: Some(300_000),
-                },
-            },
-        };
-
-        let json = serde_json::to_string(&envelope).expect("serialize request");
-        assert!(json.contains("faster-whisper"));
-        let decoded: LocalSttRequestEnvelope =
-            serde_json::from_str(&json).expect("deserialize request");
-
-        assert_eq!(decoded, envelope);
-    }
-
-    #[test]
     fn response_roundtrip_preserves_status_payload() {
         let envelope = LocalSttResponseEnvelope {
             request_id: 7,
@@ -182,7 +157,7 @@ mod tests {
                 }),
                 backend: Some("whisper_server".into()),
                 accelerator: LocalSttAccelerator::Gpu,
-                device: Some("NVIDIA GeForce RTX 5070".into()),
+                device: Some("Vulkan GPU".into()),
                 profile: LocalSttProfile::Fast,
                 idle_unload_after_ms: Some(300_000),
             })),

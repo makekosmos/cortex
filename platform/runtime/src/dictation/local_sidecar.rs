@@ -14,9 +14,8 @@ use serde_json::Value;
 use tokio::task::JoinHandle;
 
 use super::local::{
-    is_faster_whisper_engine, preload_with_whisper_backend_model,
-    transcribe_with_whisper_backend_model, unload_whisper_backend, FasterWhisperWorker, LocalError,
-    TranscriptionResult,
+    preload_with_whisper_backend_model, transcribe_with_whisper_backend_model,
+    unload_whisper_backend, LocalError, TranscriptionResult,
 };
 use super::local_sidecar_protocol::{
     LocalSttAccelerator, LocalSttAck, LocalSttModelSpec, LocalSttProfile, LocalSttRequest,
@@ -31,7 +30,6 @@ struct WarmState {
     backend: Option<String>,
     last_used_at: Option<Instant>,
     embedded: Option<WhisperDllEngine>,
-    faster_whisper: Option<FasterWhisperWorker>,
 }
 
 pub struct LocalSttSidecarService {
@@ -86,17 +84,6 @@ impl LocalSttSidecarService {
         match request {
             LocalSttRequest::Status => Ok(LocalSttResponse::Status(self.status())),
             LocalSttRequest::LoadModel { model } | LocalSttRequest::Preload { model } => {
-                if is_faster_whisper_engine(&model.engine) {
-                    #[cfg(not(test))]
-                    {
-                        self.load_faster_whisper_worker(&model).await?;
-                    }
-                    self.state.loaded_model = Some(model);
-                    self.state.backend = Some("faster_whisper".into());
-                    self.state.last_used_at = Some(Instant::now());
-                    self.state.embedded = None;
-                    return Ok(LocalSttResponse::Status(self.status()));
-                }
                 if let Err(error) = self.load_embedded_model(&model) {
                     eprintln!("[kosmos-local-stt] embedded whisper.dll preload fallback: {error}");
                     let warm = preload_with_whisper_backend_model(&model).await?;
@@ -116,49 +103,36 @@ impl LocalSttSidecarService {
                 let wav = base64::engine::general_purpose::STANDARD
                     .decode(wav_base64)
                     .map_err(|e| LocalError::CommandFailed(format!("invalid wav_base64: {e}")))?;
-                let TranscriptionResult { text, backend } =
-                    if is_faster_whisper_engine(&model.engine) {
-                        self.transcribe_faster_whisper(
-                            &model,
-                            &wav,
-                            &language,
-                            &prompt,
-                            cancel_flag.clone(),
-                        )
-                        .await?
-                    } else {
-                        match self.transcribe_embedded(
-                            &model,
-                            &wav,
-                            &language,
-                            &prompt,
-                            cancel_flag.as_deref(),
-                        ) {
-                            Ok(result) => result,
-                            Err(error) => {
-                                if cancel_flag
-                                    .as_ref()
-                                    .is_some_and(|flag| flag.load(Ordering::SeqCst))
-                                {
-                                    return Err(error);
-                                }
-                                eprintln!(
+                let TranscriptionResult { text, backend } = match self.transcribe_embedded(
+                    &model,
+                    &wav,
+                    &language,
+                    &prompt,
+                    cancel_flag.as_deref(),
+                ) {
+                    Ok(result) => result,
+                    Err(error) => {
+                        if matches!(error, LocalError::EmptyTranscript) {
+                            return Err(error);
+                        }
+                        if cancel_flag
+                            .as_ref()
+                            .is_some_and(|flag| flag.load(Ordering::SeqCst))
+                        {
+                            return Err(error);
+                        }
+                        eprintln!(
                             "[kosmos-local-stt] embedded whisper.dll transcribe fallback: {error}"
                         );
-                                let result = transcribe_with_whisper_backend_model(
-                                    &model, &wav, &language, &prompt,
-                                )
+                        let result =
+                            transcribe_with_whisper_backend_model(&model, &wav, &language, &prompt)
                                 .await?;
-                                self.state.embedded = None;
-                                result
-                            }
-                        }
-                    };
+                        self.state.embedded = None;
+                        result
+                    }
+                };
 
-                if backend == "whisper_server"
-                    || backend == "whisper_dll"
-                    || backend == "faster_whisper"
-                {
+                if backend == "whisper_server" || backend == "whisper_dll" {
                     self.state.loaded_model = Some(model);
                     self.state.backend = Some(backend.clone());
                     self.state.last_used_at = Some(Instant::now());
@@ -253,62 +227,6 @@ impl LocalSttSidecarService {
         engine.transcribe(model, wav, language, prompt, cancel_flag)
     }
 
-    async fn load_faster_whisper_worker(
-        &mut self,
-        model: &LocalSttModelSpec,
-    ) -> Result<(), LocalError> {
-        let start = Instant::now();
-        if self
-            .state
-            .faster_whisper
-            .as_ref()
-            .is_some_and(|worker| worker.matches_model(model))
-        {
-            eprintln!("[kosmos-local-stt] faster-whisper worker reused");
-            return Ok(());
-        }
-        self.state.faster_whisper = None;
-        let worker = FasterWhisperWorker::start(model).await?;
-        eprintln!(
-            "[kosmos-local-stt] faster-whisper worker loaded duration_ms={}",
-            start.elapsed().as_millis()
-        );
-        self.state.faster_whisper = Some(worker);
-        Ok(())
-    }
-
-    async fn transcribe_faster_whisper(
-        &mut self,
-        model: &LocalSttModelSpec,
-        wav: &[u8],
-        language: &str,
-        prompt: &str,
-        cancel_flag: Option<Arc<AtomicBool>>,
-    ) -> Result<TranscriptionResult, LocalError> {
-        let start = Instant::now();
-        self.load_faster_whisper_worker(model).await?;
-        let load_ms = start.elapsed().as_millis();
-        let worker = self.state.faster_whisper.as_mut().ok_or_else(|| {
-            LocalError::SidecarUnavailable("faster-whisper worker is not loaded".into())
-        })?;
-        match worker.transcribe(wav, language, prompt, cancel_flag).await {
-            Ok(result) => {
-                eprintln!(
-                    "[kosmos-local-stt] faster-whisper transcribe done load_ms={} total_ms={}",
-                    load_ms,
-                    start.elapsed().as_millis()
-                );
-                Ok(result)
-            }
-            Err(error) => {
-                if should_drop_faster_whisper_worker(&error) {
-                    self.state.faster_whisper = None;
-                }
-                Err(error)
-            }
-        }
-    }
-
     async fn unload_if_idle(&mut self) {
         let Some(model) = self.state.loaded_model.as_ref() else {
             return;
@@ -327,18 +245,6 @@ impl LocalSttSidecarService {
 
     fn reset(&mut self) {
         self.state = WarmState::default();
-    }
-}
-
-fn should_drop_faster_whisper_worker(error: &LocalError) -> bool {
-    match error {
-        LocalError::EmptyTranscript => false,
-        LocalError::CommandFailed(message)
-            if message.contains("cancelled") || message.contains("EmptyTranscript") =>
-        {
-            false
-        }
-        _ => true,
     }
 }
 
@@ -391,17 +297,7 @@ fn effective_accelerator(model: &LocalSttModelSpec) -> LocalSttAccelerator {
     match model.accelerator {
         LocalSttAccelerator::Cpu => LocalSttAccelerator::Cpu,
         LocalSttAccelerator::Gpu => LocalSttAccelerator::Gpu,
-        LocalSttAccelerator::Auto => {
-            if model
-                .command_path
-                .as_deref()
-                .is_some_and(|path| path.to_ascii_lowercase().contains("cublas"))
-            {
-                LocalSttAccelerator::Gpu
-            } else {
-                LocalSttAccelerator::Auto
-            }
-        }
+        LocalSttAccelerator::Auto => LocalSttAccelerator::Auto,
     }
 }
 
@@ -516,7 +412,7 @@ pub async fn run_stdio_service() -> io::Result<()> {
                         && kind == ActiveSidecarRequestKind::Transcribe
                     {
                         // Keep the recording-start warm-up alive. The transcribe task will wait
-                        // on the service mutex and reuse the warmed faster-whisper worker instead
+                        // on the service mutex and reuse the warmed whisper.cpp backend instead
                         // of cancelling preload and paying cold-start latency on short utterances.
                     } else {
                         previous.cancel_flag.store(true, Ordering::SeqCst);
@@ -614,7 +510,7 @@ mod tests {
                 engine: "whisper.cpp".into(),
                 model_id: Some("turbo".into()),
                 model_path: Some("C:/models/turbo.bin".into()),
-                command_path: Some("C:/tools/whisper.cpp-cublas/Release/whisper-cli.exe".into()),
+                command_path: Some("C:/tools/whisper.cpp-vulkan/Release/whisper-cli.exe".into()),
                 accelerator: LocalSttAccelerator::Gpu,
                 profile: LocalSttProfile::Accurate,
                 idle_unload_after_ms: Some(timeout_ms),
@@ -622,7 +518,6 @@ mod tests {
             backend: Some("whisper_server".into()),
             last_used_at: Some(Instant::now()),
             embedded: None,
-            faster_whisper: None,
         };
         service
     }
@@ -664,54 +559,6 @@ mod tests {
         };
         assert!(ack.accepted);
         assert!(!service.status().warm);
-    }
-
-    #[tokio::test]
-    async fn faster_whisper_preload_marks_warm_without_whisper_cpp_backend() {
-        let mut service = LocalSttSidecarService::new();
-        let response = service
-            .handle(LocalSttRequestEnvelope {
-                request_id: 4,
-                request: LocalSttRequest::Preload {
-                    model: LocalSttModelSpec {
-                        engine: "faster-whisper".into(),
-                        model_id: Some("turbo".into()),
-                        model_path: Some("C:/models/faster-whisper-large-v3-turbo".into()),
-                        command_path: None,
-                        accelerator: LocalSttAccelerator::Gpu,
-                        profile: LocalSttProfile::Fast,
-                        idle_unload_after_ms: Some(300_000),
-                    },
-                },
-            })
-            .await;
-
-        let LocalSttResponse::Status(status) = response.response.expect("expected status response")
-        else {
-            unreachable!("expected status response");
-        };
-        assert!(status.warm);
-        assert_eq!(status.backend.as_deref(), Some("faster_whisper"));
-        assert_eq!(
-            status
-                .loaded_model
-                .as_ref()
-                .map(|model| model.engine.as_str()),
-            Some("faster-whisper")
-        );
-    }
-
-    #[test]
-    fn faster_whisper_empty_transcript_does_not_drop_worker() {
-        assert!(!should_drop_faster_whisper_worker(
-            &LocalError::EmptyTranscript
-        ));
-        assert!(!should_drop_faster_whisper_worker(
-            &LocalError::CommandFailed("faster-whisper cancelled".into())
-        ));
-        assert!(should_drop_faster_whisper_worker(
-            &LocalError::CommandFailed("faster-whisper worker timed out".into())
-        ));
     }
 
     #[tokio::test]

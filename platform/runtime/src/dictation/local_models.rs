@@ -1,8 +1,7 @@
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::{self, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::OnceLock;
 use std::time::Duration;
 
 use reqwest::header::{
@@ -12,43 +11,27 @@ use reqwest::Client;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
-use tokio::process::Command as TokioCommand;
 
 use super::config;
 
 const MODELS_DIR: &str = "models/dictation";
 const TOOLS_DIR: &str = "tools/dictation/whisper.cpp";
 const CUDA_TOOLS_DIR: &str = "tools/dictation/whisper.cpp-cublas";
-const FASTER_WHISPER_LEGACY_DIR: &str = "tools/dictation/faster-whisper";
-const FASTER_WHISPER_MODEL_CACHE_DIR: &str = "models/whisper";
-const FASTER_WHISPER_VENV_DIR: &str = ".venv";
-const FASTER_WHISPER_MARKERS_DIR: &str = "prepared-models";
-const FASTER_WHISPER_RUNTIME_DIR: &str = "runtimes/faster-whisper/win-x64";
-const FASTER_WHISPER_CUDA_LIBS_DIR: &str = "runtimes/cuda-libs/cuda12-cudnn9";
-const FASTER_WHISPER_RUNTIME_VERSION: &str = "2026.06.23";
-const FASTER_WHISPER_RUNTIME_MANIFEST: &str = "kosmos-runtime.json";
-const FASTER_WHISPER_RUNTIME_ARCHIVE: &str = "kosmos-faster-whisper-runtime-win-x64.zip";
-const FASTER_WHISPER_CUDA_ARCHIVE: &str = "kosmos-cuda-libs-cuda12-cudnn9.zip";
-const FASTER_WHISPER_RUNTIME_DEFAULT_URL: &str = "https://github.com/makekosmos/local-ai-runtimes/releases/download/faster-whisper-win-x64-2026.06.23/kosmos-faster-whisper-runtime-win-x64.zip";
-const FASTER_WHISPER_RUNTIME_DEFAULT_SHA256: &str =
-    "54a954ef9d8b56bf5b863a41b148863a695e22a8f94636b441f07179ce0813b1";
-const FASTER_WHISPER_CUDA_CUBLAS_URL: &str = "https://files.pythonhosted.org/packages/20/e2/fc9a0e985249d873150276d5afb02e39a66817fedbf1a385724393e505ed/nvidia_cublas_cu12-12.9.2.10-py3-none-win_amd64.whl";
-const FASTER_WHISPER_CUDA_CUBLAS_SHA256: &str =
-    "623f43027d40d44ceadf0043f002bd25cf353e8f13ce90b9a87057019f560661";
-const FASTER_WHISPER_CUDA_CUDNN_URL: &str = "https://files.pythonhosted.org/packages/9b/93/b37f3a0fe29b1ae3bbb42c22cc25cb152971bb400a589cade336bdf5f4f3/nvidia_cudnn_cu12-9.23.2.1-py3-none-win_amd64.whl";
-const FASTER_WHISPER_CUDA_CUDNN_SHA256: &str =
-    "549d6eb120cdd89429997243cd2cad1e864aac3a2f887a93f17836ce72d83873";
+const VULKAN_TOOLS_DIR: &str = "tools/dictation/whisper.cpp-vulkan";
+const OLD_FASTER_WHISPER_TOOLS_DIR: &str = "tools/dictation/faster-whisper";
+const OLD_FASTER_WHISPER_MODEL_CACHE_DIR: &str = "models/whisper";
+const OLD_FASTER_WHISPER_RUNTIME_DIR: &str = "runtimes/faster-whisper";
+const OLD_FASTER_WHISPER_CUDA_LIBS_DIR: &str = "runtimes/cuda-libs";
 const DOWNLOAD_MAX_ATTEMPTS: usize = 8;
 
 #[cfg(windows)]
 const WHISPER_CPP_CPU_ZIP_URL: &str =
     "https://github.com/ggml-org/whisper.cpp/releases/download/v1.8.4/whisper-bin-x64.zip";
 #[cfg(windows)]
-const WHISPER_CPP_CUDA_ZIP_URL: &str =
-    "https://sourceforge.net/projects/whisper-cpp.mirror/files/v1.8.5/whisper-cublas-12.4.0-bin-x64.zip/download";
-
+const WHISPER_CPP_VULKAN_ZIP_URL: &str = "https://github.com/makekosmos/local-ai-runtimes/releases/download/whisper-vulkan-win-x64-v1.9.1/whisper-vulkan-bin-x64-v1.9.1.zip";
 #[cfg(windows)]
-static NVIDIA_GPU_AVAILABLE: OnceLock<bool> = OnceLock::new();
+const WHISPER_CPP_VULKAN_ZIP_SHA256: &str =
+    "b5660319454be5f33f387262ddeef5148e78be16c0308edc190e50fda50e66a3";
 
 #[derive(Debug, Clone, Copy)]
 pub struct ModelSpec {
@@ -87,9 +70,6 @@ pub struct LocalModelsSnapshot {
     pub models_dir: String,
     pub command_path: Option<String>,
     pub command_installed: bool,
-    pub faster_whisper_runtime_installed: bool,
-    pub faster_whisper_cuda_installed: bool,
-    pub faster_whisper_cuda_supported: bool,
     pub models: Vec<LocalModelInfo>,
 }
 
@@ -103,8 +83,6 @@ pub enum LocalModelsError {
     UnsupportedPlatform,
     #[error("download failed: {0}")]
     Download(String),
-    #[error("faster-whisper setup failed: {0}")]
-    FasterWhisper(String),
     #[error("io: {0}")]
     Io(#[from] io::Error),
     #[error("zip: {0}")]
@@ -224,14 +202,6 @@ fn shared_assets_root(data_dir: &Path) -> PathBuf {
     default_shared_assets_root()
 }
 
-fn faster_whisper_runtime_version() -> String {
-    std::env::var("KOSMOS_FASTER_WHISPER_RUNTIME_VERSION")
-        .ok()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| FASTER_WHISPER_RUNTIME_VERSION.to_owned())
-}
-
 fn merge_legacy_dir_into_shared(legacy: &Path, shared: &Path) -> io::Result<bool> {
     if !legacy.is_dir() || same_path_or_text(legacy, shared) {
         return Ok(false);
@@ -275,10 +245,6 @@ fn merge_legacy_dir_into_shared(legacy: &Path, shared: &Path) -> io::Result<bool
         changed = true;
     }
     Ok(changed)
-}
-
-fn legacy_faster_whisper_dir(data_dir: &Path) -> PathBuf {
-    shared_assets_root(data_dir).join(FASTER_WHISPER_LEGACY_DIR)
 }
 
 fn same_file_contents(left: &Path, right: &Path) -> io::Result<bool> {
@@ -345,19 +311,12 @@ pub fn migrate_legacy_assets(data_dir: &Path) -> io::Result<bool> {
             continue;
         }
         changed |= merge_legacy_dir_into_shared(&root.join(MODELS_DIR), &models_dir(data_dir))?;
-        let legacy_faster_whisper = root.join(FASTER_WHISPER_LEGACY_DIR);
-        changed |= merge_legacy_dir_into_shared(
-            &legacy_faster_whisper.join(FASTER_WHISPER_VENV_DIR),
-            &faster_whisper_venv_dir(data_dir),
-        )?;
-        changed |=
-            merge_legacy_dir_into_shared(&legacy_faster_whisper, &faster_whisper_dir(data_dir))?;
         changed |= merge_legacy_dir_into_shared(&root.join(TOOLS_DIR), &tools_dir(data_dir))?;
         #[cfg(windows)]
         {
             changed |= merge_legacy_dir_into_shared(
-                &root.join(CUDA_TOOLS_DIR),
-                &cuda_tools_dir(data_dir),
+                &root.join(VULKAN_TOOLS_DIR),
+                &vulkan_tools_dir(data_dir),
             )?;
         }
     }
@@ -372,115 +331,9 @@ pub fn tools_dir(data_dir: &Path) -> PathBuf {
     shared_assets_root(data_dir).join(TOOLS_DIR)
 }
 
-pub fn faster_whisper_dir(data_dir: &Path) -> PathBuf {
-    shared_assets_root(data_dir).join(FASTER_WHISPER_MODEL_CACHE_DIR)
-}
-
-pub fn faster_whisper_runtime_dir(data_dir: &Path) -> PathBuf {
-    shared_assets_root(data_dir)
-        .join(FASTER_WHISPER_RUNTIME_DIR)
-        .join(faster_whisper_runtime_version())
-}
-
-pub fn faster_whisper_cuda_libs_dir(data_dir: &Path) -> PathBuf {
-    shared_assets_root(data_dir)
-        .join(FASTER_WHISPER_CUDA_LIBS_DIR)
-        .join(faster_whisper_runtime_version())
-}
-
-pub fn faster_whisper_venv_dir(data_dir: &Path) -> PathBuf {
-    faster_whisper_runtime_dir(data_dir).join(FASTER_WHISPER_VENV_DIR)
-}
-
-pub fn faster_whisper_python_path(data_dir: &Path) -> PathBuf {
-    #[cfg(windows)]
-    {
-        faster_whisper_venv_dir(data_dir)
-            .join("Scripts")
-            .join("python.exe")
-    }
-    #[cfg(not(windows))]
-    {
-        faster_whisper_venv_dir(data_dir).join("bin").join("python")
-    }
-}
-
-fn faster_whisper_python_candidates(data_dir: &Path) -> Vec<PathBuf> {
-    let runtime_dir = faster_whisper_runtime_dir(data_dir);
-    let mut candidates = Vec::new();
-    candidates.push(faster_whisper_python_path(data_dir));
-    #[cfg(windows)]
-    {
-        candidates.push(runtime_dir.join("python.exe"));
-        candidates.push(runtime_dir.join("python").join("python.exe"));
-    }
-    #[cfg(not(windows))]
-    {
-        candidates.push(runtime_dir.join("bin").join("python"));
-        candidates.push(runtime_dir.join("python").join("bin").join("python"));
-    }
-    candidates
-}
-
-pub fn faster_whisper_runtime_python_path(data_dir: &Path) -> Option<PathBuf> {
-    faster_whisper_python_candidates(data_dir)
-        .into_iter()
-        .find(|path| path.is_file())
-}
-
-pub fn faster_whisper_cuda_runtime_dirs(data_dir: &Path) -> Vec<PathBuf> {
-    let cuda_dir = faster_whisper_cuda_libs_dir(data_dir);
-    let runtime_dir = faster_whisper_runtime_dir(data_dir);
-    let venv_dir = faster_whisper_venv_dir(data_dir);
-    if cfg!(windows) {
-        vec![
-            cuda_dir.join("cublas").join("bin"),
-            cuda_dir.join("cudnn").join("bin"),
-            cuda_dir.join("bin"),
-            runtime_dir
-                .join("Lib")
-                .join("site-packages")
-                .join("ctranslate2"),
-            venv_dir
-                .join("Lib")
-                .join("site-packages")
-                .join("ctranslate2"),
-        ]
-    } else {
-        vec![
-            cuda_dir.join("cublas").join("lib"),
-            cuda_dir.join("cudnn").join("lib"),
-            cuda_dir.join("lib"),
-        ]
-    }
-}
-
-pub fn faster_whisper_python_command(data_dir: &Path) -> String {
-    std::env::var("KOSMOS_FASTER_WHISPER_PYTHON")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| {
-            faster_whisper_runtime_python_path(data_dir)
-                .map(|path| path_string(&path))
-                .unwrap_or_else(|| path_string(&faster_whisper_python_path(data_dir)))
-        })
-}
-
-pub fn faster_whisper_model_id(model_id: &str) -> Result<&'static str, LocalModelsError> {
-    match model_id.trim().to_ascii_lowercase().as_str() {
-        "tiny" | "tiny-q5_1" | "whisper-tiny" => Ok("tiny"),
-        "base" | "whisper-base" => Ok("base"),
-        "small" | "whisper-small" => Ok("small"),
-        "medium" | "whisper-medium" => Ok("medium"),
-        "turbo" | "large-v3-turbo" | "whisper-large-v3-turbo" => Ok("large-v3-turbo"),
-        "large" | "large-v3" | "whisper-large-v3" => Ok("large-v3"),
-        _ => Err(LocalModelsError::ModelNotFound(model_id.to_owned())),
-    }
-}
-
 #[cfg(windows)]
-fn cuda_tools_dir(data_dir: &Path) -> PathBuf {
-    shared_assets_root(data_dir).join(CUDA_TOOLS_DIR)
+fn vulkan_tools_dir(data_dir: &Path) -> PathBuf {
+    shared_assets_root(data_dir).join(VULKAN_TOOLS_DIR)
 }
 
 pub fn model_path(data_dir: &Path, spec: &ModelSpec) -> PathBuf {
@@ -498,13 +351,13 @@ pub fn command_path(data_dir: &Path) -> Option<PathBuf> {
         if preferred.is_file() {
             return Some(preferred);
         }
+        let vulkan = vulkan_command_path(data_dir);
+        if vulkan_tools_enabled() && vulkan.is_file() {
+            return Some(vulkan);
+        }
         let cpu = cpu_command_path(data_dir);
         if cpu.is_file() {
             return Some(cpu);
-        }
-        let cuda = cuda_command_path(data_dir);
-        if cuda.is_file() {
-            return Some(cuda);
         }
         Some(preferred)
     }
@@ -521,16 +374,17 @@ fn cpu_command_path(data_dir: &Path) -> PathBuf {
 }
 
 #[cfg(windows)]
-fn cuda_command_path(data_dir: &Path) -> PathBuf {
-    cuda_tools_dir(data_dir)
+fn vulkan_command_path(data_dir: &Path) -> PathBuf {
+    vulkan_tools_dir(data_dir)
         .join("Release")
         .join("whisper-cli.exe")
 }
 
 #[cfg(windows)]
 fn preferred_command_path(data_dir: &Path) -> PathBuf {
-    if cuda_tools_enabled() {
-        cuda_command_path(data_dir)
+    let vulkan = vulkan_command_path(data_dir);
+    if vulkan_tools_enabled() && vulkan.is_file() {
+        vulkan
     } else {
         cpu_command_path(data_dir)
     }
@@ -538,53 +392,54 @@ fn preferred_command_path(data_dir: &Path) -> PathBuf {
 
 #[cfg(windows)]
 fn managed_command_paths(data_dir: &Path) -> [PathBuf; 2] {
-    [cpu_command_path(data_dir), cuda_command_path(data_dir)]
+    [cpu_command_path(data_dir), vulkan_command_path(data_dir)]
 }
 
 #[cfg(windows)]
-fn nvidia_gpu_available() -> bool {
-    *NVIDIA_GPU_AVAILABLE.get_or_init(|| {
-        if std::env::var("KOSMOS_DICTATION_DISABLE_CUDA").as_deref() == Ok("1") {
-            return false;
-        }
-        Command::new("nvidia-smi")
-            .arg("-L")
+fn vulkan_tools_enabled() -> bool {
+    if std::env::var("KOSMOS_DICTATION_DISABLE_VULKAN").as_deref() == Ok("1") {
+        return false;
+    }
+    vulkan_runtime_available()
+}
+
+#[cfg(windows)]
+fn vulkan_runtime_available() -> bool {
+    if cfg!(test) {
+        return true;
+    }
+    let system_vulkan = std::env::var("SystemRoot")
+        .ok()
+        .map(PathBuf::from)
+        .map(|root| root.join("System32").join("vulkan-1.dll"))
+        .is_some_and(|path| path.is_file());
+    system_vulkan
+        || Command::new("where")
+            .arg("vulkan-1.dll")
             .output()
-            .map(|output| output.status.success() && !output.stdout.is_empty())
+            .map(|output| output.status.success())
             .unwrap_or(false)
-    })
 }
 
 #[cfg(windows)]
-fn cuda_tools_enabled() -> bool {
-    std::env::var("KOSMOS_DICTATION_ENABLE_CUDA").as_deref() == Ok("1") && nvidia_gpu_available()
+fn vulkan_zip_url() -> String {
+    std::env::var("KOSMOS_WHISPER_CPP_VULKAN_ZIP_URL")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| WHISPER_CPP_VULKAN_ZIP_URL.to_owned())
 }
 
-pub fn faster_whisper_cuda_runtime_available(data_dir: &Path) -> bool {
-    let cublas = if cfg!(windows) {
-        "cublas64_12.dll"
-    } else {
-        "libcublas.so.12"
-    };
-    let cudnn = if cfg!(windows) {
-        "cudnn64_9.dll"
-    } else {
-        "libcudnn.so.9"
-    };
-    let dirs = faster_whisper_cuda_runtime_dirs(data_dir);
-    dirs.iter().any(|dir| dir.join(cublas).is_file())
-        && dirs.iter().any(|dir| dir.join(cudnn).is_file())
-}
-
-pub fn faster_whisper_cuda_supported() -> bool {
-    #[cfg(windows)]
-    {
-        nvidia_gpu_available()
-    }
-    #[cfg(not(windows))]
-    {
-        false
-    }
+#[cfg(windows)]
+fn vulkan_zip_sha256() -> Option<String> {
+    std::env::var("KOSMOS_WHISPER_CPP_VULKAN_ZIP_SHA256")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            (vulkan_zip_url() == WHISPER_CPP_VULKAN_ZIP_URL)
+                .then(|| WHISPER_CPP_VULKAN_ZIP_SHA256.to_owned())
+        })
 }
 
 #[cfg(windows)]
@@ -640,32 +495,28 @@ fn path_string(path: &Path) -> String {
     path.to_string_lossy().to_string()
 }
 
-pub fn faster_whisper_model_is_prepared(data_dir: &Path, model_id: &str) -> bool {
-    faster_whisper_model_marker_path(data_dir, model_id).is_file()
-        && faster_whisper_runtime_ready(data_dir)
-}
-
-fn faster_whisper_markers_dir(data_dir: &Path) -> PathBuf {
-    faster_whisper_dir(data_dir).join(FASTER_WHISPER_MARKERS_DIR)
-}
-
-fn has_prepared_faster_whisper_models(data_dir: &Path) -> bool {
-    if !faster_whisper_runtime_ready(data_dir) {
-        return false;
-    }
-    fs::read_dir(faster_whisper_markers_dir(data_dir))
-        .ok()
-        .into_iter()
-        .flatten()
-        .filter_map(Result::ok)
-        .any(|entry| entry.path().is_file())
-}
-
 pub fn has_downloaded_model_assets(data_dir: &Path) -> bool {
     MODEL_CATALOG
         .iter()
         .any(|spec| model_path(data_dir, spec).is_file())
-        || has_prepared_faster_whisper_models(data_dir)
+}
+
+pub fn cleanup_obsolete_local_stt_assets(data_dir: &Path) -> io::Result<bool> {
+    let mut changed = false;
+    for path in [
+        shared_assets_root(data_dir).join(OLD_FASTER_WHISPER_TOOLS_DIR),
+        shared_assets_root(data_dir).join(OLD_FASTER_WHISPER_MODEL_CACHE_DIR),
+        shared_assets_root(data_dir).join(OLD_FASTER_WHISPER_RUNTIME_DIR),
+        shared_assets_root(data_dir).join(OLD_FASTER_WHISPER_CUDA_LIBS_DIR),
+        #[cfg(windows)]
+        shared_assets_root(data_dir).join(CUDA_TOOLS_DIR),
+    ] {
+        if path.exists() {
+            fs::remove_dir_all(path)?;
+            changed = true;
+        }
+    }
+    Ok(changed)
 }
 
 pub fn cleanup_unused_backends(data_dir: &Path) -> io::Result<bool> {
@@ -676,19 +527,9 @@ pub fn cleanup_unused_backends(data_dir: &Path) -> io::Result<bool> {
     let mut changed = false;
     for path in [
         tools_dir(data_dir),
-        legacy_faster_whisper_dir(data_dir),
-        faster_whisper_dir(data_dir),
-        faster_whisper_runtime_dir(data_dir),
-        faster_whisper_cuda_libs_dir(data_dir),
+        #[cfg(windows)]
+        vulkan_tools_dir(data_dir),
     ] {
-        if path.exists() {
-            fs::remove_dir_all(path)?;
-            changed = true;
-        }
-    }
-    #[cfg(windows)]
-    {
-        let path = cuda_tools_dir(data_dir);
         if path.exists() {
             fs::remove_dir_all(path)?;
             changed = true;
@@ -702,26 +543,14 @@ pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSn
     let command_path = command_path(data_dir);
     let command_installed = command_path.as_ref().is_some_and(|path| path.is_file());
     let selected_path = cfg.local_model_path.as_deref();
-    let faster_whisper_selected = cfg.local_engine.eq_ignore_ascii_case("faster-whisper")
-        || cfg.local_engine.eq_ignore_ascii_case("faster_whisper");
     let models = MODEL_CATALOG
         .iter()
         .map(|spec| {
             let path = model_path(data_dir, spec);
             let path_text = path_string(&path);
             let selected = cfg.local_model.as_deref() == Some(spec.id)
-                || selected_path == Some(path_text.as_str())
-                || (faster_whisper_selected
-                    && cfg.local_model.as_deref() == Some(spec.id)
-                    && faster_whisper_model_id(spec.id)
-                        .ok()
-                        .is_some_and(|model| selected_path == Some(model)));
-            let faster_whisper_downloaded = faster_whisper_model_is_prepared(data_dir, spec.id);
-            let downloaded = if faster_whisper_selected {
-                faster_whisper_downloaded
-            } else {
-                path.is_file()
-            };
+                || selected_path == Some(path_text.as_str());
+            let downloaded = path.is_file();
             LocalModelInfo {
                 id: spec.id.to_owned(),
                 name: spec.name.to_owned(),
@@ -743,9 +572,6 @@ pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSn
         models_dir: path_string(&models_dir),
         command_path: command_path.map(|path| path_string(&path)),
         command_installed,
-        faster_whisper_runtime_installed: faster_whisper_runtime_ready(data_dir),
-        faster_whisper_cuda_installed: faster_whisper_cuda_runtime_available(data_dir),
-        faster_whisper_cuda_supported: faster_whisper_cuda_supported(),
         models,
     }
 }
@@ -944,363 +770,6 @@ fn verify_sha256(path: &Path, expected: &str) -> Result<(), LocalModelsError> {
     }
 }
 
-struct InstallLock {
-    path: PathBuf,
-    _file: File,
-}
-
-impl Drop for InstallLock {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
-    }
-}
-
-async fn acquire_install_lock(path: PathBuf) -> Result<InstallLock, LocalModelsError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    for _ in 0..240 {
-        match OpenOptions::new().write(true).create_new(true).open(&path) {
-            Ok(file) => return Ok(InstallLock { path, _file: file }),
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                tokio::time::sleep(Duration::from_millis(500)).await;
-            }
-            Err(e) => return Err(LocalModelsError::Io(e)),
-        }
-    }
-    Err(LocalModelsError::FasterWhisper(format!(
-        "runtime install lock timed out: {}",
-        path_string(&path)
-    )))
-}
-
-fn faster_whisper_runtime_manifest_path(data_dir: &Path) -> PathBuf {
-    faster_whisper_runtime_dir(data_dir).join(FASTER_WHISPER_RUNTIME_MANIFEST)
-}
-
-fn faster_whisper_cuda_manifest_path(data_dir: &Path) -> PathBuf {
-    faster_whisper_cuda_libs_dir(data_dir).join(FASTER_WHISPER_RUNTIME_MANIFEST)
-}
-
-fn write_runtime_manifest(
-    path: &Path,
-    kind: &str,
-    sha256: Option<&str>,
-) -> Result<(), LocalModelsError> {
-    let payload = serde_json::json!({
-        "kind": kind,
-        "version": faster_whisper_runtime_version(),
-        "platform": "win-x64",
-        "sha256": sha256,
-        "installedAt": chrono::Utc::now().to_rfc3339(),
-    });
-    let bytes = serde_json::to_vec_pretty(&payload).map_err(io::Error::other)?;
-    fs::write(path, bytes)?;
-    Ok(())
-}
-
-fn faster_whisper_runtime_ready(data_dir: &Path) -> bool {
-    faster_whisper_runtime_manifest_path(data_dir).is_file()
-        && faster_whisper_runtime_python_path(data_dir).is_some()
-}
-
-fn faster_whisper_dev_python_fallback_allowed() -> bool {
-    if std::env::var("KOSMOS_FASTER_WHISPER_DISABLE_DEV_PYTHON").as_deref() == Ok("1") {
-        return false;
-    }
-    if std::env::var("KOSMOS_FASTER_WHISPER_ALLOW_SYSTEM_PYTHON").as_deref() == Ok("1") {
-        return true;
-    }
-    cfg!(debug_assertions)
-        || std::env::var("KOSMOS_TEST_MODE").as_deref() == Ok("1")
-        || std::env::var("KEPLER_INSTANCE")
-            .map(|value| value.to_ascii_lowercase().contains("dev"))
-            .unwrap_or(false)
-}
-
-fn trusted_runtime_env(name: &str) -> Option<String> {
-    std::env::var(name)
-        .ok()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-}
-
-fn default_runtime_archive_source(url_env: &str) -> Option<RuntimeArchiveSource> {
-    if url_env == "KOSMOS_FASTER_WHISPER_RUNTIME_URL" {
-        return Some(RuntimeArchiveSource::Remote(
-            FASTER_WHISPER_RUNTIME_DEFAULT_URL.to_owned(),
-            FASTER_WHISPER_RUNTIME_DEFAULT_SHA256.to_owned(),
-        ));
-    }
-    None
-}
-
-fn bundled_runtime_archive(archive_name: &str) -> Option<PathBuf> {
-    let exe_dir = std::env::current_exe()
-        .ok()
-        .and_then(|path| path.parent().map(Path::to_path_buf))?;
-    [
-        exe_dir.join(archive_name),
-        exe_dir.join("runtimes").join(archive_name),
-        exe_dir.join("local-ai-runtimes").join(archive_name),
-    ]
-    .into_iter()
-    .find(|path| path.is_file())
-}
-
-enum RuntimeArchiveSource {
-    Bundled(PathBuf),
-    ExplicitFile(PathBuf, String),
-    Remote(String, String),
-}
-
-fn resolve_runtime_archive_source(
-    archive_name: &str,
-    url_env: &str,
-    sha_env: &str,
-) -> Result<RuntimeArchiveSource, LocalModelsError> {
-    if let Some(path) = bundled_runtime_archive(archive_name) {
-        return Ok(RuntimeArchiveSource::Bundled(path));
-    }
-
-    if let Some(path) = trusted_runtime_env(&format!("{url_env}_FILE")).map(PathBuf::from) {
-        let sha256 = trusted_runtime_env(sha_env).ok_or_else(|| {
-            LocalModelsError::FasterWhisper(format!(
-                "{sha_env} is required for explicit runtime archive install"
-            ))
-        })?;
-        return Ok(RuntimeArchiveSource::ExplicitFile(path, sha256));
-    }
-
-    if let Some(source) = default_runtime_archive_source(url_env) {
-        return Ok(source);
-    }
-
-    let url = trusted_runtime_env(url_env)
-        .ok_or_else(|| LocalModelsError::FasterWhisper(format!("{url_env} is not configured")))?;
-    let sha256 = trusted_runtime_env(sha_env).ok_or_else(|| {
-        LocalModelsError::FasterWhisper(format!(
-            "{sha_env} is required for trusted runtime install"
-        ))
-    })?;
-    Ok(RuntimeArchiveSource::Remote(url, sha256))
-}
-
-fn extract_zip_atomic(
-    archive_path: &Path,
-    install_dir: &Path,
-    manifest_kind: &str,
-    sha256: Option<&str>,
-) -> Result<(), LocalModelsError> {
-    let parent = install_dir.parent().ok_or_else(|| {
-        LocalModelsError::FasterWhisper(format!(
-            "runtime install path has no parent: {}",
-            path_string(install_dir)
-        ))
-    })?;
-    fs::create_dir_all(parent)?;
-    let stamp = chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default();
-    let temp_dir = parent.join(format!(".install-{stamp}"));
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir)?;
-    }
-    fs::create_dir_all(&temp_dir)?;
-    let bytes = fs::read(archive_path)?;
-    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
-    archive.extract(&temp_dir)?;
-    if install_dir.exists() {
-        fs::remove_dir_all(install_dir)?;
-    }
-    fs::rename(&temp_dir, install_dir)?;
-    write_runtime_manifest(
-        &install_dir.join(FASTER_WHISPER_RUNTIME_MANIFEST),
-        manifest_kind,
-        sha256,
-    )?;
-    Ok(())
-}
-
-async fn install_runtime_zip(
-    client: &Client,
-    install_dir: &Path,
-    archive_name: &str,
-    url_env: &str,
-    sha_env: &str,
-    phase: &'static str,
-    manifest_kind: &str,
-    progress: &mut ProgressCallback<'_>,
-) -> Result<(), LocalModelsError> {
-    let archive_path = install_dir
-        .parent()
-        .unwrap_or(install_dir)
-        .join("downloads")
-        .join(archive_name);
-
-    let source = resolve_runtime_archive_source(archive_name, url_env, sha_env)?;
-    let expected_sha256 = match source {
-        RuntimeArchiveSource::Bundled(local_archive) => {
-            fs::create_dir_all(archive_path.parent().unwrap_or(install_dir))?;
-            fs::copy(local_archive, &archive_path)?;
-            None
-        }
-        RuntimeArchiveSource::ExplicitFile(local_archive, sha256) => {
-            fs::create_dir_all(archive_path.parent().unwrap_or(install_dir))?;
-            fs::copy(local_archive, &archive_path)?;
-            verify_sha256(&archive_path, &sha256)?;
-            Some(sha256)
-        }
-        RuntimeArchiveSource::Remote(url, sha256) => {
-            download_file(client, &url, &archive_path, phase, progress).await?;
-            verify_sha256(&archive_path, &sha256)?;
-            Some(sha256)
-        }
-    };
-    progress(DownloadProgress {
-        phase: "extract",
-        downloaded_bytes: 0,
-        total_bytes: None,
-        percent: None,
-    });
-    extract_zip_atomic(
-        &archive_path,
-        install_dir,
-        manifest_kind,
-        expected_sha256.as_deref(),
-    )?;
-    let _ = fs::remove_file(&archive_path);
-    Ok(())
-}
-
-fn cuda_zip_source_configured(data_dir: &Path) -> bool {
-    bundled_runtime_archive(FASTER_WHISPER_CUDA_ARCHIVE).is_some()
-        || trusted_runtime_env("KOSMOS_FASTER_WHISPER_CUDA_URL").is_some()
-        || trusted_runtime_env("KOSMOS_FASTER_WHISPER_CUDA_URL_FILE").is_some()
-        || faster_whisper_cuda_libs_dir(data_dir)
-            .join(FASTER_WHISPER_CUDA_ARCHIVE)
-            .is_file()
-}
-
-struct CudaWheelSpec {
-    url: &'static str,
-    sha256: &'static str,
-    phase: &'static str,
-    source_prefix: &'static str,
-    target_prefix: &'static str,
-}
-
-fn filename_from_url(url: &str) -> Result<&str, LocalModelsError> {
-    url.rsplit('/')
-        .next()
-        .filter(|name| !name.is_empty())
-        .ok_or_else(|| {
-            LocalModelsError::FasterWhisper(format!("runtime URL has no filename: {url}"))
-        })
-}
-
-fn extract_zip_prefix(
-    archive_path: &Path,
-    source_prefix: &str,
-    target_dir: &Path,
-) -> Result<(), LocalModelsError> {
-    let bytes = fs::read(archive_path)?;
-    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
-    let normalized_prefix = source_prefix.trim_end_matches('/');
-    for index in 0..archive.len() {
-        let mut file = archive.by_index(index)?;
-        let name = file.name().replace('\\', "/");
-        let Some(rest) = name
-            .strip_prefix(normalized_prefix)
-            .and_then(|value| value.strip_prefix('/'))
-        else {
-            continue;
-        };
-        if rest.is_empty() || rest.contains("..") || rest.starts_with('/') {
-            continue;
-        }
-        let out_path = target_dir.join(rest);
-        if file.is_dir() {
-            fs::create_dir_all(&out_path)?;
-            continue;
-        }
-        if let Some(parent) = out_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        let mut out = File::create(out_path)?;
-        io::copy(&mut file, &mut out)?;
-    }
-    Ok(())
-}
-
-async fn install_cuda_from_official_wheels(
-    client: &Client,
-    install_dir: &Path,
-    progress: &mut ProgressCallback<'_>,
-) -> Result<(), LocalModelsError> {
-    let specs = [
-        CudaWheelSpec {
-            url: FASTER_WHISPER_CUDA_CUBLAS_URL,
-            sha256: FASTER_WHISPER_CUDA_CUBLAS_SHA256,
-            phase: "cuda-cublas",
-            source_prefix: "nvidia/cublas/bin",
-            target_prefix: "cublas/bin",
-        },
-        CudaWheelSpec {
-            url: FASTER_WHISPER_CUDA_CUDNN_URL,
-            sha256: FASTER_WHISPER_CUDA_CUDNN_SHA256,
-            phase: "cuda-cudnn",
-            source_prefix: "nvidia/cudnn/bin",
-            target_prefix: "cudnn/bin",
-        },
-    ];
-    let parent = install_dir.parent().ok_or_else(|| {
-        LocalModelsError::FasterWhisper(format!(
-            "runtime install path has no parent: {}",
-            path_string(install_dir)
-        ))
-    })?;
-    let stamp = chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default();
-    let temp_dir = parent.join(format!(".install-cuda-{stamp}"));
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir)?;
-    }
-    fs::create_dir_all(&temp_dir)?;
-    let download_dir = parent.join("downloads");
-    fs::create_dir_all(&download_dir)?;
-
-    for spec in specs {
-        let filename = filename_from_url(spec.url)?;
-        let wheel_path = download_dir.join(filename);
-        download_file(client, spec.url, &wheel_path, spec.phase, progress).await?;
-        verify_sha256(&wheel_path, spec.sha256)?;
-        progress(DownloadProgress {
-            phase: "extract",
-            downloaded_bytes: 0,
-            total_bytes: None,
-            percent: None,
-        });
-        extract_zip_prefix(
-            &wheel_path,
-            spec.source_prefix,
-            &temp_dir.join(spec.target_prefix),
-        )?;
-        let _ = fs::remove_file(&wheel_path);
-    }
-
-    if install_dir.exists() {
-        fs::remove_dir_all(install_dir)?;
-    }
-    fs::rename(&temp_dir, install_dir)?;
-    write_runtime_manifest(
-        &install_dir.join(FASTER_WHISPER_RUNTIME_MANIFEST),
-        "cuda-libs-pypi",
-        Some(&format!(
-            "cublas={};cudnn={}",
-            FASTER_WHISPER_CUDA_CUBLAS_SHA256, FASTER_WHISPER_CUDA_CUDNN_SHA256
-        )),
-    )?;
-    Ok(())
-}
-
 pub async fn ensure_model(
     client: &Client,
     data_dir: &Path,
@@ -1326,384 +795,6 @@ pub async fn ensure_model_with_progress(
     Ok(path)
 }
 
-fn faster_whisper_model_marker_path(data_dir: &Path, model_id: &str) -> PathBuf {
-    faster_whisper_dir(data_dir)
-        .join(FASTER_WHISPER_MARKERS_DIR)
-        .join(format!("{model_id}.json"))
-}
-
-fn write_faster_whisper_model_marker(
-    data_dir: &Path,
-    model_id: &str,
-    backend_model: &str,
-) -> Result<(), LocalModelsError> {
-    let path = faster_whisper_model_marker_path(data_dir, model_id);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let payload = serde_json::json!({
-        "modelId": model_id,
-        "backendModel": backend_model,
-        "preparedAt": chrono::Utc::now().to_rfc3339(),
-    });
-    let bytes = serde_json::to_vec_pretty(&payload).map_err(io::Error::other)?;
-    fs::write(path, bytes)?;
-    Ok(())
-}
-
-fn faster_whisper_prepare_timeout() -> Duration {
-    std::env::var("KOSMOS_FASTER_WHISPER_PREPARE_TIMEOUT_MS")
-        .ok()
-        .and_then(|value| value.trim().parse::<u64>().ok())
-        .map(|millis| millis.clamp(30_000, 30 * 60 * 1000))
-        .map(Duration::from_millis)
-        .unwrap_or_else(|| Duration::from_secs(15 * 60))
-}
-
-async fn run_faster_whisper_setup_command(
-    mut command: TokioCommand,
-    timeout: Duration,
-    label: &str,
-) -> Result<(), LocalModelsError> {
-    let output = match tokio::time::timeout(timeout, command.output()).await {
-        Ok(Ok(output)) => output,
-        Ok(Err(e)) => {
-            return Err(LocalModelsError::FasterWhisper(format!(
-                "{label}: failed to launch: {e}"
-            )));
-        }
-        Err(_) => {
-            return Err(LocalModelsError::FasterWhisper(format!(
-                "{label}: timed out after {}s",
-                timeout.as_secs()
-            )));
-        }
-    };
-    if output.status.success() {
-        return Ok(());
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    Err(LocalModelsError::FasterWhisper(format!(
-        "{label}: exited with status {}; stdout={}; stderr={}",
-        output.status,
-        stdout.trim(),
-        stderr.trim()
-    )))
-}
-
-#[cfg(windows)]
-fn detected_python_paths_for_faster_whisper() -> Vec<PathBuf> {
-    let output = match Command::new("py").arg("-0p").output() {
-        Ok(output) if output.status.success() => output,
-        _ => return Vec::new(),
-    };
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    stdout
-        .lines()
-        .filter(|line| {
-            line.contains("3.10")
-                || line.contains("3.11")
-                || line.contains("3.12")
-                || line.contains("3.13")
-        })
-        .filter_map(|line| {
-            line.find("C:\\")
-                .map(|idx| PathBuf::from(line[idx..].trim()))
-        })
-        .filter(|path| path.is_file())
-        .collect()
-}
-
-async fn create_faster_whisper_venv(
-    data_dir: &Path,
-    timeout: Duration,
-) -> Result<(), LocalModelsError> {
-    let venv_dir = faster_whisper_venv_dir(data_dir);
-    fs::create_dir_all(faster_whisper_runtime_dir(data_dir))?;
-    let mut attempts: Vec<(String, TokioCommand)> = Vec::new();
-
-    #[cfg(windows)]
-    {
-        for path in detected_python_paths_for_faster_whisper() {
-            let label = format!("create venv with {}", path_string(&path));
-            let mut command = TokioCommand::new(path);
-            command.arg("-m").arg("venv").arg(&venv_dir);
-            attempts.push((label, command));
-        }
-
-        let mut py311 = TokioCommand::new("py");
-        py311.arg("-3.11").arg("-m").arg("venv").arg(&venv_dir);
-        attempts.push(("create venv with py -3.11".into(), py311));
-
-        let mut py312 = TokioCommand::new("py");
-        py312.arg("-3.12").arg("-m").arg("venv").arg(&venv_dir);
-        attempts.push(("create venv with py -3.12".into(), py312));
-    }
-
-    let mut python = TokioCommand::new("python");
-    python.arg("-m").arg("venv").arg(&venv_dir);
-    attempts.push(("create venv with python".into(), python));
-
-    let mut errors = Vec::new();
-    for (label, command) in attempts {
-        match run_faster_whisper_setup_command(command, timeout, &label).await {
-            Ok(()) => return Ok(()),
-            Err(e) => errors.push(e.to_string()),
-        }
-    }
-
-    Err(LocalModelsError::FasterWhisper(format!(
-        "failed to create managed Python venv: {}",
-        errors.join(" | ")
-    )))
-}
-
-async fn ensure_faster_whisper_managed_runtime(
-    client: &Client,
-    data_dir: &Path,
-    progress: &mut ProgressCallback<'_>,
-) -> Result<(), LocalModelsError> {
-    if faster_whisper_runtime_ready(data_dir) {
-        return Ok(());
-    }
-    let install_dir = faster_whisper_runtime_dir(data_dir);
-    let _lock = acquire_install_lock(install_dir.join(".install.lock")).await?;
-    if faster_whisper_runtime_ready(data_dir) {
-        return Ok(());
-    }
-    install_runtime_zip(
-        client,
-        &install_dir,
-        FASTER_WHISPER_RUNTIME_ARCHIVE,
-        "KOSMOS_FASTER_WHISPER_RUNTIME_URL",
-        "KOSMOS_FASTER_WHISPER_RUNTIME_SHA256",
-        "runtime",
-        "faster-whisper-runtime",
-        progress,
-    )
-    .await
-}
-
-async fn ensure_faster_whisper_dev_venv(
-    data_dir: &Path,
-    progress: &mut ProgressCallback<'_>,
-) -> Result<(), LocalModelsError> {
-    let python = faster_whisper_python_path(data_dir);
-    if !python.is_file() {
-        progress(DownloadProgress {
-            phase: "python",
-            downloaded_bytes: 0,
-            total_bytes: None,
-            percent: None,
-        });
-        create_faster_whisper_venv(data_dir, faster_whisper_prepare_timeout()).await?;
-    }
-    if !python.is_file() {
-        return Err(LocalModelsError::FasterWhisper(format!(
-            "managed Python venv did not create {}",
-            path_string(&python)
-        )));
-    }
-
-    progress(DownloadProgress {
-        phase: "package",
-        downloaded_bytes: 0,
-        total_bytes: None,
-        percent: None,
-    });
-    let mut pip = TokioCommand::new(&python);
-    pip.arg("-m")
-        .arg("pip")
-        .arg("install")
-        .arg("--upgrade")
-        .arg("faster-whisper");
-    run_faster_whisper_setup_command(
-        pip,
-        faster_whisper_prepare_timeout(),
-        "install faster-whisper",
-    )
-    .await?;
-
-    write_runtime_manifest(
-        &faster_whisper_runtime_manifest_path(data_dir),
-        "faster-whisper-dev-venv",
-        None,
-    )?;
-    Ok(())
-}
-
-async fn ensure_faster_whisper_python(
-    client: &Client,
-    data_dir: &Path,
-    progress: &mut ProgressCallback<'_>,
-) -> Result<String, LocalModelsError> {
-    if let Ok(python) = std::env::var("KOSMOS_FASTER_WHISPER_PYTHON") {
-        let python = python.trim();
-        if !python.is_empty() {
-            return Ok(python.to_owned());
-        }
-    }
-
-    if !faster_whisper_runtime_ready(data_dir) {
-        match ensure_faster_whisper_managed_runtime(client, data_dir, progress).await {
-            Ok(()) => {}
-            Err(err) if faster_whisper_dev_python_fallback_allowed() => {
-                tracing::warn!(
-                    error = %err,
-                    "dictation: managed faster-whisper runtime unavailable, using dev Python fallback"
-                );
-                ensure_faster_whisper_dev_venv(data_dir, progress).await?;
-            }
-            Err(err) => return Err(err),
-        }
-    }
-
-    faster_whisper_runtime_python_path(data_dir)
-        .map(|path| path_string(&path))
-        .ok_or_else(|| {
-            LocalModelsError::FasterWhisper(format!(
-                "managed faster-whisper runtime is not executable: {}",
-                path_string(&faster_whisper_runtime_dir(data_dir))
-            ))
-        })
-}
-
-pub async fn ensure_faster_whisper_cuda_with_progress(
-    client: &Client,
-    data_dir: &Path,
-    progress: &mut ProgressCallback<'_>,
-) -> Result<(), LocalModelsError> {
-    if faster_whisper_cuda_runtime_available(data_dir)
-        && faster_whisper_cuda_manifest_path(data_dir).is_file()
-    {
-        return Ok(());
-    }
-    if !faster_whisper_cuda_supported() {
-        return Err(LocalModelsError::FasterWhisper(
-            "NVIDIA GPU is not available on this machine".into(),
-        ));
-    }
-    let install_dir = faster_whisper_cuda_libs_dir(data_dir);
-    let _lock = acquire_install_lock(install_dir.join(".install.lock")).await?;
-    if faster_whisper_cuda_runtime_available(data_dir)
-        && faster_whisper_cuda_manifest_path(data_dir).is_file()
-    {
-        return Ok(());
-    }
-    if cuda_zip_source_configured(data_dir) {
-        install_runtime_zip(
-            client,
-            &install_dir,
-            FASTER_WHISPER_CUDA_ARCHIVE,
-            "KOSMOS_FASTER_WHISPER_CUDA_URL",
-            "KOSMOS_FASTER_WHISPER_CUDA_SHA256",
-            "cuda",
-            "cuda-libs",
-            progress,
-        )
-        .await?;
-    } else {
-        install_cuda_from_official_wheels(client, &install_dir, progress).await?;
-    }
-    if faster_whisper_cuda_runtime_available(data_dir) {
-        Ok(())
-    } else {
-        Err(LocalModelsError::FasterWhisper(
-            "NVIDIA runtime archive did not contain cuBLAS/cuDNN DLLs".into(),
-        ))
-    }
-}
-
-pub async fn ensure_faster_whisper_with_progress(
-    client: &Client,
-    data_dir: &Path,
-    model_id: &str,
-    progress: &mut ProgressCallback<'_>,
-) -> Result<String, LocalModelsError> {
-    let backend_model = faster_whisper_model_id(model_id)?;
-    let cache_dir = faster_whisper_dir(data_dir);
-    fs::create_dir_all(&cache_dir)?;
-    let python = ensure_faster_whisper_python(client, data_dir, progress).await?;
-    progress(DownloadProgress {
-        phase: "faster-whisper",
-        downloaded_bytes: 0,
-        total_bytes: None,
-        percent: None,
-    });
-
-    let script = r#"
-import json
-import sys
-
-model_id = sys.argv[1]
-download_root = sys.argv[2]
-
-try:
-    from faster_whisper import WhisperModel
-except Exception as exc:
-    print(json.dumps({"error": f"faster-whisper Python package is not installed: {exc}"}))
-    raise SystemExit(0)
-
-try:
-    WhisperModel(model_id, device="cpu", compute_type="int8", download_root=download_root)
-    print(json.dumps({"ok": True, "model": model_id, "downloadRoot": download_root}))
-except Exception as exc:
-    print(json.dumps({"error": str(exc)}))
-"#;
-
-    let mut command = TokioCommand::new(python);
-    command
-        .arg("-c")
-        .arg(script)
-        .arg(backend_model)
-        .arg(path_string(&cache_dir))
-        .kill_on_drop(true);
-    let timeout = faster_whisper_prepare_timeout();
-    let output = match tokio::time::timeout(timeout, command.output()).await {
-        Ok(Ok(output)) => output,
-        Ok(Err(e)) => {
-            return Err(LocalModelsError::FasterWhisper(format!(
-                "failed to launch Python: {e}"
-            )))
-        }
-        Err(_) => {
-            return Err(LocalModelsError::FasterWhisper(format!(
-                "model preparation timed out after {}s",
-                timeout.as_secs()
-            )))
-        }
-    };
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    if !output.status.success() {
-        return Err(LocalModelsError::FasterWhisper(format!(
-            "python exited with status {}: {}",
-            output.status,
-            stderr.trim()
-        )));
-    }
-    let value: serde_json::Value = serde_json::from_str(stdout.trim()).map_err(|e| {
-        LocalModelsError::FasterWhisper(format!(
-            "invalid setup response: {e}; stdout={}; stderr={}",
-            stdout.trim(),
-            stderr.trim()
-        ))
-    })?;
-    if let Some(error) = value.get("error").and_then(|value| value.as_str()) {
-        return Err(LocalModelsError::FasterWhisper(error.to_owned()));
-    }
-    progress(DownloadProgress {
-        phase: "faster-whisper",
-        downloaded_bytes: 1,
-        total_bytes: Some(1),
-        percent: Some(100.0),
-    });
-    write_faster_whisper_model_marker(data_dir, model_id, backend_model)?;
-    Ok(backend_model.to_owned())
-}
-
 pub fn delete_model(data_dir: &Path, model_id: &str) -> Result<PathBuf, LocalModelsError> {
     let path = model_path_by_id(data_dir, model_id)?;
     if path.is_file() {
@@ -1712,10 +803,6 @@ pub fn delete_model(data_dir: &Path, model_id: &str) -> Result<PathBuf, LocalMod
     let part_path = path.with_extension("part");
     if part_path.is_file() {
         fs::remove_file(&part_path)?;
-    }
-    let marker_path = faster_whisper_model_marker_path(data_dir, model_id);
-    if marker_path.is_file() {
-        fs::remove_file(marker_path)?;
     }
     cleanup_unused_backends(data_dir)?;
     Ok(path)
@@ -1739,22 +826,66 @@ pub async fn ensure_whisper_cpp_with_progress(
     if command.is_file() {
         return Ok(command);
     }
-    let (dir, archive_name, url) = if cuda_tools_enabled() {
-        (
-            cuda_tools_dir(data_dir),
-            "whisper-cublas-12.4.0-bin-x64.zip",
-            WHISPER_CPP_CUDA_ZIP_URL,
+    if vulkan_tools_enabled() {
+        let vulkan = vulkan_command_path(data_dir);
+        if vulkan.is_file() {
+            return Ok(vulkan);
+        }
+        let url = vulkan_zip_url();
+        let sha256 = vulkan_zip_sha256();
+        match install_whisper_cpp_zip(
+            client,
+            &vulkan_tools_dir(data_dir),
+            "whisper-vulkan-bin-x64.zip",
+            &url,
+            sha256.as_deref(),
+            progress,
         )
+        .await
+        {
+            Ok(()) if vulkan.is_file() => return Ok(vulkan),
+            Ok(()) => tracing::warn!(
+                path = %path_string(&vulkan),
+                "dictation: Vulkan whisper.cpp archive did not contain command, falling back"
+            ),
+            Err(error) => tracing::warn!(
+                error = %error,
+                "dictation: Vulkan whisper.cpp install failed, falling back"
+            ),
+        }
+    }
+    let (dir, archive_name, url) = (
+        tools_dir(data_dir),
+        "whisper-bin-x64.zip",
+        WHISPER_CPP_CPU_ZIP_URL,
+    );
+    install_whisper_cpp_zip(client, &dir, archive_name, url, None, progress).await?;
+    let command = preferred_command_path(data_dir);
+    if command.is_file() {
+        Ok(command)
     } else {
-        (
-            tools_dir(data_dir),
-            "whisper-bin-x64.zip",
-            WHISPER_CPP_CPU_ZIP_URL,
-        )
-    };
+        Err(LocalModelsError::Download(format!(
+            "whisper.cpp archive did not contain {}",
+            path_string(&command)
+        )))
+    }
+}
+
+#[cfg(windows)]
+async fn install_whisper_cpp_zip(
+    client: &Client,
+    dir: &Path,
+    archive_name: &str,
+    url: &str,
+    expected_sha256: Option<&str>,
+    progress: &mut ProgressCallback<'_>,
+) -> Result<(), LocalModelsError> {
     fs::create_dir_all(&dir)?;
     let archive_path = dir.join(archive_name);
     download_file(client, url, &archive_path, "tool", progress).await?;
+    if let Some(expected) = expected_sha256 {
+        verify_sha256(&archive_path, expected)?;
+    }
     progress(DownloadProgress {
         phase: "extract",
         downloaded_bytes: 0,
@@ -1765,14 +896,7 @@ pub async fn ensure_whisper_cpp_with_progress(
     let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
     archive.extract(&dir)?;
     let _ = fs::remove_file(&archive_path);
-    if command.is_file() {
-        Ok(command)
-    } else {
-        Err(LocalModelsError::Download(format!(
-            "whisper.cpp archive did not contain {}",
-            path_string(&command)
-        )))
-    }
+    Ok(())
 }
 
 #[cfg(not(windows))]
@@ -1797,6 +921,51 @@ mod tests {
     use super::*;
     use httpmock::Method::GET;
     use httpmock::MockServer;
+
+    #[cfg(windows)]
+    fn touch(path: &Path) {
+        fs::create_dir_all(path.parent().expect("parent")).expect("parent dir");
+        fs::write(path, b"exe").expect("file");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn command_path_prefers_installed_vulkan_over_cpu() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        touch(&cpu_command_path(tmp.path()));
+        touch(&vulkan_command_path(tmp.path()));
+
+        assert!(same_path_or_text(
+            &command_path(tmp.path()).expect("command"),
+            &vulkan_command_path(tmp.path())
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn vulkan_runtime_source_is_pinned() {
+        assert!(WHISPER_CPP_VULKAN_ZIP_URL.contains("makekosmos/local-ai-runtimes"));
+        assert!(WHISPER_CPP_VULKAN_ZIP_URL.contains("whisper-vulkan-win-x64-v1.9.1"));
+        assert_eq!(WHISPER_CPP_VULKAN_ZIP_SHA256.len(), 64);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn refresh_managed_command_path_updates_cpu_to_vulkan() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        touch(&cpu_command_path(tmp.path()));
+        touch(&vulkan_command_path(tmp.path()));
+        let mut cfg = config::DictationConfig {
+            local_command_path: Some(path_string(&cpu_command_path(tmp.path()))),
+            ..Default::default()
+        };
+
+        assert!(refresh_managed_command_path(tmp.path(), &mut cfg));
+        assert_eq!(
+            cfg.local_command_path.as_deref(),
+            Some(path_string(&vulkan_command_path(tmp.path())).as_str())
+        );
+    }
 
     #[tokio::test]
     async fn download_file_streams_binary_and_reports_progress() {
@@ -1954,136 +1123,32 @@ mod tests {
         fs::create_dir_all(model_path.parent().expect("model parent")).expect("model dir");
         fs::write(&model_path, b"model").expect("model file");
         fs::create_dir_all(tools_dir(tmp.path())).expect("tools dir");
-        fs::create_dir_all(faster_whisper_dir(tmp.path())).expect("faster dir");
 
         let deleted = delete_model(tmp.path(), "small").expect("delete model");
 
         assert_eq!(deleted, model_path);
         assert!(!tools_dir(tmp.path()).exists());
-        assert!(!faster_whisper_dir(tmp.path()).exists());
     }
 
     #[test]
-    fn faster_whisper_marker_without_runtime_is_not_prepared() {
+    fn cleanup_obsolete_local_stt_assets_deletes_ct2_cache_even_with_ggml_models() {
         let tmp = tempfile::TempDir::new().expect("tempdir");
-        write_faster_whisper_model_marker(tmp.path(), "small", "small").expect("marker");
+        let small = model_spec("small").expect("small model");
+        let model_path = model_path(tmp.path(), small);
+        fs::create_dir_all(model_path.parent().expect("model parent")).expect("model dir");
+        fs::write(&model_path, b"ggml").expect("ggml model");
 
-        assert!(!faster_whisper_model_is_prepared(tmp.path(), "small"));
-        assert!(!has_downloaded_model_assets(tmp.path()));
-        assert!(cleanup_unused_backends(tmp.path()).expect("cleanup"));
-        assert!(!faster_whisper_dir(tmp.path()).exists());
-    }
+        let old_ct2 = shared_assets_root(tmp.path()).join(OLD_FASTER_WHISPER_MODEL_CACHE_DIR);
+        let old_runtime = shared_assets_root(tmp.path()).join(OLD_FASTER_WHISPER_RUNTIME_DIR);
+        let old_cuda = shared_assets_root(tmp.path()).join(OLD_FASTER_WHISPER_CUDA_LIBS_DIR);
+        fs::create_dir_all(&old_ct2).expect("ct2 dir");
+        fs::create_dir_all(&old_runtime).expect("runtime dir");
+        fs::create_dir_all(&old_cuda).expect("cuda dir");
 
-    #[test]
-    fn faster_whisper_cuda_runtime_detects_managed_cublas() {
-        let tmp = tempfile::TempDir::new().expect("tempdir");
-        let cublas = if cfg!(windows) {
-            "cublas64_12.dll"
-        } else {
-            "libcublas.so.12"
-        };
-        let cudnn = if cfg!(windows) {
-            "cudnn64_9.dll"
-        } else {
-            "libcudnn.so.9"
-        };
-        let cublas_dir = faster_whisper_cuda_runtime_dirs(tmp.path())
-            .into_iter()
-            .find(|path| path.to_string_lossy().contains("cublas"))
-            .expect("cublas dir");
-        let cudnn_dir = faster_whisper_cuda_runtime_dirs(tmp.path())
-            .into_iter()
-            .find(|path| path.to_string_lossy().contains("cudnn"))
-            .expect("cudnn dir");
-        fs::create_dir_all(&cublas_dir).expect("cublas dir");
-        fs::create_dir_all(&cudnn_dir).expect("cudnn dir");
-        fs::write(cublas_dir.join(cublas), b"dll").expect("cublas dll");
-        fs::write(cudnn_dir.join(cudnn), b"dll").expect("cudnn dll");
-
-        assert!(faster_whisper_cuda_runtime_available(tmp.path()));
-    }
-
-    #[test]
-    fn faster_whisper_runtime_has_default_download_source() {
-        match resolve_runtime_archive_source(
-            FASTER_WHISPER_RUNTIME_ARCHIVE,
-            "KOSMOS_FASTER_WHISPER_RUNTIME_URL",
-            "KOSMOS_FASTER_WHISPER_RUNTIME_SHA256",
-        )
-        .expect("default source")
-        {
-            RuntimeArchiveSource::Remote(url, sha256) => {
-                assert!(url.contains("makekosmos/local-ai-runtimes"));
-                assert_eq!(sha256, FASTER_WHISPER_RUNTIME_DEFAULT_SHA256);
-            }
-            _ => panic!("expected default remote source"),
-        }
-    }
-
-    #[test]
-    fn faster_whisper_cuda_defaults_to_official_wheels_without_zip_source() {
-        let tmp = tempfile::TempDir::new().expect("tempdir");
-        std::env::remove_var("KOSMOS_FASTER_WHISPER_CUDA_URL");
-        std::env::remove_var("KOSMOS_FASTER_WHISPER_CUDA_URL_FILE");
-
-        assert!(!cuda_zip_source_configured(tmp.path()));
-        assert!(FASTER_WHISPER_CUDA_CUBLAS_URL.contains("files.pythonhosted.org"));
-        assert!(FASTER_WHISPER_CUDA_CUDNN_URL.contains("files.pythonhosted.org"));
-    }
-
-    #[test]
-    fn cuda_wheel_extract_keeps_only_requested_prefix() {
-        let tmp = tempfile::TempDir::new().expect("tempdir");
-        let archive_path = tmp.path().join("cuda.whl");
-        {
-            let file = File::create(&archive_path).expect("wheel");
-            let mut writer = zip::ZipWriter::new(file);
-            let opts = zip::write::FileOptions::default();
-            writer
-                .start_file("nvidia/cublas/bin/cublas64_12.dll", opts)
-                .expect("cublas entry");
-            writer.write_all(b"cublas").expect("cublas bytes");
-            writer
-                .start_file("nvidia/other/bin/ignore.dll", opts)
-                .expect("ignored entry");
-            writer.write_all(b"ignore").expect("ignored bytes");
-            writer.finish().expect("finish zip");
-        }
-
-        let out = tmp.path().join("out");
-        extract_zip_prefix(&archive_path, "nvidia/cublas/bin", &out).expect("extract prefix");
-
-        assert_eq!(
-            fs::read(out.join("cublas64_12.dll")).expect("dll"),
-            b"cublas"
-        );
-        assert!(!out.join("ignore.dll").exists());
-    }
-
-    #[test]
-    fn faster_whisper_runtime_uses_shared_versioned_root() {
-        let tmp = tempfile::TempDir::new().expect("tempdir");
-
-        assert!(faster_whisper_runtime_dir(tmp.path())
-            .to_string_lossy()
-            .contains("runtimes"));
-        assert!(faster_whisper_runtime_dir(tmp.path())
-            .to_string_lossy()
-            .contains("faster-whisper"));
-        assert!(faster_whisper_dir(tmp.path())
-            .to_string_lossy()
-            .contains("models"));
-    }
-
-    #[test]
-    fn prod_like_runtime_path_does_not_allow_system_python_fallback() {
-        std::env::set_var("KOSMOS_FASTER_WHISPER_DISABLE_DEV_PYTHON", "1");
-        std::env::remove_var("KOSMOS_FASTER_WHISPER_ALLOW_SYSTEM_PYTHON");
-        std::env::remove_var("KOSMOS_TEST_MODE");
-        std::env::remove_var("KEPLER_INSTANCE");
-
-        assert!(!faster_whisper_dev_python_fallback_allowed());
-
-        std::env::remove_var("KOSMOS_FASTER_WHISPER_DISABLE_DEV_PYTHON");
+        assert!(cleanup_obsolete_local_stt_assets(tmp.path()).expect("cleanup"));
+        assert!(model_path.is_file());
+        assert!(!old_ct2.exists());
+        assert!(!old_runtime.exists());
+        assert!(!old_cuda.exists());
     }
 }
