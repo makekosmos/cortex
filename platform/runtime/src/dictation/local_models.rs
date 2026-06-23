@@ -922,7 +922,7 @@ async fn install_whisper_cpp_zip(
     expected_sha256: Option<&str>,
     progress: &mut ProgressCallback<'_>,
 ) -> Result<(), LocalModelsError> {
-    fs::create_dir_all(&dir)?;
+    fs::create_dir_all(dir)?;
     let archive_path = dir.join(archive_name);
     download_file(client, url, &archive_path, "tool", progress).await?;
     if let Some(expected) = expected_sha256 {
@@ -936,7 +936,7 @@ async fn install_whisper_cpp_zip(
     });
     let bytes = fs::read(&archive_path)?;
     let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
-    archive.extract(&dir)?;
+    archive.extract(dir)?;
     let _ = fs::remove_file(&archive_path);
     Ok(())
 }
