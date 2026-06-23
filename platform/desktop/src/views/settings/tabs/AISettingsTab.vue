@@ -288,17 +288,21 @@ function downloadProgressLabel(progress: {
   percent: number | null;
 }) {
   const phase =
-    progress.phase === "tool"
-      ? "скачиваю whisper.cpp"
-      : progress.phase === "extract"
-        ? "распаковываю whisper.cpp"
-        : progress.phase === "python"
-          ? "создаю Python env"
-          : progress.phase === "package"
-            ? "ставлю faster-whisper"
-            : progress.phase === "faster-whisper"
-              ? "готовлю Faster Whisper"
-              : "скачиваю модель";
+    progress.phase === "runtime"
+      ? "скачиваю STT runtime"
+      : progress.phase === "cuda"
+        ? "скачиваю NVIDIA runtime"
+        : progress.phase === "tool"
+          ? "скачиваю whisper.cpp"
+          : progress.phase === "extract"
+            ? "распаковываю whisper.cpp"
+            : progress.phase === "python"
+              ? "создаю Python env"
+              : progress.phase === "package"
+                ? "ставлю faster-whisper"
+                : progress.phase === "faster-whisper"
+                  ? "готовлю Faster Whisper"
+                  : "скачиваю модель";
   if (progress.percent !== null) return `${phase} ${Math.round(progress.percent)}%`;
   if (progress.totalBytes) {
     return `${phase} ${formatBytes(progress.downloadedBytes)} / ${formatBytes(progress.totalBytes)}`;
@@ -451,7 +455,9 @@ onMounted(() => {
                 v-for="option in modelSortOptions"
                 :key="option.id"
                 type="button"
-                :class="{ 'model-sort__item--active': modelSortMode === option.id }"
+                :class="{
+                  'model-sort__item--active': modelSortMode === option.id,
+                }"
                 @click="
                   modelSortMode = option.id;
                   modelSortMenuOpen = false;
@@ -463,7 +469,9 @@ onMounted(() => {
           </div>
         </div>
 
-        <p v-if="dictationLocalModelsError" class="model-error">{{ dictationLocalModelsError }}</p>
+        <p v-if="dictationLocalModelsError" class="model-error">
+          {{ dictationLocalModelsError }}
+        </p>
 
         <div class="model-catalog">
           <section v-for="section in modelCatalogSections" :key="section.id" class="model-provider">
@@ -566,7 +574,9 @@ onMounted(() => {
                   >
                     <div
                       class="local-model-progress-fill"
-                      :style="{ width: `${localModelProgressPercent(model.localModel.id)}%` }"
+                      :style="{
+                        width: `${localModelProgressPercent(model.localModel.id)}%`,
+                      }"
                     />
                   </div>
                 </div>

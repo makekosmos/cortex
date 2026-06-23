@@ -437,6 +437,12 @@ pub(crate) fn has_test_sidecar_mock_for_host() -> bool {
 }
 
 #[cfg(test)]
+pub(crate) async fn clear_test_sidecar_pool_for_host() {
+    let mut pool = local_stt_sidecar_pool().lock().await;
+    pool.active = None;
+}
+
+#[cfg(test)]
 pub(crate) fn recorded_test_sidecar_ops_for_host() -> Vec<String> {
     let guard = match test_sidecar_mock_state().lock() {
         Ok(guard) => guard,
@@ -513,6 +519,15 @@ async fn send_sidecar_request(request: LocalSttRequest) -> Result<LocalSttRespon
             } else {
                 break;
             }
+        }
+
+        if !matches!(
+            env::var("KOSMOS_TEST_ALLOW_REAL_LOCAL_STT_SIDECAR").as_deref(),
+            Ok("1")
+        ) {
+            return Err(LocalError::SidecarUnavailable(
+                "real local STT sidecar is disabled in unit tests".into(),
+            ));
         }
     }
 
@@ -1249,18 +1264,10 @@ fn apply_faster_whisper_environment_to_tokio(command: &mut TokioCommand) {
     if let Ok(joined) = env::join_paths(&dll_dirs) {
         command.env("KOSMOS_FASTER_WHISPER_DLL_DIRS", joined);
     }
-    let current_path = env::var_os("PATH").unwrap_or_default();
-    let mut paths = dll_dirs;
-    paths.extend(env::split_paths(&current_path));
-    if let Ok(joined) = env::join_paths(paths) {
-        command.env("PATH", joined);
-    }
 }
 
 fn faster_whisper_cuda_runtime_available() -> bool {
-    static CUDA_RUNTIME_AVAILABLE: OnceLock<bool> = OnceLock::new();
-    *CUDA_RUNTIME_AVAILABLE
-        .get_or_init(|| local_models::faster_whisper_cuda_runtime_available(&config::data_dir()))
+    local_models::faster_whisper_cuda_runtime_available(&config::data_dir())
 }
 
 fn faster_whisper_model_arg(req: &OwnedLocalRequest) -> Result<String, LocalError> {
@@ -1382,7 +1389,7 @@ def trace_event(event, **payload):
 
 try:
     trace_event("load_start", model_path=model_path, device=device, compute_type=compute_type, download_root=download_root)
-    model = WhisperModel(model_path, device=device, compute_type=compute_type, download_root=download_root)
+    model = WhisperModel(model_path, device=device, compute_type=compute_type, download_root=download_root, local_files_only=True)
     trace_event("load_done")
     kwargs = {
         "beam_size": int(beam_size),
@@ -1571,6 +1578,27 @@ fn faster_whisper_worker_key(
 
 impl FasterWhisperWorker {
     pub(crate) async fn start(model: &LocalSttModelSpec) -> Result<Self, LocalError> {
+        match Self::start_inner(model).await {
+            Ok(worker) => Ok(worker),
+            Err(err)
+                if matches!(model.accelerator, LocalSttAccelerator::Auto)
+                    && faster_whisper_cuda_runtime_available() =>
+            {
+                tracing::warn!(
+                    error = %err,
+                    "dictation: faster-whisper CUDA preload failed, retrying on CPU"
+                );
+                let mut cpu_model = model.clone();
+                cpu_model.accelerator = LocalSttAccelerator::Cpu;
+                let mut worker = Self::start_inner(&cpu_model).await?;
+                worker.key.accelerator = LocalSttAccelerator::Auto;
+                Ok(worker)
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    async fn start_inner(model: &LocalSttModelSpec) -> Result<Self, LocalError> {
         let start = Instant::now();
         let key = faster_whisper_worker_key(model)?;
         let model_arg = key.model_arg.clone();
@@ -1799,7 +1827,7 @@ if dll_dirs_raw and hasattr(os, "add_dll_directory"):
 try:
     from faster_whisper import WhisperModel
     model_path, device, compute_type, beam_size, download_root = sys.argv[1:6]
-    model = WhisperModel(model_path, device=device, compute_type=compute_type, download_root=download_root)
+    model = WhisperModel(model_path, device=device, compute_type=compute_type, download_root=download_root, local_files_only=True)
     beam_size = int(beam_size)
 
     warmup = tempfile.NamedTemporaryFile(prefix="kosmos-fw-warmup-", suffix=".wav", delete=False)
@@ -2355,6 +2383,7 @@ mod tests {
         assert!(warmed);
         assert_eq!(recorded_test_sidecar_ops(), vec!["preload"]);
         install_test_sidecar_mock(None);
+        clear_test_sidecar_pool_for_host().await;
     }
 
     #[test]
