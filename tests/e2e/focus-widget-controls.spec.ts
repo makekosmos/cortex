@@ -13,6 +13,8 @@
 import { test, expect } from "@playwright/test";
 import { freshDataDir, launchKeplerWithDataDir } from "./helpers/launch";
 import {
+  type FocusWidgetStateSnapshot,
+  type PomodoroStateSnapshot,
   findFocusWidgetPage,
   getFocusWidgetState,
   getPomodoroState,
@@ -26,8 +28,62 @@ import {
   waitForPomodoroStateFileAbsent,
 } from "./helpers/pomodoro-state-file";
 
+type KeplerE2eApp = Awaited<ReturnType<typeof launchKeplerWithDataDir>>;
+
+async function waitForRuntimeReady(app: KeplerE2eApp): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        app.evaluate(async ({ BrowserWindow }) => {
+          const launcher = BrowserWindow.getAllWindows()[0];
+          if (!launcher) return false;
+          return launcher.webContents.executeJavaScript(`
+            Boolean(
+              window.kepler?.focusWidget?.setState &&
+              window.kepler?.focusWidget?.getState &&
+              window.kepler?.ark?.request
+            )
+          `);
+        }),
+      { timeout: 15_000, message: "launcher APIs are ready" },
+    )
+    .toBe(true);
+  await expect
+    .poll(
+      async () => {
+        const state = await getFocusWidgetState(app);
+        return Boolean(state && !state.active && state.label);
+      },
+      { timeout: 15_000, message: "initial focus widget hydration is complete" },
+    )
+    .toBe(true);
+}
+
+function requireValue<T>(value: T | null | undefined, message: string): T {
+  if (value == null) throw new Error(message);
+  return value;
+}
+
+async function waitForPomodoroSnapshot(
+  app: KeplerE2eApp,
+  expected: Partial<PomodoroStateSnapshot>,
+): Promise<PomodoroStateSnapshot> {
+  await expect.poll(async () => getPomodoroState(app), { timeout: 10_000 }).toMatchObject(expected);
+  return requireValue(await getPomodoroState(app), "pomodoro state не найден");
+}
+
+async function waitForWidgetSnapshot(
+  app: KeplerE2eApp,
+  expected: Partial<FocusWidgetStateSnapshot>,
+): Promise<FocusWidgetStateSnapshot> {
+  await expect
+    .poll(async () => getFocusWidgetState(app), { timeout: 10_000 })
+    .toMatchObject(expected);
+  return requireValue(await getFocusWidgetState(app), "focus widget state не найден");
+}
+
 async function openWidget(
-  app: Awaited<ReturnType<typeof launchKeplerWithDataDir>>,
+  app: KeplerE2eApp,
 ): Promise<Awaited<ReturnType<typeof findFocusWidgetPage>>> {
   // Триггерим setState({active:true}) → widget BrowserWindow lazy-create.
   await setFocusWidgetState(app, {
@@ -53,88 +109,72 @@ async function openWidget(
 }
 
 test("focus widget: controls появляются только на hover/focus (pomodoro mode)", async () => {
-  test.setTimeout(60_000);
   const dataDir = freshDataDir("focus-widget-buttons-visible");
   const app = await launchKeplerWithDataDir(dataDir);
   try {
-    await new Promise((r) => setTimeout(r, 2500));
-    const widget = await openWidget(app);
-    expect(widget, "focus widget Page не найден").not.toBeNull();
+    await waitForRuntimeReady(app);
+    const widget = requireValue(await openWidget(app), "focus widget Page не найден");
 
-    const actions = widget!.locator(".actions");
+    const actions = widget.locator(".actions");
     await expect(actions).toHaveCSS("opacity", "0");
 
-    await expect(widget!.locator(".content")).toHaveCSS("-webkit-app-region", "no-drag");
-    await expect(widget!.locator(".drag-handle")).toHaveCSS("-webkit-app-region", "drag");
+    await expect(widget.locator(".content")).toHaveCSS("-webkit-app-region", "no-drag");
+    await expect(widget.locator(".drag-handle")).toHaveCSS("-webkit-app-region", "drag");
     // Pause / Done / More — все aria-label есть.
-    await widget!.locator(".widget").hover();
+    await widget.locator(".widget").hover();
     await expect(actions).toHaveCSS("opacity", "1");
     await expect(
-      widget!.locator('.btn[aria-label="Пауза"], .btn[aria-label="Продолжить"]'),
+      widget.locator('.btn[aria-label="Пауза"], .btn[aria-label="Продолжить"]'),
     ).toBeVisible();
-    await expect(widget!.locator('.btn[aria-label="Выполнено"]')).toBeVisible();
-    await expect(widget!.getByRole("button", { name: "Ещё" })).toBeVisible();
+    await expect(widget.locator('.btn[aria-label="Выполнено"]')).toBeVisible();
+    await expect(widget.getByRole("button", { name: "Ещё" })).toBeVisible();
   } finally {
     await gracefulQuit(app);
   }
 });
 
 test("focus widget: Pause кнопка триггерит backend pomodoro.pause + state.isPaused=true", async () => {
-  test.setTimeout(60_000);
   const dataDir = freshDataDir("focus-widget-pause");
   const app = await launchKeplerWithDataDir(dataDir);
   try {
-    await new Promise((r) => setTimeout(r, 2500));
+    await waitForRuntimeReady(app);
     await startPomodoroViaArk(app, { workMin: 25 });
     // Sync widget state с running pomodoro.
-    const widget = await openWidget(app);
-    expect(widget).not.toBeNull();
+    const widget = requireValue(await openWidget(app), "focus widget Page не найден");
 
-    await widget!.locator(".widget").hover();
-    await widget!.locator('.btn[aria-label="Пауза"]').click();
-    await new Promise((r) => setTimeout(r, 800));
+    await widget.locator(".widget").hover();
+    await widget.locator('.btn[aria-label="Пауза"]').click();
 
-    const pomo = await getPomodoroState(app);
-    expect(pomo).not.toBeNull();
-    expect(pomo!.isPaused).toBe(true);
-    expect(pomo!.phase).toBe("work");
+    await waitForPomodoroSnapshot(app, { isPaused: true, phase: "work" });
 
     // Regression: 2026-05-30. pause/resume не эмитят backend event, поэтому
     // виджет обязан применить state из RPC response сразу после клика.
-    await expect(widget!.locator('.btn[aria-label="Продолжить"]')).toBeVisible();
-    const widgetState = await getFocusWidgetState(app);
-    expect(widgetState).not.toBeNull();
-    expect((widgetState as unknown as { isPaused: boolean }).isPaused).toBe(true);
-    expect(widgetState!.phaseEndsAtMs).toBeNull();
+    await expect(widget.locator('.btn[aria-label="Продолжить"]')).toBeVisible();
+    await waitForWidgetSnapshot(app, { isPaused: true, phaseEndsAtMs: null });
 
-    await widget!.locator('.btn[aria-label="Продолжить"]').click();
-    await expect(widget!.locator('.btn[aria-label="Пауза"]')).toBeVisible();
-    const resumed = await getPomodoroState(app);
-    expect(resumed).not.toBeNull();
-    expect(resumed!.isPaused).toBe(false);
-    expect(resumed!.isRunning).toBe(true);
-    const resumedWidgetState = await getFocusWidgetState(app);
-    expect(resumedWidgetState).not.toBeNull();
-    expect((resumedWidgetState as unknown as { isPaused: boolean }).isPaused).toBe(false);
-    expect(resumedWidgetState!.phaseEndsAtMs).not.toBeNull();
+    await widget.locator('.btn[aria-label="Продолжить"]').click();
+    await expect(widget.locator('.btn[aria-label="Пауза"]')).toBeVisible();
+    await waitForPomodoroSnapshot(app, { isPaused: false, isRunning: true });
+    await expect
+      .poll(async () => (await getFocusWidgetState(app))?.phaseEndsAtMs ?? 0, { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    await waitForWidgetSnapshot(app, { isPaused: false });
   } finally {
     await gracefulQuit(app);
   }
 });
 
 test("focus widget: Skip через dropdown меню двигает phase work → shortBreak", async () => {
-  test.setTimeout(60_000);
   const dataDir = freshDataDir("focus-widget-skip");
   const app = await launchKeplerWithDataDir(dataDir);
   try {
-    await new Promise((r) => setTimeout(r, 2500));
+    await waitForRuntimeReady(app);
     await startPomodoroViaArk(app, { workMin: 25 });
-    const widget = await openWidget(app);
-    expect(widget).not.toBeNull();
+    const widget = requireValue(await openWidget(app), "focus widget Page не найден");
 
     // Skip теперь в native context menu (недоступен из Playwright DOM).
     // Вызываем напрямую через IPC для проверки backend функциональности.
-    await widget!.evaluate(() =>
+    await widget.evaluate(() =>
       (window as unknown as Record<string, unknown>).kepler
         ? (
             window as unknown as {
@@ -143,37 +183,27 @@ test("focus widget: Skip через dropdown меню двигает phase work 
           ).kepler.focusWidget.pomodoro.skip()
         : Promise.resolve(),
     );
-    await new Promise((r) => setTimeout(r, 800));
 
-    const pomo = await getPomodoroState(app);
-    expect(pomo).not.toBeNull();
-    expect(pomo!.phase).toBe("shortBreak");
-    expect(pomo!.completedPomodoros).toBe(1);
+    await waitForPomodoroSnapshot(app, { phase: "shortBreak", completedPomodoros: 1 });
   } finally {
     await gracefulQuit(app);
   }
 });
 
 test("focus widget: Done кнопка останавливает pomodoro и удаляет state-файл", async () => {
-  test.setTimeout(60_000);
   const dataDir = freshDataDir("focus-widget-stop");
   const app = await launchKeplerWithDataDir(dataDir);
   try {
-    await new Promise((r) => setTimeout(r, 2500));
+    await waitForRuntimeReady(app);
     await startPomodoroViaArk(app, { workMin: 25 });
     await waitForPomodoroStateFile(dataDir, 5_000);
     expect(pomodoroStateFileExists(dataDir)).toBe(true);
 
-    const widget = await openWidget(app);
-    expect(widget).not.toBeNull();
-    await widget!.locator(".widget").hover();
-    await widget!.locator('.btn[aria-label="Выполнено"]').click();
-    await new Promise((r) => setTimeout(r, 1000));
+    const widget = requireValue(await openWidget(app), "focus widget Page не найден");
+    await widget.locator(".widget").hover();
+    await widget.locator('.btn[aria-label="Выполнено"]').click();
 
-    const pomo = await getPomodoroState(app);
-    expect(pomo).not.toBeNull();
-    expect(pomo!.phase).toBe("idle");
-    expect(pomo!.isRunning).toBe(false);
+    await waitForPomodoroSnapshot(app, { phase: "idle", isRunning: false });
     await waitForPomodoroStateFileAbsent(dataDir, 3_000);
   } finally {
     await gracefulQuit(app);
@@ -181,11 +211,10 @@ test("focus widget: Done кнопка останавливает pomodoro и у�
 });
 
 test("focus widget: isPaused прокидывается в state через get-state IPC", async () => {
-  test.setTimeout(60_000);
   const dataDir = freshDataDir("focus-widget-is-paused-state");
   const app = await launchKeplerWithDataDir(dataDir);
   try {
-    await new Promise((r) => setTimeout(r, 2500));
+    await waitForRuntimeReady(app);
     await setFocusWidgetState(app, {
       active: true,
       remainingSec: 1500,
@@ -196,22 +225,18 @@ test("focus widget: isPaused прокидывается в state через get-
       isPaused: true,
       phaseEndsAtMs: null,
     });
-    const state = await getFocusWidgetState(app);
-    expect(state).not.toBeNull();
-    expect(state!.active).toBe(true);
     // isPaused — newly added field в FocusState.
-    expect((state as unknown as { isPaused: boolean }).isPaused).toBe(true);
+    await waitForWidgetSnapshot(app, { active: true, isPaused: true });
   } finally {
     await gracefulQuit(app);
   }
 });
 
 test("focus widget: backend generic label не перетирает конкретное название", async () => {
-  test.setTimeout(60_000);
   const dataDir = freshDataDir("focus-widget-label-stability");
   const app = await launchKeplerWithDataDir(dataDir);
   try {
-    await new Promise((r) => setTimeout(r, 2500));
+    await waitForRuntimeReady(app);
     await setFocusWidgetState(app, {
       active: true,
       remainingSec: 1500,
@@ -233,22 +258,19 @@ test("focus widget: backend generic label не перетирает конкре
       phaseEndsAtMs: Date.now() + 1_499_000,
     });
 
-    const state = await getFocusWidgetState(app);
-    expect(state).not.toBeNull();
     // Regression: 2026-05-28. Main-process backend tick не должен сбрасывать renderer label.
-    expect(state!.label).toBe("Собрать релиз");
-    expect(state!.remainingSec).toBeLessThanOrEqual(1499);
+    const state = await waitForWidgetSnapshot(app, { label: "Собрать релиз" });
+    expect(state.remainingSec).toBeLessThanOrEqual(1499);
   } finally {
     await gracefulQuit(app);
   }
 });
 
 test("focus widget: Stopwatch mode показывает 3 кнопки (Done + More в dropdown)", async () => {
-  test.setTimeout(60_000);
   const dataDir = freshDataDir("focus-widget-stopwatch-no-skip");
   const app = await launchKeplerWithDataDir(dataDir);
   try {
-    await new Promise((r) => setTimeout(r, 2500));
+    await waitForRuntimeReady(app);
     await setFocusWidgetState(app, {
       active: true,
       remainingSec: 0,
@@ -259,17 +281,19 @@ test("focus widget: Stopwatch mode показывает 3 кнопки (Done + M
       isPaused: false,
       phaseEndsAtMs: null,
     });
-    const widget = await findFocusWidgetPage(app, 5_000);
-    expect(widget).not.toBeNull();
-    await widget!.waitForLoadState("domcontentloaded");
-    await widget!.waitForSelector('[aria-label="Пауза"]', { state: "attached", timeout: 5_000 });
+    const widget = requireValue(
+      await findFocusWidgetPage(app, 5_000),
+      "focus widget Page не найден",
+    );
+    await widget.waitForLoadState("domcontentloaded");
+    await widget.waitForSelector('[aria-label="Пауза"]', { state: "attached", timeout: 5_000 });
 
     // В stopwatch всегда 3 кнопки: Pause / Done / More.
-    await widget!.locator(".widget").hover();
-    await expect(widget!.locator(".controls button")).toHaveCount(3);
-    await expect(widget!.locator('.btn[aria-label="Пауза"]')).toBeVisible();
-    await expect(widget!.locator('.btn[aria-label="Выполнено"]')).toBeVisible();
-    await expect(widget!.locator('.controls button[aria-label="Ещё"]')).toBeVisible();
+    await widget.locator(".widget").hover();
+    await expect(widget.locator(".controls button")).toHaveCount(3);
+    await expect(widget.locator('.btn[aria-label="Пауза"]')).toBeVisible();
+    await expect(widget.locator('.btn[aria-label="Выполнено"]')).toBeVisible();
+    await expect(widget.locator('.controls button[aria-label="Ещё"]')).toBeVisible();
   } finally {
     await gracefulQuit(app);
   }
