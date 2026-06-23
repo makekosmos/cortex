@@ -7,5 +7,5 @@ dist
 .tmp
 docs-site/public
 docs-site/.vitepress/cache
-.agent/tasks
+.agent
 .desloppify/reports

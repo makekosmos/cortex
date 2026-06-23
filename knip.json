@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignore": [
+    ".agent/**",
+    ".desloppify/**",
+    ".tmp/**",
+    "docs-site/.vitepress/cache/**",
+    "docs-site/public/**",
+    "node_modules/**",
+    "release/**",
+    "target/**",
+    "**/dist/**",
+    "**/dist-electron/**"
+  ]
+}
