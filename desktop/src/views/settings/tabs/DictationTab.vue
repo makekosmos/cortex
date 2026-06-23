@@ -11,13 +11,14 @@ import {
   SettingsList,
   SettingsRow,
 } from "@kosmos/visuals";
-import { ChevronRight, ListRestart, Trash2 } from "@lucide/vue";
+import { ChevronRight, ListRestart, Trash2, Zap } from "@lucide/vue";
 import AdvancedPageLayout, { type IntroDescriptor } from "../components/AdvancedPageLayout.vue";
 import AppCommandsTab from "./AppCommandsTab.vue";
 import {
   DICTATION_INJECT_OPTIONS,
   DICTATION_LANGUAGE_OPTIONS,
   DICTATION_TRIGGER_OPTIONS,
+  FASTER_WHISPER_CUDA_PROGRESS_ID,
   DictationConfigKey,
 } from "../composables/useDictationConfig";
 import { useDictationPending } from "../composables/useDictationPending";
@@ -47,10 +48,15 @@ const {
   dictationCaptureAccelerator,
   dictationCaptureCancelTick,
   dictationMicOptions,
+  dictationLocalModels,
+  dictationLocalModelsBusy,
+  dictationLocalModelsError,
+  dictationLocalModelDownloadProgress,
   dictationVoiceModelOptions,
   dictationVoiceModelValue,
   statsCards,
   loadDictationConfig,
+  loadDictationLocalModels,
   loadDictationStats,
   loadDictationMicrophones,
   onDictationMicChange,
@@ -58,6 +64,7 @@ const {
   onDictationInjectModeChange,
   onDictationTriggerModeChange,
   onDictationVoiceModelChange,
+  onInstallFasterWhisperCuda,
   onDictationHotkeyCapture,
   onDictationCaptureStart,
   onDictationCaptureEnd,
@@ -108,8 +115,54 @@ function openPendingPage() {
   activeSettingsView.value = "pending";
 }
 
+const selectedLocalModelReady = computed(() => {
+  if (dictationConfig.value.provider !== "local") return false;
+  const engine = dictationConfig.value.localEngine.trim().toLowerCase();
+  if (engine !== "faster-whisper" && engine !== "faster_whisper") return false;
+  return (dictationLocalModels.value?.models ?? []).some(
+    (model) => model.selected && model.downloaded,
+  );
+});
+
+const showNvidiaAcceleration = computed(
+  () =>
+    selectedLocalModelReady.value &&
+    Boolean(dictationLocalModels.value?.fasterWhisperCudaSupported),
+);
+
+const nvidiaProgress = computed(
+  () => dictationLocalModelDownloadProgress.value[FASTER_WHISPER_CUDA_PROGRESS_ID] ?? null,
+);
+
+const nvidiaAccelerationLabel = computed(() => {
+  if (dictationLocalModels.value?.fasterWhisperCudaInstalled) return "Установлено";
+  if (nvidiaProgress.value) return "Скачивается";
+  return "Ускорить на NVIDIA";
+});
+
+const nvidiaAccelerationDescription = computed(() => {
+  if (dictationLocalModelsError.value) return dictationLocalModelsError.value;
+  if (dictationLocalModels.value?.fasterWhisperCudaInstalled) {
+    return "NVIDIA runtime установлен. Диктовка попробует GPU и откатится на CPU при ошибке.";
+  }
+  if (nvidiaProgress.value) {
+    const percent = nvidiaProgress.value.percent;
+    return percent === null
+      ? "Скачиваем NVIDIA runtime (~1.2 ГБ)."
+      : `Скачиваем NVIDIA runtime ${Math.round(percent)}%.`;
+  }
+  return "Опциональный NVIDIA runtime (~1.2 ГБ). Устанавливается только для Kosmos.";
+});
+
+const nvidiaAccelerationBusy = computed(
+  () =>
+    dictationLocalModelsBusy.value === FASTER_WHISPER_CUDA_PROGRESS_ID ||
+    Boolean(nvidiaProgress.value),
+);
+
 onMounted(() => {
   void loadDictationConfig();
+  void loadDictationLocalModels();
   void loadDictationStats();
   void loadDictationMicrophones();
 });
@@ -202,6 +255,28 @@ onMounted(() => {
           <span class="stats-header__title">Дополнительно</span>
         </div>
         <SettingsList>
+          <SettingsRow
+            v-if="showNvidiaAcceleration"
+            title="NVIDIA"
+            :description="nvidiaAccelerationDescription"
+          >
+            <template #control>
+              <Button
+                size="sm"
+                variant="ghost"
+                :disabled="
+                  dictationLocalModels?.fasterWhisperCudaInstalled || nvidiaAccelerationBusy
+                "
+                :loading="nvidiaAccelerationBusy"
+                @click="onInstallFasterWhisperCuda"
+              >
+                <span class="nvidia-action">
+                  <Zap :size="14" aria-hidden="true" />
+                  {{ nvidiaAccelerationLabel }}
+                </span>
+              </Button>
+            </template>
+          </SettingsRow>
           <button class="settings-nav-row" type="button" @click="openPendingPage">
             <span class="settings-nav-row__text">
               <strong>Очередь диктовок</strong>
@@ -367,5 +442,12 @@ onMounted(() => {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+}
+
+.nvidia-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 </style>

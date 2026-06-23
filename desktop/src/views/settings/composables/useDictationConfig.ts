@@ -71,6 +71,9 @@ export interface DictationLocalModelsSnapshot {
   modelsDir: string;
   commandPath: string | null;
   commandInstalled: boolean;
+  fasterWhisperRuntimeInstalled: boolean;
+  fasterWhisperCudaInstalled: boolean;
+  fasterWhisperCudaSupported: boolean;
   models: DictationLocalModelInfo[];
 }
 
@@ -106,6 +109,8 @@ const DEFAULT_DICTATION_STATS: DictationStatsData = {
   wpm: 0,
   timeSavedSeconds: 0,
 };
+
+export const FASTER_WHISPER_CUDA_PROGRESS_ID = "__faster_whisper_cuda__";
 
 export const DNS_PROFILE_OPTIONS = [
   { value: "system", label: "Системный" },
@@ -240,8 +245,12 @@ function formatTotalWords(n: number): { value: string; unit: string } {
 }
 
 export function createDictationConfig() {
-  const dictationConfig = ref<DictationConfigData>({ ...DEFAULT_DICTATION_CFG });
-  const dictationStats = ref<DictationStatsData>({ ...DEFAULT_DICTATION_STATS });
+  const dictationConfig = ref<DictationConfigData>({
+    ...DEFAULT_DICTATION_CFG,
+  });
+  const dictationStats = ref<DictationStatsData>({
+    ...DEFAULT_DICTATION_STATS,
+  });
   const dictationHasApiKey = ref(false);
   const dictationApiKeyInput = ref("");
   const dictationApiKeyBusy = ref(false);
@@ -351,8 +360,18 @@ export function createDictationConfig() {
     const total = formatTotalWords(dictationStats.value.totalWords);
     return [
       { key: "wpm", label: "WPM", value: String(wpm), unit: "" },
-      { key: "saved", label: "Сэкономлено", value: saved.value, unit: saved.unit },
-      { key: "words", label: "Всего слов", value: total.value, unit: total.unit },
+      {
+        key: "saved",
+        label: "Сэкономлено",
+        value: saved.value,
+        unit: saved.unit,
+      },
+      {
+        key: "words",
+        label: "Всего слов",
+        value: total.value,
+        unit: total.unit,
+      },
     ];
   });
 
@@ -497,7 +516,9 @@ export function createDictationConfig() {
     dictationMicError.value = "";
     try {
       try {
-        const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const probe = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
         for (const t of probe.getTracks()) t.stop();
       } catch (permErr) {
         dictationMicError.value =
@@ -667,6 +688,36 @@ export function createDictationConfig() {
     }
   }
 
+  async function onInstallFasterWhisperCuda() {
+    dictationLocalModelsBusy.value = FASTER_WHISPER_CUDA_PROGRESS_ID;
+    dictationLocalModelsError.value = "";
+    dictationLocalModelDownloadProgress.value = {
+      ...dictationLocalModelDownloadProgress.value,
+      [FASTER_WHISPER_CUDA_PROGRESS_ID]: {
+        phase: "cuda",
+        downloadedBytes: 0,
+        totalBytes: null,
+        percent: null,
+      },
+    };
+    try {
+      const resp = (await window.kepler.ark.request(
+        "dictation.install_faster_whisper_cuda",
+        {},
+      )) as {
+        localModels?: DictationLocalModelsSnapshot;
+      };
+      if (resp.localModels) dictationLocalModels.value = resp.localModels;
+    } catch (e) {
+      dictationLocalModelsError.value = (e as Error).message;
+      const next = { ...dictationLocalModelDownloadProgress.value };
+      delete next[FASTER_WHISPER_CUDA_PROGRESS_ID];
+      dictationLocalModelDownloadProgress.value = next;
+    } finally {
+      dictationLocalModelsBusy.value = null;
+    }
+  }
+
   async function onDictationHotkeyCapture(acc: string) {
     if (!acc) return;
     await patchDictationConfig({ hotkey: acc });
@@ -746,7 +797,9 @@ export function createDictationConfig() {
     error?: string;
     latencyMs?: number;
   }> {
-    return (await window.kepler.ark.request("dictation.verify_api_key", { key })) as {
+    return (await window.kepler.ark.request("dictation.verify_api_key", {
+      key,
+    })) as {
       ok: boolean;
       reason?: string;
       status?: number;
@@ -857,6 +910,7 @@ export function createDictationConfig() {
     onDictationDownloadLocalModel,
     onDictationUseLocalModel,
     onDictationDeleteLocalModel,
+    onInstallFasterWhisperCuda,
     onDictationHotkeyCapture,
     onDictationCaptureStart,
     onDictationCaptureEnd,

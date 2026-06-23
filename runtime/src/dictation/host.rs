@@ -450,6 +450,7 @@ pub async fn handle_dictation_op(
         "native_audio_ping" => op_native_audio_ping().await,
         "list_local_models" => op_list_local_models(host).await,
         "download_local_model" => op_download_local_model(params, host).await,
+        "install_faster_whisper_cuda" => op_install_faster_whisper_cuda(host).await,
         "use_local_model" => op_use_local_model(params, host).await,
         "delete_local_model" => op_delete_local_model(params, host).await,
         other => DictationResponse::err(format!("dictation.{other}: unknown sub-operation")),
@@ -591,6 +592,7 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
         }));
         if is_faster_whisper_engine(&local_engine) {
             let model_arg = match local_models::ensure_faster_whisper_with_progress(
+                &client,
                 &data_dir,
                 &model_id,
                 &mut progress,
@@ -701,6 +703,62 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
     DictationResponse::ok(json!({
         "started": true,
         "modelId": model_id,
+    }))
+}
+
+async fn op_install_faster_whisper_cuda(host: &DictationHost) -> DictationResponse {
+    let cfg = host.snapshot_config().await;
+    let client =
+        match network::build_download_client(&cfg.network_profile, cfg.http_proxy.as_deref()) {
+            Ok(client) => client,
+            Err(e) => return DictationResponse::err(format!("install_faster_whisper_cuda: {e}")),
+        };
+    let events_tx = host.events_tx.clone();
+    let data_dir = host.data_dir.clone();
+    tokio::spawn(async move {
+        let model_id = "__faster_whisper_cuda__".to_owned();
+        let mut progress = |progress: local_models::DownloadProgress| {
+            let _ = events_tx.send(json!({
+                "event": "dictation_local_model_download_progress",
+                "modelId": model_id,
+                "phase": progress.phase,
+                "downloadedBytes": progress.downloaded_bytes,
+                "totalBytes": progress.total_bytes,
+                "percent": progress.percent,
+            }));
+        };
+        let _ = events_tx.send(json!({
+            "event": "dictation_local_model_download_started",
+            "modelId": model_id,
+        }));
+        match local_models::ensure_faster_whisper_cuda_with_progress(
+            &client,
+            &data_dir,
+            &mut progress,
+        )
+        .await
+        {
+            Ok(()) => {
+                let cfg = config::load();
+                let _ = events_tx.send(json!({
+                    "event": "dictation_local_model_download_complete",
+                    "modelId": model_id,
+                    "config": Value::Null,
+                    "localModels": local_models::snapshot(&data_dir, &cfg),
+                }));
+            }
+            Err(e) => {
+                let _ = events_tx.send(json!({
+                    "event": "dictation_local_model_download_failed",
+                    "modelId": model_id,
+                    "error": format!("install_faster_whisper_cuda: {e}"),
+                }));
+            }
+        }
+    });
+    DictationResponse::ok(json!({
+        "started": true,
+        "modelId": "__faster_whisper_cuda__",
     }))
 }
 
@@ -3576,6 +3634,7 @@ mod tests {
     #[tokio::test]
     async fn update_config_persists_and_emits_event() {
         let _guard = ENV_DATA_DIR_LOCK.lock().await;
+        let _dictation_guard = ENV_DICTATION_TEST_LOCK.lock().await;
         let tmp = tempfile::TempDir::new().expect("tempdir");
         std::env::set_var("KOSMOS_DATA_DIR", tmp.path());
         let model_path = tmp.path().join("local-whisper.bin");
