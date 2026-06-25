@@ -1,13 +1,30 @@
 # Kosmos — статус проекта (2026-06-18)
 
-| Компонент                  | Версия        |
-| -------------------------- | ------------- |
-| Kosmos Desktop (win / mac) | 0.6.9 / 0.5.1 |
-| Eden                       | 0.3.0         |
-| Delphi                     | 0.1.8         |
-| Horologion                 | 0.1.4         |
-| Arrancador                 | 0.1.4         |
-| Akasha                     | 0.1.2         |
+| Компонент                  | Версия         |
+| -------------------------- | -------------- |
+| Kosmos Desktop (win / mac) | 0.6.10 / 0.5.1 |
+| Eden                       | 0.3.0          |
+| Delphi                     | 0.1.8          |
+| Horologion                 | 0.1.4          |
+| Arrancador                 | 0.1.4          |
+| Akasha                     | 0.1.2          |
+
+## 2026-06-25 — Restored dictation mainline release (Kosmos Desktop 0.6.9 → 0.6.10)
+
+Patch-релиз закрепляет ветку `codex/restore-desloppify-before-dictation` как
+актуальное состояние `main`: два поздних проблемных main-коммита смержены с
+`ours`-стратегией, поэтому история остается fast-forwardable, но рабочее дерево
+совпадает с восстановленной веткой.
+
+- **Dictation settings contract**: восстановлен контракт настроек провайдеров,
+  чтобы UI и runtime снова говорили на одном формате.
+- **Installer shape**: stale local STT sidecar packaging остается удаленным;
+  тяжелые runtime-артефакты не возвращаются в Windows installer.
+- **Release scope**: Windows-only patch поверх 0.6.9, опубликованный в
+  `makekosmos/desktop` с новым installer и `latest.yml`.
+
+Checks: `bun run --cwd platform/desktop typecheck`, `bun run --cwd
+platform/desktop build`, `gh release view v0.6.10 -R makekosmos/desktop`.
 
 ## 2026-06-25 — Desloppified dictation release repack (Kosmos Desktop 0.6.8 → 0.6.9)
 
