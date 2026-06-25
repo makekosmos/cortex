@@ -167,7 +167,7 @@ fn rotate_backups(backups_dir: &Path, retain: usize) -> Result<usize, String> {
             Some((path, ts))
         })
         .collect();
-    entries.sort_by_key(|entry| std::cmp::Reverse(entry.1));
+    entries.sort_by(|a, b| b.1.cmp(&a.1));
     let mut removed = 0;
     for (path, _) in entries.iter().skip(retain) {
         match std::fs::remove_file(path) {

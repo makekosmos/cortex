@@ -7,11 +7,6 @@ const buildKepler = spawnSync("cargo", [...baseArgs, "--bin", "kepler-backend"],
   stdio: "inherit",
 });
 if ((buildKepler.status ?? 1) !== 0) process.exit(buildKepler.status ?? 1);
-const buildLocalStt = spawnSync("cargo", [...baseArgs, "--bin", "kosmos-local-stt"], {
-  cwd: new URL("..", import.meta.url),
-  stdio: "inherit",
-});
-if ((buildLocalStt.status ?? 1) !== 0) process.exit(buildLocalStt.status ?? 1);
 const buildArk = spawnSync(
   "cargo",
   [...baseArgs, "-p", "ark-core", "--bin", "ark-core-rpc", "--features", "iroh-spike"],

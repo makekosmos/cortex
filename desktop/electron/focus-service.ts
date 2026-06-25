@@ -15,8 +15,9 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PIPE_PATH = "\\\\.\\pipe\\kosmos-system-service";
-const LEGACY_PIPE_PATH = "\\\\.\\pipe\\kepler-focus-svc";
+export const SERVICE_NAME = "KosmosSystemSvc";
+export const PIPE_PATH = "\\\\.\\pipe\\kosmos-system-service";
+export const LEGACY_PIPE_PATH = "\\\\.\\pipe\\kepler-focus-svc";
 
 interface ServiceRequest {
   op: "add" | "remove" | "reset" | "status" | "ping";
@@ -48,46 +49,6 @@ interface CliResult {
   error?: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function isServiceResponse(value: unknown): value is ServiceResponse {
-  return (
-    isRecord(value) &&
-    typeof value.ok === "boolean" &&
-    (value.active_domains === undefined ||
-      (Array.isArray(value.active_domains) &&
-        value.active_domains.every((domain) => typeof domain === "string"))) &&
-    (value.error === undefined || typeof value.error === "string") &&
-    (value.pong === undefined || typeof value.pong === "boolean")
-  );
-}
-
-function isCliResult(value: unknown): value is CliResult {
-  return (
-    isRecord(value) &&
-    typeof value.ok === "boolean" &&
-    (value.installed === undefined || typeof value.installed === "boolean") &&
-    (value.running === undefined || typeof value.running === "boolean") &&
-    (value.service_name === undefined || typeof value.service_name === "string") &&
-    (value.needs_elevation === undefined || typeof value.needs_elevation === "boolean") &&
-    (value.error === undefined || typeof value.error === "string")
-  );
-}
-
-function parseCliResult(text: string): CliResult {
-  const parsed: unknown = JSON.parse(text);
-  if (isCliResult(parsed)) return parsed;
-  return { ok: false, error: "invalid cli response shape" };
-}
-
-function parseServiceResponse(text: string): ServiceResponse {
-  const parsed: unknown = JSON.parse(text);
-  if (isServiceResponse(parsed)) return parsed;
-  return { ok: false, error: "invalid service response shape" };
-}
-
 function runCli(args: string[]): Promise<CliResult> {
   return new Promise((resolve) => {
     let stdout = "";
@@ -106,7 +67,7 @@ function runCli(args: string[]): Promise<CliResult> {
         return;
       }
       try {
-        resolve(parseCliResult(trimmed));
+        resolve(JSON.parse(trimmed) as CliResult);
       } catch {
         resolve({ ok: false, error: `unparseable: ${trimmed.slice(0, 200)}` });
       }
@@ -118,6 +79,24 @@ function runCli(args: string[]): Promise<CliResult> {
 export async function getServiceStatus(): Promise<{ installed: boolean; running: boolean }> {
   const r = await runCli(["status"]);
   return { installed: !!r.installed, running: !!r.running };
+}
+
+/** Install требует admin — если не-admin, returns {needs_elevation: true}.
+    Shell-side ожидает что caller обработает elevation через PowerShell RunAs. */
+export async function installService(): Promise<CliResult> {
+  return runCli(["install"]);
+}
+
+export async function uninstallService(): Promise<CliResult> {
+  return runCli(["uninstall"]);
+}
+
+export async function startService(): Promise<CliResult> {
+  return runCli(["start"]);
+}
+
+export async function stopService(): Promise<CliResult> {
+  return runCli(["stop"]);
 }
 
 /** Install/uninstall с elevation via PowerShell RunAs. Используется UI кнопками. */
@@ -187,7 +166,7 @@ function sendViaPipePath(pipePath: string, req: ServiceRequest): Promise<Service
       // Service отвечает одним JSON и закрывает соединение. Пробуем
       // распарсить как только видим что-то целое.
       try {
-        const parsed = parseServiceResponse(buffer.trim());
+        const parsed = JSON.parse(buffer.trim()) as ServiceResponse;
         finish(parsed);
         client.end();
       } catch {
@@ -198,7 +177,7 @@ function sendViaPipePath(pipePath: string, req: ServiceRequest): Promise<Service
     client.on("end", () => {
       if (!resolved) {
         try {
-          finish(parseServiceResponse(buffer.trim()));
+          finish(JSON.parse(buffer.trim()) as ServiceResponse);
         } catch (e) {
           finish({ ok: false, error: `pipe parse: ${(e as Error).message}` });
         }

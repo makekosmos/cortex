@@ -31,7 +31,6 @@ function run(args) {
 }
 
 run(["build", "--manifest-path", "../../Cargo.toml", "--bin", "kepler-backend"]);
-run(["build", "--manifest-path", "../../Cargo.toml", "--bin", "kosmos-local-stt"]);
 
 const irohRequested =
   process.env.KOSMOS_IROH === "1" || /^true$/i.test(process.env.KOSMOS_IROH ?? "");

@@ -263,11 +263,12 @@ mod tests {
     fn read_nonexistent_returns_notfound() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("doesnotexist.json");
-        let err = read(&path).expect_err("missing lock file must return NotFound");
-        let LockFileError::Io(e) = err else {
-            unreachable!("missing lock file must return io error");
-        };
-        assert_eq!(e.kind(), io::ErrorKind::NotFound);
+        match read(&path) {
+            Err(LockFileError::Io(e)) => {
+                assert_eq!(e.kind(), io::ErrorKind::NotFound);
+            }
+            other => panic!("expected NotFound, got {other:?}"),
+        }
     }
 
     #[test]

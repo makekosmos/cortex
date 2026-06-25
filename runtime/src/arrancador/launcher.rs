@@ -33,16 +33,19 @@ pub enum LaunchError {
     SpawnFailed(#[from] std::io::Error),
 }
 
-type LaunchCommand = (
-    String,
-    Vec<String>,
-    Option<std::path::PathBuf>,
-    &'static str,
-);
-
 /// Резолвит команду без spawn'а. Возвращает (program, args, cwd_optional, method).
 /// Чистая функция — тестируется без процесс-spawn'а.
-pub fn resolve_launch_command(game: &ArkObject) -> Result<LaunchCommand, LaunchError> {
+pub fn resolve_launch_command(
+    game: &ArkObject,
+) -> Result<
+    (
+        String,
+        Vec<String>,
+        Option<std::path::PathBuf>,
+        &'static str,
+    ),
+    LaunchError,
+> {
     let props = &game.props_json;
     let source = props
         .get("source")

@@ -17,7 +17,7 @@ import type { KextManifestPreview } from "./extension-installer";
 import { findExtensionUpdates } from "./extension-update-plan";
 import { reloadExtensionWindow } from "./extension-host";
 
-interface CatalogExtension {
+export interface CatalogExtension {
   id: string;
   name: string;
   description: string;
@@ -41,44 +41,6 @@ const CATALOG_URL = "https://raw.githubusercontent.com/makekosmos/extensions/mai
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1h
 
 let cachedCatalog: { data: Catalog; fetchedAt: number } | null = null;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function isNullableString(value: unknown): value is string | null {
-  return value === null || typeof value === "string";
-}
-
-function isNullableNumber(value: unknown): value is number | null {
-  return value === null || typeof value === "number";
-}
-
-function isCatalogExtension(value: unknown): value is CatalogExtension {
-  if (!isRecord(value)) return false;
-  return (
-    typeof value.id === "string" &&
-    typeof value.name === "string" &&
-    typeof value.description === "string" &&
-    isNullableString(value.author) &&
-    typeof value.version === "string" &&
-    typeof value.keplerApiVersion === "string" &&
-    isNullableString(value.iconUrl) &&
-    typeof value.downloadUrl === "string" &&
-    isNullableString(value.sha256) &&
-    isNullableNumber(value.size)
-  );
-}
-
-function isCatalog(value: unknown): value is Catalog {
-  return (
-    isRecord(value) &&
-    typeof value.schemaVersion === "number" &&
-    typeof value.updatedAt === "string" &&
-    Array.isArray(value.extensions) &&
-    value.extensions.every(isCatalogExtension)
-  );
-}
 
 function httpsGetText(url: string, timeoutMs = 15000): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -154,20 +116,15 @@ async function sha256File(p: string): Promise<string> {
   return h.digest("hex");
 }
 
-async function fetchCatalog(force = false): Promise<Catalog> {
+export async function fetchCatalog(force = false): Promise<Catalog> {
   const now = Date.now();
   if (!force && cachedCatalog && now - cachedCatalog.fetchedAt < CACHE_TTL_MS) {
     return cachedCatalog.data;
   }
   const raw = await httpsGetText(CATALOG_URL);
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (e) {
-    throw new Error(`catalog.json: invalid JSON (${(e as Error).message})`);
-  }
-  if (!isCatalog(parsed)) {
-    throw new Error("catalog.json: invalid format");
+  const parsed = JSON.parse(raw) as Catalog;
+  if (!parsed || typeof parsed.schemaVersion !== "number") {
+    throw new Error("catalog.json: invalid format (no schemaVersion)");
   }
   // Tolerate unknown fields. Reject incompatible major schema version.
   if (parsed.schemaVersion !== 1) {
@@ -175,11 +132,14 @@ async function fetchCatalog(force = false): Promise<Catalog> {
       `catalog.json: schemaVersion ${parsed.schemaVersion} не поддерживается этой версией Kepler`,
     );
   }
+  if (!Array.isArray(parsed.extensions)) {
+    throw new Error("catalog.json: extensions must be an array");
+  }
   cachedCatalog = { data: parsed, fetchedAt: now };
   return parsed;
 }
 
-async function installFromUrl(
+export async function installFromUrl(
   url: string,
   expectedSha256?: string | null,
 ): Promise<KextManifestPreview> {
@@ -190,13 +150,6 @@ async function installFromUrl(
   mkdirSync(tmpRoot, { recursive: true });
   const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const tmpFile = path.join(tmpRoot, `download-${stamp}.kext`);
-  const cleanupTmpFile = () => {
-    try {
-      rmSync(tmpFile, { force: true });
-    } catch {
-      /* ignore */
-    }
-  };
 
   try {
     await httpsDownload(url, tmpFile);
@@ -209,11 +162,14 @@ async function installFromUrl(
         throw new Error(`sha256 mismatch: expected ${expectedSha256}, got ${actual}`);
       }
     }
-  } catch (error) {
-    cleanupTmpFile();
-    throw error;
+    return await installFromPath(tmpFile);
+  } finally {
+    try {
+      rmSync(tmpFile, { force: true });
+    } catch {
+      /* ignore */
+    }
   }
-  return installFromPath(tmpFile).finally(cleanupTmpFile);
 }
 
 let registered = false;
@@ -232,7 +188,7 @@ function notifyCommandsChanged(): void {
   }
 }
 
-async function autoUpdateExtensionsOnce(forceCatalog = true): Promise<void> {
+export async function autoUpdateExtensionsOnce(forceCatalog = true): Promise<void> {
   if (autoUpdateInFlight) return autoUpdateInFlight;
 
   autoUpdateInFlight = (async () => {

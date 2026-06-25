@@ -449,7 +449,7 @@ mod tests {
             Err(ArkHostError::BinaryNotFound(candidates)) => {
                 assert!(!candidates.is_empty(), "should report attempted paths");
             }
-            Err(other) => assert!(matches!(other, ArkHostError::BinaryNotFound(_))),
+            Err(other) => panic!("unexpected error: {other:?}"),
         }
     }
 }

@@ -4,8 +4,6 @@ export interface RaycastViewCallbackRegistry {
   register(callback: (payload?: Record<string, unknown>) => unknown | Promise<unknown>): string;
 }
 
-const EMPTY_RAYCAST_PROPS: Record<string, unknown> = {};
-
 function isRaycastElement(value: unknown): value is {
   type: string;
   props?: Record<string, unknown>;
@@ -43,7 +41,7 @@ function serializableProp(value: unknown): unknown {
     }
     return out;
   }
-  return;
+  return undefined;
 }
 
 export function normalizeRaycastNode(
@@ -59,7 +57,7 @@ export function normalizeRaycastNode(
   }
   if (!isRaycastElement(value)) return null;
 
-  const props = value.props ?? EMPTY_RAYCAST_PROPS;
+  const props = value.props ?? {};
   const outProps: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(props)) {
     if (key === "children" || typeof item === "function") continue;

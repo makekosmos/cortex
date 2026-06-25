@@ -3,15 +3,15 @@ import path from "node:path";
 
 // Source-tree roots for first-party and experimental app packages.
 // User-installed runtime extensions still live in <dataDir>/extensions.
-const REPO_EXTENSION_ROOT_NAMES = ["products", "incubator", "extensions"];
+export const REPO_EXTENSION_ROOT_NAMES = ["products", "incubator", "extensions"];
 
-function repoExtensionRoots(repoRoot) {
+export function repoExtensionRoots(repoRoot) {
   return REPO_EXTENSION_ROOT_NAMES.map((name) => ({ name, dir: path.join(repoRoot, name) })).filter(
     (root) => existsSync(root.dir),
   );
 }
 
-function readManifestSafe(dir) {
+export function readManifestSafe(dir) {
   const manifestPath = path.join(dir, "manifest.json");
   if (!existsSync(manifestPath)) return null;
   try {

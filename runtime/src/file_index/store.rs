@@ -1,35 +1,25 @@
 use super::{FileIndexError, IndexedFile, Result};
 use rusqlite::{params, Connection};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Mutex;
 
 const EXCLUDE_NOISY_FOLDERS_KEY: &str = "exclude_noisy_folders";
-const ENABLED_KEY: &str = "enabled";
 const RESPECT_GITIGNORE_KEY: &str = "respect_gitignore";
 const INCLUDE_HIDDEN_KEY: &str = "include_hidden";
 const NTFS_ACCELERATED_KEY: &str = "ntfs_accelerated";
 
 pub struct FileStore {
     conn: Mutex<Connection>,
-    db_path: PathBuf,
 }
 
 #[derive(Debug, Clone)]
 pub struct StatsSnapshot {
-    pub enabled: bool,
     pub total: usize,
     pub roots: Vec<String>,
     pub exclude_noisy_folders: bool,
     pub respect_gitignore: bool,
     pub include_hidden: bool,
     pub ntfs_accelerated: bool,
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-pub struct DatabaseSizeSnapshot {
-    pub db_size_bytes: u64,
-    pub wal_size_bytes: u64,
-    pub total_size_bytes: u64,
 }
 
 fn bool_setting_with_conn(conn: &Connection, key: &str, default: bool) -> Result<bool> {
@@ -68,14 +58,6 @@ CREATE TABLE IF NOT EXISTS file_index_ignore_patterns (
 );
 "#;
 
-const FTS_SCHEMA: &str = r#"
-CREATE VIRTUAL TABLE IF NOT EXISTS file_search_fts USING fts5(
-    path,
-    name,
-    tokenize = 'trigram'
-);
-"#;
-
 impl FileStore {
     pub fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)?;
@@ -83,7 +65,6 @@ impl FileStore {
         conn.execute_batch(SCHEMA)?;
         Ok(Self {
             conn: Mutex::new(conn),
-            db_path: path.to_path_buf(),
         })
     }
 
@@ -128,41 +109,6 @@ impl FileStore {
         }
         tx.commit()?;
         Ok(())
-    }
-
-    pub fn clear_index_cache(&self) -> Result<()> {
-        let conn = self.lock();
-        conn.execute_batch(
-            r#"
-            PRAGMA wal_checkpoint(TRUNCATE);
-            DELETE FROM files;
-            DROP TABLE IF EXISTS file_search_fts;
-            "#,
-        )?;
-        conn.execute_batch(FTS_SCHEMA)?;
-        conn.execute_batch(
-            r#"
-            VACUUM;
-            PRAGMA wal_checkpoint(TRUNCATE);
-            "#,
-        )?;
-        Ok(())
-    }
-
-    pub fn checkpoint_truncate_wal(&self) -> Result<()> {
-        let conn = self.lock();
-        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
-        Ok(())
-    }
-
-    pub fn database_size_snapshot(&self) -> Result<DatabaseSizeSnapshot> {
-        let db_size_bytes = file_len_or_zero(&self.db_path)?;
-        let wal_size_bytes = file_len_or_zero(&wal_path_for(&self.db_path))?;
-        Ok(DatabaseSizeSnapshot {
-            db_size_bytes,
-            wal_size_bytes,
-            total_size_bytes: db_size_bytes.saturating_add(wal_size_bytes),
-        })
     }
 
     pub fn upsert(&self, file: &IndexedFile) -> Result<()> {
@@ -281,13 +227,11 @@ impl FileStore {
                 roots.push(row?);
             }
         }
-        let enabled = bool_setting_with_conn(&conn, ENABLED_KEY, true)?;
         let exclude_noisy_folders = bool_setting_with_conn(&conn, EXCLUDE_NOISY_FOLDERS_KEY, true)?;
         let respect_gitignore = bool_setting_with_conn(&conn, RESPECT_GITIGNORE_KEY, true)?;
         let include_hidden = bool_setting_with_conn(&conn, INCLUDE_HIDDEN_KEY, false)?;
         let ntfs_accelerated = bool_setting_with_conn(&conn, NTFS_ACCELERATED_KEY, false)?;
         Ok(StatsSnapshot {
-            enabled,
             total: total.max(0) as usize,
             roots,
             exclude_noisy_folders,
@@ -316,14 +260,6 @@ impl FileStore {
 
     pub fn exclude_noisy_folders(&self) -> Result<bool> {
         self.bool_setting(EXCLUDE_NOISY_FOLDERS_KEY, true)
-    }
-
-    pub fn enabled(&self) -> Result<bool> {
-        self.bool_setting(ENABLED_KEY, true)
-    }
-
-    pub fn set_enabled(&self, enabled: bool) -> Result<()> {
-        self.set_bool_setting(ENABLED_KEY, enabled)
     }
 
     pub fn set_exclude_noisy_folders(&self, exclude: bool) -> Result<()> {
@@ -531,18 +467,6 @@ fn escape_like(input: &str) -> String {
         .replace('_', "!_")
 }
 
-fn wal_path_for(db_path: &Path) -> PathBuf {
-    PathBuf::from(format!("{}-wal", db_path.to_string_lossy()))
-}
-
-fn file_len_or_zero(path: &Path) -> Result<u64> {
-    match std::fs::metadata(path) {
-        Ok(meta) => Ok(meta.len()),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(0),
-        Err(err) => Err(err.into()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -717,28 +641,5 @@ mod tests {
             "roadmap-final.md"
         );
         assert_eq!(store.search("reports", 10).unwrap()[0].name, "invoice.txt");
-    }
-
-    #[test]
-    fn checkpoint_truncate_wal_clears_wal_bytes() {
-        let data = tempdir().unwrap();
-        let db = data.path().join("files.db");
-        let store = FileStore::open(&db).unwrap();
-        for n in 0..4_000 {
-            store
-                .upsert(&IndexedFile {
-                    path: format!(r"C:\docs\checkpoint-{n}.txt"),
-                    name: format!("checkpoint-{n}.txt"),
-                    mtime: n,
-                })
-                .unwrap();
-        }
-
-        store.checkpoint_truncate_wal().unwrap();
-
-        let sizes = store.database_size_snapshot().unwrap();
-        assert_eq!(sizes.wal_size_bytes, 0);
-        assert!(sizes.db_size_bytes > 0);
-        assert_eq!(sizes.total_size_bytes, sizes.db_size_bytes);
     }
 }

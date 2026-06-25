@@ -215,11 +215,13 @@ mod tests {
         bus.broadcast_changed().await;
 
         let evt = rx.recv().await.expect("event must arrive");
-        let CommandBusEvent::Changed(list) = evt else {
-            unreachable!("expected Changed event");
-        };
-        assert_eq!(list.len(), 1);
-        assert_eq!(list[0].id, "x");
+        match evt {
+            CommandBusEvent::Changed(list) => {
+                assert_eq!(list.len(), 1);
+                assert_eq!(list[0].id, "x");
+            }
+            CommandBusEvent::Invoked { .. } => panic!("expected Changed, got Invoked"),
+        }
     }
 
     #[tokio::test]
@@ -232,10 +234,12 @@ mod tests {
         );
 
         let evt = rx.recv().await.expect("event must arrive");
-        let CommandBusEvent::Invoked { id, params } = evt else {
-            unreachable!("expected Invoked event");
-        };
-        assert_eq!(id, "eden.new");
-        assert_eq!(params, serde_json::json!({ "title": "draft" }));
+        match evt {
+            CommandBusEvent::Invoked { id, params } => {
+                assert_eq!(id, "eden.new");
+                assert_eq!(params, serde_json::json!({ "title": "draft" }));
+            }
+            CommandBusEvent::Changed(_) => panic!("expected Invoked, got Changed"),
+        }
     }
 }

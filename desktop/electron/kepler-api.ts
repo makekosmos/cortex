@@ -37,13 +37,13 @@ export const KEPLER_API_VERSION = "1.1.0";
 // Не поддерживается: prerelease tags (`-beta.1`), `build` metadata.
 // ---------------------------------------------------------------------------
 
-interface SemVer {
+export interface SemVer {
   major: number;
   minor: number;
   patch: number;
 }
 
-function parseSemver(v: string): SemVer | null {
+export function parseSemver(v: string): SemVer | null {
   const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(v.trim());
   if (!m) return null;
   return {

@@ -7,7 +7,6 @@ mod scanner;
 mod store;
 mod watcher;
 
-use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -50,7 +49,6 @@ pub struct FileSearchResult {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ScanStats {
-    pub enabled: bool,
     pub total: usize,
     pub roots: usize,
     pub exclude_noisy_folders: bool,
@@ -61,7 +59,6 @@ pub struct ScanStats {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FileIndexSettings {
-    pub enabled: bool,
     pub exclude_noisy_folders: bool,
     pub roots: Vec<String>,
     pub ignore_patterns: Vec<String>,
@@ -105,7 +102,6 @@ pub struct ScanProgressSnapshot {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct FileIndexSettingsPatch {
-    pub enabled: Option<bool>,
     pub exclude_noisy_folders: Option<bool>,
     pub respect_gitignore: Option<bool>,
     pub include_hidden: Option<bool>,
@@ -114,69 +110,14 @@ pub struct FileIndexSettingsPatch {
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct FileIndexDiagnosticsSnapshot {
-    pub db_size_bytes: u64,
-    pub wal_size_bytes: u64,
-    pub total_size_bytes: u64,
     pub scan_in_progress: bool,
-    pub scan_progress: ScanProgressSnapshot,
     pub roots: Vec<String>,
-    pub roots_count: usize,
     pub files_count: usize,
-    pub risk_level: FileIndexRiskLevel,
-    pub risk_reasons: Vec<String>,
     pub last_scan_ms: u64,
-    pub last_scan: Option<LastScanSnapshot>,
     pub search_count: u64,
     pub like_search_count: u64,
     pub query_len_histogram: HashMap<String, u64>,
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum FileIndexRiskLevel {
-    #[default]
-    Ok,
-    Warning,
-    Danger,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct LastScanSnapshot {
-    pub finished_at_unix_ms: u64,
-    pub duration_ms: u64,
-    pub indexed_file_count: usize,
-    pub roots_count: usize,
-    pub exclude_noisy_folders: bool,
-    pub respect_gitignore: bool,
-    pub include_hidden: bool,
-    pub ntfs_accelerated: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct FileIndexRootEstimate {
-    pub path: String,
-    pub truncated: bool,
-    pub scanned_dirs: usize,
-    pub scanned_files: usize,
-    pub ignored_or_skipped_files: usize,
-    pub indexable_text_files_count: usize,
-    pub indexable_text_bytes: u64,
-    pub metadata_only_media_files_count: usize,
-    pub metadata_only_other_files_count: usize,
-    pub estimated_indexed_entries_count: usize,
-    pub estimated_index_size_bytes: u64,
-    pub risk_level: FileIndexRiskLevel,
-    pub risk_reasons: Vec<String>,
-    pub limitations: Vec<String>,
-}
-
-const ESTIMATE_DEFAULT_IGNORE_PATTERNS: &[&str] = &[
-    "*.tmp",
-    "*.temp",
-    "**/AppData/**",
-    "**/[Cc]ache/**",
-    "**/[Cc]aches/**",
-];
 
 #[derive(Debug, Clone)]
 pub struct ScanOptions {
@@ -203,7 +144,6 @@ pub struct FileIndex {
     // Toggling 5 patterns in a row used to queue 5 full rescans on scan_lock.
     rescan_pending: AtomicBool,
     ntfs_last_state: Arc<StdMutex<NtfsState>>,
-    last_scan: StdMutex<Option<LastScanSnapshot>>,
     enabled: bool,
 }
 
@@ -254,7 +194,6 @@ impl FileIndex {
             query_len_histogram: StdMutex::new(HashMap::new()),
             rescan_pending: AtomicBool::new(false),
             ntfs_last_state: Arc::new(StdMutex::new(NtfsState::default())),
-            last_scan: StdMutex::new(None),
             enabled,
         })
     }
@@ -266,7 +205,6 @@ impl FileIndex {
 
     pub fn settings(&self) -> Result<FileIndexSettings> {
         let options = self.scan_options()?;
-        let enabled = self.index_enabled()?;
         let ntfs_status = if !options.ntfs_accelerated {
             NtfsStatus::Disabled
         } else {
@@ -276,7 +214,6 @@ impl FileIndex {
                 .status
         };
         Ok(FileIndexSettings {
-            enabled,
             exclude_noisy_folders: options.exclude_noisy_folders,
             roots: self.root_strings()?,
             ignore_patterns: options.ignore_patterns,
@@ -302,21 +239,8 @@ impl FileIndex {
             return self.current_stats();
         }
         self.invalidate_running_scan();
-        let mut should_rescan = patch.enabled.is_none();
         if let Some(value) = patch.exclude_noisy_folders {
             self.store.set_exclude_noisy_folders(value)?;
-        }
-        if let Some(value) = patch.enabled {
-            self.store.set_enabled(value)?;
-            if !value {
-                should_rescan = false;
-                self.clear_progress_after_disable();
-                self.stop_watcher();
-            } else {
-                self.restart_watcher()?;
-                let snap = self.store.stats_snapshot()?;
-                should_rescan = snap.total == 0 && !snap.roots.is_empty();
-            }
         }
         if let Some(value) = patch.respect_gitignore {
             self.store.set_respect_gitignore(value)?;
@@ -327,9 +251,7 @@ impl FileIndex {
         if let Some(value) = patch.ntfs_accelerated {
             self.store.set_ntfs_accelerated(value)?;
         }
-        if should_rescan && self.index_enabled()? {
-            self.spawn_rescan();
-        }
+        self.spawn_rescan();
         self.current_stats()
     }
 
@@ -345,10 +267,8 @@ impl FileIndex {
         }
         self.invalidate_running_scan();
         self.store.add_root(path)?;
-        if self.index_enabled()? {
-            self.restart_watcher()?;
-            self.spawn_rescan();
-        }
+        self.restart_watcher()?;
+        self.spawn_rescan();
         self.current_stats()
     }
 
@@ -358,13 +278,9 @@ impl FileIndex {
         }
         self.invalidate_running_scan();
         let removed_root = self.store.remove_root_record(path)?;
-        if self.index_enabled()? {
-            self.restart_watcher()?;
-        }
+        self.restart_watcher()?;
         self.spawn_removed_root_cleanup(removed_root);
-        if self.index_enabled()? {
-            self.spawn_rescan();
-        }
+        self.spawn_rescan();
         self.current_stats()
     }
 
@@ -375,9 +291,7 @@ impl FileIndex {
         scanner::validate_ignore_pattern(pattern)?;
         self.invalidate_running_scan();
         self.store.add_ignore_pattern(pattern)?;
-        if self.index_enabled()? {
-            self.spawn_rescan();
-        }
+        self.spawn_rescan();
         self.current_stats()
     }
 
@@ -387,14 +301,12 @@ impl FileIndex {
         }
         self.invalidate_running_scan();
         self.store.remove_ignore_pattern(pattern)?;
-        if self.index_enabled()? {
-            self.spawn_rescan();
-        }
+        self.spawn_rescan();
         self.current_stats()
     }
 
     pub async fn rescan(&self) -> Result<ScanStats> {
-        if !self.enabled || !self.index_enabled()? {
+        if !self.enabled {
             return self.current_stats();
         }
         let _guard = self.scan_lock.lock().await;
@@ -402,57 +314,11 @@ impl FileIndex {
     }
 
     pub fn request_rescan(&self) -> Result<ScanStats> {
-        if !self.enabled || !self.index_enabled()? {
+        if !self.enabled {
             return self.current_stats();
         }
         self.spawn_rescan();
         self.current_stats()
-    }
-
-    pub fn clear_cache(&self) -> Result<ScanStats> {
-        if !self.enabled {
-            return self.current_stats();
-        }
-        self.invalidate_running_scan();
-        self.store.clear_index_cache()?;
-        self.current_stats()
-    }
-
-    pub fn diagnostics(&self) -> Result<FileIndexDiagnosticsSnapshot> {
-        let size = self.store.database_size_snapshot()?;
-        let stats = self.current_stats().ok();
-        let roots = self.root_strings().unwrap_or_default();
-        let files_count = stats.as_ref().map(|s| s.total).unwrap_or_default();
-        let (risk_level, risk_reasons) = assess_roots_risk(&roots);
-        Ok(FileIndexDiagnosticsSnapshot {
-            db_size_bytes: size.db_size_bytes,
-            wal_size_bytes: size.wal_size_bytes,
-            total_size_bytes: size.total_size_bytes,
-            scan_in_progress: self.scan_in_progress.load(Ordering::SeqCst),
-            scan_progress: self.progress_snapshot(),
-            roots_count: roots.len(),
-            roots,
-            files_count,
-            risk_level,
-            risk_reasons,
-            last_scan_ms: self.last_scan_ms.load(Ordering::SeqCst),
-            last_scan: self
-                .last_scan
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone(),
-            search_count: self.search_count.load(Ordering::SeqCst),
-            like_search_count: self.like_search_count.load(Ordering::SeqCst),
-            query_len_histogram: self
-                .query_len_histogram
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone(),
-        })
-    }
-
-    pub fn estimate_root(&self, path: &str) -> Result<FileIndexRootEstimate> {
-        self.estimate_root_with_budget(path, EstimateBudget::default())
     }
 
     async fn rescan_locked(&self) -> Result<ScanStats> {
@@ -520,7 +386,6 @@ impl FileIndex {
             }
             let total = files.len();
             store.replace_all(&files)?;
-            store.checkpoint_truncate_wal()?;
             Ok(ScanCommitOutcome::Committed {
                 total,
                 roots: roots.len(),
@@ -564,18 +429,7 @@ impl FileIndex {
             scan_started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
             Ordering::SeqCst,
         );
-        self.remember_last_scan(LastScanSnapshot {
-            finished_at_unix_ms: now_unix_ms(),
-            duration_ms: self.last_scan_ms.load(Ordering::SeqCst),
-            indexed_file_count: total,
-            roots_count: roots,
-            exclude_noisy_folders: options.exclude_noisy_folders,
-            respect_gitignore: options.respect_gitignore,
-            include_hidden: options.include_hidden,
-            ntfs_accelerated: options.ntfs_accelerated,
-        });
         Ok(ScanStats {
-            enabled: true,
             total,
             roots,
             exclude_noisy_folders: options.exclude_noisy_folders,
@@ -586,18 +440,12 @@ impl FileIndex {
     }
 
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<FileSearchResult>> {
-        if !self.enabled || !self.index_enabled()? {
+        if !self.enabled {
             return Ok(Vec::new());
         }
         self.observe_search(query);
         let candidate_limit = limit.saturating_mul(64).max(512);
-        let roots = self.root_strings()?;
-        let candidates = self
-            .store
-            .search(query, candidate_limit)?
-            .into_iter()
-            .filter(|file| indexed_result_is_visible(&file.path, &roots))
-            .collect();
+        let candidates = self.store.search(query, candidate_limit)?;
         Ok(rank(candidates, query, limit))
     }
 
@@ -621,10 +469,6 @@ impl FileIndex {
             return Ok(Vec::new());
         }
         self.store.roots()
-    }
-
-    fn index_enabled(&self) -> Result<bool> {
-        Ok(self.enabled && self.store.enabled()?)
     }
 
     pub fn has_roots(&self) -> Result<bool> {
@@ -652,16 +496,10 @@ impl FileIndex {
         Ok(())
     }
 
-    fn stop_watcher(&self) {
-        let mut watcher = self.watcher.lock().unwrap_or_else(|e| e.into_inner());
-        *watcher = None;
-    }
-
     fn current_stats(&self) -> Result<ScanStats> {
         if !self.enabled {
             let options = self.scan_options()?;
             return Ok(ScanStats {
-                enabled: false,
                 total: 0,
                 roots: 0,
                 exclude_noisy_folders: options.exclude_noisy_folders,
@@ -674,7 +512,6 @@ impl FileIndex {
         // separate lock() acquisitions racing with chunked remove_tree windows.
         let snap = self.store.stats_snapshot()?;
         Ok(ScanStats {
-            enabled: snap.enabled,
             total: snap.total,
             roots: snap.roots.len(),
             exclude_noisy_folders: snap.exclude_noisy_folders,
@@ -745,53 +582,23 @@ impl FileIndex {
         *progress = snapshot;
     }
 
-    fn clear_progress_after_disable(&self) {
-        self.scan_in_progress.store(false, Ordering::SeqCst);
-        self.set_progress(ScanProgressSnapshot {
-            phase: "disabled".to_string(),
-            message: "Поиск файлов выключен".to_string(),
-            ..Default::default()
-        });
-    }
-
-    fn remember_last_scan(&self, snapshot: LastScanSnapshot) {
-        let mut last_scan = self.last_scan.lock().unwrap_or_else(|e| e.into_inner());
-        *last_scan = Some(snapshot);
-    }
-
     pub fn diagnostics_snapshot(&self) -> FileIndexDiagnosticsSnapshot {
-        self.diagnostics()
-            .unwrap_or_else(|_| FileIndexDiagnosticsSnapshot {
-                db_size_bytes: 0,
-                wal_size_bytes: 0,
-                total_size_bytes: 0,
-                scan_in_progress: self.scan_in_progress.load(Ordering::SeqCst),
-                scan_progress: self.progress_snapshot(),
-                roots: self.root_strings().unwrap_or_default(),
-                roots_count: self
-                    .root_strings()
-                    .map(|roots| roots.len())
-                    .unwrap_or_default(),
-                files_count: self
-                    .current_stats()
-                    .map(|stats| stats.total)
-                    .unwrap_or_default(),
-                risk_level: FileIndexRiskLevel::Warning,
-                risk_reasons: vec!["Не удалось собрать полную диагностику индекса".to_string()],
-                last_scan_ms: self.last_scan_ms.load(Ordering::SeqCst),
-                last_scan: self
-                    .last_scan
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone(),
-                search_count: self.search_count.load(Ordering::SeqCst),
-                like_search_count: self.like_search_count.load(Ordering::SeqCst),
-                query_len_histogram: self
-                    .query_len_histogram
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone(),
-            })
+        let stats = self.current_stats().ok();
+        let roots = self.root_strings().unwrap_or_default();
+        let files_count = stats.as_ref().map(|s| s.total).unwrap_or_default();
+        FileIndexDiagnosticsSnapshot {
+            scan_in_progress: self.scan_in_progress.load(Ordering::SeqCst),
+            roots,
+            files_count,
+            last_scan_ms: self.last_scan_ms.load(Ordering::SeqCst),
+            search_count: self.search_count.load(Ordering::SeqCst),
+            like_search_count: self.like_search_count.load(Ordering::SeqCst),
+            query_len_histogram: self
+                .query_len_histogram
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+        }
     }
 
     fn observe_search(&self, query: &str) {
@@ -813,141 +620,6 @@ impl FileIndex {
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         *histogram.entry(bucket.to_string()).or_insert(0) += 1;
-    }
-
-    fn estimate_root_with_budget(
-        &self,
-        path: &str,
-        budget: EstimateBudget,
-    ) -> Result<FileIndexRootEstimate> {
-        let root = PathBuf::from(path);
-        if !root.is_dir() {
-            return Err(FileIndexError::InvalidSetting(format!(
-                "search scope must be an existing directory: {path}"
-            )));
-        }
-        let options = self.scan_options()?;
-        let mut builder = ignore::WalkBuilder::new(&root);
-        builder
-            .follow_links(false)
-            .hidden(!options.include_hidden)
-            .git_ignore(options.respect_gitignore)
-            .git_global(options.respect_gitignore)
-            .git_exclude(options.respect_gitignore)
-            .parents(options.respect_gitignore)
-            .add_custom_ignore_filename(".rayignore");
-        let matcher = estimate_ignore_matcher(&options);
-
-        let started = std::time::Instant::now();
-        let mut truncated = false;
-        let mut scanned_dirs = 0usize;
-        let mut scanned_files = 0usize;
-        let mut ignored_or_skipped_files = 0usize;
-        let mut indexable_text_files_count = 0usize;
-        let mut indexable_text_bytes = 0u64;
-        let mut metadata_only_media_files_count = 0usize;
-        let mut metadata_only_other_files_count = 0usize;
-        let mut estimated_indexed_entries_count = 0usize;
-        let mut estimated_index_size_bytes = 0u64;
-
-        for entry in builder.build().filter_map(|entry| entry.ok()) {
-            if started.elapsed() >= budget.max_duration
-                || scanned_dirs >= budget.max_dirs
-                || scanned_files >= budget.max_files
-            {
-                truncated = true;
-                break;
-            }
-            let path = entry.path();
-            if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
-                scanned_dirs += 1;
-                continue;
-            }
-            if !entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
-                continue;
-            }
-            scanned_files += 1;
-            if !estimate_should_index_path_for_root(path, &root, &options, matcher.as_ref()) {
-                ignored_or_skipped_files += 1;
-                continue;
-            }
-
-            let file_len = entry.metadata().map(|meta| meta.len()).unwrap_or(0);
-            let name = entry.file_name().to_string_lossy();
-            estimated_indexed_entries_count += 1;
-            estimated_index_size_bytes = estimated_index_size_bytes
-                .saturating_add(estimate_index_entry_size_bytes(path, &name));
-
-            match classify_indexed_file(path) {
-                IndexedFileClass::TextLike => {
-                    indexable_text_files_count += 1;
-                    indexable_text_bytes = indexable_text_bytes.saturating_add(file_len);
-                }
-                IndexedFileClass::Media => {
-                    metadata_only_media_files_count += 1;
-                }
-                IndexedFileClass::Other => {
-                    metadata_only_other_files_count += 1;
-                }
-            }
-        }
-
-        let mut limitations = vec![
-            "Текущий file index индексирует только имя и путь файла; content indexing не используется."
-                .to_string(),
-        ];
-        if options.respect_gitignore {
-            limitations.push(
-                "Файлы, отфильтрованные .gitignore/ignore walker-ом, считаются не полностью; ignored_or_skipped_files — нижняя оценка."
-                    .to_string(),
-            );
-        }
-        if truncated {
-            limitations.push(
-                "Оценка усечена по budget/time cap; итоговые числа являются нижней оценкой."
-                    .to_string(),
-            );
-        }
-
-        let (risk_level, risk_reasons) = assess_estimate_risk(
-            path,
-            truncated,
-            estimated_indexed_entries_count,
-            estimated_index_size_bytes,
-        );
-        Ok(FileIndexRootEstimate {
-            path: root.to_string_lossy().to_string(),
-            truncated,
-            scanned_dirs,
-            scanned_files,
-            ignored_or_skipped_files,
-            indexable_text_files_count,
-            indexable_text_bytes,
-            metadata_only_media_files_count,
-            metadata_only_other_files_count,
-            estimated_indexed_entries_count,
-            estimated_index_size_bytes,
-            risk_level,
-            risk_reasons,
-            limitations,
-        })
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct EstimateBudget {
-    max_files: usize,
-    max_dirs: usize,
-    max_duration: std::time::Duration,
-}
-
-impl Default for EstimateBudget {
-    fn default() -> Self {
-        Self {
-            max_files: 50_000,
-            max_dirs: 10_000,
-            max_duration: std::time::Duration::from_secs(3),
-        }
     }
 }
 
@@ -983,306 +655,6 @@ impl Drop for ScanProgressGuard<'_> {
             progress.phase = "idle".to_string();
             progress.message = "Индексация остановлена".to_string();
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum IndexedFileClass {
-    TextLike,
-    Media,
-    Other,
-}
-
-fn now_unix_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .ok()
-        .map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64)
-        .unwrap_or(0)
-}
-
-fn estimate_index_entry_size_bytes(path: &Path, name: &str) -> u64 {
-    let path_bytes = path.as_os_str().to_string_lossy().len() as u64;
-    let name_bytes = name.len() as u64;
-    // files row + fts row + index overhead. This intentionally overestimates a
-    // little so settings UI does not present unrealistically low storage costs.
-    192u64
-        .saturating_add(path_bytes.saturating_mul(2))
-        .saturating_add(name_bytes.saturating_mul(2))
-}
-
-fn classify_indexed_file(path: &Path) -> IndexedFileClass {
-    let Some(ext) = path.extension().and_then(|ext| ext.to_str()) else {
-        return IndexedFileClass::Other;
-    };
-    let ext = ext.to_ascii_lowercase();
-    if matches!(
-        ext.as_str(),
-        "png"
-            | "jpg"
-            | "jpeg"
-            | "gif"
-            | "webp"
-            | "bmp"
-            | "svg"
-            | "heic"
-            | "avif"
-            | "mp4"
-            | "mov"
-            | "avi"
-            | "mkv"
-            | "webm"
-            | "mp3"
-            | "wav"
-            | "flac"
-            | "ogg"
-            | "m4a"
-    ) {
-        return IndexedFileClass::Media;
-    }
-    if matches!(
-        ext.as_str(),
-        "txt"
-            | "md"
-            | "rs"
-            | "toml"
-            | "json"
-            | "jsonc"
-            | "yaml"
-            | "yml"
-            | "ts"
-            | "tsx"
-            | "js"
-            | "jsx"
-            | "mjs"
-            | "cjs"
-            | "html"
-            | "css"
-            | "scss"
-            | "less"
-            | "xml"
-            | "csv"
-            | "tsv"
-            | "sql"
-            | "py"
-            | "java"
-            | "kt"
-            | "kts"
-            | "go"
-            | "c"
-            | "cc"
-            | "cpp"
-            | "h"
-            | "hpp"
-            | "cs"
-            | "swift"
-            | "sh"
-            | "ps1"
-            | "bat"
-            | "cmd"
-            | "ini"
-            | "log"
-    ) {
-        return IndexedFileClass::TextLike;
-    }
-    IndexedFileClass::Other
-}
-
-fn estimate_ignore_matcher(options: &ScanOptions) -> Option<GlobSet> {
-    let mut builder = GlobSetBuilder::new();
-    let mut added = false;
-    for pattern in ESTIMATE_DEFAULT_IGNORE_PATTERNS
-        .iter()
-        .copied()
-        .chain(options.ignore_patterns.iter().map(String::as_str))
-    {
-        if estimate_add_glob_variants(&mut builder, pattern).is_ok() {
-            added = true;
-        }
-    }
-    if !added {
-        return None;
-    }
-    builder.build().ok()
-}
-
-fn estimate_add_glob_variants(
-    builder: &mut GlobSetBuilder,
-    pattern: &str,
-) -> std::result::Result<(), ()> {
-    let normalized = pattern.trim();
-    if normalized.is_empty() {
-        return Ok(());
-    }
-    let glob = Glob::new(normalized).map_err(|_| ())?;
-    builder.add(glob);
-    if !normalized.contains('/') && !normalized.contains('\\') {
-        let deep = Glob::new(&format!("**/{normalized}")).map_err(|_| ())?;
-        builder.add(deep);
-    }
-    Ok(())
-}
-
-fn estimate_should_index_path_for_root(
-    path: &Path,
-    root: &Path,
-    options: &ScanOptions,
-    matcher: Option<&GlobSet>,
-) -> bool {
-    let relative = path.strip_prefix(root).unwrap_or(path);
-    if options.exclude_noisy_folders && scanner::path_contains_noisy_folder(relative) {
-        return false;
-    }
-    if !options.include_hidden && estimate_is_dot_hidden(relative) {
-        return false;
-    }
-    !estimate_matches_ignore_pattern(relative, matcher)
-}
-
-fn estimate_matches_ignore_pattern(path: &Path, matcher: Option<&GlobSet>) -> bool {
-    matcher.is_some_and(|matcher| {
-        matcher.is_match(path)
-            || path
-                .file_name()
-                .is_some_and(|name| matcher.is_match(Path::new(name)))
-    })
-}
-
-fn estimate_is_dot_hidden(path: &Path) -> bool {
-    path.components().any(|component| {
-        let name = component.as_os_str().to_string_lossy();
-        name.starts_with('.') && name != "." && name != ".."
-    })
-}
-
-fn assess_roots_risk(roots: &[String]) -> (FileIndexRiskLevel, Vec<String>) {
-    let mut level = FileIndexRiskLevel::Ok;
-    let mut reasons = Vec::new();
-    for root in roots {
-        let (root_level, mut root_reasons) = assess_root_path_risk(root);
-        level = max_risk(level, root_level);
-        reasons.append(&mut root_reasons);
-    }
-    (level, reasons)
-}
-
-fn assess_estimate_risk(
-    root: &str,
-    truncated: bool,
-    estimated_entries: usize,
-    estimated_size_bytes: u64,
-) -> (FileIndexRiskLevel, Vec<String>) {
-    let (mut level, mut reasons) = assess_root_path_risk(root);
-    if truncated {
-        level = max_risk(level, FileIndexRiskLevel::Warning);
-        reasons.push("Оценка была усечена по budget/time cap".to_string());
-    }
-    if estimated_entries >= 500_000 {
-        level = max_risk(level, FileIndexRiskLevel::Danger);
-        reasons.push(format!(
-            "Оценка показывает очень большой объём индекса: {estimated_entries} файлов"
-        ));
-    } else if estimated_entries >= 100_000 {
-        level = max_risk(level, FileIndexRiskLevel::Warning);
-        reasons.push(format!(
-            "Оценка показывает крупный объём индекса: {estimated_entries} файлов"
-        ));
-    }
-    const MB: u64 = 1024 * 1024;
-    if estimated_size_bytes >= 1024 * MB {
-        level = max_risk(level, FileIndexRiskLevel::Danger);
-        reasons.push(format!(
-            "Оценочный размер индекса превышает 1 ГБ: {} байт",
-            estimated_size_bytes
-        ));
-    } else if estimated_size_bytes >= 256 * MB {
-        level = max_risk(level, FileIndexRiskLevel::Warning);
-        reasons.push(format!(
-            "Оценочный размер индекса заметный: {} байт",
-            estimated_size_bytes
-        ));
-    }
-    (level, reasons)
-}
-
-fn assess_root_path_risk(root: &str) -> (FileIndexRiskLevel, Vec<String>) {
-    let normalized = root.trim_end_matches(['\\', '/']);
-    if normalized.is_empty() {
-        return (
-            FileIndexRiskLevel::Danger,
-            vec!["Пустой или некорректный root индекса".to_string()],
-        );
-    }
-    let mut level = FileIndexRiskLevel::Ok;
-    let mut reasons = Vec::new();
-    if is_drive_root_like(normalized) || normalized == "/" {
-        level = FileIndexRiskLevel::Danger;
-        reasons.push(format!(
-            "Root `{root}` охватывает корень диска/файловой системы"
-        ));
-    }
-    let lower = normalized.to_ascii_lowercase();
-    if lower.ends_with(r":\users")
-        || lower.ends_with(r":\users\public")
-        || lower.ends_with(r":\programdata")
-        || lower.ends_with("/users")
-        || lower.ends_with("/home")
-    {
-        level = max_risk(level, FileIndexRiskLevel::Danger);
-        reasons.push(format!(
-            "Root `{root}` выглядит слишком широким для постоянного индексирования"
-        ));
-    }
-    let depth = Path::new(normalized)
-        .components()
-        .filter(|component| matches!(component, std::path::Component::Normal(_)))
-        .count();
-    if depth <= 1 && !is_drive_root_like(normalized) && normalized != "/" {
-        level = max_risk(level, FileIndexRiskLevel::Warning);
-        reasons.push(format!(
-            "Root `{root}` расположен слишком высоко в дереве каталогов"
-        ));
-    }
-    (level, reasons)
-}
-
-fn max_risk(a: FileIndexRiskLevel, b: FileIndexRiskLevel) -> FileIndexRiskLevel {
-    use FileIndexRiskLevel::{Danger, Ok, Warning};
-    match (a, b) {
-        (Danger, _) | (_, Danger) => Danger,
-        (Warning, _) | (_, Warning) => Warning,
-        _ => Ok,
-    }
-}
-
-fn is_drive_root_like(path: &str) -> bool {
-    let trimmed = path.trim_end_matches(['\\', '/']);
-    let bytes = trimmed.as_bytes();
-    bytes.len() == 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic()
-}
-
-fn indexed_result_is_visible(path: &str, roots: &[String]) -> bool {
-    if roots.is_empty() || !Path::new(path).exists() {
-        return false;
-    }
-    roots.iter().any(|root| path_is_under_root(path, root))
-}
-
-fn path_is_under_root(path: &str, root: &str) -> bool {
-    let normalized_root = root.trim_end_matches(['\\', '/']);
-    let normalized_path = path.trim_end_matches(['\\', '/']);
-    if normalized_root.is_empty() {
-        return false;
-    }
-    if cfg!(windows) {
-        let root_lower = normalized_root.to_ascii_lowercase();
-        let path_lower = normalized_path.to_ascii_lowercase();
-        path_lower == root_lower
-            || path_lower.starts_with(&format!("{root_lower}\\"))
-            || path_lower.starts_with(&format!("{root_lower}/"))
-    } else {
-        normalized_path == normalized_root
-            || normalized_path.starts_with(&format!("{normalized_root}/"))
     }
 }
 
@@ -1398,68 +770,6 @@ mod tests {
         assert_eq!(disabled.rescan().await.unwrap().roots, 0);
     }
 
-    #[tokio::test]
-    async fn settings_enabled_false_disables_search_without_losing_roots() {
-        let data = tempdir().unwrap();
-        let root = tempdir().unwrap();
-        std::fs::write(root.path().join("toggle-note.txt"), "v1").unwrap();
-
-        let index = FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap();
-        index.rescan().await.unwrap();
-        assert_eq!(index.search("toggle-note", 10).unwrap().len(), 1);
-
-        index
-            .set_settings(FileIndexSettingsPatch {
-                enabled: Some(false),
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        assert!(!index.settings().unwrap().enabled);
-        assert_eq!(index.settings().unwrap().roots.len(), 1);
-        assert!(index.search("toggle-note", 10).unwrap().is_empty());
-        assert_eq!(index.request_rescan().unwrap().total, 1);
-
-        index
-            .set_settings(FileIndexSettingsPatch {
-                enabled: Some(true),
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        index.rescan().await.unwrap();
-        assert_eq!(index.search("toggle-note", 10).unwrap().len(), 1);
-    }
-
-    #[tokio::test]
-    async fn enabling_existing_index_does_not_force_rescan() {
-        let data = tempdir().unwrap();
-        let root = tempdir().unwrap();
-        std::fs::write(root.path().join("old-note.txt"), "v1").unwrap();
-
-        let index = FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap();
-        index.rescan().await.unwrap();
-        std::fs::write(root.path().join("new-note.txt"), "v1").unwrap();
-
-        index
-            .set_settings(FileIndexSettingsPatch {
-                enabled: Some(false),
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        index
-            .set_settings(FileIndexSettingsPatch {
-                enabled: Some(true),
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        assert_eq!(index.search("old-note", 10).unwrap().len(), 1);
-        assert!(index.search("new-note", 10).unwrap().is_empty());
-    }
-
     #[test]
     fn env_flag_parser_treats_zero_false_off_no_as_disabled() {
         let _guard = ENV_FLAG_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -1554,117 +864,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn clear_cache_removes_index_rows_but_keeps_settings_and_roots() {
-        let data = tempdir().unwrap();
-        let root = tempdir().unwrap();
-        std::fs::write(root.path().join("cache-note.md"), "v1").unwrap();
-
-        let index = FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap();
-        index.set_exclude_noisy_folders(false).await.unwrap();
-        index.rescan().await.unwrap();
-        assert_eq!(index.search("cache-note", 10).unwrap().len(), 1);
-
-        let stats = index.clear_cache().unwrap();
-        assert_eq!(stats.total, 0);
-        assert_eq!(index.search("cache-note", 10).unwrap().len(), 0);
-
-        let settings = index.settings().unwrap();
-        assert_eq!(settings.roots.len(), 1);
-        assert!(!settings.exclude_noisy_folders);
-
-        index.rescan().await.unwrap();
-        assert_eq!(index.search("cache-note", 10).unwrap().len(), 1);
-    }
-
-    #[tokio::test]
-    async fn diagnostics_include_sizes_roots_and_last_scan() {
-        let data = tempdir().unwrap();
-        let root = tempdir().unwrap();
-        std::fs::write(root.path().join("diag-note.md"), "v1").unwrap();
-
-        let index = FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap();
-        index.rescan().await.unwrap();
-
-        let diag = index.diagnostics().unwrap();
-
-        assert_eq!(diag.roots_count, 1);
-        assert_eq!(diag.files_count, 1);
-        assert!(diag.db_size_bytes > 0);
-        assert_eq!(diag.wal_size_bytes, 0);
-        assert!(diag.last_scan.is_some());
-    }
-
-    #[tokio::test]
-    async fn estimate_root_counts_text_media_and_skipped_files() {
-        let data = tempdir().unwrap();
-        let root = tempdir().unwrap();
-        std::fs::write(root.path().join("keep.md"), "hello").unwrap();
-        std::fs::write(root.path().join("photo.png"), "png").unwrap();
-        std::fs::write(root.path().join("scratch.tmp"), "tmp").unwrap();
-        std::fs::create_dir_all(root.path().join("node_modules/pkg")).unwrap();
-        std::fs::write(root.path().join("node_modules/pkg/noise.js"), "ignored").unwrap();
-
-        let index = FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap();
-        index.add_ignore_pattern("*.tmp").await.unwrap();
-
-        let estimate = index.estimate_root(&root.path().to_string_lossy()).unwrap();
-
-        assert_eq!(estimate.indexable_text_files_count, 1);
-        assert_eq!(estimate.metadata_only_media_files_count, 1);
-        assert!(estimate.ignored_or_skipped_files >= 1);
-        assert_eq!(estimate.estimated_indexed_entries_count, 2);
-    }
-
-    #[test]
-    fn estimate_root_can_be_truncated_by_budget() {
-        let data = tempdir().unwrap();
-        let root = tempdir().unwrap();
-        std::fs::write(root.path().join("one.md"), "1").unwrap();
-        std::fs::write(root.path().join("two.md"), "2").unwrap();
-
-        let index = FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap();
-        let estimate = index
-            .estimate_root_with_budget(
-                &root.path().to_string_lossy(),
-                EstimateBudget {
-                    max_files: 1,
-                    max_dirs: 100,
-                    max_duration: std::time::Duration::from_secs(60),
-                },
-            )
-            .unwrap();
-
-        assert!(estimate.truncated);
-        assert_eq!(estimate.scanned_files, 1);
-        assert!(estimate
-            .limitations
-            .iter()
-            .any(|reason| reason.contains("усечена")));
-    }
-
-    #[test]
-    fn broad_drive_root_is_marked_as_danger() {
-        let (level, reasons) = assess_root_path_risk(r"C:\");
-        assert_eq!(level, FileIndexRiskLevel::Danger);
-        assert!(reasons.iter().any(|reason| reason.contains("корень диска")));
-    }
-
-    #[tokio::test]
-    async fn search_hides_deleted_files_before_cleanup_or_rescan() {
-        let data = tempdir().unwrap();
-        let root = tempdir().unwrap();
-        let file = root.path().join("deleted-note.md");
-        std::fs::write(&file, "v1").unwrap();
-
-        let index = FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap();
-        index.rescan().await.unwrap();
-        assert_eq!(index.search("deleted-note", 10).unwrap().len(), 1);
-
-        std::fs::remove_file(file).unwrap();
-        assert!(index.search("deleted-note", 10).unwrap().is_empty());
-    }
-
-    #[tokio::test]
     async fn scope_remove_does_not_cleanup_large_index_synchronously() {
         let data = tempdir().unwrap();
         let root = tempdir().unwrap();
@@ -1734,7 +933,7 @@ mod tests {
         }
 
         // Wait for the rescan to finish — should be one, not 50.
-        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
             loop {
                 if !index.rescan_pending.load(Ordering::SeqCst)
                     && !index.scan_in_progress.load(Ordering::SeqCst)
@@ -1788,14 +987,11 @@ mod tests {
     #[tokio::test]
     async fn blank_stored_names_fall_back_to_the_path_filename() {
         let data = tempdir().unwrap();
-        let root = tempdir().unwrap();
-        let file = root.path().join("nameless-plan.md");
-        std::fs::write(&file, "v1").unwrap();
-        let index = FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap();
+        let index = FileIndex::with_roots(data.path(), Vec::new()).unwrap();
         index
             .store
             .upsert(&IndexedFile {
-                path: file.to_string_lossy().to_string(),
+                path: r"D:\docs\nameless-plan.md".to_string(),
                 name: String::new(),
                 mtime: 1,
             })
@@ -1809,26 +1005,21 @@ mod tests {
     #[tokio::test]
     async fn word_prefix_filename_matches_survive_the_candidate_window() {
         let data = tempdir().unwrap();
-        let root = tempdir().unwrap();
-        let index = FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap();
+        let index = FileIndex::with_roots(data.path(), Vec::new()).unwrap();
         for n in 0..72 {
-            let file = root.path().join(format!("areport-{n}.txt"));
-            std::fs::write(&file, "v1").unwrap();
             index
                 .store
                 .upsert(&IndexedFile {
-                    path: file.to_string_lossy().to_string(),
+                    path: format!(r"D:\docs\areport-{n}.txt"),
                     name: format!("areport-{n}.txt"),
                     mtime: n,
                 })
                 .unwrap();
         }
-        let file = root.path().join("weekly-report-final.txt");
-        std::fs::write(&file, "v1").unwrap();
         index
             .store
             .upsert(&IndexedFile {
-                path: file.to_string_lossy().to_string(),
+                path: r"D:\docs\weekly-report-final.txt".to_string(),
                 name: "weekly-report-final.txt".to_string(),
                 mtime: 100,
             })

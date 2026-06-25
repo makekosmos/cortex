@@ -30,7 +30,7 @@ import { app } from "electron";
 import path from "node:path";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 
-type InstanceKind = "prod" | "dev" | "test";
+export type InstanceKind = "prod" | "dev" | "test";
 
 export interface Instance {
   /** Канонический id слота: "prod" | "dev" | "dev-<slug>" | "test-<slug>". */
@@ -58,31 +58,6 @@ const SLOT_RE = /^(prod|dev|dev-[a-z0-9][a-z0-9-]*|test-[a-z0-9][a-z0-9-]*)$/;
 
 let cached: Instance | null = null;
 
-function env(name: string): string | undefined {
-  return process.env[name];
-}
-
-function instanceKindForSlot(slot: string): InstanceKind {
-  if (slot.startsWith("test")) return "test";
-  if (slot === "prod") return "prod";
-  return "dev";
-}
-
-function productNameForSlot(slot: string, kind: InstanceKind): string {
-  if (slot === "prod") return "Kosmos";
-  if (slot === "dev") return "Kosmos [dev]";
-  if (kind === "test") return "Kosmos [test]";
-  return `Kosmos [${slot}]`;
-}
-
-function hotkeyForSlot(slot: string): string | null {
-  if (slot === "prod") {
-    return process.platform === "darwin" ? "Command+Space" : "Alt+Space";
-  }
-  if (slot === "dev") return "Alt+`";
-  return null;
-}
-
 /**
  * Резолвит instance slot и derive'нутые пути / флаги. Идемпотентно —
  * результат кэшируется (env читается один раз на module load).
@@ -97,7 +72,7 @@ export function resolveInstance(): Instance {
   }
 
   const appData = app.getPath("appData");
-  const kind = instanceKindForSlot(slot);
+  const kind: InstanceKind = slot.startsWith("test") ? "test" : slot === "prod" ? "prod" : "dev";
 
   // ARK dataDir:
   //   - test-<x>: KOSMOS_DATA_DIR env (всегда absolute). Helper'ы Playwright
@@ -106,20 +81,20 @@ export function resolveInstance(): Instance {
   //   - dev: %APPDATA%/Kosmos-dev
   //   - dev-<x>: %APPDATA%/Kosmos-dev-<x>
   let dataDir: string;
-  const dataDirOverride = env("KOSMOS_DATA_DIR");
   if (kind === "test") {
-    if (!dataDirOverride) {
+    const override = process.env.KOSMOS_DATA_DIR;
+    if (!override) {
       throw new Error(`[kepler-shell] test slot "${slot}" требует KOSMOS_DATA_DIR env`);
     }
-    dataDir = dataDirOverride;
+    dataDir = override;
   } else if (slot === "prod") {
-    dataDir = dataDirOverride || path.join(appData, "Kosmos");
+    dataDir = process.env.KOSMOS_DATA_DIR || path.join(appData, "Kosmos");
   } else if (slot === "dev") {
-    dataDir = dataDirOverride || path.join(appData, "Kosmos-dev");
+    dataDir = process.env.KOSMOS_DATA_DIR || path.join(appData, "Kosmos-dev");
   } else {
     // dev-<x>
     const suffix = slot.slice("dev-".length);
-    dataDir = dataDirOverride || path.join(appData, `Kosmos-dev-${suffix}`);
+    dataDir = process.env.KOSMOS_DATA_DIR || path.join(appData, `Kosmos-dev-${suffix}`);
   }
 
   // Electron userData (singleInstanceLock scope, kepler-shell-settings.json,
@@ -142,7 +117,14 @@ export function resolveInstance(): Instance {
     userDataDir = path.join(appData, `Kosmos App-dev-${suffix}`);
   }
 
-  const productName = productNameForSlot(slot, kind);
+  const productName =
+    slot === "prod"
+      ? "Kosmos"
+      : slot === "dev"
+        ? "Kosmos [dev]"
+        : kind === "test"
+          ? `Kosmos [test]`
+          : `Kosmos [${slot}]`;
 
   const appId = slot === "prod" ? "com.kazui.kosmos" : `com.kazui.kosmos.${slot}`;
 
@@ -150,7 +132,8 @@ export function resolveInstance(): Instance {
   // (legacy, не конфликтует с prod-инстансом). dev-<x> и test-<x> =
   // disabled (несколько dev-инстансов не могут поделить один accelerator;
   // пользователь активирует launcher через tray click).
-  const hotkey = hotkeyForSlot(slot);
+  const prodHotkey = process.platform === "darwin" ? "Command+Space" : "Alt+Space";
+  const hotkey = slot === "prod" ? prodHotkey : slot === "dev" ? "Alt+`" : null;
 
   return (cached = {
     slot,
@@ -167,10 +150,10 @@ export function resolveInstance(): Instance {
 }
 
 function pickSlot(): string {
-  const fromEnv = (env("KEPLER_INSTANCE") || "").trim();
+  const fromEnv = (process.env.KEPLER_INSTANCE || "").trim();
   if (fromEnv) return fromEnv;
 
-  const kosmosDataDir = env("KOSMOS_DATA_DIR");
+  const kosmosDataDir = process.env.KOSMOS_DATA_DIR;
   if (kosmosDataDir) {
     const base = path
       .basename(kosmosDataDir)
@@ -179,7 +162,7 @@ function pickSlot(): string {
     return `test-${base || "default"}`;
   }
 
-  if (env("VITE_DEV_SERVER_URL")) return "dev";
+  if (process.env.VITE_DEV_SERVER_URL) return "dev";
 
   return "prod";
 }

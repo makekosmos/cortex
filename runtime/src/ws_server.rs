@@ -215,10 +215,6 @@ impl WsServer {
         })
     }
 
-    #[allow(
-        clippy::result_large_err,
-        reason = "public API returns the local server error enum"
-    )]
     pub fn local_addr(&self) -> Result<SocketAddr, WsServerError> {
         Ok(self.listener.local_addr()?)
     }
@@ -259,10 +255,6 @@ impl WsServer {
     }
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "connection task wires existing shared services"
-)]
 async fn handle_connection(
     stream: tokio::net::TcpStream,
     ark_host: Arc<ArkHost>,
@@ -918,7 +910,11 @@ async fn handle_export_op(
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| converter.default_format().to_string());
-            if !converter.supported_formats().contains(&format.as_str()) {
+            if !converter
+                .supported_formats()
+                .iter()
+                .any(|f| *f == format.as_str())
+            {
                 return LocalResponse::err(format!(
                     "export.run: format '{format}' not supported by '{converter_id}'"
                 ));
@@ -1466,37 +1462,6 @@ async fn handle_file_index_op(
             },
             Err(e) => LocalResponse::err(format!("file_index.rescan: {e}")),
         },
-        "clear_cache" => match file_index.clear_cache() {
-            Ok(stats) => match serde_json::to_value(stats) {
-                Ok(value) => LocalResponse::ok(value),
-                Err(e) => LocalResponse::err(format!("file_index.clear_cache: serialize: {e}")),
-            },
-            Err(e) => LocalResponse::err(format!("file_index.clear_cache: {e}")),
-        },
-        "diagnostics" => match file_index.diagnostics() {
-            Ok(diag) => match serde_json::to_value(diag) {
-                Ok(value) => LocalResponse::ok(value),
-                Err(e) => LocalResponse::err(format!("file_index.diagnostics: serialize: {e}")),
-            },
-            Err(e) => LocalResponse::err(format!("file_index.diagnostics: {e}")),
-        },
-        "estimate_root" => {
-            let path = match params.get("path").and_then(|v| v.as_str()) {
-                Some(path) => path.to_string(),
-                None => return LocalResponse::err("file_index.estimate_root: missing 'path'"),
-            };
-            let index = file_index.clone();
-            match tokio::task::spawn_blocking(move || index.estimate_root(&path)).await {
-                Ok(Ok(estimate)) => match serde_json::to_value(estimate) {
-                    Ok(value) => LocalResponse::ok(value),
-                    Err(e) => {
-                        LocalResponse::err(format!("file_index.estimate_root: serialize: {e}"))
-                    }
-                },
-                Ok(Err(e)) => LocalResponse::err(format!("file_index.estimate_root: {e}")),
-                Err(e) => LocalResponse::err(format!("file_index.estimate_root: join: {e}")),
-            }
-        }
         "settings_get" => match file_index.settings() {
             Ok(settings) => match serde_json::to_value(settings) {
                 Ok(value) => LocalResponse::ok(value),
@@ -1588,113 +1553,108 @@ mod tests {
         }
     }
 
-    fn accepted_compat(outcome: HelloOutcome) -> Compatibility {
-        let HelloOutcome::Accept(compatibility) = outcome else {
-            assert!(
-                matches!(outcome, HelloOutcome::Accept(_)),
-                "expected accept"
-            );
-            unreachable!();
-        };
-        compatibility
-    }
-
-    fn rejected_code(outcome: HelloOutcome) -> &'static str {
-        let HelloOutcome::Reject { code, .. } = outcome else {
-            assert!(
-                matches!(outcome, HelloOutcome::Reject { .. }),
-                "expected reject"
-            );
-            unreachable!();
-        };
-        code
-    }
-
     #[test]
     fn valid_hello_accepted() {
         let hello = baseline_hello();
         let outcome = validate_hello(&hello, "test-token");
-        assert_eq!(accepted_compat(outcome), Compatibility::Exact);
+        match outcome {
+            HelloOutcome::Accept(c) => assert_eq!(c, Compatibility::Exact),
+            HelloOutcome::Reject { code, message } => panic!("rejected: {code} {message}"),
+        }
     }
 
     #[test]
     fn missing_protocol_version_rejected() {
         let mut hello = baseline_hello();
         hello.protocol_version = None;
-        assert_eq!(
-            rejected_code(validate_hello(&hello, "test-token")),
-            handshake_errors::MISSING_PROTOCOL_VERSION
-        );
+        match validate_hello(&hello, "test-token") {
+            HelloOutcome::Reject { code, .. } => {
+                assert_eq!(code, handshake_errors::MISSING_PROTOCOL_VERSION);
+            }
+            HelloOutcome::Accept(_) => panic!("should reject"),
+        }
     }
 
     #[test]
     fn malformed_protocol_version_rejected() {
         let mut hello = baseline_hello();
         hello.protocol_version = Some("not-a-version".into());
-        assert_eq!(
-            rejected_code(validate_hello(&hello, "test-token")),
-            handshake_errors::MALFORMED_PROTOCOL_VERSION
-        );
+        match validate_hello(&hello, "test-token") {
+            HelloOutcome::Reject { code, .. } => {
+                assert_eq!(code, handshake_errors::MALFORMED_PROTOCOL_VERSION);
+            }
+            HelloOutcome::Accept(_) => panic!("should reject"),
+        }
     }
 
     #[test]
     fn major_mismatch_rejected_as_incompatible() {
         let mut hello = baseline_hello();
         hello.protocol_version = Some("2.0.0".into());
-        assert_eq!(
-            rejected_code(validate_hello(&hello, "test-token")),
-            handshake_errors::INCOMPATIBLE_PROTOCOL_VERSION
-        );
+        match validate_hello(&hello, "test-token") {
+            HelloOutcome::Reject { code, .. } => {
+                assert_eq!(code, handshake_errors::INCOMPATIBLE_PROTOCOL_VERSION);
+            }
+            HelloOutcome::Accept(_) => panic!("MAJOR mismatch must be rejected"),
+        }
     }
 
     #[test]
     fn minor_mismatch_accepted() {
         let mut hello = baseline_hello();
         hello.protocol_version = Some("1.99.0".into());
-        assert_eq!(
-            accepted_compat(validate_hello(&hello, "test-token")),
-            Compatibility::MinorMismatch
-        );
+        match validate_hello(&hello, "test-token") {
+            HelloOutcome::Accept(c) => assert_eq!(c, Compatibility::MinorMismatch),
+            HelloOutcome::Reject { code, message } => panic!("rejected: {code} {message}"),
+        }
     }
 
     #[test]
     fn missing_token_rejected() {
         let mut hello = baseline_hello();
         hello.token = None;
-        assert_eq!(
-            rejected_code(validate_hello(&hello, "test-token")),
-            handshake_errors::MISSING_TOKEN
-        );
+        match validate_hello(&hello, "test-token") {
+            HelloOutcome::Reject { code, .. } => {
+                assert_eq!(code, handshake_errors::MISSING_TOKEN);
+            }
+            HelloOutcome::Accept(_) => panic!("should reject"),
+        }
     }
 
     #[test]
     fn invalid_token_rejected() {
         let mut hello = baseline_hello();
         hello.token = Some("wrong-token".into());
-        assert_eq!(
-            rejected_code(validate_hello(&hello, "test-token")),
-            handshake_errors::INVALID_TOKEN
-        );
+        match validate_hello(&hello, "test-token") {
+            HelloOutcome::Reject { code, .. } => {
+                assert_eq!(code, handshake_errors::INVALID_TOKEN);
+            }
+            HelloOutcome::Accept(_) => panic!("should reject"),
+        }
     }
 
     #[test]
     fn missing_pid_rejected() {
         let mut hello = baseline_hello();
         hello.pid = None;
-        assert_eq!(
-            rejected_code(validate_hello(&hello, "test-token")),
-            handshake_errors::MISSING_PID
-        );
+        match validate_hello(&hello, "test-token") {
+            HelloOutcome::Reject { code, .. } => {
+                assert_eq!(code, handshake_errors::MISSING_PID);
+            }
+            HelloOutcome::Accept(_) => panic!("should reject"),
+        }
     }
 
     #[test]
     fn nonexistent_pid_rejected() {
         let mut hello = baseline_hello();
         hello.pid = Some(0x7FFFFFFF); // impossibly high
-        assert_eq!(
-            rejected_code(validate_hello(&hello, "test-token")),
-            handshake_errors::INVALID_PID
-        );
+        match validate_hello(&hello, "test-token") {
+            HelloOutcome::Reject { code, .. } => {
+                assert_eq!(code, handshake_errors::INVALID_PID);
+            }
+            HelloOutcome::Accept(_) => panic!("should reject"),
+        }
     }
 
     #[test]
@@ -1728,43 +1688,5 @@ mod tests {
 
         assert_eq!(entry["icon_path"], serde_json::Value::Null);
         assert_eq!(entry["icon_ref"], "kosmos-icon://app/calc");
-    }
-
-    #[tokio::test]
-    async fn file_index_diagnostics_op_returns_enriched_payload() {
-        let data = tempfile::tempdir().unwrap();
-        let root = tempfile::tempdir().unwrap();
-        std::fs::write(root.path().join("diag-note.md"), "v1").unwrap();
-        let index =
-            Arc::new(FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap());
-        index.rescan().await.unwrap();
-
-        let response = handle_file_index_op("diagnostics", serde_json::Value::Null, &index).await;
-
-        assert!(response.ok);
-        assert_eq!(response.data["roots_count"], 1);
-        assert_eq!(response.data["files_count"], 1);
-        assert!(response.data.get("db_size_bytes").is_some());
-    }
-
-    #[tokio::test]
-    async fn file_index_estimate_root_op_returns_estimate_payload() {
-        let data = tempfile::tempdir().unwrap();
-        let root = tempfile::tempdir().unwrap();
-        std::fs::write(root.path().join("notes.md"), "v1").unwrap();
-        std::fs::write(root.path().join("photo.png"), "v1").unwrap();
-        let index =
-            Arc::new(FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap());
-
-        let response = handle_file_index_op(
-            "estimate_root",
-            serde_json::json!({ "path": root.path().to_string_lossy() }),
-            &index,
-        )
-        .await;
-
-        assert!(response.ok);
-        assert_eq!(response.data["indexable_text_files_count"], 1);
-        assert_eq!(response.data["metadata_only_media_files_count"], 1);
     }
 }

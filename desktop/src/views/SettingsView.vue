@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   appCommandSettings,
   HIDDEN_COMMANDS_KEY,
@@ -55,8 +55,6 @@ const { isMac } = usePlatform();
 
 const tab = ref<Tab>("general");
 const searchQuery = ref<string>("");
-const backStack = ref<Tab[]>([]);
-const forwardStack = ref<Tab[]>([]);
 
 function normalizeSearchValue(value: string): string {
   return value.trim().toLowerCase();
@@ -109,23 +107,7 @@ const activeLayout = computed<"basic" | "advanced">(
   () => activeNavigationItem.value?.layout ?? "basic",
 );
 
-const fileSearchFeatureEnabled = ref<boolean | null>(null);
-const featureToggleBusy = ref<boolean>(false);
-const fileSearchTabRevision = ref(0);
-
-const activeFeatureToggle = computed(() => {
-  if (activeTab.value !== "file-search" || fileSearchFeatureEnabled.value === null) {
-    return null;
-  }
-  return {
-    enabled: fileSearchFeatureEnabled.value,
-    label: fileSearchFeatureEnabled.value ? "Выключить поиск файлов" : "Включить поиск файлов",
-  };
-});
-
-const showAdvancedToggle = computed(() => activeFeatureToggle.value !== null);
-const canGoBack = computed(() => backStack.value.length > 0);
-const canGoForward = computed(() => forwardStack.value.length > 0);
+const showAdvancedToggle = computed(() => activeLayout.value === "advanced");
 
 const activeAdvancedIntro = computed(() => {
   const item = activeNavigationItem.value;
@@ -348,81 +330,9 @@ function onKey(e: KeyboardEvent) {
 // useFocusTab, useExtensionsTab, useFileSearchTab, useDictationConfig).
 // SettingsView больше не загружает tab data сам.
 
-function navigateToTab(t: Tab, recordHistory = true) {
-  if (tab.value === t) return;
-  if (recordHistory) {
-    backStack.value = [...backStack.value, tab.value];
-    forwardStack.value = [];
-  }
+function selectTab(t: Tab) {
   tab.value = t;
 }
-
-function selectTab(t: Tab) {
-  navigateToTab(t);
-}
-
-function goBack() {
-  const previous = backStack.value.at(-1);
-  if (!previous) return;
-  searchQuery.value = "";
-  backStack.value = backStack.value.slice(0, -1);
-  forwardStack.value = [...forwardStack.value, tab.value];
-  navigateToTab(previous, false);
-}
-
-function goForward() {
-  const next = forwardStack.value.at(-1);
-  if (!next) return;
-  searchQuery.value = "";
-  forwardStack.value = forwardStack.value.slice(0, -1);
-  backStack.value = [...backStack.value, tab.value];
-  navigateToTab(next, false);
-}
-
-async function refreshActiveFeatureToggle() {
-  if (activeTab.value !== "file-search") {
-    return;
-  }
-  try {
-    const settings = await window.kepler.fileSearch.settingsGet();
-    fileSearchFeatureEnabled.value = settings.enabled;
-  } catch (err) {
-    console.warn("file search feature toggle load failed", err);
-    fileSearchFeatureEnabled.value = null;
-  }
-}
-
-async function onToggleActiveFeature() {
-  const toggle = activeFeatureToggle.value;
-  if (!toggle || featureToggleBusy.value) return;
-  featureToggleBusy.value = true;
-  const nextEnabled = !toggle.enabled;
-  try {
-    await window.kepler.fileSearch.settingsSet({ enabled: nextEnabled });
-    fileSearchFeatureEnabled.value = nextEnabled;
-    fileSearchTabRevision.value += 1;
-  } catch (err) {
-    console.warn("feature toggle set failed", err);
-    await refreshActiveFeatureToggle();
-  } finally {
-    featureToggleBusy.value = false;
-  }
-}
-
-watch(activeTab, (next) => {
-  if (!searchQuery.value || !next) return;
-  if (tab.value !== next) {
-    tab.value = next;
-  }
-});
-
-watch(
-  activeTab,
-  () => {
-    void refreshActiveFeatureToggle();
-  },
-  { immediate: true },
-);
 
 // --- autoUpdater state ------------------------------------------------------
 
@@ -564,24 +474,17 @@ onBeforeUnmount(() => {
       </SettingsSidebar>
 
       <div class="settings-content">
-        <SettingsContentHeader
-          v-if="!isMac"
-          :back-disabled="!canGoBack"
-          :forward-disabled="!canGoForward"
-          @back="goBack"
-          @forward="goForward"
-        >
+        <SettingsContentHeader v-if="!isMac">
           <template #right>
             <button
               v-if="showAdvancedToggle"
               type="button"
               class="advanced-feature-toggle"
-              :disabled="featureToggleBusy"
+              disabled
               role="switch"
-              :aria-checked="String(activeFeatureToggle?.enabled ?? false)"
-              :aria-label="activeFeatureToggle?.label ?? 'Переключить функцию'"
-              :title="activeFeatureToggle?.label ?? 'Переключить функцию'"
-              @click="onToggleActiveFeature"
+              aria-checked="false"
+              aria-label="Включить функцию"
+              title="Скоро можно будет включать и выключать эту функцию"
             >
               <span class="advanced-feature-toggle__thumb" />
             </button>
@@ -684,7 +587,7 @@ onBeforeUnmount(() => {
         </template>
 
         <template v-else-if="activeTab === 'file-search'">
-          <FileSearchTab :key="fileSearchTabRevision" :intro="activeAdvancedIntro" />
+          <FileSearchTab :intro="activeAdvancedIntro" />
         </template>
 
         <template v-else-if="activeTab === 'clipboard'">
