@@ -2,12 +2,35 @@
 
 | Компонент                  | Версия        |
 | -------------------------- | ------------- |
-| Kosmos Desktop (win / mac) | 0.6.8 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.9 / 0.5.1 |
 | Eden                       | 0.3.0         |
 | Delphi                     | 0.1.8         |
 | Horologion                 | 0.1.4         |
 | Arrancador                 | 0.1.4         |
 | Akasha                     | 0.1.2         |
+
+## 2026-06-25 — Desloppified dictation release repack (Kosmos Desktop 0.6.8 → 0.6.9)
+
+Patch-релиз пересобирает Windows desktop после восстановления ветки
+`codex/restore-desloppify-before-dictation`: VAD/runtime изменения диктовки
+остаются поверх распиленного `desloppify` base, а текущий scan снова показывает
+`score=97` без `GOD_FILE`, `critical` или `high` findings.
+
+- **Без повторного отката распила**: desktop/electron, ARK/Eden split и текущая
+  структура модулей сохранены; исправления не cherry-pick'ят проблемный
+  `7941f4fc`.
+- **Score cleanup без API-ломки**: убраны реальные мелкие findings в
+  dictation e2e/settings IPC коде; оставшиеся medium findings — intentional
+  public/generated barrels (`@kosmos/visuals/components` и ARK generated glue).
+- **Release scope**: это Windows-only patch поверх уже опубликованного 0.6.8,
+  чтобы не перепубликовывать existing tag/assets и не рисковать `latest.yml`
+  checksum mismatch.
+
+Checks: `desloppify scan --summary --json .` (`score=97`, `findingCount=3`),
+`bun run desktop:typecheck`, `bunx playwright test --config
+platform/desktop/playwright.config.ts platform/desktop/e2e/dictation.spec.ts
+--list`, `cargo test -p kepler-backend dictation::groq::tests --`,
+`cargo test -p kepler-backend dictation::local::tests --`.
 
 ## 2026-06-25 — Local dictation VAD + safe retry release (Kosmos Desktop 0.6.7 → 0.6.8)
 
