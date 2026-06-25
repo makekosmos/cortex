@@ -1,13 +1,25 @@
-# Kosmos — статус проекта (2026-06-24)
+# Kosmos — статус проекта (2026-06-25)
 
 | Компонент                  | Версия        |
 | -------------------------- | ------------- |
-| Kosmos Desktop (win / mac) | 0.6.6 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.7 / 0.5.1 |
 | Eden                       | 0.3.0         |
 | Delphi                     | 0.1.8         |
 | Horologion                 | 0.1.4         |
 | Arrancador                 | 0.1.4         |
 | Akasha                     | 0.1.2         |
+
+## 2026-06-25 — Desloppify global refactor release (Kosmos Desktop win 0.6.7)
+
+Patch-релиз публикует текущую Windows desktop-линию после `codex/desloppify-global-refactor`.
+Скоуп релиза в основном технический: крупная разборка oversized TypeScript/Electron/Vue modules на меньшие файлы,
+удаление dead helpers и выравнивание workspace entry points без отдельной user-facing фичи для `whats-new`.
+
+Важно для следующего агента: ветка на момент bump была чистой и на 2 коммита впереди локального `main`
+(`4e63cbd9`, `dd830b49`); `main` ещё не содержал этот HEAD. Предыдущий Windows release `v0.6.6` уже был опубликован
+в `makekosmos/desktop` с `Kosmos-Setup-0.6.6.exe`, `.blockmap` и `latest.yml`, поэтому patch bump идёт в `0.6.7`.
+
+Checks before bump: `bun run --cwd platform/desktop typecheck`.
 
 ## 2026-06-24 — Lean local STT runtime delivery (Kosmos Desktop win 0.6.6)
 
