@@ -18,7 +18,7 @@ const TOOLS_DIR: &str = "tools/dictation/whisper.cpp";
 const VAD_DIR: &str = "tools/dictation/vad";
 const VAD_MODEL_FILENAME: &str = "ggml-silero-v6.2.0.bin";
 const VAD_MODEL_URL: &str =
-    "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v6.2.0.bin";
+    "https://github.com/makekosmos/local-ai-runtimes/releases/download/whisper-vad-silero-v6.2.0/ggml-silero-v6.2.0.bin";
 const VAD_MODEL_SHA256: &str = "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987";
 const DOWNLOAD_MAX_ATTEMPTS: usize = 8;
 
