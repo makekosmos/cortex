@@ -73,9 +73,6 @@ pub(crate) fn classify(err: &SubmitError) -> FailureKind {
         SubmitError::Local(LocalError::CommandFailed(message)) => FailureKind::Fatal {
             user_msg: format!("Локальная транскрипция не удалась: {message}"),
         },
-        SubmitError::Local(LocalError::SidecarUnavailable(message)) => FailureKind::Fatal {
-            user_msg: format!("Локальный STT sidecar недоступен: {message}"),
-        },
         SubmitError::Local(LocalError::EmptyTranscript) => FailureKind::Fatal {
             user_msg: "Локальная модель не вернула текст".into(),
         },
@@ -100,7 +97,7 @@ pub(crate) fn classify(err: &SubmitError) -> FailureKind {
             },
         },
         SubmitError::Inject(_) => FailureKind::Fatal {
-            user_msg: "Не удалось вставить текст (transcript уже в буфере обмена)".into(),
+            user_msg: "Не удалось вставить текст — диктовка осталась в очереди".into(),
         },
     }
 }
@@ -174,10 +171,10 @@ mod tests {
     #[test]
     fn classify_no_api_key_is_fatal() {
         let err = SubmitError::NoApiKey;
-        assert!(matches!(
-            classify(&err),
-            FailureKind::Fatal { user_msg } if user_msg.contains("API key")
-        ));
+        match classify(&err) {
+            FailureKind::Fatal { user_msg } => assert!(user_msg.contains("API key")),
+            _ => panic!("expected Fatal for NoApiKey"),
+        }
     }
 
     #[test]
@@ -221,10 +218,10 @@ mod tests {
             status: 401,
             body: "unauthorized".into(),
         });
-        assert!(matches!(
-            classify(&err),
-            FailureKind::Fatal { user_msg } if user_msg.contains("API key")
-        ));
+        match classify(&err) {
+            FailureKind::Fatal { user_msg } => assert!(user_msg.contains("API key")),
+            _ => panic!("401 must be Fatal"),
+        }
     }
 
     #[test]
@@ -233,10 +230,10 @@ mod tests {
             status: 413,
             body: "too large".into(),
         });
-        assert!(matches!(
-            classify(&err),
-            FailureKind::Fatal { user_msg } if user_msg.contains("длинное")
-        ));
+        match classify(&err) {
+            FailureKind::Fatal { user_msg } => assert!(user_msg.contains("длинное")),
+            _ => panic!("413 must be Fatal"),
+        }
     }
 
     #[test]
@@ -245,10 +242,10 @@ mod tests {
             status: 400,
             body: "bad request".into(),
         });
-        assert!(matches!(
-            classify(&err),
-            FailureKind::Fatal { user_msg } if user_msg.contains("отклонил")
-        ));
+        match classify(&err) {
+            FailureKind::Fatal { user_msg } => assert!(user_msg.contains("отклонил")),
+            _ => panic!("400 must be Fatal"),
+        }
     }
 
     #[test]
@@ -259,12 +256,13 @@ mod tests {
             status: 403,
             body: "forbidden".into(),
         });
-        assert!(matches!(
-            classify(&err),
-            FailureKind::Fatal { user_msg }
-                if user_msg.contains("403")
-                    && (user_msg.contains("DoH") || user_msg.contains("прокси"))
-        ));
+        match classify(&err) {
+            FailureKind::Fatal { user_msg } => {
+                assert!(user_msg.contains("403"));
+                assert!(user_msg.contains("DoH") || user_msg.contains("прокси"));
+            }
+            _ => panic!("403 must be Fatal"),
+        }
     }
 
     #[test]
@@ -274,10 +272,10 @@ mod tests {
             status: 418,
             body: "im a teapot".into(),
         });
-        assert!(matches!(
-            classify(&err),
-            FailureKind::Fatal { user_msg } if user_msg.contains("418")
-        ));
+        match classify(&err) {
+            FailureKind::Fatal { user_msg } => assert!(user_msg.contains("418")),
+            _ => panic!("418 must be Fatal"),
+        }
     }
 
     #[test]
@@ -293,10 +291,10 @@ mod tests {
     #[test]
     fn classify_local_missing_model_path_is_fatal() {
         let err = SubmitError::Local(LocalError::MissingModelPath);
-        assert!(matches!(
-            classify(&err),
-            FailureKind::Fatal { user_msg } if user_msg.contains("путь")
-        ));
+        match classify(&err) {
+            FailureKind::Fatal { user_msg } => assert!(user_msg.contains("путь")),
+            _ => panic!("local missing path must be fatal"),
+        }
     }
 
     #[tokio::test]

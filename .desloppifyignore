@@ -8,4 +8,7 @@ dist
 docs-site/public
 docs-site/.vitepress/cache
 .agent
+sample
+core/ark/packages/ark/src/generated
+packages/visuals/components/index.ts
 .desloppify/reports
