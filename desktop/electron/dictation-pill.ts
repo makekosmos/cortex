@@ -321,12 +321,6 @@ ipcMain.handle("kepler:dictation:pill-finished", async () => {
  * что приводит к `state must be idle, got recording`. */
 let arkUnsubscribe: (() => void) | null = null;
 
-function applyHotkeyForMode(_hotkey: string, _mode: "toggle" | "push_to_talk"): void {
-  // Hook сам перерегистрируется на backend стороне (`apply_ptt_hook` в
-  // host.rs вызывается на каждый update_config). Тут ничего не делаем —
-  // функция оставлена для future expansion (например smoke-test'а).
-}
-
 /** Warmup pill window на старте, чтобы первый toggleDictation не платил
  * за создание BrowserWindow + load bundle (≈ 600-1500ms на холодном Electron).
  * Создаём окно скрытым (`show: false` уже стоит в createPill); первый toggle
@@ -349,9 +343,7 @@ export async function setupDictationHotkey(): Promise<void> {
       | { config?: { hotkey?: string; triggerMode?: "toggle" | "push_to_talk" } }
       | undefined;
     const hotkey = cfg?.config?.hotkey ?? "Ctrl+Shift+;";
-    const mode = cfg?.config?.triggerMode ?? "toggle";
     runtime.setDictationHotkeyCache(hotkey);
-    applyHotkeyForMode(hotkey, mode);
     // Idle warmup: отложить создание pill window на 3s после старта shell'а
     // и сделать его только когда event loop свободен. Цель — не платить за
     // транспарентное BrowserWindow + DWM композицию + Vue bundle загрузку
@@ -382,9 +374,7 @@ export async function setupDictationHotkey(): Promise<void> {
               | { config?: { hotkey?: string; triggerMode?: "toggle" | "push_to_talk" } }
               | undefined;
             const nextHotkey = updated?.config?.hotkey ?? "Ctrl+Shift+;";
-            const nextMode = updated?.config?.triggerMode ?? "toggle";
             runtime.setDictationHotkeyCache(nextHotkey);
-            applyHotkeyForMode(nextHotkey, nextMode);
             runtime.broadcastCommandsUpdated();
           } catch (err) {
             console.error("[dictation-pill] re-apply hotkey mode failed:", err);

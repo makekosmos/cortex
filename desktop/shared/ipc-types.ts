@@ -1,8 +1,3 @@
-// Контракт IPC между main и renderer для Kepler launcher.
-//
-// Renderer вызывает методы через `window.kepler.*` (см. preload.ts).
-// Main process реализует handlers в electron/main.ts через ipcMain.handle().
-
 /**
  * Фича «История буфера обмена» ЗАМОРОЖЕНА (2026-06-06) и скрыта во всех сборках.
  * Единый рубильник: им загейтлены запуск поллинга/IPC (main), команда лаунчера
@@ -62,8 +57,6 @@ export interface SearchResult {
   snippet?: string;
 }
 
-/** Marketplace catalog entry — соответствует `CatalogExtension` из
-    `platform/desktop/electron/extension-marketplace.ts`. */
 export interface MarketplaceExtension {
   id: string;
   name: string;
@@ -83,7 +76,6 @@ export interface MarketplaceCatalog {
   extensions: MarketplaceExtension[];
 }
 
-/** Один зарегистрированный converter в backend export registry. Phase 7. */
 export interface ExportConverterInfo {
   converter_id: string;
   object_type: string;
@@ -92,7 +84,6 @@ export interface ExportConverterInfo {
   supported_formats: string[];
 }
 
-/** Результат `export.run` — что записано на диск и какие были ошибки. */
 export interface ExportResult {
   files_written: string[];
   bytes: number;
@@ -330,7 +321,6 @@ export interface FocusSessionSnapshot {
 
 export type { KeplerApi } from "./ipc-api-types";
 
-/** autoUpdater state machine. См. platform/desktop/electron/autoupdater-host.ts. */
 export type UpdateState =
   | { kind: "idle" }
   | { kind: "checking" }

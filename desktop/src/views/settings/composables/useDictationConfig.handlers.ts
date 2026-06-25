@@ -11,12 +11,7 @@ import { createDictationKeyActions } from "./useDictationConfig.keys";
 
 type DictationLocalModelDownloadProgress = Record<
   string,
-  {
-    phase: string;
-    downloadedBytes: number;
-    totalBytes: number | null;
-    percent: number | null;
-  }
+  { phase: string; downloadedBytes: number; totalBytes: number | null; percent: number | null }
 >;
 
 interface DictationConfigActionsArgs {
