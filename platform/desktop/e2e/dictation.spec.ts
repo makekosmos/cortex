@@ -14,19 +14,19 @@
 
 import path from "node:path";
 import fs from "node:fs";
-import { createRequire } from "node:module";
+import { setTimeout as timeoutAfter } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
+import electronBinary from "electron";
 import { _electron as electron, type ElectronApplication, type Page } from "playwright";
 import { waitForBackendReady } from "../../../tests/e2e/helpers/wait";
 import { freshDataDir, launchKeplerWithDataDir } from "../../../tests/e2e/helpers/launch";
 
-const require = createRequire(import.meta.url);
-const electronBinary = require("electron") as string;
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const e2eRoot = path.join(appRoot, ".e2e");
 const userDataDir = path.join(e2eRoot, "kepler-shell-dictation-userdata");
 const dataDir = path.join(e2eRoot, "kepler-shell-dictation-data");
+type KeplerCommand = { id: string; shortcut?: string };
 
 function makeSmokeWavBase64(): string {
   const sampleRate = 16000;
@@ -134,6 +134,36 @@ async function setDictationHotkey(page: Page, hotkey: string): Promise<void> {
   await dictationRequest(page, "dictation.update_config", { hotkey });
 }
 
+async function listKeplerCommands(page: Page): Promise<KeplerCommand[]> {
+  return page.evaluate(async () => {
+    const api = window as unknown as {
+      kepler?: {
+        commands?: {
+          list?: () => Promise<KeplerCommand[]>;
+        };
+      };
+    };
+    const list = api.kepler?.commands?.list;
+    if (!list) throw new Error("window.kepler.commands.list is unavailable");
+    return list();
+  });
+}
+
+async function invokeKeplerCommand(page: Page, id: string): Promise<void> {
+  await page.evaluate(async (commandId) => {
+    const api = window as unknown as {
+      kepler?: {
+        commands?: {
+          invoke?: (id: string) => Promise<void>;
+        };
+      };
+    };
+    const invoke = api.kepler?.commands?.invoke;
+    if (!invoke) throw new Error("window.kepler.commands.invoke is unavailable");
+    await invoke(commandId);
+  }, id);
+}
+
 async function waitForDictationStateWithContext(
   page: Page,
   expectedState: string,
@@ -150,11 +180,12 @@ async function waitForDictationStateWithContext(
       )
       .toBe(expectedState);
   } catch (error) {
-    throw new Error(
+    const wrapped = new Error(
       `Timed out after ${timeoutMs}ms waiting for dictation state ${expectedState}.\n` +
         (await getDictationDiagnostics(page)),
-      { cause: error as Error },
     );
+    wrapped.cause = error;
+    throw wrapped;
   }
 }
 
@@ -172,9 +203,7 @@ async function submitAudioWithContext(
   }>(page, "dictation.submit_audio", params);
   const timed = await Promise.race([
     submission.then((value) => ({ kind: "ok" as const, value })),
-    new Promise<{ kind: "timeout" }>((resolve) =>
-      setTimeout(() => resolve({ kind: "timeout" as const }), timeoutMs),
-    ),
+    timeoutAfter(timeoutMs).then(() => ({ kind: "timeout" as const })),
   ]);
   if (timed.kind === "timeout") {
     throw new Error(
@@ -237,6 +266,8 @@ async function launchKeplerWithFakeMedia(
 }
 
 test.describe("dictation Phase 1", () => {
+  test.describe.configure({ timeout: 45_000 });
+
   test("AC10: globalShortcut для диктации НЕ зарегистрирован в headless mode", async () => {
     const app = await launchKepler();
     try {
@@ -338,47 +369,17 @@ test.describe("dictation Phase 1", () => {
 
       await expect
         .poll(async () => {
-          const list = await launcher.evaluate(async () => {
-            const api = window as unknown as {
-              kepler?: {
-                commands?: {
-                  list?: () => Promise<Array<{ id: string; shortcut?: string }>>;
-                };
-              };
-            };
-            return (await api.kepler?.commands?.list?.()) ?? [];
-          });
+          const list = await listKeplerCommands(launcher);
           return list.find((cmd) => cmd.id === "kepler:dictation")?.shortcut ?? null;
         })
         .toBe("Ctrl+Alt+D");
 
-      const list = await launcher.evaluate(async () => {
-        const api = window as unknown as {
-          kepler?: {
-            commands?: {
-              list?: () => Promise<Array<{ id: string; shortcut?: string }>>;
-              invoke?: (id: string) => Promise<void>;
-            };
-          };
-        };
-        return (await api.kepler?.commands?.list?.()) ?? [];
-      });
+      const list = await listKeplerCommands(launcher);
       const dictation = list.find((cmd) => cmd.id === "kepler:dictation");
       expect(list.map((cmd) => cmd.id)).toContain("kepler:dictation");
       expect(dictation?.shortcut).toBe("Ctrl+Alt+D");
 
-      const result = await launcher.evaluate(async () => {
-        const api = window as unknown as {
-          kepler?: {
-            commands?: {
-              invoke?: (id: string) => Promise<void>;
-            };
-          };
-        };
-        await api.kepler?.commands?.invoke?.("kepler:dictation");
-        return true;
-      });
-      expect(result).toBe(true);
+      await invokeKeplerCommand(launcher, "kepler:dictation");
 
       const state = await app.evaluate(({ BrowserWindow, globalShortcut }) => ({
         visibleWindows: BrowserWindow.getAllWindows().filter((w) => w.isVisible()).length,
@@ -403,16 +404,7 @@ test.describe("dictation Phase 1", () => {
 
       await setDictationHotkey(launcher, "Ctrl+Alt+D");
 
-      await launcher.evaluate(async () => {
-        const api = window as unknown as {
-          kepler?: {
-            commands?: {
-              invoke?: (id: string) => Promise<void>;
-            };
-          };
-        };
-        await api.kepler?.commands?.invoke?.("settings:open");
-      });
+      await invokeKeplerCommand(launcher, "settings:open");
 
       const settings = await app.waitForEvent("window", { timeout: 10_000 });
       await settings.waitForLoadState("domcontentloaded");
@@ -633,7 +625,6 @@ test.describe("dictation mock STT", () => {
   });
 
   test("local provider records through dictation pill with fake microphone", async () => {
-    test.setTimeout(45_000);
     const dataDir = freshDataDir("dictation-local-pill-fake-media");
     const transcript = "voice from fake mic";
     const app = await launchKeplerWithFakeMedia(dataDir, {
@@ -655,29 +646,14 @@ test.describe("dictation mock STT", () => {
         localCommandPath: "C:/tools/whisper-cli.exe",
       });
 
-      await launcher.evaluate(async () => {
-        const api = window as unknown as {
-          kepler?: {
-            commands?: {
-              invoke?: (id: string) => Promise<void>;
-            };
-          };
-        };
-        await api.kepler?.commands?.invoke?.("kepler:dictation");
-      });
+      await invokeKeplerCommand(launcher, "kepler:dictation");
+      const recordingStartedAt = Date.now();
       await waitForDictationStateWithContext(launcher, "recording", 10_000);
-      await launcher.waitForTimeout(900);
+      await expect
+        .poll(() => Date.now() - recordingStartedAt, { timeout: 2_000 })
+        .toBeGreaterThanOrEqual(900);
 
-      await launcher.evaluate(async () => {
-        const api = window as unknown as {
-          kepler?: {
-            commands?: {
-              invoke?: (id: string) => Promise<void>;
-            };
-          };
-        };
-        await api.kepler?.commands?.invoke?.("kepler:dictation");
-      });
+      await invokeKeplerCommand(launcher, "kepler:dictation");
 
       await waitForDictationStateWithContext(launcher, "idle", 20_000);
       const clipboardText = await app.evaluate(({ clipboard }) => clipboard.readText());
@@ -704,8 +680,9 @@ test.describe("dictation mock STT", () => {
 });
 
 test.describe("AI settings", () => {
+  test.describe.configure({ timeout: 60_000 });
+
   test("advanced AI page shows local dictation model settings", async () => {
-    test.setTimeout(60_000);
     const dataDir = freshDataDir("dictation-ai-settings-page");
     const app = await launchKeplerWithDataDir(dataDir);
     try {
@@ -721,16 +698,7 @@ test.describe("AI settings", () => {
         localCommandPath: "C:/tools/whisper-cli.exe",
       });
 
-      await launcher.evaluate(async () => {
-        const api = window as unknown as {
-          kepler?: {
-            commands?: {
-              invoke?: (id: string) => Promise<void>;
-            };
-          };
-        };
-        await api.kepler?.commands?.invoke?.("settings:open");
-      });
+      await invokeKeplerCommand(launcher, "settings:open");
 
       const settings = await app.waitForEvent("window", { timeout: 10_000 });
       await settings.waitForLoadState("domcontentloaded");
@@ -757,8 +725,9 @@ test.describe("AI settings", () => {
 });
 
 test.describe("dictation Groq smoke", () => {
+  test.describe.configure({ timeout: 90_000 });
+
   test("opt-in real provider path works headless without microphone", async () => {
-    test.setTimeout(90_000);
     const apiKey = getRequiredEnv("KOSMOS_TEST_GROQ_API_KEY");
     const audioB64 = getRequiredEnv("KOSMOS_TEST_DICTATION_AUDIO_B64") ?? makeSmokeWavBase64();
     const expectedSubstring =
@@ -855,8 +824,9 @@ test.describe("dictation Groq smoke", () => {
 });
 
 test.describe("dictation local smoke", () => {
+  test.describe.configure({ timeout: 120_000 });
+
   test("opt-in real local whisper.cpp provider works headless without microphone", async () => {
-    test.setTimeout(120_000);
     const commandPath = getRequiredEnv("KOSMOS_TEST_LOCAL_DICTATION_COMMAND_PATH");
     const modelPath = getRequiredEnv("KOSMOS_TEST_LOCAL_DICTATION_MODEL_PATH");
     const audioPath = getRequiredEnv("KOSMOS_TEST_DICTATION_AUDIO_PATH");
