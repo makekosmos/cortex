@@ -92,6 +92,9 @@ pub struct DictationConfig {
     /// JSON чтобы выбор пользователя пережил рестарт shell'а.
     #[serde(default)]
     pub microphone_device_id: Option<String>,
+    /// Lower system output volume while dictation is recording.
+    #[serde(default)]
+    pub duck_audio_during_recording: bool,
 }
 
 impl Default for DictationConfig {
@@ -112,6 +115,7 @@ impl Default for DictationConfig {
             local_command_path: None,
             local_model: None,
             microphone_device_id: None,
+            duck_audio_during_recording: false,
         }
     }
 }
@@ -315,6 +319,7 @@ mod tests {
             local_command_path: Some("C:/tools/whisper-cli.exe".into()),
             local_model: Some("ggml-base".into()),
             microphone_device_id: None,
+            duck_audio_during_recording: true,
         };
         save_to(&path, &cfg).expect("save");
         let loaded = load_from(&path);
@@ -333,6 +338,7 @@ mod tests {
             Some("C:/tools/whisper-cli.exe")
         );
         assert_eq!(loaded.local_model.as_deref(), Some("ggml-base"));
+        assert!(loaded.duck_audio_during_recording);
     }
 
     #[test]

@@ -9,6 +9,7 @@
 //   { kind: "stop" }   → encode WAV + submit → pillFinished
 //   { kind: "cancel" } → drop buffer + pillFinished
 
+import { KbdKey } from "@kosmos/visuals";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 type PillStatus = "idle" | "recording" | "transcribing" | "waiting" | "error";
@@ -19,10 +20,17 @@ const errorText = ref<string>("");
 /// pill самодостаточен (waveform / dots).
 const subText = ref<string>("");
 const elapsedSec = ref<number>(0);
-const WAVE_BAR_COUNT = 16;
-const WAVE_HEIGHT_PX = 30;
-const WAVE_PEAK = 0.78;
-const RECORDING_PEAK = 0.68;
+const DEFAULT_DICTATION_HOTKEY = "Ctrl+Shift+;";
+const dictationHotkey = ref<string>(DEFAULT_DICTATION_HOTKEY);
+const WAVEFORM_HISTORY_SIZE = 120;
+const WAVEFORM_BAR_WIDTH_PX = 3;
+const WAVEFORM_BAR_GAP_PX = 2;
+const WAVEFORM_BAR_RADIUS_PX = 8;
+const WAVEFORM_BASE_BAR_HEIGHT_PX = 4;
+const WAVEFORM_FADE_WIDTH_PX = 48;
+const WAVEFORM_SENSITIVITY = 0.8;
+const WAVEFORM_RECORDING_COLOR = "#71717a";
+const WAVE_BAR_COUNT = WAVEFORM_HISTORY_SIZE;
 const levelBars = ref<number[]>(Array.from({ length: WAVE_BAR_COUNT }, () => 0));
 
 // Audio capture lifecycle:
@@ -46,6 +54,9 @@ let levelHandle: ReturnType<typeof setInterval> | null = null;
 let unsubscribeCommand: (() => void) | null = null;
 let recordStartMs = 0;
 let streamShutdownTimer: ReturnType<typeof setTimeout> | null = null;
+let startInFlight = false;
+let stopAfterStart = false;
+let captureGeneration = 0;
 
 const TARGET_SAMPLE_RATE = 16000;
 /** После этого окна тишины stream закрывается полностью (track.stop),
@@ -56,135 +67,69 @@ const hasDictationBridge = () => Boolean(window.kepler?.dictation);
 const isPreview =
   new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("preview") === "1" ||
   !hasDictationBridge();
-const idleBars = Array.from({ length: WAVE_BAR_COUNT }, () => 0.2);
-const previewBars = [
-  0.12, 0.32, 0.72, 0.42, 0.92, 0.58, 0.36, 0.8, 0.5, 0.22, 0.64, 0.28, 0.46, 0.7, 0.34, 0.18,
-];
-const transcribingWaveIndex = ref(0);
-const transcribingBars = computed(() =>
-  idleBars.map((base, i) => {
-    const distance = Math.abs(i - transcribingWaveIndex.value);
-    if (distance === 0) return WAVE_PEAK;
-    if (distance === 1) return 0.54;
-    if (distance === 2) return 0.36;
-    return base;
-  }),
-);
-const waitingWaveIndex = ref(0);
-const waitingBars = computed(() =>
-  idleBars.map((base, i) => {
-    const distance = Math.abs(i - waitingWaveIndex.value);
-    if (distance === 0) return WAVE_PEAK;
-    if (distance === 1) return 0.54;
-    if (distance === 2) return 0.36;
-    return base;
-  }),
-);
-const errorWaveIndex = ref(0);
-const errorBars = computed(() =>
-  idleBars.map((base, i) => {
-    const left = Math.floor((WAVE_BAR_COUNT - 1) / 2) - errorWaveIndex.value;
-    const right = Math.ceil((WAVE_BAR_COUNT - 1) / 2) + errorWaveIndex.value;
-    const distance = Math.min(Math.abs(i - left), Math.abs(i - right));
-    if (distance === 0) return WAVE_PEAK;
-    if (distance === 1) return 0.5;
-    return base;
-  }),
-);
-let transcribingWaveDirection = 1;
-let transcribingWaveHandle: ReturnType<typeof setInterval> | null = null;
-let waitingWaveDirection = 1;
-let waitingWaveHandle: ReturnType<typeof setInterval> | null = null;
-let errorWaveDirection = 1;
-let errorWaveHandle: ReturnType<typeof setInterval> | null = null;
+const idleBars = Array.from({ length: WAVE_BAR_COUNT }, () => 0);
+const previewBars = Array.from({ length: WAVE_BAR_COUNT }, (_, i) => {
+  const centered = (i - WAVE_BAR_COUNT / 2) / (WAVE_BAR_COUNT / 2);
+  const voiceShape = 0.34 + Math.sin(i * 0.39) * 0.2 + Math.cos(i * 0.17) * 0.12;
+  const centerWeight = 1 - Math.abs(centered) * 0.34;
+  return Math.max(0.02, Math.min(0.82, voiceShape * centerWeight));
+});
+const processingBars = ref<number[]>(idleBars);
+let processingAnimationFrame: number | null = null;
+let processingTime = 0;
+let processingTransitionProgress = 0;
+let lastActiveBars = idleBars;
 const previewStates: {
   status: PillStatus;
   label: string;
   subText?: string;
   errorText?: string;
-  bars?: number[];
 }[] = [
   { status: "idle", label: "idle" },
-  { status: "recording", label: "recording", bars: previewBars },
+  { status: "recording", label: "recording" },
   { status: "transcribing", label: "transcribing" },
   { status: "waiting", label: "waiting", subText: "Жду сеть… (попытка 2)" },
   { status: "error", label: "error", errorText: "Сеть не вернулась" },
 ];
 
-function startTranscribingWave(): void {
-  if (transcribingWaveHandle) return;
-  transcribingWaveHandle = setInterval(() => {
-    const next = transcribingWaveIndex.value + transcribingWaveDirection;
-    if (next >= idleBars.length - 1) {
-      transcribingWaveIndex.value = idleBars.length - 1;
-      transcribingWaveDirection = -1;
-    } else if (next <= 0) {
-      transcribingWaveIndex.value = 0;
-      transcribingWaveDirection = 1;
-    } else {
-      transcribingWaveIndex.value = next;
-    }
-  }, 55);
+function nextProcessingBars(): number[] {
+  const halfCount = Math.floor(WAVE_BAR_COUNT / 2);
+  return Array.from({ length: WAVE_BAR_COUNT }, (_, i) => {
+    const normalizedPosition = (i - halfCount) / halfCount;
+    const centerWeight = 1 - Math.abs(normalizedPosition) * 0.4;
+    const wave1 = Math.sin(processingTime * 1.5 + normalizedPosition * 3) * 0.25;
+    const wave2 = Math.sin(processingTime * 0.8 - normalizedPosition * 2) * 0.2;
+    const wave3 = Math.cos(processingTime * 2 + normalizedPosition) * 0.15;
+    const processingValue = (0.2 + wave1 + wave2 + wave3) * centerWeight;
+    const lastValue = lastActiveBars[i] ?? 0;
+    const finalValue =
+      lastValue * (1 - processingTransitionProgress) +
+      processingValue * processingTransitionProgress;
+    return Math.max(0.05, Math.min(1, finalValue));
+  });
 }
 
-function stopTranscribingWave(): void {
-  if (transcribingWaveHandle) {
-    clearInterval(transcribingWaveHandle);
-    transcribingWaveHandle = null;
+function startProcessingWave(): void {
+  if (processingAnimationFrame !== null) return;
+  processingTransitionProgress = 0;
+  const animate = () => {
+    processingTime += 0.03;
+    processingTransitionProgress = Math.min(1, processingTransitionProgress + 0.02);
+    processingBars.value = nextProcessingBars();
+    requestWaveformDraw();
+    processingAnimationFrame = requestAnimationFrame(animate);
+  };
+  animate();
+}
+
+function stopProcessingWave(): void {
+  if (processingAnimationFrame !== null) {
+    cancelAnimationFrame(processingAnimationFrame);
+    processingAnimationFrame = null;
   }
-  transcribingWaveIndex.value = 0;
-  transcribingWaveDirection = 1;
-}
-
-function startWaitingWave(): void {
-  if (waitingWaveHandle) return;
-  waitingWaveHandle = setInterval(() => {
-    const next = waitingWaveIndex.value + waitingWaveDirection;
-    if (next >= idleBars.length - 1) {
-      waitingWaveIndex.value = idleBars.length - 1;
-      waitingWaveDirection = -1;
-    } else if (next <= 0) {
-      waitingWaveIndex.value = 0;
-      waitingWaveDirection = 1;
-    } else {
-      waitingWaveIndex.value = next;
-    }
-  }, 55);
-}
-
-function stopWaitingWave(): void {
-  if (waitingWaveHandle) {
-    clearInterval(waitingWaveHandle);
-    waitingWaveHandle = null;
-  }
-  waitingWaveIndex.value = 0;
-  waitingWaveDirection = 1;
-}
-
-function startErrorWave(): void {
-  if (errorWaveHandle) return;
-  errorWaveHandle = setInterval(() => {
-    const max = Math.floor((WAVE_BAR_COUNT - 1) / 2);
-    const next = errorWaveIndex.value + errorWaveDirection;
-    if (next >= max) {
-      errorWaveIndex.value = max;
-      errorWaveDirection = -1;
-    } else if (next <= 0) {
-      errorWaveIndex.value = 0;
-      errorWaveDirection = 1;
-    } else {
-      errorWaveIndex.value = next;
-    }
-  }, 65);
-}
-
-function stopErrorWave(): void {
-  if (errorWaveHandle) {
-    clearInterval(errorWaveHandle);
-    errorWaveHandle = null;
-  }
-  errorWaveIndex.value = 0;
-  errorWaveDirection = 1;
+  processingBars.value = idleBars;
+  processingTransitionProgress = 0;
+  requestWaveformDraw();
 }
 
 function formatElapsed(seconds: number): string {
@@ -194,23 +139,184 @@ function formatElapsed(seconds: number): string {
   return `${minutes}:${rest.toString().padStart(2, "0")}`;
 }
 
-const elapsedLabel = computed(() => formatElapsed(elapsedSec.value));
+const dictationHotkeyParts = computed(() => splitHotkey(dictationHotkey.value));
 
-function barHeight(value: number): string {
-  return `${Math.max(3, value * WAVE_HEIGHT_PX)}px`;
+function hotkeyPartLabel(value: string): string {
+  return value.toLowerCase() === "shift" ? "⇧" : value;
 }
 
-function recordingBarHeight(value: number): string {
-  return barHeight(Math.min(value, RECORDING_PEAK));
+function splitHotkey(value: string): string[] {
+  return value
+    .split("+")
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
-function handleCancelClick(event: MouseEvent): void {
+async function loadDictationConfig(): Promise<void> {
+  try {
+    const cfg = (await window.kepler.ark.request("dictation.get_config", {})) as {
+      config?: { hotkey?: string | null };
+    };
+    const hotkey = cfg.config?.hotkey?.trim();
+    if (hotkey) dictationHotkey.value = hotkey;
+  } catch {
+    /* keep last known backend value */
+  }
+}
+
+const waveformCanvases = new Map<string, HTMLCanvasElement>();
+let waveformFrame: number | null = null;
+let waveformResizeObserver: ResizeObserver | null = null;
+
+function waveformBarsForStatus(nextStatus: PillStatus, preview = false): number[] {
+  if (nextStatus === "recording") return preview ? previewBars : levelBars.value;
+  if (nextStatus === "transcribing" || nextStatus === "waiting" || nextStatus === "error") {
+    return processingBars.value;
+  }
+  return idleBars;
+}
+
+function waveformColorForStatus(nextStatus: PillStatus): string {
+  if (nextStatus === "waiting") return "#f5a524";
+  if (nextStatus === "error") return "#ff453a";
+  return WAVEFORM_RECORDING_COLOR;
+}
+
+function sampleWaveformValue(values: number[], index: number, count: number): number {
+  if (values.length === 0) return 0;
+  const sourceIndex = Math.round((index / Math.max(1, count - 1)) * (values.length - 1));
+  return Math.max(0, Math.min(1, values[sourceIndex] ?? 0));
+}
+
+function drawRoundedBar(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): void {
+  const radius = Math.min(WAVEFORM_BAR_RADIUS_PX, width / 2, height / 2);
+  if ("roundRect" in ctx) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, width, height, radius);
+    ctx.fill();
+    return;
+  }
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.fill();
+}
+
+function drawWaveformCanvas(
+  canvas: HTMLCanvasElement,
+  values: number[],
+  nextStatus: PillStatus,
+): void {
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const targetWidth = Math.max(1, Math.floor(rect.width * dpr));
+  const targetHeight = Math.max(1, Math.floor(rect.height * dpr));
+  if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+  }
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, rect.width, rect.height);
+
+  const step = WAVEFORM_BAR_WIDTH_PX + WAVEFORM_BAR_GAP_PX;
+  const barCount = Math.max(1, Math.floor(rect.width / step));
+  const totalWidth = barCount * WAVEFORM_BAR_WIDTH_PX + (barCount - 1) * WAVEFORM_BAR_GAP_PX;
+  const startX = (rect.width - totalWidth) / 2;
+  const centerY = rect.height / 2;
+
+  if (nextStatus === "idle") {
+    ctx.strokeStyle = waveformColorForStatus(nextStatus);
+    ctx.globalAlpha = 0.22;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([2, 4]);
+    ctx.beginPath();
+    ctx.moveTo(0, centerY);
+    ctx.lineTo(rect.width, centerY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } else {
+    ctx.fillStyle = waveformColorForStatus(nextStatus);
+    for (let i = 0; i < barCount; i++) {
+      const value = sampleWaveformValue(values, i, barCount);
+      const barHeight = Math.max(
+        WAVEFORM_BASE_BAR_HEIGHT_PX,
+        value * rect.height * WAVEFORM_SENSITIVITY,
+      );
+      const x = startX + i * step;
+      const y = centerY - barHeight / 2;
+      ctx.globalAlpha = 0.4 + value * 0.6;
+      drawRoundedBar(ctx, x, y, WAVEFORM_BAR_WIDTH_PX, barHeight);
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  const fade = Math.min(0.3, WAVEFORM_FADE_WIDTH_PX / Math.max(1, rect.width));
+  ctx.globalCompositeOperation = "destination-out";
+  const gradient = ctx.createLinearGradient(0, 0, rect.width, 0);
+  gradient.addColorStop(0, "rgba(255,255,255,1)");
+  gradient.addColorStop(fade, "rgba(255,255,255,0)");
+  gradient.addColorStop(1 - fade, "rgba(255,255,255,0)");
+  gradient.addColorStop(1, "rgba(255,255,255,1)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, rect.width, rect.height);
+  ctx.globalCompositeOperation = "source-over";
+}
+
+function drawWaveforms(): void {
+  waveformFrame = null;
+  for (const [key, canvas] of waveformCanvases) {
+    const isPreviewCanvas = key.startsWith("preview-");
+    const nextStatus = isPreviewCanvas
+      ? (key.slice("preview-".length) as PillStatus)
+      : status.value;
+    drawWaveformCanvas(canvas, waveformBarsForStatus(nextStatus, isPreviewCanvas), nextStatus);
+  }
+}
+
+function requestWaveformDraw(): void {
+  if (waveformFrame !== null) return;
+  waveformFrame = requestAnimationFrame(drawWaveforms);
+}
+
+function setWaveformCanvas(key: string, el: Element | null): void {
+  if (!waveformResizeObserver) {
+    waveformResizeObserver = new ResizeObserver(() => requestWaveformDraw());
+  }
+  if (el instanceof HTMLCanvasElement) {
+    waveformCanvases.set(key, el);
+    waveformResizeObserver.observe(el);
+  } else {
+    waveformCanvases.delete(key);
+  }
+  requestWaveformDraw();
+}
+
+function handleCancelClick(event: Event): void {
   event.stopPropagation();
   if (isPreview) return;
   void cancelCapture();
 }
 
-function handleSubmitClick(event: MouseEvent): void {
+function handleSubmitClick(event: Event): void {
   event.stopPropagation();
   if (isPreview) return;
   void stopAndSubmit();
@@ -230,6 +336,30 @@ function statusText(): string {
     default:
       return "";
   }
+}
+
+function footerLabel(nextStatus: PillStatus): string {
+  switch (nextStatus) {
+    case "recording":
+      return "Идёт запись";
+    case "transcribing":
+      return "Распознаю";
+    case "waiting":
+      return "Жду сеть";
+    case "error":
+      return "Ошибка";
+    case "idle":
+    default:
+      return "Модель готова";
+  }
+}
+
+function canCancel(nextStatus: PillStatus): boolean {
+  return nextStatus !== "error";
+}
+
+function canSubmit(nextStatus: PillStatus): boolean {
+  return nextStatus === "recording";
 }
 
 /** Создаёт MediaStream + AudioContext если их ещё нет (cold start), либо
@@ -315,15 +445,19 @@ function closeStream(): void {
 }
 
 async function startCapture(): Promise<void> {
-  if (status.value === "recording") return;
+  if (status.value === "recording" || startInFlight) return;
+  const generation = ++captureGeneration;
+  startInFlight = true;
   pcmChunks = [];
   errorText.value = "";
   elapsedSec.value = 0;
+  await loadDictationConfig();
 
   let stream: MediaStream;
   try {
     stream = await ensureStream();
   } catch (e) {
+    startInFlight = false;
     status.value = "error";
     errorText.value = "Нет доступа к микрофону";
     console.error("[dictation-pill] getUserMedia failed:", e);
@@ -335,6 +469,11 @@ async function startCapture(): Promise<void> {
     void window.kepler.dictation.pillFinished();
     return;
   }
+  startInFlight = false;
+  if (generation !== captureGeneration) {
+    scheduleStreamShutdown();
+    return;
+  }
 
   // AudioContext тоже warm'ится — нет смысла close/open на каждую сессию.
   if (!audioCtx) {
@@ -343,8 +482,8 @@ async function startCapture(): Promise<void> {
 
   source = audioCtx.createMediaStreamSource(stream);
   analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 64;
-  analyser.smoothingTimeConstant = 0.5;
+  analyser.fftSize = 256;
+  analyser.smoothingTimeConstant = 0.85;
   source.connect(analyser);
 
   // ScriptProcessorNode deprecated, но работает без AudioWorklet boilerplate.
@@ -370,16 +509,29 @@ async function startCapture(): Promise<void> {
   }, 200);
   levelHandle = setInterval(() => {
     if (!analyser) return;
-    const buf = new Uint8Array(analyser.frequencyBinCount);
-    analyser.getByteFrequencyData(buf);
-    const bars: number[] = [];
-    const step = Math.max(1, Math.floor(buf.length / levelBars.value.length));
-    for (let i = 0; i < levelBars.value.length; i++) {
-      const v = buf[i * step] ?? 0;
-      bars.push(v / 255);
+    const spectrum = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(spectrum);
+    const bars = Array.from({ length: WAVE_BAR_COUNT }, () => 0);
+    const startFreq = Math.floor(spectrum.length * 0.05);
+    const endFreq = Math.floor(spectrum.length * 0.4);
+    const relevantData = spectrum.slice(startFreq, endFreq);
+    const halfCount = Math.floor(WAVE_BAR_COUNT / 2);
+    for (let i = halfCount - 1; i >= 0; i--) {
+      const dataIndex = Math.floor((i / halfCount) * relevantData.length);
+      const value = Math.min(1, ((relevantData[dataIndex] ?? 0) / 255) * WAVEFORM_SENSITIVITY);
+      bars[halfCount - 1 - i] = Math.max(0, value);
+    }
+    for (let i = 0; i < halfCount; i++) {
+      const dataIndex = Math.floor((i / halfCount) * relevantData.length);
+      const value = Math.min(1, ((relevantData[dataIndex] ?? 0) / 255) * WAVEFORM_SENSITIVITY);
+      bars[halfCount + i] = Math.max(0, value);
     }
     levelBars.value = bars;
   }, 80);
+  if (stopAfterStart) {
+    stopAfterStart = false;
+    void stopAndSubmit();
+  }
 }
 
 /** Останавливает per-session graph'а (processor / analyser / source / timers),
@@ -419,6 +571,7 @@ function teardownCapture(): void {
     }
     source = null;
   }
+  lastActiveBars = levelBars.value.length > 0 ? [...levelBars.value] : idleBars;
   levelBars.value = Array.from({ length: WAVE_BAR_COUNT }, () => 0);
 }
 
@@ -473,7 +626,10 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 async function stopAndSubmit(): Promise<void> {
-  if (status.value !== "recording") return;
+  if (status.value !== "recording") {
+    if (startInFlight) stopAfterStart = true;
+    return;
+  }
   const sampleRate = audioCtx?.sampleRate ?? TARGET_SAMPLE_RATE;
   teardownCapture();
   if (pcmChunks.length === 0) {
@@ -504,6 +660,10 @@ async function stopAndSubmit(): Promise<void> {
       // с error mark. Pending всё ещё на диске — юзер увидит в Settings.
       status.value = "error";
       errorText.value = resp.error ?? "Не удалось распознать";
+      console.warn("[dictation-pill] submit_audio returned error:", {
+        uuid: resp.uuid,
+        error: errorText.value,
+      });
     } else if (resp.queued && resp.uuid) {
       // Первая попытка fail → backend запустил auto-retry в фоне.
       // Поллим очередь со спиннером "Жду сеть…".
@@ -569,6 +729,9 @@ async function waitForQueueResolve(uuid: string, timeoutMs: number): Promise<voi
 }
 
 async function cancelCapture(): Promise<void> {
+  captureGeneration++;
+  startInFlight = false;
+  stopAfterStart = false;
   teardownCapture();
   pcmChunks = [];
   status.value = "idle";
@@ -581,20 +744,10 @@ async function cancelCapture(): Promise<void> {
   void window.kepler.dictation.pillFinished();
 }
 
-function handleKeydown(e: KeyboardEvent): void {
-  // Esc — cancel. Note: pill focusable: false на main-стороне, так что
-  // keydown сюда не дойдёт. Слушаем все равно для случая когда юзер
-  // явно кликнет в pill (focus всё же придёт).
-  if (e.key === "Escape") {
-    void cancelCapture();
-  }
-}
-
 onMounted(() => {
+  if (!isPreview) void loadDictationConfig();
   if (isPreview) {
-    startTranscribingWave();
-    startWaitingWave();
-    startErrorWave();
+    startProcessingWave();
     return;
   }
   unsubscribeCommand = window.kepler.dictation.onCommand((cmd) => {
@@ -606,43 +759,41 @@ onMounted(() => {
       void cancelCapture();
     }
   });
-  window.addEventListener("keydown", handleKeydown);
 });
 
 const stopStatusWatch = watch(
   status,
   (value) => {
     if (isPreview) return;
-    if (value === "transcribing") {
-      startTranscribingWave();
+    if (value === "transcribing" || value === "waiting" || value === "error") {
+      startProcessingWave();
     } else {
-      stopTranscribingWave();
-    }
-    if (value === "waiting") {
-      startWaitingWave();
-    } else {
-      stopWaitingWave();
-    }
-    if (value === "error") {
-      startErrorWave();
-    } else {
-      stopErrorWave();
+      stopProcessingWave();
     }
   },
   { immediate: true },
 );
 
+const stopWaveformWatch = watch([levelBars, processingBars, status], () => requestWaveformDraw(), {
+  immediate: true,
+});
+
 onBeforeUnmount(() => {
   unsubscribeCommand?.();
   stopStatusWatch();
-  stopTranscribingWave();
-  stopWaitingWave();
-  stopErrorWave();
-  window.removeEventListener("keydown", handleKeydown);
+  stopWaveformWatch();
+  stopProcessingWave();
   teardownCapture();
   // Окно демонтируется (Kepler закрывают) — hard-close без grace-периода.
   cancelStreamShutdown();
   closeStream();
+  if (waveformFrame !== null) {
+    cancelAnimationFrame(waveformFrame);
+    waveformFrame = null;
+  }
+  waveformResizeObserver?.disconnect();
+  waveformResizeObserver = null;
+  waveformCanvases.clear();
 });
 
 // expose to template
@@ -656,71 +807,57 @@ const exposeStatusText = computed(() => statusText());
         <div class="preview-label">{{ item.label }}</div>
         <div class="preview-frame">
           <div class="pill" :class="`status-${item.status}`">
-            <div v-if="item.status === 'recording'" class="waveform">
-              <span
-                v-for="(b, i) in item.bars ?? []"
-                :key="i"
-                class="wave-bar"
-                :style="{
-                  height: recordingBarHeight(b),
-                }"
+            <div class="pill-wave">
+              <canvas
+                class="waveform"
+                :class="`${item.status}-wave`"
+                :title="item.subText ?? item.errorText"
+                :ref="(el) => setWaveformCanvas(`preview-${item.status}`, el)"
+                aria-hidden="true"
               />
             </div>
-            <div v-else-if="item.status === 'transcribing'" class="waveform transcribing-wave">
-              <span
-                v-for="(b, i) in transcribingBars"
-                :key="i"
-                class="wave-bar"
-                :style="{
-                  height: barHeight(b),
-                }"
-              />
-            </div>
-            <div
-              v-else-if="item.status === 'waiting'"
-              class="waveform waiting-wave"
-              :title="item.subText"
-            >
-              <span
-                v-for="(b, i) in waitingBars"
-                :key="i"
-                class="wave-bar"
-                :style="{ height: barHeight(b) }"
-              />
-            </div>
-            <div
-              v-else-if="item.status === 'error'"
-              class="waveform error-wave"
-              :title="item.errorText"
-            >
-              <span
-                v-for="(b, i) in errorBars"
-                :key="i"
-                class="wave-bar"
-                :style="{ height: barHeight(b) }"
-              />
-            </div>
-            <div v-else class="waveform idle-wave">
-              <span
-                v-for="(b, i) in idleBars"
-                :key="i"
-                class="wave-bar"
-                :style="{ height: barHeight(b) }"
-              />
-            </div>
-            <div v-if="item.status === 'recording'" class="pill-hover-controls">
-              <button class="pill-action" type="button" title="Отменить" @click="handleCancelClick">
-                ×
-              </button>
-              <span class="pill-time">{{ formatElapsed(3) }}</span>
-              <button
-                class="pill-action"
-                type="button"
-                title="Отправить"
-                @click="handleSubmitClick"
+            <div class="pill-footer" :class="`pill-footer--${item.status}`">
+              <span class="pill-footer__status">
+                <span
+                  class="pill-footer__dot"
+                  :class="`pill-footer__dot--${item.status}`"
+                  aria-hidden="true"
+                />
+                {{ footerLabel(item.status) }}
+              </span>
+              <div
+                v-if="canCancel(item.status) || canSubmit(item.status)"
+                class="pill-footer__actions"
               >
-                ✓
-              </button>
+                <button
+                  v-if="canCancel(item.status)"
+                  class="pill-footer__hint"
+                  type="button"
+                  title="Отменить"
+                  @pointerdown.stop.prevent="handleCancelClick"
+                >
+                  Отмена
+                </button>
+                <span
+                  v-if="canCancel(item.status) && canSubmit(item.status)"
+                  class="pill-footer__sep"
+                  aria-hidden="true"
+                />
+                <button
+                  v-if="canSubmit(item.status)"
+                  class="pill-footer__hint pill-footer__hint--primary"
+                  type="button"
+                  title="Отправить"
+                  @pointerdown.stop.prevent="handleSubmitClick"
+                >
+                  Отправить
+                  <span class="pill-footer__hotkey" aria-hidden="true">
+                    <KbdKey v-for="part in dictationHotkeyParts" :key="part">{{
+                      hotkeyPartLabel(part)
+                    }}</KbdKey>
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -730,64 +867,66 @@ const exposeStatusText = computed(() => statusText());
   <div v-else class="stage">
     <div class="pill" :class="`status-${status}`" :title="exposeStatusText">
       <!-- Waveform внутри пилюли: вертикальные бары разной высоты, по центру. -->
-      <div v-if="status === 'recording'" class="waveform">
-        <span
-          v-for="(b, i) in levelBars"
-          :key="i"
-          class="wave-bar"
-          :style="{
-            height: recordingBarHeight(b),
-          }"
+      <div class="pill-wave">
+        <canvas
+          class="waveform"
+          :class="`${status}-wave`"
+          :title="subText || errorText"
+          :ref="(el) => setWaveformCanvas('runtime', el)"
+          aria-hidden="true"
         />
       </div>
-      <div v-else-if="status === 'transcribing'" class="waveform transcribing-wave">
-        <span
-          v-for="(b, i) in transcribingBars"
-          :key="i"
-          class="wave-bar"
-          :style="{
-            height: barHeight(b),
-          }"
-        />
-      </div>
-      <div v-else-if="status === 'waiting'" class="waveform waiting-wave" :title="subText">
-        <span
-          v-for="(b, i) in waitingBars"
-          :key="i"
-          class="wave-bar"
-          :style="{ height: barHeight(b) }"
-        />
-      </div>
-      <div v-else-if="status === 'error'" class="waveform error-wave" :title="errorText">
-        <span
-          v-for="(b, i) in errorBars"
-          :key="i"
-          class="wave-bar"
-          :style="{ height: barHeight(b) }"
-        />
-      </div>
-      <div v-else class="waveform idle-wave">
-        <span
-          v-for="(b, i) in idleBars"
-          :key="i"
-          class="wave-bar"
-          :style="{ height: barHeight(b) }"
-        />
-      </div>
-      <div v-if="status === 'recording'" class="pill-hover-controls">
-        <button class="pill-action" type="button" title="Отменить" @click="handleCancelClick">
-          ×
-        </button>
-        <span class="pill-time">{{ elapsedLabel }}</span>
-        <button class="pill-action" type="button" title="Отправить" @click="handleSubmitClick">
-          ✓
-        </button>
+      <div class="pill-footer" :class="`pill-footer--${status}`">
+        <span class="pill-footer__status">
+          <span
+            class="pill-footer__dot"
+            :class="`pill-footer__dot--${status}`"
+            aria-hidden="true"
+          />
+          {{ footerLabel(status) }}
+        </span>
+        <div v-if="canCancel(status) || canSubmit(status)" class="pill-footer__actions">
+          <button
+            v-if="canCancel(status)"
+            class="pill-footer__hint"
+            type="button"
+            title="Отменить"
+            @pointerdown.stop.prevent="handleCancelClick"
+          >
+            Отмена
+          </button>
+          <span
+            v-if="canCancel(status) && canSubmit(status)"
+            class="pill-footer__sep"
+            aria-hidden="true"
+          />
+          <button
+            v-if="canSubmit(status)"
+            class="pill-footer__hint pill-footer__hint--primary"
+            type="button"
+            title="Отправить"
+            @pointerdown.stop.prevent="handleSubmitClick"
+          >
+            Отправить
+            <span class="pill-footer__hotkey" aria-hidden="true">
+              <KbdKey v-for="part in dictationHotkeyParts" :key="part">{{
+                hotkeyPartLabel(part)
+              }}</KbdKey>
+            </span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+:global(html),
+:global(body),
+:global(#app) {
+  background: transparent !important;
+}
+
 .preview-page {
   min-height: 100vh;
   display: flex;
@@ -799,7 +938,7 @@ const exposeStatusText = computed(() => statusText());
 }
 
 .preview-list {
-  width: min(720px, 100%);
+  width: min(760px, 100%);
   display: grid;
   gap: 14px;
 }
@@ -819,7 +958,7 @@ const exposeStatusText = computed(() => statusText());
 }
 
 .preview-frame {
-  min-height: 72px;
+  min-height: 148px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -840,9 +979,16 @@ const exposeStatusText = computed(() => statusText());
   background-size: 16px 16px;
 }
 
+.preview-frame .pill {
+  width: 380px;
+  height: 126px;
+}
+
 .stage {
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -852,23 +998,26 @@ const exposeStatusText = computed(() => statusText());
 }
 
 .pill {
+  /* Заполняем родителя целиком (как `.widget` у focus-widget). В overlay
+   * родитель — `.stage` (100vw/100vh = окно), окно само размером с пилюлю
+   * (см. dictation-pill.ts). Fill гарантирует, что прозрачной области вокруг
+   * пилюли нет в принципе — значит Win32 нечего композитить белым. На preview
+   * `.preview-frame .pill` переопределяет размер на 120×36. */
   position: relative;
   pointer-events: auto;
-  /* Базовая ширина для idle/recording/transcribing. Для waiting/error pill
-   * расширяется по контенту, ограничен `.stage` (max-width в window). */
-  width: 120px;
-  max-width: calc(100vw - 24px);
-  height: 36px;
+  width: 100%;
+  height: 100%;
   box-sizing: border-box;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 2px;
+  justify-content: flex-start;
+  padding: 0;
   /* Глянцевый чёрный — тонкий светлый highlight сверху, тёмный низ. */
   background: color-mix(in srgb, var(--surface) 58%, var(--background) 42%);
-  border-radius: 4px;
-  border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
-  /* Без drop-shadow по запросу — оставляем только тонкий inset bevel внутри. */
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  /* No outer shadow: the overlay window is pill-sized, so shadows create a visible composited square. */
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--foreground) 8%, transparent),
     inset 0 -1px 0 color-mix(in srgb, var(--background) 70%, transparent);
@@ -884,109 +1033,126 @@ const exposeStatusText = computed(() => statusText());
 }
 
 @keyframes pill-in {
+  /* No translateY: window is now exactly pill-sized, so a vertical slide would
+   * be clipped at the window edge. Pure fade + inward scale stays in bounds. */
   from {
-    transform: translateY(12px) scale(0.96);
+    transform: scale(0.96);
     opacity: 0;
   }
   to {
-    transform: translateY(0) scale(1);
+    transform: scale(1);
     opacity: 1;
   }
 }
 
-.waveform {
+.pill-wave {
   position: relative;
   z-index: 1;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  width: 100%;
-  height: 30px;
-  transition: opacity 120ms linear;
+  padding: 8px 10px 6px;
+  overflow: hidden;
 }
 
-.wave-bar {
+.waveform {
   display: block;
-  width: 2px;
-  min-height: 3px;
-  background: #fff;
-  border-radius: 2px;
-  opacity: 1;
-  transition: height 30ms linear;
-}
-
-.idle-wave .wave-bar,
-.transcribing-wave .wave-bar {
-  background: #fff;
-}
-
-.waiting-wave .wave-bar {
-  background: #f5a524;
-}
-
-.error-wave .wave-bar {
-  background: #ff453a;
-}
-
-.pill-hover-controls {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: 30px 1fr 30px;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  opacity: 0;
-  pointer-events: none;
+  width: 100%;
+  height: 76px;
   transition: opacity 120ms linear;
 }
 
-.pill.status-recording:hover .waveform {
-  opacity: 0;
+.pill-footer {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 34px;
+  flex: 0 0 34px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  background: color-mix(in srgb, var(--background) 18%, transparent);
+  color: color-mix(in srgb, var(--foreground) 78%, transparent);
+  font-family: var(--font-sans, -apple-system, sans-serif);
+  font-size: 11px;
+  line-height: 1;
 }
 
-.pill.status-recording:hover .pill-hover-controls {
-  opacity: 1;
-  pointer-events: auto;
+.pill-footer__status,
+.pill-footer__actions,
+.pill-footer__hint {
+  display: inline-flex;
+  align-items: center;
 }
 
-.pill-action {
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
+.pill-footer__status {
+  min-width: 0;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.pill-footer__dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 44%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.pill-footer__dot--recording,
+.pill-footer__dot--error {
+  background: #ff453a;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #ff453a 14%, transparent);
+}
+
+.pill-footer__dot--waiting {
+  background: #f5a524;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #f5a524 14%, transparent);
+}
+
+.pill-footer__actions {
+  flex: 0 0 auto;
+  gap: 7px;
+}
+
+.pill-footer__hint {
+  gap: 4px;
+  min-width: 0;
   padding: 0;
   border: 0;
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--foreground) 9%, transparent);
-  color: #fff;
-  font-family: var(--font-sans, -apple-system, sans-serif);
-  font-size: 14px;
-  line-height: 1;
+  background: transparent;
+  color: color-mix(in srgb, var(--foreground) 80%, transparent);
+  font: inherit;
   cursor: default;
+  white-space: nowrap;
 }
 
-.pill-action:hover {
+.pill-footer__hint:hover {
+  color: color-mix(in srgb, var(--foreground) 94%, transparent);
+}
+
+.pill-footer__hint--primary {
+  color: color-mix(in srgb, var(--foreground) 92%, transparent);
+}
+
+.pill-footer__sep {
+  width: 1px;
+  height: 12px;
   background: color-mix(in srgb, var(--foreground) 16%, transparent);
 }
 
-.pill-action:first-child {
-  justify-self: start;
-}
-
-.pill-action:last-child {
-  justify-self: end;
-}
-
-.pill-time {
-  min-width: 0;
-  text-align: center;
-  font-family: var(--font-sans, -apple-system, sans-serif);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: #fff;
-  line-height: 1;
+.pill-footer__hotkey {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 </style>

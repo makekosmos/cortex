@@ -9,6 +9,7 @@
 // Operations через WS под namespace `dictation.*` — см. `handle_dictation_op`
 // в `host.rs` и intercept в `ws_server.rs`.
 
+pub mod audio_duck;
 pub mod config;
 pub mod groq;
 pub mod host;
@@ -17,6 +18,9 @@ pub mod hotkey_hook;
 pub mod inject;
 pub mod local;
 pub mod local_models;
+pub mod local_sidecar;
+pub mod local_sidecar_protocol;
+pub mod local_whisper_dll;
 #[cfg(target_os = "macos")]
 pub mod macos_native;
 pub mod network;

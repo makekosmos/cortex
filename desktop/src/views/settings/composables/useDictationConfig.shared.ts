@@ -176,7 +176,7 @@ export function buildDictationVoiceModelOptions(args: {
     if (!localRuntimeReady && !model.selected) continue;
     options.push({
       value: `local:${model.id}`,
-      label: `OpenAI · ${model.name}`,
+      label: `Локально · ${model.name}`,
       description: "Локальное распознавание речи",
     });
   }

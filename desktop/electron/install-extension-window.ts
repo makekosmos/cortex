@@ -32,7 +32,7 @@ export function openInstallExtensionWindow(sourcePath: string): void {
     return;
   }
   const display = screen.getPrimaryDisplay().workAreaSize;
-  const backgroundMaterial = resolveWindowMaterial("mica");
+  const backgroundMaterial = resolveWindowMaterial("none");
   installWindow = new BrowserWindow({
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,

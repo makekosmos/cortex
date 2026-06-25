@@ -101,7 +101,7 @@ export function createLauncherController(options: LauncherControllerOptions): La
       // reactive window после первого input event. Этот path нужен только Windows.
       alwaysOnTop: process.platform === "win32",
       ...backgroundMaterialOption(backgroundMaterial),
-      backgroundColor: "#00000000",
+      backgroundColor: "#1d1d1f",
       roundedCorners: true,
       webPreferences: {
         preload: path.join(dirname, "preload.mjs"),

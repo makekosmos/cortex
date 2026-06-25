@@ -5,23 +5,28 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use base64::Engine;
 use reqwest::header::CONTENT_TYPE;
 use reqwest::multipart::{Form, Part};
 use reqwest::Client;
 use serde_json::Value;
 use thiserror::Error;
-use tokio::process::Command as TokioCommand;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::process::{Child, ChildStdin, ChildStdout, Command as TokioCommand};
+
+use super::local_sidecar_protocol::{
+    LocalSttAccelerator, LocalSttModelSpec, LocalSttProfile, LocalSttRequest,
+    LocalSttRequestEnvelope, LocalSttResponse, LocalSttResponseEnvelope, LocalSttStatus,
+};
 
 pub const DEFAULT_LOCAL_ENGINE: &str = "whisper.cpp";
-
-#[cfg(test)]
-pub(crate) static TEST_ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[derive(Debug)]
 pub struct TranscriptionResult {
     pub text: String,
+    pub backend: String,
 }
 
 #[derive(Debug, Clone)]
@@ -33,7 +38,6 @@ pub struct LocalRequest<'a> {
     pub model_id: Option<&'a str>,
     pub model_path: Option<&'a str>,
     pub command_path: Option<&'a str>,
-    pub vad_model_path: Option<&'a str>,
 }
 
 #[derive(Debug, Clone)]
@@ -41,10 +45,12 @@ struct OwnedLocalRequest {
     wav_bytes: Vec<u8>,
     language: String,
     prompt: String,
+    engine: String,
     model_id: Option<String>,
     model_path: Option<String>,
     command_path: Option<String>,
-    vad_model_path: Option<String>,
+    accelerator: LocalSttAccelerator,
+    profile: LocalSttProfile,
 }
 
 impl<'a> From<LocalRequest<'a>> for OwnedLocalRequest {
@@ -53,12 +59,32 @@ impl<'a> From<LocalRequest<'a>> for OwnedLocalRequest {
             wav_bytes: req.wav_bytes.to_vec(),
             language: req.language.to_owned(),
             prompt: req.prompt.to_owned(),
+            engine: req.engine.to_owned(),
             model_id: req.model_id.map(str::to_owned),
             model_path: req.model_path.map(str::to_owned),
             command_path: req.command_path.map(str::to_owned),
-            vad_model_path: req.vad_model_path.map(str::to_owned),
+            accelerator: local_stt_accelerator(),
+            profile: local_stt_profile(),
         }
     }
+}
+
+struct LocalSttSidecarClient {
+    child: Child,
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
+    next_request_id: u64,
+}
+
+#[derive(Default)]
+struct LocalSttSidecarPool {
+    active: Option<LocalSttSidecarClient>,
+}
+
+static LOCAL_STT_SIDECAR_POOL: OnceLock<tokio::sync::Mutex<LocalSttSidecarPool>> = OnceLock::new();
+
+fn local_stt_sidecar_pool() -> &'static tokio::sync::Mutex<LocalSttSidecarPool> {
+    LOCAL_STT_SIDECAR_POOL.get_or_init(|| tokio::sync::Mutex::new(LocalSttSidecarPool::default()))
 }
 
 #[derive(Debug, Error)]
@@ -79,6 +105,8 @@ pub enum LocalError {
     CommandFailed(String),
     #[error("Локальная транскрипция завершилась без текста")]
     EmptyTranscript,
+    #[error("Локальный STT sidecar недоступен: {0}")]
+    SidecarUnavailable(String),
 }
 
 fn is_dictation_test_mode() -> bool {
@@ -86,7 +114,7 @@ fn is_dictation_test_mode() -> bool {
         || matches!(env::var("KOSMOS_HEADLESS").as_deref(), Ok("1"))
 }
 
-pub(crate) fn test_override_transcript() -> Option<String> {
+fn test_override_transcript() -> Option<String> {
     if !cfg!(test) && !is_dictation_test_mode() {
         return None;
     }
@@ -102,6 +130,427 @@ pub(crate) fn test_override_transcript() -> Option<String> {
         }
     }
     None
+}
+
+fn direct_sidecar_fallback_allowed() -> bool {
+    matches!(
+        env::var("KOSMOS_LOCAL_STT_ALLOW_DIRECT_FALLBACK").as_deref(),
+        Ok("1")
+    )
+}
+
+fn local_stt_accelerator() -> LocalSttAccelerator {
+    match env::var("KOSMOS_LOCAL_STT_ACCELERATOR")
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "cpu" => LocalSttAccelerator::Cpu,
+        "gpu" => LocalSttAccelerator::Gpu,
+        _ => LocalSttAccelerator::Auto,
+    }
+}
+
+fn local_stt_profile() -> LocalSttProfile {
+    match env::var("KOSMOS_LOCAL_STT_PROFILE")
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "accurate" => LocalSttProfile::Accurate,
+        _ => LocalSttProfile::Fast,
+    }
+}
+
+fn local_stt_idle_unload_after_ms_for_engine(engine: &str) -> Option<u64> {
+    if let Ok(value) = env::var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS") {
+        return value.trim().parse::<u64>().ok();
+    }
+    let _ = engine;
+    Some(5 * 60 * 1000)
+}
+
+fn local_stt_server_ready_timeout() -> Duration {
+    let millis = env::var("KOSMOS_LOCAL_STT_SERVER_READY_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .unwrap_or(30_000)
+        .clamp(1_000, 300_000);
+    Duration::from_millis(millis)
+}
+
+fn local_stt_sidecar_binary_names() -> &'static [&'static str] {
+    if cfg!(windows) {
+        &["kosmos-local-stt.exe", "Kosmos Local STT.exe"]
+    } else {
+        &["kosmos-local-stt"]
+    }
+}
+
+fn local_stt_sidecar_candidate_paths(current_exe: &Path) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    for name in local_stt_sidecar_binary_names() {
+        candidates.push(current_exe.with_file_name(name));
+        if let Some(parent) = current_exe.parent().and_then(Path::parent) {
+            candidates.push(parent.join(name));
+        }
+    }
+    candidates
+}
+
+fn local_stt_sidecar_path() -> Result<PathBuf, LocalError> {
+    if let Ok(value) = env::var("KOSMOS_LOCAL_STT_SIDECAR_PATH") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return Ok(PathBuf::from(trimmed));
+        }
+    }
+
+    let current_exe = env::current_exe().map_err(|e| {
+        LocalError::SidecarUnavailable(format!("не удалось определить путь текущего процесса: {e}"))
+    })?;
+    let candidates = local_stt_sidecar_candidate_paths(&current_exe);
+    for candidate in &candidates {
+        if candidate.is_file() {
+            return Ok(candidate.clone());
+        }
+    }
+
+    let searched = candidates
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    Err(LocalError::SidecarUnavailable(format!(
+        "binary not found; searched: {searched}"
+    )))
+}
+
+impl LocalSttSidecarClient {
+    async fn spawn() -> Result<Self, LocalError> {
+        let sidecar_path = local_stt_sidecar_path()?;
+        let mut child = TokioCommand::new(&sidecar_path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|e| {
+                LocalError::SidecarUnavailable(format!(
+                    "не удалось запустить {}: {e}",
+                    sidecar_path.display()
+                ))
+            })?;
+
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| LocalError::SidecarUnavailable("sidecar stdin is unavailable".into()))?;
+        let stdout = child.stdout.take().ok_or_else(|| {
+            LocalError::SidecarUnavailable("sidecar stdout is unavailable".into())
+        })?;
+
+        if let Some(stderr) = child.stderr.take() {
+            tokio::spawn(async move {
+                let reader = BufReader::new(stderr);
+                let mut lines = reader.lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    eprintln!("[kosmos-local-stt] {line}");
+                }
+            });
+        }
+
+        Ok(Self {
+            child,
+            stdin,
+            stdout: BufReader::new(stdout),
+            next_request_id: 1,
+        })
+    }
+
+    async fn request(&mut self, request: LocalSttRequest) -> Result<LocalSttResponse, LocalError> {
+        if let Some(status) = self
+            .child
+            .try_wait()
+            .map_err(|e| LocalError::SidecarUnavailable(format!("sidecar wait failed: {e}")))?
+        {
+            return Err(LocalError::SidecarUnavailable(format!(
+                "sidecar exited with status {status}"
+            )));
+        }
+
+        let request_id = self.next_request_id;
+        self.next_request_id += 1;
+        let envelope = LocalSttRequestEnvelope {
+            request_id,
+            request,
+        };
+        let mut payload = serde_json::to_vec(&envelope).map_err(|e| {
+            LocalError::SidecarUnavailable(format!("не удалось сериализовать запрос: {e}"))
+        })?;
+        payload.push(b'\n');
+
+        self.stdin.write_all(&payload).await.map_err(|e| {
+            LocalError::SidecarUnavailable(format!("не удалось отправить sidecar-запрос: {e}"))
+        })?;
+        self.stdin.flush().await.map_err(|e| {
+            LocalError::SidecarUnavailable(format!("не удалось завершить sidecar-запрос: {e}"))
+        })?;
+
+        let mut line = String::new();
+        let read = self.stdout.read_line(&mut line).await.map_err(|e| {
+            LocalError::SidecarUnavailable(format!("не удалось прочитать ответ sidecar: {e}"))
+        })?;
+        if read == 0 {
+            return Err(LocalError::SidecarUnavailable(
+                "sidecar stdout closed unexpectedly".into(),
+            ));
+        }
+        let envelope: LocalSttResponseEnvelope =
+            serde_json::from_str(line.trim()).map_err(|e| {
+                LocalError::SidecarUnavailable(format!("не удалось распарсить ответ sidecar: {e}"))
+            })?;
+        if envelope.request_id != request_id {
+            return Err(LocalError::SidecarUnavailable(format!(
+                "unexpected response id {}, expected {request_id}",
+                envelope.request_id
+            )));
+        }
+        if !envelope.ok {
+            return Err(LocalError::CommandFailed(
+                envelope
+                    .error
+                    .unwrap_or_else(|| "sidecar request failed".into()),
+            ));
+        }
+        envelope.response.ok_or_else(|| {
+            LocalError::SidecarUnavailable("sidecar returned empty response payload".into())
+        })
+    }
+}
+
+fn model_spec_from_owned(req: &OwnedLocalRequest) -> LocalSttModelSpec {
+    LocalSttModelSpec {
+        engine: req.engine.clone(),
+        model_id: req.model_id.clone(),
+        model_path: req.model_path.clone(),
+        command_path: req.command_path.clone(),
+        accelerator: req.accelerator.clone(),
+        profile: req.profile.clone(),
+        idle_unload_after_ms: local_stt_idle_unload_after_ms_for_engine(&req.engine),
+    }
+}
+
+fn owned_request_from_model(
+    model: &LocalSttModelSpec,
+    wav_bytes: &[u8],
+    language: &str,
+    prompt: &str,
+) -> OwnedLocalRequest {
+    OwnedLocalRequest {
+        wav_bytes: wav_bytes.to_vec(),
+        language: language.to_owned(),
+        prompt: prompt.to_owned(),
+        engine: model.engine.clone(),
+        model_id: model.model_id.clone(),
+        model_path: model.model_path.clone(),
+        command_path: model.command_path.clone(),
+        accelerator: model.accelerator.clone(),
+        profile: model.profile.clone(),
+    }
+}
+
+#[cfg(test)]
+#[derive(Debug, Clone)]
+struct TestSidecarMock {
+    transcript: Option<String>,
+    fail_error: Option<String>,
+    sidecar_unavailable_remaining: u8,
+    seen_ops: Vec<String>,
+}
+
+#[cfg(test)]
+static TEST_SIDECAR_MOCK: OnceLock<Mutex<Option<TestSidecarMock>>> = OnceLock::new();
+
+#[cfg(test)]
+fn test_sidecar_mock_state() -> &'static Mutex<Option<TestSidecarMock>> {
+    TEST_SIDECAR_MOCK.get_or_init(|| Mutex::new(None))
+}
+
+#[cfg(test)]
+pub(crate) fn install_test_sidecar_mock_for_host(transcript: Option<String>) {
+    let guard = match test_sidecar_mock_state().lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let mut guard = guard;
+    *guard = Some(TestSidecarMock {
+        transcript,
+        fail_error: None,
+        sidecar_unavailable_remaining: 0,
+        seen_ops: Vec::new(),
+    });
+}
+
+#[cfg(test)]
+pub(crate) fn install_test_sidecar_unavailable_for_host(times: u8) {
+    let guard = match test_sidecar_mock_state().lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let mut guard = guard;
+    *guard = Some(TestSidecarMock {
+        transcript: None,
+        fail_error: None,
+        sidecar_unavailable_remaining: times,
+        seen_ops: Vec::new(),
+    });
+}
+
+#[cfg(test)]
+pub(crate) fn clear_test_sidecar_mock_for_host() {
+    let guard = match test_sidecar_mock_state().lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let mut guard = guard;
+    *guard = None;
+}
+
+#[cfg(test)]
+pub(crate) fn has_test_sidecar_mock_for_host() -> bool {
+    let guard = match test_sidecar_mock_state().lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard.is_some()
+}
+
+#[cfg(test)]
+pub(crate) async fn clear_test_sidecar_pool_for_host() {
+    let mut pool = local_stt_sidecar_pool().lock().await;
+    pool.active = None;
+}
+
+#[cfg(test)]
+pub(crate) fn recorded_test_sidecar_ops_for_host() -> Vec<String> {
+    let guard = match test_sidecar_mock_state().lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard
+        .as_ref()
+        .map(|mock| mock.seen_ops.clone())
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+fn test_sidecar_mock_take(op: &str) -> Option<Result<LocalSttResponse, LocalError>> {
+    let guard = match test_sidecar_mock_state().lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let mut guard = guard;
+    let mock = guard.as_mut()?;
+    mock.seen_ops.push(op.to_owned());
+    if mock.sidecar_unavailable_remaining > 0 {
+        mock.sidecar_unavailable_remaining -= 1;
+        return Some(Err(LocalError::SidecarUnavailable(
+            "mock sidecar exited".into(),
+        )));
+    }
+    if let Some(error) = mock.fail_error.clone() {
+        return Some(Err(LocalError::CommandFailed(error)));
+    }
+    Some(Ok(match op {
+        "preload" | "load_model" => LocalSttResponse::Status(LocalSttStatus {
+            warm: true,
+            loaded_model: None,
+            backend: Some("mock_sidecar".into()),
+            accelerator: LocalSttAccelerator::Auto,
+            device: None,
+            profile: LocalSttProfile::Fast,
+            idle_unload_after_ms: local_stt_idle_unload_after_ms_for_engine(DEFAULT_LOCAL_ENGINE),
+        }),
+        "transcribe" => {
+            LocalSttResponse::Transcription(super::local_sidecar_protocol::LocalSttTranscription {
+                text: mock
+                    .transcript
+                    .clone()
+                    .unwrap_or_else(|| "mock sidecar transcript".into()),
+                backend: "mock_sidecar".into(),
+            })
+        }
+        _ => LocalSttResponse::Ack(super::local_sidecar_protocol::LocalSttAck {
+            accepted: true,
+            message: None,
+        }),
+    }))
+}
+
+async fn send_sidecar_request(request: LocalSttRequest) -> Result<LocalSttResponse, LocalError> {
+    #[cfg(test)]
+    {
+        let op_name = match &request {
+            LocalSttRequest::Status => "status",
+            LocalSttRequest::LoadModel { .. } => "load_model",
+            LocalSttRequest::Preload { .. } => "preload",
+            LocalSttRequest::Transcribe { .. } => "transcribe",
+            LocalSttRequest::Cancel { .. } => "cancel",
+            LocalSttRequest::Unload => "unload",
+            LocalSttRequest::Shutdown => "shutdown",
+        };
+        for attempt in 0..2 {
+            if let Some(response) = test_sidecar_mock_take(op_name) {
+                match response {
+                    Err(LocalError::SidecarUnavailable(_)) if attempt == 0 => continue,
+                    other => return other,
+                }
+            } else {
+                break;
+            }
+        }
+
+        if !matches!(
+            env::var("KOSMOS_TEST_ALLOW_REAL_LOCAL_STT_SIDECAR").as_deref(),
+            Ok("1")
+        ) {
+            return Err(LocalError::SidecarUnavailable(
+                "real local STT sidecar is disabled in unit tests".into(),
+            ));
+        }
+    }
+
+    let mut pool = local_stt_sidecar_pool().lock().await;
+    let request_clone = request.clone();
+    for attempt in 0..2 {
+        if pool.active.is_none() {
+            pool.active = Some(LocalSttSidecarClient::spawn().await?);
+        }
+
+        let response = {
+            let client = pool.active.as_mut().expect("sidecar client initialized");
+            client
+                .request(if attempt == 0 {
+                    request.clone()
+                } else {
+                    request_clone.clone()
+                })
+                .await
+        };
+        match response {
+            Ok(value) => return Ok(value),
+            Err(LocalError::SidecarUnavailable(_)) if attempt == 0 => {
+                pool.active = None;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(LocalError::SidecarUnavailable(
+        "sidecar request retry budget exhausted".into(),
+    ))
 }
 
 fn is_supported_engine(engine: &str) -> bool {
@@ -142,7 +591,7 @@ fn temp_audio_paths() -> Result<(PathBuf, PathBuf), LocalError> {
     Ok((base.with_extension("wav"), base))
 }
 
-fn whisper_language_arg(language: &str) -> Option<String> {
+pub(crate) fn whisper_language_arg(language: &str) -> Option<String> {
     let trimmed = language.trim();
     if trimmed.is_empty() || trimmed == "auto" {
         None
@@ -153,38 +602,13 @@ fn whisper_language_arg(language: &str) -> Option<String> {
     }
 }
 
-fn append_vad_args(command: &mut Command, vad_model_path: Option<&str>) {
-    let Some(vad_model_path) = vad_model_path
-        .map(str::trim)
-        .filter(|path| !path.is_empty())
-    else {
-        return;
-    };
-
-    command
-        .arg("--vad")
-        .arg("-vm")
-        .arg(vad_model_path)
-        .arg("-vt")
-        .arg("0.50")
-        .arg("-vspd")
-        .arg("250")
-        .arg("-vsd")
-        .arg("300")
-        .arg("-vp")
-        .arg("100")
-        .arg("-vo")
-        .arg("0.10")
-        .arg("-vmsd")
-        .arg("30");
-}
-
 fn cleanup_temp_outputs(wav_path: &Path, out_base: &Path) {
     let _ = fs::remove_file(wav_path);
     let _ = fs::remove_file(out_base.with_extension("txt"));
+    let _ = fs::remove_file(out_base.with_extension("py"));
 }
 
-fn local_whisper_threads() -> usize {
+pub(crate) fn local_whisper_threads() -> usize {
     env::var("KOSMOS_LOCAL_WHISPER_THREADS")
         .ok()
         .and_then(|value| value.trim().parse::<usize>().ok())
@@ -196,7 +620,7 @@ fn local_whisper_threads() -> usize {
         })
 }
 
-fn strip_whisper_timestamps(text: &str) -> String {
+pub(crate) fn strip_whisper_timestamps(text: &str) -> String {
     text.lines()
         .map(|line| {
             let trimmed = line.trim();
@@ -250,10 +674,17 @@ fn stable_path_key(path: &Path) -> PathBuf {
     fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
-fn server_process_key(command_path: &Path, model_path: &Path) -> ServerProcessKey {
+fn server_process_key(
+    command_path: &Path,
+    model_path: &Path,
+    accelerator: &LocalSttAccelerator,
+    profile: &LocalSttProfile,
+) -> ServerProcessKey {
     ServerProcessKey {
         command_path: stable_path_key(command_path),
         model_path: stable_path_key(model_path),
+        accelerator: accelerator.clone(),
+        profile: profile.clone(),
     }
 }
 
@@ -334,7 +765,7 @@ fn extract_transcript_value(value: &Value) -> Option<String> {
                             .filter(|text| !text.is_empty())
                     })
                     .collect::<Vec<_>>()
-                    .join(" ");
+                    .join("\n");
                 let joined = strip_whisper_timestamps(&joined);
                 if !joined.trim().is_empty() {
                     return Some(joined.trim().to_owned());
@@ -352,6 +783,33 @@ fn extract_transcript_value(value: &Value) -> Option<String> {
         }
         _ => None,
     }
+}
+
+/// Длительность аудио в секундах из стандартного 44-байтного PCM WAV-заголовка
+/// (его пишет pill renderer). Используется для расчёта таймаута инференса.
+fn wav_duration_secs(wav_bytes: &[u8]) -> f64 {
+    if wav_bytes.len() < 44 {
+        return 0.0;
+    }
+    let channels = u16::from_le_bytes([wav_bytes[22], wav_bytes[23]]).max(1) as f64;
+    let sample_rate =
+        u32::from_le_bytes([wav_bytes[24], wav_bytes[25], wav_bytes[26], wav_bytes[27]]) as f64;
+    let bits = u16::from_le_bytes([wav_bytes[34], wav_bytes[35]]).max(8) as f64;
+    let bytes_per_sec = sample_rate * channels * (bits / 8.0);
+    if bytes_per_sec <= 0.0 {
+        return 0.0;
+    }
+    wav_bytes.len().saturating_sub(44) as f64 / bytes_per_sec
+}
+
+/// Таймаут на запрос к whisper-server. Локальный STT (особенно CPU-сборка)
+/// работает ~1× реального времени, поэтому фиксированные 60с обрезали длинные
+/// записи (баг на записях ~минута и более). Масштабируем от длительности с
+/// большим запасом на медленное железо, с разумным потолком.
+fn local_inference_timeout(wav_bytes: &[u8]) -> Duration {
+    let dur = wav_duration_secs(wav_bytes);
+    let secs = (30.0 + dur * 8.0).ceil() as u64;
+    Duration::from_secs(secs.clamp(60, 1800))
 }
 
 fn server_request_form(req: &OwnedLocalRequest) -> Result<Form, LocalError> {
@@ -380,10 +838,74 @@ fn server_request_form(req: &OwnedLocalRequest) -> Result<Form, LocalError> {
         .text("no_speech_thold", "0.6"))
 }
 
+fn apply_whisper_quality_args(command: &mut TokioCommand, profile: &LocalSttProfile) {
+    match profile {
+        LocalSttProfile::Fast => {
+            command.arg("-bo").arg("1").arg("-bs").arg("1");
+        }
+        LocalSttProfile::Accurate => {
+            command.arg("-bo").arg("5").arg("-bs").arg("5");
+        }
+    };
+}
+
+fn apply_whisper_quality_args_blocking(command: &mut Command, profile: &LocalSttProfile) {
+    match profile {
+        LocalSttProfile::Fast => {
+            command.arg("-bo").arg("1").arg("-bs").arg("1");
+        }
+        LocalSttProfile::Accurate => {
+            command.arg("-bo").arg("5").arg("-bs").arg("5");
+        }
+    };
+}
+
+fn apply_whisper_accelerator_args(command: &mut TokioCommand, accelerator: &LocalSttAccelerator) {
+    if matches!(accelerator, LocalSttAccelerator::Cpu) {
+        command.arg("-ng");
+    }
+}
+
+fn apply_whisper_accelerator_args_blocking(
+    command: &mut Command,
+    accelerator: &LocalSttAccelerator,
+) {
+    if matches!(accelerator, LocalSttAccelerator::Cpu) {
+        command.arg("-ng");
+    }
+}
+
+fn whisper_cpp_vad_model_path(command_path: &Path) -> Option<PathBuf> {
+    if let Ok(path) = env::var("KOSMOS_WHISPER_CPP_VAD_MODEL") {
+        let path = PathBuf::from(path.trim());
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    command_path
+        .parent()
+        .map(|dir| dir.join("ggml-silero-v6.2.0.bin"))
+        .filter(|path| path.is_file())
+}
+
+fn apply_whisper_vad_args(command: &mut TokioCommand, command_path: &Path) {
+    if let Some(vad_model_path) = whisper_cpp_vad_model_path(command_path) {
+        command.arg("--vad").arg("-vm").arg(vad_model_path);
+    }
+}
+
+fn apply_whisper_vad_args_blocking(command: &mut Command, command_path: &Path) {
+    if let Some(vad_model_path) = whisper_cpp_vad_model_path(command_path) {
+        command.arg("--vad").arg("-vm").arg(vad_model_path);
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ServerProcessKey {
     command_path: PathBuf,
     model_path: PathBuf,
+    accelerator: LocalSttAccelerator,
+    profile: LocalSttProfile,
 }
 
 struct WhisperServerProcess {
@@ -395,10 +917,10 @@ struct WhisperServerProcess {
 impl WhisperServerProcess {
     fn is_running(&self) -> bool {
         lock_child(&self.child)
-            .and_then(|mut child| match child.try_wait() {
-                Ok(None) => Some(true),
-                Ok(Some(_)) => Some(false),
-                Err(_) => Some(false),
+            .map(|mut child| match child.try_wait() {
+                Ok(None) => true,
+                Ok(Some(_)) => false,
+                Err(_) => false,
             })
             .unwrap_or(false)
     }
@@ -431,22 +953,23 @@ fn whisper_server_client() -> &'static Client {
 async fn wait_for_whisper_server_ready(server: &WhisperServerProcess) -> Result<(), LocalError> {
     let client = whisper_server_client();
     let url = format!("http://127.0.0.1:{}/", server.port);
+    let deadline = Instant::now() + local_stt_server_ready_timeout();
 
-    for _ in 0..120 {
+    while Instant::now() < deadline {
         if !server.is_running() {
             return Err(LocalError::CommandFailed(
                 "whisper-server exited before becoming ready".into(),
             ));
         }
 
-        match client
+        if client
             .get(&url)
             .timeout(Duration::from_secs(1))
             .send()
             .await
+            .is_ok()
         {
-            Ok(response) if response.status().is_success() => return Ok(()),
-            Ok(_) | Err(_) => {}
+            return Ok(());
         }
 
         tokio::time::sleep(Duration::from_millis(250)).await;
@@ -460,6 +983,8 @@ async fn wait_for_whisper_server_ready(server: &WhisperServerProcess) -> Result<
 async fn start_whisper_server(
     model_path: &Path,
     command_path: &Path,
+    accelerator: &LocalSttAccelerator,
+    profile: &LocalSttProfile,
 ) -> Result<Arc<WhisperServerProcess>, LocalError> {
     let server_path = whisper_server_executable(command_path);
     let port = whisper_server_port()?;
@@ -476,20 +1001,19 @@ async fn start_whisper_server(
         .arg("-t")
         .arg(local_whisper_threads().to_string())
         .arg("-nt")
-        .arg("-bo")
-        .arg("1")
-        .arg("-bs")
-        .arg("1")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
+    apply_whisper_quality_args(&mut command, profile);
+    apply_whisper_accelerator_args(&mut command, accelerator);
+    apply_whisper_vad_args(&mut command, command_path);
 
     let child = command.spawn().map_err(|e| {
         LocalError::CommandFailed(format!("не удалось запустить whisper-server: {e}"))
     })?;
 
     let server = Arc::new(WhisperServerProcess {
-        key: server_process_key(command_path, model_path),
+        key: server_process_key(command_path, model_path, accelerator, profile),
         port,
         child: Mutex::new(child),
     });
@@ -501,8 +1025,10 @@ async fn start_whisper_server(
 async fn get_or_start_whisper_server(
     model_path: &Path,
     command_path: &Path,
+    accelerator: &LocalSttAccelerator,
+    profile: &LocalSttProfile,
 ) -> Result<Arc<WhisperServerProcess>, LocalError> {
-    let desired_key = server_process_key(command_path, model_path);
+    let desired_key = server_process_key(command_path, model_path, accelerator, profile);
     let mut pool = whisper_server_pool().lock().await;
     if let Some(active) = pool.active.as_ref() {
         if active.key == desired_key && active.is_running() {
@@ -510,7 +1036,7 @@ async fn get_or_start_whisper_server(
         }
     }
 
-    let server = start_whisper_server(model_path, command_path).await?;
+    let server = start_whisper_server(model_path, command_path, accelerator, profile).await?;
     pool.active = Some(Arc::clone(&server));
     Ok(server)
 }
@@ -537,13 +1063,16 @@ async fn run_whisper_server(req: OwnedLocalRequest) -> Result<TranscriptionResul
         )));
     }
 
-    let server = get_or_start_whisper_server(&model_path, &command_path).await?;
+    let server =
+        get_or_start_whisper_server(&model_path, &command_path, &req.accelerator, &req.profile)
+            .await?;
+    let timeout = local_inference_timeout(&req.wav_bytes);
     let form = server_request_form(&req)?;
     let url = format!("http://127.0.0.1:{}/inference", server.port);
     let response = whisper_server_client()
         .post(&url)
         .multipart(form)
-        .timeout(Duration::from_secs(60))
+        .timeout(timeout)
         .send()
         .await
         .map_err(|e| LocalError::CommandFailed(format!("whisper-server request failed: {e}")))?;
@@ -571,7 +1100,62 @@ async fn run_whisper_server(req: OwnedLocalRequest) -> Result<TranscriptionResul
         return Err(LocalError::EmptyTranscript);
     }
 
-    Ok(TranscriptionResult { text })
+    Ok(TranscriptionResult {
+        text,
+        backend: "whisper_server".into(),
+    })
+}
+
+pub(crate) async fn preload_with_whisper_backend(
+    engine: &str,
+    model_path: Option<&str>,
+    command_path: Option<&str>,
+) -> Result<bool, LocalError> {
+    let model = LocalSttModelSpec {
+        engine: engine.to_owned(),
+        model_id: None,
+        model_path: model_path.map(str::to_owned),
+        command_path: command_path.map(str::to_owned),
+        accelerator: local_stt_accelerator(),
+        profile: local_stt_profile(),
+        idle_unload_after_ms: local_stt_idle_unload_after_ms_for_engine(engine),
+    };
+    preload_with_whisper_backend_model(&model).await
+}
+
+pub(crate) async fn preload_with_whisper_backend_model(
+    model: &LocalSttModelSpec,
+) -> Result<bool, LocalError> {
+    if !is_supported_engine(&model.engine) {
+        return Err(LocalError::UnsupportedEngine {
+            engine: model.engine.clone(),
+        });
+    }
+    let model_path = ensure_existing_file(
+        model
+            .model_path
+            .as_deref()
+            .ok_or(LocalError::MissingModelPath)?,
+        LocalError::MissingModelPath,
+    )?;
+    let command_path = ensure_existing_file(
+        model
+            .command_path
+            .as_deref()
+            .ok_or(LocalError::MissingCommandPath)?,
+        LocalError::MissingCommandPath,
+    )?;
+    if !whisper_server_executable(&command_path).is_file() {
+        return Ok(false);
+    }
+    get_or_start_whisper_server(
+        &model_path,
+        &command_path,
+        &model.accelerator,
+        &model.profile,
+    )
+    .await?;
+    Ok(true)
 }
 
 fn run_whisper_cpp(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalError> {
@@ -604,11 +1188,11 @@ fn run_whisper_cpp(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalE
         .arg("-nt")
         .arg("-np")
         .arg("-t")
-        .arg(local_whisper_threads().to_string())
-        .arg("-bo")
-        .arg("1")
-        .arg("-bs")
-        .arg("1");
+        .arg(local_whisper_threads().to_string());
+
+    apply_whisper_quality_args_blocking(&mut command, &req.profile);
+    apply_whisper_accelerator_args_blocking(&mut command, &req.accelerator);
+    apply_whisper_vad_args_blocking(&mut command, &command_path);
 
     if let Some(language) = whisper_language_arg(&req.language) {
         command.arg("-l").arg(language);
@@ -616,7 +1200,6 @@ fn run_whisper_cpp(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalE
     if !req.prompt.trim().is_empty() {
         command.arg("--prompt").arg(req.prompt.trim());
     }
-    append_vad_args(&mut command, req.vad_model_path.as_deref());
 
     let output = command.output().map_err(|e| {
         cleanup_temp_outputs(&wav_path, &out_base);
@@ -635,16 +1218,43 @@ fn run_whisper_cpp(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalE
 
     let text = read_transcript(&output.stdout, &out_base)?;
     cleanup_temp_outputs(&wav_path, &out_base);
-    Ok(TranscriptionResult { text })
+    Ok(TranscriptionResult {
+        text,
+        backend: "whisper_cli".into(),
+    })
 }
 
-async fn transcribe_one(owned: OwnedLocalRequest) -> Result<TranscriptionResult, LocalError> {
+pub(crate) async fn transcribe_with_whisper_backend(
+    req: LocalRequest<'_>,
+) -> Result<TranscriptionResult, LocalError> {
+    transcribe_owned_with_whisper_backend(OwnedLocalRequest::from(req)).await
+}
+
+pub(crate) async fn transcribe_with_whisper_backend_model(
+    model: &LocalSttModelSpec,
+    wav_bytes: &[u8],
+    language: &str,
+    prompt: &str,
+) -> Result<TranscriptionResult, LocalError> {
+    transcribe_owned_with_whisper_backend(owned_request_from_model(
+        model, wav_bytes, language, prompt,
+    ))
+    .await
+}
+
+async fn transcribe_owned_with_whisper_backend(
+    owned: OwnedLocalRequest,
+) -> Result<TranscriptionResult, LocalError> {
+    if !is_supported_engine(&owned.engine) {
+        return Err(LocalError::UnsupportedEngine {
+            engine: owned.engine.clone(),
+        });
+    }
+
     let command_path = owned.command_path.clone();
-    if owned.vad_model_path.is_none() {
-        if let Some(command_path) = command_path {
-            if whisper_server_executable(Path::new(&command_path)).is_file() {
-                return run_whisper_server(owned).await;
-            }
+    if let Some(command_path) = command_path {
+        if whisper_server_executable(Path::new(&command_path)).is_file() {
+            return run_whisper_server(owned).await;
         }
     }
 
@@ -653,9 +1263,90 @@ async fn transcribe_one(owned: OwnedLocalRequest) -> Result<TranscriptionResult,
         .map_err(|e| LocalError::CommandFailed(format!("worker join failed: {e}")))?
 }
 
+pub(crate) async fn unload_whisper_backend() {
+    let mut pool = whisper_server_pool().lock().await;
+    pool.active = None;
+}
+
+pub async fn preload_server(
+    engine: &str,
+    model_path: Option<&str>,
+    command_path: Option<&str>,
+) -> Result<bool, LocalError> {
+    if model_path.is_none_or(|path| path.trim().is_empty()) {
+        return Err(LocalError::MissingModelPath);
+    }
+    if command_path.is_none_or(|path| path.trim().is_empty()) {
+        return Err(LocalError::MissingCommandPath);
+    }
+
+    let request = LocalSttRequest::Preload {
+        model: LocalSttModelSpec {
+            engine: engine.to_owned(),
+            model_id: None,
+            model_path: model_path.map(str::to_owned),
+            command_path: command_path.map(str::to_owned),
+            accelerator: local_stt_accelerator(),
+            profile: local_stt_profile(),
+            idle_unload_after_ms: local_stt_idle_unload_after_ms_for_engine(engine),
+        },
+    };
+
+    match send_sidecar_request(request).await {
+        Ok(LocalSttResponse::Status(status)) => Ok(status.warm),
+        Ok(other) => Err(LocalError::SidecarUnavailable(format!(
+            "unexpected preload response: {other:?}"
+        ))),
+        // Explicit debug escape hatch: managed product path must use the Kosmos-owned
+        // sidecar. Direct whisper-server/cli execution is available only when the
+        // developer opts in with KOSMOS_LOCAL_STT_ALLOW_DIRECT_FALLBACK=1.
+        Err(LocalError::SidecarUnavailable(_)) if direct_sidecar_fallback_allowed() => {
+            preload_with_whisper_backend(engine, model_path, command_path).await
+        }
+        Err(error) => Err(error),
+    }
+}
+
+pub async fn status() -> Result<LocalSttStatus, LocalError> {
+    match send_sidecar_request(LocalSttRequest::Status).await {
+        Ok(LocalSttResponse::Status(status)) => Ok(status),
+        Ok(other) => Err(LocalError::SidecarUnavailable(format!(
+            "unexpected status response: {other:?}"
+        ))),
+        Err(error) => Err(error),
+    }
+}
+
+pub async fn cancel_sidecar() -> Result<bool, LocalError> {
+    match send_sidecar_request(LocalSttRequest::Cancel {
+        target_request_id: None,
+    })
+    .await
+    {
+        Ok(LocalSttResponse::Ack(ack)) => Ok(ack.accepted),
+        Ok(other) => Err(LocalError::SidecarUnavailable(format!(
+            "unexpected cancel response: {other:?}"
+        ))),
+        Err(error) => Err(error),
+    }
+}
+
+pub async fn unload_sidecar() -> Result<bool, LocalError> {
+    match send_sidecar_request(LocalSttRequest::Unload).await {
+        Ok(LocalSttResponse::Status(status)) => Ok(!status.warm),
+        Ok(other) => Err(LocalError::SidecarUnavailable(format!(
+            "unexpected unload response: {other:?}"
+        ))),
+        Err(error) => Err(error),
+    }
+}
+
 pub async fn transcribe(req: LocalRequest<'_>) -> Result<TranscriptionResult, LocalError> {
     if let Some(text) = test_override_transcript() {
-        return Ok(TranscriptionResult { text });
+        return Ok(TranscriptionResult {
+            text,
+            backend: "test_override".into(),
+        });
     }
 
     if !is_supported_engine(req.engine) {
@@ -663,36 +1354,96 @@ pub async fn transcribe(req: LocalRequest<'_>) -> Result<TranscriptionResult, Lo
             engine: req.engine.to_owned(),
         });
     }
+    if req.model_path.is_none_or(|path| path.trim().is_empty()) {
+        return Err(LocalError::MissingModelPath);
+    }
+    if req.command_path.is_none_or(|path| path.trim().is_empty()) {
+        return Err(LocalError::MissingCommandPath);
+    }
 
     let owned = OwnedLocalRequest::from(req);
-    let chunks = super::groq::split_wav_for_transcription(&owned.wav_bytes);
-    if chunks.len() <= 1 {
-        return transcribe_one(owned).await;
-    }
+    let request = LocalSttRequest::Transcribe {
+        model: model_spec_from_owned(&owned),
+        wav_base64: base64::engine::general_purpose::STANDARD.encode(&owned.wav_bytes),
+        language: owned.language.clone(),
+        prompt: owned.prompt.clone(),
+    };
 
-    let mut parts = Vec::with_capacity(chunks.len());
-    for chunk in chunks {
-        let mut chunk_req = owned.clone();
-        chunk_req.wav_bytes = chunk;
-        let part = transcribe_one(chunk_req).await?;
-        let trimmed = part.text.trim();
-        if !trimmed.is_empty() {
-            parts.push(trimmed.to_owned());
+    match send_sidecar_request(request).await {
+        Ok(LocalSttResponse::Transcription(transcription)) => Ok(TranscriptionResult {
+            text: transcription.text,
+            backend: transcription.backend,
+        }),
+        Ok(other) => Err(LocalError::SidecarUnavailable(format!(
+            "unexpected transcribe response: {other:?}"
+        ))),
+        // Explicit debug escape hatch: managed product path must use the Kosmos-owned
+        // sidecar. Direct whisper-server/cli execution is available only when the
+        // developer opts in with KOSMOS_LOCAL_STT_ALLOW_DIRECT_FALLBACK=1.
+        Err(LocalError::SidecarUnavailable(_)) if direct_sidecar_fallback_allowed() => {
+            transcribe_with_whisper_backend(LocalRequest {
+                wav_bytes: &owned.wav_bytes,
+                language: &owned.language,
+                prompt: &owned.prompt,
+                engine: &owned.engine,
+                model_id: owned.model_id.as_deref(),
+                model_path: owned.model_path.as_deref(),
+                command_path: owned.command_path.as_deref(),
+            })
+            .await
         }
+        Err(error) => Err(error),
     }
-
-    Ok(TranscriptionResult {
-        text: parts.join(" ").trim().to_owned(),
-    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    static ENV_LOCAL_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    #[test]
+    fn sidecar_candidates_include_packaged_windows_name() {
+        let candidates =
+            local_stt_sidecar_candidate_paths(Path::new(r"C:\Kosmos\resources\Kosmos Runtime.exe"));
+        let rendered = candidates
+            .iter()
+            .map(|path| path.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+
+        assert!(rendered
+            .iter()
+            .any(|path| path.ends_with("kosmos-local-stt.exe")));
+        if cfg!(windows) {
+            assert!(rendered
+                .iter()
+                .any(|path| path.ends_with("Kosmos Local STT.exe")));
+        }
+    }
+
+    fn install_test_sidecar_mock(mock: Option<TestSidecarMock>) {
+        let guard = match test_sidecar_mock_state().lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let mut guard = guard;
+        *guard = mock;
+    }
+
+    fn recorded_test_sidecar_ops() -> Vec<String> {
+        let guard = match test_sidecar_mock_state().lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        guard
+            .as_ref()
+            .map(|mock| mock.seen_ops.clone())
+            .unwrap_or_default()
+    }
+
     #[tokio::test]
     async fn local_override_is_available_in_unit_tests() {
-        let _guard = TEST_ENV_LOCK.lock().await;
+        let _guard = ENV_LOCAL_LOCK.lock().await;
         env::remove_var("KOSMOS_TEST_MODE");
         env::remove_var("KOSMOS_HEADLESS");
         env::set_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT", "local transcript");
@@ -705,11 +1456,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn whisper_cpp_default_idle_unloads_after_timeout() {
+        let _guard = ENV_LOCAL_LOCK.lock().await;
+        env::remove_var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS");
+
+        assert_eq!(
+            local_stt_idle_unload_after_ms_for_engine(DEFAULT_LOCAL_ENGINE),
+            Some(5 * 60 * 1000)
+        );
+
+        env::set_var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS", "1234");
+        assert_eq!(
+            local_stt_idle_unload_after_ms_for_engine(DEFAULT_LOCAL_ENGINE),
+            Some(1234)
+        );
+        env::remove_var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS");
+    }
+
+    #[tokio::test]
     async fn local_transcribe_errors_without_model_path() {
-        let _guard = TEST_ENV_LOCK.lock().await;
-        env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
-        env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
-        let err = transcribe(LocalRequest {
+        let err = transcribe_with_whisper_backend(LocalRequest {
             wav_bytes: b"wav",
             language: "ru",
             prompt: "",
@@ -717,13 +1483,66 @@ mod tests {
             model_id: Some("whisper-base"),
             model_path: None,
             command_path: Some("C:/tools/whisper-cli.exe"),
-            vad_model_path: None,
         })
         .await
         .unwrap_err();
         assert!(matches!(err, LocalError::MissingModelPath));
-        env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
-        env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
+    }
+
+    fn fake_wav(sample_rate: u32, channels: u16, bits: u16, data_len: usize) -> Vec<u8> {
+        let mut wav = vec![0u8; 44 + data_len];
+        wav[22..24].copy_from_slice(&channels.to_le_bytes());
+        wav[24..28].copy_from_slice(&sample_rate.to_le_bytes());
+        wav[34..36].copy_from_slice(&bits.to_le_bytes());
+        wav
+    }
+
+    #[test]
+    fn wav_duration_secs_reads_header() {
+        // 16kHz mono 16-bit, 2 секунды = 16000 * 2 * 2 = 64000 байт данных.
+        let wav = fake_wav(16000, 1, 16, 64000);
+        assert!((wav_duration_secs(&wav) - 2.0).abs() < 1e-6);
+        // Слишком короткий буфер не паникует.
+        assert_eq!(wav_duration_secs(b"short"), 0.0);
+    }
+
+    #[test]
+    fn local_inference_timeout_scales_with_duration() {
+        // Короткое аудио — не ниже минимума 60с.
+        let short = fake_wav(16000, 1, 16, 16000); // 0.5с
+        assert_eq!(local_inference_timeout(&short), Duration::from_secs(60));
+        // Минута аудио → база 30 + 60*8 = 510с (> старых 60с, которые баговали).
+        let minute = fake_wav(16000, 1, 16, 16000 * 2 * 60);
+        assert_eq!(local_inference_timeout(&minute), Duration::from_secs(510));
+    }
+
+    #[tokio::test]
+    async fn server_ready_timeout_is_configurable_and_clamped() {
+        let _guard = ENV_LOCAL_LOCK.lock().await;
+        env::remove_var("KOSMOS_LOCAL_STT_SERVER_READY_TIMEOUT_MS");
+        assert_eq!(
+            local_stt_server_ready_timeout(),
+            Duration::from_millis(30_000)
+        );
+
+        env::set_var("KOSMOS_LOCAL_STT_SERVER_READY_TIMEOUT_MS", "25000");
+        assert_eq!(
+            local_stt_server_ready_timeout(),
+            Duration::from_millis(25_000)
+        );
+
+        env::set_var("KOSMOS_LOCAL_STT_SERVER_READY_TIMEOUT_MS", "1");
+        assert_eq!(
+            local_stt_server_ready_timeout(),
+            Duration::from_millis(1_000)
+        );
+
+        env::set_var("KOSMOS_LOCAL_STT_SERVER_READY_TIMEOUT_MS", "999999");
+        assert_eq!(
+            local_stt_server_ready_timeout(),
+            Duration::from_millis(300_000)
+        );
+        env::remove_var("KOSMOS_LOCAL_STT_SERVER_READY_TIMEOUT_MS");
     }
 
     #[test]
@@ -732,15 +1551,11 @@ mod tests {
             strip_whisper_timestamps("[00:00:00.000 --> 00:00:01.280]   Алло, алло, привет.\n"),
             "Алло, алло, привет."
         );
-    }
-
-    #[test]
-    fn strip_whisper_timestamps_joins_segments_with_spaces() {
         assert_eq!(
             strip_whisper_timestamps(
-                "[00:00:00.000 --> 00:00:01.280]   Первая фраза.\n[00:00:01.280 --> 00:00:02.560]   Вторая фраза.",
+                "[00:00:00.000 --> 00:00:01.280] first chunk\n[00:00:30.000 --> 00:00:31.000] second chunk"
             ),
-            "Первая фраза. Вторая фраза."
+            "first chunk second chunk"
         );
     }
 
@@ -786,37 +1601,17 @@ mod tests {
     }
 
     #[test]
-    fn parse_server_text_joins_json_segments_with_spaces() {
-        let text = parse_server_text(
-            r#"{"segments":[{"text":"первая часть"},{"text":"вторая часть"}]}"#,
-            Some("application/json"),
-        )
-        .expect("json transcript");
-        assert_eq!(text, "первая часть вторая часть");
-    }
-
-    #[test]
-    fn append_vad_args_enables_silero_vad_for_cli() {
-        let mut command = Command::new("whisper-cli");
-        append_vad_args(&mut command, Some("C:/models/ggml-silero-v6.2.0.bin"));
-        let debug = format!("{command:?}");
-
-        assert!(debug.contains("--vad"));
-        assert!(debug.contains("ggml-silero-v6.2.0.bin"));
-        assert!(debug.contains("-vmsd"));
-        assert!(debug.contains("30"));
-    }
-
-    #[test]
     fn server_request_form_includes_expected_fields() {
         let req = OwnedLocalRequest {
             wav_bytes: b"wav".to_vec(),
             language: "ru".into(),
             prompt: "term".into(),
+            engine: DEFAULT_LOCAL_ENGINE.into(),
             model_id: None,
             model_path: Some("C:/models/ggml-base.bin".into()),
             command_path: Some("C:/tools/whisper-cli.exe".into()),
-            vad_model_path: Some("C:/models/ggml-silero-v6.2.0.bin".into()),
+            accelerator: LocalSttAccelerator::Auto,
+            profile: LocalSttProfile::Fast,
         };
 
         let form = server_request_form(&req).expect("form");
@@ -825,5 +1620,205 @@ mod tests {
         assert!(debug.contains("response_format"));
         assert!(debug.contains("language"));
         assert!(debug.contains("prompt"));
+    }
+
+    #[tokio::test]
+    async fn preload_server_returns_false_without_server_binary() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let model = tmp.path().join("model.bin");
+        let command = tmp.path().join("whisper-cli.exe");
+        fs::write(&model, b"model").expect("model");
+        fs::write(&command, b"exe").expect("command");
+
+        let warmed =
+            preload_with_whisper_backend(DEFAULT_LOCAL_ENGINE, model.to_str(), command.to_str())
+                .await
+                .expect("preload");
+
+        assert!(!warmed);
+    }
+
+    #[tokio::test]
+    async fn preload_server_rejects_unsupported_engine() {
+        let err = preload_with_whisper_backend("other", None, None)
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, LocalError::UnsupportedEngine { .. }));
+    }
+
+    #[tokio::test]
+    async fn preload_server_prefers_mocked_sidecar() {
+        let _guard = ENV_LOCAL_LOCK.lock().await;
+        install_test_sidecar_mock(Some(TestSidecarMock {
+            transcript: None,
+            fail_error: None,
+            sidecar_unavailable_remaining: 0,
+            seen_ops: Vec::new(),
+        }));
+
+        let warmed = preload_server(
+            DEFAULT_LOCAL_ENGINE,
+            Some("Z:/missing/model.bin"),
+            Some("Z:/missing/whisper-cli.exe"),
+        )
+        .await
+        .expect("preload through sidecar");
+
+        assert!(warmed);
+        assert_eq!(recorded_test_sidecar_ops(), vec!["preload"]);
+        install_test_sidecar_mock(None);
+        clear_test_sidecar_pool_for_host().await;
+    }
+
+    #[test]
+    fn whisper_profile_and_accelerator_args_map_to_backend_flags() {
+        let mut fast = Command::new("whisper-cli");
+        apply_whisper_quality_args_blocking(&mut fast, &LocalSttProfile::Fast);
+        let fast_args = fast
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(fast_args, vec!["-bo", "1", "-bs", "1"]);
+
+        let mut accurate = Command::new("whisper-cli");
+        apply_whisper_quality_args_blocking(&mut accurate, &LocalSttProfile::Accurate);
+        let accurate_args = accurate
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(accurate_args, vec!["-bo", "5", "-bs", "5"]);
+
+        let mut cpu = Command::new("whisper-cli");
+        apply_whisper_accelerator_args_blocking(&mut cpu, &LocalSttAccelerator::Cpu);
+        let cpu_args = cpu
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(cpu_args, vec!["-ng"]);
+
+        let mut gpu = Command::new("whisper-cli");
+        apply_whisper_accelerator_args_blocking(&mut gpu, &LocalSttAccelerator::Gpu);
+        assert!(gpu.get_args().next().is_none());
+    }
+
+    #[test]
+    fn whisper_vad_args_are_added_when_vad_model_exists_next_to_command() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let command_path = tmp.path().join("whisper-cli.exe");
+        let vad_path = tmp.path().join("ggml-silero-v6.2.0.bin");
+        fs::write(&command_path, b"exe").expect("command");
+        fs::write(&vad_path, b"vad").expect("vad");
+
+        let mut command = Command::new("whisper-cli");
+        apply_whisper_vad_args_blocking(&mut command, &command_path);
+
+        let args = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            args,
+            vec![
+                "--vad".to_owned(),
+                "-vm".to_owned(),
+                vad_path.to_string_lossy().into_owned()
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn transcribe_prefers_mocked_sidecar_over_direct_whisper_binaries() {
+        let _guard = ENV_LOCAL_LOCK.lock().await;
+        env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
+        env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
+        install_test_sidecar_mock(Some(TestSidecarMock {
+            transcript: Some("sidecar transcript".into()),
+            fail_error: None,
+            sidecar_unavailable_remaining: 0,
+            seen_ops: Vec::new(),
+        }));
+
+        let result = transcribe(LocalRequest {
+            wav_bytes: b"wav",
+            language: "ru",
+            prompt: "",
+            engine: DEFAULT_LOCAL_ENGINE,
+            model_id: Some("small"),
+            model_path: Some("Z:/missing/model.bin"),
+            command_path: Some("Z:/missing/whisper-cli.exe"),
+        })
+        .await
+        .expect("sidecar transcript");
+
+        assert_eq!(result.text, "sidecar transcript");
+        assert_eq!(recorded_test_sidecar_ops(), vec!["transcribe"]);
+        install_test_sidecar_mock(None);
+    }
+
+    #[tokio::test]
+    async fn transcribe_retries_once_after_sidecar_unavailable() {
+        let _guard = ENV_LOCAL_LOCK.lock().await;
+        env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
+        env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
+        install_test_sidecar_mock(Some(TestSidecarMock {
+            transcript: Some("recovered transcript".into()),
+            fail_error: None,
+            sidecar_unavailable_remaining: 1,
+            seen_ops: Vec::new(),
+        }));
+
+        let result = transcribe(LocalRequest {
+            wav_bytes: b"wav",
+            language: "ru",
+            prompt: "",
+            engine: DEFAULT_LOCAL_ENGINE,
+            model_id: Some("small"),
+            model_path: Some("Z:/missing/model.bin"),
+            command_path: Some("Z:/missing/whisper-cli.exe"),
+        })
+        .await
+        .expect("recovered transcript");
+
+        assert_eq!(result.text, "recovered transcript");
+        assert_eq!(
+            recorded_test_sidecar_ops(),
+            vec!["transcribe", "transcribe"]
+        );
+        install_test_sidecar_mock(None);
+    }
+
+    #[tokio::test]
+    async fn test_override_transcript_bypasses_sidecar_requests() {
+        let _guard = ENV_LOCAL_LOCK.lock().await;
+        env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
+        env::set_var(
+            "KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT",
+            "override transcript",
+        );
+        install_test_sidecar_mock(Some(TestSidecarMock {
+            transcript: None,
+            fail_error: Some("sidecar should not be called".into()),
+            sidecar_unavailable_remaining: 0,
+            seen_ops: Vec::new(),
+        }));
+
+        let result = transcribe(LocalRequest {
+            wav_bytes: b"wav",
+            language: "ru",
+            prompt: "",
+            engine: DEFAULT_LOCAL_ENGINE,
+            model_id: Some("small"),
+            model_path: Some("Z:/missing/model.bin"),
+            command_path: Some("Z:/missing/whisper-cli.exe"),
+        })
+        .await
+        .expect("override transcript");
+
+        assert_eq!(result.text, "override transcript");
+        assert!(recorded_test_sidecar_ops().is_empty());
+
+        install_test_sidecar_mock(None);
+        env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
     }
 }
