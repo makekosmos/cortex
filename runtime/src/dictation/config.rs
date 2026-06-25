@@ -5,6 +5,7 @@
 // если установлен, иначе `%APPDATA%\Kosmos`. Шаблон из arrancador/config.rs.
 
 use serde::{Deserialize, Serialize};
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 /// Keyring service name (общий для всего Kepler) + key для Groq API ключа.
@@ -143,9 +144,27 @@ pub fn load() -> DictationConfig {
 }
 
 pub fn load_from(path: &Path) -> DictationConfig {
-    match std::fs::read_to_string(path) {
-        Ok(text) => serde_json::from_str(&text).unwrap_or_default(),
-        Err(_) => DictationConfig::default(),
+    if matches!(std::fs::metadata(path), Err(e) if e.kind() == std::io::ErrorKind::NotFound) {
+        return DictationConfig::default();
+    }
+    match read_config_file(path) {
+        Ok(cfg) => cfg,
+        Err(primary_err) => match read_config_file(&backup_path(path)) {
+            Ok(cfg) => {
+                eprintln!(
+                    "[dictation] WARN config load failed for {} ({primary_err}); restored backup",
+                    path.display()
+                );
+                cfg
+            }
+            Err(backup_err) => {
+                eprintln!(
+                    "[dictation] WARN config load failed for {} ({primary_err}); backup failed ({backup_err}); using defaults",
+                    path.display()
+                );
+                DictationConfig::default()
+            }
+        },
     }
 }
 
@@ -158,7 +177,42 @@ pub fn save_to(path: &Path, cfg: &DictationConfig) -> std::io::Result<()> {
         std::fs::create_dir_all(parent)?;
     }
     let text = serde_json::to_string_pretty(cfg).map_err(std::io::Error::other)?;
-    std::fs::write(path, text)
+    // См. postmortems.md § 2026-06-23.
+    write_atomic(path, text.as_bytes())?;
+    if let Err(e) = write_atomic(&backup_path(path), text.as_bytes()) {
+        eprintln!("[dictation] WARN config backup save failed: {e}");
+    }
+    Ok(())
+}
+
+fn read_config_file(path: &Path) -> Result<DictationConfig, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&text).map_err(|e| e.to_string())
+}
+
+fn backup_path(path: &Path) -> PathBuf {
+    path.with_extension(format!(
+        "{}.bak",
+        path.extension().and_then(|s| s.to_str()).unwrap_or("json")
+    ))
+}
+
+fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let temp_name = format!(
+        ".{}.tmp.{}",
+        path.file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("dictation-config.json"),
+        std::process::id()
+    );
+    let temp_path = parent.join(temp_name);
+    {
+        let mut f = std::fs::File::create(&temp_path)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+    }
+    std::fs::rename(temp_path, path)
 }
 
 // ---------------------------------------------------------------------------
@@ -312,6 +366,34 @@ mod tests {
     }
 
     #[test]
+    fn load_uses_backup_when_primary_is_malformed() {
+        // Regression: 2026-06-23. Partial JSON writes must not reset all settings.
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("cfg.json");
+        let mut cfg = DictationConfig::default();
+        cfg.hotkey = "Super+H".into();
+        cfg.provider = "local".into();
+        cfg.model = "whisper-large-v3-turbo".into();
+        cfg.inject_mode = InjectMode::ClipboardOnly;
+        save_to(&path, &cfg).expect("save");
+        std::fs::write(&path, "{truncated").expect("corrupt primary");
+
+        let loaded = load_from(&path);
+        assert_eq!(loaded.hotkey, "Super+H");
+        assert_eq!(loaded.provider, "local");
+        assert_eq!(loaded.model, "whisper-large-v3-turbo");
+        assert_eq!(loaded.inject_mode, InjectMode::ClipboardOnly);
+    }
+
+    #[test]
+    fn save_writes_backup_copy() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("cfg.json");
+        save_to(&path, &DictationConfig::default()).expect("save");
+        assert!(backup_path(&path).exists());
+    }
+
+    #[test]
     fn custom_doh_roundtrip() {
         let tmp = TempDir::new().expect("tempdir");
         let path = tmp.path().join("cfg.json");
@@ -323,9 +405,11 @@ mod tests {
         };
         save_to(&path, &cfg).expect("save");
         let loaded = load_from(&path);
-        assert!(matches!(
-            loaded.network_profile,
-            NetworkProfile::CustomDoh { ref url } if url.contains("comss")
-        ));
+        match loaded.network_profile {
+            NetworkProfile::CustomDoh { url } => {
+                assert!(url.contains("comss"));
+            }
+            other => panic!("expected CustomDoh, got {other:?}"),
+        }
     }
 }

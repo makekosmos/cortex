@@ -12,10 +12,6 @@ path = "src/lib.rs"
 name = "kepler-backend"
 path = "src/main.rs"
 
-[[bin]]
-name = "kosmos-local-stt"
-path = "src/bin/kosmos-local-stt.rs"
-
 [dependencies]
 ark-core = { path = "../../core/ark/crates/ark-core/rust" }
 rusqlite.workspace = true
@@ -78,7 +74,6 @@ arboard = "3"
 keyring = { version = "3", features = ["windows-native", "apple-native"] }
 hickory-resolver = { version = "0.24", features = ["dns-over-https-rustls"] }
 base64 = "0.22"
-libloading = "0.8"
 # Phase 4 bug-detection: structured logging.
 # tracing = фасад; subscriber = JSON exporter + env-filter; appender =
 # rolling daily file под `<data_dir>/logs/<slot>/`.
