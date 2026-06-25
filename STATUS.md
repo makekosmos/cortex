@@ -1,13 +1,27 @@
-# Kosmos — статус проекта (2026-06-18)
+# Kosmos — статус проекта (2026-06-25)
 
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
-| Kosmos Desktop (win / mac) | 0.6.10 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.11 / 0.5.1 |
 | Eden                       | 0.3.0          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
 | Arrancador                 | 0.1.4          |
 | Akasha                     | 0.1.2          |
+
+## 2026-06-25 — Dictation speed and flat shell release (Kosmos Desktop 0.6.10 → 0.6.11)
+
+Patch-релиз закрепляет восстановленный runtime диктовки и визуальные правки shell после desloppify-регрессии.
+
+- **Локальная диктовка**: Windows-путь снова держит быстрый whisper.cpp/Vulkan runtime, добавляет sidecar/DLL fallback и не склеивает 30-секундные сегменты через новые абзацы.
+- **Настройки диктовки**: модель поднята выше, вставка зафиксирована как auto-paste, локальная модель показывает конкретное имя, dropdown'ы растягиваются как обычные controls.
+- **Плоский shell**: Mica/backdrop выключены глобально, launcher/settings/sidebar используют тот же базовый фон, что Eden, без прозрачного `--main-background-color`.
+- **Запись голоса**: добавлен ducking системного звука при записи, чтобы фоновые приложения можно было приглушать во время диктовки.
+
+Checks: `bun run --cwd platform/desktop typecheck`, `bun test
+platform/desktop/electron/window-effects.test.ts`, `cargo check -p
+kepler-backend`, `cargo test -p kepler-backend
+strip_whisper_timestamps_removes_segment_prefixes`.
 
 ## 2026-06-25 — Restored dictation mainline release (Kosmos Desktop 0.6.9 → 0.6.10)
 
