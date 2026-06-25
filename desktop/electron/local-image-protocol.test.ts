@@ -14,4 +14,5 @@ test("parseLocalImageRequestUrl rejects non-local or relative URLs", () => {
   expect(parseLocalImageRequestUrl("kosmos-local-image://other/%2Ftmp%2Fx.png")).toBeNull();
   expect(parseLocalImageRequestUrl("file:///tmp/x.png")).toBeNull();
   expect(parseLocalImageRequestUrl("../images/x.png")).toBeNull();
+  expect(parseLocalImageRequestUrl(localImageUrl("C:\\vault\\notes\\draft.md"))).toBeNull();
 });

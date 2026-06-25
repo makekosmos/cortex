@@ -19,10 +19,17 @@ export interface NotifyOptions {
   urgency?: "low" | "normal" | "critical";
 }
 
-let lastNotification: Notification | null = null;
+const liveNotifications = new Set<Notification>();
 
 function isHeadless(): boolean {
   return process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
+}
+
+function retainNotification(notification: Notification): void {
+  liveNotifications.add(notification);
+  const release = () => liveNotifications.delete(notification);
+  notification.once("close", release);
+  notification.once("failed", release);
 }
 
 /**
@@ -53,15 +60,10 @@ export function notify(opts: NotifyOptions): boolean {
     // Держим ссылку чтобы GC не закрыл toast до того как OS его покажет.
     // Один live ref достаточен — OS буферизует toast'ы независимо от
     // JS-объекта после show().
-    lastNotification = n;
+    retainNotification(n);
     return true;
   } catch (e) {
     console.error("[system-notifications] notify failed:", e);
     return false;
   }
-}
-
-/** Test helper: даёт e2e проверить, что main process инициировал бы toast. */
-export function __getLastNotificationForTest(): Notification | null {
-  return lastNotification;
 }

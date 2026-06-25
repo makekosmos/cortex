@@ -189,7 +189,3 @@ export function openMyCosmosWindow(): void {
     });
   }
 }
-
-export function isMyCosmosOpen(): boolean {
-  return !!myCosmosWin && !myCosmosWin.isDestroyed();
-}

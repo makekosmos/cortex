@@ -14,6 +14,7 @@ import {
   backgroundMaterialOption,
   resolveWindowMaterial,
 } from "./window-effects";
+import { isHeadlessOrTest } from "./extension-manifest";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,10 +23,6 @@ const WINDOW_WIDTH = 520;
 const WINDOW_HEIGHT = 480;
 
 let installWindow: BrowserWindow | null = null;
-
-function isHeadlessOrTest(): boolean {
-  return process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
-}
 
 export function openInstallExtensionWindow(sourcePath: string): void {
   if (installWindow && !installWindow.isDestroyed()) {

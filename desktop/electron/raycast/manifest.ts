@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-export type RaycastCommandMode = "view" | "no-view" | "menu-bar";
+type RaycastCommandMode = "view" | "no-view" | "menu-bar";
 
-export interface RaycastPreference {
+interface RaycastPreference {
   name: string;
   title?: string;
   type?: string;
@@ -11,7 +11,7 @@ export interface RaycastPreference {
   default?: unknown;
 }
 
-export interface RaycastCommandManifest {
+interface RaycastCommandManifest {
   name: string;
   title: string;
   subtitle?: string;
@@ -23,11 +23,11 @@ export interface RaycastCommandManifest {
   arguments?: Array<Record<string, unknown>>;
 }
 
-export interface RaycastKosmosCommandConfig {
+interface RaycastKosmosCommandConfig {
   entry?: string;
 }
 
-export interface RaycastKosmosConfig {
+interface RaycastKosmosConfig {
   permissions?: string[];
   windowEffect?: "acrylic" | "mica" | "none";
   minKosmosApiVersion?: string;

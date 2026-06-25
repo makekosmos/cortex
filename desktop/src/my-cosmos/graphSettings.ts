@@ -30,13 +30,40 @@ export const DEFAULT_GRAPH_SETTINGS: GraphSettings = {
 
 const LS_KEY = "kosmos.myCosmos.graphSettings";
 
+function mergeGraphSettings(value: unknown): GraphSettings {
+  const next = { ...DEFAULT_GRAPH_SETTINGS };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return next;
+  const parsed = value as Record<string, unknown>;
+
+  for (const key of [
+    "gravity",
+    "repulsion",
+    "linkDistance",
+    "friction",
+    "pointSizeScale",
+    "linkOpacity",
+    "gap",
+  ] as const) {
+    if (typeof parsed[key] === "number" && Number.isFinite(parsed[key])) {
+      next[key] = parsed[key];
+    }
+  }
+
+  for (const key of ["curvedLinks", "highlightNeighbors", "frozen", "antiOverlap"] as const) {
+    if (typeof parsed[key] === "boolean") {
+      next[key] = parsed[key];
+    }
+  }
+
+  return next;
+}
+
 export function loadGraphSettings(): GraphSettings {
   try {
     if (typeof localStorage === "undefined") return { ...DEFAULT_GRAPH_SETTINGS };
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return { ...DEFAULT_GRAPH_SETTINGS };
-    const parsed = JSON.parse(raw) as Partial<GraphSettings>;
-    return { ...DEFAULT_GRAPH_SETTINGS, ...parsed };
+    return mergeGraphSettings(JSON.parse(raw));
   } catch {
     return { ...DEFAULT_GRAPH_SETTINGS };
   }

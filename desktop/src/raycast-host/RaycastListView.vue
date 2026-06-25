@@ -17,7 +17,7 @@ import {
   listSelectionCallbackNode,
   listSections,
   matchesItem,
-} from "./model";
+} from "./model-list";
 
 const props = defineProps<{
   root: RaycastSnapshotNode;

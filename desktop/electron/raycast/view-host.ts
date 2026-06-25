@@ -1,8 +1,10 @@
-import { BrowserWindow, ipcMain, screen, clipboard, dialog, shell } from "electron";
+import { BrowserWindow, ipcMain, screen, clipboard, dialog } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { extensionUserDataDir } from "../extension-host";
+import { isHeadless, isHeadlessOrTest } from "../extension-manifest";
 import { runRaycastViewCommand, type RaycastCommandLaunchProps } from "./command-runner";
+import { handleRaycastAction } from "./view-actions";
 import { normalizeRaycastNode, type RaycastViewCallbackRegistry } from "./view-model";
 import type { ExtensionSource } from "../extension-permissions";
 import type {
@@ -40,25 +42,6 @@ function sendFeedback(
   win.webContents.send("kepler:raycast:feedback", { sessionId, event });
 }
 
-function actionStringProp(props: Record<string, unknown>, ...keys: string[]): string | null {
-  for (const key of keys) {
-    const value = props[key];
-    if (typeof value === "string" && value.trim().length > 0) return value;
-  }
-  return null;
-}
-
-function actionPathTargets(props: Record<string, unknown>): string[] {
-  const paths = props.paths;
-  if (Array.isArray(paths)) {
-    return paths.filter(
-      (item): item is string => typeof item === "string" && item.trim().length > 0,
-    );
-  }
-  const single = actionStringProp(props, "path", "target");
-  return single ? [single] : [];
-}
-
 function sessionWindowFromSender(
   sessionId: string,
   sender: Electron.WebContents,
@@ -66,10 +49,6 @@ function sessionWindowFromSender(
   const sessionWindow = windows.get(sessionId);
   if (!sessionWindow || BrowserWindow.fromWebContents(sender) !== sessionWindow) return null;
   return sessionWindow;
-}
-
-function isHeadlessOrTest(): boolean {
-  return process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
 }
 
 function loadRaycastHost(
@@ -85,15 +64,6 @@ function loadRaycastHost(
     void win.loadFile(path.join(__dirname, "../dist/index.html"), {
       hash,
     });
-  }
-}
-
-function loadLauncherRoot(win: BrowserWindow): void {
-  const devUrl = process.env.VITE_DEV_SERVER_URL;
-  if (devUrl) {
-    void win.loadURL(devUrl);
-  } else {
-    void win.loadFile(path.join(__dirname, "../dist/index.html"));
   }
 }
 
@@ -215,7 +185,7 @@ export async function openRaycastViewCommand(options: {
     x: Math.round((display.width - RAYCAST_HOST_WIDTH) / 2),
     y: Math.round((display.height - RAYCAST_HOST_HEIGHT) / 2),
     show: !isHeadlessOrTest(),
-    skipTaskbar: process.env.KOSMOS_HEADLESS === "1",
+    skipTaskbar: isHeadless(),
     title: `${options.extensionName} — ${options.commandTitle}`,
     backgroundColor: "#00000000",
     frame: true,
@@ -262,125 +232,7 @@ export async function openRaycastViewCommand(options: {
   loadRaycastHost(win, sessionId);
 }
 
-export async function openRaycastElementView(options: {
-  extensionId: string;
-  extensionName: string;
-  commandName: string;
-  commandTitle: string;
-  root: unknown;
-  hostWindow?: BrowserWindow | null;
-}): Promise<void> {
-  const sessionCallbacks = new Map<
-    string,
-    (payload?: Record<string, unknown>) => unknown | Promise<unknown>
-  >();
-  let nextCallbackId = 0;
-  const sessionId = `${options.extensionId}:${options.commandName}:${Date.now()}`;
-  const callbackRegistry: RaycastViewCallbackRegistry = {
-    register(callback) {
-      const id = `action:${nextCallbackId++}`;
-      sessionCallbacks.set(id, callback);
-      return id;
-    },
-  };
-  const root = normalizeRaycastNode(options.root, callbackRegistry);
-  if (!root) {
-    throw new Error(
-      `[kepler-shell] built-in Raycast command returned no UI: ${options.commandName}`,
-    );
-  }
-
-  const snapshot: RaycastSnapshot = {
-    sessionId,
-    extensionId: options.extensionId,
-    extensionName: options.extensionName,
-    commandName: options.commandName,
-    commandTitle: options.commandTitle,
-    root,
-    createdAt: new Date().toISOString(),
-  };
-  sessions.set(sessionId, snapshot);
-  callbacks.set(sessionId, sessionCallbacks);
-
-  const hosted = options.hostWindow && !options.hostWindow.isDestroyed();
-  const display = screen.getPrimaryDisplay().workAreaSize;
-  const win =
-    options.hostWindow && !options.hostWindow.isDestroyed()
-      ? options.hostWindow
-      : new BrowserWindow({
-          width: RAYCAST_HOST_WIDTH,
-          height: RAYCAST_HOST_HEIGHT,
-          minWidth: RAYCAST_HOST_MIN_WIDTH,
-          minHeight: RAYCAST_HOST_MIN_HEIGHT,
-          x: Math.round((display.width - RAYCAST_HOST_WIDTH) / 2),
-          y: Math.round((display.height - RAYCAST_HOST_HEIGHT) / 2),
-          show: !isHeadlessOrTest(),
-          skipTaskbar: process.env.KOSMOS_HEADLESS === "1",
-          title: `${options.extensionName} — ${options.commandTitle}`,
-          backgroundColor: "#00000000",
-          frame: true,
-          titleBarStyle: "hidden",
-          titleBarOverlay: {
-            color: "#00000000",
-            symbolColor: "#FFFFFF",
-            height: 36,
-          },
-          roundedCorners: true,
-          webPreferences: {
-            preload: path.join(__dirname, "preload.mjs"),
-            contextIsolation: true,
-            nodeIntegration: false,
-            backgroundThrottling: true,
-          },
-        });
-
-  if (hosted) {
-    const bounds = win.getBounds();
-    win.setBounds({
-      x: Math.round(bounds.x + (bounds.width - RAYCAST_HOST_WIDTH) / 2),
-      y: Math.round(bounds.y + (bounds.height - RAYCAST_HOST_HEIGHT) / 2),
-      width: RAYCAST_HOST_WIDTH,
-      height: RAYCAST_HOST_HEIGHT,
-    });
-    win.setTitle(`${options.extensionName} — ${options.commandTitle}`);
-  }
-
-  try {
-    win.setBackgroundMaterial("acrylic");
-  } catch {
-    /* best effort */
-  }
-
-  windows.set(sessionId, win);
-  const cleanup = () => {
-    windows.delete(sessionId);
-    sessions.delete(sessionId);
-    callbacks.delete(sessionId);
-  };
-  win.once("closed", cleanup);
-  if (hosted) {
-    win.once("hide", () => {
-      cleanup();
-      loadLauncherRoot(win);
-    });
-  }
-  if (!hosted) {
-    win.webContents.on("before-input-event", (event, input) => {
-      if (input.key === "F12" && !input.alt && !input.control && !input.shift && !input.meta) {
-        event.preventDefault();
-        try {
-          win.webContents.toggleDevTools();
-        } catch {
-          /* webContents destroyed mid-flight */
-        }
-      }
-    });
-  }
-
-  loadRaycastHost(win, sessionId, "command-host");
-}
-
-export function getRaycastSnapshot(sessionId: string): RaycastSnapshot | null {
+function getRaycastSnapshot(sessionId: string): RaycastSnapshot | null {
   return sessions.get(sessionId) ?? null;
 }
 
@@ -431,89 +283,13 @@ ipcMain.handle(
     if (typeof callbackId === "string") {
       const callback = callbacks.get(sessionId)?.get(callbackId);
       if (!callback) return { ok: false, error: "callback_not_found" };
-      try {
-        await callback(action.payload);
-        return { ok: true };
-      } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : String(err) };
-      }
     }
 
-    if (action.type === "Action.CopyToClipboard") {
-      const content = action.props.content;
-      if (typeof content !== "string") return { ok: false, error: "missing_content" };
-      clipboard.writeText(content);
-      return { ok: true };
-    }
-
-    if (action.type === "Action.Paste") {
-      const content = action.props.content;
-      if (typeof content !== "string") return { ok: false, error: "missing_content" };
-      clipboard.writeText(content);
-      return { ok: true };
-    }
-
-    if (action.type === "Action.OpenInBrowser") {
-      const url = action.props.url;
-      if (typeof url !== "string") return { ok: false, error: "missing_url" };
-      await shell.openExternal(url);
-      return { ok: true };
-    }
-
-    if (action.type === "Action.Open") {
-      const target = action.props.target;
-      if (typeof target !== "string") return { ok: false, error: "missing_target" };
-      if (/^https?:\/\//i.test(target)) {
-        await shell.openExternal(target);
-        return { ok: true };
-      }
-
-      const error = await shell.openPath(target);
-      return error ? { ok: false, error } : { ok: true };
-    }
-
-    if (action.type === "Action.ShowInFinder") {
-      const target = actionStringProp(action.props, "path", "target");
-      if (!target) return { ok: false, error: "missing_path" };
-      shell.showItemInFolder(target);
-      return { ok: true };
-    }
-
-    if (action.type === "Action.Trash") {
-      const targets = actionPathTargets(action.props);
-      if (targets.length === 0) return { ok: false, error: "missing_path" };
-      for (const target of targets) await shell.trashItem(target);
-      return { ok: true };
-    }
-
-    if (action.type === "Action.LaunchCommand") {
-      const name = action.props.name;
-      if (typeof name !== "string") return { ok: false, error: "missing_name" };
-      const launcher = launchers.get(sessionId);
-      if (!launcher) return { ok: false, error: "launcher_not_configured" };
-      const extensionName =
-        typeof action.props.extensionName === "string" ? action.props.extensionName : undefined;
-      const fallbackText =
-        typeof action.props.fallbackText === "string" ? action.props.fallbackText : undefined;
-      const type =
-        typeof action.props.type === "string"
-          ? (action.props.type as LaunchCommandOptions["type"])
-          : undefined;
-      const args =
-        action.props.arguments && typeof action.props.arguments === "object"
-          ? (action.props.arguments as Record<string, unknown>)
-          : undefined;
-      await launcher({
-        name,
-        extensionName,
-        type,
-        arguments: args,
-        context: action.props.context,
-        fallbackText,
-      });
-      return { ok: true };
-    }
-
-    return { ok: false, error: "unsupported_action" };
+    return handleRaycastAction({
+      action,
+      callback:
+        typeof callbackId === "string" ? callbacks.get(sessionId)?.get(callbackId) : undefined,
+      launcher: launchers.get(sessionId),
+    });
   },
 );

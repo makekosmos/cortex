@@ -7,14 +7,12 @@
 
 import path from "node:path";
 import fs from "node:fs";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
 import { _electron as electron } from "playwright";
+import electronBinary from "electron";
 import { writeZip } from "../scripts/zip-utils.mjs";
 
-const require = createRequire(import.meta.url);
-const electronBinary = require("electron") as string;
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const e2eRoot = path.join(appRoot, ".e2e");
 
@@ -62,13 +60,28 @@ test.describe(".kext installer + backup", () => {
         ...process.env,
         NODE_ENV: "test",
         KEPLER_SKIP_SYNC: "1",
+        KOSMOS_HEADLESS: "1",
         KOSMOS_TEST_MODE: "1",
         KOSMOS_DATA_DIR: dataDir,
+        KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
       },
       timeout: 20_000,
     });
     try {
-      await new Promise((r) => setTimeout(r, 1500));
+      await expect
+        .poll(
+          () =>
+            app.evaluate(({ ipcMain }) => {
+              const handlers = (
+                ipcMain as unknown as {
+                  _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
+                }
+              )._invokeHandlers;
+              return handlers?.has?.("kepler:extension:install:do") === true;
+            }),
+          { timeout: 10_000 },
+        )
+        .toBe(true);
 
       // Install v1.
       const r1 = await app.evaluate(async ({ ipcMain }, kextPath) => {
@@ -79,7 +92,7 @@ test.describe(".kext installer + backup", () => {
         )._invokeHandlers;
         const h = handlers?.get?.("kepler:extension:install:do");
         if (!h) throw new Error("install handler missing");
-        return await h({} as never, kextPath);
+        return h({} as never, kextPath);
       }, kextV1);
       expect((r1 as { manifest: { version: string } }).manifest.version).toBe("1.0.0");
 
@@ -98,7 +111,7 @@ test.describe(".kext installer + backup", () => {
           }
         )._invokeHandlers;
         const h = handlers?.get?.("kepler:extension:install:do");
-        return await h({} as never, kextPath);
+        return h({} as never, kextPath);
       }, kextV2);
       expect((r2 as { manifest: { version: string } }).manifest.version).toBe("1.1.0");
 
@@ -150,13 +163,28 @@ test.describe(".kext installer + backup", () => {
         ...process.env,
         NODE_ENV: "test",
         KEPLER_SKIP_SYNC: "1",
+        KOSMOS_HEADLESS: "1",
         KOSMOS_TEST_MODE: "1",
         KOSMOS_DATA_DIR: isolatedData,
+        KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
       },
       timeout: 20_000,
     });
     try {
-      await new Promise((r) => setTimeout(r, 1500));
+      await expect
+        .poll(
+          () =>
+            app.evaluate(({ ipcMain }) => {
+              const handlers = (
+                ipcMain as unknown as {
+                  _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
+                }
+              )._invokeHandlers;
+              return handlers?.has?.("kepler:extension:install:do") === true;
+            }),
+          { timeout: 10_000 },
+        )
+        .toBe(true);
       const result = await app.evaluate(async ({ ipcMain }, kextPath) => {
         const handlers = (
           ipcMain as unknown as {

@@ -1,22 +1,18 @@
-import { clipboard, dialog, shell, type IpcMainInvokeEvent } from "electron";
-import { LaunchType, type AlertOptions, type LaunchCommandOptions } from "@raycast/api";
+import { setTimeout as delay } from "node:timers/promises";
+import { type IpcMainInvokeEvent } from "electron";
 import type { ArkClient } from "@kosmos/ark";
 import type { CommandRecord } from "../shared/ipc-types";
 import { safeHandle } from "./ipc-safe";
 import { COMMANDS, findCommand } from "./commands";
 import { keplerLog } from "./logging";
 import {
-  extensionUserDataDir,
   findDeclaredCommand,
   isExtensionRunning,
   loadDeclaredCommands,
   openExtension,
-  raycastRuntimeContext,
-  type DeclaredCommand,
 } from "./extension-host";
 import { listInstalledUserExtensions } from "./extension-installer";
-import { runRaycastNoViewCommand, type RaycastCommandLaunchProps } from "./raycast/command-runner";
-import { openRaycastViewCommand } from "./raycast/view-host";
+import { launchRaycastDeclaredCommand } from "./main-raycast-commands";
 
 interface MainCommandsOptions {
   getArkClient: () => ArkClient | null;
@@ -76,6 +72,30 @@ export function registerMainCommands(options: MainCommandsOptions): MainCommands
     return records;
   }
 
+  function mergeDynamicCommands(byId: Map<string, CommandRecord>, dynamic: unknown): void {
+    if (!Array.isArray(dynamic)) {
+      console.warn("[kepler-shell] commands.list returned non-array:", dynamic);
+      return;
+    }
+
+    for (const c of dynamic) {
+      if (byId.has(c.id)) continue; // internal/manifest priority
+      const d = c as CommandRecord & {
+        kind?: "app" | "command";
+        appName?: string;
+      };
+      byId.set(c.id, {
+        id: c.id,
+        title: c.title,
+        subtitle: c.subtitle,
+        category: c.category,
+        kind: d.kind,
+        appName: d.appName,
+        shortcut: d.shortcut,
+      });
+    }
+  }
+
   safeHandle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
     const byId = new Map<string, CommandRecord>();
 
@@ -111,33 +131,11 @@ export function registerMainCommands(options: MainCommandsOptions): MainCommands
         const COMMANDS_DYNAMIC_TIMEOUT_MS = 2000;
         const dynamic = await Promise.race([
           arkClient.commands.list(),
-          new Promise<never>((_, rej) =>
-            setTimeout(
-              () => rej(new Error("dynamic commands timeout")),
-              COMMANDS_DYNAMIC_TIMEOUT_MS,
-            ),
-          ),
+          delay(COMMANDS_DYNAMIC_TIMEOUT_MS).then(() => {
+            throw new Error("dynamic commands timeout");
+          }),
         ]);
-        if (Array.isArray(dynamic)) {
-          for (const c of dynamic) {
-            if (byId.has(c.id)) continue; // internal/manifest priority
-            const d = c as CommandRecord & {
-              kind?: "app" | "command";
-              appName?: string;
-            };
-            byId.set(c.id, {
-              id: c.id,
-              title: c.title,
-              subtitle: c.subtitle,
-              category: c.category,
-              kind: d.kind,
-              appName: d.appName,
-              shortcut: d.shortcut,
-            });
-          }
-        } else {
-          console.warn("[kepler-shell] commands.list returned non-array:", dynamic);
-        }
+        mergeDynamicCommands(byId, dynamic);
       } catch (e) {
         keplerLog.warn("commands", "commands.list (dynamic) failed", {
           err: String(e),
@@ -165,129 +163,9 @@ export function registerMainCommands(options: MainCommandsOptions): MainCommands
       } catch {
         // ARK rpc race — retry
       }
-      await new Promise((r) => setTimeout(r, 100));
+      await delay(100);
     }
     return false;
-  }
-
-  function raycastLaunchFromOptions(options: LaunchCommandOptions): RaycastCommandLaunchProps {
-    return {
-      launchType: options.type ?? LaunchType.LaunchCommand,
-      arguments: options.arguments ?? {},
-      fallbackText: options.fallbackText,
-      launchContext: options.context,
-    };
-  }
-
-  async function launchRaycastCommandFromOptions(
-    originExtensionId: string,
-    options: LaunchCommandOptions,
-  ): Promise<void> {
-    const extensionId = options.extensionName ?? originExtensionId;
-    const target = findDeclaredCommand(`${extensionId}:${options.name}`);
-    if (!target) {
-      console.warn(
-        `[kepler-shell] Raycast launchCommand target not found: ${extensionId}:${options.name}`,
-      );
-      return;
-    }
-    await launchRaycastDeclaredCommand(target, raycastLaunchFromOptions(options));
-  }
-
-  async function openRaycastSystemTarget(target: string): Promise<void> {
-    if (/^https?:\/\//i.test(target)) {
-      await shell.openExternal(target);
-      return;
-    }
-
-    const error = await shell.openPath(target);
-    if (error) throw new Error(error);
-  }
-
-  function raycastSystemAdapter(): {
-    open(target: string): Promise<void>;
-    showInFinder(path: string): Promise<void>;
-    trash(path: string): Promise<void>;
-  } {
-    return {
-      open: openRaycastSystemTarget,
-      async showInFinder(target) {
-        shell.showItemInFolder(target);
-      },
-      async trash(target) {
-        await shell.trashItem(target);
-      },
-    };
-  }
-
-  async function confirmRaycastAlert(alert: AlertOptions): Promise<boolean> {
-    const result = await dialog.showMessageBox({
-      type: "question",
-      buttons: [alert.primaryAction?.title ?? "OK", alert.dismissAction?.title ?? "Отмена"],
-      defaultId: 0,
-      cancelId: 1,
-      title: alert.title,
-      message: alert.title,
-      detail: alert.message,
-    });
-    return result.response === 0;
-  }
-
-  async function launchRaycastDeclaredCommand(
-    declared: DeclaredCommand,
-    launch?: RaycastCommandLaunchProps,
-  ): Promise<boolean> {
-    if (declared.mode === "open") {
-      await openExtension(declared.extensionId, declared.route);
-      return true;
-    }
-
-    if (
-      declared.mode !== "raycast-view" &&
-      declared.mode !== "raycast-no-view" &&
-      declared.mode !== "raycast-menu-bar"
-    ) {
-      return false;
-    }
-
-    const context = raycastRuntimeContext(declared.extensionId);
-    if (!context || !declared.raycastCommandName) {
-      console.warn(`[kepler-shell] Raycast command context not found: ${declared.id}`);
-      return false;
-    }
-
-    const launchCommand = (options: LaunchCommandOptions) =>
-      launchRaycastCommandFromOptions(declared.extensionId, options);
-
-    if (declared.mode === "raycast-view" || declared.mode === "raycast-menu-bar") {
-      await openRaycastViewCommand({
-        extensionId: declared.extensionId,
-        extensionName: declared.appName,
-        commandName: declared.raycastCommandName,
-        commandTitle: declared.title,
-        commandMode: declared.mode === "raycast-menu-bar" ? "menu-bar" : "view",
-        extensionDir: context.dir,
-        source: context.source,
-        launch,
-        system: raycastSystemAdapter(),
-        launchCommand,
-      });
-      return true;
-    }
-
-    await runRaycastNoViewCommand({
-      extensionId: declared.extensionId,
-      commandName: declared.raycastCommandName,
-      extensionDir: context.dir,
-      userDataDir: extensionUserDataDir(declared.extensionId),
-      source: context.source,
-      launch,
-      clipboard,
-      system: raycastSystemAdapter(),
-      confirmAlert: confirmRaycastAlert,
-      launchCommand,
-    });
-    return true;
   }
 
   async function invokeCommandById(id: string, event?: IpcMainInvokeEvent): Promise<void> {

@@ -16,11 +16,11 @@ export type WindowsLaunchItem = {
   enabled?: boolean;
 };
 
-export function normalizeWinExecutablePath(value: string): string {
+function normalizeWinExecutablePath(value: string): string {
   return path.normalize(value).toLowerCase();
 }
 
-export function sameArgs(actual: string[] | undefined, expected: string[]): boolean {
+function sameArgs(actual: string[] | undefined, expected: string[]): boolean {
   if (!actual) return expected.length === 0;
   return actual.length === expected.length && actual.every((arg, i) => arg === expected[i]);
 }

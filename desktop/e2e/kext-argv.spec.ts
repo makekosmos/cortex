@@ -5,14 +5,12 @@
 
 import path from "node:path";
 import fs from "node:fs";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
 import { _electron as electron } from "playwright";
+import electronBinary from "electron";
 import { writeZip } from "../scripts/zip-utils.mjs";
 
-const require = createRequire(import.meta.url);
-const electronBinary = require("electron") as string;
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const e2eRoot = path.join(appRoot, ".e2e");
 
@@ -54,27 +52,27 @@ test("AC: spawn с --ext-install <kext> открывает install dialog window
       ...process.env,
       NODE_ENV: "test",
       KEPLER_SKIP_SYNC: "1",
+      KOSMOS_HEADLESS: "1",
       KOSMOS_TEST_MODE: "1",
       KOSMOS_DATA_DIR: dataDir,
+      KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
     },
     timeout: 20_000,
   });
   try {
-    // Дать main process время на whenReady + open dialog + load Vue bundle.
-    await new Promise((r) => setTimeout(r, 2500));
-
-    const wins = await app.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows().map((w) => ({
-        title: w.getTitle(),
-        url: w.webContents.getURL(),
-        visible: w.isVisible(),
-      })),
-    );
-
     // Install dialog opens via loadFile(...) с hash 'install-extension?path=...'
     // — index.html единый, отличаем окна по hash в URL.
-    const hasInstallDialog = wins.some((w) => w.url.includes("install-extension"));
-    expect(hasInstallDialog).toBe(true);
+    await expect
+      .poll(
+        () =>
+          app.evaluate(({ BrowserWindow }) =>
+            BrowserWindow.getAllWindows().some((w) =>
+              w.webContents.getURL().includes("install-extension"),
+            ),
+          ),
+        { timeout: 10_000 },
+      )
+      .toBe(true);
   } finally {
     await app.close();
   }

@@ -189,7 +189,3 @@ export function openDashboardWindow(): void {
     });
   }
 }
-
-export function isDashboardOpen(): boolean {
-  return !!dashboardWin && !dashboardWin.isDestroyed();
-}
