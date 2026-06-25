@@ -156,3 +156,8 @@ export const DICTATION_LANGUAGE_OPTIONS = [
   { value: "cs", label: "Čeština" },
   { value: "el", label: "Ελληνικά" },
 ] as const;
+
+export const DICTATION_PROVIDER_OPTIONS = [
+  { value: "groq", label: "Groq Cloud" },
+  { value: "local", label: "Локальная модель" },
+] as const;

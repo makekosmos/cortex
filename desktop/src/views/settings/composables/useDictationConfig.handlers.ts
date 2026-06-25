@@ -5,6 +5,7 @@ import {
   normalizeDictationStats,
   type DictationConfigData,
   type DictationLocalModelsSnapshot,
+  type DictationProvider,
   type DictationStatsData,
 } from "./useDictationConfig.shared";
 import { createDictationKeyActions } from "./useDictationConfig.keys";
@@ -193,6 +194,10 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
     await patchDictationConfig({ triggerMode: v });
   }
 
+  async function onDictationProviderChange(v: DictationProvider) {
+    await patchDictationConfig({ provider: v });
+  }
+
   async function onDictationVoiceModelChange(value: string) {
     const [source, modelId] = value.split(":", 2);
     if (!modelId) return;
@@ -312,6 +317,7 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
     onDictationLanguageChange,
     onDictationInjectModeChange,
     onDictationTriggerModeChange,
+    onDictationProviderChange,
     onDictationVoiceModelChange,
     onDictationProviderEnabledChange,
     onDictationModelBlur,

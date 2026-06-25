@@ -3,6 +3,7 @@ export {
   DEFAULT_DICTATION_STATS,
   DICTATION_INJECT_OPTIONS,
   DICTATION_LANGUAGE_OPTIONS,
+  DICTATION_PROVIDER_OPTIONS,
   DICTATION_TRIGGER_OPTIONS,
   DNS_PROFILE_OPTIONS,
 } from "./useDictationConfig.data";
@@ -10,6 +11,7 @@ export type {
   ConnectivityReport,
   DictationConfigData,
   DictationLocalModelsSnapshot,
+  DictationProvider,
   DictationStatsData,
   DictationVoiceModelOption,
   DnsKind,

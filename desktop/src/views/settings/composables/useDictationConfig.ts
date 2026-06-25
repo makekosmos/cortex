@@ -26,6 +26,7 @@ export {
   DEFAULT_DICTATION_STATS,
   DICTATION_INJECT_OPTIONS,
   DICTATION_LANGUAGE_OPTIONS,
+  DICTATION_PROVIDER_OPTIONS,
   DICTATION_TRIGGER_OPTIONS,
   DNS_PROFILE_OPTIONS,
   buildAccelerator,
@@ -111,6 +112,16 @@ export function createDictationConfig() {
       dictationLocalModelId.value,
     ),
   );
+  const dictationProviderDescription = computed(() => {
+    switch (dictationConfig.value.provider) {
+      case "local":
+        return dictationLocalStatus.value;
+      case "mock":
+        return "Тестовый режим: mock provider используется только для автоматических smoke-прогонов.";
+      default:
+        return dictationGroqStatus.value;
+    }
+  });
 
   const actions = createDictationConfigActions({
     dictationConfig,
@@ -159,6 +170,7 @@ export function createDictationConfig() {
     dictationMicError,
     dictationCaptureAccelerator,
     dictationCaptureCancelTick,
+    dictationProviderDescription,
     dictationMicOptions,
     statsCards,
     dictationGroqStatus,
