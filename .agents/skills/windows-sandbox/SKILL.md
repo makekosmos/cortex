@@ -23,6 +23,7 @@ translate the intent, not the literal API, when using another harness.
 
 ## PowerShell and Windows Path Gotchas
 
+- `rtk` does not invoke PowerShell cmdlets directly: `rtk Get-ChildItem ...` fails because `Get-ChildItem` is not an executable. Use `rtk powershell -NoProfile -Command "Get-ChildItem ..."` for cmdlet reads.
 - Do not rely on bash-style globs inside arguments. `rg extensions/*/manifest.json` can fail on Windows with `os error 123`. Prefer `rg --files -g manifest.json extensions` or `Get-ChildItem -Path extensions -Recurse -Filter manifest.json`.
 - Prefer native PowerShell cmdlets end-to-end for filesystem operations. Do not enumerate paths in PowerShell and pass them to `cmd /c` for deletion or moving.
 - Before recursive delete/move, verify resolved absolute paths stay inside the repo root from `git rev-parse --show-toplevel` or inside another explicitly intended target directory. Do not hardcode the Kosmos checkout path as the safety boundary.
