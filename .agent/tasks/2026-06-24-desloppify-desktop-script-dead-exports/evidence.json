@@ -1,0 +1,46 @@
+{
+  "task_id": "2026-06-24-desloppify-desktop-script-dead-exports",
+  "verified_at": "2026-06-24T11:48:00+03:00",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "evidence": [
+        "baseline/desloppify-before.json",
+        "desloppify-after.json",
+        "findings: 501 -> 496",
+        "severity: critical 0 -> 0, high 300 -> 295, medium 130 -> 130, low 71 -> 71"
+      ]
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "evidence": [
+        "platform/desktop/scripts/repo-extension-roots.mjs internal helpers are no longer exported",
+        "platform/desktop/scripts/extension-package-utils.mjs::nativeExecutablePath is no longer exported",
+        "platform/desktop/scripts/zip-utils.mjs::readManifestFromZip removed",
+        "scoped DEAD_EXPORT findings: 5 -> 0",
+        "rg reference checks found no external imports for removed exports"
+      ]
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "evidence": [
+        "repo-extension-roots.mjs still exports findRepoExtensionEntry and listRepoExtensionEntries",
+        "extension-package-utils.mjs still exports buildNativeRelease, fileSize, packageExtensionKext, and sha256File",
+        "zip-utils.mjs still exports entriesFromDir, extractZip, readZip, safeEntryName, and writeZip",
+        "module import smoke confirmed remaining exports"
+      ]
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "commands": [
+        "bun run --cwd platform/desktop typecheck",
+        "bun run --cwd platform/desktop build:extension delphi",
+        "KOSMOS_HEADLESS=1 KOSMOS_TEST_MODE=1 bunx playwright test --config platform/desktop/playwright.config.ts platform/desktop/e2e/kext-install.spec.ts platform/desktop/e2e/kext-argv.spec.ts platform/desktop/e2e/kext-revert.spec.ts"
+      ]
+    }
+  ]
+}

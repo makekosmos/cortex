@@ -1,0 +1,19 @@
+{
+  "file": "platform/desktop/electron/raycast/manifest.ts",
+  "edit": "removed export modifiers from RaycastCommandMode, RaycastPreference, RaycastCommandManifest, RaycastKosmosCommandConfig, RaycastKosmosConfig",
+  "verification": {
+    "typecheck": "pass",
+    "target_test": "not found",
+    "knip_after": {
+      "manifest_dead_export_findings": ["Unused export: parseRaycastPackageManifest"]
+    },
+    "desloppify": {
+      "before_total": 315,
+      "after_total": 310,
+      "before_high": 158,
+      "after_high": 153,
+      "before_target_count": 5,
+      "after_target_count": 0
+    }
+  }
+}

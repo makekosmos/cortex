@@ -1,0 +1,45 @@
+{
+  "task_id": "2026-06-24-desloppify-eden-cm-helper-exports",
+  "verified_at": "2026-06-24T12:24:00+03:00",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "evidence": [
+        "baseline/desloppify-before.json",
+        "desloppify-after.json",
+        "findings: 479 -> 472",
+        "severity: critical 0 -> 0, high 278 -> 271, medium 130 -> 130, low 71 -> 71"
+      ]
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "evidence": [
+        "scoped DEAD_EXPORT findings: 7 -> 0",
+        "rg reference checks found changed helpers only in defining files or no callers",
+        "getCmEditorBlockers and slashCommandRender had no callers and were removed"
+      ]
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "evidence": [
+        "isCmSafeDoc, coerceToCmSafeDoc, shouldUseCmEditor remain exported",
+        "markdownListIndentPlugin, orderedListRenumber, slashCommandSource remain exported",
+        "shouldStartBlockSelectionTracking remains exported",
+        "focused CM and block-selection tests passed"
+      ]
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "commands": [
+        "bun run --cwd platform/desktop typecheck",
+        "bun run --cwd platform/desktop build:extension eden",
+        "bun test products/eden/tests/cmGate.test.ts",
+        "bunx vitest run --browser=chromium tests/components/BlockSelectionPointer.spec.ts"
+      ]
+    }
+  ]
+}

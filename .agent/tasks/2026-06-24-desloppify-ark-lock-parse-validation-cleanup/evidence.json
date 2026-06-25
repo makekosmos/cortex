@@ -1,0 +1,56 @@
+{
+  "classification": "FULL_LOOP",
+  "targets": [
+    "core/ark/packages/ark/src/ensure-kepler.ts",
+    "platform/desktop/electron/settings-autostart.test.ts"
+  ],
+  "docsRead": ["docs-site/concepts/write-boundary.md", "docs-site/agents/forbidden/ark.md"],
+  "checks": [
+    {
+      "command": "rtk err bun test core/ark/packages/ark/tests/ensure-kepler.test.ts",
+      "status": "passed"
+    },
+    {
+      "command": "rtk err bun test platform/desktop/electron/settings-autostart.test.ts",
+      "status": "passed"
+    },
+    {
+      "command": "rtk err bun run ark:guard:writes",
+      "status": "passed"
+    },
+    {
+      "command": "rtk err bun run --cwd platform/desktop typecheck",
+      "status": "passed"
+    },
+    {
+      "command": "rtk proxy cmd /c \"set PATH=%CD%\\.tmp\\bin;%PATH%&& bunx desloppify scan --json . > .tmp\\desloppify-after-ark-lock-parse-validation-cleanup.json\"",
+      "status": "expected_exit_1",
+      "details": "Scan produced valid JSON; repository still has findings"
+    }
+  ],
+  "desloppify": {
+    "before": {
+      "score": 3,
+      "findings": 387,
+      "targetFindings": 1,
+      "summary": {
+        "critical": 0,
+        "high": 230,
+        "medium": 113,
+        "low": 44
+      }
+    },
+    "after": {
+      "score": 9,
+      "findings": 386,
+      "targetFindings": 0,
+      "remainingJsonParseCastFindings": 0,
+      "summary": {
+        "critical": 0,
+        "high": 229,
+        "medium": 113,
+        "low": 44
+      }
+    }
+  }
+}

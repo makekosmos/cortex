@@ -1,0 +1,30 @@
+{
+  "scope": "platform/desktop/electron/raycast/view-host.ts",
+  "baseline": {
+    "path": ".agent/tasks/2026-06-24-desloppify-raycast-view-host-dead-exports-cleanup/baseline/desloppify-before.json",
+    "summary": {
+      "critical": 0,
+      "high": 142,
+      "medium": 113,
+      "low": 44
+    },
+    "dead_export_count": 56
+  },
+  "after": {
+    "path": ".agent/tasks/2026-06-24-desloppify-raycast-view-host-dead-exports-cleanup/desloppify-after.json",
+    "summary": {
+      "critical": 0,
+      "high": 140,
+      "medium": 113,
+      "low": 44
+    },
+    "dead_export_count": 54
+  },
+  "removed_dead_exports": ["openRaycastElementView", "getRaycastSnapshot"],
+  "verification": {
+    "typecheck": "pass",
+    "targeted_test": "none found",
+    "knip_export_scan": "dead exports dropped by 2",
+    "desloppify_scan": "exit code 1 expected; findings remain"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "task_id": "2026-06-23-desloppify-cleanup",
+  "verified_at": "2026-06-24T10:59:05+03:00",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "evidence": [
+        "baseline/desloppify-full-findings.json",
+        "desloppify-final.json",
+        "evidence.md metrics summary"
+      ]
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "evidence": [
+        "desloppify-final.json has critical 0",
+        "No GOD_FILE critical findings remain for platform/desktop/electron/main.ts or platform/desktop/electron/extension-host.ts"
+      ]
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "bun run --cwd platform/desktop build:js:shell"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "KOSMOS_HEADLESS=1 KOSMOS_TEST_MODE=1 bunx playwright test tests/e2e/focus-widget-controls.spec.ts",
+      "evidence": [
+        "7 passed",
+        "Final scan has 0 findings for tests/e2e/focus-widget-controls.spec.ts"
+      ]
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "evidence": [
+        "evidence.md maps commands and verdicts",
+        "build and targeted e2e were rerun after final code changes"
+      ]
+    }
+  ]
+}

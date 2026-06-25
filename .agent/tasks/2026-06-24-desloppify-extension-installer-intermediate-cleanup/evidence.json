@@ -1,0 +1,75 @@
+{
+  "task": "2026-06-24-desloppify-extension-installer-intermediate-cleanup",
+  "classification": "FULL_LOOP",
+  "scan": {
+    "before": {
+      "path": ".agent/tasks/2026-06-24-desloppify-extension-installer-intermediate-cleanup/baseline/desloppify-before.json",
+      "score": 0,
+      "total": 434,
+      "summary": {
+        "critical": 0,
+        "high": 243,
+        "medium": 127,
+        "low": 64
+      }
+    },
+    "after": {
+      "path": ".agent/tasks/2026-06-24-desloppify-extension-installer-intermediate-cleanup/desloppify-after.json",
+      "score": 0,
+      "total": 432,
+      "summary": {
+        "critical": 0,
+        "high": 243,
+        "medium": 127,
+        "low": 62
+      }
+    },
+    "delta": {
+      "total": -2,
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": -2
+    }
+  },
+  "scopedFindings": {
+    "file": "platform/desktop/electron/extension-installer.ts",
+    "before": [
+      "LOW UNNECESSARY_INTERMEDIATE line 487",
+      "LOW UNNECESSARY_INTERMEDIATE line 665",
+      "HIGH LARGE_FILE line 1",
+      "HIGH DEAD_FILE line 1"
+    ],
+    "after": ["HIGH LARGE_FILE line 1", "HIGH DEAD_FILE line 1"]
+  },
+  "codeDelta": {
+    "file": "platform/desktop/electron/extension-installer.ts",
+    "shortstat": "1 file changed, 2 insertions(+), 4 deletions(-)"
+  },
+  "verification": [
+    {
+      "command": "rtk err bun run --cwd platform/desktop typecheck",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk err bun run --cwd platform/desktop build:js:shell",
+      "result": "PASS with existing Vite warnings about chunk size and inlineDynamicImports/codeSplitting"
+    },
+    {
+      "command": "rtk test bun test platform/desktop/electron/no-sync-io.test.ts",
+      "result": "PASS: 4 tests"
+    },
+    {
+      "command": "rtk test bun test platform/desktop/electron/extension-installer.test.ts",
+      "result": "PARTIAL: installer source-contract test passed; extension-host source-contract test failed because it still expects `if (!app.isPackaged) {` in extension-host.ts."
+    },
+    {
+      "command": "rtk proxy cmd /c \"set PATH=%CD%\\.tmp\\bin;%PATH%&& bunx desloppify scan --json . > .tmp\\desloppify-after-extension-installer-intermediate-cleanup.json\"",
+      "result": "PASS for evidence purposes: command exits 1 because findings remain; JSON output was produced and copied to the task evidence path."
+    }
+  ],
+  "falsePositiveNotes": [
+    "The remaining DEAD_FILE finding for extension-installer.ts is a knip false positive for an Electron main-process module imported by extension-host.ts.",
+    "The remaining LARGE_FILE finding requires a separate installer split/refactor proof."
+  ]
+}

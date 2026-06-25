@@ -1,0 +1,82 @@
+{
+  "task": "2026-06-24-desloppify-markdown-frontmatter-parser-cleanup",
+  "classification": "FULL_LOOP",
+  "scan": {
+    "before": {
+      "path": ".agent/tasks/2026-06-24-desloppify-markdown-frontmatter-parser-cleanup/baseline/desloppify-before.json",
+      "score": 0,
+      "total": 451,
+      "summary": {
+        "critical": 0,
+        "high": 250,
+        "medium": 130,
+        "low": 71
+      }
+    },
+    "after": {
+      "path": ".agent/tasks/2026-06-24-desloppify-markdown-frontmatter-parser-cleanup/desloppify-after.json",
+      "score": 0,
+      "total": 444,
+      "summary": {
+        "critical": 0,
+        "high": 245,
+        "medium": 128,
+        "low": 71
+      }
+    },
+    "delta": {
+      "total": -7,
+      "critical": 0,
+      "high": -5,
+      "medium": -2,
+      "low": 0
+    }
+  },
+  "scopedFindings": {
+    "file": "products/eden/src/lib/markdownFrontmatter.ts",
+    "before": [
+      "LOW RETURN_UNDEFINED line 205",
+      "MEDIUM CATCH_WRAP_NO_CAUSE line 162",
+      "MEDIUM CATCH_WRAP_NO_CAUSE line 616",
+      "MEDIUM CATCH_WRAP_NO_CAUSE line 680",
+      "HIGH LARGE_FILE line 1",
+      "HIGH DEAD_EXPORT parseEntryMarkdownDocument line 74",
+      "HIGH DEAD_EXPORT EntryMarkdownFrontmatter line 9",
+      "HIGH DEAD_EXPORT ParseEntryMarkdownDocumentOptions line 34",
+      "HIGH DEAD_EXPORT ParsedEntryMarkdownDocument line 39"
+    ],
+    "after": ["LOW RETURN_UNDEFINED line 145", "MEDIUM CATCH_WRAP_NO_CAUSE line 102"]
+  },
+  "codeDelta": {
+    "file": "products/eden/src/lib/markdownFrontmatter.ts",
+    "shortstat": "1 file changed, 1 insertion(+), 539 deletions(-)",
+    "lineCountAfter": 252
+  },
+  "referenceChecks": [
+    {
+      "command": "rtk rg \"parseEntryMarkdownDocument|ParsedEntryMarkdownDocument|ParseEntryMarkdownDocumentOptions|EntryMarkdownFrontmatter|YamlSubsetParser|buildEntryMarkdownDocument|FrontmatterValue\" products/eden/src products/eden/tests tests",
+      "result": "No references to the removed parser API outside markdownFrontmatter.ts; active buildEntryMarkdownDocument and FrontmatterValue references remain in obsidianVault.ts, ExportSettings.vue, and obsidianVault.test.ts."
+    }
+  ],
+  "verification": [
+    {
+      "command": "rtk err bun run --cwd platform/desktop typecheck",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk err bun run --cwd platform/desktop build:extension eden",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk test bun test products/eden/tests/obsidianVault.test.ts",
+      "result": "PASS: 12 tests, 51 expects"
+    },
+    {
+      "command": "rtk proxy cmd /c \"set PATH=%CD%\\.tmp\\bin;%PATH%&& bunx desloppify scan --json . > .tmp\\desloppify-after-markdown-frontmatter-parser-cleanup.json\"",
+      "result": "PASS for evidence purposes: command exits 1 because findings remain; JSON output was produced and copied to the task evidence path."
+    }
+  ],
+  "falsePositiveNotes": [
+    "Remaining RETURN_UNDEFINED and CATCH_WRAP_NO_CAUSE in markdownFrontmatter.ts are in the active export serializer path and were left for a separate behavior-preserving cleanup."
+  ]
+}

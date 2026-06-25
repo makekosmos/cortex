@@ -1,0 +1,31 @@
+{
+  "file": "products/eden/src/lib/kepler-api-shim.ts",
+  "rule": "LOG_AND_RETHROW",
+  "before": {
+    "count": 1,
+    "score": 9,
+    "high": 176,
+    "medium": 113,
+    "low": 44
+  },
+  "after": {
+    "count": 0,
+    "score": 9,
+    "high": 175,
+    "medium": 113,
+    "low": 44
+  },
+  "delta": {
+    "count": -1,
+    "score": 0,
+    "high": -1,
+    "medium": 0,
+    "low": 0
+  },
+  "verification": {
+    "oxlint": "passed",
+    "typecheck": "passed",
+    "targeted_test": "not found/runnable in this setup",
+    "desloppify_scan": "completed; JSON copied to task dir"
+  }
+}

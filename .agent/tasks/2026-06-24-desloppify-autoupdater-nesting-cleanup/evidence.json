@@ -1,0 +1,49 @@
+{
+  "objective": "Verify autoupdater nesting cleanup after worker edit in platform/desktop/electron/autoupdater-host.ts",
+  "changed_source_file": "platform/desktop/electron/autoupdater-host.ts",
+  "checks": {
+    "handler_uses_helper": true,
+    "no_inline_settimeout_remains_in_update_downloaded": true,
+    "helper_strings_cyrillic": true,
+    "build_js_shell_passed": true,
+    "desloppify_scan_run": true,
+    "target_cleared": true
+  },
+  "build": {
+    "command": "rtk err bun run --cwd platform/desktop build:js:shell",
+    "exit_code": 0,
+    "notes": ["Vite printed warnings about chunk size and inlineDynamicImports"]
+  },
+  "scan": {
+    "command": "rtk proxy cmd /c \"set PATH=%CD%\\.tmp\\bin;%PATH%&& bunx desloppify scan --json . > .tmp\\desloppify-after-autoupdater-nesting-cleanup.json\"",
+    "exit_code": 1,
+    "before": {
+      "score": 9,
+      "findings": 380,
+      "critical": 0,
+      "high": 223,
+      "medium": 113,
+      "low": 44,
+      "target_rule": "DEEP_NESTING",
+      "target_path": "platform\\\\desktop\\\\electron\\\\autoupdater-host.ts",
+      "target_count": 1
+    },
+    "after": {
+      "score": 9,
+      "findings": 379,
+      "critical": 0,
+      "high": 222,
+      "medium": 113,
+      "low": 44,
+      "target_rule": "DEEP_NESTING",
+      "target_path": "platform\\\\desktop\\\\electron\\\\autoupdater-host.ts",
+      "target_count": 0
+    },
+    "delta": {
+      "findings": -1,
+      "high": -1,
+      "medium": 0,
+      "low": 0
+    }
+  }
+}

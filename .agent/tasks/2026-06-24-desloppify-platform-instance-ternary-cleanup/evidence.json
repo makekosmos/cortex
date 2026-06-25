@@ -1,0 +1,56 @@
+{
+  "task": "2026-06-24-desloppify-platform-instance-ternary-cleanup",
+  "classification": "FULL_LOOP",
+  "scan": {
+    "before": {
+      "path": ".agent/tasks/2026-06-24-desloppify-platform-instance-ternary-cleanup/baseline/desloppify-before.json",
+      "score": 0,
+      "total": 414,
+      "summary": {
+        "critical": 0,
+        "high": 242,
+        "medium": 122,
+        "low": 50
+      }
+    },
+    "after": {
+      "path": ".agent/tasks/2026-06-24-desloppify-platform-instance-ternary-cleanup/desloppify-after.json",
+      "score": 0,
+      "total": 410,
+      "summary": {
+        "critical": 0,
+        "high": 242,
+        "medium": 118,
+        "low": 50
+      }
+    },
+    "delta": {
+      "total": -4,
+      "critical": 0,
+      "high": 0,
+      "medium": -4,
+      "low": 0
+    }
+  },
+  "change": [
+    "Added platformMarker helpers in preload files.",
+    "Extracted instanceKindForSlot, productNameForSlot, and hotkeyForSlot in instance.ts."
+  ],
+  "verification": [
+    {
+      "command": "rtk err bun run --cwd platform/desktop typecheck",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk err bun run --cwd platform/desktop build:js:shell",
+      "result": "PASS with existing Vite warnings about chunk size and inlineDynamicImports/codeSplitting"
+    },
+    {
+      "command": "rtk proxy cmd /c \"set PATH=%CD%\\.tmp\\bin;%PATH%&& bunx desloppify scan --json . > .tmp\\desloppify-after-platform-instance-ternary-cleanup.json\"",
+      "result": "PASS for evidence purposes: command exits 1 because findings remain; JSON output was produced and copied to the task evidence path."
+    }
+  ],
+  "notes": [
+    "Remaining findings in these files are architectural or knip entrypoint false positives: preload long file, instance scattered env, and DEAD_FILE."
+  ]
+}

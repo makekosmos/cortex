@@ -1,0 +1,43 @@
+{
+  "classification": "FULL_LOOP",
+  "target": "tests/e2e/extension-ark-bridge.spec.ts",
+  "checks": [
+    {
+      "command": "rtk err powershell -NoProfile -Command \"$env:KOSMOS_HEADLESS='1'; $env:KOSMOS_TEST_MODE='1'; bunx playwright test --config playwright.config.ts extension-ark-bridge.spec.ts --list\"",
+      "status": "passed"
+    },
+    {
+      "command": "rtk err bun run --cwd platform/desktop typecheck",
+      "status": "passed"
+    },
+    {
+      "command": "rtk proxy cmd /c \"set PATH=%CD%\\.tmp\\bin;%PATH%&& bunx desloppify scan --json . > .tmp\\desloppify-after-extension-ark-bridge-nesting-cleanup.json\"",
+      "status": "expected_exit_1",
+      "details": "Scan produced valid JSON; repository still has findings"
+    }
+  ],
+  "desloppify": {
+    "before": {
+      "score": 9,
+      "findings": 382,
+      "targetFindings": 1,
+      "summary": {
+        "critical": 0,
+        "high": 225,
+        "medium": 113,
+        "low": 44
+      }
+    },
+    "after": {
+      "score": 9,
+      "findings": 381,
+      "targetFindings": 0,
+      "summary": {
+        "critical": 0,
+        "high": 224,
+        "medium": 113,
+        "low": 44
+      }
+    }
+  }
+}

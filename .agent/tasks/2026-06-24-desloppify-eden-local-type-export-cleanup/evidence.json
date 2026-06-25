@@ -1,0 +1,73 @@
+{
+  "task": "2026-06-24-desloppify-eden-local-type-export-cleanup",
+  "classification": "FULL_LOOP",
+  "scan": {
+    "before": {
+      "path": ".agent/tasks/2026-06-24-desloppify-eden-local-type-export-cleanup/baseline/desloppify-before.json",
+      "score": 0,
+      "total": 442,
+      "summary": {
+        "critical": 0,
+        "high": 245,
+        "medium": 127,
+        "low": 70
+      }
+    },
+    "after": {
+      "path": ".agent/tasks/2026-06-24-desloppify-eden-local-type-export-cleanup/desloppify-after.json",
+      "score": 0,
+      "total": 440,
+      "summary": {
+        "critical": 0,
+        "high": 243,
+        "medium": 127,
+        "low": 70
+      }
+    },
+    "delta": {
+      "total": -2,
+      "critical": 0,
+      "high": -2,
+      "medium": 0,
+      "low": 0
+    }
+  },
+  "change": [
+    "Removed unused type export DragPayload from products/eden/src/components/sidebar/types.ts.",
+    "Removed unused type export UseBlockSelectionReturn from products/eden/src/composables/useBlockSelection.ts."
+  ],
+  "codeDelta": {
+    "files": [
+      "products/eden/src/components/sidebar/types.ts",
+      "products/eden/src/composables/useBlockSelection.ts"
+    ],
+    "shortstat": "2 files changed, 4 deletions(-)"
+  },
+  "verification": [
+    {
+      "command": "rtk err bun run --cwd platform/desktop typecheck",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk err bun run --cwd platform/desktop build:extension eden",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk err bunx vitest run tests/components/BlockSelectionAutoScroll.spec.ts --browser=chromium",
+      "workdir": "products/eden",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk proxy cmd /c \"set PATH=%CD%\\.tmp\\bin;%PATH%&& bunx desloppify scan --json . > .tmp\\desloppify-after-eden-local-type-export-cleanup.json\"",
+      "result": "PASS for evidence purposes: command exits 1 because findings remain; JSON output was produced and copied to the task evidence path."
+    }
+  ],
+  "falsePositiveNotes": [
+    "sortEntries remains reported but is imported by products/eden/src/components/spaces/SpacesView.vue.",
+    "DragRect remains reported but is imported by products/eden/src/components/BlockSelectionOverlay.vue.",
+    "useBlockSelection remains reported and was not removed because it requires separate editor/UI behavior proof."
+  ],
+  "failedCheckNotes": [
+    "Bare `rtk test bun test products/eden/tests/components/BlockSelectionAutoScroll.spec.ts` failed with `document is not defined`; this spec requires Eden's Vitest browser runner."
+  ]
+}

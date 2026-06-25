@@ -1,0 +1,32 @@
+{
+  "file": "products/eden/src/lib/systemTypes.ts",
+  "before": {
+    "score": 9,
+    "total_findings": 342,
+    "high": 185,
+    "medium": 113,
+    "low": 44,
+    "dead_export_count": 5,
+    "dead_export_messages": [
+      "Unused export: SYSTEM_TYPE_WORKOUT_ID",
+      "Unused export: SYSTEM_TYPE_EXERCISE_ID",
+      "Unused export: SYSTEM_TYPE_GAME",
+      "Unused export: SYSTEM_TYPE_WORKOUT",
+      "Unused export: SYSTEM_TYPE_EXERCISE"
+    ]
+  },
+  "after": {
+    "score": 9,
+    "total_findings": 339,
+    "high": 182,
+    "medium": 113,
+    "low": 44,
+    "dead_export_count": 2,
+    "dead_export_messages": [
+      "Unused export: SYSTEM_TYPE_WORKOUT_ID",
+      "Unused export: SYSTEM_TYPE_EXERCISE_ID"
+    ]
+  },
+  "changed_exports": ["SYSTEM_TYPE_GAME", "SYSTEM_TYPE_WORKOUT", "SYSTEM_TYPE_EXERCISE"],
+  "blocked_exports": ["SYSTEM_TYPE_WORKOUT_ID", "SYSTEM_TYPE_EXERCISE_ID"]
+}

@@ -1,0 +1,42 @@
+{
+  "objective": "Remove two safe dead type exports from Electron files without changing runtime behavior.",
+  "filesChanged": [
+    "platform/desktop/electron/clipboard-history-store.ts",
+    "platform/desktop/electron/window-effects.ts"
+  ],
+  "baseline": {
+    "score": 9,
+    "findings": 317,
+    "high": 160,
+    "medium": 113,
+    "low": 44,
+    "deadCode": 163
+  },
+  "after": {
+    "score": 9,
+    "findings": 315,
+    "high": 158,
+    "medium": 113,
+    "low": 44,
+    "deadCode": 161
+  },
+  "delta": {
+    "findings": -2,
+    "high": -2,
+    "deadCode": -2
+  },
+  "targetFindingsRemoved": ["ClipboardHistoryRecordMetadata", "KosmosWindowEffects"],
+  "keptTestSeams": [
+    "defaultClipboardHistorySettings",
+    "classifyClipboardText",
+    "normalizeWindowEffects",
+    "normalizeLegacyBgMaterial"
+  ],
+  "verification": {
+    "typecheck": "passed",
+    "windowEffectsTest": "passed",
+    "clipboardHistoryStoreTest": "passed",
+    "knip": "passed with remaining unrelated dead exports",
+    "desloppifyScan": "completed with exit code 1 and target findings removed"
+  }
+}

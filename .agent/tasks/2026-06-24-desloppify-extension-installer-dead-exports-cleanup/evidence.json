@@ -1,0 +1,36 @@
+{
+  "scope_file": "platform/desktop/electron/extension-installer.ts",
+  "baseline": ".agent/tasks/2026-06-24-desloppify-extension-installer-dead-exports-cleanup/baseline/desloppify-before.json",
+  "after": ".agent/tasks/2026-06-24-desloppify-extension-installer-dead-exports-cleanup/desloppify-after.json",
+  "changed_symbols": [
+    "userExtensionsRoot",
+    "extensionsBackupsRoot",
+    "previewKext",
+    "previewDir",
+    "backupExtension",
+    "repoDevExtensionsRoot"
+  ],
+  "kept_exported": [],
+  "before": {
+    "score": 9,
+    "file_findings": 7,
+    "file_dead_export_findings": 6,
+    "high": 7,
+    "medium": 0,
+    "low": 0
+  },
+  "after": {
+    "score": 9,
+    "file_findings": 1,
+    "file_dead_export_findings": 0,
+    "high": 1,
+    "medium": 0,
+    "low": 0
+  },
+  "verification": {
+    "typecheck": "passed",
+    "targeted_test": "failed: unrelated source-text assertion in extension-installer.test.ts",
+    "knip_exports": "passed: no remaining exports reported for extension-installer.ts",
+    "desloppify_scan": "passed with findings remaining elsewhere"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "scope": "platform/desktop/electron/extension-markdown-vault.ts",
+  "baseline": {
+    "path": ".agent/tasks/2026-06-24-desloppify-extension-markdown-vault-dead-exports-cleanup/baseline/desloppify-before.json",
+    "score": 9,
+    "findings": 323,
+    "high": 166,
+    "medium": 113,
+    "low": 44
+  },
+  "after": {
+    "path": ".agent/tasks/2026-06-24-desloppify-extension-markdown-vault-dead-exports-cleanup/desloppify-after.json",
+    "score": 9,
+    "findings": 319,
+    "high": 162,
+    "medium": 113,
+    "low": 44
+  },
+  "delta": {
+    "score": 0,
+    "findings": -4,
+    "high": -4,
+    "medium": 0,
+    "low": 0
+  },
+  "target_file_dead_export_findings": {
+    "before": 4,
+    "after": 0,
+    "removed": [
+      "Unused export: isIgnoredVaultDir",
+      "Unused export: readImageDimensions",
+      "Unused type export: MarkdownVaultTextFile",
+      "Unused type export: MarkdownVaultImageFile"
+    ]
+  },
+  "verification": {
+    "typecheck": "passed",
+    "targeted_test": "passed",
+    "knip": "target file no longer reported",
+    "desloppify_scan": "passed with expected nonzero exit while findings remain"
+  }
+}

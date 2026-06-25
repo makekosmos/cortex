@@ -1,0 +1,62 @@
+{
+  "task": "2026-06-24-desloppify-typed-notes-error-cause",
+  "classification": "FULL_LOOP",
+  "scan": {
+    "before": {
+      "path": ".agent/tasks/2026-06-24-desloppify-typed-notes-error-cause/baseline/desloppify-before.json",
+      "score": 0,
+      "total": 430,
+      "summary": {
+        "critical": 0,
+        "high": 243,
+        "medium": 125,
+        "low": 62
+      }
+    },
+    "after": {
+      "path": ".agent/tasks/2026-06-24-desloppify-typed-notes-error-cause/desloppify-after.json",
+      "score": 0,
+      "total": 429,
+      "summary": {
+        "critical": 0,
+        "high": 243,
+        "medium": 124,
+        "low": 62
+      }
+    },
+    "delta": {
+      "total": -1,
+      "critical": 0,
+      "high": 0,
+      "medium": -1,
+      "low": 0
+    }
+  },
+  "scopedChange": {
+    "file": "products/eden/src/lib/typedNotes.ts",
+    "beforeFinding": "MEDIUM CATCH_WRAP_NO_CAUSE line 142",
+    "afterFinding": null,
+    "shortstat": "1 file changed, 1 insertion(+), 1 deletion(-)"
+  },
+  "verification": [
+    {
+      "command": "rtk err bun run --cwd platform/desktop typecheck",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk test bun test products/eden/tests/systemTypes.test.ts",
+      "result": "PASS: 2 tests, 16 expects"
+    },
+    {
+      "command": "rtk err bun run --cwd platform/desktop build:extension eden",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk proxy cmd /c \"set PATH=%CD%\\.tmp\\bin;%PATH%&& bunx desloppify scan --json . > .tmp\\desloppify-after-typed-notes-error-cause.json\"",
+      "result": "PASS for evidence purposes: command exits 1 because findings remain; JSON output was produced and copied to the task evidence path."
+    }
+  ],
+  "notes": [
+    "Remaining typedNotes findings are schema/API cleanup candidates and were left for separate proof."
+  ]
+}

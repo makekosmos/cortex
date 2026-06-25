@@ -1,0 +1,36 @@
+{
+  "scope": "products/eden/src/lib/typedNotes.ts",
+  "baseline": {
+    "score": 9,
+    "findings": 360,
+    "high": 203,
+    "medium": 113,
+    "low": 44,
+    "typedNotesDeadExport": 18
+  },
+  "after": {
+    "score": 9,
+    "findings": 342,
+    "high": 185,
+    "medium": 113,
+    "low": 44,
+    "typedNotesDeadExport": 0
+  },
+  "delta": {
+    "findings": -18,
+    "high": -18,
+    "medium": 0,
+    "low": 0,
+    "typedNotesDeadExport": -18
+  },
+  "checks": {
+    "platformDesktopTypecheck": "passed",
+    "productsEdenBuild": "script missing",
+    "productsEdenTscFallback": "not run",
+    "desloppifyScan": "passed with exit code 1 as expected"
+  },
+  "notes": [
+    "Only export modifiers were removed from the target declarations.",
+    "A pre-existing unrelated change in parseJsonWithContext remains in the worktree."
+  ]
+}

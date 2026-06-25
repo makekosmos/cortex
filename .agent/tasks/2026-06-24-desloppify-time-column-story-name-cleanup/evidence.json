@@ -1,0 +1,44 @@
+{
+  "classification": "FULL_LOOP",
+  "target": "packages/visuals/components/TimeColumn.stories.ts",
+  "checks": [
+    {
+      "command": "rtk err bun run --cwd packages/visuals build-storybook",
+      "status": "passed"
+    },
+    {
+      "command": "rtk err bun run --cwd platform/desktop typecheck",
+      "status": "passed"
+    },
+    {
+      "command": "rtk proxy cmd /c \"set PATH=%CD%\\.tmp\\bin;%PATH%&& bunx desloppify scan --json . > .tmp\\desloppify-after-time-column-story-name-cleanup.json\"",
+      "status": "expected_exit_1",
+      "details": "Scan produced valid JSON; repository still has findings"
+    }
+  ],
+  "generatedOutputRemoved": "packages/visuals/storybook-static",
+  "desloppify": {
+    "before": {
+      "score": 0,
+      "findings": 404,
+      "targetFindings": 1,
+      "summary": {
+        "critical": 0,
+        "high": 242,
+        "medium": 116,
+        "low": 46
+      }
+    },
+    "after": {
+      "score": 0,
+      "findings": 403,
+      "targetFindings": 0,
+      "summary": {
+        "critical": 0,
+        "high": 242,
+        "medium": 115,
+        "low": 46
+      }
+    }
+  }
+}

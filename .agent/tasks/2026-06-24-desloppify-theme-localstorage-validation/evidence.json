@@ -1,0 +1,68 @@
+{
+  "task": "2026-06-24-desloppify-theme-localstorage-validation",
+  "classification": "FULL_LOOP",
+  "scan": {
+    "before": {
+      "path": ".agent/tasks/2026-06-24-desloppify-theme-localstorage-validation/baseline/desloppify-before.json",
+      "score": 0,
+      "total": 432,
+      "summary": {
+        "critical": 0,
+        "high": 243,
+        "medium": 127,
+        "low": 62
+      }
+    },
+    "after": {
+      "path": ".agent/tasks/2026-06-24-desloppify-theme-localstorage-validation/desloppify-after.json",
+      "score": 0,
+      "total": 430,
+      "summary": {
+        "critical": 0,
+        "high": 243,
+        "medium": 125,
+        "low": 62
+      }
+    },
+    "delta": {
+      "total": -2,
+      "critical": 0,
+      "high": 0,
+      "medium": -2,
+      "low": 0
+    }
+  },
+  "scopedFindings": {
+    "files": [
+      "products/eden/src/composables/useTheme.ts",
+      "products/delphi/src/composables/useTheme.ts"
+    ],
+    "before": [
+      "MEDIUM LOCALSTORAGE_CAST products/eden/src/composables/useTheme.ts line 16",
+      "MEDIUM LOCALSTORAGE_CAST products/delphi/src/composables/useTheme.ts line 19"
+    ],
+    "after": []
+  },
+  "change": [
+    "Added readStoredTheme helpers that accept only light, dark, or system.",
+    "Kept Eden fallback as dark and Delphi fallback as system."
+  ],
+  "verification": [
+    {
+      "command": "rtk err bun run --cwd platform/desktop typecheck",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk err bun run --cwd platform/desktop build:extension eden",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk err bun run --cwd platform/desktop build:extension delphi",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk proxy cmd /c \"set PATH=%CD%\\.tmp\\bin;%PATH%&& bunx desloppify scan --json . > .tmp\\desloppify-after-theme-localstorage-validation.json\"",
+      "result": "PASS for evidence purposes: command exits 1 because findings remain; JSON output was produced and copied to the task evidence path."
+    }
+  ]
+}

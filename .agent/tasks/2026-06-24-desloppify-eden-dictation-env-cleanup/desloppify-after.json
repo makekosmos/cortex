@@ -1,0 +1,3069 @@
+{
+  "schema_version": "desloppify.findings/v1",
+  "scan": {
+    "version": "1.0.2",
+    "path": "C:\\Users\\kirill\\Coding\\kosmos",
+    "generatedAt": "2026-06-24T18:10:43.987Z",
+    "pack": {
+      "name": "js-ts",
+      "explicit": false
+    }
+  },
+  "tools": {
+    "knip": true,
+    "madge": false,
+    "ast-grep": false,
+    "tsc": true,
+    "eslint": false,
+    "biome": false,
+    "oxlint": true,
+    "oxfmt": true,
+    "ruff": true,
+    "mypy": false,
+    "vulture": false,
+    "cargo-clippy": true,
+    "staticcheck": false,
+    "golangci-lint": false,
+    "rubocop": false
+  },
+  "score": 38,
+  "metrics": {
+    "fileCount": 551,
+    "lineCount": 119167,
+    "nonEmptyLineCount": 106674,
+    "normalized": {
+      "scorePerFile": 0.07,
+      "scorePerKloc": 0.36,
+      "findingsPerFile": 0.14,
+      "findingsPerKloc": 0.7
+    }
+  },
+  "hotspots": {
+    "paths": [
+      {
+        "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts",
+        "findingCount": 7,
+        "penalty": 21
+      },
+      {
+        "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts",
+        "findingCount": 4,
+        "penalty": 12
+      },
+      {
+        "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts",
+        "findingCount": 6,
+        "penalty": 6.5
+      },
+      {
+        "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts",
+        "findingCount": 6,
+        "penalty": 4.5
+      },
+      {
+        "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main.ts",
+        "findingCount": 3,
+        "penalty": 4.5
+      }
+    ]
+  },
+  "summary": {
+    "critical": 0,
+    "high": 25,
+    "medium": 40,
+    "low": 10
+  },
+  "categories": {
+    "defensive-programming": {
+      "count": 8,
+      "fixable": 0
+    },
+    "ai-slop": {
+      "count": 5,
+      "fixable": 5
+    },
+    "test-quality": {
+      "count": 8,
+      "fixable": 0
+    },
+    "async-correctness": {
+      "count": 3,
+      "fixable": 0
+    },
+    "complexity": {
+      "count": 38,
+      "fixable": 0
+    },
+    "inconsistency": {
+      "count": 4,
+      "fixable": 0
+    },
+    "dead-code": {
+      "count": 9,
+      "fixable": 9
+    }
+  },
+  "rules": {
+    "EMPTY_ARRAY_FALLBACK": {
+      "id": "EMPTY_ARRAY_FALLBACK",
+      "name": "Empty Array Fallback",
+      "category": "defensive-programming",
+      "defaultSeverity": "LOW",
+      "tool": "grep",
+      "shortDescription": "Empty Array Fallback"
+    },
+    "FAKE_LOADING_DELAY": {
+      "id": "FAKE_LOADING_DELAY",
+      "name": "Fake Loading Delay",
+      "category": "ai-slop",
+      "defaultSeverity": "MEDIUM",
+      "tool": "grep",
+      "shortDescription": "Fake Loading Delay"
+    },
+    "SLEEPY_TEST": {
+      "id": "SLEEPY_TEST",
+      "name": "Sleepy Test",
+      "category": "test-quality",
+      "defaultSeverity": "MEDIUM",
+      "tool": "grep",
+      "shortDescription": "Sleepy Test"
+    },
+    "REDUNDANT_RETURN_AWAIT": {
+      "id": "REDUNDANT_RETURN_AWAIT",
+      "name": "Redundant Return Await",
+      "category": "async-correctness",
+      "defaultSeverity": "LOW",
+      "tool": "grep",
+      "shortDescription": "Redundant Return Await"
+    },
+    "CATCH_WRAP_NO_CAUSE": {
+      "id": "CATCH_WRAP_NO_CAUSE",
+      "name": "Catch Wrap No Cause",
+      "category": "defensive-programming",
+      "defaultSeverity": "MEDIUM",
+      "tool": "grep",
+      "shortDescription": "Catch Wrap No Cause"
+    },
+    "LONG_FILE": {
+      "id": "LONG_FILE",
+      "name": "Long File",
+      "category": "complexity",
+      "defaultSeverity": "MEDIUM",
+      "tool": "file-metrics",
+      "shortDescription": "Long File"
+    },
+    "LARGE_FILE": {
+      "id": "LARGE_FILE",
+      "name": "Large File",
+      "category": "complexity",
+      "defaultSeverity": "HIGH",
+      "tool": "file-metrics",
+      "shortDescription": "Large File"
+    },
+    "SCATTERED_ENV": {
+      "id": "SCATTERED_ENV",
+      "name": "Scattered Env",
+      "category": "inconsistency",
+      "defaultSeverity": "MEDIUM",
+      "tool": "file-metrics",
+      "shortDescription": "Scattered Env"
+    },
+    "IMPORT_HEAVY": {
+      "id": "IMPORT_HEAVY",
+      "name": "Import Heavy",
+      "category": "complexity",
+      "defaultSeverity": "MEDIUM",
+      "tool": "file-metrics",
+      "shortDescription": "Import Heavy"
+    },
+    "BARREL_FILE": {
+      "id": "BARREL_FILE",
+      "name": "Barrel File",
+      "category": "complexity",
+      "defaultSeverity": "MEDIUM",
+      "tool": "file-metrics",
+      "shortDescription": "Barrel File"
+    },
+    "STAR_REEXPORT": {
+      "id": "STAR_REEXPORT",
+      "name": "Star Reexport",
+      "category": "inconsistency",
+      "defaultSeverity": "HIGH",
+      "tool": "file-metrics",
+      "shortDescription": "Star Reexport"
+    },
+    "DEAD_EXPORT": {
+      "id": "DEAD_EXPORT",
+      "name": "Dead Export",
+      "category": "dead-code",
+      "defaultSeverity": "HIGH",
+      "tool": "knip",
+      "shortDescription": "Dead Export"
+    }
+  },
+  "findings": [
+    {
+      "id": "97b5bf8cc93b068ba963533430f533c878b01f8a",
+      "rule_id": "EMPTY_ARRAY_FALLBACK",
+      "level": "note",
+      "severity": "LOW",
+      "category": "defensive-programming",
+      "message": "Empty array fallback hides missing invariant — fix the source shape instead",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-task-enter.spec.ts",
+          "range": {
+            "start": {
+              "line": 99,
+              "column": 1
+            },
+            "end": {
+              "line": 99,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "97b5bf8cc93b068ba963533430f533c878b01f8a",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-task-enter.spec.ts:99:EMPTY_ARRAY_FALLBACK",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-task-enter.spec.ts:EMPTY_ARRAY_FALLBACK:Empty array fallback hides missing invariant — fix the source shape instead",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-task-enter.spec.ts:EMPTY_ARRAY_FALLBACK",
+          "rule_message": "EMPTY_ARRAY_FALLBACK:Empty array fallback hides missing invariant — fix the source shape instead"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "837a842ae4f7d1b3448166f06aab891b954a6df4",
+      "rule_id": "EMPTY_ARRAY_FALLBACK",
+      "level": "note",
+      "severity": "LOW",
+      "category": "defensive-programming",
+      "message": "Empty array fallback hides missing invariant — fix the source shape instead",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts",
+          "range": {
+            "start": {
+              "line": 122,
+              "column": 1
+            },
+            "end": {
+              "line": 122,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "837a842ae4f7d1b3448166f06aab891b954a6df4",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:122:EMPTY_ARRAY_FALLBACK",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:EMPTY_ARRAY_FALLBACK:Empty array fallback hides missing invariant — fix the source shape instead",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:EMPTY_ARRAY_FALLBACK",
+          "rule_message": "EMPTY_ARRAY_FALLBACK:Empty array fallback hides missing invariant — fix the source shape instead"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "dfe32a7917a50e3adb0ff44b9c031098311858fe",
+      "rule_id": "EMPTY_ARRAY_FALLBACK",
+      "level": "note",
+      "severity": "LOW",
+      "category": "defensive-programming",
+      "message": "Empty array fallback hides missing invariant — fix the source shape instead",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts",
+          "range": {
+            "start": {
+              "line": 135,
+              "column": 1
+            },
+            "end": {
+              "line": 135,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "dfe32a7917a50e3adb0ff44b9c031098311858fe",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:135:EMPTY_ARRAY_FALLBACK",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:EMPTY_ARRAY_FALLBACK:Empty array fallback hides missing invariant — fix the source shape instead",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:EMPTY_ARRAY_FALLBACK",
+          "rule_message": "EMPTY_ARRAY_FALLBACK:Empty array fallback hides missing invariant — fix the source shape instead"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "90cd8ba552039033eff7fb8a90ba0d3ad88b985f",
+      "rule_id": "EMPTY_ARRAY_FALLBACK",
+      "level": "note",
+      "severity": "LOW",
+      "category": "defensive-programming",
+      "message": "Empty array fallback hides missing invariant — fix the source shape instead",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts",
+          "range": {
+            "start": {
+              "line": 164,
+              "column": 1
+            },
+            "end": {
+              "line": 164,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "90cd8ba552039033eff7fb8a90ba0d3ad88b985f",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:164:EMPTY_ARRAY_FALLBACK",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:EMPTY_ARRAY_FALLBACK:Empty array fallback hides missing invariant — fix the source shape instead",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:EMPTY_ARRAY_FALLBACK",
+          "rule_message": "EMPTY_ARRAY_FALLBACK:Empty array fallback hides missing invariant — fix the source shape instead"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "d6282196d9ff3d5e50fd7fe0534fa45d76c12e26",
+      "rule_id": "EMPTY_ARRAY_FALLBACK",
+      "level": "note",
+      "severity": "LOW",
+      "category": "defensive-programming",
+      "message": "Empty array fallback hides missing invariant — fix the source shape instead",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts",
+          "range": {
+            "start": {
+              "line": 194,
+              "column": 1
+            },
+            "end": {
+              "line": 194,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "d6282196d9ff3d5e50fd7fe0534fa45d76c12e26",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:194:EMPTY_ARRAY_FALLBACK",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:EMPTY_ARRAY_FALLBACK:Empty array fallback hides missing invariant — fix the source shape instead",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:EMPTY_ARRAY_FALLBACK",
+          "rule_message": "EMPTY_ARRAY_FALLBACK:Empty array fallback hides missing invariant — fix the source shape instead"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "4b02113d1b368f33ac32356597ed25d6591cb32d",
+      "rule_id": "EMPTY_ARRAY_FALLBACK",
+      "level": "note",
+      "severity": "LOW",
+      "category": "defensive-programming",
+      "message": "Empty array fallback hides missing invariant — fix the source shape instead",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts",
+          "range": {
+            "start": {
+              "line": 237,
+              "column": 1
+            },
+            "end": {
+              "line": 237,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "4b02113d1b368f33ac32356597ed25d6591cb32d",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:237:EMPTY_ARRAY_FALLBACK",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:EMPTY_ARRAY_FALLBACK:Empty array fallback hides missing invariant — fix the source shape instead",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:EMPTY_ARRAY_FALLBACK",
+          "rule_message": "EMPTY_ARRAY_FALLBACK:Empty array fallback hides missing invariant — fix the source shape instead"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "4a64702c0549ff5c1157ebe6743af79da8a258d3",
+      "rule_id": "EMPTY_ARRAY_FALLBACK",
+      "level": "note",
+      "severity": "LOW",
+      "category": "defensive-programming",
+      "message": "Empty array fallback hides missing invariant — fix the source shape instead",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts",
+          "range": {
+            "start": {
+              "line": 307,
+              "column": 1
+            },
+            "end": {
+              "line": 307,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "4a64702c0549ff5c1157ebe6743af79da8a258d3",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:307:EMPTY_ARRAY_FALLBACK",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:EMPTY_ARRAY_FALLBACK:Empty array fallback hides missing invariant — fix the source shape instead",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-trailing-paragraph.spec.ts:EMPTY_ARRAY_FALLBACK",
+          "rule_message": "EMPTY_ARRAY_FALLBACK:Empty array fallback hides missing invariant — fix the source shape instead"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "acac0f71f33c28851d026441d18e483e5e4ebdcf",
+      "rule_id": "FAKE_LOADING_DELAY",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "ai-slop",
+      "message": "Fake loading delay in production code — simulated latency should not ship",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\helpers\\focus-widget.ts",
+          "range": {
+            "start": {
+              "line": 55,
+              "column": 1
+            },
+            "end": {
+              "line": 55,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "acac0f71f33c28851d026441d18e483e5e4ebdcf",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\helpers\\focus-widget.ts:55:FAKE_LOADING_DELAY",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\helpers\\focus-widget.ts:FAKE_LOADING_DELAY:Fake loading delay in production code — simulated latency should not ship",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\helpers\\focus-widget.ts:FAKE_LOADING_DELAY",
+          "rule_message": "FAKE_LOADING_DELAY:Fake loading delay in production code — simulated latency should not ship"
+        }
+      },
+      "fixes": [
+        {
+          "description": "Remove the artificial delay or gate it to demos/tests"
+        }
+      ],
+      "metadata": {
+        "tier": 1
+      }
+    },
+    {
+      "id": "f081db1a63aa7365ff4cd9e4c2e12e7dbbbfda37",
+      "rule_id": "FAKE_LOADING_DELAY",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "ai-slop",
+      "message": "Fake loading delay in production code — simulated latency should not ship",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\helpers\\pomodoro-state-file.ts",
+          "range": {
+            "start": {
+              "line": 115,
+              "column": 1
+            },
+            "end": {
+              "line": 115,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "f081db1a63aa7365ff4cd9e4c2e12e7dbbbfda37",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\helpers\\pomodoro-state-file.ts:115:FAKE_LOADING_DELAY",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\helpers\\pomodoro-state-file.ts:FAKE_LOADING_DELAY:Fake loading delay in production code — simulated latency should not ship",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\helpers\\pomodoro-state-file.ts:FAKE_LOADING_DELAY",
+          "rule_message": "FAKE_LOADING_DELAY:Fake loading delay in production code — simulated latency should not ship"
+        }
+      },
+      "fixes": [
+        {
+          "description": "Remove the artificial delay or gate it to demos/tests"
+        }
+      ],
+      "metadata": {
+        "tier": 1
+      }
+    },
+    {
+      "id": "a2b9118782f370be3a826a6feb0e93b5ac4c5ca6",
+      "rule_id": "FAKE_LOADING_DELAY",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "ai-slop",
+      "message": "Fake loading delay in production code — simulated latency should not ship",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\helpers\\pomodoro-state-file.ts",
+          "range": {
+            "start": {
+              "line": 128,
+              "column": 1
+            },
+            "end": {
+              "line": 128,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "a2b9118782f370be3a826a6feb0e93b5ac4c5ca6",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\helpers\\pomodoro-state-file.ts:128:FAKE_LOADING_DELAY",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\helpers\\pomodoro-state-file.ts:FAKE_LOADING_DELAY:Fake loading delay in production code — simulated latency should not ship",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\helpers\\pomodoro-state-file.ts:FAKE_LOADING_DELAY",
+          "rule_message": "FAKE_LOADING_DELAY:Fake loading delay in production code — simulated latency should not ship"
+        }
+      },
+      "fixes": [
+        {
+          "description": "Remove the artificial delay or gate it to demos/tests"
+        }
+      ],
+      "metadata": {
+        "tier": 1
+      }
+    },
+    {
+      "id": "11b9b8f9219959d827399913279ae656e2de9266",
+      "rule_id": "FAKE_LOADING_DELAY",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "ai-slop",
+      "message": "Fake loading delay in production code — simulated latency should not ship",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\focus-block.ts",
+          "range": {
+            "start": {
+              "line": 231,
+              "column": 1
+            },
+            "end": {
+              "line": 231,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "11b9b8f9219959d827399913279ae656e2de9266",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\focus-block.ts:231:FAKE_LOADING_DELAY",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\focus-block.ts:FAKE_LOADING_DELAY:Fake loading delay in production code — simulated latency should not ship",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\focus-block.ts:FAKE_LOADING_DELAY",
+          "rule_message": "FAKE_LOADING_DELAY:Fake loading delay in production code — simulated latency should not ship"
+        }
+      },
+      "fixes": [
+        {
+          "description": "Remove the artificial delay or gate it to demos/tests"
+        }
+      ],
+      "metadata": {
+        "tier": 1
+      }
+    },
+    {
+      "id": "49d43605528a8189e4e1e845c6db6efe1ee08d3b",
+      "rule_id": "FAKE_LOADING_DELAY",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "ai-slop",
+      "message": "Fake loading delay in production code — simulated latency should not ship",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main-commands.ts",
+          "range": {
+            "start": {
+              "line": 176,
+              "column": 1
+            },
+            "end": {
+              "line": 176,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "49d43605528a8189e4e1e845c6db6efe1ee08d3b",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main-commands.ts:176:FAKE_LOADING_DELAY",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main-commands.ts:FAKE_LOADING_DELAY:Fake loading delay in production code — simulated latency should not ship",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main-commands.ts:FAKE_LOADING_DELAY",
+          "rule_message": "FAKE_LOADING_DELAY:Fake loading delay in production code — simulated latency should not ship"
+        }
+      },
+      "fixes": [
+        {
+          "description": "Remove the artificial delay or gate it to demos/tests"
+        }
+      ],
+      "metadata": {
+        "tier": 1
+      }
+    },
+    {
+      "id": "ee8530bcb30c2ae5be50e6e77c27a1467f361991",
+      "rule_id": "SLEEPY_TEST",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "test-quality",
+      "message": "Sleep in test — use waitFor/polling instead of arbitrary delays",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\delphi-legacy-cleanup.spec.ts",
+          "range": {
+            "start": {
+              "line": 44,
+              "column": 1
+            },
+            "end": {
+              "line": 44,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "ee8530bcb30c2ae5be50e6e77c27a1467f361991",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\delphi-legacy-cleanup.spec.ts:44:SLEEPY_TEST",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\delphi-legacy-cleanup.spec.ts:SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\delphi-legacy-cleanup.spec.ts:SLEEPY_TEST",
+          "rule_message": "SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "ac322d5b3fe38c9eefb5f7c0c1da5259c410783f",
+      "rule_id": "SLEEPY_TEST",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "test-quality",
+      "message": "Sleep in test — use waitFor/polling instead of arbitrary delays",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-selection-after-click.spec.ts",
+          "range": {
+            "start": {
+              "line": 237,
+              "column": 1
+            },
+            "end": {
+              "line": 237,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "ac322d5b3fe38c9eefb5f7c0c1da5259c410783f",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-selection-after-click.spec.ts:237:SLEEPY_TEST",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-selection-after-click.spec.ts:SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\e2e\\eden-selection-after-click.spec.ts:SLEEPY_TEST",
+          "rule_message": "SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "043c4b5382a9acb72bbca3dab363bf108ccb7703",
+      "rule_id": "REDUNDANT_RETURN_AWAIT",
+      "level": "note",
+      "severity": "LOW",
+      "category": "async-correctness",
+      "message": "return await on a direct promise — return the promise unless you need try/catch semantics",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\kepler-api-shim.ts",
+          "range": {
+            "start": {
+              "line": 1023,
+              "column": 1
+            },
+            "end": {
+              "line": 1023,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "043c4b5382a9acb72bbca3dab363bf108ccb7703",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\kepler-api-shim.ts:1023:REDUNDANT_RETURN_AWAIT",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\kepler-api-shim.ts:REDUNDANT_RETURN_AWAIT:return await on a direct promise — return the promise unless you need try/catch semantics",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\kepler-api-shim.ts:REDUNDANT_RETURN_AWAIT",
+          "rule_message": "REDUNDANT_RETURN_AWAIT:return await on a direct promise — return the promise unless you need try/catch semantics"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "4b7649b102431e92c10dc327a35805880bf3ac82",
+      "rule_id": "REDUNDANT_RETURN_AWAIT",
+      "level": "note",
+      "severity": "LOW",
+      "category": "async-correctness",
+      "message": "return await on a direct promise — return the promise unless you need try/catch semantics",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-marketplace.ts",
+          "range": {
+            "start": {
+              "line": 205,
+              "column": 1
+            },
+            "end": {
+              "line": 205,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "4b7649b102431e92c10dc327a35805880bf3ac82",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-marketplace.ts:205:REDUNDANT_RETURN_AWAIT",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-marketplace.ts:REDUNDANT_RETURN_AWAIT:return await on a direct promise — return the promise unless you need try/catch semantics",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-marketplace.ts:REDUNDANT_RETURN_AWAIT",
+          "rule_message": "REDUNDANT_RETURN_AWAIT:return await on a direct promise — return the promise unless you need try/catch semantics"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "1f6dec5af72f71d68aa1d7964ae6ba3b7c6ead0a",
+      "rule_id": "REDUNDANT_RETURN_AWAIT",
+      "level": "note",
+      "severity": "LOW",
+      "category": "async-correctness",
+      "message": "return await on a direct promise — return the promise unless you need try/catch semantics",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\ipc-safe.ts",
+          "range": {
+            "start": {
+              "line": 28,
+              "column": 1
+            },
+            "end": {
+              "line": 28,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "1f6dec5af72f71d68aa1d7964ae6ba3b7c6ead0a",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\ipc-safe.ts:28:REDUNDANT_RETURN_AWAIT",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\ipc-safe.ts:REDUNDANT_RETURN_AWAIT:return await on a direct promise — return the promise unless you need try/catch semantics",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\ipc-safe.ts:REDUNDANT_RETURN_AWAIT",
+          "rule_message": "REDUNDANT_RETURN_AWAIT:return await on a direct promise — return the promise unless you need try/catch semantics"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "162f83e724ff3ccbccfeb7bb04cfff7b4f97931f",
+      "rule_id": "CATCH_WRAP_NO_CAUSE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "defensive-programming",
+      "message": "Catch block wraps an error without preserving the original cause",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts",
+          "range": {
+            "start": {
+              "line": 151,
+              "column": 1
+            },
+            "end": {
+              "line": 151,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "162f83e724ff3ccbccfeb7bb04cfff7b4f97931f",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:151:CATCH_WRAP_NO_CAUSE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:CATCH_WRAP_NO_CAUSE:Catch block wraps an error without preserving the original cause",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:CATCH_WRAP_NO_CAUSE",
+          "rule_message": "CATCH_WRAP_NO_CAUSE:Catch block wraps an error without preserving the original cause"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "0f3ab0056128e4a31714fcf1656c2ed8681230b6",
+      "rule_id": "SLEEPY_TEST",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "test-quality",
+      "message": "Sleep in test — use waitFor/polling instead of arbitrary delays",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts",
+          "range": {
+            "start": {
+              "line": 174,
+              "column": 1
+            },
+            "end": {
+              "line": 174,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "0f3ab0056128e4a31714fcf1656c2ed8681230b6",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:174:SLEEPY_TEST",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:SLEEPY_TEST",
+          "rule_message": "SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "2f8775134f845c58601cf40a7996388e439cb401",
+      "rule_id": "SLEEPY_TEST",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "test-quality",
+      "message": "Sleep in test — use waitFor/polling instead of arbitrary delays",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts",
+          "range": {
+            "start": {
+              "line": 625,
+              "column": 1
+            },
+            "end": {
+              "line": 625,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "2f8775134f845c58601cf40a7996388e439cb401",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:625:SLEEPY_TEST",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:SLEEPY_TEST",
+          "rule_message": "SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "1701dc2f5a4f7860c03c6bbede02c7eec2137622",
+      "rule_id": "SLEEPY_TEST",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "test-quality",
+      "message": "Sleep in test — use waitFor/polling instead of arbitrary delays",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts",
+          "range": {
+            "start": {
+              "line": 697,
+              "column": 1
+            },
+            "end": {
+              "line": 697,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "1701dc2f5a4f7860c03c6bbede02c7eec2137622",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:697:SLEEPY_TEST",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:SLEEPY_TEST",
+          "rule_message": "SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "55c5740a02d4c858cdc90424b2686f05d8bfe490",
+      "rule_id": "SLEEPY_TEST",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "test-quality",
+      "message": "Sleep in test — use waitFor/polling instead of arbitrary delays",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts",
+          "range": {
+            "start": {
+              "line": 750,
+              "column": 1
+            },
+            "end": {
+              "line": 750,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "55c5740a02d4c858cdc90424b2686f05d8bfe490",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:750:SLEEPY_TEST",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:SLEEPY_TEST",
+          "rule_message": "SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "1d66da62e53a41880b23aa0b9235aa734004a2ee",
+      "rule_id": "SLEEPY_TEST",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "test-quality",
+      "message": "Sleep in test — use waitFor/polling instead of arbitrary delays",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts",
+          "range": {
+            "start": {
+              "line": 848,
+              "column": 1
+            },
+            "end": {
+              "line": 848,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "1d66da62e53a41880b23aa0b9235aa734004a2ee",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:848:SLEEPY_TEST",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\dictation.spec.ts:SLEEPY_TEST",
+          "rule_message": "SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "882f0c4af90e17444b4cf5d84b1b7c7a128a2b0b",
+      "rule_id": "SLEEPY_TEST",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "test-quality",
+      "message": "Sleep in test — use waitFor/polling instead of arbitrary delays",
+      "tool": "grep",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\settings-about.spec.ts",
+          "range": {
+            "start": {
+              "line": 6,
+              "column": 1
+            },
+            "end": {
+              "line": 6,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "882f0c4af90e17444b4cf5d84b1b7c7a128a2b0b",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\settings-about.spec.ts:6:SLEEPY_TEST",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\settings-about.spec.ts:SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\e2e\\settings-about.spec.ts:SLEEPY_TEST",
+          "rule_message": "SLEEPY_TEST:Sleep in test — use waitFor/polling instead of arbitrary delays"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "5888d085daf35814f07ede44c8c9b8037a1bc6bf",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 810 lines of code — consider splitting (threshold: 600)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\unit\\raycast-command-runner.test.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "5888d085daf35814f07ede44c8c9b8037a1bc6bf",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\unit\\raycast-command-runner.test.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\unit\\raycast-command-runner.test.ts:LONG_FILE:File has 810 lines of code — consider splitting (threshold: 600)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\unit\\raycast-command-runner.test.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 810 lines of code — consider splitting (threshold: 600)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "25b1df150683a391f7c1c4d42f649b68d26ca46d",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 680 lines of code — consider splitting (threshold: 600)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\unit\\raycast-view-model.test.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "25b1df150683a391f7c1c4d42f649b68d26ca46d",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\unit\\raycast-view-model.test.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\unit\\raycast-view-model.test.ts:LONG_FILE:File has 680 lines of code — consider splitting (threshold: 600)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\tests\\unit\\raycast-view-model.test.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 680 lines of code — consider splitting (threshold: 600)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "aa7731380b3b15f6b2fcc53b9f8fc8c125ffbf6b",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 644 lines of code — consider splitting (threshold: 600)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\tests\\obsidianVault.test.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "aa7731380b3b15f6b2fcc53b9f8fc8c125ffbf6b",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\tests\\obsidianVault.test.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\tests\\obsidianVault.test.ts:LONG_FILE:File has 644 lines of code — consider splitting (threshold: 600)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\tests\\obsidianVault.test.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 644 lines of code — consider splitting (threshold: 600)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "ddce8b9476699eab0725628fb2cdd4cc75ec8930",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 602 lines of code — consider splitting (threshold: 600)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\tests\\components\\CmEditor.spec.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "ddce8b9476699eab0725628fb2cdd4cc75ec8930",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\tests\\components\\CmEditor.spec.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\tests\\components\\CmEditor.spec.ts:LONG_FILE:File has 602 lines of code — consider splitting (threshold: 600)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\tests\\components\\CmEditor.spec.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 602 lines of code — consider splitting (threshold: 600)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "0da522f9013a3025fa6d1598592a69f8055686cf",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 648 lines of code — approaching god file territory (threshold: 500)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\store\\eden.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "0da522f9013a3025fa6d1598592a69f8055686cf",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\store\\eden.ts:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\store\\eden.ts:LARGE_FILE:File has 648 lines of code — approaching god file territory (threshold: 500)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\store\\eden.ts:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 648 lines of code — approaching god file territory (threshold: 500)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "6e011907cd25b43e7141a860517b0ae8f7cb5284",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 1238 lines of code — approaching god file territory (threshold: 825)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\kepler-api-shim.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "6e011907cd25b43e7141a860517b0ae8f7cb5284",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\kepler-api-shim.ts:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\kepler-api-shim.ts:LARGE_FILE:File has 1238 lines of code — approaching god file territory (threshold: 825)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\kepler-api-shim.ts:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 1238 lines of code — approaching god file territory (threshold: 825)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "e7eb0776fb264505a2c799abcf1ddee28f4e9201",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 1085 lines of code — approaching god file territory (threshold: 825)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\obsidianVault.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "e7eb0776fb264505a2c799abcf1ddee28f4e9201",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\obsidianVault.ts:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\obsidianVault.ts:LARGE_FILE:File has 1085 lines of code — approaching god file territory (threshold: 825)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\obsidianVault.ts:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 1085 lines of code — approaching god file territory (threshold: 825)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "2e8643b4bb6131fa8dc35c816970fd56b211576c",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 790 lines of code — approaching god file territory (threshold: 500)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\systemTypes.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "2e8643b4bb6131fa8dc35c816970fd56b211576c",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\systemTypes.ts:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\systemTypes.ts:LARGE_FILE:File has 790 lines of code — approaching god file territory (threshold: 500)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\systemTypes.ts:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 790 lines of code — approaching god file territory (threshold: 500)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "6c0e7164c657e2f46a8bfffbb4aecfa36a34b200",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 600 lines of code — approaching god file territory (threshold: 500)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\typedNotes.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "6c0e7164c657e2f46a8bfffbb4aecfa36a34b200",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\typedNotes.ts:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\typedNotes.ts:LARGE_FILE:File has 600 lines of code — approaching god file territory (threshold: 500)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\eden\\src\\lib\\typedNotes.ts:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 600 lines of code — approaching god file territory (threshold: 500)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "2e62671ba18a945fcce4afccd24c4285981ce0b5",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 398 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\products\\delphi\\src\\store\\todos.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "2e62671ba18a945fcce4afccd24c4285981ce0b5",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\delphi\\src\\store\\todos.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\products\\delphi\\src\\store\\todos.ts:LONG_FILE:File has 398 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\delphi\\src\\store\\todos.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 398 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "8968ffb7509f9dd0a1d4d87cde065e4b140808d3",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 393 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\products\\delphi\\src\\lib\\electron-api-shim.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "8968ffb7509f9dd0a1d4d87cde065e4b140808d3",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\delphi\\src\\lib\\electron-api-shim.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\products\\delphi\\src\\lib\\electron-api-shim.ts:LONG_FILE:File has 393 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\products\\delphi\\src\\lib\\electron-api-shim.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 393 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "257baaf6b16fa6aee5ac63306208fb9fa46dc5b0",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 409 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\navigation.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "257baaf6b16fa6aee5ac63306208fb9fa46dc5b0",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\navigation.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\navigation.ts:LONG_FILE:File has 409 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\navigation.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 409 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "ce033f740fe7d79a762f7295e171ba8cb02d29f3",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 805 lines of code — approaching god file territory (threshold: 500)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\composables\\useDictationConfig.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "ce033f740fe7d79a762f7295e171ba8cb02d29f3",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\composables\\useDictationConfig.ts:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\composables\\useDictationConfig.ts:LARGE_FILE:File has 805 lines of code — approaching god file territory (threshold: 500)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\composables\\useDictationConfig.ts:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 805 lines of code — approaching god file territory (threshold: 500)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "f60cc3b72539fed7e66a6a1b13126af524d30650",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 431 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\composables\\useFileSearchTab.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "f60cc3b72539fed7e66a6a1b13126af524d30650",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\composables\\useFileSearchTab.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\composables\\useFileSearchTab.ts:LONG_FILE:File has 431 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\composables\\useFileSearchTab.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 431 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "12774aa9c698844808b278945dd809636f28f105",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 418 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\composables\\useFocusTab.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "12774aa9c698844808b278945dd809636f28f105",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\composables\\useFocusTab.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\composables\\useFocusTab.ts:LONG_FILE:File has 418 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\views\\settings\\composables\\useFocusTab.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 418 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "997e11c28aa1eb878a58de70ddf26be2bea32aa4",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 781 lines of code — approaching god file territory (threshold: 500)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\raycast-host\\model.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "997e11c28aa1eb878a58de70ddf26be2bea32aa4",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\raycast-host\\model.ts:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\raycast-host\\model.ts:LARGE_FILE:File has 781 lines of code — approaching god file territory (threshold: 500)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\src\\raycast-host\\model.ts:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 781 lines of code — approaching god file territory (threshold: 500)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "7248370e83b69c330efd5703a822cc665432d566",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 770 lines of code — approaching god file territory (threshold: 500)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\shared\\ipc-types.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "7248370e83b69c330efd5703a822cc665432d566",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\shared\\ipc-types.ts:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\shared\\ipc-types.ts:LARGE_FILE:File has 770 lines of code — approaching god file territory (threshold: 500)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\shared\\ipc-types.ts:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 770 lines of code — approaching god file territory (threshold: 500)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "d3f1182a5878361a4d5e0f221b5008ffcb2a04ca",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 485 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\clipboard-history-store.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "d3f1182a5878361a4d5e0f221b5008ffcb2a04ca",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\clipboard-history-store.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\clipboard-history-store.ts:LONG_FILE:File has 485 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\clipboard-history-store.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 485 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "e588e54867d45660070e1d7327c0da7931995c97",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 322 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\diagnostics.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "e588e54867d45660070e1d7327c0da7931995c97",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\diagnostics.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\diagnostics.ts:LONG_FILE:File has 322 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\diagnostics.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 322 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "6abaffd61dac88da32297bfa5f1cb1806761b33f",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 1259 lines of code — approaching god file territory (threshold: 825)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "6abaffd61dac88da32297bfa5f1cb1806761b33f",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:LARGE_FILE:File has 1259 lines of code — approaching god file territory (threshold: 825)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 1259 lines of code — approaching god file territory (threshold: 825)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "eff61b012759ffcb8ceb683a05d4888148a4650c",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 577 lines of code — approaching god file territory (threshold: 500)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-installer.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "eff61b012759ffcb8ceb683a05d4888148a4650c",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-installer.ts:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-installer.ts:LARGE_FILE:File has 577 lines of code — approaching god file territory (threshold: 500)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-installer.ts:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 577 lines of code — approaching god file territory (threshold: 500)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "69544d69a31e43dfee05b01d54d7b0a8cf26709c",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 653 lines of code — approaching god file territory (threshold: 500)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "69544d69a31e43dfee05b01d54d7b0a8cf26709c",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:LARGE_FILE:File has 653 lines of code — approaching god file territory (threshold: 500)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 653 lines of code — approaching god file territory (threshold: 500)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "669f06916f2b1e017a03f7f809a01b579d0769b0",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 782 lines of code — approaching god file territory (threshold: 500)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\focus-session.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "669f06916f2b1e017a03f7f809a01b579d0769b0",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\focus-session.ts:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\focus-session.ts:LARGE_FILE:File has 782 lines of code — approaching god file territory (threshold: 500)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\focus-session.ts:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 782 lines of code — approaching god file territory (threshold: 500)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "33d113abd9def529fefad598cd6f38a6ca0216d2",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 489 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\focus-widget.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "33d113abd9def529fefad598cd6f38a6ca0216d2",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\focus-widget.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\focus-widget.ts:LONG_FILE:File has 489 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\focus-widget.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 489 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "4245013d6ab08b5ebdb2549e89c333d9091b2c45",
+      "rule_id": "SCATTERED_ENV",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "inconsistency",
+      "message": "7 direct process.env accesses — centralize in a config module",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\instance.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "4245013d6ab08b5ebdb2549e89c333d9091b2c45",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\instance.ts:1:SCATTERED_ENV",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\instance.ts:SCATTERED_ENV:7 direct process.env accesses — centralize in a config module",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\instance.ts:SCATTERED_ENV",
+          "rule_message": "SCATTERED_ENV:7 direct process.env accesses — centralize in a config module"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "b10a1cd43da980af1173e2166e44a0693e9154c6",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 349 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main-commands.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "b10a1cd43da980af1173e2166e44a0693e9154c6",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main-commands.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main-commands.ts:LONG_FILE:File has 349 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main-commands.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 349 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "0ec0cd0e6845f7df306bb16506aad504f0e7a87c",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 371 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main-data-ipc.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "0ec0cd0e6845f7df306bb16506aad504f0e7a87c",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main-data-ipc.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main-data-ipc.ts:LONG_FILE:File has 371 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main-data-ipc.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 371 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "77092777c46d02102eb89795872136fe69498be6",
+      "rule_id": "IMPORT_HEAVY",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File imports from 36 modules — too many concerns in one file",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "77092777c46d02102eb89795872136fe69498be6",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main.ts:1:IMPORT_HEAVY",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main.ts:IMPORT_HEAVY:File imports from 36 modules — too many concerns in one file",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main.ts:IMPORT_HEAVY",
+          "rule_message": "IMPORT_HEAVY:File imports from 36 modules — too many concerns in one file"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "13a0fda9b1020b26dde113a24d3e377cc890d448",
+      "rule_id": "SCATTERED_ENV",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "inconsistency",
+      "message": "13 direct process.env accesses — centralize in a config module",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "13a0fda9b1020b26dde113a24d3e377cc890d448",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main.ts:1:SCATTERED_ENV",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main.ts:SCATTERED_ENV:13 direct process.env accesses — centralize in a config module",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main.ts:SCATTERED_ENV",
+          "rule_message": "SCATTERED_ENV:13 direct process.env accesses — centralize in a config module"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "e2f516768af7975eda1f5c55ec5113d75cf8517e",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 823 lines of code — approaching god file territory (threshold: 500)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "e2f516768af7975eda1f5c55ec5113d75cf8517e",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main.ts:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main.ts:LARGE_FILE:File has 823 lines of code — approaching god file territory (threshold: 500)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\main.ts:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 823 lines of code — approaching god file territory (threshold: 500)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "6aba290624f962889ea41141e4ea7632e3536621",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 344 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\preload.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "6aba290624f962889ea41141e4ea7632e3536621",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\preload.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\preload.ts:LONG_FILE:File has 344 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\preload.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 344 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "46f214b1d8630b2acfc62d3a48fd8d42ac031168",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 369 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\settings-window.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "46f214b1d8630b2acfc62d3a48fd8d42ac031168",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\settings-window.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\settings-window.ts:LONG_FILE:File has 369 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\settings-window.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 369 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "3c082287f3f0a40bf9937931d087a668953a1d4c",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 358 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\raycast\\command-runner.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "3c082287f3f0a40bf9937931d087a668953a1d4c",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\raycast\\command-runner.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\raycast\\command-runner.ts:LONG_FILE:File has 358 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\raycast\\command-runner.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 358 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "fc7b4dc4b48a08f73beaaeac78a45698a3437419",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 354 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\raycast\\view-host.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "fc7b4dc4b48a08f73beaaeac78a45698a3437419",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\raycast\\view-host.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\raycast\\view-host.ts:LONG_FILE:File has 354 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\raycast\\view-host.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 354 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "d10ea9bc7d7dfb684e4723ecdc4e12ce44b72735",
+      "rule_id": "BARREL_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "Barrel export file — 46/47 exports are re-exports. Direct imports are faster (Atlassian: 75% build speed gain)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\packages\\visuals\\components\\index.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "d10ea9bc7d7dfb684e4723ecdc4e12ce44b72735",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\packages\\visuals\\components\\index.ts:1:BARREL_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\packages\\visuals\\components\\index.ts:BARREL_FILE:Barrel export file — 46/47 exports are re-exports. Direct imports are faster (Atlassian: 75% build speed gain)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\packages\\visuals\\components\\index.ts:BARREL_FILE",
+          "rule_message": "BARREL_FILE:Barrel export file — 46/47 exports are re-exports. Direct imports are faster (Atlassian: 75% build speed gain)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "357a226a816d6902963b0f16addd56fc26cfeb08",
+      "rule_id": "IMPORT_HEAVY",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File imports from 47 modules — too many concerns in one file",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\packages\\visuals\\components\\index.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "357a226a816d6902963b0f16addd56fc26cfeb08",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\packages\\visuals\\components\\index.ts:1:IMPORT_HEAVY",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\packages\\visuals\\components\\index.ts:IMPORT_HEAVY:File imports from 47 modules — too many concerns in one file",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\packages\\visuals\\components\\index.ts:IMPORT_HEAVY",
+          "rule_message": "IMPORT_HEAVY:File imports from 47 modules — too many concerns in one file"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "b4ee4d0417812b69dea7c1e0cf1e0c4244381a63",
+      "rule_id": "LONG_FILE",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File has 364 lines of code — consider splitting (threshold: 300)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\incubator\\akasha\\src\\lib\\epub.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "b4ee4d0417812b69dea7c1e0cf1e0c4244381a63",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\incubator\\akasha\\src\\lib\\epub.ts:1:LONG_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\incubator\\akasha\\src\\lib\\epub.ts:LONG_FILE:File has 364 lines of code — consider splitting (threshold: 300)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\incubator\\akasha\\src\\lib\\epub.ts:LONG_FILE",
+          "rule_message": "LONG_FILE:File has 364 lines of code — consider splitting (threshold: 300)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "8ef0e9887ce54edf972f1693940adce79eaf9bd1",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 694 lines of code — approaching god file territory (threshold: 500)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\docs\\kosmos-overview.html",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "8ef0e9887ce54edf972f1693940adce79eaf9bd1",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\docs\\kosmos-overview.html:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\docs\\kosmos-overview.html:LARGE_FILE:File has 694 lines of code — approaching god file territory (threshold: 500)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\docs\\kosmos-overview.html:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 694 lines of code — approaching god file territory (threshold: 500)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "1497d1d3083838405b536eec1534ab59ec529c30",
+      "rule_id": "STAR_REEXPORT",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "inconsistency",
+      "message": "export * from — pollutes namespace, hides what's exposed. Use named exports.",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\ark-client.js",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "1497d1d3083838405b536eec1534ab59ec529c30",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\ark-client.js:1:STAR_REEXPORT",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\ark-client.js:STAR_REEXPORT:export * from — pollutes namespace, hides what's exposed. Use named exports.",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\ark-client.js:STAR_REEXPORT",
+          "rule_message": "STAR_REEXPORT:export * from — pollutes namespace, hides what's exposed. Use named exports."
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "72b1f338a00e6e0cdc2b7b5b9de97740853c8f6f",
+      "rule_id": "LARGE_FILE",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "complexity",
+      "message": "File has 1246 lines of code — approaching god file territory (threshold: 825)",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\ark-client.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "72b1f338a00e6e0cdc2b7b5b9de97740853c8f6f",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\ark-client.ts:1:LARGE_FILE",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\ark-client.ts:LARGE_FILE:File has 1246 lines of code — approaching god file territory (threshold: 825)",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\ark-client.ts:LARGE_FILE",
+          "rule_message": "LARGE_FILE:File has 1246 lines of code — approaching god file territory (threshold: 825)"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "a472e89242ab5e74e26a0517d9141dd9053f11f6",
+      "rule_id": "SCATTERED_ENV",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "inconsistency",
+      "message": "10 direct process.env accesses — centralize in a config module",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\ensure-kepler.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "a472e89242ab5e74e26a0517d9141dd9053f11f6",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\ensure-kepler.ts:1:SCATTERED_ENV",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\ensure-kepler.ts:SCATTERED_ENV:10 direct process.env accesses — centralize in a config module",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\ensure-kepler.ts:SCATTERED_ENV",
+          "rule_message": "SCATTERED_ENV:10 direct process.env accesses — centralize in a config module"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "e3fbcb40d28e96c204b7128b4845856e9b596ed5",
+      "rule_id": "IMPORT_HEAVY",
+      "level": "warning",
+      "severity": "MEDIUM",
+      "category": "complexity",
+      "message": "File imports from 26 modules — too many concerns in one file",
+      "tool": "file-metrics",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\generated\\index.ts",
+          "range": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "e3fbcb40d28e96c204b7128b4845856e9b596ed5",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\generated\\index.ts:1:IMPORT_HEAVY",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\generated\\index.ts:IMPORT_HEAVY:File imports from 26 modules — too many concerns in one file",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\core\\ark\\packages\\ark\\src\\generated\\index.ts:IMPORT_HEAVY",
+          "rule_message": "IMPORT_HEAVY:File imports from 26 modules — too many concerns in one file"
+        }
+      },
+      "metadata": {
+        "tier": 0
+      }
+    },
+    {
+      "id": "86fbf2ec79a1ca94c93328a49b48741be38edc08",
+      "rule_id": "DEAD_EXPORT",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "dead-code",
+      "message": "Unused export: extensionIconDataUri",
+      "tool": "knip",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts",
+          "range": {
+            "start": {
+              "line": 66,
+              "column": 1
+            },
+            "end": {
+              "line": 66,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "86fbf2ec79a1ca94c93328a49b48741be38edc08",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:66:DEAD_EXPORT",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:DEAD_EXPORT:Unused export: extensionIconDataUri",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:DEAD_EXPORT",
+          "rule_message": "DEAD_EXPORT:Unused export: extensionIconDataUri",
+          "path_rule_delta": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:DEAD_EXPORT:export:extensionIconDataUri",
+          "rule_delta": "DEAD_EXPORT:export:extensionIconDataUri"
+        }
+      },
+      "fixes": [
+        {
+          "description": "Remove export 'extensionIconDataUri' — no importers found"
+        }
+      ],
+      "metadata": {
+        "tier": 3
+      }
+    },
+    {
+      "id": "1aa9be0c8e607352e65b1683f27493998d319981",
+      "rule_id": "DEAD_EXPORT",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "dead-code",
+      "message": "Unused export: listExtensions",
+      "tool": "knip",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts",
+          "range": {
+            "start": {
+              "line": 69,
+              "column": 1
+            },
+            "end": {
+              "line": 69,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "1aa9be0c8e607352e65b1683f27493998d319981",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:69:DEAD_EXPORT",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:DEAD_EXPORT:Unused export: listExtensions",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:DEAD_EXPORT",
+          "rule_message": "DEAD_EXPORT:Unused export: listExtensions",
+          "path_rule_delta": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:DEAD_EXPORT:export:listExtensions",
+          "rule_delta": "DEAD_EXPORT:export:listExtensions"
+        }
+      },
+      "fixes": [
+        {
+          "description": "Remove export 'listExtensions' — no importers found"
+        }
+      ],
+      "metadata": {
+        "tier": 3
+      }
+    },
+    {
+      "id": "7b313f295edfd402eb625a5bf016d157d7bd67b2",
+      "rule_id": "DEAD_EXPORT",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "dead-code",
+      "message": "Unused export: loadExtensionManifest",
+      "tool": "knip",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts",
+          "range": {
+            "start": {
+              "line": 71,
+              "column": 1
+            },
+            "end": {
+              "line": 71,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "7b313f295edfd402eb625a5bf016d157d7bd67b2",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:71:DEAD_EXPORT",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:DEAD_EXPORT:Unused export: loadExtensionManifest",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:DEAD_EXPORT",
+          "rule_message": "DEAD_EXPORT:Unused export: loadExtensionManifest",
+          "path_rule_delta": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-host.ts:DEAD_EXPORT:export:loadExtensionManifest",
+          "rule_delta": "DEAD_EXPORT:export:loadExtensionManifest"
+        }
+      },
+      "fixes": [
+        {
+          "description": "Remove export 'loadExtensionManifest' — no importers found"
+        }
+      ],
+      "metadata": {
+        "tier": 3
+      }
+    },
+    {
+      "id": "8cbcc23976bf115a058b058717bd7bc10be594a7",
+      "rule_id": "DEAD_EXPORT",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "dead-code",
+      "message": "Unused export: readDevModeSetting",
+      "tool": "knip",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts",
+          "range": {
+            "start": {
+              "line": 209,
+              "column": 1
+            },
+            "end": {
+              "line": 209,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "8cbcc23976bf115a058b058717bd7bc10be594a7",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:209:DEAD_EXPORT",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT:Unused export: readDevModeSetting",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT",
+          "rule_message": "DEAD_EXPORT:Unused export: readDevModeSetting",
+          "path_rule_delta": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT:export:readDevModeSetting",
+          "rule_delta": "DEAD_EXPORT:export:readDevModeSetting"
+        }
+      },
+      "fixes": [
+        {
+          "description": "Remove export 'readDevModeSetting' — no importers found"
+        }
+      ],
+      "metadata": {
+        "tier": 3
+      }
+    },
+    {
+      "id": "7ff851f9335dca5867edbe718c6e86941354e8ec",
+      "rule_id": "DEAD_EXPORT",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "dead-code",
+      "message": "Unused export: resolveExtensionRoots",
+      "tool": "knip",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts",
+          "range": {
+            "start": {
+              "line": 370,
+              "column": 1
+            },
+            "end": {
+              "line": 370,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "7ff851f9335dca5867edbe718c6e86941354e8ec",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:370:DEAD_EXPORT",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT:Unused export: resolveExtensionRoots",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT",
+          "rule_message": "DEAD_EXPORT:Unused export: resolveExtensionRoots",
+          "path_rule_delta": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT:export:resolveExtensionRoots",
+          "rule_delta": "DEAD_EXPORT:export:resolveExtensionRoots"
+        }
+      },
+      "fixes": [
+        {
+          "description": "Remove export 'resolveExtensionRoots' — no importers found"
+        }
+      ],
+      "metadata": {
+        "tier": 3
+      }
+    },
+    {
+      "id": "a0547ec8f428a33d6b9a2827ead6cb0d37f76e4b",
+      "rule_id": "DEAD_EXPORT",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "dead-code",
+      "message": "Unused export: userExtensionsRoot",
+      "tool": "knip",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts",
+          "range": {
+            "start": {
+              "line": 379,
+              "column": 1
+            },
+            "end": {
+              "line": 379,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "a0547ec8f428a33d6b9a2827ead6cb0d37f76e4b",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:379:DEAD_EXPORT",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT:Unused export: userExtensionsRoot",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT",
+          "rule_message": "DEAD_EXPORT:Unused export: userExtensionsRoot",
+          "path_rule_delta": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT:export:userExtensionsRoot",
+          "rule_delta": "DEAD_EXPORT:export:userExtensionsRoot"
+        }
+      },
+      "fixes": [
+        {
+          "description": "Remove export 'userExtensionsRoot' — no importers found"
+        }
+      ],
+      "metadata": {
+        "tier": 3
+      }
+    },
+    {
+      "id": "cb9fb2eebaff3a644b53cbdedd51d06961f1ec2d",
+      "rule_id": "DEAD_EXPORT",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "dead-code",
+      "message": "Unused export: extensionIconDataUri",
+      "tool": "knip",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts",
+          "range": {
+            "start": {
+              "line": 532,
+              "column": 1
+            },
+            "end": {
+              "line": 532,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "cb9fb2eebaff3a644b53cbdedd51d06961f1ec2d",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:532:DEAD_EXPORT",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT:Unused export: extensionIconDataUri",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT",
+          "rule_message": "DEAD_EXPORT:Unused export: extensionIconDataUri",
+          "path_rule_delta": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT:export:extensionIconDataUri",
+          "rule_delta": "DEAD_EXPORT:export:extensionIconDataUri"
+        }
+      },
+      "fixes": [
+        {
+          "description": "Remove export 'extensionIconDataUri' — no importers found"
+        }
+      ],
+      "metadata": {
+        "tier": 3
+      }
+    },
+    {
+      "id": "e5e83ffa330600c0117628600db89f3219ba662f",
+      "rule_id": "DEAD_EXPORT",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "dead-code",
+      "message": "Unused type export: ExtensionKind",
+      "tool": "knip",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts",
+          "range": {
+            "start": {
+              "line": 14,
+              "column": 1
+            },
+            "end": {
+              "line": 14,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "e5e83ffa330600c0117628600db89f3219ba662f",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:14:DEAD_EXPORT",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT:Unused type export: ExtensionKind",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT",
+          "rule_message": "DEAD_EXPORT:Unused type export: ExtensionKind",
+          "path_rule_delta": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT:type-export:ExtensionKind",
+          "rule_delta": "DEAD_EXPORT:type-export:ExtensionKind"
+        }
+      },
+      "fixes": [
+        {
+          "description": "Remove type export 'ExtensionKind' — no importers found"
+        }
+      ],
+      "metadata": {
+        "tier": 3
+      }
+    },
+    {
+      "id": "904a1d5b1b06adb78f1f4e41cc66caca457e3a91",
+      "rule_id": "DEAD_EXPORT",
+      "level": "error",
+      "severity": "HIGH",
+      "category": "dead-code",
+      "message": "Unused type export: KextManifestCommand",
+      "tool": "knip",
+      "locations": [
+        {
+          "path": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts",
+          "range": {
+            "start": {
+              "line": 20,
+              "column": 1
+            },
+            "end": {
+              "line": 20,
+              "column": 1
+            }
+          }
+        }
+      ],
+      "primary_location_index": 0,
+      "fingerprints": {
+        "primary": "904a1d5b1b06adb78f1f4e41cc66caca457e3a91",
+        "partial": {
+          "path_line_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:20:DEAD_EXPORT",
+          "path_rule_message": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT:Unused type export: KextManifestCommand",
+          "path_rule": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT",
+          "rule_message": "DEAD_EXPORT:Unused type export: KextManifestCommand",
+          "path_rule_delta": "C:\\Users\\kirill\\Coding\\kosmos\\platform\\desktop\\electron\\extension-manifest.ts:DEAD_EXPORT:type-export:KextManifestCommand",
+          "rule_delta": "DEAD_EXPORT:type-export:KextManifestCommand"
+        }
+      },
+      "fixes": [
+        {
+          "description": "Remove type export 'KextManifestCommand' — no importers found"
+        }
+      ],
+      "metadata": {
+        "tier": 3
+      }
+    }
+  ]
+}

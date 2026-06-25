@@ -1,0 +1,62 @@
+{
+  "task": "2026-06-24-desloppify-soft-delete-log-rethrow-cleanup",
+  "classification": "FULL_LOOP",
+  "scan": {
+    "before": {
+      "path": ".agent/tasks/2026-06-24-desloppify-soft-delete-log-rethrow-cleanup/baseline/desloppify-before.json",
+      "score": 0,
+      "total": 424,
+      "summary": {
+        "critical": 0,
+        "high": 243,
+        "medium": 124,
+        "low": 57
+      }
+    },
+    "after": {
+      "path": ".agent/tasks/2026-06-24-desloppify-soft-delete-log-rethrow-cleanup/desloppify-after.json",
+      "score": 0,
+      "total": 423,
+      "summary": {
+        "critical": 0,
+        "high": 242,
+        "medium": 124,
+        "low": 57
+      }
+    },
+    "delta": {
+      "total": -1,
+      "critical": 0,
+      "high": -1,
+      "medium": 0,
+      "low": 0
+    }
+  },
+  "change": [
+    "Removed the no-op catch/log/rethrow wrapper from softDeleteTask.",
+    "Preserved get_object, deletedAt guard, and upsert_object behavior."
+  ],
+  "verification": [
+    {
+      "command": "rtk err bun run --cwd platform/desktop typecheck",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk err bun run --cwd platform/desktop build:extension eden",
+      "result": "PASS"
+    },
+    {
+      "command": "rtk err bunx vitest run tests/components/keplerApiShim.spec.ts --browser=chromium",
+      "workdir": "products/eden",
+      "result": "PASS: 11 tests"
+    },
+    {
+      "command": "rtk proxy cmd /c \"set PATH=%CD%\\.tmp\\bin;%PATH%&& bunx desloppify scan --json . > .tmp\\desloppify-after-soft-delete-log-rethrow-cleanup.json\"",
+      "result": "PASS for evidence purposes: command exits 1 because findings remain; JSON output was produced and copied to the task evidence path."
+    }
+  ],
+  "falsePositiveNotes": [
+    "The remaining Eden task object registration LOG_AND_RETHROW catch resets the cached promise so later calls can retry.",
+    "The Delphi task object registration LOG_AND_RETHROW catch also resets cached retry state."
+  ]
+}

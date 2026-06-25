@@ -1,0 +1,42 @@
+{
+  "scope": "platform/desktop/electron/settings-window.ts",
+  "baseline": {
+    "score": 9,
+    "findings": 331,
+    "high": 174,
+    "medium": 113,
+    "low": 44
+  },
+  "after": {
+    "score": 9,
+    "findings": 323,
+    "high": 166,
+    "medium": 113,
+    "low": 44
+  },
+  "delta": {
+    "score": 0,
+    "findings": -8,
+    "high": -8,
+    "medium": 0,
+    "low": 0
+  },
+  "settings_window_dead_export": {
+    "before": [
+      "setTrayIconEnabled",
+      "DEFAULT_HOTKEY_PROD",
+      "DEFAULT_HOTKEY_DEV",
+      "setStoredHotkey",
+      "isAutostartEnabled",
+      "setAutostartEnabled",
+      "isAutostartAllowed",
+      "getLauncherStateTtlMinutes"
+    ],
+    "after": []
+  },
+  "checks": {
+    "typecheck": "pass",
+    "knip": "pass with remaining unrelated DEAD_EXPORT findings elsewhere",
+    "desloppify_scan": "exit_code_1_expected, json_written"
+  }
+}

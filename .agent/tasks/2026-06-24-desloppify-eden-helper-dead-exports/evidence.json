@@ -1,0 +1,38 @@
+{
+  "task_id": "2026-06-24-desloppify-eden-helper-dead-exports",
+  "verified_at": "2026-06-24T11:20:20+03:00",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "evidence": ["baseline/desloppify-before.json", "desloppify-after.json"]
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "evidence": [
+        "Scoped DEAD_EXPORT findings: 5 -> 0",
+        "rg reference check found removed symbols only in scoped helper files"
+      ]
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS_WITH_UNRELATED_BLOCKER",
+      "commands": [
+        "bun run --cwd platform/desktop typecheck",
+        "bun run --cwd platform/desktop build:extension eden",
+        "KOSMOS_HEADLESS=1 KOSMOS_TEST_MODE=1 bunx playwright test tests/e2e/eden.spec.ts tests/e2e/eden-task-enter.spec.ts"
+      ],
+      "evidence": [
+        "typecheck passed",
+        "build:extension eden passed",
+        "focused Eden e2e failed in autosave/journal assertions unrelated to removed helper exports; see raw/focused-eden-e2e.log"
+      ]
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "evidence": ["No changes to launchKepler or headless/test data-dir setup"]
+    }
+  ]
+}
