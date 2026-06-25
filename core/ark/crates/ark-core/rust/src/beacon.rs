@@ -227,14 +227,12 @@ impl BroadcastDiscovery {
         let mut sorted = merged.clone();
         sorted.sort();
 
-        let should_fire = {
-            let mut seen = self.seen_peers.lock().await;
-            let existing = seen.get(&payload.d).cloned();
-            let (should_fire, new_state) =
-                classify_beacon(existing.as_ref(), &payload.n, &sorted, now_val);
-            seen.insert(payload.d.clone(), new_state);
-            should_fire
-        };
+        let mut seen = self.seen_peers.lock().await;
+        let existing = seen.get(&payload.d).cloned();
+        let (should_fire, new_state) =
+            classify_beacon(existing.as_ref(), &payload.n, &sorted, now_val);
+        seen.insert(payload.d.clone(), new_state);
+        drop(seen);
 
         if !should_fire {
             return;
@@ -247,8 +245,7 @@ impl BroadcastDiscovery {
             addresses: merged,
         };
 
-        let handler = self.on_peer_discovered.lock().await.clone();
-        if let Some(handler) = handler.as_ref() {
+        if let Some(handler) = self.on_peer_discovered.lock().await.as_ref() {
             handler(peer);
         }
     }

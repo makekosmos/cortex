@@ -1,4 +1,3 @@
-import { setTimeout as delay } from "node:timers/promises";
 import type { ElectronApplication, Page } from "@playwright/test";
 
 export interface FocusWidgetStateSnapshot {
@@ -31,9 +30,9 @@ export async function gracefulQuit(app: ElectronApplication): Promise<void> {
   }
   await Promise.race([
     new Promise<void>((resolve) => app.process().once("exit", () => resolve())),
-    delay(10_000).then(() => {
-      throw new Error("process exit timeout 10s");
-    }),
+    new Promise<void>((_, rej) =>
+      setTimeout(() => rej(new Error("process exit timeout 10s")), 10_000),
+    ),
   ]).catch(() => undefined);
 }
 
@@ -53,7 +52,7 @@ export async function findFocusWidgetPage(
         /* page might be transitioning */
       }
     }
-    await delay(150);
+    await new Promise((resolve) => setTimeout(resolve, 150));
   }
   return null;
 }

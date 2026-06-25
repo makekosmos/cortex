@@ -1,0 +1,197 @@
+export const codeBlockLanguages: { id: string; name: string }[] = [
+  { id: "plaintext", name: "Plain Text" },
+
+  { id: "arduino", name: "Arduino" },
+
+  { id: "bash", name: "Bash" },
+
+  { id: "c", name: "C" },
+
+  { id: "cpp", name: "C++" },
+
+  { id: "csharp", name: "C#" },
+
+  { id: "clojure", name: "Clojure" },
+
+  { id: "coffeescript", name: "CoffeeScript" },
+
+  { id: "css", name: "CSS" },
+
+  { id: "dart", name: "Dart" },
+
+  { id: "diff", name: "Diff" },
+
+  { id: "dockerfile", name: "Dockerfile" },
+
+  { id: "elixir", name: "Elixir" },
+
+  { id: "elm", name: "Elm" },
+
+  { id: "erlang", name: "Erlang" },
+
+  { id: "fortran", name: "Fortran" },
+
+  { id: "fsharp", name: "F#" },
+
+  { id: "glsl", name: "GLSL" },
+
+  { id: "go", name: "Go" },
+
+  { id: "graphql", name: "GraphQL" },
+
+  { id: "groovy", name: "Groovy" },
+
+  { id: "haskell", name: "Haskell" },
+
+  { id: "html", name: "HTML" },
+
+  { id: "ini", name: "INI" },
+
+  { id: "java", name: "Java" },
+
+  { id: "javascript", name: "JavaScript" },
+
+  { id: "json", name: "JSON" },
+
+  { id: "julia", name: "Julia" },
+
+  { id: "kotlin", name: "Kotlin" },
+
+  { id: "latex", name: "LaTeX" },
+
+  { id: "less", name: "Less" },
+
+  { id: "lisp", name: "Lisp" },
+
+  { id: "lua", name: "Lua" },
+
+  { id: "makefile", name: "Makefile" },
+
+  { id: "markdown", name: "Markdown" },
+
+  { id: "matlab", name: "MATLAB" },
+
+  { id: "nix", name: "Nix" },
+
+  { id: "objectivec", name: "Objective-C" },
+
+  { id: "ocaml", name: "OCaml" },
+
+  { id: "pascal", name: "Pascal" },
+
+  { id: "perl", name: "Perl" },
+
+  { id: "php", name: "PHP" },
+
+  { id: "powershell", name: "PowerShell" },
+
+  { id: "protobuf", name: "Protobuf" },
+
+  { id: "python", name: "Python" },
+
+  { id: "r", name: "R" },
+
+  { id: "ruby", name: "Ruby" },
+
+  { id: "rust", name: "Rust" },
+
+  { id: "scala", name: "Scala" },
+
+  { id: "scss", name: "SCSS" },
+
+  { id: "shell", name: "Shell" },
+
+  { id: "sql", name: "SQL" },
+
+  { id: "swift", name: "Swift" },
+
+  { id: "toml", name: "TOML" },
+
+  { id: "typescript", name: "TypeScript" },
+
+  { id: "vbnet", name: "VB.NET" },
+
+  { id: "verilog", name: "Verilog" },
+
+  { id: "vhdl", name: "VHDL" },
+
+  { id: "wasm", name: "WebAssembly" },
+
+  { id: "xml", name: "XML" },
+
+  { id: "yaml", name: "YAML" },
+
+  { id: "zig", name: "Zig" },
+];
+
+export const codeBlockLanguageMap = new Map(codeBlockLanguages.map((lang) => [lang.id, lang.name]));
+
+export const codeLanguageAliases: Record<string, string> = {
+  js: "javascript",
+
+  ts: "typescript",
+
+  py: "python",
+
+  rb: "ruby",
+
+  rs: "rust",
+
+  cs: "csharp",
+
+  "c++": "cpp",
+
+  "c#": "csharp",
+
+  "f#": "fsharp",
+
+  sh: "bash",
+
+  zsh: "bash",
+
+  yml: "yaml",
+
+  tex: "latex",
+
+  kt: "kotlin",
+
+  objc: "objectivec",
+
+  "objective-c": "objectivec",
+
+  ps: "powershell",
+
+  ps1: "powershell",
+
+  proto: "protobuf",
+
+  hs: "haskell",
+
+  ex: "elixir",
+
+  erl: "erlang",
+
+  ml: "ocaml",
+
+  vb: "vbnet",
+
+  asm: "wasm",
+
+  plain: "plaintext",
+
+  text: "plaintext",
+
+  txt: "plaintext",
+};
+
+export function resolveLanguageId(language: string | null | undefined): string {
+  if (!language || !language.trim()) return "plaintext";
+
+  const lower = language.toLowerCase();
+
+  return codeLanguageAliases[lower] ?? lower;
+}
+
+export function getCodeLanguageDisplayName(languageId: string): string {
+  return codeBlockLanguageMap.get(languageId) ?? languageId;
+}

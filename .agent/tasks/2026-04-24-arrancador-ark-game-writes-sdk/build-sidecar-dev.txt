@@ -1,4 +1,0 @@
-$ cargo build --manifest-path sidecar/Cargo.toml && cargo build --manifest-path ../../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc
-   Compiling arrancador-sidecar v0.1.0 (D:\Personal\Hobby\Coding\kosmos\apps\arrancador\sidecar)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.91s
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.32s

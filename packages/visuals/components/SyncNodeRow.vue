@@ -4,8 +4,8 @@ import { Laptop, Monitor, Smartphone } from "@lucide/vue";
 import Button from "./Button.vue";
 import StatusDot from "./StatusDot.vue";
 
-type SyncNodeDeviceKind = "desktop" | "laptop" | "phone" | "unknown";
-type SyncNodeStatus = "online" | "offline" | "connecting";
+export type SyncNodeDeviceKind = "desktop" | "laptop" | "phone" | "unknown";
+export type SyncNodeStatus = "online" | "offline" | "connecting";
 
 const props = withDefaults(
   defineProps<{

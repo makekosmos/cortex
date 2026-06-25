@@ -1,5 +1,5 @@
 import { createApp, defineAsyncComponent, h, ref } from "vue";
-import { installConsoleOnlyRuntimeErrors, installScrollFadeListener } from "@kosmos/visuals";
+import { installScrollFadeListener } from "@kosmos/visuals";
 import App from "./App.vue";
 import SettingsView from "./views/SettingsView.vue";
 import "./styles.css";
@@ -22,37 +22,44 @@ function rootView() {
   const currentHash = hash.value;
   if (currentHash.startsWith("#settings")) return SettingsView;
   if (currentHash.startsWith("#install-extension")) {
-    return defineAsyncComponent(() => import("./views/InstallExtensionView.vue"));
+    const InstallExtensionView = defineAsyncComponent(
+      () => import("./views/InstallExtensionView.vue"),
+    );
+    return InstallExtensionView;
   }
   if (currentHash.startsWith("#/dashboard")) {
     // Async — dashboard views и их деревья не нужны для launcher / settings окон.
-    return defineAsyncComponent(() => import("./views/DashboardRoot.vue"));
+    const DashboardRoot = defineAsyncComponent(() => import("./views/DashboardRoot.vue"));
+    return DashboardRoot;
   }
   if (currentHash.startsWith("#/my-cosmos")) {
     // Async — cosmos.gl + граф не нужны в launcher / settings бандлах.
-    return defineAsyncComponent(() => import("./my-cosmos/MyCosmosView.vue"));
+    const MyCosmosView = defineAsyncComponent(() => import("./my-cosmos/MyCosmosView.vue"));
+    return MyCosmosView;
   }
   if (currentHash.startsWith("#raycast-host") || currentHash.startsWith("#command-host")) {
-    return defineAsyncComponent(() => import("./views/RaycastHostView.vue"));
+    const RaycastHostView = defineAsyncComponent(() => import("./views/RaycastHostView.vue"));
+    return RaycastHostView;
   }
   if (currentHash.startsWith("#focus-widget")) {
     // Tiny always-on-top widget для активной pomodoro сессии. Async чтобы
     // не тащить в launcher bundle.
-    return defineAsyncComponent(() => import("./views/FocusWidgetView.vue"));
+    const FocusWidgetView = defineAsyncComponent(() => import("./views/FocusWidgetView.vue"));
+    return FocusWidgetView;
   }
   if (currentHash.startsWith("#focus-block-overlay")) {
-    return defineAsyncComponent(() => import("./views/FocusBlockOverlay.vue"));
+    const FocusBlockOverlay = defineAsyncComponent(() => import("./views/FocusBlockOverlay.vue"));
+    return FocusBlockOverlay;
   }
   if (currentHash.startsWith("#dictation-pill")) {
     // Дикта-pill — overlay с waveform + таймером во время записи.
     // Async — audio capture / encoding в launcher bundle не нужны.
-    return defineAsyncComponent(() => import("./views/DictationPillView.vue"));
+    const DictationPillView = defineAsyncComponent(() => import("./views/DictationPillView.vue"));
+    return DictationPillView;
   }
   return App;
 }
 
-const app = createApp({
+createApp({
   render: () => h(rootView()),
-});
-installConsoleOnlyRuntimeErrors(app, { label: "desktop-renderer" });
-app.mount("#app");
+}).mount("#app");

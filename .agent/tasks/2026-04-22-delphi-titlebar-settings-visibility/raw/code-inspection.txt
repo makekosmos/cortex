@@ -1,6 +1,0 @@
-Relevant inspected facts:
-
-- `apps/delphi/ts/src/App.vue`
-  - `openSettings()` remains the navigation handler
-  - the titlebar control now uses icon + text
-  - the control still reflects active state when `/settings` is open

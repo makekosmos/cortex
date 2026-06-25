@@ -10,7 +10,7 @@ export function buildNativeRelease(id, manifest, repoRoot, logPrefix = "native:p
   execSync(`cargo build --release -p ${pkg}`, { cwd: repoRoot, stdio: "inherit" });
 }
 
-function nativeExecutablePath(id, manifest, repoRoot) {
+export function nativeExecutablePath(id, manifest, repoRoot) {
   const pkg = manifest.native?.cargoPackage ?? id;
   const exeName = process.platform === "win32" ? `${pkg}.exe` : pkg;
   return path.join(repoRoot, "target", "release", exeName);

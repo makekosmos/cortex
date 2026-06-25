@@ -18,17 +18,12 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 
-function platformMarker(): "mac" | "windows" | "linux" {
-  if (process.platform === "darwin") return "mac";
-  if (process.platform === "win32") return "windows";
-  return "linux";
-}
-
 // Платформенный маркер на <html> для extension-окон (Eden/Delphi/...).
 // Inline + DOMContentLoaded — см. preload.ts (chunk-split ломает sandbox,
 // preload запускается до создания documentElement).
 {
-  const platform = platformMarker();
+  const platform =
+    process.platform === "darwin" ? "mac" : process.platform === "win32" ? "windows" : "linux";
   const mark = () => {
     if (document.documentElement) document.documentElement.dataset.platform = platform;
   };

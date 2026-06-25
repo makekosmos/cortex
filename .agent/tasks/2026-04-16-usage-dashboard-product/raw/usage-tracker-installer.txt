@@ -1,9 +1,0 @@
-bun : $ powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1
-строка:2 знак:261
-+ ... ge-tracker; bun run package:installer *> ..\..\.agent\tasks\2026-04-1 ...
-+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: ($ powershell -E...d-installer.ps1:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
-    Finished `release` profile [optimized] target(s) in 0.56s
-Installer bundle ready: D:\Personal\Hobby\Coding\kosmos\services\usage-tracker\dist\KosmosUsageTrackerInstaller

@@ -1,7 +1,0 @@
-bun.exe : error: bun is unable to write files to tempdir: AccessDenied
-строка:2 знак:154
-+ ... ng\kosmos'; & 'C:\Users\Kazui\.bun\bin\bun.exe' x oxlint apps/eden/ts ...
-+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (error: bun is u...r: AccessDenied:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 

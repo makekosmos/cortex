@@ -87,7 +87,7 @@ const EdenSidebarFixture = defineComponent({
       openObjectTypeId,
       setNotesScreen,
       onEntryContextMenu() {
-        return;
+        return undefined;
       },
       onCreateEntry() {
         createEntryCount.value += 1;

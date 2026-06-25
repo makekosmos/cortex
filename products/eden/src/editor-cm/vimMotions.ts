@@ -1,4 +1,4 @@
-interface VimMotionItem {
+export interface VimMotionItem {
   keys: string;
   title: string;
   description: string;
@@ -135,11 +135,6 @@ export const VIM_MOTION_GROUPS: VimMotionGroup[] = [
         keys: ":zen on",
         title: "Включить focus mode",
         description: "Открыть редактор без лишнего chrome.",
-      },
-      {
-        keys: ":zen off",
-        title: "Выключить focus mode",
-        description: "Вернуться к обычному chrome Eden.",
       },
     ],
   },

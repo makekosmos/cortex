@@ -29,6 +29,7 @@
   "devDependencies": {
     "@storybook/addon-docs": "^10.4.0",
     "@storybook/addon-vitest": "^10.4.0",
+    "@storybook/vue3": "^10.4.0",
     "@storybook/vue3-vite": "^10.4.0",
     "@tailwindcss/vite": "^4.2.2",
     "@vitejs/plugin-vue": "^5.0.5",
@@ -39,6 +40,7 @@
     "vite": "^5.4.0",
     "vitest": "^4.1.6",
     "vue": "^3.6.0-beta.12",
+    "vue-component-type-helpers": "2.2.12",
     "vue-router": "^5.0.7"
   },
   "peerDependencies": {

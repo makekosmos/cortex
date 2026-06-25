@@ -4,11 +4,6 @@ type Theme = "light" | "dark" | "system";
 
 const STORAGE_KEY = "vite-ui-theme";
 
-function readStoredTheme(fallback: Theme): Theme {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  return stored === "light" || stored === "dark" || stored === "system" ? stored : fallback;
-}
-
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
 
@@ -21,7 +16,7 @@ function applyTheme(theme: Theme) {
 
 // Module-level shared state (singleton)
 
-const theme = ref<Theme>(readStoredTheme("system"));
+const theme = ref<Theme>((localStorage.getItem(STORAGE_KEY) as Theme) || "system");
 
 // Apply theme immediately on module load and reactively on every change.
 

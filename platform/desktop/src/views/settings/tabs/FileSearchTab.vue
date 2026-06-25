@@ -4,7 +4,7 @@
 // прогресс индексации показывается toast'ом, который живёт дольше mount'а.
 
 import { onBeforeUnmount, onMounted } from "vue";
-import { Folder, Plus } from "@lucide/vue";
+import { Folder } from "@lucide/vue";
 import { useToast } from "@kosmos/visuals";
 import AdvancedPageLayout, { type IntroDescriptor } from "../components/AdvancedPageLayout.vue";
 import LegacyRow from "../components/LegacyRow.vue";
@@ -20,8 +20,7 @@ const {
   fileSearchBusy,
   fileSearchError,
   fileSearchNewIgnore,
-  fileSearchRootWarnings,
-  loadFileSearchState,
+  loadFileSearchSettings,
   clearFileSearchPoll,
   onToggleFileSearchNoise,
   onToggleFileSearchGitignore,
@@ -32,11 +31,10 @@ const {
   onAddFileSearchIgnore,
   onRemoveFileSearchIgnore,
   onRescanFileSearch,
-  onClearFileSearchCache,
 } = useFileSearchTab(toast);
 
 onMounted(() => {
-  void loadFileSearchState();
+  void loadFileSearchSettings();
 });
 
 onBeforeUnmount(() => {
@@ -52,20 +50,12 @@ onBeforeUnmount(() => {
     <div v-if="fileSearchSettings === null && !fileSearchError" class="hint">
       Загрузка настроек поиска…
     </div>
-    <div v-if="fileSearchSettings" class="row file-search-row file-search-row--scopes">
+    <div v-if="fileSearchSettings" class="row file-search-row">
       <div class="row-label file-search-wide">
-        <div class="file-search-section-header">
-          <div class="label">Папки поиска</div>
-          <button
-            type="button"
-            class="file-search-add-scope"
-            :disabled="!fileSearchSettings || fileSearchBusy"
-            aria-label="Добавить папку поиска"
-            title="Добавить папку поиска"
-            @click="onAddFileSearchScope"
-          >
-            <Plus :size="17" :stroke-width="2" />
-          </button>
+        <div class="label">Папки поиска</div>
+        <div class="hint">
+          Kepler индексирует только выбранные папки. По умолчанию это профиль пользователя; большие
+          диски лучше добавлять осознанно.
         </div>
         <!-- Regression L5 (2026-05-24): semantic list + button
                aria-label includes the scope so screen readers don't
@@ -90,24 +80,16 @@ onBeforeUnmount(() => {
             Папки не выбраны — поиск файлов ничего не индексирует.
           </li>
         </ul>
-        <div v-if="fileSearchRootWarnings.length > 0" class="file-search-root-warnings">
-          <div class="file-search-root-warnings__title">Предупреждения по корням</div>
-          <div class="file-search-root-warnings__list">
-            <div
-              v-for="warning in fileSearchRootWarnings"
-              :key="warning.path"
-              class="file-search-root-warnings__item"
-              :class="{
-                'file-search-root-warnings__item--danger': warning.risk_level === 'danger',
-              }"
-            >
-              <code>{{ warning.path }}</code>
-              <span>
-                {{ warning.risk_reasons[0] || "Требуется подтверждение" }}
-              </span>
-            </div>
-          </div>
-        </div>
+      </div>
+      <div class="row-actions">
+        <button
+          type="button"
+          class="btn"
+          :disabled="!fileSearchSettings || fileSearchBusy"
+          @click="onAddFileSearchScope"
+        >
+          Добавить…
+        </button>
       </div>
     </div>
 
@@ -197,8 +179,10 @@ onBeforeUnmount(() => {
 
     <LegacyRow v-if="fileSearchSettings" title="Ускоренный NTFS-режим">
       <template #hint>
-        Быстрый scan для корней дисков. Если сервис недоступен или включён
-        <code>.gitignore</code>, поиск автоматически использует обычный scan.
+        Если включено, Kepler пробует быстрый NTFS/MFT scan для корней дисков. Если service или
+        права недоступны — автоматически падает назад на обычный scan. NTFS-режим не уважает
+        <code>.gitignore</code>: при включённой обработке <code>.gitignore</code> диски сканируются
+        обычным способом.
       </template>
       <!-- Regression H10 (2026-05-24): surface actual NTFS status, not just toggle position. -->
       <template #extra>
@@ -217,12 +201,12 @@ onBeforeUnmount(() => {
               fileSearchSettings.ntfs_status === 'unavailable',
           }"
         >
-          Реальный режим:
-          <strong v-if="fileSearchSettings.ntfs_status === 'active'"> NTFS работает </strong>
-          <strong v-else-if="fileSearchSettings.ntfs_status === 'fallback'"> обычный scan </strong>
-          <strong v-else-if="fileSearchSettings.ntfs_status === 'unavailable'">
-            NTFS недоступен
+          Статус:
+          <strong v-if="fileSearchSettings.ntfs_status === 'active'"> активен </strong>
+          <strong v-else-if="fileSearchSettings.ntfs_status === 'fallback'">
+            резервный режим
           </strong>
+          <strong v-else-if="fileSearchSettings.ntfs_status === 'unavailable'"> недоступен </strong>
         </div>
       </template>
       <LegacyToggle
@@ -235,26 +219,13 @@ onBeforeUnmount(() => {
     <LegacyRow
       v-if="fileSearchSettings"
       title="Переиндексация"
-      hint="Очистка удаляет только кеш поиска."
+      hint="Запусти вручную после больших перемещений файлов."
     >
       <div class="row-actions">
         <button
           type="button"
-          class="btn ghost danger"
-          :disabled="!fileSearchSettings || fileSearchBusy || fileSearchSettings?.scan_in_progress"
-          @click="onClearFileSearchCache"
-        >
-          Очистить индекс
-        </button>
-        <button
-          type="button"
           class="btn"
-          :disabled="
-            !fileSearchSettings ||
-            fileSearchBusy ||
-            fileSearchSettings?.scan_in_progress ||
-            fileSearchSettings?.enabled === false
-          "
+          :disabled="!fileSearchSettings || fileSearchBusy || fileSearchSettings?.scan_in_progress"
           @click="onRescanFileSearch"
         >
           {{
@@ -272,46 +243,8 @@ onBeforeUnmount(() => {
   align-items: flex-start;
 }
 
-.file-search-row--scopes {
-  position: relative;
-}
-
 .file-search-wide {
   width: 100%;
-}
-
-.file-search-section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 28px;
-}
-
-.file-search-add-scope {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
-  border: 0;
-  background: transparent;
-  color: color-mix(in srgb, var(--foreground) 74%, transparent);
-  cursor: default;
-  transition:
-    background 120ms ease,
-    color 120ms ease;
-}
-
-.file-search-add-scope:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  color: var(--foreground);
-}
-
-.file-search-add-scope:disabled {
-  cursor: default;
-  opacity: 0.45;
 }
 
 .file-search-list {
@@ -383,55 +316,6 @@ onBeforeUnmount(() => {
 
 .file-search-add .focus-input {
   min-width: 180px;
-}
-
-.file-search-root-warnings {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, oklch(0.7 0.12 85) 35%, transparent);
-  background: color-mix(in srgb, oklch(0.7 0.12 85) 12%, transparent);
-}
-
-.file-search-root-warnings__title {
-  font-size: 0.6875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: color-mix(in srgb, var(--foreground) 60%, transparent);
-  margin-bottom: 6px;
-}
-
-.file-search-root-warnings__list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.file-search-root-warnings__item {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  min-width: 0;
-  font-size: 0.75rem;
-  color: color-mix(in srgb, var(--foreground) 85%, transparent);
-}
-
-.file-search-root-warnings__item code {
-  flex: 0 0 auto;
-  max-width: 42%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-mono, ui-monospace, monospace);
-}
-
-.file-search-root-warnings__item span {
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.file-search-root-warnings__item--danger {
-  color: color-mix(in srgb, #fda4af 55%, var(--foreground) 45%);
 }
 
 .focus-input {

@@ -2,8 +2,11 @@
 import { computed } from "vue";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { formatObjectFieldValue } from "@/lib/objectFieldFormatting";
-import { resolveNoteTypeFields, type ResolvedNoteTypeField } from "@/lib/typedNotes";
-import { safeParseHeaderProps } from "@/lib/typedNoteHeaderProps";
+import {
+  resolveNoteTypeFields,
+  safeParseHeaderProps,
+  type ResolvedNoteTypeField,
+} from "@/lib/typedNotes";
 import { toDisplayImageSrc } from "@/lib/localImages";
 import { readEntryMarkdown } from "@/editor-cm/content";
 

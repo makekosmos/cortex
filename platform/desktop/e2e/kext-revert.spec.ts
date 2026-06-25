@@ -5,12 +5,14 @@
 
 import path from "node:path";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
 import { _electron as electron } from "playwright";
-import electronBinary from "electron";
 import { writeZip } from "../scripts/zip-utils.mjs";
 
+const require = createRequire(import.meta.url);
+const electronBinary = require("electron") as string;
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const e2eRoot = path.join(appRoot, ".e2e");
 
@@ -53,14 +55,14 @@ test("AC: revert восстанавливает предыдущую верси�
       ...process.env,
       NODE_ENV: "test",
       KEPLER_SKIP_SYNC: "1",
-      KOSMOS_HEADLESS: "1",
       KOSMOS_TEST_MODE: "1",
       KOSMOS_DATA_DIR: dataDir,
-      KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
     },
     timeout: 20_000,
   });
   try {
+    await new Promise((r) => setTimeout(r, 1500));
+
     async function call(channel: string, ...args: unknown[]) {
       return app.evaluate(
         async ({ ipcMain }, { ch, a }) => {
@@ -71,30 +73,11 @@ test("AC: revert восстанавливает предыдущую верси�
           )._invokeHandlers;
           const h = handlers?.get?.(ch);
           if (!h) throw new Error(`no handler: ${ch}`);
-          return h({} as never, ...a);
+          return await h({} as never, ...a);
         },
         { ch: channel, a: args },
       );
     }
-
-    await expect
-      .poll(
-        () =>
-          app.evaluate(({ ipcMain }) => {
-            const handlers = (
-              ipcMain as unknown as {
-                _invokeHandlers: Map<string, (...x: unknown[]) => unknown>;
-              }
-            )._invokeHandlers;
-            return (
-              handlers?.has?.("kepler:extension:install:do") &&
-              handlers?.has?.("kepler:extension:backups:list") &&
-              handlers?.has?.("kepler:extension:revert")
-            );
-          }),
-        { timeout: 10_000 },
-      )
-      .toBe(true);
 
     await call("kepler:extension:install:do", kV1);
     await call("kepler:extension:install:do", kV2);

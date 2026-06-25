@@ -1,8 +1,0 @@
-$ tsc && vite build --configLoader native
-✓ client build passed
-✓ electron main build passed
-✓ preload build passed
-
-Notes:
-- raw absolute image refs now export as real asset copy entries
-- shell build completed successfully after the export path fix

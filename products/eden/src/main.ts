@@ -15,7 +15,7 @@
 import { createApp, h, ref, vaporInteropPlugin } from "vue";
 import { createPinia } from "pinia";
 import { PiniaColada } from "@pinia/colada";
-import { installConsoleOnlyRuntimeErrors, installScrollFadeListener } from "@kosmos/visuals";
+import { installScrollFadeListener } from "@kosmos/visuals";
 
 import { dispatchEdenCommand, installKeplerApiShim } from "./lib/kepler-api-shim";
 
@@ -44,11 +44,13 @@ function rootView() {
 // Установлен 2026-05-19 в рамках Phase 14 (pilot). Сейчас не используется
 // — еще нет ни одной useQuery/useMutation; store/eden.ts продолжает работать
 // на обычной Pinia. Миграция отдельных queries — отдельный proof loop.
-const app = createApp({
+createApp({
   render: () => h(rootView()),
-});
-installConsoleOnlyRuntimeErrors(app, { label: "eden-extension" });
-app.use(createPinia()).use(PiniaColada).use(vaporInteropPlugin).mount("#root");
+})
+  .use(createPinia())
+  .use(PiniaColada)
+  .use(vaporInteropPlugin)
+  .mount("#root");
 
 // ---------------------------------------------------------------------------
 // Deep-link routing — static open-команды Kepler shell'а вызывают

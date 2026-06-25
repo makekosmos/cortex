@@ -1,5 +1,5 @@
 export type KosmosWindowMaterial = "acrylic" | "mica" | "none";
-type KosmosWindowEffects = "flat" | "acrylic" | "mica";
+export type KosmosWindowEffects = "flat" | "acrylic" | "mica";
 
 interface WindowEffectsEnv {
   KOSMOS_WINDOW_EFFECTS?: string;

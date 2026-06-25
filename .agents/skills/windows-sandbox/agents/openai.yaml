@@ -1,4 +1,0 @@
-interface:
-  display_name: "Windows Sandbox"
-  short_description: "Recover from Windows sandbox command failures."
-  default_prompt: "Use $windows-sandbox to recover from repeated sandbox permission/setup failures."

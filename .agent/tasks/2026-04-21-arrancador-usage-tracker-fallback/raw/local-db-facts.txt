@@ -1,6 +1,0 @@
-selected_space_id=f028287f78de2d7e
-selected_space_usage_sessions=0
-root_ark_usage_sessions=1609
-root_ark_latest_usage=2026-04-17T23:33:37.201Z
-root_ark_usage_2026-04-20=0
-root_ark_usage_2026-04-21=0

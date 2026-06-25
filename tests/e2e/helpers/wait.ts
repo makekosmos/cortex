@@ -34,3 +34,64 @@ export async function waitForBackendReady(page: Page, timeoutMs = 15_000): Promi
     await k.__test.waitForReady(ms);
   }, timeoutMs);
 }
+
+/**
+ * Ждёт пока command с указанным id появится в registry (kepler-internal,
+ * manifest-declared или runtime-registered). Используется когда тест
+ * открывает extension и ему нужно дождаться, что команды extension'а
+ * прорегистрированы до того как делать assertions.
+ */
+export async function waitForCommandRegistered(
+  page: Page,
+  commandId: string,
+  timeoutMs = 5_000,
+): Promise<void> {
+  await page.waitForFunction(
+    async (id: string) => {
+      const k = (
+        window as unknown as {
+          kepler?: {
+            __test?: {
+              getStats(): Promise<{ commands: string[] }>;
+            };
+          };
+        }
+      ).kepler;
+      if (!k?.__test) return false;
+      const stats = await k.__test.getStats();
+      return stats.commands.includes(id);
+    },
+    commandId,
+    { timeout: timeoutMs, polling: 100 },
+  );
+}
+
+/**
+ * Snapshot текущей статистики (для assertions). Throws если test rig не
+ * exposed (KOSMOS_TEST_MODE не выставлен).
+ */
+export async function getTestStats(page: Page): Promise<{
+  arkConnected: boolean;
+  commands: string[];
+  commandsRegistered: number;
+}> {
+  return page.evaluate(async () => {
+    const k = (
+      window as unknown as {
+        kepler?: {
+          __test?: {
+            getStats(): Promise<{
+              arkConnected: boolean;
+              commands: string[];
+              commandsRegistered: number;
+            }>;
+          };
+        };
+      }
+    ).kepler;
+    if (!k?.__test) {
+      throw new Error("window.kepler.__test не exposed — KOSMOS_TEST_MODE=1 не выставлен?");
+    }
+    return k.__test.getStats();
+  });
+}

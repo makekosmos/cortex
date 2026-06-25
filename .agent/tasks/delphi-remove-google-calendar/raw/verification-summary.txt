@@ -1,4 +1,0 @@
-﻿google_calendar_refs=0
-calendar_service_exists=True
-google_calendar_service_source_files=0
-google_calendar_electron_exists=False

@@ -33,7 +33,7 @@ export const Minutes: Story = {
   }),
 };
 
-export const MinutesFiveMinuteStep: Story = {
+export const MinutesStep5: Story = {
   render: () => ({
     components: { TimeColumn },
     setup: () => ({ value: ref(15) }),

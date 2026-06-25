@@ -618,21 +618,20 @@ fn make_sync_entity(
 /// перебивает HLC — данные уже записаны через `record_local_*`.
 /// Если SYNC не запущен — тихий no-op.
 async fn broadcast_local_change(entity: SyncEntity) {
-    let runtime = {
-        let guard = SYNC.lock().await;
-        match guard.as_ref() {
-            Some(r) => r.clone(),
-            None => return,
-        }
+    let guard = SYNC.lock().await;
+    let runtime = match guard.as_ref() {
+        Some(r) => r.clone(),
+        None => return,
     };
+    drop(guard);
 
     runtime
         .server
         .broadcast_live_change(entity.clone(), None)
         .await;
 
-    let clients: Vec<_> = runtime.clients.lock().await.values().cloned().collect();
-    for client in clients {
+    let clients = runtime.clients.lock().await;
+    for client in clients.values() {
         client.broadcast_live_change(entity.clone()).await;
     }
     if let Some(relay) = runtime.relay.as_ref() {
@@ -1628,21 +1627,24 @@ async fn handle_start_sync(
                 if server.is_connected_to(&peer.device_id).await {
                     return;
                 }
-                let existing = clients.lock().await.get(&peer.device_id).cloned();
-                if let Some(existing) = existing {
+                let guard = clients.lock().await;
+                if guard.contains_key(&peer.device_id) {
                     // Update its peer record so reconnect picks the new addresses.
-                    existing
-                        .update_peer(PeerRecord {
-                            device_id: peer.device_id.clone(),
-                            device_name: peer.device_name.clone(),
-                            addresses: reachable.clone(),
-                            last_seen: chrono::Utc::now()
-                                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-                            last_address: None,
-                        })
-                        .await;
+                    if let Some(existing) = guard.get(&peer.device_id) {
+                        existing
+                            .update_peer(PeerRecord {
+                                device_id: peer.device_id.clone(),
+                                device_name: peer.device_name.clone(),
+                                addresses: reachable.clone(),
+                                last_seen: chrono::Utc::now()
+                                    .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                                last_address: None,
+                            })
+                            .await;
+                    }
                     return;
                 }
+                drop(guard);
 
                 let peer_rec = PeerRecord {
                     device_id: peer.device_id.clone(),
@@ -1815,11 +1817,8 @@ async fn start_seed_client(
 }
 
 async fn handle_stop_sync() {
-    let runtime = {
-        let mut guard = SYNC.lock().await;
-        guard.take()
-    };
-    if let Some(runtime) = runtime {
+    let mut guard = SYNC.lock().await;
+    if let Some(runtime) = guard.take() {
         runtime.beacon.stop().await;
         if let Some(relay) = runtime.relay.as_ref() {
             relay.stop();
@@ -1859,13 +1858,12 @@ fn build_pairing_restart_params(runtime: &SyncRuntime, pairing_code: &str) -> Sy
 }
 
 async fn handle_broadcast_change(mut entity: SyncEntity) -> Result<Value, String> {
-    let runtime = {
-        let guard = SYNC.lock().await;
-        match guard.as_ref() {
-            Some(r) => r.clone(),
-            None => return Err("Sync not running".to_string()),
-        }
+    let guard = SYNC.lock().await;
+    let runtime = match guard.as_ref() {
+        Some(r) => r.clone(),
+        None => return Err("Sync not running".to_string()),
     };
+    drop(guard);
 
     // Stamp HLC on the outgoing entity.
     let hlc = runtime.server.update_entity_hlc(&entity.id).await;
@@ -1881,8 +1879,8 @@ async fn handle_broadcast_change(mut entity: SyncEntity) -> Result<Value, String
         .await;
 
     // Broadcast via outbound clients.
-    let clients: Vec<_> = runtime.clients.lock().await.values().cloned().collect();
-    for client in clients {
+    let clients = runtime.clients.lock().await;
+    for client in clients.values() {
         client.broadcast_live_change(entity.clone()).await;
     }
     if let Some(relay) = runtime.relay.as_ref() {
@@ -1903,19 +1901,17 @@ async fn handle_get_own_iroh_ticket() -> Result<Value, String> {
 }
 
 async fn handle_get_sync_snapshot() -> Result<Value, String> {
-    let runtime = {
-        let guard = SYNC.lock().await;
-        match guard.as_ref() {
-            Some(r) => r.clone(),
-            None => {
-                return Ok(json!({
-                    "running": false,
-                    "transport": "unknown",
-                    "pairing_available": false,
-                    "own_pairing_code_available": false,
-                    "peers": [],
-                }))
-            }
+    let guard = SYNC.lock().await;
+    let runtime = match guard.as_ref() {
+        Some(r) => r.clone(),
+        None => {
+            return Ok(json!({
+                "running": false,
+                "transport": "unknown",
+                "pairing_available": false,
+                "own_pairing_code_available": false,
+                "peers": [],
+            }))
         }
     };
 
@@ -2039,12 +2035,10 @@ async fn handle_connect_with_pairing_code(pairing_code: String) -> Result<Value,
 }
 
 async fn handle_get_connected_peers() -> Result<Value, String> {
-    let runtime = {
-        let guard = SYNC.lock().await;
-        match guard.as_ref() {
-            Some(r) => r.clone(),
-            None => return Ok(json!([])),
-        }
+    let guard = SYNC.lock().await;
+    let runtime = match guard.as_ref() {
+        Some(r) => r.clone(),
+        None => return Ok(json!([])),
     };
     let entries = runtime.server.get_connected_peer_entries().await;
 
@@ -2058,15 +2052,9 @@ async fn handle_get_connected_peers() -> Result<Value, String> {
         }
         seen.insert(id, name);
     }
-    let clients: Vec<_> = runtime
-        .clients
-        .lock()
-        .await
-        .iter()
-        .map(|(device_id, client)| (device_id.clone(), client.clone()))
-        .collect();
-    for (device_id, client) in clients {
-        if seen.contains_key(&device_id) {
+    let clients = runtime.clients.lock().await;
+    for (device_id, client) in clients.iter() {
+        if seen.contains_key(device_id) {
             continue;
         }
         let peer = client.current_peer().await;
@@ -2075,6 +2063,7 @@ async fn handle_get_connected_peers() -> Result<Value, String> {
             seen.insert(peer.device_id, peer.device_name);
         }
     }
+    drop(clients);
 
     if let Some(relay) = runtime.relay.as_ref() {
         for (device_id, device_name) in relay.get_connected_peer_entries().await {
@@ -2101,12 +2090,10 @@ async fn handle_get_connected_peers() -> Result<Value, String> {
 }
 
 async fn handle_add_seed_peer(addresses: Vec<String>) -> Result<Value, String> {
-    let runtime = {
-        let guard = SYNC.lock().await;
-        match guard.as_ref() {
-            Some(r) => r.clone(),
-            None => return Err("Sync not running".to_string()),
-        }
+    let guard = SYNC.lock().await;
+    let runtime = match guard.as_ref() {
+        Some(r) => r.clone(),
+        None => return Err("Sync not running".to_string()),
     };
     let own = runtime.own_addresses.lock().await.clone();
     start_seed_client(
@@ -2175,16 +2162,17 @@ mod tests {
         }))
         .expect("iroh config should be accepted by the request schema");
 
-        let Request::StartSync {
-            use_iroh,
-            iroh_peer_ticket,
-            ..
-        } = request
-        else {
-            unreachable!("expected start_sync");
-        };
-        assert!(use_iroh);
-        assert_eq!(iroh_peer_ticket.as_deref(), Some("endpointsometicketvalue"));
+        match request {
+            Request::StartSync {
+                use_iroh,
+                iroh_peer_ticket,
+                ..
+            } => {
+                assert!(use_iroh);
+                assert_eq!(iroh_peer_ticket.as_deref(), Some("endpointsometicketvalue"));
+            }
+            _ => panic!("expected start_sync"),
+        }
     }
 
     #[test]
@@ -2195,10 +2183,12 @@ mod tests {
         }))
         .expect("code alias should deserialize for pairing requests");
 
-        let Request::ConnectWithPairingCode { pairing_code } = request else {
-            unreachable!("expected connect_with_pairing_code");
-        };
-        assert_eq!(pairing_code, "endpointdemo123");
+        match request {
+            Request::ConnectWithPairingCode { pairing_code } => {
+                assert_eq!(pairing_code, "endpointdemo123");
+            }
+            _ => panic!("expected connect_with_pairing_code"),
+        }
     }
 
     #[test]
@@ -2308,7 +2298,7 @@ mod tests {
                      environment (unrelated to iroh transport selection): {e}"
                 );
             }
-            Err(e) => assert!(false, "start_sync with use_iroh failed unexpectedly: {e}"),
+            Err(e) => panic!("start_sync with use_iroh failed unexpectedly: {e}"),
         }
     }
 
@@ -2360,16 +2350,17 @@ mod tests {
         }))
         .expect("start_sync without iroh fields should still deserialize");
 
-        let Request::StartSync {
-            use_iroh,
-            iroh_peer_ticket,
-            ..
-        } = request
-        else {
-            unreachable!("expected start_sync");
-        };
-        assert!(!use_iroh);
-        assert_eq!(iroh_peer_ticket, None);
+        match request {
+            Request::StartSync {
+                use_iroh,
+                iroh_peer_ticket,
+                ..
+            } => {
+                assert!(!use_iroh);
+                assert_eq!(iroh_peer_ticket, None);
+            }
+            _ => panic!("expected start_sync"),
+        }
     }
 
     #[test]
@@ -2384,18 +2375,19 @@ mod tests {
         }))
         .expect("relay config should be accepted by the request schema");
 
-        let Request::StartSync {
-            relay_url,
-            relay_api_key,
-            auth_secret,
-            ..
-        } = request
-        else {
-            unreachable!("expected start_sync");
-        };
-        assert_eq!(relay_url.as_deref(), Some("ws://127.0.0.1:8765"));
-        assert_eq!(relay_api_key.as_deref(), Some("key"));
-        assert_eq!(auth_secret.as_deref(), Some("secret"));
+        match request {
+            Request::StartSync {
+                relay_url,
+                relay_api_key,
+                auth_secret,
+                ..
+            } => {
+                assert_eq!(relay_url.as_deref(), Some("ws://127.0.0.1:8765"));
+                assert_eq!(relay_api_key.as_deref(), Some("key"));
+                assert_eq!(auth_secret.as_deref(), Some("secret"));
+            }
+            _ => panic!("expected start_sync"),
+        }
     }
 
     #[tokio::test]
@@ -3032,14 +3024,13 @@ mod tests {
                     }
                 }
                 Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
-                    assert!(
-                        std::time::Instant::now() <= deadline,
-                        "timed out waiting for disconnect events"
-                    );
+                    if std::time::Instant::now() > deadline {
+                        panic!("timed out waiting for disconnect events");
+                    }
                     tokio::time::sleep(std::time::Duration::from_millis(5)).await;
                 }
                 Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
-                    assert!(false, "event channel disconnected unexpectedly");
+                    panic!("event channel disconnected unexpectedly");
                 }
             }
         }

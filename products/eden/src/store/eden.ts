@@ -1,33 +1,143 @@
 import { defineStore } from "pinia";
 
-import { ref, computed, nextTick, watch } from "vue";
+import { ref, computed, nextTick, onScopeDispose, watch } from "vue";
 
 import { v4 as uuidv4 } from "uuid";
+
+import { normalizeSlug } from "@/lib/typedNotes";
+
+import { createUntitledEntryHeaderProps } from "@/lib/entryTitles";
+
+import { writeEntryMarkdown } from "@/editor-cm/content";
 
 import {
   SYSTEM_TYPE_COLLECTION_ID,
   SYSTEM_TYPE_JOURNAL,
   SYSTEM_TYPE_JOURNAL_ID,
   SYSTEM_TYPE_NOTE_ID,
+  SYSTEM_TYPES,
+  isSystemType,
+  normalizeSystemNoteType,
 } from "@/lib/systemTypes";
 
 import type { SpaceId } from "@/components/sidebar/types";
 
 import type { SortMode } from "@/components/sidebar/types";
 
-import { createBlankEntry, createTodayJournalEntry, todayJournalTitle } from "./edenEntryFactory";
-import {
-  getCollectionTargetTypeId,
-  waitForLoadingFrame,
-  writeLastVisitedEntryId,
-  type ActiveScreen,
-  type EntrySaveCoordinator,
-} from "./edenStoreHelpers";
-import { createEdenStoreDataActions } from "./edenStoreDataActions";
-import { createEdenStoreDraftActions } from "./edenStoreDraftActions";
-import { createEdenStoreNoteTypeActions } from "./edenStoreNoteTypeActions";
-import { createEdenStoreSaveActions } from "./edenStoreSaveActions";
-import { ensureSystemTypePersisted } from "./edenStoreSystemTypeActions";
+import { useLayoutStore } from "./layout";
+
+import { edenApi } from "@/lib/edenApi";
+
+import { shouldApplyRemoteEntry } from "./liveRefresh";
+
+import { hasUserVisibleEntryChanges } from "./entryChanges";
+
+type ActiveScreen = "notes" | "settings" | "type-collection";
+
+// Persistence для last-visited entry id. Юзер reload'ит окно (Ctrl+R в
+// dev) и ожидает что вернётся в ту заметку которую читал.
+const LAST_ENTRY_STORAGE_KEY = "eden:nav:lastEntryId";
+
+function writeLastVisitedEntryId(id: string): void {
+  try {
+    window.localStorage.setItem(LAST_ENTRY_STORAGE_KEY, id);
+  } catch {
+    // localStorage недоступен — silent.
+  }
+}
+
+function mergeNoteTypesWithSystem(noteTypesData: NoteType[]) {
+  const byId = new Map<string, NoteType>();
+  for (const systemType of SYSTEM_TYPES) {
+    byId.set(systemType.id, normalizeSystemNoteType(systemType));
+  }
+  for (const noteType of noteTypesData) {
+    byId.set(noteType.id, normalizeSystemNoteType(noteType));
+  }
+  return [...byId.values()];
+}
+
+const SYSTEM_TYPES_BY_ID = new Map(SYSTEM_TYPES.map((noteType) => [noteType.id, noteType]));
+
+function parseEntryHeaderProps(entry: Entry): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(entry.header_props_json || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function getCollectionTargetTypeId(entry: Entry | null | undefined): string | null {
+  if (!entry || entry.type_id !== SYSTEM_TYPE_COLLECTION_ID) return null;
+  const objectTypeId = parseEntryHeaderProps(entry).object_type_id;
+  return typeof objectTypeId === "string" && objectTypeId.trim() ? objectTypeId : null;
+}
+
+function mergeEntriesById(entries: Entry[], additions: Entry[]): Entry[] {
+  if (additions.length === 0) return entries;
+  const byId = new Map(entries.map((entry) => [entry.id, entry] as const));
+  for (const entry of additions) {
+    byId.set(entry.id, entry);
+  }
+  return [...byId.values()].sort((left, right) => right.updated_at - left.updated_at);
+}
+
+interface QueuedSaveRequest {
+  entry: Entry;
+
+  waiters: Array<{
+    resolve: (result: SaveEntryResult | null) => void;
+
+    reject: (error: unknown) => void;
+  }>;
+}
+
+interface EntrySaveCoordinator {
+  inFlight: boolean;
+
+  queued: QueuedSaveRequest | null;
+}
+
+function waitForLoadingFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof window.requestAnimationFrame === "function") {
+      // `requestAnimationFrame()` fires before paint. Use two frame turns and
+      // only then queue the macrotask so the loading shell has a real chance to
+      // hit the screen before IPC/loadEntry blocks the renderer again.
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          window.setTimeout(resolve, 0);
+        });
+      });
+      return;
+    }
+
+    window.setTimeout(resolve, 0);
+  });
+}
+
+function pruneTransientSaveState(
+  latestSaveTimestamps: Map<string, number>,
+  saveCoordinators: Record<string, EntrySaveCoordinator>,
+  existingEntries: Entry[],
+) {
+  const validIds = new Set(existingEntries.map((entry) => entry.id));
+
+  for (const entryId of latestSaveTimestamps.keys()) {
+    if (!validIds.has(entryId)) {
+      latestSaveTimestamps.delete(entryId);
+    }
+  }
+
+  for (const entryId of Object.keys(saveCoordinators)) {
+    if (!validIds.has(entryId) && !saveCoordinators[entryId]?.inFlight) {
+      delete saveCoordinators[entryId];
+    }
+  }
+}
 
 export const useEdenStore = defineStore("eden", () => {
   const entries = ref<Entry[]>([]);
@@ -114,12 +224,131 @@ export const useEdenStore = defineStore("eden", () => {
     return vaultPath.value.split("/").pop() ?? vaultPath.value;
   });
 
+  async function refreshData() {
+    if (!window.api) return;
+
+    const [entriesData, noteTypesData] = await Promise.all([
+      window.api.listEntries(),
+
+      window.api.listNoteTypes(),
+    ]);
+
+    noteTypes.value = mergeNoteTypesWithSystem(noteTypesData);
+    const collectionEntries = await window.api.ensureCollectionObjects(noteTypes.value);
+
+    if (currentEntry.value) {
+      const refreshed =
+        entriesData.find((e) => e.id === currentEntry.value!.id) ?? currentEntry.value;
+      const safeCurrentEntry = await ensureEntryCmSafe({
+        ...refreshed,
+        content_json: currentEntry.value.content_json,
+      });
+      currentEntry.value = safeCurrentEntry;
+      const idx = entriesData.findIndex((entry) => entry.id === safeCurrentEntry.id);
+      if (idx >= 0) entriesData[idx] = safeCurrentEntry;
+    }
+
+    const nextEntries = mergeEntriesById(entriesData, collectionEntries);
+    entries.value = nextEntries;
+    entriesLoaded.value = true;
+    pruneTransientSaveState(latestSaveTimestamps, saveCoordinators, nextEntries);
+  }
+
+  async function hydrateVaultData() {
+    if (!window.api || !vaultPath.value) return;
+
+    isHydratingVault.value = true;
+
+    try {
+      const [entriesData, noteTypesData] = await Promise.all([
+        window.api.listEntries(),
+        window.api.listNoteTypes(),
+      ]);
+
+      noteTypes.value = mergeNoteTypesWithSystem(noteTypesData);
+      const collectionEntries = await window.api.ensureCollectionObjects(noteTypes.value);
+      const nextEntries = mergeEntriesById(entriesData, collectionEntries);
+      entries.value = nextEntries;
+      entriesLoaded.value = true;
+      pruneTransientSaveState(latestSaveTimestamps, saveCoordinators, nextEntries);
+
+      // См. postmortems.md § 2026-06-15. Startup must not mount CodeMirror
+      // or load a note body just because an old lastEntryId exists.
+      currentEntry.value = null;
+    } finally {
+      isHydratingVault.value = false;
+    }
+  }
+
+  async function initApp() {
+    if (!window.api) return;
+
+    // Запускаем live-refresh подписку один раз на lifecycle стора.
+    // onScopeDispose внутри обеспечивает cleanup при unmount Pinia scope.
+    startLiveRefreshSubscription();
+
+    const [path, recentPaths, sidebarConfig] = await Promise.all([
+      window.api.getVaultPath(),
+
+      window.api.getRecentVaultPaths(),
+
+      window.api.getSidebarConfig(),
+    ]);
+
+    vaultPath.value = path;
+
+    recentVaultPaths.value = recentPaths;
+
+    const layout = useLayoutStore();
+
+    layout.widgetSidebarHidden = sidebarConfig.widget.hidden;
+    layout.widgetSidebarWidth = sidebarConfig.widget.width;
+
+    isInitializing.value = false;
+
+    if (path) {
+      void hydrateVaultData();
+    }
+  }
+
   function createEntry(title: string, noteTypeId: string = SYSTEM_TYPE_NOTE_ID): Entry {
-    const newEntry = createBlankEntry({ id: uuidv4(), title, noteTypeId });
+    const newEntry: Entry = {
+      id: uuidv4(),
+
+      title,
+
+      content_json: JSON.stringify(writeEntryMarkdown("")),
+
+      created_at: Date.now(),
+
+      updated_at: Date.now(),
+
+      folder_id: null,
+
+      type_id: noteTypeId,
+
+      header_layout: null,
+
+      header_props_json: JSON.stringify(createUntitledEntryHeaderProps()),
+
+      schema_version: 1,
+
+      deleted_at: null,
+    };
 
     entries.value = [newEntry, ...entries.value];
 
     return newEntry;
+  }
+
+  async function ensureSystemTypePersisted(noteTypeId: string): Promise<void> {
+    const systemType = SYSTEM_TYPES_BY_ID.get(noteTypeId);
+    if (!systemType || !window.api) return;
+
+    const result = await window.api.saveNoteType(systemType);
+    if (!result.ok) {
+      console.warn("[eden] persist system type failed:", result);
+    }
   }
 
   // Markdown storage is read tolerantly by CM. Do not rewrite legacy/invalid bodies on open;
@@ -207,7 +436,12 @@ export const useEdenStore = defineStore("eden", () => {
       }
     }
 
-    const todayTitle = todayJournalTitle();
+    // ISO date — `2026-05-19`. `padStart(2, "0")` для месяца/дня.
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const todayTitle = `${yyyy}-${mm}-${dd}`;
 
     if (window.api && !entriesLoaded.value) {
       try {
@@ -243,7 +477,19 @@ export const useEdenStore = defineStore("eden", () => {
     // в header_props_json, и getEntryDisplayTitle тогда подменяет реальный
     // title "2026-05-19" на placeholder "Без названия". Для дневника title
     // — это и есть смысл, header_props должны быть пустыми (без flag'а).
-    const newEntry = createTodayJournalEntry(uuidv4(), todayTitle);
+    const newEntry: Entry = {
+      id: uuidv4(),
+      title: todayTitle,
+      content_json: JSON.stringify(writeEntryMarkdown("")),
+      created_at: Date.now(),
+      updated_at: Date.now(),
+      folder_id: null,
+      type_id: SYSTEM_TYPE_JOURNAL_ID,
+      header_layout: null,
+      header_props_json: "{}",
+      schema_version: 1,
+      deleted_at: null,
+    };
     entries.value = [newEntry, ...entries.value];
     currentEntry.value = newEntry;
 
@@ -269,6 +515,46 @@ export const useEdenStore = defineStore("eden", () => {
         console.error("[eden] save journal entry threw:", err);
       }
     }
+  }
+
+  async function selectFolder() {
+    if (!window.api) return;
+
+    const path = await window.api.selectFolder();
+
+    if (!path) return;
+
+    await window.api.setVaultPath(path);
+
+    vaultPath.value = path;
+
+    recentVaultPaths.value = await window.api.getRecentVaultPaths();
+
+    currentEntry.value = null;
+    entriesLoaded.value = false;
+
+    activeSpace.value = "diary";
+
+    await refreshData();
+  }
+
+  async function selectVaultPath(nextPath: string) {
+    if (!window.api || !nextPath || nextPath === vaultPath.value) return;
+
+    await window.api.setVaultPath(nextPath);
+
+    vaultPath.value = nextPath;
+
+    recentVaultPaths.value = await window.api.getRecentVaultPaths();
+
+    currentEntry.value = null;
+    entriesLoaded.value = false;
+
+    activeSpace.value = "diary";
+
+    activeScreen.value = "notes";
+
+    await refreshData();
   }
 
   async function navigateTo(entryId: string) {
@@ -336,45 +622,268 @@ export const useEdenStore = defineStore("eden", () => {
       ) ?? null;
   }
 
-  const { refreshData, initApp, selectFolder, selectVaultPath } = createEdenStoreDataActions({
-    activeScreen,
-    activeSpace,
-    currentEntry,
-    entries,
-    entriesLoaded,
-    isCurrentEntryDirty,
-    isHydratingVault,
-    isInitializing,
-    latestSaveTimestamps,
-    noteTypes,
-    recentVaultPaths,
-    saveCoordinators,
-    vaultPath,
-    ensureEntryCmSafe,
-    upsertEntryBaseline,
-  });
+  async function saveNoteType(
+    draft: Omit<NoteType, "id" | "created_at" | "updated_at" | "slug"> & {
+      id?: string;
 
-  const { saveNoteType, deleteNoteType } = createEdenStoreNoteTypeActions({
-    noteTypes,
-    refreshData,
-  });
+      slug?: string;
+    },
+  ): Promise<SaveNoteTypeResult> {
+    if (!window.api) return { ok: false, reason: "invalid_definition", message: "No API" };
 
-  const { handleSave } = createEdenStoreSaveActions({
-    currentEntry,
-    entries,
-    isCurrentEntryDirty,
-    latestSaveTimestamps,
-    saveCoordinators,
-    markLatestLocalEntry,
-  });
+    const now = Date.now();
 
-  const { updateEntryDraft } = createEdenStoreDraftActions({
-    currentEntry,
-    entries,
-    isCurrentEntryDirty,
-    noteTypes,
-    markLatestLocalEntry,
-  });
+    const noteType: NoteType = {
+      id: draft.id ?? uuidv4(),
+
+      name: draft.name,
+
+      slug: normalizeSlug(draft.slug || draft.name),
+
+      icon: draft.icon,
+
+      color: draft.color,
+
+      schema_json: draft.schema_json,
+
+      header_template_json: draft.header_template_json,
+
+      ui_schema_json: draft.ui_schema_json,
+
+      created_at: draft.id
+        ? (noteTypes.value.find((t) => t.id === draft.id)?.created_at ?? now)
+        : now,
+
+      updated_at: now,
+    };
+
+    const result = await window.api.saveNoteType(noteType);
+
+    if (result.ok) await refreshData();
+
+    return result;
+  }
+
+  async function deleteNoteType(noteTypeId: string) {
+    if (!window.api || isSystemType(noteTypeId)) return;
+
+    await window.api.deleteNoteType(noteTypeId);
+
+    await refreshData();
+  }
+
+  /**
+   * Подписывается на ARK events object_upserted / object_deleted и обновляет
+   * список entries и currentEntry при удалённых изменениях.
+   *
+   * Структура обработчика:
+   * 1. СПИСОК-уровень (для любого id):
+   *    - object_deleted → удаляем из entries.value.
+   *    - object_upserted, id УЖЕ в entries → обновляем title/updated_at в списке.
+   *    - object_upserted, id НЕТ в entries → загружаем через loadListableEntry
+   *      (применяет фильтры listEntries: visibleTypeIds + shouldIncludeObjectInEdenList)
+   *      и добавляем если объект подходит.
+   * 2. currentEntry-уровень (только если id совпадает с открытой заметкой):
+   *    - object_deleted → закрываем заметку.
+   *    - object_upserted → re-hydrate с dirty-guard и self-echo guard.
+   *
+   * Гарантии:
+   * - Self-echo guard: content-equality — если markdown не изменился, noop.
+   * - Dirty guard: если редактор dirty, не затираем пользовательский ввод.
+   * - Фильтрация чужих типов через loadListableEntry (task_obj, game_obj не попадают
+   *   в список при настроенных visibleTypeIds).
+   * - Cleanup через onScopeDispose (Pinia scope dispose при unmount стора).
+   */
+  function startLiveRefreshSubscription(): void {
+    const unsubscribe = edenApi.subscribeObjectChanges(async (payload) => {
+      // ── 1. СПИСОК-уровень ────────────────────────────────────────────────
+
+      if (payload.event === "object_deleted") {
+        // Удаляем из списка.
+        entries.value = entries.value.filter((e) => e.id !== payload.id);
+
+        // currentEntry-уровень: закрываем если открыта.
+        if (currentEntry.value?.id === payload.id) {
+          currentEntry.value = null;
+          isCurrentEntryDirty.value = false;
+        }
+        return;
+      }
+
+      // object_upserted — обновляем список.
+      const existingIdx = entries.value.findIndex((e) => e.id === payload.id);
+
+      if (existingIdx >= 0) {
+        // Объект уже в списке — обновляем метаданные (title, updated_at) через loadEntry.
+        // Это нужно чтобы порядок ленты и превью были актуальны.
+        // Загрузка происходит ниже вместе с currentEntry-гидратацией.
+        void (async () => {
+          if (!window.api) return;
+          let fresh: Entry | undefined;
+          try {
+            fresh = await window.api.loadEntry(payload.id);
+          } catch (err) {
+            console.warn("[eden] live-refresh: loadEntry (list update) failed:", err);
+            return;
+          }
+          if (!fresh) return;
+          // Обновляем запись в списке (title, updated_at, header_props).
+          const idx = entries.value.findIndex((e) => e.id === payload.id);
+          if (idx >= 0) {
+            entries.value[idx] = fresh;
+          }
+
+          // currentEntry-уровень: если это открытая заметка — применяем с guards.
+          if (currentEntry.value?.id !== payload.id) return;
+          const decision = shouldApplyRemoteEntry({
+            fresh,
+            currentContentJson: currentEntry.value.content_json,
+            isEditorDirty: isCurrentEntryDirty.value,
+          });
+          if (decision !== "apply") return;
+          upsertEntryBaseline(fresh);
+          currentEntry.value = fresh;
+        })();
+      } else {
+        // Новый объект — загружаем только если он подходит для Eden-списка.
+        void (async () => {
+          if (!window.api) return;
+          let listable: Entry | undefined;
+          try {
+            listable = await edenApi.loadListableEntry(payload.id, payload.typeId);
+          } catch (err) {
+            console.warn("[eden] live-refresh: loadListableEntry failed:", err);
+            return;
+          }
+          if (!listable) return;
+          // Добавляем в начало списка (самый свежий).
+          entries.value = [listable, ...entries.value].sort((a, b) => b.updated_at - a.updated_at);
+        })();
+      }
+    });
+
+    onScopeDispose(() => {
+      unsubscribe();
+    });
+  }
+
+  async function handleSave(entry: Entry): Promise<SaveEntryResult | null> {
+    if (!window.api) return null;
+
+    // См. postmortems.md § 2026-06-15. `entries` contains optimistic drafts
+    // from updateEntryDraft, so it is not a safe persisted baseline for skipping saves.
+    const persistEntry = async (entryToPersist: Entry): Promise<SaveEntryResult | null> => {
+      markLatestLocalEntry(entryToPersist);
+
+      const result = await window.api.saveEntry(entryToPersist);
+
+      if (!result.ok) return result;
+
+      if (latestSaveTimestamps.get(entryToPersist.id) !== entryToPersist.updated_at) return result;
+
+      const idx = entries.value.findIndex((e) => e.id === entryToPersist.id);
+
+      if (idx >= 0) {
+        entries.value[idx] = entryToPersist;
+      } else {
+        entries.value = [entryToPersist, ...entries.value];
+      }
+
+      if (currentEntry.value?.id === entryToPersist.id) {
+        currentEntry.value = entryToPersist;
+        // Сохранение успешно завершено — редактор больше не dirty.
+        isCurrentEntryDirty.value = false;
+      }
+
+      return result;
+    };
+
+    const coordinator = saveCoordinators[entry.id] ?? {
+      inFlight: false,
+      queued: null,
+    };
+
+    saveCoordinators[entry.id] = coordinator;
+
+    const runSaveLoop = async (nextEntry: Entry): Promise<SaveEntryResult | null> => {
+      coordinator.inFlight = true;
+
+      try {
+        const result = await persistEntry(nextEntry);
+
+        const queued = coordinator.queued;
+
+        if (!queued) {
+          coordinator.inFlight = false;
+
+          return result;
+        }
+
+        coordinator.queued = null;
+
+        const queuedResult = await runSaveLoop(queued.entry);
+
+        queued.waiters.forEach((w) => w.resolve(queuedResult));
+
+        return queuedResult;
+      } catch (error) {
+        const queued = coordinator.queued;
+
+        coordinator.queued = null;
+
+        coordinator.inFlight = false;
+
+        if (queued) queued.waiters.forEach((w) => w.reject(error));
+
+        throw error;
+      } finally {
+        if (!coordinator.queued) {
+          coordinator.inFlight = false;
+
+          delete saveCoordinators[nextEntry.id];
+
+          if (latestSaveTimestamps.get(nextEntry.id) === nextEntry.updated_at) {
+            latestSaveTimestamps.delete(nextEntry.id);
+          }
+        }
+      }
+    };
+
+    if (!coordinator.inFlight) return runSaveLoop(entry);
+
+    return new Promise<SaveEntryResult | null>((resolve, reject) => {
+      if (coordinator.queued) {
+        coordinator.queued.entry = entry;
+
+        coordinator.queued.waiters.push({ resolve, reject });
+
+        return;
+      }
+
+      coordinator.queued = { entry, waiters: [{ resolve, reject }] };
+    });
+  }
+
+  function updateEntryDraft(entry: Entry) {
+    // См. postmortems.md § 2026-06-16. Live editor draft is newer than any
+    // older in-flight save completion until the same draft is persisted.
+    markLatestLocalEntry(entry);
+
+    const idx = entries.value.findIndex((candidate) => candidate.id === entry.id);
+
+    if (idx >= 0) {
+      if (!hasUserVisibleEntryChanges(entry, entries.value[idx], noteTypes.value)) return;
+      entries.value[idx] = entry;
+    } else {
+      entries.value = [entry, ...entries.value];
+    }
+
+    if (currentEntry.value?.id === entry.id) {
+      currentEntry.value = entry;
+      // Черновик содержит изменения — редактор dirty.
+      isCurrentEntryDirty.value = true;
+    }
+  }
 
   return {
     entries,

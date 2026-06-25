@@ -15,7 +15,7 @@ import {
   gridSelectedItemId,
   gridSelectionCallbackNode,
   matchesGridItem,
-} from "./model-grid";
+} from "./model";
 
 const props = defineProps<{
   root: RaycastSnapshotNode;

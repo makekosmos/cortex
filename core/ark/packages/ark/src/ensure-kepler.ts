@@ -18,10 +18,6 @@ import path from "node:path";
 
 export const KEPLER_LOCK_FILENAME = "kepler.lock.json";
 
-function env(name: string): string | undefined {
-  return process.env[name];
-}
-
 /** Базовый Kosmos data dir под appData (ранее жил в selected-space.ts; теперь
  *  локальный helper — единственным consumer'ом был этот файл). */
 function getKosmosDataDir(appDataPath: string): string {
@@ -46,32 +42,6 @@ export interface KeplerLockInfo {
   auth_token: string;
   started_at: string;
   db_path: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function isProtocolVersion(value: unknown): value is KeplerProtocolVersion {
-  return (
-    isRecord(value) &&
-    typeof value.major === "number" &&
-    typeof value.minor === "number" &&
-    typeof value.patch === "number"
-  );
-}
-
-function isKeplerLockInfo(value: unknown): value is KeplerLockInfo {
-  return (
-    isRecord(value) &&
-    typeof value.format_version === "number" &&
-    isProtocolVersion(value.protocol_version) &&
-    typeof value.pid === "number" &&
-    typeof value.ws_port === "number" &&
-    typeof value.auth_token === "string" &&
-    typeof value.started_at === "string" &&
-    typeof value.db_path === "string"
-  );
 }
 
 export type KeplerState =
@@ -216,7 +186,7 @@ export function resolveLockPath(appDataPath: string): string {
   // kosmos_data_dir() helper). e2e тестам это обязательно — иначе ensureKepler
   // искал бы lock в %APPDATA%/Kosmos/ и говорил «not-installed» даже когда
   // backend running под тестовым dir'ом.
-  const override = env("KOSMOS_DATA_DIR");
+  const override = process.env.KOSMOS_DATA_DIR;
   if (override && override.length > 0) {
     return path.join(override, KEPLER_LOCK_FILENAME);
   }
@@ -228,9 +198,17 @@ export function readLockIfAlive(lockPath: string): KeplerLockInfo | null {
   let lock: KeplerLockInfo;
   try {
     const content = fs.readFileSync(lockPath, "utf8");
-    const parsed: unknown = JSON.parse(content);
-    if (!isKeplerLockInfo(parsed)) return null;
-    lock = parsed;
+    const parsed = JSON.parse(content) as Partial<KeplerLockInfo>;
+    if (
+      typeof parsed.pid !== "number" ||
+      typeof parsed.ws_port !== "number" ||
+      typeof parsed.auth_token !== "string" ||
+      !parsed.protocol_version ||
+      typeof parsed.protocol_version.major !== "number"
+    ) {
+      return null;
+    }
+    lock = parsed as KeplerLockInfo;
   } catch {
     return null;
   }
@@ -277,32 +255,35 @@ function defaultExeCandidates(): string[] {
   const list: string[] = [];
 
   if (process.platform === "win32") {
-    const localAppData = env("LOCALAPPDATA");
-    if (localAppData) {
-      list.push(path.join(localAppData, "Programs", "Kosmos", "Kosmos.exe"));
-      list.push(path.join(localAppData, "Programs", "Kepler", "Kepler.exe"));
-      list.push(path.join(localAppData, "Kosmos", "Kepler", "kepler.exe"));
+    if (process.env.LOCALAPPDATA) {
+      list.push(path.join(process.env.LOCALAPPDATA, "Programs", "Kosmos", "Kosmos.exe"));
+      list.push(path.join(process.env.LOCALAPPDATA, "Programs", "Kepler", "Kepler.exe"));
+      list.push(path.join(process.env.LOCALAPPDATA, "Kosmos", "Kepler", "kepler.exe"));
     }
-    const programFiles = env("ProgramFiles");
-    if (programFiles) {
-      list.push(path.join(programFiles, "Kosmos", "Kosmos.exe"));
-      list.push(path.join(programFiles, "Kepler", "Kepler.exe"));
-      list.push(path.join(programFiles, "Kosmos", "Kepler", "kepler.exe"));
+    if (process.env["ProgramFiles"]) {
+      list.push(path.join(process.env["ProgramFiles"], "Kosmos", "Kosmos.exe"));
+      list.push(path.join(process.env["ProgramFiles"], "Kepler", "Kepler.exe"));
+      list.push(path.join(process.env["ProgramFiles"], "Kosmos", "Kepler", "kepler.exe"));
     }
   } else if (process.platform === "darwin") {
     list.push("/Applications/Kosmos.app/Contents/MacOS/Kosmos");
     list.push("/Applications/Kosmos Kepler.app/Contents/MacOS/kepler");
-    const home = env("HOME");
-    if (home) {
+    if (process.env.HOME) {
       list.push(
-        path.join(home, "Applications", "Kosmos Kepler.app", "Contents", "MacOS", "kepler"),
+        path.join(
+          process.env.HOME,
+          "Applications",
+          "Kosmos Kepler.app",
+          "Contents",
+          "MacOS",
+          "kepler",
+        ),
       );
     }
   } else {
     list.push("/usr/local/bin/kepler");
-    const home = env("HOME");
-    if (home) {
-      list.push(path.join(home, ".local", "bin", "kepler"));
+    if (process.env.HOME) {
+      list.push(path.join(process.env.HOME, ".local", "bin", "kepler"));
     }
   }
 

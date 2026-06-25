@@ -1,2 +1,0 @@
-vite build --configLoader native: PASS
-renderer/main/preload bundles built successfully

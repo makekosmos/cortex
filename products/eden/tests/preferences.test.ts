@@ -10,7 +10,6 @@
 // IPC mock'овка из Kepler shell preload'а; покрытие — e2e матрица.
 
 import { beforeEach, expect, test } from "bun:test";
-import { nextTick } from "vue";
 
 // Bun не имеет jsdom — мокаем window / localStorage минимально.
 const localStorageMock: Record<string, unknown> = {};
@@ -36,7 +35,7 @@ let importSeq = 0;
 function seedLocalStorage(
   snapshot: Partial<{
     spellcheckEnabled: boolean;
-    readerModeEnabled: boolean;
+    cmEditorEnabled: boolean;
     vimModeEnabled: boolean;
   }>,
 ): void {
@@ -59,7 +58,7 @@ beforeEach(() => {
 test("hydrate из localStorage + setter API", async () => {
   seedLocalStorage({
     spellcheckEnabled: true,
-    readerModeEnabled: true,
+    cmEditorEnabled: true,
     vimModeEnabled: false,
   });
 
@@ -71,7 +70,7 @@ test("hydrate из localStorage + setter API", async () => {
 
   // 1. localStorage значения подхвачены.
   expect(prefs.state.spellcheckEnabled).toBe(true);
-  expect(prefs.state.readerModeEnabled).toBe(true);
+  expect(prefs.state.cmEditorEnabled).toBe(true);
   expect(prefs.state.vimModeEnabled).toBe(false);
 
   // 2. Setter'ы работают.
@@ -81,21 +80,21 @@ test("hydrate из localStorage + setter API", async () => {
   prefs.setSpellcheckEnabled(true);
   expect(prefs.state.spellcheckEnabled).toBe(true);
 
-  prefs.setReaderModeEnabled(false);
-  expect(prefs.state.readerModeEnabled).toBe(false);
+  prefs.setCmEditorEnabled(false);
+  expect(prefs.state.cmEditorEnabled).toBe(false);
 
   prefs.setVimModeEnabled(true);
   expect(prefs.state.vimModeEnabled).toBe(true);
 
   prefs.setSpellcheckEnabled(false);
-  prefs.setReaderModeEnabled(false);
+  prefs.setCmEditorEnabled(false);
   prefs.setVimModeEnabled(false);
   expect(prefs.state.spellcheckEnabled).toBe(false);
-  expect(prefs.state.readerModeEnabled).toBe(false);
+  expect(prefs.state.cmEditorEnabled).toBe(false);
   expect(prefs.state.vimModeEnabled).toBe(false);
 
   // Даем post-flush watcher'у дописать snapshot, чтобы он не протекал в следующий тест.
-  await nextTick();
+  await new Promise((resolve) => setTimeout(resolve, 0));
 });
 
 test("fresh import не наследует состояние между тестами", async () => {
@@ -105,6 +104,6 @@ test("fresh import не наследует состояние между тес�
   await prefs.ready();
 
   expect(prefs.state.spellcheckEnabled).toBe(false);
-  expect(prefs.state.readerModeEnabled).toBe(false);
+  expect(prefs.state.cmEditorEnabled).toBe(false);
   expect(prefs.state.vimModeEnabled).toBe(false);
 });

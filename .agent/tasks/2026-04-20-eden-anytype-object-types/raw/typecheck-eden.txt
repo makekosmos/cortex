@@ -1,9 +1,0 @@
-Command:
-`node apps/eden/ts/node_modules/typescript/bin/tsc -p apps/eden/ts/tsconfig.json --noEmit`
-
-Result:
-PASS
-
-Output:
-No TypeScript errors were emitted.
-

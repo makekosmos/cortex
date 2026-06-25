@@ -1,9 +1,0 @@
-
- RUN  v4.1.4 D:/Personal/Hobby/Coding/kosmos/apps/arrancador
-
-
- Test Files  1 passed (1)
-      Tests  2 passed (2)
-   Start at  22:04:59
-   Duration  384ms (transform 105ms, setup 0ms, import 147ms, tests 10ms, environment 0ms)
-

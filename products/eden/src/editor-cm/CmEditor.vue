@@ -76,8 +76,11 @@ import {
   resolveStoredEntryTitle,
   syncUntitledEntryTitleFlag,
 } from "@/lib/entryTitles";
-import { resolveNoteTypeHeaderLayout } from "@/lib/typedNotes";
-import { createHeaderPropsForTypeChange, safeParseHeaderProps } from "@/lib/typedNoteHeaderProps";
+import {
+  createHeaderPropsForTypeChange,
+  resolveNoteTypeHeaderLayout,
+  safeParseHeaderProps,
+} from "@/lib/typedNotes";
 import { SYSTEM_TYPE_NOTE_ID, SYSTEM_TYPE_PERSON_ID } from "@/lib/systemTypes";
 import {
   livePreviewPlugin,

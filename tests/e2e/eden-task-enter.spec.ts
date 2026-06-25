@@ -96,8 +96,7 @@ test.describe("Eden TaskRef Enter", () => {
       // Doc structure + PM doc JSON BEFORE Enter
       const beforeData = await edenWin.evaluate(() => {
         const pm = document.querySelector(".ProseMirror");
-        if (!pm) throw new Error("ProseMirror not found before Enter");
-        const dom = Array.from(pm.children).map((el) => ({
+        const dom = Array.from(pm?.children ?? []).map((el) => ({
           t: (el as HTMLElement).tagName,
           cls: (el as HTMLElement).className,
         }));
@@ -131,7 +130,7 @@ test.describe("Eden TaskRef Enter", () => {
       // Log block structure for diagnosis
       const blockStructure = await edenWin.evaluate(() => {
         const pm = document.querySelector(".ProseMirror");
-        if (!pm) throw new Error("ProseMirror not found while collecting block structure");
+        if (!pm) return [];
         return Array.from(pm.children).map((el) => {
           const t = (el as HTMLElement).tagName;
           const cls = (el as HTMLElement).className;

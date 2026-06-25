@@ -231,7 +231,11 @@ mod tests {
             .expect("первый acquire должен пройти");
 
         let second = acquire_clearing_stale_lock(&lock_path, &singleton_path);
-        assert!(matches!(second, Err(SingletonError::AlreadyRunning)));
+        match second {
+            Err(SingletonError::AlreadyRunning) => {}
+            Err(e) => panic!("expected AlreadyRunning, got Err({e})"),
+            Ok(_) => panic!("expected AlreadyRunning, got Ok"),
+        }
 
         // Сообщение об ошибке — часть контракта. Должно быть human-readable.
         let msg = SingletonError::AlreadyRunning.to_string();

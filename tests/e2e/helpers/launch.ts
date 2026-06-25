@@ -9,16 +9,19 @@
 
 import path from "node:path";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { _electron as electron, type ElectronApplication } from "playwright";
-import electronBinary from "electron";
+
+const require = createRequire(import.meta.url);
+const electronBinary = require("electron") as string;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
-const SHELL_ROOT = path.join(REPO_ROOT, "platform", "desktop");
-const E2E_ROOT = path.join(REPO_ROOT, "tests", ".e2e");
+export const SHELL_ROOT = path.join(REPO_ROOT, "platform", "desktop");
+export const E2E_ROOT = path.join(REPO_ROOT, "tests", ".e2e");
 
 export interface LaunchOptions {
   /** Имя tмп-dir под `tests/.e2e/<slug>/`. Pre-cleaned. */

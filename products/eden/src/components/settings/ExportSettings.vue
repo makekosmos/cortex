@@ -91,8 +91,7 @@ import {
 } from "@/lib/obsidianVault";
 import { SYSTEM_TYPE_IMAGE, SYSTEM_TYPE_IMAGE_ID, SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
 import { readEntryMarkdown, writeEntryMarkdown } from "@/editor-cm/content";
-import type { NoteType } from "@/lib/typedNotes";
-import { normalizeHeaderProps } from "@/lib/typedNoteHeaderProps";
+import { normalizeHeaderProps, type NoteType } from "@/lib/typedNotes";
 import { useEdenStore } from "@/store/eden";
 
 const eden = useEdenStore();

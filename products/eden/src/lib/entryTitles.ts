@@ -1,11 +1,8 @@
 export const UNTITLED_ENTRY_PLACEHOLDER = "Без названия";
-const UNTITLED_ENTRY_TITLE_FLAG = "__untitledTitle";
+export const GENERATED_UNTITLED_ENTRY_PREFIX = "Новая заметка";
+export const UNTITLED_ENTRY_TITLE_FLAG = "__untitledTitle";
 
 type HeaderPropsSource = Record<string, unknown> | string | null | undefined;
-
-function isHeaderPropsRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
 
 function hasUntitledEntryTitleFlag(source: HeaderPropsSource): boolean {
   if (!source) {
@@ -14,8 +11,7 @@ function hasUntitledEntryTitleFlag(source: HeaderPropsSource): boolean {
 
   if (typeof source === "string") {
     try {
-      const parsed = JSON.parse(source);
-      return isHeaderPropsRecord(parsed) && hasUntitledEntryTitleFlag(parsed);
+      return hasUntitledEntryTitleFlag(JSON.parse(source) as Record<string, unknown>);
     } catch {
       return false;
     }
@@ -39,7 +35,7 @@ export function createUntitledEntryHeaderProps(): Record<string, boolean> {
   };
 }
 
-function isGeneratedUntitledEntryTitle(
+export function isGeneratedUntitledEntryTitle(
   _title: string | null | undefined,
   headerPropsSource?: HeaderPropsSource,
 ): boolean {

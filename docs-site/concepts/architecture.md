@@ -32,7 +32,6 @@
 ┌──────────────────────────────────────────────────────────────┐
 │  Kosmos Runtime.exe  (Rust, platform/runtime)         │
 │    ├─ spawn: Kosmos Data Engine.exe / ark-core-rpc.exe       │
-│    ├─ spawn: Kosmos Local STT.exe                             │
 │    ├─ WS server 127.0.0.1:<random_port>                      │
 │    ├─ Command bus (registry + invoke broadcast)              │
 │    ├─ Auth (bearer token, PID-binding, file ACL)             │
@@ -73,17 +72,17 @@ Dashboard — встроенный shell view (platform/desktop/src/views/Dashbo
 
 `platform/runtime/`:
 
-| Файл                  | Что делает                                                                                         |
-| --------------------- | -------------------------------------------------------------------------------------------------- |
-| `main.rs`             | bootstrap: singleton, lock-file, ark-core-rpc supervisor, WS server, dictation runtime, start_sync |
-| `ark_host.rs`         | spawn + watchdog `ark-core-rpc`, proxy stdio JSON ↔ WS                                             |
-| `ws_server.rs`        | WS accept loop, auth handshake, dispatch operations (intercept `commands.*`)                       |
-| `command_bus.rs`      | registry per WS-connection, broadcast invoke/changed events                                        |
-| `sync.rs`             | вызов `start_sync` на ark-core-rpc после health                                                    |
-| `lock_file.rs`        | `%APPDATA%\Kosmos\kepler.lock.json` (pid, ws_port, bearer token)                                   |
-| `singleton.rs`        | rusqlite WAL BEGIN IMMEDIATE — одна копия на машину                                                |
-| `auth.rs`             | bearer token, PID-binding, file ACL                                                                |
-| `protocol_version.rs` | hello-handshake version match                                                                      |
+| Файл                  | Что делает                                                                      |
+| --------------------- | ------------------------------------------------------------------------------- |
+| `main.rs`             | bootstrap: singleton, lock-file, ark-core-rpc supervisor, WS server, start_sync |
+| `ark_host.rs`         | spawn + watchdog `ark-core-rpc`, proxy stdio JSON ↔ WS                          |
+| `ws_server.rs`        | WS accept loop, auth handshake, dispatch operations (intercept `commands.*`)    |
+| `command_bus.rs`      | registry per WS-connection, broadcast invoke/changed events                     |
+| `sync.rs`             | вызов `start_sync` на ark-core-rpc после health                                 |
+| `lock_file.rs`        | `%APPDATA%\Kosmos\kepler.lock.json` (pid, ws_port, bearer token)                |
+| `singleton.rs`        | rusqlite WAL BEGIN IMMEDIATE — одна копия на машину                             |
+| `auth.rs`             | bearer token, PID-binding, file ACL                                             |
+| `protocol_version.rs` | hello-handshake version match                                                   |
 
 ### Apps (consumers + producers)
 
@@ -148,7 +147,6 @@ Apps (`@kosmos/ark` в kepler-mode) не открывают SQLite напрям�
 | **ARK objects**    | `objects` + `object_links` в SQLite                              | Долгоживущие данные, репликация sync'ом                                                                               |
 | **Entity events**  | `onArkEvent` / `onEntityChanged` в `@kosmos/ark`                 | Подписка на изменения объектов                                                                                        |
 | **Command bus**    | `commands.*` в WS protocol                                       | Императивные «ручки» апок (Pomodoro start, create note и т.п.). См. [Command bus](/concepts/command-bus)              |
-| **Local STT IPC**  | `dictation.*` local sidecar protocol                             | Dictation host owns state/retries/pending, sidecar owns native engine lifecycle and crash isolation                   |
 | **Extension host** | `kepler:extension:*` IPC в kepler-shell                          | Загрузка Vue extension bundles внутри launcher'а (Phase 4 foundation). См. [Extension host](/concepts/extension-host) |
 | **Focus mode**     | `platform/desktop/electron/focus-*.ts` + backend `pomodoro_host` | Floating widget, app/website blocker, pomodoro phase events. См. [Focus mode](/concepts/focus-mode)                   |
 
@@ -160,7 +158,7 @@ Apps (`@kosmos/ark` в kepler-mode) не открывают SQLite напрям�
 
 ### 2. Single shared runtime
 
-`ark-core-rpc` владеет схемой, объектами, usage-данными, sync-протоколом. `kepler-backend` владеет только одной копией `ark-core-rpc` на машину + WS gateway. Local STT остаётся отдельным sidecar boundary: `kepler-backend` хранит dictation state, а `Kosmos Local STT` владеет native engine lifecycle. Приложения — тонкие оболочки. Если ты пишешь много логики работы с данными внутри приложения — ты, скорее всего, ошибаешься; этот код должен быть в ARK.
+`ark-core-rpc` владеет схемой, объектами, usage-данными, sync-протоколом. `kepler-backend` владеет только одной копией `ark-core-rpc` на машину + WS gateway. Приложения — тонкие оболочки. Если ты пишешь много логики работы с данными внутри приложения — ты, скорее всего, ошибаешься; этот код должен быть в ARK.
 
 ### 3. Narrow contract
 

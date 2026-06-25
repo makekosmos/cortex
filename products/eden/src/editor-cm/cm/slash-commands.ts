@@ -19,6 +19,11 @@ interface SlashCmd {
   cursorOffset?: number;
 }
 
+type DecoratedCompletion = Completion & {
+  _kind?: "slash";
+  _icon?: string;
+};
+
 const COMMANDS: SlashCmd[] = [
   { label: "Заголовок 1", detail: "#", icon: "H1", insert: "# " },
   { label: "Заголовок 2", detail: "##", icon: "H2", insert: "## " },
@@ -38,6 +43,31 @@ const COMMANDS: SlashCmd[] = [
   { label: "Формула", detail: "$$", icon: "∑", insert: "$$\n\n$$", cursorOffset: -3 },
   { label: "Ссылка", detail: "[]", icon: "🔗", insert: "[]()", cursorOffset: -3 },
 ];
+
+/** Render a custom completion item matching the Eden theme. */
+function renderCompletion(completion: Completion): HTMLElement {
+  const decorated = completion as DecoratedCompletion;
+
+  const el = document.createElement("div");
+  el.className = "slash-cmd-item";
+
+  const icon = document.createElement("span");
+  icon.className = "slash-cmd-icon";
+  icon.textContent = decorated._icon ?? "";
+
+  const label = document.createElement("span");
+  label.className = "slash-cmd-label";
+  label.textContent = completion.label;
+
+  const detail = document.createElement("span");
+  detail.className = "slash-cmd-detail";
+  detail.textContent = completion.detail ?? "";
+
+  el.appendChild(icon);
+  el.appendChild(label);
+  el.appendChild(detail);
+  return el;
+}
 
 /**
  * CodeMirror completion source for Notion-style slash commands.
@@ -80,3 +110,8 @@ export function slashCommandSource(context: CompletionContext): CompletionResult
     filter: true,
   };
 }
+
+/** Custom rendering for the slash command completion items. */
+export const slashCommandRender = {
+  render: renderCompletion,
+};

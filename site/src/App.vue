@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import CornerLabels from "./components/CornerLabels.vue";
 import Hero from "./components/Hero.vue";
-// Launcher showcase временно скрыт; import оставлен для будущего возврата.
+// Launcher showcase / DesktopMockup временно скрыты — оставляем импорты
+// закомментированными для будущего возврата без потери wire-up'а.
+// import DesktopMockup from "./components/DesktopMockup.vue";
 // import LauncherView from "@/views/LauncherView.vue";
 </script>
 

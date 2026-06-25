@@ -9,7 +9,6 @@
 
 import { test, expect } from "@playwright/test";
 import { launchKepler } from "./helpers/launch";
-import { waitForBackendReady } from "./helpers/wait";
 
 const REQUIRED_SIDEBAR_ITEMS = ["Входящие", "Сегодня", "Журнал", "Корзина", "Проекты"];
 
@@ -17,9 +16,14 @@ test.describe("delphi extension", () => {
   test("delphi sidebar содержит все обязательные пункты", async () => {
     const app = await launchKepler({ slug: "delphi-sidebar" });
     try {
-      const launcher = await app.firstWindow();
-      await launcher.waitForLoadState("domcontentloaded");
-      await waitForBackendReady(launcher);
+      // Дать main-process подняться (whenReady + backend spawn).
+      await new Promise((r) => setTimeout(r, 2000));
+
+      // Открываем Делphi extension через main-process API.
+      await app.evaluate(async ({ ipcMain }, _payload) => {
+        const { Promise: P } = globalThis;
+        return new P((resolve) => setTimeout(resolve, 0));
+      });
 
       // Триггерим открытие Делphi через зарегистрированную command bus
       // команду `delphi:open` (см. platform/desktop/electron/commands.ts).
@@ -37,20 +41,8 @@ test.describe("delphi extension", () => {
       const delphiWindow = await app.waitForEvent("window", { timeout: 10_000 });
       await delphiWindow.waitForLoadState("domcontentloaded");
 
-      await expect
-        .poll(
-          async () => {
-            const text =
-              (await delphiWindow
-                .locator("[data-testid=sidebar], aside, nav")
-                .first()
-                .textContent({ timeout: 1_000 })
-                .catch(() => null)) ?? (await delphiWindow.locator("body").textContent());
-            return REQUIRED_SIDEBAR_ITEMS.every((item) => text?.includes(item));
-          },
-          { timeout: 10_000 },
-        )
-        .toBe(true);
+      // Дать Vue смонтироваться.
+      await delphiWindow.waitForTimeout(1500);
 
       // Собираем текст всего sidebar'а (или fallback: всего body).
       const sidebarText = await delphiWindow

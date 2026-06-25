@@ -22,7 +22,7 @@ import { reactive, watch } from "vue";
 const PREFS_FILE_NAME = "eden-settings.json";
 const LOCAL_STORAGE_KEY = "eden-preferences";
 
-interface EdenPreferences {
+export interface EdenPreferences {
   /** false по умолчанию — браузерный spellcheck выключен. */
   spellcheckEnabled: boolean;
   /** false по умолчанию — Vim mode включается пользователем явно. */
@@ -65,16 +65,12 @@ function mergeIntoState(partial: Partial<EdenPreferences> | null | undefined): v
   }
 }
 
-function isPreferencePatch(value: unknown): value is Partial<EdenPreferences> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
 function readLocalStorageSync(): Partial<EdenPreferences> | null {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    return isPreferencePatch(parsed) ? parsed : null;
+    const parsed = JSON.parse(raw) as Partial<EdenPreferences>;
+    return parsed && typeof parsed === "object" ? parsed : null;
   } catch {
     return null;
   }

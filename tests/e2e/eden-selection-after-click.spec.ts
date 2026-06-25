@@ -234,7 +234,7 @@ function assertClean(snap: DiagSnapshot, scenario: string): void {
 }
 
 test.describe("Eden block-selection after click — scenarios", () => {
-  test.describe.configure({ timeout: 120_000 });
+  test.setTimeout(120_000);
 
   test("A. click на title INPUT первой task'и", async () => {
     const { app, edenWin } = await setupEdenWithTasks(2);

@@ -1,3 +1,0 @@
-vite build
-PASS
-Lazy-loaded route chunks emitted for LayoutPage, LibraryPage, SettingsPage, StatisticsPage, ScanPage, GameDetailPage, SqobaPage, CataloguePage.

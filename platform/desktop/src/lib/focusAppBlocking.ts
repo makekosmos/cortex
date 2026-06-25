@@ -10,13 +10,8 @@ export function isAppBlockedByFocus(
   appName?: string | null,
 ) {
   if (!focus?.active) return false;
-  const blockedAppIds = focus.blocked_app_ids;
-  if (Array.isArray(blockedAppIds) && blockedAppIds.includes(appId)) return true;
+  if ((focus.blocked_app_ids ?? []).includes(appId)) return true;
   const normalized = appName ? normalizeFocusAppName(appName) : "";
   if (!normalized) return false;
-  const blockedApps = focus.blocked_apps;
-  return (
-    Array.isArray(blockedApps) &&
-    blockedApps.some((app) => normalizeFocusAppName(app.name) === normalized)
-  );
+  return (focus.blocked_apps ?? []).some((app) => normalizeFocusAppName(app.name) === normalized);
 }

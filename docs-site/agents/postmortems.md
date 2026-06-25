@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-23 — Dictation settings silently fell back to defaults
+
+**Симптомы.** После перезапуска компьютера настройки диктовки откатывались к fallback: кастомный hotkey, выбранная модель/провайдер и режим вставки выглядели потерянными.
+**Где жило.** `platform/runtime/src/dictation/config.rs::load_from`, `platform/runtime/src/dictation/config.rs::save_to`.
+**Root cause.** `save_to` писал `dictation-config.json` напрямую через `std::fs::write`, а `load_from` при любой ошибке чтения/JSON/serde делал `unwrap_or_default()`. Если процесс или Windows прерывали запись JSON, следующий старт молча принимал defaults за валидный конфиг и весь settings UI показывал fallback.
+**Fix.** `dictation-config.json` теперь сохраняется через temp-файл с `fsync` и ведёт best-effort `.bak`; при битом primary загрузка восстанавливает backup вместо silent default. `kepler-shell-settings.json` получил аналогичный backup fallback для общих shell-настроек.
+**Регрешн-защита.** `platform/runtime/src/dictation/config.rs::tests::load_uses_backup_when_primary_is_malformed` фиксирует, что битый primary не сбрасывает hotkey/provider/model/inject mode. `save_writes_backup_copy` фиксирует создание backup.
+**Prevention.** Persisted settings JSON не должен иметь путь `parse error → default` без recovery. Для user-настроек нужен хотя бы temp-write + last-known-good backup; defaults допустимы только когда файла действительно ещё нет или нет восстановимой копии.
+
 ## 2026-06-16 — Shell ARK startup timeout маскировался под not-installed
 
 **Симптомы.** В production shell логировал `[kepler-shell] kepler-backend not-installed: ArkClient unavailable`, затем extension IPC падал с `ark bridge not ready (timeout)`, а generic shell IPC — с `ArkClient not ready (timeout)`, хотя runtime binaries уже были установлены.

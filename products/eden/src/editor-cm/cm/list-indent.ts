@@ -21,7 +21,7 @@ function visualColumn(text: string): number {
   return col;
 }
 
-function markdownListHangingIndentCh(lineText: string, markerOffset = 0): number | null {
+export function markdownListHangingIndentCh(lineText: string, markerOffset = 0): number | null {
   if (markerOffset < 0 || markerOffset > lineText.length) return null;
   const markerText = lineText.slice(markerOffset);
   const match =

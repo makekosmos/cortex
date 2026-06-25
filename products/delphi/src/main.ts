@@ -15,7 +15,6 @@
 import "./lib/electron-api-shim";
 
 import { createApp } from "vue";
-import { installConsoleOnlyRuntimeErrors } from "@kosmos/visuals";
 import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
 
@@ -34,7 +33,6 @@ const router = createRouter({
 });
 
 const app = createApp(App);
-installConsoleOnlyRuntimeErrors(app, { label: "delphi-extension" });
 app.use(createPinia());
 app.use(router);
 app.mount("#root");

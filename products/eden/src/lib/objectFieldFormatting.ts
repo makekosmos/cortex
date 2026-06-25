@@ -37,12 +37,8 @@ export function formatReadableRussianDate(value: unknown): string {
     return "";
   }
 
-  let source = Number.NaN;
-  if (typeof value === "number") {
-    source = value;
-  } else if (typeof value === "string") {
-    source = Date.parse(value);
-  }
+  const source =
+    typeof value === "number" ? value : typeof value === "string" ? Date.parse(value) : Number.NaN;
 
   if (!Number.isFinite(source)) {
     return String(value);
@@ -55,7 +51,7 @@ export function formatReadableRussianDate(value: unknown): string {
   return `${day} ${month} ${year} \u0433\u043e\u0434\u0430`;
 }
 
-function formatPlaytimeSeconds(value: unknown): string {
+export function formatPlaytimeSeconds(value: unknown): string {
   const totalSeconds = readFiniteNumber(value);
   if (totalSeconds === null) {
     return "";

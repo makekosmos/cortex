@@ -1,9 +1,0 @@
-cargo.exe :     Checking ark-core v0.1.0 (D:\Personal\Hobby\Coding\kosmos\packages\ark-core\rust)
-строка:2 знак:1
-+ & cargo check --manifest-path services/usage-tracker/Cargo.toml *> .a ...
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (    Checking ar...\ark-core\rust):String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
-    Checking usage-tracker v0.1.0 (D:\Personal\Hobby\Coding\kosmos\services\usage-tracker)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.21s

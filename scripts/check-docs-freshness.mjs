@@ -126,6 +126,8 @@ function pathExists(p) {
 }
 
 function shouldSkipPath(clean) {
+  // Historical proof-loop artifacts are intentionally not part of the slim repo.
+  if (clean.startsWith(".agent/")) return true;
   // Skip явные template-плейсхолдеры с <...> и UPPER_CASE токенами
   if (clean.includes("<") || clean.includes(">")) return true;
   if (/\$\{/.test(clean)) return true;

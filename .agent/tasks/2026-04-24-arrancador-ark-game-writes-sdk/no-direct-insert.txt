@@ -1,1 +1,0 @@
-no direct object INSERT in ark-game-objects.ts

@@ -4,6 +4,10 @@
 //   - openEden(app) — launcher warmup + invoke `eden:open` → ждём extension window.
 //   - createEdenNote(edenWindow, {id?, title?, content?}) — saveEntry через shim
 //     с дефолтами note_obj. Возвращает id.
+//   - openEdenNote(edenWindow, id) — навигация на заметку через клик в sidebar
+//     по `[data-testid="recent-entry-<id>"]` (или fallback по title-тексту).
+//     Если не найдена —
+//     возвращает "not-found".
 //   - getProseMirrorJSON(edenWindow) — best-effort извлечение editor.getJSON()
 //     через DOM-spelunking (TipTap Vue node view → __vueParentComponent →
 //     до Editor instance). Если не получится, fallback на DOM-структуру через
@@ -20,7 +24,7 @@ import { expect, type Page } from "@playwright/test";
 import type { ElectronApplication } from "playwright";
 import { waitForBackendReady } from "./wait";
 
-interface EdenApi {
+export interface EdenApi {
   saveEntry: (e: unknown) => Promise<{ ok: boolean; entryId?: string }>;
   listEntries: () => Promise<
     Array<{
@@ -120,7 +124,7 @@ export async function createEdenNote(edenWindow: Page, opts: CreateNoteOpts = {}
  * подхватит при следующем mount. Использовать ПЕРЕД close+reopen Eden чтобы
  * нужная заметка автоматически открылась.
  */
-async function setEdenLastEntry(edenWindow: Page, entryId: string): Promise<void> {
+export async function setEdenLastEntry(edenWindow: Page, entryId: string): Promise<void> {
   await edenWindow.evaluate((id) => {
     try {
       window.localStorage.setItem("eden:nav:lastEntryId", id);
@@ -130,6 +134,12 @@ async function setEdenLastEntry(edenWindow: Page, entryId: string): Promise<void
   }, entryId);
 }
 
+/**
+ * Навигация на заметку через DOM-click в sidebar. Возвращает строку-статус:
+ * "clicked-sidebar" | "clicked-by-text" | "not-found".
+ *
+ * Не делает waitForTimeout после клика — caller сам ждёт rendering.
+ */
 /**
  * Hardest-fix navigation: ставим entryId в localStorage и reload'им
  * Eden window — initApp подхватит и откроет заметку. Возвращает true
@@ -146,6 +156,48 @@ export async function openNoteViaReload(edenWindow: Page, entryId: string): Prom
   // Дать initApp + shim install + Editor lazy chunk.
   await edenWindow.waitForTimeout(2500);
   return await edenWindow.evaluate(() => !!document.querySelector(".ProseMirror"));
+}
+
+export async function openEdenNote(
+  edenWindow: Page,
+  entryId: string,
+  expectedTitle?: string,
+): Promise<string> {
+  // Sidebar item для recent entry рендерится с data-testid="recent-entry-<id>"
+  // (см. EdenSidebar.vue::buildEntryItem). Если note
+  // только что создан и ещё не в `recentEntries.value` (refresh периодически
+  // через subscribeObjectChanges) — может потребоваться wait.
+  const status = await edenWindow.evaluate(
+    async ({ id, title }) => {
+      const selector = `[data-testid="recent-entry-${id}"]`;
+      // Poll до 3s — entries.value обновляется через ARK object_upserted event.
+      const start = Date.now();
+      while (Date.now() - start < 3000) {
+        const el = document.querySelector(selector) as HTMLElement | null;
+        if (el) {
+          el.click();
+          return "clicked-sidebar";
+        }
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      // Fallback: by-text по кликабельным элементам. Не завязываемся на
+      // общий root вроде `kosmos-sidebar`, чтобы смена sidebar API не
+      // ломала helper.
+      if (title) {
+        const all = Array.from(
+          document.querySelectorAll<HTMLElement>("button, a, [role='button']"),
+        );
+        const byText = all.find((el) => (el.textContent ?? "").trim() === title);
+        if (byText) {
+          byText.click();
+          return "clicked-by-text";
+        }
+      }
+      return "not-found";
+    },
+    { id: entryId, title: expectedTitle },
+  );
+  return status;
 }
 
 /**

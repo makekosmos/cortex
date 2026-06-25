@@ -1,9 +1,0 @@
-
- RUN  v4.1.4 D:/Personal/Hobby/Coding/kosmos/apps/delphi/ts
-
-
- Test Files  8 passed (8)
-      Tests  100 passed (100)
-   Start at  12:24:29
-   Duration  29.78s (transform 437ms, setup 0ms, import 897ms, tests 95ms, environment 25.98s)
-

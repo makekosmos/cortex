@@ -44,41 +44,6 @@ interface ExtensionManifest {
   tests?: ExtensionTestContract;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
-}
-
-function isExtensionTestContract(value: unknown): value is ExtensionTestContract {
-  if (!isRecord(value)) return false;
-  if (value.commands !== undefined && !isStringArray(value.commands)) return false;
-
-  const smoke = value.smoke;
-  if (smoke === undefined) return true;
-  if (!isRecord(smoke) || typeof smoke.objectType !== "string") return false;
-  if (smoke.sample !== undefined && !isRecord(smoke.sample)) return false;
-  return true;
-}
-
-function parseExtensionManifest(raw: string): ExtensionManifest | null {
-  const parsed: unknown = JSON.parse(raw);
-  if (!isRecord(parsed)) return null;
-  if (typeof parsed.id !== "string" || typeof parsed.name !== "string") return null;
-  if (parsed.tests !== undefined && !isExtensionTestContract(parsed.tests)) return null;
-  return {
-    id: parsed.id,
-    name: parsed.name,
-    kind:
-      parsed.kind === "vue" || parsed.kind === "static" || parsed.kind === "native"
-        ? parsed.kind
-        : undefined,
-    tests: parsed.tests,
-  };
-}
-
 function discoverExtensionsWithTests(): ExtensionManifest[] {
   const result: ExtensionManifest[] = [];
   const seen = new Set<string>();
@@ -91,8 +56,7 @@ function discoverExtensionsWithTests(): ExtensionManifest[] {
       if (!fs.existsSync(manifestPath)) continue;
       try {
         const raw = fs.readFileSync(manifestPath, "utf-8");
-        const manifest = parseExtensionManifest(raw);
-        if (!manifest) continue;
+        const manifest = JSON.parse(raw) as ExtensionManifest;
         if (!manifest.tests || seen.has(manifest.id)) continue;
         seen.add(manifest.id);
         result.push(manifest);
@@ -105,149 +69,6 @@ function discoverExtensionsWithTests(): ExtensionManifest[] {
 }
 
 const manifests = discoverExtensionsWithTests();
-
-async function registeredCommandIds(extWindow: Page): Promise<string[]> {
-  return extWindow.evaluate(async () => {
-    const kepler = (
-      window as unknown as {
-        kepler?: {
-          ark: {
-            request: <T = unknown>(op: string, params?: unknown) => Promise<T>;
-          };
-        };
-      }
-    ).kepler;
-    if (!kepler) return [];
-    try {
-      const res = await kepler.ark.request<
-        { commands?: Array<{ id: string }> } | Array<{ id: string }>
-      >("commands.list", {});
-      if (Array.isArray(res)) return res.map((c) => c.id);
-      if (res && "commands" in res && Array.isArray(res.commands)) {
-        return res.commands.map((c) => c.id);
-      }
-      return [];
-    } catch (e) {
-      console.warn("[contract-spec] commands.list failed:", e);
-      return [];
-    }
-  });
-}
-
-async function expectContractCommands(
-  extWindow: Page,
-  manifest: ExtensionManifest,
-  commands: string[] | undefined,
-): Promise<void> {
-  if (!commands?.length) return;
-  const registered = await registeredCommandIds(extWindow);
-  const missing = commands.filter((c) => !registered.includes(c));
-  expect(
-    missing,
-    `extension ${manifest.id}: команды ${JSON.stringify(missing)} не появились в commands.list. ` +
-      `Зарегистрированы: ${JSON.stringify(registered)}`,
-  ).toEqual([]);
-}
-
-type SmokeObject = { id?: string; title?: string; typeId?: string };
-type SmokeResult =
-  | { stage: "ok"; got: SmokeObject | null }
-  | { stage: "no-kepler" | "upsert" | "get" | "cleanup"; error: string; got?: SmokeObject | null };
-
-interface SmokePayload {
-  id: string;
-  typeId: string;
-  title: string;
-  content: unknown;
-  props: Record<string, unknown>;
-  ts: string;
-}
-
-async function runSmokeRoundTrip(extWindow: Page, payload: SmokePayload): Promise<SmokeResult> {
-  return extWindow.evaluate(async (payload): Promise<SmokeResult> => {
-    const kepler = (
-      window as unknown as {
-        kepler?: {
-          ark: {
-            request: <T = unknown>(op: string, params?: unknown) => Promise<T>;
-          };
-        };
-      }
-    ).kepler;
-    if (!kepler) return { stage: "no-kepler", error: "no kepler bridge" };
-
-    try {
-      await kepler.ark.request<boolean>("upsert_object", {
-        object: {
-          id: payload.id,
-          typeId: payload.typeId,
-          title: payload.title,
-          contentJson: payload.content,
-          propsJson: payload.props,
-          createdAt: payload.ts,
-          updatedAt: payload.ts,
-          deletedAt: null,
-        },
-      });
-    } catch (e) {
-      return {
-        stage: "upsert",
-        error: e instanceof Error ? e.message : String(e),
-      };
-    }
-
-    let got: SmokeObject | null = null;
-    try {
-      got = await kepler.ark.request<SmokeObject | null>("get_object", { id: payload.id });
-    } catch (e) {
-      return {
-        stage: "get",
-        error: e instanceof Error ? e.message : String(e),
-      };
-    }
-
-    try {
-      await kepler.ark.request<boolean>("delete_object", { id: payload.id });
-    } catch (e) {
-      return {
-        stage: "cleanup",
-        error: e instanceof Error ? e.message : String(e),
-        got,
-      };
-    }
-
-    return { stage: "ok", got };
-  }, payload);
-}
-
-async function expectSmokeRoundTrip(
-  extWindow: Page,
-  manifest: ExtensionManifest,
-  smoke: NonNullable<ExtensionTestContract["smoke"]>,
-): Promise<void> {
-  const sampleId = `contract-smoke-${manifest.id}-${Date.now()}`;
-  const sampleTitle = smoke.sample?.title ?? `contract-smoke-${manifest.id}`;
-  const result = await runSmokeRoundTrip(extWindow, {
-    id: sampleId,
-    typeId: smoke.objectType,
-    title: sampleTitle,
-    content: smoke.sample?.content ?? { type: "doc", content: [{ type: "paragraph" }] },
-    props: smoke.sample?.props ?? {},
-    ts: new Date().toISOString(),
-  });
-
-  if (result.stage !== "ok") {
-    throw new Error(
-      `extension ${manifest.id} smoke failed at stage=${result.stage}: ${result.error}`,
-    );
-  }
-
-  expect(result.got, `get_object вернул object`).toMatchObject({
-    id: sampleId,
-    typeId: smoke.objectType,
-    title: sampleTitle,
-  });
-}
 
 test("extension contract discovery finds manifests with tests", () => {
   expect(manifests.length).toBeGreaterThan(0);
@@ -307,10 +128,129 @@ for (const manifest of manifests) {
 
         const contract = manifest.tests!;
 
-        await expectContractCommands(extWindow, manifest, contract.commands);
+        // -- commands check --
+        if (contract.commands && contract.commands.length > 0) {
+          const registered = await extWindow.evaluate(async () => {
+            const kepler = (
+              window as unknown as {
+                kepler?: {
+                  ark: {
+                    request: <T = unknown>(op: string, params?: unknown) => Promise<T>;
+                  };
+                };
+              }
+            ).kepler;
+            if (!kepler) return [];
+            try {
+              const res = await kepler.ark.request<
+                { commands?: Array<{ id: string }> } | Array<{ id: string }>
+              >("commands.list", {});
+              if (Array.isArray(res)) return res.map((c) => c.id);
+              if (res && "commands" in res && Array.isArray(res.commands)) {
+                return res.commands.map((c) => c.id);
+              }
+              return [];
+            } catch (e) {
+              console.warn("[contract-spec] commands.list failed:", e);
+              return [];
+            }
+          });
 
+          const missing = contract.commands.filter((c) => !registered.includes(c));
+          expect(
+            missing,
+            `extension ${manifest.id}: команды ${JSON.stringify(missing)} не появились в commands.list. ` +
+              `Зарегистрированы: ${JSON.stringify(registered)}`,
+          ).toEqual([]);
+        }
+
+        // -- ARK smoke round-trip --
         if (contract.smoke) {
-          await expectSmokeRoundTrip(extWindow, manifest, contract.smoke);
+          const smoke = contract.smoke;
+          const sampleId = `contract-smoke-${manifest.id}-${Date.now()}`;
+          const sampleTitle = smoke.sample?.title ?? `contract-smoke-${manifest.id}`;
+          const nowIso = new Date().toISOString();
+
+          const result = await extWindow.evaluate(
+            async (payload) => {
+              const kepler = (
+                window as unknown as {
+                  kepler?: {
+                    ark: {
+                      request: <T = unknown>(op: string, params?: unknown) => Promise<T>;
+                    };
+                  };
+                }
+              ).kepler;
+              if (!kepler) return { stage: "no-kepler", error: "no kepler bridge" };
+
+              try {
+                await kepler.ark.request<boolean>("upsert_object", {
+                  object: {
+                    id: payload.id,
+                    typeId: payload.typeId,
+                    title: payload.title,
+                    contentJson: payload.content,
+                    propsJson: payload.props,
+                    createdAt: payload.ts,
+                    updatedAt: payload.ts,
+                    deletedAt: null,
+                  },
+                });
+              } catch (e) {
+                return {
+                  stage: "upsert",
+                  error: e instanceof Error ? e.message : String(e),
+                };
+              }
+
+              let got: { id?: string; title?: string; typeId?: string } | null = null;
+              try {
+                got = await kepler.ark.request<typeof got>("get_object", { id: payload.id });
+              } catch (e) {
+                return {
+                  stage: "get",
+                  error: e instanceof Error ? e.message : String(e),
+                };
+              }
+
+              try {
+                await kepler.ark.request<boolean>("delete_object", { id: payload.id });
+              } catch (e) {
+                return {
+                  stage: "cleanup",
+                  error: e instanceof Error ? e.message : String(e),
+                  got,
+                };
+              }
+
+              return { stage: "ok", got };
+            },
+            {
+              id: sampleId,
+              typeId: smoke.objectType,
+              title: sampleTitle,
+              content: smoke.sample?.content ?? { type: "doc", content: [{ type: "paragraph" }] },
+              props: smoke.sample?.props ?? {},
+              ts: nowIso,
+            },
+          );
+
+          if (result.stage !== "ok") {
+            // Если type ещё не зарегистрирован (extension его lazy-init'ит при
+            // первом write своих real-объектов) — не валим контракт. Smoke
+            // объявленный в manifest должен быть валидируемым; если он
+            // зависит от ленивого ensure-type — манифест должен это
+            // декларировать или smoke перенесён в per-app spec.
+            throw new Error(
+              `extension ${manifest.id} smoke failed at stage=${result.stage}: ${result.error}`,
+            );
+          }
+
+          expect(result.got, `get_object вернул object`).toBeTruthy();
+          expect(result.got?.id).toBe(sampleId);
+          expect(result.got?.typeId).toBe(smoke.objectType);
+          expect(result.got?.title).toBe(sampleTitle);
         }
       } finally {
         await app.close();

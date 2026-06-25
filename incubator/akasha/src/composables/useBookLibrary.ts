@@ -130,13 +130,13 @@ export function useBookLibrary() {
 }
 
 async function readCatalog(): Promise<LibraryCatalog> {
-  const stored = await window.kepler?.userData?.readJson<unknown>(LIBRARY_FILE);
+  const stored = await window.kepler?.userData?.readJson<Partial<LibraryCatalog>>(LIBRARY_FILE);
   if (stored) return normalizeCatalog(stored);
 
   const fallback = localStorage.getItem(FALLBACK_LIBRARY_KEY);
   if (!fallback) return createEmptyCatalog();
   try {
-    return normalizeCatalog(JSON.parse(fallback));
+    return normalizeCatalog(JSON.parse(fallback) as Partial<LibraryCatalog>);
   } catch {
     return createEmptyCatalog();
   }

@@ -1,8 +1,0 @@
-Command:
-cmd.exe /c "cd /d D:\Personal\Hobby\Coding\kosmos\apps\delphi\ts && bun x vite build --configLoader native"
-
-Result:
-PASS
-
-Summary:
-- Delphi renderer and Electron production builds completed successfully after the status bridge fix.

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Visual Verify"
-  short_description: "Verify Kosmos UI changes with Playwright screenshots."
-  default_prompt: "Verify this Kosmos UI change visually with Playwright screenshots."

@@ -20,6 +20,8 @@
     "lint": "oxlint",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
+    "clean:build-cache": "node scripts/clean-build-cache.mjs",
+    "clean:build-cache:all": "node scripts/clean-build-cache.mjs --all",
     "docs:dev": "bun run --cwd docs-site dev",
     "docs:build": "bun run docs:sync && bun run --cwd docs-site build",
     "docs:preview": "bun run --cwd docs-site preview",
@@ -42,12 +44,14 @@
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "electron": "^42.2.0",
+    "electron-playwright-helpers": "^2.1.0",
     "knip": "^6.14.1",
     "lefthook": "^2.1.8",
     "oxfmt": "0.51.0",
     "oxlint": "1.66.0",
     "playwright": "^1.60.0",
-    "vue": "^3.6.0-beta.12"
+    "vue": "^3.6.0-beta.12",
+    "vue-router": "^5.0.7"
   },
   "overrides": {
     "vite": "^8.0.3"

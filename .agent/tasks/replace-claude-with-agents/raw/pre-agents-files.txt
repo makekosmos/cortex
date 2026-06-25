@@ -1,2 +1,0 @@
-AGENTS.md
-apps/eden/ts/AGENTS.md

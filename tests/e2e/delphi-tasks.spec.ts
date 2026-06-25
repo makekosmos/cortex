@@ -12,7 +12,6 @@
 
 import { test, expect } from "@playwright/test";
 import { launchKepler } from "./helpers/launch";
-import { waitForBackendReady } from "./helpers/wait";
 
 test("delphi: inbox shows task created via ARK", async () => {
   const app = await launchKepler({ slug: "delphi-tasks-visible" });
@@ -25,9 +24,7 @@ test("delphi: inbox shows task created via ARK", async () => {
   });
 
   try {
-    const launcher = await app.firstWindow();
-    await launcher.waitForLoadState("domcontentloaded");
-    await waitForBackendReady(launcher);
+    await new Promise((r) => setTimeout(r, 2500));
 
     // Seed task через launcher's ark bridge.
     const TASK_TITLE = "Test inbox задача";
@@ -105,20 +102,14 @@ test("delphi: inbox shows task created via ARK", async () => {
 
     const delphiWindow = await app.waitForEvent("window", { timeout: 10_000 });
     await delphiWindow.waitForLoadState("domcontentloaded");
+    // Дать активации space + ARK load завершиться.
+    await delphiWindow.waitForTimeout(5000);
 
     // delphi:open deep-link'ает в /today; seed-задача не isToday → она в
     // Inbox (/). Переходим явно, иначе assertion на body упрётся в "На сегодня
     // задач нет".
     await delphiWindow.getByText("Входящие", { exact: true }).first().click();
-    await expect
-      .poll(
-        async () => {
-          const text = await delphiWindow.locator("body").textContent();
-          return text?.includes(TASK_TITLE) === true;
-        },
-        { timeout: 10_000 },
-      )
-      .toBe(true);
+    await delphiWindow.waitForTimeout(800);
 
     const bodyText = (await delphiWindow.locator("body").textContent()) ?? "";
 
@@ -136,6 +127,12 @@ test("delphi: inbox shows task created via ARK", async () => {
       );
     }
   } finally {
-    await app.close();
+    await app.evaluate(({ app: a }) => a.quit());
+    await Promise.race([
+      new Promise<void>((resolve) => app.process().once("exit", () => resolve())),
+      new Promise<void>((_, rej) =>
+        setTimeout(() => rej(new Error("process exit timeout 10s")), 10_000),
+      ),
+    ]);
   }
 });

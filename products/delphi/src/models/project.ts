@@ -1,4 +1,4 @@
-import { type Project, ProjectStatus } from "@/types/task";
+import { type Project, ProjectStatus, type TodoItem } from "@/types/task";
 
 const uuid = () => crypto.randomUUID();
 
@@ -44,4 +44,26 @@ export function createProject(params: CreateProjectParams): Project {
 
     price: params.price ?? null,
   };
+}
+
+/** Computed: count of completed (non-trashed) todos in a project. */
+
+export function completedCount(todos: TodoItem[]): number {
+  return todos.filter((t) => t.isCompleted).length;
+}
+
+/** Computed: count of non-trashed todos in a project. */
+
+export function totalCount(todos: TodoItem[]): number {
+  return todos.filter((t) => !t.isTrashed).length;
+}
+
+/** Computed: progress 0..1 for a project. */
+
+export function progress(todos: TodoItem[]): number {
+  const total = totalCount(todos);
+
+  if (total === 0) return 0;
+
+  return completedCount(todos) / total;
 }

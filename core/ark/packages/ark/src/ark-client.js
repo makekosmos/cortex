@@ -1,1 +1,1 @@
-export { ArkClient } from "./ark-client.ts";
+export * from "./ark-client.ts";

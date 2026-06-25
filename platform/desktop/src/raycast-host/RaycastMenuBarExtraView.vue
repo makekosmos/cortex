@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { computed, shallowRef } from "vue";
 import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
-import { menuBarIsLoading, menuBarSections, menuBarTitle } from "./model-menu";
-import type { RaycastMenuBarItemModel } from "./model";
+import {
+  menuBarIsLoading,
+  menuBarSections,
+  menuBarTitle,
+  type RaycastMenuBarItemModel,
+} from "./model";
 
 const props = defineProps<{
   root: RaycastSnapshotNode;

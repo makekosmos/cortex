@@ -25,6 +25,14 @@ import {
   moveToTrash as trashTodoItem,
 } from "@/models/todoItem";
 
+import { createProject } from "@/models/project";
+
+import { createArea } from "@/models/area";
+
+import { createTag } from "@/models/tag";
+
+import { createHeading } from "@/models/heading";
+
 import { countAll, filterTodos } from "@/services/filters/todoFilterService";
 
 import {
@@ -34,8 +42,7 @@ import {
 
 import type { CreateTodoParams } from "@/models/todoItem";
 
-import { deleteTodoFromArk, persistTodoToArk } from "./todoArkPersistence";
-import { createTodoReferenceActions } from "./todoReferenceActions";
+import type { CreateProjectParams } from "@/models/project";
 
 // ---------------------------------------------------------------------------
 
@@ -51,6 +58,40 @@ function mapTodo(
   fn: (t: TodoItem) => TodoItem,
 ): TodoItem[] {
   return todos.map((t) => (t.id === id ? fn(t) : t));
+}
+
+function getElectronInvoker(): {
+  invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
+} | null {
+  if (
+    typeof window === "undefined" ||
+    !(window as unknown as Record<string, unknown>).electronAPI
+  ) {
+    return null;
+  }
+
+  const electronAPI = (
+    window as unknown as Record<
+      string,
+      { invoke: (channel: string, ...args: unknown[]) => Promise<unknown> }
+    >
+  ).electronAPI;
+
+  return electronAPI ?? null;
+}
+
+function persistTodoToArk(todo: TodoItem): void {
+  const electronAPI = getElectronInvoker();
+  if (!electronAPI) return;
+
+  electronAPI.invoke("ark:upsertDelphiTask", JSON.parse(JSON.stringify(todo))).catch(() => {});
+}
+
+function deleteTodoFromArk(id: string): void {
+  const electronAPI = getElectronInvoker();
+  if (!electronAPI) return;
+
+  electronAPI.invoke("ark:deleteDelphiTask", id).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -75,22 +116,6 @@ export const useTodoStore = defineStore("todos", () => {
   const activeSmartList = ref<SmartList | null>(null);
 
   const hydrated = ref(false);
-
-  const {
-    addProject,
-    updateProject,
-    removeProject,
-    upsertProject,
-    addArea,
-    updateArea,
-    removeArea,
-    addTag,
-    updateTag,
-    removeTag,
-    addHeading,
-    updateHeading,
-    removeHeading,
-  } = createTodoReferenceActions({ todos, projects, areas, tags, headings });
 
   // ---- Bulk setters (for sync / hydration) ----
 
@@ -355,6 +380,118 @@ export const useTodoStore = defineStore("todos", () => {
     }
   }
 
+  // ---- Project CRUD ----
+
+  function addProject(params: CreateProjectParams): Project {
+    const project = createProject(params);
+
+    projects.value = [project, ...projects.value];
+
+    return project;
+  }
+
+  function updateProject(id: string, patch: Partial<Project>) {
+    projects.value = projects.value.map((p) => (p.id === id ? { ...p, ...patch } : p));
+
+    const updated = projects.value.find((p) => p.id === id);
+
+    if (updated) {
+      void updated;
+    }
+  }
+
+  function removeProject(id: string) {
+    projects.value = projects.value.filter((p) => p.id !== id);
+
+    // Unlink todos from removed project
+
+    todos.value = todos.value.map((t) => (t.projectId === id ? { ...t, projectId: null } : t));
+  }
+
+  function upsertProject(project: Project) {
+    const exists = projects.value.some((p) => p.id === project.id);
+
+    projects.value = exists
+      ? projects.value.map((p) => (p.id === project.id ? project : p))
+      : [project, ...projects.value];
+  }
+
+  // ---- Area CRUD ----
+
+  function addArea(title: string): Area {
+    const area = createArea(title);
+
+    areas.value = [area, ...areas.value];
+
+    return area;
+  }
+
+  function updateArea(id: string, patch: Partial<Area>) {
+    areas.value = areas.value.map((a) => (a.id === id ? { ...a, ...patch } : a));
+  }
+
+  function removeArea(id: string) {
+    areas.value = areas.value.filter((a) => a.id !== id);
+
+    // Unlink projects & todos from removed area
+
+    projects.value = projects.value.map((p) => (p.areaId === id ? { ...p, areaId: null } : p));
+
+    todos.value = todos.value.map((t) => (t.areaId === id ? { ...t, areaId: null } : t));
+  }
+
+  // ---- Tag CRUD ----
+
+  function addTag(
+    title: string,
+
+    color?: string,
+
+    shortcut?: string | null,
+  ): Tag {
+    const tag = createTag(title, color, shortcut);
+
+    tags.value = [tag, ...tags.value];
+
+    return tag;
+  }
+
+  function updateTag(id: string, patch: Partial<Tag>) {
+    tags.value = tags.value.map((t) => (t.id === id ? { ...t, ...patch } : t));
+  }
+
+  function removeTag(id: string) {
+    tags.value = tags.value.filter((t) => t.id !== id);
+
+    // Remove tag from all todos
+
+    todos.value = todos.value.map((t) =>
+      t.tagIds.includes(id) ? { ...t, tagIds: t.tagIds.filter((tid) => tid !== id) } : t,
+    );
+  }
+
+  // ---- Heading CRUD ----
+
+  function addHeading(title: string, projectId?: string | null): Heading {
+    const heading = createHeading(title, projectId);
+
+    headings.value = [heading, ...headings.value];
+
+    return heading;
+  }
+
+  function updateHeading(id: string, patch: Partial<Heading>) {
+    headings.value = headings.value.map((h) => (h.id === id ? { ...h, ...patch } : h));
+  }
+
+  function removeHeading(id: string) {
+    headings.value = headings.value.filter((h) => h.id !== id);
+
+    // Clear headingId from todos that referenced it
+
+    todos.value = todos.value.map((t) => (t.headingId === id ? { ...t, headingId: null } : t));
+  }
+
   async function emptyTrash() {
     const trashedTodos = todos.value.filter((t) => t.isTrashed);
     for (const t of trashedTodos) {
@@ -497,3 +634,5 @@ export const useTodoStore = defineStore("todos", () => {
     removeHeading,
   };
 });
+
+export default useTodoStore;

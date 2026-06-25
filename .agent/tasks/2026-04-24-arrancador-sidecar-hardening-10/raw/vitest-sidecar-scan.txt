@@ -1,9 +1,0 @@
-$ bunx vitest run --configLoader native --config vitest.config.mjs electron/main/sidecar/arrancador-sidecar.test.ts electron/main/services/scan-sidecar-fallback.test.ts
-
- RUN  v4.1.4 D:/Personal/Hobby/Coding/kosmos/apps/arrancador
-
-
- Test Files  2 passed (2)
-      Tests  4 passed (4)
-   Start at  02:02:38
-   Duration  364ms (transform 110ms, setup 0ms, import 184ms, tests 24ms, environment 1ms)

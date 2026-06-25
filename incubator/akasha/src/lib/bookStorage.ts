@@ -59,13 +59,11 @@ export function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
-export function normalizeCatalog(value: unknown): LibraryCatalog {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return createEmptyCatalog();
-  const catalog = value as { books?: unknown };
-  if (!Array.isArray(catalog.books)) return createEmptyCatalog();
+export function normalizeCatalog(value: Partial<LibraryCatalog> | null): LibraryCatalog {
+  if (!value || !Array.isArray(value.books)) return createEmptyCatalog();
   return {
     version: 1,
-    books: catalog.books
+    books: value.books
       .map(normalizeBookRecord)
       .filter((book): book is BookRecord => book !== null)
       .sort(sortByLastOpened),

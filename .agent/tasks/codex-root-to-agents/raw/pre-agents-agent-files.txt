@@ -1,4 +1,0 @@
-task-builder.md
-task-fixer.md
-task-spec-freezer.md
-task-verifier.md

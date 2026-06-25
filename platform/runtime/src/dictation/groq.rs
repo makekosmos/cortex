@@ -30,7 +30,7 @@ pub const GROQ_ENDPOINT: &str = "https://api.groq.com/openai/v1/audio/transcript
 
 /// Hardcoded prompt для Whisper. Короткий, с domain-терминами Kosmos/Kepler
 /// + явно указывает что это русская речь с пунктуацией. Не описывает задачу
-///   («ты транскрибатор…») — Whisper это копирует в выход. Только пример стиля.
+/// («ты транскрибатор…») — Whisper это копирует в выход. Только пример стиля.
 const HARDCODED_PROMPT: &str = "Привет! Это транскрипция русской речи с правильной пунктуацией — точками, запятыми, тире, вопросительными и восклицательными знаками. В тексте могут встречаться термины: API, Groq, Whisper, GPT, Anthropic, React, TypeScript. Сохраняй естественные паузы и интонацию говорящего.";
 
 /// Пороги фильтрации сегментов от Whisper. Откалиброваны под docs OpenAI
@@ -183,7 +183,7 @@ struct PcmWav<'a> {
     data: &'a [u8],
 }
 
-fn split_wav_for_transcription(wav_bytes: &[u8]) -> Vec<Vec<u8>> {
+pub(crate) fn split_wav_for_transcription(wav_bytes: &[u8]) -> Vec<Vec<u8>> {
     let Some(parsed) = parse_pcm_wav(wav_bytes) else {
         return vec![wav_bytes.to_vec()];
     };

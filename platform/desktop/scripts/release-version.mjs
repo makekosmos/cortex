@@ -5,7 +5,7 @@
 // a MAJOR.MINOR "parity line" that is bumped together when a feature ships on
 // both platforms.
 //
-// Library API:
+// Library exports:
 //   readVersions()           → { win: "0.5.3", mac: "0.5.1" }
 //   getVersion(platform)     → "0.5.3"
 //   writeVersions(obj)       → void  (2-space indent + trailing newline)
@@ -71,7 +71,7 @@ function validateVersionString(v, context) {
 // ─── Library exports ───────────────────────────────────────────────────────────
 
 /** Read release-versions.json and return { win, mac }. Validates semver on read. */
-function readVersions() {
+export function readVersions() {
   let raw;
   try {
     raw = readFileSync(VERSIONS_PATH, "utf8");
@@ -104,7 +104,7 @@ export function getVersion(platform) {
 }
 
 /** Write { win, mac } back to release-versions.json (2-space indent + trailing newline). */
-function writeVersions(obj) {
+export function writeVersions(obj) {
   for (const platform of VALID_PLATFORMS) {
     validateVersionString(obj[platform], `writeVersions["${platform}"]`);
   }

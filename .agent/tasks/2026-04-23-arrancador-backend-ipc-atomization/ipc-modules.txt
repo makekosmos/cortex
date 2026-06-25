@@ -1,9 +1,0 @@
-﻿
-Name                   Length
-----                   ------
-app-handlers.ts          4207
-game-handlers.ts         5616
-shell-scan-handlers.ts   3310
-types.ts                  423
-
-

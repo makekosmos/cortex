@@ -9,7 +9,7 @@
 // этого скрипта (см. package.json `dev`). SIGINT/SIGTERM пробрасывается
 // children, чтобы Ctrl+C корректно убивал всё дерево.
 
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
@@ -92,16 +92,9 @@ async function assertDevPortsAvailable() {
   const checks = [{ label: "shell", port: shellDevPort }, ...readExtensionDevPorts()];
   const busy = [];
   for (const check of checks) {
-    if (await isPortAvailable(check.port)) {
-      continue;
+    if (!(await isPortAvailable(check.port))) {
+      busy.push(check);
     }
-    if (tryReleaseStaleDevPort(check.port)) {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      if (await isPortAvailable(check.port)) {
-        continue;
-      }
-    }
-    busy.push(check);
   }
   if (busy.length === 0) return;
 
@@ -114,36 +107,6 @@ async function assertDevPortsAvailable() {
 }
 
 await assertDevPortsAvailable();
-
-function psSingleQuoted(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-function tryReleaseStaleDevPort(port) {
-  if (process.platform !== "win32") return false;
-  const script = `
-$port = ${Number(port)}
-$repo = ${psSingleQuoted(repoRoot)}
-$conn = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $conn) { exit 0 }
-$processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$($conn.OwningProcess)"
-if (-not $processInfo) { exit 1 }
-$cmd = [string]$processInfo.CommandLine
-$cmdLower = $cmd.ToLowerInvariant()
-$repoLower = $repo.ToLowerInvariant()
-if ($cmdLower.Contains($repoLower) -and $cmdLower.Contains("vite")) {
-  taskkill /PID $conn.OwningProcess /T /F | Out-Null
-  exit 0
-}
-exit 1
-`;
-  const result = spawnSync("powershell.exe", ["-NoProfile", "-Command", script], {
-    stdio: "ignore",
-    windowsHide: true,
-  });
-  if (result.status !== 0) return false;
-  return true;
-}
 
 function startChild(name, cmd, args, env = {}) {
   const child = spawn(cmd, args, {
@@ -161,25 +124,15 @@ function startChild(name, cmd, args, env = {}) {
   return child;
 }
 
-function killProcessTree(child, signal) {
-  if (child.killed) return;
-  if (process.platform === "win32" && child.pid) {
-    spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
-      stdio: "ignore",
-      windowsHide: true,
-    });
-    return;
-  }
-  try {
-    child.kill(signal);
-  } catch {
-    // ignore
-  }
-}
-
 function shutdown(signal) {
   for (const { child } of children) {
-    killProcessTree(child, signal);
+    if (!child.killed) {
+      try {
+        child.kill(signal);
+      } catch {
+        // ignore
+      }
+    }
   }
   // Дать процессам 500мс на graceful exit, потом force-exit.
   setTimeout(() => process.exit(0), 500);

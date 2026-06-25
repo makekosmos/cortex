@@ -1,130 +1,13 @@
-# Kosmos — статус проекта (2026-06-25)
+# Kosmos — статус проекта (2026-06-18)
 
 | Компонент                  | Версия        |
 | -------------------------- | ------------- |
-| Kosmos Desktop (win / mac) | 0.6.7 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.5.4 / 0.5.1 |
 | Eden                       | 0.3.0         |
 | Delphi                     | 0.1.8         |
 | Horologion                 | 0.1.4         |
 | Arrancador                 | 0.1.4         |
 | Akasha                     | 0.1.2         |
-
-## 2026-06-25 — Desloppify global refactor release (Kosmos Desktop win 0.6.7)
-
-Patch-релиз публикует текущую Windows desktop-линию после `codex/desloppify-global-refactor`.
-Скоуп релиза в основном технический: крупная разборка oversized TypeScript/Electron/Vue modules на меньшие файлы,
-удаление dead helpers и выравнивание workspace entry points без отдельной user-facing фичи для `whats-new`.
-
-Важно для следующего агента: ветка на момент bump была чистой и на 2 коммита впереди локального `main`
-(`4e63cbd9`, `dd830b49`); `main` ещё не содержал этот HEAD. Предыдущий Windows release `v0.6.6` уже был опубликован
-в `makekosmos/desktop` с `Kosmos-Setup-0.6.6.exe`, `.blockmap` и `latest.yml`, поэтому patch bump идёт в `0.6.7`.
-
-Checks before bump: `bun run --cwd platform/desktop typecheck`.
-
-## 2026-06-24 — Lean local STT runtime delivery (Kosmos Desktop win 0.6.6)
-
-Patch-релиз откатывает packaging-решение `0.6.5`: CPU/Vulkan `whisper.cpp` runtimes больше не входят в Windows
-installer как `extraResources`. Это возвращает installer к компактному размеру и убирает лишние вложенные unsigned
-`whisper-cli.exe`/DLL из первого запуска, из-за которых Windows Smart App Control чаще показывал reputation/block
-warnings.
-
-Runtime всё ещё ставится автоматически при скачивании локальной модели, но теперь качается лениво в общий
-`%APPDATA%\Kosmos` cache из публичного static CDN `makekosmos.github.io/local-ai-runtimes`. Оба архива pinned по SHA-256:
-CPU `whisper-cpu-bin-x64-v1.9.1.zip` (`7a17d804ab6e0fc992d356b4d3c434764f9191c13f0da6b8c219e7bc19e8ffcf`) и Vulkan
-`whisper-vulkan-bin-x64-v1.9.1.zip` (`d9be5497fae76a35eff0a44141d51bfe30aa8961afe9a13dea7f66b425fa4ca7`). CDN assets
-опубликованы в `makekosmos/local-ai-runtimes` через GitHub Pages; release assets GitHub больше не используются в
-production URL.
-
-Checks: runtime CDN `HEAD` returned 200 for both zip assets with expected sizes (`1116526`, `24532865` bytes).
-
-## 2026-06-24 — Bundled local STT runtime hotfix (Kosmos Desktop win 0.6.5)
-
-Patch-релиз исправляет production-сценарий, где скачивание локальной модели доходило до установки `whisper.cpp`
-runtime и падало на прямом скачивании GitHub Release asset (`error sending request`, TLS/timeout на
-`whisper-bin-x64.zip`). Теперь Windows installer включает CPU и Vulkan `whisper.cpp` runtimes как `extraResources`,
-а backend при подготовке модели сначала копирует bundled runtime в общий `%APPDATA%\Kosmos` cache. Сетевой download
-runtime остаётся только запасным путём для нестандартных сборок.
-
-Checks at release time: local runtime staging script, plus release test compilation for the bundled-runtime regression
-(запуск test exe был заблокирован Windows App Control `os error 4551`; компиляция теста прошла). Этот staging script
-удалён в `0.6.6`, потому что runtime больше не поставляется внутри installer.
-
-## 2026-06-23 — Local STT stale model cleanup hotfix (Kosmos Desktop win 0.6.4)
-
-Patch-релиз исправляет production-сценарий, где удаление локальной модели могло удалить сам `.bin`, затем упасть на cleanup runtime с `Access denied`, потому что `Kosmos Local STT.exe` ещё держал файлы открытыми. В результате config продолжал ссылаться на отсутствующую модель, и следующая диктовка уходила в ошибку.
-
-Теперь backend выгружает local STT sidecar перед удалением модели, cleanup не ломает уже выполненное удаление модели, а список локальных моделей очищает stale selection, если выбранного файла больше нет.
-
-Checks: `cargo test --release -p kepler-backend --lib dictation::local_models::tests`,
-`cargo test --release -p kepler-backend --lib dictation::host::tests::list_local_models_clears_stale_missing_local_selection`.
-
-## 2026-06-23 — Vulkan-first local STT (Kosmos Desktop win 0.6.3)
-
-Patch-релиз переводит Windows local STT с faster-whisper/Python/CTranslate2 на один production path через `whisper.cpp`.
-Windows policy теперь выбирает `whisper.cpp`, а managed runtime при скачивании локальной модели сначала ставит Vulkan build
-из `makekosmos/local-ai-runtimes` (`whisper-vulkan-bin-x64-v1.9.1.zip`, pinned SHA-256), если в системе доступен Vulkan runtime.
-Если Vulkan runtime или скачивание недоступны, установка откатывается на официальный CPU `whisper.cpp` zip.
-
-Удалён product-flow для CUDA/faster-whisper: UI больше не показывает кнопку NVIDIA/CUDA, sidecar не запускает Python worker,
-а старые CT2/CUDA assets (`models/whisper`, `runtimes/faster-whisper`, `runtimes/cuda-libs`,
-`tools/dictation/whisper.cpp-cublas`) автоматически очищаются при старте. VAD остаётся включённым через Silero model рядом
-с `whisper-cli.exe`.
-
-Checks: `cargo test -p kepler-backend dictation`, `bun run --cwd platform/desktop typecheck`,
-`bun run --cwd platform/desktop build:backend:dev`.
-
-## 2026-06-22 — Packaged local STT sidecar hotfix (Kosmos Desktop win 0.6.2)
-
-Patch-релиз исправляет расхождение dev/prod упаковки локальной диктовки на Windows. В dev runtime запускал
-`target/.../kosmos-local-stt.exe`, а installer кладёт sidecar в `resources/Kosmos Local STT.exe`; из-за этого
-packaged build не мог стартовать локальный STT при той же модели и настройках, которые работали в dev.
-
-`platform/runtime/src/dictation/local.rs` теперь проверяет оба имени sidecar-а и в ошибке печатает все paths,
-которые реально искал. Добавлен unit-test на packaged Windows имя.
-
-Checks: `bun run --cwd platform/desktop typecheck`, `cargo test --manifest-path platform/runtime/Cargo.toml
-dictation::local`, `cargo clippy --manifest-path platform/runtime/Cargo.toml --all-targets -- -D warnings`.
-
-## 2026-06-22 — Faster-whisper production hardening (Kosmos Desktop win 0.6.1)
-
-Patch-релиз закрывает production-проблемы локальной диктовки на Windows после перехода на faster-whisper:
-
-- **Backend policy**: Windows больше не предлагает ручной выбор backend'а. Локальная диктовка использует
-  faster-whisper, а backend ставится только при подготовке модели, чтобы не держать лишний runtime без
-  скачанных локальных моделей.
-- **Managed faster-whisper runtime**: подготовка модели теперь проверяет не только marker-файл, но и реальный
-  managed Python/CUDA runtime. На NVIDIA-машинах venv доустанавливает `nvidia-cublas-cu12` и
-  `nvidia-cudnn-cu12==9.*`; stale-конфиг без модели или без runtime очищается и больше не пытается запускать
-  несуществующий worker.
-- **Anti-hallucination defaults**: faster-whisper всегда запускается с `condition_on_previous_text=false` и
-  `vad_filter=true` (`min_silence_duration_ms=500`), чтобы тишина реже превращалась в текст.
-- **Diagnostics**: ошибки `provider disabled` / `local model is not ready` теперь логируются с `uuid`,
-  `provider`, `local_engine` и `local_model`; pill renderer тоже пишет штатный `state=error`, чтобы UI-ошибка
-  больше не была “тихой”.
-
-Checks: `cargo test --manifest-path platform/runtime/Cargo.toml dictation::local`,
-`dictation::local_models`, `dictation::host`, `cargo clippy --manifest-path platform/runtime/Cargo.toml
---all-targets -- -D warnings`, `bun run --cwd platform/desktop typecheck`.
-
-## 2026-06-22 — Dictation local STT + recording pill polish (Kosmos Desktop win 0.6.0)
-
-Windows desktop bump до `0.6.0` покрывает итерацию по локальной диктовке и
-визуальному состоянию pill overlay:
-
-- **Local STT**: whisper.cpp остаётся базовым fallback, faster-whisper работает
-  как NVIDIA/CUDA-ускоренный backend без повторной загрузки модели на каждый
-  короткий запрос. Runtime sidecar и модельные ассеты проверены на dev-машине.
-- **Модели диктовки**: локальные модели вынесены в общий каталог, который не
-  зависит от dev/prod data dir, чтобы не скачивать одни и те же файлы дважды.
-  UI управления моделями показывает скачивание/удаление отдельно от выбора
-  активной голосовой модели.
-- **Recording pill**: waveform переведён на canvas-подход по мотивам
-  ElevenLabs LiveWaveform без React-зависимости. Footer стал отдельной нижней
-  секцией с реальными action-кнопками; отправка показывает актуальный hotkey
-  из `dictation.get_config`, а не фиктивные `Esc`/`Enter`.
-
-Checks: `bun run --cwd platform/desktop typecheck`, visual preview screenshots
-в `.tmp/visual/2026-06-22-*`, ручная runtime-проверка faster-whisper диктовки.
 
 ## 2026-06-18 — Per-platform release channels + Windows 0.5.4 (восстановление автообновления)
 
