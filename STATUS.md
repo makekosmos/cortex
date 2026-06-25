@@ -2,12 +2,32 @@
 
 | Компонент                  | Версия        |
 | -------------------------- | ------------- |
-| Kosmos Desktop (win / mac) | 0.5.4 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.8 / 0.5.1 |
 | Eden                       | 0.3.0         |
 | Delphi                     | 0.1.8         |
 | Horologion                 | 0.1.4         |
 | Arrancador                 | 0.1.4         |
 | Akasha                     | 0.1.2         |
+
+## 2026-06-25 — Local dictation VAD + safe retry release (Kosmos Desktop 0.6.7 → 0.6.8)
+
+Patch-релиз закрепляет исправления локальной диктовки из ветки
+`codex/desloppify-global-refactor`: длинные локальные записи больше не
+разваливаются на случайные переводы строк от timestamp output, локальный
+whisper.cpp получает Silero VAD-модель, а неудачная вставка текста больше не
+удаляет pending audio без возможности повторить отправку.
+
+- **Silero VAD для whisper.cpp**: модель `ggml-silero-v6.2.0.bin` опубликована в
+  `makekosmos/local-ai-runtimes` и скачивается лениво в общий каталог
+  `tools/dictation/vad`.
+- **Длинные записи**: локальный путь использует тот же WAV chunking, что Groq, и
+  склеивает сегменты пробелами вместо переносов строк.
+- **Без потери pending audio**: ошибки вставки текста оставляют запись в pending
+  и показывают пользователю понятное состояние для retry.
+
+Checks: `cargo test --target-dir .codex-target -p kepler-backend dictation::`,
+`cargo nextest run` для `ark-core` и `kepler-backend`, `cargo clippy --workspace
+--all-targets --quiet`, `cargo shear`, `docs:check`, `ark:guard:writes`.
 
 ## 2026-06-18 — Per-platform release channels + Windows 0.5.4 (восстановление автообновления)
 
