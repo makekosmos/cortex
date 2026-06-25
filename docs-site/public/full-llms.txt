@@ -211,7 +211,6 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 ┌──────────────────────────────────────────────────────────────┐
 │  Kosmos Runtime.exe  (Rust, platform/runtime)         │
 │    ├─ spawn: Kosmos Data Engine.exe / ark-core-rpc.exe       │
-│    ├─ spawn: Kosmos Local STT.exe                             │
 │    ├─ WS server 127.0.0.1:<random_port>                      │
 │    ├─ Command bus (registry + invoke broadcast)              │
 │    ├─ Auth (bearer token, PID-binding, file ACL)             │
@@ -339,7 +338,7 @@ Apps (`@kosmos/ark` в kepler-mode) не открывают SQLite напрям�
 
 ### 2. Single shared runtime
 
-`ark-core-rpc` владеет схемой, объектами, usage-данными, sync-протоколом. `kepler-backend` владеет только одной копией `ark-core-rpc` на машину + WS gateway. Local STT остаётся отдельным sidecar boundary: `kepler-backend` хранит dictation state, а `Kosmos Local STT` владеет native engine lifecycle. Приложения — тонкие оболочки. Если ты пишешь много логики работы с данными внутри приложения — ты, скорее всего, ошибаешься; этот код должен быть в ARK.
+`ark-core-rpc` владеет схемой, объектами, usage-данными, sync-протоколом. `kepler-backend` владеет только одной копией `ark-core-rpc` на машину + WS gateway. Local STT больше не упаковывается отдельным Kosmos sidecar: backend хранит dictation state и запускает выбранный `whisper-cli` / `whisper-server` из лениво скачанного runtime. Приложения — тонкие оболочки. Если ты пишешь много логики работы с данными внутри приложения — ты, скорее всего, ошибаешься; этот код должен быть в ARK.
 
 ### 3. Narrow contract
 
@@ -2999,7 +2998,7 @@ Roadmap дальше (Phase 3+):
 - Settings → Диктация отвечает за поведение диктации: hotkey/language/inject mode/provider (`online` или `local`).
 - Local model storage — только `<dataDir>/dictation/models/`. Это переживает app update/reinstall и изолируется по instance/data dir; Settings → About показывает, сколько занимают DB/backups/models.
 - Download manager делает resumable download и показывает progress. Long-running download не должен идти через короткий 30s Ark IPC timeout.
-- Local STT adapter запускает `Kosmos Local STT` sidecar как runtime detail. UI не знает, какой native executable/engine внутри; выбирает только provider/model, а sidecar владеет preload/transcribe/cancel/unload и crash isolation.
+- Local STT adapter больше не требует packaged `Kosmos Local STT` sidecar. Backend запускает выбранный `whisper-cli` / `whisper-server` из лениво скачанного runtime; UI не знает, какой native executable/engine внутри, и выбирает только provider/model.
 - Groq остаётся online fallback: тот же pending/retry/network/proxy путь, API key по-прежнему только в Credential Manager / Keychain.
 
 Причина: желаемый UX такой же, как в Handy — выбрать модель из списка, скачать, использовать. Ручные пути к `.bin`, `whisper-cli.exe` или прямой `whisper-server.exe` оставлены только как debug/advanced escape hatch, не как основной workflow.

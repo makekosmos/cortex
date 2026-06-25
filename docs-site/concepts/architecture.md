@@ -32,7 +32,6 @@
 ┌──────────────────────────────────────────────────────────────┐
 │  Kosmos Runtime.exe  (Rust, platform/runtime)         │
 │    ├─ spawn: Kosmos Data Engine.exe / ark-core-rpc.exe       │
-│    ├─ spawn: Kosmos Local STT.exe                             │
 │    ├─ WS server 127.0.0.1:<random_port>                      │
 │    ├─ Command bus (registry + invoke broadcast)              │
 │    ├─ Auth (bearer token, PID-binding, file ACL)             │
@@ -160,7 +159,7 @@ Apps (`@kosmos/ark` в kepler-mode) не открывают SQLite напрям�
 
 ### 2. Single shared runtime
 
-`ark-core-rpc` владеет схемой, объектами, usage-данными, sync-протоколом. `kepler-backend` владеет только одной копией `ark-core-rpc` на машину + WS gateway. Local STT остаётся отдельным sidecar boundary: `kepler-backend` хранит dictation state, а `Kosmos Local STT` владеет native engine lifecycle. Приложения — тонкие оболочки. Если ты пишешь много логики работы с данными внутри приложения — ты, скорее всего, ошибаешься; этот код должен быть в ARK.
+`ark-core-rpc` владеет схемой, объектами, usage-данными, sync-протоколом. `kepler-backend` владеет только одной копией `ark-core-rpc` на машину + WS gateway. Local STT больше не упаковывается отдельным Kosmos sidecar: backend хранит dictation state и запускает выбранный `whisper-cli` / `whisper-server` из лениво скачанного runtime. Приложения — тонкие оболочки. Если ты пишешь много логики работы с данными внутри приложения — ты, скорее всего, ошибаешься; этот код должен быть в ARK.
 
 ### 3. Narrow contract
 

@@ -181,7 +181,7 @@ Roadmap дальше (Phase 3+):
 - Settings → Диктация отвечает за поведение диктации: hotkey/language/inject mode/provider (`online` или `local`).
 - Local model storage — только `<dataDir>/dictation/models/`. Это переживает app update/reinstall и изолируется по instance/data dir; Settings → About показывает, сколько занимают DB/backups/models.
 - Download manager делает resumable download и показывает progress. Long-running download не должен идти через короткий 30s Ark IPC timeout.
-- Local STT adapter запускает `Kosmos Local STT` sidecar как runtime detail. UI не знает, какой native executable/engine внутри; выбирает только provider/model, а sidecar владеет preload/transcribe/cancel/unload и crash isolation.
+- Local STT adapter больше не требует packaged `Kosmos Local STT` sidecar. Backend запускает выбранный `whisper-cli` / `whisper-server` из лениво скачанного runtime; UI не знает, какой native executable/engine внутри, и выбирает только provider/model.
 - Groq остаётся online fallback: тот же pending/retry/network/proxy путь, API key по-прежнему только в Credential Manager / Keychain.
 
 Причина: желаемый UX такой же, как в Handy — выбрать модель из списка, скачать, использовать. Ручные пути к `.bin`, `whisper-cli.exe` или прямой `whisper-server.exe` оставлены только как debug/advanced escape hatch, не как основной workflow.
