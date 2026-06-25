@@ -113,13 +113,9 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-// Mica — modern Win11 22H2+ backdrop (static texture от desktop wallpaper,
-// дешевле acrylic'а в DWM). Global env override:
-// `KOSMOS_WINDOW_EFFECTS=flat|mica|acrylic`; legacy
-// `KEPLER_BG_MATERIAL=acrylic|mica|none` remains supported when global flag is unset.
-// Non-Win11 systems: setBackgroundMaterial no-op'ит, окно остаётся opaque.
+// Window backdrops are currently forced off globally in `window-effects.ts`.
 function resolveLauncherBgMaterial(): KosmosWindowMaterial {
-  return resolveWindowMaterial("mica");
+  return resolveWindowMaterial("none");
 }
 
 let isQuiting = false;

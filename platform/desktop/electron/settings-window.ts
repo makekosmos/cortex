@@ -77,7 +77,7 @@ export function openSettings(): void {
     return;
   }
   const display = screen.getPrimaryDisplay().workAreaSize;
-  const backgroundMaterial = resolveWindowMaterial("acrylic");
+  const backgroundMaterial = resolveWindowMaterial("none");
   settingsWindow = new BrowserWindow({
     width: SETTINGS_WIDTH,
     height: SETTINGS_HEIGHT,
@@ -101,7 +101,7 @@ export function openSettings(): void {
     fullscreenable: false,
     skipTaskbar: isHeadless(),
     alwaysOnTop: false,
-    backgroundColor: "#00000000",
+    backgroundColor: "#1d1d1f",
     ...backgroundMaterialOption(backgroundMaterial),
     roundedCorners: true,
     title: "Kosmos — Настройки",

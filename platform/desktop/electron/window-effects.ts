@@ -22,12 +22,10 @@ export function resolveWindowMaterial(
   fallback: KosmosWindowMaterial,
   env: WindowEffectsEnv = process.env,
 ): KosmosWindowMaterial {
-  const globalEffects = normalizeWindowEffects(env.KOSMOS_WINDOW_EFFECTS);
-  if (globalEffects === "flat") return "none";
-  if (globalEffects) return globalEffects;
-
-  const legacy = normalizeLegacyBgMaterial(env.KEPLER_BG_MATERIAL);
-  return legacy ?? fallback;
+  void fallback;
+  void env;
+  // ponytail: global flat mode; restore env/fallback handling only if backdrops return.
+  return "none";
 }
 
 export function backgroundMaterialOption(material: KosmosWindowMaterial): {

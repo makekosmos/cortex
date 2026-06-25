@@ -1736,7 +1736,7 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--main-background-color);
+  background: var(--bg-app, #1d1d1f);
 }
 
 .search-bar {

@@ -1,6 +1,7 @@
 use std::fs::{self, OpenOptions};
-use std::io::{self, Cursor, Write};
+use std::io::{self, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::Duration;
 
 use reqwest::header::{
@@ -15,16 +16,26 @@ use super::config;
 
 const MODELS_DIR: &str = "models/dictation";
 const TOOLS_DIR: &str = "tools/dictation/whisper.cpp";
-const VAD_DIR: &str = "tools/dictation/vad";
-const VAD_MODEL_FILENAME: &str = "ggml-silero-v6.2.0.bin";
-const VAD_MODEL_URL: &str =
-    "https://github.com/makekosmos/local-ai-runtimes/releases/download/whisper-vad-silero-v6.2.0/ggml-silero-v6.2.0.bin";
-const VAD_MODEL_SHA256: &str = "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987";
+const CUDA_TOOLS_DIR: &str = "tools/dictation/whisper.cpp-cublas";
+const VULKAN_TOOLS_DIR: &str = "tools/dictation/whisper.cpp-vulkan";
+const OLD_FASTER_WHISPER_TOOLS_DIR: &str = "tools/dictation/faster-whisper";
+const OLD_FASTER_WHISPER_MODEL_CACHE_DIR: &str = "models/whisper";
+const OLD_FASTER_WHISPER_RUNTIME_DIR: &str = "runtimes/faster-whisper";
+const OLD_FASTER_WHISPER_CUDA_LIBS_DIR: &str = "runtimes/cuda-libs";
 const DOWNLOAD_MAX_ATTEMPTS: usize = 8;
 
 #[cfg(windows)]
-const WHISPER_CPP_ZIP_URL: &str =
-    "https://github.com/ggml-org/whisper.cpp/releases/download/v1.8.4/whisper-bin-x64.zip";
+const WHISPER_CPP_CPU_ZIP_URL: &str =
+    "https://makekosmos.github.io/local-ai-runtimes/whisper-cpu-bin-x64-v1.9.1.zip";
+#[cfg(windows)]
+const WHISPER_CPP_CPU_ZIP_SHA256: &str =
+    "7a17d804ab6e0fc992d356b4d3c434764f9191c13f0da6b8c219e7bc19e8ffcf";
+#[cfg(windows)]
+const WHISPER_CPP_VULKAN_ZIP_URL: &str =
+    "https://makekosmos.github.io/local-ai-runtimes/whisper-vulkan-bin-x64-v1.9.1.zip";
+#[cfg(windows)]
+const WHISPER_CPP_VULKAN_ZIP_SHA256: &str =
+    "d9be5497fae76a35eff0a44141d51bfe30aa8961afe9a13dea7f66b425fa4ca7";
 
 #[derive(Debug, Clone, Copy)]
 pub struct ModelSpec {
@@ -169,16 +180,164 @@ fn model_spec(model_id: &str) -> Result<&'static ModelSpec, LocalModelsError> {
         .ok_or_else(|| LocalModelsError::ModelNotFound(model_id.to_owned()))
 }
 
+fn default_shared_assets_base() -> PathBuf {
+    std::env::var("APPDATA")
+        .ok()
+        .map(PathBuf::from)
+        .or_else(|| std::env::var("XDG_CONFIG_HOME").ok().map(PathBuf::from))
+        .or_else(|| std::env::var("HOME").ok().map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+fn default_shared_assets_root() -> PathBuf {
+    default_shared_assets_base().join("Kosmos")
+}
+
+fn shared_assets_root(data_dir: &Path) -> PathBuf {
+    if let Ok(dir) = std::env::var("KOSMOS_LOCAL_STT_DIR") {
+        let trimmed = dir.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+    if cfg!(test) {
+        return data_dir.to_path_buf();
+    }
+    default_shared_assets_root()
+}
+
+fn merge_legacy_dir_into_shared(legacy: &Path, shared: &Path) -> io::Result<bool> {
+    if !legacy.is_dir() || same_path_or_text(legacy, shared) {
+        return Ok(false);
+    }
+    if !shared.exists() {
+        if let Some(parent) = shared.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::rename(legacy, shared)?;
+        return Ok(true);
+    }
+
+    let mut changed = false;
+    fs::create_dir_all(shared)?;
+    for entry in fs::read_dir(legacy)? {
+        let entry = entry?;
+        let source = entry.path();
+        let destination = shared.join(entry.file_name());
+        if destination.exists() {
+            if source.is_dir() && destination.is_dir() {
+                changed |= merge_legacy_dir_into_shared(&source, &destination)?;
+                if fs::read_dir(&source)?.next().is_none() {
+                    fs::remove_dir(&source)?;
+                    changed = true;
+                }
+            } else if source.is_file() && destination.is_file() {
+                if same_file_contents(&source, &destination)? {
+                    fs::remove_file(&source)?;
+                } else {
+                    fs::rename(&source, unique_legacy_destination(&destination))?;
+                }
+                changed = true;
+            }
+            continue;
+        }
+        fs::rename(&source, &destination)?;
+        changed = true;
+    }
+    if fs::read_dir(legacy)?.next().is_none() {
+        fs::remove_dir(legacy)?;
+        changed = true;
+    }
+    Ok(changed)
+}
+
+fn same_file_contents(left: &Path, right: &Path) -> io::Result<bool> {
+    if left.metadata()?.len() != right.metadata()?.len() {
+        return Ok(false);
+    }
+
+    let mut left = fs::File::open(left)?;
+    let mut right = fs::File::open(right)?;
+    let mut left_buf = [0; 64 * 1024];
+    let mut right_buf = [0; 64 * 1024];
+    loop {
+        let left_read = left.read(&mut left_buf)?;
+        let right_read = right.read(&mut right_buf)?;
+        if left_read != right_read || left_buf[..left_read] != right_buf[..right_read] {
+            return Ok(false);
+        }
+        if left_read == 0 {
+            return Ok(true);
+        }
+    }
+}
+
+fn unique_legacy_destination(destination: &Path) -> PathBuf {
+    for i in 1.. {
+        let candidate = destination.with_extension(format!(
+            "{}legacy-{i}",
+            destination
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| format!("{ext}."))
+                .unwrap_or_default()
+        ));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    unreachable!()
+}
+
+pub fn migrate_legacy_assets(data_dir: &Path) -> io::Result<bool> {
+    let shared_root = shared_assets_root(data_dir);
+    let mut changed = false;
+    let mut roots = vec![data_dir.to_path_buf()];
+    if std::env::var("KOSMOS_LOCAL_STT_DIR").is_err()
+        && !cfg!(test)
+        && same_path_or_text(&shared_root, &default_shared_assets_root())
+    {
+        if let Ok(entries) = fs::read_dir(default_shared_assets_base()) {
+            for entry in entries {
+                let path = entry?.path();
+                let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                    continue;
+                };
+                if path.is_dir() && name.starts_with("Kosmos-dev") {
+                    roots.push(path);
+                }
+            }
+        }
+    }
+
+    for root in roots {
+        if same_path_or_text(&root, &shared_root) {
+            continue;
+        }
+        changed |= merge_legacy_dir_into_shared(&root.join(MODELS_DIR), &models_dir(data_dir))?;
+        changed |= merge_legacy_dir_into_shared(&root.join(TOOLS_DIR), &tools_dir(data_dir))?;
+        #[cfg(windows)]
+        {
+            changed |= merge_legacy_dir_into_shared(
+                &root.join(VULKAN_TOOLS_DIR),
+                &vulkan_tools_dir(data_dir),
+            )?;
+        }
+    }
+    Ok(changed)
+}
+
 pub fn models_dir(data_dir: &Path) -> PathBuf {
-    data_dir.join(MODELS_DIR)
+    shared_assets_root(data_dir).join(MODELS_DIR)
 }
 
 pub fn tools_dir(data_dir: &Path) -> PathBuf {
-    data_dir.join(TOOLS_DIR)
+    shared_assets_root(data_dir).join(TOOLS_DIR)
 }
 
-pub fn vad_model_path(data_dir: &Path) -> PathBuf {
-    data_dir.join(VAD_DIR).join(VAD_MODEL_FILENAME)
+#[cfg(windows)]
+fn vulkan_tools_dir(data_dir: &Path) -> PathBuf {
+    shared_assets_root(data_dir).join(VULKAN_TOOLS_DIR)
 }
 
 pub fn model_path(data_dir: &Path, spec: &ModelSpec) -> PathBuf {
@@ -192,7 +351,19 @@ pub fn model_path_by_id(data_dir: &Path, model_id: &str) -> Result<PathBuf, Loca
 pub fn command_path(data_dir: &Path) -> Option<PathBuf> {
     #[cfg(windows)]
     {
-        Some(tools_dir(data_dir).join("Release").join("whisper-cli.exe"))
+        let preferred = preferred_command_path(data_dir);
+        if preferred.is_file() {
+            return Some(preferred);
+        }
+        let vulkan = vulkan_command_path(data_dir);
+        if vulkan_tools_enabled() && vulkan.is_file() {
+            return Some(vulkan);
+        }
+        let cpu = cpu_command_path(data_dir);
+        if cpu.is_file() {
+            return Some(cpu);
+        }
+        Some(preferred)
     }
     #[cfg(not(windows))]
     {
@@ -201,8 +372,195 @@ pub fn command_path(data_dir: &Path) -> Option<PathBuf> {
     }
 }
 
+#[cfg(windows)]
+fn cpu_command_path(data_dir: &Path) -> PathBuf {
+    tools_dir(data_dir).join("Release").join("whisper-cli.exe")
+}
+
+#[cfg(windows)]
+fn vulkan_command_path(data_dir: &Path) -> PathBuf {
+    vulkan_tools_dir(data_dir)
+        .join("Release")
+        .join("whisper-cli.exe")
+}
+
+#[cfg(windows)]
+fn preferred_command_path(data_dir: &Path) -> PathBuf {
+    let vulkan = vulkan_command_path(data_dir);
+    if vulkan_tools_enabled() && vulkan.is_file() {
+        vulkan
+    } else {
+        cpu_command_path(data_dir)
+    }
+}
+
+#[cfg(windows)]
+fn managed_command_paths(data_dir: &Path) -> [PathBuf; 2] {
+    [cpu_command_path(data_dir), vulkan_command_path(data_dir)]
+}
+
+#[cfg(windows)]
+fn vulkan_tools_enabled() -> bool {
+    if std::env::var("KOSMOS_DICTATION_DISABLE_VULKAN").as_deref() == Ok("1") {
+        return false;
+    }
+    vulkan_runtime_available()
+}
+
+#[cfg(windows)]
+fn vulkan_runtime_available() -> bool {
+    if cfg!(test) {
+        return true;
+    }
+    let system_vulkan = std::env::var("SystemRoot")
+        .ok()
+        .map(PathBuf::from)
+        .map(|root| root.join("System32").join("vulkan-1.dll"))
+        .is_some_and(|path| path.is_file());
+    system_vulkan
+        || Command::new("where")
+            .arg("vulkan-1.dll")
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn cpu_zip_url() -> String {
+    std::env::var("KOSMOS_WHISPER_CPP_CPU_ZIP_URL")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| WHISPER_CPP_CPU_ZIP_URL.to_owned())
+}
+
+#[cfg(windows)]
+fn cpu_zip_sha256() -> Option<String> {
+    std::env::var("KOSMOS_WHISPER_CPP_CPU_ZIP_SHA256")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            (cpu_zip_url() == WHISPER_CPP_CPU_ZIP_URL)
+                .then(|| WHISPER_CPP_CPU_ZIP_SHA256.to_owned())
+        })
+}
+
+#[cfg(windows)]
+fn vulkan_zip_url() -> String {
+    std::env::var("KOSMOS_WHISPER_CPP_VULKAN_ZIP_URL")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| WHISPER_CPP_VULKAN_ZIP_URL.to_owned())
+}
+
+#[cfg(windows)]
+fn vulkan_zip_sha256() -> Option<String> {
+    std::env::var("KOSMOS_WHISPER_CPP_VULKAN_ZIP_SHA256")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            (vulkan_zip_url() == WHISPER_CPP_VULKAN_ZIP_URL)
+                .then(|| WHISPER_CPP_VULKAN_ZIP_SHA256.to_owned())
+        })
+}
+
+#[cfg(windows)]
+pub fn refresh_managed_command_path(data_dir: &Path, cfg: &mut config::DictationConfig) -> bool {
+    let Some(command_path) = command_path(data_dir) else {
+        return false;
+    };
+    if !command_path.is_file() {
+        return false;
+    }
+
+    let current = cfg.local_command_path.as_deref().map(PathBuf::from);
+    let current_is_managed = current.as_ref().is_none_or(|path| {
+        managed_command_paths(data_dir)
+            .iter()
+            .any(|managed| same_path_or_text(managed, path))
+    });
+    if !current_is_managed {
+        return false;
+    }
+
+    if current
+        .as_ref()
+        .is_some_and(|path| same_path_or_text(path, &command_path))
+    {
+        return false;
+    }
+
+    cfg.local_command_path = Some(path_string(&command_path));
+    true
+}
+
+#[cfg(not(windows))]
+pub fn refresh_managed_command_path(_data_dir: &Path, _cfg: &mut config::DictationConfig) -> bool {
+    false
+}
+
+fn same_path_or_text(left: &Path, right: &Path) -> bool {
+    if left == right {
+        return true;
+    }
+    let left_canonical = fs::canonicalize(left).ok();
+    let right_canonical = fs::canonicalize(right).ok();
+    match (left_canonical, right_canonical) {
+        (Some(left), Some(right)) => left == right,
+        _ => left
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&right.to_string_lossy()),
+    }
+}
+
 fn path_string(path: &Path) -> String {
     path.to_string_lossy().to_string()
+}
+
+pub fn has_downloaded_model_assets(data_dir: &Path) -> bool {
+    MODEL_CATALOG
+        .iter()
+        .any(|spec| model_path(data_dir, spec).is_file())
+}
+
+pub fn cleanup_obsolete_local_stt_assets(data_dir: &Path) -> io::Result<bool> {
+    let mut changed = false;
+    for path in [
+        shared_assets_root(data_dir).join(OLD_FASTER_WHISPER_TOOLS_DIR),
+        shared_assets_root(data_dir).join(OLD_FASTER_WHISPER_MODEL_CACHE_DIR),
+        shared_assets_root(data_dir).join(OLD_FASTER_WHISPER_RUNTIME_DIR),
+        shared_assets_root(data_dir).join(OLD_FASTER_WHISPER_CUDA_LIBS_DIR),
+        #[cfg(windows)]
+        shared_assets_root(data_dir).join(CUDA_TOOLS_DIR),
+    ] {
+        if path.exists() {
+            fs::remove_dir_all(path)?;
+            changed = true;
+        }
+    }
+    Ok(changed)
+}
+
+pub fn cleanup_unused_backends(data_dir: &Path) -> io::Result<bool> {
+    if has_downloaded_model_assets(data_dir) {
+        return Ok(false);
+    }
+
+    let mut changed = false;
+    for path in [
+        tools_dir(data_dir),
+        #[cfg(windows)]
+        vulkan_tools_dir(data_dir),
+    ] {
+        if path.exists() {
+            fs::remove_dir_all(path)?;
+            changed = true;
+        }
+    }
+    Ok(changed)
 }
 
 pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSnapshot {
@@ -215,6 +573,10 @@ pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSn
         .map(|spec| {
             let path = model_path(data_dir, spec);
             let path_text = path_string(&path);
+            let downloaded = path.is_file();
+            let selected = downloaded
+                && (cfg.local_model.as_deref() == Some(spec.id)
+                    || selected_path == Some(path_text.as_str()));
             LocalModelInfo {
                 id: spec.id.to_owned(),
                 name: spec.name.to_owned(),
@@ -225,9 +587,8 @@ pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSn
                 accuracy_score: spec.accuracy_score,
                 speed_score: spec.speed_score,
                 recommended: spec.recommended,
-                downloaded: path.is_file(),
-                selected: cfg.local_model.as_deref() == Some(spec.id)
-                    || selected_path == Some(path_text.as_str()),
+                downloaded,
+                selected,
                 path: path.is_file().then_some(path_text),
             }
         })
@@ -460,18 +821,6 @@ pub async fn ensure_model_with_progress(
     Ok(path)
 }
 
-pub async fn ensure_vad_model(
-    client: &Client,
-    data_dir: &Path,
-) -> Result<PathBuf, LocalModelsError> {
-    let path = vad_model_path(data_dir);
-    if !path.is_file() {
-        download_file(client, VAD_MODEL_URL, &path, "vad", &mut |_| {}).await?;
-    }
-    verify_sha256(&path, VAD_MODEL_SHA256)?;
-    Ok(path)
-}
-
 pub fn delete_model(data_dir: &Path, model_id: &str) -> Result<PathBuf, LocalModelsError> {
     let path = model_path_by_id(data_dir, model_id)?;
     if path.is_file() {
@@ -480,6 +829,12 @@ pub fn delete_model(data_dir: &Path, model_id: &str) -> Result<PathBuf, LocalMod
     let part_path = path.with_extension("part");
     if part_path.is_file() {
         fs::remove_file(&part_path)?;
+    }
+    if let Err(error) = cleanup_unused_backends(data_dir) {
+        tracing::warn!(
+            error = %error,
+            "dictation: cleanup of unused local STT backends failed after model delete"
+        );
     }
     Ok(path)
 }
@@ -498,24 +853,56 @@ pub async fn ensure_whisper_cpp_with_progress(
     data_dir: &Path,
     progress: &mut ProgressCallback<'_>,
 ) -> Result<PathBuf, LocalModelsError> {
-    let command = command_path(data_dir).ok_or(LocalModelsError::UnsupportedPlatform)?;
+    let command = preferred_command_path(data_dir);
     if command.is_file() {
         return Ok(command);
     }
+    if vulkan_tools_enabled() {
+        let vulkan = vulkan_command_path(data_dir);
+        if vulkan.is_file() {
+            return Ok(vulkan);
+        }
+        let url = vulkan_zip_url();
+        let sha256 = vulkan_zip_sha256();
+        match install_whisper_cpp_zip(
+            client,
+            &vulkan_tools_dir(data_dir),
+            "whisper-vulkan-bin-x64.zip",
+            &url,
+            sha256.as_deref(),
+            progress,
+        )
+        .await
+        {
+            Ok(()) if vulkan.is_file() => return Ok(vulkan),
+            Ok(()) => tracing::warn!(
+                path = %path_string(&vulkan),
+                "dictation: Vulkan whisper.cpp archive did not contain command, falling back"
+            ),
+            Err(error) => tracing::warn!(
+                error = %error,
+                "dictation: Vulkan whisper.cpp install failed, falling back"
+            ),
+        }
+    }
     let dir = tools_dir(data_dir);
-    fs::create_dir_all(&dir)?;
-    let archive_path = dir.join("whisper-bin-x64.zip");
-    download_file(client, WHISPER_CPP_ZIP_URL, &archive_path, "tool", progress).await?;
-    progress(DownloadProgress {
-        phase: "extract",
-        downloaded_bytes: 0,
-        total_bytes: None,
-        percent: None,
-    });
-    let bytes = fs::read(&archive_path)?;
-    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
-    archive.extract(&dir)?;
-    let _ = fs::remove_file(&archive_path);
+    let archive_name = "whisper-cpu-bin-x64.zip";
+    let url = cpu_zip_url();
+    let sha256 = cpu_zip_sha256();
+    let cpu_command = cpu_command_path(data_dir);
+    if cpu_command.is_file() {
+        return Ok(cpu_command);
+    }
+    install_whisper_cpp_zip(
+        client,
+        &dir,
+        archive_name,
+        &url,
+        sha256.as_deref(),
+        progress,
+    )
+    .await?;
+    let command = preferred_command_path(data_dir);
     if command.is_file() {
         Ok(command)
     } else {
@@ -524,6 +911,34 @@ pub async fn ensure_whisper_cpp_with_progress(
             path_string(&command)
         )))
     }
+}
+
+#[cfg(windows)]
+async fn install_whisper_cpp_zip(
+    client: &Client,
+    dir: &Path,
+    archive_name: &str,
+    url: &str,
+    expected_sha256: Option<&str>,
+    progress: &mut ProgressCallback<'_>,
+) -> Result<(), LocalModelsError> {
+    fs::create_dir_all(dir)?;
+    let archive_path = dir.join(archive_name);
+    download_file(client, url, &archive_path, "tool", progress).await?;
+    if let Some(expected) = expected_sha256 {
+        verify_sha256(&archive_path, expected)?;
+    }
+    progress(DownloadProgress {
+        phase: "extract",
+        downloaded_bytes: 0,
+        total_bytes: None,
+        percent: None,
+    });
+    let bytes = fs::read(&archive_path)?;
+    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
+    archive.extract(dir)?;
+    let _ = fs::remove_file(&archive_path);
+    Ok(())
 }
 
 #[cfg(not(windows))]
@@ -549,6 +964,99 @@ mod tests {
     use httpmock::Method::GET;
     use httpmock::MockServer;
 
+    #[cfg(windows)]
+    fn touch(path: &Path) {
+        fs::create_dir_all(path.parent().expect("parent")).expect("parent dir");
+        fs::write(path, b"exe").expect("file");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn command_path_prefers_installed_vulkan_over_cpu() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        touch(&cpu_command_path(tmp.path()));
+        touch(&vulkan_command_path(tmp.path()));
+
+        assert!(same_path_or_text(
+            &command_path(tmp.path()).expect("command"),
+            &vulkan_command_path(tmp.path())
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn whisper_cpp_runtime_sources_are_pinned() {
+        assert!(WHISPER_CPP_CPU_ZIP_URL.contains("makekosmos.github.io/local-ai-runtimes"));
+        assert!(WHISPER_CPP_CPU_ZIP_URL.contains("whisper-cpu-bin-x64-v1.9.1"));
+        assert_eq!(WHISPER_CPP_CPU_ZIP_SHA256.len(), 64);
+        assert!(WHISPER_CPP_VULKAN_ZIP_URL.contains("makekosmos.github.io/local-ai-runtimes"));
+        assert!(WHISPER_CPP_VULKAN_ZIP_URL.contains("whisper-vulkan-bin-x64-v1.9.1"));
+        assert_eq!(WHISPER_CPP_VULKAN_ZIP_SHA256.len(), 64);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn refresh_managed_command_path_updates_cpu_to_vulkan() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        touch(&cpu_command_path(tmp.path()));
+        touch(&vulkan_command_path(tmp.path()));
+        let mut cfg = config::DictationConfig {
+            local_command_path: Some(path_string(&cpu_command_path(tmp.path()))),
+            ..Default::default()
+        };
+
+        assert!(refresh_managed_command_path(tmp.path(), &mut cfg));
+        assert_eq!(
+            cfg.local_command_path.as_deref(),
+            Some(path_string(&vulkan_command_path(tmp.path())).as_str())
+        );
+    }
+
+    #[test]
+    fn snapshot_does_not_mark_missing_selected_model() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let spec = MODEL_CATALOG
+            .iter()
+            .find(|model| model.id == "turbo")
+            .expect("turbo model");
+        let path = model_path(tmp.path(), spec);
+        let cfg = config::DictationConfig {
+            provider: "local".into(),
+            provider_enabled: true,
+            local_model: Some(spec.id.to_owned()),
+            local_model_path: Some(path_string(&path)),
+            ..Default::default()
+        };
+
+        let snapshot = snapshot(tmp.path(), &cfg);
+        let model = snapshot
+            .models
+            .iter()
+            .find(|model| model.id == spec.id)
+            .expect("snapshot model");
+        assert!(!model.downloaded);
+        assert!(!model.selected);
+    }
+
+    #[test]
+    fn delete_model_ignores_backend_cleanup_failure_after_file_delete() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let spec = MODEL_CATALOG
+            .iter()
+            .find(|model| model.id == "small")
+            .expect("small model");
+        let path = model_path(tmp.path(), spec);
+        fs::create_dir_all(path.parent().expect("model parent")).expect("model dir");
+        fs::write(&path, b"model").expect("model file");
+        fs::create_dir_all(tools_dir(tmp.path()).parent().expect("tools parent"))
+            .expect("tools parent");
+        fs::write(tools_dir(tmp.path()), b"not a directory").expect("cleanup blocker");
+
+        let deleted = delete_model(tmp.path(), spec.id).expect("delete model");
+        assert_eq!(deleted, path);
+        assert!(!deleted.exists());
+    }
+
     #[tokio::test]
     async fn download_file_streams_binary_and_reports_progress() {
         let server = MockServer::start_async().await;
@@ -558,7 +1066,7 @@ mod tests {
                 when.method(GET).path("/model.bin");
                 then.status(200)
                     .header("content-type", "application/octet-stream")
-                    .header("content-length", &body.len().to_string())
+                    .header("content-length", body.len().to_string())
                     .body(body.as_slice());
             })
             .await;
@@ -676,5 +1184,61 @@ mod tests {
                 .any(|event| event.downloaded_bytes == 11 && event.percent == Some(100.0)),
             "missing resumed complete progress event: {events:?}"
         );
+    }
+
+    #[test]
+    fn legacy_merge_keeps_conflicting_files() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let legacy = tmp.path().join("legacy");
+        let shared = tmp.path().join("shared");
+        fs::create_dir_all(&legacy).expect("legacy dir");
+        fs::create_dir_all(&shared).expect("shared dir");
+        fs::write(legacy.join("ggml.bin"), b"old!").expect("legacy model");
+        fs::write(shared.join("ggml.bin"), b"new!").expect("shared model");
+
+        assert!(merge_legacy_dir_into_shared(&legacy, &shared).expect("merge"));
+        assert_eq!(fs::read(shared.join("ggml.bin")).expect("shared"), b"new!");
+        assert_eq!(
+            fs::read(shared.join("ggml.bin.legacy-1")).expect("legacy copy"),
+            b"old!"
+        );
+        assert!(!legacy.exists());
+    }
+
+    #[test]
+    fn delete_last_model_removes_unused_backend_dirs() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let small = model_spec("small").expect("small model");
+        let model_path = model_path(tmp.path(), small);
+        fs::create_dir_all(model_path.parent().expect("model parent")).expect("model dir");
+        fs::write(&model_path, b"model").expect("model file");
+        fs::create_dir_all(tools_dir(tmp.path())).expect("tools dir");
+
+        let deleted = delete_model(tmp.path(), "small").expect("delete model");
+
+        assert_eq!(deleted, model_path);
+        assert!(!tools_dir(tmp.path()).exists());
+    }
+
+    #[test]
+    fn cleanup_obsolete_local_stt_assets_deletes_ct2_cache_even_with_ggml_models() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let small = model_spec("small").expect("small model");
+        let model_path = model_path(tmp.path(), small);
+        fs::create_dir_all(model_path.parent().expect("model parent")).expect("model dir");
+        fs::write(&model_path, b"ggml").expect("ggml model");
+
+        let old_ct2 = shared_assets_root(tmp.path()).join(OLD_FASTER_WHISPER_MODEL_CACHE_DIR);
+        let old_runtime = shared_assets_root(tmp.path()).join(OLD_FASTER_WHISPER_RUNTIME_DIR);
+        let old_cuda = shared_assets_root(tmp.path()).join(OLD_FASTER_WHISPER_CUDA_LIBS_DIR);
+        fs::create_dir_all(&old_ct2).expect("ct2 dir");
+        fs::create_dir_all(&old_runtime).expect("runtime dir");
+        fs::create_dir_all(&old_cuda).expect("cuda dir");
+
+        assert!(cleanup_obsolete_local_stt_assets(tmp.path()).expect("cleanup"));
+        assert!(model_path.is_file());
+        assert!(!old_ct2.exists());
+        assert!(!old_runtime.exists());
+        assert!(!old_cuda.exists());
     }
 }

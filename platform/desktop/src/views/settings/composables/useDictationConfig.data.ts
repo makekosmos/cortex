@@ -17,6 +17,7 @@ export interface DictationConfigData {
   localModelId: string;
   localEngine: string;
   microphoneDeviceId: string | null;
+  duckAudioDuringRecording: boolean;
 }
 
 interface ConnectivityStage {
@@ -88,6 +89,7 @@ export const DEFAULT_DICTATION_CFG: DictationConfigData = {
   localModelId: "whisper-large-v3",
   localEngine: "whisper.cpp",
   microphoneDeviceId: null,
+  duckAudioDuringRecording: false,
 };
 
 export const DEFAULT_DICTATION_STATS: DictationStatsData = {

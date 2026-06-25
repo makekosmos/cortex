@@ -54,6 +54,7 @@ const mutableOptions = computed(() => props.options.slice() as Option<T>[]);
           :searchable="searchable"
           :search-placeholder="searchPlaceholder"
           :disabled="disabled"
+          :match-trigger-width="false"
           @update:model-value="(v: T) => emit('update:modelValue', v)"
         >
           <template v-if="$slots['trigger-leading']" #trigger-leading="ctx">

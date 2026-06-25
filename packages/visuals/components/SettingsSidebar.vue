@@ -17,10 +17,7 @@ const hasTitleBar = computed(
 );
 
 const sidebarStyle = computed(() => ({
-  "--kosmos-settings-sidebar-bg":
-    props.tone === "strong"
-      ? "color-mix(in srgb, var(--main-background-color) 64%, var(--color-bg-primary) 36%)"
-      : "var(--main-background-color)",
+  "--kosmos-settings-sidebar-bg": "var(--bg-app, #1d1d1f)",
 }));
 </script>
 
