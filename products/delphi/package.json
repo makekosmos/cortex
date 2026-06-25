@@ -13,7 +13,6 @@
     "@tailwindcss/vite": "^4.2.2",
     "clsx": "^2.1.1",
     "pinia": "^3.0.4",
-    "qrcode": "^1.5.4",
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^4.1.16",
     "vue": "^3.6.0-beta.12",
@@ -21,7 +20,6 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.7",
-    "@vitest/browser": "^4.1.6",
     "@vitest/browser-playwright": "^4.1.6",
     "vitest": "^4.1.6",
     "vitest-browser-vue": "^2.1.0"

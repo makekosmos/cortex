@@ -12,18 +12,17 @@ test.describe("kepler-shell launcher", () => {
     const app = await launchKepler({ slug: "launcher-boot" });
     try {
       const name = await app.evaluate(({ app: a }) => a.getName());
-      expect(name).toBeTruthy();
-      expect(typeof name).toBe("string");
+      expect(name).toBe("Kosmos [test]");
     } finally {
       await app.close();
     }
   });
 
   test("launcher: ровно одно окно создано, не destroyed", async () => {
-    const app = await launchKepler({ slug: "launcher-windows" });
+    const app = await launchKepler({ slug: "launcher-windows-smoke" });
     try {
-      // Дать main-process чуть времени на whenReady → spawn backend → createWindow.
-      await new Promise((r) => setTimeout(r, 1500));
+      const launcher = await app.firstWindow();
+      await launcher.waitForLoadState("domcontentloaded");
       const wins = await app.evaluate(({ BrowserWindow }) =>
         BrowserWindow.getAllWindows().map((w) => ({
           isDestroyed: w.isDestroyed(),

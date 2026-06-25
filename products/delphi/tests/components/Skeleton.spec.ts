@@ -10,9 +10,9 @@ describe("Delphi Skeleton", () => {
   test("монтируется с базовыми классами", async () => {
     const { container } = render(Skeleton);
     const root = container.querySelector("div");
-    expect(root).not.toBeNull();
-    expect(root?.className).toMatch(/animate-pulse/);
-    expect(root?.className).toMatch(/rounded-md/);
+    if (!root) throw new Error("expected Skeleton root element");
+    expect(root.classList.contains("animate-pulse")).toBe(true);
+    expect(root.classList.contains("rounded-[var(--radius-input)]")).toBe(true);
   });
 
   test("проп class мерджится через cn()", async () => {
@@ -20,7 +20,8 @@ describe("Delphi Skeleton", () => {
       props: { class: "h-4 w-32" },
     });
     const root = container.querySelector("div");
-    expect(root?.className).toMatch(/h-4/);
-    expect(root?.className).toMatch(/w-32/);
+    if (!root) throw new Error("expected Skeleton root element");
+    expect(root.classList.contains("h-4")).toBe(true);
+    expect(root.classList.contains("w-32")).toBe(true);
   });
 });

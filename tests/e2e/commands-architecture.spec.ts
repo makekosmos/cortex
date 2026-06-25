@@ -27,11 +27,13 @@ interface CommandRecord {
 }
 
 async function commandsList(launcher: import("@playwright/test").Page): Promise<CommandRecord[]> {
-  return await launcher.evaluate(async () => {
+  return launcher.evaluate(async () => {
     const w = window as unknown as {
       kepler?: { commands?: { list?: () => Promise<CommandRecord[]> } };
     };
-    return (await w.kepler?.commands?.list?.()) ?? [];
+    const listCommands = w.kepler?.commands?.list;
+    if (!listCommands) throw new Error("kepler.commands.list is unavailable");
+    return listCommands();
   });
 }
 
@@ -84,9 +86,7 @@ test.describe("commands architecture v1+v2", () => {
 
       const eden = await app.waitForEvent("window", { timeout: 10_000 });
       await eden.waitForLoadState("domcontentloaded");
-      const url = eden.url();
-      // Eden окно открыто — простая проверка существования.
-      expect(url).toBeTruthy();
+      expect(eden.url()).toContain("eden");
     } finally {
       await app.close();
     }

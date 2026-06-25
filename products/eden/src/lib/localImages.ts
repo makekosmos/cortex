@@ -1,6 +1,6 @@
 const LOCAL_IMAGE_PROTOCOL = "kosmos-local-image";
 
-export function localImageUrl(filePath: string): string {
+function localImageUrl(filePath: string): string {
   return `${LOCAL_IMAGE_PROTOCOL}://file/${encodeURIComponent(filePath)}`;
 }
 

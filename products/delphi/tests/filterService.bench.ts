@@ -23,17 +23,17 @@ function bench(name: string, fn: () => void, items: number, runs = 200): BenchRe
   for (let i = 0; i < 20; i++) fn();
   const samples: number[] = [];
   for (let i = 0; i < runs; i++) {
-    const t0 = performance.now();
+    const startedAt = performance.now();
     fn();
-    samples.push(performance.now() - t0);
+    samples.push(performance.now() - startedAt);
   }
   samples.sort((a, b) => a - b);
   const median = samples[Math.floor(samples.length / 2)] ?? 0;
-  const p99 = samples[Math.floor(samples.length * 0.99)] ?? 0;
+  const tailLatencyMs = samples[Math.floor(samples.length * 0.99)] ?? 0;
   return {
     name,
     median_ms: median,
-    p99_ms: p99,
+    p99_ms: tailLatencyMs,
     throughput_items_per_sec: Math.round((items / median) * 1000),
   };
 }

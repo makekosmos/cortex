@@ -8,7 +8,7 @@ const uuid = () => crypto.randomUUID();
 
 // ---------------------------------------------------------------------------
 
-export function nextDate(rule: RecurrenceData, after: Date): Date | null {
+function nextDate(rule: RecurrenceData, after: Date): Date | null {
   if (rule.endDate) {
     const end = new Date(rule.endDate);
 

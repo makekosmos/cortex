@@ -33,21 +33,7 @@ function component<TType extends string, TProps extends object = Record<string, 
   return (props = {} as TProps): RaycastElement<TType, TProps> => createRaycastElement(type, props);
 }
 
-export interface ListProps {
-  children?: RaycastChild;
-  isLoading?: boolean;
-  isShowingDetail?: boolean;
-  filtering?: boolean;
-  searchText?: string;
-  searchBarPlaceholder?: string;
-  throttle?: boolean;
-  selectedItemId?: string;
-  onSearchTextChange?: (text: string) => void;
-  onSelectionChange?: (id: string | null) => void;
-  searchBarAccessory?: RaycastChild;
-}
-
-export interface ListItemProps {
+interface ListItemProps {
   id?: string;
   title: string;
   subtitle?: string;
@@ -58,7 +44,7 @@ export interface ListItemProps {
   detail?: RaycastChild;
 }
 
-export interface DetailProps {
+interface DetailProps {
   markdown?: string;
   navigationTitle?: string;
   metadata?: RaycastChild;
@@ -107,19 +93,7 @@ export const Grid = Object.assign(component("Grid"), {
   }),
 });
 
-export interface GridProps {
-  children?: RaycastChild;
-  isLoading?: boolean;
-  filtering?: boolean;
-  searchText?: string;
-  searchBarPlaceholder?: string;
-  selectedItemId?: string;
-  onSearchTextChange?: (text: string) => void;
-  onSelectionChange?: (id: string | null) => void;
-  searchBarAccessory?: RaycastChild;
-}
-
-export interface GridItemProps {
+interface GridItemProps {
   id?: string;
   title: string;
   subtitle?: string;
@@ -173,7 +147,7 @@ export const ActionPanel = Object.assign(component("ActionPanel"), {
   Submenu: component("ActionPanel.Submenu"),
 });
 
-export interface ActionProps {
+interface ActionProps {
   title: string;
   icon?: ImageLike;
   shortcut?: unknown;

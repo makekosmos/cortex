@@ -76,7 +76,7 @@ export function resolveLocalImagePath(filePath: string): string | null {
   return candidateExistingPath(filePath);
 }
 
-export function isSupportedLocalImagePath(filePath: string): boolean {
+function isSupportedLocalImagePath(filePath: string): boolean {
   return LOCAL_IMAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }
 

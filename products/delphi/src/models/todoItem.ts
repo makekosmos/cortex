@@ -165,7 +165,7 @@ export function restoreFromTrash(todo: TodoItem): TodoItem {
 
 // ---------------------------------------------------------------------------
 
-export function createChecklistItem(
+function createChecklistItem(
   title: string,
 
   todoItemId?: string,

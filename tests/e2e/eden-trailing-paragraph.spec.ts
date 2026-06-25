@@ -48,6 +48,14 @@ function isEmptyParagraph(node: PMNodeJSON | undefined): boolean {
   return node.content.every((c) => c.type === "text" && (!c.text || c.text === ""));
 }
 
+function requireDocContent(json: PMDocJSON): PMNodeJSON[] {
+  const content = json.content;
+  expect(Array.isArray(content), `doc.content должен быть массивом: ${JSON.stringify(json)}`).toBe(
+    true,
+  );
+  return content as PMNodeJSON[];
+}
+
 async function inspectDoc(edenWindow: Awaited<ReturnType<typeof openEden>>): Promise<{
   json: PMDocJSON | null;
   dom: Awaited<ReturnType<typeof getProseMirrorStructure>>;
@@ -93,9 +101,10 @@ test.describe("eden: TrailingParagraph extension", () => {
         expect(last?.type, "последний top-level node — paragraph").toBe("paragraph");
         expect(isEmptyParagraph(last), "последний paragraph должен быть пустым").toBe(true);
       } else {
-        expect(dom, "DOM structure доступен").toBeTruthy();
-        expect(dom?.lastChildTag).toBe("p");
-        expect(dom?.lastChildIsEmpty).toBe(true);
+        expect(dom, "DOM structure доступен").toMatchObject({
+          lastChildTag: "p",
+          lastChildIsEmpty: true,
+        });
       }
 
       await deleteEdenEntry(edenWindow, id);
@@ -118,7 +127,7 @@ test.describe("eden: TrailingParagraph extension", () => {
       const { json, dom } = await inspectDoc(edenWindow);
 
       if (json) {
-        const content = json.content ?? [];
+        const content = requireDocContent(json);
         expect(
           content.length,
           `top-level узлов: ${content.length} — ожидаем >=2`,
@@ -131,7 +140,8 @@ test.describe("eden: TrailingParagraph extension", () => {
       } else {
         expect(dom?.childCount).toBeGreaterThanOrEqual(2);
         expect(dom?.lastChildIsEmpty).toBe(true);
-        const allText = (dom?.children ?? []).map((c) => c.text).join(" ");
+        expect(Array.isArray(dom?.children)).toBe(true);
+        const allText = dom!.children.map((c) => c.text).join(" ");
         expect(allText).toContain("hello");
       }
 
@@ -160,7 +170,7 @@ test.describe("eden: TrailingParagraph extension", () => {
       const { json, dom } = await inspectDoc(edenWindow);
 
       if (json) {
-        const content = json.content ?? [];
+        const content = requireDocContent(json);
         // Ожидаем <=3 (хоть 2, хоть 3 если editor нормализовал). >3 — bug.
         expect(content.length, `doc раздулся до ${content.length}`).toBeLessThanOrEqual(3);
         const last = content[content.length - 1];
@@ -190,7 +200,7 @@ test.describe("eden: TrailingParagraph extension", () => {
       const { json, dom } = await inspectDoc(edenWindow);
 
       if (json) {
-        const content = json.content ?? [];
+        const content = requireDocContent(json);
         expect(content[0]?.type).toBe("heading");
         const last = content[content.length - 1];
         expect(last?.type, "после heading должен быть paragraph").toBe("paragraph");
@@ -233,7 +243,7 @@ test.describe("eden: TrailingParagraph extension", () => {
       const { json, dom } = await inspectDoc(second);
 
       if (json) {
-        const content = json.content ?? [];
+        const content = requireDocContent(json);
         const last = content[content.length - 1];
         expect(
           isEmptyParagraph(last),
@@ -303,7 +313,7 @@ test.describe("eden: TrailingParagraph extension", () => {
       const { json, dom } = await inspectDoc(edenWindow);
 
       if (json) {
-        const content = json.content ?? [];
+        const content = requireDocContent(json);
         const last = content[content.length - 1];
         expect(
           last?.type,

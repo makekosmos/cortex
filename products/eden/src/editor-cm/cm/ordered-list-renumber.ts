@@ -27,7 +27,7 @@ import type { SyntaxNode, Tree } from "@lezer/common";
  * Set this on programmatic doc replacements (note switching, file
  * watcher syncs) so the user's stored content isn't rewritten on load.
  */
-export const skipOrderedListRenumber = Annotation.define<boolean>();
+const skipOrderedListRenumber = Annotation.define<boolean>();
 
 const ORDERED_MARK_RE = /^(\d{1,9})([.)])$/;
 

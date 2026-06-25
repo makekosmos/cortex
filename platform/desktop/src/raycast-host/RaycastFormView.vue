@@ -3,7 +3,8 @@ import { computed, shallowReactive, shallowRef } from "vue";
 import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
 import RaycastActionPanel from "./RaycastActionPanel.vue";
 import RaycastDetailView from "./RaycastDetailView.vue";
-import { actionNodes, formModel } from "./model";
+import { actionNodes } from "./model";
+import { formModel } from "./model-form";
 
 const props = defineProps<{
   root: RaycastSnapshotNode;

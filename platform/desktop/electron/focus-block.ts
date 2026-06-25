@@ -15,6 +15,7 @@
 
 import { spawn } from "node:child_process";
 import { promises as fsp } from "node:fs";
+import { setTimeout as delay } from "node:timers/promises";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -38,6 +39,27 @@ interface HelperResponse {
   ok: boolean;
   active_domains?: string[];
   error?: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function isHelperResponse(value: unknown): value is HelperResponse {
+  return (
+    isRecord(value) &&
+    typeof value.ok === "boolean" &&
+    (value.active_domains === undefined ||
+      (Array.isArray(value.active_domains) &&
+        value.active_domains.every((domain) => typeof domain === "string"))) &&
+    (value.error === undefined || typeof value.error === "string")
+  );
+}
+
+function parseHelperResponse(text: string): HelperResponse {
+  const parsed: unknown = JSON.parse(text);
+  if (isHelperResponse(parsed)) return parsed;
+  return { ok: false, error: "invalid helper response shape" };
 }
 
 function helperBinaryPath(): string {
@@ -96,8 +118,7 @@ function runHelperDirect(req: HelperRequest): Promise<HelperResponse | "needs_el
         return;
       }
       try {
-        const parsed = JSON.parse(trimmed) as HelperResponse;
-        resolve(parsed);
+        resolve(parseHelperResponse(trimmed));
       } catch {
         resolve({ ok: false, error: `unparseable helper response: ${trimmed.slice(0, 200)}` });
       }
@@ -153,7 +174,7 @@ async function runHelperElevated(req: HelperRequest): Promise<HelperResponse> {
     });
 
     const respText = await fsp.readFile(outputPath, "utf8");
-    return JSON.parse(respText.trim()) as HelperResponse;
+    return parseHelperResponse(respText.trim());
   } catch (e) {
     return {
       ok: false,
@@ -208,7 +229,7 @@ async function tryAutoInstallService(): Promise<boolean> {
     if (status.installed && status.running) {
       if (await pingService()) return true;
     }
-    await new Promise((r) => setTimeout(r, 100));
+    await delay(100);
   }
   console.warn("[focus-block] auto-install ok but pipe не отвечает за 3s");
   return false;

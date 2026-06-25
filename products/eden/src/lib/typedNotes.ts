@@ -1,146 +1,41 @@
-import { z } from "zod";
+import {
+  headerTemplateSchema,
+  noteTypeDefinitionSchema,
+  noteTypeUiSchema,
+} from "./typedNoteSchemas";
+import type {
+  HeaderTemplateDefinition,
+  LegacyHeaderTemplateKind,
+  NoteType,
+  NoteTypeField,
+  NoteTypePresentation,
+  NoteTypeUiSchema,
+  ObjectHeaderLayoutKind,
+  ResolvedNoteTypeField,
+} from "./typedNoteSchemas";
 
-export const noteFieldKinds = [
-  "text",
-  "long_text",
-  "number",
-  "date",
-  "boolean",
-  "select",
-  "multi_select",
-  "image",
-  "relation",
-] as const;
+export { noteTypeSchema } from "./typedNoteSchemas";
+export type {
+  NoteTypeField,
+  NoteTypeUiSchema,
+  ResolvedNoteTypeField,
+  NoteTypePresentation,
+  NoteType,
+} from "./typedNoteSchemas";
 
-export const legacyHeaderTemplateKinds = ["default", "centered_profile"] as const;
-export const objectHeaderLayoutKinds = ["inline", "column"] as const;
-export const objectDefaultLayoutKinds = ["page", "list", "gallery", "board"] as const;
-
-export type NoteFieldKind = (typeof noteFieldKinds)[number];
-export type LegacyHeaderTemplateKind = (typeof legacyHeaderTemplateKinds)[number];
-export type ObjectHeaderLayoutKind = (typeof objectHeaderLayoutKinds)[number];
-export type ObjectDefaultLayoutKind = (typeof objectDefaultLayoutKinds)[number];
-export type NoteFieldDisplayMode = "featured" | "visible" | "hidden";
-
-export interface NoteTypeField {
-  id: string;
-  label: string;
-  kind: NoteFieldKind;
-  required: boolean;
-  options?: string[];
-  placeholder?: string;
-  visible?: boolean;
-  read_only?: boolean;
-  multiple?: boolean;
-  system?: boolean;
-  link_type?: string;
-  allowed_object_types?: string[];
-}
-
-export interface NoteTypeUiSchema {
-  featured_fields?: string[];
-  visible_fields?: string[];
-  hidden_fields?: string[];
-  read_only_fields?: string[];
-  field_order?: string[];
-  header_layout?: ObjectHeaderLayoutKind;
-  default_layout?: ObjectDefaultLayoutKind;
-  default_template_id?: string | null;
-  collection_name?: string;
-}
-
-export interface ResolvedNoteTypeField extends NoteTypeField {
-  visible: boolean;
-  read_only: boolean;
-}
-
-export interface HeaderTemplateDefinition {
-  kind: LegacyHeaderTemplateKind;
-  primaryFieldIds?: string[];
-  secondaryFieldIds?: string[];
-  imageFieldId?: string | null;
-}
-
-export interface NoteTypePresentation {
-  headerLayout: ObjectHeaderLayoutKind;
-  featuredFields: ResolvedNoteTypeField[];
-  secondaryFields: ResolvedNoteTypeField[];
-  descriptionField: ResolvedNoteTypeField | null;
-  fieldOrder: string[];
-  imageFieldId: string | null;
-}
-
-export interface NoteType {
-  id: string;
-  name: string;
-  slug: string;
-  icon: string | null;
-  color: string | null;
-  schema_json: string;
-  header_template_json: string;
-  ui_schema_json?: string;
-  created_at: number;
-  updated_at: number;
-}
-
-const noteTypeFieldSchema = z.object({
-  id: z.string().min(1),
-  label: z.string().min(1),
-  kind: z.enum(noteFieldKinds),
-  required: z.boolean(),
-  options: z.array(z.string().min(1)).optional(),
-  placeholder: z.string().optional(),
-  visible: z.boolean().optional(),
-  read_only: z.boolean().optional(),
-  multiple: z.boolean().optional(),
-  system: z.boolean().optional(),
-  link_type: z.string().optional(),
-  allowed_object_types: z.array(z.string().min(1)).optional(),
-});
-
-const headerTemplateSchema = z.object({
-  kind: z.enum(legacyHeaderTemplateKinds),
-  primaryFieldIds: z.array(z.string()).optional(),
-  secondaryFieldIds: z.array(z.string()).optional(),
-  imageFieldId: z.string().nullable().optional(),
-});
-
-export const noteTypeDefinitionSchema = z.object({
-  fields: z.array(noteTypeFieldSchema),
-});
-
-const noteTypeUiSchema = z.object({
-  featured_fields: z.array(z.string()).optional(),
-  visible_fields: z.array(z.string()).optional(),
-  hidden_fields: z.array(z.string()).optional(),
-  read_only_fields: z.array(z.string()).optional(),
-  field_order: z.array(z.string()).optional(),
-  header_layout: z.enum(objectHeaderLayoutKinds).optional(),
-  default_layout: z.enum(objectDefaultLayoutKinds).optional(),
-  default_template_id: z.string().nullable().optional(),
-  collection_name: z.string().min(1).optional(),
-});
-
-export const noteTypeSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  slug: z.string().min(1),
-  icon: z.string().nullable(),
-  color: z.string().nullable(),
-  schema_json: z.string(),
-  header_template_json: z.string(),
-  ui_schema_json: z.string().optional(),
-  created_at: z.number(),
-  updated_at: z.number(),
-});
+const EMPTY_STRING_ARRAY = Object.freeze([]) as unknown as string[];
 
 function parseJsonWithContext(json: string, label: string): unknown {
   try {
     return JSON.parse(json);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`${label}: invalid JSON (${message})`);
+    throw new Error(`${label}: invalid JSON (${message})`, { cause: error });
   }
+}
+
+function arrayOrDefault<T>(value: T[] | undefined, fallback: T[]): T[] {
+  return value ? value : fallback;
 }
 
 export function parseNoteTypeDefinition(schemaJson: string) {
@@ -153,7 +48,7 @@ export function parseHeaderTemplate(templateJson: string) {
   return headerTemplateSchema.parse(parsed);
 }
 
-export function createDefaultHeaderTemplate(
+function createDefaultHeaderTemplate(
   kind: LegacyHeaderTemplateKind = "default",
 ): HeaderTemplateDefinition {
   return {
@@ -164,13 +59,13 @@ export function createDefaultHeaderTemplate(
   };
 }
 
-export function createDefaultNoteTypeDefinition() {
+function createDefaultNoteTypeDefinition() {
   return {
     fields: [],
   };
 }
 
-export function createDefaultNoteTypeUiSchema(): NoteTypeUiSchema {
+function createDefaultNoteTypeUiSchema(): NoteTypeUiSchema {
   return {
     featured_fields: [],
     visible_fields: [],
@@ -194,16 +89,16 @@ export function parseNoteTypeUiSchema(uiSchemaJson?: string | null): NoteTypeUiS
   return {
     ...defaults,
     ...parsed,
-    featured_fields: parsed.featured_fields ?? defaults.featured_fields,
-    visible_fields: parsed.visible_fields ?? defaults.visible_fields,
-    hidden_fields: parsed.hidden_fields ?? defaults.hidden_fields,
-    read_only_fields: parsed.read_only_fields ?? defaults.read_only_fields,
-    field_order: parsed.field_order ?? defaults.field_order,
+    featured_fields: arrayOrDefault(parsed.featured_fields, defaults.featured_fields),
+    visible_fields: arrayOrDefault(parsed.visible_fields, defaults.visible_fields),
+    hidden_fields: arrayOrDefault(parsed.hidden_fields, defaults.hidden_fields),
+    read_only_fields: arrayOrDefault(parsed.read_only_fields, defaults.read_only_fields),
+    field_order: arrayOrDefault(parsed.field_order, defaults.field_order),
     collection_name: parsed.collection_name ?? defaults.collection_name,
   };
 }
 
-export function pluralizeNoteTypeName(name: string): string {
+function pluralizeNoteTypeName(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) {
     return "Объекты";
@@ -296,7 +191,10 @@ function getLegacyFeaturedFieldIds(noteType: NoteType | null): string[] {
 
   try {
     const template = parseHeaderTemplate(noteType.header_template_json);
-    return [...(template.primaryFieldIds ?? []), ...(template.secondaryFieldIds ?? [])];
+    return [
+      ...arrayOrDefault(template.primaryFieldIds, EMPTY_STRING_ARRAY),
+      ...arrayOrDefault(template.secondaryFieldIds, EMPTY_STRING_ARRAY),
+    ];
   } catch {
     return [];
   }
@@ -332,13 +230,16 @@ export function resolveNoteTypeFields(noteType: NoteType | null): ResolvedNoteTy
 
   const definition = parseNoteTypeDefinition(noteType.schema_json);
   const uiSchema = parseNoteTypeUiSchema(noteType.ui_schema_json);
-  const featuredFields = new Set(uiSchema.featured_fields ?? []);
-  const visibleFields = new Set(uiSchema.visible_fields ?? []);
-  const hiddenFields = new Set(uiSchema.hidden_fields ?? []);
-  const readOnlyFields = new Set(uiSchema.read_only_fields ?? []);
+  const featuredFields = new Set(arrayOrDefault(uiSchema.featured_fields, EMPTY_STRING_ARRAY));
+  const visibleFields = new Set(arrayOrDefault(uiSchema.visible_fields, EMPTY_STRING_ARRAY));
+  const hiddenFields = new Set(arrayOrDefault(uiSchema.hidden_fields, EMPTY_STRING_ARRAY));
+  const readOnlyFields = new Set(arrayOrDefault(uiSchema.read_only_fields, EMPTY_STRING_ARRAY));
   const explicitVisibilityConfig =
     featuredFields.size > 0 || visibleFields.size > 0 || hiddenFields.size > 0;
-  const fieldOrder = getResolvedFieldOrder(definition.fields, uiSchema.field_order ?? []);
+  const fieldOrder = getResolvedFieldOrder(
+    definition.fields,
+    arrayOrDefault(uiSchema.field_order, EMPTY_STRING_ARRAY),
+  );
   const orderIndex = new Map(fieldOrder.map((fieldId, index) => [fieldId, index]));
 
   return [...definition.fields]
@@ -401,286 +302,6 @@ export function getNoteTypePresentation(noteType: NoteType | null): NoteTypePres
     fieldOrder,
     imageFieldId,
   };
-}
-
-export function getNoteTypeFieldDisplayMode(
-  noteType: NoteType | null,
-  fieldId: string,
-): NoteFieldDisplayMode {
-  const uiSchema = parseNoteTypeUiSchema(noteType?.ui_schema_json);
-  if ((uiSchema.hidden_fields ?? []).includes(fieldId)) {
-    return "hidden";
-  }
-  if ((uiSchema.featured_fields ?? []).includes(fieldId)) {
-    return "featured";
-  }
-  if ((uiSchema.visible_fields ?? []).includes(fieldId)) {
-    return "visible";
-  }
-
-  const field = getResolvedNoteTypeField(noteType, fieldId);
-  return field?.visible === false ? "hidden" : "visible";
-}
-
-export function createDefaultHeaderProps(noteType: NoteType | null) {
-  if (!noteType) {
-    return {};
-  }
-
-  const definition = parseNoteTypeDefinition(noteType.schema_json);
-
-  return Object.fromEntries(
-    definition.fields.map((field) => {
-      switch (field.kind) {
-        case "boolean":
-          return [field.id, false];
-        case "number":
-          return [field.id, ""];
-        case "multi_select":
-          return [field.id, []];
-        case "relation":
-          return [field.id, field.multiple === false ? "" : []];
-        default:
-          return [field.id, ""];
-      }
-    }),
-  );
-}
-
-function isPersonLikeNoteType(noteType: NoteType | null): boolean {
-  if (!noteType) {
-    return false;
-  }
-
-  try {
-    const definition = parseNoteTypeDefinition(noteType.schema_json);
-    const fieldIds = new Set(definition.fields.map((field) => field.id));
-    return (
-      noteType.slug === "person" ||
-      (fieldIds.has("first_name") && fieldIds.has("last_name") && fieldIds.has("patronymic"))
-    );
-  } catch {
-    return false;
-  }
-}
-
-function splitPersonTitle(title: string): {
-  firstName: string;
-  lastName: string;
-  patronymic: string;
-} {
-  const parts = title.trim().split(/\s+/).filter(Boolean);
-
-  return {
-    firstName: parts[0] ?? "",
-    lastName: parts[1] ?? "",
-    patronymic: parts.slice(2).join(" "),
-  };
-}
-
-export function createHeaderPropsForTypeChange(noteType: NoteType | null, sourceTitle: string) {
-  const props = createDefaultHeaderProps(noteType);
-  if (!isPersonLikeNoteType(noteType)) {
-    return props;
-  }
-
-  const { firstName, lastName, patronymic } = splitPersonTitle(sourceTitle);
-
-  return {
-    ...props,
-    first_name: firstName,
-    last_name: lastName,
-    patronymic,
-  };
-}
-
-function coerceHeaderFieldValue(field: NoteTypeField, value: unknown) {
-  switch (field.kind) {
-    case "text":
-    case "long_text":
-    case "date":
-    case "image":
-      if (typeof value === "string") {
-        return value;
-      }
-
-      if (typeof value === "number" && Number.isFinite(value)) {
-        return String(value);
-      }
-
-      return "";
-    case "number":
-      if (typeof value === "number" && Number.isFinite(value)) {
-        return value;
-      }
-
-      if (typeof value === "string") {
-        const trimmed = value.trim();
-        return /^$|^-?\d+(\.\d+)?$/.test(trimmed) ? trimmed : "";
-      }
-
-      return "";
-    case "boolean":
-      if (value === true || value === false) {
-        return value;
-      }
-
-      if (value === 1 || value === "1" || value === "true") {
-        return true;
-      }
-
-      if (value === 0 || value === "0" || value === "false") {
-        return false;
-      }
-
-      return false;
-    case "multi_select":
-      if (Array.isArray(value)) {
-        return value
-          .filter((item): item is string => typeof item === "string")
-          .map((item) => item.trim())
-          .filter(Boolean);
-      }
-
-      if (typeof value === "string") {
-        return value
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean);
-      }
-
-      return [];
-    case "relation":
-      if (field.multiple === false) {
-        if (typeof value === "string") {
-          return value.trim();
-        }
-
-        if (Array.isArray(value)) {
-          const firstValue = value.find((item): item is string => typeof item === "string");
-          return firstValue?.trim() ?? "";
-        }
-
-        return "";
-      }
-
-      if (Array.isArray(value)) {
-        return value
-          .filter((item): item is string => typeof item === "string")
-          .map((item) => item.trim())
-          .filter(Boolean);
-      }
-
-      if (typeof value === "string") {
-        const trimmed = value.trim();
-        return trimmed ? [trimmed] : [];
-      }
-
-      return [];
-    case "select":
-      if (typeof value === "string") {
-        return value;
-      }
-
-      if (typeof value === "number" && Number.isFinite(value)) {
-        return String(value);
-      }
-
-      if (Array.isArray(value)) {
-        const firstValue = value.find((item): item is string => typeof item === "string");
-        return firstValue ?? "";
-      }
-
-      return "";
-    default:
-      return value;
-  }
-}
-
-function normalizeHeaderPropsRecord(noteType: NoteType | null, rawProps: Record<string, unknown>) {
-  if (!noteType) {
-    return rawProps;
-  }
-
-  const definition = parseNoteTypeDefinition(noteType.schema_json);
-  const normalized: Record<string, unknown> = { ...rawProps };
-
-  for (const field of definition.fields) {
-    normalized[field.id] = coerceHeaderFieldValue(field, rawProps[field.id]);
-  }
-
-  return normalized;
-}
-
-export function normalizeHeaderProps(noteType: NoteType | null, rawProps: unknown) {
-  if (!rawProps || typeof rawProps !== "object" || Array.isArray(rawProps)) {
-    return createDefaultHeaderProps(noteType);
-  }
-
-  return {
-    ...createDefaultHeaderProps(noteType),
-    ...normalizeHeaderPropsRecord(noteType, rawProps as Record<string, unknown>),
-  };
-}
-
-export function buildHeaderPropsSchema(noteType: NoteType | null) {
-  if (!noteType) {
-    return z.record(z.string(), z.unknown());
-  }
-
-  const definition = parseNoteTypeDefinition(noteType.schema_json);
-  const shape: Record<string, z.ZodTypeAny> = {};
-
-  for (const field of definition.fields) {
-    let schema: z.ZodTypeAny;
-
-    switch (field.kind) {
-      case "number":
-        schema = z.union([z.number(), z.string().regex(/^$|^-?\d+(\.\d+)?$/)]);
-        break;
-      case "date":
-        schema = z.string();
-        break;
-      case "boolean":
-        schema = z.boolean();
-        break;
-      case "multi_select":
-        schema = z.array(z.string());
-        break;
-      case "relation":
-        schema = field.multiple === false ? z.string() : z.array(z.string());
-        break;
-      default:
-        schema = z.string();
-        break;
-    }
-
-    shape[field.id] = field.required ? schema : schema.optional();
-  }
-
-  return z.object(shape).passthrough();
-}
-
-export function validateHeaderProps(noteType: NoteType | null, rawProps: unknown) {
-  return buildHeaderPropsSchema(noteType).safeParse(normalizeHeaderProps(noteType, rawProps));
-}
-
-export function safeParseHeaderProps(
-  noteType: NoteType | null,
-  rawJson: string | null | undefined,
-) {
-  try {
-    const parsed = rawJson ? JSON.parse(rawJson) : {};
-    const result = validateHeaderProps(noteType, parsed);
-
-    if (result.success) {
-      return result.data as Record<string, unknown>;
-    }
-  } catch {
-    return createDefaultHeaderProps(noteType);
-  }
-
-  return createDefaultHeaderProps(noteType);
 }
 
 export function normalizeSlug(input: string) {

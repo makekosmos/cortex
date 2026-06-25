@@ -1,6 +1,6 @@
 // Gate: какие PM-документы безопасны для CM6 markdown-редактора (фаза 1).
 
-export const CM_SAFE_NODES = new Set([
+const CM_SAFE_NODES = new Set([
   "doc",
   "paragraph",
   "heading",
@@ -18,7 +18,7 @@ export const CM_SAFE_NODES = new Set([
   "taskItem",
 ]);
 
-export const CM_SAFE_MARKS = new Set(["bold", "italic", "strike", "code", "link"]);
+const CM_SAFE_MARKS = new Set(["bold", "italic", "strike", "code", "link"]);
 
 type JsonNode = Record<string, unknown>;
 
@@ -81,45 +81,6 @@ function isNodeSafe(node: unknown): boolean {
   return true;
 }
 
-function collectCmBlockers(node: unknown, blockers: Set<string>): void {
-  if (!node || typeof node !== "object" || Array.isArray(node)) {
-    blockers.add("invalid-node");
-    return;
-  }
-
-  const n = node as Record<string, unknown>;
-
-  if (typeof n.type !== "string") {
-    blockers.add("missing-node-type");
-    return;
-  }
-
-  if (!CM_SAFE_NODES.has(n.type)) {
-    blockers.add(`node:${n.type}`);
-  }
-
-  if (Array.isArray(n.marks)) {
-    for (const mark of n.marks) {
-      if (!mark || typeof mark !== "object" || Array.isArray(mark)) {
-        blockers.add("invalid-mark");
-        continue;
-      }
-      const m = mark as Record<string, unknown>;
-      if (typeof m.type !== "string") {
-        blockers.add("missing-mark-type");
-      } else if (!CM_SAFE_MARKS.has(m.type)) {
-        blockers.add(`mark:${m.type}`);
-      }
-    }
-  }
-
-  if (Array.isArray(n.content)) {
-    for (const child of n.content) {
-      collectCmBlockers(child, blockers);
-    }
-  }
-}
-
 function extractPlainText(node: unknown): string {
   if (!node || typeof node !== "object" || Array.isArray(node)) return "";
   const n = node as JsonNode;
@@ -179,24 +140,7 @@ function coerceNodeToCmSafe(node: unknown): JsonNode[] {
   if (n.type === "paragraph" || n.type === "heading") {
     const content = Array.isArray(n.content)
       ? n.content
-          .map((child) => {
-            const childNode = child as JsonNode;
-            if (
-              childNode &&
-              typeof childNode === "object" &&
-              !Array.isArray(childNode) &&
-              childNode.type === "text" &&
-              typeof childNode.text === "string"
-            ) {
-              const marks = sanitizeMarks(childNode.marks);
-              return marks
-                ? { type: "text", text: childNode.text, marks }
-                : textNode(childNode.text);
-            }
-
-            const text = extractPlainText(child);
-            return text ? textNode(text) : null;
-          })
+          .map(coerceInlineChildToCmSafe)
           .filter((child): child is JsonNode => child !== null)
       : [];
 
@@ -222,6 +166,23 @@ function coerceNodeToCmSafe(node: unknown): JsonNode[] {
 
   const text = extractPlainText(n);
   return text.trim() ? [paragraphNode(text)] : [];
+}
+
+function coerceInlineChildToCmSafe(child: unknown): JsonNode | null {
+  const childNode = child as JsonNode;
+  if (
+    childNode &&
+    typeof childNode === "object" &&
+    !Array.isArray(childNode) &&
+    childNode.type === "text" &&
+    typeof childNode.text === "string"
+  ) {
+    const marks = sanitizeMarks(childNode.marks);
+    return marks ? { type: "text", text: childNode.text, marks } : textNode(childNode.text);
+  }
+
+  const text = extractPlainText(child);
+  return text ? textNode(text) : null;
 }
 
 export function isCmSafeDoc(doc: unknown): boolean {
@@ -253,17 +214,4 @@ export function shouldUseCmEditor(prefEnabled: boolean, contentJson: string): bo
   }
 
   return isCmSafeDoc(parsed);
-}
-
-export function getCmEditorBlockers(contentJson: string): string[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(contentJson);
-  } catch {
-    return ["invalid-json"];
-  }
-
-  const blockers = new Set<string>();
-  collectCmBlockers(parsed, blockers);
-  return [...blockers].sort();
 }

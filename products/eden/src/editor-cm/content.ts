@@ -1,4 +1,4 @@
-export const MARKDOWN_CONTENT_VERSION = 1;
+const MARKDOWN_CONTENT_VERSION = 1;
 
 export interface MarkdownContent {
   type: "markdown";
@@ -21,7 +21,7 @@ export function writeEntryMarkdown(md: string): MarkdownContent {
 export function readEntryMarkdown(value: unknown): string {
   if (typeof value === "string") {
     try {
-      return readEntryMarkdown(JSON.parse(value) as unknown);
+      return readEntryMarkdown(JSON.parse(value));
     } catch {
       return "";
     }

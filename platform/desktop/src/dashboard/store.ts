@@ -9,7 +9,7 @@ import type { DashboardObjectRow, DashboardObjectType, DashboardUsageRow } from 
 import { HIDDEN_DASHBOARD_TYPE_IDS } from "./typeVisuals";
 
 export const objectTypes = ref<DashboardObjectType[]>([]);
-export const objectTypesLoading = ref<boolean>(false);
+const objectTypesLoading = ref<boolean>(false);
 
 // null → «Всё» (all objects), id → object type, "__usage__" → usage tracker.
 export const currentTypeId = ref<string | null>(null);

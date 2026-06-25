@@ -325,7 +325,7 @@ bun run --cwd platform/desktop dev
 ### Exp 30 — CSS `contain: layout style` на extension roots (применён, проверка нерегрессии)
 
 - [ ] **Arrancador.** Library scroll, переключение pages — нет clipped overflow.
-- [ ] **Delphi.** Sidebar + main pane, drag&drop задач, modal'ы (QuickEntry / QuickOpen) — нет визуальных регрессий.
+- [ ] **Delphi.** Sidebar + main pane, drag&drop задач, QuickEntry — нет визуальных регрессий.
 - [ ] **Eden.** Editor + sidebar resize, modal overlays (search, settings) — нет clipped content.
 
 CSS `contain: layout style` изолирует reflow scope, но не paint scope (`contain: paint` мог бы обрезать тени / outline'ы — поэтому не выставлен).

@@ -8,7 +8,7 @@ import LegacyRow from "../components/LegacyRow.vue";
 import LegacyToggle from "../components/LegacyToggle.vue";
 import type { AppSettingsTab } from "../navigation";
 
-export interface AppCommandSetting {
+interface AppCommandSetting {
   id: string;
   title: string;
   icon: string;

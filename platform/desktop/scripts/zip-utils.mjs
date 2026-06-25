@@ -137,22 +137,6 @@ export function extractZip(zipPath, targetDir) {
   }
 }
 
-/**
- * Читает только manifest.json из zip — для preview перед install'ом без
- * full extract. Возвращает parsed object или null если manifest.json не
- * найден / повреждён.
- */
-export function readManifestFromZip(zipPath) {
-  const entries = readZip(zipPath);
-  const m = entries.find((e) => e.name === "manifest.json" && !e.isDir);
-  if (!m) return null;
-  try {
-    return JSON.parse(m.data.toString("utf8"));
-  } catch {
-    return null;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Writer — минимальный, stored (без сжатия) для удобства dev/test'ов.
 // Используется в тестах для генерации .kext fixture'ов.

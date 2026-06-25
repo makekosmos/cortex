@@ -32,5 +32,10 @@ export default {
     assetsDir: "assets",
     base: "./",
   },
+  server: {
+    hmr: {
+      overlay: false,
+    },
+  },
   clearScreen: false,
 };

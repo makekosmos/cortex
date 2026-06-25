@@ -13,7 +13,7 @@
 //
 // Use:
 //   safeHandle("kepler:foo", async (_e, x: number) => {
-//     return await something(x);
+//     return something(x);
 //   });
 
 import { ipcMain } from "electron";
@@ -23,15 +23,15 @@ export function safeHandle<P extends unknown[], R>(
   channel: string,
   handler: (event: Electron.IpcMainInvokeEvent, ...args: P) => Promise<R> | R,
 ): void {
-  ipcMain.handle(channel, async (event, ...args) => {
-    try {
-      return await handler(event, ...(args as P));
-    } catch (err) {
-      keplerLog.error("ipc", `${channel} threw`, {
-        err: String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      throw err;
-    }
-  });
+  ipcMain.handle(channel, (event, ...args) =>
+    Promise.resolve()
+      .then(() => handler(event, ...(args as P)))
+      .catch((err) => {
+        keplerLog.error("ipc", `${channel} threw`, {
+          err: String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        });
+        throw err;
+      }),
+  );
 }

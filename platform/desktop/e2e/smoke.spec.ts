@@ -17,19 +17,19 @@
 
 import path from "node:path";
 import fs from "node:fs";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
 import { _electron as electron, type ElectronApplication } from "playwright";
+import electronBinary from "electron";
 
-const require = createRequire(import.meta.url);
-const electronBinary = require("electron") as string;
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const e2eRoot = path.join(appRoot, ".e2e");
 const userDataDir = path.join(e2eRoot, "kepler-shell-userdata");
+const dataDir = path.join(e2eRoot, "kepler-shell-data-smoke");
 
 async function launchKepler(): Promise<ElectronApplication> {
   fs.mkdirSync(userDataDir, { recursive: true });
+  fs.mkdirSync(dataDir, { recursive: true });
   return electron.launch({
     executablePath: electronBinary,
     cwd: appRoot,
@@ -37,6 +37,10 @@ async function launchKepler(): Promise<ElectronApplication> {
     env: {
       ...process.env,
       NODE_ENV: "test",
+      KOSMOS_DATA_DIR: dataDir,
+      KOSMOS_TEST_MODE: "1",
+      KOSMOS_HEADLESS: "1",
+      KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
       // Hint backend skipping sync — kepler-backend поддерживает этот флаг
       // сам, kepler-shell просто пробрасывает env в spawn.
       KEPLER_SKIP_SYNC: "1",
@@ -50,14 +54,11 @@ test.describe("kepler-shell smoke", () => {
     const app = await launchKepler();
     try {
       const appPath = await app.evaluate(({ app: electronApp }) => electronApp.getAppPath());
-      expect(appPath).toBeTruthy();
-      expect(typeof appPath).toBe("string");
+      expect(path.basename(appPath)).toBe("dist-electron");
+      expect(path.normalize(path.dirname(appPath))).toBe(path.normalize(appRoot));
 
       const name = await app.evaluate(({ app: electronApp }) => electronApp.getName());
-      expect(name).toBeTruthy();
-
-      // Дать main-process чуть времени на whenReady / spawn backend.
-      await new Promise((r) => setTimeout(r, 1500));
+      expect(name).toBe("Kosmos [test]");
     } finally {
       await app.close();
     }
@@ -90,7 +91,5 @@ test.describe("kepler-shell smoke", () => {
     const app = await launchKepler();
     // Закрытие — единственная проверка; await не должен висеть/throw'ать.
     await app.close();
-    // Если дошли сюда без таймаута — pass.
-    expect(true).toBe(true);
   });
 });

@@ -3,7 +3,7 @@ import { computed, shallowRef, watch } from "vue";
 import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
 import { parseRaycastMarkdown } from "./markdown";
 import RaycastActionPanel from "./RaycastActionPanel.vue";
-import { detailActions, detailMarkdown, detailMetadataItems } from "./model";
+import { detailActions, detailMarkdown, detailMetadataItems } from "./model-detail";
 import RaycastMetadataView from "./RaycastMetadataView.vue";
 
 const props = defineProps<{

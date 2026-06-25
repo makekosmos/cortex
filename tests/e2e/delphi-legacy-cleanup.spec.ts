@@ -40,8 +40,7 @@ async function captureExtensionWindow(
 }
 
 test.describe("delphi legacy cleanup", () => {
-  test("opens directly into task UI without legacy spaces setup", async () => {
-    test.setTimeout(60_000);
+  test("opens directly into task UI without legacy spaces setup", { timeout: 60_000 }, async () => {
     fs.mkdirSync(VISUAL_DIR, { recursive: true });
     const app = await launchKepler({ slug: "delphi-legacy-cleanup" });
     try {

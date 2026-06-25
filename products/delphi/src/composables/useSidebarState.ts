@@ -14,10 +14,6 @@ try {
   // ignore
 }
 
-export function setSidebarHidden(hidden: boolean) {
-  sidebarHidden.value = hidden;
-}
-
 export function useSidebarState() {
   const wrapClass = "mx-auto w-full";
   const titleWrapRef = ref<HTMLElement | null>(null);

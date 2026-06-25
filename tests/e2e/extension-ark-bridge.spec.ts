@@ -17,6 +17,97 @@
 import { test, expect, type ConsoleMessage, type Page } from "@playwright/test";
 import { launchKepler } from "./helpers/launch";
 
+type KeplerTestApp = Awaited<ReturnType<typeof launchKepler>>;
+
+const INVOKE_EDEN_OPEN_SCRIPT = `
+  (async () => {
+    if (typeof window.kepler?.commands?.invoke !== "function") {
+      return "no-api";
+    }
+    try {
+      await window.kepler.commands.invoke("eden:open");
+      return "ok";
+    } catch (e) {
+      return "throw:" + (e && e.message ? e.message : String(e));
+    }
+  })()
+`;
+
+function attachPageErrorCollectors(
+  page: Page,
+  consoleErrors: string[],
+  pageErrors: string[],
+): void {
+  page.on("console", (msg: ConsoleMessage) => {
+    if (msg.type() === "error") {
+      consoleErrors.push(msg.text());
+    }
+  });
+  page.on("pageerror", (err: Error) => {
+    pageErrors.push(err.message);
+  });
+}
+
+function collectFuturePageErrors(app: KeplerTestApp): {
+  consoleErrors: string[];
+  pageErrors: string[];
+} {
+  const consoleErrors: string[] = [];
+  const pageErrors: string[] = [];
+  app.on("window", (page: Page) => {
+    attachPageErrorCollectors(page, consoleErrors, pageErrors);
+  });
+  return { consoleErrors, pageErrors };
+}
+
+async function invokeEdenOpenFromLauncher(app: KeplerTestApp): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        app.evaluate(async ({ BrowserWindow }, script) => {
+          const wins = BrowserWindow.getAllWindows();
+          const launcher = wins[0];
+          if (!launcher) return "no-launcher";
+          return (await launcher.webContents.executeJavaScript(script)) as string;
+        }, INVOKE_EDEN_OPEN_SCRIPT),
+      {
+        intervals: [100],
+        timeout: 3_000,
+        message: "commands.invoke должен стать доступен в launcher window",
+      },
+    )
+    .toBe("ok");
+}
+
+async function waitForExtensionArkBridge(extensionWindow: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        extensionWindow.evaluate(async () => {
+          const kepler = (
+            window as unknown as {
+              kepler?: {
+                ark?: { request(operation: string, params?: unknown): Promise<unknown> };
+              };
+            }
+          ).kepler;
+          if (typeof kepler?.ark?.request !== "function") return "no-api";
+          try {
+            await kepler.ark.request("list_objects");
+            return "ok";
+          } catch (e) {
+            return "throw:" + (e && e instanceof Error ? e.message : String(e));
+          }
+        }),
+      {
+        intervals: [100, 250, 500],
+        timeout: 5_000,
+        message: "extension ARK bridge должен принять первый request",
+      },
+    )
+    .toBe("ok");
+}
+
 test.describe("extension ark bridge", () => {
   test("первый extension probe не fails — bridge ready-gate работает", async () => {
     const app = await launchKepler({ slug: "extension-ark-bridge" });
@@ -29,53 +120,18 @@ test.describe("extension ark bridge", () => {
 
       // Собираем все будущие extension page errors. Setup ДО открытия —
       // чтобы не упустить ранние логи.
-      const consoleErrors: string[] = [];
-      const pageErrors: string[] = [];
-      app.on("window", (page: Page) => {
-        page.on("console", (msg: ConsoleMessage) => {
-          if (msg.type() === "error") {
-            consoleErrors.push(msg.text());
-          }
-        });
-        page.on("pageerror", (err: Error) => {
-          pageErrors.push(err.message);
-        });
-      });
+      const { consoleErrors, pageErrors } = collectFuturePageErrors(app);
 
       // Триггерим открытие Eden как можно раньше — через invoke
       // open-команды из launcher window. Если launcher ещё не имеет
       // commands API (race с preload exposure), коротко поллим до 3s.
       // Это всё ещё минимальный warm-up vs нормальные 2.5s — оставляем
       // условиям test'а максимально близкими к real-world cold launch.
-      const triggered = await app.evaluate(async ({ BrowserWindow }) => {
-        const wins = BrowserWindow.getAllWindows();
-        const launcher = wins[0];
-        if (!launcher) return "no-launcher";
-        const start = Date.now();
-        while (Date.now() - start < 3000) {
-          const ok = (await launcher.webContents.executeJavaScript(`
-            (async () => {
-              if (typeof window.kepler?.commands?.invoke !== "function") {
-                return "no-api";
-              }
-              try {
-                await window.kepler.commands.invoke("eden:open");
-                return "ok";
-              } catch (e) {
-                return "throw:" + (e && e.message ? e.message : String(e));
-              }
-            })()
-          `)) as string;
-          if (ok === "ok") return ok;
-          await new Promise((r) => setTimeout(r, 100));
-        }
-        return "timeout";
-      });
-      expect(triggered, `commands.invoke status: ${triggered}`).toBe("ok");
+      await invokeEdenOpenFromLauncher(app);
 
       const extensionWindow = await app.waitForEvent("window", { timeout: 10_000 });
       await extensionWindow.waitForLoadState("domcontentloaded");
-      await extensionWindow.waitForTimeout(5_000);
+      await waitForExtensionArkBridge(extensionWindow);
 
       // Убеждаемся, что «ark bridge not ready» нигде не прилетело за это
       // время — ни в console, ни в page errors. (Сами по себе IPC reject'ы

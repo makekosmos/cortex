@@ -46,26 +46,6 @@ export function taskRef(taskId: string, autoFocus = false): PMNode {
   };
 }
 
-/** Документ с двумя taskRef подряд. */
-export function twoTaskRefsDoc(taskId1: string, taskId2: string): PMDoc {
-  return {
-    type: "doc",
-    content: [taskRef(taskId1), taskRef(taskId2)],
-  };
-}
-
-/** TaskRef → paragraph(text) → TaskRef. */
-export function taskRefParagraphTaskRefDoc(
-  taskId1: string,
-  paragraphText: string,
-  taskId2: string,
-): PMDoc {
-  return {
-    type: "doc",
-    content: [taskRef(taskId1), paragraph(paragraphText), taskRef(taskId2)],
-  };
-}
-
 /** Heading node (level 1-6). */
 export function heading(level: number, text: string): PMNode {
   return {

@@ -4,6 +4,17 @@ import path from "node:path";
 import { freshDataDir, launchKeplerWithDataDir } from "./helpers/launch";
 import { waitForBackendReady } from "./helpers/wait";
 
+function parseSyncVersionVector(rawVector: string | null): Record<string, string> {
+  if (!rawVector) return {};
+  const parsed: unknown = JSON.parse(rawVector);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+  return Object.fromEntries(
+    Object.entries(parsed).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
+}
+
 function writeProbeExtension(dataDir: string, id: string, permissions: string[] | undefined): void {
   const dir = path.join(dataDir, "extensions", id);
   fs.mkdirSync(dir, { recursive: true });
@@ -144,7 +155,7 @@ test.describe("extension runtime permissions", () => {
           key: "lan_sync.version_vector",
         }),
       );
-      const vector = JSON.parse(rawVector ?? "{}") as Record<string, string>;
+      const vector = parseSyncVersionVector(rawVector);
 
       expect(result?.id).toBe("allowed-task");
       expect(result?.title).toBe("Allowed");

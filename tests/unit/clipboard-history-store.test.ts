@@ -141,8 +141,9 @@ describe("clipboard history store", () => {
 
     const pinned = store.record("keep");
     store.record("remove");
-    expect(pinned).not.toBeNull();
-    store.togglePin(pinned!.id);
+    if (!pinned) throw new Error("expected clipboard entry to be recorded");
+    expect(pinned.text).toBe("keep");
+    store.togglePin(pinned.id);
     store.record("newer");
 
     expect(store.list().map((item) => item.text)).toEqual(["keep", "newer", "remove"]);
@@ -158,9 +159,10 @@ describe("clipboard history store", () => {
     const store = createClipboardHistoryStore({ now: () => 1 });
     const item = store.record("copy me");
 
-    expect(item).not.toBeNull();
-    expect(store.remove(item!.id)).toBe(true);
-    expect(store.remove(item!.id)).toBe(false);
+    if (!item) throw new Error("expected clipboard entry to be recorded");
+    expect(item.text).toBe("copy me");
+    expect(store.remove(item.id)).toBe(true);
+    expect(store.remove(item.id)).toBe(false);
 
     store.record("next");
     store.clear();
@@ -168,13 +170,14 @@ describe("clipboard history store", () => {
     expect(store.list()).toEqual([]);
   });
 
-  test("persists entries and settings across store instances", () => {
+  test("persists entries and settings across store instances", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "kosmos-clipboard-"));
     try {
       const storagePath = path.join(dir, "clipboard-history.json");
       const first = createClipboardHistoryStore({ storagePath, now: () => 100 });
       first.record("persist me");
       first.updateSettings({ retentionDays: 12, maxBytes: 1024 * 1024 });
+      await first.flush();
 
       const second = createClipboardHistoryStore({ storagePath, now: () => 200 });
 
@@ -191,8 +194,9 @@ describe("clipboard history store", () => {
 
     now = 1_000;
     const old = store.record("old");
-    expect(old).not.toBeNull();
-    store.togglePin(old!.id);
+    if (!old) throw new Error("expected clipboard entry to be recorded");
+    expect(old.text).toBe("old");
+    store.togglePin(old.id);
     now = 2_000;
     store.record("unpinned old");
     now = 4 * 24 * 60 * 60 * 1000;
@@ -207,14 +211,15 @@ describe("clipboard history store", () => {
     const store = createClipboardHistoryStore({ now: () => now++ });
 
     const pinned = store.record("pin " + "x".repeat(80));
-    expect(pinned).not.toBeNull();
-    store.togglePin(pinned!.id);
+    if (!pinned) throw new Error("expected clipboard entry to be recorded");
+    expect(pinned.text).toBe("pin " + "x".repeat(80));
+    store.togglePin(pinned.id);
     store.record("first " + "a".repeat(80));
     store.record("second " + "b".repeat(80));
 
     const pinnedBytes = store.list().find((item) => item.pinned)?.storageBytes ?? 0;
     store.updateSettings({ maxBytes: pinnedBytes + 80 });
 
-    expect(store.list().map((item) => item.text)).toEqual([pinned!.text]);
+    expect(store.list().map((item) => item.text)).toEqual([pinned.text]);
   });
 });

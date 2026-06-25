@@ -15,14 +15,14 @@ export interface ScanResult {
   errors: string[];
 }
 
-export interface LaunchResultOk {
+interface LaunchResultOk {
   ok: true;
   pid: number;
   started_at: string;
   method: string;
 }
 
-export interface LaunchResultErr {
+interface LaunchResultErr {
   ok: false;
   error: string;
 }
@@ -39,7 +39,7 @@ export interface RawgGame {
   platforms?: { platform: { id: number; name: string } }[];
 }
 
-export interface RawgSearchResult {
+interface RawgSearchResult {
   results: RawgGame[];
 }
 
@@ -52,18 +52,18 @@ export interface SqobaBackup {
   bytes: number;
 }
 
-export interface SqobaListResult {
+interface SqobaListResult {
   backups: SqobaBackup[];
 }
 
-export interface SqobaRestoreResult {
+interface SqobaRestoreResult {
   ok: boolean;
   restored_files?: number;
   bytes?: number;
   errors?: string[];
 }
 
-export interface OkResult {
+interface OkResult {
   ok: boolean;
   error?: string;
 }

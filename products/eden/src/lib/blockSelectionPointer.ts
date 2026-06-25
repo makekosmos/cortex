@@ -1,4 +1,4 @@
-export function resolvePointerTargetElement(target: EventTarget | null): HTMLElement | null {
+function resolvePointerTargetElement(target: EventTarget | null): HTMLElement | null {
   if (target instanceof HTMLElement) return target;
   if (target instanceof Node && target.parentElement instanceof HTMLElement) {
     return target.parentElement;

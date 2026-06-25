@@ -36,8 +36,7 @@ async function openDelphi(app: Awaited<ReturnType<typeof launchKepler>>): Promis
 
   const delphiWindow = await app.waitForEvent("window", { timeout: 10_000 });
   await delphiWindow.waitForLoadState("domcontentloaded");
-  // Дать Vue mount + activateSpace + ARK load завершиться.
-  await delphiWindow.waitForTimeout(3000);
+  await delphiWindow.getByText("Входящие", { exact: true }).first().waitFor({ timeout: 10_000 });
   return delphiWindow;
 }
 
@@ -52,8 +51,6 @@ test("delphi: задача создана через addTodo сохраняет�
   });
 
   try {
-    await new Promise((r) => setTimeout(r, 2500));
-
     // ----- step 1: open Делphi, создаём задачу через electronAPI shim -----
     let delphi = await openDelphi(app);
 
@@ -116,7 +113,9 @@ test("delphi: задача создана через addTodo сохраняет�
       `);
       return { ok: true, list };
     });
-    const arkList = (arkCheck.list ?? []) as Array<{ id: string; title: string }>;
+    expect(arkCheck.ok).toBe(true);
+    expect(Array.isArray(arkCheck.list), `ARK list shape: ${JSON.stringify(arkCheck)}`).toBe(true);
+    const arkList = arkCheck.list as Array<{ id: string; title: string }>;
     const matchingArk = arkList.find((o) => o.id === taskId);
     expect(
       matchingArk,
@@ -125,18 +124,25 @@ test("delphi: задача создана через addTodo сохраняет�
     expect(matchingArk?.title).toBe(TASK_TITLE);
 
     // ----- step 2: закрываем Делphi window -----
+    const delphiClosed = delphi.waitForEvent("close");
     await delphi.evaluate(() => window.close());
-    await new Promise((r) => setTimeout(r, 1000));
+    await delphiClosed;
 
     // ----- step 3: reopen Делphi -----
     delphi = await openDelphi(app);
-    // Дать ARK load завершиться (activateSpace + ark:listDelphiTasks).
-    await delphi.waitForTimeout(2500);
 
     // delphi:open deep-link'ает в /today; созданная задача isToday=false →
     // показывается в Inbox (/). Переходим явно.
     await delphi.getByText("Входящие", { exact: true }).first().click();
-    await delphi.waitForTimeout(800);
+    await expect
+      .poll(
+        async () => {
+          const text = await delphi.locator("body").textContent();
+          return text?.includes(TASK_TITLE) === true;
+        },
+        { timeout: 10_000 },
+      )
+      .toBe(true);
 
     const bodyText = (await delphi.locator("body").textContent()) ?? "";
     if (!bodyText.includes(TASK_TITLE)) {
@@ -154,12 +160,6 @@ test("delphi: задача создана через addTodo сохраняет�
       );
     }
   } finally {
-    await app.evaluate(({ app: a }) => a.quit());
-    await Promise.race([
-      new Promise<void>((resolve) => app.process().once("exit", () => resolve())),
-      new Promise<void>((_, rej) =>
-        setTimeout(() => rej(new Error("process exit timeout 10s")), 10_000),
-      ),
-    ]);
+    await app.close();
   }
 });

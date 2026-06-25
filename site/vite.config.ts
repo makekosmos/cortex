@@ -7,7 +7,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [vue()],
-  server: { port: 5180 },
+  server: {
+    port: 5180,
+    hmr: {
+      overlay: false,
+    },
+  },
   resolve: {
     alias: {
       // Те же alias'ы что и platform/desktop/vite.config.mjs — site импортирует

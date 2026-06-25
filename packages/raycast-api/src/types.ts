@@ -13,7 +13,7 @@ export interface RaycastElement<TType extends string = string, TProps = Record<s
   readonly props: TProps & { children?: RaycastChild[] };
 }
 
-export interface Icon {
+interface Icon {
   source: string;
   tintColor?: string;
 }

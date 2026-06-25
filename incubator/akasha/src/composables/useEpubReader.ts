@@ -105,12 +105,12 @@ export function useEpubReader() {
 }
 
 async function loadSettings(): Promise<ReaderSettings> {
-  const stored = await window.kepler?.userData?.readJson<Partial<ReaderSettings>>(STATE_FILE);
+  const stored = await window.kepler?.userData?.readJson<unknown>(STATE_FILE);
   if (!stored) {
     const fallback = localStorage.getItem("akasha:reader-state");
     if (!fallback) return { ...DEFAULT_SETTINGS };
     try {
-      return normalizeSettings(JSON.parse(fallback) as Partial<ReaderSettings>);
+      return normalizeSettings(JSON.parse(fallback));
     } catch {
       return { ...DEFAULT_SETTINGS };
     }
@@ -123,14 +123,15 @@ async function saveSettings(settings: ReaderSettings) {
   await window.kepler?.userData?.writeJson(STATE_FILE, settings);
 }
 
-function normalizeSettings(value: Partial<ReaderSettings>): ReaderSettings {
+function normalizeSettings(value: unknown): ReaderSettings {
+  const settings = value && typeof value === "object" ? (value as Partial<ReaderSettings>) : {};
   return {
     fontFamily:
-      typeof value.fontFamily === "string" ? value.fontFamily : DEFAULT_SETTINGS.fontFamily,
+      typeof settings.fontFamily === "string" ? settings.fontFamily : DEFAULT_SETTINGS.fontFamily,
     fontSize:
-      typeof value.fontSize === "number"
-        ? Math.min(28, Math.max(14, value.fontSize))
+      typeof settings.fontSize === "number"
+        ? Math.min(28, Math.max(14, settings.fontSize))
         : DEFAULT_SETTINGS.fontSize,
-    selectedBookId: typeof value.selectedBookId === "string" ? value.selectedBookId : null,
+    selectedBookId: typeof settings.selectedBookId === "string" ? settings.selectedBookId : null,
   };
 }

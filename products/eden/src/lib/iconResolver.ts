@@ -32,7 +32,7 @@ const FILE: IconNode = [
   ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
 ];
 
-const GAMEPAD_2: IconNode = [
+const GAMEPAD_CONTROLLER: IconNode = [
   ["line", { x1: "6", x2: "10", y1: "11", y2: "11" }],
   ["line", { x1: "8", x2: "8", y1: "9", y2: "13" }],
   ["line", { x1: "15", x2: "15.01", y1: "12", y2: "12" }],
@@ -140,7 +140,7 @@ const ICON_MAP: Record<string, IconNode> = {
   document: FILE_TEXT,
   "document-text": FILE_TEXT,
   page: FILE,
-  "game-controller": GAMEPAD_2,
+  "game-controller": GAMEPAD_CONTROLLER,
   image: IMAGE,
   barbell: DUMBBELL,
   fitness: ACTIVITY,

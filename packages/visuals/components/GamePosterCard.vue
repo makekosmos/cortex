@@ -2,7 +2,7 @@
 import { computed, type Component } from "vue";
 import { gamePosterCardClasses } from "../patterns";
 
-export interface GamePosterCardProps {
+interface GamePosterCardProps {
   to: string;
   title: string;
   eyebrow?: string | null;

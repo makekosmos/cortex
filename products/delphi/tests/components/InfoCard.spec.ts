@@ -20,9 +20,7 @@ describe("Delphi InfoCard", () => {
       slots: { default: "содержимое" },
     });
     const root = container.querySelector("div");
-    expect(root).not.toBeNull();
-    // class содержит rounded-xl + bg-(--card) → проверяем хотя бы
-    // первый, остальное может меняться с tailwind v4.
-    expect(root?.className).toMatch(/rounded-xl/);
+    if (!root) throw new Error("expected InfoCard root element");
+    expect(root.className).toBe("info-card");
   });
 });

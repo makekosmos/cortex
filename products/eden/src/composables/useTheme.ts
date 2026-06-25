@@ -1,8 +1,13 @@
-import { computed, ref, watch } from "vue";
+import { ref, watch } from "vue";
 
 type Theme = "light" | "dark" | "system";
 
 const STORAGE_KEY = "vite-ui-theme";
+
+function readStoredTheme(fallback: Theme): Theme {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  return stored === "light" || stored === "dark" || stored === "system" ? stored : fallback;
+}
 
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
@@ -13,7 +18,7 @@ function applyTheme(theme: Theme) {
   root.style.colorScheme = isDark ? "dark" : "light";
 }
 
-const theme = ref<Theme>((localStorage.getItem(STORAGE_KEY) as Theme) || "dark");
+const theme = ref<Theme>(readStoredTheme("dark"));
 
 applyTheme(theme.value);
 
@@ -29,23 +34,3 @@ mq.addEventListener("change", () => {
     applyTheme("system");
   }
 });
-
-export function useTheme() {
-  const resolvedTheme = computed<"light" | "dark">(() => {
-    if (theme.value === "system") {
-      return mq.matches ? "dark" : "light";
-    }
-
-    return theme.value;
-  });
-
-  function setTheme(value: Theme) {
-    theme.value = value;
-  }
-
-  return {
-    theme,
-    resolvedTheme,
-    setTheme,
-  };
-}

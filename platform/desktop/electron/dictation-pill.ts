@@ -266,7 +266,7 @@ export async function toggleDictation(): Promise<void> {
   }
 }
 
-export async function cancelDictation(): Promise<void> {
+async function cancelDictation(): Promise<void> {
   if (!isRecording) return;
   isRecording = false;
   await sendPillCommand({ kind: "cancel" });

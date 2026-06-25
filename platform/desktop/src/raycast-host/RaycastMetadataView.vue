@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
-import { detailMetadataItems } from "./model";
+import { detailMetadataItems } from "./model-detail";
 
 const props = defineProps<{
   detail: RaycastSnapshotNode | null;

@@ -41,5 +41,10 @@ export default defineConfig({
     assetsDir: "assets",
     base: "./",
   },
+  server: {
+    hmr: {
+      overlay: false,
+    },
+  },
   clearScreen: false,
 });

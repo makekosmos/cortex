@@ -2,8 +2,7 @@ import { test, expect } from "@playwright/test";
 import { freshDataDir, launchKeplerWithDataDir } from "../../../tests/e2e/helpers/launch";
 
 test.describe("settings about", () => {
-  test("shows storage summary in About page", async () => {
-    test.setTimeout(60_000);
+  test("shows storage summary in About page", { timeout: 60_000 }, async () => {
     const dataDir = freshDataDir("settings-about-storage-summary");
     const app = await launchKeplerWithDataDir(dataDir);
     try {

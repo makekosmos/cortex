@@ -13,6 +13,7 @@
 // Native `window.electronAPI.*` пути из legacy здесь недоступны.
 
 import { createApp } from "vue";
+import { installConsoleOnlyRuntimeErrors } from "@kosmos/visuals";
 
 // eslint-disable-next-line import/no-unassigned-import
 import "@kosmos/visuals/theme/css";
@@ -24,7 +25,9 @@ import { router } from "./router";
 
 document.documentElement.classList.add("dark");
 
-createApp(App).use(router).mount("#app");
+const app = createApp(App);
+installConsoleOnlyRuntimeErrors(app, { label: "arrancador-extension" });
+app.use(router).mount("#app");
 
 // Deep links через IPC. См. products/delphi/src/main.ts для пояснения.
 const keplerNav = (

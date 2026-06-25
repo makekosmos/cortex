@@ -49,7 +49,7 @@ function readBoolean(value: unknown): boolean {
   return value === true;
 }
 
-export function projectGame(record: ArkObjectRecord): ArrancadorGame {
+function projectGame(record: ArkObjectRecord): ArrancadorGame {
   const props =
     record.propsJson && typeof record.propsJson === "object"
       ? (record.propsJson as Record<string, unknown>)

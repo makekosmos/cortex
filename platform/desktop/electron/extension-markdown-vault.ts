@@ -13,14 +13,14 @@ const MARKDOWN_VAULT_MAX_FILES = 5_000;
 const MARKDOWN_VAULT_MAX_IMAGES = 5_000;
 const MARKDOWN_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif"]);
 
-export type MarkdownVaultTextFile = {
+type MarkdownVaultTextFile = {
   path: string;
   relativePath: string;
   name: string;
   content: string;
 };
 
-export type MarkdownVaultImageFile = {
+type MarkdownVaultImageFile = {
   path: string;
   relativePath: string;
   name: string;
@@ -65,7 +65,7 @@ function normalizeVaultRelativePath(root: string, filePath: string): string {
   return path.relative(root, filePath).split(path.sep).join("/");
 }
 
-export function isIgnoredVaultDir(name: string): boolean {
+function isIgnoredVaultDir(name: string): boolean {
   return name.startsWith(".") || name === "node_modules";
 }
 
@@ -73,7 +73,7 @@ function readUInt24LE(buffer: Buffer, offset: number): number {
   return buffer[offset] + (buffer[offset + 1] << 8) + (buffer[offset + 2] << 16);
 }
 
-export function readImageDimensions(filePath: string): { width: number; height: number } | null {
+function readImageDimensions(filePath: string): { width: number; height: number } | null {
   try {
     const buffer = readFileSync(filePath);
     if (

@@ -17,7 +17,8 @@
 // Решение: нормализовать оба entry одинаково через схему типа из noteTypes.
 
 import { readEntryMarkdown } from "../editor-cm/content";
-import { normalizeHeaderProps, resolveNoteTypeHeaderLayout } from "../lib/typedNotes";
+import { normalizeHeaderProps } from "../lib/typedNoteHeaderProps";
+import { resolveNoteTypeHeaderLayout } from "../lib/typedNotes";
 
 function normalizedEntryTypeId(entry: Entry): string {
   return entry.type_id ?? "note_obj";
