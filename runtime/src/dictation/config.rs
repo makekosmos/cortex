@@ -95,6 +95,16 @@ pub struct DictationConfig {
     /// Lower system output volume while dictation is recording.
     #[serde(default)]
     pub duck_audio_during_recording: bool,
+    /// Через сколько мс простоя выгружать whisper-server процесс (освободить
+    /// VRAM / RAM). `Some(ms)` = выгрузить через ms миллисекунд бездействия;
+    /// `None` = никогда не выгружать. Default = 5 минут (300 000 мс).
+    /// Используется только для direct whisper-server пути (local engine).
+    #[serde(default = "default_local_idle_unload_ms")]
+    pub local_idle_unload_ms: Option<u64>,
+}
+
+fn default_local_idle_unload_ms() -> Option<u64> {
+    Some(300_000)
 }
 
 impl Default for DictationConfig {
@@ -116,6 +126,7 @@ impl Default for DictationConfig {
             local_model: None,
             microphone_device_id: None,
             duck_audio_during_recording: false,
+            local_idle_unload_ms: Some(300_000),
         }
     }
 }
@@ -320,6 +331,7 @@ mod tests {
             local_model: Some("ggml-base".into()),
             microphone_device_id: None,
             duck_audio_during_recording: true,
+            local_idle_unload_ms: Some(60_000),
         };
         save_to(&path, &cfg).expect("save");
         let loaded = load_from(&path);
@@ -339,6 +351,33 @@ mod tests {
         );
         assert_eq!(loaded.local_model.as_deref(), Some("ggml-base"));
         assert!(loaded.duck_audio_during_recording);
+        // Новое поле: round-trip.
+        assert_eq!(loaded.local_idle_unload_ms, Some(60_000));
+    }
+
+    #[test]
+    fn local_idle_unload_ms_null_roundtrip() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("cfg.json");
+        let mut cfg = DictationConfig::default();
+        cfg.local_idle_unload_ms = None; // "Не выгружать"
+        save_to(&path, &cfg).expect("save");
+        let loaded = load_from(&path);
+        assert_eq!(loaded.local_idle_unload_ms, None);
+    }
+
+    #[test]
+    fn local_idle_unload_ms_default_on_legacy_config() {
+        // Конфиг без localIdleUnloadMs должен загрузиться с дефолтом 5 минут.
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("legacy.json");
+        std::fs::write(
+            &path,
+            r#"{"hotkey":"Ctrl+Shift+;","trigger_mode":"toggle","language":"ru","inject_mode":"auto_paste","network_profile":{"kind":"system"},"provider":"groq","model":"whisper-large-v3"}"#,
+        )
+        .expect("write");
+        let loaded = load_from(&path);
+        assert_eq!(loaded.local_idle_unload_ms, Some(300_000));
     }
 
     #[test]

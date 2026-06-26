@@ -18,6 +18,8 @@ export interface DictationConfigData {
   localEngine: string;
   microphoneDeviceId: string | null;
   duckAudioDuringRecording: boolean;
+  /** Через сколько мс простоя выгружать whisper-server. null = никогда. */
+  localIdleUnloadMs: number | null;
 }
 
 interface ConnectivityStage {
@@ -94,7 +96,16 @@ export const DEFAULT_DICTATION_CFG: DictationConfigData = {
   localEngine: "whisper.cpp",
   microphoneDeviceId: null,
   duckAudioDuringRecording: false,
+  localIdleUnloadMs: 300000,
 };
+
+export const DICTATION_IDLE_UNLOAD_OPTIONS = [
+  { value: 30000, label: "30 сек" },
+  { value: 60000, label: "1 минута" },
+  { value: 180000, label: "3 минуты" },
+  { value: 300000, label: "5 минут" },
+  { value: null, label: "Не выгружать" },
+] as const;
 
 export const DEFAULT_DICTATION_STATS: DictationStatsData = {
   totalWords: 0,

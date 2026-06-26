@@ -17,6 +17,7 @@ import AdvancedPageLayout, { type IntroDescriptor } from "../components/Advanced
 import AppCommandsTab from "./AppCommandsTab.vue";
 import ModelProviderBadge from "./ModelProviderBadge.vue";
 import {
+  DICTATION_IDLE_UNLOAD_OPTIONS,
   DICTATION_LANGUAGE_OPTIONS,
   DICTATION_TRIGGER_OPTIONS,
   DictationConfigKey,
@@ -66,6 +67,7 @@ const {
   onDictationHotkeyCapture,
   onDictationCaptureStart,
   onDictationCaptureEnd,
+  onDictationIdleUnloadChange,
 } = ctx;
 
 const commandsWithBinding = computed<AppCommandSetting[]>(() =>
@@ -212,6 +214,14 @@ onMounted(async () => {
             description="Во время записи системная громкость временно опускается до 20%."
             :model-value="dictationConfig.duckAudioDuringRecording"
             @update:modelValue="onDictationDuckAudioChange"
+          />
+          <SettingsDropdownRow
+            v-if="dictationConfig.provider === 'local'"
+            title="Выгрузка модели"
+            description="Через сколько простоя выгружать локальную модель из памяти."
+            :model-value="dictationConfig.localIdleUnloadMs"
+            :options="DICTATION_IDLE_UNLOAD_OPTIONS"
+            @update:modelValue="onDictationIdleUnloadChange"
           />
           <SettingsRow
             title="Вставка"

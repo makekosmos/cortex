@@ -1,6 +1,7 @@
 export {
   DEFAULT_DICTATION_CFG,
   DEFAULT_DICTATION_STATS,
+  DICTATION_IDLE_UNLOAD_OPTIONS,
   DICTATION_INJECT_OPTIONS,
   DICTATION_LANGUAGE_OPTIONS,
   DICTATION_PROVIDER_OPTIONS,
@@ -104,6 +105,12 @@ export function normalizeDictationConfig(
     localCommandPath: config?.localCommandPath ?? null,
     localModelId: config?.localModelId ?? DEFAULT_DICTATION_CFG.localModelId,
     localEngine: config?.localEngine ?? DEFAULT_DICTATION_CFG.localEngine,
+    // null = "никогда не выгружать" — явное значение; undefined (отсутствует) →
+    // дефолт 5 минут.
+    localIdleUnloadMs:
+      config != null && "localIdleUnloadMs" in config
+        ? (config.localIdleUnloadMs ?? null)
+        : DEFAULT_DICTATION_CFG.localIdleUnloadMs,
   };
 }
 
