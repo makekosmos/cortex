@@ -52,7 +52,7 @@ const fallbackLetter = computed(() => props.provider.charAt(0).toUpperCase());
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--foreground);
+  color: currentColor;
   flex-shrink: 0;
 }
 

@@ -15,10 +15,12 @@ import {
 import { ChevronRight, ListRestart, Trash2 } from "@lucide/vue";
 import AdvancedPageLayout, { type IntroDescriptor } from "../components/AdvancedPageLayout.vue";
 import AppCommandsTab from "./AppCommandsTab.vue";
+import ModelProviderBadge from "./ModelProviderBadge.vue";
 import {
   DICTATION_LANGUAGE_OPTIONS,
   DICTATION_TRIGGER_OPTIONS,
   DictationConfigKey,
+  type DictationVoiceModelOption,
 } from "../composables/useDictationConfig";
 import { useDictationPending } from "../composables/useDictationPending";
 import type { AppCommandSetting } from "../navigation";
@@ -107,6 +109,19 @@ const pendingQueueLabel = computed(() => {
   return String(pendingItems.value.length);
 });
 
+function modelOptionBadgeKind(
+  option?: DictationVoiceModelOption | null,
+): "groq" | "openai" | "nvidia" | "speech" | "text" {
+  if (!option) return "speech";
+  if (option.iconProvider) return option.iconProvider;
+  const lowerLabel = option.label.toLowerCase();
+  if (lowerLabel.includes("gpt") || lowerLabel.includes("whisper") || option.provider === "local") {
+    return "openai";
+  }
+  if (option.provider === "groq") return "groq";
+  return "speech";
+}
+
 function openPendingPage() {
   activeSettingsView.value = "pending";
 }
@@ -167,8 +182,17 @@ onMounted(async () => {
             :description="dictationProviderDescription"
             :model-value="dictationVoiceModelValue"
             :options="dictationVoiceModelOptions"
+            searchable
+            search-placeholder="Поиск модели"
             @update:modelValue="onDictationVoiceModelChange"
-          />
+          >
+            <template #trigger-leading="{ option }">
+              <ModelProviderBadge :kind="modelOptionBadgeKind(option)" />
+            </template>
+            <template #option-leading="{ option }">
+              <ModelProviderBadge :kind="modelOptionBadgeKind(option)" />
+            </template>
+          </SettingsDropdownRow>
           <SettingsDropdownRow
             title="Язык"
             description="Подсказка для Whisper. «Авто» — автоопределение."

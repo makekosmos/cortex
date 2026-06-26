@@ -3,25 +3,27 @@
 
 import { computed, inject, onMounted, ref } from "vue";
 import { SettingsList } from "@kosmos/visuals";
-import { PhDownloadSimple, PhMicrophone, PhOpenAiLogo, PhTextT } from "@phosphor-icons/vue";
-import { Boxes, ChevronRight, ExternalLink, Plus, Trash2 } from "@lucide/vue";
+import { PhDownloadSimple, PhMicrophone, PhTextT } from "@phosphor-icons/vue";
+import { ChevronRight, Cloud, ExternalLink, Plus, Trash2 } from "@lucide/vue";
 import AdvancedPageLayout, { type IntroDescriptor } from "../components/AdvancedPageLayout.vue";
 import { DictationConfigKey } from "../composables/useDictationConfig";
 import AddApiKeyModal from "./AddApiKeyModal.vue";
+import ModelProviderBadge from "./ModelProviderBadge.vue";
 import ProviderIcon from "./ProviderIcon.vue";
+import type { AISettingsView } from "../navigation";
 
 const props = defineProps<{
   intro: IntroDescriptor | null;
+  view: AISettingsView;
 }>();
+const emit = defineEmits<{ "update:view": [view: AISettingsView] }>();
 
 const ctx = inject(DictationConfigKey);
 if (!ctx) throw new Error("AISettingsTab requires DictationConfigKey provider in parent");
 
 const {
-  dictationConfig,
   dictationHasApiKey,
   dictationApiKeyBusy,
-  dictationModelName,
   dictationLocalModelPath,
   dictationLocalModelId,
   dictationLocalModels,
@@ -34,29 +36,21 @@ const {
   onDictationDownloadLocalModel,
 } = ctx;
 
-type AISettingsView = "overview" | "models";
 type ModelSortMode = "brand" | "speed" | "type";
 type CatalogModelSource = "groq" | "local";
 
-const activeSettingsView = ref<AISettingsView>("overview");
 const apiKeyModalOpen = ref(false);
 const modelSortMode = ref<ModelSortMode>("brand");
 const modelSortMenuOpen = ref(false);
 
 const GROQ_CONSOLE_URL = "https://console.groq.com/keys";
 
-const modelsIntro = computed<IntroDescriptor>(() => ({
-  icon: Boxes,
-  label: "Модели",
-  description: "Выберите модели для Kosmos AI.",
-  iconGradient: props.intro?.iconGradient,
-}));
+const activeSettingsView = computed<AISettingsView>({
+  get: () => props.view,
+  set: (value) => emit("update:view", value),
+});
 
-const activeIntro = computed(() =>
-  activeSettingsView.value === "models" ? modelsIntro.value : props.intro,
-);
-
-const isGroqProvider = computed(() => dictationConfig.value.provider === "groq");
+const activeIntro = computed(() => (activeSettingsView.value === "models" ? null : props.intro));
 const modelSortOptions: Array<{ id: ModelSortMode; label: string }> = [
   { id: "brand", label: "По бренду" },
   { id: "speed", label: "По скорости" },
@@ -84,115 +78,79 @@ type LocalCatalogModel = (typeof localModelRows.value)[number];
 interface CatalogModelRow {
   id: string;
   name: string;
-  brand: string;
   typeLabel: string;
   speedScore: number;
   intelligenceScore: number;
-  statusLabel: string;
-  selected: boolean;
   source: CatalogModelSource;
   localModel?: LocalCatalogModel;
-}
-
-interface CatalogModelSection {
-  id: string;
-  name: string;
-  description?: string;
-  rows: CatalogModelRow[];
 }
 
 const groqModelRows = computed<CatalogModelRow[]>(() => {
   if (!dictationHasApiKey.value) return [];
 
-  const selectedModel = dictationModelName.value.trim() || "whisper-large-v3";
-
   return [
     {
       id: "groq-whisper-large-v3-turbo",
       name: "Whisper Large V3 Turbo",
-      brand: "Groq",
       typeLabel: "Речь",
       speedScore: 0.86,
       intelligenceScore: 0.78,
-      statusLabel: "",
-      selected: isGroqProvider.value && selectedModel === "whisper-large-v3-turbo",
       source: "groq",
     },
     {
       id: "groq-whisper-large-v3",
       name: "Whisper Large V3",
-      brand: "Groq",
       typeLabel: "Речь",
       speedScore: 0.7,
       intelligenceScore: 0.88,
-      statusLabel: "",
-      selected: isGroqProvider.value && selectedModel === "whisper-large-v3",
       source: "groq",
     },
     {
       id: "groq-gpt-oss-20b",
       name: "GPT OSS 20B",
-      brand: "Groq",
       typeLabel: "Текст",
       speedScore: 1,
       intelligenceScore: 0.72,
-      statusLabel: "Скоро",
-      selected: false,
       source: "groq",
     },
     {
       id: "groq-gpt-oss-120b",
       name: "GPT OSS 120B",
-      brand: "Groq",
       typeLabel: "Текст",
       speedScore: 0.5,
       intelligenceScore: 0.9,
-      statusLabel: "Скоро",
-      selected: false,
       source: "groq",
     },
     {
       id: "groq-llama-3-1-8b",
       name: "Llama 3.1 8B",
-      brand: "Groq",
       typeLabel: "Текст",
       speedScore: 0.56,
       intelligenceScore: 0.62,
-      statusLabel: "Скоро",
-      selected: false,
       source: "groq",
     },
     {
       id: "groq-llama-3-3-70b",
       name: "Llama 3.3 70B",
-      brand: "Groq",
       typeLabel: "Текст",
       speedScore: 0.28,
       intelligenceScore: 0.82,
-      statusLabel: "Скоро",
-      selected: false,
       source: "groq",
     },
     {
       id: "groq-qwen3-32b",
       name: "Qwen3-32B",
-      brand: "Groq",
       typeLabel: "Текст",
       speedScore: 0.4,
       intelligenceScore: 0.8,
-      statusLabel: "Скоро",
-      selected: false,
       source: "groq",
     },
     {
       id: "groq-llama-4-scout",
       name: "Llama 4 Scout 17B",
-      brand: "Groq",
       typeLabel: "Текст",
       speedScore: 0.75,
       intelligenceScore: 0.78,
-      statusLabel: "Скоро",
-      selected: false,
       source: "groq",
     },
   ];
@@ -203,50 +161,26 @@ const allCatalogModelRows = computed<CatalogModelRow[]>(() => [
   ...localModelRows.value.map((model) => ({
     id: `local-${model.id}`,
     name: model.name,
-    brand: "OpenAI",
     typeLabel: "Речь",
     speedScore: model.speedScore,
     intelligenceScore: model.accuracyScore,
-    statusLabel: model.uiState.selected
-      ? "Используется"
-      : model.uiState.downloaded
-        ? "Готово"
-        : "Не готово",
-    selected: model.uiState.selected,
     source: "local" as const,
     localModel: model,
   })),
 ]);
 
-const modelCatalogSections = computed<CatalogModelSection[]>(() => {
+const modelCatalogRows = computed<CatalogModelRow[]>(() => {
   const rows = [...allCatalogModelRows.value];
   if (modelSortMode.value === "speed") {
-    return [
-      {
-        id: "speed",
-        name: "По скорости",
-        rows: rows.sort((a, b) => b.speedScore - a.speedScore || a.name.localeCompare(b.name)),
-      },
-    ];
+    return rows.sort((a, b) => b.speedScore - a.speedScore || a.name.localeCompare(b.name));
   }
 
-  const groupKey =
-    modelSortMode.value === "type"
-      ? (row: CatalogModelRow) => row.typeLabel
-      : (row: CatalogModelRow) => row.brand;
-  const groups = new Map<string, CatalogModelRow[]>();
-  for (const row of rows) {
-    const key = groupKey(row);
-    groups.set(key, [...(groups.get(key) ?? []), row]);
+  if (modelSortMode.value === "type") {
+    const typeRank = (row: CatalogModelRow) => (row.typeLabel === "Речь" ? 0 : 1);
+    return rows.sort((a, b) => typeRank(a) - typeRank(b) || a.name.localeCompare(b.name));
   }
 
-  return [...groups.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, groupRows]) => ({
-      id: `${modelSortMode.value}-${name}`,
-      name,
-      rows: groupRows.sort((a, b) => a.name.localeCompare(b.name)),
-    }));
+  return rows.sort((a, b) => a.name.localeCompare(b.name));
 });
 
 function formatBytes(bytes: number): string {
@@ -260,6 +194,11 @@ function formatBytes(bytes: number): string {
   }
   const digits = value >= 100 || unit === 0 ? 0 : value >= 10 ? 1 : 2;
   return `${value.toFixed(digits)} ${units[unit]}`;
+}
+
+function formatModelSize(sizeMb: number | null | undefined): string {
+  if (!Number.isFinite(sizeMb) || !sizeMb || sizeMb <= 0) return "0 Б";
+  return formatBytes(sizeMb * 1024 * 1024);
 }
 
 function downloadProgressLabel(progress: {
@@ -298,11 +237,31 @@ function scoreSegmentClass(score: number, index: number) {
     : "model-score__bar";
 }
 
-function localModelUiState(model: { id: string; downloaded: boolean; selected: boolean }) {
+function modelBadgeKind(model: CatalogModelRow): "groq" | "openai" | "nvidia" | "speech" | "text" {
+  const lowerName = model.name.toLowerCase();
+  if (lowerName.includes("parakeet")) return "nvidia";
+  if (model.source === "local" && !lowerName.includes("whisper")) return "speech";
+  if (lowerName.includes("gpt") || lowerName.includes("whisper") || model.source === "local") {
+    return "openai";
+  }
+  if (model.source === "groq") return "groq";
+  if (model.typeLabel === "Речь") return "speech";
+  return "text";
+}
+
+function localModelUiState(model: {
+  id: string;
+  downloaded: boolean;
+  selected: boolean;
+  transcriptionSupported?: boolean;
+}) {
   return {
     ...model,
     downloaded:
-      model.selected || (model.downloaded && Boolean(dictationLocalModels.value?.commandInstalled)),
+      model.selected ||
+      (model.downloaded &&
+        (model.transcriptionSupported === false ||
+          Boolean(dictationLocalModels.value?.commandInstalled))),
   };
 }
 
@@ -339,7 +298,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <AdvancedPageLayout :intro="activeIntro">
+  <AdvancedPageLayout
+    :intro="activeIntro"
+    :page-class="activeSettingsView === 'models' ? 'advanced-page--flush-top' : undefined"
+  >
     <template v-if="activeSettingsView === 'overview'">
       <section class="advanced-page__section">
         <SettingsList>
@@ -400,9 +362,6 @@ onMounted(() => {
     <template v-else>
       <section class="advanced-page__section">
         <div class="model-manager-heading">
-          <div>
-            <h2 class="advanced-section-title">Управление моделями</h2>
-          </div>
           <div class="model-sort">
             <button
               class="model-sort__button"
@@ -429,130 +388,112 @@ onMounted(() => {
               </button>
             </div>
           </div>
+          <button
+            type="button"
+            class="api-keys-heading__add"
+            :aria-label="addApiKeyTitle"
+            :title="addApiKeyTitle"
+            :disabled="!canAddApiKey"
+            @click="openAddApiKeyModal"
+          >
+            <Plus :size="15" aria-hidden="true" />
+          </button>
         </div>
 
         <p v-if="dictationLocalModelsError" class="model-error">
           {{ dictationLocalModelsError }}
         </p>
 
-        <div class="model-catalog">
-          <section v-for="section in modelCatalogSections" :key="section.id" class="model-provider">
-            <header class="model-provider__header">
-              <div class="model-provider__title">
+        <div class="model-table">
+          <div class="model-table__head">
+            <span>Модель</span>
+            <span class="model-table__head-right">Тип</span>
+            <span class="model-table__head-right">Скорость / качество</span>
+            <span class="model-table__head-status">Онлайн / оффлайн</span>
+          </div>
+          <div v-for="model in modelCatalogRows" :key="model.id" class="model-row">
+            <div class="model-name">
+              <ModelProviderBadge :kind="modelBadgeKind(model)" />
+              <strong>{{ model.name }}</strong>
+            </div>
+            <span class="model-type-icon" :title="model.typeLabel" :aria-label="model.typeLabel">
+              <PhMicrophone
+                v-if="model.typeLabel === 'Речь'"
+                :size="15"
+                weight="bold"
+                aria-hidden="true"
+              />
+              <PhTextT v-else :size="15" weight="bold" aria-hidden="true" />
+            </span>
+            <div class="model-score-pair" aria-label="Скорость и качество">
+              <div class="model-score" aria-label="Скорость">
                 <span
-                  v-if="section.name === 'OpenAI'"
-                  class="model-provider__icon"
-                  aria-hidden="true"
-                >
-                  <PhOpenAiLogo :size="16" weight="bold" />
-                </span>
-                <span
-                  v-else-if="section.name === 'Groq'"
-                  class="model-provider__icon model-provider__icon--groq"
-                  aria-hidden="true"
+                  v-for="index in 5"
+                  :key="`speed-${model.id}-${index}`"
+                  :class="scoreSegmentClass(model.speedScore, index)"
                 />
-                <h3>{{ section.name }}</h3>
               </div>
-            </header>
-            <div class="model-table">
-              <div class="model-table__head">
-                <span>Модель</span>
-                <span>Скорость</span>
-                <span>Качество</span>
-                <span>Тип</span>
-                <span />
-              </div>
-              <div v-for="model in section.rows" :key="model.id" class="model-row">
-                <div class="model-name">
-                  <strong>{{ model.name }}</strong>
-                </div>
-                <div class="model-score" aria-label="Скорость">
-                  <span
-                    v-for="index in 5"
-                    :key="`speed-${model.id}-${index}`"
-                    :class="scoreSegmentClass(model.speedScore, index)"
-                  />
-                </div>
-                <div class="model-score" aria-label="Качество">
-                  <span
-                    v-for="index in 5"
-                    :key="`quality-${model.id}-${index}`"
-                    :class="scoreSegmentClass(model.intelligenceScore, index)"
-                  />
-                </div>
+              <div class="model-score model-score--secondary" aria-label="Качество">
                 <span
-                  class="model-type-icon"
-                  :title="model.typeLabel"
-                  :aria-label="model.typeLabel"
-                >
-                  <PhMicrophone
-                    v-if="model.typeLabel === 'Речь'"
-                    :size="15"
-                    weight="bold"
-                    aria-hidden="true"
-                  />
-                  <PhTextT v-else :size="15" weight="bold" aria-hidden="true" />
-                </span>
-                <div
-                  v-if="model.source === 'local' && model.localModel"
-                  class="local-model-actions"
-                >
-                  <button
-                    v-if="!model.localModel.uiState.downloaded"
-                    class="model-icon-button model-icon-button--download"
-                    type="button"
-                    :disabled="Boolean(dictationLocalModelsBusy) || hasAnyLocalModelDownload()"
-                    aria-label="Скачать модель"
-                    @click="onLocalModelAction(model.localModel)"
-                  >
-                    <PhDownloadSimple :size="15" weight="bold" aria-hidden="true" />
-                  </button>
-                  <button
-                    v-else
-                    class="model-icon-button model-icon-button--delete"
-                    type="button"
-                    aria-label="Удалить модель"
-                    :disabled="Boolean(dictationLocalModelsBusy) || hasAnyLocalModelDownload()"
-                    @click="onLocalModelAction(model.localModel)"
-                  >
-                    <Trash2 :size="14" aria-hidden="true" />
-                  </button>
-                  <div
-                    v-if="dictationLocalModelDownloadProgress[model.localModel.id]"
-                    class="local-model-progress"
-                    :class="{
-                      'local-model-progress--indeterminate':
-                        dictationLocalModelDownloadProgress[model.localModel.id].percent === null,
-                    }"
-                    role="progressbar"
-                    :aria-valuemin="0"
-                    :aria-valuemax="100"
-                    :aria-valuenow="localModelProgressPercent(model.localModel.id)"
-                    :aria-label="
-                      downloadProgressLabel(
-                        dictationLocalModelDownloadProgress[model.localModel.id],
-                      )
-                    "
-                  >
-                    <div
-                      class="local-model-progress-fill"
-                      :style="{
-                        width: `${localModelProgressPercent(model.localModel.id)}%`,
-                      }"
-                    />
-                  </div>
-                </div>
-                <span v-else class="model-checkbox-cell">
-                  <input
-                    class="model-checkbox"
-                    type="checkbox"
-                    aria-label="Показать модель в списках"
-                    @click.prevent
-                  />
-                </span>
+                  v-for="index in 5"
+                  :key="`quality-${model.id}-${index}`"
+                  :class="scoreSegmentClass(model.intelligenceScore, index)"
+                />
               </div>
             </div>
-          </section>
+            <div v-if="model.source === 'groq'" class="model-status model-status--online">
+              <Cloud class="model-status__cloud" :size="13" aria-hidden="true" />
+            </div>
+            <div v-else-if="model.localModel" class="model-status model-status--offline">
+              <span class="model-status__size">
+                {{ formatModelSize(model.localModel.sizeMb) }}
+              </span>
+              <div class="local-model-actions">
+                <button
+                  v-if="!model.localModel.uiState.downloaded"
+                  class="model-icon-button model-icon-button--download"
+                  type="button"
+                  :disabled="Boolean(dictationLocalModelsBusy) || hasAnyLocalModelDownload()"
+                  aria-label="Скачать модель"
+                  @click="onLocalModelAction(model.localModel)"
+                >
+                  <PhDownloadSimple :size="12" weight="bold" aria-hidden="true" />
+                </button>
+                <button
+                  v-else
+                  class="model-icon-button model-icon-button--delete"
+                  type="button"
+                  aria-label="Удалить модель"
+                  :disabled="Boolean(dictationLocalModelsBusy) || hasAnyLocalModelDownload()"
+                  @click="onLocalModelAction(model.localModel)"
+                >
+                  <Trash2 :size="11" aria-hidden="true" />
+                </button>
+                <div
+                  v-if="dictationLocalModelDownloadProgress[model.localModel.id]"
+                  class="local-model-progress"
+                  :class="{
+                    'local-model-progress--indeterminate':
+                      dictationLocalModelDownloadProgress[model.localModel.id].percent === null,
+                  }"
+                  role="progressbar"
+                  :aria-valuemin="0"
+                  :aria-valuemax="100"
+                  :aria-valuenow="localModelProgressPercent(model.localModel.id)"
+                  :aria-label="
+                    downloadProgressLabel(dictationLocalModelDownloadProgress[model.localModel.id])
+                  "
+                >
+                  <div
+                    class="local-model-progress-fill"
+                    :style="{
+                      width: `${localModelProgressPercent(model.localModel.id)}%`,
+                    }"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </template>
@@ -780,100 +721,32 @@ onMounted(() => {
   background: color-mix(in srgb, currentColor 10%, transparent);
 }
 
-.model-catalog {
-  display: grid;
-  gap: 10px;
-}
-
-.model-provider {
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, currentColor 8%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, currentColor 4%, transparent);
-}
-
-.model-provider__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 12px 10px;
-}
-
-.model-provider__title {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-  gap: 8px;
-}
-
-.model-provider__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
-  color: color-mix(in srgb, currentColor 78%, transparent);
-}
-
-.model-provider__icon--groq::before {
-  content: "";
-  width: 15px;
-  height: 15px;
-  background: currentColor;
-  mask: url("../../../assets/providers/groq.svg") center / contain no-repeat;
-  -webkit-mask: url("../../../assets/providers/groq.svg") center / contain no-repeat;
-}
-
-.model-provider__header h3 {
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.25;
-}
-
-.model-provider__header p {
-  max-width: 560px;
-  margin: 5px 0 0;
-  color: color-mix(in srgb, currentColor 62%, transparent);
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.model-checkbox-cell {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  width: 28px;
-  height: 28px;
-}
-
-.model-checkbox {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: currentColor;
-}
-
 .model-table {
+  --model-type-column-width: 24px;
+  --model-score-column-width: 108px;
+  --model-status-column-width: 88px;
   display: grid;
   gap: 6px;
-  padding: 0 10px 10px;
+  padding: 0;
 }
 
 .model-table__head,
 .model-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 66px 66px 32px 32px;
+  grid-template-columns:
+    minmax(0, 1fr)
+    var(--model-type-column-width)
+    var(--model-score-column-width)
+    var(--model-status-column-width);
   gap: 8px;
   align-items: center;
 }
 
 .model-table__head {
-  min-height: 28px;
-  padding: 0 8px;
+  min-height: 22px;
+  padding: 0 5px;
   color: color-mix(in srgb, currentColor 48%, transparent);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -882,23 +755,33 @@ onMounted(() => {
   text-align: left;
 }
 
+.model-table__head-right {
+  justify-self: end !important;
+  text-align: right !important;
+}
+
+.model-table__head-status {
+  justify-self: end !important;
+  text-align: right !important;
+}
+
 .model-row {
-  min-height: 42px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, currentColor 7%, transparent);
-  border-radius: 7px;
-  background: color-mix(in srgb, currentColor 3%, transparent);
+  min-height: 30px;
+  padding: 0 5px;
 }
 
 .model-name {
-  display: grid;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 
 .model-name strong {
+  min-width: 0;
   overflow: hidden;
   color: color-mix(in srgb, currentColor 82%, transparent);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 450;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -909,11 +792,26 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 2px;
-  width: 66px;
+  width: 100%;
+}
+
+.model-score-pair {
+  display: grid;
+  grid-template-columns: 1fr;
+  justify-items: end;
+  gap: 4px;
+  min-width: 0;
+  width: var(--model-score-column-width);
+  max-width: 100%;
+  justify-self: end;
+}
+
+.model-score--secondary {
+  opacity: 0.88;
 }
 
 .model-score__bar {
-  height: 3px;
+  height: 2px;
   border-radius: 999px;
   background: color-mix(in srgb, currentColor 12%, transparent);
 }
@@ -926,8 +824,39 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
+  justify-self: end;
+  color: color-mix(in srgb, currentColor 62%, transparent);
+}
+
+.model-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  width: 100%;
+  justify-self: end;
+}
+
+.model-status--online {
+  gap: 0;
+}
+
+.model-status--offline {
+  gap: 8px;
+}
+
+.model-status__size {
+  color: color-mix(in srgb, currentColor 48%, transparent);
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.model-status__cloud {
+  flex: 0 0 auto;
   color: color-mix(in srgb, currentColor 62%, transparent);
 }
 
@@ -940,26 +869,25 @@ onMounted(() => {
 
 .local-model-actions {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-start;
-  gap: 4px;
-  width: 28px;
+  justify-content: flex-end;
+  gap: 2px;
+  min-width: 20px;
 }
 
 .model-icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: 1px solid color-mix(in srgb, currentColor 10%, transparent);
-  border-radius: 6px;
+  border-radius: 4px;
   color: inherit;
   background: color-mix(in srgb, currentColor 6%, transparent);
   font: inherit;
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 650;
   cursor: pointer;
 }
@@ -979,8 +907,8 @@ onMounted(() => {
 }
 
 .local-model-progress {
-  width: 100%;
-  height: 4px;
+  width: 28px;
+  height: 2px;
   overflow: hidden;
   border-radius: 999px;
   background: color-mix(in srgb, currentColor 18%, transparent);

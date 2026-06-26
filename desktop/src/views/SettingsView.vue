@@ -4,6 +4,7 @@ import {
   appCommandSettings,
   HIDDEN_COMMANDS_KEY,
   settingsNavigationItems,
+  type AISettingsView,
   type AppCommandSetting,
   type AppSettingsTab,
   type SettingsNavigationItem,
@@ -55,8 +56,10 @@ const { isMac } = usePlatform();
 
 const tab = ref<Tab>("general");
 const searchQuery = ref<string>("");
-const backStack = ref<Tab[]>([]);
-const forwardStack = ref<Tab[]>([]);
+const aiSettingsView = ref<AISettingsView>("overview");
+type SettingsLocation = { tab: Tab; aiView?: AISettingsView };
+const backStack = ref<SettingsLocation[]>([]);
+const forwardStack = ref<SettingsLocation[]>([]);
 
 function normalizeSearchValue(value: string): string {
   return value.trim().toLowerCase();
@@ -337,6 +340,21 @@ function onClose() {
   void window.kepler.settings.close();
 }
 
+function currentLocation(): SettingsLocation {
+  return tab.value === "ai" ? { tab: tab.value, aiView: aiSettingsView.value } : { tab: tab.value };
+}
+
+function sameLocation(left: SettingsLocation, right: SettingsLocation): boolean {
+  return left.tab === right.tab && (left.aiView ?? "overview") === (right.aiView ?? "overview");
+}
+
+function applyLocation(location: SettingsLocation) {
+  tab.value = location.tab;
+  if (location.tab === "ai") {
+    aiSettingsView.value = location.aiView ?? "overview";
+  }
+}
+
 function onKey(e: KeyboardEvent) {
   if (e.key === "Escape") {
     e.preventDefault();
@@ -348,17 +366,25 @@ function onKey(e: KeyboardEvent) {
 // useFocusTab, useExtensionsTab, useFileSearchTab, useDictationConfig).
 // SettingsView больше не загружает tab data сам.
 
-function navigateToTab(t: Tab, recordHistory = true) {
-  if (tab.value === t) return;
+function navigateToLocation(location: SettingsLocation, recordHistory = true) {
+  if (sameLocation(currentLocation(), location)) return;
   if (recordHistory) {
-    backStack.value = [...backStack.value, tab.value];
+    backStack.value = [...backStack.value, currentLocation()];
     forwardStack.value = [];
   }
-  tab.value = t;
+  applyLocation(location);
+}
+
+function navigateToTab(t: Tab, recordHistory = true) {
+  navigateToLocation({ tab: t, aiView: t === "ai" ? "overview" : undefined }, recordHistory);
 }
 
 function selectTab(t: Tab) {
   navigateToTab(t);
+}
+
+function onAiSettingsViewChange(next: AISettingsView) {
+  navigateToLocation({ tab: "ai", aiView: next });
 }
 
 function goBack() {
@@ -366,8 +392,8 @@ function goBack() {
   if (!previous) return;
   searchQuery.value = "";
   backStack.value = backStack.value.slice(0, -1);
-  forwardStack.value = [...forwardStack.value, tab.value];
-  navigateToTab(previous, false);
+  forwardStack.value = [...forwardStack.value, currentLocation()];
+  applyLocation(previous);
 }
 
 function goForward() {
@@ -375,8 +401,8 @@ function goForward() {
   if (!next) return;
   searchQuery.value = "";
   forwardStack.value = forwardStack.value.slice(0, -1);
-  backStack.value = [...backStack.value, tab.value];
-  navigateToTab(next, false);
+  backStack.value = [...backStack.value, currentLocation()];
+  applyLocation(next);
 }
 
 async function refreshActiveFeatureToggle() {
@@ -642,7 +668,11 @@ onBeforeUnmount(() => {
         </template>
 
         <template v-else-if="activeTab === 'ai'">
-          <AISettingsTab :intro="activeAdvancedIntro" />
+          <AISettingsTab
+            :intro="activeAdvancedIntro"
+            :view="aiSettingsView"
+            @update:view="onAiSettingsViewChange"
+          />
         </template>
 
         <template v-else-if="activeTab === 'secrets'">

@@ -1,8 +1,10 @@
 import type { Ref } from "vue";
 import {
   applyDictationConfigSnapshot,
+  buildDictationVoiceModelValue,
   DEFAULT_DICTATION_CFG,
   normalizeDictationStats,
+  resolveAvailableDictationVoiceModelValue,
   type DictationConfigData,
   type DictationLocalModelsSnapshot,
   type DictationProvider,
@@ -127,6 +129,23 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
       }
       args.dictationHasApiKey.value = resp.hasApiKey ?? false;
       await loadDictationLocalModels();
+      const current = buildDictationVoiceModelValue(args.dictationConfig.value);
+      const resolved = resolveAvailableDictationVoiceModelValue(args.dictationConfig.value, {
+        hasApiKey: args.dictationHasApiKey.value,
+        localModels: args.dictationLocalModels.value,
+      });
+      if (resolved && resolved !== current) {
+        const [source, modelId] = resolved.split(":", 2);
+        if (source === "local") {
+          await onDictationUseLocalModel(modelId);
+        } else if (source === "groq") {
+          await patchDictationConfig({
+            provider: "groq",
+            providerEnabled: true,
+            model: modelId,
+          });
+        }
+      }
     } catch (e) {
       console.error("[settings] loadDictationConfig failed:", e);
     }

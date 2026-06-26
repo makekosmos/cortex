@@ -4,12 +4,14 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
+use flate2::read::GzDecoder;
 use reqwest::header::{
     ACCEPT_ENCODING, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE,
 };
 use reqwest::Client;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use tar::Archive;
 use thiserror::Error;
 
 use super::config;
@@ -49,6 +51,8 @@ pub struct ModelSpec {
     pub accuracy_score: f32,
     pub speed_score: f32,
     pub recommended: bool,
+    pub transcription_supported: bool,
+    pub directory: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -63,6 +67,8 @@ pub struct LocalModelInfo {
     pub accuracy_score: f32,
     pub speed_score: f32,
     pub recommended: bool,
+    pub transcription_supported: bool,
+    pub directory: bool,
     pub downloaded: bool,
     pub selected: bool,
     pub path: Option<String>,
@@ -122,6 +128,8 @@ pub const MODEL_CATALOG: &[ModelSpec] = &[
         accuracy_score: 0.35,
         speed_score: 0.98,
         recommended: false,
+        transcription_supported: true,
+        directory: false,
     },
     ModelSpec {
         id: "small",
@@ -134,6 +142,8 @@ pub const MODEL_CATALOG: &[ModelSpec] = &[
         accuracy_score: 0.60,
         speed_score: 0.85,
         recommended: true,
+        transcription_supported: true,
+        directory: false,
     },
     ModelSpec {
         id: "medium",
@@ -146,6 +156,8 @@ pub const MODEL_CATALOG: &[ModelSpec] = &[
         accuracy_score: 0.75,
         speed_score: 0.60,
         recommended: false,
+        transcription_supported: true,
+        directory: false,
     },
     ModelSpec {
         id: "turbo",
@@ -158,6 +170,8 @@ pub const MODEL_CATALOG: &[ModelSpec] = &[
         accuracy_score: 0.80,
         speed_score: 0.40,
         recommended: false,
+        transcription_supported: true,
+        directory: false,
     },
     ModelSpec {
         id: "large",
@@ -170,6 +184,22 @@ pub const MODEL_CATALOG: &[ModelSpec] = &[
         accuracy_score: 0.85,
         speed_score: 0.30,
         recommended: false,
+        transcription_supported: true,
+        directory: false,
+    },
+    ModelSpec {
+        id: "parakeet-tdt-0.6b-v3",
+        name: "Parakeet V3",
+        description: "Быстрая int8-сборка NVIDIA Parakeet v3 из Handy.",
+        filename: "parakeet-tdt-0.6b-v3-int8",
+        url: "https://blob.handy.computer/parakeet-v3-int8.tar.gz",
+        sha256: Some("43d37191602727524a7d8c6da0eef11c4ba24320f5b4730f1a2497befc2efa77"),
+        size_mb: 456,
+        accuracy_score: 0.80,
+        speed_score: 0.85,
+        recommended: false,
+        transcription_supported: true,
+        directory: true,
     },
 ];
 
@@ -178,6 +208,10 @@ fn model_spec(model_id: &str) -> Result<&'static ModelSpec, LocalModelsError> {
         .iter()
         .find(|model| model.id == model_id)
         .ok_or_else(|| LocalModelsError::ModelNotFound(model_id.to_owned()))
+}
+
+pub fn model_supports_transcription(model_id: &str) -> Result<bool, LocalModelsError> {
+    Ok(model_spec(model_id)?.transcription_supported)
 }
 
 fn default_shared_assets_base() -> PathBuf {
@@ -342,6 +376,15 @@ fn vulkan_tools_dir(data_dir: &Path) -> PathBuf {
 
 pub fn model_path(data_dir: &Path, spec: &ModelSpec) -> PathBuf {
     models_dir(data_dir).join(spec.filename)
+}
+
+pub fn model_is_installed(data_dir: &Path, spec: &ModelSpec) -> bool {
+    let path = model_path(data_dir, spec);
+    if spec.directory {
+        path.is_dir()
+    } else {
+        path.is_file()
+    }
 }
 
 pub fn model_path_by_id(data_dir: &Path, model_id: &str) -> Result<PathBuf, LocalModelsError> {
@@ -523,7 +566,7 @@ fn path_string(path: &Path) -> String {
 pub fn has_downloaded_model_assets(data_dir: &Path) -> bool {
     MODEL_CATALOG
         .iter()
-        .any(|spec| model_path(data_dir, spec).is_file())
+        .any(|spec| model_is_installed(data_dir, spec))
 }
 
 pub fn cleanup_obsolete_local_stt_assets(data_dir: &Path) -> io::Result<bool> {
@@ -573,7 +616,7 @@ pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSn
         .map(|spec| {
             let path = model_path(data_dir, spec);
             let path_text = path_string(&path);
-            let downloaded = path.is_file();
+            let downloaded = model_is_installed(data_dir, spec);
             let selected = downloaded
                 && (cfg.local_model.as_deref() == Some(spec.id)
                     || selected_path == Some(path_text.as_str()));
@@ -587,9 +630,11 @@ pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSn
                 accuracy_score: spec.accuracy_score,
                 speed_score: spec.speed_score,
                 recommended: spec.recommended,
+                transcription_supported: spec.transcription_supported,
+                directory: spec.directory,
                 downloaded,
                 selected,
-                path: path.is_file().then_some(path_text),
+                path: downloaded.then_some(path_text),
             }
         })
         .collect();
@@ -781,9 +826,16 @@ async fn sleep_download_retry(attempt: usize) {
 }
 
 fn verify_sha256(path: &Path, expected: &str) -> Result<(), LocalModelsError> {
-    let bytes = fs::read(path)?;
+    let mut file = fs::File::open(path)?;
     let mut hasher = Sha256::new();
-    hasher.update(&bytes);
+    let mut buf = [0; 1024 * 1024];
+    loop {
+        let read = file.read(&mut buf)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buf[..read]);
+    }
     let actual = format!("{:x}", hasher.finalize());
     if actual.eq_ignore_ascii_case(expected) {
         Ok(())
@@ -794,6 +846,34 @@ fn verify_sha256(path: &Path, expected: &str) -> Result<(), LocalModelsError> {
             actual,
         })
     }
+}
+
+fn extract_tar_gz(archive_path: &Path, destination: &Path) -> Result<(), LocalModelsError> {
+    let parent = destination.parent().unwrap_or_else(|| Path::new("."));
+    let extracting = destination.with_extension("extracting");
+    let _ = fs::remove_dir_all(&extracting);
+    fs::create_dir_all(&extracting)?;
+
+    let file = fs::File::open(archive_path)?;
+    Archive::new(GzDecoder::new(file)).unpack(&extracting)?;
+
+    let dirs = fs::read_dir(&extracting)?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().map(|ty| ty.is_dir()).unwrap_or(false))
+        .map(|entry| entry.path())
+        .collect::<Vec<_>>();
+
+    if destination.exists() {
+        fs::remove_dir_all(destination)?;
+    }
+    if dirs.len() == 1 {
+        fs::rename(&dirs[0], destination)?;
+        let _ = fs::remove_dir_all(&extracting);
+    } else {
+        fs::create_dir_all(parent)?;
+        fs::rename(&extracting, destination)?;
+    }
+    Ok(())
 }
 
 pub async fn ensure_model(
@@ -812,24 +892,46 @@ pub async fn ensure_model_with_progress(
 ) -> Result<PathBuf, LocalModelsError> {
     let spec = model_spec(model_id)?;
     let path = model_path(data_dir, spec);
-    if !path.is_file() {
-        download_file(client, spec.url, &path, "model", progress).await?;
+    if model_is_installed(data_dir, spec) {
+        return Ok(path);
     }
-    if let Some(expected) = spec.sha256 {
-        verify_sha256(&path, expected)?;
+    if spec.directory {
+        let archive_path = path.with_extension("tar.gz");
+        download_file(client, spec.url, &archive_path, "model", progress).await?;
+        if let Some(expected) = spec.sha256 {
+            verify_sha256(&archive_path, expected)?;
+        }
+        progress(DownloadProgress {
+            phase: "extract",
+            downloaded_bytes: 0,
+            total_bytes: None,
+            percent: None,
+        });
+        extract_tar_gz(&archive_path, &path)?;
+        let _ = fs::remove_file(&archive_path);
+    } else {
+        download_file(client, spec.url, &path, "model", progress).await?;
+        if let Some(expected) = spec.sha256 {
+            verify_sha256(&path, expected)?;
+        }
     }
     Ok(path)
 }
 
 pub fn delete_model(data_dir: &Path, model_id: &str) -> Result<PathBuf, LocalModelsError> {
-    let path = model_path_by_id(data_dir, model_id)?;
-    if path.is_file() {
+    let spec = model_spec(model_id)?;
+    let path = model_path(data_dir, spec);
+    if spec.directory && path.is_dir() {
+        fs::remove_dir_all(&path)?;
+    } else if path.is_file() {
         fs::remove_file(&path)?;
     }
-    let part_path = path.with_extension("part");
-    if part_path.is_file() {
-        fs::remove_file(&part_path)?;
+    for path in [path.with_extension("part"), path.with_extension("tar.part")] {
+        if path.is_file() {
+            fs::remove_file(&path)?;
+        }
     }
+    let _ = fs::remove_dir_all(path.with_extension("extracting"));
     if let Err(error) = cleanup_unused_backends(data_dir) {
         tracing::warn!(
             error = %error,
@@ -1218,6 +1320,37 @@ mod tests {
 
         assert_eq!(deleted, model_path);
         assert!(!tools_dir(tmp.path()).exists());
+    }
+
+    #[test]
+    fn extract_tar_gz_installs_directory_model() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let archive_path = tmp.path().join("model.tar.gz");
+        let tar_gz = fs::File::create(&archive_path).expect("archive");
+        let encoder = flate2::write::GzEncoder::new(tar_gz, flate2::Compression::default());
+        let mut archive = tar::Builder::new(encoder);
+        let mut header = tar::Header::new_gnu();
+        let body = b"config";
+        header.set_size(body.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        archive
+            .append_data(&mut header, "nested/config.json", &body[..])
+            .expect("append tar");
+        archive
+            .into_inner()
+            .expect("finish tar")
+            .finish()
+            .expect("gzip");
+
+        let destination = tmp.path().join("parakeet-tdt-0.6b-v3-int8");
+        extract_tar_gz(&archive_path, &destination).expect("extract");
+
+        assert_eq!(
+            fs::read(destination.join("config.json")).expect("extracted file"),
+            body
+        );
+        assert!(!destination.with_extension("extracting").exists());
     }
 
     #[test]

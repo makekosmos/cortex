@@ -150,8 +150,8 @@ export function buildStatsCards(stats: DictationStatsData) {
 }
 
 const DICTATION_GROQ_SPEECH_MODELS = [
-  { id: "whisper-large-v3-turbo", label: "Groq · Whisper Large V3 Turbo" },
-  { id: "whisper-large-v3", label: "Groq · Whisper Large V3" },
+  { id: "whisper-large-v3-turbo", label: "Whisper Large V3 Turbo" },
+  { id: "whisper-large-v3", label: "Whisper Large V3" },
 ] as const;
 
 export function buildDictationVoiceModelOptions(args: {
@@ -166,18 +166,25 @@ export function buildDictationVoiceModelOptions(args: {
         value: `groq:${model.id}`,
         label: model.label,
         description: "Онлайн-распознавание речи через Groq",
+        provider: "groq",
+        iconProvider: "groq",
       });
     }
   }
 
   const localRuntimeReady = Boolean(args.localModels?.commandInstalled);
+  if (!localRuntimeReady) {
+    return options;
+  }
   for (const model of args.localModels?.models ?? []) {
-    if (!model.downloaded && !model.selected) continue;
-    if (!localRuntimeReady && !model.selected) continue;
+    if (!model.downloaded) continue;
+    if (model.transcriptionSupported === false) continue;
     options.push({
       value: `local:${model.id}`,
-      label: `Локально · ${model.name}`,
+      label: model.name,
       description: "Локальное распознавание речи",
+      provider: "local",
+      iconProvider: model.id.includes("parakeet") ? "nvidia" : "openai",
     });
   }
 
@@ -194,6 +201,21 @@ export function buildDictationVoiceModelValue(
     return `local:${config.localModelId || DEFAULT_DICTATION_CFG.localModelId}`;
   }
   return "";
+}
+
+export function resolveAvailableDictationVoiceModelValue(
+  config: Pick<DictationConfigData, "provider" | "model" | "localModelId">,
+  args: {
+    hasApiKey: boolean;
+    localModels: DictationLocalModelsSnapshot | null;
+  },
+): string | null {
+  const options = buildDictationVoiceModelOptions(args);
+  const current = buildDictationVoiceModelValue(config);
+  if (options.some((option) => option.value === current)) {
+    return current;
+  }
+  return options[0]?.value ?? null;
 }
 
 export function buildDictationGroqStatus(provider: DictationProvider, hasApiKey: boolean): string {

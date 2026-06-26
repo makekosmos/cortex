@@ -20,6 +20,7 @@ export interface IntroDescriptor {
 
 defineProps<{
   intro: IntroDescriptor | null;
+  pageClass?: string;
   /** Не используется по умолчанию (`.advanced-page__body` flex column).
    * Если tab'у нужен другой layout — переопределите через class на default slot. */
   bodyClass?: string;
@@ -27,7 +28,7 @@ defineProps<{
 </script>
 
 <template>
-  <section class="advanced-page kosmos-scroll">
+  <section class="advanced-page kosmos-scroll" :class="pageClass">
     <SettingsAdvancedIntro
       v-if="intro"
       :icon="intro.icon"

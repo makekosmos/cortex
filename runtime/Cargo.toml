@@ -49,6 +49,9 @@ urlencoding = "2"
 async-trait = "0.1"
 # Arrancador SQOBA (subagent C) — zip backup/restore save-files.
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
+flate2 = "1"
+tar = "0.4"
+transcribe-rs = { version = "0.3.11", features = ["onnx"] }
 # App Index (2026-05-22): .lnk parsing для Start Menu sources.
 lnk = "0.5"
 # App Index: fs-watch для invalidation cache.

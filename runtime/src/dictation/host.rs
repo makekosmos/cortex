@@ -378,10 +378,13 @@ fn local_config_is_ready(_data_dir: &std::path::Path, cfg: &DictationConfig) -> 
     if !cfg.provider_enabled || !provider_uses_local_runtime(&cfg.provider) {
         return true;
     }
-    let model_ok = cfg
-        .local_model_path
-        .as_deref()
-        .is_some_and(|path| std::path::Path::new(path).is_file());
+    let model_ok = cfg.local_model_path.as_deref().is_some_and(|path| {
+        let path = std::path::Path::new(path);
+        path.is_file() || path.is_dir()
+    });
+    if cfg.local_engine == "parakeet" {
+        return model_ok;
+    }
     let command_ok = cfg
         .local_command_path
         .as_deref()
@@ -462,7 +465,7 @@ async fn apply_local_model_selection(
     host: &DictationHost,
     model_id: &str,
     model_path: std::path::PathBuf,
-    command_path: std::path::PathBuf,
+    command_path: Option<std::path::PathBuf>,
 ) -> Result<DictationConfig, String> {
     apply_local_model_selection_to_config(
         &host.config,
@@ -479,14 +482,14 @@ async fn apply_local_model_selection_to_config(
     events_tx: &broadcast::Sender<Value>,
     model_id: &str,
     model_path: std::path::PathBuf,
-    command_path: std::path::PathBuf,
+    command_path: Option<std::path::PathBuf>,
 ) -> Result<DictationConfig, String> {
     apply_local_model_selection_values_to_config(
         config_state,
         events_tx,
         model_id,
         model_path.to_string_lossy().to_string(),
-        Some(command_path.to_string_lossy().to_string()),
+        command_path.map(|path| path.to_string_lossy().to_string()),
     )
     .await
 }
@@ -501,7 +504,7 @@ async fn apply_local_model_selection_values_to_config(
     let mut cfg = config_state.lock().await;
     cfg.provider = "local".into();
     cfg.provider_enabled = true;
-    cfg.local_engine = platform_local_engine().into();
+    cfg.local_engine = local_engine_for_model(model_id).into();
     cfg.local_model = Some(model_id.to_owned());
     cfg.local_model_path = Some(model_path);
     cfg.local_command_path = command_path;
@@ -511,6 +514,14 @@ async fn apply_local_model_selection_values_to_config(
     apply_ptt_hook(&snapshot, events_tx);
     let _ = events_tx.send(json!({ "event": "dictation_config_changed" }));
     Ok(snapshot)
+}
+
+fn local_engine_for_model(model_id: &str) -> &'static str {
+    if model_id == "parakeet-tdt-0.6b-v3" {
+        "parakeet"
+    } else {
+        platform_local_engine()
+    }
 }
 
 fn platform_local_engine() -> &'static str {
@@ -603,11 +614,11 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
                 return;
             }
         };
-        let command_path =
+        let command_path = if local_engine_for_model(&model_id) == DEFAULT_LOCAL_ENGINE {
             match local_models::ensure_whisper_cpp_with_progress(&client, &data_dir, &mut progress)
                 .await
             {
-                Ok(path) => path,
+                Ok(path) => Some(path),
                 Err(e) => {
                     let msg = format!("download_local_model: {e}");
                     let _ = events_tx.send(json!({
@@ -617,7 +628,10 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
                     }));
                     return;
                 }
-            };
+            }
+        } else {
+            None
+        };
 
         if select {
             if let Err(e) = apply_local_model_selection_to_config(
@@ -660,10 +674,11 @@ async fn op_use_local_model(params: Value, host: &DictationHost) -> DictationRes
     let model_path = match local_models::MODEL_CATALOG
         .iter()
         .find(|model| model.id == model_id)
-        .map(|spec| local_models::model_path(&host.data_dir, spec))
+        .map(|spec| (spec, local_models::model_path(&host.data_dir, spec)))
     {
-        Some(path) if path.is_file() => path,
-        Some(_) => {
+        Some((_, path)) if path.is_file() => path,
+        Some((spec, path)) if spec.directory && path.is_dir() => path,
+        Some((_, _)) => {
             return DictationResponse::err(format!(
                 "use_local_model: model is not downloaded: {model_id}"
             ))
@@ -672,9 +687,18 @@ async fn op_use_local_model(params: Value, host: &DictationHost) -> DictationRes
             return DictationResponse::err(format!("use_local_model: model not found: {model_id}"))
         }
     };
-    let command_path = match local_models::command_path(&host.data_dir) {
-        Some(path) if path.is_file() => path,
-        _ => return DictationResponse::err("use_local_model: whisper.cpp is not installed"),
+    if !local_models::model_supports_transcription(model_id).unwrap_or(false) {
+        return DictationResponse::err(format!(
+            "use_local_model: model cannot be used by whisper.cpp: {model_id}"
+        ));
+    }
+    let command_path = if local_engine_for_model(model_id) == DEFAULT_LOCAL_ENGINE {
+        match local_models::command_path(&host.data_dir) {
+            Some(path) if path.is_file() => Some(path),
+            _ => return DictationResponse::err("use_local_model: whisper.cpp is not installed"),
+        }
+    } else {
+        None
     };
     match apply_local_model_selection(host, model_id, model_path, command_path).await {
         Ok(cfg) => DictationResponse::ok(json!({
@@ -3677,6 +3701,43 @@ mod tests {
             .any(|model| model["id"] == "small"
                 && model["downloaded"] == true
                 && model["selected"] == true));
+
+        std::env::remove_var("KOSMOS_DATA_DIR");
+    }
+
+    #[tokio::test]
+    async fn local_models_use_parakeet_directory_without_whisper_command() {
+        let _guard = ENV_DATA_DIR_LOCK.lock().await;
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        std::env::set_var("KOSMOS_DATA_DIR", tmp.path());
+
+        let host = DictationHost::new();
+        let parakeet = local_models::MODEL_CATALOG
+            .iter()
+            .find(|model| model.id == "parakeet-tdt-0.6b-v3")
+            .expect("parakeet model in catalog");
+        let model_path = local_models::model_path(tmp.path(), parakeet);
+        std::fs::create_dir_all(&model_path).expect("model dir");
+
+        let used = handle_dictation_op(
+            "use_local_model",
+            json!({ "modelId": "parakeet-tdt-0.6b-v3" }),
+            &host,
+        )
+        .await;
+        assert!(used.ok, "use_local_model failed: {:?}", used.error);
+        assert_eq!(used.data["config"]["provider"], "local");
+        assert_eq!(used.data["config"]["localEngine"], "parakeet");
+        assert_eq!(used.data["config"]["localModelId"], "parakeet-tdt-0.6b-v3");
+        assert_eq!(used.data["config"]["localCommandPath"], Value::Null);
+        assert!(used.data["localModels"]["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|model| model["id"] == "parakeet-tdt-0.6b-v3"
+                && model["downloaded"] == true
+                && model["selected"] == true
+                && model["transcriptionSupported"] == true));
 
         std::env::remove_var("KOSMOS_DATA_DIR");
     }
