@@ -1102,6 +1102,36 @@ async fn preload_local_runtime_for_recording(host: &DictationHost) {
         return;
     }
 
+    // Self-heal для существующих установок: Vulkan whisper-cli без
+    // whisper-server.exe работает только «холодно» (модель грузится заново на
+    // каждую диктовку). Докачиваем обновлённый рантайм (r2) в фоне — после
+    // успеха тёплый GPU-путь включается автоматически.
+    if cfg.local_engine != local::PARAKEET_LOCAL_ENGINE
+        && local_models::vulkan_runtime_needs_server_repair(&host.data_dir)
+    {
+        let data_dir = host.data_dir.clone();
+        let network_profile = cfg.network_profile.clone();
+        let http_proxy = cfg.http_proxy.clone();
+        tokio::spawn(async move {
+            let client =
+                match network::build_download_client(&network_profile, http_proxy.as_deref()) {
+                    Ok(client) => client,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "dictation: whisper-server repair client build failed");
+                        return;
+                    }
+                };
+            match local_models::ensure_whisper_cpp(&client, &data_dir).await {
+                Ok(_) => tracing::info!(
+                    "dictation: whisper-server runtime repaired — warm GPU path enabled"
+                ),
+                Err(e) => {
+                    tracing::warn!(error = %e, "dictation: whisper-server runtime repair failed")
+                }
+            }
+        });
+    }
+
     let engine = cfg.local_engine.clone();
     let model_path = cfg.local_model_path.clone();
     let command_path = cfg.local_command_path.clone();
