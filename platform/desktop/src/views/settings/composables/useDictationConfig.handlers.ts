@@ -217,6 +217,10 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
     await patchDictationConfig({ duckAudioDuringRecording: enabled });
   }
 
+  async function onDictationIdleUnloadChange(v: number | null) {
+    await patchDictationConfig({ localIdleUnloadMs: v });
+  }
+
   async function onDictationProviderChange(v: DictationProvider) {
     await patchDictationConfig({ provider: v });
   }
@@ -341,6 +345,7 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
     onDictationInjectModeChange,
     onDictationTriggerModeChange,
     onDictationDuckAudioChange,
+    onDictationIdleUnloadChange,
     onDictationProviderChange,
     onDictationVoiceModelChange,
     onDictationProviderEnabledChange,

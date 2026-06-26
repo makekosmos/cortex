@@ -279,6 +279,7 @@ fn config_to_value(cfg: &DictationConfig) -> Value {
         "localModel": cfg.local_model,
         "localModelId": cfg.local_model,
         "microphoneDeviceId": cfg.microphone_device_id,
+        "localIdleUnloadMs": cfg.local_idle_unload_ms,
     })
 }
 
@@ -958,6 +959,19 @@ async fn op_update_config(params: Value, host: &DictationHost) -> DictationRespo
     {
         cfg.duck_audio_during_recording = enabled;
     }
+    if params.get("localIdleUnloadMs").is_some() {
+        // null → None (никогда не выгружать); число → Some(ms).
+        cfg.local_idle_unload_ms = params
+            .get("localIdleUnloadMs")
+            .and_then(|v| {
+                if v.is_null() {
+                    None
+                } else {
+                    v.as_u64().map(Some)
+                }
+            })
+            .unwrap_or(None);
+    }
     if let Some(np_val) = params.get("networkProfile") {
         let kind = np_val.get("kind").and_then(|v| v.as_str()).unwrap_or("");
         cfg.network_profile = match kind {
@@ -1550,6 +1564,7 @@ async fn process_one_attempt(
             model_id: cfg.local_model.as_deref().or(Some(model.as_str())),
             model_path: cfg.local_model_path.as_deref(),
             command_path: cfg.local_command_path.as_deref(),
+            idle_unload_ms: cfg.local_idle_unload_ms,
         })
         .await
         .map(|transcript| transcript.text)
@@ -2545,6 +2560,7 @@ mod tests {
             http_proxy: None,
             transcription_prompt: String::new(),
             microphone_device_id: None,
+            local_idle_unload_ms: Some(300_000),
         }
     }
 

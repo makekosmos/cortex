@@ -3,6 +3,7 @@ use std::fs;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -41,6 +42,9 @@ pub struct LocalRequest<'a> {
     pub model_id: Option<&'a str>,
     pub model_path: Option<&'a str>,
     pub command_path: Option<&'a str>,
+    /// Через сколько мс простоя выгружать whisper-server (из config).
+    /// `None` = никогда. Env `KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS` переопределяет.
+    pub idle_unload_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -54,6 +58,8 @@ struct OwnedLocalRequest {
     command_path: Option<String>,
     accelerator: LocalSttAccelerator,
     profile: LocalSttProfile,
+    /// Разрешённое значение: env override → config_value.
+    idle_unload_ms: Option<u64>,
 }
 
 impl<'a> From<LocalRequest<'a>> for OwnedLocalRequest {
@@ -68,6 +74,7 @@ impl<'a> From<LocalRequest<'a>> for OwnedLocalRequest {
             command_path: req.command_path.map(str::to_owned),
             accelerator: local_stt_accelerator(),
             profile: local_stt_profile(),
+            idle_unload_ms: resolve_direct_idle_unload_ms(req.idle_unload_ms),
         }
     }
 }
@@ -187,6 +194,15 @@ fn local_stt_idle_unload_after_ms_for_engine(engine: &str) -> Option<u64> {
     }
     let _ = engine;
     Some(5 * 60 * 1000)
+}
+
+/// Разрешает idle-unload для DIRECT пути: env var переопределяет config.
+/// `config_value` берётся из `DictationConfig.local_idle_unload_ms`.
+fn resolve_direct_idle_unload_ms(config_value: Option<u64>) -> Option<u64> {
+    if let Ok(value) = env::var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS") {
+        return value.trim().parse::<u64>().ok();
+    }
+    config_value
 }
 
 fn local_stt_server_ready_timeout() -> Duration {
@@ -356,7 +372,8 @@ fn model_spec_from_owned(req: &OwnedLocalRequest) -> LocalSttModelSpec {
         command_path: req.command_path.clone(),
         accelerator: req.accelerator.clone(),
         profile: req.profile.clone(),
-        idle_unload_after_ms: local_stt_idle_unload_after_ms_for_engine(&req.engine),
+        // Используем разрешённое значение из запроса (config + env override).
+        idle_unload_after_ms: req.idle_unload_ms,
     }
 }
 
@@ -376,6 +393,7 @@ fn owned_request_from_model(
         command_path: model.command_path.clone(),
         accelerator: model.accelerator.clone(),
         profile: model.profile.clone(),
+        idle_unload_ms: model.idle_unload_after_ms,
     }
 }
 
@@ -976,6 +994,11 @@ struct WhisperServerPool {
 
 static WHISPER_SERVER_POOL: OnceLock<tokio::sync::Mutex<WhisperServerPool>> = OnceLock::new();
 static WHISPER_SERVER_CLIENT: OnceLock<Client> = OnceLock::new();
+/// Монотонный счётчик активности whisper-server пути. Инкрементируется в
+/// начале каждого `run_whisper_server` вызова. Idle-unload таймер проверяет,
+/// что значение не изменилось с момента его постановки — это гарантирует, что
+/// мы не выгрузим сервер пока идёт транскрипция или сразу после неё.
+static WHISPER_SERVER_ACTIVITY_ID: AtomicU64 = AtomicU64::new(0);
 
 fn whisper_server_pool() -> &'static tokio::sync::Mutex<WhisperServerPool> {
     WHISPER_SERVER_POOL.get_or_init(|| tokio::sync::Mutex::new(WhisperServerPool::default()))
@@ -1077,6 +1100,10 @@ async fn get_or_start_whisper_server(
 }
 
 async fn run_whisper_server(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalError> {
+    // Bump activity ID сразу — любой ранее поставленный idle-unload таймер
+    // увидит другое поколение и откажется выгружать пока мы в работе.
+    let generation = WHISPER_SERVER_ACTIVITY_ID.fetch_add(1, Ordering::Relaxed) + 1;
+
     let model_path = ensure_existing_file(
         req.model_path
             .as_deref()
@@ -1133,6 +1160,24 @@ async fn run_whisper_server(req: OwnedLocalRequest) -> Result<TranscriptionResul
     let text = parse_server_text(&body, content_type.as_deref())?;
     if text.trim().is_empty() {
         return Err(LocalError::EmptyTranscript);
+    }
+
+    // Ставим (или переставляем) idle-unload таймер. Если следующая
+    // транскрипция придёт раньше дедлайна — она инкрементирует generation
+    // и наш таймер тихо сдётся.
+    if let Some(ms) = req.idle_unload_ms {
+        if ms > 0 {
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(ms)).await;
+                if WHISPER_SERVER_ACTIVITY_ID.load(Ordering::Relaxed) == generation {
+                    unload_whisper_backend().await;
+                    tracing::info!(
+                        idle_ms = ms,
+                        "dictation: whisper-server idle unload triggered"
+                    );
+                }
+            });
+        }
     }
 
     Ok(TranscriptionResult {
@@ -1474,6 +1519,7 @@ pub async fn transcribe(req: LocalRequest<'_>) -> Result<TranscriptionResult, Lo
                 model_id: owned.model_id.as_deref(),
                 model_path: owned.model_path.as_deref(),
                 command_path: owned.command_path.as_deref(),
+                idle_unload_ms: owned.idle_unload_ms,
             })
             .await
         }
@@ -1559,6 +1605,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn resolve_direct_idle_unload_uses_config_then_env_override() {
+        let _guard = ENV_LOCAL_LOCK.lock().await;
+        env::remove_var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS");
+
+        // Без env var — возвращает config value.
+        assert_eq!(resolve_direct_idle_unload_ms(Some(300_000)), Some(300_000));
+        assert_eq!(resolve_direct_idle_unload_ms(None), None);
+        assert_eq!(resolve_direct_idle_unload_ms(Some(60_000)), Some(60_000));
+
+        // Env var переопределяет config.
+        env::set_var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS", "9999");
+        assert_eq!(resolve_direct_idle_unload_ms(Some(300_000)), Some(9999));
+        assert_eq!(resolve_direct_idle_unload_ms(None), Some(9999));
+        env::remove_var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS");
+    }
+
+    #[tokio::test]
     async fn local_transcribe_errors_without_model_path() {
         let err = transcribe_with_whisper_backend(LocalRequest {
             wav_bytes: b"wav",
@@ -1568,6 +1631,7 @@ mod tests {
             model_id: Some("whisper-base"),
             model_path: None,
             command_path: Some("C:/tools/whisper-cli.exe"),
+            idle_unload_ms: None,
         })
         .await
         .unwrap_err();
@@ -1697,6 +1761,7 @@ mod tests {
             command_path: Some("C:/tools/whisper-cli.exe".into()),
             accelerator: LocalSttAccelerator::Auto,
             profile: LocalSttProfile::Fast,
+            idle_unload_ms: None,
         };
 
         let form = server_request_form(&req).expect("form");
@@ -1832,6 +1897,7 @@ mod tests {
             model_id: Some("small"),
             model_path: Some("Z:/missing/model.bin"),
             command_path: Some("Z:/missing/whisper-cli.exe"),
+            idle_unload_ms: None,
         })
         .await
         .expect("sidecar transcript");
@@ -1861,6 +1927,7 @@ mod tests {
             model_id: Some("small"),
             model_path: Some("Z:/missing/model.bin"),
             command_path: Some("Z:/missing/whisper-cli.exe"),
+            idle_unload_ms: None,
         })
         .await
         .expect("recovered transcript");
@@ -1896,6 +1963,7 @@ mod tests {
             model_id: Some("small"),
             model_path: Some("Z:/missing/model.bin"),
             command_path: Some("Z:/missing/whisper-cli.exe"),
+            idle_unload_ms: None,
         })
         .await
         .expect("override transcript");
