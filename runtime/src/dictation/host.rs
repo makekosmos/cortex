@@ -543,10 +543,20 @@ fn platform_local_engine_for_os(os: &str) -> &'static str {
 }
 
 fn normalize_platform_local_engine(cfg: &mut DictationConfig) -> bool {
+    // Parakeet — полноценный in-process движок (новая фича): никогда не
+    // даунгрейдим его до whisper.cpp, иначе выбор Parakeet (вместе с путём к
+    // модели) затирается на каждом старте/`update_config`, и provider
+    // отключается через `clear_local_selection`.
+    if cfg.local_engine == local::PARAKEET_LOCAL_ENGINE {
+        return false;
+    }
     let local_engine = platform_local_engine();
     if cfg.local_engine == local_engine {
         return false;
     }
+    // Сюда попадают только legacy/unknown движки (например старый
+    // faster-whisper) — их мигрируем на платформенный default и сбрасываем
+    // несовместимый выбор модели.
     cfg.local_engine = local_engine.to_owned();
     cfg.local_model = None;
     cfg.local_model_path = None;
@@ -3561,6 +3571,38 @@ mod tests {
             DEFAULT_LOCAL_ENGINE
         );
         assert_eq!(platform_local_engine_for_os("macos"), DEFAULT_LOCAL_ENGINE);
+    }
+
+    #[test]
+    fn normalize_preserves_parakeet_engine_and_selection() {
+        // Regression: normalize_platform_local_engine раньше затирал выбор
+        // Parakeet (movie/path) на каждом старте/update, отключая provider.
+        let mut cfg = DictationConfig {
+            local_engine: local::PARAKEET_LOCAL_ENGINE.into(),
+            local_model: Some("parakeet-tdt-0.6b-v3".into()),
+            local_model_path: Some("C:/models/parakeet".into()),
+            ..Default::default()
+        };
+        let changed = normalize_platform_local_engine(&mut cfg);
+        assert!(!changed, "parakeet engine must not be normalized away");
+        assert_eq!(cfg.local_engine, local::PARAKEET_LOCAL_ENGINE);
+        assert_eq!(cfg.local_model.as_deref(), Some("parakeet-tdt-0.6b-v3"));
+        assert_eq!(cfg.local_model_path.as_deref(), Some("C:/models/parakeet"));
+    }
+
+    #[test]
+    fn normalize_migrates_unknown_legacy_engine() {
+        let mut cfg = DictationConfig {
+            local_engine: "faster-whisper".into(),
+            local_model: Some("legacy".into()),
+            local_model_path: Some("C:/legacy".into()),
+            ..Default::default()
+        };
+        let changed = normalize_platform_local_engine(&mut cfg);
+        assert!(changed, "unknown legacy engine must be migrated");
+        assert_eq!(cfg.local_engine, DEFAULT_LOCAL_ENGINE);
+        assert!(cfg.local_model.is_none());
+        assert!(cfg.local_model_path.is_none());
     }
 
     #[tokio::test]

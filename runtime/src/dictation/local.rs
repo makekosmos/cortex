@@ -136,9 +136,23 @@ fn test_override_transcript() -> Option<String> {
 }
 
 fn direct_sidecar_fallback_allowed() -> bool {
-    matches!(
+    // Юнит-тесты проверяют контракт sidecar напрямую (см.
+    // `submit_audio_local_sidecar_unavailable_keeps_pending`) — там fallback
+    // выключен, включается только явным `=1`.
+    if cfg!(test) {
+        return matches!(
+            env::var("KOSMOS_LOCAL_STT_ALLOW_DIRECT_FALLBACK").as_deref(),
+            Ok("1")
+        );
+    }
+    // Пакетирование sidecar убрано (commit "drop stale local stt sidecar
+    // packaging"), поэтому в проде whisper.cpp обязан исполняться напрямую
+    // через user/managed command path. Без этого SidecarUnavailable
+    // классифицируется как Retryable и pill бесконечно показывает «Жду сеть»
+    // для ЛОКАЛЬНОГО провайдера. Явный opt-out — `=0`.
+    !matches!(
         env::var("KOSMOS_LOCAL_STT_ALLOW_DIRECT_FALLBACK").as_deref(),
-        Ok("1")
+        Ok("0")
     )
 }
 
