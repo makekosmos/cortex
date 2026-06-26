@@ -15,6 +15,8 @@ use serde_json::Value;
 use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command as TokioCommand};
+use transcribe_rs::onnx::parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity};
+use transcribe_rs::onnx::Quantization;
 
 use super::local_sidecar_protocol::{
     LocalSttAccelerator, LocalSttModelSpec, LocalSttProfile, LocalSttRequest,
@@ -22,6 +24,7 @@ use super::local_sidecar_protocol::{
 };
 
 pub const DEFAULT_LOCAL_ENGINE: &str = "whisper.cpp";
+pub const PARAKEET_LOCAL_ENGINE: &str = "parakeet";
 
 #[derive(Debug)]
 pub struct TranscriptionResult {
@@ -558,8 +561,12 @@ fn is_supported_engine(engine: &str) -> bool {
     normalized.is_empty()
         || matches!(
             normalized.as_str(),
-            DEFAULT_LOCAL_ENGINE | "whisper" | "whisper-cpp"
+            DEFAULT_LOCAL_ENGINE | "whisper" | "whisper-cpp" | PARAKEET_LOCAL_ENGINE
         )
+}
+
+fn is_parakeet_engine(engine: &str) -> bool {
+    engine.trim().eq_ignore_ascii_case(PARAKEET_LOCAL_ENGINE)
 }
 
 fn ensure_existing_file(path: &str, missing: LocalError) -> Result<PathBuf, LocalError> {
@@ -580,6 +587,20 @@ fn ensure_existing_file(path: &str, missing: LocalError) -> Result<PathBuf, Loca
         };
     }
     Ok(path)
+}
+
+fn ensure_existing_model_path(path: &str) -> Result<PathBuf, LocalError> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err(LocalError::MissingModelPath);
+    }
+    let path = PathBuf::from(trimmed);
+    if path.is_file() || path.is_dir() {
+        return Ok(path);
+    }
+    Err(LocalError::ModelPathNotFound {
+        path: trimmed.to_owned(),
+    })
 }
 
 fn temp_audio_paths() -> Result<(PathBuf, PathBuf), LocalError> {
@@ -1224,6 +1245,42 @@ fn run_whisper_cpp(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalE
     })
 }
 
+fn run_parakeet(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalError> {
+    let model_path = ensure_existing_model_path(
+        req.model_path
+            .as_deref()
+            .ok_or(LocalError::MissingModelPath)?,
+    )?;
+    let (wav_path, out_base) = temp_audio_paths()?;
+    fs::write(&wav_path, &req.wav_bytes).map_err(|e| LocalError::TempAudio(e.to_string()))?;
+
+    let result = (|| {
+        let samples = transcribe_rs::audio::read_wav_samples(&wav_path)
+            .map_err(|e| LocalError::CommandFailed(e.to_string()))?;
+        let mut model = ParakeetModel::load(&model_path, &Quantization::Int8)
+            .map_err(|e| LocalError::CommandFailed(e.to_string()))?;
+        model
+            .transcribe_with(
+                &samples,
+                &ParakeetParams {
+                    timestamp_granularity: Some(TimestampGranularity::Segment),
+                    ..Default::default()
+                },
+            )
+            .map_err(|e| LocalError::CommandFailed(e.to_string()))
+    })();
+
+    cleanup_temp_outputs(&wav_path, &out_base);
+    let text = result?.text.trim().to_owned();
+    if text.is_empty() {
+        return Err(LocalError::EmptyTranscript);
+    }
+    Ok(TranscriptionResult {
+        text,
+        backend: "parakeet_onnx".into(),
+    })
+}
+
 pub(crate) async fn transcribe_with_whisper_backend(
     req: LocalRequest<'_>,
 ) -> Result<TranscriptionResult, LocalError> {
@@ -1251,6 +1308,12 @@ async fn transcribe_owned_with_whisper_backend(
         });
     }
 
+    if is_parakeet_engine(&owned.engine) {
+        return tokio::task::spawn_blocking(move || run_parakeet(owned))
+            .await
+            .map_err(|e| LocalError::CommandFailed(format!("worker join failed: {e}")))?;
+    }
+
     let command_path = owned.command_path.clone();
     if let Some(command_path) = command_path {
         if whisper_server_executable(Path::new(&command_path)).is_file() {
@@ -1275,6 +1338,9 @@ pub async fn preload_server(
 ) -> Result<bool, LocalError> {
     if model_path.is_none_or(|path| path.trim().is_empty()) {
         return Err(LocalError::MissingModelPath);
+    }
+    if is_parakeet_engine(engine) {
+        return Ok(false);
     }
     if command_path.is_none_or(|path| path.trim().is_empty()) {
         return Err(LocalError::MissingCommandPath);
@@ -1357,11 +1423,16 @@ pub async fn transcribe(req: LocalRequest<'_>) -> Result<TranscriptionResult, Lo
     if req.model_path.is_none_or(|path| path.trim().is_empty()) {
         return Err(LocalError::MissingModelPath);
     }
-    if req.command_path.is_none_or(|path| path.trim().is_empty()) {
+    if !is_parakeet_engine(req.engine) && req.command_path.is_none_or(|path| path.trim().is_empty())
+    {
         return Err(LocalError::MissingCommandPath);
     }
 
     let owned = OwnedLocalRequest::from(req);
+    if is_parakeet_engine(&owned.engine) {
+        return transcribe_owned_with_whisper_backend(owned).await;
+    }
+
     let request = LocalSttRequest::Transcribe {
         model: model_spec_from_owned(&owned),
         wav_base64: base64::engine::general_purpose::STANDARD.encode(&owned.wav_bytes),

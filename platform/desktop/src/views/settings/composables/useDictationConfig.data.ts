@@ -54,6 +54,8 @@ interface DictationLocalModelInfo {
   accuracyScore: number;
   speedScore: number;
   recommended: boolean;
+  transcriptionSupported?: boolean;
+  directory?: boolean;
   downloaded: boolean;
   selected: boolean;
   path: string | null;
@@ -71,6 +73,8 @@ export interface DictationVoiceModelOption {
   label: string;
   description?: string;
   disabled?: boolean;
+  provider?: DictationProvider;
+  iconProvider?: "groq" | "openai" | "nvidia" | "speech" | "text";
 }
 
 export const DEFAULT_DICTATION_CFG: DictationConfigData = {

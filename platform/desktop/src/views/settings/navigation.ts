@@ -24,6 +24,8 @@ export type Tab =
   | "file-search"
   | "export";
 
+export type AISettingsView = "overview" | "models";
+
 export interface SettingsNavigationItem {
   tab: Tab;
   label: string;

@@ -260,7 +260,7 @@ onBeforeUnmount(() => {
     <button
       ref="triggerRef"
       type="button"
-      class="inline-flex h-10 w-fit max-w-full items-center justify-between gap-2 rounded-[var(--radius-input)] border-2 border-transparent bg-transparent px-2 font-[inherit] text-[length:var(--kosmos-text-control-size)] text-[var(--foreground)] transition-[background-color,border-color] duration-140 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] hover:not-disabled:border-white"
+      class="inline-flex h-7 w-fit max-w-full items-center justify-between gap-1.5 rounded-[var(--radius-input)] border border-transparent bg-transparent px-1.5 font-[inherit] font-medium leading-[1.2] text-[var(--foreground)] transition-[background-color,border-color] duration-140 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] hover:not-disabled:border-[color-mix(in_srgb,var(--foreground)_18%,transparent)]"
       :class="{
         'border-[color-mix(in_srgb,var(--accent)_65%,transparent)]': open,
         'text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]': !selectedOption,
@@ -269,6 +269,7 @@ onBeforeUnmount(() => {
       :disabled="disabled"
       :aria-haspopup="'listbox'"
       :aria-expanded="open"
+      :style="{ fontSize: 'var(--kosmos-settings-font-size-base, 12px)' }"
       @click="toggle"
     >
       <!-- Слот для leading-иконки в trigger'е (показывает иконку текущего
@@ -281,7 +282,7 @@ onBeforeUnmount(() => {
         v-if="showChevron"
         class="shrink-0 text-[color-mix(in_srgb,var(--foreground)_65%,transparent)] transition-transform duration-[180ms] ease-[cubic-bezier(0.2,0,0,1)]"
         :class="{ '-rotate-180': open }"
-        :size="14"
+        :size="12"
         :stroke-width="2"
       />
     </button>
@@ -291,7 +292,7 @@ onBeforeUnmount(() => {
         <div
           v-if="open"
           ref="panelRef"
-          class="kosmos-dd__panel fixed z-[9500] flex min-w-[200px] flex-col overflow-hidden rounded-[var(--radius-button)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-[var(--popover,color-mix(in_srgb,var(--background)_92%,black))] p-0 shadow-[0_16px_40px_color-mix(in_srgb,var(--background)_36%,transparent),0_8px_16px_color-mix(in_srgb,var(--background)_18%,transparent)] backdrop-blur-[20px] backdrop-saturate-[180%] [corner-shape:var(--corner-shape)]"
+          class="kosmos-dd__panel fixed z-[9500] flex min-w-[200px] flex-col overflow-hidden rounded-xl border border-[var(--border-color-strong,var(--border))] bg-[var(--settings-search-surface,var(--popover,var(--background)))] p-0 text-[var(--foreground)] [corner-shape:var(--corner-shape)]"
           role="listbox"
           :style="{
             top: panelPosition.top + 'px',
@@ -305,10 +306,11 @@ onBeforeUnmount(() => {
               ref="searchInputRef"
               v-model="searchQuery"
               type="text"
-              class="h-8 w-full rounded-[var(--radius-input)] border border-[color-mix(in_srgb,var(--border)_60%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] px-2 font-[inherit] text-[length:var(--kosmos-text-body-size)] text-[var(--foreground)] outline-none transition-colors duration-140 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] placeholder:text-[color-mix(in_srgb,var(--foreground)_45%,transparent)] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))]"
+              class="h-8 w-full rounded-[var(--radius-input)] border border-[var(--border-color-strong,var(--border))] bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] px-2 font-[inherit] text-[var(--foreground)] outline-none transition-colors duration-140 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] placeholder:text-[color-mix(in_srgb,var(--foreground)_45%,transparent)] focus:border-[color-mix(in_srgb,var(--foreground)_18%,transparent)]"
               :placeholder="searchPlaceholder"
               spellcheck="false"
               autocomplete="off"
+              :style="{ fontSize: 'var(--kosmos-settings-font-size-base, 12px)' }"
             />
           </div>
           <div
@@ -318,7 +320,7 @@ onBeforeUnmount(() => {
               v-for="(opt, i) in filteredOptions"
               :key="String(opt.value)"
               type="button"
-              class="kosmos-dd__option flex min-h-8 w-full items-center gap-2 rounded-[var(--radius-input)] border-0 bg-transparent text-left font-[inherit] text-[length:var(--kosmos-text-control-size)] font-medium text-[var(--foreground)] transition-colors duration-100 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)]"
+              class="kosmos-dd__option flex min-h-8 w-full items-center gap-2 rounded-[var(--radius-input)] border-0 bg-transparent text-left font-[inherit] font-medium text-[var(--foreground)] transition-colors duration-100 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)]"
               :class="{
                 'kosmos-dd__option--selected': opt.value === modelValue,
                 'kosmos-dd__option--highlighted': i === highlightIdx,
@@ -327,6 +329,7 @@ onBeforeUnmount(() => {
               role="option"
               :aria-selected="opt.value === modelValue"
               :disabled="opt.disabled"
+              :style="{ fontSize: 'var(--kosmos-settings-font-size-base, 12px)' }"
               @mouseenter="!opt.disabled && (highlightIdx = i)"
               @click="pick(opt)"
             >

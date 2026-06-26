@@ -1,13 +1,32 @@
-# Kosmos — статус проекта (2026-06-25)
+# Kosmos — статус проекта (2026-06-26)
 
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
-| Kosmos Desktop (win / mac) | 0.6.11 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.12 / 0.5.1 |
 | Eden                       | 0.3.0          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
 | Arrancador                 | 0.1.4          |
 | Akasha                     | 0.1.2          |
+
+## 2026-06-26 — NVIDIA Parakeet V3 local dictation release (Kosmos Desktop 0.6.11 → 0.6.12)
+
+Patch-релиз добавляет Parakeet TDT 0.6B V3 как скачиваемую локальную модель
+диктовки и закрепляет отдельный локальный backend для нее.
+
+- **Parakeet V3**: модель скачивается из Handy-совместимого архива, проверяется
+  по SHA-256 и устанавливается как directory model без зависимости от
+  `whisper.cpp`.
+- **Выбор модели**: Parakeet теперь появляется в списке локальных моделей после
+  скачивания, а настройки AI и диктовки используют один общий badge провайдера с
+  NVIDIA-иконкой.
+- **Runtime**: локальная диктовка выбирает engine `parakeet` для
+  `parakeet-tdt-0.6b-v3` и запускает transcribe-rs/ONNX backend напрямую,
+  вместо устаревшего whisper-only sidecar path.
+
+Checks: `bun run --cwd platform/desktop typecheck`, `bun run products:build`,
+`cargo test --manifest-path platform/runtime/Cargo.toml dictation::local --lib`,
+`cargo test --manifest-path platform/runtime/Cargo.toml dictation::local_models --lib`.
 
 ## 2026-06-25 — Dictation speed and flat shell release (Kosmos Desktop 0.6.10 → 0.6.11)
 

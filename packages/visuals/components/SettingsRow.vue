@@ -21,9 +21,9 @@ withDefaults(defineProps<Props>(), {
 
 <template>
   <div
-    class="flex items-center justify-between gap-4 border-b border-[var(--border-color-strong)] bg-transparent px-4 py-4 last:border-b-0"
+    class="flex items-start justify-between gap-4 border-b border-[var(--border-color-strong)] bg-transparent px-4 py-4 last:border-b-0"
   >
-    <div class="flex min-w-0 flex-col gap-2" :class="{ 'opacity-60': muted }">
+    <div class="flex min-w-0 flex-col gap-1" :class="{ 'opacity-60': muted }">
       <div
         class="font-[var(--font-sans)] text-[length:var(--kosmos-text-body-size)] leading-[1.4] font-medium text-[var(--foreground)]"
       >
@@ -36,7 +36,7 @@ withDefaults(defineProps<Props>(), {
         {{ description }}
       </div>
     </div>
-    <div class="flex shrink-0 items-center gap-2">
+    <div class="flex shrink-0 items-start gap-2">
       <slot name="control">
         <slot />
       </slot>

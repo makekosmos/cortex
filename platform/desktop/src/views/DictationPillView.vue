@@ -11,6 +11,12 @@
 
 import { KbdKey } from "@kosmos/visuals";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  buildDictationVoiceModelValue,
+  normalizeDictationConfig,
+  resolveAvailableDictationVoiceModelValue,
+  type DictationLocalModelsSnapshot,
+} from "./settings/composables/useDictationConfig.shared";
 
 type PillStatus = "idle" | "recording" | "transcribing" | "waiting" | "error";
 
@@ -161,6 +167,49 @@ async function loadDictationConfig(): Promise<void> {
     if (hotkey) dictationHotkey.value = hotkey;
   } catch {
     /* keep last known backend value */
+  }
+}
+
+async function ensureReadyDictationModel(): Promise<boolean> {
+  try {
+    const cfgResp = (await window.kepler.ark.request("dictation.get_config", {})) as {
+      config?: Record<string, unknown>;
+      hasApiKey?: boolean;
+    };
+    const localModels = (await window.kepler.ark.request(
+      "dictation.list_local_models",
+      {},
+    )) as DictationLocalModelsSnapshot;
+    const config = normalizeDictationConfig(cfgResp.config as Record<string, unknown> | undefined);
+    const current = buildDictationVoiceModelValue(config);
+    const resolved = resolveAvailableDictationVoiceModelValue(config, {
+      hasApiKey: cfgResp.hasApiKey ?? false,
+      localModels,
+    });
+    if (!resolved) {
+      status.value = "error";
+      errorText.value = "Нет доступной модели. Откройте Settings → AI.";
+      setTimeout(() => void window.kepler.dictation.pillFinished(), 4500);
+      return false;
+    }
+    if (resolved === current) return true;
+    const [source, modelId] = resolved.split(":", 2);
+    if (source === "local") {
+      await window.kepler.ark.request("dictation.use_local_model", { modelId });
+    } else {
+      await window.kepler.ark.request("dictation.update_config", {
+        provider: "groq",
+        providerEnabled: true,
+        model: modelId,
+      });
+    }
+    return true;
+  } catch (e) {
+    status.value = "error";
+    errorText.value = "Не удалось подготовить модель";
+    console.error("[dictation-pill] ensureReadyDictationModel failed:", e);
+    setTimeout(() => void window.kepler.dictation.pillFinished(), 4500);
+    return false;
   }
 }
 
@@ -452,6 +501,9 @@ async function startCapture(): Promise<void> {
   errorText.value = "";
   elapsedSec.value = 0;
   await loadDictationConfig();
+  if (!(await ensureReadyDictationModel())) {
+    return;
+  }
 
   let stream: MediaStream;
   try {
