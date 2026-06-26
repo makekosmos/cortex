@@ -34,10 +34,12 @@ const WHISPER_CPP_CPU_ZIP_SHA256: &str =
     "7a17d804ab6e0fc992d356b4d3c434764f9191c13f0da6b8c219e7bc19e8ffcf";
 #[cfg(windows)]
 const WHISPER_CPP_VULKAN_ZIP_URL: &str =
-    "https://makekosmos.github.io/local-ai-runtimes/whisper-vulkan-bin-x64-v1.9.1.zip";
+    "https://makekosmos.github.io/local-ai-runtimes/whisper-vulkan-bin-x64-v1.9.1-r2.zip";
+// r2: добавлен whisper-server.exe (тёплый GPU-путь). Без него whisper-cli
+// грузил модель заново на каждую диктовку — резкая просадка скорости.
 #[cfg(windows)]
 const WHISPER_CPP_VULKAN_ZIP_SHA256: &str =
-    "d9be5497fae76a35eff0a44141d51bfe30aa8961afe9a13dea7f66b425fa4ca7";
+    "c26060f8fe02dce053d73a6806be517c3f06f2ff54fe0f86b69e58225b11fa1e";
 
 #[derive(Debug, Clone, Copy)]
 pub struct ModelSpec {
@@ -425,6 +427,28 @@ fn vulkan_command_path(data_dir: &Path) -> PathBuf {
     vulkan_tools_dir(data_dir)
         .join("Release")
         .join("whisper-cli.exe")
+}
+
+#[cfg(windows)]
+fn vulkan_server_path(data_dir: &Path) -> PathBuf {
+    vulkan_tools_dir(data_dir)
+        .join("Release")
+        .join("whisper-server.exe")
+}
+
+/// `true`, если установлен Vulkan whisper-cli, но рядом нет whisper-server.exe.
+/// Такой рантайм работает только в «холодном» режиме (перезагрузка модели на
+/// каждую диктовку); требуется перекачать обновлённый архив с server'ом.
+#[cfg(windows)]
+pub fn vulkan_runtime_needs_server_repair(data_dir: &Path) -> bool {
+    vulkan_tools_enabled()
+        && vulkan_command_path(data_dir).is_file()
+        && !vulkan_server_path(data_dir).is_file()
+}
+
+#[cfg(not(windows))]
+pub fn vulkan_runtime_needs_server_repair(_data_dir: &Path) -> bool {
+    false
 }
 
 #[cfg(windows)]
@@ -955,13 +979,13 @@ pub async fn ensure_whisper_cpp_with_progress(
     data_dir: &Path,
     progress: &mut ProgressCallback<'_>,
 ) -> Result<PathBuf, LocalModelsError> {
-    let command = preferred_command_path(data_dir);
-    if command.is_file() {
-        return Ok(command);
-    }
     if vulkan_tools_enabled() {
         let vulkan = vulkan_command_path(data_dir);
-        if vulkan.is_file() {
+        // Vulkan-рантайм считается установленным только если есть И whisper-cli,
+        // И whisper-server.exe: без server тёплый путь (warm GPU) не работает и
+        // модель грузится заново на каждую диктовку. Отсутствие server.exe →
+        // перекачиваем обновлённый архив (r2), который его содержит.
+        if vulkan.is_file() && vulkan_server_path(data_dir).is_file() {
             return Ok(vulkan);
         }
         let url = vulkan_zip_url();
