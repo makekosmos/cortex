@@ -63,11 +63,19 @@ let streamShutdownTimer: ReturnType<typeof setTimeout> | null = null;
 let startInFlight = false;
 let stopAfterStart = false;
 let captureGeneration = 0;
+/** Reentrancy guard для stopAndSubmit — пока идёт grace-wait/submit, повторный
+ *  stop не должен запустить второй submit того же аудио (double-submit). */
+let stopInFlight = false;
 
 const TARGET_SAMPLE_RATE = 16000;
 /** После этого окна тишины stream закрывается полностью (track.stop),
  *  Windows mic indicator гаснет. На следующий hotkey — ~80-500ms cold start. */
 const STREAM_KEEP_ALIVE_MS = 30_000;
+/** Короткая фраза: ScriptProcessor буфер (2048 @16kHz ≈ 128ms) может ещё не
+ *  успеть отдать первый onaudioprocess к моменту stop'а. Ждём первые PCM-кадры
+ *  не дольше этого окна, прежде чем счесть запись пустой — иначе быстрая
+ *  диктовка молча теряется. */
+const PCM_FIRST_FRAME_GRACE_MS = 350;
 
 const hasDictationBridge = () => Boolean(window.kepler?.dictation);
 const isPreview =
@@ -502,6 +510,10 @@ async function startCapture(): Promise<void> {
   elapsedSec.value = 0;
   await loadDictationConfig();
   if (!(await ensureReadyDictationModel())) {
+    // Модель не готова — снимаем in-flight флаги, иначе startInFlight
+    // навсегда залипнет true и любой следующий toggle молча проигнорируется.
+    startInFlight = false;
+    stopAfterStart = false;
     return;
   }
 
@@ -677,75 +689,111 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
+/** Ждёт появления первых PCM-кадров (или истечения timeoutMs). Процессор
+ *  должен оставаться подключённым (teardownCapture ещё НЕ вызван), иначе
+ *  onaudioprocess не дольёт буфер. Резолвится сразу, как только pcmChunks
+ *  непустой. */
+function waitForFirstPcm(timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    if (pcmChunks.length > 0) {
+      resolve();
+      return;
+    }
+    const startMs = Date.now();
+    const tick = () => {
+      if (pcmChunks.length > 0 || Date.now() - startMs >= timeoutMs) {
+        resolve();
+        return;
+      }
+      setTimeout(tick, 20);
+    };
+    setTimeout(tick, 20);
+  });
+}
+
 async function stopAndSubmit(): Promise<void> {
   if (status.value !== "recording") {
+    // Stop пришёл пока start ещё в полёте — отложим submit до конца startCapture
+    // (он сам дёрнет stopAndSubmit), чтобы быстрая запись не потерялась.
     if (startInFlight) stopAfterStart = true;
     return;
   }
-  const sampleRate = audioCtx?.sampleRate ?? TARGET_SAMPLE_RATE;
-  teardownCapture();
-  if (pcmChunks.length === 0) {
-    status.value = "idle";
-    scheduleStreamShutdown();
-    void window.kepler.dictation.pillFinished();
-    return;
-  }
-  status.value = "transcribing";
-  const pcm = concatPcm(pcmChunks);
-  pcmChunks = [];
-  const durationSec = pcm.length / sampleRate;
-  const wav = encodeWav(pcm, sampleRate);
-  const b64 = bytesToBase64(wav);
-  let queuedUuid: string | null = null;
+  if (stopInFlight) return;
+  stopInFlight = true;
+  const generation = captureGeneration;
   try {
-    const resp = (await window.kepler.ark.request("dictation.submit_audio", {
-      audioB64: b64,
-      durationSec,
-    })) as {
-      uuid?: string;
-      state?: PillStatus | "pending";
-      queued?: boolean;
-      error?: string;
-    };
-    if (resp.state === "error") {
-      // Fatal от backend (401/400/403/etc) — показываем user_msg, закроемся
-      // с error mark. Pending всё ещё на диске — юзер увидит в Settings.
-      status.value = "error";
-      errorText.value = resp.error ?? "Не удалось распознать";
-      console.warn("[dictation-pill] submit_audio returned error:", {
-        uuid: resp.uuid,
-        error: errorText.value,
-      });
-    } else if (resp.queued && resp.uuid) {
-      // Первая попытка fail → backend запустил auto-retry в фоне.
-      // Поллим очередь со спиннером "Жду сеть…".
-      queuedUuid = resp.uuid;
-      console.info("[dictation-pill] queued for background retry:", resp.uuid);
-    } else {
-      // Success path — text уже инжектнут, pill закрывается.
-      status.value = "idle";
+    const sampleRate = audioCtx?.sampleRate ?? TARGET_SAMPLE_RATE;
+    // Короткая фраза: processor мог ещё не отдать первый буфер. Ждём (bounded)
+    // первые кадры ДО teardownCapture — пока граф ещё подключён.
+    if (pcmChunks.length === 0) {
+      await waitForFirstPcm(PCM_FIRST_FRAME_GRACE_MS);
     }
-  } catch (e) {
-    status.value = "error";
-    errorText.value = (e as Error)?.message ?? "Ошибка распознавания";
-    console.error("[dictation-pill] submit_audio failed:", e);
-  }
-  scheduleStreamShutdown();
+    // Cancel во время grace-wait — generation сдвинулся; ничего не отправляем.
+    if (generation !== captureGeneration) {
+      return;
+    }
+    teardownCapture();
+    if (pcmChunks.length === 0) {
+      // Действительно пусто (ни одного кадра за grace-период) — тихо закрываемся.
+      status.value = "idle";
+      scheduleStreamShutdown();
+      void window.kepler.dictation.pillFinished();
+      return;
+    }
+    status.value = "transcribing";
+    const pcm = concatPcm(pcmChunks);
+    pcmChunks = [];
+    const durationSec = pcm.length / sampleRate;
+    const wav = encodeWav(pcm, sampleRate);
+    const b64 = bytesToBase64(wav);
+    let queuedUuid: string | null = null;
+    try {
+      const resp = (await window.kepler.ark.request("dictation.submit_audio", {
+        audioB64: b64,
+        durationSec,
+      })) as {
+        uuid?: string;
+        state?: PillStatus | "pending";
+        queued?: boolean;
+        error?: string;
+      };
+      if (resp.state === "error") {
+        // Fatal от backend (401/400/403/etc) — показываем user_msg, закроемся
+        // с error mark. Pending всё ещё на диске — юзер увидит в Settings.
+        status.value = "error";
+        errorText.value = resp.error ?? "Не удалось распознать";
+        console.warn("[dictation-pill] submit_audio returned error:", {
+          uuid: resp.uuid,
+          error: errorText.value,
+        });
+      } else if (resp.queued && resp.uuid) {
+        // Первая попытка fail → backend запустил auto-retry в фоне.
+        // Поллим очередь со спиннером "Жду сеть…".
+        queuedUuid = resp.uuid;
+        console.info("[dictation-pill] queued for background retry:", resp.uuid);
+      } else {
+        // Success path — text уже инжектнут, pill закрывается.
+        status.value = "idle";
+      }
+    } catch (e) {
+      status.value = "error";
+      errorText.value = (e as Error)?.message ?? "Ошибка распознавания";
+      console.error("[dictation-pill] submit_audio failed:", e);
+    }
+    scheduleStreamShutdown();
 
-  if (queuedUuid) {
-    // Висим со спиннером пока background retry работает. Backend расписание:
-    // 1+5+10+20+40 sec = 76s sleeps + ~5×8s attempt window ≈ ~120s максимум.
-    // Даём 130s timeout — чуть больше чем полный цикл backend.
-    await waitForQueueResolve(queuedUuid, 130_000);
+    if (queuedUuid) {
+      // Висим со спиннером пока background retry работает. Backend расписание:
+      // 1+5+10+20+40 sec = 76s sleeps + ~5×8s attempt window ≈ ~120s максимум.
+      // Даём 130s timeout — чуть больше чем полный цикл backend.
+      await waitForQueueResolve(queuedUuid, 130_000);
+    }
     setTimeout(
       () => void window.kepler.dictation.pillFinished(),
       status.value === "error" ? 4500 : 80,
     );
-  } else {
-    setTimeout(
-      () => void window.kepler.dictation.pillFinished(),
-      status.value === "error" ? 4500 : 80,
-    );
+  } finally {
+    stopInFlight = false;
   }
 }
 
@@ -784,6 +832,7 @@ async function cancelCapture(): Promise<void> {
   captureGeneration++;
   startInFlight = false;
   stopAfterStart = false;
+  stopInFlight = false;
   teardownCapture();
   pcmChunks = [];
   status.value = "idle";

@@ -173,6 +173,19 @@ pub fn load_from(path: &Path) -> DictationConfig {
                 cfg
             }
             Err(backup_err) => {
+                // Last resort перед чистым default'ом: спасаем как можно больше
+                // полей по отдельности (особенно `hotkey`). Иначе одно
+                // bad/unknown-typed поле в JSON обнуляло бы весь конфиг, и
+                // пользовательский hotkey «откатывался» к Ctrl+Shift+;.
+                if let Some(cfg) = read_config_file_lenient(path)
+                    .or_else(|| read_config_file_lenient(&backup_path(path)))
+                {
+                    eprintln!(
+                        "[dictation] WARN config strict load failed for {} ({primary_err}); recovered fields field-by-field",
+                        path.display()
+                    );
+                    return cfg;
+                }
                 eprintln!(
                     "[dictation] WARN config load failed for {} ({primary_err}); backup failed ({backup_err}); using defaults",
                     path.display()
@@ -181,6 +194,52 @@ pub fn load_from(path: &Path) -> DictationConfig {
             }
         },
     }
+}
+
+/// Best-effort recovery: разбираем JSON как generic object и применяем каждое
+/// поле, которое десериализуется, начиная с дефолтов. Одно битое поле (неверный
+/// тип и т.п.) теряет только себя, а не сбрасывает весь конфиг. Возвращает
+/// `None` только если текст не читается / не валидный JSON (для торн-райтов
+/// есть `.bak`-fallback).
+fn read_config_file_lenient(path: &Path) -> Option<DictationConfig> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&text).ok()?;
+    Some(deserialize_lenient(&value))
+}
+
+fn deserialize_lenient(value: &serde_json::Value) -> DictationConfig {
+    let mut cfg = DictationConfig::default();
+    let Some(obj) = value.as_object() else {
+        return cfg;
+    };
+    macro_rules! field {
+        ($key:literal, $target:expr) => {
+            if let Some(v) = obj.get($key) {
+                if let Ok(parsed) = serde_json::from_value(v.clone()) {
+                    $target = parsed;
+                }
+            }
+        };
+    }
+    // Ключи — camelCase, как пишет `save_to` (serde rename_all = "camelCase").
+    field!("hotkey", cfg.hotkey);
+    field!("triggerMode", cfg.trigger_mode);
+    field!("language", cfg.language);
+    field!("injectMode", cfg.inject_mode);
+    field!("networkProfile", cfg.network_profile);
+    field!("httpProxy", cfg.http_proxy);
+    field!("transcriptionPrompt", cfg.transcription_prompt);
+    field!("provider", cfg.provider);
+    field!("providerEnabled", cfg.provider_enabled);
+    field!("model", cfg.model);
+    field!("localEngine", cfg.local_engine);
+    field!("localModelPath", cfg.local_model_path);
+    field!("localCommandPath", cfg.local_command_path);
+    field!("localModel", cfg.local_model);
+    field!("microphoneDeviceId", cfg.microphone_device_id);
+    field!("duckAudioDuringRecording", cfg.duck_audio_during_recording);
+    field!("localIdleUnloadMs", cfg.local_idle_unload_ms);
+    cfg
 }
 
 pub fn save(cfg: &DictationConfig) -> std::io::Result<()> {
@@ -428,6 +487,30 @@ mod tests {
         assert_eq!(loaded.provider, "local");
         assert_eq!(loaded.model, "whisper-large-v3-turbo");
         assert_eq!(loaded.inject_mode, InjectMode::ClipboardOnly);
+    }
+
+    #[test]
+    fn lenient_recovery_preserves_hotkey_when_one_field_is_bad_typed() {
+        // Regression: одно поле неверного типа (localIdleUnloadMs как строка)
+        // не должно сбрасывать весь конфиг и терять пользовательский hotkey.
+        // Backup отсутствует (нет .bak), поэтому strict primary + strict backup
+        // оба фейлятся → срабатывает field-by-field recovery.
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("cfg.json");
+        std::fs::write(
+            &path,
+            r#"{"hotkey":"Shift+PageUp","triggerMode":"toggle","provider":"local","model":"whisper-large-v3-turbo","injectMode":"clipboard_only","localIdleUnloadMs":"not-a-number"}"#,
+        )
+        .expect("write");
+
+        let loaded = load_from(&path);
+        // Спасённые поля.
+        assert_eq!(loaded.hotkey, "Shift+PageUp");
+        assert_eq!(loaded.provider, "local");
+        assert_eq!(loaded.model, "whisper-large-v3-turbo");
+        assert_eq!(loaded.inject_mode, InjectMode::ClipboardOnly);
+        // Битое поле падает на дефолт, остальное цело.
+        assert_eq!(loaded.local_idle_unload_ms, Some(300_000));
     }
 
     #[test]
