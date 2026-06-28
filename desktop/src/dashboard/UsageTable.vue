@@ -63,7 +63,22 @@ function fmtDate(iso?: string | null): string {
         <span>Путь</span>
       </div>
       <div class="usage-table__body kosmos-scroll">
-        <div v-for="row in rows" :key="row.id" class="usage-row">
+        <div
+          v-for="row in rows"
+          :key="row.id"
+          v-memo="[
+            row.id,
+            row.iconRef,
+            row.displayName,
+            row.processName,
+            row.runtimeMs,
+            row.foregroundMs,
+            row.sessions,
+            row.lastSeenAt,
+            row.normalizedPath,
+          ]"
+          class="usage-row"
+        >
           <div class="usage-row__app">
             <span class="app-icon" aria-hidden="true">
               <img
