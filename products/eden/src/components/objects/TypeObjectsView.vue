@@ -161,6 +161,17 @@ const tableColumnsStyle = computed(() => ({
           <div
             v-for="entry in collectionEntries"
             :key="entry.id"
+            v-memo="[
+              entry.id,
+              entry.title,
+              entry.header_props_json,
+              entry.updated_at,
+              isPersonCollection,
+              tableColumnsStyle,
+              summaryFields,
+              noteType.color,
+              iconSrc,
+            ]"
             class="type-objects-row"
             :class="isPersonCollection && 'type-objects-row--person'"
             :style="tableColumnsStyle"

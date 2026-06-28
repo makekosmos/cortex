@@ -38,7 +38,12 @@ const hasRows = computed(() => props.rows.length > 0);
         <span>Последняя модификация</span>
       </div>
       <div class="object-table__body kosmos-scroll">
-        <div v-for="row in rows" :key="row.id" class="object-row">
+        <div
+          v-for="row in rows"
+          :key="row.id"
+          v-memo="[row.id, row.typeName, row.typeId, row.primary, row.updatedAt]"
+          class="object-row"
+        >
           <span
             class="object-type-icon"
             :title="row.typeName"

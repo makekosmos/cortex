@@ -84,6 +84,7 @@ const {
           <button
             v-for="item in section.items"
             :key="item.id"
+            v-memo="[item.id, item.icon, item.title, item.subtitle, item.accessories, item.id === selectedItem?.id]"
             class="command-list-view__item"
             :class="{ 'command-list-view__item--selected': item.id === selectedItem?.id }"
             type="button"
