@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { parseRaycastPackageManifest } from "../../platform/desktop/electron/raycast/manifest";
+import { parseCommandPackageManifest } from "../../platform/desktop/electron/command-host/manifest";
 
-describe("Raycast package manifest parser", () => {
-  test("parses Raycast package.json metadata, commands, preferences, and kosmos namespace", () => {
-    const manifest = parseRaycastPackageManifest({
+describe("Command package manifest parser", () => {
+  test("parses Command package.json metadata, commands, preferences, and kosmos namespace", () => {
+    const manifest = parseCommandPackageManifest({
       name: "notes-tools",
       title: "Notes Tools",
       version: "1.2.3",
@@ -40,12 +40,12 @@ describe("Raycast package manifest parser", () => {
     expect(manifest?.kosmos?.commands?.copy?.entry).toBe("dist/copy.mjs");
   });
 
-  test("rejects packages without Raycast commands", () => {
-    expect(parseRaycastPackageManifest({ name: "plain-package" })).toBeNull();
+  test("rejects packages without Command commands", () => {
+    expect(parseCommandPackageManifest({ name: "plain-package" })).toBeNull();
   });
 
   test("defaults missing command mode to view and skips explicit unknown modes", () => {
-    const manifest = parseRaycastPackageManifest({
+    const manifest = parseCommandPackageManifest({
       name: "mode-tools",
       commands: [
         { name: "defaulted", title: "Defaulted" },
@@ -62,7 +62,7 @@ describe("Raycast package manifest parser", () => {
 
   test("rejects packages with only unknown command modes", () => {
     expect(
-      parseRaycastPackageManifest({
+      parseCommandPackageManifest({
         name: "bad-tools",
         commands: [{ name: "bad", title: "Bad", mode: "background" }],
       }),

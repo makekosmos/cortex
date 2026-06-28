@@ -1,12 +1,12 @@
-import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
+import type { CommandSnapshotNode } from "../../shared/command-ipc";
 
-export interface RaycastViewCallbackRegistry {
+export interface CommandViewCallbackRegistry {
   register(callback: (payload?: Record<string, unknown>) => unknown | Promise<unknown>): string;
 }
 
-const EMPTY_RAYCAST_PROPS: Record<string, unknown> = {};
+const EMPTY_COMMAND_PROPS: Record<string, unknown> = {};
 
-function isRaycastElement(value: unknown): value is {
+function isCommandElement(value: unknown): value is {
   type: string;
   props?: Record<string, unknown>;
 } {
@@ -46,10 +46,10 @@ function serializableProp(value: unknown): unknown {
   return;
 }
 
-export function normalizeRaycastNode(
+export function normalizeCommandNode(
   value: unknown,
-  callbacks?: RaycastViewCallbackRegistry,
-): RaycastSnapshotNode | null {
+  callbacks?: CommandViewCallbackRegistry,
+): CommandSnapshotNode | null {
   if (value === null || value === undefined || typeof value === "boolean") return null;
   if (typeof value === "string" || typeof value === "number") {
     return { type: "Text", text: String(value), props: {}, children: [] };
@@ -57,9 +57,9 @@ export function normalizeRaycastNode(
   if (Array.isArray(value)) {
     return { type: "Fragment", props: {}, children: normalizeChildren(value, callbacks) };
   }
-  if (!isRaycastElement(value)) return null;
+  if (!isCommandElement(value)) return null;
 
-  const props = value.props ?? EMPTY_RAYCAST_PROPS;
+  const props = value.props ?? EMPTY_COMMAND_PROPS;
   const outProps: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(props)) {
     if (key === "children" || typeof item === "function") continue;
@@ -141,9 +141,9 @@ function datePickerCallbackValue(value: unknown): Date | null {
 
 function normalizeChildren(
   value: unknown,
-  callbacks?: RaycastViewCallbackRegistry,
-): RaycastSnapshotNode[] {
+  callbacks?: CommandViewCallbackRegistry,
+): CommandSnapshotNode[] {
   if (Array.isArray(value)) return value.flatMap((item) => normalizeChildren(item, callbacks));
-  const node = normalizeRaycastNode(value, callbacks);
+  const node = normalizeCommandNode(value, callbacks);
   return node ? [node] : [];
 }

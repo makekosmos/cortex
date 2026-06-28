@@ -6,8 +6,8 @@ import {
   List,
   MenuBarExtra,
 } from "../../packages/raycast-api/src/index";
-import { normalizeRaycastNode } from "../../platform/desktop/electron/raycast/view-model";
-import { actionNodes } from "../../platform/desktop/src/raycast-host/model";
+import { normalizeCommandNode } from "../../platform/desktop/electron/command-host/view-model";
+import { actionNodes } from "../../platform/desktop/src/command-host/model";
 import {
   gridDropdown,
   gridEmptyActions,
@@ -21,11 +21,11 @@ import {
   gridSections,
   gridSelectedItemId,
   gridSelectionCallbackNode,
-} from "../../platform/desktop/src/raycast-host/model-grid";
-import { listIsLoading } from "../../platform/desktop/src/raycast-host/model-list";
-import { menuBarSections, menuBarTitle } from "../../platform/desktop/src/raycast-host/model-menu";
+} from "../../platform/desktop/src/command-host/model-grid";
+import { listIsLoading } from "../../platform/desktop/src/command-host/model-list";
+import { menuBarSections, menuBarTitle } from "../../platform/desktop/src/command-host/model-menu";
 
-describe("Raycast grid and menu view model", () => {
+describe("Command grid and menu view model", () => {
   test("normalizes Grid sections, items, images, and actions into host model", () => {
     const root = Grid({
       searchBarPlaceholder: "Поиск игр",
@@ -69,7 +69,7 @@ describe("Raycast grid and menu view model", () => {
       ],
     });
 
-    const snapshot = normalizeRaycastNode(root);
+    const snapshot = normalizeCommandNode(root);
     expect(snapshot?.type).toBe("Grid");
     expect(snapshot ? gridIsLoading(snapshot) : false).toBe(false);
     expect(snapshot ? gridPlaceholder(snapshot) : "").toBe("Поиск игр");
@@ -117,7 +117,7 @@ describe("Raycast grid and menu view model", () => {
       ],
     });
 
-    const snapshot = normalizeRaycastNode(root, {
+    const snapshot = normalizeCommandNode(root, {
       register(callback) {
         const id = `callback:${callbacks.size}`;
         callbacks.set(id, callback);
@@ -166,7 +166,7 @@ describe("Raycast grid and menu view model", () => {
       ],
     });
 
-    const snapshot = normalizeRaycastNode(root, {
+    const snapshot = normalizeCommandNode(root, {
       register(callback) {
         const id = `callback:${callbacks.size}`;
         callbacks.set(id, callback);
@@ -189,8 +189,8 @@ describe("Raycast grid and menu view model", () => {
   });
 
   test("extracts loading state from List and Grid roots", () => {
-    const listSnapshot = normalizeRaycastNode(List({ isLoading: true }));
-    const gridSnapshot = normalizeRaycastNode(Grid({ isLoading: true }));
+    const listSnapshot = normalizeCommandNode(List({ isLoading: true }));
+    const gridSnapshot = normalizeCommandNode(Grid({ isLoading: true }));
 
     expect(listSnapshot ? listIsLoading(listSnapshot) : false).toBe(true);
     expect(gridSnapshot ? gridIsLoading(gridSnapshot) : false).toBe(true);

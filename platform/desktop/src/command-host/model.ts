@@ -1,42 +1,42 @@
-import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
+import type { CommandSnapshotNode } from "../../shared/command-ipc";
 
-export interface RaycastListItemModel {
+export interface CommandListItemModel {
   id: string;
   title: string;
   subtitle: string | null;
   icon: string | null;
   keywords: string[];
   accessories: string[];
-  detail: RaycastSnapshotNode | null;
-  actions: RaycastSnapshotNode | null;
+  detail: CommandSnapshotNode | null;
+  actions: CommandSnapshotNode | null;
 }
 
-export interface RaycastListSectionModel {
+export interface CommandListSectionModel {
   id: string;
   title: string | null;
-  items: RaycastListItemModel[];
+  items: CommandListItemModel[];
 }
 
-export interface RaycastListDropdownOptionModel {
+export interface CommandListDropdownOptionModel {
   value: string;
   title: string;
 }
 
-export interface RaycastListDropdownSectionModel {
+export interface CommandListDropdownSectionModel {
   id: string;
   title: string | null;
-  options: RaycastListDropdownOptionModel[];
+  options: CommandListDropdownOptionModel[];
 }
 
-export interface RaycastListDropdownModel {
-  node: RaycastSnapshotNode;
+export interface CommandListDropdownModel {
+  node: CommandSnapshotNode;
   placeholder: string | null;
   defaultValue: string | null;
-  sections: RaycastListDropdownSectionModel[];
-  options: RaycastListDropdownOptionModel[];
+  sections: CommandListDropdownSectionModel[];
+  options: CommandListDropdownOptionModel[];
 }
 
-export interface RaycastFormFieldModel {
+export interface CommandFormFieldModel {
   id: string;
   type: string;
   title: string;
@@ -48,39 +48,39 @@ export interface RaycastFormFieldModel {
   canChooseDirectories: boolean;
   canChooseFiles: boolean;
   showHiddenFiles: boolean;
-  optionSections: RaycastListDropdownSectionModel[];
+  optionSections: CommandListDropdownSectionModel[];
   options: { value: string; title: string }[];
 }
 
-export interface RaycastFormModel {
-  fields: RaycastFormFieldModel[];
-  actions: RaycastSnapshotNode | null;
+export interface CommandFormModel {
+  fields: CommandFormFieldModel[];
+  actions: CommandSnapshotNode | null;
 }
 
-export interface RaycastGridItemModel {
+export interface CommandGridItemModel {
   id: string;
   title: string;
   subtitle: string | null;
   keywords: string[];
   image: string | null;
-  actions: RaycastSnapshotNode | null;
+  actions: CommandSnapshotNode | null;
 }
 
-export interface RaycastGridSectionModel {
+export interface CommandGridSectionModel {
   id: string;
   title: string | null;
-  items: RaycastGridItemModel[];
+  items: CommandGridItemModel[];
 }
 
-export interface RaycastGridDropdownModel {
-  node: RaycastSnapshotNode;
+export interface CommandGridDropdownModel {
+  node: CommandSnapshotNode;
   placeholder: string | null;
   defaultValue: string | null;
-  sections: RaycastListDropdownSectionModel[];
-  options: RaycastListDropdownOptionModel[];
+  sections: CommandListDropdownSectionModel[];
+  options: CommandListDropdownOptionModel[];
 }
 
-export type RaycastMetadataItemModel =
+export type CommandMetadataItemModel =
   | {
       id: string;
       type: "label" | "link";
@@ -99,27 +99,27 @@ export type RaycastMetadataItemModel =
       type: "separator";
     };
 
-export interface RaycastMenuBarItemModel {
+export interface CommandMenuBarItemModel {
   id: string;
   title: string;
   subtitle: string | null;
-  node: RaycastSnapshotNode;
-  children: RaycastMenuBarItemModel[];
+  node: CommandSnapshotNode;
+  children: CommandMenuBarItemModel[];
 }
 
-export interface RaycastMenuBarSectionModel {
+export interface CommandMenuBarSectionModel {
   id: string;
   title: string | null;
-  items: RaycastMenuBarItemModel[];
+  items: CommandMenuBarItemModel[];
 }
 
-export interface RaycastActionSectionModel {
+export interface CommandActionSectionModel {
   id: string;
   title: string | null;
-  actions: RaycastSnapshotNode[];
+  actions: CommandSnapshotNode[];
 }
 
-export interface RaycastActionShortcutModel {
+export interface CommandActionShortcutModel {
   key: string;
   code: string | null;
   modifiers: {
@@ -167,7 +167,7 @@ export function imageProp(value: unknown): string | null {
   return null;
 }
 
-export function findFirst(node: RaycastSnapshotNode, type: string): RaycastSnapshotNode | null {
+export function findFirst(node: CommandSnapshotNode, type: string): CommandSnapshotNode | null {
   if (node.type === type) return node;
   for (const child of node.children) {
     const found = findFirst(child, type);
@@ -176,20 +176,20 @@ export function findFirst(node: RaycastSnapshotNode, type: string): RaycastSnaps
   return null;
 }
 
-export function collectNodes(node: RaycastSnapshotNode, type: string): RaycastSnapshotNode[] {
-  const out: RaycastSnapshotNode[] = node.type === type ? [node] : [];
+export function collectNodes(node: CommandSnapshotNode, type: string): CommandSnapshotNode[] {
+  const out: CommandSnapshotNode[] = node.type === type ? [node] : [];
   for (const child of node.children) out.push(...collectNodes(child, type));
   return out;
 }
 
-export function actionNodes(panel: RaycastSnapshotNode | null): RaycastSnapshotNode[] {
+export function actionNodes(panel: CommandSnapshotNode | null): CommandSnapshotNode[] {
   return actionSections(panel).flatMap((section) => section.actions.flatMap(actionNodeLeaves));
 }
 
-export function actionSections(panel: RaycastSnapshotNode | null): RaycastActionSectionModel[] {
+export function actionSections(panel: CommandSnapshotNode | null): CommandActionSectionModel[] {
   if (!panel) return [];
-  const sections: RaycastActionSectionModel[] = [];
-  let looseActions: RaycastSnapshotNode[] = [];
+  const sections: CommandActionSectionModel[] = [];
+  let looseActions: CommandSnapshotNode[] = [];
 
   function flushLooseActions(): void {
     if (looseActions.length === 0) return;
@@ -221,24 +221,24 @@ export function actionSections(panel: RaycastSnapshotNode | null): RaycastAction
   return sections;
 }
 
-function isActionNode(node: RaycastSnapshotNode): boolean {
+function isActionNode(node: CommandSnapshotNode): boolean {
   return ACTION_TYPES.has(node.type);
 }
 
-function isActionPanelEntry(node: RaycastSnapshotNode): boolean {
+function isActionPanelEntry(node: CommandSnapshotNode): boolean {
   return ACTION_PANEL_ENTRY_TYPES.has(node.type);
 }
 
-function actionNodeLeaves(node: RaycastSnapshotNode): RaycastSnapshotNode[] {
+function actionNodeLeaves(node: CommandSnapshotNode): CommandSnapshotNode[] {
   if (node.type === "ActionPanel.Submenu") return actionSubmenuActions(node);
   return isActionNode(node) ? [node] : [];
 }
 
-export function actionSubmenuActions(node: RaycastSnapshotNode): RaycastSnapshotNode[] {
+export function actionSubmenuActions(node: CommandSnapshotNode): CommandSnapshotNode[] {
   return node.children.flatMap(actionNodeLeaves);
 }
 
-export function actionShortcut(action: RaycastSnapshotNode): RaycastActionShortcutModel | null {
+export function actionShortcut(action: CommandSnapshotNode): CommandActionShortcutModel | null {
   const shortcut = action.props.shortcut;
   if (!shortcut || typeof shortcut !== "object") return null;
   const record = shortcut as Record<string, unknown>;
@@ -271,7 +271,7 @@ export function actionShortcut(action: RaycastSnapshotNode): RaycastActionShortc
 }
 
 export function matchesActionShortcut(
-  shortcut: RaycastActionShortcutModel | null,
+  shortcut: CommandActionShortcutModel | null,
   event: Pick<KeyboardEvent, "altKey" | "code" | "ctrlKey" | "key" | "metaKey" | "shiftKey">,
 ): boolean {
   if (!shortcut) return false;

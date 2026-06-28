@@ -18,10 +18,10 @@ export interface DeclaredCommand {
   extensionId: string;
   /** Hash-route из manifest (если задан). */
   route?: string;
-  /** Mode: `open`, `action`, or Raycast-compatible command runner. */
-  mode: "open" | "action" | "raycast-view" | "raycast-no-view" | "raycast-menu-bar";
-  /** Raycast command name for `kind: "raycast"` packages. */
-  raycastCommandName?: string;
+  /** Mode: `open`, `action`, or command runner. */
+  mode: "open" | "action" | "command-view" | "command-no-view" | "command-menu-bar";
+  /** Command name for `kind: "command-extension"` packages. */
+  commandName?: string;
 }
 
 interface IconCacheEntry {
@@ -127,14 +127,14 @@ export function loadDeclaredCommands(): DeclaredCommand[] {
         id: fullId,
         title: cmd.title,
         subtitle: cmd.subtitle ?? manifest.name,
-        category: cmd.mode === "action" || cmd.mode === "raycast-no-view" ? "action" : "open",
+        category: cmd.mode === "action" || cmd.mode === "command-no-view" ? "action" : "open",
         kind: cmd.kind ?? "command",
         appName: manifest.name,
         icon,
         extensionId: manifest.id,
         route: cmd.route,
         mode: cmd.mode ?? "open",
-        raycastCommandName: manifest.kind === "raycast" ? cmd.id : undefined,
+        commandName: manifest.kind === "command-extension" ? cmd.id : undefined,
       });
     }
   }

@@ -1,20 +1,20 @@
-import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
-import { textProp, type RaycastMenuBarItemModel, type RaycastMenuBarSectionModel } from "./model";
+import type { CommandSnapshotNode } from "../../shared/command-ipc";
+import { textProp, type CommandMenuBarItemModel, type CommandMenuBarSectionModel } from "./model";
 
-export function menuBarTitle(snapshot: RaycastSnapshotNode): string {
+export function menuBarTitle(snapshot: CommandSnapshotNode): string {
   return textProp(snapshot.props.title) ?? textProp(snapshot.props.tooltip) ?? "Menu Bar";
 }
 
-export function menuBarIsLoading(snapshot: RaycastSnapshotNode): boolean {
+export function menuBarIsLoading(snapshot: CommandSnapshotNode): boolean {
   return snapshot.props.isLoading === true;
 }
 
-export function menuBarSections(snapshot: RaycastSnapshotNode): RaycastMenuBarSectionModel[] {
-  const sections: RaycastMenuBarSectionModel[] = [];
-  let looseItems: RaycastSnapshotNode[] = [];
+export function menuBarSections(snapshot: CommandSnapshotNode): CommandMenuBarSectionModel[] {
+  const sections: CommandMenuBarSectionModel[] = [];
+  let looseItems: CommandSnapshotNode[] = [];
   let itemIndex = 0;
 
-  function menuItemModel(node: RaycastSnapshotNode): RaycastMenuBarItemModel {
+  function menuItemModel(node: CommandSnapshotNode): CommandMenuBarItemModel {
     const title = textProp(node.props.title) ?? "Без названия";
     const id = textProp(node.props.id) ?? `${itemIndex}:${title}`;
     itemIndex += 1;

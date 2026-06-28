@@ -1,20 +1,20 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
-import { runRaycastViewCommand } from "../../platform/desktop/electron/raycast/command-runner";
-import { writeFixture } from "./raycast-command-runner.test";
+import { runCommandView } from "../../platform/desktop/electron/command-host/command-runner";
+import { writeFixture } from "./command-runner.test";
 
-const fixtureRoot = "raycast-command-runner-view-test";
+const fixtureRoot = "command-runner-view-test";
 const root = path.resolve(".tmp", fixtureRoot);
 
 afterEach(() => {
   if (existsSync(root)) rmSync(root, { recursive: true, force: true });
 });
 
-describe("Raycast view command runner", () => {
+describe("Command view command runner", () => {
   test("runs trusted view command and returns a host-renderable snapshot", async () => {
     const fixture = writeFixture(fixtureRoot);
-    const snapshot = await runRaycastViewCommand({
+    const snapshot = await runCommandView({
       extensionId: "copy-tool",
       commandName: "search",
       extensionDir: fixture.extensionDir,
@@ -55,7 +55,7 @@ describe("Raycast view command runner", () => {
     >();
     const feedback: string[] = [];
 
-    const snapshot = await runRaycastViewCommand({
+    const snapshot = await runCommandView({
       extensionId: "copy-tool",
       commandName: "search",
       extensionDir: fixture.extensionDir,
@@ -85,7 +85,7 @@ describe("Raycast view command runner", () => {
       string,
       (payload?: Record<string, unknown>) => unknown | Promise<unknown>
     >();
-    const snapshot = await runRaycastViewCommand({
+    const snapshot = await runCommandView({
       extensionId: "copy-tool",
       commandName: "create",
       extensionDir: fixture.extensionDir,
@@ -122,7 +122,7 @@ describe("Raycast view command runner", () => {
 
   test("runs trusted grid command and returns sectioned grid snapshot", async () => {
     const fixture = writeFixture(fixtureRoot);
-    const snapshot = await runRaycastViewCommand({
+    const snapshot = await runCommandView({
       extensionId: "copy-tool",
       commandName: "gallery",
       extensionDir: fixture.extensionDir,
@@ -139,7 +139,7 @@ describe("Raycast view command runner", () => {
 
   test("bridges @raycast/api/jsx-runtime imports from trusted view commands", async () => {
     const fixture = writeFixture(fixtureRoot);
-    const snapshot = await runRaycastViewCommand({
+    const snapshot = await runCommandView({
       extensionId: "copy-tool",
       commandName: "jsx",
       extensionDir: fixture.extensionDir,
@@ -164,7 +164,7 @@ describe("Raycast view command runner", () => {
 
   test("runs trusted detail command and returns metadata snapshot", async () => {
     const fixture = writeFixture(fixtureRoot);
-    const snapshot = await runRaycastViewCommand({
+    const snapshot = await runCommandView({
       extensionId: "copy-tool",
       commandName: "inspect",
       extensionDir: fixture.extensionDir,
@@ -191,7 +191,7 @@ describe("Raycast view command runner", () => {
     >();
     const navigation: string[] = [];
     const pushed: unknown[] = [];
-    const snapshot = await runRaycastViewCommand({
+    const snapshot = await runCommandView({
       extensionId: "copy-tool",
       commandName: "nav",
       extensionDir: fixture.extensionDir,
@@ -237,7 +237,7 @@ describe("Raycast view command runner", () => {
       string,
       (payload?: Record<string, unknown>) => unknown | Promise<unknown>
     >();
-    const snapshot = await runRaycastViewCommand({
+    const snapshot = await runCommandView({
       extensionId: "copy-tool",
       commandName: "status",
       commandMode: "menu-bar",

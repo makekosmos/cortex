@@ -2,13 +2,13 @@ import type { KeplerApiShellServices } from "./ipc-api-shell-services";
 // Контракт renderer API для `window.kepler` (см. preload.ts).
 
 import type {
-  RaycastActionRequest,
-  RaycastActionResult,
-  RaycastFeedbackEvent,
-  RaycastFilePickerRequest,
-  RaycastFilePickerResult,
-  RaycastSnapshot,
-} from "./raycast-ipc";
+  CommandActionRequest,
+  CommandActionResult,
+  CommandFeedbackEvent,
+  CommandFilePickerRequest,
+  CommandFilePickerResult,
+  CommandSnapshot,
+} from "./command-ipc";
 import type {
   BackendStatus,
   ClipboardHistoryItem,
@@ -175,17 +175,17 @@ export interface KeplerApi extends KeplerApiShellServices {
     snoozeApp(appId: string): Promise<void>;
   };
 
-  /** Raycast-compatible command host snapshots. Renderer-only read model for
-      `kind:"raycast"` view commands. */
-  raycast: {
-    snapshot(sessionId: string): Promise<RaycastSnapshot | null>;
-    action(sessionId: string, action: RaycastActionRequest): Promise<RaycastActionResult>;
+  /** Command host snapshots. Renderer-only read model for
+      `kind:"command-extension"` view commands. */
+  command: {
+    snapshot(sessionId: string): Promise<CommandSnapshot | null>;
+    action(sessionId: string, action: CommandActionRequest): Promise<CommandActionResult>;
     pickFiles(
       sessionId: string,
-      request: RaycastFilePickerRequest,
-    ): Promise<RaycastFilePickerResult>;
-    onSnapshotUpdated(sessionId: string, listener: (snapshot: RaycastSnapshot) => void): () => void;
-    onFeedback(sessionId: string, listener: (event: RaycastFeedbackEvent) => void): () => void;
+      request: CommandFilePickerRequest,
+    ): Promise<CommandFilePickerResult>;
+    onSnapshotUpdated(sessionId: string, listener: (snapshot: CommandSnapshot) => void): () => void;
+    onFeedback(sessionId: string, listener: (event: CommandFeedbackEvent) => void): () => void;
   };
 
   /** Управление установкой / список / revert user-extensions. */

@@ -7,21 +7,21 @@ import {
   Keyboard,
   List,
 } from "../../packages/raycast-api/src/index";
-import { normalizeRaycastNode } from "../../platform/desktop/electron/raycast/view-model";
-import { parseRaycastMarkdown } from "../../platform/desktop/src/raycast-host/markdown";
+import { normalizeCommandNode } from "../../platform/desktop/electron/command-host/view-model";
+import { parseCommandMarkdown } from "../../platform/desktop/src/command-host/markdown";
 import {
   actionNodes,
   actionSections,
   actionShortcut,
   actionSubmenuActions,
   matchesActionShortcut,
-} from "../../platform/desktop/src/raycast-host/model";
+} from "../../platform/desktop/src/command-host/model";
 import {
   detailActions,
   detailMetadataItems,
   detailMarkdown,
-} from "../../platform/desktop/src/raycast-host/model-detail";
-import { formModel } from "../../platform/desktop/src/raycast-host/model-form";
+} from "../../platform/desktop/src/command-host/model-detail";
+import { formModel } from "../../platform/desktop/src/command-host/model-form";
 import {
   listEmptyActions,
   listEmptyMessage,
@@ -35,9 +35,9 @@ import {
   listSections,
   listSelectedItemId,
   listSelectionCallbackNode,
-} from "../../platform/desktop/src/raycast-host/model-list";
+} from "../../platform/desktop/src/command-host/model-list";
 
-describe("Raycast view model", () => {
+describe("Command view model", () => {
   test("normalizes List.Item detail/actions props into host-renderable children", () => {
     const root = List({
       searchBarPlaceholder: "Search notes",
@@ -109,7 +109,7 @@ describe("Raycast view model", () => {
       ],
     });
 
-    const snapshot = normalizeRaycastNode(root);
+    const snapshot = normalizeCommandNode(root);
     expect(snapshot?.type).toBe("List");
     expect(snapshot ? listIsLoading(snapshot) : false).toBe(false);
     expect(snapshot ? listPlaceholder(snapshot) : "").toBe("Search notes");
@@ -198,7 +198,7 @@ describe("Raycast view model", () => {
       ],
     });
 
-    const snapshot = normalizeRaycastNode(root, {
+    const snapshot = normalizeCommandNode(root, {
       register(callback) {
         const id = `callback:${callbacks.size}`;
         callbacks.set(id, callback);
@@ -223,9 +223,9 @@ describe("Raycast view model", () => {
     expect(selected).toBe(null);
   });
 
-  test("parses Raycast Detail markdown into safe render blocks", () => {
+  test("parses Command Detail markdown into safe render blocks", () => {
     expect(
-      parseRaycastMarkdown("# Заголовок\n\nТекст\n\n- Один\n- Два\n\n```ts\nconst ok = true;\n```"),
+      parseCommandMarkdown("# Заголовок\n\nТекст\n\n- Один\n- Два\n\n```ts\nconst ok = true;\n```"),
     ).toEqual([
       { type: "heading", level: 1, text: "Заголовок" },
       { type: "paragraph", text: "Текст" },
@@ -257,7 +257,7 @@ describe("Raycast view model", () => {
       }),
     });
 
-    const snapshot = normalizeRaycastNode(root);
+    const snapshot = normalizeCommandNode(root);
     expect(snapshot?.type).toBe("Detail");
     expect(snapshot ? detailMarkdown(snapshot) : "").toBe("# Проект");
     expect(snapshot ? detailMetadataItems(snapshot) : []).toEqual([
@@ -285,7 +285,7 @@ describe("Raycast view model", () => {
       }),
     });
 
-    const snapshot = normalizeRaycastNode(root);
+    const snapshot = normalizeCommandNode(root);
     expect(snapshot?.children.map((node) => node.type)).toEqual(["ActionPanel"]);
     expect(snapshot ? detailMarkdown(snapshot) : "").toBe("# Проект");
     expect(actionNodes(snapshot ? detailActions(snapshot) : null).map((node) => node.type)).toEqual(
@@ -313,7 +313,7 @@ describe("Raycast view model", () => {
       ],
     });
 
-    const snapshot = normalizeRaycastNode(root);
+    const snapshot = normalizeCommandNode(root);
     const sections = actionSections(snapshot);
 
     expect(sections.map((section) => section.title)).toEqual([null, "Файлы"]);
@@ -346,7 +346,7 @@ describe("Raycast view model", () => {
       ],
     });
 
-    const snapshot = normalizeRaycastNode(root);
+    const snapshot = normalizeCommandNode(root);
     const shortcut = actionShortcut(actionNodes(snapshot)[0]);
 
     expect(shortcut?.label).toBe("Cmd C");
@@ -446,7 +446,7 @@ describe("Raycast view model", () => {
       }),
     });
 
-    const snapshot = normalizeRaycastNode(root, {
+    const snapshot = normalizeCommandNode(root, {
       register(callback) {
         const id = `callback:${callbacks.size}`;
         callbacks.set(id, callback);

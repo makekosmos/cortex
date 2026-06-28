@@ -1,21 +1,21 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
-import { runRaycastNoViewCommand } from "../../platform/desktop/electron/raycast/command-runner";
-import { writeFixture } from "./raycast-command-runner.test";
+import { runCommandNoView } from "../../platform/desktop/electron/command-host/command-runner";
+import { writeFixture } from "./command-runner.test";
 
-const fixtureRoot = "raycast-command-runner-no-view-test";
+const fixtureRoot = "command-runner-no-view-test";
 const root = path.resolve(".tmp", fixtureRoot);
 
 afterEach(() => {
   if (existsSync(root)) rmSync(root, { recursive: true, force: true });
 });
 
-describe("Raycast no-view command runner", () => {
+describe("Command no-view command runner", () => {
   test("runs trusted no-view command with storage, cache, preferences, feedback, and clipboard", async () => {
     const fixture = writeFixture(fixtureRoot);
 
-    await runRaycastNoViewCommand({
+    await runCommandNoView({
       extensionId: "copy-tool",
       commandName: "copy",
       extensionDir: fixture.extensionDir,
@@ -49,21 +49,21 @@ describe("Raycast no-view command runner", () => {
   test("refuses to execute user-installed command code in main process", async () => {
     const fixture = writeFixture(fixtureRoot);
     await expect(
-      runRaycastNoViewCommand({
+      runCommandNoView({
         extensionId: "copy-tool",
         commandName: "copy",
         extensionDir: fixture.extensionDir,
         userDataDir: fixture.userDataDir,
         source: "user",
       }),
-    ).rejects.toThrow("refusing to execute user-installed Raycast command");
+    ).rejects.toThrow("refusing to execute user-installed command");
   });
 
   test("bridges confirmAlert calls from trusted commands to the host adapter", async () => {
     const fixture = writeFixture(fixtureRoot);
     const prompts: unknown[] = [];
 
-    await runRaycastNoViewCommand({
+    await runCommandNoView({
       extensionId: "copy-tool",
       commandName: "alert",
       extensionDir: fixture.extensionDir,
@@ -91,7 +91,7 @@ describe("Raycast no-view command runner", () => {
     const fixture = writeFixture(fixtureRoot);
     const launches: unknown[] = [];
 
-    await runRaycastNoViewCommand({
+    await runCommandNoView({
       extensionId: "copy-tool",
       commandName: "chain",
       extensionDir: fixture.extensionDir,
@@ -115,7 +115,7 @@ describe("Raycast no-view command runner", () => {
     const fixture = writeFixture(fixtureRoot);
     let clipboardText = "Seed";
 
-    await runRaycastNoViewCommand({
+    await runCommandNoView({
       extensionId: "copy-tool",
       commandName: "clipboard",
       extensionDir: fixture.extensionDir,
@@ -145,7 +145,7 @@ describe("Raycast no-view command runner", () => {
   test("bridges system utilities from trusted commands to the host adapter", async () => {
     const fixture = writeFixture(fixtureRoot);
 
-    await runRaycastNoViewCommand({
+    await runCommandNoView({
       extensionId: "copy-tool",
       commandName: "files",
       extensionDir: fixture.extensionDir,
@@ -168,7 +168,7 @@ describe("Raycast no-view command runner", () => {
   test("bridges LocalStorage.allItems from trusted commands", async () => {
     const fixture = writeFixture(fixtureRoot);
 
-    await runRaycastNoViewCommand({
+    await runCommandNoView({
       extensionId: "copy-tool",
       commandName: "storage",
       extensionDir: fixture.extensionDir,
@@ -190,7 +190,7 @@ describe("Raycast no-view command runner", () => {
   test("passes launch props into command default export", async () => {
     const fixture = writeFixture(fixtureRoot);
 
-    await runRaycastNoViewCommand({
+    await runCommandNoView({
       extensionId: "copy-tool",
       commandName: "copy",
       extensionDir: fixture.extensionDir,

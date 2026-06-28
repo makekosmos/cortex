@@ -177,9 +177,9 @@ async function openExtensionImpl(
     await openNativeExtension(id, manifest, route);
     return;
   }
-  if (manifest.kind === "raycast") {
+  if (manifest.kind === "command-extension") {
     console.warn(
-      `[kepler-shell] Raycast view commands are not implemented yet: ${id}${route ? ` (${route})` : ""}`,
+      `[kepler-shell] Command view commands are not implemented yet: ${id}${route ? ` (${route})` : ""}`,
     );
     return;
   }
@@ -196,14 +196,14 @@ async function openExtensionImpl(
     focusExistingWindow: focusExistingExtensionWindow,
   });
 }
-export function raycastRuntimeContext(id: string): {
+export function commandRuntimeContext(id: string): {
   manifest: ExtensionManifest;
   dir: string;
   source: ExtensionPermissionSource;
 } | null {
   const manifest = loadExtensionManifest(id);
   const location = resolveExtensionLocation(id);
-  if (!manifest || !location || manifest.kind !== "raycast") return null;
+  if (!manifest || !location || manifest.kind !== "command-extension") return null;
   return { manifest, dir: location.dir, source: location.source };
 }
 

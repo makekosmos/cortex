@@ -1,11 +1,11 @@
-import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
+import type { CommandSnapshotNode } from "../../shared/command-ipc";
 import { collectNodes, findFirst, imageProp, stringArrayProp, textProp } from "./model";
 import type {
-  RaycastListDropdownModel,
-  RaycastListDropdownOptionModel,
-  RaycastListDropdownSectionModel,
-  RaycastListItemModel,
-  RaycastListSectionModel,
+  CommandListDropdownModel,
+  CommandListDropdownOptionModel,
+  CommandListDropdownSectionModel,
+  CommandListItemModel,
+  CommandListSectionModel,
 } from "./model";
 
 function accessoryText(value: unknown): string | null {
@@ -22,7 +22,7 @@ function accessoryTexts(value: unknown): string[] {
   return value.map(accessoryText).filter((item): item is string => item !== null);
 }
 
-function itemModel(node: RaycastSnapshotNode, index: number): RaycastListItemModel {
+function itemModel(node: CommandSnapshotNode, index: number): CommandListItemModel {
   const title = textProp(node.props.title) ?? "Без названия";
   const id = textProp(node.props.id) ?? `${index}:${title}`;
   return {
@@ -37,19 +37,19 @@ function itemModel(node: RaycastSnapshotNode, index: number): RaycastListItemMod
   };
 }
 
-function listRoot(snapshot: RaycastSnapshotNode): RaycastSnapshotNode | null {
+function listRoot(snapshot: CommandSnapshotNode): CommandSnapshotNode | null {
   return findFirst(snapshot, "List");
 }
 
-export function listItems(snapshot: RaycastSnapshotNode): RaycastListItemModel[] {
+export function listItems(snapshot: CommandSnapshotNode): CommandListItemModel[] {
   return listSections(snapshot).flatMap((section) => section.items);
 }
 
-export function listSections(snapshot: RaycastSnapshotNode): RaycastListSectionModel[] {
+export function listSections(snapshot: CommandSnapshotNode): CommandListSectionModel[] {
   const root = listRoot(snapshot);
   if (!root) return [];
-  const sections: RaycastListSectionModel[] = [];
-  let looseItems: RaycastSnapshotNode[] = [];
+  const sections: CommandListSectionModel[] = [];
+  let looseItems: CommandSnapshotNode[] = [];
   let itemIndex = 0;
 
   function flushLooseItems(): void {
@@ -82,12 +82,12 @@ export function listSections(snapshot: RaycastSnapshotNode): RaycastListSectionM
   return sections;
 }
 
-export function listPlaceholder(snapshot: RaycastSnapshotNode): string {
+export function listPlaceholder(snapshot: CommandSnapshotNode): string {
   const root = listRoot(snapshot);
   return textProp(root?.props.searchBarPlaceholder) ?? "Поиск";
 }
 
-export function listEmptyMessage(snapshot: RaycastSnapshotNode): string {
+export function listEmptyMessage(snapshot: CommandSnapshotNode): string {
   const root = listRoot(snapshot);
   const emptyView = root ? findFirst(root, "List.EmptyView") : null;
   return (
@@ -97,50 +97,50 @@ export function listEmptyMessage(snapshot: RaycastSnapshotNode): string {
   );
 }
 
-export function listEmptyActions(snapshot: RaycastSnapshotNode): RaycastSnapshotNode | null {
+export function listEmptyActions(snapshot: CommandSnapshotNode): CommandSnapshotNode | null {
   const root = listRoot(snapshot);
   const emptyView = root ? findFirst(root, "List.EmptyView") : null;
   return emptyView ? findFirst(emptyView, "ActionPanel") : null;
 }
 
-export function listIsLoading(snapshot: RaycastSnapshotNode): boolean {
+export function listIsLoading(snapshot: CommandSnapshotNode): boolean {
   return listRoot(snapshot)?.props.isLoading === true;
 }
 
-export function listFiltering(snapshot: RaycastSnapshotNode): boolean {
+export function listFiltering(snapshot: CommandSnapshotNode): boolean {
   return listRoot(snapshot)?.props.filtering !== false;
 }
 
-export function listSearchText(snapshot: RaycastSnapshotNode): string {
+export function listSearchText(snapshot: CommandSnapshotNode): string {
   return textProp(listRoot(snapshot)?.props.searchText) ?? "";
 }
 
-export function listSelectedItemId(snapshot: RaycastSnapshotNode): string | null {
+export function listSelectedItemId(snapshot: CommandSnapshotNode): string | null {
   return textProp(listRoot(snapshot)?.props.selectedItemId);
 }
 
-export function listSearchCallbackNode(snapshot: RaycastSnapshotNode): RaycastSnapshotNode | null {
+export function listSearchCallbackNode(snapshot: CommandSnapshotNode): CommandSnapshotNode | null {
   const root = listRoot(snapshot);
   return typeof root?.props.__onSearchTextChangeId === "string" ? root : null;
 }
 
 export function listSelectionCallbackNode(
-  snapshot: RaycastSnapshotNode,
-): RaycastSnapshotNode | null {
+  snapshot: CommandSnapshotNode,
+): CommandSnapshotNode | null {
   const root = listRoot(snapshot);
   return typeof root?.props.__onSelectionChangeId === "string" ? root : null;
 }
 
-export function listDropdown(snapshot: RaycastSnapshotNode): RaycastListDropdownModel | null {
+export function listDropdown(snapshot: CommandSnapshotNode): CommandListDropdownModel | null {
   const root = listRoot(snapshot);
   const dropdown = root ? findFirst(root, "List.Dropdown") : null;
   if (!dropdown) return null;
 
-  const sections: RaycastListDropdownSectionModel[] = [];
-  let looseItems: RaycastSnapshotNode[] = [];
+  const sections: CommandListDropdownSectionModel[] = [];
+  let looseItems: CommandSnapshotNode[] = [];
   let optionIndex = 0;
 
-  function optionModel(node: RaycastSnapshotNode): RaycastListDropdownOptionModel {
+  function optionModel(node: CommandSnapshotNode): CommandListDropdownOptionModel {
     const value = textProp(node.props.value) ?? textProp(node.props.id) ?? `${optionIndex}`;
     optionIndex += 1;
     return {
@@ -182,7 +182,7 @@ export function listDropdown(snapshot: RaycastSnapshotNode): RaycastListDropdown
   };
 }
 
-export function matchesItem(item: RaycastListItemModel, query: string): boolean {
+export function matchesItem(item: CommandListItemModel, query: string): boolean {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
   const haystack = [item.title, item.subtitle ?? "", ...item.keywords].join(" ").toLowerCase();

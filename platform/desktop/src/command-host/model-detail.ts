@@ -1,8 +1,8 @@
-import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
+import type { CommandSnapshotNode } from "../../shared/command-ipc";
 import { collectNodes, findFirst, textProp } from "./model";
-import type { RaycastMetadataItemModel } from "./model";
+import type { CommandMetadataItemModel } from "./model";
 
-export function detailMarkdown(node: RaycastSnapshotNode | null): string {
+export function detailMarkdown(node: CommandSnapshotNode | null): string {
   if (!node) return "";
   const markdown = textProp(node.props.markdown);
   if (markdown) return markdown;
@@ -12,18 +12,18 @@ export function detailMarkdown(node: RaycastSnapshotNode | null): string {
     .join("\n");
 }
 
-function detailMetadata(node: RaycastSnapshotNode | null): RaycastSnapshotNode | null {
+function detailMetadata(node: CommandSnapshotNode | null): CommandSnapshotNode | null {
   return node ? findFirst(node, "Detail.Metadata") : null;
 }
 
-export function detailActions(node: RaycastSnapshotNode | null): RaycastSnapshotNode | null {
+export function detailActions(node: CommandSnapshotNode | null): CommandSnapshotNode | null {
   return node ? findFirst(node, "ActionPanel") : null;
 }
 
-export function detailMetadataItems(node: RaycastSnapshotNode | null): RaycastMetadataItemModel[] {
+export function detailMetadataItems(node: CommandSnapshotNode | null): CommandMetadataItemModel[] {
   const metadata = detailMetadata(node);
   if (!metadata) return [];
-  const items: RaycastMetadataItemModel[] = [];
+  const items: CommandMetadataItemModel[] = [];
   let index = 0;
 
   for (const child of metadata.children) {

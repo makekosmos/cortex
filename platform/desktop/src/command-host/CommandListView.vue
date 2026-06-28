@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from "vue";
-import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
-import RaycastActionPanel from "./RaycastActionPanel.vue";
-import RaycastDetailView from "./RaycastDetailView.vue";
+import type { CommandSnapshotNode } from "../../shared/command-ipc";
+import CommandActionPanel from "./CommandActionPanel.vue";
+import CommandDetailView from "./CommandDetailView.vue";
 import {
   listEmptyActions,
   listDropdown,
@@ -20,14 +20,14 @@ import {
 } from "./model-list";
 
 const props = defineProps<{
-  root: RaycastSnapshotNode;
+  root: CommandSnapshotNode;
   sessionId: string;
 }>();
 
 const query = shallowRef("");
 const selectedId = shallowRef<string | null>(null);
 const dropdownValue = shallowRef("");
-const pushedDetail = shallowRef<RaycastSnapshotNode | null>(null);
+const pushedDetail = shallowRef<CommandSnapshotNode | null>(null);
 const actionStatus = shallowRef<string | null>(null);
 
 const items = computed(() => listItems(props.root));
@@ -116,7 +116,7 @@ watch(selectedItem, () => {
   actionStatus.value = null;
 });
 
-async function executeAction(action: RaycastSnapshotNode): Promise<void> {
+async function executeAction(action: CommandSnapshotNode): Promise<void> {
   if (action.type === "Action.Push") {
     pushedDetail.value =
       action.children.find((child) => child.type === "Detail") ?? action.children[0] ?? null;
@@ -136,7 +136,7 @@ async function executeAction(action: RaycastSnapshotNode): Promise<void> {
     action.type === "Action.Trash" ||
     action.type === "Action.LaunchCommand"
   ) {
-    const result = await window.kepler.raycast.action(props.sessionId, {
+    const result = await window.kepler.command.action(props.sessionId, {
       type: action.type,
       props: action.props,
     });
@@ -146,7 +146,7 @@ async function executeAction(action: RaycastSnapshotNode): Promise<void> {
 
 async function executeDropdownChange(): Promise<void> {
   if (!dropdown.value?.node.props.__callbackId) return;
-  const result = await window.kepler.raycast.action(props.sessionId, {
+  const result = await window.kepler.command.action(props.sessionId, {
     type: dropdown.value.node.type,
     props: dropdown.value.node.props,
     payload: { value: dropdownValue.value },
@@ -163,7 +163,7 @@ async function updateSearch(event: Event): Promise<void> {
   const callbackId = callbackNode?.props.__onSearchTextChangeId;
   if (typeof callbackId !== "string") return;
 
-  const result = await window.kepler.raycast.action(props.sessionId, {
+  const result = await window.kepler.command.action(props.sessionId, {
     type: callbackNode.type,
     props: { __callbackId: callbackId },
     payload: { text: next },
@@ -181,7 +181,7 @@ async function selectItem(id: string | null, notify = true): Promise<void> {
   const callbackId = callbackNode?.props.__onSelectionChangeId;
   if (typeof callbackId !== "string") return;
 
-  const result = await window.kepler.raycast.action(props.sessionId, {
+  const result = await window.kepler.command.action(props.sessionId, {
     type: callbackNode.type,
     props: { __callbackId: callbackId },
     payload: { id },
@@ -204,12 +204,12 @@ function actionSuccessMessage(type: string): string {
 </script>
 
 <template>
-  <section class="raycast-list-view" aria-label="Raycast List">
-    <div class="raycast-list-view__main">
-      <div class="raycast-list-view__search">
+  <section class="command-list-view" aria-label="Command List">
+    <div class="command-list-view__main">
+      <div class="command-list-view__search">
         <input
           :value="query"
-          class="raycast-list-view__input"
+          class="command-list-view__input"
           type="search"
           :placeholder="placeholder"
           aria-label="Поиск"
@@ -218,7 +218,7 @@ function actionSuccessMessage(type: string): string {
         <select
           v-if="dropdown"
           v-model="dropdownValue"
-          class="raycast-list-view__dropdown"
+          class="command-list-view__dropdown"
           :aria-label="dropdown.placeholder ?? 'Фильтр'"
           @change="executeDropdownChange"
         >
@@ -247,39 +247,39 @@ function actionSuccessMessage(type: string): string {
         </select>
       </div>
 
-      <div class="raycast-list-view__items kosmos-scroll">
-        <p v-if="isLoading" class="raycast-list-view__loading">Загрузка...</p>
+      <div class="command-list-view__items kosmos-scroll">
+        <p v-if="isLoading" class="command-list-view__loading">Загрузка...</p>
         <section
           v-for="section in visibleSections"
           :key="section.id"
-          class="raycast-list-view__section"
+          class="command-list-view__section"
         >
-          <h2 v-if="section.title" class="raycast-list-view__section-title">{{ section.title }}</h2>
+          <h2 v-if="section.title" class="command-list-view__section-title">{{ section.title }}</h2>
           <button
             v-for="item in section.items"
             :key="item.id"
-            class="raycast-list-view__item"
-            :class="{ 'raycast-list-view__item--selected': item.id === selectedItem?.id }"
+            class="command-list-view__item"
+            :class="{ 'command-list-view__item--selected': item.id === selectedItem?.id }"
             type="button"
             @click="selectItem(item.id)"
           >
             <img
               v-if="item.icon"
-              class="raycast-list-view__icon"
+              class="command-list-view__icon"
               :src="item.icon"
               :alt="item.title"
             />
-            <span class="raycast-list-view__item-text">
-              <span class="raycast-list-view__title">{{ item.title }}</span>
-              <span v-if="item.subtitle" class="raycast-list-view__subtitle">{{
+            <span class="command-list-view__item-text">
+              <span class="command-list-view__title">{{ item.title }}</span>
+              <span v-if="item.subtitle" class="command-list-view__subtitle">{{
                 item.subtitle
               }}</span>
             </span>
-            <span v-if="item.accessories.length > 0" class="raycast-list-view__accessories">
+            <span v-if="item.accessories.length > 0" class="command-list-view__accessories">
               <span
                 v-for="accessory in item.accessories"
                 :key="`${item.id}:${accessory}`"
-                class="raycast-list-view__accessory"
+                class="command-list-view__accessory"
               >
                 {{ accessory }}
               </span>
@@ -287,23 +287,23 @@ function actionSuccessMessage(type: string): string {
           </button>
         </section>
 
-        <p v-if="visibleItems.length === 0 && !isLoading" class="raycast-list-view__empty">
+        <p v-if="visibleItems.length === 0 && !isLoading" class="command-list-view__empty">
           {{ emptyMessage }}
         </p>
       </div>
 
-      <footer class="raycast-list-view__footer">
-        <RaycastActionPanel :panel="activeActions" @execute="executeAction" />
-        <p v-if="actionStatus" class="raycast-list-view__status">{{ actionStatus }}</p>
+      <footer class="command-list-view__footer">
+        <CommandActionPanel :panel="activeActions" @execute="executeAction" />
+        <p v-if="actionStatus" class="command-list-view__status">{{ actionStatus }}</p>
       </footer>
     </div>
 
-    <RaycastDetailView :detail="detail" />
+    <CommandDetailView :detail="detail" />
   </section>
 </template>
 
 <style scoped>
-.raycast-list-view {
+.command-list-view {
   display: flex;
   min-height: 0;
   min-width: 0;
@@ -311,14 +311,14 @@ function actionSuccessMessage(type: string): string {
   overflow: hidden;
 }
 
-.raycast-list-view__main {
+.command-list-view__main {
   display: flex;
   min-width: 0;
   flex: 1;
   flex-direction: column;
 }
 
-.raycast-list-view__search {
+.command-list-view__search {
   display: flex;
   flex-shrink: 0;
   gap: 8px;
@@ -326,7 +326,7 @@ function actionSuccessMessage(type: string): string {
   padding: 10px 12px;
 }
 
-.raycast-list-view__input {
+.command-list-view__input {
   min-width: 0;
   flex: 1;
   height: 34px;
@@ -339,7 +339,7 @@ function actionSuccessMessage(type: string): string {
   font-size: 13px;
 }
 
-.raycast-list-view__dropdown {
+.command-list-view__dropdown {
   width: min(210px, 36%);
   height: 34px;
   flex: 0 1 210px;
@@ -352,35 +352,35 @@ function actionSuccessMessage(type: string): string {
   font-size: 13px;
 }
 
-.raycast-list-view__input:focus,
-.raycast-list-view__dropdown:focus {
+.command-list-view__input:focus,
+.command-list-view__dropdown:focus {
   border-color: var(--accent);
 }
 
-.raycast-list-view__items {
+.command-list-view__items {
   min-height: 0;
   flex: 1;
   overflow: auto;
   padding: 8px;
 }
 
-.raycast-list-view__section {
+.command-list-view__section {
   display: grid;
   gap: 4px;
 }
 
-.raycast-list-view__section + .raycast-list-view__section {
+.command-list-view__section + .command-list-view__section {
   margin-top: 8px;
 }
 
-.raycast-list-view__section-title {
+.command-list-view__section-title {
   margin: 6px 10px 2px;
   color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 700;
 }
 
-.raycast-list-view__item {
+.command-list-view__item {
   display: flex;
   width: 100%;
   min-height: 42px;
@@ -394,18 +394,18 @@ function actionSuccessMessage(type: string): string {
   text-align: left;
 }
 
-.raycast-list-view__item--selected {
+.command-list-view__item--selected {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
-.raycast-list-view__item-text {
+.command-list-view__item-text {
   display: grid;
   min-width: 0;
   flex: 1;
   gap: 2px;
 }
 
-.raycast-list-view__icon {
+.command-list-view__icon {
   width: 24px;
   height: 24px;
   flex: 0 0 24px;
@@ -413,7 +413,7 @@ function actionSuccessMessage(type: string): string {
   object-fit: cover;
 }
 
-.raycast-list-view__accessories {
+.command-list-view__accessories {
   display: flex;
   max-width: 42%;
   flex: 0 1 auto;
@@ -422,7 +422,7 @@ function actionSuccessMessage(type: string): string {
   gap: 4px;
 }
 
-.raycast-list-view__accessory {
+.command-list-view__accessory {
   min-width: 0;
   max-width: 160px;
   overflow: hidden;
@@ -435,31 +435,31 @@ function actionSuccessMessage(type: string): string {
   font-size: 11px;
 }
 
-.raycast-list-view__title,
-.raycast-list-view__subtitle {
+.command-list-view__title,
+.command-list-view__subtitle {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.raycast-list-view__title {
+.command-list-view__title {
   font-size: 13px;
   font-weight: 600;
 }
 
-.raycast-list-view__subtitle,
-.raycast-list-view__empty,
-.raycast-list-view__loading {
+.command-list-view__subtitle,
+.command-list-view__empty,
+.command-list-view__loading {
   color: var(--muted-foreground);
   font-size: 12px;
 }
 
-.raycast-list-view__empty,
-.raycast-list-view__loading {
+.command-list-view__empty,
+.command-list-view__loading {
   margin: 18px 10px;
 }
 
-.raycast-list-view__footer {
+.command-list-view__footer {
   display: flex;
   min-height: 44px;
   align-items: center;
@@ -468,7 +468,7 @@ function actionSuccessMessage(type: string): string {
   padding: 8px 10px;
 }
 
-.raycast-list-view__status {
+.command-list-view__status {
   margin: 0;
   overflow: hidden;
   color: var(--muted-foreground);

@@ -32,8 +32,8 @@ function rootView() {
     // Async — cosmos.gl + граф не нужны в launcher / settings бандлах.
     return defineAsyncComponent(() => import("./my-cosmos/MyCosmosView.vue"));
   }
-  if (currentHash.startsWith("#raycast-host") || currentHash.startsWith("#command-host")) {
-    return defineAsyncComponent(() => import("./views/RaycastHostView.vue"));
+  if (currentHash.startsWith("#command-host")) {
+    return defineAsyncComponent(() => import("./views/CommandHostView.vue"));
   }
   if (currentHash.startsWith("#focus-widget")) {
     // Tiny always-on-top widget для активной pomodoro сессии. Async чтобы

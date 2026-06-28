@@ -3,29 +3,29 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { extensionUserDataDir } from "../extension-host";
 import { isHeadless, isHeadlessOrTest } from "../extension-manifest";
-import { runRaycastViewCommand, type RaycastCommandLaunchProps } from "./command-runner";
-import { handleRaycastAction } from "./view-actions";
-import { normalizeRaycastNode, type RaycastViewCallbackRegistry } from "./view-model";
+import { runCommandView, type CommandLaunchProps } from "./command-runner";
+import { handleCommandAction } from "./view-actions";
+import { normalizeCommandNode, type CommandViewCallbackRegistry } from "./view-model";
 import type { ExtensionSource } from "../extension-permissions";
 import type {
-  RaycastActionRequest,
-  RaycastActionResult,
-  RaycastFeedbackEvent,
-  RaycastFilePickerRequest,
-  RaycastFilePickerResult,
-  RaycastSnapshot,
-} from "../../shared/raycast-ipc";
+  CommandActionRequest,
+  CommandActionResult,
+  CommandFeedbackEvent,
+  CommandFilePickerRequest,
+  CommandFilePickerResult,
+  CommandSnapshot,
+} from "../../shared/command-ipc";
 import type { LaunchCommandOptions } from "@raycast/api";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const RAYCAST_HOST_WIDTH = 760;
-const RAYCAST_HOST_HEIGHT = 560;
-const RAYCAST_HOST_MIN_WIDTH = 620;
-const RAYCAST_HOST_MIN_HEIGHT = 420;
+const COMMAND_HOST_WIDTH = 760;
+const COMMAND_HOST_HEIGHT = 560;
+const COMMAND_HOST_MIN_WIDTH = 620;
+const COMMAND_HOST_MIN_HEIGHT = 420;
 
-const sessions = new Map<string, RaycastSnapshot>();
+const sessions = new Map<string, CommandSnapshot>();
 const callbacks = new Map<
   string,
   Map<string, (payload?: Record<string, unknown>) => unknown | Promise<unknown>>
@@ -36,10 +36,10 @@ const windows = new Map<string, BrowserWindow>();
 function sendFeedback(
   win: BrowserWindow | null,
   sessionId: string | null,
-  event: RaycastFeedbackEvent,
+  event: CommandFeedbackEvent,
 ): void {
   if (!win || win.isDestroyed() || !sessionId) return;
-  win.webContents.send("kepler:raycast:feedback", { sessionId, event });
+  win.webContents.send("kepler:command:feedback", { sessionId, event });
 }
 
 function sessionWindowFromSender(
@@ -51,10 +51,10 @@ function sessionWindowFromSender(
   return sessionWindow;
 }
 
-function loadRaycastHost(
+function loadCommandHost(
   win: BrowserWindow,
   sessionId: string,
-  route: "raycast-host" | "command-host" = "raycast-host",
+  route: "command-host" = "command-host",
 ): void {
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   const hash = `${route}?session=${encodeURIComponent(sessionId)}`;
@@ -67,7 +67,7 @@ function loadRaycastHost(
   }
 }
 
-export async function openRaycastViewCommand(options: {
+export async function openCommandViewCommand(options: {
   extensionId: string;
   extensionName: string;
   commandName: string;
@@ -75,7 +75,7 @@ export async function openRaycastViewCommand(options: {
   commandMode?: "view" | "menu-bar";
   extensionDir: string;
   source: ExtensionSource;
-  launch?: RaycastCommandLaunchProps;
+  launch?: CommandLaunchProps;
   system?: {
     open(target: string): Promise<void>;
     showInFinder(path: string): Promise<void>;
@@ -90,8 +90,8 @@ export async function openRaycastViewCommand(options: {
   let nextCallbackId = 0;
   const sessionId = `${options.extensionId}:${options.commandName}:${Date.now()}`;
   let sessionWindow: BrowserWindow | null = null;
-  const navigationStack: RaycastSnapshot["root"][] = [];
-  const callbackRegistry: RaycastViewCallbackRegistry = {
+  const navigationStack: CommandSnapshot["root"][] = [];
+  const callbackRegistry: CommandViewCallbackRegistry = {
     register(callback) {
       const id = `action:${nextCallbackId++}`;
       sessionCallbacks.set(id, callback);
@@ -106,20 +106,20 @@ export async function openRaycastViewCommand(options: {
     snapshot.root = root;
     sessions.set(sessionId, snapshot);
     if (!sessionWindow || sessionWindow.isDestroyed()) return;
-    sessionWindow.webContents.send("kepler:raycast:snapshot-updated", {
+    sessionWindow.webContents.send("kepler:command:snapshot-updated", {
       sessionId,
       snapshot,
     });
   }
 
   function pushNavigationTarget(target: unknown): void {
-    const node = normalizeRaycastNode(target, callbackRegistry);
+    const node = normalizeCommandNode(target, callbackRegistry);
     if (!node) return;
     navigationStack.push(node);
     publishSnapshotUpdate();
   }
 
-  const root = await runRaycastViewCommand({
+  const root = await runCommandView({
     extensionId: options.extensionId,
     commandName: options.commandName,
     extensionDir: options.extensionDir,
@@ -163,7 +163,7 @@ export async function openRaycastViewCommand(options: {
   });
 
   navigationStack.push(root);
-  const snapshot: RaycastSnapshot = {
+  const snapshot: CommandSnapshot = {
     sessionId,
     extensionId: options.extensionId,
     extensionName: options.extensionName,
@@ -178,12 +178,12 @@ export async function openRaycastViewCommand(options: {
 
   const display = screen.getPrimaryDisplay().workAreaSize;
   const win = new BrowserWindow({
-    width: RAYCAST_HOST_WIDTH,
-    height: RAYCAST_HOST_HEIGHT,
-    minWidth: RAYCAST_HOST_MIN_WIDTH,
-    minHeight: RAYCAST_HOST_MIN_HEIGHT,
-    x: Math.round((display.width - RAYCAST_HOST_WIDTH) / 2),
-    y: Math.round((display.height - RAYCAST_HOST_HEIGHT) / 2),
+    width: COMMAND_HOST_WIDTH,
+    height: COMMAND_HOST_HEIGHT,
+    minWidth: COMMAND_HOST_MIN_WIDTH,
+    minHeight: COMMAND_HOST_MIN_HEIGHT,
+    x: Math.round((display.width - COMMAND_HOST_WIDTH) / 2),
+    y: Math.round((display.height - COMMAND_HOST_HEIGHT) / 2),
     show: !isHeadlessOrTest(),
     skipTaskbar: isHeadless(),
     title: `${options.extensionName} — ${options.commandTitle}`,
@@ -229,25 +229,25 @@ export async function openRaycastViewCommand(options: {
     }
   });
 
-  loadRaycastHost(win, sessionId);
+  loadCommandHost(win, sessionId);
 }
 
-function getRaycastSnapshot(sessionId: string): RaycastSnapshot | null {
+function getCommandSnapshot(sessionId: string): CommandSnapshot | null {
   return sessions.get(sessionId) ?? null;
 }
 
-ipcMain.handle("kepler:raycast:snapshot", (_event, sessionId: string): RaycastSnapshot | null => {
+ipcMain.handle("kepler:command:snapshot", (_event, sessionId: string): CommandSnapshot | null => {
   if (typeof sessionId !== "string") return null;
-  return getRaycastSnapshot(sessionId);
+  return getCommandSnapshot(sessionId);
 });
 
 ipcMain.handle(
-  "kepler:raycast:pick-files",
+  "kepler:command:pick-files",
   async (
     event,
     sessionId: string,
-    request: RaycastFilePickerRequest,
-  ): Promise<RaycastFilePickerResult> => {
+    request: CommandFilePickerRequest,
+  ): Promise<CommandFilePickerResult> => {
     if (typeof sessionId !== "string" || !request || typeof request !== "object") {
       return { ok: false, paths: [], error: "invalid_request" };
     }
@@ -270,8 +270,8 @@ ipcMain.handle(
 );
 
 ipcMain.handle(
-  "kepler:raycast:action",
-  async (event, sessionId: string, action: RaycastActionRequest): Promise<RaycastActionResult> => {
+  "kepler:command:action",
+  async (event, sessionId: string, action: CommandActionRequest): Promise<CommandActionResult> => {
     if (typeof sessionId !== "string" || !action || typeof action !== "object") {
       return { ok: false, error: "invalid_request" };
     }
@@ -285,7 +285,7 @@ ipcMain.handle(
       if (!callback) return { ok: false, error: "callback_not_found" };
     }
 
-    return handleRaycastAction({
+    return handleCommandAction({
       action,
       callback:
         typeof callbackId === "string" ? callbacks.get(sessionId)?.get(callbackId) : undefined,
