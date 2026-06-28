@@ -12,7 +12,7 @@ import {
   openExtension,
 } from "./extension-host";
 import { listInstalledUserExtensions } from "./extension-installer";
-import { launchRaycastDeclaredCommand } from "./main-raycast-commands";
+import { launchCommandDeclaredCommand } from "./main-command-host";
 
 interface MainCommandsOptions {
   getArkClient: () => ArkClient | null;
@@ -189,20 +189,20 @@ export function registerMainCommands(options: MainCommandsOptions): MainCommands
         hideLauncher();
         return;
       }
-      if (declared.mode === "raycast-view" || declared.mode === "raycast-menu-bar") {
+      if (declared.mode === "command-view" || declared.mode === "command-menu-bar") {
         try {
-          await launchRaycastDeclaredCommand(declared);
+          await launchCommandDeclaredCommand(declared);
         } catch (e) {
-          console.error(`[kepler-shell] Raycast UI command ${id} failed:`, e);
+          console.error(`[kepler-shell] Command UI command ${id} failed:`, e);
         }
         hideLauncher();
         return;
       }
-      if (declared.mode === "raycast-no-view") {
+      if (declared.mode === "command-no-view") {
         try {
-          await launchRaycastDeclaredCommand(declared);
+          await launchCommandDeclaredCommand(declared);
         } catch (e) {
-          console.error(`[kepler-shell] Raycast no-view command ${id} failed:`, e);
+          console.error(`[kepler-shell] Command no-view command ${id} failed:`, e);
         }
         hideLauncher();
         return;

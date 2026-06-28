@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from "vue";
-import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
-import RaycastActionPanel from "./RaycastActionPanel.vue";
+import type { CommandSnapshotNode } from "../../shared/command-ipc";
+import CommandActionPanel from "./CommandActionPanel.vue";
 import {
   gridDropdown,
   gridEmptyActions,
@@ -18,7 +18,7 @@ import {
 } from "./model-grid";
 
 const props = defineProps<{
-  root: RaycastSnapshotNode;
+  root: CommandSnapshotNode;
   sessionId: string;
 }>();
 
@@ -110,7 +110,7 @@ watch(selectedItem, () => {
   actionStatus.value = null;
 });
 
-async function executeAction(action: RaycastSnapshotNode): Promise<void> {
+async function executeAction(action: CommandSnapshotNode): Promise<void> {
   if (
     action.type === "Action" ||
     action.type === "Action.CopyToClipboard" ||
@@ -123,7 +123,7 @@ async function executeAction(action: RaycastSnapshotNode): Promise<void> {
     action.type === "Action.Trash" ||
     action.type === "Action.LaunchCommand"
   ) {
-    const result = await window.kepler.raycast.action(props.sessionId, {
+    const result = await window.kepler.command.action(props.sessionId, {
       type: action.type,
       props: action.props,
     });
@@ -133,7 +133,7 @@ async function executeAction(action: RaycastSnapshotNode): Promise<void> {
 
 async function executeDropdownChange(): Promise<void> {
   if (!dropdown.value?.node.props.__callbackId) return;
-  const result = await window.kepler.raycast.action(props.sessionId, {
+  const result = await window.kepler.command.action(props.sessionId, {
     type: dropdown.value.node.type,
     props: dropdown.value.node.props,
     payload: { value: dropdownValue.value },
@@ -150,7 +150,7 @@ async function updateSearch(event: Event): Promise<void> {
   const callbackId = callbackNode?.props.__onSearchTextChangeId;
   if (typeof callbackId !== "string") return;
 
-  const result = await window.kepler.raycast.action(props.sessionId, {
+  const result = await window.kepler.command.action(props.sessionId, {
     type: callbackNode.type,
     props: { __callbackId: callbackId },
     payload: { text: next },
@@ -168,7 +168,7 @@ async function selectItem(id: string | null, notify = true): Promise<void> {
   const callbackId = callbackNode?.props.__onSelectionChangeId;
   if (typeof callbackId !== "string") return;
 
-  const result = await window.kepler.raycast.action(props.sessionId, {
+  const result = await window.kepler.command.action(props.sessionId, {
     type: callbackNode.type,
     props: { __callbackId: callbackId },
     payload: { id },
@@ -195,11 +195,11 @@ function placeholderLetter(title: string): string {
 </script>
 
 <template>
-  <section class="raycast-grid-view" aria-label="Raycast Grid">
-    <div class="raycast-grid-view__search">
+  <section class="command-grid-view" aria-label="Command Grid">
+    <div class="command-grid-view__search">
       <input
         :value="query"
-        class="raycast-grid-view__input"
+        class="command-grid-view__input"
         type="search"
         :placeholder="placeholder"
         aria-label="Поиск"
@@ -208,7 +208,7 @@ function placeholderLetter(title: string): string {
       <select
         v-if="dropdown"
         v-model="dropdownValue"
-        class="raycast-grid-view__dropdown"
+        class="command-grid-view__dropdown"
         :aria-label="dropdown.placeholder ?? 'Фильтр'"
         @change="executeDropdownChange"
       >
@@ -237,56 +237,56 @@ function placeholderLetter(title: string): string {
       </select>
     </div>
 
-    <div class="raycast-grid-view__body kosmos-scroll">
-      <p v-if="isLoading" class="raycast-grid-view__loading">Загрузка...</p>
+    <div class="command-grid-view__body kosmos-scroll">
+      <p v-if="isLoading" class="command-grid-view__loading">Загрузка...</p>
       <section
         v-for="section in visibleSections"
         :key="section.id"
-        class="raycast-grid-view__section"
+        class="command-grid-view__section"
       >
-        <h2 v-if="section.title" class="raycast-grid-view__section-title">{{ section.title }}</h2>
-        <div class="raycast-grid-view__items">
+        <h2 v-if="section.title" class="command-grid-view__section-title">{{ section.title }}</h2>
+        <div class="command-grid-view__items">
           <button
             v-for="item in section.items"
             :key="item.id"
-            class="raycast-grid-view__item"
-            :class="{ 'raycast-grid-view__item--selected': item.id === selectedItem?.id }"
+            class="command-grid-view__item"
+            :class="{ 'command-grid-view__item--selected': item.id === selectedItem?.id }"
             type="button"
             @click="selectItem(item.id)"
           >
-            <span class="raycast-grid-view__preview">
+            <span class="command-grid-view__preview">
               <img
                 v-if="item.image"
-                class="raycast-grid-view__image"
+                class="command-grid-view__image"
                 :src="item.image"
                 :alt="item.title"
               />
-              <span v-else class="raycast-grid-view__placeholder">
+              <span v-else class="command-grid-view__placeholder">
                 {{ placeholderLetter(item.title) }}
               </span>
             </span>
-            <span class="raycast-grid-view__title">{{ item.title }}</span>
-            <span v-if="item.subtitle" class="raycast-grid-view__subtitle">{{
+            <span class="command-grid-view__title">{{ item.title }}</span>
+            <span v-if="item.subtitle" class="command-grid-view__subtitle">{{
               item.subtitle
             }}</span>
           </button>
         </div>
       </section>
 
-      <p v-if="visibleItems.length === 0 && !isLoading" class="raycast-grid-view__empty">
+      <p v-if="visibleItems.length === 0 && !isLoading" class="command-grid-view__empty">
         {{ emptyMessage }}
       </p>
     </div>
 
-    <footer class="raycast-grid-view__footer">
-      <RaycastActionPanel :panel="activeActions" @execute="executeAction" />
-      <p v-if="actionStatus" class="raycast-grid-view__status">{{ actionStatus }}</p>
+    <footer class="command-grid-view__footer">
+      <CommandActionPanel :panel="activeActions" @execute="executeAction" />
+      <p v-if="actionStatus" class="command-grid-view__status">{{ actionStatus }}</p>
     </footer>
   </section>
 </template>
 
 <style scoped>
-.raycast-grid-view {
+.command-grid-view {
   display: flex;
   min-height: 0;
   min-width: 0;
@@ -295,7 +295,7 @@ function placeholderLetter(title: string): string {
   overflow: hidden;
 }
 
-.raycast-grid-view__search {
+.command-grid-view__search {
   display: flex;
   flex-shrink: 0;
   gap: 8px;
@@ -303,7 +303,7 @@ function placeholderLetter(title: string): string {
   padding: 10px 12px;
 }
 
-.raycast-grid-view__input {
+.command-grid-view__input {
   min-width: 0;
   flex: 1;
   height: 34px;
@@ -316,7 +316,7 @@ function placeholderLetter(title: string): string {
   font-size: 13px;
 }
 
-.raycast-grid-view__dropdown {
+.command-grid-view__dropdown {
   width: min(210px, 36%);
   height: 34px;
   flex: 0 1 210px;
@@ -329,36 +329,36 @@ function placeholderLetter(title: string): string {
   font-size: 13px;
 }
 
-.raycast-grid-view__input:focus,
-.raycast-grid-view__dropdown:focus {
+.command-grid-view__input:focus,
+.command-grid-view__dropdown:focus {
   border-color: var(--accent);
 }
 
-.raycast-grid-view__body {
+.command-grid-view__body {
   min-height: 0;
   flex: 1;
   overflow: auto;
   padding: 12px;
 }
 
-.raycast-grid-view__section + .raycast-grid-view__section {
+.command-grid-view__section + .command-grid-view__section {
   margin-top: 14px;
 }
 
-.raycast-grid-view__section-title {
+.command-grid-view__section-title {
   margin: 0 0 8px;
   color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 700;
 }
 
-.raycast-grid-view__items {
+.command-grid-view__items {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
   gap: 10px;
 }
 
-.raycast-grid-view__item {
+.command-grid-view__item {
   display: grid;
   min-width: 0;
   gap: 6px;
@@ -370,12 +370,12 @@ function placeholderLetter(title: string): string {
   text-align: left;
 }
 
-.raycast-grid-view__item--selected {
+.command-grid-view__item--selected {
   border-color: color-mix(in srgb, var(--accent) 42%, transparent);
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-.raycast-grid-view__preview {
+.command-grid-view__preview {
   display: grid;
   aspect-ratio: 1;
   place-items: center;
@@ -385,49 +385,49 @@ function placeholderLetter(title: string): string {
   background: color-mix(in srgb, var(--foreground) 5%, transparent);
 }
 
-.raycast-grid-view__image {
+.command-grid-view__image {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.raycast-grid-view__placeholder {
+.command-grid-view__placeholder {
   color: var(--muted-foreground);
   font-size: 28px;
   font-weight: 700;
 }
 
-.raycast-grid-view__title,
-.raycast-grid-view__subtitle {
+.command-grid-view__title,
+.command-grid-view__subtitle {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.raycast-grid-view__title {
+.command-grid-view__title {
   font-size: 13px;
   font-weight: 700;
 }
 
-.raycast-grid-view__subtitle,
-.raycast-grid-view__empty,
-.raycast-grid-view__loading,
-.raycast-grid-view__status {
+.command-grid-view__subtitle,
+.command-grid-view__empty,
+.command-grid-view__loading,
+.command-grid-view__status {
   color: var(--muted-foreground);
   font-size: 12px;
 }
 
-.raycast-grid-view__empty,
-.raycast-grid-view__loading,
-.raycast-grid-view__status {
+.command-grid-view__empty,
+.command-grid-view__loading,
+.command-grid-view__status {
   margin: 0;
 }
 
-.raycast-grid-view__loading {
+.command-grid-view__loading {
   margin-bottom: 12px;
 }
 
-.raycast-grid-view__footer {
+.command-grid-view__footer {
   display: flex;
   min-height: 44px;
   align-items: center;

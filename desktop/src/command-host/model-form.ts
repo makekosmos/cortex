@@ -1,15 +1,15 @@
-import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
+import type { CommandSnapshotNode } from "../../shared/command-ipc";
 import {
   findFirst,
   textProp,
-  type RaycastFormFieldModel,
-  type RaycastFormModel,
-  type RaycastListDropdownOptionModel,
-  type RaycastListDropdownSectionModel,
+  type CommandFormFieldModel,
+  type CommandFormModel,
+  type CommandListDropdownOptionModel,
+  type CommandListDropdownSectionModel,
 } from "./model";
 
-export function formModel(snapshot: RaycastSnapshotNode): RaycastFormModel {
-  const fields: RaycastFormFieldModel[] = [];
+export function formModel(snapshot: CommandSnapshotNode): CommandFormModel {
+  const fields: CommandFormFieldModel[] = [];
   let index = 0;
   for (const child of snapshot.children) {
     if (!child.type.startsWith("Form.")) continue;
@@ -50,12 +50,12 @@ export function formModel(snapshot: RaycastSnapshotNode): RaycastFormModel {
   };
 }
 
-function formDropdownSections(node: RaycastSnapshotNode): RaycastListDropdownSectionModel[] {
-  const sections: RaycastListDropdownSectionModel[] = [];
-  let looseItems: RaycastSnapshotNode[] = [];
+function formDropdownSections(node: CommandSnapshotNode): CommandListDropdownSectionModel[] {
+  const sections: CommandListDropdownSectionModel[] = [];
+  let looseItems: CommandSnapshotNode[] = [];
   let optionIndex = 0;
 
-  function optionModel(item: RaycastSnapshotNode): RaycastListDropdownOptionModel {
+  function optionModel(item: CommandSnapshotNode): CommandListDropdownOptionModel {
     const value = textProp(item.props.value) ?? textProp(item.props.id) ?? `${optionIndex}`;
     optionIndex += 1;
     return {
@@ -93,10 +93,10 @@ function formDropdownSections(node: RaycastSnapshotNode): RaycastListDropdownSec
   return sections;
 }
 
-function formTagPickerSections(node: RaycastSnapshotNode): RaycastListDropdownSectionModel[] {
+function formTagPickerSections(node: CommandSnapshotNode): CommandListDropdownSectionModel[] {
   const options = node.children
     .filter((item) => item.type === "Form.TagPicker.Item")
-    .map((item, index): RaycastListDropdownOptionModel => {
+    .map((item, index): CommandListDropdownOptionModel => {
       const value = textProp(item.props.value) ?? textProp(item.props.id) ?? `${index}`;
       return {
         value,
@@ -115,7 +115,7 @@ function formTagPickerSections(node: RaycastSnapshotNode): RaycastListDropdownSe
     : [];
 }
 
-function formDefaultValue(node: RaycastSnapshotNode): string | boolean | string[] | null {
+function formDefaultValue(node: CommandSnapshotNode): string | boolean | string[] | null {
   const value = node.props.defaultValue ?? node.props.value;
   if (node.type === "Form.FilePicker" || node.type === "Form.TagPicker") {
     if (Array.isArray(value))

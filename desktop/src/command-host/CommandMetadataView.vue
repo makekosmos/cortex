@@ -1,35 +1,35 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
+import type { CommandSnapshotNode } from "../../shared/command-ipc";
 import { detailMetadataItems } from "./model-detail";
 
 const props = defineProps<{
-  detail: RaycastSnapshotNode | null;
+  detail: CommandSnapshotNode | null;
 }>();
 
 const items = computed(() => detailMetadataItems(props.detail));
 </script>
 
 <template>
-  <dl v-if="items.length > 0" class="raycast-metadata-view" aria-label="Метаданные">
+  <dl v-if="items.length > 0" class="command-metadata-view" aria-label="Метаданные">
     <template v-for="item in items" :key="item.id">
-      <div v-if="item.type === 'separator'" class="raycast-metadata-view__separator" />
+      <div v-if="item.type === 'separator'" class="command-metadata-view__separator" />
 
-      <div v-else-if="item.type === 'tags'" class="raycast-metadata-view__row">
-        <dt v-if="item.title" class="raycast-metadata-view__title">{{ item.title }}</dt>
-        <dd class="raycast-metadata-view__value raycast-metadata-view__value--tags">
-          <span v-for="tag in item.tags" :key="tag" class="raycast-metadata-view__tag">
+      <div v-else-if="item.type === 'tags'" class="command-metadata-view__row">
+        <dt v-if="item.title" class="command-metadata-view__title">{{ item.title }}</dt>
+        <dd class="command-metadata-view__value command-metadata-view__value--tags">
+          <span v-for="tag in item.tags" :key="tag" class="command-metadata-view__tag">
             {{ tag }}
           </span>
         </dd>
       </div>
 
-      <div v-else class="raycast-metadata-view__row">
-        <dt v-if="item.title" class="raycast-metadata-view__title">{{ item.title }}</dt>
-        <dd class="raycast-metadata-view__value">
+      <div v-else class="command-metadata-view__row">
+        <dt v-if="item.title" class="command-metadata-view__title">{{ item.title }}</dt>
+        <dd class="command-metadata-view__value">
           <a
             v-if="item.type === 'link' && item.href"
-            class="raycast-metadata-view__link"
+            class="command-metadata-view__link"
             :href="item.href"
             target="_blank"
             rel="noreferrer"
@@ -44,7 +44,7 @@ const items = computed(() => detailMetadataItems(props.detail));
 </template>
 
 <style scoped>
-.raycast-metadata-view {
+.command-metadata-view {
   display: grid;
   gap: 10px;
   margin: 16px 0 0;
@@ -52,20 +52,20 @@ const items = computed(() => detailMetadataItems(props.detail));
   padding-top: 14px;
 }
 
-.raycast-metadata-view__row {
+.command-metadata-view__row {
   display: grid;
   min-width: 0;
   gap: 4px;
 }
 
-.raycast-metadata-view__title {
+.command-metadata-view__title {
   margin: 0;
   color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 700;
 }
 
-.raycast-metadata-view__value {
+.command-metadata-view__value {
   min-width: 0;
   margin: 0;
   color: var(--foreground);
@@ -74,13 +74,13 @@ const items = computed(() => detailMetadataItems(props.detail));
   word-break: break-word;
 }
 
-.raycast-metadata-view__value--tags {
+.command-metadata-view__value--tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.raycast-metadata-view__tag {
+.command-metadata-view__tag {
   max-width: 100%;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -91,16 +91,16 @@ const items = computed(() => detailMetadataItems(props.detail));
   white-space: nowrap;
 }
 
-.raycast-metadata-view__link {
+.command-metadata-view__link {
   color: var(--accent);
   text-decoration: none;
 }
 
-.raycast-metadata-view__link:hover {
+.command-metadata-view__link:hover {
   text-decoration: underline;
 }
 
-.raycast-metadata-view__separator {
+.command-metadata-view__separator {
   height: 1px;
   background: var(--border);
 }

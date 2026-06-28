@@ -1,6 +1,6 @@
-import type { RaycastPackageManifest } from "./raycast/manifest";
+import type { CommandPackageManifest } from "./command-host/manifest";
 
-export type ExtensionKind = "vue" | "static" | "native" | "raycast";
+export type ExtensionKind = "vue" | "static" | "native" | "command-extension";
 
 /**
  * Объявление команды в `manifest.json` extension'а. Полный id рендерится
@@ -27,7 +27,7 @@ interface KextManifestCommand {
    *  - `action`: invoke в running extension через ARK commands bus. Если
    *    extension не запущен — Kepler auto-launch'ит и dispatch'ит после
    *    mount. */
-  mode?: "open" | "action" | "raycast-view" | "raycast-no-view" | "raycast-menu-bar";
+  mode?: "open" | "action" | "command-view" | "command-no-view" | "command-menu-bar";
 }
 
 export interface ExtensionManifest {
@@ -64,10 +64,10 @@ export interface ExtensionManifest {
   keplerApiVersion?: string;
   kind?: ExtensionKind;
   /**
-   * Raycast-compatible package metadata derived from `package.json`.
-   * Present only for `kind: "raycast"` extensions.
+   * Command package metadata derived from `package.json`.
+   * Present only for `kind: "command-extension"` extensions.
    */
-  raycast?: RaycastPackageManifest;
+  commandPackage?: CommandPackageManifest;
   entryHtml?: string;
   /**
    * Native extension entrypoint. Used only when `kind: "native"`.

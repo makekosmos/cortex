@@ -134,26 +134,26 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
       },
       snoozeApp: (appId: string) => ipcRenderer.invoke("kepler:focus-session:snooze-app", appId),
     },
-    raycast: {
-      snapshot: (sessionId) => ipcRenderer.invoke("kepler:raycast:snapshot", sessionId),
-      action: (sessionId, action) => ipcRenderer.invoke("kepler:raycast:action", sessionId, action),
+    command: {
+      snapshot: (sessionId) => ipcRenderer.invoke("kepler:command:snapshot", sessionId),
+      action: (sessionId, action) => ipcRenderer.invoke("kepler:command:action", sessionId, action),
       pickFiles: (sessionId, request) =>
-        ipcRenderer.invoke("kepler:raycast:pick-files", sessionId, request),
+        ipcRenderer.invoke("kepler:command:pick-files", sessionId, request),
       onSnapshotUpdated: (sessionId, listener) => {
         const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => {
           const update = payload as { sessionId?: unknown; snapshot?: unknown };
           if (update.sessionId === sessionId) listener(update.snapshot as never);
         };
-        ipcRenderer.on("kepler:raycast:snapshot-updated", handler);
-        return () => ipcRenderer.removeListener("kepler:raycast:snapshot-updated", handler);
+        ipcRenderer.on("kepler:command:snapshot-updated", handler);
+        return () => ipcRenderer.removeListener("kepler:command:snapshot-updated", handler);
       },
       onFeedback: (sessionId, listener) => {
         const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => {
           const feedback = payload as { sessionId?: unknown; event?: unknown };
           if (feedback.sessionId === sessionId) listener(feedback.event as never);
         };
-        ipcRenderer.on("kepler:raycast:feedback", handler);
-        return () => ipcRenderer.removeListener("kepler:raycast:feedback", handler);
+        ipcRenderer.on("kepler:command:feedback", handler);
+        return () => ipcRenderer.removeListener("kepler:command:feedback", handler);
       },
     },
     extension: {

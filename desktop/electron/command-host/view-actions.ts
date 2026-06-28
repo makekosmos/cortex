@@ -1,6 +1,6 @@
 import { clipboard, shell } from "electron";
 import type { LaunchCommandOptions } from "@raycast/api";
-import type { RaycastActionRequest, RaycastActionResult } from "../../shared/raycast-ipc";
+import type { CommandActionRequest, CommandActionResult } from "../../shared/command-ipc";
 
 function actionStringProp(props: Record<string, unknown>, ...keys: string[]): string | null {
   for (const key of keys) {
@@ -21,11 +21,11 @@ function actionPathTargets(props: Record<string, unknown>): string[] {
   return single ? [single] : [];
 }
 
-export async function handleRaycastAction(options: {
-  action: RaycastActionRequest;
+export async function handleCommandAction(options: {
+  action: CommandActionRequest;
   callback?: (payload?: Record<string, unknown>) => unknown | Promise<unknown>;
   launcher?: (options: LaunchCommandOptions) => Promise<void>;
-}): Promise<RaycastActionResult> {
+}): Promise<CommandActionResult> {
   const { action, callback, launcher } = options;
 
   if (callback) {

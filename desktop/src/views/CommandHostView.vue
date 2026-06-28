@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, shallowRef } from "vue";
 import { DesktopChrome, DesktopContentSurface, type ToastTone } from "@kosmos/visuals";
-import type { RaycastFeedbackEvent, RaycastSnapshot } from "../../shared/raycast-ipc";
-import RaycastFormView from "../raycast-host/RaycastFormView.vue";
-import RaycastGridView from "../raycast-host/RaycastGridView.vue";
-import RaycastListView from "../raycast-host/RaycastListView.vue";
-import RaycastDetailView from "../raycast-host/RaycastDetailView.vue";
-import RaycastMenuBarExtraView from "../raycast-host/RaycastMenuBarExtraView.vue";
+import type { CommandFeedbackEvent, CommandSnapshot } from "../../shared/command-ipc";
+import CommandFormView from "../command-host/CommandFormView.vue";
+import CommandGridView from "../command-host/CommandGridView.vue";
+import CommandListView from "../command-host/CommandListView.vue";
+import CommandDetailView from "../command-host/CommandDetailView.vue";
+import CommandMenuBarExtraView from "../command-host/CommandMenuBarExtraView.vue";
 
-const snapshot = shallowRef<RaycastSnapshot | null>(null);
+const snapshot = shallowRef<CommandSnapshot | null>(null);
 const error = shallowRef<string | null>(null);
 const feedbackItems = shallowRef<
   Array<{
@@ -35,14 +35,14 @@ onMounted(async () => {
     return;
   }
   try {
-    stopFeedback = window.kepler.raycast.onFeedback(id, showFeedback);
-    if (typeof window.kepler.raycast.onSnapshotUpdated === "function") {
-      stopSnapshotUpdates = window.kepler.raycast.onSnapshotUpdated(id, (nextSnapshot) => {
+    stopFeedback = window.kepler.command.onFeedback(id, showFeedback);
+    if (typeof window.kepler.command.onSnapshotUpdated === "function") {
+      stopSnapshotUpdates = window.kepler.command.onSnapshotUpdated(id, (nextSnapshot) => {
         snapshot.value = nextSnapshot;
         error.value = null;
       });
     }
-    snapshot.value = await window.kepler.raycast.snapshot(id);
+    snapshot.value = await window.kepler.command.snapshot(id);
     if (!snapshot.value) error.value = "Сессия команды не найдена";
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err);
@@ -56,13 +56,13 @@ onBeforeUnmount(() => {
   stopSnapshotUpdates = null;
 });
 
-function feedbackTone(event: RaycastFeedbackEvent): ToastTone {
+function feedbackTone(event: CommandFeedbackEvent): ToastTone {
   if (event.style === "success") return "success";
   if (event.style === "failure") return "error";
   return "info";
 }
 
-function showFeedback(event: RaycastFeedbackEvent): void {
+function showFeedback(event: CommandFeedbackEvent): void {
   const id = nextFeedbackId++;
   feedbackItems.value = [
     ...feedbackItems.value.slice(-2),
@@ -88,57 +88,57 @@ function dismissFeedback(id: number): void {
 
 <template>
   <DesktopChrome platform="windows" :title="snapshot?.commandTitle ?? 'Команда'">
-    <DesktopContentSurface class="raycast-host">
-      <RaycastListView
+    <DesktopContentSurface class="command-host">
+      <CommandListView
         v-if="snapshot?.root.type === 'List'"
         :root="snapshot.root"
         :session-id="snapshot.sessionId"
       />
-      <RaycastFormView
+      <CommandFormView
         v-else-if="snapshot?.root.type === 'Form'"
         :root="snapshot.root"
         :session-id="snapshot.sessionId"
       />
-      <RaycastGridView
+      <CommandGridView
         v-else-if="snapshot?.root.type === 'Grid'"
         :root="snapshot.root"
         :session-id="snapshot.sessionId"
       />
-      <RaycastDetailView
+      <CommandDetailView
         v-else-if="snapshot?.root.type === 'Detail'"
         :detail="snapshot.root"
         :session-id="snapshot.sessionId"
-        class="raycast-host__detail"
+        class="command-host__detail"
       />
-      <RaycastMenuBarExtraView
+      <CommandMenuBarExtraView
         v-else-if="snapshot?.root.type === 'MenuBarExtra'"
         :root="snapshot.root"
         :session-id="snapshot.sessionId"
       />
-      <section v-else class="raycast-host__state">
-        <h1 class="raycast-host__title">{{ snapshot?.commandTitle ?? "Команда" }}</h1>
-        <p class="raycast-host__text">
+      <section v-else class="command-host__state">
+        <h1 class="command-host__title">{{ snapshot?.commandTitle ?? "Команда" }}</h1>
+        <p class="command-host__text">
           {{ error ?? "Этот тип команды пока не поддерживается" }}
         </p>
       </section>
     </DesktopContentSurface>
 
-    <div v-if="feedbackItems.length > 0" class="raycast-host__feedback" aria-live="polite">
+    <div v-if="feedbackItems.length > 0" class="command-host__feedback" aria-live="polite">
       <button
         v-for="item in feedbackItems"
         :key="item.id"
-        class="raycast-host__feedback-card"
+        class="command-host__feedback-card"
         :class="{
-          'raycast-host__feedback-card--success': item.tone === 'success',
-          'raycast-host__feedback-card--error': item.tone === 'error',
+          'command-host__feedback-card--success': item.tone === 'success',
+          'command-host__feedback-card--error': item.tone === 'error',
         }"
         type="button"
         @click="dismissFeedback(item.id)"
       >
-        <span v-if="item.loading" class="raycast-host__feedback-spinner" aria-hidden="true" />
-        <span class="raycast-host__feedback-text">
-          <strong class="raycast-host__feedback-title">{{ item.title }}</strong>
-          <span v-if="item.message" class="raycast-host__feedback-message">{{ item.message }}</span>
+        <span v-if="item.loading" class="command-host__feedback-spinner" aria-hidden="true" />
+        <span class="command-host__feedback-text">
+          <strong class="command-host__feedback-title">{{ item.title }}</strong>
+          <span v-if="item.message" class="command-host__feedback-message">{{ item.message }}</span>
         </span>
       </button>
     </div>
@@ -146,7 +146,7 @@ function dismissFeedback(id: number): void {
 </template>
 
 <style scoped>
-.raycast-host {
+.command-host {
   display: flex;
   min-height: 0;
   min-width: 0;
@@ -154,7 +154,7 @@ function dismissFeedback(id: number): void {
   background: color-mix(in srgb, var(--background) 94%, transparent);
 }
 
-.raycast-host__state {
+.command-host__state {
   display: grid;
   place-content: center;
   gap: 8px;
@@ -164,25 +164,25 @@ function dismissFeedback(id: number): void {
   text-align: center;
 }
 
-.raycast-host__title {
+.command-host__title {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
 }
 
-.raycast-host__text {
+.command-host__text {
   margin: 0;
   color: var(--muted-foreground);
   font-size: 13px;
 }
 
-.raycast-host__detail {
+.command-host__detail {
   max-width: none;
   flex: 1;
   border-left: 0;
 }
 
-.raycast-host__feedback {
+.command-host__feedback {
   position: fixed;
   top: 48px;
   right: 16px;
@@ -193,7 +193,7 @@ function dismissFeedback(id: number): void {
   pointer-events: none;
 }
 
-.raycast-host__feedback-card {
+.command-host__feedback-card {
   display: flex;
   min-width: 0;
   align-items: flex-start;
@@ -208,15 +208,15 @@ function dismissFeedback(id: number): void {
   text-align: left;
 }
 
-.raycast-host__feedback-card--success {
+.command-host__feedback-card--success {
   border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
 }
 
-.raycast-host__feedback-card--error {
+.command-host__feedback-card--error {
   border-color: color-mix(in srgb, var(--destructive) 56%, var(--border));
 }
 
-.raycast-host__feedback-spinner {
+.command-host__feedback-spinner {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
@@ -224,32 +224,32 @@ function dismissFeedback(id: number): void {
   border: 2px solid color-mix(in srgb, var(--foreground) 20%, transparent);
   border-top-color: var(--accent);
   border-radius: 999px;
-  animation: raycast-feedback-spin 800ms linear infinite;
+  animation: command-feedback-spin 800ms linear infinite;
 }
 
-.raycast-host__feedback-text {
+.command-host__feedback-text {
   display: grid;
   min-width: 0;
   gap: 3px;
 }
 
-.raycast-host__feedback-title,
-.raycast-host__feedback-message {
+.command-host__feedback-title,
+.command-host__feedback-message {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.raycast-host__feedback-title {
+.command-host__feedback-title {
   font-size: 13px;
   font-weight: 700;
 }
 
-.raycast-host__feedback-message {
+.command-host__feedback-message {
   color: var(--muted-foreground);
   font-size: 12px;
 }
 
-@keyframes raycast-feedback-spin {
+@keyframes command-feedback-spin {
   to {
     transform: rotate(360deg);
   }

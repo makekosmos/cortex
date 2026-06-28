@@ -9,16 +9,16 @@ import {
 } from "@raycast/api";
 import type { AlertOptions } from "@raycast/api";
 import type { ExtensionSource } from "../extension-permissions";
-import { importRaycastCommand } from "./api-bridge";
+import { importCommandModule } from "./api-bridge";
 import {
-  loadRaycastPackageManifest,
-  raycastPreferenceDefaults,
-  resolveRaycastCommandEntry,
-  type RaycastPackageManifest,
+  loadCommandPackageManifest,
+  commandPreferenceDefaults,
+  resolveCommandEntry,
+  type CommandPackageManifest,
 } from "./manifest";
-import { normalizeRaycastNode, type RaycastViewCallbackRegistry } from "./view-model";
-import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
-import type { RaycastFeedbackEvent } from "../../shared/raycast-ipc";
+import { normalizeCommandNode, type CommandViewCallbackRegistry } from "./view-model";
+import type { CommandSnapshotNode } from "../../shared/command-ipc";
+import type { CommandFeedbackEvent } from "../../shared/command-ipc";
 
 interface ClipboardAdapter {
   writeText(text: string): void;
@@ -32,18 +32,18 @@ interface SystemAdapter {
   trash(path: string): Promise<void>;
 }
 
-export interface RunRaycastNoViewCommandOptions {
+export interface RunCommandNoViewOptions {
   extensionId: string;
   commandName: string;
   extensionDir: string;
   userDataDir: string;
   source: ExtensionSource;
-  launch?: RaycastCommandLaunchProps;
+  launch?: CommandLaunchProps;
   clipboard?: ClipboardAdapter;
   system?: SystemAdapter;
   launchCommand?: (options: LaunchCommandOptions) => Promise<void>;
   confirmAlert?: (options: AlertOptions) => Promise<boolean>;
-  feedback?: (event: RaycastFeedbackEvent) => void;
+  feedback?: (event: CommandFeedbackEvent) => void;
   navigation?: {
     push(target: unknown): void;
     pop(): void;
@@ -51,12 +51,12 @@ export interface RunRaycastNoViewCommandOptions {
   };
 }
 
-export interface RunRaycastViewCommandOptions extends RunRaycastNoViewCommandOptions {
-  callbacks?: RaycastViewCallbackRegistry;
+export interface RunCommandViewOptions extends RunCommandNoViewOptions {
+  callbacks?: CommandViewCallbackRegistry;
   commandMode?: "view" | "menu-bar";
 }
 
-export interface RaycastCommandLaunchProps {
+export interface CommandLaunchProps {
   launchType?: LaunchTypeValue;
   arguments?: Record<string, unknown>;
   fallbackText?: string;
@@ -115,8 +115,8 @@ function createCacheStorage(filePath: string, namespace: string): ReturnType<typ
 }
 
 function createRuntimeAdapter(
-  manifest: RaycastPackageManifest,
-  options: RunRaycastNoViewCommandOptions,
+  manifest: CommandPackageManifest,
+  options: RunCommandNoViewOptions,
 ): RaycastRuntimeAdapter {
   const local = createStorage(path.join(options.userDataDir, "raycast-local-storage.json"));
   const cacheDir = path.join(options.userDataDir, "raycast-cache");
@@ -128,11 +128,11 @@ function createRuntimeAdapter(
         message: toast.message,
         style: toast.style,
       });
-      console.log(`[raycast:${options.extensionId}] toast: ${toast.title}`);
+      console.log(`[command:${options.extensionId}] toast: ${toast.title}`);
     },
     async showHUD(title) {
       options.feedback?.({ kind: "hud", title });
-      console.log(`[raycast:${options.extensionId}] hud: ${title}`);
+      console.log(`[command:${options.extensionId}] hud: ${title}`);
     },
     async confirmAlert(alert) {
       return options.confirmAlert ? options.confirmAlert(alert) : false;
@@ -154,17 +154,17 @@ function createRuntimeAdapter(
       options.clipboard?.writeText("");
     },
     async systemOpen(target) {
-      if (!options.system) throw new Error("[kepler-shell] Raycast system.open is not configured");
+      if (!options.system) throw new Error("[kepler-shell] Command system.open is not configured");
       await options.system.open(target);
     },
     async systemShowInFinder(path) {
       if (!options.system) {
-        throw new Error("[kepler-shell] Raycast system.showInFinder is not configured");
+        throw new Error("[kepler-shell] Command system.showInFinder is not configured");
       }
       await options.system.showInFinder(path);
     },
     async systemTrash(path) {
-      if (!options.system) throw new Error("[kepler-shell] Raycast system.trash is not configured");
+      if (!options.system) throw new Error("[kepler-shell] Command system.trash is not configured");
       await options.system.trash(path);
     },
     async localStorageGetItem(key) {
@@ -195,11 +195,11 @@ function createRuntimeAdapter(
       createCacheStorage(cacheDir, namespace).clear();
     },
     getPreferenceValues() {
-      return raycastPreferenceDefaults(manifest, options.commandName);
+      return commandPreferenceDefaults(manifest, options.commandName);
     },
     async launchCommand(commandOptions) {
       if (!options.launchCommand) {
-        throw new Error("[kepler-shell] Raycast launchCommand is not configured");
+        throw new Error("[kepler-shell] Command launchCommand is not configured");
       }
       await options.launchCommand(commandOptions);
     },
@@ -215,7 +215,7 @@ function createRuntimeAdapter(
   };
 }
 
-function commandLaunchProps(options: RunRaycastNoViewCommandOptions): {
+function commandLaunchProps(options: RunCommandNoViewOptions): {
   launchType: LaunchTypeValue;
   arguments: Record<string, unknown>;
   fallbackText?: string;
@@ -229,73 +229,73 @@ function commandLaunchProps(options: RunRaycastNoViewCommandOptions): {
   };
 }
 
-export async function runRaycastNoViewCommand(
-  options: RunRaycastNoViewCommandOptions,
+export async function runCommandNoView(
+  options: RunCommandNoViewOptions,
 ): Promise<void> {
   if (options.source === "user") {
     throw new Error(
-      `[kepler-shell] refusing to execute user-installed Raycast command '${options.extensionId}:${options.commandName}' without an isolated runtime`,
+      `[kepler-shell] refusing to execute user-installed command '${options.extensionId}:${options.commandName}' without an isolated runtime`,
     );
   }
 
-  const manifest = loadRaycastPackageManifest(options.extensionDir);
+  const manifest = loadCommandPackageManifest(options.extensionDir);
   const command = manifest?.commands.find((item) => item.name === options.commandName);
   if (!manifest || !command || command.mode !== "no-view") {
     throw new Error(
-      `[kepler-shell] Raycast no-view command not found: ${options.extensionId}:${options.commandName}`,
+      `[kepler-shell] no-view command not found: ${options.extensionId}:${options.commandName}`,
     );
   }
 
-  const entry = resolveRaycastCommandEntry(options.extensionDir, manifest, options.commandName);
+  const entry = resolveCommandEntry(options.extensionDir, manifest, options.commandName);
   if (!entry) {
     throw new Error(
-      `[kepler-shell] Raycast command '${options.extensionId}:${options.commandName}' has no built JS entry`,
+      `[kepler-shell] command '${options.extensionId}:${options.commandName}' has no built JS entry`,
     );
   }
 
   configureRaycastRuntime(createRuntimeAdapter(manifest, options));
-  const imported = await importRaycastCommand(entry, options.userDataDir);
+  const imported = await importCommandModule(entry, options.userDataDir);
   if (typeof imported.default !== "function") {
-    throw new Error(`[kepler-shell] Raycast command '${entry}' must export default function`);
+    throw new Error(`[kepler-shell] command '${entry}' must export default function`);
   }
   await imported.default(commandLaunchProps(options));
 }
 
-export async function runRaycastViewCommand(
-  options: RunRaycastViewCommandOptions,
-): Promise<RaycastSnapshotNode> {
+export async function runCommandView(
+  options: RunCommandViewOptions,
+): Promise<CommandSnapshotNode> {
   if (options.source === "user") {
     throw new Error(
-      `[kepler-shell] refusing to execute user-installed Raycast view command '${options.extensionId}:${options.commandName}' without an isolated runtime`,
+      `[kepler-shell] refusing to execute user-installed view command '${options.extensionId}:${options.commandName}' without an isolated runtime`,
     );
   }
 
-  const manifest = loadRaycastPackageManifest(options.extensionDir);
+  const manifest = loadCommandPackageManifest(options.extensionDir);
   const command = manifest?.commands.find((item) => item.name === options.commandName);
   const commandMode = options.commandMode ?? "view";
   if (!manifest || !command || command.mode !== commandMode) {
     throw new Error(
-      `[kepler-shell] Raycast ${commandMode} command not found: ${options.extensionId}:${options.commandName}`,
+      `[kepler-shell] ${commandMode} command not found: ${options.extensionId}:${options.commandName}`,
     );
   }
 
-  const entry = resolveRaycastCommandEntry(options.extensionDir, manifest, options.commandName);
+  const entry = resolveCommandEntry(options.extensionDir, manifest, options.commandName);
   if (!entry) {
     throw new Error(
-      `[kepler-shell] Raycast command '${options.extensionId}:${options.commandName}' has no built JS entry`,
+      `[kepler-shell] command '${options.extensionId}:${options.commandName}' has no built JS entry`,
     );
   }
 
   configureRaycastRuntime(createRuntimeAdapter(manifest, options));
-  const imported = await importRaycastCommand(entry, options.userDataDir);
+  const imported = await importCommandModule(entry, options.userDataDir);
   if (typeof imported.default !== "function") {
-    throw new Error(`[kepler-shell] Raycast command '${entry}' must export default function`);
+    throw new Error(`[kepler-shell] command '${entry}' must export default function`);
   }
   const root = await imported.default(commandLaunchProps(options));
-  const snapshot = normalizeRaycastNode(root, options.callbacks);
+  const snapshot = normalizeCommandNode(root, options.callbacks);
   if (!snapshot) {
     throw new Error(
-      `[kepler-shell] Raycast view command '${options.extensionId}:${options.commandName}' returned no UI`,
+      `[kepler-shell] view command '${options.extensionId}:${options.commandName}' returned no UI`,
     );
   }
   return snapshot;

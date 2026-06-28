@@ -1,18 +1,18 @@
-import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
+import type { CommandSnapshotNode } from "../../shared/command-ipc";
 import {
   collectNodes,
   findFirst,
   imageProp,
   stringArrayProp,
   textProp,
-  type RaycastGridDropdownModel,
-  type RaycastGridItemModel,
-  type RaycastGridSectionModel,
-  type RaycastListDropdownOptionModel,
-  type RaycastListDropdownSectionModel,
+  type CommandGridDropdownModel,
+  type CommandGridItemModel,
+  type CommandGridSectionModel,
+  type CommandListDropdownOptionModel,
+  type CommandListDropdownSectionModel,
 } from "./model";
 
-function gridItemModel(node: RaycastSnapshotNode, index: number): RaycastGridItemModel {
+function gridItemModel(node: CommandSnapshotNode, index: number): CommandGridItemModel {
   const title = textProp(node.props.title) ?? "Без названия";
   const id = textProp(node.props.id) ?? `${index}:${title}`;
   return {
@@ -25,9 +25,9 @@ function gridItemModel(node: RaycastSnapshotNode, index: number): RaycastGridIte
   };
 }
 
-export function gridSections(snapshot: RaycastSnapshotNode): RaycastGridSectionModel[] {
-  const sections: RaycastGridSectionModel[] = [];
-  let looseItems: RaycastSnapshotNode[] = [];
+export function gridSections(snapshot: CommandSnapshotNode): CommandGridSectionModel[] {
+  const sections: CommandGridSectionModel[] = [];
+  let looseItems: CommandSnapshotNode[] = [];
   let itemIndex = 0;
 
   function flushLooseItems(): void {
@@ -60,15 +60,15 @@ export function gridSections(snapshot: RaycastSnapshotNode): RaycastGridSectionM
   return sections;
 }
 
-export function gridItems(snapshot: RaycastSnapshotNode): RaycastGridItemModel[] {
+export function gridItems(snapshot: CommandSnapshotNode): CommandGridItemModel[] {
   return gridSections(snapshot).flatMap((section) => section.items);
 }
 
-export function gridPlaceholder(snapshot: RaycastSnapshotNode): string {
+export function gridPlaceholder(snapshot: CommandSnapshotNode): string {
   return textProp(snapshot.props.searchBarPlaceholder) ?? "Поиск";
 }
 
-export function gridEmptyMessage(snapshot: RaycastSnapshotNode): string {
+export function gridEmptyMessage(snapshot: CommandSnapshotNode): string {
   const emptyView = findFirst(snapshot, "Grid.EmptyView");
   return (
     textProp(emptyView?.props.title) ??
@@ -77,46 +77,46 @@ export function gridEmptyMessage(snapshot: RaycastSnapshotNode): string {
   );
 }
 
-export function gridEmptyActions(snapshot: RaycastSnapshotNode): RaycastSnapshotNode | null {
+export function gridEmptyActions(snapshot: CommandSnapshotNode): CommandSnapshotNode | null {
   const emptyView = findFirst(snapshot, "Grid.EmptyView");
   return emptyView ? findFirst(emptyView, "ActionPanel") : null;
 }
 
-export function gridIsLoading(snapshot: RaycastSnapshotNode): boolean {
+export function gridIsLoading(snapshot: CommandSnapshotNode): boolean {
   return snapshot.props.isLoading === true;
 }
 
-export function gridFiltering(snapshot: RaycastSnapshotNode): boolean {
+export function gridFiltering(snapshot: CommandSnapshotNode): boolean {
   return snapshot.props.filtering !== false;
 }
 
-export function gridSearchText(snapshot: RaycastSnapshotNode): string {
+export function gridSearchText(snapshot: CommandSnapshotNode): string {
   return textProp(snapshot.props.searchText) ?? "";
 }
 
-export function gridSelectedItemId(snapshot: RaycastSnapshotNode): string | null {
+export function gridSelectedItemId(snapshot: CommandSnapshotNode): string | null {
   return textProp(snapshot.props.selectedItemId);
 }
 
-export function gridSearchCallbackNode(snapshot: RaycastSnapshotNode): RaycastSnapshotNode | null {
+export function gridSearchCallbackNode(snapshot: CommandSnapshotNode): CommandSnapshotNode | null {
   return typeof snapshot.props.__onSearchTextChangeId === "string" ? snapshot : null;
 }
 
 export function gridSelectionCallbackNode(
-  snapshot: RaycastSnapshotNode,
-): RaycastSnapshotNode | null {
+  snapshot: CommandSnapshotNode,
+): CommandSnapshotNode | null {
   return typeof snapshot.props.__onSelectionChangeId === "string" ? snapshot : null;
 }
 
-export function gridDropdown(snapshot: RaycastSnapshotNode): RaycastGridDropdownModel | null {
+export function gridDropdown(snapshot: CommandSnapshotNode): CommandGridDropdownModel | null {
   const dropdown = findFirst(snapshot, "Grid.Dropdown");
   if (!dropdown) return null;
 
-  const sections: RaycastListDropdownSectionModel[] = [];
-  let looseItems: RaycastSnapshotNode[] = [];
+  const sections: CommandListDropdownSectionModel[] = [];
+  let looseItems: CommandSnapshotNode[] = [];
   let optionIndex = 0;
 
-  function optionModel(node: RaycastSnapshotNode): RaycastListDropdownOptionModel {
+  function optionModel(node: CommandSnapshotNode): CommandListDropdownOptionModel {
     const value = textProp(node.props.value) ?? textProp(node.props.id) ?? `${optionIndex}`;
     optionIndex += 1;
     return {
@@ -158,7 +158,7 @@ export function gridDropdown(snapshot: RaycastSnapshotNode): RaycastGridDropdown
   };
 }
 
-export function matchesGridItem(item: RaycastGridItemModel, query: string): boolean {
+export function matchesGridItem(item: CommandGridItemModel, query: string): boolean {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
   const haystack = [item.title, item.subtitle ?? "", ...item.keywords].join(" ").toLowerCase();

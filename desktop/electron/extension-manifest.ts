@@ -3,7 +3,7 @@ import path from "node:path";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
 import { KEPLER_API_VERSION, satisfiesSemver } from "./kepler-api";
-import { loadRaycastPackageManifest } from "./raycast/manifest";
+import { loadCommandPackageManifest } from "./command-host/manifest";
 import { resolveExtensionDir, resolveExtensionRoots } from "./extension-roots";
 import type { ExtensionKind, ExtensionManifest } from "./extension-manifest-types";
 
@@ -140,38 +140,38 @@ export function loadExtensionManifest(id: string): ExtensionManifest | null {
   if (!dir) return null;
   const manifestPath = path.join(dir, "manifest.json");
   if (!existsSync(manifestPath)) {
-    const raycast = loadRaycastPackageManifest(dir);
-    if (!raycast) return null;
-    if (raycast.name !== id) {
+    const commandPackage = loadCommandPackageManifest(dir);
+    if (!commandPackage) return null;
+    if (commandPackage.name !== id) {
       console.warn(
-        `[kepler-shell] Raycast package name mismatch: folder=${id}, package=${raycast.name}`,
+        `[kepler-shell] Command package name mismatch: folder=${id}, package=${commandPackage.name}`,
       );
       return null;
     }
     return {
-      id: raycast.name,
-      name: raycast.title,
-      version: raycast.version,
-      description: raycast.description,
-      author: raycast.author,
-      permissions: raycast.kosmos?.permissions,
-      kind: "raycast",
-      icon: raycast.icon,
-      windowEffect: raycast.kosmos?.windowEffect,
-      keplerApiVersion: raycast.kosmos?.minKosmosApiVersion,
-      raycast,
-      commands: raycast.commands.map((command) => ({
+      id: commandPackage.name,
+      name: commandPackage.title,
+      version: commandPackage.version,
+      description: commandPackage.description,
+      author: commandPackage.author,
+      permissions: commandPackage.kosmos?.permissions,
+      kind: "command-extension",
+      icon: commandPackage.icon,
+      windowEffect: commandPackage.kosmos?.windowEffect,
+      keplerApiVersion: commandPackage.kosmos?.minKosmosApiVersion,
+      commandPackage,
+      commands: commandPackage.commands.map((command) => ({
         id: command.name,
         title: command.title,
-        subtitle: command.subtitle ?? raycast.title,
-        icon: command.icon ?? raycast.icon,
+        subtitle: command.subtitle ?? commandPackage.title,
+        icon: command.icon ?? commandPackage.icon,
         kind: "command",
         mode:
           command.mode === "no-view"
-            ? "raycast-no-view"
+            ? "command-no-view"
             : command.mode === "menu-bar"
-              ? "raycast-menu-bar"
-              : "raycast-view",
+              ? "command-menu-bar"
+              : "command-view",
       })),
     };
   }

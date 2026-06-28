@@ -1,25 +1,25 @@
-export type RaycastMarkdownBlock =
+export type CommandMarkdownBlock =
   | { type: "heading"; level: 1 | 2 | 3; text: string }
   | { type: "paragraph"; text: string }
   | { type: "list"; items: string[] }
   | { type: "code"; text: string };
 
-function flushParagraph(lines: string[], blocks: RaycastMarkdownBlock[]): void {
+function flushParagraph(lines: string[], blocks: CommandMarkdownBlock[]): void {
   if (lines.length === 0) return;
   blocks.push({ type: "paragraph", text: lines.join(" ") });
   lines.length = 0;
 }
 
-function flushList(items: string[], blocks: RaycastMarkdownBlock[]): void {
+function flushList(items: string[], blocks: CommandMarkdownBlock[]): void {
   if (items.length === 0) return;
   blocks.push({ type: "list", items: [...items] });
   items.length = 0;
 }
 
-export function parseRaycastMarkdown(input: string): RaycastMarkdownBlock[] {
+export function parseCommandMarkdown(input: string): CommandMarkdownBlock[] {
   const normalized = input.replace(/\r\n?/g, "\n");
   const lines = normalized.split("\n");
-  const blocks: RaycastMarkdownBlock[] = [];
+  const blocks: CommandMarkdownBlock[] = [];
   const paragraph: string[] = [];
   const listItems: string[] = [];
   let codeLines: string[] | null = null;

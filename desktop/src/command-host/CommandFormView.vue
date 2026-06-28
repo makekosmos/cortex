@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { computed, shallowReactive, shallowRef } from "vue";
-import type { RaycastSnapshotNode } from "../../shared/raycast-ipc";
-import RaycastActionPanel from "./RaycastActionPanel.vue";
-import RaycastDetailView from "./RaycastDetailView.vue";
+import type { CommandSnapshotNode } from "../../shared/command-ipc";
+import CommandActionPanel from "./CommandActionPanel.vue";
+import CommandDetailView from "./CommandDetailView.vue";
 import { actionNodes } from "./model";
 import { formModel } from "./model-form";
 
 const props = defineProps<{
-  root: RaycastSnapshotNode;
+  root: CommandSnapshotNode;
   sessionId: string;
 }>();
 
 const values = shallowReactive<Record<string, string | boolean | string[]>>({});
 const status = shallowRef<string | null>(null);
-const pushedDetail = shallowRef<RaycastSnapshotNode | null>(null);
+const pushedDetail = shallowRef<CommandSnapshotNode | null>(null);
 
 const form = computed(() => formModel(props.root));
 const submitAction = computed(
@@ -32,7 +32,7 @@ for (const field of form.value.fields) {
   }
 }
 
-async function executeAction(action: RaycastSnapshotNode): Promise<void> {
+async function executeAction(action: CommandSnapshotNode): Promise<void> {
   if (action.type === "Action.Push") {
     pushedDetail.value =
       action.children.find((child) => child.type === "Detail") ?? action.children[0] ?? null;
@@ -52,7 +52,7 @@ async function executeAction(action: RaycastSnapshotNode): Promise<void> {
     action.type === "Action.Trash" ||
     action.type === "Action.LaunchCommand"
   ) {
-    const result = await window.kepler.raycast.action(props.sessionId, {
+    const result = await window.kepler.command.action(props.sessionId, {
       type: action.type,
       props: action.props,
     });
@@ -60,7 +60,7 @@ async function executeAction(action: RaycastSnapshotNode): Promise<void> {
     return;
   }
   if (action.type !== "Action.SubmitForm") return;
-  const result = await window.kepler.raycast.action(props.sessionId, {
+  const result = await window.kepler.command.action(props.sessionId, {
     type: action.type,
     props: action.props,
     payload: { values: { ...values } },
@@ -118,7 +118,7 @@ function setFiles(id: string, paths: string[]): void {
 async function chooseFiles(fieldId: string): Promise<void> {
   const field = form.value.fields.find((item) => item.id === fieldId);
   if (!field) return;
-  const result = await window.kepler.raycast.pickFiles(props.sessionId, {
+  const result = await window.kepler.command.pickFiles(props.sessionId, {
     allowMultipleSelection: field.allowMultipleSelection,
     canChooseDirectories: field.canChooseDirectories,
     canChooseFiles: field.canChooseFiles,
@@ -151,7 +151,7 @@ function setBoolean(id: string, value: boolean): void {
 async function notifyFieldChange(id: string, value: string | boolean | string[]): Promise<void> {
   const field = form.value.fields.find((item) => item.id === id);
   if (!field?.callbackId) return;
-  const result = await window.kepler.raycast.action(props.sessionId, {
+  const result = await window.kepler.command.action(props.sessionId, {
     type: field.type,
     props: { __callbackId: field.callbackId },
     payload: { value },
@@ -161,35 +161,35 @@ async function notifyFieldChange(id: string, value: string | boolean | string[])
 </script>
 
 <template>
-  <section class="raycast-form-view-shell">
-    <form class="raycast-form-view" @submit.prevent="submitAction && executeAction(submitAction)">
-      <div class="raycast-form-view__fields kosmos-scroll">
+  <section class="command-form-view-shell">
+    <form class="command-form-view" @submit.prevent="submitAction && executeAction(submitAction)">
+      <div class="command-form-view__fields kosmos-scroll">
         <template v-for="field in form.fields" :key="field.id">
-          <hr v-if="field.type === 'Form.Separator'" class="raycast-form-view__separator" />
+          <hr v-if="field.type === 'Form.Separator'" class="command-form-view__separator" />
 
-          <p v-else-if="field.type === 'Form.Description'" class="raycast-form-view__description">
+          <p v-else-if="field.type === 'Form.Description'" class="command-form-view__description">
             {{ field.title }}
           </p>
 
-          <label v-else-if="field.type === 'Form.Checkbox'" class="raycast-form-view__checkbox">
+          <label v-else-if="field.type === 'Form.Checkbox'" class="command-form-view__checkbox">
             <input
               :checked="checkboxValue(field.id)"
-              class="raycast-form-view__checkbox-input"
+              class="command-form-view__checkbox-input"
               type="checkbox"
               @change="setBoolean(field.id, ($event.target as HTMLInputElement).checked)"
             />
-            <span class="raycast-form-view__checkbox-title">{{ field.title }}</span>
+            <span class="command-form-view__checkbox-title">{{ field.title }}</span>
           </label>
 
-          <div v-else-if="field.type === 'Form.TagPicker'" class="raycast-form-view__field">
-            <span class="raycast-form-view__label">{{ field.title }}</span>
-            <div class="raycast-form-view__tag-picker">
+          <div v-else-if="field.type === 'Form.TagPicker'" class="command-form-view__field">
+            <span class="command-form-view__label">{{ field.title }}</span>
+            <div class="command-form-view__tag-picker">
               <button
                 v-for="option in field.options"
                 :key="`${field.id}:${option.value}`"
-                class="raycast-form-view__tag"
+                class="command-form-view__tag"
                 :class="{
-                  'raycast-form-view__tag--selected': isTagSelected(field.id, option.value),
+                  'command-form-view__tag--selected': isTagSelected(field.id, option.value),
                 }"
                 type="button"
                 :aria-pressed="isTagSelected(field.id, option.value)"
@@ -197,24 +197,24 @@ async function notifyFieldChange(id: string, value: string | boolean | string[])
               >
                 {{ option.title }}
               </button>
-              <p v-if="field.options.length === 0" class="raycast-form-view__file-empty">
+              <p v-if="field.options.length === 0" class="command-form-view__file-empty">
                 Нет тегов
               </p>
             </div>
           </div>
 
-          <label v-else class="raycast-form-view__field">
-            <span class="raycast-form-view__label">{{ field.title }}</span>
+          <label v-else class="command-form-view__field">
+            <span class="command-form-view__label">{{ field.title }}</span>
             <textarea
               v-if="field.type === 'Form.TextArea'"
-              class="raycast-form-view__textarea"
+              class="command-form-view__textarea"
               :placeholder="field.placeholder ?? undefined"
               :value="inputValue(field.id)"
               @input="setString(field.id, ($event.target as HTMLTextAreaElement).value)"
             />
             <select
               v-else-if="field.type === 'Form.Dropdown'"
-              class="raycast-form-view__input"
+              class="command-form-view__input"
               :value="inputValue(field.id)"
               @change="setString(field.id, ($event.target as HTMLSelectElement).value)"
             >
@@ -243,23 +243,23 @@ async function notifyFieldChange(id: string, value: string | boolean | string[])
             </select>
             <div
               v-else-if="field.type === 'Form.FilePicker'"
-              class="raycast-form-view__file-picker"
+              class="command-form-view__file-picker"
             >
               <button
-                class="raycast-form-view__file-button"
+                class="command-form-view__file-button"
                 type="button"
                 @click="chooseFiles(field.id)"
               >
                 Выбрать
               </button>
-              <div class="raycast-form-view__files">
-                <p v-if="fileValues(field.id).length === 0" class="raycast-form-view__file-empty">
+              <div class="command-form-view__files">
+                <p v-if="fileValues(field.id).length === 0" class="command-form-view__file-empty">
                   Файлы не выбраны
                 </p>
                 <button
                   v-for="path in fileValues(field.id)"
                   :key="path"
-                  class="raycast-form-view__file"
+                  class="command-form-view__file"
                   type="button"
                   :title="path"
                   @click="removeFile(field.id, path)"
@@ -270,7 +270,7 @@ async function notifyFieldChange(id: string, value: string | boolean | string[])
             </div>
             <input
               v-else
-              class="raycast-form-view__input"
+              class="command-form-view__input"
               :type="
                 field.type === 'Form.PasswordField'
                   ? 'password'
@@ -285,25 +285,25 @@ async function notifyFieldChange(id: string, value: string | boolean | string[])
           </label>
         </template>
 
-        <p v-if="form.fields.length === 0" class="raycast-form-view__empty">Нет полей</p>
+        <p v-if="form.fields.length === 0" class="command-form-view__empty">Нет полей</p>
       </div>
 
-      <footer class="raycast-form-view__footer">
-        <RaycastActionPanel :panel="form.actions" @execute="executeAction" />
-        <p v-if="status" class="raycast-form-view__status">{{ status }}</p>
+      <footer class="command-form-view__footer">
+        <CommandActionPanel :panel="form.actions" @execute="executeAction" />
+        <p v-if="status" class="command-form-view__status">{{ status }}</p>
       </footer>
     </form>
 
-    <RaycastDetailView
+    <CommandDetailView
       v-if="pushedDetail"
       :detail="pushedDetail"
-      class="raycast-form-view-shell__detail"
+      class="command-form-view-shell__detail"
     />
   </section>
 </template>
 
 <style scoped>
-.raycast-form-view-shell {
+.command-form-view-shell {
   display: flex;
   min-height: 0;
   min-width: 0;
@@ -311,7 +311,7 @@ async function notifyFieldChange(id: string, value: string | boolean | string[])
   overflow: hidden;
 }
 
-.raycast-form-view {
+.command-form-view {
   display: flex;
   min-height: 0;
   min-width: 0;
@@ -320,7 +320,7 @@ async function notifyFieldChange(id: string, value: string | boolean | string[])
   overflow: hidden;
 }
 
-.raycast-form-view__fields {
+.command-form-view__fields {
   display: grid;
   min-height: 0;
   gap: 14px;
@@ -328,24 +328,24 @@ async function notifyFieldChange(id: string, value: string | boolean | string[])
   padding: 18px;
 }
 
-.raycast-form-view__field {
+.command-form-view__field {
   display: grid;
   gap: 6px;
   min-width: 0;
 }
 
-.raycast-form-view__label,
-.raycast-form-view__checkbox-title {
+.command-form-view__label,
+.command-form-view__checkbox-title {
   color: var(--foreground);
   font-size: 13px;
   font-weight: 600;
 }
 
-.raycast-form-view__input,
-.raycast-form-view__textarea,
-.raycast-form-view__file-button,
-.raycast-form-view__file,
-.raycast-form-view__tag {
+.command-form-view__input,
+.command-form-view__textarea,
+.command-form-view__file-button,
+.command-form-view__file,
+.command-form-view__tag {
   width: 100%;
   border: 1px solid var(--input);
   border-radius: var(--radius-input);
@@ -356,42 +356,42 @@ async function notifyFieldChange(id: string, value: string | boolean | string[])
   font-size: 13px;
 }
 
-.raycast-form-view__input,
-.raycast-form-view__file-button {
+.command-form-view__input,
+.command-form-view__file-button {
   height: 34px;
 }
 
-.raycast-form-view__textarea {
+.command-form-view__textarea {
   min-height: 90px;
   resize: vertical;
   padding-block: 8px;
 }
 
-.raycast-form-view__input:focus,
-.raycast-form-view__textarea:focus,
-.raycast-form-view__file-button:focus,
-.raycast-form-view__file:focus,
-.raycast-form-view__tag:focus {
+.command-form-view__input:focus,
+.command-form-view__textarea:focus,
+.command-form-view__file-button:focus,
+.command-form-view__file:focus,
+.command-form-view__tag:focus {
   border-color: var(--accent);
 }
 
-.raycast-form-view__file-picker {
+.command-form-view__file-picker {
   display: grid;
   gap: 8px;
 }
 
-.raycast-form-view__file-button {
+.command-form-view__file-button {
   width: max-content;
   min-width: 110px;
   cursor: default;
 }
 
-.raycast-form-view__files {
+.command-form-view__files {
   display: grid;
   gap: 6px;
 }
 
-.raycast-form-view__file {
+.command-form-view__file {
   min-width: 0;
   height: auto;
   padding-block: 8px;
@@ -402,62 +402,62 @@ async function notifyFieldChange(id: string, value: string | boolean | string[])
   white-space: nowrap;
 }
 
-.raycast-form-view__file-empty {
+.command-form-view__file-empty {
   margin: 0;
   color: var(--muted-foreground);
   font-size: 12px;
 }
 
-.raycast-form-view__tag-picker {
+.command-form-view__tag-picker {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.raycast-form-view__tag {
+.command-form-view__tag {
   width: auto;
   min-height: 28px;
   cursor: default;
 }
 
-.raycast-form-view__tag--selected {
+.command-form-view__tag--selected {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--accent);
 }
 
-.raycast-form-view__checkbox {
+.command-form-view__checkbox {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.raycast-form-view__checkbox-input {
+.command-form-view__checkbox-input {
   width: 16px;
   height: 16px;
   accent-color: var(--accent);
 }
 
-.raycast-form-view__empty,
-.raycast-form-view__status,
-.raycast-form-view__description {
+.command-form-view__empty,
+.command-form-view__status,
+.command-form-view__description {
   margin: 0;
   color: var(--muted-foreground);
   font-size: 12px;
 }
 
-.raycast-form-view__description {
+.command-form-view__description {
   line-height: 1.5;
 }
 
-.raycast-form-view__separator {
+.command-form-view__separator {
   width: 100%;
   height: 1px;
   border: 0;
   background: var(--border);
 }
 
-.raycast-form-view__footer {
+.command-form-view__footer {
   display: flex;
   min-height: 44px;
   align-items: center;
@@ -466,7 +466,7 @@ async function notifyFieldChange(id: string, value: string | boolean | string[])
   padding: 8px 10px;
 }
 
-.raycast-form-view-shell__detail {
+.command-form-view-shell__detail {
   flex: 0 0 min(380px, 42%);
 }
 </style>

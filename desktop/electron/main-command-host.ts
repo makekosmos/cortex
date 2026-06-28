@@ -4,13 +4,13 @@ import {
   extensionUserDataDir,
   findDeclaredCommand,
   openExtension,
-  raycastRuntimeContext,
+  commandRuntimeContext,
   type DeclaredCommand,
 } from "./extension-host";
-import { runRaycastNoViewCommand, type RaycastCommandLaunchProps } from "./raycast/command-runner";
-import { openRaycastViewCommand } from "./raycast/view-host";
+import { runCommandNoView, type CommandLaunchProps } from "./command-host/command-runner";
+import { openCommandViewCommand } from "./command-host/view-host";
 
-function raycastLaunchFromOptions(options: LaunchCommandOptions): RaycastCommandLaunchProps {
+function commandLaunchFromOptions(options: LaunchCommandOptions): CommandLaunchProps {
   return {
     launchType: options.type ?? LaunchType.LaunchCommand,
     arguments: options.arguments ?? {},
@@ -19,7 +19,7 @@ function raycastLaunchFromOptions(options: LaunchCommandOptions): RaycastCommand
   };
 }
 
-async function launchRaycastCommandFromOptions(
+async function launchCommandFromOptions(
   originExtensionId: string,
   options: LaunchCommandOptions,
 ): Promise<void> {
@@ -27,14 +27,14 @@ async function launchRaycastCommandFromOptions(
   const target = findDeclaredCommand(`${extensionId}:${options.name}`);
   if (!target) {
     console.warn(
-      `[kepler-shell] Raycast launchCommand target not found: ${extensionId}:${options.name}`,
+      `[kepler-shell] Command launchCommand target not found: ${extensionId}:${options.name}`,
     );
     return;
   }
-  await launchRaycastDeclaredCommand(target, raycastLaunchFromOptions(options));
+  await launchCommandDeclaredCommand(target, commandLaunchFromOptions(options));
 }
 
-async function openRaycastSystemTarget(target: string): Promise<void> {
+async function openCommandSystemTarget(target: string): Promise<void> {
   if (/^https?:\/\//i.test(target)) {
     await shell.openExternal(target);
     return;
@@ -44,13 +44,13 @@ async function openRaycastSystemTarget(target: string): Promise<void> {
   if (error) throw new Error(error);
 }
 
-function raycastSystemAdapter(): {
+function commandSystemAdapter(): {
   open(target: string): Promise<void>;
   showInFinder(path: string): Promise<void>;
   trash(path: string): Promise<void>;
 } {
   return {
-    open: openRaycastSystemTarget,
+    open: openCommandSystemTarget,
     async showInFinder(target) {
       shell.showItemInFolder(target);
     },
@@ -60,7 +60,7 @@ function raycastSystemAdapter(): {
   };
 }
 
-async function confirmRaycastAlert(alert: AlertOptions): Promise<boolean> {
+async function confirmCommandAlert(alert: AlertOptions): Promise<boolean> {
   const result = await dialog.showMessageBox({
     type: "question",
     buttons: [alert.primaryAction?.title ?? "OK", alert.dismissAction?.title ?? "Отмена"],
@@ -73,9 +73,9 @@ async function confirmRaycastAlert(alert: AlertOptions): Promise<boolean> {
   return result.response === 0;
 }
 
-export async function launchRaycastDeclaredCommand(
+export async function launchCommandDeclaredCommand(
   declared: DeclaredCommand,
-  launch?: RaycastCommandLaunchProps,
+  launch?: CommandLaunchProps,
 ): Promise<boolean> {
   if (declared.mode === "open") {
     await openExtension(declared.extensionId, declared.route);
@@ -83,48 +83,48 @@ export async function launchRaycastDeclaredCommand(
   }
 
   if (
-    declared.mode !== "raycast-view" &&
-    declared.mode !== "raycast-no-view" &&
-    declared.mode !== "raycast-menu-bar"
+    declared.mode !== "command-view" &&
+    declared.mode !== "command-no-view" &&
+    declared.mode !== "command-menu-bar"
   ) {
     return false;
   }
 
-  const context = raycastRuntimeContext(declared.extensionId);
-  if (!context || !declared.raycastCommandName) {
-    console.warn(`[kepler-shell] Raycast command context not found: ${declared.id}`);
+  const context = commandRuntimeContext(declared.extensionId);
+  if (!context || !declared.commandName) {
+    console.warn(`[kepler-shell] Command context not found: ${declared.id}`);
     return false;
   }
 
   const launchCommand = (options: LaunchCommandOptions) =>
-    launchRaycastCommandFromOptions(declared.extensionId, options);
+    launchCommandFromOptions(declared.extensionId, options);
 
-  if (declared.mode === "raycast-view" || declared.mode === "raycast-menu-bar") {
-    await openRaycastViewCommand({
+  if (declared.mode === "command-view" || declared.mode === "command-menu-bar") {
+    await openCommandViewCommand({
       extensionId: declared.extensionId,
       extensionName: declared.appName,
-      commandName: declared.raycastCommandName,
+      commandName: declared.commandName,
       commandTitle: declared.title,
-      commandMode: declared.mode === "raycast-menu-bar" ? "menu-bar" : "view",
+      commandMode: declared.mode === "command-menu-bar" ? "menu-bar" : "view",
       extensionDir: context.dir,
       source: context.source,
       launch,
-      system: raycastSystemAdapter(),
+      system: commandSystemAdapter(),
       launchCommand,
     });
     return true;
   }
 
-  await runRaycastNoViewCommand({
+  await runCommandNoView({
     extensionId: declared.extensionId,
-    commandName: declared.raycastCommandName,
+    commandName: declared.commandName,
     extensionDir: context.dir,
     userDataDir: extensionUserDataDir(declared.extensionId),
     source: context.source,
     launch,
     clipboard,
-    system: raycastSystemAdapter(),
-    confirmAlert: confirmRaycastAlert,
+    system: commandSystemAdapter(),
+    confirmAlert: confirmCommandAlert,
     launchCommand,
   });
   return true;

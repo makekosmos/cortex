@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-type RaycastCommandMode = "view" | "no-view" | "menu-bar";
+type CommandMode = "view" | "no-view" | "menu-bar";
 
-interface RaycastPreference {
+interface CommandPreference {
   name: string;
   title?: string;
   type?: string;
@@ -11,39 +11,39 @@ interface RaycastPreference {
   default?: unknown;
 }
 
-interface RaycastCommandManifest {
+interface CommandManifestEntry {
   name: string;
   title: string;
   subtitle?: string;
   description?: string;
   icon?: string;
-  mode: RaycastCommandMode;
+  mode: CommandMode;
   keywords?: string[];
-  preferences?: RaycastPreference[];
+  preferences?: CommandPreference[];
   arguments?: Array<Record<string, unknown>>;
 }
 
-interface RaycastKosmosCommandConfig {
+interface CommandKosmosCommandConfig {
   entry?: string;
 }
 
-interface RaycastKosmosConfig {
+interface CommandKosmosConfig {
   permissions?: string[];
   windowEffect?: "acrylic" | "mica" | "none";
   minKosmosApiVersion?: string;
-  commands?: Record<string, RaycastKosmosCommandConfig>;
+  commands?: Record<string, CommandKosmosCommandConfig>;
 }
 
-export interface RaycastPackageManifest {
+export interface CommandPackageManifest {
   name: string;
   title: string;
   version?: string;
   description?: string;
   author?: string;
   icon?: string;
-  commands: RaycastCommandManifest[];
-  preferences?: RaycastPreference[];
-  kosmos?: RaycastKosmosConfig;
+  commands: CommandManifestEntry[];
+  preferences?: CommandPreference[];
+  kosmos?: CommandKosmosConfig;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -68,9 +68,9 @@ function parseAuthor(value: unknown): string | undefined {
   return optionalString(record?.name);
 }
 
-function parsePreferences(value: unknown): RaycastPreference[] | undefined {
+function parsePreferences(value: unknown): CommandPreference[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const preferences: RaycastPreference[] = [];
+  const preferences: CommandPreference[] = [];
   for (const item of value) {
     const record = asRecord(item);
     const name = optionalString(record?.name);
@@ -86,15 +86,15 @@ function parsePreferences(value: unknown): RaycastPreference[] | undefined {
   return preferences.length > 0 ? preferences : undefined;
 }
 
-function parseCommandMode(value: unknown): RaycastCommandMode | null {
+function parseCommandMode(value: unknown): CommandMode | null {
   if (value === undefined || value === null || value === "") return "view";
   if (value === "view" || value === "no-view" || value === "menu-bar") return value;
   return null;
 }
 
-function parseCommands(value: unknown): RaycastCommandManifest[] {
+function parseCommands(value: unknown): CommandManifestEntry[] {
   if (!Array.isArray(value)) return [];
-  const commands: RaycastCommandManifest[] = [];
+  const commands: CommandManifestEntry[] = [];
   for (const item of value) {
     const record = asRecord(item);
     const name = optionalString(record?.name);
@@ -118,11 +118,11 @@ function parseCommands(value: unknown): RaycastCommandManifest[] {
   return commands;
 }
 
-function parseKosmosConfig(value: unknown): RaycastKosmosConfig | undefined {
+function parseKosmosConfig(value: unknown): CommandKosmosConfig | undefined {
   const record = asRecord(value);
   if (!record) return undefined;
   const commandsRecord = asRecord(record.commands);
-  const commands: Record<string, RaycastKosmosCommandConfig> = {};
+  const commands: Record<string, CommandKosmosCommandConfig> = {};
   if (commandsRecord) {
     for (const [name, config] of Object.entries(commandsRecord)) {
       const commandConfig = asRecord(config);
@@ -130,7 +130,7 @@ function parseKosmosConfig(value: unknown): RaycastKosmosConfig | undefined {
       if (entry) commands[name] = { entry };
     }
   }
-  const out: RaycastKosmosConfig = {
+  const out: CommandKosmosConfig = {
     permissions: stringArray(record.permissions),
     windowEffect:
       record.windowEffect === "acrylic" ||
@@ -146,7 +146,7 @@ function parseKosmosConfig(value: unknown): RaycastKosmosConfig | undefined {
     : undefined;
 }
 
-export function parseRaycastPackageManifest(value: unknown): RaycastPackageManifest | null {
+export function parseCommandPackageManifest(value: unknown): CommandPackageManifest | null {
   const record = asRecord(value);
   const name = optionalString(record?.name);
   if (!record || !name) return null;
@@ -165,20 +165,20 @@ export function parseRaycastPackageManifest(value: unknown): RaycastPackageManif
   };
 }
 
-export function loadRaycastPackageManifest(extensionDir: string): RaycastPackageManifest | null {
+export function loadCommandPackageManifest(extensionDir: string): CommandPackageManifest | null {
   const manifestPath = path.join(extensionDir, "package.json");
   if (!existsSync(manifestPath)) return null;
   try {
-    return parseRaycastPackageManifest(JSON.parse(readFileSync(manifestPath, "utf8")));
+    return parseCommandPackageManifest(JSON.parse(readFileSync(manifestPath, "utf8")));
   } catch (error) {
-    console.error(`[kepler-shell] Raycast package.json invalid: ${extensionDir}`, error);
+    console.error(`[kepler-shell] Command package.json invalid: ${extensionDir}`, error);
     return null;
   }
 }
 
-export function resolveRaycastCommandEntry(
+export function resolveCommandEntry(
   extensionDir: string,
-  manifest: RaycastPackageManifest,
+  manifest: CommandPackageManifest,
   commandName: string,
 ): string | null {
   const configured = manifest.kosmos?.commands?.[commandName]?.entry;
@@ -200,8 +200,8 @@ export function resolveRaycastCommandEntry(
   return null;
 }
 
-export function raycastPreferenceDefaults(
-  manifest: RaycastPackageManifest,
+export function commandPreferenceDefaults(
+  manifest: CommandPackageManifest,
   commandName: string,
 ): Record<string, unknown> {
   const command = manifest.commands.find((item) => item.name === commandName);
