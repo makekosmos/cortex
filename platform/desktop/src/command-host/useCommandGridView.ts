@@ -142,7 +142,7 @@ export function useCommandGridView(props: { root: CommandSnapshotNode; sessionId
 
     const callbackNode = searchCallbackNode.value;
     const callbackId = callbackNode?.props.__onSearchTextChangeId;
-    if (typeof callbackId !== "string") return;
+    if (!callbackNode || typeof callbackId !== "string") return;
 
     const result = await window.kepler.command.action(props.sessionId, {
       type: callbackNode.type,
@@ -160,7 +160,7 @@ export function useCommandGridView(props: { root: CommandSnapshotNode; sessionId
     if (!notify) return;
     const callbackNode = selectionCallbackNode.value;
     const callbackId = callbackNode?.props.__onSelectionChangeId;
-    if (typeof callbackId !== "string") return;
+    if (!callbackNode || typeof callbackId !== "string") return;
 
     const result = await window.kepler.command.action(props.sessionId, {
       type: callbackNode.type,

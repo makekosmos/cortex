@@ -25,6 +25,10 @@ function fmtUpdatedAt(iso: string): string {
 }
 
 const hasRows = computed(() => props.rows.length > 0);
+
+const decoratedRows = computed(() =>
+  props.rows.map((row) => ({ row, visual: typeVisualFor(row.typeId) })),
+);
 </script>
 
 <template>
@@ -39,7 +43,7 @@ const hasRows = computed(() => props.rows.length > 0);
       </div>
       <div class="object-table__body kosmos-scroll">
         <div
-          v-for="row in rows"
+          v-for="{ row, visual } in decoratedRows"
           :key="row.id"
           v-memo="[row.id, row.typeName, row.typeId, row.primary, row.updatedAt]"
           class="object-row"
@@ -48,12 +52,12 @@ const hasRows = computed(() => props.rows.length > 0);
             class="object-type-icon"
             :title="row.typeName"
             :style="{
-              '--object-type-icon-from': typeVisualFor(row.typeId).from,
-              '--object-type-icon-to': typeVisualFor(row.typeId).to,
+              '--object-type-icon-from': visual.from,
+              '--object-type-icon-to': visual.to,
             }"
             aria-hidden="true"
           >
-            <component :is="typeVisualFor(row.typeId).icon" :size="14" weight="duotone" />
+            <component :is="visual.icon" :size="14" weight="duotone" />
           </span>
           <div class="object-row__primary">{{ row.primary }}</div>
           <time class="object-table__updated" :datetime="row.updatedAt">

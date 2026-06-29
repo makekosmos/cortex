@@ -16,6 +16,12 @@ function iconSrc(iconRef?: string | null): string | null {
   return `file:///${iconRef.replace(/\\/g, "/")}`;
 }
 
+const iconSrcMap = computed(() => {
+  const map = new Map<string, string | null>();
+  for (const row of props.rows) map.set(row.id, iconSrc(row.iconRef));
+  return map;
+});
+
 function onIconError(event: Event): void {
   (event.currentTarget as HTMLImageElement).hidden = true;
 }
@@ -82,8 +88,8 @@ function fmtDate(iso?: string | null): string {
           <div class="usage-row__app">
             <span class="app-icon" aria-hidden="true">
               <img
-                v-if="iconSrc(row.iconRef)"
-                :src="iconSrc(row.iconRef)!"
+                v-if="iconSrcMap.get(row.id)"
+                :src="iconSrcMap.get(row.id)!"
                 alt=""
                 draggable="false"
                 @error="onIconError"
