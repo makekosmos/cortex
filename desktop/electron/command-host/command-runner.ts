@@ -229,9 +229,7 @@ function commandLaunchProps(options: RunCommandNoViewOptions): {
   };
 }
 
-export async function runCommandNoView(
-  options: RunCommandNoViewOptions,
-): Promise<void> {
+export async function runCommandNoView(options: RunCommandNoViewOptions): Promise<void> {
   if (options.source === "user") {
     throw new Error(
       `[kepler-shell] refusing to execute user-installed command '${options.extensionId}:${options.commandName}' without an isolated runtime`,
@@ -261,9 +259,7 @@ export async function runCommandNoView(
   await imported.default(commandLaunchProps(options));
 }
 
-export async function runCommandView(
-  options: RunCommandViewOptions,
-): Promise<CommandSnapshotNode> {
+export async function runCommandView(options: RunCommandViewOptions): Promise<CommandSnapshotNode> {
   if (options.source === "user") {
     throw new Error(
       `[kepler-shell] refusing to execute user-installed view command '${options.extensionId}:${options.commandName}' without an isolated runtime`,
