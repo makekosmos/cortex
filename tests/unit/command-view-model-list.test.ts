@@ -1,11 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  Action,
-  ActionPanel,
-  Detail,
-  Keyboard,
-  List,
-} from "../../packages/raycast-api/src/index";
+import { Action, ActionPanel, Detail, Keyboard, List } from "../../packages/raycast-api/src/index";
 import { normalizeCommandNode } from "../../platform/desktop/electron/command-host/view-model";
 import {
   actionNodes,

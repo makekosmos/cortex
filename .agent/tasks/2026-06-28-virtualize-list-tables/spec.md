@@ -24,11 +24,11 @@ All three have **single-line cells** (`white-space: nowrap` + `text-overflow: el
 and a `min-height: 36px` row, so they are safe to convert to a fixed 36px row and
 window with simple index math.
 
-| # | Component | Scroll container | Row `v-for` | Row rule to fix |
-|---|-----------|------------------|-------------|-----------------|
-| 1 | `platform/desktop/src/dashboard/ObjectTable.vue` | `.object-table__body` | `row in rows` (~line 41) | `.object-row` `min-height: 36px` → `height: 36px` (~line 109) |
-| 2 | `platform/desktop/src/dashboard/UsageTable.vue` | `.usage-table__body` | `row in rows` (~line 66) | `.usage-row` `min-height: 36px` → `height: 36px` (~line 165) |
-| 3 | `products/eden/src/components/objects/TypeObjectsView.vue` | `.type-objects-table-body` | `entry in collectionEntries` (~line 161) | `.type-objects-row` `min-height: 36px` → `height: 36px` (~line 388) |
+| #   | Component                                                  | Scroll container           | Row `v-for`                              | Row rule to fix                                                     |
+| --- | ---------------------------------------------------------- | -------------------------- | ---------------------------------------- | ------------------------------------------------------------------- |
+| 1   | `platform/desktop/src/dashboard/ObjectTable.vue`           | `.object-table__body`      | `row in rows` (~line 41)                 | `.object-row` `min-height: 36px` → `height: 36px` (~line 109)       |
+| 2   | `platform/desktop/src/dashboard/UsageTable.vue`            | `.usage-table__body`       | `row in rows` (~line 66)                 | `.usage-row` `min-height: 36px` → `height: 36px` (~line 165)        |
+| 3   | `products/eden/src/components/objects/TypeObjectsView.vue` | `.type-objects-table-body` | `entry in collectionEntries` (~line 161) | `.type-objects-row` `min-height: 36px` → `height: 36px` (~line 388) |
 
 `ROW_HEIGHT = 36`. Each of these `v-for` rows already carries a `v-memo` (added in
 `bdcda8c`) — **keep it**; v-memo and virtualization coexist fine.
@@ -39,8 +39,8 @@ window with simple index math.
   are **variable height** (1–2 lines). Needs measured-height virtualization or a design
   change to a fixed row; not a simple height fix.
 - `platform/desktop/src/command-host/CommandListView.vue` — accessories `flex-wrap: wrap`
-  + subtitle → variable height, plus it has **sections** and **keyboard navigation /
-  scroll-into-view**. Hardest case. Leave it (it already has `v-memo`).
+  - subtitle → variable height, plus it has **sections** and **keyboard navigation /
+    scroll-into-view**. Hardest case. Leave it (it already has `v-memo`).
 
 ## Reference pattern (from EdenSidebar)
 
