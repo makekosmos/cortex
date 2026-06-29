@@ -29,7 +29,7 @@ const {
 </script>
 
 <template>
-  <section class="command-grid-view" aria-label="Command Grid">
+  <section class="command-grid-view" aria-label="Сетка команд">
     <div class="command-grid-view__search">
       <input
         :value="query"

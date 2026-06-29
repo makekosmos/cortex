@@ -30,7 +30,7 @@ const {
 </script>
 
 <template>
-  <section class="command-list-view" aria-label="Command List">
+  <section class="command-list-view" aria-label="Список команд">
     <div class="command-list-view__main">
       <div class="command-list-view__search">
         <input
@@ -84,7 +84,14 @@ const {
           <button
             v-for="item in section.items"
             :key="item.id"
-            v-memo="[item.id, item.icon, item.title, item.subtitle, item.accessories, item.id === selectedItem?.id]"
+            v-memo="[
+              item.id,
+              item.icon,
+              item.title,
+              item.subtitle,
+              item.accessories,
+              item.id === selectedItem?.id,
+            ]"
             class="command-list-view__item"
             :class="{ 'command-list-view__item--selected': item.id === selectedItem?.id }"
             type="button"
