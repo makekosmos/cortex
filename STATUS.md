@@ -3,11 +3,24 @@
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
 | Kosmos Desktop (win / mac) | 0.6.17 / 0.5.1 |
-| Eden                       | 0.4.0          |
+| Eden                       | 0.4.1          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
 | Arrancador                 | 0.1.4          |
 | Akasha                     | 0.1.2          |
+
+## 2026-06-30 — Eden TipTap-only editor patch (Eden 0.4.0 -> 0.4.1)
+
+Patch-релиз закрывает хвосты после TipTap migration release: CodeMirror больше не остается в Eden как fallback, а UX код-блоков и Markdown-команд доведен до production-поведения.
+
+- **CodeMirror удален из runtime**: старый editor-gate, Vim-настройки, CM-тесты и миграционная кнопка убраны; Eden теперь работает с TipTap/ProseMirror content path напрямую.
+- **Markdown-команды в rich text**: `## `, списки, blockquote и code-fence вводятся как реальные TipTap-блоки, а Backspace в начале heading сбрасывает строку в обычный paragraph.
+- **Код-блоки**: Shiki-подсветка, выбор языка, копирование, wrap/unwrap, горизонтальный скролл и длинные блоки приведены к единому Eden/Kosmos visual contract без поломки переноса строк.
+- **Сохранность данных**: частичное копирование из code block переносится как обычный текст, а полный блок сохраняет структурное копирование; content adapter покрыт обновленными тестами.
+
+Checks: `bun run --cwd products/eden test:unit`, `bun run --cwd products/eden test:vue`,
+`bun run format:check`, `bun run --cwd platform/desktop typecheck`,
+`bun run --cwd platform/desktop build:extensions`.
 
 ## 2026-06-30 — Eden TipTap migration release (Kosmos Desktop 0.6.16 → 0.6.17, Eden 0.3.0 → 0.4.0)
 
