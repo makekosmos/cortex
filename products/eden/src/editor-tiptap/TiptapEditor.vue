@@ -12,6 +12,7 @@ import {
   watch,
 } from "vue";
 import {
+  type Editor,
   Extension,
   mergeAttributes,
   Node,
@@ -62,6 +63,7 @@ import { SYSTEM_TYPE_NOTE_ID, SYSTEM_TYPE_PERSON_ID } from "@/lib/systemTypes";
 import { isFailedSaveResult } from "@/lib/saveResult";
 import {
   isReadableEntryContent,
+  markdownToTiptapDoc,
   readEntryTiptapDoc,
   tiptapDocToMarkdown,
   writeEntryTiptapDoc,
@@ -198,14 +200,12 @@ class EdenCodeBlockView implements NodeView {
   private readonly languageDropdownValue = shallowRef("");
   private readonly languageDropdownApp: VueApp;
   private readonly wrapButton: HTMLButtonElement;
-  private readonly wrapLines = shallowRef(false);
+  private readonly wrapLines = shallowRef(true);
   private readonly wrapIconApp: VueApp;
   private readonly copyButton: HTMLButtonElement;
   private readonly copyIconCopied = shallowRef(false);
   private readonly copyIconApp: VueApp;
   private readonly expandButton: HTMLButtonElement;
-  private readonly expandButtonLabel: HTMLSpanElement;
-  private readonly expandIconExpanded = shallowRef(false);
   private readonly expandIconApp: VueApp;
   private readonly resizeObserver: ResizeObserver | null = null;
   private scrollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -222,7 +222,7 @@ class EdenCodeBlockView implements NodeView {
     this.getPos = getPos;
 
     this.dom = document.createElement("div");
-    this.dom.className = "tiptap-code-block";
+    this.dom.className = "tiptap-code-block is-wrapped";
     this.dom.dataset.language = visibleCodeLanguage(node);
 
     const toolbar = document.createElement("div");
@@ -296,29 +296,29 @@ class EdenCodeBlockView implements NodeView {
     this.expandButton.type = "button";
     this.expandButton.className = "tiptap-code-expand";
     this.expandButton.contentEditable = "false";
-    this.expandButtonLabel = document.createElement("span");
     const expandIconHost = document.createElement("span");
     expandIconHost.className = "tiptap-code-expand-icon";
     this.expandIconApp = createApp({
       setup: () => () =>
-        h(this.expandIconExpanded.value ? PhCaretUp : PhCaretDown, {
+        h(PhCaretDown, {
           size: 13,
           weight: "bold",
           "aria-hidden": "true",
         }),
     });
     this.expandIconApp.mount(expandIconHost);
-    this.expandButton.append(this.expandButtonLabel, expandIconHost);
+    this.expandButton.append(expandIconHost);
     this.expandButton.addEventListener("click", this.handleExpandToggle);
 
     this.dom.append(toolbar, this.pre, this.expandButton);
-    this.syncControls();
+    this.dom.addEventListener("click", this.handleCollapsedPreviewClick);
+    this.syncControls(false);
   }
 
   update(node: ProseMirrorNode): boolean {
     if (node.type !== this.node.type) return false;
     this.node = node;
-    this.syncControls();
+    this.syncControls(true);
     return true;
   }
 
@@ -342,6 +342,7 @@ class EdenCodeBlockView implements NodeView {
     this.wrapButton.removeEventListener("click", this.handleWrapToggle);
     this.copyButton.removeEventListener("click", this.handleCopy);
     this.expandButton.removeEventListener("click", this.handleExpandToggle);
+    this.dom.removeEventListener("click", this.handleCollapsedPreviewClick);
     this.pre.removeEventListener("scroll", this.handleCodeScroll);
     this.pre.removeEventListener("mouseenter", this.handleCodeHover);
     this.pre.removeEventListener("mouseleave", this.handleCodeLeave);
@@ -362,7 +363,7 @@ class EdenCodeBlockView implements NodeView {
   };
 
   private readonly handleCopy = (): void => {
-    void copyTextToClipboard(this.node.textContent).then(() => {
+    void copyTextToClipboard(codeBlockMarkdownForClipboard(this.node)).then(() => {
       this.copyIconCopied.value = true;
       this.copyButton.classList.add("is-copied");
       if (this.copyTimer !== null) clearTimeout(this.copyTimer);
@@ -384,8 +385,28 @@ class EdenCodeBlockView implements NodeView {
     this.view.focus();
   };
 
-  private readonly handleExpandToggle = (): void => {
+  private readonly handleExpandToggle = (event?: MouseEvent): void => {
+    event?.preventDefault();
+    event?.stopPropagation();
     this.expanded = !this.expanded;
+    this.syncExpandState();
+    this.view.focus();
+  };
+
+  private readonly handleCollapsedPreviewClick = (event: MouseEvent): void => {
+    if (!this.dom.classList.contains("is-collapsible") || this.expanded) return;
+    if (!(event.target instanceof globalThis.Node)) return;
+    if (
+      this.languageDropdownHost.contains(event.target) ||
+      this.copyButton.contains(event.target) ||
+      this.expandButton.contains(event.target)
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.expanded = true;
     this.syncExpandState();
     this.view.focus();
   };
@@ -407,7 +428,7 @@ class EdenCodeBlockView implements NodeView {
     }, 900);
   };
 
-  private syncControls(): void {
+  private syncControls(expandNewCollapsible: boolean): void {
     const language = visibleCodeLanguage(this.node);
     this.dom.dataset.language = language;
     this.languageDropdownValue.value = language;
@@ -417,6 +438,8 @@ class EdenCodeBlockView implements NodeView {
     this.scheduleWrapAvailabilitySync();
     const isCollapsible =
       this.node.textContent.split(/\r?\n/).length > EdenCodeBlockView.COLLAPSED_LINE_LIMIT;
+    const wasCollapsible = this.dom.classList.contains("is-collapsible");
+    if (expandNewCollapsible && isCollapsible && !wasCollapsible) this.expanded = true;
     if (!isCollapsible) this.expanded = false;
     this.dom.classList.toggle("is-collapsible", isCollapsible);
     this.syncExpandState();
@@ -425,12 +448,11 @@ class EdenCodeBlockView implements NodeView {
   private syncExpandState(): void {
     const isCollapsible = this.dom.classList.contains("is-collapsible");
     this.dom.classList.toggle("is-expanded", isCollapsible && this.expanded);
-    this.expandButton.hidden = !isCollapsible;
-    this.expandIconExpanded.value = isCollapsible && this.expanded;
-    this.expandButtonLabel.textContent =
-      isCollapsible && this.expanded ? "Свернуть" : "Показать полностью";
-    this.expandButton.title = this.expandButtonLabel.textContent;
-    this.expandButton.ariaLabel = this.expandButtonLabel.textContent;
+    this.expandButton.hidden = !isCollapsible || this.expanded;
+    if (isCollapsible && !this.expanded) this.pre.scrollTop = 0;
+    this.expandButton.title = "Показать полностью";
+    this.expandButton.ariaLabel = "Показать полностью";
+    this.scheduleWrapAvailabilitySync();
   }
 
   private scheduleWrapAvailabilitySync(): void {
@@ -438,6 +460,10 @@ class EdenCodeBlockView implements NodeView {
   }
 
   private readonly syncWrapAvailability = (): void => {
+    if (this.dom.classList.contains("is-collapsible") && !this.expanded) {
+      this.wrapButton.hidden = true;
+      return;
+    }
     this.wrapButton.hidden =
       !this.wrapLines.value && this.pre.scrollWidth <= this.pre.clientWidth + 1;
   };
@@ -626,6 +652,17 @@ function visibleCodeLanguage(node: ProseMirrorNode): string {
   return normalizedCodeLanguage(node) || syntaxLanguageForNode(node) || "";
 }
 
+function codeBlockMarkdownForClipboard(node: ProseMirrorNode): string {
+  const language = visibleCodeLanguage(node);
+  const fence = longestBacktickRun(node.textContent) >= 3 ? "````" : "```";
+  const code = node.textContent.endsWith("\n") ? node.textContent : `${node.textContent}\n`;
+  return `${fence}${language}\n${code}${fence}`;
+}
+
+function longestBacktickRun(text: string): number {
+  return Math.max(0, ...[...text.matchAll(/`+/g)].map((match) => match[0].length));
+}
+
 function normalizedCodeLanguage(node: ProseMirrorNode): string {
   const raw =
     typeof node.attrs.language === "string" ? node.attrs.language.trim().toLowerCase() : "";
@@ -720,18 +757,37 @@ const EdenRichTextEditing = Extension.create({
   },
 
   addProseMirrorPlugins() {
+    const activeEditor = this.editor;
     return [
       new Plugin({
         key: new PluginKey("eden-code-copy-as-text"),
         props: {
           handleDOMEvents: {
             copy: (view, event) => handleEditorCopy(view, event),
+            paste: (_view, event) => handleEditorPaste(activeEditor, event),
           },
         },
       }),
     ];
   },
 });
+
+function handleEditorPaste(activeEditor: Editor, event: Event): boolean {
+  if (!(event instanceof ClipboardEvent) || !event.clipboardData) return false;
+  const text = event.clipboardData.getData("text/plain");
+  if (!hasCodeFence(text)) return false;
+
+  const nodes = markdownToTiptapDoc(text).content ?? [];
+  if (nodes.length === 0) return false;
+  if (!activeEditor.commands.insertContent(nodes)) return false;
+
+  event.preventDefault();
+  return true;
+}
+
+function hasCodeFence(text: string): boolean {
+  return /^(`{3,})[^\n`]*\n[\s\S]*\n\1\s*$/.test(text.trim());
+}
 
 function handleEditorCopy(view: EditorView, event: Event): boolean {
   if (!(event instanceof ClipboardEvent) || !event.clipboardData) return false;
@@ -1553,7 +1609,7 @@ onMounted(() => {
 
 .tiptap-editor-content :deep(.ProseMirror .tiptap-code-block pre) {
   margin: 0;
-  padding: 13px 14px;
+  padding: 42px 14px 18px;
   border-radius: 0;
   background: transparent;
   cursor: default;
@@ -1609,28 +1665,31 @@ onMounted(() => {
 
 .tiptap-editor-content :deep(.ProseMirror .tiptap-code-expand) {
   position: absolute;
-  right: 12px;
+  left: 50%;
   bottom: 10px;
   z-index: 3;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  width: 30px;
   height: 26px;
-  border: 0;
+  border: 1px solid var(--border-color-strong, var(--border));
   border-radius: 6px;
-  padding: 0 9px;
-  background: color-mix(in srgb, var(--surface-secondary, #242424) 72%, #000 28%);
+  padding: 0;
+  background: var(--settings-search-surface, var(--popover, var(--background)));
   color: var(--text-secondary);
   cursor: default;
   font-size: 12px;
   line-height: 1;
+  transform: translateX(-50%);
   transition:
     background-color 140ms ease,
+    border-color 140ms ease,
     color 140ms ease;
 }
 
 .tiptap-editor-content :deep(.ProseMirror .tiptap-code-expand:hover) {
-  background: color-mix(in srgb, var(--text-primary) 9%, var(--surface-secondary, #242424));
+  border-color: color-mix(in srgb, var(--text-secondary) 48%, transparent);
   color: var(--text-primary);
 }
 

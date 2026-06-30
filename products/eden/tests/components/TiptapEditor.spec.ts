@@ -242,7 +242,9 @@ describe("TiptapEditor component", () => {
 
     render(TiptapEditor, {
       props: {
-        entry: markdownEntry("```js\nconst jhon = () => return something\n```"),
+        entry: markdownEntry(
+          '```rs\nfn main() {\n  let name = "Rust";\n  println!("Привет, {}!", name);\n}\n```',
+        ),
         onSave,
         zenMode: false,
       },
@@ -253,11 +255,13 @@ describe("TiptapEditor component", () => {
     const copyButton = () => document.querySelector<HTMLButtonElement>(".tiptap-code-copy");
 
     await expect.poll(languageButton).not.toBeNull();
-    expect(languageButton()?.textContent).toContain("JavaScript");
+    expect(languageButton()?.textContent).toContain("Rust");
     await expect.poll(() => shikiHighlightedSpanCount(), { timeout: 4000 }).toBeGreaterThan(1);
 
     await userEvent.click(copyButton()!);
-    expect(writeText).toHaveBeenCalledWith("const jhon = () => return something");
+    expect(writeText).toHaveBeenCalledWith(
+      '```rust\nfn main() {\n  let name = "Rust";\n  println!("Привет, {}!", name);\n}\n```',
+    );
 
     await userEvent.click(languageButton()!);
     const typeScriptOption = () =>
@@ -310,6 +314,36 @@ describe("TiptapEditor component", () => {
     expect(clipboardData.getData("text/html")).toBe("");
   });
 
+  test("pasted fenced markdown becomes a code block", async () => {
+    const onSave = vi.fn(async () => null);
+    render(TiptapEditor, {
+      props: { entry: makeEntry(EMPTY_DOC), onSave, zenMode: false },
+    });
+
+    await focusBody();
+    const clipboardData = new DataTransfer();
+    clipboardData.setData("text/plain", "```typescript\nconst jhon = () => return something\n```");
+    const event = new ClipboardEvent("paste", {
+      bubbles: true,
+      cancelable: true,
+      clipboardData,
+    });
+
+    tiptapBody().dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    await expect
+      .poll(() => document.querySelector<HTMLElement>(".tiptap-code-block code")?.textContent)
+      .toContain("const jhon");
+    await expect
+      .poll(
+        () =>
+          document.querySelector<HTMLButtonElement>(".tiptap-code-language-host button")
+            ?.textContent,
+      )
+      .toContain("TypeScript");
+  });
+
   test("code block line wrapping can be toggled", async () => {
     const onSave = vi.fn(async () => null);
     render(TiptapEditor, {
@@ -331,14 +365,14 @@ describe("TiptapEditor component", () => {
     await expect.poll(wrapButton).not.toBeNull();
     await expect.poll(() => wrapButton()?.hidden).toBe(false);
     expect(scroll()?.classList.contains("kosmos-scroll")).toBe(true);
-    expect(block()?.classList.contains("is-wrapped")).toBe(false);
+    expect(block()?.classList.contains("is-wrapped")).toBe(true);
 
     scroll()?.dispatchEvent(new Event("mouseenter", { bubbles: true }));
     expect(scroll()?.dataset.scrolling).toBe("1");
 
     const blockWidth = block()!.offsetWidth;
     await userEvent.click(wrapButton()!);
-    expect(block()?.classList.contains("is-wrapped")).toBe(true);
+    expect(block()?.classList.contains("is-wrapped")).toBe(false);
     expect(block()!.offsetWidth).toBe(blockWidth);
     await expect
       .poll(() =>
@@ -349,10 +383,10 @@ describe("TiptapEditor component", () => {
       .toBe(false);
 
     await userEvent.click(wrapButton()!);
-    expect(block()?.classList.contains("is-wrapped")).toBe(false);
+    expect(block()?.classList.contains("is-wrapped")).toBe(true);
   });
 
-  test("code block wrap button is hidden without horizontal overflow", async () => {
+  test("code block is wrapped by default without horizontal overflow", async () => {
     const onSave = vi.fn(async () => null);
     render(TiptapEditor, {
       props: {
@@ -363,13 +397,44 @@ describe("TiptapEditor component", () => {
     });
 
     const wrapButton = () => document.querySelector<HTMLButtonElement>(".tiptap-code-wrap");
+    const block = () => document.querySelector<HTMLElement>(".tiptap-code-block");
     await expect.poll(wrapButton).not.toBeNull();
-    await expect.poll(() => wrapButton()?.hidden).toBe(true);
+    await expect.poll(block).not.toBeNull();
+    expect(block()?.classList.contains("is-wrapped")).toBe(true);
   });
 
-  test("long code block can be expanded and collapsed", async () => {
+  test("code block that becomes long while editing stays expanded", async () => {
     const onSave = vi.fn(async () => null);
-    const code = Array.from({ length: 22 }, (_, index) => `line ${index + 1}`).join("\n");
+    render(TiptapEditor, {
+      props: {
+        entry: markdownEntry("```ts\nline 1\n```"),
+        onSave,
+        zenMode: false,
+      },
+    });
+
+    const block = () => document.querySelector<HTMLElement>(".tiptap-code-block");
+    const code = () => document.querySelector<HTMLElement>(".tiptap-code-block code");
+    const expandButton = () => document.querySelector<HTMLButtonElement>(".tiptap-code-expand");
+
+    await expect.poll(code).not.toBeNull();
+    await userEvent.click(code()!);
+    await userEvent.keyboard(
+      Array.from({ length: 20 }, (_, index) => `{Enter}line ${index + 2}`).join(""),
+    );
+
+    await expect.poll(() => block()?.classList.contains("is-collapsible")).toBe(true);
+    expect(block()?.classList.contains("is-expanded")).toBe(true);
+    expect(expandButton()?.hidden).toBe(true);
+  });
+
+  test("long code block preview expands from code click", async () => {
+    const onSave = vi.fn(async () => null);
+    const code = Array.from(
+      { length: 22 },
+      (_, index) =>
+        `line ${index + 1}: const veryLongLine = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";`,
+    ).join("\n");
     render(TiptapEditor, {
       props: {
         entry: markdownEntry(`\`\`\`ts\n${code}\n\`\`\``),
@@ -379,19 +444,21 @@ describe("TiptapEditor component", () => {
     });
 
     const block = () => document.querySelector<HTMLElement>(".tiptap-code-block");
+    const scroll = () => document.querySelector<HTMLElement>(".tiptap-code-scroll");
+    const wrapButton = () => document.querySelector<HTMLButtonElement>(".tiptap-code-wrap");
     const expandButton = () => document.querySelector<HTMLButtonElement>(".tiptap-code-expand");
 
     await expect.poll(() => block()?.classList.contains("is-collapsible")).toBe(true);
     await expect.poll(expandButton).not.toBeNull();
     expect(expandButton()?.hidden).toBe(false);
-    expect(expandButton()?.textContent).toContain("Показать полностью");
+    expect(expandButton()?.textContent).toBe("");
+    expect(expandButton()?.ariaLabel).toBe("Показать полностью");
+    expect(wrapButton()?.hidden).toBe(true);
 
-    await userEvent.click(expandButton()!);
+    await userEvent.click(scroll()!);
     expect(block()?.classList.contains("is-expanded")).toBe(true);
-    expect(expandButton()?.textContent).toContain("Свернуть");
-
-    await userEvent.click(expandButton()!);
-    expect(block()?.classList.contains("is-expanded")).toBe(false);
+    expect(expandButton()?.hidden).toBe(true);
+    await expect.poll(() => wrapButton()?.hidden).toBe(false);
   });
 
   test("code block подсвечивает Rust", async () => {

@@ -1,13 +1,23 @@
-# Kosmos — статус проекта (2026-06-30)
+# Kosmos — статус проекта (2026-07-01)
 
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
 | Kosmos Desktop (win / mac) | 0.6.17 / 0.5.1 |
-| Eden                       | 0.4.1          |
+| Eden                       | 0.4.2          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
 | Arrancador                 | 0.1.4          |
 | Akasha                     | 0.1.2          |
+
+## 2026-07-01 — Eden fenced-code paste patch (Eden 0.4.1 -> 0.4.2)
+
+Patch-релиз закрывает последний заметный разрыв в TipTap code-block UX: кнопка копирования уже отдавала fenced Markdown, но обратная вставка такого блока в Eden раньше попадала обычным текстом.
+
+- **Вставка code fence**: clipboard-текст вида ` ```typescript ... ``` ` теперь парсится через существующий Markdown -> TipTap adapter и вставляется как настоящий `codeBlock` с языком, подсветкой и toolbar.
+- **Копирование code block**: кнопка copy продолжает класть в буфер полный fenced Markdown, чтобы вставка обратно в Eden и в другие Markdown-aware приложения сохраняла структуру блока.
+- **Регрессии**: добавлен browser component test на paste fenced Markdown; существующие сценарии частичного копирования из code block как plain text остаются покрыты.
+
+Checks: `bun run format:check`, `bun run --cwd products/eden test:vue`.
 
 ## 2026-06-30 — Eden TipTap-only editor patch (Eden 0.4.0 -> 0.4.1)
 
