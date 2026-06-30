@@ -66,7 +66,15 @@ loadDotenvLocal();
 const children = [];
 
 function readExtensionDevPorts() {
-  const requestedIds = process.env.KEPLER_DEV_EXTENSIONS === "1" ? null : new Set(["akasha"]);
+  const requestedIds =
+    process.env.KEPLER_DEV_EXTENSIONS === "1"
+      ? null
+      : new Set(
+          (process.env.KEPLER_DEV_EXTENSIONS || "akasha")
+            .split(",")
+            .map((id) => id.trim())
+            .filter(Boolean),
+        );
   return listRepoExtensionEntries(repoRoot)
     .filter((e) => !requestedIds || requestedIds.has(e.id) || requestedIds.has(e.folder))
     .map((e) => {
@@ -204,6 +212,12 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 //    порта — fallback на one-shot dist build.
 if (process.env.KEPLER_DEV_EXTENSIONS === "1") {
   startChild("dev-extensions", "node", ["scripts/dev-extensions.mjs"]);
+} else if (process.env.KEPLER_DEV_EXTENSIONS) {
+  startChild("dev-extensions", "node", [
+    "scripts/dev-extensions.mjs",
+    "--only",
+    process.env.KEPLER_DEV_EXTENSIONS,
+  ]);
 } else {
   startChild("dev-extensions:akasha", "node", ["scripts/dev-extensions.mjs", "--only", "akasha"]);
 }
