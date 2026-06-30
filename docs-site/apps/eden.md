@@ -13,14 +13,14 @@ Eden — приложение для записей: дневник, мысли,
 ```
 Kepler.exe (Electron host)
   └─ extension-host
-      └─ products/eden/  (Vue bundle, CodeMirror editor)
+      └─ products/eden/  (Vue bundle, TipTap editor)
             ↕
             kepler.ark.request(operation, params)  ─→  kepler-backend (WS)
                                                           ↓
                                                        ark-core-rpc (SQLite)
 ```
 
-- **`products/eden/src/`** — Vue 3.6 Vapor UI: редактор (CodeMirror), сайдбар, настройки, typed notes; shared visuals из `@kosmos/visuals`.
+- **`products/eden/src/`** — Vue 3.6 Vapor UI: редактор (TipTap), сайдбар, настройки, typed notes; shared visuals из `@kosmos/visuals`.
 - **`products/eden/src/lib/kepler-api-shim.ts`** — мост: эмулирует `window.api` (как у standalone Eden), внутри роутит ARK операции через `window.kepler.ark.request(...)`. Это позволяет сохранять Eden codebase без массового rewrite call-sites при миграции в extension. Прецедент — Delphi `electron-api-shim.ts`.
 - **`products/eden/src/lib/edenApi.ts`** — публичный фасад для note CRUD / folders / search / typed-notes, импортирует функции из shim'а.
 - **Heart Rust sidecar — удалён.** Search полностью через ARK FTS5 (`search_objects`). Vault filesystem manager стал не нужен — single ARK DB per user.
@@ -29,7 +29,7 @@ Kepler.exe (Electron host)
 
 | Слой      | Технология                                                                           |
 | --------- | ------------------------------------------------------------------------------------ |
-| UI        | Vue 3.6 **Vapor** + CodeMirror + Pinia                                               |
+| UI        | Vue 3.6 **Vapor** + TipTap + Pinia                                                   |
 | Транспорт | `window.kepler.ark.request` → kepler-backend WS → `ark-core-rpc`                     |
 | Storage   | ARK SQLite (через runtime, не direct access)                                         |
 | Search    | ARK FTS5 (`search_objects` endpoint)                                                 |
@@ -47,7 +47,8 @@ products/eden/
 └─ src/
    ├─ main.ts                 # installKeplerApiShim() → createApp(App).use(pinia).mount("#root")
    ├─ App.vue                 # корневой view
-   ├─ editor-cm/              # CodeMirror editor + Markdown storage adapter
+   ├─ editor-tiptap/          # TipTap editor
+   ├─ editor-content/         # content storage/read/write adapters
    ├─ Titlebar.vue
    ├─ lib/
    │  ├─ kepler-api-shim.ts   # window.api эмуляция поверх kepler.ark
@@ -210,7 +211,7 @@ Elevation surfaces (`dialog-card`, `search-overlay`, `note-type-menu`, etc.) о�
 
 ### Legacy TipTap UI удалён
 
-Eden runtime editor path — CodeMirror (`products/eden/src/editor-cm/CmEditor.vue`). Legacy TipTap editor files and TipTap dependencies were removed after Markdown storage migration; body storage uses `editor-cm/content.ts`.
+Eden runtime editor path — TipTap (`products/eden/src/editor-tiptap/TiptapEditor.vue`). Body storage/read/write helpers live in `products/eden/src/editor-content/content.ts`.
 
 ### Accent color
 
@@ -268,7 +269,7 @@ widget mode](../concepts/eden-zen-mode#dock-corner-widget-mode).
 - **Storage hardening через ARK** — все писи идут через `upsert_object` с runtime валидацией; никаких прямых SQL write'ов из extension TS (см. [Граница записи](../concepts/write-boundary.md)).
 - **Vault export** пишет выбранные object types в Obsidian-style папки и не подмешивает task_obj без явного выбора; локальные image/file refs переписываются в vault-relative пути и попадают в `assets/obsidian-asset-manifest.json`, а сам markdown-files bridge остаётся text-only, поэтому бинарные payloads копировать нечем.
 - **Desktop shell** строится через shared `DesktopChrome` и `DesktopContentSurface` из `@kosmos/visuals`.
-- **Lazy CmEditor.vue** — `defineAsyncComponent(() => import("./editor-cm/CmEditor.vue"))` в App.vue: main bundle stays small; editor chunk lazy-loads при открытии заметки.
+- **Lazy TiptapEditor.vue** — `defineAsyncComponent(() => import("./editor-tiptap/TiptapEditor.vue"))` в App.vue: main bundle stays small; editor chunk lazy-loads при открытии заметки.
 
 ## Будущее
 

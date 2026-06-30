@@ -6,7 +6,7 @@ import {
   parseNoteTypeUiSchema,
   type NoteType,
 } from "@/lib/typedNotes";
-import { writeEntryMarkdown } from "@/editor-cm/content";
+import { writeEntryMarkdown } from "@/editor-content/content";
 import {
   SYSTEM_TYPE_COLLECTION,
   SYSTEM_TYPE_COLLECTION_ID,

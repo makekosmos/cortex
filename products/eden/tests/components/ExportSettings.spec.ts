@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { createApp, nextTick, vaporInteropPlugin, type App } from "vue";
 import ExportSettings from "../../src/components/settings/ExportSettings.vue";
-import { writeEntryMarkdown } from "../../src/editor-cm/content";
+import { writeEntryMarkdown } from "../../src/editor-content/content";
 import { SYSTEM_TYPE_NOTE } from "../../src/lib/systemTypes";
 import { useEdenStore } from "../../src/store/eden";
-import { markdownEntry } from "./cm-editor-test-helpers";
+import { markdownEntry } from "./editor-test-helpers";
 
 let app: App<Element> | null = null;
 let container: HTMLDivElement | null = null;

@@ -40,7 +40,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef } from "vue";
-import { FileDown, Keyboard, Settings, Trash2 } from "@lucide/vue";
+import { FileDown, Settings, Trash2 } from "@lucide/vue";
 import {
   SettingsContentHeader,
   SettingsSearchInput,
@@ -53,7 +53,7 @@ import "@kosmos/visuals/components/settings-shell.css";
 import SettingsPage from "@/components/settings/SettingsPage.vue";
 import { useEdenStore } from "@/store/eden";
 
-type SettingsTab = "general" | "export" | "trash" | "vim";
+type SettingsTab = "general" | "export" | "trash";
 
 const eden = useEdenStore();
 const tab = shallowRef<SettingsTab>("general");
@@ -77,12 +77,6 @@ const navigationItems = [
     icon: Trash2,
     label: "Корзина",
     testId: "eden-settings-trash",
-  },
-  {
-    id: "vim" as const,
-    icon: Keyboard,
-    label: "Vim",
-    testId: "eden-settings-vim",
   },
 ];
 

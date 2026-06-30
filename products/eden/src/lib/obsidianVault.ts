@@ -1,4 +1,4 @@
-import { writeEntryMarkdown } from "../editor-cm/content";
+import { writeEntryMarkdown } from "../editor-content/content";
 import {
   buildImageAssetMap,
   extractMarkdownImageRefs,

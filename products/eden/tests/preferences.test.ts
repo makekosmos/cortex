@@ -37,8 +37,6 @@ function seedLocalStorage(
   snapshot: Partial<{
     spellcheckEnabled: boolean;
     readerModeEnabled: boolean;
-    vimModeEnabled: boolean;
-    tiptapEditorEnabled: boolean;
   }>,
 ): void {
   localStorage.setItem("eden-preferences", JSON.stringify(snapshot));
@@ -61,8 +59,6 @@ test("hydrate из localStorage + setter API", async () => {
   seedLocalStorage({
     spellcheckEnabled: true,
     readerModeEnabled: true,
-    vimModeEnabled: false,
-    tiptapEditorEnabled: true,
   });
 
   const usePreferences = await loadFreshUsePreferences();
@@ -74,8 +70,6 @@ test("hydrate из localStorage + setter API", async () => {
   // 1. localStorage значения подхвачены.
   expect(prefs.state.spellcheckEnabled).toBe(true);
   expect(prefs.state.readerModeEnabled).toBe(true);
-  expect(prefs.state.vimModeEnabled).toBe(false);
-  expect(prefs.state.tiptapEditorEnabled).toBe(true);
 
   // 2. Setter'ы работают.
   prefs.setSpellcheckEnabled(false);
@@ -87,20 +81,10 @@ test("hydrate из localStorage + setter API", async () => {
   prefs.setReaderModeEnabled(false);
   expect(prefs.state.readerModeEnabled).toBe(false);
 
-  prefs.setVimModeEnabled(true);
-  expect(prefs.state.vimModeEnabled).toBe(true);
-
-  prefs.setTiptapEditorEnabled(false);
-  expect(prefs.state.tiptapEditorEnabled).toBe(false);
-
   prefs.setSpellcheckEnabled(false);
   prefs.setReaderModeEnabled(false);
-  prefs.setVimModeEnabled(false);
-  prefs.setTiptapEditorEnabled(false);
   expect(prefs.state.spellcheckEnabled).toBe(false);
   expect(prefs.state.readerModeEnabled).toBe(false);
-  expect(prefs.state.vimModeEnabled).toBe(false);
-  expect(prefs.state.tiptapEditorEnabled).toBe(false);
 
   // Даем post-flush watcher'у дописать snapshot, чтобы он не протекал в следующий тест.
   await nextTick();
@@ -114,6 +98,4 @@ test("fresh import не наследует состояние между тес�
 
   expect(prefs.state.spellcheckEnabled).toBe(false);
   expect(prefs.state.readerModeEnabled).toBe(false);
-  expect(prefs.state.vimModeEnabled).toBe(false);
-  expect(prefs.state.tiptapEditorEnabled).toBe(false);
 });

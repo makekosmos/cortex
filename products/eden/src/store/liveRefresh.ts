@@ -3,7 +3,7 @@
 // Изолирована от Vue и любых сторонних зависимостей — легко тестируется через bun test.
 // Вся опасная логика (не затирать ввод, не зацикливаться на self-echo) сконцентрирована здесь.
 
-import { readEntryMarkdown } from "../editor-cm/content";
+import { readEntryMarkdown } from "../editor-content/content";
 
 export type RemoteEntryDecision =
   /** Применить удалённые изменения — безопасно, редактор не dirty, контент отличается. */

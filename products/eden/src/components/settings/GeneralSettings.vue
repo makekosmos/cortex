@@ -10,13 +10,6 @@
           data-testid="eden-spellcheck-toggle"
           @update:model-value="preferences.setSpellcheckEnabled"
         />
-        <SettingsToggleRow
-          title="TipTap"
-          description="Включает ProseMirror/TipTap-редактор. Vim здесь отключён."
-          :model-value="preferences.state.tiptapEditorEnabled"
-          data-testid="eden-tiptap-toggle"
-          @update:model-value="preferences.setTiptapEditorEnabled"
-        />
       </SettingsList>
     </div>
     <div>

@@ -155,31 +155,12 @@
             :note-type="activeCurrentType"
           />
           <TiptapEditor
-            v-else-if="preferences.state.tiptapEditorEnabled"
+            v-else
             :key="`tiptap:${eden.currentEntry.id}:${eden.currentEntry.type_id ?? 'note_obj'}`"
             :entry="eden.currentEntry"
             :all-entries="eden.entries"
             :note-types="eden.noteTypes"
             :zen-mode="layout.isZenMode"
-            :reader-mode="preferences.state.readerModeEnabled"
-            :body-loading="eden.loadingEntryId === eden.currentEntry.id"
-            :on-save="eden.handleSave"
-            :on-navigate="eden.navigateTo"
-            @close-entry="closeCurrentEntry"
-            @set-zen-mode="setZenMode"
-            @entry-draft-change="eden.updateEntryDraft"
-            @live-char-count="liveCharCount = $event"
-            @title-out-of-view-change="noteTitleOutOfView = $event"
-            @type-change="onCmTypeChange"
-          />
-          <CmEditor
-            v-else
-            :key="`${eden.currentEntry.id}:${eden.currentEntry.type_id ?? 'note_obj'}`"
-            :entry="eden.currentEntry"
-            :all-entries="eden.entries"
-            :note-types="eden.noteTypes"
-            :zen-mode="layout.isZenMode"
-            :vim-mode="preferences.state.vimModeEnabled"
             :reader-mode="preferences.state.readerModeEnabled"
             :body-loading="eden.loadingEntryId === eden.currentEntry.id"
             :on-save="eden.handleSave"
@@ -261,13 +242,9 @@ import { useDockedWidget } from "@/composables/useDockedWidget";
 import { useNavigationHistory } from "@/composables/useNavigationHistory";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { usePreferences } from "@/composables/usePreferences";
-import { useAutoTipTapMigration } from "@/editor-tiptap/useAutoTipTapMigration";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
 import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
-// CodeMirror editor lazy-load — основной bundle открывается быстрее,
-// заметка-чанк подгружается при первом открытии заметки.
-const CmEditor = defineAsyncComponent(() => import("./editor-cm/CmEditor.vue"));
 const TiptapEditor = defineAsyncComponent(() => import("./editor-tiptap/TiptapEditor.vue"));
 import ImageObjectView from "@/components/objects/ImageObjectView.vue";
 import TypeObjectsView from "@/components/objects/TypeObjectsView.vue";
@@ -286,8 +263,8 @@ const eden = useEdenStore();
 const layout = useLayoutStore();
 const preferences = usePreferences();
 
-function mountedEditorKind(): "cm" | "spaces" | "other" {
-  if (document.querySelector(".cm-editor-host")) return "cm";
+function mountedEditorKind(): "tiptap" | "spaces" | "other" {
+  if (document.querySelector(".tiptap-editor-host")) return "tiptap";
   if (document.querySelector(".spaces-view")) return "spaces";
   return "other";
 }
@@ -298,7 +275,6 @@ function currentEdenDebug() {
     activeScreen: eden.activeScreen,
     activeSpace: eden.activeSpace,
     editorKind: mountedEditorKind(),
-    vimModeEnabled: preferences.state.vimModeEnabled,
     entry: entry
       ? {
           id: entry.id,
@@ -314,13 +290,12 @@ function currentEdenDebug() {
 (window as unknown as { __edenDebug?: () => unknown }).__edenDebug = currentEdenDebug;
 
 // Provide toast api на root уровне — useToast() из любого descendant'а
-// (CmEditor.vue и т.д.) увидит его. ToastHost дальше в template только
+// увидит его. ToastHost дальше в template только
 // рендерит, не повторяет provide.
 provideToastHost();
 
 usePlatform();
 useKeyboard();
-useAutoTipTapMigration(eden);
 const { pendingQuery } = useSearch();
 
 // ПКМ-меню на entries в sidebar — пункт «Удалить» soft-delete'ит запись.

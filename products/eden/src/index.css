@@ -174,8 +174,7 @@ input {
   font-family: inherit;
 }
 
-/* Caret color = brand accent для обычных контролов Eden.
-   CodeMirror сам управляет native caret через drawSelection()/vim(). */
+/* Caret color = brand accent for Eden inputs and the TipTap editor. */
 input,
 textarea,
 .ProseMirror {

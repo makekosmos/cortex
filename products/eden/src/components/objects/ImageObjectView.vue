@@ -5,7 +5,7 @@ import { formatObjectFieldValue } from "@/lib/objectFieldFormatting";
 import { resolveNoteTypeFields, type ResolvedNoteTypeField } from "@/lib/typedNotes";
 import { safeParseHeaderProps } from "@/lib/typedNoteHeaderProps";
 import { toDisplayImageSrc } from "@/lib/localImages";
-import { readEntryMarkdown } from "@/editor-cm/content";
+import { readEntryMarkdown } from "@/editor-content/content";
 
 const props = defineProps<{
   entry: Entry;

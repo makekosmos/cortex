@@ -201,7 +201,7 @@ debounce-autosave.
   `docs-site/agents/postmortems.md` (`Shell ARK startup timeout маскировался под
 not-installed`, `Eden unmount save skipped after optimistic draft`). Regression
   тесты: `core/ark/packages/ark/tests/ensure-kepler.test.ts`,
-  `products/eden/tests/components/CmEditor.spec.ts`.
+  `legacy CmEditor browser regression spec (removed)`.
 
 Checks: `bun test core/ark/packages/ark/tests/ensure-kepler.test.ts`,
 `bun run shell:build`, `bunx vitest run --browser chromium tests/components/CmEditor.spec.ts`,

@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { isOlderRemoteEntry, shouldApplyRemoteEntry } from "../src/store/liveRefresh";
-import { writeEntryMarkdown } from "../src/editor-cm/content";
+import { writeEntryMarkdown } from "../src/editor-content/content";
 
 function makeEntry(id: string, markdown: string): Entry {
   return {

@@ -2,17 +2,15 @@
   <GeneralSettings v-if="props.activeTab === 'general'" />
   <ExportSettings v-else-if="props.activeTab === 'export'" />
   <TrashSettings v-else-if="props.activeTab === 'trash'" @refresh-data="emit('refreshData')" />
-  <VimSettings v-else-if="props.activeTab === 'vim'" />
 </template>
 
 <script setup lang="ts">
 import GeneralSettings from "./GeneralSettings.vue";
 import ExportSettings from "./ExportSettings.vue";
 import TrashSettings from "./TrashSettings.vue";
-import VimSettings from "./VimSettings.vue";
 import "./SettingsPage.css";
 
-type SettingsTab = "general" | "export" | "trash" | "vim";
+type SettingsTab = "general" | "export" | "trash";
 
 const props = defineProps<{
   activeTab: SettingsTab;

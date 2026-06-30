@@ -90,7 +90,7 @@ import {
   type ObsidianImportDraft,
 } from "@/lib/obsidianVault";
 import { SYSTEM_TYPE_IMAGE, SYSTEM_TYPE_IMAGE_ID, SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
-import { readEntryMarkdown, writeEntryMarkdown } from "@/editor-cm/content";
+import { readEntryMarkdown, writeEntryMarkdown } from "@/editor-content/content";
 import type { NoteType } from "@/lib/typedNotes";
 import { normalizeHeaderProps } from "@/lib/typedNoteHeaderProps";
 import { useEdenStore } from "@/store/eden";

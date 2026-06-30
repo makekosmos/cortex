@@ -10,7 +10,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { hasUserVisibleEntryChanges } from "../src/store/entryChanges";
-import { writeEntryMarkdown, writeEntryTiptapDoc } from "../src/editor-cm/content";
+import { writeEntryMarkdown, writeEntryTiptapDoc } from "../src/editor-content/content";
 import { SYSTEM_TYPE_NOTE, SYSTEM_TYPE_PERSON } from "../src/lib/systemTypes";
 
 function makeNoteEntry(overrides: Partial<Entry> = {}): Entry {
@@ -55,7 +55,7 @@ describe("hasUserVisibleEntryChanges", () => {
 
   test("header_props_json=null vs нормализованные дефолтные поля типа — НЕ изменение", () => {
     const base = makeNoteEntry({ header_props_json: null });
-    // CmEditor после safeParseHeaderProps добавляет дефолтные поля SYSTEM_TYPE_NOTE:
+    // Editor после safeParseHeaderProps добавляет дефолтные поля SYSTEM_TYPE_NOTE:
     // description, related_notes
     const draft = makeNoteEntry({
       header_props_json: JSON.stringify({ description: "", related_notes: [] }),

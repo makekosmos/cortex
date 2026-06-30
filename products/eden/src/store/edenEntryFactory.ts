@@ -1,4 +1,4 @@
-import { writeEntryMarkdown } from "@/editor-cm/content";
+import { writeEntryMarkdown } from "@/editor-content/content";
 import { createUntitledEntryHeaderProps } from "@/lib/entryTitles";
 import { SYSTEM_TYPE_JOURNAL_ID, SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
 

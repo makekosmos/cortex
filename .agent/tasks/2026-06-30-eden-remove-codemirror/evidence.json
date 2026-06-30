@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-06-30-eden-remove-codemirror",
+  "verified_at": "2026-06-30",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "Test-Path products/eden/src/editor-cm; rg --files products/eden/src products/eden/tests | rg \"editor-cm|CmEditor|VimSettings|vimMotions|cmGate|CmConvert|cm-editor\""
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "rg -n \"VimSettings|vimMotions|\\\\bvim\\\\b|\\\\bVim\\\\b\" products/eden/src products/eden/tests"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "rg -n \"@codemirror|@replit/codemirror-vim|@lezer|codemirror|CodeMirror|editor-cm|cmGate|CmEditor|vimMotions|VimSettings|\\\\bvim\\\\b|\\\\bVim\\\\b\" products/eden/src products/eden/tests products/eden/package.json docs-site/apps/eden.md docs-site/apps/eden/editor.md bun.lock"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "rg -n \"editor-content/content|editor-cm/content|cm-editor-test-helpers|ContentAdapter|editor-test-helpers\" products/eden/src products/eden/tests"
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "command": "bun run --cwd products/eden test; bun run products:build; bun run docs:check; bun run format:check"
+    }
+  ]
+}

@@ -9,7 +9,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import type { useEdenStore } from "@/store/eden";
 import type { useLayoutStore } from "@/store/layout";
-import { readEntryMarkdown } from "@/editor-cm/content";
+import { readEntryMarkdown } from "@/editor-content/content";
 
 export function useCharCounter(
   eden: ReturnType<typeof useEdenStore>,

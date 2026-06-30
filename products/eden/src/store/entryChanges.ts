@@ -5,18 +5,22 @@
 // содержит ли черновик реальные пользовательские изменения.
 //
 // Проблема, которую решает этот модуль (см. postmortems 2026-06-17):
-// CmEditor гидратирует headerProps.value через safeParseHeaderProps, которая
+// TipTap editor гидратирует headerProps.value через safeParseHeaderProps, которая
 // добавляет дефолтные поля из схемы типа (description, related_notes для NOTE;
 // first_name, last_name, ... для PERSON). Если в БД header_props_json пустой,
 // первый buildEntryDraft уже содержит эти поля — и наивное сравнение JSON
 // видит расхождение, хотя пользователь ничего не менял.
 //
-// Аналогично: header_layout=null в БД, но CmEditor ставит resolved дефолт
+// Аналогично: header_layout=null в БД, но editor ставит resolved дефолт
 // ("inline"/"column") → наивное сравнение также видит расхождение.
 //
 // Решение: нормализовать оба entry одинаково через схему типа из noteTypes.
 
-import { isEntryTiptapContent, readEntryMarkdown, readEntryTiptapDoc } from "../editor-cm/content";
+import {
+  isEntryTiptapContent,
+  readEntryMarkdown,
+  readEntryTiptapDoc,
+} from "../editor-content/content";
 import { normalizeHeaderProps } from "../lib/typedNoteHeaderProps";
 import { resolveNoteTypeHeaderLayout } from "../lib/typedNotes";
 
@@ -26,7 +30,7 @@ function normalizedEntryTypeId(entry: Entry): string {
 
 /**
  * Нормализует header_layout: если не задан явно — разворачивает в дефолт для типа.
- * Совпадает с логикой headerLayout.value в CmEditor.vue.
+ * Совпадает с логикой headerLayout.value в TiptapEditor.vue.
  */
 function resolveEntryHeaderLayout(entry: Entry, noteTypes: NoteType[]): string {
   if (entry.header_layout != null) return entry.header_layout;
@@ -36,7 +40,7 @@ function resolveEntryHeaderLayout(entry: Entry, noteTypes: NoteType[]): string {
 
 /**
  * Нормализует header_props_json через схему типа.
- * Совпадает с тем, что safeParseHeaderProps возвращает в CmEditor:
+ * Совпадает с тем, что safeParseHeaderProps возвращает в TiptapEditor:
  * добавляет дефолтные поля, приводит типы значений.
  * Этим устраняется ложное расхождение при первом открытии.
  */

@@ -10,9 +10,9 @@ import {
   tiptapDocToMarkdown,
   writeEntryMarkdown,
   writeEntryTiptapDoc,
-} from "../src/editor-cm/content";
+} from "../src/editor-content/content";
 
-describe("editor-cm/content", () => {
+describe("editor-content/content", () => {
   test("markdown content reads exact text and writes the markdown envelope", () => {
     const text = "# Заголовок\n\n- [ ] задача\n\nстрока  ";
     const content = writeEntryMarkdown(text);

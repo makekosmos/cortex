@@ -11,7 +11,13 @@ import {
   type App as VueApp,
   watch,
 } from "vue";
-import { Extension, mergeAttributes, Node } from "@tiptap/core";
+import {
+  Extension,
+  mergeAttributes,
+  Node,
+  textblockTypeInputRule,
+  wrappingInputRule,
+} from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet, type EditorView, type NodeView } from "@tiptap/pm/view";
@@ -35,7 +41,14 @@ import {
   Minus,
   Quote,
 } from "@lucide/vue";
-import { PhCheck, PhCopy } from "@phosphor-icons/vue";
+import {
+  PhArrowBendDownRight,
+  PhArrowsLeftRight,
+  PhCaretDown,
+  PhCaretUp,
+  PhCheck,
+  PhCopy,
+} from "@phosphor-icons/vue";
 import { Dropdown, Skeleton } from "@kosmos/visuals";
 import TypedHeader from "@/components/typed-notes/TypedHeader.vue";
 import {
@@ -53,7 +66,7 @@ import {
   tiptapDocToMarkdown,
   writeEntryTiptapDoc,
   type TiptapDoc,
-} from "@/editor-cm/content";
+} from "@/editor-content/content";
 import {
   highlightCodeWithShiki,
   isShikiCodeLanguage,
@@ -175,16 +188,29 @@ class EdenCodeBlockView implements NodeView {
   dom: HTMLElement;
   contentDOM: HTMLElement;
 
+  private static readonly COLLAPSED_LINE_LIMIT = 18;
+
   private node: ProseMirrorNode;
   private readonly view: EditorView;
   private readonly getPos: (() => number | undefined) | boolean;
+  private readonly pre: HTMLPreElement;
   private readonly languageDropdownHost: HTMLElement;
   private readonly languageDropdownValue = shallowRef("");
   private readonly languageDropdownApp: VueApp;
+  private readonly wrapButton: HTMLButtonElement;
+  private readonly wrapLines = shallowRef(false);
+  private readonly wrapIconApp: VueApp;
   private readonly copyButton: HTMLButtonElement;
   private readonly copyIconCopied = shallowRef(false);
   private readonly copyIconApp: VueApp;
+  private readonly expandButton: HTMLButtonElement;
+  private readonly expandButtonLabel: HTMLSpanElement;
+  private readonly expandIconExpanded = shallowRef(false);
+  private readonly expandIconApp: VueApp;
+  private readonly resizeObserver: ResizeObserver | null = null;
+  private scrollTimer: ReturnType<typeof setTimeout> | null = null;
   private copyTimer: ReturnType<typeof setTimeout> | null = null;
+  private expanded = false;
 
   constructor(
     node: ProseMirrorNode,
@@ -222,9 +248,23 @@ class EdenCodeBlockView implements NodeView {
     });
     this.languageDropdownApp.mount(this.languageDropdownHost);
 
+    this.wrapButton = document.createElement("button");
+    this.wrapButton.type = "button";
+    this.wrapButton.className = "tiptap-code-action tiptap-code-wrap";
+    this.wrapIconApp = createApp({
+      setup: () => () =>
+        h(this.wrapLines.value ? PhArrowsLeftRight : PhArrowBendDownRight, {
+          size: 15,
+          weight: "regular",
+          "aria-hidden": "true",
+        }),
+    });
+    this.wrapIconApp.mount(this.wrapButton);
+    this.wrapButton.addEventListener("click", this.handleWrapToggle);
+
     this.copyButton = document.createElement("button");
     this.copyButton.type = "button";
-    this.copyButton.className = "tiptap-code-copy";
+    this.copyButton.className = "tiptap-code-action tiptap-code-copy";
     this.copyButton.title = "Скопировать код";
     this.copyButton.ariaLabel = "Скопировать код";
     this.copyIconApp = createApp({
@@ -238,12 +278,40 @@ class EdenCodeBlockView implements NodeView {
     this.copyIconApp.mount(this.copyButton);
     this.copyButton.addEventListener("click", this.handleCopy);
 
-    toolbar.append(this.languageDropdownHost, this.copyButton);
+    toolbar.append(this.languageDropdownHost, this.wrapButton, this.copyButton);
 
-    const pre = document.createElement("pre");
+    this.pre = document.createElement("pre");
+    this.pre.className = "tiptap-code-scroll kosmos-scroll";
+    this.pre.addEventListener("scroll", this.handleCodeScroll, { passive: true });
+    this.pre.addEventListener("mouseenter", this.handleCodeHover);
+    this.pre.addEventListener("mouseleave", this.handleCodeLeave);
+    if (typeof ResizeObserver !== "undefined") {
+      this.resizeObserver = new ResizeObserver(this.syncWrapAvailability);
+      this.resizeObserver.observe(this.pre);
+    }
     this.contentDOM = document.createElement("code");
-    pre.append(this.contentDOM);
-    this.dom.append(toolbar, pre);
+    this.pre.append(this.contentDOM);
+
+    this.expandButton = document.createElement("button");
+    this.expandButton.type = "button";
+    this.expandButton.className = "tiptap-code-expand";
+    this.expandButton.contentEditable = "false";
+    this.expandButtonLabel = document.createElement("span");
+    const expandIconHost = document.createElement("span");
+    expandIconHost.className = "tiptap-code-expand-icon";
+    this.expandIconApp = createApp({
+      setup: () => () =>
+        h(this.expandIconExpanded.value ? PhCaretUp : PhCaretDown, {
+          size: 13,
+          weight: "bold",
+          "aria-hidden": "true",
+        }),
+    });
+    this.expandIconApp.mount(expandIconHost);
+    this.expandButton.append(this.expandButtonLabel, expandIconHost);
+    this.expandButton.addEventListener("click", this.handleExpandToggle);
+
+    this.dom.append(toolbar, this.pre, this.expandButton);
     this.syncControls();
   }
 
@@ -257,7 +325,8 @@ class EdenCodeBlockView implements NodeView {
   stopEvent(event: Event): boolean {
     return (
       event.target instanceof globalThis.Node &&
-      this.dom.querySelector(".tiptap-code-toolbar")?.contains(event.target) === true
+      (this.dom.querySelector(".tiptap-code-toolbar")?.contains(event.target) === true ||
+        this.expandButton.contains(event.target))
     );
   }
 
@@ -267,8 +336,17 @@ class EdenCodeBlockView implements NodeView {
 
   destroy(): void {
     this.languageDropdownApp.unmount();
+    this.wrapIconApp.unmount();
     this.copyIconApp.unmount();
+    this.expandIconApp.unmount();
+    this.wrapButton.removeEventListener("click", this.handleWrapToggle);
     this.copyButton.removeEventListener("click", this.handleCopy);
+    this.expandButton.removeEventListener("click", this.handleExpandToggle);
+    this.pre.removeEventListener("scroll", this.handleCodeScroll);
+    this.pre.removeEventListener("mouseenter", this.handleCodeHover);
+    this.pre.removeEventListener("mouseleave", this.handleCodeLeave);
+    this.resizeObserver?.disconnect();
+    if (this.scrollTimer !== null) clearTimeout(this.scrollTimer);
     if (this.copyTimer !== null) clearTimeout(this.copyTimer);
   }
 
@@ -296,12 +374,73 @@ class EdenCodeBlockView implements NodeView {
     });
   };
 
+  private readonly handleWrapToggle = (): void => {
+    this.wrapLines.value = !this.wrapLines.value;
+    this.dom.classList.toggle("is-wrapped", this.wrapLines.value);
+    this.wrapButton.title = this.wrapLines.value ? "Не переносить строки" : "Переносить строки";
+    this.wrapButton.ariaLabel = this.wrapButton.title;
+    if (this.wrapLines.value) this.pre.scrollLeft = 0;
+    this.scheduleWrapAvailabilitySync();
+    this.view.focus();
+  };
+
+  private readonly handleExpandToggle = (): void => {
+    this.expanded = !this.expanded;
+    this.syncExpandState();
+    this.view.focus();
+  };
+
+  private readonly handleCodeHover = (): void => {
+    this.pre.dataset.scrolling = "1";
+  };
+
+  private readonly handleCodeLeave = (): void => {
+    if (this.scrollTimer === null) delete this.pre.dataset.scrolling;
+  };
+
+  private readonly handleCodeScroll = (): void => {
+    this.pre.dataset.scrolling = "1";
+    if (this.scrollTimer !== null) clearTimeout(this.scrollTimer);
+    this.scrollTimer = setTimeout(() => {
+      this.scrollTimer = null;
+      if (!this.pre.matches(":hover")) delete this.pre.dataset.scrolling;
+    }, 900);
+  };
+
   private syncControls(): void {
     const language = visibleCodeLanguage(this.node);
     this.dom.dataset.language = language;
     this.languageDropdownValue.value = language;
     this.copyButton.disabled = this.node.textContent.length === 0;
+    this.wrapButton.title = this.wrapLines.value ? "Не переносить строки" : "Переносить строки";
+    this.wrapButton.ariaLabel = this.wrapButton.title;
+    this.scheduleWrapAvailabilitySync();
+    const isCollapsible =
+      this.node.textContent.split(/\r?\n/).length > EdenCodeBlockView.COLLAPSED_LINE_LIMIT;
+    if (!isCollapsible) this.expanded = false;
+    this.dom.classList.toggle("is-collapsible", isCollapsible);
+    this.syncExpandState();
   }
+
+  private syncExpandState(): void {
+    const isCollapsible = this.dom.classList.contains("is-collapsible");
+    this.dom.classList.toggle("is-expanded", isCollapsible && this.expanded);
+    this.expandButton.hidden = !isCollapsible;
+    this.expandIconExpanded.value = isCollapsible && this.expanded;
+    this.expandButtonLabel.textContent =
+      isCollapsible && this.expanded ? "Свернуть" : "Показать полностью";
+    this.expandButton.title = this.expandButtonLabel.textContent;
+    this.expandButton.ariaLabel = this.expandButtonLabel.textContent;
+  }
+
+  private scheduleWrapAvailabilitySync(): void {
+    window.requestAnimationFrame(this.syncWrapAvailability);
+  }
+
+  private readonly syncWrapAvailability = (): void => {
+    this.wrapButton.hidden =
+      !this.wrapLines.value && this.pre.scrollWidth <= this.pre.clientWidth + 1;
+  };
 }
 
 const emit = defineEmits<Emits>();
@@ -444,11 +583,11 @@ async function buildCodeBlockDecorations(doc: ProseMirrorNode): Promise<Decorati
 
   doc.descendants((node, pos) => {
     if (node.type.name !== "codeBlock") return;
+    const start = pos + 1;
+    const code = node.textContent;
     const language = syntaxLanguageForNode(node);
     if (!language) return;
 
-    const start = pos + 1;
-    const code = node.textContent;
     jobs.push(
       highlightCodeWithShiki(code, language).then((tokens) => {
         for (const token of tokens) {
@@ -491,7 +630,13 @@ function normalizedCodeLanguage(node: ProseMirrorNode): string {
   const raw =
     typeof node.attrs.language === "string" ? node.attrs.language.trim().toLowerCase() : "";
   if (!raw) return "";
-  return languageAliasToValue.get(raw) ?? raw;
+  return normalizeCodeLanguageValue(raw);
+}
+
+function normalizeCodeLanguageValue(raw: string | undefined): string {
+  const normalized = raw?.trim().toLowerCase() ?? "";
+  if (!normalized) return "";
+  return languageAliasToValue.get(normalized) ?? normalized;
 }
 
 async function copyTextToClipboard(text: string): Promise<void> {
@@ -512,6 +657,133 @@ async function copyTextToClipboard(text: string): Promise<void> {
   textarea.select();
   document.execCommand("copy");
   textarea.remove();
+}
+
+const EdenRichTextEditing = Extension.create({
+  name: "edenRichTextEditing",
+  priority: 1000,
+
+  addInputRules() {
+    const rules = [];
+    const { heading, codeBlock, blockquote, bulletList, orderedList } = this.editor.schema.nodes;
+
+    if (heading) {
+      rules.push(
+        textblockTypeInputRule({
+          find: /^(#{1,6})\s$/,
+          type: heading,
+          getAttributes: (match) => ({ level: match[1]?.length ?? 1 }),
+        }),
+      );
+    }
+
+    if (codeBlock) {
+      rules.push(
+        textblockTypeInputRule({
+          find: /^```([a-zA-Z0-9_+#.-]*)\s$/,
+          type: codeBlock,
+          getAttributes: (match) => ({ language: normalizeCodeLanguageValue(match[1]) }),
+        }),
+      );
+    }
+
+    if (blockquote) {
+      rules.push(wrappingInputRule({ find: /^\s*>\s$/, type: blockquote }));
+    }
+
+    if (bulletList) {
+      rules.push(wrappingInputRule({ find: /^\s*([-+*])\s$/, type: bulletList }));
+    }
+
+    if (orderedList) {
+      rules.push(
+        wrappingInputRule({
+          find: /^\s*(\d+)\.\s$/,
+          type: orderedList,
+          getAttributes: (match) => ({ start: Number(match[1] ?? 1) }),
+        }),
+      );
+    }
+
+    return rules;
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      Backspace: () => {
+        const { selection } = this.editor.state;
+        if (!selection.empty || selection.$from.parentOffset !== 0) return false;
+        if (selection.$from.parent.type.name !== "heading") return false;
+        return this.editor.commands.setParagraph();
+      },
+    };
+  },
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("eden-code-copy-as-text"),
+        props: {
+          handleDOMEvents: {
+            copy: (view, event) => handleEditorCopy(view, event),
+          },
+        },
+      }),
+    ];
+  },
+});
+
+function handleEditorCopy(view: EditorView, event: Event): boolean {
+  if (!(event instanceof ClipboardEvent) || !event.clipboardData) return false;
+  const range = selectedEditorTextRange(view);
+  if (!range) return false;
+  const codeBlock = selectedSingleCodeBlock(view, range);
+  if (!codeBlock || codeBlock.isFullSelection) return false;
+
+  event.clipboardData.setData("text/plain", view.state.doc.textBetween(range.from, range.to, "\n"));
+  event.preventDefault();
+  return true;
+}
+
+function selectedEditorTextRange(view: EditorView): { from: number; to: number } | null {
+  const selection = view.state.selection;
+  if (!selection.empty) return { from: selection.from, to: selection.to };
+
+  const domSelection = view.dom.ownerDocument.getSelection();
+  if (!domSelection || domSelection.isCollapsed || domSelection.rangeCount === 0) return null;
+  const { anchorNode, focusNode } = domSelection;
+  if (!anchorNode || !focusNode) return null;
+  if (!view.dom.contains(anchorNode) || !view.dom.contains(focusNode)) return null;
+
+  try {
+    const anchor = view.posAtDOM(anchorNode, domSelection.anchorOffset);
+    const focus = view.posAtDOM(focusNode, domSelection.focusOffset);
+    if (anchor === focus) return null;
+    return { from: Math.min(anchor, focus), to: Math.max(anchor, focus) };
+  } catch {
+    return null;
+  }
+}
+
+function selectedSingleCodeBlock(
+  view: EditorView,
+  range: { from: number; to: number },
+): { isFullSelection: boolean } | null {
+  const $from = view.state.doc.resolve(range.from);
+  const $to = view.state.doc.resolve(range.to);
+  const maxDepth = Math.min($from.depth, $to.depth);
+
+  for (let depth = maxDepth; depth > 0; depth--) {
+    const node = $from.node(depth);
+    if (node.type.name !== "codeBlock" || $to.node(depth) !== node) continue;
+    const contentStart = $from.start(depth);
+    const contentEnd = $from.end(depth);
+    return {
+      isFullSelection: range.from <= contentStart && range.to >= contentEnd,
+    };
+  }
+
+  return null;
 }
 
 async function openSlashMenu(): Promise<void> {
@@ -535,6 +807,7 @@ const editor = useEditor({
   editable: !props.readerMode,
   extensions: [
     StarterKit.configure({}),
+    EdenRichTextEditing,
     EdenCodeBlockTools,
     EdenImage,
     TaskList,
@@ -932,6 +1205,8 @@ onMounted(() => {
 
 <style scoped>
 .tiptap-editor-host {
+  --tiptap-page-gutter: clamp(24px, 4vw, 40px);
+
   height: 100%;
   overflow: auto;
   overflow-x: hidden;
@@ -944,7 +1219,7 @@ onMounted(() => {
   width: 100%;
   max-width: 760px;
   margin: 0 auto;
-  padding: 18px 32px 8px;
+  padding: 18px var(--tiptap-page-gutter) 8px;
   display: grid;
   gap: 10px;
 }
@@ -1078,7 +1353,7 @@ onMounted(() => {
   width: 100%;
   max-width: 760px;
   margin: 0 auto;
-  padding: 16px 32px 35vh;
+  padding: 16px var(--tiptap-page-gutter) 35vh;
 }
 
 .tiptap-editor-content {
@@ -1195,6 +1470,7 @@ onMounted(() => {
 .tiptap-editor-content :deep(.ProseMirror .tiptap-code-block) {
   position: relative;
   overflow: hidden;
+  width: 100%;
   border: 0;
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface-secondary, #242424) 96%, #000 4%);
@@ -1220,8 +1496,11 @@ onMounted(() => {
 .tiptap-editor-content :deep(.ProseMirror .tiptap-code-language-dropdown button) {
   width: 100%;
   height: 26px;
+  border: 1px solid transparent;
+  padding: 0 8px;
   color: var(--text-primary);
   font-size: 12px;
+  transition: border-color 140ms ease;
 }
 
 .tiptap-editor-content :deep(.ProseMirror .tiptap-code-language-dropdown button:hover) {
@@ -1229,13 +1508,14 @@ onMounted(() => {
 }
 
 .tiptap-editor-content :deep(.ProseMirror .tiptap-code-language-dropdown button:focus-visible),
-.tiptap-editor-content :deep(.ProseMirror .tiptap-code-copy:focus-visible) {
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-action:focus-visible),
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-expand:focus-visible) {
   outline: 2px solid
     color-mix(in srgb, var(--eden-accent-color, var(--accent, currentColor)) 65%, transparent);
   outline-offset: 2px;
 }
 
-.tiptap-editor-content :deep(.ProseMirror .tiptap-code-copy) {
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-action) {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -1253,7 +1533,7 @@ onMounted(() => {
     color 140ms ease;
 }
 
-.tiptap-editor-content :deep(.ProseMirror .tiptap-code-copy:hover) {
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-action:hover) {
   background: color-mix(in srgb, var(--text-primary) 8%, transparent);
   color: var(--text-primary);
 }
@@ -1267,11 +1547,16 @@ onMounted(() => {
   color: var(--eden-accent-color, var(--accent, currentColor));
 }
 
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-wrap[hidden]) {
+  display: none;
+}
+
 .tiptap-editor-content :deep(.ProseMirror .tiptap-code-block pre) {
   margin: 0;
-  padding: 36px 14px 13px;
+  padding: 13px 14px;
   border-radius: 0;
   background: transparent;
+  cursor: default;
 }
 
 .tiptap-editor-content :deep(.ProseMirror .tiptap-code-block code) {
@@ -1286,6 +1571,71 @@ onMounted(() => {
   padding: 0;
   tab-size: 2;
   white-space: pre;
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-block.is-wrapped pre) {
+  overflow-x: hidden;
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-block.is-wrapped code) {
+  min-width: 0;
+  width: 100%;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  word-break: normal;
+}
+
+.tiptap-editor-content
+  :deep(.ProseMirror .tiptap-code-block.is-collapsible:not(.is-expanded)::after) {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 72px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--surface-secondary, #242424) 96%, #000 4%) 72%
+  );
+  content: "";
+  pointer-events: none;
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-block.is-collapsible:not(.is-expanded) pre) {
+  max-height: 360px;
+  overflow-y: hidden;
+  padding-bottom: 44px;
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-expand) {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 9px;
+  background: color-mix(in srgb, var(--surface-secondary, #242424) 72%, #000 28%);
+  color: var(--text-secondary);
+  cursor: default;
+  font-size: 12px;
+  line-height: 1;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-expand:hover) {
+  background: color-mix(in srgb, var(--text-primary) 9%, var(--surface-secondary, #242424));
+  color: var(--text-primary);
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-expand[hidden]) {
+  display: none;
 }
 
 .tiptap-slash-menu-anchor {

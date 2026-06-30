@@ -24,10 +24,10 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 ## 2026-06-30 — Eden editor accepted failed save as persisted
 
 **Симптомы.** Если `saveEntry` возвращал `{ ok: false }` без exception, редактор мог считать текущий draft сохранённым. После reload/переоткрытия пользователь видел старую версию из ARK, а editor больше не пытался сохранить тот же draft без новых правок.
-**Где жило.** `products/eden/src/editor-cm/CmEditor.vue::flushSave`, `products/eden/src/editor-cm/CmEditor.vue::handleTypePick`, `products/eden/src/editor-tiptap/TiptapEditor.vue::flushSave`, `products/eden/src/editor-tiptap/TiptapEditor.vue::handleTypePick`.
+**Где жило.** `legacy CodeMirror editor (removed)::flushSave`, `legacy CodeMirror editor (removed)::handleTypePick`, `products/eden/src/editor-tiptap/TiptapEditor.vue::flushSave`, `products/eden/src/editor-tiptap/TiptapEditor.vue::handleTypePick`.
 **Root cause.** Editor save path ждал `props.onSave(entry)`, но не проверял typed `SaveEntryResult`. ARK/API сообщает validation/duplicate/write failures как resolved `{ ok:false }`, поэтому `await` завершался успешно, после чего editor обновлял persisted baseline на unsaved draft.
 **Fix.** `CmEditor` и `TiptapEditor` теперь двигают persisted baseline только если `onSave()` не вернул typed `{ ok:false }`. Дополнительно `saveEntry` fail-closed отклоняет malformed `content_json` и stale writes, а store refresh/history/live-refresh больше не продвигают summary/older bodies в current editor state.
-**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` и `TiptapEditor.spec.ts` проверяют retry после failed save. `CmEditor.store.spec.ts` покрывает journal initial save и clean/dirty refresh. `keplerApiShim.spec.ts` покрывает malformed/stale body rejection. `content.test.ts` покрывает TipTap Markdown edge cases.
+**Регрешн-защита.** `legacy CmEditor browser regression spec (removed)` и `TiptapEditor.spec.ts` проверяют retry после failed save. `CmEditor.store.spec.ts` покрывает journal initial save и clean/dirty refresh. `keplerApiShim.spec.ts` покрывает malformed/stale body rejection. `content.test.ts` покрывает TipTap Markdown edge cases.
 **Prevention.** Resolved promise не означает successful persistence: все editor/store save paths обязаны проверять typed result, а API boundary обязан отклонять malformed/stale body writes вместо silent normalization. Summary entries нельзя считать полноценным `Entry` body source; перед записью или открытием editor нужен full `loadEntry` либо dirty/pending guard.
 
 ## 2026-06-16 — Shell ARK startup timeout маскировался под not-installed
@@ -42,61 +42,61 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 ## 2026-06-16 — Eden unmount save skipped after optimistic draft
 
 **Симптомы.** Пользователь пишет текст в заметке, сразу уходит из неё и возвращается; свежий текст пропадает, хотя в этой же сессии draft уже был виден в редакторе.
-**Где жило.** `products/eden/src/editor-cm/CmEditor.vue::hasEntryDraftChanges`, `products/eden/src/editor-cm/CmEditor.vue::flushSave`, `products/eden/src/store/eden.ts::updateEntryDraft`.
+**Где жило.** `legacy CodeMirror editor (removed)::hasEntryDraftChanges`, `legacy CodeMirror editor (removed)::flushSave`, `products/eden/src/store/eden.ts::updateEntryDraft`.
 **Root cause.** `CmEditor` эмитил `entryDraftChange` на каждый ввод, а parent/store сразу прокидывал optimistic draft обратно в `props.entry`. При `blur`/`onBeforeUnmount` `flushSave()` сравнивал новый draft именно с `props.entry`, видел “изменений нет” и пропускал `onSave`. Поэтому быстрый выход из заметки до debounce-сейва оставлял текст только в in-memory draft и не доводил его до ARK.
 **Fix.** `CmEditor` получил собственный persisted baseline (`title`, `type_id`, `header_layout`, `header_props_json`, body markdown) и теперь `flushSave()` сравнивает draft именно с ним, а не с reactive `props.entry`. Baseline синхронизируется только после успешного `onSave()` или при входе в новую заметку.
-**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` проверяет unmount-сценарий: parent отражает optimistic `entryDraftChange` обратно в props, затем `screen.unmount()` всё равно обязан вызвать `onSave` с набранным текстом.
+**Регрешн-защита.** `legacy CmEditor browser regression spec (removed)` проверяет unmount-сценарий: parent отражает optimistic `entryDraftChange` обратно в props, затем `screen.unmount()` всё равно обязан вызвать `onSave` с набранным текстом.
 **Prevention.** Reactive props из optimistic cache нельзя использовать как persisted baseline для cleanup/blur/unmount save paths. Если editor публикует draft наверх до backend-save, компонент обязан отдельно помнить последнюю подтверждённую persisted версию.
 
 ## 2026-06-16 — Eden stale inbound body перерисовывал live draft
 
 **Симптомы.** Во время обычного набора в Eden текст мог сразу исчезнуть, а через некоторое время появиться обратно. Это происходило не только на первом вводе в новой заметке, а во время дальнейшей работы.
-**Где жило.** `products/eden/src/editor-cm/CmEditor.vue::EditorView.updateListener`, `products/eden/src/editor-cm/CmEditor.vue::syncBodyFromEntry`, `products/eden/src/store/eden.ts::updateEntryDraft`, `products/eden/src/store/eden.ts::handleSave`.
+**Где жило.** `legacy CodeMirror editor (removed)::EditorView.updateListener`, `legacy CodeMirror editor (removed)::syncBodyFromEntry`, `products/eden/src/store/eden.ts::updateEntryDraft`, `products/eden/src/store/eden.ts::handleSave`.
 **Root cause.** CodeMirror держал самый свежий текст только внутри `EditorView`: body `entryDraftChange` эмитился лишь при `flushSave()`, а не при каждом `docChanged`. Пока debounce-save ещё не сработал, `store.currentEntry.content_json` оставался старым. Любой входящий store update или completion старого save мог снова прислать этот старый `content_json` в props; `syncBodyFromEntry()` без dirty/version fence считал props authoritative и целиком заменял live CodeMirror doc. Дополнительно `handleSave()` защищал только порядок уже начатых save-запросов через `latestSaveTimestamps`; новый optimistic draft между save completion и следующим debounce-save не помечался как latest local state, поэтому старый save completion мог перезаписать его в `currentEntry`.
 **Fix.** `CmEditor` теперь эмитит body `entryDraftChange` сразу на каждый `docChanged` до debounce-save, а draft `updated_at` делается локально монотонным. Store помечает `updateEntryDraft()` как latest local state через тот же timestamp fence, который использует save coordinator; завершение более старого save больше не может записать старый body обратно в `entries/currentEntry`.
-**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` проверяет два контракта: ввод сразу публикует body draft до autosave, и stale save completion не откатывает более новый optimistic draft.
+**Регрешн-защита.** `legacy CmEditor browser regression spec (removed)` проверяет два контракта: ввод сразу публикует body draft до autosave, и stale save completion не откатывает более новый optimistic draft.
 **Prevention.** В live editor локальный draft должен быть canonical state для renderer'а до момента успешного reconcile с backend. Inbound props/save completions/load results можно применять к body только через version fence; debounce-save сам по себе не является защитой от stale render.
 
 ## 2026-06-16 — Eden обычная новая заметка откатывала первый ввод
 
 **Симптомы.** При наборе текста в Eden введённые символы могли появляться, затем исчезать или заменяться старой версией, как будто поверх применился предыдущий save.
-**Где жило.** `products/eden/src/store/eden.ts::createEntry`, `products/eden/src/store/eden.ts::createNewEntry`, `products/eden/src/editor-cm/CmEditor.vue::syncBodyFromEntry`.
+**Где жило.** `products/eden/src/store/eden.ts::createEntry`, `products/eden/src/store/eden.ts::createNewEntry`, `legacy CodeMirror editor (removed)::syncBodyFromEntry`.
 **Root cause.** Обычный путь `createNewEntry()` создавал entry через `createEntry()`, а `createEntry()` запускал первичный пустой `window.api.saveEntry(newEntry)` fire-and-forget, вне `handleSave()` coordinator. Если пользователь успевал начать ввод и autosave с контентом проходил раньше, запоздалый initial empty-save мог записать пустой `content_json` после него. Затем reactive `currentEntry.content_json` приходил обратно в `CmEditor`, и `syncBodyFromEntry()` целиком заменял CodeMirror doc старой/пустой версией.
 **Fix.** `createEntry()` больше не делает самостоятельный fire-and-forget persist. `createNewEntry()` теперь повторяет строгий порядок дневникового пути: создаёт optimistic draft, синхронно дожидается первичного `window.api.saveEntry(newEntry)`, и только после успешного save выставляет `currentEntry`, чтобы CodeMirror вообще не монтировался до завершения empty-save.
-**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` проверяет, что `createNewEntry()` не выставляет `currentEntry`, пока initial `saveEntry` не завершился.
+**Регрешн-защита.** `legacy CmEditor browser regression spec (removed)` проверяет, что `createNewEntry()` не выставляет `currentEntry`, пока initial `saveEntry` не завершился.
 **Prevention.** Любой initial create/save, который создаёт пустую версию объекта, должен идти через тот же порядок или coordinator, что и последующие autosave. Fire-and-forget persist для объекта, который сразу открывается в live editor, запрещён: renderer может начать писать пользовательский draft раньше, чем первичная пустая запись долетит до backend.
 
 ## 2026-06-15 — Eden pending note load ломал chrome после быстрых переходов
 
 **Симптомы.** После быстрого прокликивания разных заметок Eden переставал реагировать на клики; при попытке открыть настройки пропадал titlebar/chrome, reload возвращал нормальное состояние.
-**Где жило.** `products/eden/src/store/eden.ts::navigateTo`, `products/eden/src/App.vue::openSettingsTab`, `products/eden/src/editor-cm/CmEditor.vue::bodyLoading`.
+**Где жило.** `products/eden/src/store/eden.ts::navigateTo`, `products/eden/src/App.vue::openSettingsTab`, `legacy CodeMirror editor (removed)::bodyLoading`.
 **Root cause.** `navigateTo()` держал глобальный `loadingEntryId` для skeleton body и очищал его только completion'ом самой note-навигации. Быстрые переходы `note A → note B → settings` могли оставить in-flight load валидным относительно UI screen: settings прятал note chrome, но pending note load всё ещё управлял `currentEntry/loadingEntryId`, из-за чего окно выглядело зависшим.
 **Fix.** `navigateTo()` получил monotonic `navigationRequestSeq`: каждый новый переход инвалидирует старые completion'ы, а watcher `activeScreen` сбрасывает pending load при уходе с notes screen. Stale `loadEntry()` больше не может перезаписать `currentEntry` или держать `loadingEntryId`.
-**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` проверяет быстрый `navigateTo(note-1) → navigateTo(note-2)` со stale resolve и сценарий `navigateTo(note) → activeScreen=settings`.
+**Регрешн-защита.** `legacy CmEditor browser regression spec (removed)` проверяет быстрый `navigateTo(note-1) → navigateTo(note-2)` со stale resolve и сценарий `navigateTo(note) → activeScreen=settings`.
 **Prevention.** Любой UI loading-state, который переживает route/screen transition, должен иметь явную cancellation identity. Одного `loadingId` недостаточно: нужен sequence/token, который инвалидируется не только новой загрузкой, но и уходом в другой screen.
 
 ## 2026-06-15 — Eden CM optimistic draft скрывал unsaved body
 
 **Симптомы.** Пользователь писал текст в заметке Eden, выходил из неё и при повторном открытии видел, что введённый текст исчез.
-**Где жило.** `products/eden/src/editor-cm/CmEditor.vue::hasEntryDraftChanges`, `products/eden/src/editor-cm/CmEditor.vue::flushSave`, `products/eden/src/store/eden.ts::updateEntryDraft`.
+**Где жило.** `legacy CodeMirror editor (removed)::hasEntryDraftChanges`, `legacy CodeMirror editor (removed)::flushSave`, `products/eden/src/store/eden.ts::updateEntryDraft`.
 **Root cause.** CM editor на каждом `docChanged` эмитил optimistic draft в parent, а parent сразу заменял `entries/currentEntry` на этот draft через `updateEntryDraft`. Отложенный autosave затем вызывал `eden.handleSave()` с тем же entry, но store сравнивал его с уже optimistic `entries.value`; сравнение возвращало “изменений нет”, `window.api.saveEntry` не вызывался, и текст оставался только в памяти Vue.
 **Fix.** `products/eden/src/store/eden.ts::handleSave` больше не short-circuit'ит save по сравнению с `entries.value`: этот массив является optimistic cache, а не persisted baseline. Persist по-прежнему идёт через `window.api.saveEntry` и существующий coordinator.
-**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` проверяет store-сценарий: `updateEntryDraft()` сначала кладёт новый markdown body в optimistic state, затем `handleSave()` всё равно обязан вызвать `window.api.saveEntry`.
+**Регрешн-защита.** `legacy CmEditor browser regression spec (removed)` проверяет store-сценарий: `updateEntryDraft()` сначала кладёт новый markdown body в optimistic state, затем `handleSave()` всё равно обязан вызвать `window.api.saveEntry`.
 **Prevention.** Optimistic UI state нельзя использовать как источник истины для “уже сохранено”. Любой save-skip должен сравнивать draft с явно tracked persisted baseline или backend version, а не с reactive cache, который уже мог принять unsaved изменения.
 
 ## 2026-06-13 — Eden CM смена типа откатывалась unmount-save'ом
 
 **Симптомы.** При смене типа заметки в Eden визуально ничего не происходило или тип сразу возвращался назад.
-**Где жило.** `products/eden/src/editor-cm/CmEditor.vue::handleTypePick`, `products/eden/src/editor-cm/CmEditor.vue::buildEntryDraft`, `products/eden/src/editor-cm/CmEditor.vue::onBeforeUnmount`.
+**Где жило.** `legacy CodeMirror editor (removed)::handleTypePick`, `legacy CodeMirror editor (removed)::buildEntryDraft`, `legacy CodeMirror editor (removed)::onBeforeUnmount`.
 **Root cause.** CM editor держал выбранный тип только в `props.entry.type_id`. `handleTypePick()` optimistic-обновлял parent draft, из-за `:key="id:type_id"` компонент размонтировался, а `onBeforeUnmount()` запускал `flushSave()`. Этот flush строил draft через `buildEntryDraft()` без нового `type_id` и мог сохранить старый тип поверх только что выбранного.
 **Fix.** `CmEditor` получил локальный `currentTypeId`, `buildEntryDraft()` всегда кладёт актуальный `type_id`, а prop-watchers синхронизируют локальный тип только при входящих entry changes.
-**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` проверяет keyed-remount сценарий: выбор `person_obj` не должен порождать последующий save со старым `note_obj`.
+**Регрешн-защита.** `legacy CmEditor browser regression spec (removed)` проверяет keyed-remount сценарий: выбор `person_obj` не должен порождать последующий save со старым `note_obj`.
 **Prevention.** Если optimistic UI update меняет Vue key и вызывает unmount, cleanup/flush path обязан читать тот же локальный draft state, что и action path; нельзя полагаться только на старые props во время teardown.
 
 ## 2026-06-13 — Eden titlebar не показывал страницы людей при скролле
 
 **Симптомы** — у обычных страниц Eden после прокрутки заголовка вниз название всплывало в titlebar, но у страниц типа `Человек` titlebar оставался пустым; рядом с названием не было мини-аватара человека.
-**Где жило** — `products/eden/src/editor-cm/CmEditor.vue::syncTitleScrollState`, `products/eden/src/App.vue::titlebarPageTitle`.
+**Где жило** — `legacy CodeMirror editor (removed)::syncTitleScrollState`, `products/eden/src/App.vue::titlebarPageTitle`.
 **Root cause** — CM editor считал “заголовок вне viewport” только по высоте `.cm-editor-title-container`. Для `person_obj` этот контейнер намеренно скрыт (`showCmTitleEditor = false`), а настоящий заголовок рендерится в `TypedHeader`; из-за `offsetHeight = 0` событие `titleOutOfViewChange` никогда не эмитилось.
 **Fix** — для страниц людей scroll threshold теперь берётся по высоте всего `.cm-editor-title-shell` с `TypedHeader`. Titlebar для `person_obj` дополнительно рендерит мини-иконку: фото из поля `image`/`photo`, либо fallback-иконку пользователя.
 **Регрешн-защита** — `rtk bunx vite build --config platform/desktop/vite.extensions.config.mjs --mode eden` проверяет Vue/TS/CSS compile path; ручная проверка: открыть длинную страницу человека, прокрутить ниже паспорта — в titlebar появляется имя и мини-иконка.
@@ -114,7 +114,7 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 ## 2026-06-13 — Eden смена типа заметки на человека оставляла note UI
 
 **Симптомы** — пользователь выбирал тип `Человек` у обычной заметки; в логах entry уже приходил как `person_obj`, но визуально страница продолжала выглядеть как обычная заметка, без полноценного паспорта человека.
-**Где жило** — `products/eden/src/editor-cm/CmEditor.vue::handleTypePick`, `products/eden/src/Editor.vue::handleNoteTypeChange`.
+**Где жило** — `legacy CodeMirror editor (removed)::handleTypePick`, `products/eden/src/Editor.vue::handleNoteTypeChange`.
 **Root cause** — смена типа была реализована в двух разных редакторах разными путями. CM-путь сохранял `type_id`, но создавал пустые header props; legacy TipTap-путь менял только локальные refs и не сохранял смену типа немедленно. При переходе `note_obj → person_obj` заголовок не раскладывался в поля человека, поэтому объект формально становился `person_obj`, но UI не получал meaningful person state.
 **Fix** — объектные поля теперь рендерятся прямо внутри CM editor через `TypedHeader`; `person_obj` больше не исключается из CM path, поэтому Vim/отступы/шрифт остаются теми же. Смена типа стала optimistic: header props и parent draft обновляются до фонового `saveNoteType`. Для человека текущий title раскладывается в `first_name` / `last_name` / `patronymic`, а уже сохранённые пустые person headers backfill'ятся при открытии.
 **Регрешн-защита** — `platform/desktop` TypeScript check покрывает новые Vue props/imports; manual HMR check: смена `Заметка → Человек` должна сразу остаться в CM editor без refresh и показать паспорт человека над markdown-телом.
@@ -132,7 +132,7 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 ## 2026-06-12 — Eden CM scroller перестал скроллить заметки
 
 **Симптомы.** В заметках Eden больше не получалось скроллить текст.
-**Где жило.** `products/eden/src/editor-cm/cm-editor.css::.cm-editor .cm-scroller`, `products/eden/src/editor-cm/CmEditor.vue::.cm-editor-host`.
+**Где жило.** `legacy CodeMirror stylesheet (removed)::.cm-editor .cm-scroller`, `legacy CodeMirror editor (removed)::.cm-editor-host`.
 **Root cause.** После переноса scroll ownership на внешний `.cm-editor-host` внутренний CodeMirror `.cm-scroller` получил `overflow-y: visible`, хотя CodeMirror ожидает scrollable `scrollDOM`. Wheel/scroll события приходили в `.cm-scroller`, но он сам не был scroll container, а внешний host не получал стабильный native scroll path.
 **Fix.** `.cm-editor-host` и `.cm-editor-container` стали non-scroll flex containers (`overflow: hidden`, `min-height: 0`), а `.cm-editor` / `.cm-scroller` снова занимают высоту редактора; `.cm-scroller` вернулся к `overflow-y: auto`, как scrollDOM CodeMirror.
 **Регрешн-защита.** Eden extension build проверяет CSS/Vue compile path; визуально проверяется HMR: длинная заметка должна скроллиться колесом/тачпадом внутри текста.
@@ -144,7 +144,7 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 **Где жило.** `products/eden/src/store/eden.ts::ensureMySpaceEntryCmSafe`, `products/eden/src/App.vue::useCmEditorForCurrent`.
 **Root cause.** Предыдущий фикс нормализовал несовместимый `content_json` только для записи с title `Мое пространство`. Любая другая старая запись с unsupported PM nodes (`taskRef`, `wikilink`, unknown marks) проходила обычный `navigateTo()` без coercion, `shouldUseCmEditor()` возвращал `false`, и App.vue снова падал в TipTap.
 **Fix.** `ensureMySpaceEntryCmSafe()` заменён на общий `ensureEntryCmSafe()`: `refreshData()`, `hydrateVaultData()`, `openMySpace()`, `openTodayJournal()` и `navigateTo()` теперь нормализуют любую открываемую запись перед попаданием в editor gate. Search result selection больше не присваивает `currentEntry` напрямую, а идёт через `navigateTo()`. Нормализация сохраняет существующий `type_id`, а отсутствующий тип приводит к базовому типу заметки.
-**Регрешн-защита.** `products/eden/tests/cmGate.test.ts` проверяет, что legacy doc с `wikilink`/`taskRef` становится CM-safe без привязки к конкретному title; локально прогоняется `rtk proxy bun test tests/cmGate.test.ts`.
+**Регрешн-защита.** `legacy cmGate unit spec (removed)` проверяет, что legacy doc с `wikilink`/`taskRef` становится CM-safe без привязки к конкретному title; локально прогоняется `rtk proxy bun test tests/cmGate.test.ts`.
 **Prevention.** Editor compatibility нельзя привязывать к title, user-facing имени или “особой” записи. Любой fallback из CM в legacy editor из-за content blockers должен закрываться на entry-boundary перед присваиванием `currentEntry`.
 
 ## 2026-06-12 — Eden my-space оставался в TipTap вместо CM editor
@@ -153,7 +153,7 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 **Где жило.** `products/eden/src/App.vue::useCmEditorForCurrent`, `products/eden/src/store/eden.ts::openMySpace` / `hydrateVaultData`.
 **Root cause.** `Мое пространство` — дефолтная запись, которую store подхватывает по title без проверки `content_json`. Если в старой версии этой записи лежали unsupported PM nodes (`taskRef`, `wikilink`, unknown marks), `cmGate.shouldUseCmEditor()` возвращал `false`, и App.vue падал в legacy TipTap `Editor.vue`; все Vim/CM cursor/font правила живут только в `CmEditor`.
 **Fix.** `cmGate` получил `coerceToCmSafeDoc()`, который превращает старые unsupported PM nodes в безопасный markdown-shaped doc. Все входы в дефолтную запись (`hydrateVaultData` fallback, last-visited restore, `openMySpace`, `navigateTo`, `refreshData` current entry refresh) нормализуют только `Мое пространство`, обновляют `type_id` до `note_obj` и сохраняют через `window.api.saveEntry`.
-**Регрешн-защита.** `products/eden/tests/cmGate.test.ts` проверяет, что `taskRef` превращается в CM-safe checklist, а `wikilink` внутри paragraph сохраняется как markdown-текст. Дополнительно проверена сборка Eden extension.
+**Регрешн-защита.** `legacy cmGate unit spec (removed)` проверяет, что `taskRef` превращается в CM-safe checklist, а `wikilink` внутри paragraph сохраняется как markdown-текст. Дополнительно проверена сборка Eden extension.
 **Prevention.** Дефолтные/служебные entries нельзя подхватывать по title и сразу отдавать в editor: перед установкой в `currentEntry` нужен контракт совместимости с активным editor path. Если документ может попасть в CM editor, normalization должен жить рядом с gate, а не в случайном CSS/UI workaround.
 
 ## 2026-06-12 — Backend app_index rescan стартовал до WS readiness
@@ -168,19 +168,19 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 ## 2026-06-11 — Eden CM6 caret не использовал zennotes cursor layer
 
 **Симптомы** — при включённом CodeMirror 6 markdown-редакторе ввод уже работал в WYSIWYG/live-preview стиле, но каретка выглядела не как в ZenNotes: Eden CSS задавал 2px accent cursor, однако пользователь видел обычную браузерную каретку.
-**Где жило** — `products/eden/src/editor-cm/CmEditor.vue`, `products/eden/src/editor-cm/cm-editor.css`.
+**Где жило** — `legacy CodeMirror editor (removed)`, `legacy CodeMirror stylesheet (removed)`.
 **Root cause** — из ZenNotes был перенесён CSS для `.cm-cursor`, но “толстая” ZenNotes-каретка живёт не там: её создаёт `@replit/codemirror-vim` как отдельный DOM-элемент `.cm-fat-cursor` в normal mode, а CSS только превращает этот элемент в solid block. Попытка утолщать `.cm-cursor` давала лишь bar-caret, визуально всё ещё тонкую.
 **Fix** — `CmEditor.vue` теперь подключает `drawSelection()` и собственный `fatCursorPlugin`, который без Vim keybindings рисует `.cm-fat-cursor` через CodeMirror `layer(...)`, синхронизированный с `coordsAtPos` и scroll geometry. `cm-editor.css` повторяет ZenNotes visual contract для `.cm-fat-cursor` и скрывает обычную `.cm-cursor` при активном fat cursor. Цвета идут через `var(--eden-accent-color, var(--accent, currentColor))`.
-**Регрешн-защита** — `products/eden/tests/components/CmEditor.spec.ts` проверяет, что после реального ввода появляется `.cm-fat-cursor` с видимой шириной и непрозрачным background, а `.cm-cursor-primary` скрыт; targeted RED до фикса падал на отсутствии `.cm-cursor`, после фикса полный `bun run --cwd products/eden test` прошёл.
+**Регрешн-защита** — `legacy CmEditor browser regression spec (removed)` проверяет, что после реального ввода появляется `.cm-fat-cursor` с видимой шириной и непрозрачным background, а `.cm-cursor-primary` скрыт; targeted RED до фикса падал на отсутствии `.cm-cursor`, после фикса полный `bun run --cwd products/eden test` прошёл.
 **Prevention** — При портировании CM6 UX из другого редактора сначала проверь, какой DOM-элемент реально рисует видимый эффект. В CodeMirror `.cm-cursor`, native caret, inline decorations и overlay layers — разные механизмы; для caret-подобных эффектов используй layer/coords-based rendering, а не inline decoration, иначе возможен desync с настоящей selection geometry.
 
 ### UPDATE 2026-06-11 — Vim mode оставлял старый Eden fat-cursor layer
 
 **Симптомы.** При persisted настройках `cmEditorEnabled=true` + `vimModeEnabled=true` редактор сначала монтировался обычным CM6, затем preferences догоняли и включали Vim. В DOM мог оставаться старый Eden `.cm-fat-cursorLayer`, пока Vim уже рисовал собственный `.cm-fat-cursor.cm-cursor-primary`.
-**Где жило.** `products/eden/src/editor-cm/CmEditor.vue`, `products/eden/src/editor-cm/cm/fat-cursor-fix.ts`.
+**Где жило.** `legacy CodeMirror editor (removed)`, `legacy CodeMirror fat-cursor helper (removed)`.
 **Root cause.** Initial-mount путь `vimMode=true` был покрыт тестом, а hydration/reconfigure путь `false → true` — нет. CodeMirror `Compartment.reconfigure([])` убирал extension, но старый layer DOM мог пережить переключение достаточно долго, чтобы визуально конфликтовать с Vim cursor.
 **Fix.** Удалён старый Eden-owned fat cursor layer. Eden использует Vim-owned `.cm-fat-cursor` из `@replit/codemirror-vim` и отдельный zennotes-style helper `fatCursorFixPlugin`, который чинит natural width/height cursor DOM на `selectionSet` / `geometryChanged` / `docChanged` / `viewportChanged`.
-**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` теперь проверяет false→true reconfigure: custom `.cm-fat-cursorLayer` не появляется, а после включения Vim остаётся Vim-owned `.cm-fat-cursor`. Дополнительно visual-check production bundle проверяет отсутствие Eden layer при Vim mode.
+**Регрешн-защита.** `legacy CmEditor browser regression spec (removed)` теперь проверяет false→true reconfigure: custom `.cm-fat-cursorLayer` не появляется, а после включения Vim остаётся Vim-owned `.cm-fat-cursor`. Дополнительно visual-check production bundle проверяет отсутствие Eden layer при Vim mode.
 **Prevention.** Для toggled CM6 extensions тестируй не только initial state, но и reconfigure-переходы после async preferences hydration. Если CSS class name совпадает с third-party extension (`.cm-fat-cursor`), контракт теста должен проверять owned wrapper/layer, а не общий selector.
 
 ## 2026-06-10 — kosmos-icon URLs не грузили PNG в renderer
