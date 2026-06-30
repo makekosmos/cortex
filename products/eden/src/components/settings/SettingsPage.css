@@ -80,6 +80,43 @@
   gap: 8px;
 }
 
+.settings-btn-primary:disabled,
+.settings-btn-secondary:disabled,
+.settings-btn-danger:disabled,
+.settings-btn-danger-sm:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.settings-confirm-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.settings-confirm-row input {
+  flex: 0 0 auto;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.settings-failure-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 12px 8px 24px;
+  border: 1px solid rgba(245, 85, 34, 0.22);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  background: var(--danger-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 /* Trash */
 .trash-list {
   display: flex;

@@ -16,7 +16,7 @@
 //
 // Решение: нормализовать оба entry одинаково через схему типа из noteTypes.
 
-import { readEntryMarkdown } from "../editor-cm/content";
+import { isEntryTiptapContent, readEntryMarkdown, readEntryTiptapDoc } from "../editor-cm/content";
 import { normalizeHeaderProps } from "../lib/typedNoteHeaderProps";
 import { resolveNoteTypeHeaderLayout } from "../lib/typedNotes";
 
@@ -52,6 +52,21 @@ function resolveEntryHeaderProps(entry: Entry, noteTypes: NoteType[]): string {
   return JSON.stringify(normalized);
 }
 
+function entryBodyChanged(nextEntry: Entry, previousEntry: Entry): boolean {
+  if (
+    isEntryTiptapContent(nextEntry.content_json) ||
+    isEntryTiptapContent(previousEntry.content_json)
+  ) {
+    return (
+      JSON.stringify(readEntryTiptapDoc(nextEntry.content_json)) !==
+      JSON.stringify(readEntryTiptapDoc(previousEntry.content_json))
+    );
+  }
+  return (
+    readEntryMarkdown(nextEntry.content_json) !== readEntryMarkdown(previousEntry.content_json)
+  );
+}
+
 /**
  * Возвращает true если черновик содержит реальные пользовательские изменения
  * относительно previousEntry.
@@ -78,7 +93,5 @@ export function hasUserVisibleEntryChanges(
   ) {
     return true;
   }
-  return (
-    readEntryMarkdown(nextEntry.content_json) !== readEntryMarkdown(previousEntry.content_json)
-  );
+  return entryBodyChanged(nextEntry, previousEntry);
 }

@@ -4,6 +4,7 @@ import { validateHeaderProps } from "@/lib/typedNoteHeaderProps";
 import { SYSTEM_TYPE_COLLECTION_ID } from "@/lib/systemTypes";
 import {
   DEFAULT_ARK_TYPE_ID,
+  arkTimestampToMillis,
   mapArkObjectSummaryToEntry,
   mapArkObjectToEntry,
   mapEntryToArkObject,
@@ -38,6 +39,7 @@ export function createEntryApi(
 ): {
   loadListableEntry: (id: string, typeIdHint?: string) => Promise<Entry | undefined>;
   listEntries: () => Promise<Entry[]>;
+  listAllEntries: () => Promise<Entry[]>;
   loadEntry: (id: string) => Promise<Entry | undefined>;
   saveEntry: (entry: Entry) => Promise<SaveEntryResult>;
   deleteEntry: (entryId: string) => Promise<DeleteEntryResult>;
@@ -73,9 +75,9 @@ export function createEntryApi(
 
       const chunks = await Promise.all(
         typeIds.map((typeId) =>
-          ark<unknown>("list_object_summaries_by_type", { type_id: typeId }).then(
-            ensureList<ArkObjectSummaryRecord>,
-          ),
+          ark<unknown>("list_object_summaries_by_type", {
+            type_id: typeId,
+          }).then(ensureList<ArkObjectSummaryRecord>),
         ),
       );
       return chunks.flat();
@@ -146,8 +148,36 @@ export function createEntryApi(
   }
 
   async function ensureEntryTypeAvailable(noteTypeId: string): Promise<boolean> {
-    const t = await ark<ArkObjectTypeRecord | null>("get_object_type", { id: noteTypeId });
+    const t = await ark<ArkObjectTypeRecord | null>("get_object_type", {
+      id: noteTypeId,
+    });
     return Boolean(t);
+  }
+
+  function parseEntryContentJson(
+    contentJson: string,
+  ): { ok: true; value: unknown } | { ok: false } {
+    try {
+      return { ok: true, value: JSON.parse(contentJson || "{}") };
+    } catch {
+      return { ok: false };
+    }
+  }
+
+  function isStaleEntryWrite(
+    entry: Entry,
+    existing: ArkObjectRecord,
+    nextContentJson: unknown,
+  ): boolean {
+    const existingUpdatedAt = arkTimestampToMillis(existing.updatedAt, 0);
+    if (existingUpdatedAt <= entry.updated_at) return false;
+
+    const nextObject = mapEntryToArkObject(entry);
+    return (
+      JSON.stringify(existing.contentJson ?? null) !== JSON.stringify(nextContentJson ?? null) ||
+      existing.title !== nextObject.title ||
+      JSON.stringify(existing.propsJson ?? {}) !== JSON.stringify(nextObject.propsJson ?? {})
+    );
   }
 
   async function syncRelatedLinks(entry: Entry): Promise<void> {
@@ -230,6 +260,18 @@ export function createEntryApi(
         .sort((a, b) => b.updated_at - a.updated_at);
     },
 
+    async listAllEntries(): Promise<Entry[]> {
+      const [objects, links] = await Promise.all([
+        listAllObjects(),
+        ark<unknown>("list_object_links").then(ensureList<ArkObjectLinkRecord>),
+      ]);
+
+      return objects
+        .filter((object) => !object.deletedAt)
+        .map((object) => mapArkObjectToEntry(object, links, undefined))
+        .sort((a, b) => b.updated_at - a.updated_at);
+    },
+
     loadEntry,
 
     async saveEntry(entry: Entry): Promise<SaveEntryResult> {
@@ -251,8 +293,39 @@ export function createEntryApi(
         };
       }
 
+      if (normalized.content_loaded === false) {
+        return {
+          ok: false,
+          reason: "content_not_loaded",
+          message: "Тело заметки ещё не загружено",
+        };
+      }
+
+      const parsedContent = parseEntryContentJson(normalized.content_json);
+      if (!parsedContent.ok) {
+        return {
+          ok: false,
+          reason: "invalid_content_json",
+          message: "Тело заметки сохранено в неверном формате",
+        };
+      }
+
       const normalizedTitle = normalized.title.trim().toLocaleLowerCase("ru");
       const existingObjects = await listAllObjects();
+      const existingCurrentObject = existingObjects.find(
+        (candidate) => candidate.id === normalized.id,
+      );
+      if (
+        existingCurrentObject &&
+        isStaleEntryWrite(normalized, existingCurrentObject, parsedContent.value)
+      ) {
+        return {
+          ok: false,
+          reason: "stale_entry",
+          message: "Заметка уже была обновлена более новой версией",
+        };
+      }
+
       const conflicting = existingObjects.find((candidate) => {
         if (candidate.id === normalized.id || candidate.deletedAt) return false;
         return candidate.title.trim().toLocaleLowerCase("ru") === normalizedTitle;
@@ -287,7 +360,9 @@ export function createEntryApi(
     },
 
     async deleteEntry(entryId: string): Promise<DeleteEntryResult> {
-      const existing = await ark<ArkObjectRecord | null>("get_object", { id: entryId });
+      const existing = await ark<ArkObjectRecord | null>("get_object", {
+        id: entryId,
+      });
       if (!existing || existing.deletedAt) {
         return {
           ok: false,

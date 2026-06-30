@@ -48,6 +48,7 @@ export const useEdenStore = defineStore("eden", () => {
   // читает старый `lastEntryId` и открывает не ту заметку.
   watch(currentEntry, (entry) => {
     if (entry?.id) writeLastVisitedEntryId(entry.id);
+    isCurrentEntryDirty.value = !!entry?.id && dirtyEntryId.value === entry.id;
   });
 
   const vaultPath = ref<string | null>(null);
@@ -83,6 +84,7 @@ export const useEdenStore = defineStore("eden", () => {
   // Сбрасывается в false когда handleSave успешно завершает.
   // Используется в live-refresh guard: не применять удалённые изменения пока пользователь редактирует.
   const isCurrentEntryDirty = ref(false);
+  const dirtyEntryId = ref<string | null>(null);
 
   // Non-reactive save coordination state (mutable internal mechanism)
 
@@ -226,6 +228,9 @@ export const useEdenStore = defineStore("eden", () => {
         entry.deleted_at === null,
     );
     if (existing) {
+      if (currentEntry.value?.id === existing.id && isCurrentEntryDirty.value) {
+        return;
+      }
       // Fresh state из ARK — entries.value может быть устаревший snapshot
       // (autosave в Editor.vue обновляет entries[idx] post-persist, но
       // если пользователь вызывает open-today до того как autosave успел —
@@ -245,7 +250,6 @@ export const useEdenStore = defineStore("eden", () => {
     // — это и есть смысл, header_props должны быть пустыми (без flag'а).
     const newEntry = createTodayJournalEntry(uuidv4(), todayTitle);
     entries.value = [newEntry, ...entries.value];
-    currentEntry.value = newEntry;
 
     // Persist первичную пустую заметку СИНХРОННО до того как редактор начнёт
     // autosave'ить пользовательский ввод. Раньше был fire-and-forget
@@ -261,12 +265,14 @@ export const useEdenStore = defineStore("eden", () => {
         if (!result.ok) {
           console.warn("[eden] save journal entry failed:", result);
           entries.value = entries.value.filter((e) => e.id !== newEntry.id);
-          if (currentEntry.value?.id === newEntry.id) {
-            currentEntry.value = null;
-          }
+          currentEntry.value = null;
+          return;
         }
+        currentEntry.value = newEntry;
       } catch (err) {
         console.error("[eden] save journal entry threw:", err);
+        entries.value = entries.value.filter((e) => e.id !== newEntry.id);
+        currentEntry.value = null;
       }
     }
   }
@@ -343,6 +349,7 @@ export const useEdenStore = defineStore("eden", () => {
     entries,
     entriesLoaded,
     isCurrentEntryDirty,
+    dirtyEntryId,
     isHydratingVault,
     isInitializing,
     latestSaveTimestamps,
@@ -363,6 +370,7 @@ export const useEdenStore = defineStore("eden", () => {
     currentEntry,
     entries,
     isCurrentEntryDirty,
+    dirtyEntryId,
     latestSaveTimestamps,
     saveCoordinators,
     markLatestLocalEntry,
@@ -372,6 +380,7 @@ export const useEdenStore = defineStore("eden", () => {
     currentEntry,
     entries,
     isCurrentEntryDirty,
+    dirtyEntryId,
     noteTypes,
     markLatestLocalEntry,
   });

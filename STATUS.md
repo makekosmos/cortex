@@ -1,13 +1,26 @@
-# Kosmos — статус проекта (2026-06-26)
+# Kosmos — статус проекта (2026-06-30)
 
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
-| Kosmos Desktop (win / mac) | 0.6.12 / 0.5.1 |
-| Eden                       | 0.3.0          |
+| Kosmos Desktop (win / mac) | 0.6.17 / 0.5.1 |
+| Eden                       | 0.4.0          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
 | Arrancador                 | 0.1.4          |
 | Akasha                     | 0.1.2          |
+
+## 2026-06-30 — Eden TipTap migration release (Kosmos Desktop 0.6.16 → 0.6.17, Eden 0.3.0 → 0.4.0)
+
+Minor-релиз Eden закрепляет миграцию редактора с CodeMirror на TipTap и выпускает ее в составе Windows-сборки Kosmos.
+
+- **TipTap по умолчанию**: старые записи автоматически переходят на ProseMirror JSON без ручного чекбокса, а открытые/грязные записи не перетираются миграцией поверх локального текста.
+- **Код-блоки**: язык выбирается через общий searchable dropdown Kosmos Visuals, копирование вынесено в отдельную кнопку, подсветка синтаксиса идет через Shiki.
+- **Настройки**: sidebar Eden Settings использует тот же визуальный контракт, что и настройки Kosmos, включая выбранную страницу и отступы.
+- **Сохранность данных**: summary-записи больше не сохраняются как полный контент, экспорт vault читает полные записи из backend, а сравнение изменений работает по каноническому TipTap JSON.
+
+Checks: `bun run --cwd products/eden test:unit`, `bun run --cwd products/eden test:vue`,
+`bun run desktop:typecheck`, `bun run ark:guard:writes`, `bun run docs:check`,
+`bunx prettier --check packages/visuals/components/Dropdown.vue`.
 
 ## 2026-06-26 — NVIDIA Parakeet V3 local dictation release (Kosmos Desktop 0.6.11 → 0.6.12)
 
@@ -882,14 +895,14 @@ Setting в Settings → Общие.
 
 ## Текущие версии
 
-| Артефакт                                            | Версия                                                               |
-| --------------------------------------------------- | -------------------------------------------------------------------- |
-| Kosmos Desktop (`platform/desktop/package.json`)    | **0.4.8**                                                            |
-| Akasha extension (`incubator/akasha/manifest.json`) | **0.1.2** (Vue EPUB reader; EPUB parser guardrails)                  |
-| Eden extension (`products/eden/manifest.json`)      | **0.3.0** (live sync / object refresh + Eden live-list sync updates) |
-| Delphi extension                                    | **0.1.7** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)    |
-| Arrancador extension                                | **0.1.4**                                                            |
-| Dashboard                                           | встроен в shell (не extension)                                       |
+| Артефакт                                                  | Версия                                                            |
+| --------------------------------------------------------- | ----------------------------------------------------------------- |
+| Kosmos Desktop (`platform/desktop/release-versions.json`) | **0.6.17 / 0.5.1** (win / mac)                                    |
+| Akasha extension (`incubator/akasha/manifest.json`)       | **0.1.2** (Vue EPUB reader; EPUB parser guardrails)               |
+| Eden extension (`products/eden/manifest.json`)            | **0.4.0** (TipTap migration + Shiki code blocks)                  |
+| Delphi extension                                          | **0.1.7** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl) |
+| Arrancador extension                                      | **0.1.4**                                                         |
+| Dashboard                                                 | встроен в shell (не extension)                                    |
 
 1. Floating focus widget переставал тикать (renderer push'ил state, renderer dead → no push'ей; main process autonomous tick не обновлял phaseEndsAtMs на phase boundary).
 2. `time_entry_obj` оставались `endedAt: null` навсегда (close/create логика жила в `usePomodoroSession` renderer'е).

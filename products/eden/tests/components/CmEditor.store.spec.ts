@@ -13,7 +13,11 @@ describe("CmEditor store flows", () => {
     const original = markdownEntry("");
     const draft: Entry = {
       ...original,
-      content_json: JSON.stringify({ type: "markdown", version: 1, text: "persist me" }),
+      content_json: JSON.stringify({
+        type: "markdown",
+        version: 1,
+        text: "persist me",
+      }),
       updated_at: original.updated_at + 1,
     };
     const saveEntry = vi.fn(
@@ -41,12 +45,20 @@ describe("CmEditor store flows", () => {
     original.updated_at = 100;
     const olderDraft: Entry = {
       ...original,
-      content_json: JSON.stringify({ type: "markdown", version: 1, text: "old save" }),
+      content_json: JSON.stringify({
+        type: "markdown",
+        version: 1,
+        text: "old save",
+      }),
       updated_at: 101,
     };
     const newerDraft: Entry = {
       ...original,
-      content_json: JSON.stringify({ type: "markdown", version: 1, text: "new local draft" }),
+      content_json: JSON.stringify({
+        type: "markdown",
+        version: 1,
+        text: "new local draft",
+      }),
       updated_at: 102,
     };
     const pendingSave = deferred<SaveEntryResult>();
@@ -127,8 +139,16 @@ describe("CmEditor store flows", () => {
   test("store navigateTo защищает от stale resolve при быстрых кликах по заметкам", async () => {
     setActivePinia(createPinia());
 
-    const first: Entry = { ...markdownEntry("First preview"), id: "note-1", title: "First" };
-    const second: Entry = { ...markdownEntry("Second preview"), id: "note-2", title: "Second" };
+    const first: Entry = {
+      ...markdownEntry("First preview"),
+      id: "note-1",
+      title: "First",
+    };
+    const second: Entry = {
+      ...markdownEntry("Second preview"),
+      id: "note-2",
+      title: "Second",
+    };
     const firstLoad = deferred<Entry | undefined>();
     const secondLoad = deferred<Entry | undefined>();
     const saveEntry = vi.fn(async () => ({ ok: true, entryId: first.id }));
@@ -160,7 +180,11 @@ describe("CmEditor store flows", () => {
     const resolvedSecond: Entry = {
       ...second,
       title: "Loaded second",
-      content_json: JSON.stringify({ type: "markdown", version: 1, text: "second body" }),
+      content_json: JSON.stringify({
+        type: "markdown",
+        version: 1,
+        text: "second body",
+      }),
     };
     secondLoad.resolve(resolvedSecond);
     await expect.poll(() => store.currentEntry?.title, { timeout: 4000 }).toBe("Loaded second");
@@ -169,7 +193,11 @@ describe("CmEditor store flows", () => {
     const resolvedFirst: Entry = {
       ...first,
       title: "Loaded first",
-      content_json: JSON.stringify({ type: "markdown", version: 1, text: "first body" }),
+      content_json: JSON.stringify({
+        type: "markdown",
+        version: 1,
+        text: "first body",
+      }),
     };
     firstLoad.resolve(resolvedFirst);
     await nextTick();
@@ -208,7 +236,11 @@ describe("CmEditor store flows", () => {
     load.resolve({
       ...entry,
       title: "Loaded after settings",
-      content_json: JSON.stringify({ type: "markdown", version: 1, text: "body" }),
+      content_json: JSON.stringify({
+        type: "markdown",
+        version: 1,
+        text: "body",
+      }),
     });
     await nextTick();
 
@@ -217,7 +249,7 @@ describe("CmEditor store flows", () => {
     expect(store.loadingEntryId).toBe(null);
   });
 
-  test("store initApp не открывает lastEntryId на старте", async () => {
+  test("store initApp открывает lastEntryId на старте", async () => {
     setActivePinia(createPinia());
 
     const entry = markdownEntry("Saved body");
@@ -238,7 +270,9 @@ describe("CmEditor store flows", () => {
       value: {
         getVaultPath: vi.fn(async () => "D:/tmp/eden"),
         getRecentVaultPaths: vi.fn(async () => ["D:/tmp/eden"]),
-        getSidebarConfig: vi.fn(async () => ({ widget: { hidden: false, width: 280 } })),
+        getSidebarConfig: vi.fn(async () => ({
+          widget: { hidden: false, width: 280 },
+        })),
         listEntries: vi.fn(async () => [entry]),
         listNoteTypes: vi.fn(async () => []),
         ensureCollectionObjects: vi.fn(async () => []),
@@ -256,7 +290,117 @@ describe("CmEditor store flows", () => {
 
     await expect.poll(() => store.isHydratingVault).toBe(false);
     expect(store.entries.map((candidate) => candidate.id)).toEqual([entry.id]);
+    expect(store.currentEntry?.id).toBe(entry.id);
+    expect(loadEntry).toHaveBeenCalledTimes(1);
+    expect(loadEntry).toHaveBeenCalledWith(entry.id);
+  });
+
+  test("store openTodayJournal waits for initial empty save before mounting editor", async () => {
+    setActivePinia(createPinia());
+    const initialSave = deferred<SaveEntryResult>();
+    const saveEntry = vi.fn(() => initialSave.promise);
+    Object.defineProperty(window, "api", {
+      configurable: true,
+      writable: true,
+      value: {
+        saveEntry,
+        saveNoteType: vi.fn(async () => ({ ok: true })),
+        listEntries: vi.fn(async () => []),
+      },
+    });
+
+    const store = useEdenStore();
+    const openPromise = store.openTodayJournal();
+
+    await expect.poll(() => saveEntry.mock.calls.length, { timeout: 4000 }).toBe(1);
     expect(store.currentEntry).toBeNull();
+
+    const newEntry = saveEntry.mock.calls[0]?.[0] as Entry;
+    initialSave.resolve({ ok: true, entryId: newEntry.id });
+    await openPromise;
+
+    expect(store.currentEntry?.id).toBe(newEntry.id);
+  });
+
+  test("store refreshData reloads full body for clean current entry", async () => {
+    setActivePinia(createPinia());
+    const summary = markdownEntry("");
+    const full = {
+      ...summary,
+      content_json: JSON.stringify({
+        type: "markdown",
+        version: 1,
+        text: "fresh full body",
+      }),
+    };
+    const loadEntry = vi.fn(async () => full);
+    Object.defineProperty(window, "api", {
+      configurable: true,
+      writable: true,
+      value: {
+        listEntries: vi.fn(async () => [summary]),
+        listNoteTypes: vi.fn(async () => []),
+        ensureCollectionObjects: vi.fn(async () => []),
+        loadEntry,
+        saveEntry: vi.fn(async () => ({ ok: true, entryId: summary.id })),
+      },
+    });
+
+    const store = useEdenStore();
+    store.entries = [summary];
+    store.currentEntry = summary;
+
+    await store.refreshData();
+
+    expect(loadEntry).toHaveBeenCalledWith(summary.id);
+    expect(store.currentEntry?.content_json).toBe(full.content_json);
+  });
+
+  test("store refreshData preserves dirty current body instead of summary body", async () => {
+    setActivePinia(createPinia());
+    const base = markdownEntry("persisted");
+    const draft = {
+      ...base,
+      content_json: JSON.stringify({
+        type: "markdown",
+        version: 1,
+        text: "local dirty body",
+      }),
+      updated_at: base.updated_at + 1,
+    };
+    const summary = {
+      ...base,
+      content_json: JSON.stringify({ type: "markdown", version: 1, text: "" }),
+      updated_at: base.updated_at + 2,
+    };
+    const loadEntry = vi.fn(async () => ({
+      ...base,
+      content_json: JSON.stringify({
+        type: "markdown",
+        version: 1,
+        text: "remote body",
+      }),
+    }));
+    Object.defineProperty(window, "api", {
+      configurable: true,
+      writable: true,
+      value: {
+        listEntries: vi.fn(async () => [summary]),
+        listNoteTypes: vi.fn(async () => []),
+        ensureCollectionObjects: vi.fn(async () => []),
+        loadEntry,
+        saveEntry: vi.fn(async () => ({ ok: true, entryId: base.id })),
+      },
+    });
+
+    const store = useEdenStore();
+    store.entries = [base];
+    store.currentEntry = base;
+    store.updateEntryDraft(draft);
+
+    await store.refreshData();
+
     expect(loadEntry).not.toHaveBeenCalled();
+    expect(store.currentEntry?.content_json).toBe(draft.content_json);
   });
 });

@@ -27,7 +27,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ["@tiptap/pm/state"],
+    include: ["@tiptap/core", "@tiptap/pm/state", "@tiptap/pm/view"],
   },
   test: {
     include: ["tests/components/**/*.{test,spec}.ts"],

@@ -4,7 +4,7 @@
 // Тестируется чистая функция shouldApplyRemoteEntry из store/liveRefresh.ts.
 
 import { describe, expect, test } from "bun:test";
-import { shouldApplyRemoteEntry } from "../src/store/liveRefresh";
+import { isOlderRemoteEntry, shouldApplyRemoteEntry } from "../src/store/liveRefresh";
 import { writeEntryMarkdown } from "../src/editor-cm/content";
 
 function makeEntry(id: string, markdown: string): Entry {
@@ -97,5 +97,26 @@ describe("shouldApplyRemoteEntry", () => {
         isEditorDirty: false,
       }),
     ).toBe("apply");
+  });
+});
+
+describe("isOlderRemoteEntry", () => {
+  test("возвращает true для задержанного remote load со старым updated_at", () => {
+    expect(
+      isOlderRemoteEntry(
+        { ...makeEntry("abc", "старое"), updated_at: 100 },
+        { ...makeEntry("abc", "новое"), updated_at: 101 },
+      ),
+    ).toBe(true);
+  });
+
+  test("не отбрасывает такую же или более новую версию", () => {
+    const current = { ...makeEntry("abc", "текущее"), updated_at: 100 };
+    expect(isOlderRemoteEntry({ ...makeEntry("abc", "такая же"), updated_at: 100 }, current)).toBe(
+      false,
+    );
+    expect(isOlderRemoteEntry({ ...makeEntry("abc", "новее"), updated_at: 101 }, current)).toBe(
+      false,
+    );
   });
 });

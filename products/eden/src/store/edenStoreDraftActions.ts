@@ -6,6 +6,7 @@ interface EdenStoreDraftActionState {
   currentEntry: Ref<Entry | null>;
   entries: Ref<Entry[]>;
   isCurrentEntryDirty: Ref<boolean>;
+  dirtyEntryId: Ref<string | null>;
   noteTypes: Ref<NoteType[]>;
   markLatestLocalEntry(entry: Entry): void;
 }
@@ -26,6 +27,7 @@ export function createEdenStoreDraftActions(state: EdenStoreDraftActionState) {
 
     if (state.currentEntry.value?.id === entry.id) {
       state.currentEntry.value = entry;
+      state.dirtyEntryId.value = entry.id;
       state.isCurrentEntryDirty.value = true;
     }
   }

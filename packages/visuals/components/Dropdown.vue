@@ -11,6 +11,8 @@ import { ChevronDown } from "@lucide/vue";
 interface Option<V> {
   value: V;
   label: string;
+  /** Визуальный разделитель между группами. Не выбирается и не фильтруется. */
+  kind?: "option" | "separator";
   /** Опциональная подсказка под лейблом. */
   description?: string;
   /** Disable конкретной опции. */
@@ -63,6 +65,7 @@ const open = ref(false);
 const triggerRef = ref<HTMLElement | null>(null);
 const panelRef = ref<HTMLElement | null>(null);
 const searchInputRef = ref<HTMLInputElement | null>(null);
+const optionsRef = ref<HTMLElement | null>(null);
 const searchQuery = ref("");
 const panelPosition = ref<{ top: number; left: number; width: number }>({
   top: 0,
@@ -81,11 +84,10 @@ const filteredOptions = computed<Option<T>[]>(() => {
   const q = rawQuery.toLowerCase();
   if (!q) return props.options;
 
-  const matches = props.options.filter(
-    (o) =>
-      o.label.toLowerCase().includes(q) ||
-      (o.description && o.description.toLowerCase().includes(q)),
-  );
+  const matches = props.options.filter((o) => {
+    if (o.kind === "separator") return false;
+    return o.label.toLowerCase().includes(q) || Boolean(o.description?.toLowerCase().includes(q));
+  });
   const exactMatch = matches.some(
     (o) => o.label.toLowerCase() === q || String(o.value) === rawQuery,
   );
@@ -104,6 +106,11 @@ const displayLabel = computed(() =>
 );
 
 const panelMaxHeight = computed(() => Math.max(80, Math.min(420, props.maxHeightPx)));
+const hasScrollableOptions = ref(false);
+
+function isSelectableOption(opt: Option<T> | undefined): opt is Option<T> {
+  return Boolean(opt && !opt.disabled && opt.kind !== "separator");
+}
 
 function reposition() {
   const trigger = triggerRef.value;
@@ -151,6 +158,20 @@ function scrollSelectedOptionIntoView() {
     ?.scrollIntoView({ block: "nearest" });
 }
 
+function scrollHighlightedOptionIntoView() {
+  nextTick(() => {
+    panelRef.value
+      ?.querySelector<HTMLElement>(".kosmos-dd__option--highlighted")
+      ?.scrollIntoView({ block: "nearest" });
+    updateOptionsOverflow();
+  });
+}
+
+function updateOptionsOverflow() {
+  const el = optionsRef.value;
+  hasScrollableOptions.value = Boolean(el && el.scrollHeight > el.clientHeight + 1);
+}
+
 function toggle() {
   if (props.disabled) return;
   open.value = !open.value;
@@ -158,10 +179,11 @@ function toggle() {
     searchQuery.value = "";
     // Подсветим текущий выбранный (или первый) элемент.
     const idx = props.options.findIndex((o) => o.value === props.modelValue);
-    highlightIdx.value = idx >= 0 ? idx : 0;
+    highlightIdx.value = idx >= 0 ? idx : props.options.findIndex(isSelectableOption);
     nextTick(() => {
       reposition();
       scrollSelectedOptionIntoView();
+      updateOptionsOverflow();
       // Auto-focus в search field (если есть) — UX как в macOS dropdown.
       if (isSearchable.value) searchInputRef.value?.focus();
     });
@@ -169,7 +191,7 @@ function toggle() {
 }
 
 function pick(opt: Option<T>) {
-  if (opt.disabled) return;
+  if (!isSelectableOption(opt)) return;
   emit("update:modelValue", opt.value);
   open.value = false;
 }
@@ -185,8 +207,9 @@ function onKey(e: KeyboardEvent) {
   if (e.key === "ArrowDown") {
     e.preventDefault();
     for (let i = highlightIdx.value + 1; i < opts.length; i++) {
-      if (!opts[i].disabled) {
+      if (isSelectableOption(opts[i])) {
         highlightIdx.value = i;
+        scrollHighlightedOptionIntoView();
         return;
       }
     }
@@ -195,8 +218,9 @@ function onKey(e: KeyboardEvent) {
   if (e.key === "ArrowUp") {
     e.preventDefault();
     for (let i = highlightIdx.value - 1; i >= 0; i--) {
-      if (!opts[i].disabled) {
+      if (isSelectableOption(opts[i])) {
         highlightIdx.value = i;
+        scrollHighlightedOptionIntoView();
         return;
       }
     }
@@ -205,7 +229,7 @@ function onKey(e: KeyboardEvent) {
   if (e.key === "Enter") {
     e.preventDefault();
     const opt = opts[highlightIdx.value];
-    if (opt) pick(opt);
+    if (isSelectableOption(opt)) pick(opt);
     return;
   }
 }
@@ -215,8 +239,10 @@ watch(searchQuery, () => {
   if (filteredOptions.value.length === 0) {
     highlightIdx.value = -1;
   } else {
-    highlightIdx.value = 0;
+    highlightIdx.value = filteredOptions.value.findIndex(isSelectableOption);
   }
+  scrollHighlightedOptionIntoView();
+  nextTick(updateOptionsOverflow);
 });
 
 function onDocPointerDown(e: PointerEvent) {
@@ -230,7 +256,9 @@ function onDocPointerDown(e: PointerEvent) {
 }
 
 function onWindowResize() {
-  if (open.value) reposition();
+  if (!open.value) return;
+  reposition();
+  nextTick(updateOptionsOverflow);
 }
 
 watch(open, (isOpen) => {
@@ -301,59 +329,80 @@ onBeforeUnmount(() => {
             maxHeight: `min(${panelMaxHeight}px, calc(100vh - 32px))`,
           }"
         >
-          <div v-if="isSearchable" class="px-2 pt-2 pb-1">
+          <div v-if="isSearchable" class="kosmos-dd__search">
             <input
               ref="searchInputRef"
               v-model="searchQuery"
               type="text"
-              class="h-8 w-full rounded-[var(--radius-input)] border border-[var(--border-color-strong,var(--border))] bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] px-2 font-[inherit] text-[var(--foreground)] outline-none transition-colors duration-140 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] placeholder:text-[color-mix(in_srgb,var(--foreground)_45%,transparent)] focus:border-[color-mix(in_srgb,var(--foreground)_18%,transparent)]"
+              class="h-8 w-full border-0 bg-transparent px-2 font-[inherit] text-[var(--foreground)] outline-none placeholder:text-[color-mix(in_srgb,var(--foreground)_45%,transparent)]"
               :placeholder="searchPlaceholder"
               spellcheck="false"
               autocomplete="off"
-              :style="{ fontSize: 'var(--kosmos-settings-font-size-base, 12px)' }"
+              :style="{
+                fontSize: 'var(--kosmos-settings-font-size-base, 12px)',
+              }"
             />
           </div>
           <div
-            class="kosmos-dd__options kosmos-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto py-2"
+            ref="optionsRef"
+            class="kosmos-dd__options kosmos-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2"
+            :class="{ 'kosmos-dd__options--scrollable': hasScrollableOptions }"
           >
-            <button
-              v-for="(opt, i) in filteredOptions"
-              :key="String(opt.value)"
-              type="button"
-              class="kosmos-dd__option flex min-h-8 w-full items-center gap-2 rounded-[var(--radius-input)] border-0 bg-transparent text-left font-[inherit] font-medium text-[var(--foreground)] transition-colors duration-100 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)]"
-              :class="{
-                'kosmos-dd__option--selected': opt.value === modelValue,
-                'kosmos-dd__option--highlighted': i === highlightIdx,
-                'cursor-not-allowed opacity-45': opt.disabled,
-              }"
-              role="option"
-              :aria-selected="opt.value === modelValue"
-              :disabled="opt.disabled"
-              :style="{ fontSize: 'var(--kosmos-settings-font-size-base, 12px)' }"
-              @mouseenter="!opt.disabled && (highlightIdx = i)"
-              @click="pick(opt)"
-            >
-              <!-- Слот для кастомной leading-иконки (например ProviderIcon).
-                   Если не передан — опция может сама отрисовать iconSrc/color. -->
-              <slot name="option-leading" :option="opt">
-                <span
-                  v-if="opt.iconSrc || opt.color"
-                  class="kosmos-dd__option-swatch"
-                  :style="{ '--kosmos-dd-option-color': opt.color ?? 'var(--text-secondary)' }"
-                  aria-hidden="true"
-                >
+            <template v-for="(opt, i) in filteredOptions" :key="String(opt.value)">
+              <div
+                v-if="opt.kind === 'separator'"
+                class="kosmos-dd__separator -mx-2 my-1 h-px shrink-0 bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)]"
+                role="separator"
+                aria-hidden="true"
+              ></div>
+              <button
+                v-else
+                type="button"
+                class="kosmos-dd__option flex min-h-8 w-full items-center gap-2 rounded-[var(--radius-input)] border-0 bg-transparent text-left font-[inherit] font-medium text-[var(--foreground)] transition-colors duration-100 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)]"
+                :class="{
+                  'kosmos-dd__option--selected': opt.value === modelValue,
+                  'kosmos-dd__option--highlighted': i === highlightIdx,
+                  'cursor-not-allowed opacity-45': opt.disabled,
+                }"
+                role="option"
+                :aria-selected="opt.value === modelValue"
+                :disabled="opt.disabled"
+                :style="{
+                  fontSize: 'var(--kosmos-settings-font-size-base, 12px)',
+                }"
+                @mouseenter="isSelectableOption(opt) && (highlightIdx = i)"
+                @click="pick(opt)"
+              >
+                <slot name="option-leading" :option="opt">
                   <span
-                    v-if="opt.iconSrc"
-                    class="kosmos-dd__option-icon"
-                    :style="{ '--kosmos-dd-option-icon-src': `url(${opt.iconSrc})` }"
-                  ></span>
-                  <span v-else class="kosmos-dd__option-dot"></span>
+                    v-if="opt.iconSrc || opt.color"
+                    class="kosmos-dd__option-swatch"
+                    :style="{
+                      '--kosmos-dd-option-color': opt.color ?? 'var(--text-secondary)',
+                    }"
+                    aria-hidden="true"
+                  >
+                    <span
+                      v-if="opt.iconSrc && opt.color"
+                      class="kosmos-dd__option-icon"
+                      :style="{
+                        '--kosmos-dd-option-icon-src': `url(${opt.iconSrc})`,
+                      }"
+                    ></span>
+                    <img
+                      v-else-if="opt.iconSrc"
+                      class="kosmos-dd__option-img"
+                      :src="opt.iconSrc"
+                      alt=""
+                    />
+                    <span v-else class="kosmos-dd__option-dot"></span>
+                  </span>
+                </slot>
+                <span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                  {{ opt.label }}
                 </span>
-              </slot>
-              <span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                {{ opt.label }}
-              </span>
-            </button>
+              </button>
+            </template>
             <div
               v-if="filteredOptions.length === 0"
               class="px-2 py-4 text-center text-[0.8125rem] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]"
@@ -369,11 +418,21 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .kosmos-dd__options {
+  scrollbar-gutter: auto;
+}
+
+.kosmos-dd__options--scrollable {
+  padding: 6px 0;
   scrollbar-gutter: stable both-edges;
 }
 
 .kosmos-dd__option {
   padding: 6px 10px;
+  scroll-margin-block: 8px;
+}
+
+.kosmos-dd__search {
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
 }
 
 .kosmos-dd__option-swatch {
@@ -399,6 +458,13 @@ onBeforeUnmount(() => {
   mask-position: center;
   -webkit-mask-size: contain;
   mask-size: contain;
+}
+
+.kosmos-dd__option-img {
+  width: 16px;
+  height: 16px;
+  display: block;
+  object-fit: contain;
 }
 
 .kosmos-dd__option-dot {

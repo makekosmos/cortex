@@ -68,19 +68,12 @@ export function useNavigationHistory(eden: ReturnType<typeof useEdenStore>) {
         return;
       }
 
-      const existingEntry = eden.entries.find((entry) => entry.id === snapshot.currentEntryId);
-      if (existingEntry) {
-        eden.currentEntry = existingEntry;
-        return;
-      }
-
       if (!window.api) {
         eden.currentEntry = null;
         return;
       }
 
-      const loadedEntry = await window.api.loadEntry(snapshot.currentEntryId);
-      eden.currentEntry = loadedEntry ?? null;
+      await eden.navigateTo(snapshot.currentEntryId);
     } finally {
       await nextTick();
       suppressHistoryRecording.value = false;

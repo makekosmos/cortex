@@ -6,8 +6,10 @@ import {
   loadEntry,
   listEntries,
   listNoteTypes,
+  saveEntry,
   softDeleteTask,
 } from "@/lib/kepler-api-shim";
+import { SYSTEM_TYPE_NOTE } from "@/lib/systemTypes";
 
 const previousKepler = window.kepler;
 const previousApi = window.api;
@@ -36,6 +38,18 @@ function installArkMock(handler: (operation: string, params?: Record<string, unk
       },
     },
   });
+}
+
+function noteObjectType() {
+  return {
+    id: SYSTEM_TYPE_NOTE.id,
+    name: SYSTEM_TYPE_NOTE.name,
+    schemaJson: SYSTEM_TYPE_NOTE.schema_json,
+    uiSchemaJson: SYSTEM_TYPE_NOTE.ui_schema_json,
+    createdAt: new Date(SYSTEM_TYPE_NOTE.created_at).toISOString(),
+    updatedAt: new Date(SYSTEM_TYPE_NOTE.updated_at).toISOString(),
+    systemLocked: true,
+  };
 }
 
 describe("kepler-api-shim timestamps", () => {
@@ -107,7 +121,10 @@ describe("kepler-api-shim timestamps", () => {
       "eden-extension-visible-object-type-ids",
       JSON.stringify(["note_obj", "book_obj"]),
     );
-    const operations: Array<{ operation: string; params?: Record<string, unknown> }> = [];
+    const operations: Array<{
+      operation: string;
+      params?: Record<string, unknown>;
+    }> = [];
 
     installArkMock((operation, params) => {
       operations.push({ operation, params });
@@ -244,13 +261,135 @@ describe("kepler-api-shim timestamps", () => {
 
     await expect(loadEntry("trashed-note")).resolves.toBeUndefined();
   });
+
+  test("saveEntry rejects malformed content_json without upsert", async () => {
+    const calls: Array<{
+      operation: string;
+      params?: Record<string, unknown>;
+    }> = [];
+    installArkMock((operation, params) => {
+      calls.push({ operation, params });
+      if (operation === "get_object_type") {
+        return noteObjectType();
+      }
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+
+    const entry = {
+      id: "note-1",
+      title: "Broken body",
+      content_json: "{not-json",
+      created_at: Date.parse("2024-01-02T03:04:05.000Z"),
+      updated_at: Date.parse("2024-01-02T03:04:05.000Z"),
+      folder_id: null,
+      type_id: "note_obj",
+      header_layout: "default",
+      header_props_json: "{}",
+      schema_version: 1,
+      deleted_at: null,
+    } satisfies Entry;
+
+    await expect(saveEntry(entry)).resolves.toMatchObject({
+      ok: false,
+      reason: "invalid_content_json",
+    });
+    expect(calls.map((call) => call.operation)).not.toContain("upsert_object");
+  });
+
+  test("saveEntry rejects summary entries whose body was not loaded", async () => {
+    const calls: Array<{
+      operation: string;
+      params?: Record<string, unknown>;
+    }> = [];
+    installArkMock((operation, params) => {
+      calls.push({ operation, params });
+      if (operation === "get_object_type") {
+        return noteObjectType();
+      }
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+
+    const entry = {
+      id: "note-summary",
+      title: "Summary",
+      content_json: JSON.stringify({ type: "markdown", version: 1, text: "" }),
+      content_loaded: false,
+      created_at: Date.parse("2024-01-02T03:04:05.000Z"),
+      updated_at: Date.parse("2024-01-02T03:04:05.000Z"),
+      folder_id: null,
+      type_id: "note_obj",
+      header_layout: "default",
+      header_props_json: "{}",
+      schema_version: 1,
+      deleted_at: null,
+    } satisfies Entry;
+
+    await expect(saveEntry(entry)).resolves.toMatchObject({
+      ok: false,
+      reason: "content_not_loaded",
+    });
+    expect(calls.map((call) => call.operation)).not.toContain("upsert_object");
+  });
+
+  test("saveEntry rejects stale body writes without upsert", async () => {
+    const calls: Array<{
+      operation: string;
+      params?: Record<string, unknown>;
+    }> = [];
+    const existing = {
+      id: "note-1",
+      typeId: "note_obj",
+      title: "Note",
+      contentJson: { type: "markdown", version: 1, text: "new body" },
+      propsJson: {},
+      createdAt: "2024-01-02T03:04:05.000Z",
+      updatedAt: "2024-01-02T03:04:06.000Z",
+      deletedAt: null,
+    };
+
+    installArkMock((operation, params) => {
+      calls.push({ operation, params });
+      if (operation === "get_object_type") {
+        return noteObjectType();
+      }
+      if (operation === "list_objects") return [existing];
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+
+    const entry = {
+      id: "note-1",
+      title: "Note",
+      content_json: JSON.stringify({
+        type: "markdown",
+        version: 1,
+        text: "old body",
+      }),
+      created_at: Date.parse("2024-01-02T03:04:05.000Z"),
+      updated_at: Date.parse("2024-01-02T03:04:05.000Z"),
+      folder_id: null,
+      type_id: "note_obj",
+      header_layout: "default",
+      header_props_json: "{}",
+      schema_version: 1,
+      deleted_at: null,
+    } satisfies Entry;
+
+    await expect(saveEntry(entry)).resolves.toMatchObject({
+      ok: false,
+      reason: "stale_entry",
+    });
+    expect(calls.map((call) => call.operation)).not.toContain("upsert_object");
+  });
 });
 
 describe("kepler-api-shim delete semantics", () => {
   test("deleteEntry soft-deletes through upsert_object instead of delete_object", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2024-05-06T07:08:09.000Z"));
-    const calls: Array<{ operation: string; params?: Record<string, unknown> }> = [];
+    const calls: Array<{
+      operation: string;
+      params?: Record<string, unknown>;
+    }> = [];
     const existing = {
       id: "note-1",
       typeId: "note_obj",
@@ -269,7 +408,10 @@ describe("kepler-api-shim delete semantics", () => {
       throw new Error(`Unexpected operation: ${operation}`);
     });
 
-    await expect(deleteEntry("note-1")).resolves.toEqual({ ok: true, entryId: "note-1" });
+    await expect(deleteEntry("note-1")).resolves.toEqual({
+      ok: true,
+      entryId: "note-1",
+    });
 
     expect(calls.map((call) => call.operation)).toEqual(["get_object", "upsert_object"]);
     expect(calls).not.toContainEqual(expect.objectContaining({ operation: "delete_object" }));
@@ -283,7 +425,10 @@ describe("kepler-api-shim delete semantics", () => {
   test("softDeleteTask soft-deletes through upsert_object instead of delete_object", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2024-05-06T07:08:09.000Z"));
-    const calls: Array<{ operation: string; params?: Record<string, unknown> }> = [];
+    const calls: Array<{
+      operation: string;
+      params?: Record<string, unknown>;
+    }> = [];
     const existing = {
       id: "task-1",
       typeId: "task_obj",
@@ -370,7 +515,10 @@ describe("kepler-api-shim task object metadata", () => {
   });
 
   test("registers task_obj with an editable deadline field for Eden object pages", async () => {
-    const calls: Array<{ operation: string; params?: Record<string, unknown> }> = [];
+    const calls: Array<{
+      operation: string;
+      params?: Record<string, unknown>;
+    }> = [];
 
     installArkMock((operation, params) => {
       calls.push({ operation, params });

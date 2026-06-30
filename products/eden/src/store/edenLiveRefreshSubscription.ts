@@ -1,7 +1,7 @@
 import type { Ref } from "vue";
 import { onScopeDispose } from "vue";
 import { edenApi } from "@/lib/edenApi";
-import { shouldApplyRemoteEntry } from "./liveRefresh";
+import { isOlderRemoteEntry, shouldApplyRemoteEntry } from "./liveRefresh";
 
 export function startEdenLiveRefreshSubscription(deps: {
   entries: Ref<Entry[]>;
@@ -34,11 +34,14 @@ export function startEdenLiveRefreshSubscription(deps: {
         if (!fresh) return;
 
         const idx = entries.value.findIndex((entry) => entry.id === payload.id);
+        if (idx >= 0 && isOlderRemoteEntry(fresh, entries.value[idx]!)) return;
+
         if (idx >= 0) {
           entries.value[idx] = fresh;
         }
 
         if (currentEntry.value?.id !== payload.id) return;
+        if (isOlderRemoteEntry(fresh, currentEntry.value)) return;
         const decision = shouldApplyRemoteEntry({
           fresh,
           currentContentJson: currentEntry.value.content_json,

@@ -141,6 +141,32 @@ describe("CmEditor component", () => {
     expect(parsed.text).toContain("persist on close");
   });
 
+  test("failed save keeps persisted baseline dirty and retries draft on unmount", async () => {
+    // Regression: 2026-06-30. SaveEntryResult ok:false is not persisted.
+    const onSave = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        reason: "duplicate_title",
+        message: "duplicate",
+      })
+      .mockResolvedValueOnce({ ok: true, entryId: "entry-1" });
+    const screen = render(CmEditor, {
+      props: { entry: makeEntry(EMPTY_DOC), onSave, zenMode: false },
+    });
+
+    await expect.poll(() => document.querySelector(".cm-content")).not.toBeNull();
+    await typeInEditor("retry after failed save");
+
+    await expect.poll(() => onSave.mock.calls.length, { timeout: 4000 }).toBe(1);
+    screen.unmount();
+
+    await expect.poll(() => onSave.mock.calls.length, { timeout: 4000 }).toBe(2);
+    const retried = onSave.mock.calls[1]?.[0] as Entry;
+    const parsed = JSON.parse(retried.content_json) as { text?: string };
+    expect(parsed.text).toContain("retry after failed save");
+  });
+
   test("ввод текста эмитит liveCharCount > 0", async () => {
     const counts: number[] = [];
     render(CmEditor, {
@@ -176,7 +202,9 @@ describe("CmEditor component", () => {
 
     expect(onSave).not.toHaveBeenCalled();
     expect(drafts.length).toBeGreaterThan(0);
-    const parsed = JSON.parse(drafts.at(-1)?.content_json ?? "{}") as { text?: string };
+    const parsed = JSON.parse(drafts.at(-1)?.content_json ?? "{}") as {
+      text?: string;
+    };
     expect(parsed.text).toContain("ж");
   });
 
@@ -272,7 +300,11 @@ describe("CmEditor component", () => {
 
   test("без vimMode использует обычную CodeMirror-каретку без кастомного fat layer", async () => {
     render(CmEditor, {
-      props: { entry: makeEntry(EMPTY_DOC), onSave: vi.fn(async () => null), zenMode: false },
+      props: {
+        entry: makeEntry(EMPTY_DOC),
+        onSave: vi.fn(async () => null),
+        zenMode: false,
+      },
     });
 
     await expect.poll(() => document.querySelector(".cm-content")).not.toBeNull();
@@ -441,7 +473,10 @@ describe("CmEditor component", () => {
 
     await expect.poll(() => onSave.mock.calls.length, { timeout: 4000 }).toBeGreaterThan(0);
     const saved = onSave.mock.calls.at(-1)?.[0] as Entry;
-    const parsed = JSON.parse(saved.content_json) as { type?: string; text?: string };
+    const parsed = JSON.parse(saved.content_json) as {
+      type?: string;
+      text?: string;
+    };
     expect(parsed.type).toBe("markdown");
     expect(parsed.text).toContain("привет мир");
   });

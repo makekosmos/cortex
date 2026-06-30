@@ -23,9 +23,12 @@
   --eden-accent-color: #ff5c00;
   --accent: var(--eden-accent-color);
 
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter Variable", Inter,
+    "Segoe UI", Helvetica, Arial, sans-serif;
   --font-display:
-    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter Variable", Inter,
+    "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono:
     "JetBrains Mono", "SF Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
 

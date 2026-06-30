@@ -6,6 +6,7 @@ interface EdenStoreSaveActionState {
   currentEntry: Ref<Entry | null>;
   entries: Ref<Entry[]>;
   isCurrentEntryDirty: Ref<boolean>;
+  dirtyEntryId: Ref<string | null>;
   latestSaveTimestamps: Map<string, number>;
   saveCoordinators: Record<string, EntrySaveCoordinator>;
   markLatestLocalEntry(entry: Entry): void;
@@ -37,6 +38,9 @@ export function createEdenStoreSaveActions(state: EdenStoreSaveActionState) {
       if (state.currentEntry.value?.id === entryToPersist.id) {
         state.currentEntry.value = entryToPersist;
         state.isCurrentEntryDirty.value = false;
+      }
+      if (state.dirtyEntryId.value === entryToPersist.id) {
+        state.dirtyEntryId.value = null;
       }
 
       return result;

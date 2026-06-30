@@ -328,7 +328,12 @@ async function importObsidianVaultFolder(): Promise<void> {
       if (!result.ok) {
         throw new Error(result.message ?? `Не удалось импортировать ${draft.relativePath}.`);
       }
-      noteEntries.push({ draft, existingEntry, entry, noteType: noteType ?? null });
+      noteEntries.push({
+        draft,
+        existingEntry,
+        entry,
+        noteType: noteType ?? null,
+      });
       savedNotes += 1;
     }
 
@@ -405,8 +410,10 @@ async function exportObsidianVaultFolder(): Promise<void> {
       return;
     }
 
+    const entries = await window.api.listAllEntries();
+    const exportEntryTitlesById = new Map(entries.map((entry) => [entry.id, entry.title]));
     const bodyMarkdownById = new Map<string, string>();
-    for (const entry of eden.entries) {
+    for (const entry of entries) {
       try {
         bodyMarkdownById.set(entry.id, readEntryMarkdown(entry.content_json));
       } catch {
@@ -423,12 +430,13 @@ async function exportObsidianVaultFolder(): Promise<void> {
     }
 
     const files = buildObsidianExportFiles({
-      entries: eden.entries,
+      entries,
       noteTypes: eden.noteTypes,
       selectedTypeIds: exportObjectTypeIds.value,
       folderPathById,
       bodyMarkdownById: (entry) => bodyMarkdownById.get(entry.id) ?? "",
-      relatedEntryTitleLookup: (entryId) => entryTitlesById.value.get(entryId),
+      relatedEntryTitleLookup: (entryId) =>
+        exportEntryTitlesById.get(entryId) ?? entryTitlesById.value.get(entryId),
     });
     const result = await window.api.exportMarkdownVault(files);
     markdownStatus.value = result

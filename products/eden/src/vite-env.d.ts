@@ -15,6 +15,8 @@ interface Entry {
 
   content_json: string;
 
+  content_loaded?: boolean;
+
   created_at: number;
 
   updated_at: number;
@@ -180,6 +182,13 @@ type SaveEntryResult =
       ok: false;
 
       reason: "invalid_type_metadata";
+
+      message: string;
+    }
+  | {
+      ok: false;
+
+      reason: "invalid_content_json" | "stale_entry" | "content_not_loaded";
 
       message: string;
     };
@@ -360,6 +369,8 @@ interface Window {
     loadEntry: (id: string) => Promise<Entry | undefined>;
 
     listEntries: () => Promise<Entry[]>;
+
+    listAllEntries: () => Promise<Entry[]>;
 
     getVaultPath: () => Promise<string | null>;
 

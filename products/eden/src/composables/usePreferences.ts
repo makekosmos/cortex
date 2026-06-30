@@ -29,12 +29,15 @@ interface EdenPreferences {
   vimModeEnabled: boolean;
   /** false по умолчанию — Eden открывается в режиме писателя. */
   readerModeEnabled: boolean;
+  /** false по умолчанию — экспериментальный TipTap/ProseMirror редактор выключен. */
+  tiptapEditorEnabled: boolean;
 }
 
 const DEFAULT_PREFERENCES: EdenPreferences = {
   spellcheckEnabled: false,
   vimModeEnabled: false,
   readerModeEnabled: false,
+  tiptapEditorEnabled: false,
 };
 
 const state = reactive<EdenPreferences>({ ...DEFAULT_PREFERENCES });
@@ -62,6 +65,9 @@ function mergeIntoState(partial: Partial<EdenPreferences> | null | undefined): v
   }
   if (typeof partial.readerModeEnabled === "boolean") {
     state.readerModeEnabled = partial.readerModeEnabled;
+  }
+  if (typeof partial.tiptapEditorEnabled === "boolean") {
+    state.tiptapEditorEnabled = partial.tiptapEditorEnabled;
   }
 }
 
@@ -161,6 +167,9 @@ export function usePreferences() {
     },
     setReaderModeEnabled(value: boolean): void {
       state.readerModeEnabled = value;
+    },
+    setTiptapEditorEnabled(value: boolean): void {
+      state.tiptapEditorEnabled = value;
     },
     /** Promise, который resolve'ит когда первичный read из userData завершился. */
     ready(): Promise<void> {

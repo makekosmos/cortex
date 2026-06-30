@@ -10,7 +10,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { hasUserVisibleEntryChanges } from "../src/store/entryChanges";
-import { writeEntryMarkdown } from "../src/editor-cm/content";
+import { writeEntryMarkdown, writeEntryTiptapDoc } from "../src/editor-cm/content";
 import { SYSTEM_TYPE_NOTE, SYSTEM_TYPE_PERSON } from "../src/lib/systemTypes";
 
 function makeNoteEntry(overrides: Partial<Entry> = {}): Entry {
@@ -99,8 +99,31 @@ describe("hasUserVisibleEntryChanges", () => {
   });
 
   test("смена тела — это изменение", () => {
-    const base = makeNoteEntry({ content_json: JSON.stringify(writeEntryMarkdown("старый")) });
-    const draft = makeNoteEntry({ content_json: JSON.stringify(writeEntryMarkdown("новый")) });
+    const base = makeNoteEntry({
+      content_json: JSON.stringify(writeEntryMarkdown("старый")),
+    });
+    const draft = makeNoteEntry({
+      content_json: JSON.stringify(writeEntryMarkdown("новый")),
+    });
+    expect(hasUserVisibleEntryChanges(draft, base, NOTE_TYPES)).toBe(true);
+  });
+
+  test("структурная TipTap-смена с тем же markdown — это изменение", () => {
+    const base = makeNoteEntry({
+      content_json: JSON.stringify(writeEntryMarkdown("a")),
+    });
+    const draft = makeNoteEntry({
+      content_json: JSON.stringify(
+        writeEntryTiptapDoc({
+          type: "doc",
+          content: [
+            { type: "paragraph", content: [{ type: "text", text: "a" }] },
+            { type: "paragraph" },
+          ],
+        }),
+      ),
+    });
+
     expect(hasUserVisibleEntryChanges(draft, base, NOTE_TYPES)).toBe(true);
   });
 
@@ -113,7 +136,11 @@ describe("hasUserVisibleEntryChanges", () => {
   test("реальная смена header_props (заполненное имя) — это изменение", () => {
     const base = makeNoteEntry({
       type_id: "person_obj",
-      header_props_json: JSON.stringify({ first_name: "", last_name: "", patronymic: "" }),
+      header_props_json: JSON.stringify({
+        first_name: "",
+        last_name: "",
+        patronymic: "",
+      }),
     });
     const draft = makeNoteEntry({
       type_id: "person_obj",

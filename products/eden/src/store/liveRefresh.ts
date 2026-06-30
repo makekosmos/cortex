@@ -22,6 +22,13 @@ export interface ShouldApplyRemoteEntryParams {
   isEditorDirty: boolean;
 }
 
+export function isOlderRemoteEntry(
+  fresh: Pick<Entry, "updated_at">,
+  current: Pick<Entry, "updated_at">,
+): boolean {
+  return fresh.updated_at < current.updated_at;
+}
+
 /**
  * Решает: нужно ли применить удалённое изменение к открытой заметке.
  *

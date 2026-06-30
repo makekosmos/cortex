@@ -4,34 +4,46 @@
 
     <div class="settings-shell">
       <SettingsSidebar title="Настройки">
+        <div class="settings-sidebar-search">
+          <SettingsSearchInput v-model="searchQuery" placeholder="Поиск" />
+        </div>
+
         <div class="settings-sidebar-scroll kosmos-scroll">
-          <div class="settings-sidebar-group">
+          <div v-if="hasSidebarMatches" class="settings-sidebar-group">
             <SettingsSidebarButton
-              v-for="item in navigationItems"
+              v-for="item in matchedNavigationItems"
               :key="item.id"
               :icon="item.icon"
               :label="item.label"
-              :active="tab === item.id"
+              :active="activeTab === item.id"
               :test-id="item.testId"
-              @click="tab = item.id"
+              @click="selectTab(item.id)"
             />
           </div>
+
+          <div v-else class="settings-sidebar-empty">Ничего не найдено</div>
         </div>
       </SettingsSidebar>
 
       <div class="settings-content">
         <SettingsContentHeader />
-        <SettingsPage :initial-tab="tab" @refresh-data="eden.refreshData()" />
+        <div v-if="searchQuery && !activeTab" class="empty">Ничего не найдено</div>
+        <SettingsPage
+          v-else-if="activeTab"
+          :active-tab="activeTab"
+          @refresh-data="eden.refreshData()"
+        />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, shallowRef } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import { FileDown, Keyboard, Settings, Trash2 } from "@lucide/vue";
 import {
   SettingsContentHeader,
+  SettingsSearchInput,
   SettingsSidebar,
   SettingsSidebarButton,
   ToastHost,
@@ -45,6 +57,7 @@ type SettingsTab = "general" | "export" | "trash" | "vim";
 
 const eden = useEdenStore();
 const tab = shallowRef<SettingsTab>("general");
+const searchQuery = ref("");
 
 const navigationItems = [
   {
@@ -72,6 +85,28 @@ const navigationItems = [
     testId: "eden-settings-vim",
   },
 ];
+
+function normalizeSearchValue(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+const matchedNavigationItems = computed(() => {
+  const query = normalizeSearchValue(searchQuery.value);
+  if (!query) return navigationItems;
+  return navigationItems.filter((item) => item.label.toLowerCase().includes(query));
+});
+
+const hasSidebarMatches = computed(() => matchedNavigationItems.value.length > 0);
+
+const activeTab = computed<SettingsTab | null>(() => {
+  if (!searchQuery.value.trim()) return tab.value;
+  if (matchedNavigationItems.value.some((item) => item.id === tab.value)) return tab.value;
+  return matchedNavigationItems.value[0]?.id ?? null;
+});
+
+function selectTab(nextTab: SettingsTab): void {
+  tab.value = nextTab;
+}
 
 provideToastHost();
 

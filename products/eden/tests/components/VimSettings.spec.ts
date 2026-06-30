@@ -8,7 +8,7 @@ async function mountVimSettings(): Promise<void> {
   const { default: VimSettings } = await import("../../src/components/settings/VimSettings.vue");
 
   if (!container) {
-    throw new Error("Тестовый контейнер не инициализирован");
+    throw new Error("Контейнер для монтирования не инициализирован");
   }
 
   app = createApp(VimSettings);
@@ -31,13 +31,13 @@ afterEach(() => {
 });
 
 describe("VimSettings", () => {
-  test("показывает Vim-настройки, справочник команд и note для выключенного CM6", async () => {
+  test("показывает Vim-настройки и справочник команд", async () => {
     await mountVimSettings();
 
     await expect.poll(() => document.body.textContent ?? "").toContain("Vim");
     await expect
       .poll(() => document.body.textContent ?? "")
-      .toContain("Режим команд для Markdown-редактора Eden");
+      .toContain("Включает Vim-команды в CodeMirror-редакторе.");
     await expect
       .poll(() => document.querySelector('[data-testid="eden-vim-mode-toggle"]'))
       .not.toBeNull();
@@ -47,9 +47,6 @@ describe("VimSettings", () => {
     await expect
       .poll(() => document.querySelector('[data-testid="vim-motion-group-eden"]'))
       .not.toBeNull();
-    await expect
-      .poll(() => document.body.textContent ?? "")
-      .toContain("Сначала включите Markdown-редактор в общих настройках.");
     await expect.poll(() => document.body.textContent ?? "").toContain(":w");
     await expect.poll(() => document.body.textContent ?? "").toContain(":q");
     await expect.poll(() => document.body.textContent ?? "").toContain(":wq");
@@ -57,22 +54,20 @@ describe("VimSettings", () => {
     await expect.poll(() => document.body.textContent ?? "").toContain(":zen off");
   });
 
-  test("скрывает предупреждение, когда CM6 включён в preferences singleton", async () => {
+  test("не зависит от TipTap/CM6 флага preferences при отображении справочника", async () => {
     await mountVimSettings();
 
     const { usePreferences } = await import("../../src/composables/usePreferences");
     const preferences = usePreferences();
     await preferences.ready();
 
-    expect(document.body.textContent ?? "").toContain(
-      "Сначала включите Markdown-редактор в общих настройках.",
-    );
+    preferences.setTiptapEditorEnabled(true);
 
-    preferences.setCmEditorEnabled(true);
-
-    await expect.poll(() => document.querySelector(".vim-settings-note")).toBeNull();
     await expect
-      .poll(() => document.querySelector('[data-testid="eden-vim-mode-toggle"]'))
+      .poll(() => document.body.textContent ?? "")
+      .toContain("Включает Vim-команды в CodeMirror-редакторе.");
+    await expect
+      .poll(() => document.querySelector('[data-testid="vim-motion-group-modes"]'))
       .not.toBeNull();
   });
 });

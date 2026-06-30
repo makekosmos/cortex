@@ -31,6 +31,14 @@ export function writeLastVisitedEntryId(id: string): void {
   }
 }
 
+export function readLastVisitedEntryId(): string | null {
+  try {
+    return window.localStorage.getItem(LAST_ENTRY_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export function mergeNoteTypesWithSystem(noteTypesData: NoteType[]) {
   const byId = new Map<string, NoteType>();
   for (const systemType of SYSTEM_TYPES) {

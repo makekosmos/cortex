@@ -8,6 +8,7 @@ import {
   mergeEntriesById,
   mergeNoteTypesWithSystem,
   pruneTransientSaveState,
+  readLastVisitedEntryId,
   type ActiveScreen,
   type EntrySaveCoordinator,
 } from "./edenStoreHelpers";
@@ -16,6 +17,7 @@ interface EdenStoreDataActionState {
   activeScreen: Ref<ActiveScreen>;
   activeSpace: Ref<SpaceId>;
   currentEntry: Ref<Entry | null>;
+  dirtyEntryId: Ref<string | null>;
   entries: Ref<Entry[]>;
   entriesLoaded: Ref<boolean>;
   isCurrentEntryDirty: Ref<boolean>;
@@ -43,12 +45,24 @@ export function createEdenStoreDataActions(state: EdenStoreDataActionState) {
     const collectionEntries = await window.api.ensureCollectionObjects(state.noteTypes.value);
 
     if (state.currentEntry.value) {
+      const currentId = state.currentEntry.value.id;
+      const shouldPreserveLocalBody =
+        state.isCurrentEntryDirty.value ||
+        state.dirtyEntryId.value === currentId ||
+        Boolean(state.saveCoordinators[currentId]);
       const refreshed =
-        entriesData.find((entry) => entry.id === state.currentEntry.value!.id) ??
-        state.currentEntry.value;
+        entriesData.find((entry) => entry.id === currentId) ?? state.currentEntry.value;
+      const fullEntry = shouldPreserveLocalBody
+        ? null
+        : ((await window.api.loadEntry(currentId)) ?? null);
       const safeCurrentEntry = await state.ensureEntryCmSafe({
-        ...refreshed,
-        content_json: state.currentEntry.value.content_json,
+        ...(fullEntry ?? refreshed),
+        content_json: shouldPreserveLocalBody
+          ? state.currentEntry.value.content_json
+          : (fullEntry?.content_json ?? refreshed.content_json),
+        content_loaded: shouldPreserveLocalBody
+          ? (state.currentEntry.value.content_loaded ?? true)
+          : Boolean(fullEntry) || refreshed.content_loaded === true,
       });
       state.currentEntry.value = safeCurrentEntry;
       const idx = entriesData.findIndex((entry) => entry.id === safeCurrentEntry.id);
@@ -64,6 +78,7 @@ export function createEdenStoreDataActions(state: EdenStoreDataActionState) {
   async function hydrateVaultData() {
     if (!window.api || !state.vaultPath.value) return;
 
+    const startingEntryId = state.currentEntry.value?.id ?? null;
     state.isHydratingVault.value = true;
 
     try {
@@ -78,7 +93,19 @@ export function createEdenStoreDataActions(state: EdenStoreDataActionState) {
       state.entries.value = nextEntries;
       state.entriesLoaded.value = true;
       pruneTransientSaveState(state.latestSaveTimestamps, state.saveCoordinators, nextEntries);
-      state.currentEntry.value = null;
+      const lastEntryId = readLastVisitedEntryId();
+      const lastEntry =
+        nextEntries.find((entry) => entry.id === lastEntryId && entry.deleted_at === null) ?? null;
+      const loadedLastEntry = lastEntry ? await window.api.loadEntry(lastEntry.id) : null;
+      if (
+        (state.currentEntry.value?.id ?? null) !== startingEntryId ||
+        state.isCurrentEntryDirty.value
+      ) {
+        return;
+      }
+      state.currentEntry.value = loadedLastEntry
+        ? await state.ensureEntryCmSafe(loadedLastEntry)
+        : null;
     } finally {
       state.isHydratingVault.value = false;
     }

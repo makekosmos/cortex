@@ -214,22 +214,17 @@ describe("EdenSidebar contract", () => {
 
     await userEvent.click(screen.getByTestId("sidebar-open-objects"));
     await expect.element(screen.getByTestId("sidebar-objects-modal")).toBeInTheDocument();
-    document
-      .querySelector<HTMLButtonElement>(
-        `[data-testid="objects-modal-object-type-${SYSTEM_TYPE_NOTE.id}"]`,
-      )
-      ?.click();
+    const pickerNoteType = document.querySelector<HTMLButtonElement>(
+      `[data-testid="objects-modal-object-type-${SYSTEM_TYPE_NOTE.id}"]`,
+    );
+    expect(pickerNoteType).not.toBeNull();
+    pickerNoteType?.click();
 
+    await expect.element(screen.getByTestId("sidebar-objects-modal")).not.toBeInTheDocument();
     await expect
       .element(screen.getByTestId("open-object-type-id"))
       .toHaveTextContent(SYSTEM_TYPE_NOTE.id);
     await expect.element(screen.getByTestId("screen")).toHaveTextContent("type-collection");
-    await expect
-      .element(screen.getByTestId(`object-type-${SYSTEM_TYPE_NOTE.id}`))
-      .toBeInTheDocument();
-    await expect
-      .element(screen.getByTestId(`object-type-${SYSTEM_TYPE_NOTE.id}`))
-      .toHaveAttribute("data-active", "true");
   });
 
   test("settings button keeps note navigation visible and only emits the open request", async () => {

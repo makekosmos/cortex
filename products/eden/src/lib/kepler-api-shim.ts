@@ -50,6 +50,16 @@ import {
 } from "./kepler-folder-stubs";
 import { createTrashStorageApi } from "./kepler-trash-storage";
 export {
+  createFolder,
+  deleteFolder,
+  getVaultPath,
+  listFolders,
+  moveEntryToFolder,
+  moveFolderToFolder,
+  selectFolder,
+  setVaultPath,
+};
+export {
   createTask,
   ensureTaskObjectTypeRegistered,
   getTask,
@@ -82,6 +92,7 @@ function ark<T = unknown>(operation: string, params?: Record<string, unknown>): 
 
 export const {
   loadListableEntry,
+  listAllEntries,
   listEntries,
   loadEntry,
   saveEntry,
@@ -111,6 +122,7 @@ export function installKeplerApiShim(): void {
     saveEntry,
     loadEntry,
     listEntries,
+    listAllEntries,
     getVaultPath,
     getRecentVaultPaths,
     selectFolder,

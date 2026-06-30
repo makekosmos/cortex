@@ -70,7 +70,7 @@ import { highlightActiveLine } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
-import { readEntryMarkdown, writeEntryMarkdown } from "./content";
+import { isReadableEntryContent, readEntryMarkdown, writeEntryMarkdown } from "./content";
 import {
   getEditableEntryTitle,
   resolveStoredEntryTitle,
@@ -79,6 +79,7 @@ import {
 import { resolveNoteTypeHeaderLayout } from "@/lib/typedNotes";
 import { createHeaderPropsForTypeChange, safeParseHeaderProps } from "@/lib/typedNoteHeaderProps";
 import { SYSTEM_TYPE_NOTE_ID, SYSTEM_TYPE_PERSON_ID } from "@/lib/systemTypes";
+import { isFailedSaveResult } from "@/lib/saveResult";
 import {
   livePreviewPlugin,
   livePreviewReaderModeFacet,
@@ -203,6 +204,8 @@ let lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(props.entry.header_p
 let lastPersistedBodyMarkdown = readEntryMarkdown(props.entry.content_json);
 let lastDraftUpdatedAt = props.entry.updated_at;
 let suppressBodySyncSave = false;
+let bodyReadable = isReadableEntryContent(props.entry.content_json);
+let bodyEditedSinceEntryLoad = false;
 
 const currentTypeId = ref(props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID);
 const activeNoteType = computed(
@@ -292,6 +295,8 @@ function syncPersistedBaseline(entry: Entry): void {
   lastPersistedHeaderLayout = normalizedEntryHeaderLayout(entry);
   lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(entry.header_props_json);
   lastPersistedBodyMarkdown = readEntryMarkdown(entry.content_json);
+  bodyReadable = isReadableEntryContent(entry.content_json);
+  bodyEditedSinceEntryLoad = false;
 }
 
 function scheduleAutosave(): void {
@@ -309,12 +314,19 @@ function scheduleAutosave(): void {
 async function flushSave(): Promise<void> {
   if (!view) return;
   const md = view.state.doc.toString();
-  const contentJson = JSON.stringify(writeEntryMarkdown(md));
+  const contentJson =
+    bodyReadable || bodyEditedSinceEntryLoad
+      ? JSON.stringify(writeEntryMarkdown(md))
+      : props.entry.content_json;
   const entry = buildEntryDraft(contentJson);
   if (!hasEntryDraftChanges(entry)) return;
 
   emit("entryDraftChange", entry);
-  await props.onSave(entry);
+  const result = await props.onSave(entry);
+  if (isFailedSaveResult(result)) {
+    console.warn("[eden cm] save failed:", result);
+    return;
+  }
   syncPersistedBaseline(entry);
 }
 
@@ -345,8 +357,9 @@ async function handleTypePick(nextTypeId: string): Promise<void> {
   });
 
   const result = await props.onSave(entry);
-  if (result && typeof result === "object" && "ok" in result && result.ok === false) {
+  if (isFailedSaveResult(result)) {
     console.warn("[eden cm] type change save failed:", result);
+    return;
   }
   syncPersistedBaseline(entry);
 }
@@ -436,7 +449,11 @@ function createTitleState(initialTitle: string): EditorState {
         const nextTitle = update.state.doc.toString().replace(/[\r\n]+/g, " ");
         if (nextTitle !== update.state.doc.toString()) {
           update.view.dispatch({
-            changes: { from: 0, to: update.state.doc.length, insert: nextTitle },
+            changes: {
+              from: 0,
+              to: update.state.doc.length,
+              insert: nextTitle,
+            },
           });
           return;
         }
@@ -527,7 +544,11 @@ onMounted(() => {
       drawSelection(),
       highlightActiveLine(),
       EditorView.lineWrapping,
-      markdown({ base: markdownLanguage, codeLanguages: resolveCodeLanguage, addKeymap: true }),
+      markdown({
+        base: markdownLanguage,
+        codeLanguages: resolveCodeLanguage,
+        addKeymap: true,
+      }),
       syntaxHighlighting(edenHighlight),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       livePreviewReaderModeCompartment.of(livePreviewReaderModeFacet.of(props.readerMode)),
@@ -541,6 +562,7 @@ onMounted(() => {
       EditorView.contentAttributes.of({ spellcheck: "false" }),
       EditorView.updateListener.of((update) => {
         if (update.docChanged && !props.readerMode && !suppressBodySyncSave) {
+          bodyEditedSinceEntryLoad = true;
           emit("liveCharCount", update.state.doc.length);
           const contentJson = JSON.stringify(writeEntryMarkdown(update.state.doc.toString()));
           emit("entryDraftChange", buildEntryDraft(contentJson));
@@ -556,7 +578,9 @@ onMounted(() => {
   });
   bodyScrollElement = hostRef.value;
   bodyScrollElement.classList.add("kosmos-scroll");
-  bodyScrollElement.addEventListener("scroll", syncTitleScrollState, { passive: true });
+  bodyScrollElement.addEventListener("scroll", syncTitleScrollState, {
+    passive: true,
+  });
   hostRef.value?.addEventListener("pointerdown", handleHostPointerDown);
   backfillPersonNameFromTitle(activeNoteType.value);
   syncTitleScrollState();
@@ -592,11 +616,17 @@ watch(
     emit("titleOutOfViewChange", false);
     if (titleView && titleView.state.doc.toString() !== title.value) {
       titleView.dispatch({
-        changes: { from: 0, to: titleView.state.doc.length, insert: title.value },
+        changes: {
+          from: 0,
+          to: titleView.state.doc.length,
+          insert: title.value,
+        },
       });
     }
     syncBodyFromEntry();
     syncPersistedBaseline(props.entry);
+    bodyReadable = isReadableEntryContent(props.entry.content_json);
+    bodyEditedSinceEntryLoad = false;
     lastDraftUpdatedAt = props.entry.updated_at;
   },
 );

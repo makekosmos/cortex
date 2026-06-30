@@ -154,6 +154,24 @@
             :entry="eden.currentEntry"
             :note-type="activeCurrentType"
           />
+          <TiptapEditor
+            v-else-if="preferences.state.tiptapEditorEnabled"
+            :key="`tiptap:${eden.currentEntry.id}:${eden.currentEntry.type_id ?? 'note_obj'}`"
+            :entry="eden.currentEntry"
+            :all-entries="eden.entries"
+            :note-types="eden.noteTypes"
+            :zen-mode="layout.isZenMode"
+            :reader-mode="preferences.state.readerModeEnabled"
+            :body-loading="eden.loadingEntryId === eden.currentEntry.id"
+            :on-save="eden.handleSave"
+            :on-navigate="eden.navigateTo"
+            @close-entry="closeCurrentEntry"
+            @set-zen-mode="setZenMode"
+            @entry-draft-change="eden.updateEntryDraft"
+            @live-char-count="liveCharCount = $event"
+            @title-out-of-view-change="noteTitleOutOfView = $event"
+            @type-change="onCmTypeChange"
+          />
           <CmEditor
             v-else
             :key="`${eden.currentEntry.id}:${eden.currentEntry.type_id ?? 'note_obj'}`"
@@ -194,7 +212,8 @@
       :class="{ 'has-overlap': charCounterHasOverlap }"
       data-testid="eden-char-counter"
     >
-      {{ currentEntryCharCount }} {{ pluralizeCharacters(currentEntryCharCount) }}
+      {{ currentEntryCharCount }}
+      {{ pluralizeCharacters(currentEntryCharCount) }}
     </div>
 
     <ContextMenu
@@ -242,12 +261,14 @@ import { useDockedWidget } from "@/composables/useDockedWidget";
 import { useNavigationHistory } from "@/composables/useNavigationHistory";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { usePreferences } from "@/composables/usePreferences";
+import { useAutoTipTapMigration } from "@/editor-tiptap/useAutoTipTapMigration";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
 import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
 // CodeMirror editor lazy-load — основной bundle открывается быстрее,
 // заметка-чанк подгружается при первом открытии заметки.
 const CmEditor = defineAsyncComponent(() => import("./editor-cm/CmEditor.vue"));
+const TiptapEditor = defineAsyncComponent(() => import("./editor-tiptap/TiptapEditor.vue"));
 import ImageObjectView from "@/components/objects/ImageObjectView.vue";
 import TypeObjectsView from "@/components/objects/TypeObjectsView.vue";
 import {
@@ -299,6 +320,7 @@ provideToastHost();
 
 usePlatform();
 useKeyboard();
+useAutoTipTapMigration(eden);
 const { pendingQuery } = useSearch();
 
 // ПКМ-меню на entries в sidebar — пункт «Удалить» soft-delete'ит запись.

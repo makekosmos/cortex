@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-30 — Eden editor accepted failed save as persisted
+
+**Симптомы.** Если `saveEntry` возвращал `{ ok: false }` без exception, редактор мог считать текущий draft сохранённым. После reload/переоткрытия пользователь видел старую версию из ARK, а editor больше не пытался сохранить тот же draft без новых правок.
+**Где жило.** `products/eden/src/editor-cm/CmEditor.vue::flushSave`, `products/eden/src/editor-cm/CmEditor.vue::handleTypePick`, `products/eden/src/editor-tiptap/TiptapEditor.vue::flushSave`, `products/eden/src/editor-tiptap/TiptapEditor.vue::handleTypePick`.
+**Root cause.** Editor save path ждал `props.onSave(entry)`, но не проверял typed `SaveEntryResult`. ARK/API сообщает validation/duplicate/write failures как resolved `{ ok:false }`, поэтому `await` завершался успешно, после чего editor обновлял persisted baseline на unsaved draft.
+**Fix.** `CmEditor` и `TiptapEditor` теперь двигают persisted baseline только если `onSave()` не вернул typed `{ ok:false }`. Дополнительно `saveEntry` fail-closed отклоняет malformed `content_json` и stale writes, а store refresh/history/live-refresh больше не продвигают summary/older bodies в current editor state.
+**Регрешн-защита.** `products/eden/tests/components/CmEditor.spec.ts` и `TiptapEditor.spec.ts` проверяют retry после failed save. `CmEditor.store.spec.ts` покрывает journal initial save и clean/dirty refresh. `keplerApiShim.spec.ts` покрывает malformed/stale body rejection. `content.test.ts` покрывает TipTap Markdown edge cases.
+**Prevention.** Resolved promise не означает successful persistence: все editor/store save paths обязаны проверять typed result, а API boundary обязан отклонять malformed/stale body writes вместо silent normalization. Summary entries нельзя считать полноценным `Entry` body source; перед записью или открытием editor нужен full `loadEntry` либо dirty/pending guard.
+
 ## 2026-06-16 — Shell ARK startup timeout маскировался под not-installed
 
 **Симптомы.** В production shell логировал `[kepler-shell] kepler-backend not-installed: ArkClient unavailable`, затем extension IPC падал с `ark bridge not ready (timeout)`, а generic shell IPC — с `ArkClient not ready (timeout)`, хотя runtime binaries уже были установлены.

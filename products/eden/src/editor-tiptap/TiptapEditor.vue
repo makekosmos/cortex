@@ -1,0 +1,1324 @@
+<script setup lang="ts">
+import {
+  computed,
+  createApp,
+  h,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  shallowRef,
+  type App as VueApp,
+  watch,
+} from "vue";
+import { Extension, mergeAttributes, Node } from "@tiptap/core";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Decoration, DecorationSet, type EditorView, type NodeView } from "@tiptap/pm/view";
+import { EditorContent, useEditor } from "@tiptap/vue-3";
+import StarterKit from "@tiptap/starter-kit";
+import TaskItem from "@tiptap/extension-task-item";
+import TaskList from "@tiptap/extension-task-list";
+import Placeholder from "@tiptap/extension-placeholder";
+import {
+  CheckSquare,
+  Code,
+  Heading1,
+  Heading2,
+  Heading3,
+  Heading4,
+  Heading5,
+  Heading6,
+  List,
+  ListOrdered,
+  Pilcrow,
+  Minus,
+  Quote,
+} from "@lucide/vue";
+import { PhCheck, PhCopy } from "@phosphor-icons/vue";
+import { Dropdown, Skeleton } from "@kosmos/visuals";
+import TypedHeader from "@/components/typed-notes/TypedHeader.vue";
+import {
+  getEditableEntryTitle,
+  resolveStoredEntryTitle,
+  syncUntitledEntryTitleFlag,
+} from "@/lib/entryTitles";
+import { resolveNoteTypeHeaderLayout } from "@/lib/typedNotes";
+import { createHeaderPropsForTypeChange, safeParseHeaderProps } from "@/lib/typedNoteHeaderProps";
+import { SYSTEM_TYPE_NOTE_ID, SYSTEM_TYPE_PERSON_ID } from "@/lib/systemTypes";
+import { isFailedSaveResult } from "@/lib/saveResult";
+import {
+  isReadableEntryContent,
+  readEntryTiptapDoc,
+  tiptapDocToMarkdown,
+  writeEntryTiptapDoc,
+  type TiptapDoc,
+} from "@/editor-cm/content";
+import {
+  highlightCodeWithShiki,
+  isShikiCodeLanguage,
+  type ShikiCodeLanguage,
+} from "./shikiHighlight";
+
+interface Props {
+  entry: Entry;
+  allEntries?: Entry[];
+  noteTypes?: NoteType[];
+  onSave: (entry: Entry) => Promise<unknown>;
+  onNavigate?: (entryId: string) => void;
+  zenMode?: boolean;
+  readerMode?: boolean;
+  bodyLoading?: boolean;
+}
+
+interface Emits {
+  closeEntry: [];
+  setZenMode: [enabled: boolean];
+  entryDraftChange: [entry: Entry];
+  liveCharCount: [count: number];
+  titleOutOfViewChange: [outOfView: boolean];
+  typeChange: [entry: Entry];
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  allEntries: () => [],
+  noteTypes: () => [],
+  onNavigate: () => {},
+  zenMode: false,
+  readerMode: false,
+  bodyLoading: false,
+});
+
+const EdenImage = Node.create({
+  name: "image",
+  group: "block",
+  atom: true,
+  draggable: true,
+
+  addAttributes() {
+    return {
+      src: { default: null },
+      alt: { default: null },
+      title: { default: null },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: "img[src]" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ["img", mergeAttributes(HTMLAttributes)];
+  },
+});
+
+const EdenCodeBlockTools = Extension.create({
+  name: "edenCodeBlockTools",
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin<DecorationSet>({
+        key: CODE_BLOCK_PLUGIN_KEY,
+        state: {
+          init: () => DecorationSet.empty,
+          apply(tr, value) {
+            const next = tr.getMeta(CODE_BLOCK_PLUGIN_KEY) as DecorationSet | undefined;
+            if (next) return next;
+            return tr.docChanged ? value.map(tr.mapping, tr.doc) : value;
+          },
+        },
+        props: {
+          nodeViews: {
+            codeBlock: (node, view, getPos) => new EdenCodeBlockView(node, view, getPos),
+          },
+          decorations(state): DecorationSet {
+            return CODE_BLOCK_PLUGIN_KEY.getState(state) ?? DecorationSet.empty;
+          },
+        },
+        view(editorView) {
+          let requestId = 0;
+          let lastDoc: ProseMirrorNode | null = null;
+
+          const scheduleHighlight = (): void => {
+            const doc = editorView.state.doc;
+            if (doc === lastDoc) return;
+            lastDoc = doc;
+            const currentRequest = ++requestId;
+
+            window.setTimeout(() => {
+              void buildCodeBlockDecorations(doc).then((decorations) => {
+                if (currentRequest !== requestId) return;
+                editorView.dispatch(
+                  editorView.state.tr.setMeta(CODE_BLOCK_PLUGIN_KEY, decorations),
+                );
+              });
+            }, 80);
+          };
+
+          scheduleHighlight();
+          return {
+            update(view, previousState) {
+              if (view.state.doc.eq(previousState.doc)) return;
+              scheduleHighlight();
+            },
+            destroy() {
+              requestId++;
+            },
+          };
+        },
+      }),
+    ];
+  },
+});
+
+class EdenCodeBlockView implements NodeView {
+  dom: HTMLElement;
+  contentDOM: HTMLElement;
+
+  private node: ProseMirrorNode;
+  private readonly view: EditorView;
+  private readonly getPos: (() => number | undefined) | boolean;
+  private readonly languageDropdownHost: HTMLElement;
+  private readonly languageDropdownValue = shallowRef("");
+  private readonly languageDropdownApp: VueApp;
+  private readonly copyButton: HTMLButtonElement;
+  private readonly copyIconCopied = shallowRef(false);
+  private readonly copyIconApp: VueApp;
+  private copyTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(
+    node: ProseMirrorNode,
+    view: EditorView,
+    getPos: (() => number | undefined) | boolean,
+  ) {
+    this.node = node;
+    this.view = view;
+    this.getPos = getPos;
+
+    this.dom = document.createElement("div");
+    this.dom.className = "tiptap-code-block";
+    this.dom.dataset.language = visibleCodeLanguage(node);
+
+    const toolbar = document.createElement("div");
+    toolbar.className = "tiptap-code-toolbar";
+    toolbar.contentEditable = "false";
+
+    this.languageDropdownHost = document.createElement("div");
+    this.languageDropdownHost.className = "tiptap-code-language-host";
+    this.languageDropdownApp = createApp({
+      setup: () => () =>
+        h(Dropdown, {
+          modelValue: this.languageDropdownValue.value,
+          options: codeBlockLanguageOptions(this.languageDropdownValue.value),
+          placeholder: "Plain text",
+          searchable: true,
+          searchPlaceholder: "Поиск языка...",
+          maxHeightPx: 260,
+          matchTriggerWidth: false,
+          panelAlign: "end",
+          class: "tiptap-code-language-dropdown",
+          "onUpdate:modelValue": this.setLanguage,
+        }),
+    });
+    this.languageDropdownApp.mount(this.languageDropdownHost);
+
+    this.copyButton = document.createElement("button");
+    this.copyButton.type = "button";
+    this.copyButton.className = "tiptap-code-copy";
+    this.copyButton.title = "Скопировать код";
+    this.copyButton.ariaLabel = "Скопировать код";
+    this.copyIconApp = createApp({
+      setup: () => () =>
+        h(this.copyIconCopied.value ? PhCheck : PhCopy, {
+          size: 15,
+          weight: "regular",
+          "aria-hidden": "true",
+        }),
+    });
+    this.copyIconApp.mount(this.copyButton);
+    this.copyButton.addEventListener("click", this.handleCopy);
+
+    toolbar.append(this.languageDropdownHost, this.copyButton);
+
+    const pre = document.createElement("pre");
+    this.contentDOM = document.createElement("code");
+    pre.append(this.contentDOM);
+    this.dom.append(toolbar, pre);
+    this.syncControls();
+  }
+
+  update(node: ProseMirrorNode): boolean {
+    if (node.type !== this.node.type) return false;
+    this.node = node;
+    this.syncControls();
+    return true;
+  }
+
+  stopEvent(event: Event): boolean {
+    return (
+      event.target instanceof globalThis.Node &&
+      this.dom.querySelector(".tiptap-code-toolbar")?.contains(event.target) === true
+    );
+  }
+
+  ignoreMutation(mutation: MutationRecord): boolean {
+    return !this.contentDOM.contains(mutation.target);
+  }
+
+  destroy(): void {
+    this.languageDropdownApp.unmount();
+    this.copyIconApp.unmount();
+    this.copyButton.removeEventListener("click", this.handleCopy);
+    if (this.copyTimer !== null) clearTimeout(this.copyTimer);
+  }
+
+  private readonly setLanguage = (language: string): void => {
+    if (typeof this.getPos !== "function") return;
+    const pos = this.getPos();
+    if (typeof pos !== "number") return;
+    const attrs = { ...this.node.attrs };
+    if (language) attrs.language = language;
+    else delete attrs.language;
+    this.view.dispatch(this.view.state.tr.setNodeMarkup(pos, undefined, attrs));
+    this.view.focus();
+  };
+
+  private readonly handleCopy = (): void => {
+    void copyTextToClipboard(this.node.textContent).then(() => {
+      this.copyIconCopied.value = true;
+      this.copyButton.classList.add("is-copied");
+      if (this.copyTimer !== null) clearTimeout(this.copyTimer);
+      this.copyTimer = setTimeout(() => {
+        this.copyIconCopied.value = false;
+        this.copyButton.classList.remove("is-copied");
+        this.copyTimer = null;
+      }, 900);
+    });
+  };
+
+  private syncControls(): void {
+    const language = visibleCodeLanguage(this.node);
+    this.dom.dataset.language = language;
+    this.languageDropdownValue.value = language;
+    this.copyButton.disabled = this.node.textContent.length === 0;
+  }
+}
+
+const emit = defineEmits<Emits>();
+
+const AUTOSAVE_DEBOUNCE_MS = 300;
+const SLASH_MENU_GAP_PX = 16;
+const SLASH_MENU_MAX_HEIGHT_PX = 300;
+const DROPDOWN_MARGIN_PX = 4;
+const SLASH_MENU_TRIGGER_SIZE_PX = 1;
+const CODE_BLOCK_PLUGIN_KEY = new PluginKey("eden-code-block-ui");
+const JS_LIKE_RE = /\b(?:const|let|var|function|return|import|export|async|await)\b|=>/;
+
+type CodeBlockLanguage = {
+  value: string;
+  label: string;
+  aliases?: string[];
+};
+
+const CODE_BLOCK_LANGUAGES: CodeBlockLanguage[] = [
+  { value: "", label: "Plain text" },
+  { value: "bash", label: "Bash / Shell", aliases: ["sh", "shell", "zsh"] },
+  { value: "c", label: "C" },
+  { value: "cpp", label: "C++", aliases: ["c++", "cc", "cxx"] },
+  { value: "csharp", label: "C Sharp", aliases: ["cs", "c#"] },
+  { value: "css", label: "CSS" },
+  { value: "diff", label: "Diff", aliases: ["patch"] },
+  { value: "go", label: "Go", aliases: ["golang"] },
+  { value: "graphql", label: "GraphQL", aliases: ["gql"] },
+  { value: "html", label: "HTML" },
+  { value: "ini", label: "INI", aliases: ["conf", "cfg"] },
+  { value: "java", label: "Java" },
+  {
+    value: "javascript",
+    label: "JavaScript",
+    aliases: ["js", "jsx"],
+  },
+  { value: "json", label: "JSON" },
+  { value: "kotlin", label: "Kotlin", aliases: ["kt", "kts"] },
+  { value: "less", label: "Less" },
+  { value: "lua", label: "Lua" },
+  { value: "makefile", label: "Makefile", aliases: ["make"] },
+  { value: "markdown", label: "Markdown", aliases: ["md"] },
+  {
+    value: "objective-c",
+    label: "Objective-C",
+    aliases: ["objc", "objectivec"],
+  },
+  { value: "perl", label: "Perl", aliases: ["pl"] },
+  { value: "php", label: "PHP" },
+  { value: "python", label: "Python", aliases: ["py"] },
+  { value: "r", label: "R" },
+  { value: "ruby", label: "Ruby", aliases: ["rb"] },
+  { value: "rust", label: "Rust", aliases: ["rs"] },
+  { value: "scss", label: "SCSS" },
+  { value: "sql", label: "SQL" },
+  { value: "swift", label: "Swift" },
+  {
+    value: "typescript",
+    label: "TypeScript",
+    aliases: ["ts", "tsx"],
+  },
+  { value: "xml", label: "XML" },
+  { value: "yaml", label: "YAML", aliases: ["yml"] },
+];
+
+const languageAliasToValue = new Map<string, string>(
+  CODE_BLOCK_LANGUAGES.flatMap((language) => [
+    [language.value, language.value] as const,
+    ...(language.aliases ?? []).map((alias) => [alias, language.value] as const),
+  ]),
+);
+
+function codeBlockLanguageOptions(currentLanguage: string): CodeBlockLanguage[] {
+  if (
+    !currentLanguage ||
+    CODE_BLOCK_LANGUAGES.some((language) => language.value === currentLanguage)
+  ) {
+    return CODE_BLOCK_LANGUAGES;
+  }
+  return [...CODE_BLOCK_LANGUAGES, { value: currentLanguage, label: currentLanguage }];
+}
+
+const hostRef = ref<HTMLDivElement | null>(null);
+const titleShellRef = ref<HTMLDivElement | null>(null);
+const titleInputRef = ref<HTMLInputElement | null>(null);
+const title = ref(getEditableEntryTitle(props.entry.title, props.entry.header_props_json));
+const currentTypeId = ref(props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID);
+const headerProps = ref<Record<string, unknown>>(
+  safeParseHeaderProps(
+    props.noteTypes.find((noteType) => noteType.id === currentTypeId.value) ?? null,
+    props.entry.header_props_json,
+  ),
+);
+const headerLayout = ref<string | null>(props.entry.header_layout);
+const slashMenuOpen = ref(false);
+const slashMenuX = ref(0);
+const slashMenuY = ref(0);
+const slashMenuValue = ref<string | null>(null);
+const slashMenuTriggerRef = ref<HTMLDivElement | null>(null);
+const suppressUpdate = ref(false);
+
+let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+let lastDraftUpdatedAt = props.entry.updated_at;
+let lastPersistedTitle = props.entry.title;
+let lastPersistedTypeId = props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
+let lastPersistedHeaderLayout = normalizedEntryHeaderLayout(props.entry);
+let lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(props.entry.header_props_json);
+let lastPersistedBodyMarkdown = tiptapDocToMarkdown(readEntryTiptapDoc(props.entry.content_json));
+let lastPersistedBodyJson = JSON.stringify(readEntryTiptapDoc(props.entry.content_json));
+let bodyReadable = isReadableEntryContent(props.entry.content_json);
+let bodyEditedSinceEntryLoad = false;
+let titleOutOfView = false;
+
+const activeNoteType = computed(
+  () => props.noteTypes.find((noteType) => noteType.id === currentTypeId.value) ?? null,
+);
+const isPersonEntry = computed(() => currentTypeId.value === SYSTEM_TYPE_PERSON_ID);
+const showTypedHeader = computed(() => Boolean(activeNoteType.value));
+const showTitleInput = computed(() => !isPersonEntry.value);
+const slashCommands = [
+  { value: "h1", label: "Заголовок 1", icon: Heading1 },
+  { value: "h2", label: "Заголовок 2", icon: Heading2 },
+  { value: "h3", label: "Заголовок 3", icon: Heading3 },
+  { value: "h4", label: "Заголовок 4", icon: Heading4 },
+  { value: "h5", label: "Заголовок 5", icon: Heading5 },
+  { value: "h6", label: "Заголовок 6", icon: Heading6 },
+  { value: "text", label: "Текст", icon: Pilcrow },
+  { value: "divider", label: "", kind: "separator" as const },
+  { value: "bullet", label: "Маркированный список", icon: List },
+  { value: "ordered", label: "Нумерованный список", icon: ListOrdered },
+  { value: "task", label: "Задача", icon: CheckSquare },
+  { value: "quote", label: "Цитата", icon: Quote },
+  { value: "code", label: "Код", icon: Code },
+  { value: "hr", label: "Разделитель", icon: Minus },
+];
+
+async function buildCodeBlockDecorations(doc: ProseMirrorNode): Promise<DecorationSet> {
+  const decorations: Decoration[] = [];
+  const jobs: Promise<void>[] = [];
+
+  doc.descendants((node, pos) => {
+    if (node.type.name !== "codeBlock") return;
+    const language = syntaxLanguageForNode(node);
+    if (!language) return;
+
+    const start = pos + 1;
+    const code = node.textContent;
+    jobs.push(
+      highlightCodeWithShiki(code, language).then((tokens) => {
+        for (const token of tokens) {
+          decorations.push(
+            Decoration.inline(start + token.from, start + token.to, {
+              style: shikiTokenStyle(token),
+            }),
+          );
+        }
+      }),
+    );
+  });
+
+  await Promise.all(jobs);
+  return DecorationSet.create(doc, decorations);
+}
+
+function shikiTokenStyle(token: { color?: string; fontStyle?: number }): string {
+  const rules = token.color ? [`color: ${token.color}`] : [];
+  if (token.fontStyle) {
+    if (token.fontStyle & 1) rules.push("font-style: italic");
+    if (token.fontStyle & 2) rules.push("font-weight: 600");
+    if (token.fontStyle & 4) rules.push("text-decoration: underline");
+  }
+  return rules.join("; ");
+}
+
+function syntaxLanguageForNode(node: ProseMirrorNode): ShikiCodeLanguage | null {
+  const language = normalizedCodeLanguage(node);
+  if (isShikiCodeLanguage(language)) return language;
+  if (!language && JS_LIKE_RE.test(node.textContent)) return "javascript";
+  return null;
+}
+
+function visibleCodeLanguage(node: ProseMirrorNode): string {
+  return normalizedCodeLanguage(node) || syntaxLanguageForNode(node) || "";
+}
+
+function normalizedCodeLanguage(node: ProseMirrorNode): string {
+  const raw =
+    typeof node.attrs.language === "string" ? node.attrs.language.trim().toLowerCase() : "";
+  if (!raw) return "";
+  return languageAliasToValue.get(raw) ?? raw;
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+  } catch {
+    // Fall through to the textarea path for WebView/permission edge cases.
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.append(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
+async function openSlashMenu(): Promise<void> {
+  const activeEditor = editor.value;
+  if (!activeEditor) return;
+  const rect = activeEditor.view.coordsAtPos(activeEditor.state.selection.from);
+  const opensBelow =
+    rect.bottom + SLASH_MENU_GAP_PX + SLASH_MENU_MAX_HEIGHT_PX <= window.innerHeight - 8;
+  slashMenuX.value = rect.left;
+  slashMenuY.value = opensBelow
+    ? rect.bottom + SLASH_MENU_GAP_PX - DROPDOWN_MARGIN_PX - SLASH_MENU_TRIGGER_SIZE_PX
+    : rect.top - SLASH_MENU_GAP_PX + DROPDOWN_MARGIN_PX;
+  slashMenuOpen.value = true;
+  slashMenuValue.value = null;
+  await nextTick();
+  slashMenuTriggerRef.value?.querySelector("button")?.click();
+}
+
+const editor = useEditor({
+  content: readEntryTiptapDoc(props.entry.content_json),
+  editable: !props.readerMode,
+  extensions: [
+    StarterKit.configure({}),
+    EdenCodeBlockTools,
+    EdenImage,
+    TaskList,
+    TaskItem.configure({ nested: true }),
+    Placeholder.configure({ placeholder: "Начните писать..." }),
+  ],
+  editorProps: {
+    attributes: {
+      class: "ProseMirror tiptap-prosemirror",
+      spellcheck: "false",
+    },
+    handleKeyDown(_view, event) {
+      if (event.key === "/" && !props.readerMode) {
+        void openSlashMenu();
+      }
+      if (event.key === "Escape") {
+        slashMenuOpen.value = false;
+      }
+      return false;
+    },
+  },
+  onUpdate({ editor: activeEditor }) {
+    if (suppressUpdate.value || props.readerMode) return;
+    bodyEditedSinceEntryLoad = true;
+    const doc = activeEditor.getJSON() as TiptapDoc;
+    emit("liveCharCount", activeEditor.getText().length);
+    emit("entryDraftChange", buildEntryDraft(JSON.stringify(writeEntryTiptapDoc(doc))));
+    scheduleAutosave();
+  },
+  onFocus() {
+    slashMenuOpen.value = false;
+  },
+});
+
+function getCurrentTitle(): string {
+  return title.value;
+}
+
+function normalizeHeaderPropsJson(headerPropsJson: string | null | undefined): string {
+  if (!headerPropsJson?.trim()) return JSON.stringify({});
+  try {
+    return JSON.stringify(JSON.parse(headerPropsJson) as Record<string, unknown>);
+  } catch {
+    return JSON.stringify({});
+  }
+}
+
+function nextDraftUpdatedAt(): number {
+  const now = Date.now();
+  lastDraftUpdatedAt = Math.max(now, lastDraftUpdatedAt + 1);
+  return lastDraftUpdatedAt;
+}
+
+function buildEntryDraft(contentJson?: string): Entry {
+  const editedTitle = getCurrentTitle();
+  const normalizedTitle = resolveStoredEntryTitle(
+    editedTitle,
+    lastPersistedTitle,
+    lastPersistedHeaderPropsJson,
+  );
+  const normalizedHeaderPropsJson = JSON.stringify(
+    syncUntitledEntryTitleFlag(
+      headerProps.value,
+      editedTitle,
+      lastPersistedTitle,
+      lastPersistedHeaderPropsJson,
+    ),
+  );
+
+  return {
+    ...props.entry,
+    title: normalizedTitle,
+    type_id: currentTypeId.value,
+    header_layout: headerLayout.value,
+    header_props_json: normalizedHeaderPropsJson,
+    content_json: contentJson ?? props.entry.content_json,
+    updated_at: nextDraftUpdatedAt(),
+  };
+}
+
+function normalizedEntryHeaderLayout(entry: Entry): string | null {
+  if (entry.header_layout !== null && entry.header_layout !== undefined) return entry.header_layout;
+  const noteType =
+    props.noteTypes.find((candidate) => candidate.id === (entry.type_id ?? SYSTEM_TYPE_NOTE_ID)) ??
+    null;
+  return resolveNoteTypeHeaderLayout(noteType);
+}
+
+function hasEntryDraftChanges(entry: Entry): boolean {
+  if (entry.title !== lastPersistedTitle) return true;
+  if ((entry.type_id ?? SYSTEM_TYPE_NOTE_ID) !== lastPersistedTypeId) return true;
+  if (normalizedEntryHeaderLayout(entry) !== lastPersistedHeaderLayout) return true;
+  if (normalizeHeaderPropsJson(entry.header_props_json) !== lastPersistedHeaderPropsJson) {
+    return true;
+  }
+  return JSON.stringify(readEntryTiptapDoc(entry.content_json)) !== lastPersistedBodyJson;
+}
+
+function syncPersistedBaseline(entry: Entry): void {
+  lastPersistedTitle = entry.title;
+  lastPersistedTypeId = entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
+  lastPersistedHeaderLayout = normalizedEntryHeaderLayout(entry);
+  lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(entry.header_props_json);
+  lastPersistedBodyMarkdown = tiptapDocToMarkdown(readEntryTiptapDoc(entry.content_json));
+  lastPersistedBodyJson = JSON.stringify(readEntryTiptapDoc(entry.content_json));
+  bodyReadable = isReadableEntryContent(entry.content_json);
+  bodyEditedSinceEntryLoad = false;
+}
+
+function scheduleAutosave(): void {
+  if (autosaveTimer !== null) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    autosaveTimer = null;
+    void flushSave().catch((err) => {
+      console.warn("[eden tiptap] autosave failed:", err);
+    });
+  }, AUTOSAVE_DEBOUNCE_MS);
+}
+
+async function flushSave(): Promise<void> {
+  const activeEditor = editor.value;
+  if (!activeEditor) return;
+  const contentJson =
+    bodyReadable || bodyEditedSinceEntryLoad
+      ? JSON.stringify(writeEntryTiptapDoc(activeEditor.getJSON() as TiptapDoc))
+      : props.entry.content_json;
+  const entry = buildEntryDraft(contentJson);
+  if (!hasEntryDraftChanges(entry)) return;
+  emit("entryDraftChange", entry);
+  const result = await props.onSave(entry);
+  if (isFailedSaveResult(result)) {
+    console.warn("[eden tiptap] save failed:", result);
+    return;
+  }
+  syncPersistedBaseline(entry);
+}
+
+async function handleTypePick(nextTypeId: string): Promise<void> {
+  const activeEditor = editor.value;
+  const nextType = props.noteTypes.find((noteType) => noteType.id === nextTypeId) ?? null;
+  if (!activeEditor || !nextType || nextTypeId === currentTypeId.value) return;
+
+  currentTypeId.value = nextTypeId;
+  headerProps.value = createHeaderPropsForTypeChange(nextType, getCurrentTitle());
+  headerLayout.value = resolveNoteTypeHeaderLayout(nextType);
+  const entry: Entry = {
+    ...buildEntryDraft(JSON.stringify(writeEntryTiptapDoc(activeEditor.getJSON() as TiptapDoc))),
+    type_id: nextTypeId,
+    header_layout: headerLayout.value,
+    header_props_json: JSON.stringify(headerProps.value),
+  };
+
+  emit("typeChange", entry);
+  emit("entryDraftChange", entry);
+  void window.api?.saveNoteType?.(nextType).catch((err) => {
+    console.warn("[eden tiptap] type persist failed:", err);
+  });
+  const result = await props.onSave(entry);
+  if (isFailedSaveResult(result)) {
+    console.warn("[eden tiptap] type change save failed:", result);
+    return;
+  }
+  syncPersistedBaseline(entry);
+}
+
+function handleHeaderPropChange(fieldId: string, value: unknown): void {
+  headerProps.value = { ...headerProps.value, [fieldId]: value };
+  emit("entryDraftChange", buildEntryDraft());
+  scheduleAutosave();
+}
+
+function handleTitleInput(event: Event): void {
+  title.value = (event.target as HTMLInputElement).value.replace(/[\r\n]+/g, " ");
+  emit("entryDraftChange", buildEntryDraft());
+  scheduleAutosave();
+}
+
+function syncTitleScrollState(): void {
+  const titleHeight = titleShellRef.value?.offsetHeight ?? 0;
+  const scrollTop = hostRef.value?.scrollTop ?? 0;
+  const nextOutOfView = titleHeight > 0 && scrollTop >= titleHeight;
+  if (nextOutOfView === titleOutOfView) return;
+  titleOutOfView = nextOutOfView;
+  emit("titleOutOfViewChange", nextOutOfView);
+}
+
+function focusBodyStartSoon(): void {
+  void nextTick(() => {
+    window.requestAnimationFrame(() => {
+      editor.value?.commands.focus("start");
+    });
+  });
+}
+
+function syncBodyFromEntry(): void {
+  const activeEditor = editor.value;
+  if (!activeEditor) return;
+  const nextDoc = readEntryTiptapDoc(props.entry.content_json);
+  if (JSON.stringify(activeEditor.getJSON()) === JSON.stringify(nextDoc)) return;
+  suppressUpdate.value = true;
+  activeEditor.commands.setContent(nextDoc);
+  suppressUpdate.value = false;
+  emit("liveCharCount", activeEditor.getText().length);
+}
+
+function deleteSlashTrigger(): void {
+  const activeEditor = editor.value;
+  if (!activeEditor) return;
+  const { from } = activeEditor.state.selection;
+  activeEditor
+    .chain()
+    .focus()
+    .deleteRange({ from: Math.max(0, from - 1), to: from })
+    .run();
+}
+
+function runSlashCommand(kind: string): void {
+  const activeEditor = editor.value;
+  if (!activeEditor) return;
+  deleteSlashTrigger();
+  const chain = activeEditor.chain().focus();
+  if (kind === "h1") chain.toggleHeading({ level: 1 }).run();
+  else if (kind === "h2") chain.toggleHeading({ level: 2 }).run();
+  else if (kind === "h3") chain.toggleHeading({ level: 3 }).run();
+  else if (kind === "h4") chain.toggleHeading({ level: 4 }).run();
+  else if (kind === "h5") chain.toggleHeading({ level: 5 }).run();
+  else if (kind === "h6") chain.toggleHeading({ level: 6 }).run();
+  else if (kind === "text") chain.setParagraph().run();
+  else if (kind === "bullet") chain.toggleBulletList().run();
+  else if (kind === "ordered") chain.toggleOrderedList().run();
+  else if (kind === "task") chain.toggleTaskList().run();
+  else if (kind === "quote") chain.toggleBlockquote().run();
+  else if (kind === "code") chain.toggleCodeBlock().run();
+  else if (kind === "hr") chain.setHorizontalRule().run();
+  slashMenuOpen.value = false;
+}
+
+function handleSlashCommandPick(kind: string): void {
+  slashMenuValue.value = kind;
+  runSlashCommand(kind);
+}
+
+watch(
+  () => props.entry.id,
+  () => {
+    const normalizedTypeId = props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
+    const noteType = props.noteTypes.find((candidate) => candidate.id === normalizedTypeId) ?? null;
+    currentTypeId.value = normalizedTypeId;
+    title.value = getEditableEntryTitle(props.entry.title, props.entry.header_props_json);
+    headerProps.value = safeParseHeaderProps(noteType, props.entry.header_props_json);
+    headerLayout.value = props.entry.header_layout ?? resolveNoteTypeHeaderLayout(noteType);
+    titleOutOfView = false;
+    emit("titleOutOfViewChange", false);
+    syncBodyFromEntry();
+    syncPersistedBaseline(props.entry);
+    bodyReadable = isReadableEntryContent(props.entry.content_json);
+    bodyEditedSinceEntryLoad = false;
+    lastDraftUpdatedAt = props.entry.updated_at;
+    if (!props.bodyLoading) focusBodyStartSoon();
+  },
+);
+
+watch([() => props.entry.content_json, () => props.bodyLoading], () => {
+  if (!props.bodyLoading) syncBodyFromEntry();
+});
+
+watch(
+  () => props.readerMode,
+  (enabled) => {
+    editor.value?.setEditable(!enabled);
+    if (!enabled) focusBodyStartSoon();
+  },
+);
+
+watch(
+  () => props.bodyLoading,
+  (loading) => {
+    if (!loading) focusBodyStartSoon();
+  },
+);
+
+function handleHostScroll(): void {
+  syncTitleScrollState();
+}
+
+onBeforeUnmount(() => {
+  if (autosaveTimer !== null) {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = null;
+  }
+  hostRef.value?.removeEventListener("scroll", handleHostScroll);
+  void flushSave().catch((err) => {
+    console.warn("[eden tiptap] unmount save failed:", err);
+  });
+  editor.value?.destroy();
+});
+
+onMounted(() => {
+  hostRef.value?.addEventListener("scroll", handleHostScroll, {
+    passive: true,
+  });
+  if (!props.bodyLoading) focusBodyStartSoon();
+});
+</script>
+
+<template>
+  <div
+    ref="hostRef"
+    class="tiptap-editor-host kosmos-scroll"
+    :class="{
+      'is-focus-mode': props.zenMode,
+      'is-reader-mode': props.readerMode,
+    }"
+    data-testid="tiptap-editor-host"
+  >
+    <div ref="titleShellRef" class="tiptap-title-shell">
+      <input
+        v-if="showTitleInput"
+        ref="titleInputRef"
+        class="tiptap-title-input"
+        :value="title"
+        :readonly="props.readerMode"
+        placeholder="Без названия"
+        aria-label="Название заметки"
+        @input="handleTitleInput"
+        @blur="flushSave"
+        @keydown.enter.prevent="editor?.commands.focus('start')"
+      />
+      <TypedHeader
+        v-if="showTypedHeader"
+        :active-note-type="activeNoteType"
+        :title="getCurrentTitle()"
+        :header-props="headerProps"
+        :validation-error="null"
+        :all-entries="allEntries"
+        :current-entry-id="entry.id"
+        :note-types="noteTypes"
+        :editable-type="true"
+        :readonly="props.readerMode"
+        :show-type-row="false"
+        :show-title="isPersonEntry"
+        @header-prop-change="handleHeaderPropChange"
+        @object-type-change="handleTypePick"
+        @relation-navigate="props.onNavigate"
+      />
+    </div>
+
+    <div v-show="!props.bodyLoading" class="tiptap-body-shell">
+      <EditorContent v-if="editor" :editor="editor" class="tiptap-editor-content" />
+    </div>
+
+    <div
+      v-if="slashMenuOpen"
+      ref="slashMenuTriggerRef"
+      class="tiptap-slash-menu-anchor"
+      :style="{ left: slashMenuX + 'px', top: slashMenuY + 'px' }"
+    >
+      <Dropdown
+        :model-value="slashMenuValue"
+        :options="slashCommands"
+        placeholder="/"
+        panel-align="start"
+        :match-trigger-width="false"
+        :show-chevron="false"
+        :searchable="false"
+        :max-height-px="300"
+        @update:model-value="handleSlashCommandPick"
+      >
+        <template #option-leading="{ option }">
+          <component
+            :is="option.icon"
+            class="tiptap-slash-menu-icon"
+            :size="14"
+            :stroke-width="2"
+            aria-hidden="true"
+          />
+        </template>
+      </Dropdown>
+    </div>
+    <div
+      v-if="props.bodyLoading"
+      class="tiptap-body-skeleton"
+      data-testid="tiptap-editor-body-skeleton"
+      aria-label="Текст заметки загружается"
+      aria-busy="true"
+    >
+      <Skeleton class="h-4 w-[92%]" />
+      <Skeleton class="h-4 w-[78%]" />
+      <Skeleton class="h-4 w-[86%]" />
+      <Skeleton class="h-4 w-[54%]" />
+      <Skeleton class="mt-5 h-28 w-full rounded-lg" />
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.tiptap-editor-host {
+  height: 100%;
+  overflow: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  color: var(--text-primary);
+}
+
+.tiptap-title-shell {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 18px 32px 8px;
+  display: grid;
+  gap: 10px;
+}
+
+.tiptap-title-input {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 1.5em;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.tiptap-title-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.tiptap-title-shell :deep(.typed-object-header) {
+  margin: 2px 0 8px;
+  overflow: visible;
+}
+
+.tiptap-title-shell :deep(.typed-object-header__inner) {
+  gap: 10px;
+  padding: 0;
+}
+
+.tiptap-title-shell :deep(.typed-object-header.is-person .typed-object-header__hero) {
+  gap: 12px;
+}
+
+.tiptap-title-shell :deep(.typed-object-header.is-person .typed-object-header__content) {
+  gap: 8px;
+}
+
+.tiptap-title-shell :deep(.typed-object-header.is-person .typed-object-header__title) {
+  max-width: 100%;
+  color: var(--text-primary);
+  font-family: "SF Pro Text", "SF Pro Display", Inter, var(--font-sans), system-ui, sans-serif;
+  font-size: 28px;
+  line-height: 32px;
+  font-weight: 700;
+  letter-spacing: -0.56px;
+  text-wrap: balance;
+}
+
+.tiptap-title-shell :deep(.typed-object-header.is-person .typed-object-header__featured--column),
+.tiptap-title-shell :deep(.typed-object-header.is-person .typed-object-header__secondary-list) {
+  width: min(100%, 560px);
+}
+
+.tiptap-title-shell :deep(.typed-object-header__featured--column) {
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.tiptap-title-shell :deep(.typed-object-header__secondary) {
+  padding-top: 0;
+}
+
+.tiptap-title-shell :deep(.object-property-field--featured-column),
+.tiptap-title-shell :deep(.object-property-field--secondary) {
+  grid-template-columns: minmax(116px, 30%) minmax(0, 1fr);
+  gap: 12px;
+  min-height: 34px;
+  padding: 3px 0;
+}
+
+.tiptap-title-shell :deep(.object-property-field--secondary:hover) {
+  background: transparent;
+}
+
+.tiptap-title-shell :deep(.object-property-field__label),
+.tiptap-title-shell :deep(.object-property-field__value),
+.tiptap-title-shell :deep(.object-property-field__input),
+.tiptap-title-shell :deep(.object-property-picker__trigger),
+.tiptap-title-shell :deep(.object-property-picker__summary),
+.tiptap-title-shell :deep(.object-property-picker__placeholder) {
+  font-family:
+    "SF Pro Text", "SF Pro Display", Inter, var(--font-sans), system-ui, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  line-height: 22px !important;
+  letter-spacing: -0.12px !important;
+}
+
+.tiptap-title-shell :deep(.object-property-field__input) {
+  height: 30px;
+  min-height: 30px;
+  border-radius: 8px;
+  background: transparent;
+  caret-color: var(--eden-accent-color, var(--accent, currentColor));
+}
+
+.tiptap-title-shell :deep(.object-property-field__input::placeholder) {
+  font: inherit;
+  color: var(--muted-foreground);
+  opacity: 1;
+}
+
+.tiptap-title-shell :deep(.object-property-picker__trigger) {
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  background: transparent;
+}
+
+.tiptap-title-shell :deep(.typed-object-header__avatar-picker .object-property-picker__trigger) {
+  width: 128px;
+  height: 128px;
+  min-height: 128px;
+  place-items: center;
+}
+
+.tiptap-title-shell
+  :deep(.typed-object-header__avatar-picker .object-property-picker__placeholder) {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.tiptap-body-shell {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px 32px 35vh;
+}
+
+.tiptap-editor-content {
+  min-height: 0;
+}
+
+.tiptap-editor-content :deep(.ProseMirror) {
+  min-height: 0;
+  outline: none;
+  caret-color: var(--eden-accent-color, var(--accent, currentColor));
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.7;
+  letter-spacing: 0;
+}
+
+.tiptap-editor-content :deep(.ProseMirror::selection),
+.tiptap-editor-content :deep(.ProseMirror *::selection) {
+  background: color-mix(
+    in srgb,
+    var(--eden-accent-color, var(--accent, currentColor)) 22%,
+    transparent
+  );
+}
+
+.tiptap-editor-content :deep(.ProseMirror p) {
+  margin: 0;
+}
+
+.tiptap-editor-content :deep(.ProseMirror > *) {
+  margin-top: 0;
+  margin-bottom: 27.2px;
+}
+
+.tiptap-editor-content :deep(.ProseMirror > :last-child) {
+  margin-bottom: 0;
+}
+
+.tiptap-editor-content :deep(.ProseMirror h1),
+.tiptap-editor-content :deep(.ProseMirror h2),
+.tiptap-editor-content :deep(.ProseMirror h3),
+.tiptap-editor-content :deep(.ProseMirror h4),
+.tiptap-editor-content :deep(.ProseMirror h5),
+.tiptap-editor-content :deep(.ProseMirror h6) {
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.tiptap-editor-content :deep(.ProseMirror h1) {
+  font-size: 2em;
+}
+
+.tiptap-editor-content :deep(.ProseMirror h2) {
+  font-size: 1.6em;
+}
+
+.tiptap-editor-content :deep(.ProseMirror h3) {
+  font-size: 1.3em;
+}
+
+.tiptap-editor-content :deep(.ProseMirror h4) {
+  font-size: 1.15em;
+}
+
+.tiptap-editor-content :deep(.ProseMirror h5) {
+  font-size: 1em;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.tiptap-editor-content :deep(.ProseMirror h6) {
+  color: var(--text-secondary);
+  font-size: 0.92em;
+}
+
+.tiptap-editor-content :deep(.ProseMirror ul),
+.tiptap-editor-content :deep(.ProseMirror ol) {
+  padding-left: 0;
+  list-style-position: inside;
+}
+
+.tiptap-editor-content :deep(.ProseMirror li p) {
+  display: inline;
+}
+
+.tiptap-editor-content :deep(.ProseMirror li::marker) {
+  color: currentColor;
+}
+
+.tiptap-editor-content :deep(.ProseMirror blockquote) {
+  padding-left: 0;
+  border-left: 0;
+  color: inherit;
+  font-style: italic;
+}
+
+.tiptap-editor-content :deep(.ProseMirror code) {
+  border-radius: 4px;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  padding: 1px 4px;
+}
+
+.tiptap-editor-content :deep(.ProseMirror pre) {
+  overflow: auto;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--color-shape-highlight-light-solid);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-block) {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-secondary, #242424) 96%, #000 4%);
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-toolbar) {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-language-host) {
+  display: flex;
+  justify-content: flex-end;
+  width: 138px;
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-language-dropdown button) {
+  width: 100%;
+  height: 26px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-language-dropdown button:hover) {
+  border-color: color-mix(in srgb, var(--text-secondary) 48%, transparent);
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-language-dropdown button:focus-visible),
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-copy:focus-visible) {
+  outline: 2px solid
+    color-mix(in srgb, var(--eden-accent-color, var(--accent, currentColor)) 65%, transparent);
+  outline-offset: 2px;
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-copy) {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: default;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-copy:hover) {
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+  color: var(--text-primary);
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-copy:disabled) {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-copy.is-copied) {
+  color: var(--eden-accent-color, var(--accent, currentColor));
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-block pre) {
+  margin: 0;
+  padding: 36px 14px 13px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.tiptap-editor-content :deep(.ProseMirror .tiptap-code-block code) {
+  display: block;
+  min-width: max-content;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.65;
+  padding: 0;
+  tab-size: 2;
+  white-space: pre;
+}
+
+.tiptap-slash-menu-anchor {
+  position: fixed;
+  z-index: 9500;
+  width: 1px;
+  height: 1px;
+  line-height: 0;
+}
+
+.tiptap-slash-menu-anchor :deep(> .relative) {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  line-height: 0;
+}
+
+.tiptap-slash-menu-anchor :deep(button) {
+  width: 1px !important;
+  min-width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  opacity: 0;
+}
+
+.tiptap-slash-menu-icon {
+  color: var(--text-secondary);
+}
+
+.tiptap-body-skeleton {
+  display: grid;
+  gap: 12px;
+}
+</style>

@@ -93,6 +93,7 @@ function stringifyHeaderProps(props: Record<string, unknown>): string {
 export function normalizeEntry(entry: Entry): Entry {
   return {
     ...entry,
+    content_loaded: entry.content_loaded ?? true,
     type_id: entry.type_id ?? null,
     header_layout: entry.header_layout ?? null,
     header_props_json: entry.header_props_json ?? "{}",
@@ -126,6 +127,7 @@ export function mapArkObjectToEntry(
     id: object.id,
     title: object.title,
     content_json: JSON.stringify(object.contentJson ?? writeEntryMarkdown("")),
+    content_loaded: true,
     created_at: createdAt,
     updated_at: updatedAt,
     folder_id: null,
@@ -157,6 +159,7 @@ export function mapArkObjectSummaryToEntry(
     id: object.id,
     title: object.title,
     content_json: JSON.stringify(writeEntryMarkdown("")),
+    content_loaded: false,
     created_at: createdAt,
     updated_at: updatedAt,
     folder_id: null,
