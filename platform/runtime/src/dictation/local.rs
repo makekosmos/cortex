@@ -19,6 +19,7 @@ use tokio::process::{Child, ChildStdin, ChildStdout, Command as TokioCommand};
 use transcribe_rs::onnx::parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity};
 use transcribe_rs::onnx::Quantization;
 
+use super::groq::{filter_segments, VerboseResponse};
 use super::local_sidecar_protocol::{
     LocalSttAccelerator, LocalSttModelSpec, LocalSttProfile, LocalSttRequest,
     LocalSttRequestEnvelope, LocalSttResponse, LocalSttResponseEnvelope, LocalSttStatus,
@@ -689,20 +690,42 @@ pub(crate) fn strip_whisper_timestamps(text: &str) -> String {
         .join(" ")
 }
 
+fn is_known_silence_hallucination(text: &str) -> bool {
+    let text = text.trim().to_lowercase();
+    [
+        "продолжение следует",
+        "субтитры сделал",
+        "субтитры создавал",
+        "субтитры предоставил",
+        "спасибо за просмотр",
+        "подписывайтесь на канал",
+    ]
+    .iter()
+    .any(|needle| text.contains(needle))
+}
+
+pub(crate) fn clean_whisper_transcript(text: &str) -> Option<String> {
+    let text = strip_whisper_timestamps(text);
+    let text = text.trim();
+    if text.is_empty() || is_known_silence_hallucination(text) {
+        None
+    } else {
+        Some(text.to_owned())
+    }
+}
+
 fn read_transcript(stdout: &[u8], out_base: &Path) -> Result<String, LocalError> {
     let txt_path = out_base.with_extension("txt");
     if let Ok(file_text) = fs::read_to_string(&txt_path) {
-        let text = strip_whisper_timestamps(&file_text);
-        if !text.trim().is_empty() {
-            return Ok(text.trim().to_owned());
+        if let Some(text) = clean_whisper_transcript(&file_text) {
+            return Ok(text);
         }
     }
 
     let stdout_text = String::from_utf8_lossy(stdout).trim().to_owned();
     if !stdout_text.is_empty() {
-        let text = strip_whisper_timestamps(&stdout_text);
-        if !text.trim().is_empty() {
-            return Ok(text.trim().to_owned());
+        if let Some(text) = clean_whisper_transcript(&stdout_text) {
+            return Ok(text);
         }
     }
 
@@ -774,6 +797,9 @@ fn parse_server_text(body: &str, content_type: Option<&str>) -> Result<String, L
     if content_type_is_json || looks_like_json {
         match serde_json::from_str::<Value>(trimmed) {
             Ok(value) => {
+                if let Some(filtered) = extract_filtered_verbose_transcript(&value) {
+                    return filtered;
+                }
                 if let Some(text) = extract_transcript_value(&value) {
                     return Ok(text);
                 }
@@ -787,20 +813,22 @@ fn parse_server_text(body: &str, content_type: Option<&str>) -> Result<String, L
         }
     }
 
-    let text = strip_whisper_timestamps(trimmed);
-    if text.trim().is_empty() {
-        Err(LocalError::EmptyTranscript)
-    } else {
-        Ok(text.trim().to_owned())
+    clean_whisper_transcript(trimmed).ok_or(LocalError::EmptyTranscript)
+}
+
+fn extract_filtered_verbose_transcript(value: &Value) -> Option<Result<String, LocalError>> {
+    let segments = value.get("segments").and_then(Value::as_array)?;
+    if segments.is_empty() {
+        return None;
     }
+    let resp = serde_json::from_value::<VerboseResponse>(value.clone()).ok()?;
+    let text = filter_segments(&resp);
+    Some(clean_whisper_transcript(&text).ok_or(LocalError::EmptyTranscript))
 }
 
 fn extract_transcript_value(value: &Value) -> Option<String> {
     match value {
-        Value::String(text) => {
-            let text = strip_whisper_timestamps(text);
-            (!text.trim().is_empty()).then_some(text.trim().to_owned())
-        }
+        Value::String(text) => clean_whisper_transcript(text),
         Value::Object(map) => {
             for key in ["text", "transcription", "transcript", "result", "content"] {
                 if let Some(text) = map.get(key).and_then(extract_transcript_value) {
@@ -820,8 +848,8 @@ fn extract_transcript_value(value: &Value) -> Option<String> {
                     .collect::<Vec<_>>()
                     .join("\n");
                 let joined = strip_whisper_timestamps(&joined);
-                if !joined.trim().is_empty() {
-                    return Some(joined.trim().to_owned());
+                if let Some(text) = clean_whisper_transcript(&joined) {
+                    return Some(text);
                 }
             }
             None
@@ -876,7 +904,7 @@ fn server_request_form(req: &OwnedLocalRequest) -> Result<Form, LocalError> {
             })?,
     );
 
-    form = form.text("response_format", "json");
+    form = form.text("response_format", "verbose_json");
 
     if let Some(language) = whisper_language_arg(&req.language) {
         form = form.text("language", language);
@@ -1747,6 +1775,22 @@ mod tests {
         )
         .expect("plain transcript");
         assert_eq!(text, "добрый день");
+    }
+
+    #[test]
+    fn parse_server_text_drops_no_speech_verbose_segments() {
+        let err = parse_server_text(
+            r#"{"text":"Продолжение следует","segments":[{"text":"Продолжение следует","no_speech_prob":0.95,"avg_logprob":-0.4}]}"#,
+            Some("application/json"),
+        )
+        .unwrap_err();
+        assert!(matches!(err, LocalError::EmptyTranscript));
+    }
+
+    #[test]
+    fn parse_server_text_drops_known_subtitle_hallucination() {
+        let err = parse_server_text("Субтитры сделал DimaTorzok", Some("text/plain")).unwrap_err();
+        assert!(matches!(err, LocalError::EmptyTranscript));
     }
 
     #[test]

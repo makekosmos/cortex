@@ -755,6 +755,7 @@ async function stopAndSubmit(): Promise<void> {
         uuid?: string;
         state?: PillStatus | "pending";
         queued?: boolean;
+        injected?: boolean;
         error?: string;
       };
       if (resp.state === "error") {
@@ -773,7 +774,12 @@ async function stopAndSubmit(): Promise<void> {
         console.info("[dictation-pill] queued for background retry:", resp.uuid);
       } else {
         // Success path — text уже инжектнут, pill закрывается.
-        status.value = "idle";
+        if (resp.injected === false) {
+          status.value = "error";
+          errorText.value = "Текст распознан, но не вставлен. Он в буфере обмена.";
+        } else {
+          status.value = "idle";
+        }
       }
     } catch (e) {
       status.value = "error";
