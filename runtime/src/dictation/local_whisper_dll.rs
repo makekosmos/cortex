@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use libloading::Library;
 
-use super::local::{strip_whisper_timestamps, LocalError, TranscriptionResult};
+use super::local::{clean_whisper_transcript, LocalError, TranscriptionResult};
 use super::local_sidecar_protocol::{LocalSttAccelerator, LocalSttModelSpec, LocalSttProfile};
 
 const WHISPER_SAMPLING_GREEDY: WhisperSamplingStrategy = 0;
@@ -317,10 +317,7 @@ impl WhisperDllEngine {
                 text.push('\n');
             }
         }
-        let text = strip_whisper_timestamps(&text);
-        if text.is_empty() {
-            return Err(LocalError::EmptyTranscript);
-        }
+        let text = clean_whisper_transcript(&text).ok_or(LocalError::EmptyTranscript)?;
         Ok(TranscriptionResult {
             text,
             backend: "whisper_dll".into(),

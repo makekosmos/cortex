@@ -1127,14 +1127,16 @@ async fn preload_local_runtime_for_recording(host: &DictationHost) {
         let network_profile = cfg.network_profile.clone();
         let http_proxy = cfg.http_proxy.clone();
         tokio::spawn(async move {
-            let client =
-                match network::build_download_client(&network_profile, http_proxy.as_deref()) {
-                    Ok(client) => client,
-                    Err(e) => {
-                        tracing::warn!(error = %e, "dictation: whisper-server repair client build failed");
-                        return;
-                    }
-                };
+            let client = match network::build_download_client(
+                &network_profile,
+                http_proxy.as_deref(),
+            ) {
+                Ok(client) => client,
+                Err(e) => {
+                    tracing::warn!(error = %e, "dictation: whisper-server repair client build failed");
+                    return;
+                }
+            };
             match local_models::ensure_whisper_cpp(&client, &data_dir).await {
                 Ok(_) => tracing::info!(
                     "dictation: whisper-server runtime repaired — warm GPU path enabled"
@@ -1332,11 +1334,18 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
     // Одна inline-попытка — pill показывает «Распознаю…» ~1s в happy-path.
     // На фейле — spawn'им auto-retry в фоне (5/10/20/40s) и сразу возвращаем
     // OK с state=idle, чтобы pill закрылся без перехвата фокуса.
-    let outcome = process_one_attempt(host, &uuid, &api_key, record_seconds).await;
+    let outcome = process_one_attempt(
+        host,
+        &uuid,
+        &api_key,
+        record_seconds,
+        AttemptDelivery::Active,
+    )
+    .await;
     match outcome {
-        AttemptOutcome::Success => {
+        AttemptOutcome::Success { injected } => {
             // process_one_attempt уже перевёл state в Idle.
-            DictationResponse::ok(json!({ "uuid": uuid, "state": "idle" }))
+            DictationResponse::ok(json!({ "uuid": uuid, "state": "idle", "injected": injected }))
         }
         AttemptOutcome::Cancelled => DictationResponse::ok(json!({
             "uuid": uuid,
@@ -1449,13 +1458,19 @@ fn resolve_attempt_inject_mode(raw_mode: &str, mock_transcript: Option<&str>) ->
 #[derive(Debug, PartialEq)]
 enum AttemptOutcome {
     /// Транскрибировано + inject выполнен (или fallback'нут в clipboard).
-    Success,
+    Success { injected: bool },
     /// Пользователь отменил активную попытку; не inject'им и не удаляем pending.
     Cancelled,
     /// Retryable error — стоит повторить через delay.
     Retryable,
     /// Fatal error — не повторяем (401/400/конфиг).
     Fatal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AttemptDelivery {
+    Active,
+    Background,
 }
 
 /// Одна попытка transcribe + inject. Сохраняет attempts/last_error в
@@ -1467,6 +1482,7 @@ async fn process_one_attempt(
     uuid: &str,
     api_key: &str,
     record_seconds: f32,
+    delivery: AttemptDelivery,
 ) -> AttemptOutcome {
     let start = std::time::Instant::now();
 
@@ -1537,7 +1553,7 @@ async fn process_one_attempt(
             drop(s);
             host.emit_state(&snap).await;
         }
-        return AttemptOutcome::Success;
+        return AttemptOutcome::Success { injected: false };
     }
 
     let result: Result<String, SubmitError> = if provider_uses_local_runtime(&cfg.provider) {
@@ -1595,16 +1611,22 @@ async fn process_one_attempt(
 
     match result {
         Ok(text) => {
-            {
+            let is_active_attempt = {
                 let s = host.state.lock().await;
-                if s.active_uuid.as_deref() != Some(uuid) {
-                    tracing::info!(%uuid, "dictation: transcription finished after cancel; skipping inject");
-                    return AttemptOutcome::Cancelled;
-                }
+                s.active_uuid.as_deref() == Some(uuid)
+            };
+            if matches!(delivery, AttemptDelivery::Active) && !is_active_attempt {
+                tracing::info!(%uuid, "dictation: transcription finished after cancel; skipping inject");
+                return AttemptOutcome::Cancelled;
             }
             let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
             tracing::info!(%uuid, duration_ms, "dictation: transcribed");
 
+            let inject_mode = if matches!(delivery, AttemptDelivery::Background) {
+                InjectMode::ClipboardOnly
+            } else {
+                inject_mode
+            };
             let text_for_inject = text.clone();
             let inject_res = tokio::task::spawn_blocking(move || {
                 inject::inject_blocking(&text_for_inject, inject_mode, prev_hwnd)
@@ -1621,14 +1643,32 @@ async fn process_one_attempt(
                 }
             }
 
-            let inject_failed = !matches!(inject_res, Ok(Ok(_)));
+            let injected = match &inject_res {
+                Ok(Ok(())) => true,
+                Ok(Err(e)) => {
+                    tracing::warn!(
+                        %uuid,
+                        error = %e,
+                        "dictation: inject failed; transcript may be in clipboard"
+                    );
+                    false
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        %uuid,
+                        error = %e,
+                        "dictation: inject task failed; transcript delivery is unknown"
+                    );
+                    false
+                }
+            };
             let _ = host.events_tx.send(json!({
                 "event": "dictation_transcript",
                 "text": text,
                 "language": language,
                 "durationMs": duration_ms,
                 "uuid": uuid,
-                "injected": !inject_failed,
+                "injected": injected,
             }));
             let _ = host
                 .events_tx
@@ -1643,7 +1683,7 @@ async fn process_one_attempt(
                 drop(s);
                 host.emit_state(&snap).await;
             }
-            AttemptOutcome::Success
+            AttemptOutcome::Success { injected }
         }
         Err(e) => {
             {
@@ -1704,8 +1744,16 @@ async fn auto_retry_loop(
             return;
         }
 
-        match process_one_attempt(&host, &uuid, &api_key, record_seconds).await {
-            AttemptOutcome::Success => return,
+        match process_one_attempt(
+            &host,
+            &uuid,
+            &api_key,
+            record_seconds,
+            AttemptDelivery::Background,
+        )
+        .await
+        {
+            AttemptOutcome::Success { .. } => return,
             AttemptOutcome::Cancelled => return,
             AttemptOutcome::Fatal => return,
             AttemptOutcome::Retryable => continue,
@@ -1767,7 +1815,15 @@ async fn op_retry(params: Value, host: &Arc<DictationHost>) -> DictationResponse
     let dur = item.duration_sec;
     // Ручной retry: одна попытка + если retryable — повторное auto-retry-расписание.
     tokio::spawn(async move {
-        match process_one_attempt(&host_clone, &uuid_for_task, &api_key, dur).await {
+        match process_one_attempt(
+            &host_clone,
+            &uuid_for_task,
+            &api_key,
+            dur,
+            AttemptDelivery::Background,
+        )
+        .await
+        {
             AttemptOutcome::Retryable => {
                 auto_retry_loop(
                     host_clone,
@@ -1778,7 +1834,7 @@ async fn op_retry(params: Value, host: &Arc<DictationHost>) -> DictationResponse
                 )
                 .await;
             }
-            AttemptOutcome::Success | AttemptOutcome::Cancelled | AttemptOutcome::Fatal => {}
+            AttemptOutcome::Success { .. } | AttemptOutcome::Cancelled | AttemptOutcome::Fatal => {}
         }
     });
     DictationResponse::ok(json!({ "uuid": uuid, "started": true }))
@@ -1859,7 +1915,14 @@ async fn op_retry_all(host: &Arc<DictationHost>) -> DictationResponse {
         let api_key_clone = api_key.clone();
         tokio::spawn(async move {
             if matches!(
-                process_one_attempt(&host_clone, &uuid, &api_key_clone, dur).await,
+                process_one_attempt(
+                    &host_clone,
+                    &uuid,
+                    &api_key_clone,
+                    dur,
+                    AttemptDelivery::Background,
+                )
+                .await,
                 AttemptOutcome::Retryable
             ) {
                 auto_retry_loop(host_clone, uuid, api_key_clone, dur, &AUTO_RETRY_DELAYS_SEC).await;
@@ -2631,14 +2694,55 @@ mod tests {
             s.name = DictationStateName::Transcribing;
         }
 
-        let outcome = process_one_attempt(&host, &uuid, "fake-key", 1.0).await;
-        assert_eq!(outcome, AttemptOutcome::Success);
+        let outcome =
+            process_one_attempt(&host, &uuid, "fake-key", 1.0, AttemptDelivery::Active).await;
+        assert_eq!(outcome, AttemptOutcome::Success { injected: true });
 
         // pending удалён
         assert!(super::super::pending::list(&host.data_dir)
             .unwrap()
             .is_empty());
         // state → Idle
+        let snap = host.current_state().await;
+        assert_eq!(snap["state"], "idle");
+    }
+
+    #[tokio::test]
+    async fn background_process_success_drops_pending_without_active_session() {
+        use httpmock::prelude::*;
+        let server = MockServer::start_async().await;
+        server
+            .mock_async(|when, then| {
+                when.method(POST).path("/openai/v1/audio/transcriptions");
+                then.status(200).body(
+                    r#"{"text":"retry transcript","segments":[{"text":"retry transcript","no_speech_prob":0.05,"avg_logprob":-0.3}]}"#,
+                );
+            })
+            .await;
+        let td = tempfile::TempDir::new().unwrap();
+        let endpoint = format!("{}/openai/v1/audio/transcriptions", server.base_url());
+        let host = DictationHost::new_for_test(td.path().into(), endpoint, test_cfg());
+        let uuid = super::super::pending::enqueue(
+            &host.data_dir,
+            &make_wav(),
+            1.0,
+            super::super::pending::EnqueueOpts {
+                language: "ru".into(),
+                prompt: String::new(),
+                inject_mode: "auto_paste".into(),
+                model: "whisper-large-v3".into(),
+                prev_hwnd: Some(1),
+            },
+        )
+        .unwrap();
+
+        let outcome =
+            process_one_attempt(&host, &uuid, "fake-key", 1.0, AttemptDelivery::Background).await;
+
+        assert_eq!(outcome, AttemptOutcome::Success { injected: true });
+        assert!(super::super::pending::list(&host.data_dir)
+            .unwrap()
+            .is_empty());
         let snap = host.current_state().await;
         assert_eq!(snap["state"], "idle");
     }
@@ -2678,7 +2782,8 @@ mod tests {
             s.name = DictationStateName::Transcribing;
         }
 
-        let outcome = process_one_attempt(&host, &uuid, "fake-key", 1.0).await;
+        let outcome =
+            process_one_attempt(&host, &uuid, "fake-key", 1.0, AttemptDelivery::Active).await;
         assert_eq!(outcome, AttemptOutcome::Fatal, "401 must be Fatal");
 
         // Pending item остался на диске + attempts++
@@ -2727,7 +2832,8 @@ mod tests {
         )
         .unwrap();
 
-        let outcome = process_one_attempt(&host, &uuid, "fake-key", 1.0).await;
+        let outcome =
+            process_one_attempt(&host, &uuid, "fake-key", 1.0, AttemptDelivery::Active).await;
         assert_eq!(outcome, AttemptOutcome::Retryable);
 
         let items = super::super::pending::list(&host.data_dir).unwrap();
