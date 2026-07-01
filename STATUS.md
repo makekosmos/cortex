@@ -2,12 +2,25 @@
 
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
-| Kosmos Desktop (win / mac) | 0.6.17 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.18 / 0.5.1 |
 | Eden                       | 0.4.3          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
 | Arrancador                 | 0.1.4          |
 | Akasha                     | 0.1.2          |
+
+## 2026-07-01 — Local dictation silence filter (Kosmos Desktop 0.6.17 -> 0.6.18)
+
+Patch-релиз закрывает два заметных сбоя локальной диктовки на Windows: `whisper.cpp` больше не превращает тишину/шум в типичные subtitle-галлюцинации, а успешная расшифровка без auto-paste больше не выглядит как полная потеря текста.
+
+- **Фильтр тишины для local STT**: `whisper-server` теперь запрашивает `verbose_json`, использует segment metadata и отбрасывает результаты с высоким `no_speech_prob` или низким `avg_logprob`. Известные шумовые фразы вроде «Продолжение следует», «Субтитры сделал…», «Спасибо за просмотр» дополнительно режутся на fallback-путях без metadata.
+- **Доставка текста**: active dictation path возвращает в renderer флаг `injected`; если auto-paste не сработал, pill показывает, что текст распознан и лежит в clipboard, вместо тихого закрытия.
+- **Retry path**: background/manual retry больше не требует active session для успешной доставки в clipboard и очистки pending item, но не пытается украсть фокус у текущего окна.
+
+Checks: `cargo test --manifest-path platform/runtime/Cargo.toml dictation::local --lib`,
+`cargo test --manifest-path platform/runtime/Cargo.toml dictation::local_whisper_dll --lib`,
+`cargo test --manifest-path platform/runtime/Cargo.toml dictation::host --lib -- --test-threads=1`,
+`bun run shell:typecheck`.
 
 ## 2026-07-01 — Eden cached navigation polish (Eden 0.4.2 -> 0.4.3)
 
