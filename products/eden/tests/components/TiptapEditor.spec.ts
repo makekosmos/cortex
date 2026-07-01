@@ -38,6 +38,21 @@ function parseSavedContent(entry: Entry): {
 }
 
 describe("TiptapEditor component", () => {
+  test("body skeleton uses the same content shell as the editor body", async () => {
+    render(TiptapEditor, {
+      props: { entry: makeEntry(EMPTY_DOC), onSave: vi.fn(async () => null), bodyLoading: true },
+    });
+
+    await expect.poll(() => document.querySelector(".tiptap-body-skeleton")).not.toBeNull();
+    const shell = document.querySelector(".tiptap-body-shell");
+    const skeleton = document.querySelector(".tiptap-body-skeleton");
+
+    expect(shell).not.toBeNull();
+    expect(skeleton).not.toBeNull();
+    expect(shell?.contains(skeleton)).toBe(true);
+    expect(document.querySelector(".tiptap-editor-content")).not.toBeNull();
+  });
+
   test("редактирование body автосохраняет content_json как type:tiptap", async () => {
     const onSave = vi.fn(async () => null);
     render(TiptapEditor, {

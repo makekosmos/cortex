@@ -1211,8 +1211,26 @@ onMounted(() => {
       />
     </div>
 
-    <div v-show="!props.bodyLoading" class="tiptap-body-shell">
-      <EditorContent v-if="editor" :editor="editor" class="tiptap-editor-content" />
+    <div class="tiptap-body-shell">
+      <EditorContent
+        v-if="editor"
+        v-show="!props.bodyLoading"
+        :editor="editor"
+        class="tiptap-editor-content"
+      />
+      <div
+        v-if="props.bodyLoading"
+        class="tiptap-body-skeleton"
+        data-testid="tiptap-editor-body-skeleton"
+        aria-label="Текст заметки загружается"
+        aria-busy="true"
+      >
+        <Skeleton class="h-4 w-[92%]" />
+        <Skeleton class="h-4 w-[78%]" />
+        <Skeleton class="h-4 w-[86%]" />
+        <Skeleton class="h-4 w-[54%]" />
+        <Skeleton class="mt-5 h-28 w-full rounded-lg" />
+      </div>
     </div>
 
     <div
@@ -1242,19 +1260,6 @@ onMounted(() => {
           />
         </template>
       </Dropdown>
-    </div>
-    <div
-      v-if="props.bodyLoading"
-      class="tiptap-body-skeleton"
-      data-testid="tiptap-editor-body-skeleton"
-      aria-label="Текст заметки загружается"
-      aria-busy="true"
-    >
-      <Skeleton class="h-4 w-[92%]" />
-      <Skeleton class="h-4 w-[78%]" />
-      <Skeleton class="h-4 w-[86%]" />
-      <Skeleton class="h-4 w-[54%]" />
-      <Skeleton class="mt-5 h-28 w-full rounded-lg" />
     </div>
   </div>
 </template>

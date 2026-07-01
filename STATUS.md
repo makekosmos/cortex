@@ -3,11 +3,22 @@
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
 | Kosmos Desktop (win / mac) | 0.6.17 / 0.5.1 |
-| Eden                       | 0.4.2          |
+| Eden                       | 0.4.3          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
 | Arrancador                 | 0.1.4          |
 | Akasha                     | 0.1.2          |
+
+## 2026-07-01 — Eden cached navigation polish (Eden 0.4.2 -> 0.4.3)
+
+Patch-релиз убирает лишний loading-state в Eden при повторном открытии уже загруженных заметок и выравнивает skeleton по реальной ширине страницы.
+
+- **Повторное открытие заметки**: если body уже есть в `entries` как `content_loaded: true`, Eden открывает запись из памяти без `loadEntry`, без искусственного ожидания кадра и без skeleton.
+- **Skeleton редактора**: placeholder теперь рендерится внутри того же `tiptap-body-shell`, что и TipTap body, поэтому соблюдает max-width и page gutters контента.
+- **Регрессии**: добавлены browser component tests на cached navigation и на то, что skeleton живет в контентной рамке редактора.
+
+Checks: `bun run --cwd products/eden test:unit`, `bun run --cwd products/eden test:vue`,
+`bun run --cwd platform/desktop typecheck`, `bun run format:check`.
 
 ## 2026-07-01 — Eden fenced-code paste patch (Eden 0.4.1 -> 0.4.2)
 

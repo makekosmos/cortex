@@ -289,6 +289,26 @@ export const useEdenStore = defineStore("eden", () => {
     }
 
     activeScreen.value = "notes";
+
+    if (previewEntry?.content_loaded === true) {
+      loadingEntryId.value = null;
+      currentEntry.value = previewEntry;
+
+      const safeEntry = await ensureEntryCmSafe(previewEntry);
+      if (requestSeq !== navigationRequestSeq) return;
+
+      const collectionTypeId = getCollectionTargetTypeId(safeEntry);
+      if (collectionTypeId) {
+        openTypeCollection(collectionTypeId);
+        return;
+      }
+
+      upsertEntryBaseline(safeEntry);
+      currentEntry.value = safeEntry;
+      writeLastVisitedEntryId(entryId);
+      return;
+    }
+
     loadingEntryId.value = entryId;
     currentEntry.value = previewEntry;
 
