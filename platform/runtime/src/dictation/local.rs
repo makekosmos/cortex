@@ -690,6 +690,29 @@ pub(crate) fn strip_whisper_timestamps(text: &str) -> String {
         .join(" ")
 }
 
+fn collapse_exact_repeated_transcript(text: &str) -> &str {
+    let text = text.trim();
+    if text.len() < 32 {
+        return text;
+    }
+
+    let mid = text.len() / 2;
+    for split in mid.saturating_sub(4)..=(mid + 4).min(text.len()) {
+        if !text.is_char_boundary(split) {
+            continue;
+        }
+        let first = text[..split].trim_end();
+        if first.len() < 16 {
+            continue;
+        }
+        if first == text[split..].trim_start() {
+            return first;
+        }
+    }
+
+    text
+}
+
 fn is_known_silence_hallucination(text: &str) -> bool {
     let text = text.trim().to_lowercase();
     [
@@ -706,7 +729,7 @@ fn is_known_silence_hallucination(text: &str) -> bool {
 
 pub(crate) fn clean_whisper_transcript(text: &str) -> Option<String> {
     let text = strip_whisper_timestamps(text);
-    let text = text.trim();
+    let text = collapse_exact_repeated_transcript(&text);
     if text.is_empty() || is_known_silence_hallucination(text) {
         None
     } else {
@@ -1733,6 +1756,19 @@ mod tests {
                 "[00:00:00.000 --> 00:00:01.280] first chunk\n[00:00:30.000 --> 00:00:31.000] second chunk"
             ),
             "first chunk second chunk"
+        );
+    }
+
+    #[test]
+    fn clean_whisper_transcript_collapses_exact_double_result() {
+        let text = "Now I use dictation through Whisper.";
+        assert_eq!(
+            clean_whisper_transcript(&format!("{text}{text}")).as_deref(),
+            Some(text)
+        );
+        assert_eq!(
+            clean_whisper_transcript(&format!("{text} {text}")).as_deref(),
+            Some(text)
         );
     }
 
