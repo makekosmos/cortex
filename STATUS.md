@@ -1,13 +1,26 @@
-# Kosmos — статус проекта (2026-07-01)
+# Kosmos — статус проекта (2026-07-02)
 
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
-| Kosmos Desktop (win / mac) | 0.6.18 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.19 / 0.5.1 |
 | Eden                       | 0.4.3          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
 | Arrancador                 | 0.1.4          |
 | Akasha                     | 0.1.2          |
+
+## 2026-07-02 — Local dictation delivery patch (Kosmos Desktop 0.6.18 -> 0.6.19)
+
+Patch-релиз закрывает две заметные проблемы локальной диктовки на Windows: `whisper.cpp` иногда возвращал точный дубль одной и той же фразы, а auto-paste мог отказаться от вставки, если foreground window сменился после старта записи.
+
+- **Дедуп локального Whisper**: общий cleaner для local transcript теперь схлопывает точный дубль всего результата (`texttext` / `text text`) до stats/events/inject. Это покрывает `whisper-server`, CLI/stdout fallback и DLL path через общий `clean_whisper_transcript`.
+- **Auto-paste без отказа при смене foreground**: `inject_blocking` больше не возвращает `TargetWindowChanged`; после распознавания текст кладётся в clipboard, фокус возвращается в захваченное при старте окно и отправляется `Ctrl+V`.
+- **Регрессии**: добавлен unit-test на doubled transcript; inject-модуль больше не содержит отдельной ветки отказа `target window changed before paste`.
+
+Checks: `cargo test --manifest-path platform/runtime/Cargo.toml dictation::local --lib`,
+`cargo test --manifest-path platform/runtime/Cargo.toml dictation::inject --lib`,
+`cargo test --manifest-path platform/runtime/Cargo.toml dictation::host --lib -- --test-threads=1`,
+`bun run --cwd platform/desktop typecheck`.
 
 ## 2026-07-01 — Local dictation silence filter (Kosmos Desktop 0.6.17 -> 0.6.18)
 
