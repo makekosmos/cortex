@@ -40,8 +40,6 @@ pub enum InjectError {
     Clipboard(#[from] arboard::Error),
     #[error("SendInput failed: injected {injected} of {expected} events")]
     SendInput { injected: u32, expected: u32 },
-    #[error("target window changed before paste")]
-    TargetWindowChanged,
 }
 
 /// Захват активного окна на момент вызова. Должен вызываться ДО показа
@@ -170,20 +168,6 @@ pub fn inject_blocking(
 
     if matches!(mode, InjectMode::ClipboardOnly) {
         return Ok(());
-    }
-
-    // Если юзер ушёл из target окна (current foreground != prev_hwnd) —
-    // НЕ воруем фокус. Текст остаётся в clipboard, юзер сам нажмёт Ctrl+V
-    // когда будет готов. Это критично для auto-retry в фоне: если ретрай
-    // завершается пока юзер уже работает в другом приложении, мы не дёргаем
-    // его фокус и не вставляем текст в неправильное окно.
-    if let Some(prev) = prev_hwnd {
-        let current = capture_foreground_window();
-        if current != Some(prev) {
-            // Foreground сменился — transcript уже в clipboard, но auto-paste не
-            // случился. Пусть UI явно скажет об этом вместо тихого success.
-            return Err(InjectError::TargetWindowChanged);
-        }
     }
 
     if let Some(hwnd) = prev_hwnd {
