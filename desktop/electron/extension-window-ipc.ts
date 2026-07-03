@@ -16,6 +16,7 @@ interface ExtensionWindowIpcOptions {
 
 const extensionWindowDrags = new Map<number, ExtensionWindowDragState>();
 const extensionTitlebarHoverTrackers = new Map<number, NodeJS.Timeout>();
+const extensionTitlebarSymbolColors = new Map<number, string>();
 const dockedState = new Map<
   string,
   { x: number; y: number; width: number; height: number; alwaysOnTop: boolean }
@@ -23,6 +24,33 @@ const dockedState = new Map<
 
 const DOCK_WIDTH = 360;
 const DOCK_HEIGHT = 560;
+const TITLEBAR_OVERLAY_BASE_HEIGHT = 40;
+const TITLEBAR_OVERLAY_MIN_HEIGHT = 28;
+const TITLEBAR_OVERLAY_MAX_HEIGHT = 80;
+const TITLEBAR_OVERLAY_DEFAULT_SYMBOL = "#f5f5f5";
+
+function titlebarOverlayHeightForZoom(factor: number): number {
+  const zoom = Number.isFinite(factor) && factor > 0 ? factor : 1;
+  return Math.round(
+    Math.max(
+      TITLEBAR_OVERLAY_MIN_HEIGHT,
+      Math.min(TITLEBAR_OVERLAY_MAX_HEIGHT, TITLEBAR_OVERLAY_BASE_HEIGHT * zoom),
+    ),
+  );
+}
+
+function setExtensionTitlebarOverlay(
+  win: BrowserWindow,
+  webContentsId: number,
+  factor: number,
+): void {
+  win.setTitleBarOverlay({
+    color: "#00000000",
+    symbolColor:
+      extensionTitlebarSymbolColors.get(webContentsId) ?? TITLEBAR_OVERLAY_DEFAULT_SYMBOL,
+    height: titlebarOverlayHeightForZoom(factor),
+  });
+}
 
 function clearExtensionTitlebarHoverTracker(webContentsId: number): void {
   const interval = extensionTitlebarHoverTrackers.get(webContentsId);
@@ -43,6 +71,7 @@ function broadcastDocked(win: BrowserWindow, isDocked: boolean): void {
 export function clearExtensionWindowIpcState(webContentsId: number): void {
   clearExtensionTitlebarHoverTracker(webContentsId);
   extensionWindowDrags.delete(webContentsId);
+  extensionTitlebarSymbolColors.delete(webContentsId);
 }
 
 export function registerExtensionWindowIpc({
@@ -89,6 +118,10 @@ export function registerExtensionWindowIpc({
     const next = typeof factor === "number" && Number.isFinite(factor) ? factor : 1;
     const clamped = Math.max(0.5, Math.min(2.0, next));
     e.sender.setZoomFactor(clamped);
+    const win = windowForSender(e.sender);
+    if (win && !win.isDestroyed()) {
+      setExtensionTitlebarOverlay(win, e.sender.id, clamped);
+    }
     return clamped;
   });
 
@@ -101,11 +134,8 @@ export function registerExtensionWindowIpc({
   ipcMain.handle("kepler:extension:window:set-titlebar-symbol-color", (e, symbolColor: string) => {
     const win = windowForSender(e.sender);
     if (!win || win.isDestroyed()) return;
-    win.setTitleBarOverlay({
-      color: "#00000000",
-      symbolColor,
-      height: 40,
-    });
+    extensionTitlebarSymbolColors.set(e.sender.id, symbolColor);
+    setExtensionTitlebarOverlay(win, e.sender.id, e.sender.getZoomFactor());
   });
 
   ipcMain.handle("kepler:extension:window:begin-manual-drag", (e, point) => {

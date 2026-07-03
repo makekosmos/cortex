@@ -19,7 +19,7 @@ import { listRepoExtensionEntries } from "./repo-extension-roots.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const shellRoot = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(shellRoot, "..", "..");
-const shellDevPort = 5173;
+const defaultShellDevPort = 5173;
 
 // --- .env.local loader (per-worktree dev slot override) ---------------------
 // `platform/desktop/.env.local` (gitignored) задаёт `KEPLER_INSTANCE=dev-<slug>` для
@@ -63,6 +63,12 @@ function loadDotenvLocal() {
 }
 loadDotenvLocal();
 
+const shellDevPort = Number(process.env.KOSMOS_SHELL_DEV_PORT ?? defaultShellDevPort);
+if (!Number.isInteger(shellDevPort) || shellDevPort < 1 || shellDevPort > 65535) {
+  console.error(`[dev] invalid KOSMOS_SHELL_DEV_PORT=${process.env.KOSMOS_SHELL_DEV_PORT}`);
+  process.exit(1);
+}
+
 const children = [];
 
 function readExtensionDevPorts() {
@@ -98,6 +104,15 @@ function isPortAvailable(port, host = "127.0.0.1") {
 
 async function assertDevPortsAvailable() {
   const checks = [{ label: "shell", port: shellDevPort }, ...readExtensionDevPorts()];
+  const labelsByPort = new Map();
+  for (const check of checks) {
+    const previous = labelsByPort.get(check.port);
+    if (previous) {
+      console.error(`[dev] duplicate dev port ${check.port}: ${previous} and ${check.label}`);
+      process.exit(1);
+    }
+    labelsByPort.set(check.port, check.label);
+  }
   const busy = [];
   for (const check of checks) {
     if (await isPortAvailable(check.port)) {
