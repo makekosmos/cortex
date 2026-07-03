@@ -107,7 +107,7 @@ async function onConfirmRestore() {
   restoreError.value = null;
   try {
     const api = requireArrancadorApi();
-    const res = await api.sqoba.restore(restoreTarget.value.backup.id);
+    const res = await api.sqoba.restore(restoreTarget.value.gameId, restoreTarget.value.backup.id);
     if (res.ok) {
       restoreSuccess.value = `Восстановлено файлов: ${res.restored_files ?? 0}`;
       setTimeout(() => {

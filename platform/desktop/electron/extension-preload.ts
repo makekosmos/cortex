@@ -172,6 +172,16 @@ const api = {
     // — это OK для UI smoke до merge.
     scan: <T = unknown>(): Promise<T> =>
       ipcRenderer.invoke("kepler:extension:ark:request", "arrancador.scan", {}) as Promise<T>,
+    addManual: <T = unknown>(params: {
+      name: string;
+      exePath: string;
+      savePaths?: string[];
+    }): Promise<T> =>
+      ipcRenderer.invoke("kepler:extension:ark:request", "arrancador.add_manual", {
+        name: params.name,
+        exe_path: params.exePath,
+        save_paths: params.savePaths ?? [],
+      }) as Promise<T>,
     launch: <T = unknown>(gameId: string): Promise<T> =>
       ipcRenderer.invoke("kepler:extension:ark:request", "arrancador.launch", {
         game_id: gameId,
@@ -196,8 +206,9 @@ const api = {
         ipcRenderer.invoke("kepler:extension:ark:request", "arrancador.sqoba.list", {
           game_id: gameId,
         }) as Promise<T>,
-      restore: <T = unknown>(backupId: string): Promise<T> =>
+      restore: <T = unknown>(gameId: string, backupId: string): Promise<T> =>
         ipcRenderer.invoke("kepler:extension:ark:request", "arrancador.sqoba.restore", {
+          game_id: gameId,
           backup_id: backupId,
         }) as Promise<T>,
     },
