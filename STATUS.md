@@ -1,13 +1,26 @@
-# Kosmos — статус проекта (2026-07-02)
+# Kosmos — статус проекта (2026-07-03)
 
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
-| Kosmos Desktop (win / mac) | 0.6.19 / 0.5.1 |
-| Eden                       | 0.4.3          |
+| Kosmos Desktop (win / mac) | 0.6.20 / 0.5.1 |
+| Eden                       | 0.5.0          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
 | Arrancador                 | 0.1.4          |
 | Akasha                     | 0.1.2          |
+
+## 2026-07-03 — Eden bubble diary release (Kosmos Desktop 0.6.19 -> 0.6.20, Eden 0.4.3 -> 0.5.0)
+
+Minor-релиз Eden добавляет первый рабочий дневник как ленту мыслей: запись сохраняется в ARK, остаётся после перезагрузки, отображается в timeline и редактируется на месте через TipTap.
+
+- **Дневник-баблы**: отдельная страница дневника показывает только дневниковые записи по времени, без прежней фильтрации по типам. Старые дневниковые блоки мигрируют в отдельные bubble-записи с сохранением порядка.
+- **Ввод как единый блок**: поле записи визуально собрано в один контейнер с кнопкой `Записать`; многострочный ввод растягивает блок по высоте, а отправка идёт через `Ctrl+Enter`.
+- **Календарь справа**: календарь открывается из titlebar и живёт как правый `aside`, участвует в layout, имеет общий фон/бордер с shell sidebar и не перекрывает дневник.
+- **Регрессии**: добавлены component tests для diary flow, navigation persistence и TipTap/дневникового отображения.
+
+Checks: `git diff --check`, `bun run docs:sync`, `bun run docs:check`,
+`bun run --cwd products/eden test:unit`, `bun run --cwd products/eden test:vue`,
+`bun run --cwd platform/desktop typecheck`.
 
 ## 2026-07-02 — Local dictation delivery patch (Kosmos Desktop 0.6.18 -> 0.6.19)
 
