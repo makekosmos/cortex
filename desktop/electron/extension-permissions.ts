@@ -141,15 +141,14 @@ function requiredCapabilities(operation: string, params?: Record<string, unknown
   if (operation === "commands.invoke" || operation === "commands.list") return ["commands.invoke"];
   if (operation.startsWith("focus.")) return ["focus.control"];
   if (operation.startsWith("pomodoro.")) return ["pomodoro.control", "focus.control"];
+  if (operation === "arrancador.add_manual") return ["objects.write:game_obj"];
   if (operation === "arrancador.scan" || operation === "arrancador.rawg.search") {
     return ["arrancador.scan"];
   }
-  if (
-    operation === "arrancador.launch" ||
-    operation.startsWith("arrancador.rawg.") ||
-    operation.startsWith("arrancador.sqoba.") ||
-    operation.startsWith("arrancador.config.")
-  ) {
+  if (operation.startsWith("arrancador.rawg.")) return ["objects.write:game_obj"];
+  if (operation.startsWith("arrancador.sqoba.")) return ["arrancador.launch"];
+  if (operation.startsWith("arrancador.config.")) return ["arrancador.scan"];
+  if (operation === "arrancador.launch") {
     return ["arrancador.launch"];
   }
   if (operation.startsWith("dictation.")) return ["dictation.control"];

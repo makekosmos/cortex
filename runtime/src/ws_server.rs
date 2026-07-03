@@ -1047,6 +1047,7 @@ async fn handle_arrancador_op(
                     "name": game.name,
                 });
 
+                let now = chrono::Utc::now().to_rfc3339();
                 let upsert_obj = if let Some(existing) = existing_match {
                     // Merge: сохраняем content_json + RAWG-метадату которая уже есть.
                     let mut merged_props = existing.props_json.clone();
@@ -1061,17 +1062,24 @@ async fn handle_arrancador_op(
                     }
                     serde_json::json!({
                         "id": existing.id,
-                        "type_id": "game_obj",
+                        "typeId": "game_obj",
                         "title": game.name,
-                        "content_json": existing.content_json,
-                        "props_json": merged_props,
+                        "contentJson": existing.content_json,
+                        "propsJson": merged_props,
+                        "createdAt": existing.created_at,
+                        "updatedAt": now,
+                        "deletedAt": existing.deleted_at,
                     })
                 } else {
                     serde_json::json!({
-                        "type_id": "game_obj",
+                        "id": uuid::Uuid::new_v4().to_string(),
+                        "typeId": "game_obj",
                         "title": game.name,
-                        "content_json": {},
-                        "props_json": props,
+                        "contentJson": {},
+                        "propsJson": props,
+                        "createdAt": now,
+                        "updatedAt": now,
+                        "deletedAt": null,
                     })
                 };
 
@@ -1109,6 +1117,149 @@ async fn handle_arrancador_op(
                 "discovered": discovered.len(),
                 "errors": errors,
             }))
+        }
+        "add_manual" => {
+            let name = match params.get("name").and_then(|v| v.as_str()).map(str::trim) {
+                Some(s) if !s.is_empty() => s.to_string(),
+                _ => return LocalResponse::err("arrancador.add_manual: missing 'name'"),
+            };
+            let input_path = match params
+                .get("exe_path")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+            {
+                Some(s) if !s.is_empty() => std::path::PathBuf::from(s),
+                _ => return LocalResponse::err("arrancador.add_manual: missing 'exe_path'"),
+            };
+            let exe_path = match resolve_arrancador_manual_exec_path(&input_path) {
+                Ok(path) => path,
+                Err(e) => return LocalResponse::err(format!("arrancador.add_manual: {e}")),
+            };
+            let save_paths: Vec<std::path::PathBuf> = params
+                .get("save_paths")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(str::trim))
+                        .filter(|s| !s.is_empty())
+                        .map(std::path::PathBuf::from)
+                        .collect()
+                })
+                .unwrap_or_default();
+            let exe_name = exe_path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default()
+                .to_string();
+            let install_dir = exe_path.parent().map(|p| p.to_string_lossy().to_string());
+            let save_path = save_paths.first().map(|p| p.to_string_lossy().to_string());
+            let save_paths_json: Vec<String> = save_paths
+                .iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect();
+            let props = serde_json::json!({
+                "source": "manual",
+                "source_app_id": exe_path.to_string_lossy(),
+                "sync_source": "arrancador",
+                "name": name,
+                "exe_path": exe_path.to_string_lossy(),
+                "exe_name": exe_name,
+                "install_dir": install_dir,
+                "save_path": save_path,
+                "save_paths": save_paths_json,
+                "play_status": "not_started",
+                "total_playtime_seconds": 0,
+            });
+            let ark_resp = match ark_host
+                .request(
+                    "list_objects_by_type",
+                    serde_json::json!({ "type_id": "game_obj" }),
+                )
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    return LocalResponse::err(format!("arrancador.add_manual: ark_host: {e}"))
+                }
+            };
+            let existing: Vec<ark_core::types::ArkObject> = if ark_resp.ok {
+                match serde_json::from_value(ark_resp.data) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return LocalResponse::err(format!(
+                            "arrancador.add_manual: failed to parse existing games: {e}"
+                        ))
+                    }
+                }
+            } else {
+                Vec::new()
+            };
+            let source_app_id = exe_path.to_string_lossy().to_string();
+            let existing_match = existing.iter().find(|obj| {
+                let src = obj
+                    .props_json
+                    .get("source")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let app_id = obj
+                    .props_json
+                    .get("source_app_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                src == "manual" && app_id == source_app_id
+            });
+            let now = chrono::Utc::now().to_rfc3339();
+            let id = existing_match
+                .map(|obj| obj.id.clone())
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            let (content_json, created_at, deleted_at, merged_props) = if let Some(existing) =
+                existing_match
+            {
+                let mut merged_props = existing.props_json.clone();
+                if let Some(map) = merged_props.as_object_mut() {
+                    if let Some(new_map) = props.as_object() {
+                        for (k, v) in new_map {
+                            map.insert(k.clone(), v.clone());
+                        }
+                    }
+                } else {
+                    merged_props = props.clone();
+                }
+                (
+                    existing.content_json.clone(),
+                    existing.created_at.clone(),
+                    serde_json::to_value(&existing.deleted_at).unwrap_or(serde_json::Value::Null),
+                    merged_props,
+                )
+            } else {
+                (
+                    serde_json::json!({}),
+                    now.clone(),
+                    serde_json::Value::Null,
+                    props,
+                )
+            };
+            let object = serde_json::json!({
+                "id": id,
+                "typeId": "game_obj",
+                "title": name,
+                "contentJson": content_json,
+                "propsJson": merged_props,
+                "createdAt": created_at,
+                "updatedAt": now,
+                "deletedAt": deleted_at,
+            });
+            match ark_host
+                .request("upsert_object", serde_json::json!({ "object": object }))
+                .await
+            {
+                Ok(r) if r.ok => LocalResponse::ok(serde_json::json!({ "ok": true, "id": id })),
+                Ok(r) => LocalResponse::err(format!(
+                    "arrancador.add_manual: upsert failed: {}",
+                    r.error.unwrap_or_default()
+                )),
+                Err(e) => LocalResponse::err(format!("arrancador.add_manual: ark_host: {e}")),
+            }
         }
         "launch" => {
             let game_id = match params.get("game_id").and_then(|v| v.as_str()) {
@@ -1152,6 +1303,10 @@ async fn handle_arrancador_op(
                 "keep_backups": cfg.keep_backups,
             });
             LocalResponse::ok(payload)
+        }
+        "config.get_rawg_key" => {
+            let cfg = arrancador::config::load();
+            LocalResponse::ok(serde_json::json!({ "key": cfg.rawg_api_key }))
         }
         "config.set_rawg_key" => {
             let key = params
@@ -1247,7 +1402,7 @@ async fn handle_arrancador_op(
                     .unwrap_or(&game.id)
                     .to_string()
             };
-            // Manual save paths из propsJson.save_paths (массив строк) если есть.
+            // Manual save paths из propsJson.save_paths или системного save_path.
             let manual_paths: Option<Vec<std::path::PathBuf>> = game
                 .props_json
                 .get("save_paths")
@@ -1256,6 +1411,13 @@ async fn handle_arrancador_op(
                     arr.iter()
                         .filter_map(|x| x.as_str().map(std::path::PathBuf::from))
                         .collect()
+                })
+                .or_else(|| {
+                    game.props_json
+                        .get("save_path")
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.is_empty())
+                        .map(|s| vec![std::path::PathBuf::from(s)])
                 });
             match arrancador::sqoba::backup(&game_id, &game_name, manual_paths.as_deref()) {
                 Ok(b) => match serde_json::to_value(&b) {
@@ -1283,24 +1445,27 @@ async fn handle_arrancador_op(
                 Some(s) => s.to_string(),
                 None => return LocalResponse::err("arrancador.sqoba.restore: missing 'backup_id'"),
             };
-            // game_id опционален; если задан — резолвим через list_backups,
-            // иначе принимаем backup_id как уже полный path.
-            let path = if let Some(game_id) = params.get("game_id").and_then(|v| v.as_str()) {
-                match arrancador::sqoba::resolve_backup_path(game_id, &backup_id) {
-                    Some(p) => p,
-                    None => {
-                        return LocalResponse::err(format!(
-                            "arrancador.sqoba.restore: backup '{}' not found for game '{}'",
-                            backup_id, game_id
-                        ))
-                    }
+            let game_id = match params.get("game_id").and_then(|v| v.as_str()) {
+                Some(s) => s,
+                None => return LocalResponse::err("arrancador.sqoba.restore: missing 'game_id'"),
+            };
+            let path = match arrancador::sqoba::resolve_backup_path(game_id, &backup_id) {
+                Some(p) => p,
+                None => {
+                    return LocalResponse::err(format!(
+                        "arrancador.sqoba.restore: backup '{}' not found for game '{}'",
+                        backup_id, game_id
+                    ))
                 }
-            } else {
-                std::path::PathBuf::from(&backup_id)
             };
             match arrancador::sqoba::restore(&path) {
                 Ok(r) => match serde_json::to_value(&r) {
-                    Ok(v) => LocalResponse::ok(v),
+                    Ok(mut v) => {
+                        if let Some(obj) = v.as_object_mut() {
+                            obj.insert("ok".into(), serde_json::Value::Bool(r.errors.is_empty()));
+                        }
+                        LocalResponse::ok(v)
+                    }
                     Err(e) => {
                         LocalResponse::err(format!("arrancador.sqoba.restore: serialize: {e}"))
                     }
@@ -1395,6 +1560,46 @@ async fn handle_app_index_op(
             Err(e) => LocalResponse::err(format!("app_index.rescan: {e}")),
         },
         other => LocalResponse::err(format!("app_index.{other}: unknown sub-operation")),
+    }
+}
+
+fn resolve_arrancador_manual_exec_path(
+    input_path: &std::path::Path,
+) -> Result<std::path::PathBuf, String> {
+    if !input_path.is_file() {
+        return Err(format!("path is not a file: {}", input_path.display()));
+    }
+
+    let ext = input_path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase());
+
+    #[cfg(target_os = "windows")]
+    if ext.as_deref() == Some("lnk") {
+        let target =
+            crate::app_index::platform::windows::start_menu::resolve_lnk_target_path(input_path)
+                .map_err(|e| format!("failed to read shortcut: {e}"))?
+                .ok_or_else(|| format!("shortcut has no target: {}", input_path.display()))?;
+        if !target.is_file() {
+            return Err(format!(
+                "shortcut target is not a file: {}",
+                target.display()
+            ));
+        }
+        return Ok(target);
+    }
+
+    match std::fs::canonicalize(input_path) {
+        Ok(path) => {
+            let value = path.to_string_lossy().to_string();
+            if let Some(stripped) = value.strip_prefix(r"\\?\") {
+                Ok(std::path::PathBuf::from(stripped))
+            } else {
+                Ok(path)
+            }
+        }
+        Err(_) => Ok(input_path.to_path_buf()),
     }
 }
 
