@@ -2,7 +2,7 @@
 // Production build идёт через корневой platform/desktop/vite.extensions.config.mjs.
 //
 // Запускается через platform/desktop/scripts/dev-extensions.mjs:
-//   bunx vite --port 5184 --strictPort --host 127.0.0.1
+//   bunx vite --port <manifest.devPort> --strictPort --host 127.0.0.1
 //
 // Порт совпадает с manifest.json `devPort`.
 

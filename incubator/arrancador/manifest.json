@@ -7,7 +7,7 @@
   "kind": "vue",
   "icon": "icon.png",
   "entryHtml": "dist/index.html",
-  "devPort": 5183,
+  "devPort": 9915,
   "width": 1280,
   "height": 800,
   "minWidth": 900,

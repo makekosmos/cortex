@@ -17,7 +17,7 @@ const hasTitleBar = computed(
 );
 
 const sidebarStyle = computed(() => ({
-  "--kosmos-settings-sidebar-bg": "var(--bg-app, #1d1d1f)",
+  "--kosmos-settings-sidebar-bg": "var(--sidebar-bg, var(--bg-app, #1d1d1f))",
 }));
 </script>
 
@@ -28,7 +28,7 @@ const sidebarStyle = computed(() => ({
   >
     <div
       v-if="hasTitleBar"
-      class="kosmos-settings-sidebar__title flex min-h-9 items-center gap-2 px-2 pb-0 pt-2 font-[var(--font-sans)] text-[13px] leading-[1.4] font-medium [-webkit-app-region:drag]"
+      class="kosmos-settings-sidebar__title flex items-center font-[var(--font-sans)] text-[13px] leading-[1.4] font-medium [-webkit-app-region:drag]"
     >
       <div
         v-if="$slots['title-leading']"
@@ -51,3 +51,20 @@ const sidebarStyle = computed(() => ({
     </div>
   </aside>
 </template>
+
+<style scoped>
+.kosmos-settings-sidebar__title {
+  box-sizing: border-box;
+  height: var(--kosmos-settings-titlebar-height);
+  min-height: var(--kosmos-settings-titlebar-height);
+  gap: var(--kosmos-titlebar-control-gap);
+  border-bottom: 1px solid var(--border-color-strong);
+  padding: 0 10px;
+}
+
+.kosmos-settings-sidebar__title :deep([data-testid="sidebar-header"]) {
+  height: 100%;
+  align-items: center;
+  gap: var(--kosmos-titlebar-control-gap);
+}
+</style>

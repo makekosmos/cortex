@@ -10,7 +10,7 @@ import {
   Search,
   Settings,
 } from "@lucide/vue";
-import { SettingsSidebar, SettingsSidebarButton } from "@kosmos/visuals";
+import { SettingsSidebar, SettingsSidebarButton, TitlebarButton } from "@kosmos/visuals";
 
 const props = defineProps<{
   hidden: boolean;
@@ -57,24 +57,15 @@ function go(to: string) {
   <SettingsSidebar v-if="!props.hidden" tone="strong">
     <template #title-leading>
       <div class="arrancador-sidebar__titlebar" data-testid="arrancador-sidebar-header">
-        <button
-          type="button"
-          class="arrancador-sidebar__icon-button"
+        <TitlebarButton
           title="Скрыть сайдбар"
           aria-label="Скрыть сайдбар"
+          aria-pressed="true"
           data-testid="arrancador-sidebar-titlebar-toggle"
           @click="emit('update:hidden', true)"
         >
           <PanelLeftClose :size="16" />
-        </button>
-        <SettingsSidebarButton
-          :icon="Gamepad2"
-          label="Arrancador"
-          icon-variant="plain"
-          :active="route.path === '/'"
-          test-id="arrancador-sidebar-home"
-          @click="go('/')"
-        />
+        </TitlebarButton>
       </div>
     </template>
 
@@ -115,31 +106,6 @@ function go(to: string) {
   flex: 1 1 auto;
   align-items: center;
   gap: 4px;
-}
-
-.arrancador-sidebar__titlebar :deep(.kosmos-settings-sidebar-button) {
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.arrancador-sidebar__icon-button {
-  display: inline-flex;
-  width: var(--kosmos-titlebar-control-size, 32px);
-  height: var(--kosmos-titlebar-control-size, 32px);
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--kosmos-titlebar-control-radius, 8px);
-  color: color-mix(in srgb, var(--sidebar-foreground) 72%, transparent);
-  transition:
-    background-color 120ms ease,
-    color 120ms ease;
-  -webkit-app-region: no-drag;
-}
-
-.arrancador-sidebar__icon-button:hover {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  color: var(--foreground);
 }
 
 .arrancador-sidebar {

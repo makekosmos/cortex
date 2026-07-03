@@ -4749,42 +4749,8 @@ span[data-wikilink]:hover {
   padding-top: 0;
 }
 
-.app-container .kosmos-desktop-chrome-settings {
-  --eden-chrome-titlebar-height: 41px;
-}
-
-.app-container .kosmos-desktop-chrome-settings > div {
-  background: var(--bg-app);
-}
-
 .app-container .app-main {
   background: var(--bg-app);
-}
-
-.app-container .kosmos-settings-sidebar {
-  background: var(--sidebar-bg);
-  background-color: var(--sidebar-bg);
-}
-
-.app-container .kosmos-settings-sidebar__title {
-  box-sizing: border-box;
-  height: var(--eden-chrome-titlebar-height);
-  min-height: var(--eden-chrome-titlebar-height);
-  align-items: center;
-  border-bottom: 1px solid var(--border-color-strong);
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-}
-
-.app-container .kosmos-desktop-chrome-settings__header {
-  position: relative;
-  box-sizing: border-box;
-  height: var(--eden-chrome-titlebar-height);
-  min-height: var(--eden-chrome-titlebar-height);
-  align-items: center;
-  border-bottom: 1px solid var(--border-color-strong);
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
 }
 
 .eden-diary-calendar-open .kosmos-desktop-chrome-settings__header::after {
@@ -4872,7 +4838,7 @@ span[data-wikilink]:hover {
 }
 
 .app-container.focus-mode-active .kosmos-desktop-chrome-settings__header button:hover,
-.app-container.focus-mode-active .eden-titlebar-button:hover {
+.app-container.focus-mode-active .kosmos-titlebar-button:hover {
   background: color-mix(in srgb, var(--foreground) 8%, transparent) !important;
 }
 

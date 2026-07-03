@@ -13,17 +13,20 @@ import {
   createJournalBubblesFromEntry,
   decodeLocalBubblesStorage,
   encodeLocalBubblesStorage,
+  isLegacyDatedJournalEntry,
   normalizeLocalBubbles,
   parseBubbleDraft,
   plainTextToTiptapDoc,
   type BubbleKind,
   type BubbleTimelineNode,
 } from "./bubbleDiaryModel";
-import { SYSTEM_TYPE_JOURNAL_ID } from "../../lib/systemTypeDefinitions";
 
 const props = defineProps<{
   journalEntries?: Entry[];
   calendarOpen?: boolean;
+}>();
+const emit = defineEmits<{
+  journalMigrated: [];
 }>();
 
 const draftPlainText = ref("");
@@ -31,6 +34,7 @@ const localBubbles = ref<BubbleTimelineNode[]>([]);
 const journalImported = ref(false);
 const contentRef = ref<HTMLElement | null>(null);
 const composerHeightPx = ref(78);
+let journalCleanupRunning = false;
 
 const draftPreview = computed(() => parseBubbleDraft(draftPlainText.value));
 const canSubmitDraft = computed(() => draftPreview.value.text.length > 0);
@@ -74,16 +78,7 @@ onMounted(() => {
   void nextTick(syncComposerHeight);
 });
 
-watch(
-  localBubbles,
-  (bubbles) => {
-    localStorage.setItem(
-      LOCAL_BUBBLES_STORAGE_KEY,
-      encodeLocalBubblesStorage(bubbles, { journalImported: journalImported.value }),
-    );
-  },
-  { deep: true },
-);
+watch(localBubbles, () => persistLocalBubbles(), { deep: true });
 
 watch(
   () => props.journalEntries,
@@ -154,7 +149,19 @@ function readLocalBubbles(): BubbleTimelineNode[] {
   return readLocalBubbleState().bubbles;
 }
 
-function readLocalBubbleState(): { bubbles: BubbleTimelineNode[]; journalImported: boolean } {
+function persistLocalBubbles(): void {
+  localStorage.setItem(
+    LOCAL_BUBBLES_STORAGE_KEY,
+    encodeLocalBubblesStorage(localBubbles.value, {
+      journalImported: journalImported.value,
+    }),
+  );
+}
+
+function readLocalBubbleState(): {
+  bubbles: BubbleTimelineNode[];
+  journalImported: boolean;
+} {
   try {
     const raw = JSON.parse(localStorage.getItem(LOCAL_BUBBLES_STORAGE_KEY) ?? "null");
     const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
@@ -170,16 +177,34 @@ function readLocalBubbleState(): { bubbles: BubbleTimelineNode[]; journalImporte
 
 async function refreshLocalBubbles(): Promise<void> {
   const state = readLocalBubbleState();
-  const journalBubbles = state.journalImported ? [] : await readJournalBubbles();
+  const migration = await readJournalMigration();
+  const journalBubbles = state.journalImported ? [] : migration.bubbles;
+  const nextBubbles = mergeBubbles(state.bubbles, journalBubbles);
 
-  journalImported.value = state.journalImported || journalBubbles.length > 0;
-  localBubbles.value = mergeBubbles(state.bubbles, journalBubbles);
+  journalImported.value = state.journalImported;
+  localBubbles.value = nextBubbles;
+
+  const deletableEntryIds = migration.entries
+    .filter(
+      ({ bubbles }) =>
+        bubbles.length > 0 && bubbles.every((bubble) => hasBubble(nextBubbles, bubble.id)),
+    )
+    .map(({ entry }) => entry.id);
+  if (deletableEntryIds.length > 0) {
+    await deleteImportedJournalEntries(deletableEntryIds);
+  }
 }
 
-async function readJournalBubbles(): Promise<BubbleTimelineNode[]> {
-  const entries = [...(props.journalEntries ?? [])]
-    .filter((entry) => entry.type_id === SYSTEM_TYPE_JOURNAL_ID && entry.deleted_at === null)
-    .sort((left, right) => right.created_at - left.created_at);
+async function readJournalMigration(): Promise<{
+  entries: { entry: Entry; bubbles: BubbleTimelineNode[] }[];
+  bubbles: BubbleTimelineNode[];
+}> {
+  const sourceEntries = await readJournalSourceEntries();
+  const entries = sourceEntries
+    .filter(isLegacyDatedJournalEntry)
+    .sort(
+      (left, right) => right.title.localeCompare(left.title) || right.created_at - left.created_at,
+    );
 
   const loadedEntries: Entry[] = [];
   for (const entry of entries) {
@@ -190,7 +215,30 @@ async function readJournalBubbles(): Promise<BubbleTimelineNode[]> {
     loadedEntries.push((await window.api.loadEntry(entry.id)) ?? entry);
   }
 
-  return loadedEntries.flatMap(createJournalBubblesFromEntry);
+  const migrationEntries = loadedEntries.map((entry) => ({
+    entry,
+    bubbles: createJournalBubblesFromEntry(entry),
+  }));
+
+  return {
+    entries: migrationEntries,
+    bubbles: migrationEntries.flatMap(({ bubbles }) => bubbles),
+  };
+}
+
+async function readJournalSourceEntries(): Promise<Entry[]> {
+  const entriesById = new Map((props.journalEntries ?? []).map((entry) => [entry.id, entry]));
+
+  try {
+    const allEntries = await window.api?.listAllEntries?.();
+    for (const entry of allEntries ?? []) {
+      entriesById.set(entry.id, entry);
+    }
+  } catch (err) {
+    console.warn("[eden] legacy journal migration listAllEntries failed:", err);
+  }
+
+  return [...entriesById.values()];
 }
 
 function mergeBubbles(
@@ -202,6 +250,36 @@ function mergeBubbles(
     if (!byId.has(bubble.id)) byId.set(bubble.id, bubble);
   }
   return [...byId.values()];
+}
+
+function hasBubble(bubbles: BubbleTimelineNode[], id: string): boolean {
+  return bubbles.some((bubble) => bubble.id === id);
+}
+
+async function deleteImportedJournalEntries(entryIds: string[]): Promise<void> {
+  if (journalCleanupRunning || !window.api?.deleteEntry) return;
+  journalCleanupRunning = true;
+
+  let deletedCount = 0;
+  try {
+    for (const entryId of entryIds) {
+      const result = await window.api.deleteEntry(entryId);
+      if (result.ok) {
+        deletedCount += 1;
+        continue;
+      }
+      console.warn("[eden] legacy journal cleanup failed:", result);
+    }
+
+    if (deletedCount === entryIds.length) {
+      journalImported.value = true;
+      persistLocalBubbles();
+    }
+
+    if (deletedCount > 0) emit("journalMigrated");
+  } finally {
+    journalCleanupRunning = false;
+  }
 }
 </script>
 

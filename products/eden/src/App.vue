@@ -47,21 +47,17 @@
     >
       <template #titlebar-leading>
         <div class="inline-flex items-center gap-2 [-webkit-app-region:no-drag]">
-          <button
+          <TitlebarButton
             v-if="layout.isZenMode"
-            type="button"
-            class="eden-titlebar-button inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in [-webkit-app-region:no-drag] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)"
             title="Выйти из фокуса"
             aria-label="Выйти из фокуса"
             data-testid="titlebar-focus-exit"
             @click="layout.disableZenMode()"
           >
             <PhPottedPlant :size="17" weight="duotone" />
-          </button>
-          <button
+          </TitlebarButton>
+          <TitlebarButton
             v-else-if="layout.widgetSidebarHidden"
-            type="button"
-            class="eden-titlebar-button inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in [-webkit-app-region:no-drag] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)"
             title="Показать сайдбар"
             aria-label="Показать сайдбар"
             aria-pressed="false"
@@ -69,7 +65,7 @@
             @click="layout.toggleWidgetSidebar()"
           >
             <PanelLeftOpen :size="16" />
-          </button>
+          </TitlebarButton>
           <TitlebarHistoryControls
             v-if="!layout.isZenMode"
             :back-disabled="!canGoBack"
@@ -79,10 +75,8 @@
             @back="navigateBack"
             @forward="navigateForward"
           />
-          <button
+          <TitlebarButton
             v-if="!layout.isZenMode && eden.activeScreen !== 'diary'"
-            type="button"
-            class="eden-titlebar-button inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in [-webkit-app-region:no-drag] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)"
             :title="preferences.state.readerModeEnabled ? 'Режим чтеца' : 'Режим писателя'"
             :aria-label="
               preferences.state.readerModeEnabled
@@ -95,7 +89,7 @@
           >
             <BookOpen v-if="preferences.state.readerModeEnabled" :size="16" />
             <Pencil v-else :size="16" />
-          </button>
+          </TitlebarButton>
         </div>
       </template>
 
@@ -121,10 +115,8 @@
       </template>
 
       <template #titlebar-trailing>
-        <button
+        <TitlebarButton
           v-if="!layout.isZenMode && eden.activeScreen === 'diary'"
-          type="button"
-          class="eden-titlebar-button inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in [-webkit-app-region:no-drag] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)"
           title="Календарь"
           aria-label="Календарь"
           :aria-pressed="diaryCalendarOpen"
@@ -132,7 +124,7 @@
           @click="diaryCalendarOpen = !diaryCalendarOpen"
         >
           <CalendarDays :size="16" />
-        </button>
+        </TitlebarButton>
       </template>
 
       <template v-if="!layout.isZenMode" #sidebar>
@@ -167,6 +159,7 @@
           v-else-if="eden.activeScreen === 'diary'"
           :journal-entries="eden.entries"
           :calendar-open="diaryCalendarOpen"
+          @journal-migrated="eden.refreshData()"
         />
         <TypeObjectsView
           v-else-if="isCollectionViewActive && activeCollectionType"
@@ -253,6 +246,7 @@ import {
   ContextMenu,
   ContextMenuItem,
   DesktopChrome,
+  TitlebarButton,
   TitlebarHistoryControls,
   ToastHost,
   type TitlebarPlatform,

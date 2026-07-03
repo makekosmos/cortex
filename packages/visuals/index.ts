@@ -13,6 +13,7 @@ export {
   type SidebarProjectItem,
   type SidebarProjectGroup,
   Titlebar,
+  TitlebarButton,
   type TitlebarPlatform,
   TitlebarHistoryControls,
   DesktopChrome,

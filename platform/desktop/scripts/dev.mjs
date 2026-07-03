@@ -19,7 +19,7 @@ import { listRepoExtensionEntries } from "./repo-extension-roots.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const shellRoot = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(shellRoot, "..", "..");
-const defaultShellDevPort = 5173;
+const defaultShellDevPort = 9912;
 
 // --- .env.local loader (per-worktree dev slot override) ---------------------
 // `platform/desktop/.env.local` (gitignored) задаёт `KEPLER_INSTANCE=dev-<slug>` для

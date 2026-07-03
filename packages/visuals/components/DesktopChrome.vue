@@ -35,11 +35,11 @@ provide("kosmosHasSidebar", hasSidebar);
     </aside>
 
     <div
-      class="relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--background)]"
+      class="relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--bg-app,var(--background))]"
     >
       <header
         :class="[
-          'kosmos-desktop-chrome-settings__header flex min-h-9 items-center justify-between gap-4 pb-[3px] pt-[6px] [-webkit-app-region:drag]',
+          'kosmos-desktop-chrome-settings__header flex items-center justify-between gap-4 [-webkit-app-region:drag]',
           // Native window controls: на macOS traffic lights слева → отступ
           // слева под них; на Windows min/max/close справа → отступ справа.
           props.platform === 'mac'
@@ -102,3 +102,31 @@ provide("kosmosHasSidebar", hasSidebar);
     </div>
   </div>
 </template>
+
+<style scoped>
+.kosmos-desktop-chrome-settings__header {
+  position: relative;
+  box-sizing: border-box;
+  height: var(--kosmos-settings-titlebar-height);
+  min-height: var(--kosmos-settings-titlebar-height);
+  border-bottom: 1px solid var(--border-color-strong);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.kosmos-desktop-chrome-settings__header-left,
+.kosmos-desktop-chrome-settings__header-center,
+.kosmos-desktop-chrome-settings__header-right {
+  height: 100%;
+  align-items: center;
+  gap: var(--kosmos-titlebar-control-gap);
+}
+
+.kosmos-desktop-chrome-settings__header-left :deep(> div),
+.kosmos-desktop-chrome-settings__header-right :deep(> div),
+.kosmos-desktop-chrome-settings__header :deep(.kosmos-titlebar-history-controls) {
+  height: 100%;
+  align-items: center;
+  gap: var(--kosmos-titlebar-control-gap);
+}
+</style>

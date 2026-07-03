@@ -8,6 +8,8 @@ export { default as Sidebar } from "./Sidebar.vue";
 
 export { default as Titlebar } from "./Titlebar.vue";
 
+export { default as TitlebarButton } from "./TitlebarButton.vue";
+
 export { default as TitlebarHistoryControls } from "./TitlebarHistoryControls.vue";
 
 export { default as DesktopChrome } from "./DesktopChrome.vue";

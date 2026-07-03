@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ChevronLeft, ChevronRight } from "@lucide/vue";
+import TitlebarButton from "./TitlebarButton.vue";
 
 interface Props {
   backDisabled?: boolean;
@@ -32,10 +33,8 @@ function handleForward() {
 </script>
 
 <template>
-  <div class="kosmos-titlebar-history-controls inline-flex items-center gap-2">
-    <button
-      type="button"
-      class="inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in hover:not-disabled:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:not-disabled:text-(--foreground) disabled:cursor-default disabled:opacity-[0.38]"
+  <div class="kosmos-titlebar-history-controls inline-flex items-center">
+    <TitlebarButton
       :disabled="backDisabled"
       :title="backTitle"
       :aria-label="backTitle"
@@ -43,11 +42,9 @@ function handleForward() {
       @click="handleBack"
     >
       <ChevronLeft :size="16" />
-    </button>
+    </TitlebarButton>
 
-    <button
-      type="button"
-      class="inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in hover:not-disabled:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:not-disabled:text-(--foreground) disabled:cursor-default disabled:opacity-[0.38]"
+    <TitlebarButton
       :disabled="forwardDisabled"
       :title="forwardTitle"
       :aria-label="forwardTitle"
@@ -55,12 +52,14 @@ function handleForward() {
       @click="handleForward"
     >
       <ChevronRight :size="16" />
-    </button>
+    </TitlebarButton>
   </div>
 </template>
 
 <style scoped>
 .kosmos-titlebar-history-controls {
+  height: 100%;
+  gap: var(--kosmos-titlebar-control-gap);
   -webkit-app-region: no-drag;
 }
 </style>

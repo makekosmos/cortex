@@ -1,6 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
 import { readEntryTiptapDoc, type TiptapDoc, type TiptapNode } from "../../editor-content/content";
-import { SYSTEM_TYPE_JOURNAL_ID } from "../../lib/systemTypeDefinitions";
+import { SYSTEM_TYPE_JOURNAL_ID, SYSTEM_TYPE_NOTE_ID } from "../../lib/systemTypeDefinitions";
 
 export type BubbleKind = "plain" | "idea" | "task" | "highlight";
 
@@ -87,7 +87,7 @@ export function createDraftBubble(
 }
 
 export function createJournalBubblesFromEntry(entry: JournalEntryLike): BubbleTimelineNode[] {
-  if (entry.type_id !== SYSTEM_TYPE_JOURNAL_ID || entry.deleted_at !== null) return [];
+  if (!isLegacyDatedJournalEntry(entry)) return [];
 
   const date = journalDate(entry);
   const doc = readEntryTiptapDoc(entry.content_json);
@@ -102,6 +102,16 @@ export function createJournalBubblesFromEntry(entry: JournalEntryLike): BubbleTi
     });
     return bubble ? [bubble] : [];
   });
+}
+
+export function isLegacyDatedJournalEntry(entry: JournalEntryLike): boolean {
+  return (
+    (entry.type_id === SYSTEM_TYPE_JOURNAL_ID ||
+      entry.type_id === SYSTEM_TYPE_NOTE_ID ||
+      entry.type_id === null) &&
+    entry.deleted_at === null &&
+    DATE_KEY_PATTERN.test(entry.title.trim())
+  );
 }
 
 export function encodeLocalBubblesStorage(

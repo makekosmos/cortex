@@ -170,6 +170,12 @@
      контролы. */
   --kosmos-mac-traffic-light-left-safe-area: 0px;
   --kosmos-mac-traffic-light-top-safe-area: 0px;
+
+  --kosmos-settings-titlebar-height: 41px;
+  --kosmos-titlebar-control-size: 30px;
+  --kosmos-titlebar-control-radius: 7px;
+  --kosmos-titlebar-control-icon-size: 16px;
+  --kosmos-titlebar-control-gap: 4px;
 }
 
 /* macOS-специфичные токены. Активируются `data-platform="mac"` на <html>,
@@ -284,4 +290,45 @@
 .kosmos-scroll::-webkit-scrollbar-thumb:hover {
   border-width: 0;
   background-color: rgb(from var(--foreground) r g b / 0.32);
+}
+
+.kosmos-titlebar-button {
+  display: inline-grid;
+  width: var(--kosmos-titlebar-control-size);
+  min-width: var(--kosmos-titlebar-control-size);
+  height: var(--kosmos-titlebar-control-size);
+  min-height: var(--kosmos-titlebar-control-size);
+  flex: 0 0 var(--kosmos-titlebar-control-size);
+  place-items: center;
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  border-radius: var(--kosmos-titlebar-control-radius);
+  background: transparent;
+  color: color-mix(in srgb, var(--sidebar-foreground, var(--foreground)) 72%, transparent);
+  line-height: 1;
+  cursor: default;
+  user-select: none;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    opacity 120ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.kosmos-titlebar-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  color: var(--foreground);
+}
+
+.kosmos-titlebar-button:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.kosmos-titlebar-button > svg {
+  width: var(--kosmos-titlebar-control-icon-size);
+  height: var(--kosmos-titlebar-control-icon-size);
+  flex: 0 0 var(--kosmos-titlebar-control-icon-size);
+  pointer-events: none;
 }

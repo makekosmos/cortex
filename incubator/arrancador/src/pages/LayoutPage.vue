@@ -5,7 +5,7 @@ import { PanelLeft } from "@lucide/vue";
 import {
   DesktopChrome,
   DesktopContentSurface,
-  IconButton,
+  TitlebarButton,
   type TitlebarPlatform,
 } from "@kosmos/visuals";
 
@@ -24,20 +24,18 @@ const chromePlatform = computed<TitlebarPlatform>(() => {
 </script>
 
 <template>
-  <DesktopChrome
-    class="arrancador-shell"
-    title="Arrancador"
-    :platform="chromePlatform"
-    :titlebar-transparent="false"
-  >
+  <DesktopChrome class="arrancador-shell" appearance="settings" :platform="chromePlatform">
     <template #titlebar-leading>
-      <IconButton
+      <TitlebarButton
         v-if="sidebarHidden"
         :title="sidebarHidden ? 'Показать сайдбар' : 'Скрыть сайдбар'"
+        aria-label="Показать сайдбар"
+        aria-pressed="false"
+        data-testid="arrancador-titlebar-sidebar-toggle"
         @click="sidebarHidden = !sidebarHidden"
       >
-        <PanelLeft :size="18" />
-      </IconButton>
+        <PanelLeft :size="16" />
+      </TitlebarButton>
     </template>
 
     <template #titlebar-trailing>

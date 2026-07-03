@@ -5,9 +5,7 @@
         class="inline-flex items-center gap-1 [-webkit-app-region:no-drag]"
         data-testid="sidebar-header"
       >
-        <button
-          type="button"
-          :class="SIDEBAR_ICON_BUTTON_CLASS"
+        <TitlebarButton
           title="Скрыть сайдбар"
           aria-label="Скрыть сайдбар"
           aria-pressed="true"
@@ -15,20 +13,16 @@
           @click="emit('toggleSidebar')"
         >
           <PanelLeftClose :size="16" />
-        </button>
-        <button
-          type="button"
-          :class="SIDEBAR_ICON_BUTTON_CLASS"
+        </TitlebarButton>
+        <TitlebarButton
           title="Настройки"
           aria-label="Настройки"
           data-testid="sidebar-header-settings"
           @click="emit('openSettings')"
         >
           <Settings :size="16" />
-        </button>
-        <button
-          type="button"
-          :class="SIDEBAR_ICON_BUTTON_CLASS"
+        </TitlebarButton>
+        <TitlebarButton
           title="Поиск"
           aria-label="Поиск"
           :aria-pressed="!!props.isSearchOpen || !!props.searchQuery"
@@ -36,17 +30,15 @@
           @click="emit('toggleSearch')"
         >
           <Search :size="16" />
-        </button>
-        <button
-          type="button"
-          :class="SIDEBAR_ICON_BUTTON_CLASS"
+        </TitlebarButton>
+        <TitlebarButton
           title="Новая заметка"
           aria-label="Новая заметка"
           data-testid="sidebar-create-entry"
           @click="emit('createEntry')"
         >
           <Plus :size="16" />
-        </button>
+        </TitlebarButton>
       </div>
     </template>
 
@@ -186,7 +178,13 @@
 
 <script setup lang="ts">
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from "vue";
-import { Button, Modal, SettingsSidebar, SettingsSidebarButton } from "@kosmos/visuals";
+import {
+  Button,
+  Modal,
+  SettingsSidebar,
+  SettingsSidebarButton,
+  TitlebarButton,
+} from "@kosmos/visuals";
 import { PanelLeftClose, Plus, Search, Settings, Shapes } from "@lucide/vue";
 import {
   PhBarbell,
@@ -305,8 +303,6 @@ const RECENT_ITEM_STRIDE = RECENT_ITEM_HEIGHT + RECENT_ITEM_GAP;
 const RECENT_LIST_OVERSCAN = 6;
 const RECENT_LIST_INITIAL_VISIBLE_COUNT = 12;
 const ENTRY_ICON_COLOR = "var(--muted-foreground)";
-const SIDEBAR_ICON_BUTTON_CLASS =
-  "inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in [-webkit-app-region:no-drag] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)";
 const objectTypesModalOpen = ref(false);
 const isResizingSidebar = ref(false);
 const recentListRef = ref<HTMLElement | null>(null);
