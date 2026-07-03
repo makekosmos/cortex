@@ -56,79 +56,9 @@ input {
 /* ---------- App shell ---------- */
 
 .arrancador-shell {
-  display: flex;
-  flex-direction: column;
   height: 100vh;
   min-height: 0;
-  overflow: hidden;
-  background: var(--background);
-  color: var(--foreground);
 }
-
-.arrancador-shell__body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-}
-
-/* ---------- Titlebar ---------- */
-
-.arrancador-titlebar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  height: 44px;
-  /* Right safe-area — под Windows-overlay кнопки (env() = 0 на mac).
-     Left safe-area — под macOS traffic lights (токен = 0px на Windows,
-     80px при data-platform="mac"; см. @kosmos/visuals css-variables). */
-  padding: 0
-    max(16px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px)) 0
-    max(16px, var(--kosmos-mac-traffic-light-left-safe-area, 0px));
-  border-bottom: 1px solid var(--border);
-  background: var(--card);
-  -webkit-app-region: drag;
-}
-
-.arrancador-titlebar__left,
-.arrancador-titlebar__right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  -webkit-app-region: no-drag;
-}
-
-.arrancador-titlebar__title {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--foreground);
-}
-
-.arrancador-titlebar__btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-input);
-  color: var(--muted-foreground);
-  transition:
-    background 120ms var(--easing-standard),
-    color 120ms var(--easing-standard);
-}
-
-.arrancador-titlebar__btn:hover:not(:disabled) {
-  background: var(--muted);
-  color: var(--foreground);
-}
-
-.arrancador-titlebar__btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* Sidebar — теперь поверх `Sidebar` из `@kosmos/visuals` (см. components/AppSidebar.vue). */
 
 /* ---------- Spotlight ---------- */
 
@@ -159,14 +89,6 @@ input {
 }
 
 /* ---------- Layout / content ---------- */
-
-.arrancador-content {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
 
 .arrancador-toolbar {
   display: flex;
@@ -426,6 +348,43 @@ input {
   background: var(--scrim-gradient);
 }
 
+.arrancador-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.arrancador-detail__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 12px;
+}
+
+.arrancador-detail__action:not(:disabled):hover {
+  background: var(--muted);
+}
+
+.arrancador-detail__action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.arrancador-detail__action-message {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.arrancador-detail__action-message--error {
+  color: var(--destructive-foreground, var(--destructive));
+}
+
 .arrancador-detail__title {
   margin: 0;
   font-size: 24px;
@@ -483,6 +442,159 @@ input {
   font-size: 14px;
   line-height: 1.5;
   color: var(--foreground);
+}
+
+/* ---------- Metadata modal ---------- */
+
+.arrancador-metadata-modal {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.arrancador-metadata-modal__search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.arrancador-metadata-modal__input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--background);
+  color: var(--foreground);
+  outline: none;
+}
+
+.arrancador-metadata-modal__input:focus {
+  border-color: var(--accent);
+}
+
+.arrancador-metadata-modal__button,
+.arrancador-metadata-modal__apply {
+  display: inline-flex;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.arrancador-metadata-modal__button:not(:disabled):hover {
+  background: var(--muted);
+}
+
+.arrancador-metadata-modal__button:disabled,
+.arrancador-metadata-modal__result:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.arrancador-metadata-modal__message {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.arrancador-metadata-modal__message--error {
+  color: var(--destructive-foreground, var(--destructive));
+}
+
+.arrancador-metadata-modal__results {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.arrancador-metadata-modal__result {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  text-align: left;
+}
+
+.arrancador-metadata-modal__result:not(:disabled):hover {
+  background: var(--muted);
+}
+
+.arrancador-metadata-modal__cover,
+.arrancador-metadata-modal__cover-placeholder {
+  width: 88px;
+  height: 50px;
+  border-radius: var(--radius-input);
+}
+
+.arrancador-metadata-modal__cover {
+  object-fit: cover;
+  background: var(--muted);
+}
+
+.arrancador-metadata-modal__cover-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.arrancador-metadata-modal__body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.arrancador-metadata-modal__name,
+.arrancador-metadata-modal__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arrancador-metadata-modal__name {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.arrancador-metadata-modal__meta {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .arrancador-metadata-modal__search,
+  .arrancador-metadata-modal__result {
+    grid-template-columns: 1fr;
+  }
+
+  .arrancador-metadata-modal__cover,
+  .arrancador-metadata-modal__cover-placeholder {
+    width: 100%;
+    height: 120px;
+  }
+
+  .arrancador-metadata-modal__apply {
+    width: 100%;
+  }
 }
 
 /* Caret color = brand accent. */

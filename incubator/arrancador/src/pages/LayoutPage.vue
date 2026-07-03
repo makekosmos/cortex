@@ -1,38 +1,55 @@
 <script setup lang="ts">
-// LayoutPage — корневой shell (titlebar + sidebar + router outlet).
-//
-// Адаптация vs `apps/arrancador/src-vue/pages/LayoutPage.vue`:
-//   - убраны Pinia store / RouterView с history-controls / Teleport mobile menu /
-//     toast bridge / kosmos-desktop-chrome layout. Extension renderer не имеет
-//     native window-controls и mobile breakpoint'ов.
-//   - данные тянутся через `useGames()` composable (kepler.ark.request).
-//   - Vue Router добавлен (createMemoryHistory) — sidebar теперь использует
-//     <router-link>, а основной контент рендерится <router-view />.
-import { ref } from "vue";
+// LayoutPage — корневой shell через актуальный @kosmos/visuals chrome.
+import { computed, ref } from "vue";
+import { PanelLeft } from "@lucide/vue";
+import {
+  DesktopChrome,
+  DesktopContentSurface,
+  IconButton,
+  type TitlebarPlatform,
+} from "@kosmos/visuals";
 
 import AppSidebar from "../components/AppSidebar.vue";
 import AppSpotlight from "../components/AppSpotlight.vue";
-import AppTitlebar from "../components/AppTitlebar.vue";
 import { useSearchQuery } from "../composables/useSearchQuery";
 
 const sidebarHidden = ref(false);
 const search = useSearchQuery();
+
+const chromePlatform = computed<TitlebarPlatform>(() => {
+  if (navigator.platform.startsWith("Mac")) return "mac";
+  if (navigator.platform.startsWith("Linux")) return "linux";
+  return "windows";
+});
 </script>
 
 <template>
-  <div class="arrancador-shell">
-    <AppTitlebar :sidebar-hidden="sidebarHidden" @toggle-sidebar="sidebarHidden = !sidebarHidden">
-      <template #right>
-        <AppSpotlight v-model="search" />
-      </template>
-    </AppTitlebar>
+  <DesktopChrome
+    class="arrancador-shell"
+    title="Arrancador"
+    :platform="chromePlatform"
+    :titlebar-transparent="false"
+  >
+    <template #titlebar-leading>
+      <IconButton
+        v-if="sidebarHidden"
+        :title="sidebarHidden ? 'Показать сайдбар' : 'Скрыть сайдбар'"
+        @click="sidebarHidden = !sidebarHidden"
+      >
+        <PanelLeft :size="18" />
+      </IconButton>
+    </template>
 
-    <div class="arrancador-shell__body">
-      <AppSidebar :hidden="sidebarHidden" @update:hidden="(val) => (sidebarHidden = val)" />
+    <template #titlebar-trailing>
+      <AppSpotlight v-model="search" />
+    </template>
 
-      <div class="arrancador-content">
-        <router-view />
-      </div>
-    </div>
-  </div>
+    <template v-if="!sidebarHidden" #sidebar>
+      <AppSidebar :hidden="false" @update:hidden="(val) => (sidebarHidden = val)" />
+    </template>
+
+    <DesktopContentSurface padding-top="0" padding-inline="0" padding-bottom="0">
+      <router-view />
+    </DesktopContentSurface>
+  </DesktopChrome>
 </template>

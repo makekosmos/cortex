@@ -24,6 +24,9 @@ export interface ArrancadorGame {
   userNote: string | null;
   playStatus: string | null;
   exePath: string | null;
+  exeName: string | null;
+  savePath: string | null;
+  source: string | null;
   rawgId: number | null;
 }
 
@@ -49,6 +52,17 @@ function readBoolean(value: unknown): boolean {
   return value === true;
 }
 
+function readStringList(value: unknown): string | null {
+  if (typeof value === "string" && value.length > 0) return value;
+  if (Array.isArray(value)) {
+    const items = value.filter(
+      (item): item is string => typeof item === "string" && item.length > 0,
+    );
+    return items.length > 0 ? items.join(", ") : null;
+  }
+  return null;
+}
+
 function projectGame(record: ArkObjectRecord): ArrancadorGame {
   const props =
     record.propsJson && typeof record.propsJson === "object"
@@ -60,15 +74,18 @@ function projectGame(record: ArkObjectRecord): ArrancadorGame {
     coverImage: readString(props.cover_image),
     backgroundImage: readString(props.background_image),
     description: readString(props.description),
-    genres: readString(props.genres),
-    platforms: readString(props.platforms),
+    genres: readStringList(props.genres),
+    platforms: readStringList(props.platforms),
     released: readString(props.released),
     isFavorite: readBoolean(props.is_favorite),
-    totalPlaytime: readNumber(props.total_playtime),
+    totalPlaytime: readNumber(props.total_playtime_seconds) ?? readNumber(props.total_playtime),
     userRating: readNumber(props.user_rating),
     userNote: readString(props.user_note),
     playStatus: readString(props.play_status),
     exePath: readString(props.exe_path),
+    exeName: readString(props.exe_name),
+    savePath: readString(props.save_path),
+    source: readString(props.source),
     rawgId: readNumber(props.rawg_id),
   };
 }

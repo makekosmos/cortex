@@ -15,6 +15,18 @@ export interface ScanResult {
   errors: string[];
 }
 
+export interface AddManualGameParams {
+  name: string;
+  exePath: string;
+  savePaths?: string[];
+}
+
+export interface AddManualGameResult {
+  ok: boolean;
+  id?: string;
+  error?: string;
+}
+
 interface LaunchResultOk {
   ok: true;
   pid: number;
@@ -70,6 +82,7 @@ interface OkResult {
 
 interface ArrancadorApi {
   scan: () => Promise<ScanResult>;
+  addManual: (params: AddManualGameParams) => Promise<AddManualGameResult>;
   launch: (gameId: string) => Promise<LaunchResult>;
   rawg: {
     search: (query: string) => Promise<RawgSearchResult>;
@@ -78,7 +91,7 @@ interface ArrancadorApi {
   sqoba: {
     backup: (gameId: string) => Promise<SqobaBackup>;
     list: (gameId: string) => Promise<SqobaListResult>;
-    restore: (backupId: string) => Promise<SqobaRestoreResult>;
+    restore: (gameId: string, backupId: string) => Promise<SqobaRestoreResult>;
   };
   config: {
     getRawgKey: () => Promise<{ key: string | null }>;
