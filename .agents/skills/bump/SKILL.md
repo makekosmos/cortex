@@ -216,6 +216,24 @@ installer asset, содержать актуальные `version`, `path`, `fil
 hyphen-имя (`Kosmos-Setup-X.Y.Z.exe`), поэтому либо загружай asset с тем же
 именем, либо синхронно меняй `path/files[].url` на фактическое имя. Перед
 `gh release create` ещё раз проверь `latest.yml` глазами/командой.
+
+После ручного `gh release create/upload` обязательно сверяй фактические имена
+assets через:
+
+```powershell
+gh release view v<version> -R makekosmos/desktop --json assets
+```
+
+GitHub CLI может нормализовать пробелы в имени файла в точки
+(`Kosmos Setup X.Y.Z.exe` → `Kosmos.Setup.X.Y.Z.exe`). Если это случилось,
+пересобери `latest.yml` так, чтобы `path` и `files[].url` совпадали с именем
+из `gh release view`, перезалей его через `gh release upload --clobber`, подожди
+propagation GitHub CDN и только потом считай релиз готовым. Финальная проверка:
+
+```powershell
+bun run --cwd platform/desktop verify:channel -- --platform win --version <version>
+```
+
 :::
 
 ### 5a. Multi-target bump в одном запросе
