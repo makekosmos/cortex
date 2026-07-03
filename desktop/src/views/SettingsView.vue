@@ -549,7 +549,7 @@ onBeforeUnmount(() => {
     />
 
     <div class="settings-shell">
-      <SettingsSidebar v-if="!isMac" title="Настройки">
+      <SettingsSidebar v-if="!isMac" title="Настройки" background="var(--bg-app, #1d1d1f)">
         <div class="settings-sidebar-search">
           <SettingsSearchInput v-model="searchQuery" placeholder="Поиск" />
         </div>
