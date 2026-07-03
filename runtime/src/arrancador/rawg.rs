@@ -241,6 +241,11 @@ async fn apply_to_game_obj_with_base<R: ArkRequester>(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .unwrap_or_else(|| "game_obj".to_string());
+    if type_id_existing != "game_obj" {
+        return Err(RawgError::ArkHost(format!(
+            "RAWG metadata can only be applied to game_obj, got {type_id_existing}"
+        )));
+    }
     let content_existing = existing
         .get("contentJson")
         .cloned()

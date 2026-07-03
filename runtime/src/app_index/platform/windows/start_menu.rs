@@ -211,6 +211,10 @@ fn scan_dir(root: &Path, by_id: &mut HashMap<String, App>) {
 /// 2) `link_info().local_base_path_unicode()`
 /// 3) `working_dir()` + `relative_path()` (RELATIVE_PATH stringdata)
 ///    Затем — env var expansion.
+pub fn resolve_lnk_target_path(path: &Path) -> std::result::Result<Option<PathBuf>, String> {
+    Ok(parse_lnk(path)?.map(|target| canonicalize_target(&target)))
+}
+
 fn parse_lnk(path: &Path) -> std::result::Result<Option<String>, String> {
     let shell_link = lnk::ShellLink::open(path).map_err(|e| format!("{e:?}"))?;
 

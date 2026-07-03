@@ -134,7 +134,7 @@ pub fn backup_with_root(
 
     let game_dir = dest_root.join(game_id);
     std::fs::create_dir_all(&game_dir)?;
-    let dest_path = game_dir.join(format!("{}.zip", timestamp));
+    let dest_path = unique_backup_path(&game_dir, &timestamp);
 
     let file = std::fs::File::create(&dest_path)?;
     let mut zw = zip::ZipWriter::new(file);
@@ -181,6 +181,22 @@ pub fn backup_with_root(
         bytes,
         source_paths: sources,
     })
+}
+
+fn unique_backup_path(game_dir: &Path, timestamp: &str) -> PathBuf {
+    let first = game_dir.join(format!("{timestamp}.zip"));
+    if !first.exists() {
+        return first;
+    }
+
+    for index in 1..1000 {
+        let candidate = game_dir.join(format!("{timestamp}-{index}.zip"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+
+    game_dir.join(format!("{timestamp}-{}.zip", uuid::Uuid::new_v4()))
 }
 
 fn write_dir_recursive<W: Write + std::io::Seek>(
