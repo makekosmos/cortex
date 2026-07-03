@@ -223,7 +223,7 @@ function dismissFeedback(id: number): void {
   margin-top: 1px;
   border: 2px solid color-mix(in srgb, var(--foreground) 20%, transparent);
   border-top-color: var(--accent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   animation: command-feedback-spin 800ms linear infinite;
 }
 

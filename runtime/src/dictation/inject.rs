@@ -6,7 +6,7 @@
 //   2. clipboard.set_text(transcript)
 //   3. SetForegroundWindow(prev_hwnd) если есть HWND
 //   4. sleep 80ms — даём ОС вернуть focus в целевое окно
-//   5. enigo: Ctrl press → V click → Ctrl release
+//   5. terminal-aware paste shortcut (Ctrl+V normally, Shift+Insert for terminals)
 //   6. sleep 80ms — даём ОС прочитать буфер ПЕРЕД restore (иначе race:
 //      Windows может ещё не успеть paste'нуть → восстановим старый текст
 //      раньше времени → вставится старый)
@@ -33,6 +33,31 @@ const POST_PASTE_DELAY_MS: u64 = 80;
 /// Задержка после SetForegroundWindow перед симуляцией клавиш. Без неё
 /// `Ctrl+V` может уйти в pill window (фокус ещё не вернулся).
 const REFOCUS_DELAY_MS: u64 = 80;
+
+#[cfg(windows)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PasteShortcut {
+    CtrlV,
+    ShiftInsert,
+}
+
+#[cfg(windows)]
+fn paste_shortcut_for_window_class(class_name: &str) -> PasteShortcut {
+    let class = class_name.to_ascii_lowercase();
+    let terminal_classes = [
+        "cascadia_hosting_window_class",
+        "consolewindowclass",
+        "mintty",
+        "wezterm",
+        "alacritty",
+        "virtualconsoleclass",
+    ];
+    if terminal_classes.iter().any(|needle| class.contains(needle)) {
+        PasteShortcut::ShiftInsert
+    } else {
+        PasteShortcut::CtrlV
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum InjectError {
@@ -75,16 +100,38 @@ fn restore_foreground_window(raw: isize) {
 #[cfg(not(windows))]
 fn restore_foreground_window(_raw: isize) {}
 
-/// Симулирует Ctrl+V через Win32 SendInput. Используем VK_CONTROL + VK_V
+#[cfg(windows)]
+fn window_class_name(raw: isize) -> Option<String> {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::GetClassNameW;
+
+    let hwnd = HWND(raw as *mut _);
+    let mut buf = [0u16; 256];
+    let len = unsafe { GetClassNameW(hwnd, &mut buf) };
+    if len <= 0 {
+        return None;
+    }
+    Some(String::from_utf16_lossy(&buf[..len as usize]))
+}
+
+#[cfg(windows)]
+fn paste_shortcut_for_window(prev_hwnd: Option<isize>) -> PasteShortcut {
+    prev_hwnd
+        .and_then(window_class_name)
+        .map(|class_name| paste_shortcut_for_window_class(&class_name))
+        .unwrap_or(PasteShortcut::CtrlV)
+}
+
+/// Симулирует paste через Win32 SendInput. Используем VK_CONTROL + VK_V
 /// (0x56) — стандартный virtual-key канал. enigo путь через
 /// `Key::Unicode('v')` шлёт VK_PACKET (Unicode channel), на котором
 /// модификаторы (Ctrl) не работают как shortcut и сам enigo падал
 /// с `TryFromIntError` при попытке упаковать keystate в u32.
 #[cfg(windows)]
-fn send_ctrl_v() -> Result<(), InjectError> {
+fn send_paste_shortcut(shortcut: PasteShortcut) -> Result<(), InjectError> {
     use windows::Win32::UI::Input::KeyboardAndMouse::{
         SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP,
-        VIRTUAL_KEY, VK_CONTROL,
+        VIRTUAL_KEY, VK_CONTROL, VK_INSERT, VK_SHIFT,
     };
 
     const VK_V: u16 = 0x56;
@@ -109,11 +156,16 @@ fn send_ctrl_v() -> Result<(), InjectError> {
         }
     }
 
+    let (modifier, key) = match shortcut {
+        PasteShortcut::CtrlV => (VK_CONTROL.0, VK_V),
+        PasteShortcut::ShiftInsert => (VK_SHIFT.0, VK_INSERT.0),
+    };
+
     let inputs = [
-        make_key(VK_CONTROL.0, false),
-        make_key(VK_V, false),
-        make_key(VK_V, true),
-        make_key(VK_CONTROL.0, true),
+        make_key(modifier, false),
+        make_key(key, false),
+        make_key(key, true),
+        make_key(modifier, true),
     ];
 
     let cb = std::mem::size_of::<INPUT>() as i32;
@@ -127,15 +179,21 @@ fn send_ctrl_v() -> Result<(), InjectError> {
     Ok(())
 }
 
+#[cfg(windows)]
+fn send_paste(prev_hwnd: Option<isize>) -> Result<(), InjectError> {
+    // See postmortems.md 2026-07-03: terminals need Shift+Insert, not plain Ctrl+V.
+    send_paste_shortcut(paste_shortcut_for_window(prev_hwnd))
+}
+
 #[cfg(all(not(windows), not(target_os = "macos")))]
-fn send_ctrl_v() -> Result<(), InjectError> {
+fn send_paste(_prev_hwnd: Option<isize>) -> Result<(), InjectError> {
     // Phase 1 Windows-only. На non-Windows автоинжект не реализован — пользователь
     // получит транскрипт в clipboard и Ctrl+V руками.
     Ok(())
 }
 
 #[cfg(target_os = "macos")]
-fn send_ctrl_v() -> Result<(), InjectError> {
+fn send_paste(_prev_hwnd: Option<isize>) -> Result<(), InjectError> {
     let script = r#"tell application "System Events" to keystroke "v" using command down"#;
     let status = std::process::Command::new("/usr/bin/osascript")
         .args(["-e", script])
@@ -175,7 +233,7 @@ pub fn inject_blocking(
     }
     thread::sleep(Duration::from_millis(REFOCUS_DELAY_MS));
 
-    send_ctrl_v()?;
+    send_paste(prev_hwnd)?;
 
     thread::sleep(Duration::from_millis(POST_PASTE_DELAY_MS));
 
@@ -196,6 +254,20 @@ mod tests {
     fn capture_returns_some_or_none_without_panic() {
         // Не assert'им конкретное значение — зависит от среды (CI без UI = None).
         let _ = capture_foreground_window();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_terminal_uses_terminal_paste_shortcut() {
+        // Regression: 2026-07-03. Windows Terminal does not reliably paste on plain Ctrl+V.
+        assert_eq!(
+            paste_shortcut_for_window_class("CASCADIA_HOSTING_WINDOW_CLASS"),
+            PasteShortcut::ShiftInsert
+        );
+        assert_eq!(
+            paste_shortcut_for_window_class("Chrome_WidgetWin_1"),
+            PasteShortcut::CtrlV
+        );
     }
 
     // Реальный inject_blocking требует interactive UI session + active window

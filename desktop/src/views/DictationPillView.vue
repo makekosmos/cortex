@@ -1210,7 +1210,7 @@ const exposeStatusText = computed(() => statusText());
   width: 7px;
   height: 7px;
   flex: 0 0 auto;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   background: color-mix(in srgb, var(--foreground) 44%, transparent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--foreground) 8%, transparent);
 }

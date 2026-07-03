@@ -812,7 +812,7 @@ onMounted(() => {
 
 .model-score__bar {
   height: 2px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
@@ -910,7 +910,7 @@ onMounted(() => {
   width: 28px;
   height: 2px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   background: color-mix(in srgb, currentColor 18%, transparent);
 }
 
