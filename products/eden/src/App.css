@@ -4749,6 +4749,10 @@ span[data-wikilink]:hover {
   padding-top: 0;
 }
 
+.app-container .kosmos-desktop-chrome-settings {
+  --eden-chrome-titlebar-height: 41px;
+}
+
 .app-container .kosmos-desktop-chrome-settings > div {
   background: var(--bg-app);
 }
@@ -4764,8 +4768,8 @@ span[data-wikilink]:hover {
 
 .app-container .kosmos-settings-sidebar__title {
   box-sizing: border-box;
-  height: 44px;
-  min-height: 44px;
+  height: var(--eden-chrome-titlebar-height);
+  min-height: var(--eden-chrome-titlebar-height);
   align-items: center;
   border-bottom: 1px solid var(--border-color-strong);
   padding-top: 0 !important;
@@ -4775,8 +4779,8 @@ span[data-wikilink]:hover {
 .app-container .kosmos-desktop-chrome-settings__header {
   position: relative;
   box-sizing: border-box;
-  height: 44px;
-  min-height: 44px;
+  height: var(--eden-chrome-titlebar-height);
+  min-height: var(--eden-chrome-titlebar-height);
   align-items: center;
   border-bottom: 1px solid var(--border-color-strong);
   padding-top: 0 !important;

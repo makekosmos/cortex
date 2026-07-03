@@ -20,7 +20,7 @@
     "dev:extension": "node scripts/dev-extensions.mjs --only",
     "dev:extensions:only": "node scripts/dev-extensions.mjs --only",
     "dev:kepler": "node -e \"process.env.KEPLER_DEV='1';require('node:child_process').spawnSync('vite',['--configLoader','native'],{stdio:'inherit',shell:true,env:process.env});\"",
-    "dev:eden": "bun run build:backend:dev && bun run build:extension eden && node -e \"process.env.KEPLER_DEV_EXTENSIONS='eden';require('node:child_process').spawnSync('node',['scripts/dev.mjs'],{stdio:'inherit',shell:true,env:process.env});\"",
+    "dev:eden": "bun run build:backend:dev && bun run build:extension eden && node -e \"process.env.KEPLER_DEV_EXTENSIONS='eden';process.env.KOSMOS_SHELL_DEV_PORT='9912';const r=require('node:child_process').spawnSync(process.execPath,['scripts/dev.mjs'],{stdio:'inherit',env:process.env});process.exit(r.status ?? 1);\"",
     "dev": "bun run build:backend:dev && bun run build:extensions && node scripts/dev.mjs",
     "dev:no-build": "node scripts/dev.mjs",
     "build:js:shell": "tsc && vite build --configLoader native",
