@@ -2,12 +2,21 @@
 
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
-| Kosmos Desktop (win / mac) | 0.6.20 / 0.5.1 |
-| Eden                       | 0.5.0          |
+| Kosmos Desktop (win / mac) | 0.6.21 / 0.5.1 |
+| Eden                       | 0.5.1          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
-| Arrancador                 | 0.1.4          |
+| Arrancador                 | 0.1.5          |
 | Akasha                     | 0.1.2          |
+
+## 2026-07-03 — Dev port standardization + titlebar component extraction (Kosmos Desktop 0.6.20 -> 0.6.21, Eden 0.5.0 -> 0.5.1, Arrancador 0.1.4 -> 0.1.5)
+
+Patch-релиз унифицирует dev-порты расширений и выносит TitlebarButton в общий компонент `@kosmos/visuals`.
+
+- **Dev ports**: shell → 9912, eden → 9913, delphi → 9914, arrancador → 9915, akasha → 9916. Больше никаких случайных конфликтов с другими проектами на 5173/518x.
+- **TitlebarButton**: изолированный компонент с CSS-переменными (`--kosmos-titlebar-control-size`, `--kosmos-titlebar-control-radius`, `--kosmos-titlebar-control-icon-size`, `--kosmos-titlebar-control-gap`) для единообразных контролов в titlebar. Встроен в `TitlebarHistoryControls`.
+- **Settings titlebar**: DesktopChrome и SettingsSidebar используют `--kosmos-settings-titlebar-height` и `border-bottom` для точного совпадения с дизайном.
+- **Eden BubbleDiaryView**: улучшен layout, sidebar cleanup, добавлены component tests.
 
 ## 2026-07-03 — Eden bubble diary release (Kosmos Desktop 0.6.19 -> 0.6.20, Eden 0.4.3 -> 0.5.0)
 

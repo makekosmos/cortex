@@ -1,6 +1,6 @@
 {
   "name": "@kosmos/extension-eden",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "Eden (заметки + TipTap editor) — Vue extension для Kepler shell.",
   "type": "module",
