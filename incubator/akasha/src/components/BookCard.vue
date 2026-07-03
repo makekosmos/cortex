@@ -204,7 +204,7 @@ const coverInitials = computed(() =>
   height: 4px;
   margin-top: 14px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   background: var(--muted);
 }
 

@@ -8,9 +8,9 @@ import { userEvent } from "vitest/browser";
 import { render } from "vitest-browser-vue";
 import { defineComponent, shallowRef } from "vue";
 import EdenSidebar from "../../src/components/sidebar/EdenSidebar.vue";
-import { SYSTEM_TYPE_JOURNAL_ID, SYSTEM_TYPE_NOTE } from "../../src/lib/systemTypes";
+import { SYSTEM_TYPE_NOTE } from "../../src/lib/systemTypes";
 
-type EdenScreen = "notes" | "settings" | "type-collection";
+type EdenScreen = "notes" | "settings" | "type-collection" | "diary";
 
 function makeEntry(
   id: string,
@@ -51,13 +51,6 @@ const EdenSidebarFixture = defineComponent({
         `Начало текста заметки ${index + 1}. Второе предложение для превью.`,
       ),
     );
-    const journalEntry = makeEntry(
-      "entry-diary",
-      "Дневник",
-      SYSTEM_TYPE_JOURNAL_ID,
-      now + 1,
-      "Запись дневника",
-    );
     const currentEntry = shallowRef<Entry | null>(recentEntries[0]);
     const noteTypes = [SYSTEM_TYPE_NOTE];
 
@@ -93,8 +86,8 @@ const EdenSidebarFixture = defineComponent({
         createEntryCount.value += 1;
       },
       onOpenDiary() {
-        currentEntry.value = journalEntry;
-        activeScreen.value = "notes";
+        currentEntry.value = null;
+        activeScreen.value = "diary";
       },
       onToggleSearch() {
         toggleSearchCount.value += 1;
@@ -163,6 +156,7 @@ describe("EdenSidebar contract", () => {
     await expect.element(screen.getByTestId("widget-link-search")).toBeInTheDocument();
     await expect.element(screen.getByTestId("sidebar-header-settings")).toBeInTheDocument();
     await expect.element(screen.getByTestId("sidebar-open-objects")).toBeInTheDocument();
+    await expect.element(screen.getByTestId("sidebar-open-bubbles")).not.toBeInTheDocument();
     await expect.element(screen.getByTestId("recent-entry-entry-1")).toBeInTheDocument();
     await expect
       .element(screen.getByTestId("recent-entry-entry-1"))
@@ -183,7 +177,7 @@ describe("EdenSidebar contract", () => {
     await expect.element(screen.getByTestId("eden-sidebar-resize-handle")).toBeInTheDocument();
 
     await userEvent.click(screen.getByTestId("sidebar-open-diary"));
-    await expect.element(screen.getByTestId("screen")).toHaveTextContent("notes");
+    await expect.element(screen.getByTestId("screen")).toHaveTextContent("diary");
     await expect
       .element(screen.getByTestId("sidebar-open-diary"))
       .toHaveAttribute("data-active", "true");

@@ -21,6 +21,33 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-07-03 — Dictation sidecar returned repeated transcript with newline
+
+**Симптомы.** Длинная локальная диктовка иногда вставлялась дважды, причём второй дубль начинался с новой строки, будто в текст попал Enter.
+**Где жило.** `platform/runtime/src/dictation/local.rs::transcribe`, `platform/runtime/src/dictation/local.rs::clean_whisper_transcript`.
+**Root cause.** Cleanup от whisper.cpp дублей жил в direct `whisper-server`/`whisper-cli`/DLL paths, но клиент sidecar-протокола доверял `LocalSttTranscription.text` и возвращал его дальше без `clean_whisper_transcript`. Если sidecar binary был старее клиента или вернул raw segment text с `\n`, injector получал настоящий newline и вставлял его как Enter.
+**Fix.** `local::transcribe` теперь прогоняет sidecar response через общий `clean_whisper_transcript` перед возвратом в host; direct paths остаются как были.
+**Регрешн-защита.** `dictation::local::tests::transcribe_cleans_sidecar_transcript_before_returning` мокает sidecar response `text\ntext` и проверяет, что наружу выходит один cleaned transcript.
+**Prevention.** Любой transcript, пришедший через process/protocol boundary, должен очищаться на принимающей стороне тоже: нельзя считать sidecar той же версии и с теми же post-processing guarantees.
+
+## 2026-07-03 — Dictation autopaste used Ctrl+V in terminals
+
+**Симптомы.** Диктовка вставляла текст в обычные приложения, но не вставляла в терминал; transcript при этом успешно распознавался.
+**Где жило.** `platform/runtime/src/dictation/inject.rs::send_ctrl_v`, `platform/runtime/src/dictation/inject.rs::inject_blocking`.
+**Root cause.** AutoPaste всегда слал `Ctrl+V` через Win32 `SendInput`. Терминальные окна вроде Windows Terminal (`CASCADIA_HOSTING_WINDOW_CLASS`) не обязаны трактовать `Ctrl+V` как paste: у них стандартный paste shortcut — terminal-friendly `Shift+Insert` / `Ctrl+Shift+V`, поэтому `SendInput` мог успешно отправить клавиши, но терминал не вставлял clipboard.
+**Fix.** Windows injector теперь смотрит class name целевого HWND и для terminal windows (`CASCADIA_HOSTING_WINDOW_CLASS`, `ConsoleWindowClass`, mintty/WezTerm/Alacritty/ConEmu) шлёт `Shift+Insert`; остальные окна остаются на `Ctrl+V`.
+**Регрешн-защита.** `dictation::inject::tests::windows_terminal_uses_terminal_paste_shortcut` проверяет, что Windows Terminal выбирает `Shift+Insert`, а обычное Electron/Chromium окно остаётся на `Ctrl+V`.
+**Prevention.** OS input injection не должен считать один GUI shortcut универсальным: terminal targets требуют отдельного paste chord на уровне общего injector, а не специальных UI-веток.
+
+## 2026-07-03 — Dictation hotkey fell back to default after update
+
+**Симптомы.** После обновлений пользователь снова видел дефолтный хоткей диктовки и был вынужден заново назначать `Shift+PageUp`.
+**Где жило.** `platform/runtime/src/dictation/config.rs::load_from`, `platform/runtime/src/dictation/config.rs::backup_path`.
+**Root cause.** `load_from()` сразу возвращал `DictationConfig::default()`, если основной `dictation-config.json` отсутствовал. Backup-файл уже писался рядом, но использовался только когда primary существовал и не парсился. После update/перезаписи профиля любой сценарий “primary пропал, `.bak` жив” терял пользовательский `hotkey`.
+**Fix.** `load_from()` теперь при missing primary сначала читает `dictation-config.json.bak` strict, затем lenient, и только после этого возвращает default.
+**Регрешн-защита.** `dictation::config::tests::load_uses_backup_when_primary_is_missing` воспроизводит исчезнувший primary с живым backup и проверяет, что `hotkey` не откатывается к `Ctrl+Shift+;`.
+**Prevention.** Backup persistence должен покрывать не только corruption, но и missing-primary path: если рядом есть резервная копия user config, default допустим только после неудачного чтения обоих файлов.
+
 ## 2026-06-30 — Eden editor accepted failed save as persisted
 
 **Симптомы.** Если `saveEntry` возвращал `{ ok: false }` без exception, редактор мог считать текущий draft сохранённым. После reload/переоткрытия пользователь видел старую версию из ARK, а editor больше не пытался сохранить тот же draft без новых правок.

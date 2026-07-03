@@ -600,7 +600,7 @@ function formatOptionLabel(option: string) {
   min-height: 24px;
   padding: 0 12px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   background: var(--secondary);
   color: var(--secondary-foreground);
   font-size: 14px;

@@ -346,7 +346,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
   align-items: center;
   min-height: 24px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   background: var(--secondary);
   color: var(--secondary-foreground);
 }
@@ -441,7 +441,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
   align-items: center;
   justify-content: center;
   border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   background: transparent;
 }
 
@@ -454,7 +454,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
   content: "";
   width: 6px;
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   background: white;
 }
 

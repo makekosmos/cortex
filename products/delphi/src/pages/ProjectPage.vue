@@ -407,7 +407,7 @@ function handleArchive() {
   display: flex;
   align-items: center;
   gap: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   padding: 2px 10px;
   color: var(--status-success);
   background: color-mix(in srgb, var(--status-success) 15%, transparent);

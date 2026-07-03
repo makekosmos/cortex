@@ -470,7 +470,7 @@ onBeforeUnmount(() => {
 .kosmos-dd__option-dot {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   background: var(--kosmos-dd-option-color);
 }
 

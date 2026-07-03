@@ -160,14 +160,10 @@ const EdenCodeBlockTools = Extension.create({
             lastDoc = doc;
             const currentRequest = ++requestId;
 
-            window.setTimeout(() => {
-              void buildCodeBlockDecorations(doc).then((decorations) => {
-                if (currentRequest !== requestId) return;
-                editorView.dispatch(
-                  editorView.state.tr.setMeta(CODE_BLOCK_PLUGIN_KEY, decorations),
-                );
-              });
-            }, 80);
+            void buildCodeBlockDecorations(doc).then((decorations) => {
+              if (currentRequest !== requestId) return;
+              editorView.dispatch(editorView.state.tr.setMeta(CODE_BLOCK_PLUGIN_KEY, decorations));
+            });
           };
 
           scheduleHighlight();
@@ -476,6 +472,8 @@ const SLASH_MENU_GAP_PX = 16;
 const SLASH_MENU_MAX_HEIGHT_PX = 300;
 const DROPDOWN_MARGIN_PX = 4;
 const SLASH_MENU_TRIGGER_SIZE_PX = 1;
+const CODE_BLOCK_TAB_SIZE = 2;
+const CODE_BLOCK_INDENT = " ".repeat(CODE_BLOCK_TAB_SIZE);
 const CODE_BLOCK_PLUGIN_KEY = new PluginKey("eden-code-block-ui");
 const JS_LIKE_RE = /\b(?:const|let|var|function|return|import|export|async|await)\b|=>/;
 
@@ -842,6 +840,33 @@ function selectedSingleCodeBlock(
   return null;
 }
 
+function activeCodeBlock(view: EditorView): { text: string; start: number } | null {
+  const { selection } = view.state;
+  const $from = selection.$from;
+  const $to = selection.$to;
+  for (let depth = Math.min($from.depth, $to.depth); depth > 0; depth--) {
+    const node = $from.node(depth);
+    if (node.type.name !== "codeBlock" || $to.node(depth) !== node) continue;
+    return { text: node.textContent, start: $from.start(depth) };
+  }
+  return null;
+}
+
+function handleCodeBlockEnter(view: EditorView, event: KeyboardEvent): boolean {
+  const block = activeCodeBlock(view);
+  if (!block) return false;
+  event.preventDefault();
+
+  const { state } = view;
+  const { from, to } = state.selection;
+  const beforeCursor = block.text.slice(0, Math.max(0, from - block.start));
+  const currentLine = beforeCursor.slice(beforeCursor.lastIndexOf("\n") + 1);
+  const indent = /^\s*/.exec(currentLine)?.[0] ?? "";
+  const extraIndent = /(?:[{[(]|:)\s*$/.test(currentLine) ? CODE_BLOCK_INDENT : "";
+  view.dispatch(state.tr.insertText(`\n${indent}${extraIndent}`, from, to).scrollIntoView());
+  return true;
+}
+
 async function openSlashMenu(): Promise<void> {
   const activeEditor = editor.value;
   if (!activeEditor) return;
@@ -862,7 +887,12 @@ const editor = useEditor({
   content: readEntryTiptapDoc(props.entry.content_json),
   editable: !props.readerMode,
   extensions: [
-    StarterKit.configure({}),
+    StarterKit.configure({
+      codeBlock: {
+        enableTabIndentation: true,
+        tabSize: CODE_BLOCK_TAB_SIZE,
+      },
+    }),
     EdenRichTextEditing,
     EdenCodeBlockTools,
     EdenImage,
@@ -875,8 +905,10 @@ const editor = useEditor({
       class: "ProseMirror tiptap-prosemirror",
       spellcheck: "false",
     },
-    handleKeyDown(_view, event) {
-      if (event.key === "/" && !props.readerMode) {
+    handleKeyDown(view, event) {
+      const inCodeBlock = activeCodeBlock(view) !== null;
+      if (inCodeBlock && event.key === "Enter") return handleCodeBlockEnter(view, event);
+      if (event.key === "/" && !inCodeBlock && !props.readerMode) {
         void openSlashMenu();
       }
       if (event.key === "Escape") {

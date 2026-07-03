@@ -1552,7 +1552,9 @@ pub async fn transcribe(req: LocalRequest<'_>) -> Result<TranscriptionResult, Lo
 
     match send_sidecar_request(request).await {
         Ok(LocalSttResponse::Transcription(transcription)) => Ok(TranscriptionResult {
-            text: transcription.text,
+            // See postmortems.md 2026-07-03: sidecar output still crosses a version boundary.
+            text: clean_whisper_transcript(&transcription.text)
+                .ok_or(LocalError::EmptyTranscript)?,
             backend: transcription.backend,
         }),
         Ok(other) => Err(LocalError::SidecarUnavailable(format!(
@@ -1985,6 +1987,39 @@ mod tests {
         assert_eq!(result.text, "sidecar transcript");
         assert_eq!(recorded_test_sidecar_ops(), vec!["transcribe"]);
         install_test_sidecar_mock(None);
+    }
+
+    #[tokio::test]
+    async fn transcribe_cleans_sidecar_transcript_before_returning() {
+        let _guard = ENV_LOCAL_LOCK.lock().await;
+        env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
+        env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
+        let text = "This is a long dictation transcript that should only appear once.";
+        install_test_sidecar_mock(Some(TestSidecarMock {
+            transcript: Some(format!("{text}\n{text}")),
+            fail_error: None,
+            sidecar_unavailable_remaining: 0,
+            seen_ops: Vec::new(),
+        }));
+
+        let result = transcribe(LocalRequest {
+            wav_bytes: b"wav",
+            language: "ru",
+            prompt: "",
+            engine: DEFAULT_LOCAL_ENGINE,
+            model_id: Some("small"),
+            model_path: Some("Z:/missing/model.bin"),
+            command_path: Some("Z:/missing/whisper-cli.exe"),
+            idle_unload_ms: None,
+        })
+        .await;
+
+        install_test_sidecar_mock(None);
+        assert_eq!(
+            result.expect("sidecar transcript").text,
+            text,
+            "Regression: 2026-07-03. Sidecar raw text must still pass shared cleanup."
+        );
     }
 
     #[tokio::test]

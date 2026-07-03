@@ -31,6 +31,18 @@ Capture when at least one is true:
 
 Do not capture one-off facts, temporary state, or obvious repo knowledge already covered by `AGENTS.md`.
 
+## Promotion Rule
+
+Promote a lesson to a skill only when all three hold:
+
+- A passing check proved the path works.
+- A named failure pattern explains what it prevents.
+- At least one concrete dead-end was ruled out.
+
+If any part is missing, write a shortcut or memory note instead.
+
+Never copy secrets into skills or shortcuts. Record only where to get them, such as an env var name, secret manager entry, or owner/tool.
+
 ## Destination
 
 Choose the smallest durable place:

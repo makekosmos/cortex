@@ -10,11 +10,12 @@
 import { computed, nextTick, shallowRef, watch, type ComputedRef } from "vue";
 import type { useEdenStore } from "@/store/eden";
 import type { SpaceId } from "@/components/sidebar/types";
+import type { ActiveScreen } from "@/store/edenStoreHelpers";
 
 const MAX_NAVIGATION_HISTORY = 30;
 
 export interface EdenHistorySnapshot {
-  activeScreen: "notes" | "settings";
+  activeScreen: ActiveScreen;
   currentEntryId: string | null;
   activeSpace: SpaceId;
 }

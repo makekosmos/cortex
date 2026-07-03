@@ -28,7 +28,7 @@ pub enum TriggerMode {
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum InjectMode {
-    /// Default: clipboard сохраняется → текст → Ctrl+V → restore clipboard.
+    /// Default: clipboard сохраняется → текст → paste shortcut → restore clipboard.
     #[default]
     AutoPaste,
     /// Только записать в буфер обмена, пользователь сам жмёт Ctrl+V.
@@ -160,6 +160,22 @@ pub fn load() -> DictationConfig {
 
 pub fn load_from(path: &Path) -> DictationConfig {
     if matches!(std::fs::metadata(path), Err(e) if e.kind() == std::io::ErrorKind::NotFound) {
+        // See postmortems.md 2026-07-03: updates can leave primary missing while .bak survives.
+        let backup = backup_path(path);
+        if let Ok(cfg) = read_config_file(&backup) {
+            eprintln!(
+                "[dictation] WARN config missing for {}; restored backup",
+                path.display()
+            );
+            return cfg;
+        }
+        if let Some(cfg) = read_config_file_lenient(&backup) {
+            eprintln!(
+                "[dictation] WARN config missing for {}; recovered backup fields field-by-field",
+                path.display()
+            );
+            return cfg;
+        }
         return DictationConfig::default();
     }
     match read_config_file(path) {
@@ -487,6 +503,22 @@ mod tests {
         assert_eq!(loaded.provider, "local");
         assert_eq!(loaded.model, "whisper-large-v3-turbo");
         assert_eq!(loaded.inject_mode, InjectMode::ClipboardOnly);
+    }
+
+    #[test]
+    fn load_uses_backup_when_primary_is_missing() {
+        // Regression: 2026-07-03. Updates must not reset hotkey if primary config disappears.
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("cfg.json");
+        let mut cfg = DictationConfig::default();
+        cfg.hotkey = "Shift+PageUp".into();
+        cfg.provider = "local".into();
+        save_to(&path, &cfg).expect("save");
+        std::fs::remove_file(&path).expect("remove primary");
+
+        let loaded = load_from(&path);
+        assert_eq!(loaded.hotkey, "Shift+PageUp");
+        assert_eq!(loaded.provider, "local");
     }
 
     #[test]

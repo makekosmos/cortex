@@ -38,6 +38,7 @@
   --radius-card: 24px;
   --radius-button: 16px;
   --radius-input: 8px;
+  --radius-pill: 999px;
   --corner-shape: squircle;
 
   /* Easing-токены. -standard для основных interaction-переходов

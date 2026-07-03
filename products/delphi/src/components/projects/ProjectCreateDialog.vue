@@ -342,7 +342,7 @@ watch(
   width: 10px;
   height: 10px;
   flex-shrink: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   background: var(--project-color, var(--muted-foreground));
 }
 

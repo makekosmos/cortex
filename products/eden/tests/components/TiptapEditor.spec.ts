@@ -496,6 +496,34 @@ describe("TiptapEditor component", () => {
       .toContain("Rust");
     await expect.poll(() => shikiHighlightedSpanCount(), { timeout: 4000 }).toBeGreaterThan(0);
   });
+
+  test("code block handles editor keys without leaving the block", async () => {
+    const onSave = vi.fn(async () => null);
+
+    render(TiptapEditor, {
+      props: {
+        entry: markdownEntry("```ts\nif (ok) {\n  run()\n}\n```"),
+        onSave,
+        zenMode: false,
+      },
+    });
+
+    await focusBody();
+    const code = document.querySelector<HTMLElement>(".tiptap-code-block code");
+    if (!code) throw new Error("code block not found");
+
+    placeCursorAfterText(code, "if (ok) {");
+    await userEvent.keyboard("{Enter}");
+    expect(code.textContent).toContain("if (ok) {\n  ");
+
+    await userEvent.keyboard("{Tab}");
+    expect(code.textContent).toContain("if (ok) {\n    ");
+    expect(document.activeElement).toBe(tiptapBody());
+
+    await userEvent.keyboard("/");
+    expect(document.querySelector(".tiptap-slash-menu-anchor")).toBeNull();
+    expect(code.textContent).toContain("    /");
+  });
 });
 
 function shikiHighlightedSpanCount(): number {
@@ -538,4 +566,30 @@ function placeCursorBeforeText(root: HTMLElement, needle: string): void {
     textNode = walker.nextNode() as Text | null;
   }
   throw new Error(`Text "${needle}" not found`);
+}
+
+function placeCursorAfterText(root: HTMLElement, needle: string): void {
+  const offset = root.textContent?.indexOf(needle) ?? -1;
+  if (offset < 0) throw new Error(`Text "${needle}" not found`);
+  placeCursorAtTextOffset(root, offset + needle.length);
+}
+
+function placeCursorAtTextOffset(root: HTMLElement, offset: number): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let remaining = offset;
+  let textNode = walker.nextNode() as Text | null;
+  while (textNode) {
+    if (remaining <= textNode.data.length) {
+      const range = document.createRange();
+      range.setStart(textNode, remaining);
+      range.collapse(true);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      return;
+    }
+    remaining -= textNode.data.length;
+    textNode = walker.nextNode() as Text | null;
+  }
+  throw new Error(`Text offset ${offset} not found`);
 }

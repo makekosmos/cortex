@@ -315,7 +315,7 @@ const tableColumnsStyle = computed(() => ({
 }
 
 .type-objects-row-thumb--avatar {
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
 }
 
 .type-objects-title-copy {

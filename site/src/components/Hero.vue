@@ -71,7 +71,7 @@ const DOWNLOAD_URL = "https://github.com/yoso-industries/kepler-releases/release
   align-items: stretch;
   gap: 0;
   background: #ffffff;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   padding: 2px 18px 2px 2px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
@@ -87,7 +87,7 @@ const DOWNLOAD_URL = "https://github.com/yoso-industries/kepler-releases/release
   color: white;
   font-weight: 500;
   font-size: 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   cursor: pointer;
   border: none;
   transition:

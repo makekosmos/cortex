@@ -18,7 +18,9 @@ import type { SortMode } from "@/components/sidebar/types";
 import { createBlankEntry, createTodayJournalEntry, todayJournalTitle } from "./edenEntryFactory";
 import {
   getCollectionTargetTypeId,
+  readLastActiveScreen,
   waitForLoadingFrame,
+  writeLastActiveScreen,
   writeLastVisitedEntryId,
   type ActiveScreen,
   type EntrySaveCoordinator,
@@ -58,7 +60,7 @@ export const useEdenStore = defineStore("eden", () => {
   const isInitializing = ref(true);
   const isHydratingVault = ref(false);
 
-  const activeScreen = ref<ActiveScreen>("notes");
+  const activeScreen = ref<ActiveScreen>(readLastActiveScreen());
 
   const activeNoteTypeId = ref<string | null>(null);
 
@@ -73,11 +75,16 @@ export const useEdenStore = defineStore("eden", () => {
 
   const sortMode = ref<SortMode>("updated_at");
 
-  watch(activeScreen, (screen) => {
-    if (screen !== "notes") {
-      cancelPendingNavigation();
-    }
-  });
+  watch(
+    activeScreen,
+    (screen) => {
+      writeLastActiveScreen(screen);
+      if (screen !== "notes") {
+        cancelPendingNavigation();
+      }
+    },
+    { flush: "sync" },
+  );
 
   // Флаг: редактор содержит несохранённые изменения текущей заметки.
   // Выставляется в true когда updateEntryDraft получает черновик с реальными изменениями.
@@ -362,6 +369,14 @@ export const useEdenStore = defineStore("eden", () => {
       ) ?? null;
   }
 
+  function openDiary() {
+    cancelPendingNavigation();
+    activeScreen.value = "diary";
+    activeNoteTypeId.value = null;
+    activeSpace.value = "diary";
+    currentEntry.value = null;
+  }
+
   const { refreshData, initApp, selectFolder, selectVaultPath } = createEdenStoreDataActions({
     activeScreen,
     activeSpace,
@@ -451,6 +466,8 @@ export const useEdenStore = defineStore("eden", () => {
     navigateTo,
 
     openTypeCollection,
+
+    openDiary,
 
     saveNoteType,
 

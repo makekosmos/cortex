@@ -22,6 +22,7 @@ function cachedEntry(id: string): Entry {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   setActivePinia(createPinia());
 });
 
@@ -46,5 +47,14 @@ describe("Eden store navigation", () => {
     expect(eden.loadingEntryId).toBeNull();
     expect(eden.currentEntry?.id).toBe(entry.id);
     expect(eden.currentEntry?.content_json).toBe(entry.content_json);
+  });
+
+  test("restores diary screen after reload", () => {
+    const eden = useEdenStore();
+
+    eden.openDiary();
+    setActivePinia(createPinia());
+
+    expect(useEdenStore().activeScreen).toBe("diary");
   });
 });

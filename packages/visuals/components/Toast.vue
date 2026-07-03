@@ -64,7 +64,7 @@ const emit = defineEmits<{
   height: 16px;
   margin-top: 0;
   flex-shrink: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   border: 2px solid color-mix(in srgb, var(--foreground) 18%, transparent);
   border-top-color: color-mix(in srgb, var(--accent) 82%, var(--foreground));
   animation: kosmos-toast-spin 800ms linear infinite;

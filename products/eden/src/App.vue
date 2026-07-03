@@ -37,7 +37,14 @@
       @result-select="onResultSelect"
     />
 
-    <DesktopChrome appearance="settings" class="h-screen w-screen" :platform="chromePlatform">
+    <DesktopChrome
+      appearance="settings"
+      :class="[
+        'h-screen w-screen',
+        { 'eden-diary-calendar-open': diaryCalendarOpen && eden.activeScreen === 'diary' },
+      ]"
+      :platform="chromePlatform"
+    >
       <template #titlebar-leading>
         <div class="inline-flex items-center gap-2 [-webkit-app-region:no-drag]">
           <button
@@ -73,7 +80,7 @@
             @forward="navigateForward"
           />
           <button
-            v-if="!layout.isZenMode"
+            v-if="!layout.isZenMode && eden.activeScreen !== 'diary'"
             type="button"
             class="eden-titlebar-button inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in [-webkit-app-region:no-drag] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)"
             :title="preferences.state.readerModeEnabled ? 'Режим чтеца' : 'Режим писателя'"
@@ -113,6 +120,21 @@
         </Transition>
       </template>
 
+      <template #titlebar-trailing>
+        <button
+          v-if="!layout.isZenMode && eden.activeScreen === 'diary'"
+          type="button"
+          class="eden-titlebar-button inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in [-webkit-app-region:no-drag] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)"
+          title="Календарь"
+          aria-label="Календарь"
+          :aria-pressed="diaryCalendarOpen"
+          data-testid="titlebar-diary-calendar-toggle"
+          @click="diaryCalendarOpen = !diaryCalendarOpen"
+        >
+          <CalendarDays :size="16" />
+        </button>
+      </template>
+
       <template v-if="!layout.isZenMode" #sidebar>
         <EdenSidebar
           :hidden="layout.widgetSidebarHidden"
@@ -127,7 +149,7 @@
           :resizable="true"
           @toggle-search="layout.isSearchOpen = !layout.isSearchOpen"
           @create-entry="eden.createNewEntry()"
-          @open-diary="eden.openTodayJournal()"
+          @open-diary="eden.openDiary()"
           @open-entry="(id) => eden.navigateTo(id)"
           @entry-context-menu="onEntryContextMenu"
           @open-settings="openSettings"
@@ -141,6 +163,11 @@
         <div v-if="eden.isHydratingVault && !eden.currentEntry" class="app-main-loading">
           Загрузка данных...
         </div>
+        <BubbleDiaryView
+          v-else-if="eden.activeScreen === 'diary'"
+          :journal-entries="eden.entries"
+          :calendar-open="diaryCalendarOpen"
+        />
         <TypeObjectsView
           v-else-if="isCollectionViewActive && activeCollectionType"
           :note-type="activeCollectionType"
@@ -244,6 +271,7 @@ import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { usePreferences } from "@/composables/usePreferences";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
+import BubbleDiaryView from "@/components/bubbles/BubbleDiaryView.vue";
 import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
 const TiptapEditor = defineAsyncComponent(() => import("./editor-tiptap/TiptapEditor.vue"));
 import ImageObjectView from "@/components/objects/ImageObjectView.vue";
@@ -256,12 +284,13 @@ import {
 import { getResolvedNoteTypeField } from "@/lib/typedNotes";
 import { resolveObjectImageSrc } from "@/lib/objectImages";
 import { PhPottedPlant } from "@phosphor-icons/vue";
-import { BookOpen, PanelLeftOpen, Pencil, User } from "@lucide/vue";
+import { BookOpen, CalendarDays, PanelLeftOpen, Pencil, User } from "@lucide/vue";
 import "@/App.css";
 
 const eden = useEdenStore();
 const layout = useLayoutStore();
 const preferences = usePreferences();
+const diaryCalendarOpen = ref(false);
 
 function mountedEditorKind(): "tiptap" | "spaces" | "other" {
   if (document.querySelector(".tiptap-editor-host")) return "tiptap";
@@ -516,7 +545,8 @@ watch(
 
 watch(
   () => eden.activeScreen,
-  () => {
+  (activeScreen) => {
+    if (activeScreen !== "diary") diaryCalendarOpen.value = false;
     syncWindowMaximizeAvailability();
   },
 );

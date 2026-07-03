@@ -212,7 +212,7 @@ import {
 } from "@/lib/systemTypes";
 import RecentSidebarItem from "./RecentSidebarItem.vue";
 
-type EdenScreen = "notes" | "settings" | "type-collection";
+type EdenScreen = "notes" | "settings" | "type-collection" | "diary";
 
 interface SidebarActionItem {
   id: string;
@@ -518,22 +518,30 @@ onMounted(() => {
   void nextTick(syncRecentViewport);
 });
 
+const showsPrimaryNavigation = computed(
+  () =>
+    props.activeScreen === "notes" ||
+    props.activeScreen === "type-collection" ||
+    props.activeScreen === "diary",
+);
+
 const diaryLauncherItem = computed<SidebarActionItem | null>(() => {
-  if (props.activeScreen !== "notes" && props.activeScreen !== "type-collection") return null;
+  if (!showsPrimaryNavigation.value) return null;
 
   return {
     id: "diary",
     icon: PhBookOpen,
     label: "Дневник",
     active:
-      props.activeScreen === "notes" && props.currentEntry?.type_id === SYSTEM_TYPE_JOURNAL_ID,
+      props.activeScreen === "diary" ||
+      (props.activeScreen === "notes" && props.currentEntry?.type_id === SYSTEM_TYPE_JOURNAL_ID),
     onClick: () => emit("openDiary"),
     testId: "sidebar-open-diary",
   };
 });
 
 const objectTypesLauncherItem = computed<SidebarActionItem | null>(() => {
-  if (props.activeScreen !== "notes" && props.activeScreen !== "type-collection") return null;
+  if (!showsPrimaryNavigation.value) return null;
 
   return {
     id: "objects",
@@ -677,7 +685,7 @@ watch(
 );
 
 const sidebarGroups = computed<SidebarGroup[]>(() => {
-  if (props.activeScreen === "notes" || props.activeScreen === "type-collection") {
+  if (showsPrimaryNavigation.value) {
     return sortedRecentEntries.value.length > 0 ? [{ id: "recent", label: "Недавние" }] : [];
   }
 
@@ -797,7 +805,7 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
 .eden-sidebar-resize-handle__line {
   width: 4px;
   height: 32px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   background: color-mix(in srgb, var(--foreground) 22%, transparent);
   opacity: 0;
   transition:

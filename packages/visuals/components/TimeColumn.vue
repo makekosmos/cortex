@@ -93,7 +93,7 @@ watch(
 }
 .kosmos-timecol::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--foreground) 18%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   border: 1.5px solid transparent;
   background-clip: padding-box;
 }

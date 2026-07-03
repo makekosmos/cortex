@@ -357,7 +357,7 @@ function handleObjectTypeChange(value: string | number) {
   min-height: 24px;
   padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   background: var(--secondary);
   color: var(--secondary-foreground);
   font-size: 11px;
@@ -415,13 +415,13 @@ function handleObjectTypeChange(value: string | number) {
   justify-content: center;
   width: 128px;
   min-height: 128px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   background: var(--typed-object-header-avatar-bg);
 }
 
 .typed-object-header.is-person .typed-object-header__cover {
   width: 128px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   pointer-events: none;
 }
 
@@ -429,7 +429,7 @@ function handleObjectTypeChange(value: string | number) {
 .typed-object-header__avatar-picker {
   width: 128px;
   aspect-ratio: 1 / 1;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
 }
 
 .typed-object-header__avatar-placeholder {
@@ -453,7 +453,7 @@ function handleObjectTypeChange(value: string | number) {
   display: grid;
   place-items: center;
   padding: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   background: var(--typed-object-header-avatar-bg);
   color: color-mix(in srgb, var(--foreground) 42%, transparent);
   font-size: 30px;
