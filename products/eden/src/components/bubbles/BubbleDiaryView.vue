@@ -4,6 +4,8 @@ import type { JSONContent } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
+import { useVirtualizer } from "@tanstack/vue-virtual";
+import type { VirtualItem } from "@tanstack/vue-virtual";
 import BubbleDiaryCalendarSidebar from "./BubbleDiaryCalendarSidebar.vue";
 import BubbleTimelineItem from "./BubbleTimelineItem.vue";
 import {
@@ -32,12 +34,28 @@ const emit = defineEmits<{
 const draftPlainText = ref("");
 const localBubbles = ref<BubbleTimelineNode[]>([]);
 const journalImported = ref(false);
-const contentRef = ref<HTMLElement | null>(null);
+const timelineRef = ref<HTMLElement | null>(null);
 const composerHeightPx = ref(78);
 let journalCleanupRunning = false;
 
 const draftPreview = computed(() => parseBubbleDraft(draftPlainText.value));
 const canSubmitDraft = computed(() => draftPreview.value.text.length > 0);
+const rowVirtualizer = useVirtualizer<HTMLElement, HTMLElement>(
+  computed(() => ({
+    count: localBubbles.value.length,
+    getScrollElement: () => timelineRef.value,
+    estimateSize: () => 64,
+    overscan: 8,
+    getItemKey: (index) => localBubbles.value[index]?.id ?? index,
+  })),
+);
+const virtualRows = computed<Array<{ row: VirtualItem; node: BubbleTimelineNode }>>(() =>
+  rowVirtualizer.value.getVirtualItems().flatMap((row) => {
+    const node = localBubbles.value[row.index];
+    return node ? [{ row, node }] : [];
+  }),
+);
+const virtualListHeight = computed(() => `${rowVirtualizer.value.getTotalSize()}px`);
 
 const composerEditor = useEditor({
   content: "",
@@ -139,10 +157,13 @@ function updateBubbleKind(id: string, kind: BubbleKind): void {
 }
 
 function scrollToDate(date: string): void {
-  const target = [
-    ...(contentRef.value?.querySelectorAll<HTMLElement>("[data-bubble-date]") ?? []),
-  ].find((element) => element.dataset.bubbleDate === date);
-  target?.scrollIntoView({ block: "center", behavior: "smooth" });
+  const index = localBubbles.value.findIndex((bubble) => bubble.date === date);
+  if (index < 0) return;
+  rowVirtualizer.value.scrollToIndex(index, { align: "center", behavior: "smooth" });
+}
+
+function measureVirtualRow(element: Element | null): void {
+  if (element instanceof HTMLElement) rowVirtualizer.value.measureElement(element);
 }
 
 function readLocalBubbles(): BubbleTimelineNode[] {
@@ -178,17 +199,13 @@ function readLocalBubbleState(): {
 async function refreshLocalBubbles(): Promise<void> {
   const state = readLocalBubbleState();
   const migration = await readJournalMigration();
-  const journalBubbles = state.journalImported ? [] : migration.bubbles;
-  const nextBubbles = mergeBubbles(state.bubbles, journalBubbles);
+  const nextBubbles = mergeBubbles(state.bubbles, migration.bubbles);
 
   journalImported.value = state.journalImported;
   localBubbles.value = nextBubbles;
 
   const deletableEntryIds = migration.entries
-    .filter(
-      ({ bubbles }) =>
-        bubbles.length > 0 && bubbles.every((bubble) => hasBubble(nextBubbles, bubble.id)),
-    )
+    .filter(({ bubbles }) => bubbles.every((bubble) => hasBubble(nextBubbles, bubble.id)))
     .map(({ entry }) => entry.id);
   if (deletableEntryIds.length > 0) {
     await deleteImportedJournalEntries(deletableEntryIds);
@@ -249,11 +266,17 @@ function mergeBubbles(
   for (const bubble of normalizeLocalBubbles([...local, ...journal])) {
     if (!byId.has(bubble.id)) byId.set(bubble.id, bubble);
   }
-  return [...byId.values()];
+  return [...byId.values()].sort((left, right) => bubbleSortValue(right) - bubbleSortValue(left));
 }
 
 function hasBubble(bubbles: BubbleTimelineNode[], id: string): boolean {
   return bubbles.some((bubble) => bubble.id === id);
+}
+
+function bubbleSortValue(bubble: BubbleTimelineNode): number {
+  if (typeof bubble.sortKey === "number" && Number.isFinite(bubble.sortKey)) return bubble.sortKey;
+  const parsed = Date.parse(bubble.date ?? bubble.time);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 async function deleteImportedJournalEntries(entryIds: string[]): Promise<void> {
@@ -285,7 +308,7 @@ async function deleteImportedJournalEntries(entryIds: string[]): Promise<void> {
 
 <template>
   <section class="bubble-diary-view" data-testid="diary-view" aria-label="Дневник">
-    <div ref="contentRef" class="bubble-diary-view__content kosmos-scroll">
+    <div class="bubble-diary-view__content">
       <form
         class="bubble-composer"
         :style="{ minHeight: `${composerHeightPx}px` }"
@@ -313,15 +336,28 @@ async function deleteImportedJournalEntries(entryIds: string[]): Promise<void> {
         </div>
       </form>
 
-      <section class="bubble-timeline" aria-label="Лента дневника">
-        <BubbleTimelineItem
-          v-for="node in localBubbles"
-          :key="node.id"
-          :node="node"
-          @update="updateLocalBubble"
-          @remove="deleteLocalBubble"
-          @kind-change="updateBubbleKind"
-        />
+      <section ref="timelineRef" class="bubble-timeline kosmos-scroll" aria-label="Лента дневника">
+        <div
+          v-if="localBubbles.length > 0"
+          class="bubble-timeline__virtual-spacer"
+          :style="{ height: virtualListHeight }"
+        >
+          <div
+            v-for="{ row, node } in virtualRows"
+            :key="row.key"
+            :ref="measureVirtualRow"
+            class="bubble-timeline__virtual-row"
+            :data-index="row.index"
+            :style="{ transform: `translateY(${row.start}px)` }"
+          >
+            <BubbleTimelineItem
+              :node="node"
+              @update="updateLocalBubble"
+              @remove="deleteLocalBubble"
+              @kind-change="updateBubbleKind"
+            />
+          </div>
+        </div>
         <div v-if="localBubbles.length === 0" class="bubble-timeline__empty">Пока нет записей</div>
       </section>
     </div>
@@ -353,18 +389,20 @@ async function deleteImportedJournalEntries(entryIds: string[]): Promise<void> {
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  overflow: auto;
+  gap: 18px;
+  overflow: hidden;
+  padding: 10px 16px 0;
 }
 
 .bubble-timeline {
   display: flex;
-  width: min(880px, calc(100% - 2rem));
+  width: 100%;
   min-width: 0;
-  flex: 1 0 auto;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 0;
-  margin: 0 auto;
-  padding: 18px 0 96px;
+  overflow: auto;
+  padding: 0 0 96px;
 }
 
 .bubble-timeline__empty {
@@ -376,6 +414,20 @@ async function deleteImportedJournalEntries(entryIds: string[]): Promise<void> {
   text-align: center;
 }
 
+.bubble-timeline__virtual-spacer {
+  position: relative;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.bubble-timeline__virtual-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  will-change: transform;
+}
+
 .bubble-composer {
   position: sticky;
   top: 0;
@@ -384,9 +436,9 @@ async function deleteImportedJournalEntries(entryIds: string[]): Promise<void> {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 12px;
-  width: min(880px, calc(100% - 2rem));
+  width: 100%;
   min-height: 55px;
-  margin: 10px auto 0;
+  margin: 0;
   border: 1px solid var(--border-color-strong);
   border-radius: var(--radius-lg, 12px);
   background: var(--bg-elevated);
@@ -473,22 +525,19 @@ async function deleteImportedJournalEntries(entryIds: string[]): Promise<void> {
   justify-content: center;
   border: 0;
   border-radius: 4px 4px 8px;
-  background: var(--accent);
-  color: var(--accent-foreground, var(--background));
+  background: #fff;
+  color: var(--background);
   padding: 0 18px;
   font-size: 0.84rem;
   font-weight: 650;
   line-height: 28px;
   cursor: default;
   user-select: none;
-  transition:
-    background-color 120ms ease,
-    opacity 120ms ease,
-    transform 120ms ease;
+  transition: transform 120ms ease;
 }
 
 .bubble-composer__submit:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 88%, var(--foreground));
+  background: #fff;
 }
 
 .bubble-composer__submit:active:not(:disabled) {
@@ -496,17 +545,17 @@ async function deleteImportedJournalEntries(entryIds: string[]): Promise<void> {
 }
 
 .bubble-composer__submit:disabled {
-  opacity: 0.45;
+  background: color-mix(in srgb, var(--foreground) 16%, transparent);
+  color: color-mix(in srgb, var(--foreground) 42%, transparent);
 }
 
 @media (max-width: 520px) {
   .bubble-composer {
-    width: calc(100% - 1.5rem);
+    width: 100%;
   }
 
   .bubble-timeline {
-    width: calc(100% - 1.5rem);
-    padding-top: 14px;
+    width: 100%;
   }
 }
 </style>

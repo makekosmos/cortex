@@ -2,12 +2,25 @@
 
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
-| Kosmos Desktop (win / mac) | 0.6.21 / 0.5.1 |
-| Eden                       | 0.5.1          |
+| Kosmos Desktop (win / mac) | 0.6.22 / 0.5.1 |
+| Eden                       | 0.5.2          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
 | Arrancador                 | 0.1.5          |
 | Akasha                     | 0.1.2          |
+
+## 2026-07-03 — Diary virtualization + shared chrome polish (Kosmos Desktop 0.6.21 -> 0.6.22, Eden 0.5.1 -> 0.5.2)
+
+Patch-релиз закрывает хвосты после первого bubble diary release: дневник больше не пытается держать всю ленту в DOM, а общие chrome/sidebar controls вынесены в `@kosmos/visuals` так, чтобы Eden и Settings совпадали по сетке.
+
+- **Bubble diary virtualization**: `BubbleDiaryView` использует `@tanstack/vue-virtual`, поэтому длинная лента дневника рендерит только видимые строки. Ввод остаётся sticky-компонентом сверху, а список скроллится отдельно.
+- **Diary cleanup**: новые записи тримятся жёстче, двойные пустые строки схлопываются, standalone dated diary notes скрываются из обычного списка заметок после миграции в bubble diary, а rail-lines у несвязанных мыслей убраны.
+- **Shared chrome**: `TitlebarButton`, `SettingsSidebar`, `settings-shell.css` и titlebar tokens теперь задают одинаковые размеры, hover, border-bottom и safe-area поведение для Eden, Kosmos Settings и extension chrome.
+- **Eden sidebar grid**: main actions получают отдельный inset, а список страниц/recent items выровнен по ширине sidebar без лишнего внешнего gutter.
+
+Checks: `bun run --cwd platform/desktop typecheck`, `bun run --cwd platform/desktop build:extensions`,
+`bun run --cwd platform/desktop build:extension eden`, `bun test products/eden/tests/bubbleDiaryModel.test.ts`,
+`git diff --check`, visual verify for settings titlebar/sidebar geometry.
 
 ## 2026-07-03 — Dev port standardization + titlebar component extraction (Kosmos Desktop 0.6.20 -> 0.6.21, Eden 0.5.0 -> 0.5.1, Arrancador 0.1.4 -> 0.1.5)
 

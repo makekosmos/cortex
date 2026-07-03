@@ -71,11 +71,28 @@
 /* === Header: navigation + chrome controls === */
 
 .settings-shell .content-header {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 36px;
-  padding: 8px 140px 4px 10px;
+  height: calc(
+    env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kosmos-settings-titlebar-height))
+  );
+  min-height: calc(
+    env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kosmos-settings-titlebar-height))
+  );
+  border-bottom: 1px solid var(--border-color-strong);
+  background: var(--bg-app, #1d1d1f);
+  padding-top: env(titlebar-area-y, 0px);
+  padding-right: max(
+    140px,
+    calc(
+      100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) +
+        var(--kosmos-titlebar-inline-padding, 16px)
+    )
+  );
+  padding-bottom: 0;
+  padding-left: max(10px, calc(env(titlebar-area-x, 0px) + 10px));
   -webkit-app-region: drag;
   gap: 16px;
 }
@@ -90,16 +107,24 @@
 
 .settings-shell .chrome-control {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
+  width: var(--kosmos-titlebar-control-size);
+  min-width: var(--kosmos-titlebar-control-size);
+  height: var(--kosmos-titlebar-control-size);
+  min-height: var(--kosmos-titlebar-control-size);
+  flex: 0 0 var(--kosmos-titlebar-control-size);
   align-items: center;
   justify-content: center;
   padding: 0;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--kosmos-titlebar-control-radius);
   background: transparent;
   color: color-mix(in srgb, var(--foreground) 72%, transparent);
   -webkit-app-region: no-drag;
+}
+
+.settings-shell .chrome-control > svg {
+  width: var(--kosmos-titlebar-control-icon-size);
+  height: var(--kosmos-titlebar-control-icon-size);
 }
 
 .settings-shell .chrome-control:hover:not(:disabled) {

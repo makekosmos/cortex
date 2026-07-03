@@ -1,7 +1,7 @@
 {
   "id": "eden",
   "name": "Eden",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Заметки, дневник, мысли — TipTap editor + ARK objects",
   "keplerApiVersion": "^1.1.0",
   "kind": "vue",

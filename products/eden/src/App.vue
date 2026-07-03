@@ -46,7 +46,7 @@
       :platform="chromePlatform"
     >
       <template #titlebar-leading>
-        <div class="inline-flex items-center gap-2 [-webkit-app-region:no-drag]">
+        <div class="inline-flex items-center gap-2">
           <TitlebarButton
             v-if="layout.isZenMode"
             title="Выйти из фокуса"

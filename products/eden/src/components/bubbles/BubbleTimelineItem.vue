@@ -33,7 +33,6 @@
           />
         </template>
       </Dropdown>
-      <span class="bubble-timeline-item__line" aria-hidden="true" />
     </div>
     <div class="bubble-timeline-item__content">
       <section class="bubble-card" :aria-label="`Запись ${node.time}`">
@@ -248,20 +247,6 @@ function bubbleKindColor(kind: BubbleKind): string {
   flex: 0 0 0.875rem;
   border-radius: var(--radius-pill, 999px);
   background: var(--bubble-kind-color);
-}
-
-.bubble-timeline-item__line {
-  width: 2px;
-  flex: 1 0 0;
-  min-height: 1.3rem;
-  margin-top: 0.2rem;
-  background: color-mix(in srgb, var(--bubble-source-accent) 50%, var(--border));
-  opacity: 0.72;
-  transition: opacity 120ms ease;
-}
-
-.bubble-timeline-item:last-child .bubble-timeline-item__line {
-  opacity: 0;
 }
 
 .bubble-timeline-item__content {

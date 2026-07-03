@@ -2,6 +2,7 @@ import { shouldIncludeTypeInEdenListForLiveUpdate } from "../store/liveListFilte
 import type { NoteType } from "@/lib/typedNotes";
 import { validateHeaderProps } from "@/lib/typedNoteHeaderProps";
 import { SYSTEM_TYPE_COLLECTION_ID } from "@/lib/systemTypes";
+import { SYSTEM_TYPE_JOURNAL_ID, SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypeDefinitions";
 import {
   DEFAULT_ARK_TYPE_ID,
   arkTimestampToMillis,
@@ -20,6 +21,8 @@ import {
 import { createNoteTypeApi } from "./kepler-note-type-api";
 
 type ArkRequest = <T = unknown>(operation: string, params?: Record<string, unknown>) => Promise<T>;
+
+const LEGACY_JOURNAL_TITLE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function ensureList<T>(value: unknown): T[] {
   if (Array.isArray(value)) return value as T[];
@@ -255,6 +258,7 @@ export function createEntryApi(
 
       return objects
         .filter((o) => !o.deletedAt)
+        .filter((o) => !isLegacyDatedJournalObject(o))
         .filter(shouldIncludeObjectInEdenList)
         .map((o) => mapArkObjectSummaryToEntry(o, [], undefined))
         .sort((a, b) => b.updated_at - a.updated_at);
@@ -404,4 +408,11 @@ export function createEntryApi(
       }
     },
   };
+}
+
+function isLegacyDatedJournalObject(object: Pick<ArkObjectSummaryRecord, "typeId" | "title">) {
+  return (
+    (object.typeId === SYSTEM_TYPE_JOURNAL_ID || object.typeId === SYSTEM_TYPE_NOTE_ID) &&
+    LEGACY_JOURNAL_TITLE_PATTERN.test(object.title.trim())
+  );
 }

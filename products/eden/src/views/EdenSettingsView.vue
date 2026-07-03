@@ -3,7 +3,7 @@
     <ToastHost />
 
     <div class="settings-shell">
-      <SettingsSidebar title="Настройки">
+      <SettingsSidebar title="Настройки" background="var(--bg-app, #1d1d1f)">
         <div class="settings-sidebar-search">
           <SettingsSearchInput v-model="searchQuery" placeholder="Поиск" />
         </div>

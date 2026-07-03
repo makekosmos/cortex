@@ -725,7 +725,6 @@ const sidebarGroups = computed<SidebarGroup[]>(() => {
   flex: 0 0 auto;
   flex-direction: column;
   gap: 8px;
-  padding: 0 8px;
 }
 
 .eden-sidebar-group--recent {

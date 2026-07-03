@@ -317,7 +317,7 @@
 }
 
 .kosmos-titlebar-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  background-color: color-mix(in srgb, var(--foreground) 12%, transparent);
   color: var(--foreground);
 }
 

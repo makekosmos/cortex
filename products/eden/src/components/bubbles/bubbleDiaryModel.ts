@@ -8,6 +8,7 @@ export interface BubbleTimelineNode {
   id: string;
   date?: string;
   time: string;
+  sortKey?: number;
   text: string;
   contentJson?: JSONContent;
   tags: string[];
@@ -39,19 +40,27 @@ export function parseBubbleDraft(input: string): {
   tags: string[];
 } {
   const tags: string[] = [];
-  const text = input
-    .replace(TAG_PATTERN, (match) => {
+  const text = normalizeDraftText(
+    input.replace(/\r\n?/g, "\n").replace(TAG_PATTERN, (match) => {
       const tag = match.slice(1).trim().toLowerCase();
       if (tag) tags.push(tag);
       return " ";
-    })
-    .replace(/\s+/g, " ")
-    .trim();
+    }),
+  );
 
   return {
     text,
     tags: [...new Set(tags)],
   };
+}
+
+function normalizeDraftText(input: string): string {
+  return input
+    .split("\n")
+    .map((line) => line.replace(/[^\S\n]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n")
+    .trim();
 }
 
 export function plainTextToTiptapDoc(text: string): JSONContent {
@@ -79,6 +88,7 @@ export function createDraftBubble(
     id: `draft-${now.getTime()}`,
     date: formatBubbleDateKey(now),
     time: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
+    sortKey: now.getTime(),
     text: draft.text,
     contentJson: stripTagsFromTiptapDoc(contentJson),
     tags: draft.tags,
@@ -90,6 +100,7 @@ export function createJournalBubblesFromEntry(entry: JournalEntryLike): BubbleTi
   if (!isLegacyDatedJournalEntry(entry)) return [];
 
   const date = journalDate(entry);
+  const baseSortKey = Date.parse(`${date}T00:00:00.000Z`) || entry.created_at || entry.updated_at;
   const doc = readEntryTiptapDoc(entry.content_json);
   return (doc.content ?? []).flatMap((block, index) => {
     const contentJson = docFromBlock(block);
@@ -98,6 +109,7 @@ export function createJournalBubblesFromEntry(entry: JournalEntryLike): BubbleTi
       id: `journal-${entry.id}-${index}`,
       date,
       time: date,
+      sortKey: baseSortKey - index,
       plainText: text,
     });
     return bubble ? [bubble] : [];
@@ -158,6 +170,7 @@ export function normalizeLocalBubbles(value: unknown): BubbleTimelineNode[] {
         id: record.id,
         date: normalizeBubbleDateKey(record.date, record.time),
         time: record.time,
+        sortKey: normalizeBubbleSortKey(record.sortKey, record.date, record.time, record.id),
         text: record.text,
         contentJson: normalizeTiptapDoc(record.contentJson, record.text),
         tags: record.tags.filter((tag): tag is string => typeof tag === "string"),
@@ -181,7 +194,7 @@ export function formatBubbleDateKey(date: Date): string {
 
 function createBubbleFromContent(
   contentJson: JSONContent,
-  opts: { id: string; date?: string; time: string; plainText: string },
+  opts: { id: string; date?: string; time: string; sortKey?: number; plainText: string },
 ): BubbleTimelineNode | null {
   const draft = parseBubbleDraft(opts.plainText);
   if (!draft.text) return null;
@@ -190,6 +203,7 @@ function createBubbleFromContent(
     id: opts.id,
     date: normalizeBubbleDateKey(opts.date, opts.time),
     time: opts.time,
+    sortKey: opts.sortKey,
     text: draft.text,
     contentJson: stripTagsFromTiptapDoc(contentJson),
     tags: draft.tags,
@@ -247,6 +261,22 @@ function normalizeBubbleDateKey(date: unknown, time: unknown): string | undefine
   return undefined;
 }
 
+function normalizeBubbleSortKey(
+  value: unknown,
+  date: unknown,
+  time: unknown,
+  id: unknown,
+): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const dateKey = normalizeBubbleDateKey(date, time);
+  if (!dateKey) return undefined;
+  const parsed = Date.parse(`${dateKey}T00:00:00.000Z`);
+  if (!Number.isFinite(parsed)) return undefined;
+  const journalBlockIndex =
+    typeof id === "string" ? Number(id.match(/^journal-.+-(\d+)$/)?.[1] ?? 0) : 0;
+  return parsed - (Number.isFinite(journalBlockIndex) ? journalBlockIndex : 0);
+}
+
 function stripTagsFromTiptapDoc(doc: JSONContent): JSONContent {
   return stripTagsFromTiptapNode(doc, false) ?? plainTextToTiptapDoc("");
 }
@@ -254,7 +284,9 @@ function stripTagsFromTiptapDoc(doc: JSONContent): JSONContent {
 function stripTagsFromTiptapNode(node: JSONContent, insideCodeBlock: boolean): JSONContent | null {
   const nextInsideCodeBlock = insideCodeBlock || node.type === "codeBlock";
   if (node.type === "text") {
-    const text = nextInsideCodeBlock ? node.text : node.text?.replace(TAG_PATTERN, " ");
+    const text = nextInsideCodeBlock
+      ? node.text?.trimEnd()
+      : normalizeDraftText(node.text?.replace(TAG_PATTERN, " ") ?? "");
     if (!text?.trim()) return null;
     return { ...node, text };
   }
@@ -262,6 +294,8 @@ function stripTagsFromTiptapNode(node: JSONContent, insideCodeBlock: boolean): J
   const content = (node.content ?? [])
     .map((child) => stripTagsFromTiptapNode(child, nextInsideCodeBlock))
     .filter((child): child is JSONContent => Boolean(child));
+
+  if (node.type && BLOCK_NODE_TYPES.has(node.type) && content.length === 0) return null;
 
   return { ...node, content: content.length > 0 ? content : undefined };
 }
