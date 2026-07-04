@@ -52,7 +52,7 @@ describe("bubbleDiaryModel legacy journal migration", () => {
     ]);
   });
 
-  test("keeps legacy block order and drops empty blocks", () => {
+  test("sorts later legacy blocks above earlier blocks and drops empty blocks", () => {
     const legacy = entry({
       content_json: JSON.stringify(
         writeEntryTiptapDoc({
@@ -72,7 +72,7 @@ describe("bubbleDiaryModel legacy journal migration", () => {
     ]);
     expect(createJournalBubblesFromEntry(legacy).map((bubble) => bubble.sortKey)).toEqual([
       Date.UTC(2021, 0, 21),
-      Date.UTC(2021, 0, 21) - 2,
+      Date.UTC(2021, 0, 21) + 2,
     ]);
   });
 
@@ -84,6 +84,7 @@ describe("bubbleDiaryModel legacy journal migration", () => {
           id: "journal-entry-1-2",
           date: "2021-01-21",
           time: "2021-01-21",
+          sortKey: Date.UTC(2021, 0, 21) - 2,
           text: "вторая",
           tags: [],
           kind: "plain",
@@ -91,7 +92,7 @@ describe("bubbleDiaryModel legacy journal migration", () => {
       ],
     });
 
-    expect(decoded[0]?.sortKey).toBe(Date.UTC(2021, 0, 21) - 2);
+    expect(decoded[0]?.sortKey).toBe(Date.UTC(2021, 0, 21) + 2);
   });
 
   test("trims trailing spaces and collapses empty lines", () => {

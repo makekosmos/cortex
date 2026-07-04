@@ -1,13 +1,24 @@
-# Kosmos — статус проекта (2026-07-03)
+# Kosmos — статус проекта (2026-07-04)
 
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
-| Kosmos Desktop (win / mac) | 0.6.22 / 0.5.1 |
-| Eden                       | 0.5.2          |
+| Kosmos Desktop (win / mac) | 0.6.23 / 0.5.1 |
+| Eden                       | 0.5.3          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
 | Arrancador                 | 0.1.5          |
 | Akasha                     | 0.1.2          |
+
+## 2026-07-04 — Diary chronology repair + native titlebar inset (Kosmos Desktop 0.6.22 -> 0.6.23, Eden 0.5.2 -> 0.5.3)
+
+Patch-релиз закрывает два заметных хвоста bubble diary: старые импортированные дневниковые блоки теперь реально подчиняются новой хронологии, а legacy journal type больше не торчит как отдельный объект внутри самого дневника. В desktop host заодно выровнен titlebar inset под нативную Windows titlebar-area.
+
+- **Diary chronology repair**: `bubbleDiaryModel` больше не доверяет stale `sortKey` у уже импортированных `journal-*` bubbles. При чтении local state порядок пересчитывается из даты и индекса блока, поэтому записи вида «4 Помидор» снова поднимаются выше «3 Помидор» после перезагрузки.
+- **Journal type hidden from object UX**: `system-type-journal` исключён из Eden object collections, selector'ов типа и recent sidebar. Старый системный тип остаётся только как совместимость для legacy import / open-today-journal, но не создаёт второй «дневник внутри дневника».
+- **Desktop titlebar safe-area**: `DesktopChrome` использует `env(titlebar-area-y)` и `env(titlebar-area-height)` для итоговой высоты header'а и верхнего inset'а. Это убирает расхождение между native titlebar area и визуальной рамкой sidebar/settings на Windows.
+
+Checks: `bun run --cwd platform/desktop typecheck`, `bun run --cwd platform/desktop build:extensions`,
+`bun test products/eden/tests/bubbleDiaryModel.test.ts`, `bun run --cwd products/eden test:vue`.
 
 ## 2026-07-03 — Diary virtualization + shared chrome polish (Kosmos Desktop 0.6.21 -> 0.6.22, Eden 0.5.1 -> 0.5.2)
 

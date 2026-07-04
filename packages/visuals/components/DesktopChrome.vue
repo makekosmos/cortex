@@ -107,10 +107,14 @@ provide("kosmosHasSidebar", hasSidebar);
 .kosmos-desktop-chrome-settings__header {
   position: relative;
   box-sizing: border-box;
-  height: var(--kosmos-settings-titlebar-height);
-  min-height: var(--kosmos-settings-titlebar-height);
+  height: calc(
+    env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kosmos-settings-titlebar-height))
+  );
+  min-height: calc(
+    env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kosmos-settings-titlebar-height))
+  );
   border-bottom: 1px solid var(--border-color-strong);
-  padding-top: 0;
+  padding-top: env(titlebar-area-y, 0px);
   padding-bottom: 0;
 }
 

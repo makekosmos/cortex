@@ -33,6 +33,7 @@ export {
 
 const HIDDEN_EDEN_COLLECTION_TYPE_IDS = new Set([
   SYSTEM_TYPE_COLLECTION_ID,
+  SYSTEM_TYPE_JOURNAL_ID,
   "blocklist_obj",
   "tag_obj",
   "task_obj",

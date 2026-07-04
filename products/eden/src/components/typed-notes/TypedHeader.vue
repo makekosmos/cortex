@@ -7,6 +7,7 @@ import { getNoteTypePresentation, getResolvedNoteTypeField } from "@/lib/typedNo
 import {
   SYSTEM_TYPE_GAME_ID,
   SYSTEM_TYPE_IMAGE_ID,
+  SYSTEM_TYPE_JOURNAL_ID,
   SYSTEM_TYPE_NOTE_ID,
   SYSTEM_TYPE_PERSON_ID,
 } from "@/lib/systemTypes";
@@ -164,7 +165,9 @@ const typeField = computed(() => ({
 }));
 const typeOptions = computed(() =>
   props.noteTypes
-    .filter((noteType) => noteType.id !== SYSTEM_TYPE_IMAGE_ID)
+    .filter(
+      (noteType) => noteType.id !== SYSTEM_TYPE_IMAGE_ID && noteType.id !== SYSTEM_TYPE_JOURNAL_ID,
+    )
     .map((noteType) => ({
       value: noteType.id,
       label: noteType.name,

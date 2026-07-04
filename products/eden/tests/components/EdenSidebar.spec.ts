@@ -8,7 +8,7 @@ import { userEvent } from "vitest/browser";
 import { render } from "vitest-browser-vue";
 import { defineComponent, shallowRef } from "vue";
 import EdenSidebar from "../../src/components/sidebar/EdenSidebar.vue";
-import { SYSTEM_TYPE_NOTE } from "../../src/lib/systemTypes";
+import { SYSTEM_TYPE_JOURNAL, SYSTEM_TYPE_NOTE } from "../../src/lib/systemTypes";
 
 type EdenScreen = "notes" | "settings" | "type-collection" | "diary";
 
@@ -42,17 +42,20 @@ const EdenSidebarFixture = defineComponent({
     const activeScreen = shallowRef<EdenScreen>("notes");
     const sidebarWidth = shallowRef(280);
     const now = Date.now();
-    const recentEntries = Array.from({ length: 120 }, (_, index) =>
-      makeEntry(
-        `entry-${index + 1}`,
-        `Недавняя заметка ${index + 1}`,
-        SYSTEM_TYPE_NOTE.id,
-        now - index * 24 * 60 * 60 * 1000,
-        `Начало текста заметки ${index + 1}. Второе предложение для превью.`,
+    const recentEntries = [
+      makeEntry("journal-entry", "2026-07-04", SYSTEM_TYPE_JOURNAL.id, now + 1000),
+      ...Array.from({ length: 120 }, (_, index) =>
+        makeEntry(
+          `entry-${index + 1}`,
+          `Недавняя заметка ${index + 1}`,
+          SYSTEM_TYPE_NOTE.id,
+          now - index * 24 * 60 * 60 * 1000,
+          `Начало текста заметки ${index + 1}. Второе предложение для превью.`,
+        ),
       ),
-    );
-    const currentEntry = shallowRef<Entry | null>(recentEntries[0]);
-    const noteTypes = [SYSTEM_TYPE_NOTE];
+    ];
+    const currentEntry = shallowRef<Entry | null>(recentEntries[1]);
+    const noteTypes = [SYSTEM_TYPE_NOTE, SYSTEM_TYPE_JOURNAL];
 
     const createEntryCount = shallowRef(0);
     const toggleSearchCount = shallowRef(0);
@@ -158,6 +161,8 @@ describe("EdenSidebar contract", () => {
     await expect.element(screen.getByTestId("sidebar-open-objects")).toBeInTheDocument();
     await expect.element(screen.getByTestId("sidebar-open-bubbles")).not.toBeInTheDocument();
     await expect.element(screen.getByTestId("recent-entry-entry-1")).toBeInTheDocument();
+    await expect.element(screen.getByTestId("recent-entry-journal-entry")).not.toBeInTheDocument();
+    await expect.element(screen.getByText("Дневники")).not.toBeInTheDocument();
     await expect
       .element(screen.getByTestId("recent-entry-entry-1"))
       .toHaveTextContent("Недавняя заметка 1");
@@ -208,6 +213,9 @@ describe("EdenSidebar contract", () => {
 
     await userEvent.click(screen.getByTestId("sidebar-open-objects"));
     await expect.element(screen.getByTestId("sidebar-objects-modal")).toBeInTheDocument();
+    await expect
+      .element(screen.getByTestId(`objects-modal-object-type-${SYSTEM_TYPE_JOURNAL.id}`))
+      .not.toBeInTheDocument();
     const pickerNoteType = document.querySelector<HTMLButtonElement>(
       `[data-testid="objects-modal-object-type-${SYSTEM_TYPE_NOTE.id}"]`,
     );

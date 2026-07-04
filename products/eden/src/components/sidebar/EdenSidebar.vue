@@ -589,7 +589,10 @@ function openObjectTypeFromModal(item: SidebarListItem): void {
 const recentNavigationEntries = computed(() =>
   props.activeScreen === "type-collection"
     ? props.recentEntries.filter((entry) => entry.type_id === SYSTEM_TYPE_COLLECTION_ID)
-    : props.recentEntries.filter((entry) => entry.type_id !== SYSTEM_TYPE_COLLECTION_ID),
+    : props.recentEntries.filter(
+        (entry) =>
+          entry.type_id !== SYSTEM_TYPE_COLLECTION_ID && entry.type_id !== SYSTEM_TYPE_JOURNAL_ID,
+      ),
 );
 
 const sortedRecentEntries = computed<Entry[]>(() => {

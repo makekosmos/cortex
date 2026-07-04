@@ -143,7 +143,7 @@ describe("BubbleDiaryView", () => {
     await expect.element(screen.getByTestId("bubble-node-old-draft")).not.toBeInTheDocument();
   });
 
-  test("converts old journal blocks into dated bubbles in order", async () => {
+  test("converts old journal blocks into dated bubbles with newest block first", async () => {
     const screen = render(BubbleDiaryView, {
       props: {
         journalEntries: [journalEntry()],
@@ -156,13 +156,14 @@ describe("BubbleDiaryView", () => {
     await expect
       .element(screen.getByTestId("bubble-node-journal-journal-1-1"))
       .toHaveTextContent("second block");
-    expect(document.body.textContent?.indexOf("first block")).toBeLessThan(
-      document.body.textContent?.indexOf("second block") ?? 0,
+    expect(document.body.textContent?.indexOf("second block")).toBeLessThan(
+      document.body.textContent?.indexOf("first block") ?? 0,
     );
     expect(screen.getByTestId("bubble-node-journal-journal-1-0").element()).toHaveTextContent(
       "2026-07-01",
     );
     expect(storedBubbles()[0].date).toBe("2026-07-01");
+    expect(storedBubbles()[0].text).toBe("second block");
   });
 
   test("does not load full content for non-journal entries during legacy import", async () => {
@@ -176,6 +177,7 @@ describe("BubbleDiaryView", () => {
           journalEntries: [
             journalEntry({
               id: "regular-note",
+              title: "Regular note",
               type_id: "note_obj",
               content_loaded: false,
             }),

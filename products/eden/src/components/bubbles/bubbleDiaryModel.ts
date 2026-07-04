@@ -109,7 +109,7 @@ export function createJournalBubblesFromEntry(entry: JournalEntryLike): BubbleTi
       id: `journal-${entry.id}-${index}`,
       date,
       time: date,
-      sortKey: baseSortKey - index,
+      sortKey: baseSortKey + index,
       plainText: text,
     });
     return bubble ? [bubble] : [];
@@ -267,14 +267,18 @@ function normalizeBubbleSortKey(
   time: unknown,
   id: unknown,
 ): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
   const dateKey = normalizeBubbleDateKey(date, time);
+  const journalBlockIndex =
+    typeof id === "string" ? Number(id.match(/^journal-.+-(\d+)$/)?.[1] ?? Number.NaN) : Number.NaN;
+  if (dateKey && Number.isFinite(journalBlockIndex)) {
+    const parsed = Date.parse(`${dateKey}T00:00:00.000Z`);
+    return Number.isFinite(parsed) ? parsed + journalBlockIndex : undefined;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return value;
   if (!dateKey) return undefined;
   const parsed = Date.parse(`${dateKey}T00:00:00.000Z`);
   if (!Number.isFinite(parsed)) return undefined;
-  const journalBlockIndex =
-    typeof id === "string" ? Number(id.match(/^journal-.+-(\d+)$/)?.[1] ?? 0) : 0;
-  return parsed - (Number.isFinite(journalBlockIndex) ? journalBlockIndex : 0);
+  return parsed;
 }
 
 function stripTagsFromTiptapDoc(doc: JSONContent): JSONContent {
