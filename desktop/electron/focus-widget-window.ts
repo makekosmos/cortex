@@ -3,11 +3,6 @@ import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
-import {
-  applyWindowMaterial,
-  backgroundMaterialOption,
-  resolveWindowMaterial,
-} from "./window-effects";
 
 const WIDGET_WIDTH = 280;
 const WIDGET_HEIGHT = 52;
@@ -98,7 +93,6 @@ export function createFocusWidgetWindow(opts: {
   const persisted = readPersistedBounds();
   const pos =
     persisted && isOnSomeDisplay(persisted.x, persisted.y) ? persisted : defaultPosition();
-  const backgroundMaterial = resolveWindowMaterial("none");
 
   const win = new BrowserWindow({
     width: WIDGET_WIDTH,
@@ -116,7 +110,9 @@ export function createFocusWidgetWindow(opts: {
     alwaysOnTop: true,
     transparent: true,
     backgroundColor: "#00000000",
-    ...backgroundMaterialOption(backgroundMaterial),
+    // Do not set backgroundMaterial, including "none", on this transparent
+    // Win32 window. It attaches a DWM backing surface that becomes visible in
+    // the transparent pixels around the rounded renderer content.
     roundedCorners: true,
     // focusable: true (default). Раньше было false ("не воровать фокус
     // когда показывается"), но на Win32 non-focusable окно не получает
@@ -132,7 +128,6 @@ export function createFocusWidgetWindow(opts: {
   });
 
   win.setAlwaysOnTop(true, "screen-saver", 1);
-  applyWindowMaterial(win, backgroundMaterial, "focus-widget");
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) {

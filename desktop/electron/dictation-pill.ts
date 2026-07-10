@@ -182,7 +182,14 @@ async function sendPillCommand(cmd: { kind: "start" | "stop" | "cancel" }): Prom
 function showPill(): void {
   const win = ensureWindow();
   if (isHeadless()) return;
+  // Re-assert the native topmost level on every show. The pill window is kept
+  // alive and hidden between recordings; on Windows its BrowserWindow flag can
+  // remain true while the HWND has fallen behind another topmost/fullscreen
+  // window. `showInactive()` deliberately avoids activation, so it does not
+  // repair that z-order by itself.
+  win.setAlwaysOnTop(true, "screen-saver", 1);
   if (!win.isVisible()) win.showInactive();
+  win.moveTop();
 }
 
 function hidePill(): void {
