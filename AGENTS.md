@@ -92,6 +92,7 @@ Noisy build output — через `rtk err <cmd>` или лог в `.tmp/*.log`,
 - ❌ Destructive migrations (`DROP TABLE`, несовместимый `ALTER COLUMN`). Только additive.
 - ❌ `Mutex::lock().unwrap()` в production Rust paths; нужен poison recovery.
 - ❌ E2E без `KOSMOS_HEADLESS=1`; BrowserWindow show/focus/always-on-top без headless guard.
+- ❌ `backgroundMaterial` / `setBackgroundMaterial()` на transparent Win32 overlay даже со значением `"none"`; reused topmost overlay без повторного `screen-saver` level перед `showInactive()`.
 - ❌ User-facing UI на английском; hardcoded `#hex`/`rgb()`/fonts вместо `@kosmos/visuals` tokens.
 - ❌ Свой titlebar/safe-area вместо `<DesktopChrome>` / `<DesktopContentSurface>`.
 - ❌ `e.key === "<латинская буква>"` для Ctrl/Cmd shortcuts; используй `e.code === "KeyA"`.

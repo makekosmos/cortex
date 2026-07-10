@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-07-10 — Desktop overlay window contracts regressed
+
+**Симптомы.** Переиспользуемое окно диктации иногда оказывалось под другими приложениями, включая полноэкранные. У Focus widget вокруг тёмного скруглённого UI снова была видна непрозрачная прямоугольная подложка; fullscreen-состояние блокировки приложения также могло закрашивать экран за пределами намеренного edge-gradient и popup.
+**Где жило.** `platform/desktop/electron/dictation-pill.ts::showPill`, `platform/desktop/electron/focus-widget-window.ts::createFocusWidgetWindow`, `platform/desktop/electron/focus-overlay.ts::getOrCreateOverlay`.
+**Root cause.** Dictation pill получал Win32 `screen-saver` always-on-top level только при создании окна; после `hide()` повторный `showInactive()` не восстанавливал фактическую позицию переиспользуемого HWND в topmost z-order. Focus widget и fullscreen blocked-app overlay, в отличие от рабочего dictation window, продолжали задавать `backgroundMaterial: "none"` и вызывать `setBackgroundMaterial("none")`; на прозрачном Win32 BrowserWindow это всё равно подключало DWM backing surface, который проявлялся в прозрачных пикселях вокруг скруглённого widget UI или по всей площади fullscreen overlay за пределами renderer-gradient.
+**Fix.** `showPill()` теперь перед каждым показом повторно задаёт `screen-saver` always-on-top level и после `showInactive()` поднимает HWND через `moveTop()`. Focus widget и blocked-app overlay больше не передают `backgroundMaterial` и не вызывают material API: их native surfaces задаются только через `transparent: true` и полностью прозрачный `backgroundColor`; существующий renderer edge-gradient и popup сохранены.
+**Регрешн-защита.** `dictation-pill-window.test.ts` фиксирует порядок headless guard → повторный topmost → `showInactive()` → `moveTop()`. `focus-widget-window.test.ts` фиксирует прозрачные BrowserWindow options и отсутствие material option/apply API. `focus-overlay-window.test.ts` фиксирует тот же native contract для fullscreen blocked-app overlay и наличие edge-gradient/popup в renderer.
+**Prevention.** Переиспользуемый overlay, который проходит цикл `hide()`/`showInactive()`, обязан восстанавливать native topmost level при каждом показе, а не только при создании BrowserWindow. Для прозрачных Win32 overlay surfaces любого размера запрещено подключать DWM material API даже со значением `"none"`; прозрачность и намеренно нарисованные renderer-слои должны быть отдельным явным window contract с регрессионным тестом.
+
 ## 2026-07-03 — Dictation sidecar returned repeated transcript with newline
 
 **Симптомы.** Длинная локальная диктовка иногда вставлялась дважды, причём второй дубль начинался с новой строки, будто в текст попал Enter.

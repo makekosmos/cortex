@@ -1,0 +1,41 @@
+{
+  "task_id": "2026-07-10-dictation-focus-window-surfaces",
+  "verified_at": "2026-07-10T07:26:45Z",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "bun test platform/desktop/electron/dictation-pill-window.test.ts"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "bun test platform/desktop/electron/focus-widget-window.test.ts"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "bun run --cwd platform/desktop typecheck"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "focused tests + typecheck + oxfmt --check + git diff --check"
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "command": "visible Win32 Electron smoke over separate fullscreen Chromium; OS screenshots + native window state"
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "command": "bun run docs:sync && bun run docs:check"
+    },
+    {
+      "ac": "AC7",
+      "verdict": "PASS",
+      "command": "bun test platform/desktop/electron/focus-overlay-window.test.ts + visible blocked-app edge-gradient smoke"
+    }
+  ]
+}
