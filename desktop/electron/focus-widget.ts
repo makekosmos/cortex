@@ -15,7 +15,7 @@ import {
   resetFocusWidgetPosition,
   scheduleFocusWidgetBoundsPersist,
 } from "./focus-widget-window";
-import { registerFocusWidgetIpcHandlers } from "./focus-widget-ipc";
+import { registerFocusWidgetIpcHandlers, type FocusWidgetSessionActions } from "./focus-widget-ipc";
 
 type FocusWidgetRuntime = {
   awaitArkReady: () => Promise<ArkClient>;
@@ -26,6 +26,7 @@ let currentState: FocusState = { ...DEFAULT_FOCUS_WIDGET_STATE };
 let tickTimer: ReturnType<typeof setInterval> | null = null;
 let focusSessionOpener: (() => void) | null = null;
 let focusWidgetRuntime: FocusWidgetRuntime | null = null;
+let focusSessionActions: FocusWidgetSessionActions | null = null;
 let backendEventsUnsubscribe: (() => void) | null = null;
 
 export type { FocusState } from "./focus-widget-state";
@@ -36,6 +37,17 @@ export function setFocusWidgetFocusSessionOpener(opener: () => void): void {
 
 export function setFocusWidgetRuntime(runtime: FocusWidgetRuntime | null): void {
   focusWidgetRuntime = runtime;
+}
+
+export function setFocusWidgetSessionActions(actions: FocusWidgetSessionActions): void {
+  focusSessionActions = actions;
+}
+
+function requireFocusWidgetSessionActions(): FocusWidgetSessionActions {
+  if (!focusSessionActions) {
+    throw new Error("focus widget session actions are not initialized");
+  }
+  return focusSessionActions;
 }
 
 function requireFocusWidgetRuntime(): FocusWidgetRuntime {
@@ -158,6 +170,7 @@ registerFocusWidgetIpcHandlers({
   },
   setFocusState,
   getFocusState,
+  getSessionActions: requireFocusWidgetSessionActions,
   requireRuntime: requireFocusWidgetRuntime,
 });
 

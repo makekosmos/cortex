@@ -4,6 +4,14 @@ import { Info, X } from "@lucide/vue";
 import { Dropdown } from "@kosmos/visuals";
 import type { FocusBlockedApp, FocusSessionSnapshot, FocusSessionTask } from "@shared/ipc-types";
 import { buildFocusSessionStartInput } from "./focusCommandPayload";
+import {
+  activeFocusCommands,
+  FOCUS_DONE_ID,
+  FOCUS_EDIT_ID,
+  FOCUS_PAUSE_TOGGLE_ID,
+  FOCUS_SKIP_ID,
+  FOCUS_STOP_ID,
+} from "../lib/focusLauncherCommands";
 
 const durationOptions = [25, 45, 60, 90];
 const doneTaskStatuses = new Set(["done", "canceled", "cancelled"]);
@@ -30,6 +38,7 @@ const highlightedTaskIndex = ref(0);
 const appPickerValue = ref<string | null>(null);
 const blockedApps = shallowRef<FocusAppEntry[]>([]);
 const submitting = ref(false);
+const sessionActionBusy = shallowRef("");
 const error = ref("");
 let unsubscribeUpdated: (() => void) | null = null;
 
@@ -178,6 +187,15 @@ const resolvedDurationMin = computed(() => {
   }
   return Number.parseInt(durationMode.value, 10);
 });
+const sessionActive = computed(() => snapshot.value?.pomodoro.phase !== "idle");
+const sessionPaused = computed(() => snapshot.value?.pomodoro.isPaused === true);
+const sessionCommands = computed(() =>
+  sessionActive.value
+    ? activeFocusCommands({ active: true, paused: sessionPaused.value }).filter(
+        (command) => command.id !== FOCUS_EDIT_ID,
+      )
+    : [],
+);
 
 async function hydrate(): Promise<void> {
   error.value = "";
@@ -325,6 +343,29 @@ async function start(): Promise<void> {
   }
 }
 
+async function runSessionCommand(id: string): Promise<void> {
+  if (sessionActionBusy.value) return;
+  sessionActionBusy.value = id;
+  error.value = "";
+  try {
+    if (id === FOCUS_PAUSE_TOGGLE_ID) {
+      snapshot.value = sessionPaused.value
+        ? await window.kepler.focusSession.resume()
+        : await window.kepler.focusSession.pause();
+    } else if (id === FOCUS_SKIP_ID) {
+      snapshot.value = await window.kepler.focusSession.skip();
+    } else if (id === FOCUS_DONE_ID) {
+      snapshot.value = await window.kepler.focusSession.complete();
+    } else if (id === FOCUS_STOP_ID) {
+      snapshot.value = await window.kepler.focusSession.stop();
+    }
+  } catch (e) {
+    error.value = `Не удалось выполнить команду: ${String((e as Error)?.message ?? e)}`;
+  } finally {
+    sessionActionBusy.value = "";
+  }
+}
+
 onMounted(() => {
   void hydrate();
   unsubscribeUpdated = window.kepler.focusSession.onUpdated(() => {
@@ -352,6 +393,24 @@ defineExpose({ start });
     <div class="focus-command__layout">
       <form class="focus-command__form" @submit.prevent="start">
         <div class="focus-command__body">
+          <div v-if="sessionCommands.length > 0" class="focus-command__session-actions">
+            <span class="focus-command__label">Текущая сессия</span>
+            <div class="focus-command__session-command-list">
+              <button
+                v-for="command in sessionCommands"
+                :key="command.id"
+                type="button"
+                class="focus-command__session-command"
+                :disabled="!!sessionActionBusy"
+                @click="runSessionCommand(command.id)"
+              >
+                <span class="focus-command__session-command-title">{{ command.title }}</span>
+                <small class="focus-command__session-command-subtitle">{{
+                  command.subtitle
+                }}</small>
+              </button>
+            </div>
+          </div>
           <label class="focus-command__field">
             <span class="focus-command__label">Цель</span>
             <div class="focus-command__goal-wrap">
@@ -541,6 +600,57 @@ defineExpose({ start });
   align-items: center;
   gap: 16px;
   min-width: 0;
+}
+
+.focus-command__session-actions {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.focus-command__session-command-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.focus-command__session-command {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 13%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  color: var(--foreground);
+  padding: 7px 10px;
+  text-align: left;
+  font: inherit;
+}
+
+.focus-command__session-command:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 9%, transparent);
+}
+
+.focus-command__session-command:disabled {
+  opacity: 0.55;
+}
+
+.focus-command__session-command-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.focus-command__session-command-subtitle {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .focus-command__label {

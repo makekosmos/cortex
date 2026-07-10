@@ -6,12 +6,14 @@ export const FOCUS_START_COMMAND_ID = "kepler:focus-session";
 // Синтетические launcher-команды управления активной фокус-сессией. Не
 // существуют в command bus — обрабатываются прямо в LauncherView.invokeSelected.
 export const FOCUS_PAUSE_TOGGLE_ID = "kepler:focus-launcher-pause-toggle";
+export const FOCUS_SKIP_ID = "kepler:focus-launcher-skip";
 export const FOCUS_DONE_ID = "kepler:focus-launcher-done";
 export const FOCUS_STOP_ID = "kepler:focus-launcher-stop";
 export const FOCUS_EDIT_ID = "kepler:focus-launcher-edit";
 
 export const FOCUS_LAUNCHER_COMMAND_IDS: ReadonlySet<string> = new Set([
   FOCUS_PAUSE_TOGGLE_ID,
+  FOCUS_SKIP_ID,
   FOCUS_DONE_ID,
   FOCUS_STOP_ID,
   FOCUS_EDIT_ID,
@@ -45,6 +47,14 @@ export function activeFocusCommands(state: FocusCommandState): CommandRecord[] {
       appName: "Kosmos",
     },
     {
+      id: FOCUS_SKIP_ID,
+      title: "Пропустить сессию",
+      subtitle: "Перейти к следующей фазе таймера",
+      category: "action",
+      kind: "command",
+      appName: "Kosmos",
+    },
+    {
       id: FOCUS_DONE_ID,
       title: "Отметить задачу выполненной",
       subtitle: "Остановить сессию и отметить задачу выполненной",
@@ -54,7 +64,7 @@ export function activeFocusCommands(state: FocusCommandState): CommandRecord[] {
     },
     {
       id: FOCUS_STOP_ID,
-      title: "Завершить фокус",
+      title: "Отменить фокус",
       subtitle: "Остановить сессию, не трогая задачу",
       category: "action",
       kind: "command",
@@ -72,7 +82,7 @@ export function activeFocusCommands(state: FocusCommandState): CommandRecord[] {
 }
 
 // На месте «Начать фокус» подставляем состояние-зависимый набор: idle — сама
-// «Начать фокус»; активная сессия — пауза/выполнена/завершить/редактировать.
+// «Начать фокус»; активная сессия — пауза/skip/выполнена/отмена/редактирование.
 // Остальные сырые command-bus focus-команды убираем (дублируют).
 export function buildFocusAwareCommands(
   commands: readonly CommandRecord[],

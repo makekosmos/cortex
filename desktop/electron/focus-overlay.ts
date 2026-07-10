@@ -7,7 +7,11 @@ const __dirname = path.dirname(__filename);
 
 let overlayWin: BrowserWindow | null = null;
 let isReady = false;
-let pendingApp: { id: string; title: string; icon?: string | null } | null = null;
+type FocusOverlayFeedback =
+  | { kind: "blocked"; id: string; title: string; icon?: string | null }
+  | { kind: "completed"; title: string };
+
+let pendingFeedback: FocusOverlayFeedback | null = null;
 let readyFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
 const isHeadless = () =>
@@ -49,11 +53,11 @@ function markReady(): void {
     readyFallbackTimer = null;
   }
   isReady = true;
-  if (pendingApp) {
-    const app = pendingApp;
-    pendingApp = null;
+  if (pendingFeedback) {
+    const feedback = pendingFeedback;
+    pendingFeedback = null;
     showOverlay();
-    overlayWin?.webContents.send("kepler:focus-overlay:show", app);
+    overlayWin?.webContents.send("kepler:focus-overlay:show", feedback);
   }
   // Нет pending-блокировки — окно остаётся скрытым, compositor surface не занята.
 }
@@ -117,6 +121,7 @@ function getOrCreateOverlay(): BrowserWindow | null {
   overlayWin.on("closed", () => {
     overlayWin = null;
     isReady = false;
+    pendingFeedback = null;
     if (readyFallbackTimer) {
       clearTimeout(readyFallbackTimer);
       readyFallbackTimer = null;
@@ -131,13 +136,21 @@ export function showFocusBlockOverlay(app: {
   title: string;
   icon?: string | null;
 }): void {
+  showFocusOverlay({ kind: "blocked", ...app });
+}
+
+export function showFocusCompletionOverlay(title: string): void {
+  showFocusOverlay({ kind: "completed", title });
+}
+
+function showFocusOverlay(feedback: FocusOverlayFeedback): void {
   const win = getOrCreateOverlay();
   if (!win) return;
   if (isReady) {
     showOverlay();
-    win.webContents.send("kepler:focus-overlay:show", app);
+    win.webContents.send("kepler:focus-overlay:show", feedback);
   } else {
     // Окно загружается — отправим сообщение как только renderer будет готов.
-    pendingApp = app;
+    pendingFeedback = feedback;
   }
 }

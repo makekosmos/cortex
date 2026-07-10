@@ -98,16 +98,16 @@ async function onPauseToggle(): Promise<void> {
   }
 }
 
-async function onStop(): Promise<void> {
+async function onComplete(): Promise<void> {
   const api = window.kepler.focusWidget;
   try {
     if (isPomodoro.value) {
-      await api.pomodoro.stop();
+      await api.pomodoro.complete();
     } else {
       await api.stopwatch.stop();
     }
   } catch (e) {
-    console.error("[focus-widget] stop failed:", e);
+    console.error("[focus-widget] complete failed:", e);
   }
 }
 
@@ -138,7 +138,7 @@ async function onShowMenu(): Promise<void> {
           <component :is="state.isPaused ? Play : Pause" :size="14" />
           <span>{{ state.isPaused ? "Продолжить" : "Пауза" }}</span>
         </button>
-        <button type="button" class="btn" aria-label="Выполнено" @click="onStop">
+        <button type="button" class="btn" aria-label="Выполнено" @click="onComplete">
           <Check :size="14" />
           <span>Выполнено</span>
         </button>
