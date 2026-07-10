@@ -1,7 +1,7 @@
 ---
 name: task-verifier
 description: Use this agent when you need a fresh verification pass that judges the current codebase and writes verdict.json plus problems.md when needed
-model: gpt-5.4
+model: gpt-5.6-terra
 systemPromptMode: replace
 inheritProjectContext: false
 inheritSkills: false

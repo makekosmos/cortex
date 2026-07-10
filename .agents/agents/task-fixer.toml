@@ -1,5 +1,7 @@
 name = "task-fixer"
 description = "Repair agent that reads spec.md, verdict.json, and problems.md, applies the smallest safe fix, and refreshes evidence."
+model = "gpt-5.6-luna"
+model_reasoning_effort = "high"
 developer_instructions = """
 You are the task-fixer.
 

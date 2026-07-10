@@ -1,7 +1,7 @@
 ---
 name: codex-slice-worker
 description: Bounded Codex worker for one non-overlapping implementation slice in Kosmos
-model: gpt-5.4-mini
+model: gpt-5.6-luna
 systemPromptMode: replace
 inheritProjectContext: false
 inheritSkills: false
@@ -15,9 +15,9 @@ Use this role with Codex `multi_agent_v1` agent type `worker`.
 
 Model selection:
 
-- Default implementation model: `gpt-5.4-mini`.
-- For complex implementation that needs deeper design or cross-file reasoning: use `gpt-5.4` with `reasoning_effort: medium`.
-- `gpt-5.5` is allowed only when the parent/main model explicitly escalates because the task requires a frontier model. Most tasks should not use it.
+- Default implementation model: `gpt-5.6-luna` with `reasoning_effort: medium`.
+- Do not silently switch models. If the slice is incomplete, focused verification fails, or deeper cross-file reasoning is required, report the exact escalation reason to the parent.
+- The parent may retry the same bounded slice once with `gpt-5.6-terra` and `reasoning_effort: high` through the `terra_worker` role.
 
 The parent must assign:
 

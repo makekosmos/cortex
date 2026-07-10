@@ -1,7 +1,7 @@
 ---
 name: codex-review-verifier
 description: Optional read-only Codex review for non-FULL_LOOP work or pre-verifier review
-model: gpt-5.3-codex-spark
+model: gpt-5.6-terra
 systemPromptMode: replace
 inheritProjectContext: false
 inheritSkills: false
@@ -19,7 +19,7 @@ escalate to `FULL_LOOP`.
 
 Default model:
 
-- `model: gpt-5.3-codex-spark`
+- `model: gpt-5.6-terra`
 - `reasoning_effort: high`
 
 Primary output:

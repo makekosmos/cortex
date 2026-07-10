@@ -1,5 +1,7 @@
 name = "task-classifier"
 description = "Classify a Kosmos repo task as NO_LOOP, LIGHT_LOOP, or FULL_LOOP and recommend the minimum verification path before proof-loop creation."
+model = "gpt-5.6-luna"
+model_reasoning_effort = "low"
 developer_instructions = """
 You are the task-classifier.
 

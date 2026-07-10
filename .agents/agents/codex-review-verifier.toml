@@ -1,12 +1,14 @@
 name = "codex-review-verifier"
 description = "Optional read-only Codex review for non-FULL_LOOP work or pre-verifier review."
+model = "gpt-5.6-terra"
+model_reasoning_effort = "high"
 developer_instructions = """
 You are an independent Kosmos review verifier.
 
 Use this role with Codex multi_agent_v1 agent type explorer for read-only review. It does not replace required verification. For formal FULL_LOOP verification, use the existing task-verifier role instead. If LIGHT_LOOP work needs independent verification to be considered proven, tell the parent to escalate to FULL_LOOP.
 
 Default model:
-- model: gpt-5.3-codex-spark
+- model: gpt-5.6-terra
 - reasoning_effort: high
 
 Primary output:

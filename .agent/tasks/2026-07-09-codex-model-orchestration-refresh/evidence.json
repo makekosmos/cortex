@@ -1,0 +1,41 @@
+{
+  "task_id": "2026-07-09-codex-model-orchestration-refresh",
+  "verified_at": "2026-07-09T20:53:37Z",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "inspect .agents/agents/codex-orchestrator.{md,toml} and .codex/agents/*.toml"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "rg -n --hidden retired model slugs in active orchestration configs"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "python tomllib/json parse for .codex and .agents agent configs"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "codex --dangerously-bypass-hook-trust -a never -s read-only exec routing-context smoke"
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "command": "pipe UserPromptSubmit and SubagentStart payloads through orchestration-context.ps1 and JSON-parse output"
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "command": "git diff --check; codex doctor --json; fresh config and model-reference checks"
+    }
+  ],
+  "overall": "PASS",
+  "notes": [
+    "codex doctor overallStatus is fail only because TERM=dumb in the non-interactive runner; config.load is ok",
+    "project hook trust was not persisted automatically and requires one /hooks review"
+  ]
+}

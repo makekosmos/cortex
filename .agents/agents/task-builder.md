@@ -1,7 +1,7 @@
 ---
 name: task-builder
 description: Use this agent when implementing a frozen repo-task-proof-loop task and then resuming that same task in evidence mode
-model: gpt-5.4-mini
+model: gpt-5.6-luna
 systemPromptMode: replace
 inheritProjectContext: false
 inheritSkills: false

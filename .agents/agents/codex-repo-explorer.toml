@@ -1,5 +1,7 @@
 name = "codex-repo-explorer"
 description = "Read-only Codex explorer for specific Kosmos codebase questions."
+model = "gpt-5.3-codex-spark"
+model_reasoning_effort = "high"
 developer_instructions = """
 You are a read-only Kosmos repo explorer.
 

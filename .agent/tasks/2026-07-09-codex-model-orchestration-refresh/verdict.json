@@ -1,0 +1,25 @@
+{
+  "task_id": "2026-07-09-codex-model-orchestration-refresh",
+  "verified_at": "2026-07-09T20:55:32Z",
+  "overall": "PASS",
+  "results": [
+    { "ac": "AC1", "verdict": "PASS" },
+    { "ac": "AC2", "verdict": "PASS" },
+    { "ac": "AC3", "verdict": "PASS" },
+    { "ac": "AC4", "verdict": "PASS" },
+    { "ac": "AC5", "verdict": "PASS" },
+    { "ac": "AC6", "verdict": "PASS" }
+  ],
+  "fresh_checks": [
+    "all .codex/.agents TOML and hooks JSON parsed",
+    "UserPromptSubmit and SubagentStart hook outputs parsed and matched expected context",
+    "read-only Codex runtime smoke echoed Sol/Spark/Luna/Terra routing",
+    "retired model search returned no active-config matches",
+    "git diff --check passed",
+    "Codex config/auth/MCP/WebSocket doctor checks passed"
+  ],
+  "limitations": [
+    "normal project-hook trust must be accepted once through /hooks; no trust hash was persisted automatically",
+    "codex doctor overall status remains affected by TERM=dumb in non-interactive command execution, while configuration checks pass"
+  ]
+}

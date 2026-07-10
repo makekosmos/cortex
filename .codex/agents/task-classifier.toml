@@ -1,0 +1,8 @@
+name = "task_classifier"
+description = "Classify Kosmos work as NO_LOOP, LIGHT_LOOP, or FULL_LOOP before implementation."
+model = "gpt-5.6-luna"
+model_reasoning_effort = "low"
+sandbox_mode = "read-only"
+developer_instructions = """
+Read the request and minimum relevant repo guidance. Return NO_LOOP, LIGHT_LOOP, or FULL_LOOP with a concise reason, observed escalation triggers, and the minimum verification path. Do not edit files or create task artifacts. Choose FULL_LOOP when substantial or ambiguous.
+"""
