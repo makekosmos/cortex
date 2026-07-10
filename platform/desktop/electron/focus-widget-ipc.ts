@@ -1,11 +1,15 @@
-import { BrowserWindow, Menu, ipcMain } from "electron";
+import { BrowserWindow, Menu, ipcMain, type MenuItemConstructorOptions } from "electron";
 import type { ArkClient } from "@kosmos/ark";
 import { assertExtensionSenderHostPermissionIfExtension } from "./extension-host";
-import {
-  deriveFocusStateFromBackend,
-  type FocusState,
-  type PomodoroEventState,
-} from "./focus-widget-state";
+import type { FocusState } from "./focus-widget-state";
+
+export interface FocusWidgetSessionActions {
+  pause: () => Promise<unknown>;
+  resume: () => Promise<unknown>;
+  skip: () => Promise<unknown>;
+  stop: () => Promise<unknown>;
+  complete: () => Promise<unknown>;
+}
 
 interface ArkObjectLike {
   id: string;
@@ -37,6 +41,7 @@ export function registerFocusWidgetIpcHandlers(deps: {
   resetWidgetPosition: () => void;
   setFocusState: (next: Partial<FocusState>) => void;
   getFocusState: () => FocusState;
+  getSessionActions: () => FocusWidgetSessionActions;
   requireRuntime: () => { awaitArkReady: () => Promise<ArkClient> };
 }): void {
   ipcMain.handle("kepler:focus-widget:set-state", (e, patch: Partial<FocusState>) => {
@@ -58,19 +63,19 @@ export function registerFocusWidgetIpcHandlers(deps: {
   ipcMain.handle("kepler:focus-widget:show-menu", () => {
     const win = deps.getWidgetWindow();
     if (!win || win.isDestroyed()) return;
+    const state = deps.getFocusState();
+    const sessionItems: MenuItemConstructorOptions[] =
+      state.mode === "stopwatch"
+        ? [
+            {
+              label: "Остановить секундомер",
+              click: () => void stopManualStopwatch(deps),
+            },
+          ]
+        : focusSessionMenuItems(deps, state.isPaused);
     const menu = Menu.buildFromTemplate([
-      {
-        label: "Редактировать",
-        click: () => {
-          deps.openFocusSessionFromWidget();
-        },
-      },
-      {
-        label: "Пропустить сессию",
-        click: () => {
-          void invokePomodoro(deps, "skip");
-        },
-      },
+      ...sessionItems,
+      { type: "separator" },
       {
         label: "Сбросить позицию",
         click: () => {
@@ -89,38 +94,63 @@ export function registerFocusWidgetIpcHandlers(deps: {
   });
 
   ipcMain.handle("kepler:focus-widget:pomodoro:pause", async () => {
-    await invokePomodoro(deps, "pause");
+    await deps.getSessionActions().pause();
   });
   ipcMain.handle("kepler:focus-widget:pomodoro:resume", async () => {
-    await invokePomodoro(deps, "resume");
+    await deps.getSessionActions().resume();
   });
   ipcMain.handle("kepler:focus-widget:pomodoro:skip", async () => {
-    await invokePomodoro(deps, "skip");
+    await deps.getSessionActions().skip();
+  });
+  ipcMain.handle("kepler:focus-widget:pomodoro:complete", async () => {
+    await deps.getSessionActions().complete();
   });
   ipcMain.handle("kepler:focus-widget:pomodoro:stop", async () => {
-    await invokePomodoro(deps, "stop");
+    await deps.getSessionActions().stop();
   });
   ipcMain.handle("kepler:focus-widget:stopwatch:stop", async () => {
     await stopManualStopwatch(deps);
   });
 }
 
-async function invokePomodoro(
+function focusSessionMenuItems(
   deps: Parameters<typeof registerFocusWidgetIpcHandlers>[0],
-  op: "pause" | "resume" | "skip" | "stop",
-): Promise<void> {
+  isPaused: boolean,
+): MenuItemConstructorOptions[] {
+  const actions = deps.getSessionActions();
+  return [
+    {
+      label: isPaused ? "Продолжить" : "Пауза",
+      click: () =>
+        void runFocusAction(
+          isPaused ? "resume" : "pause",
+          isPaused ? actions.resume : actions.pause,
+        ),
+    },
+    {
+      label: "Редактировать",
+      click: deps.openFocusSessionFromWidget,
+    },
+    {
+      label: "Пропустить сессию",
+      click: () => void runFocusAction("skip", actions.skip),
+    },
+    {
+      label: "Выполнено",
+      click: () => void runFocusAction("complete", actions.complete),
+    },
+    {
+      label: "Отменить фокус",
+      click: () => void runFocusAction("stop", actions.stop),
+    },
+  ];
+}
+
+async function runFocusAction(name: string, action: () => Promise<unknown>): Promise<void> {
   try {
-    const client = await deps.requireRuntime().awaitArkReady();
-    const state = await client.invokeOperation<PomodoroEventState>({
-      operation: `pomodoro.${op}`,
-    });
-    if (state && typeof state === "object") {
-      // См. postmortems.md § 2026-05-30: pause/resume return state but do not emit
-      // pomodoro events, so the widget must apply the operation response directly.
-      deps.setFocusState(deriveFocusStateFromBackend(state));
-    }
-  } catch (e) {
-    console.error(`[focus-widget] pomodoro.${op} failed:`, e);
+    await action();
+  } catch (error) {
+    console.error(`[focus-widget] focus session ${name} failed:`, error);
   }
 }
 

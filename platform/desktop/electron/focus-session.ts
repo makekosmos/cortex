@@ -1,7 +1,8 @@
 import { BrowserWindow } from "electron";
 import type { ArkClient } from "@kosmos/ark";
 import { applyFocusBlock } from "./focus-block";
-import { setFocusState } from "./focus-widget";
+import { showFocusCompletionOverlay } from "./focus-overlay";
+import { setFocusState, setFocusWidgetSessionActions } from "./focus-widget";
 import {
   setupFocusSessionBackendSync as setupFocusSessionBackendSyncSubscription,
   teardownFocusSessionBackendSync as teardownFocusSessionBackendSyncSubscription,
@@ -271,7 +272,8 @@ export async function stopFocusSessionCommand(): Promise<FocusSessionSnapshot> {
 // привязанную задачу выполненной. Без задачи — эквивалент stop.
 async function completeFocusSession(): Promise<FocusSessionSnapshot> {
   const current = await snapshot();
-  const taskId = current.pomodoro.tasks?.[0]?.id ?? null;
+  const task = current.pomodoro.tasks?.[0] ?? null;
+  const taskId = task?.id ?? null;
   clearBlockingContext();
   const state = await invoke<PomodoroState>("pomodoro.stop");
   setFocusState(deriveFocusWidgetPatch(state));
@@ -280,6 +282,9 @@ async function completeFocusSession(): Promise<FocusSessionSnapshot> {
     await markTaskDone(taskId);
   }
   await applyFocusState(false);
+  showFocusCompletionOverlay(
+    task?.title?.trim() || current.pomodoro.title?.trim() || "Фокус завершён",
+  );
   const next = await snapshot();
   broadcastFocusSessionUpdated();
   return next;
@@ -293,6 +298,14 @@ export async function toggleFocusSessionCommand(): Promise<void> {
   }
   await stopFocusSession();
 }
+
+setFocusWidgetSessionActions({
+  pause: pauseFocusSession,
+  resume: resumeFocusSession,
+  skip: skipFocusSession,
+  stop: stopFocusSession,
+  complete: completeFocusSession,
+});
 
 registerFocusSessionIpc({
   open: openFocusSessionShell,

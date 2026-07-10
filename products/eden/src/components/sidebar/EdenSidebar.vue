@@ -440,7 +440,7 @@ function buildEntryItem(entry: Entry, testId: string): SidebarListItem {
         ? getNoteTypeCollectionName(noteType)
         : undefined,
     active:
-      props.currentEntry?.id === entry.id ||
+      (props.activeScreen === "notes" && props.currentEntry?.id === entry.id) ||
       (props.activeScreen === "type-collection" &&
         collectionTypeId !== null &&
         props.selectedObjectTypeId === collectionTypeId),

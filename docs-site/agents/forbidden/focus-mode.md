@@ -9,7 +9,7 @@
 См. [Focus mode](/concepts/focus-mode).
 
 - ❌ Прямые манипуляции `BrowserWindow` focus widget'а (show/hide/move/destroy) из extension'ов или из кода вне `platform/desktop/electron/focus-widget.ts`. Только через IPC `kepler:focus-widget:*` (`set-state` / `get-state` / `hide`).
-- ❌ Обход `pomodoro_host` для lifecycle pomodoro-сессии. Кнопки виджета (pause/resume/skip/stop) дёргают **только** `invokeOperation("pomodoro.<op>")` через backend — никаких прямых `setFocusState` локально после клика. Backend — source of truth, его broadcast обновит widget.
+- ❌ Обход canonical `focus-session.ts` lifecycle из виджета/Shell. Кнопки pause/resume/skip/complete/stop передают intent в `focusSession.*`; main process уже вызывает `pomodoro.<op>`, синхронизирует time entry, task и blocking state. Никаких прямых `setFocusState` или сырых `pomodoro.stop` из UI.
 - ❌ Прямые writes в `C:\Windows\System32\drivers\etc\hosts` из любого места кроме `Kosmos Helper.exe` / `Kosmos System Service.exe` (dev-бинарники всё ещё называются `kepler-focus-helper` / `kepler-focus-svc`). Никаких inline `fs.writeFile` или `child_process` поверх hosts из shell / extension'ов / `platform/runtime/`.
 - ❌ Запись вне маркерной секции (`# === kepler-focus BEGIN/END ===`) в helper / svc. Backup создаётся **один раз** при первой модификации — если перезаписать вне маркеров, юзерские hosts entries потеряются навсегда.
 - ❌ Destructive ALTER / DROP для `blocklist_obj` или ключа `focus.active_state` в `sync_kv`. Только additive миграции (см. [ARK objects](/concepts/ark-objects)).

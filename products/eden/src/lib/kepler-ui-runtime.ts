@@ -45,7 +45,7 @@ export async function openMarkdownVault(): Promise<MarkdownVaultOpenResult | nul
 }
 
 export async function saveMarkdownVault(
-  files: MarkdownVaultExportFile[],
+  files: MarkdownVaultExportFile[] = [],
 ): Promise<MarkdownVaultExportResult | null> {
   return window.kepler?.markdownFiles?.exportVault?.(files) ?? null;
 }
@@ -107,7 +107,7 @@ export async function setEdenVisibleObjectTypeIds(typeIds: string[]): Promise<st
   return next;
 }
 
-export async function getPlatform(): Promise<NodeJS.Platform> {
+export async function getPlatform(): Promise<"win32" | "darwin" | "linux"> {
   const ua = navigator.userAgent.toLowerCase();
   if (ua.includes("windows")) return "win32";
   if (ua.includes("mac")) return "darwin";

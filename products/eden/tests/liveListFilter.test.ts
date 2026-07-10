@@ -20,6 +20,22 @@ import { describe, expect, test } from "bun:test";
 import { shouldIncludeTypeInEdenListForLiveUpdate } from "../src/store/liveListFilter";
 
 describe("shouldIncludeTypeInEdenListForLiveUpdate", () => {
+  test("excludes bubble-marked journal objects from the ordinary Eden list", () => {
+    expect(
+      shouldIncludeTypeInEdenListForLiveUpdate({
+        typeId: "system-type-journal",
+        propsJson: { entry_kind: "bubble" },
+        visibleTypeIds: [],
+      }),
+    ).toBe(false);
+    expect(
+      shouldIncludeTypeInEdenListForLiveUpdate({
+        typeId: "system-type-journal",
+        propsJson: {},
+        visibleTypeIds: [],
+      }),
+    ).toBe(true);
+  });
   describe("visibleTypeIds = [] (дефолт — показываем все объекты кроме скрытых коллекций)", () => {
     test("note_obj — принимаем", () => {
       expect(

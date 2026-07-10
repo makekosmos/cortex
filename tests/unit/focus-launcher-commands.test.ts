@@ -4,6 +4,7 @@ import {
   buildFocusAwareCommands,
   FOCUS_START_COMMAND_ID,
   FOCUS_PAUSE_TOGGLE_ID,
+  FOCUS_SKIP_ID,
   FOCUS_DONE_ID,
   FOCUS_STOP_ID,
   FOCUS_EDIT_ID,
@@ -37,6 +38,7 @@ describe("focus launcher commands", () => {
     expect(ids(out)).toEqual([
       "settings:open",
       FOCUS_PAUSE_TOGGLE_ID,
+      FOCUS_SKIP_ID,
       FOCUS_DONE_ID,
       FOCUS_STOP_ID,
       FOCUS_EDIT_ID,
@@ -46,6 +48,8 @@ describe("focus launcher commands", () => {
     expect(toggle.title).toBe("Приостановить фокус");
     const done = out.find((c) => c.id === FOCUS_DONE_ID)!;
     expect(done.title).toBe("Отметить задачу выполненной");
+    const stop = out.find((c) => c.id === FOCUS_STOP_ID)!;
+    expect(stop.title).toBe("Отменить фокус");
   });
 
   test("active paused: pause toggle reads «Продолжить фокус»", () => {

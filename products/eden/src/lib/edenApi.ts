@@ -58,6 +58,33 @@ export const edenApi = {
   createTask: (sourceNoteId: string, title?: string, explicitId?: string) =>
     shim.createTask(sourceNoteId, title, explicitId),
 
+  listBubbles: () => shim.listBubbles(),
+
+  createBubble: (
+    input: string,
+    kind?: import("@/components/bubbles/bubbleDiaryModel").BubbleKind,
+    parentId?: string,
+    contentJson?: import("@tiptap/core").JSONContent,
+  ) => shim.createBubble(input, kind, parentId, contentJson),
+
+  updateBubble: (
+    id: string,
+    patch: {
+      input?: string;
+      kind?: import("@/components/bubbles/bubbleDiaryModel").BubbleKind;
+    },
+  ) => shim.updateBubble(id, patch),
+
+  deleteBubble: (id: string) => shim.deleteBubble(id),
+
+  migrateBubble: (
+    namespace: string,
+    sourceId: string,
+    source: import("@/components/bubbles/bubbleDiaryModel").BubbleTimelineNode,
+  ) => shim.migrateBubble(namespace, sourceId, source),
+
+  subscribeBubbleChanges: (handler: () => void) => shim.subscribeBubbleChanges(handler),
+
   subscribeObjectChanges: (
     handler: (payload: {
       event: "object_upserted" | "object_deleted";

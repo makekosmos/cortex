@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, watch } from "vue";
 import type { JSONContent } from "@tiptap/core";
+import TaskItem from "@tiptap/extension-task-item";
+import TaskList from "@tiptap/extension-task-list";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
 import { plainTextToTiptapDoc } from "./bubbleDiaryModel";
@@ -17,7 +19,7 @@ const content = computed(() => props.contentJson ?? plainTextToTiptapDoc(props.f
 const editor = useEditor({
   content: content.value,
   editable: false,
-  extensions: [StarterKit],
+  extensions: [StarterKit, TaskList, TaskItem.configure({ nested: true })],
   editorProps: {
     attributes: {
       class: "ProseMirror bubble-card__prosemirror",

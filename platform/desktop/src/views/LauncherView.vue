@@ -16,6 +16,7 @@ import {
   Check,
   Pause,
   Play,
+  SkipForward,
   Square,
   Pencil,
 } from "@lucide/vue";
@@ -28,6 +29,7 @@ import { dedupeCommandsById } from "../lib/launcherCommands";
 import {
   buildFocusAwareCommands,
   FOCUS_PAUSE_TOGGLE_ID,
+  FOCUS_SKIP_ID,
   FOCUS_DONE_ID,
   FOCUS_STOP_ID,
   FOCUS_EDIT_ID,
@@ -114,6 +116,8 @@ function builtInIconFor(cmd: CommandRecord): BuiltInIconConfig | null {
   switch (cmd.id) {
     case FOCUS_PAUSE_TOGGLE_ID:
       return { icon: focusPaused.value ? Play : Pause, ...FOCUS_GRADIENT };
+    case FOCUS_SKIP_ID:
+      return { icon: SkipForward, ...FOCUS_GRADIENT };
     case FOCUS_DONE_ID:
       return { icon: Check, ...FOCUS_GRADIENT };
     case FOCUS_STOP_ID:
@@ -147,7 +151,7 @@ const displayCommands = computed<CommandRecord[]>(() =>
   buildFocusAwareCommands(commands.value, {
     active: focusActive.value,
     paused: focusPaused.value,
-  }),
+  }).filter(isCommandVisible),
 );
 
 async function refreshFocusSnapshot(): Promise<void> {
@@ -655,6 +659,11 @@ async function invokeSelected() {
     selectedIndex.value = 0;
     return;
   }
+  if (row.cmd.id === FOCUS_SKIP_ID) {
+    focusSnapshot.value = await window.kepler.focusSession.skip();
+    selectedIndex.value = 0;
+    return;
+  }
   if (row.cmd.id === FOCUS_STOP_ID) {
     focusSnapshot.value = await window.kepler.focusSession.stop();
     selectedIndex.value = 0;
@@ -994,17 +1003,20 @@ async function refreshCommands() {
   // apps сохраняем — список не теряет элементы между открытиями.
   const phase1 = dedupeCommandsById([...cmds, ...prevApps]);
   allCommandsCache.value = phase1;
-  commands.value = phase1.filter(isCommandVisible);
+  commands.value = phase1;
   // Фаза 2: свежие приложения (могут быть медленными/пустыми при мёртвом backend).
   const apps = await fetchApps();
   if (run !== commandsRefreshRun || apps.length === 0) return;
   const deduped = dedupeCommandsById([...cmds, ...apps]);
   allCommandsCache.value = deduped;
-  commands.value = deduped.filter(isCommandVisible);
+  commands.value = deduped;
 }
 
 const hiddenCommandsList = computed<CommandRecord[]>(() =>
-  allCommandsCache.value.filter((cmd) => hiddenCommandIds.value.includes(cmd.id)),
+  buildFocusAwareCommands(allCommandsCache.value, {
+    active: focusActive.value,
+    paused: focusPaused.value,
+  }).filter((cmd) => hiddenCommandIds.value.includes(cmd.id)),
 );
 
 let offShow = () => {};

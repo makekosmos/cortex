@@ -6,8 +6,8 @@
 
 Focus mode — это подсистема Kepler, которая:
 
-1. Показывает shell-owned **Start Focus Session** внутри текущего Shell (`platform/desktop/src/views/LauncherView.vue` + `platform/desktop/src/components/FocusCommandPanel.vue`): цель с `@` mention для Delphi-задачи, длительность и blocklist. Управление текущей сессией идёт отдельными Shell commands (`toggle/pause/resume/skip/complete`) и через focus widget.
-2. Показывает плавающий always-on-top **focus widget** (Spotify-mini-style, 320×52) с countdown'ом текущей pomodoro-фазы и кнопками pause/resume/skip/stop. Виджет живёт пока Kepler shell открыт и тикает по wallclock anchor'у даже без открытой Focus Session панели.
+1. Показывает shell-owned **Start Focus Session** внутри текущего Shell (`platform/desktop/src/views/LauncherView.vue` + `platform/desktop/src/components/FocusCommandPanel.vue`): цель с `@` mention для Delphi-задачи, длительность и blocklist. Во время активной сессии команда старта заменяется на pause/resume, skip, complete, cancel и edit; те же действия доступны в focus widget и Focus UI.
+2. Показывает плавающий always-on-top **focus widget** (Spotify-mini-style, 320×52) с countdown'ом текущей pomodoro-фазы и кнопками pause/resume/skip/complete/cancel. Виджет живёт пока Kepler shell открыт и тикает по wallclock anchor'у даже без открытой Focus Session панели.
 3. Блокирует **distracting домены** через запись в `C:\Windows\System32\drivers\etc\hosts` между маркерами `# === kepler-focus BEGIN/END ===`. Применением занимаются короткоживущие elevated процессы (`Kosmos Helper.exe`, dev bin `kepler-focus-helper.exe`) или постоянный Windows-сервис (`Kosmos System Service`, dev bin `kepler-focus-svc`), который снимает UAC-промпт после первой установки.
 4. Блокирует запуск выбранных приложений **из Kosmos launcher**: Focus Session textarea принимает `@`-mentions приложений из `app_index`, сохраняет `blocked_app_ids` в active state, а `LauncherView` отказывает в `app_index.launch` пока focus active. Это не OS-level process blocker.
 5. Хранит **blocklist'ы** и **active state** в ARK (тип объекта `blocklist_obj` + `sync_kv` ключ `focus.active_state`) через модуль `platform/runtime/src/focus.rs`. Применение к hosts file делает **shell**, backend знает только state.
@@ -27,7 +27,8 @@ Pomodoro session при этом сама по себе живёт в backend'е
 | `platform/desktop/electron/focus-block.ts`                                                              | `applyFocusBlock({ active, domains })` — модифицирует hosts file. Тройной fallback: pipe-to-service → auto-install service (один UAC) → direct helper spawn (если Kepler сам admin) → elevated helper через `Start-Process -Verb RunAs` (UAC per-call).                                                                                                                                           |
 | `platform/desktop/electron/focus-service.ts`                                                            | TS-клиент для Kosmos System Service: CLI invocations (install/uninstall/start/stop/status, elevation через PowerShell `RunAs`) + named-pipe IPC `\\.\pipe\kosmos-system-service` с fallback на legacy `\\.\pipe\kepler-focus-svc`.                                                                                                                                                                |
 | `platform/desktop/src/views/LauncherView.vue` + `platform/desktop/src/components/FocusCommandPanel.vue` | Vue-renderer Start Focus Session внутри content slot текущего Shell: header back остаётся в launcher surface, цель и Delphi task выбираются в одном поле через `@`, форма фокуса не открывает отдельный `BrowserWindow`.                                                                                                                                                                          |
-| `platform/desktop/src/views/FocusWidgetView.vue`                                                        | Vue-renderer виджета. Получает state через `kepler:focus-widget:state` IPC, кнопки дёргают `pomodoro.{pause,resume,skip,stop}` через `invokeOperation`.                                                                                                                                                                                                                                           |
+| `platform/desktop/src/views/FocusWidgetView.vue`                                                        | Vue-renderer виджета. Получает state через `kepler:focus-widget:state` IPC; pause/resume/skip/complete/cancel передают intent в canonical `focus-session.ts`, не обходя time-entry, task и blocking side effects.                                                                                                                                                                                 |
+| `platform/desktop/electron/focus-overlay.ts` + `platform/desktop/src/views/FocusBlockOverlay.vue`       | Прозрачный fullscreen topmost feedback surface: жёлтый edge glow + popup для заблокированного приложения, зелёный edge glow + popup после выполнения задачи. Вне glow/popup renderer остаётся прозрачным.                                                                                                                                                                                         |
 | `platform/native-services/kepler-focus-helper/`                                                         | Dev Rust binary; packaged как `Kosmos Helper.exe` с `requireAdministrator` manifest. Читает один JSON request со stdin (или `--input <file>` если spawned через `Start-Process -Verb RunAs`), выполняет op над hosts file, печатает JSON response, exit. Маркер-секция + idempotent add/remove + backup в `hosts.kepler-backup` (один раз).                                                       |
 | `platform/native-services/kepler-focus-svc/`                                                            | Dev Rust service; packaged как `Kosmos System Service.exe`. Windows-сервис (LocalSystem, AutoStart). Listens на named pipe `\\.\pipe\kosmos-system-service` с SDDL `D:(A;;GA;;;AU)` (доступно authenticated user-mode процессам), переиспользует `kepler_focus_helper::hosts` и даёт privileged NTFS scan для File Search. Legacy service name `KeplerFocusSvc` остаётся supported для migration. |
 | `platform/runtime/src/focus.rs`                                                                         | ARK operations: `focus.list_blocklists`, `focus.upsert_blocklist`, `focus.delete_blocklist`, `focus.get_active_state`, `focus.set_active_state`. Хранит **только state** (`blocklist_id`, `blocked_app_ids`), не трогает hosts file.                                                                                                                                                              |
@@ -57,7 +58,7 @@ flowchart LR
   shell -- "fallback: spawn / RunAs" --> helper
   svc --> hosts
   helper --> hosts
-  widget -- "pomodoro.{pause,resume,skip,stop}" --> backend
+  widget -- "focusSession.{pause,resume,skip,complete,stop}" --> shell
 ```
 
 Ключевые инварианты:
@@ -70,21 +71,21 @@ flowchart LR
 
 ### Electron IPC (shell main ↔ renderer)
 
-| Канал                                                        | Направление          | Назначение                                                                   |
-| ------------------------------------------------------------ | -------------------- | ---------------------------------------------------------------------------- |
-| `kepler:focus-session:open`                                  | renderer → main      | request открыть Focus Session внутри текущего Shell                          |
-| `kepler:focus-session:open-shell`                            | main → launcher      | перевести `LauncherView` в режим Focus Session                               |
-| `kepler:focus-session:{snapshot,list-tasks,list-blocklists}` | renderer → main      | hydrate формы Focus Session                                                  |
-| `kepler:focus-session:{start,pause,resume,skip,stop}`        | renderer → main      | lifecycle Focus Session через backend `pomodoro.*` и shell side effects      |
-| `kepler:focus-session:updated`                               | main → renderer      | refresh открытых Focus Session panels после backend/main-process изменений   |
-| `kepler:focus-widget:set-state`                              | renderer → main      | compat/internal push `Partial<FocusState>`                                   |
-| `kepler:focus-widget:get-state`                              | renderer → main      | initial hydrate в `FocusWidgetView`                                          |
-| `kepler:focus-widget:state`                                  | main → renderer      | broadcast updated state виджету                                              |
-| `kepler:focus-widget:hide`                                   | renderer → main      | спрятать виджет (не destroy)                                                 |
-| `kepler:focus-widget:pomodoro:{pause,resume,skip,stop}`      | renderer → main      | проксируется в `invokeOperation("pomodoro.<op>")`                            |
-| `kepler:focus-widget:stopwatch:stop`                         | renderer → main      | закрывает running `time_entry_obj` (source=manual) напрямую через ARK upsert |
-| `kepler:focus:applied`                                       | main → all renderers | результат `applyFocusBlock` (Settings показывает status)                     |
-| `kepler:focus-service:status-changed`                        | main → all renderers | service install/uninstall — UI рефрешит карточку                             |
+| Канал                                                            | Направление          | Назначение                                                                                                                             |
+| ---------------------------------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `kepler:focus-session:open`                                      | renderer → main      | request открыть Focus Session внутри текущего Shell                                                                                    |
+| `kepler:focus-session:open-shell`                                | main → launcher      | перевести `LauncherView` в режим Focus Session                                                                                         |
+| `kepler:focus-session:{snapshot,list-tasks,list-blocklists}`     | renderer → main      | hydrate формы Focus Session                                                                                                            |
+| `kepler:focus-session:{start,pause,resume,skip,complete,stop}`   | renderer → main      | lifecycle Focus Session через backend `pomodoro.*` и shell side effects; `complete` завершает task, `stop` отменяет без изменения task |
+| `kepler:focus-session:updated`                                   | main → renderer      | refresh открытых Focus Session panels после backend/main-process изменений                                                             |
+| `kepler:focus-widget:set-state`                                  | renderer → main      | compat/internal push `Partial<FocusState>`                                                                                             |
+| `kepler:focus-widget:get-state`                                  | renderer → main      | initial hydrate в `FocusWidgetView`                                                                                                    |
+| `kepler:focus-widget:state`                                      | main → renderer      | broadcast updated state виджету                                                                                                        |
+| `kepler:focus-widget:hide`                                       | renderer → main      | спрятать виджет (не destroy)                                                                                                           |
+| `kepler:focus-widget:pomodoro:{pause,resume,skip,complete,stop}` | renderer → main      | маршрутизируется через canonical Focus Session lifecycle; `complete` завершает задачу, `stop` отменяет фокус без завершения задачи     |
+| `kepler:focus-widget:stopwatch:stop`                             | renderer → main      | закрывает running `time_entry_obj` (source=manual) напрямую через ARK upsert                                                           |
+| `kepler:focus:applied`                                           | main → all renderers | результат `applyFocusBlock` (Settings показывает status)                                                                               |
+| `kepler:focus-service:status-changed`                            | main → all renderers | service install/uninstall — UI рефрешит карточку                                                                                       |
 
 ### ARK operations (backend)
 
@@ -118,7 +119,7 @@ Response: `{ok, active_domains?, error?, pong?}`. Helper bin используе�
 См. [полный список](/agents/forbidden#focus-mode). Кратко:
 
 - ❌ Прямые манипуляции `BrowserWindow` focus widget'а из extension'ов. Только через `kepler:focus-widget:*` IPC.
-- ❌ Обход `pomodoro_host` для lifecycle pomodoro-сессии. Никаких прямых state-mutations из shell — только `invokeOperation("pomodoro.<op>")`.
+- ❌ Обход `focus-session.ts` для lifecycle pomodoro-сессии. UI не вызывает сырой `pomodoro.stop` и не мутирует widget state напрямую; все intents идут через `focusSession.*`.
 - ❌ Прямые writes в hosts file из любого места кроме `Kosmos Helper.exe` / `Kosmos System Service.exe` (dev: `kepler-focus-helper` / `kepler-focus-svc`). Никаких inline `fs.writeFile("C:\\Windows\\...")` из shell или extension'ов.
 - ❌ Запись вне маркерной секции в helper/svc — backup может не покрыть, юзер потеряет свои hosts entries.
 - ❌ Destructive schema migration для `blocklist_obj` (см. [ARK objects](/concepts/ark-objects)).

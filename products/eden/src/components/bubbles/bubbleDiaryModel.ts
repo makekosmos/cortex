@@ -1,11 +1,14 @@
 import type { JSONContent } from "@tiptap/core";
-import { readEntryTiptapDoc, type TiptapDoc, type TiptapNode } from "../../editor-content/content";
+import { readEntryTiptapDoc, type TiptapNode } from "../../editor-content/content";
 import { SYSTEM_TYPE_JOURNAL_ID, SYSTEM_TYPE_NOTE_ID } from "../../lib/systemTypeDefinitions";
 
 export type BubbleKind = "plain" | "idea" | "task" | "highlight";
 
 export interface BubbleTimelineNode {
   id: string;
+  createdAt?: string;
+  updatedAt?: string;
+  parentId?: string;
   date?: string;
   time: string;
   sortKey?: number;
@@ -15,11 +18,23 @@ export interface BubbleTimelineNode {
   kind: BubbleKind;
 }
 
+export interface BubbleThreadNode extends BubbleTimelineNode {
+  parentId?: string;
+}
+
 export const LOCAL_BUBBLES_STORAGE_KEY = "eden-bubble-diary-local-bubbles";
 export const LOCAL_BUBBLES_STORAGE_VERSION = 1;
 
-export const BUBBLE_KIND_OPTIONS: { value: BubbleKind; label: string; color: string }[] = [
-  { value: "plain", label: "Просто", color: "var(--border-color-strong, var(--border))" },
+export const BUBBLE_KIND_OPTIONS: {
+  value: BubbleKind;
+  label: string;
+  color: string;
+}[] = [
+  {
+    value: "plain",
+    label: "Просто",
+    color: "var(--border-color-strong, var(--border))",
+  },
   { value: "idea", label: "Идея", color: "#017AFF" },
   { value: "task", label: "Задача", color: "#4de64d" },
   { value: "highlight", label: "Подсветить", color: "#FF703A" },
@@ -86,6 +101,8 @@ export function createDraftBubble(
 
   return {
     id: `draft-${now.getTime()}`,
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
     date: formatBubbleDateKey(now),
     time: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
     sortKey: now.getTime(),
@@ -94,6 +111,130 @@ export function createDraftBubble(
     tags: draft.tags,
     kind: "plain",
   };
+}
+
+export function formatBubbleOccurrenceLabel(
+  occurrence: string | number | Date,
+  now = new Date(),
+): string {
+  const date = occurrence instanceof Date ? occurrence : new Date(occurrence);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const time = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const day = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime();
+  if (day === today) return time;
+  if (day === yesterday) return `Вчера, ${time}`;
+
+  const months = [
+    "янв",
+    "фев",
+    "мар",
+    "апр",
+    "май",
+    "июн",
+    "июл",
+    "авг",
+    "сен",
+    "окт",
+    "ноя",
+    "дек",
+  ];
+  const dateLabel = `${date.getDate()} ${months[date.getMonth()]}`;
+  return date.getFullYear() === now.getFullYear()
+    ? `${dateLabel}, ${time}`
+    : `${dateLabel} ${date.getFullYear()}, ${time}`;
+}
+
+export function bubbleOccurrenceMillis(node: BubbleTimelineNode): number | null {
+  if (node.createdAt) {
+    const parsed = Date.parse(node.createdAt);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  if (typeof node.sortKey === "number" && Number.isFinite(node.sortKey)) return node.sortKey;
+  if (node.date && /^\d{4}-\d{2}-\d{2}$/.test(node.date) && /^\d{2}:\d{2}$/.test(node.time)) {
+    const [year, month, day] = node.date.split("-").map(Number);
+    const [hour, minute] = node.time.split(":").map(Number);
+    const local = new Date(year, month - 1, day, hour, minute);
+    if (
+      local.getFullYear() === year &&
+      local.getMonth() === month - 1 &&
+      local.getDate() === day &&
+      local.getHours() === hour &&
+      local.getMinutes() === minute
+    ) {
+      return local.getTime();
+    }
+  }
+  const draftTimestamp = Number(node.id.match(/^draft-(\d{10,})$/)?.[1]);
+  return Number.isFinite(draftTimestamp) ? draftTimestamp : null;
+}
+
+export function normalizeBubbleThreads(
+  bubbles: BubbleTimelineNode[],
+  replyLinks: Array<{
+    id: string;
+    sourceObjectId: string;
+    targetObjectId: string;
+  }>,
+): { bubbles: BubbleThreadNode[]; invalidLinkIds: string[] } {
+  const byId = new Map(bubbles.map((bubble) => [bubble.id, bubble]));
+  const linksByChild = new Map<string, typeof replyLinks>();
+  const invalid = new Set<string>();
+
+  for (const link of replyLinks) {
+    if (
+      link.sourceObjectId === link.targetObjectId ||
+      !byId.has(link.sourceObjectId) ||
+      !byId.has(link.targetObjectId)
+    ) {
+      invalid.add(link.id);
+      continue;
+    }
+    const links = linksByChild.get(link.sourceObjectId) ?? [];
+    links.push(link);
+    linksByChild.set(link.sourceObjectId, links);
+  }
+
+  const parentByChild = new Map<string, string>();
+  for (const [childId, links] of linksByChild) {
+    const targets = new Set(links.map((link) => link.targetObjectId));
+    if (targets.size !== 1) {
+      links.forEach((link) => invalid.add(link.id));
+      continue;
+    }
+    parentByChild.set(childId, links[0].targetObjectId);
+    links.slice(1).forEach((link) => invalid.add(link.id));
+  }
+
+  const candidateChildren = new Set(parentByChild.keys());
+  for (const [childId, parentId] of parentByChild) {
+    if (candidateChildren.has(parentId)) {
+      parentByChild.delete(childId);
+      linksByChild.get(childId)?.forEach((link) => invalid.add(link.id));
+    }
+  }
+
+  const roots = bubbles
+    .filter((bubble) => !parentByChild.has(bubble.id))
+    .sort(
+      (left, right) =>
+        bubbleSortValue(right) - bubbleSortValue(left) || left.id.localeCompare(right.id),
+    );
+  const threaded: BubbleThreadNode[] = [];
+  for (const root of roots) {
+    threaded.push({ ...root, parentId: undefined });
+    const replies = bubbles
+      .filter((bubble) => parentByChild.get(bubble.id) === root.id)
+      .sort(
+        (left, right) =>
+          bubbleSortValue(left) - bubbleSortValue(right) || left.id.localeCompare(right.id),
+      );
+    threaded.push(...replies.map((reply) => ({ ...reply, parentId: root.id })));
+  }
+
+  return { bubbles: threaded, invalidLinkIds: [...invalid] };
 }
 
 export function createJournalBubblesFromEntry(entry: JournalEntryLike): BubbleTimelineNode[] {
@@ -194,7 +335,13 @@ export function formatBubbleDateKey(date: Date): string {
 
 function createBubbleFromContent(
   contentJson: JSONContent,
-  opts: { id: string; date?: string; time: string; sortKey?: number; plainText: string },
+  opts: {
+    id: string;
+    date?: string;
+    time: string;
+    sortKey?: number;
+    plainText: string;
+  },
 ): BubbleTimelineNode | null {
   const draft = parseBubbleDraft(opts.plainText);
   if (!draft.text) return null;
@@ -211,8 +358,8 @@ function createBubbleFromContent(
   };
 }
 
-function docFromBlock(block: TiptapNode): TiptapDoc {
-  return { type: "doc", content: [block] };
+function docFromBlock(block: TiptapNode): JSONContent {
+  return { type: "doc", content: [block as JSONContent] };
 }
 
 function journalDate(entry: JournalEntryLike): string {
@@ -238,6 +385,10 @@ function tiptapPlainText(node: JSONContent): string {
     .join("")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+export function bubblePlainText(node: JSONContent): string {
+  return tiptapPlainText(node);
 }
 
 function collectTiptapText(node: JSONContent, chunks: string[]): void {
@@ -279,6 +430,10 @@ function normalizeBubbleSortKey(
   const parsed = Date.parse(`${dateKey}T00:00:00.000Z`);
   if (!Number.isFinite(parsed)) return undefined;
   return parsed;
+}
+
+function bubbleSortValue(bubble: BubbleTimelineNode): number {
+  return bubbleOccurrenceMillis(bubble) ?? 0;
 }
 
 function stripTagsFromTiptapDoc(doc: JSONContent): JSONContent {

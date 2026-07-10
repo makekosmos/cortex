@@ -34,6 +34,8 @@ export function shouldIncludeTypeInEdenListForLiveUpdate(opts: {
 }): boolean {
   const { typeId, propsJson, visibleTypeIds } = opts;
 
+  if (typeId === "system-type-journal" && propsJson.entry_kind === "bubble") return false;
+
   if (typeId === COLLECTION_TYPE_ID) {
     // Коллекции всегда проходят дополнительный фильтр по object_type_id.
     const objectTypeId = propsJson.object_type_id;

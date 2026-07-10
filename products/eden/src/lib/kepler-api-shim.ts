@@ -41,6 +41,7 @@ import {
 } from "./kepler-ui-runtime";
 import { onCommand } from "./kepler-command-bus";
 import { createEntryApi } from "./kepler-entry-api";
+import { createBubbleApi } from "./kepler-bubble-api";
 import {
   createFolder,
   deleteFolder,
@@ -88,6 +89,28 @@ function keplerBridge(): KeplerArkBridge {
 
 function ark<T = unknown>(operation: string, params?: Record<string, unknown>): Promise<T> {
   return keplerBridge().request<T>(operation, params);
+}
+
+export const { listBubbles, createBubble, updateBubble, deleteBubble, migrateBubble } =
+  createBubbleApi(ark);
+
+export function subscribeBubbleChanges(handler: () => void): () => void {
+  const offObjects = subscribeObjectChanges(({ typeId }) => {
+    if (!typeId || typeId === "system-type-journal") handler();
+  });
+  const offLinks = keplerBridge().subscribe("entity_changed", (payload) => {
+    const record =
+      payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+    const entity =
+      record.entity && typeof record.entity === "object"
+        ? (record.entity as Record<string, unknown>)
+        : record;
+    if (entity.entity_type === "object_link") handler();
+  });
+  return () => {
+    offObjects();
+    offLinks();
+  };
 }
 
 export const {

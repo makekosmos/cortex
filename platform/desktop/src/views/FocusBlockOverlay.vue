@@ -1,21 +1,24 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted, onUnmounted } from "vue";
+import { Check } from "@lucide/vue";
+import { computed, nextTick, onMounted, onUnmounted, shallowRef } from "vue";
+import type { FocusOverlayFeedback } from "@shared/ipc-api-shell-services";
 
-interface BlockedApp {
-  id: string;
-  title: string;
-  icon?: string | null;
-}
-
-const app = ref<BlockedApp | null>(null);
-const active = ref(false); // плашка/градиент в DOM
-const edgesOn = ref(false); // градиент по краям (fade 300ms)
-const popupOn = ref(false); // плашка (slide 300ms сверху)
+const feedback = shallowRef<FocusOverlayFeedback | null>(null);
+const active = shallowRef(false); // плашка/градиент в DOM
+const edgesOn = shallowRef(false); // градиент по краям (fade 300ms)
+const popupOn = shallowRef(false); // плашка (slide 300ms сверху)
+const isBlocked = computed(() => feedback.value?.kind === "blocked");
+const toneClass = computed(() =>
+  feedback.value ? `focus-overlay--${feedback.value.kind}` : undefined,
+);
+const feedbackLabel = computed(() =>
+  feedback.value?.kind === "completed" ? "Задача выполнена" : "Заблокировано во время фокуса",
+);
 
 // Hold-to-confirm на кнопке «Открыть»: при наведении отсчёт 3→2→1, после —
 // кнопка становится кликабельной.
-const holdState = ref<"idle" | "counting" | "ready">("idle");
-const countdown = ref(3);
+const holdState = shallowRef<"idle" | "counting" | "ready">("idle");
+const countdown = shallowRef(3);
 
 let edgesTimer: ReturnType<typeof setTimeout> | null = null;
 let popupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -42,10 +45,10 @@ function resetHold(): void {
   countdown.value = 3;
 }
 
-function show(blocked: BlockedApp): void {
+function show(nextFeedback: FocusOverlayFeedback): void {
   clearTimers();
   resetHold();
-  app.value = blocked;
+  feedback.value = nextFeedback;
   active.value = true;
   edgesOn.value = false;
   popupOn.value = false;
@@ -82,6 +85,7 @@ function finish(): void {
 
 // --- hover плашки: пауза авто-скрытия + интерактивность окна ---------------
 function onPopupEnter(): void {
+  if (!isBlocked.value) return;
   if (popupTimer) {
     clearTimeout(popupTimer);
     popupTimer = null;
@@ -98,6 +102,7 @@ function onPopupEnter(): void {
 }
 
 function onPopupLeave(): void {
+  if (!isBlocked.value) return;
   cancelHold();
   void window.kepler.focusOverlay.setInteractive(false);
   // После увода курсора — даём плашке уехать через короткую паузу.
@@ -132,8 +137,9 @@ function cancelHold(): void {
 }
 
 async function onOpenClick(): Promise<void> {
-  if (holdState.value !== "ready" || !app.value) return;
-  const id = app.value.id;
+  const current = feedback.value;
+  if (holdState.value !== "ready" || current?.kind !== "blocked") return;
+  const id = current.id;
   finish();
   await window.kepler.focusSession.snoozeApp(id);
   await new Promise((r) => setTimeout(r, 200));
@@ -145,7 +151,7 @@ async function onOpenClick(): Promise<void> {
 }
 
 onMounted(() => {
-  offShow = window.kepler.focusOverlay.onShow((blocked) => show(blocked));
+  offShow = window.kepler.focusOverlay.onShow(show);
   window.kepler.focusOverlay.ready();
 });
 
@@ -157,7 +163,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="focus-overlay">
+  <div class="focus-overlay" :class="toneClass">
     <div
       v-if="active"
       class="focus-overlay__edges"
@@ -165,22 +171,32 @@ onUnmounted(() => {
       aria-hidden="true"
     />
     <div
-      v-if="active && app"
+      v-if="active && feedback"
       class="focus-overlay__popup"
-      :class="{ 'focus-overlay__popup--on': popupOn }"
+      :class="{
+        'focus-overlay__popup--on': popupOn,
+        'focus-overlay__popup--completed': feedback.kind === 'completed',
+      }"
       @mouseenter="onPopupEnter"
       @mouseleave="onPopupLeave"
     >
       <div class="focus-overlay__popup-inner">
-        <img v-if="app.icon" :src="app.icon" class="focus-overlay__icon" alt="" />
+        <img
+          v-if="feedback.kind === 'blocked' && feedback.icon"
+          :src="feedback.icon"
+          class="focus-overlay__icon"
+          alt=""
+        />
         <div v-else class="focus-overlay__icon-fallback">
-          {{ app.title.charAt(0).toUpperCase() }}
+          <Check v-if="feedback.kind === 'completed'" :size="20" />
+          <template v-else>{{ feedback.title.charAt(0).toUpperCase() }}</template>
         </div>
         <div class="focus-overlay__body">
-          <div class="focus-overlay__label">Заблокировано во время фокуса</div>
-          <div class="focus-overlay__title">{{ app.title }}</div>
+          <div class="focus-overlay__label">{{ feedbackLabel }}</div>
+          <div class="focus-overlay__title">{{ feedback.title }}</div>
         </div>
         <button
+          v-if="feedback.kind === 'blocked'"
           type="button"
           class="focus-overlay__open"
           :class="{ 'focus-overlay__open--ready': holdState === 'ready' }"
@@ -201,6 +217,11 @@ onUnmounted(() => {
   inset: 0;
   pointer-events: none;
   overflow: hidden;
+  --feedback-accent: var(--status-warning);
+}
+
+.focus-overlay--completed {
+  --feedback-accent: var(--status-success);
 }
 
 .focus-overlay__edges {
@@ -212,22 +233,22 @@ onUnmounted(() => {
   background:
     linear-gradient(
       to bottom,
-      color-mix(in srgb, var(--timer-work, oklch(0.55 0.22 22)) 32%, transparent) 0%,
+      color-mix(in srgb, var(--feedback-accent) 32%, transparent) 0%,
       transparent 16%
     ),
     linear-gradient(
       to top,
-      color-mix(in srgb, var(--timer-work, oklch(0.55 0.22 22)) 18%, transparent) 0%,
+      color-mix(in srgb, var(--feedback-accent) 18%, transparent) 0%,
       transparent 10%
     ),
     linear-gradient(
       to right,
-      color-mix(in srgb, var(--timer-work, oklch(0.55 0.22 22)) 18%, transparent) 0%,
+      color-mix(in srgb, var(--feedback-accent) 18%, transparent) 0%,
       transparent 7%
     ),
     linear-gradient(
       to left,
-      color-mix(in srgb, var(--timer-work, oklch(0.55 0.22 22)) 18%, transparent) 0%,
+      color-mix(in srgb, var(--feedback-accent) 18%, transparent) 0%,
       transparent 7%
     );
 }
@@ -253,6 +274,10 @@ onUnmounted(() => {
   transform: translateX(-50%) translateY(0);
 }
 
+.focus-overlay__popup--completed {
+  pointer-events: none;
+}
+
 .focus-overlay__popup-inner {
   display: flex;
   align-items: center;
@@ -264,11 +289,13 @@ onUnmounted(() => {
     --popover,
     color-mix(in srgb, var(--background, #1e1e20) 96%, var(--foreground, #fff) 4%)
   );
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
   min-width: 360px;
   max-width: 500px;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  box-shadow:
+    0 8px 32px color-mix(in srgb, var(--background) 55%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--feedback-accent) 18%, transparent);
 }
 
 .focus-overlay__icon {
@@ -287,8 +314,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--foreground, #fff) 12%, transparent);
-  color: var(--foreground, #fff);
+  background: color-mix(in srgb, var(--feedback-accent) 16%, transparent);
+  color: var(--feedback-accent);
   font-size: 16px;
   font-weight: 700;
 }

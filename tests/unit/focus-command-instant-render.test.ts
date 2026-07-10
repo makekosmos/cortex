@@ -13,4 +13,17 @@ describe("focus command instant render", () => {
     expect(source).not.toContain('v-if="loading"');
     expect(source).not.toContain("Загружаю фокус");
   });
+
+  test("routes active-session actions through the canonical focus session API", () => {
+    const source = readFileSync(
+      path.join(process.cwd(), "platform", "desktop", "src", "components", "FocusCommandPanel.vue"),
+      "utf8",
+    );
+
+    expect(source).toContain("focusSession.pause()");
+    expect(source).toContain("focusSession.resume()");
+    expect(source).toContain("focusSession.skip()");
+    expect(source).toContain("focusSession.complete()");
+    expect(source).toContain("focusSession.stop()");
+  });
 });

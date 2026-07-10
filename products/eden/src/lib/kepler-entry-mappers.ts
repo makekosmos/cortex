@@ -309,6 +309,9 @@ export function shouldIncludeObjectInEdenList(object: {
   typeId: string;
   propsJson?: Record<string, unknown>;
 }): boolean {
+  if (object.typeId === "system-type-journal" && object.propsJson?.entry_kind === "bubble") {
+    return false;
+  }
   if (object.typeId !== SYSTEM_TYPE_COLLECTION_ID) return true;
   const objectTypeId = object.propsJson?.object_type_id;
   return typeof objectTypeId === "string" && shouldShowAsEdenCollection(objectTypeId);

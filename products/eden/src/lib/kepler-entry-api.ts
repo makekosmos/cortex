@@ -272,6 +272,7 @@ export function createEntryApi(
 
       return objects
         .filter((object) => !object.deletedAt)
+        .filter(shouldIncludeObjectInEdenList)
         .map((object) => mapArkObjectToEntry(object, links, undefined))
         .sort((a, b) => b.updated_at - a.updated_at);
     },

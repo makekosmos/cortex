@@ -22,4 +22,9 @@ test("focus blocked-app overlay uses a transparent native surface", async () => 
   expect(viewSource).toContain("edgesOn.value = true");
   expect(viewSource).toContain("linear-gradient(");
   expect(viewSource).toContain('class="focus-overlay__popup"');
+  expect(viewSource).toContain("--feedback-accent: var(--status-warning)");
+  expect(viewSource).toContain("--feedback-accent: var(--status-success)");
+  expect(viewSource).toContain("Задача выполнена");
+  expect(windowSource).toContain('kind: "blocked"');
+  expect(windowSource).toContain('kind: "completed"');
 });

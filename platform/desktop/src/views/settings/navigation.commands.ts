@@ -5,6 +5,14 @@ import edenAddSvg from "../../assets/eden-add.svg";
 import edenDiarySvg from "../../assets/eden-diary.svg";
 import edenSvg from "../../assets/eden.svg";
 import kosmosIconPng from "../../../build/icon.png";
+import {
+  FOCUS_DONE_ID,
+  FOCUS_EDIT_ID,
+  FOCUS_PAUSE_TOGGLE_ID,
+  FOCUS_SKIP_ID,
+  FOCUS_START_COMMAND_ID,
+  FOCUS_STOP_ID,
+} from "../../lib/focusLauncherCommands";
 
 import type { AppCommandSetting, AppSettingsTab } from "./navigation";
 
@@ -75,8 +83,38 @@ export const appCommandSettings: Record<AppSettingsTab, AppCommandSetting[]> = {
   ],
   "time-tracker": [
     {
-      id: "kepler:focus-session",
+      id: FOCUS_START_COMMAND_ID,
       title: "Начать фокус",
+      icon: kosmosIconPng,
+      ...FOCUS_COMMAND_GRADIENT,
+    },
+    {
+      id: FOCUS_PAUSE_TOGGLE_ID,
+      title: "Приостановить / продолжить фокус",
+      icon: kosmosIconPng,
+      ...FOCUS_COMMAND_GRADIENT,
+    },
+    {
+      id: FOCUS_SKIP_ID,
+      title: "Пропустить сессию",
+      icon: kosmosIconPng,
+      ...FOCUS_COMMAND_GRADIENT,
+    },
+    {
+      id: FOCUS_DONE_ID,
+      title: "Отметить задачу выполненной",
+      icon: kosmosIconPng,
+      ...FOCUS_COMMAND_GRADIENT,
+    },
+    {
+      id: FOCUS_STOP_ID,
+      title: "Отменить фокус",
+      icon: kosmosIconPng,
+      ...FOCUS_COMMAND_GRADIENT,
+    },
+    {
+      id: FOCUS_EDIT_ID,
+      title: "Редактировать фокус",
       icon: kosmosIconPng,
       ...FOCUS_COMMAND_GRADIENT,
     },

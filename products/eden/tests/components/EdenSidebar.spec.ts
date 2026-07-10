@@ -89,7 +89,6 @@ const EdenSidebarFixture = defineComponent({
         createEntryCount.value += 1;
       },
       onOpenDiary() {
-        currentEntry.value = null;
         activeScreen.value = "diary";
       },
       onToggleSearch() {
@@ -186,6 +185,7 @@ describe("EdenSidebar contract", () => {
     await expect
       .element(screen.getByTestId("sidebar-open-diary"))
       .toHaveAttribute("data-active", "true");
+    await expect.element(screen.getByTestId("recent-entry-entry-1")).not.toHaveClass("is-active");
 
     await userEvent.click(screen.getByTestId("widget-link-search"));
     await expect.element(screen.getByTestId("toggle-search-count")).toHaveTextContent("1");

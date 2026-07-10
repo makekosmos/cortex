@@ -38,6 +38,18 @@ interface DiagnosticsWindowMoveBenchmarkResult {
   frames_over_50ms: number;
 }
 
+export type FocusOverlayFeedback =
+  | {
+      kind: "blocked";
+      id: string;
+      title: string;
+      icon?: string | null;
+    }
+  | {
+      kind: "completed";
+      title: string;
+    };
+
 export interface KeplerApiShellServices {
   /** Floating focus widget — Spotify-mini-player style always-on-top
       окно для активной pomodoro сессии. */
@@ -68,6 +80,8 @@ export interface KeplerApiShellServices {
       pause(): Promise<void>;
       resume(): Promise<void>;
       skip(): Promise<void>;
+      complete(): Promise<void>;
+      /** Cancel the session without completing its task. */
       stop(): Promise<void>;
     };
     /** Stopwatch (manual time_entry) stop. Закрывает running entry с
@@ -218,9 +232,7 @@ export interface KeplerApiShellServices {
   };
   focusOverlay: {
     ready(): void;
-    onShow(
-      listener: (app: { id: string; title: string; icon?: string | null }) => void,
-    ): () => void;
+    onShow(listener: (feedback: FocusOverlayFeedback) => void): () => void;
     setInteractive(interactive: boolean): Promise<void>;
     showBlocked(app: { id: string; title: string; icon?: string | null }): Promise<void>;
     /** Сигнализирует main, что анимация завершена и окно можно скрыть. */

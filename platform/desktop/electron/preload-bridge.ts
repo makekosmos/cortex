@@ -195,6 +195,7 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
         pause: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:pause"),
         resume: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:resume"),
         skip: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:skip"),
+        complete: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:complete"),
         stop: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:stop"),
       },
       stopwatch: {

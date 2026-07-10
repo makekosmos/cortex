@@ -71,8 +71,8 @@ export function createKeplerSettingsBridge(): KeplerSettingsBridge {
     focusOverlay: {
       ready: () => ipcRenderer.send("kepler:focus-overlay:ready"),
       onShow: (listener) => {
-        const handler = (_e: Electron.IpcRendererEvent, app: unknown) =>
-          listener(app as { id: string; title: string; icon?: string | null });
+        const handler = (_e: Electron.IpcRendererEvent, feedback: unknown) =>
+          listener(feedback as Parameters<typeof listener>[0]);
         ipcRenderer.on("kepler:focus-overlay:show", handler);
         return () => ipcRenderer.removeListener("kepler:focus-overlay:show", handler);
       },

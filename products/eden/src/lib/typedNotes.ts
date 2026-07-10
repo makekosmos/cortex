@@ -34,8 +34,8 @@ function parseJsonWithContext(json: string, label: string): unknown {
   }
 }
 
-function arrayOrDefault<T>(value: T[] | undefined, fallback: T[]): T[] {
-  return value ? value : fallback;
+function arrayOrDefault<T>(value: T[] | undefined, fallback: T[] | undefined): T[] {
+  return value ?? fallback ?? [];
 }
 
 export function parseNoteTypeDefinition(schemaJson: string) {
