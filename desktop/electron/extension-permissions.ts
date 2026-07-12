@@ -17,6 +17,7 @@ export interface ExtensionHostPermissionCheck {
     | "userData.read"
     | "userData.write"
     | "focus.control"
+    | "dialogs.directory"
     | "markdownFiles.open"
     | "markdownFiles.save";
 }
@@ -153,6 +154,19 @@ function requiredCapabilities(operation: string, params?: Record<string, unknown
   }
   if (operation.startsWith("dictation.")) return ["dictation.control"];
   if (
+    operation === "agents.projects.list" ||
+    operation === "agents.sessions.list" ||
+    operation === "agents.sessions.get" ||
+    operation === "agents.sessions.timeline" ||
+    operation === "agents.diff.get" ||
+    operation === "agents.models.list" ||
+    operation === "agents.editors.list" ||
+    operation === "agents.snapshot"
+  ) {
+    return ["agents.read"];
+  }
+  if (operation.startsWith("agents.")) return ["agents.control"];
+  if (
     operation === "app_index.list_all" ||
     operation === "app_index.search" ||
     operation === "file_index.search" ||
@@ -254,6 +268,7 @@ function requiredEventCapabilities(event: string): string[] {
     return ["commands.invoke", "commands.register"];
   }
   if (event.startsWith("pomodoro_")) return ["focus.control"];
+  if (event === "agents_event") return ["agents.read"];
   if (event === "peer_list_updated" || event === "sync_error") return ["sync.read"];
   return [];
 }

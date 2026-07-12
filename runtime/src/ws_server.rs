@@ -14,6 +14,7 @@ use thiserror::Error;
 use tokio::net::TcpListener;
 use tokio_tungstenite::tungstenite::Message;
 
+use crate::agents::AgentsService;
 use crate::app_index::AppIndex;
 use crate::ark_host::ArkHost;
 use crate::arrancador;
@@ -180,6 +181,9 @@ pub struct WsServer {
     dictation_host: Arc<DictationHost>,
     app_index: Arc<AppIndex>,
     file_index: Arc<FileIndex>,
+    agents: Arc<tokio::sync::OnceCell<Arc<AgentsService>>>,
+    agents_data_dir: Arc<std::path::PathBuf>,
+    agent_events: tokio::sync::broadcast::Sender<serde_json::Value>,
     usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
     rpc_diagnostics: SharedRpcDiagnostics,
     next_client_id: Arc<AtomicU64>,
@@ -200,15 +204,19 @@ impl WsServer {
             .parse()
             .expect("hardcoded socket literal is always valid");
         let listener = TcpListener::bind(addr).await?;
+        let (agent_events, _) = tokio::sync::broadcast::channel(512);
         Ok(WsServer {
             listener,
             ark_host,
             auth_token: Arc::new(auth_token),
             command_bus: Arc::new(CommandBus::new()),
-            pomodoro_host: PomodoroHost::new(data_dir),
+            pomodoro_host: PomodoroHost::new(data_dir.clone()),
             dictation_host: DictationHost::new(),
             app_index,
             file_index,
+            agents: Arc::new(tokio::sync::OnceCell::new()),
+            agents_data_dir: Arc::new(data_dir.clone()),
+            agent_events,
             usage_diagnostics,
             rpc_diagnostics: Arc::new(RpcDiagnostics::new()),
             next_client_id: Arc::new(AtomicU64::new(1)),
@@ -230,6 +238,10 @@ impl WsServer {
             .unwrap_or_default()
     }
 
+    pub fn agents_handle(&self) -> Arc<tokio::sync::OnceCell<Arc<AgentsService>>> {
+        self.agents.clone()
+    }
+
     /// Главный accept loop. Spawn'ит per-connection task. Завершается, если
     /// listener закрыт (например, через graceful shutdown).
     pub async fn run(self) -> Result<(), WsServerError> {
@@ -242,13 +254,28 @@ impl WsServer {
             let dict = self.dictation_host.clone();
             let app_idx = self.app_index.clone();
             let file_idx = self.file_index.clone();
+            let agents = self.agents.clone();
+            let agents_data_dir = self.agents_data_dir.clone();
+            let agent_events = self.agent_events.clone();
             let usage_diag = self.usage_diagnostics.clone();
             let rpc_diag = self.rpc_diagnostics.clone();
             let client_id = self.next_client_id.fetch_add(1, Ordering::Relaxed);
             tokio::spawn(async move {
                 if let Err(e) = handle_connection(
-                    stream, ark_host, token, bus, pomo, dict, app_idx, file_idx, usage_diag,
-                    rpc_diag, client_id,
+                    stream,
+                    ark_host,
+                    token,
+                    bus,
+                    pomo,
+                    dict,
+                    app_idx,
+                    file_idx,
+                    agents,
+                    agents_data_dir,
+                    agent_events,
+                    usage_diag,
+                    rpc_diag,
+                    client_id,
                 )
                 .await
                 {
@@ -272,6 +299,9 @@ async fn handle_connection(
     dictation_host: Arc<DictationHost>,
     app_index: Arc<AppIndex>,
     file_index: Arc<FileIndex>,
+    agents: Arc<tokio::sync::OnceCell<Arc<AgentsService>>>,
+    agents_data_dir: Arc<std::path::PathBuf>,
+    agent_events: tokio::sync::broadcast::Sender<serde_json::Value>,
     usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
     rpc_diagnostics: SharedRpcDiagnostics,
     client_id: ClientId,
@@ -346,6 +376,7 @@ async fn handle_connection(
     // events не доходили до клиентов. Cross-app live updates (Eden subscribed
     // на object_upserted для taskRef) полагаются на этот forward.
     let mut ark_evt_rx = ark_host.subscribe_events();
+    let mut agents_rx = agent_events.subscribe();
 
     loop {
         tokio::select! {
@@ -388,6 +419,17 @@ async fn handle_connection(
                         if sink.send(Message::Text(payload.to_string())).await.is_err() {
                             break;
                         }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+
+            // Daedalus events are already flat wire envelopes.
+            agent_evt = agents_rx.recv() => {
+                match agent_evt {
+                    Ok(payload) => {
+                        if sink.send(Message::Text(payload.to_string())).await.is_err() { break; }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
@@ -515,6 +557,36 @@ async fn handle_connection(
                     if sink.send(Message::Text(payload)).await.is_err() {
                         break;
                     }
+                    continue;
+                }
+
+                if let Some(rest) = operation.strip_prefix("agents.") {
+                    let service = agents
+                        .get_or_try_init(|| async {
+                            AgentsService::new_with_events(&agents_data_dir, agent_events.clone())
+                        })
+                        .await;
+                    let result = match service {
+                        Ok(service) => service.handle(rest, params).await,
+                        Err(error) => Err(error.clone()),
+                    };
+                    let mut envelope = serde_json::Map::new();
+                    if let Some(id) = req_id {
+                        envelope.insert("id".into(), serde_json::Value::String(id));
+                    }
+                    match result {
+                        Ok(data) => {
+                            envelope.insert("ok".into(), serde_json::Value::Bool(true));
+                            envelope.insert("data".into(), data);
+                        }
+                        Err(error) => {
+                            envelope.insert("ok".into(), serde_json::Value::Bool(false));
+                            envelope.insert("error".into(), serde_json::Value::String(error));
+                        }
+                    }
+                    let payload = serde_json::Value::Object(envelope).to_string();
+                    observe_rpc_payload(&rpc_diagnostics, &operation, operation_started, &payload);
+                    if sink.send(Message::Text(payload)).await.is_err() { break; }
                     continue;
                 }
 
