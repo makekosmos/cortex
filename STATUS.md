@@ -1,13 +1,19 @@
-# Kosmos — статус проекта (2026-07-04)
+# Kosmos — статус проекта (2026-07-13)
 
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
-| Kosmos Desktop (win / mac) | 0.6.23 / 0.5.1 |
-| Eden                       | 0.5.3          |
+| Kosmos Desktop (win / mac) | 0.6.24 / 0.5.1 |
+| Eden                       | 0.5.4          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
 | Arrancador                 | 0.1.5          |
 | Akasha                     | 0.1.2          |
+
+## 2026-07-13 — Bubble diary threads + focus-session feedback (Kosmos Desktop 0.6.23 -> 0.6.24, Eden 0.5.3 -> 0.5.4)
+
+Eden diary now keeps ARK-backed threads coherent while editing and navigating them, including the timeline and sidebar. The desktop focus flow now opens its command panel immediately and carries session feedback through the overlay and widget IPC path.
+
+Checks: `bun run --cwd platform/desktop typecheck`, `bun run --cwd platform/desktop build:extensions`, `bun run docs:check`.
 
 ## 2026-07-04 — Diary chronology repair + native titlebar inset (Kosmos Desktop 0.6.22 -> 0.6.23, Eden 0.5.2 -> 0.5.3)
 
