@@ -7,6 +7,7 @@ import { ArkKeplerTransport } from "./ark-kepler-transport.js";
 import { createArkClientApis } from "./ark-client-apis.js";
 import { generateHlc, withLocalWriteDeviceId } from "./ark-client-helpers.js";
 import { dispatchArkEvent } from "./ark-event-dispatcher.js";
+import { createArkAgentsApi } from "./ark-client-agents.js";
 
 import type {
   ArkClientOptions,
@@ -26,6 +27,7 @@ import type {
 } from "./ark-client.types.js";
 
 import type { ArkUsageApi } from "./ark-client-usage.types.js";
+import type { ArkAgentsApi, AgentsEvent } from "./ark-client-agents.types.js";
 
 // ---------------------------------------------------------------------------
 // ArkClient
@@ -39,6 +41,7 @@ export class ArkClient {
   readonly usage: ArkUsageApi;
   readonly kv: ArkKvApi;
   readonly commands: ArkCommandsApi;
+  readonly agents: ArkAgentsApi;
 
   // ---- Built-in sidecar child-process (used when requestFn is absent) ----
   private childTransport: ArkChildTransport | null = null;
@@ -74,6 +77,14 @@ export class ArkClient {
     this.usage = apis.usage;
     this.kv = apis.kv;
     this.commands = apis.commands;
+    this.agents = createArkAgentsApi(
+      <T>(operation: string, params: Record<string, unknown> = {}) =>
+        this.requestAfterInit<T>({ operation, ...params }),
+      (callback) =>
+        this.onArkEvent((event) => {
+          if (event.event === "agents_event") callback(event as unknown as AgentsEvent);
+        }),
+    );
   }
 
   // -------------------------------------------------------------------------

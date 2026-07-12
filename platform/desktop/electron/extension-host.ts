@@ -24,7 +24,7 @@
 // kind: "static" (legacy PoC) — preload не используется по умолчанию;
 // extension сам отвечает за всю свою логику.
 
-import { app, BrowserWindow, ipcMain, type WebContents } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, type WebContents } from "electron";
 import {
   ensureUserDataDir,
   isHeadlessOrTest,
@@ -240,6 +240,7 @@ function assertExtensionSenderHostPermission(
     | "userData.read"
     | "userData.write"
     | "focus.control"
+    | "dialogs.directory"
     | "markdownFiles.open"
     | "markdownFiles.save",
 ): void {
@@ -258,6 +259,7 @@ export function assertExtensionSenderHostPermissionIfExtension(
     | "userData.read"
     | "userData.write"
     | "focus.control"
+    | "dialogs.directory"
     | "markdownFiles.open"
     | "markdownFiles.save",
 ): void {
@@ -298,6 +300,15 @@ registerExtensionWindowIpc({
   extensionIdForSender,
   initialRouteForSender,
   windowForSender,
+});
+
+ipcMain.handle("kepler:extension:dialogs:pick-directory", async (event) => {
+  assertExtensionSenderHostPermission(event.sender, "dialogs.directory");
+  const parent = windowForSender(event.sender);
+  const result = parent
+    ? await dialog.showOpenDialog(parent, { properties: ["openDirectory"] })
+    : await dialog.showOpenDialog({ properties: ["openDirectory"] });
+  return result.canceled ? null : (result.filePaths[0] ?? null);
 });
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,22 @@
+{
+  "task": "2026-07-11-daedalus-mvp",
+  "status": "pass",
+  "checks": [
+    { "name": "rust-agents", "status": "pass", "summary": "10 passed, 1 opt-in ignored" },
+    { "name": "fake-restart-resume", "status": "pass" },
+    { "name": "real-codex-smoke", "status": "pass", "summary": "codex-cli 0.144.0, 47.64s" },
+    { "name": "desktop-typecheck", "status": "pass" },
+    { "name": "ark-typecheck", "status": "pass" },
+    { "name": "daedalus-typecheck", "status": "pass" },
+    { "name": "daedalus-unit", "status": "pass", "summary": "8 passed" },
+    { "name": "desktop-js-all-extensions-build", "status": "pass" },
+    { "name": "ark-write-guard", "status": "pass" },
+    { "name": "extension-contract", "status": "pass", "summary": "1 passed" },
+    { "name": "daedalus-e2e", "status": "pass", "summary": "1 passed, 26.8s" },
+    { "name": "docs", "status": "pass" },
+    { "name": "visual-1280x800", "status": "pass" },
+    { "name": "visual-900x600", "status": "pass" }
+  ],
+  "notRun": ["installer-release-packaging"],
+  "outOfScope": ["android", "iroh"]
+}

@@ -1,4 +1,6 @@
 export { ArkClient } from "./ark-client.js";
+export { createArkAgentsApi } from "./ark-client-agents.js";
+export type { AgentsRequest } from "./ark-client-agents.js";
 // Generated bindings из Rust ark-core (Phase 5 bug-detection).
 // См. core/ark/packages/ark/src/generated/index.ts.
 export type {
@@ -86,3 +88,17 @@ export type {
   ArkUsageSnapshot,
   ArkUsageSummary,
 } from "./ark-client-usage.types.js";
+export type {
+  AgentsApproval,
+  AgentsDiff,
+  AgentsDiffFile,
+  AgentsEvent,
+  AgentsMode,
+  AgentsModel,
+  AgentsProject,
+  AgentsSession,
+  AgentsSessionStatus,
+  AgentsSnapshot,
+  AgentsTimelineEvent,
+  ArkAgentsApi,
+} from "./ark-client-agents.types.js";

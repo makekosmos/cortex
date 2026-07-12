@@ -9,6 +9,10 @@
     ".": {
       "import": "./src/index.ts",
       "types": "./src/index.ts"
+    },
+    "./agents": {
+      "import": "./src/ark-client-agents.ts",
+      "types": "./src/ark-client-agents.ts"
     }
   },
   "scripts": {

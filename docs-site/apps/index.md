@@ -1,6 +1,6 @@
 # Приложения
 
-Kosmos — это **Kepler host** (Electron-launcher `platform/desktop/` + backend) + **четыре активных Vue-extension'а** внутри Kepler shell (**Eden**, Delphi, Arrancador, Akasha), встроенный shell-view **Dashboard** и shell-owned **Focus Session** внутри Shell command surface, **два зарезервированных имени** (Digital Cave, Kerux), плюс **отдельный Android-стек** (две APK в `mobile/`).
+Kosmos — это **Kepler host** (Electron-launcher `platform/desktop/` + backend) + first-party Vue-extension'ы внутри Kepler shell (**Eden**, Delphi, Arrancador, Akasha, Daedalus), встроенный shell-view **Dashboard** и shell-owned **Focus Session** внутри Shell command surface, **два зарезервированных имени** (Digital Cave, Kerux), плюс **отдельный Android-стек** (две APK в `mobile/`).
 
 ::: tip Live snapshot
 Актуальное состояние миграций / Phase trackers — `STATUS.md` в корне репозитория. Эта страница — концептуальная карта; STATUS.md — what's in flight прямо сейчас.
@@ -19,6 +19,7 @@ Kosmos — это **Kepler host** (Electron-launcher `platform/desktop/` + backe
 | [Eden](/apps/eden)             | `products/eden`        | заметки, дневник, typed notes        | `note_obj` + кастомные типы                       |
 | [Delphi](/apps/delphi)         | `products/delphi`      | задачи                               | `task_obj` (auto-миграция legacy todos на старте) |
 | [Arrancador](/apps/arrancador) | `incubator/arrancador` | игровая библиотека, playtime, бэкапы | `game_obj` + usage data                           |
+| [Daedalus](/apps/daedalus)     | `products/daedalus`    | управление Codex-сессиями            | отдельная local SQLite, не ARK sync tables        |
 | [Akasha](/apps/akasha)         | `incubator/akasha`     | EPUB-читалка                         | local JSON v1                                     |
 
 ## Встроенные shell views

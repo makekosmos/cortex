@@ -113,6 +113,7 @@ async fn main() -> ExitCode {
         _log_guard,
     } = state;
 
+    let agents_shutdown = ws.agents_handle();
     tokio::spawn(async move {
         if let Err(e) = ws.run().await {
             eprintln!("[kepler-backend] WS server exited: {e}");
@@ -161,6 +162,10 @@ async fn main() -> ExitCode {
 
     let _ = tokio::signal::ctrl_c().await;
     eprintln!("[kepler-backend] shutdown signal received, cleaning up");
+
+    if let Some(agents) = agents_shutdown.get() {
+        agents.shutdown().await;
+    }
 
     if let Err(e) = std::fs::remove_file(&lock_path) {
         eprintln!("[kepler-backend] failed to remove lock-file: {e}");

@@ -56,6 +56,10 @@ const api = {
   meta: {
     id: (): Promise<string | null> => ipcRenderer.invoke("kepler:extension:meta:id"),
   },
+  dialogs: {
+    pickDirectory: (): Promise<string | null> =>
+      ipcRenderer.invoke("kepler:extension:dialogs:pick-directory") as Promise<string | null>,
+  },
   window: {
     close: (): Promise<void> => ipcRenderer.invoke("kepler:extension:window:close"),
     minimize: (): Promise<void> => ipcRenderer.invoke("kepler:extension:window:minimize"),

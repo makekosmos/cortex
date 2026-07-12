@@ -1,0 +1,17 @@
+PASS Rust agents suite: 10 passed, 1 opt-in ignored
+PASS strict fake app-server restart/resume/stale-approval integration
+PASS real Codex app-server smoke: codex-cli 0.144.0, 47.64s
+PASS desktop typecheck
+PASS @kosmos/ark typecheck
+PASS Daedalus vue-tsc
+PASS Daedalus Vitest: 8 passed
+PASS desktop production JS + all extension build
+PASS ARK write boundary guard
+PASS universal Daedalus extension contract: 1 passed
+PASS strict Daedalus Electron E2E: 1 passed, 26.8s
+PASS docs freshness
+PASS final visual 1280x800 start/session and 900x600 session
+PASS git diff --check
+
+Environment workaround: CARGO_TARGET_DIR=.tmp/cargo-daedalus because the running
+Kosmos process locked target/debug/kepler-backend.exe on Windows.

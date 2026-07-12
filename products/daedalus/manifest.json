@@ -1,0 +1,26 @@
+{
+  "id": "daedalus",
+  "name": "Daedalus",
+  "version": "0.1.0",
+  "description": "Управление Codex-сессиями",
+  "keplerApiVersion": "^1.1.0",
+  "kind": "vue",
+  "entryHtml": "dist/index.html",
+  "devPort": 9917,
+  "width": 1280,
+  "height": 800,
+  "minWidth": 900,
+  "minHeight": 600,
+  "windowEffect": "none",
+  "permissions": ["agents.read", "agents.control", "dialogs.directory"],
+  "commands": [
+    {
+      "id": "open",
+      "title": "Открыть Daedalus",
+      "subtitle": "Codex-сессии",
+      "kind": "app",
+      "mode": "open"
+    }
+  ],
+  "tests": {}
+}
