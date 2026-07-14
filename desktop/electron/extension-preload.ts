@@ -60,6 +60,10 @@ const api = {
     pickDirectory: (): Promise<string | null> =>
       ipcRenderer.invoke("kepler:extension:dialogs:pick-directory") as Promise<string | null>,
   },
+  images: {
+    dominantColor: (source: string): Promise<string | null> =>
+      ipcRenderer.invoke("kepler:extension:image:dominant-color", source) as Promise<string | null>,
+  },
   window: {
     close: (): Promise<void> => ipcRenderer.invoke("kepler:extension:window:close"),
     minimize: (): Promise<void> => ipcRenderer.invoke("kepler:extension:window:minimize"),
