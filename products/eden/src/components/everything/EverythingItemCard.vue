@@ -1,7 +1,31 @@
+<script lang="ts">
+const notePreviewCache = new Map<string, { updatedAt: number; text: string }>();
+const NOTE_PREVIEW_CHARACTER_LIMIT = 800;
+
+function truncateNotePreview(text: string): string {
+  const normalized = text.trim();
+  if (normalized.length <= NOTE_PREVIEW_CHARACTER_LIMIT) return normalized;
+
+  const slice = normalized.slice(0, NOTE_PREVIEW_CHARACTER_LIMIT);
+  const wordBoundary = slice.lastIndexOf(" ");
+  const end = wordBoundary >= NOTE_PREVIEW_CHARACTER_LIMIT * 0.75 ? wordBoundary : slice.length;
+  return `${slice.slice(0, end).trimEnd()}…`;
+}
+</script>
+
 <script setup lang="ts">
-import { computed, shallowRef, watch } from "vue";
+import {
+  computed,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  shallowRef,
+  watch,
+} from "vue";
+import { bubblePlainText } from "@/components/bubbles/bubbleDiaryModel";
+import { readEntryTiptapDoc } from "@/editor-content/content";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
-import { formatReadableRussianDate } from "@/lib/objectFieldFormatting";
 import { resolveObjectImageSrc } from "@/lib/objectImages";
 import { SYSTEM_TYPE_BOOK_ID } from "@/lib/systemTypes";
 
@@ -31,7 +55,6 @@ const headerProps = computed(() => parseHeaderProps(props.entry.header_props_jso
 const title = computed(() =>
   getEntryDisplayTitle(props.entry.title, props.entry.header_props_json),
 );
-const typeLabel = computed(() => props.noteType?.name ?? (isBook.value ? "Книга" : "Заметка"));
 const author = computed(() => String(headerProps.value.author ?? "").trim());
 const coverSrc = computed(() =>
   isBook.value ? resolveObjectImageSrc(headerProps.value.cover_image, props.entriesById) : "",
@@ -41,12 +64,69 @@ const coverCrossOrigin = computed(() =>
 );
 const coverFailed = shallowRef(false);
 const coverColor = shallowRef("");
-const updatedLabel = computed(() => formatReadableRussianDate(props.entry.updated_at));
-const updatedDateTime = computed(() => {
-  const timestamp = Number(props.entry.updated_at);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined;
-});
 const openLabel = computed(() => `Открыть «${title.value}»`);
+const cardElement = shallowRef<HTMLElement | null>(null);
+const cachedPreview = notePreviewCache.get(props.entry.id);
+const notePreview = shallowRef(
+  cachedPreview?.updatedAt === props.entry.updated_at ? cachedPreview.text : "",
+);
+let previewObserver: IntersectionObserver | null = null;
+let previewVisible = false;
+let previewRequestKey = "";
+
+async function loadNotePreview() {
+  if (isBook.value) return;
+  const id = props.entry.id;
+  const updatedAt = props.entry.updated_at;
+  const requestKey = `${id}:${updatedAt}`;
+  const cached = notePreviewCache.get(id);
+  if (cached?.updatedAt === updatedAt) {
+    notePreview.value = cached.text;
+    return;
+  }
+  if (previewRequestKey === requestKey) return;
+  previewRequestKey = requestKey;
+
+  try {
+    const loaded =
+      props.entry.content_loaded === false ? await window.api?.loadEntry(id) : props.entry;
+    if (!loaded || props.entry.id !== id || props.entry.updated_at !== updatedAt) return;
+    const text = truncateNotePreview(bubblePlainText(readEntryTiptapDoc(loaded.content_json)));
+    notePreviewCache.set(id, { updatedAt, text });
+    notePreview.value = text;
+  } catch {
+    // The title remains usable when a preview cannot be loaded.
+  } finally {
+    if (previewRequestKey === requestKey) previewRequestKey = "";
+  }
+}
+
+function observePreview() {
+  previewObserver?.disconnect();
+  if (isBook.value || !cardElement.value) return;
+  previewObserver = new IntersectionObserver(([entry]) => {
+    previewVisible = entry?.isIntersecting === true;
+    if (previewVisible) void loadNotePreview();
+  });
+  previewObserver.observe(cardElement.value);
+}
+
+onMounted(observePreview);
+onActivated(observePreview);
+onDeactivated(() => {
+  previewVisible = false;
+  previewObserver?.disconnect();
+});
+onBeforeUnmount(() => previewObserver?.disconnect());
+
+watch(
+  () => [props.entry.id, props.entry.updated_at, props.entry.content_loaded] as const,
+  () => {
+    const cached = notePreviewCache.get(props.entry.id);
+    if (cached?.updatedAt === props.entry.updated_at) notePreview.value = cached.text;
+    if (previewVisible) void loadNotePreview();
+  },
+);
 
 watch(coverSrc, () => {
   coverFailed.value = false;
@@ -110,6 +190,7 @@ function handleCoverError() {
 
 <template>
   <button
+    ref="cardElement"
     type="button"
     class="everything-item-card"
     :class="isBook ? 'everything-item-card--book' : 'everything-item-card--note'"
@@ -150,9 +231,18 @@ function handleCoverError() {
         </span>
       </template>
 
-      <span v-else class="everything-item-copy">
-        <span class="everything-item-type">{{ typeLabel }}</span>
-        <time class="everything-item-date" :datetime="updatedDateTime">{{ updatedLabel }}</time>
+      <span
+        v-else
+        class="everything-item-copy"
+        :class="{ 'everything-item-copy--has-preview': notePreview }"
+      >
+        <span
+          v-if="notePreview"
+          class="everything-item-preview"
+          :data-testid="`everything-preview-${entry.id}`"
+        >
+          {{ notePreview }}
+        </span>
       </span>
     </span>
 
@@ -185,21 +275,25 @@ function handleCoverError() {
   overflow: hidden;
   border: 2px solid var(--card, transparent);
   border-radius: var(--radius-md);
-  background: var(--card);
+  background-color: var(--card);
   transition:
-    background-color var(--transition-normal),
-    border-color var(--transition-normal);
+    background-color 300ms ease,
+    border-color 300ms ease;
 }
 
 .everything-item-card:hover .everything-item-visual {
   border-color: color-mix(in srgb, var(--foreground) 18%, var(--border));
-  background: var(--surface);
+  background-color: var(--surface);
 }
 
 .everything-item-card--book .everything-item-visual {
   padding: var(--space-4);
   border-color: transparent;
-  background: transparent;
+  background-color: transparent;
+}
+
+.everything-item-card--note .everything-item-visual {
+  border-radius: var(--radius-sm);
 }
 
 .everything-item-card:focus-visible {
@@ -273,25 +367,24 @@ function handleCoverError() {
   text-align: center;
 }
 
-.everything-item-type,
-.everything-item-date {
-  color: var(--muted-foreground);
-  font-size: var(--kosmos-text-caption-size);
-  line-height: 1.4;
-}
-
-.everything-item-type {
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .everything-item-copy {
+  position: relative;
   display: flex;
   min-height: 9rem;
-  flex-direction: column;
-  gap: var(--space-2);
   padding: var(--space-4);
+}
+
+.everything-item-preview {
+  display: block;
+  width: 100%;
+  height: 7.5em;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--foreground) 72%, var(--bg-app));
+  font-size: var(--kosmos-text-body-size);
+  line-height: 1.5;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent 100%);
+  white-space: pre-wrap;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent 100%);
 }
 
 .everything-item-caption {
@@ -324,9 +417,5 @@ function handleCoverError() {
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.everything-item-copy .everything-item-date {
-  margin-block-start: auto;
 }
 </style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, shallowRef } from "vue";
+import { computed, onBeforeUnmount, shallowRef, watch } from "vue";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { SYSTEM_TYPE_BOOK_ID, SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
 import EverythingItemCard from "./EverythingItemCard.vue";
@@ -17,6 +17,29 @@ const supportedTypeIds = new Set([SYSTEM_TYPE_NOTE_ID, SYSTEM_TYPE_BOOK_ID]);
 const searchQuery = shallowRef("");
 const normalizedSearchQuery = computed(() => searchQuery.value.trim().toLocaleLowerCase("ru-RU"));
 const isFiltering = computed(() => normalizedSearchQuery.value.length > 0);
+const fullTextMatchIds = shallowRef<ReadonlySet<string>>(new Set());
+let searchTimer: number | null = null;
+let searchRequestId = 0;
+
+watch(normalizedSearchQuery, (query) => {
+  searchRequestId += 1;
+  const requestId = searchRequestId;
+  if (searchTimer !== null) window.clearTimeout(searchTimer);
+  fullTextMatchIds.value = new Set();
+  if (!query) return;
+
+  searchTimer = window.setTimeout(async () => {
+    searchTimer = null;
+    const results = (await window.api?.searchEntries(query).catch(() => [])) ?? [];
+    if (requestId !== searchRequestId) return;
+    fullTextMatchIds.value = new Set(results.map((result) => result.entryId));
+  }, 300);
+});
+
+onBeforeUnmount(() => {
+  searchRequestId += 1;
+  if (searchTimer !== null) window.clearTimeout(searchTimer);
+});
 
 function getAuthor(entry: Entry): string {
   try {
@@ -32,9 +55,11 @@ const visibleEntries = computed(() =>
     .filter((entry) => entry.type_id !== null && supportedTypeIds.has(entry.type_id))
     .filter((entry) => {
       if (!normalizedSearchQuery.value) return true;
-      return `${getEntryDisplayTitle(entry.title, entry.header_props_json)} ${getAuthor(entry)}`
-        .toLocaleLowerCase("ru-RU")
-        .includes(normalizedSearchQuery.value);
+      const localMatch =
+        `${getEntryDisplayTitle(entry.title, entry.header_props_json)} ${getAuthor(entry)}`
+          .toLocaleLowerCase("ru-RU")
+          .includes(normalizedSearchQuery.value);
+      return localMatch || fullTextMatchIds.value.has(entry.id);
     })
     .sort((left, right) => right.updated_at - left.updated_at),
 );
@@ -73,11 +98,14 @@ const entriesById = computed(
         />
       </div>
 
-      <section v-else class="everything-empty" data-testid="everything-empty" aria-live="polite">
-        <h2 class="everything-empty-title">
-          {{ isFiltering ? "Ничего не найдено" : "Здесь пока ничего нет" }}
-        </h2>
-        <p v-if="!isFiltering" class="everything-empty-description">
+      <section
+        v-else-if="!isFiltering"
+        class="everything-empty"
+        data-testid="everything-empty"
+        aria-live="polite"
+      >
+        <h2 class="everything-empty-title">Здесь пока ничего нет</h2>
+        <p class="everything-empty-description">
           Создай заметку или книгу — она появится на странице «Всё».
         </p>
       </section>

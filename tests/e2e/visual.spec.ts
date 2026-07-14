@@ -12,7 +12,7 @@
 // Окна Kepler в e2e создаются `show: false` (headless mode) — screenshot
 // всё равно работает через webContents.
 
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { resolve } from "node:path";
 import { SYSTEM_TYPE_BOOK } from "../../products/eden/src/lib/systemTypes";
 import { localImageUrl } from "../../platform/desktop/electron/local-image-protocol";
@@ -24,16 +24,22 @@ const SNAP_OPTS = { maxDiffPixels: 200 } as const;
 
 async function captureElectronWindow(
   app: Awaited<ReturnType<typeof launchKepler>>,
-  targetUrl: string,
+  page: Page,
 ): Promise<Buffer> {
-  const base64 = await app.evaluate(async ({ BrowserWindow }, url) => {
-    const window = BrowserWindow.getAllWindows().find(
-      (candidate) => candidate.webContents.getURL() === url,
-    );
-    if (!window) throw new Error(`Electron window not found for ${url}`);
-    const image = await window.capturePage();
-    return image.toPNG().toString("base64");
-  }, targetUrl);
+  const marker = `visual-${Date.now()}`;
+  await page.evaluate((name) => {
+    window.name = name;
+  }, marker);
+  const base64 = await app.evaluate(async ({ BrowserWindow }, name) => {
+    for (const candidate of BrowserWindow.getAllWindows()) {
+      const candidateName = await candidate.webContents.executeJavaScript("window.name");
+      if (candidateName !== name) continue;
+      candidate.webContents.invalidate();
+      await new Promise((resolveFrame) => setTimeout(resolveFrame, 50));
+      return (await candidate.capturePage()).toPNG().toString("base64");
+    }
+    throw new Error(`Electron window not found for ${name}`);
+  }, marker);
   return Buffer.from(base64, "base64");
 }
 
@@ -177,6 +183,9 @@ test.describe("visual regression", () => {
       const reopened = await openEden(app);
       await reopened.getByTestId("everything-view").waitFor({ state: "visible", timeout: 15_000 });
       await expect(reopened.locator('[data-testid^="everything-card-"]')).toHaveCount(4);
+      const notePreview = reopened.getByTestId("everything-preview-visual-note-summer");
+      await expect(notePreview).toBeVisible();
+      await expect(notePreview).toContainText("Собрать референсы и сделать первый прототип.");
       await expect(reopened.getByTestId("eden-top-navigation")).toBeVisible();
       await expect(reopened.getByTestId("top-nav-everything")).toHaveAttribute(
         "aria-current",
@@ -237,7 +246,7 @@ test.describe("visual regression", () => {
         await card
           .locator(".everything-item-visual")
           .evaluate((element) => getComputedStyle(element).transitionDuration),
-      ).not.toBe("0s");
+      ).toBe("0.3s, 0.3s");
       const coverColors = await card
         .locator(".everything-item-cover")
         .evaluate((element) => [
@@ -249,7 +258,7 @@ test.describe("visual regression", () => {
       expect(coverColors[2]).toBe(coverColors[1]);
       await reopened.evaluate(() => document.fonts?.ready ?? Promise.resolve());
       await reopened.waitForTimeout(500);
-      const screenshot = await captureElectronWindow(app, reopened.url());
+      const screenshot = await captureElectronWindow(app, reopened);
       expect(screenshot).toMatchSnapshot("eden-top-navigation-mixed.png", SNAP_OPTS);
 
       await reopened.getByTestId("everything-card-visual-book-ocean").click();

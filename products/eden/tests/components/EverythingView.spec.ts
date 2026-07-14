@@ -93,7 +93,7 @@ describe("EverythingView", () => {
       .toHaveTextContent("Без обложки");
     await expect
       .element(screen.getByTestId("everything-card-note-old"))
-      .toHaveTextContent("Заметка");
+      .not.toHaveTextContent("Заметка");
     await expect.element(screen.getByTestId("everything-card-task")).not.toBeInTheDocument();
     await expect.element(screen.getByTestId("everything-card-journal")).not.toBeInTheDocument();
     await expect.element(screen.getByTestId("everything-card-collection")).not.toBeInTheDocument();
@@ -112,9 +112,129 @@ describe("EverythingView", () => {
     expect(cardIds()).toEqual(["note-old"]);
 
     await userEvent.fill(search, "Нет совпадений");
-    await expect
-      .element(screen.getByTestId("everything-empty"))
-      .toHaveTextContent("Ничего не найдено");
+    await expect.element(screen.getByTestId("everything-empty")).not.toBeInTheDocument();
+    await expect.element(screen.getByTestId("everything-grid")).not.toBeInTheDocument();
+  });
+
+  test("adds full-text matches after the immediate local results", async () => {
+    const originalApi = window.api;
+    let resolveSearch!: (results: SearchResult[]) => void;
+    const searchEntries = vi.fn(
+      () => new Promise<SearchResult[]>((resolve) => (resolveSearch = resolve)),
+    );
+    window.api = { ...originalApi, searchEntries } as typeof window.api;
+
+    try {
+      const screen = render(EverythingView, {
+        props: { entries: mixedEntries(), noteTypes },
+      });
+      const search = screen.getByRole("searchbox", { name: "Поиск" });
+      const query = mixedEntries()[0]!.title.split(" ")[0]!;
+
+      await userEvent.fill(search, query);
+      expect(cardIds()).toEqual(["note-old"]);
+      expect(searchEntries).not.toHaveBeenCalled();
+
+      await vi.waitFor(() =>
+        expect(searchEntries).toHaveBeenCalledWith(query.toLocaleLowerCase("ru-RU")),
+      );
+      resolveSearch([
+        { entryId: "book-fallback", file: "", line: 1, text: "body match" },
+        { entryId: "task", file: "", line: 1, text: "hidden type" },
+      ]);
+      await vi.waitFor(() => expect(cardIds()).toEqual(["book-fallback", "note-old"]));
+    } finally {
+      window.api = originalApi;
+    }
+  });
+
+  test("loads and caches a visible note preview", async () => {
+    const originalApi = window.api;
+    const originalObserver = window.IntersectionObserver;
+    let reveal: (() => void) | undefined;
+    let previewUpdatedAt = 900;
+    let previewText = `# Preview heading\n\nPreview body ${"word ".repeat(250)}`;
+    const loadEntry = vi.fn(async () =>
+      entry("note-preview", SYSTEM_TYPE_NOTE_ID, previewUpdatedAt, {
+        title: "Заметка с телом",
+        content_loaded: true,
+        content_json: JSON.stringify({
+          type: "markdown",
+          version: 1,
+          text: previewText,
+        }),
+      }),
+    );
+    window.api = { ...originalApi, loadEntry } as typeof window.api;
+    window.IntersectionObserver = class {
+      constructor(callback: IntersectionObserverCallback) {
+        reveal = () => callback([{ isIntersecting: true } as IntersectionObserverEntry], this);
+      }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+      takeRecords() {
+        return [];
+      }
+      root = null;
+      rootMargin = "0px";
+      thresholds = [0];
+    } as typeof IntersectionObserver;
+
+    try {
+      const first = render(EverythingView, {
+        props: {
+          entries: [entry("note-preview", SYSTEM_TYPE_NOTE_ID, 900)],
+          noteTypes,
+        },
+      });
+      expect(loadEntry).not.toHaveBeenCalled();
+      reveal?.();
+      reveal?.();
+      await expect
+        .element(first.getByTestId("everything-preview-note-preview"))
+        .toHaveTextContent("Preview heading Preview body");
+      const preview = (await first
+        .getByTestId("everything-preview-note-preview")
+        .element()) as HTMLElement;
+      const previewStyle = getComputedStyle(preview);
+      expect(preview.textContent!.length).toBeLessThanOrEqual(801);
+      expect(
+        Number.parseFloat(previewStyle.height) / Number.parseFloat(previewStyle.lineHeight),
+      ).toBe(5);
+      expect(getComputedStyle(preview).maskImage).toContain("linear-gradient");
+      expect(loadEntry).toHaveBeenCalledOnce();
+      first.unmount();
+
+      const second = render(EverythingView, {
+        props: {
+          entries: [entry("note-preview", SYSTEM_TYPE_NOTE_ID, 900)],
+          noteTypes,
+        },
+      });
+      await expect
+        .element(second.getByTestId("everything-preview-note-preview"))
+        .toBeInTheDocument();
+      expect(loadEntry).toHaveBeenCalledOnce();
+      second.unmount();
+
+      previewUpdatedAt = 901;
+      previewText = "# Refreshed preview\n\nNew body";
+      const refreshed = render(EverythingView, {
+        props: {
+          entries: [entry("note-preview", SYSTEM_TYPE_NOTE_ID, 901)],
+          noteTypes,
+        },
+      });
+      reveal?.();
+      await expect
+        .element(refreshed.getByTestId("everything-preview-note-preview"))
+        .toHaveTextContent("Refreshed preview New body");
+      expect(loadEntry).toHaveBeenCalledTimes(2);
+    } finally {
+      window.api = originalApi;
+      window.IntersectionObserver = originalObserver;
+    }
   });
 
   test("uses the typographic fallback after a cover load error", async () => {

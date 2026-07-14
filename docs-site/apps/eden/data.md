@@ -4,9 +4,10 @@ Scope: `products/eden/src/lib/kepler-api-shim.ts`, `lib/edenApi.ts`, `store/eden
 
 - Eden talks to ARK through `window.api` shim / `edenApi.ts`; components and store must not call `window.kepler.ark.request` directly.
 - `EverythingView` and `BubbleDiaryView` stay in a two-entry Vue `KeepAlive` cache after their first mount. Navigation switches immediately; the global Eden ARK subscription updates `eden.entries` for «Всё», while the diary subscription keeps its timeline fresh without restarting migrations or list reads.
+- «Всё» keeps its summary-first load: each visible note card lazily calls the existing `loadEntry(id)` for its body preview and caches the plain text by `id + updated_at`; books and off-screen notes do not trigger body reads.
 - Notes and typed objects are ARK objects; object metadata lives in `header_props_json`, `header_layout`, `type_id`.
 - Eden body `content_json` is Markdown storage (`{ type: "markdown", version: 1, text }`). Legacy ProseMirror/invalid bodies are read best-effort by `editor-cm/content.ts` and should only be rewritten through the normal ARK save path after editing.
-- Search is ARK FTS5 (`search_objects`); do not resurrect ripgrep/Tantivy/Heart sidecar.
+- Search is ARK FTS5 (`search_objects`); «Всё» shows title/author matches immediately, then merges debounced full-text matches for visible notes and books without loading every body into the renderer. Do not resurrect ripgrep/Tantivy/Heart sidecar.
 - Bulk imports that create graph edges must be staged: create/update nodes first, then write links after targets exist.
 - Any data-layer change must respect ARK write boundary and sync versioning rules.
 
