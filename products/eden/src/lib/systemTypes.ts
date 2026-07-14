@@ -1,6 +1,7 @@
 import type { NoteType } from "./typedNotes";
 import {
   SYSTEM_TYPES,
+  SYSTEM_TYPE_BOOK_ID,
   SYSTEM_TYPE_COLLECTION_ID,
   SYSTEM_TYPE_EXERCISE_ID,
   SYSTEM_TYPE_GAME_ID,
@@ -18,6 +19,8 @@ import {
 
 export {
   SYSTEM_TYPES,
+  SYSTEM_TYPE_BOOK,
+  SYSTEM_TYPE_BOOK_ID,
   SYSTEM_TYPE_COLLECTION,
   SYSTEM_TYPE_COLLECTION_ID,
   SYSTEM_TYPE_IMAGE,
@@ -73,6 +76,7 @@ export function normalizeSystemNoteType(noteType: NoteType): NoteType {
 export function isSystemType(noteTypeId: string): boolean {
   return (
     noteTypeId === SYSTEM_TYPE_NOTE_ID ||
+    noteTypeId === SYSTEM_TYPE_BOOK_ID ||
     noteTypeId === SYSTEM_TYPE_COLLECTION_ID ||
     noteTypeId === SYSTEM_TYPE_JOURNAL_ID ||
     noteTypeId === SYSTEM_TYPE_IMAGE_ID ||

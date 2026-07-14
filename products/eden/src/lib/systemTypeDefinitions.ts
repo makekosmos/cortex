@@ -23,6 +23,7 @@ export {
 } from "./systemTypeVisualDefinitions";
 
 export const SYSTEM_TYPE_NOTE_ID = "note_obj";
+export const SYSTEM_TYPE_BOOK_ID = "book_obj";
 export const SYSTEM_TYPE_WORKOUT_ID = "system-type-workout";
 export const SYSTEM_TYPE_EXERCISE_ID = "system-type-exercise";
 export const SYSTEM_TYPE_JOURNAL_ID = "system-type-journal";
@@ -69,6 +70,48 @@ const noteUiSchemaJson = JSON.stringify({
   default_layout: "page",
   default_template_id: null,
   collection_name: "Заметки",
+});
+
+const bookSchemaJson = JSON.stringify({
+  fields: [
+    {
+      id: "cover_image",
+      label: "Обложка",
+      kind: "image",
+      required: false,
+      visible: true,
+      read_only: false,
+      system: false,
+    },
+    {
+      id: "author",
+      label: "Автор",
+      kind: "text",
+      required: false,
+      visible: true,
+      read_only: false,
+      system: false,
+    },
+  ],
+});
+
+const bookHeaderTemplateJson = JSON.stringify({
+  kind: "default",
+  primaryFieldIds: ["author"],
+  secondaryFieldIds: [],
+  imageFieldId: "cover_image",
+});
+
+const bookUiSchemaJson = JSON.stringify({
+  featured_fields: ["author"],
+  visible_fields: ["cover_image", "author"],
+  hidden_fields: ["created_at", "updated_at", "deleted_at"],
+  read_only_fields: [],
+  field_order: ["cover_image", "author"],
+  header_layout: "inline",
+  default_layout: "page",
+  default_template_id: null,
+  collection_name: "Книги",
 });
 
 const collectionSchemaJson = JSON.stringify({
@@ -199,6 +242,19 @@ export const SYSTEM_TYPE_NOTE: NoteType = {
   updated_at: 0,
 };
 
+export const SYSTEM_TYPE_BOOK: NoteType = {
+  id: SYSTEM_TYPE_BOOK_ID,
+  name: "Книга",
+  slug: "book_obj",
+  icon: "book",
+  color: null,
+  schema_json: bookSchemaJson,
+  header_template_json: bookHeaderTemplateJson,
+  ui_schema_json: bookUiSchemaJson,
+  created_at: 0,
+  updated_at: 0,
+};
+
 export const SYSTEM_TYPE_COLLECTION: NoteType = {
   id: SYSTEM_TYPE_COLLECTION_ID,
   name: "Коллекция",
@@ -291,6 +347,7 @@ const SYSTEM_TYPE_EXERCISE: NoteType = {
 
 export const SYSTEM_TYPES: NoteType[] = [
   SYSTEM_TYPE_NOTE,
+  SYSTEM_TYPE_BOOK,
   SYSTEM_TYPE_COLLECTION,
   SYSTEM_TYPE_JOURNAL,
   SYSTEM_TYPE_IMAGE,

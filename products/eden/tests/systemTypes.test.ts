@@ -1,16 +1,50 @@
 import { describe, expect, test } from "vitest";
 import { objectIconUri } from "../src/lib/iconResolver";
 import {
+  SYSTEM_TYPE_BOOK,
+  SYSTEM_TYPE_BOOK_ID,
   SYSTEM_TYPE_IMAGE,
   SYSTEM_TYPE_IMAGE_ID,
   SYSTEM_TYPES,
   isSystemType,
 } from "../src/lib/systemTypes";
 import {
+  parseHeaderTemplate,
   parseNoteTypeDefinition,
   parseNoteTypeUiSchema,
   resolveNoteTypeFields,
 } from "../src/lib/typedNotes";
+
+describe("Eden system type book", () => {
+  test("is registered with the book metadata contract", () => {
+    expect(SYSTEM_TYPE_BOOK_ID).toBe("book_obj");
+    expect(isSystemType(SYSTEM_TYPE_BOOK_ID)).toBe(true);
+    expect(SYSTEM_TYPES.map((noteType) => noteType.id)).toContain(SYSTEM_TYPE_BOOK_ID);
+    expect(SYSTEM_TYPE_BOOK).toMatchObject({
+      name: "Книга",
+      slug: "book_obj",
+      icon: "book",
+      color: null,
+    });
+
+    const definition = parseNoteTypeDefinition(SYSTEM_TYPE_BOOK.schema_json);
+    expect(definition.fields).toEqual([
+      expect.objectContaining({ id: "cover_image", kind: "image", required: false }),
+      expect.objectContaining({ id: "author", kind: "text", required: false }),
+    ]);
+
+    const headerTemplate = parseHeaderTemplate(SYSTEM_TYPE_BOOK.header_template_json);
+    expect(headerTemplate.imageFieldId).toBe("cover_image");
+
+    const uiSchema = parseNoteTypeUiSchema(SYSTEM_TYPE_BOOK.ui_schema_json);
+    expect(uiSchema).toMatchObject({
+      featured_fields: ["author"],
+      visible_fields: ["cover_image", "author"],
+      field_order: ["cover_image", "author"],
+      collection_name: "Книги",
+    });
+  });
+});
 
 describe("Eden system type image", () => {
   test("is registered as a system type and exposes the image schema contract", () => {

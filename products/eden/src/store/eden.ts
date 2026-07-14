@@ -18,10 +18,7 @@ import type { SortMode } from "@/components/sidebar/types";
 import { createBlankEntry, createTodayJournalEntry, todayJournalTitle } from "./edenEntryFactory";
 import {
   getCollectionTargetTypeId,
-  readLastActiveScreen,
   waitForLoadingFrame,
-  writeLastActiveScreen,
-  writeLastVisitedEntryId,
   type ActiveScreen,
   type EntrySaveCoordinator,
 } from "./edenStoreHelpers";
@@ -44,12 +41,8 @@ export const useEdenStore = defineStore("eden", () => {
   // на предыдущей/пустой странице.
   const loadingEntryId = ref<string | null>(null);
 
-  // Persist last-visited entry id ВСЕГДА при изменении currentEntry,
-  // не только в navigateTo. openTodayJournal / createEntry / иные code paths
-  // тоже ставят currentEntry — без watch'а после refresh'а hydrateVaultData
-  // читает старый `lastEntryId` и открывает не ту заметку.
+  // Keep the dirty marker aligned when navigation changes the current entry.
   watch(currentEntry, (entry) => {
-    if (entry?.id) writeLastVisitedEntryId(entry.id);
     isCurrentEntryDirty.value = !!entry?.id && dirtyEntryId.value === entry.id;
   });
 
@@ -60,7 +53,7 @@ export const useEdenStore = defineStore("eden", () => {
   const isInitializing = ref(true);
   const isHydratingVault = ref(false);
 
-  const activeScreen = ref<ActiveScreen>(readLastActiveScreen());
+  const activeScreen = ref<ActiveScreen>("notes");
 
   const activeNoteTypeId = ref<string | null>(null);
 
@@ -78,7 +71,6 @@ export const useEdenStore = defineStore("eden", () => {
   watch(
     activeScreen,
     (screen) => {
-      writeLastActiveScreen(screen);
       if (screen !== "notes") {
         cancelPendingNavigation();
       }
@@ -312,7 +304,6 @@ export const useEdenStore = defineStore("eden", () => {
 
       upsertEntryBaseline(safeEntry);
       currentEntry.value = safeEntry;
-      writeLastVisitedEntryId(entryId);
       return;
     }
 
@@ -343,7 +334,6 @@ export const useEdenStore = defineStore("eden", () => {
         }
         upsertEntryBaseline(safeEntry);
         currentEntry.value = safeEntry;
-        writeLastVisitedEntryId(entryId);
       } else {
         currentEntry.value = null;
       }
@@ -372,6 +362,14 @@ export const useEdenStore = defineStore("eden", () => {
   function openDiary() {
     cancelPendingNavigation();
     activeScreen.value = "diary";
+    activeNoteTypeId.value = null;
+    activeSpace.value = "diary";
+    currentEntry.value = null;
+  }
+
+  function openEverything() {
+    cancelPendingNavigation();
+    activeScreen.value = "notes";
     activeNoteTypeId.value = null;
     activeSpace.value = "diary";
     currentEntry.value = null;
@@ -468,6 +466,8 @@ export const useEdenStore = defineStore("eden", () => {
     openTypeCollection,
 
     openDiary,
+
+    openEverything,
 
     saveNoteType,
 

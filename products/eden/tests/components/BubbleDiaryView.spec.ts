@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { userEvent } from "vitest/browser";
 import { render } from "vitest-browser-vue";
+import { defineComponent, ref } from "vue";
 import BubbleDiaryView from "../../src/components/bubbles/BubbleDiaryView.vue";
+import EverythingView from "../../src/components/everything/EverythingView.vue";
 import {
   LOCAL_BUBBLES_STORAGE_KEY,
   encodeLocalBubblesStorage,
@@ -26,6 +28,46 @@ const links = new Map<string, Record<string, unknown>>();
 let request: ReturnType<typeof vi.fn>;
 let subscribe: ReturnType<typeof vi.fn>;
 const subscriptions = new Map<string, Set<(payload: unknown) => void>>();
+
+const CachedDiaryFixture = defineComponent({
+  components: { BubbleDiaryView, EverythingView },
+  setup() {
+    const activePage = ref<"everything" | "diary">("everything");
+    const entries = ref<Entry[]>([everythingNote("cached-note", "В кеше")]);
+    const addEverythingEntry = () => {
+      entries.value = [everythingNote("fresh-note", "Фоновое обновление"), ...entries.value];
+    };
+    return { activePage, addEverythingEntry, entries };
+  },
+  template: `
+    <button data-testid="open-diary" @click="activePage = 'diary'">Дневник</button>
+    <button data-testid="close-diary" @click="activePage = 'everything'">Всё</button>
+    <button data-testid="add-everything-entry" @click="addEverythingEntry">Обновить</button>
+    <Transition name="eden-page-fade">
+      <KeepAlive :max="2">
+        <BubbleDiaryView v-if="activePage === 'diary'" key="diary" />
+        <EverythingView v-else key="everything" :entries="entries" :note-types="[]" />
+      </KeepAlive>
+    </Transition>
+  `,
+});
+
+function everythingNote(id: string, title: string): Entry {
+  return {
+    id,
+    title,
+    content_json: "",
+    created_at: 1,
+    updated_at: 1,
+    folder_id: null,
+    type_id: "note_obj",
+    header_layout: null,
+    header_props_json: "{}",
+    schema_version: 1,
+    deleted_at: null,
+    content_loaded: true,
+  };
+}
 
 function bubble(id: string, text: string, createdAt: string): ArkObject {
   return {
@@ -119,6 +161,40 @@ describe("BubbleDiaryView", () => {
 
     await expect.element(screen.getByTestId("bubble-node-bubble-1")).toHaveTextContent("Из ARK");
     await expect.element(screen.getByTestId("bubble-node-journal-1")).not.toBeInTheDocument();
+  });
+
+  test("keeps both home pages cached and applies live updates while hidden", async () => {
+    objects.set("cached", bubble("cached", "В кеше", new Date().toISOString()));
+    const screen = render(CachedDiaryFixture);
+    await expect.element(screen.getByTestId("everything-card-cached-note")).toBeInTheDocument();
+    const everythingRoot = document.querySelector('[data-testid="everything-view"]');
+    const listReadCount = () =>
+      request.mock.calls.filter(([operation]) => operation === "list_objects_by_type").length;
+
+    expect(listReadCount()).toBe(0);
+    await userEvent.click(screen.getByTestId("open-diary"));
+    await expect.element(screen.getByTestId("bubble-node-cached")).toBeInTheDocument();
+    const readsAfterFirstOpen = listReadCount();
+
+    await userEvent.click(screen.getByTestId("close-diary"));
+    await expect.element(screen.getByTestId("bubble-node-cached")).not.toBeInTheDocument();
+    objects.set(
+      "while-hidden",
+      bubble("while-hidden", "Фоновое обновление", new Date().toISOString()),
+    );
+    emitArk("object_upserted", { id: "while-hidden", type_id: "system-type-journal" });
+    await vi.waitFor(() => expect(listReadCount()).toBeGreaterThan(readsAfterFirstOpen));
+    const readsAfterLiveUpdate = listReadCount();
+
+    await userEvent.click(screen.getByTestId("open-diary"));
+    await expect.element(screen.getByTestId("bubble-node-while-hidden")).toBeInTheDocument();
+    expect(listReadCount()).toBe(readsAfterLiveUpdate);
+    expect(subscribe).toHaveBeenCalledTimes(3);
+
+    await userEvent.click(screen.getByTestId("add-everything-entry"));
+    await userEvent.click(screen.getByTestId("close-diary"));
+    await expect.element(screen.getByTestId("everything-card-fresh-note")).toBeInTheDocument();
+    expect(document.querySelector('[data-testid="everything-view"]')).toBe(everythingRoot);
   });
 
   test("renders saved task lists with the bubble Tiptap schema", async () => {

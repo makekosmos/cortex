@@ -1,0 +1,41 @@
+{
+  "task_id": "2026-07-13-eden-everything",
+  "verified_at": "2026-07-13T14:10:44.3375842Z",
+  "independent_verifier": {
+    "verdict": "PASS",
+    "acceptance_criteria": ["AC1", "AC2", "AC3", "AC4", "AC5", "AC6"],
+    "actionable_findings": 0
+  },
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "bun run --cwd products/eden test:vue; bun run visual:eden"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "bun run --cwd products/eden test:vue"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "bun run --cwd products/eden test:unit; bun run ark:guard:writes"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "bun run --cwd products/eden test:vue; bun run visual:eden -- --update-snapshots; bun run visual:eden"
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "command": "bun run --cwd platform/desktop build:js; bun run docs:sync; bun run docs:check"
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "command": "bun run --cwd products/eden test:unit; bun run --cwd products/eden test:vue; bun run ark:guard:writes; bun run --cwd platform/desktop build:js; bun run docs:check; bun run visual:eden; git diff --check"
+    }
+  ]
+}

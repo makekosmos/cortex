@@ -49,12 +49,31 @@ describe("Eden store navigation", () => {
     expect(eden.currentEntry?.content_json).toBe(entry.content_json);
   });
 
-  test("restores diary screen after reload", () => {
+  test("always starts on Everything even with stale navigation storage", () => {
+    localStorage.setItem("eden:nav:lastScreen", "diary");
+    localStorage.setItem("eden:nav:lastEntryId", "old-entry");
+
     const eden = useEdenStore();
 
-    eden.openDiary();
-    setActivePinia(createPinia());
+    expect(eden.activeScreen).toBe("notes");
+    expect(eden.activeNoteTypeId).toBeNull();
+    expect(eden.currentEntry).toBeNull();
+  });
 
-    expect(useEdenStore().activeScreen).toBe("diary");
+  test("openEverything clears the selected entry, collection, and pending load", () => {
+    const eden = useEdenStore();
+    const entry = cachedEntry("current-entry");
+
+    eden.activeScreen = "type-collection";
+    eden.activeNoteTypeId = "book_obj";
+    eden.currentEntry = entry;
+    eden.loadingEntryId = entry.id;
+
+    eden.openEverything();
+
+    expect(eden.activeScreen).toBe("notes");
+    expect(eden.activeNoteTypeId).toBeNull();
+    expect(eden.currentEntry).toBeNull();
+    expect(eden.loadingEntryId).toBeNull();
   });
 });

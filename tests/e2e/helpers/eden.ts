@@ -116,36 +116,70 @@ export async function createEdenNote(edenWindow: Page, opts: CreateNoteOpts = {}
 }
 
 /**
- * Установить `eden:nav:lastEntryId` в localStorage у Eden window — initApp
- * подхватит при следующем mount. Использовать ПЕРЕД close+reopen Eden чтобы
- * нужная заметка автоматически открылась.
- */
-async function setEdenLastEntry(edenWindow: Page, entryId: string): Promise<void> {
-  await edenWindow.evaluate((id) => {
-    try {
-      window.localStorage.setItem("eden:nav:lastEntryId", id);
-    } catch {
-      /* ignore */
-    }
-  }, entryId);
-}
-
-/**
- * Hardest-fix navigation: ставим entryId в localStorage и reload'им
- * Eden window — initApp подхватит и откроет заметку. Возвращает true
- * если после reload в .ProseMirror отрендерилось содержимое (или
- * вообще ProseMirror смонтировался).
+ * Reload Eden on its home feed, preload the full entry, and navigate through
+ * the existing store action. Returns true when the TipTap editor mounts.
  *
- * Эта стратегия надёжнее DOM-click на sidebar (entries refresh ленивый,
- * sidebar item может ещё не отрендериться).
+ * The public helper name stays stable for existing e2e specs even though
+ * cross-launch last-entry restoration is intentionally no longer supported.
+ * Preloading preserves these editor-focused specs' original full-body mount
+ * contract; the Everything visual spec covers the real summary-card path.
  */
 export async function openNoteViaReload(edenWindow: Page, entryId: string): Promise<boolean> {
-  await setEdenLastEntry(edenWindow, entryId);
   await edenWindow.reload();
   await edenWindow.waitForLoadState("domcontentloaded");
-  // Дать initApp + shim install + Editor lazy chunk.
-  await edenWindow.waitForTimeout(2500);
-  return await edenWindow.evaluate(() => !!document.querySelector(".ProseMirror"));
+  try {
+    await edenWindow.waitForFunction(() => typeof window.api?.loadEntry === "function", null, {
+      timeout: 10_000,
+    });
+    const opened = await edenWindow.evaluate(async (id) => {
+      const fullEntry = await window.api.loadEntry(id);
+      if (!fullEntry) return false;
+
+      type EdenTestStore = {
+        entries: Entry[];
+        navigateTo: (entryId: string) => Promise<void>;
+      };
+      type PiniaLike = { _s?: Map<string, EdenTestStore> };
+      const root = document.querySelector("#root") as
+        | (Element & {
+            __vue_app__?: {
+              _context?: { provides?: Record<PropertyKey, unknown> };
+            };
+          })
+        | null;
+      const provides = root?.__vue_app__?._context?.provides;
+      const pinia = provides
+        ? Reflect.ownKeys(provides)
+            .map((key) => provides[key])
+            .find(
+              (candidate): candidate is PiniaLike =>
+                !!candidate &&
+                typeof candidate === "object" &&
+                (candidate as PiniaLike)._s instanceof Map,
+            )
+        : null;
+      const store = pinia?._s?.get("eden");
+      if (!store) throw new Error("Eden Pinia store not found");
+      const loadedEntry = { ...fullEntry, content_loaded: true };
+      const existingIndex = store.entries.findIndex((entry) => entry.id === id);
+      store.entries =
+        existingIndex >= 0
+          ? store.entries.map((entry, index) => (index === existingIndex ? loadedEntry : entry))
+          : [loadedEntry, ...store.entries];
+      await store.navigateTo(id);
+      return true;
+    }, entryId);
+    if (!opened) return false;
+
+    await edenWindow.locator(".ProseMirror").waitFor({ state: "visible", timeout: 10_000 });
+    // Preserve the helper's previous settle contract for TipTap transactions
+    // and callers that reload again immediately after debounced autosave.
+    await edenWindow.waitForTimeout(2500);
+    return true;
+  } catch (error) {
+    console.warn(`[eden helpers] openNoteViaReload(${entryId}) failed:`, error);
+    return false;
+  }
 }
 
 /**

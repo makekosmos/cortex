@@ -499,6 +499,9 @@ interface Window {
     meta?: {
       id: () => Promise<string>;
     };
+    images?: {
+      dominantColor: (source: string) => Promise<string | null>;
+    };
     userData?: {
       readJson: <T = unknown>(name: string) => Promise<T | null>;
       writeJson: (name: string, value: unknown) => Promise<void>;

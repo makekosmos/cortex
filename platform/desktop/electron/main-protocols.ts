@@ -97,6 +97,7 @@ function registerLocalImageProtocol(): void {
         headers: {
           "content-type": localImageMimeType(resolvedPath),
           "cache-control": "max-age=3600",
+          "access-control-allow-origin": "*",
         },
       });
     } catch (e) {

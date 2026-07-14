@@ -56,16 +56,6 @@
           >
             <PhPottedPlant :size="17" weight="duotone" />
           </TitlebarButton>
-          <TitlebarButton
-            v-else-if="layout.widgetSidebarHidden"
-            title="Показать сайдбар"
-            aria-label="Показать сайдбар"
-            aria-pressed="false"
-            data-testid="titlebar-sidebar-toggle"
-            @click="layout.toggleWidgetSidebar()"
-          >
-            <PanelLeftOpen :size="16" />
-          </TitlebarButton>
           <TitlebarHistoryControls
             v-if="!layout.isZenMode"
             :back-disabled="!canGoBack"
@@ -76,7 +66,7 @@
             @forward="navigateForward"
           />
           <TitlebarButton
-            v-if="!layout.isZenMode && eden.activeScreen !== 'diary'"
+            v-if="!layout.isZenMode && eden.activeScreen !== 'diary' && eden.currentEntry"
             :title="preferences.state.readerModeEnabled ? 'Режим чтеца' : 'Режим писателя'"
             :aria-label="
               preferences.state.readerModeEnabled
@@ -90,28 +80,61 @@
             <BookOpen v-if="preferences.state.readerModeEnabled" :size="16" />
             <Pencil v-else :size="16" />
           </TitlebarButton>
+          <Transition name="eden-titlebar-page-title">
+            <div
+              v-if="showTitlebarPageTitle"
+              :key="titlebarPageTitle"
+              class="eden-titlebar-page-title"
+              data-testid="titlebar-page-title"
+            >
+              <span
+                v-if="showTitlebarPersonIcon"
+                class="eden-titlebar-page-title__icon"
+                aria-hidden="true"
+              >
+                <img v-if="titlebarPersonImageSrc" :src="titlebarPersonImageSrc" alt="" />
+                <User v-else :size="13" />
+              </span>
+              <span class="eden-titlebar-page-title__text">{{ titlebarPageTitle }}</span>
+            </div>
+          </Transition>
         </div>
       </template>
 
       <template #titlebar-center>
-        <Transition name="eden-titlebar-page-title">
-          <div
-            v-if="showTitlebarPageTitle"
-            :key="titlebarPageTitle"
-            class="eden-titlebar-page-title"
-            data-testid="titlebar-page-title"
+        <nav
+          v-if="!layout.isZenMode"
+          class="eden-top-navigation"
+          :class="{ 'is-diary': eden.activeScreen === 'diary' }"
+          aria-label="Разделы Eden"
+          data-testid="eden-top-navigation"
+        >
+          <span
+            class="eden-top-navigation__indicator"
+            data-testid="top-nav-indicator"
+            aria-hidden="true"
+          />
+          <button
+            type="button"
+            class="eden-top-navigation__item"
+            :class="{ 'is-active': eden.activeScreen === 'notes' }"
+            :aria-current="eden.activeScreen === 'notes' ? 'page' : undefined"
+            data-testid="top-nav-everything"
+            @click="eden.openEverything()"
           >
-            <span
-              v-if="showTitlebarPersonIcon"
-              class="eden-titlebar-page-title__icon"
-              aria-hidden="true"
-            >
-              <img v-if="titlebarPersonImageSrc" :src="titlebarPersonImageSrc" alt="" />
-              <User v-else :size="13" />
-            </span>
-            <span class="eden-titlebar-page-title__text">{{ titlebarPageTitle }}</span>
-          </div>
-        </Transition>
+            Всё
+          </button>
+          <button
+            type="button"
+            class="eden-top-navigation__item"
+            :class="{ 'is-active': eden.activeScreen === 'diary' }"
+            :aria-current="eden.activeScreen === 'diary' ? 'page' : undefined"
+            data-testid="top-nav-diary"
+            @click="eden.openDiary()"
+          >
+            Дневник
+          </button>
+        </nav>
       </template>
 
       <template #titlebar-trailing>
@@ -127,75 +150,79 @@
         </TitlebarButton>
       </template>
 
-      <template v-if="!layout.isZenMode" #sidebar>
-        <EdenSidebar
-          :hidden="layout.widgetSidebarHidden"
-          :is-search-open="layout.isSearchOpen"
-          :search-query="layout.searchQuery"
-          :recent-entries="recentSidebarEntries"
-          :note-types="eden.noteTypes"
-          :current-entry="eden.currentEntry"
-          :active-screen="eden.activeScreen"
-          :selected-object-type-id="eden.activeNoteTypeId"
-          :sidebar-width="layout.widgetSidebarWidth"
-          :resizable="true"
-          @toggle-search="layout.isSearchOpen = !layout.isSearchOpen"
-          @create-entry="eden.createNewEntry()"
-          @open-diary="eden.openDiary()"
-          @open-entry="(id) => eden.navigateTo(id)"
-          @entry-context-menu="onEntryContextMenu"
-          @open-settings="openSettings"
-          @open-object-type="openObjectCollection"
-          @sidebar-width-change="layout.setWidgetSidebarWidth($event)"
-          @toggle-sidebar="layout.toggleWidgetSidebar()"
-        />
-      </template>
-
       <main class="app-main">
         <div v-if="eden.isHydratingVault && !eden.currentEntry" class="app-main-loading">
           Загрузка данных...
         </div>
-        <BubbleDiaryView
-          v-else-if="eden.activeScreen === 'diary'"
-          :journal-entries="eden.entries"
-          :calendar-open="diaryCalendarOpen"
-          @journal-migrated="eden.refreshData()"
-        />
-        <TypeObjectsView
-          v-else-if="isCollectionViewActive && activeCollectionType"
-          :note-type="activeCollectionType"
-          :entries="eden.entries"
-          @open-entry="(id) => eden.navigateTo(id)"
-          @create-entry="eden.createNewEntry(activeCollectionType.id)"
-        />
-        <template v-else-if="eden.currentEntry">
-          <ImageObjectView
-            v-if="activeCurrentType?.id === SYSTEM_TYPE_IMAGE_ID"
-            :entry="eden.currentEntry"
-            :note-type="activeCurrentType"
-          />
-          <TiptapEditor
-            v-else
-            :key="`tiptap:${eden.currentEntry.id}:${eden.currentEntry.type_id ?? 'note_obj'}`"
-            :entry="eden.currentEntry"
-            :all-entries="eden.entries"
-            :note-types="eden.noteTypes"
-            :zen-mode="layout.isZenMode"
-            :reader-mode="preferences.state.readerModeEnabled"
-            :body-loading="eden.loadingEntryId === eden.currentEntry.id"
-            :on-save="eden.handleSave"
-            :on-navigate="eden.navigateTo"
-            @close-entry="closeCurrentEntry"
-            @set-zen-mode="setZenMode"
-            @entry-draft-change="eden.updateEntryDraft"
-            @live-char-count="liveCharCount = $event"
-            @title-out-of-view-change="noteTitleOutOfView = $event"
-            @type-change="onCmTypeChange"
-          />
+        <template v-else>
+          <Transition name="eden-page-fade">
+            <KeepAlive :max="2">
+              <BubbleDiaryView
+                v-if="eden.activeScreen === 'diary'"
+                key="diary"
+                class="eden-page-surface"
+                :journal-entries="eden.entries"
+                :calendar-open="diaryCalendarOpen"
+                @journal-migrated="eden.refreshData()"
+              />
+              <EverythingView
+                v-else-if="isEverythingHome"
+                key="everything"
+                class="eden-page-surface"
+                :entries="eden.entries"
+                :note-types="eden.noteTypes"
+                @open-entry="(id) => eden.navigateTo(id)"
+              />
+            </KeepAlive>
+          </Transition>
+          <Transition name="eden-page-fade">
+            <div
+              v-if="eden.activeScreen !== 'diary' && !isEverythingHome"
+              class="eden-page-surface"
+            >
+              <TypeObjectsView
+                v-if="isCollectionViewActive && activeCollectionType"
+                :note-type="activeCollectionType"
+                :entries="eden.entries"
+                @open-entry="(id) => eden.navigateTo(id)"
+                @create-entry="eden.createNewEntry(activeCollectionType.id)"
+              />
+              <template v-else-if="eden.currentEntry">
+                <ImageObjectView
+                  v-if="activeCurrentType?.id === SYSTEM_TYPE_IMAGE_ID"
+                  :entry="eden.currentEntry"
+                  :note-type="activeCurrentType"
+                />
+                <TiptapEditor
+                  v-else
+                  :key="`tiptap:${eden.currentEntry.id}:${eden.currentEntry.type_id ?? 'note_obj'}`"
+                  :entry="eden.currentEntry"
+                  :all-entries="eden.entries"
+                  :note-types="eden.noteTypes"
+                  :zen-mode="layout.isZenMode"
+                  :reader-mode="preferences.state.readerModeEnabled"
+                  :body-loading="eden.loadingEntryId === eden.currentEntry.id"
+                  :on-save="eden.handleSave"
+                  :on-navigate="eden.navigateTo"
+                  @close-entry="closeCurrentEntry"
+                  @set-zen-mode="setZenMode"
+                  @entry-draft-change="eden.updateEntryDraft"
+                  @live-char-count="liveCharCount = $event"
+                  @title-out-of-view-change="noteTitleOutOfView = $event"
+                  @type-change="onCmTypeChange"
+                />
+              </template>
+              <div
+                v-else
+                class="app-empty-editor"
+                data-testid="empty-editor-state"
+                aria-live="polite"
+              >
+                Никакая страница не выбрана
+              </div>
+            </div>
+          </Transition>
         </template>
-        <div v-else class="app-empty-editor" data-testid="empty-editor-state" aria-live="polite">
-          Никакая страница не выбрана
-        </div>
       </main>
 
       <div
@@ -217,17 +244,6 @@
       {{ pluralizeCharacters(currentEntryCharCount) }}
     </div>
 
-    <ContextMenu
-      :open="entryMenu.isOpen.value"
-      :x="entryMenu.x.value"
-      :y="entryMenu.y.value"
-      @close="entryMenu.close"
-    >
-      <ContextMenuItem data-testid="eden-entry-delete" @click="onDeleteContextEntry">
-        Удалить
-      </ContextMenuItem>
-    </ContextMenu>
-
     <ToastHost />
   </div>
 </template>
@@ -243,15 +259,12 @@ import {
   watch,
 } from "vue";
 import {
-  ContextMenu,
-  ContextMenuItem,
   DesktopChrome,
   TitlebarButton,
   TitlebarHistoryControls,
   ToastHost,
   type TitlebarPlatform,
   provideToastHost,
-  useContextMenu,
 } from "@kosmos/visuals";
 import { useEdenStore } from "@/store/eden";
 import { useLayoutStore } from "@/store/layout";
@@ -266,7 +279,7 @@ import { usePreferences } from "@/composables/usePreferences";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
 import BubbleDiaryView from "@/components/bubbles/BubbleDiaryView.vue";
-import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
+import EverythingView from "@/components/everything/EverythingView.vue";
 const TiptapEditor = defineAsyncComponent(() => import("./editor-tiptap/TiptapEditor.vue"));
 import ImageObjectView from "@/components/objects/ImageObjectView.vue";
 import TypeObjectsView from "@/components/objects/TypeObjectsView.vue";
@@ -278,13 +291,16 @@ import {
 import { getResolvedNoteTypeField } from "@/lib/typedNotes";
 import { resolveObjectImageSrc } from "@/lib/objectImages";
 import { PhPottedPlant } from "@phosphor-icons/vue";
-import { BookOpen, CalendarDays, PanelLeftOpen, Pencil, User } from "@lucide/vue";
+import { BookOpen, CalendarDays, Pencil, User } from "@lucide/vue";
 import "@/App.css";
 
 const eden = useEdenStore();
 const layout = useLayoutStore();
 const preferences = usePreferences();
 const diaryCalendarOpen = ref(false);
+const isEverythingHome = computed(
+  () => eden.activeScreen === "notes" && eden.currentEntry === null,
+);
 
 function mountedEditorKind(): "tiptap" | "spaces" | "other" {
   if (document.querySelector(".tiptap-editor-host")) return "tiptap";
@@ -320,13 +336,6 @@ provideToastHost();
 usePlatform();
 useKeyboard();
 const { pendingQuery } = useSearch();
-
-// ПКМ-меню на entries в sidebar — пункт «Удалить» soft-delete'ит запись.
-const entryMenu = useContextMenu<string>();
-
-function onEntryContextMenu(event: MouseEvent, entryId: string) {
-  entryMenu.open(event, entryId);
-}
 
 // Docked-widget state — для CSS-маркера (.eden-docked) на app-container.
 const { isDocked } = useDockedWidget();
@@ -545,32 +554,8 @@ watch(
   },
 );
 
-async function onDeleteContextEntry() {
-  const id = entryMenu.payload.value;
-  entryMenu.close();
-  if (!id || !window.api) return;
-  try {
-    await window.api.deleteEntry(id);
-    await eden.refreshData();
-    if (eden.currentEntry?.id === id) {
-      eden.currentEntry = null;
-    }
-  } catch (err) {
-    console.error("[eden] deleteEntry failed:", err);
-  }
-}
 const { canGoBack, canGoForward, navigateBack, navigateForward } = useNavigationHistory(eden);
 const noteTitleOutOfView = shallowRef(false);
-
-const recentSidebarEntries = computed(() => eden.entries);
-
-function openObjectCollection(noteTypeId: string, collectionEntryId?: string): void {
-  if (collectionEntryId) {
-    void eden.navigateTo(collectionEntryId);
-    return;
-  }
-  eden.openTypeCollection(noteTypeId);
-}
 
 const { liveCharCount, currentEntryCharCount, charCounterHasOverlap, pluralizeCharacters } =
   useCharCounter(eden, layout);
@@ -647,16 +632,9 @@ const titlebarPageTitle = computed(() => {
   return "";
 });
 const showTitlebarPageTitle = computed(() => titlebarPageTitle.value.length > 0);
-async function openSettings() {
-  layout.closeSearch();
-  pendingQuery.value = "";
-  layout.searchQuery = "";
-  layout.searchResults = [];
-  await window.kepler?.edenSettings?.open?.();
-}
 
 function closeCurrentEntry() {
-  eden.currentEntry = null;
+  eden.openEverything();
 }
 
 function onCmTypeChange(entry: Entry) {

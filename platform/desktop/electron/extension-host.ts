@@ -47,6 +47,7 @@ import { registerExtensionUserDataIpc } from "./extension-user-data-ipc";
 import { registerExtensionInstallerIpc } from "./extension-installer-ipc";
 import { clearExtensionWindowIpcState, registerExtensionWindowIpc } from "./extension-window-ipc";
 import { registerExtensionArkIpc } from "./extension-ark-ipc";
+import { registerExtensionImageColorIpc } from "./extension-image-color-ipc";
 import { isNativeExtensionRunning, openNativeExtension } from "./extension-native-runner";
 import { openExtensionBrowserWindow } from "./extension-browser-window";
 
@@ -301,6 +302,8 @@ registerExtensionWindowIpc({
   initialRouteForSender,
   windowForSender,
 });
+
+registerExtensionImageColorIpc({ extensionIdForSender });
 
 ipcMain.handle("kepler:extension:dialogs:pick-directory", async (event) => {
   assertExtensionSenderHostPermission(event.sender, "dialogs.directory");

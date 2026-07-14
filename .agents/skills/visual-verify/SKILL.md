@@ -11,6 +11,7 @@ After visible UI changes, verify the result, not only the code:
 
 1. Prefer an existing local dev server if the relevant port is already listening. Do not kill unknown user processes.
 2. If no server is running and the app needs one, start the smallest suitable dev server and record the URL.
+   For packaged Electron extension visuals, rebuild the changed extension first; otherwise the test may verify a stale bundle.
 3. Use Playwright to open the target route. For Electron renderer routes that need preload IPC, inject a minimal `window.kepler` mock with `page.addInitScript`.
 4. Wait for the real UI selector that proves the changed surface rendered.
 5. Save a screenshot under `.tmp/` and inspect it with `view_image`.

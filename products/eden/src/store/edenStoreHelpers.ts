@@ -8,9 +8,6 @@ export type ActiveScreen = "notes" | "settings" | "type-collection" | "diary";
 
 export const SYSTEM_TYPES_BY_ID = new Map(SYSTEM_TYPES.map((noteType) => [noteType.id, noteType]));
 
-const LAST_ENTRY_STORAGE_KEY = "eden:nav:lastEntryId";
-const LAST_SCREEN_STORAGE_KEY = "eden:nav:lastScreen";
-
 interface QueuedSaveRequest {
   entry: Entry;
   waiters: Array<{
@@ -22,42 +19,6 @@ interface QueuedSaveRequest {
 export interface EntrySaveCoordinator {
   inFlight: boolean;
   queued: QueuedSaveRequest | null;
-}
-
-export function writeLastVisitedEntryId(id: string): void {
-  try {
-    window.localStorage.setItem(LAST_ENTRY_STORAGE_KEY, id);
-  } catch {
-    // localStorage can be unavailable in tests or restricted renderer contexts.
-  }
-}
-
-export function readLastVisitedEntryId(): string | null {
-  try {
-    return window.localStorage.getItem(LAST_ENTRY_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-export function writeLastActiveScreen(screen: ActiveScreen): void {
-  try {
-    if (screen === "diary") {
-      window.localStorage.setItem(LAST_SCREEN_STORAGE_KEY, screen);
-    } else {
-      window.localStorage.removeItem(LAST_SCREEN_STORAGE_KEY);
-    }
-  } catch {
-    // localStorage can be unavailable in tests or restricted renderer contexts.
-  }
-}
-
-export function readLastActiveScreen(): ActiveScreen {
-  try {
-    return window.localStorage.getItem(LAST_SCREEN_STORAGE_KEY) === "diary" ? "diary" : "notes";
-  } catch {
-    return "notes";
-  }
 }
 
 export function mergeNoteTypesWithSystem(noteTypesData: NoteType[]) {
