@@ -21,6 +21,24 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-07-14 — Browser fallback повторно резолвил DNS после SSRF-проверки
+
+**Симптомы.** Импорт метаданных книги проверял, что hostname указывает на публичный адрес, но sandboxed Chromium мог выполнить отдельный DNS lookup непосредственно перед запросом и получить уже приватный адрес.
+**Где жило.** `platform/desktop/electron/book-metadata-browser.ts::isPublicBrowserRequest`, `platform/desktop/electron/book-metadata-browser.ts::fetchBookMetadataPageInBrowser`.
+**Root cause.** `webRequest.onBeforeRequest` валидировал hostname через Node `dns.lookup`, после чего разрешал Chromium продолжить запрос по тому же hostname. Проверенный IP не участвовал в соединении, поэтому DNS rebinding оставлял TOCTOU между validation lookup и реальным Chromium lookup.
+**Fix.** Browser fallback получил отдельный ephemeral HTTP CONNECT proxy. Уникальная Electron session принудительно использует его для HTTP/HTTPS с `proxyBypassRules: "<-loopback>"`, поэтому Chromium не может уйти напрямую даже к localhost/link-local target. Proxy запрещает обычные HTTP requests, для каждого CONNECT проверяет весь DNS-набор и открывает upstream socket через `net.connect` к выбранному публичному IP, а не к hostname. Proxy, session и BrowserWindow закрываются общим `finally`, включая ошибки настройки и создания окна.
+**Регресс-защита.** `platform/desktop/electron/book-metadata-connect-proxy.test.ts` проверяет, что единственное upstream-соединение получает именно валидированный IP, обычный HTTP не запускает DNS, а private CONNECT target отклоняется до создания upstream socket. `book-metadata-fetch.test.ts` отдельно фиксирует pinned-IP fast path и повторную DNS-проверку redirects.
+**Prevention.** Любая SSRF-проверка DNS обязана передавать выбранный проверенный IP непосредственно в `connect`; раздельные «проверить hostname» и «позже подключиться по hostname» не образуют security boundary.
+
+## 2026-07-14 — Eden удалял старую обложку книги до подтверждённого сохранения
+
+**Симптомы.** При замене локальной обложки и последующей ошибке autosave запись продолжала ссылаться на старый путь, но сам старый файл уже мог быть удалён.
+**Где жило.** `products/eden/src/components/typed-notes/TypedHeader.vue::readCoverFile`, `products/eden/src/editor-tiptap/TiptapEditor.vue::flushSave`.
+**Root cause.** UI-компонент удалял предыдущий файл сразу после записи нового, не имея результата `onSave`. Запись файла и сохранение нового `cover_image` — две разные операции без общей транзакции, поэтому cleanup выполнялся раньше единственной доступной точки подтверждения persistence.
+**Fix.** Cleanup перенесён в `TiptapEditor` после успешного `onSave`; failed save сохраняет старый файл, а успешная замена локального пути или переход на URL удаляет предыдущий локальный asset best-effort.
+**Регрешн-защита.** `TiptapEditor.spec.ts` сначала возвращает `{ ok:false }` и проверяет сохранность файла, затем подтверждает успешный save и ожидает удаление прежнего `book-covers/old.png`.
+**Prevention.** Cleanup внешнего ресурса, на который ссылается сохраняемая запись, допустим только после подтверждённого persistence нового значения; до этого безопаснее оставить orphan, чем разрушить последнее сохранённое состояние.
+
 ## 2026-07-10 — Desktop overlay window contracts regressed
 
 **Симптомы.** Переиспользуемое окно диктации иногда оказывалось под другими приложениями, включая полноэкранные. У Focus widget вокруг тёмного скруглённого UI снова была видна непрозрачная прямоугольная подложка; fullscreen-состояние блокировки приложения также могло закрашивать экран за пределами намеренного edge-gradient и popup.

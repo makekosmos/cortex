@@ -262,6 +262,30 @@ describe("kepler-api-shim timestamps", () => {
     await expect(loadEntry("trashed-note")).resolves.toBeUndefined();
   });
 
+  test("loads preview content without links or type metadata", async () => {
+    const calls: string[] = [];
+    installArkMock((operation) => {
+      calls.push(operation);
+      if (operation !== "get_object") throw new Error(`Unexpected operation: ${operation}`);
+      return {
+        id: "preview-note",
+        typeId: "note_obj",
+        title: "Preview",
+        contentJson: { type: "markdown", version: 1, text: "Preview body" },
+        propsJson: {},
+        createdAt: "2024-01-02T03:04:05.000Z",
+        updatedAt: "2024-01-03T03:04:05.000Z",
+        deletedAt: null,
+      };
+    });
+
+    const entry = await loadEntry("preview-note", { contentOnly: true });
+
+    expect(entry?.content_loaded).toBe(true);
+    expect(entry?.content_json).toContain("Preview body");
+    expect(calls).toEqual(["get_object"]);
+  });
+
   test("saveEntry rejects malformed content_json without upsert", async () => {
     const calls: Array<{
       operation: string;

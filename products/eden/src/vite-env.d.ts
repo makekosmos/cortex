@@ -363,10 +363,12 @@ interface EdenPerfTracker {
 }
 
 interface Window {
+  __edenFpsDrops?: readonly import("./composables/useFpsMonitor").FpsDropRecord[];
+
   api: {
     saveEntry: (entry: Entry) => Promise<SaveEntryResult>;
 
-    loadEntry: (id: string) => Promise<Entry | undefined>;
+    loadEntry: (id: string, options?: { contentOnly?: boolean }) => Promise<Entry | undefined>;
 
     listEntries: () => Promise<Entry[]>;
 
@@ -502,11 +504,17 @@ interface Window {
     images?: {
       dominantColor: (source: string) => Promise<string | null>;
     };
+    bookMetadata?: {
+      fetchPage: (url: string) => Promise<{ finalUrl: string; html: string } | null>;
+      lookupIsbn: (isbn: string) => Promise<import("./lib/bookMetadata").BookMetadata | null>;
+    };
     userData?: {
       readJson: <T = unknown>(name: string) => Promise<T | null>;
       writeJson: (name: string, value: unknown) => Promise<void>;
       readFile: (name: string) => Promise<string | null>;
       writeFile: (name: string, content: string) => Promise<void>;
+      writeBinary: (name: string, base64: string) => Promise<void>;
+      deleteFile: (name: string) => Promise<boolean>;
       path: () => Promise<string>;
     };
     markdownFiles?: {

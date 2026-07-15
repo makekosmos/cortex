@@ -64,7 +64,8 @@ export function startEdenLiveRefreshSubscription(deps: {
         return;
       }
       if (!listable) return;
-      entries.value = [listable, ...entries.value].sort((a, b) => b.updated_at - a.updated_at);
+      upsertEntryBaseline(listable);
+      entries.value.sort((a, b) => b.updated_at - a.updated_at);
     })();
   });
 

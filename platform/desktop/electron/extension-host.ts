@@ -48,6 +48,7 @@ import { registerExtensionInstallerIpc } from "./extension-installer-ipc";
 import { clearExtensionWindowIpcState, registerExtensionWindowIpc } from "./extension-window-ipc";
 import { registerExtensionArkIpc } from "./extension-ark-ipc";
 import { registerExtensionImageColorIpc } from "./extension-image-color-ipc";
+import { registerExtensionBookMetadataIpc } from "./extension-book-metadata-ipc";
 import { isNativeExtensionRunning, openNativeExtension } from "./extension-native-runner";
 import { openExtensionBrowserWindow } from "./extension-browser-window";
 
@@ -241,6 +242,7 @@ function assertExtensionSenderHostPermission(
     | "userData.read"
     | "userData.write"
     | "focus.control"
+    | "network.read"
     | "dialogs.directory"
     | "markdownFiles.open"
     | "markdownFiles.save",
@@ -260,6 +262,7 @@ export function assertExtensionSenderHostPermissionIfExtension(
     | "userData.read"
     | "userData.write"
     | "focus.control"
+    | "network.read"
     | "dialogs.directory"
     | "markdownFiles.open"
     | "markdownFiles.save",
@@ -304,6 +307,20 @@ registerExtensionWindowIpc({
 });
 
 registerExtensionImageColorIpc({ extensionIdForSender });
+registerExtensionBookMetadataIpc({
+  assertNetworkRead: (sender) => {
+    const context = extensionContextForSender(sender);
+    if (context.id !== "eden") {
+      throw new Error("[kepler-shell] book metadata fetch is available only to Eden");
+    }
+    assertExtensionHostPermission({
+      extensionId: context.id,
+      source: context.source,
+      manifestPermissions: context.manifestPermissions,
+      capability: "network.read",
+    });
+  },
+});
 
 ipcMain.handle("kepler:extension:dialogs:pick-directory", async (event) => {
   assertExtensionSenderHostPermission(event.sender, "dialogs.directory");

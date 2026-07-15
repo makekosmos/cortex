@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, nextTick, useTemplateRef, watch } from "vue";
 import { DateTimePicker, Dropdown } from "@kosmos/visuals";
+import { isBookLanguageField, normalizeBookLanguage } from "@/lib/bookLanguages";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { formatObjectFieldValue } from "@/lib/objectFieldFormatting";
 import type { ResolvedNoteTypeField } from "@/lib/typedNotes";
@@ -35,6 +36,8 @@ const emit = defineEmits<{
   relationNavigate: [entryId: string];
 }>();
 
+const authorTextarea = useTemplateRef<HTMLTextAreaElement>("authorTextarea");
+
 const isReadonly = computed(() => props.readonly === true || props.field.read_only);
 const isSelectLike = computed(
   () =>
@@ -47,6 +50,7 @@ const usesCustomPicker = computed(
 );
 const dropdownValue = computed(() => {
   const value = props.modelValue;
+  if (isBookLanguageField(props.field)) return normalizeBookLanguage(value) || null;
   return typeof value === "string" && value.trim().length > 0 ? value : null;
 });
 const datePickerValue = computed(() => {
@@ -64,6 +68,7 @@ const inputType = computed(() => {
     case "date":
       return "text";
     case "image":
+    case "url":
       return "url";
     default:
       return "text";
@@ -119,10 +124,19 @@ const pickerOptions = computed(() => {
     return props.pickerOptions;
   }
 
-  return (props.field.options ?? []).map((option) => ({
+  const options = (props.field.options ?? []).map((option) => ({
     value: option,
     label: formatOptionLabel(option),
   }));
+  const currentValue = dropdownValue.value;
+  if (
+    props.field.kind === "select" &&
+    currentValue &&
+    !options.some((option) => option.value === currentValue)
+  ) {
+    options.push({ value: currentValue, label: formatOptionLabel(currentValue) });
+  }
+  return options;
 });
 
 const displayValue = computed(() => {
@@ -159,6 +173,7 @@ const inputPlaceholder = computed(() => {
     case "relation":
       return "Выберите объекты";
     case "image":
+    case "url":
       return "Вставьте ссылку";
     default:
       return "Введите значение";
@@ -172,6 +187,24 @@ function updateTextValue(event: Event) {
 function updateTextareaValue(event: Event) {
   emit("update:modelValue", (event.target as HTMLTextAreaElement).value);
 }
+
+function fitAuthorTextarea() {
+  const textarea = authorTextarea.value;
+  if (!textarea) return;
+  textarea.style.height = "0";
+  textarea.style.height = `${textarea.scrollHeight}px`;
+}
+
+function updateAuthorValue(event: Event) {
+  fitAuthorTextarea();
+  updateTextareaValue(event);
+}
+
+watch(
+  () => [props.modelValue, isReadonly.value],
+  () => nextTick(fitAuthorTextarea),
+  { immediate: true },
+);
 
 function updateBooleanValue(event: Event) {
   emit("update:modelValue", (event.target as HTMLInputElement).checked);
@@ -190,6 +223,8 @@ function formatOptionLabel(option: string) {
       `object-property-field--${variant}`,
       isReadonly && 'object-property-field--readonly',
       isSelectLike && 'object-property-field--selectlike',
+      field.id === '__object_type' && 'object-property-field--type',
+      field.kind === 'url' && 'object-property-field--url',
       field.kind === 'long_text' && 'object-property-field--wide',
     ]"
   >
@@ -220,6 +255,18 @@ function formatOptionLabel(option: string) {
         :placeholder="inputPlaceholder"
         :disabled="isReadonly"
         @input="updateTextareaValue"
+      />
+
+      <textarea
+        v-else-if="field.id === 'author'"
+        ref="authorTextarea"
+        class="object-property-field__input object-property-field__textarea object-property-field__textarea--author"
+        :data-testid="`typed-note-field-${field.id}`"
+        :value="String(modelValue ?? '')"
+        :placeholder="inputPlaceholder"
+        :disabled="isReadonly"
+        rows="1"
+        @input="updateAuthorValue"
       />
 
       <div v-else-if="field.kind === 'relation'" class="object-property-field__relation">
@@ -438,8 +485,21 @@ function formatOptionLabel(option: string) {
   overflow-wrap: anywhere;
 }
 
+.object-property-field--url .object-property-field__read,
+.object-property-field--url .object-property-field__input {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .object-property-field__read--placeholder {
   color: var(--muted-foreground);
+}
+
+.object-property-field--type .object-property-field__read,
+.object-property-field--type .object-property-field__dropdown :deep(> button) {
+  font-size: 14px !important;
+  line-height: 22px;
 }
 
 .object-property-field--featured-inline .object-property-field__read {
@@ -571,6 +631,14 @@ function formatOptionLabel(option: string) {
 .object-property-field__textarea {
   min-height: 84px;
   resize: vertical;
+}
+
+.object-property-field__textarea--author {
+  height: auto;
+  min-height: 24px;
+  overflow: hidden;
+  resize: none;
+  white-space: pre-wrap;
 }
 
 .object-property-field__checkbox {

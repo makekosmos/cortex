@@ -306,6 +306,7 @@ IPC проверяет capabilities перед тем как пропустит�
 - `kepler:extension:ark:request` → `assertExtensionArkPermission(...)`.
 - `kepler:extension:ark:subscribe` → event permission check.
 - `kepler:extension:userData:*` → `userData.read` / `userData.write`.
+- `kepler:extension:book-metadata:fetch-page` → `network.read` (Eden-only narrow bridge).
 - `kepler:focus-widget:set-state` → `focus.control`.
 
 Trust определяется **по source**, а не по `extension.id`:
@@ -336,6 +337,7 @@ arrancador.scan
 arrancador.launch
 userData.read
 userData.write
+network.read
 hostIndex.read
 hostIndex.write
 export.read
@@ -448,6 +450,8 @@ window.kepler.window.close();
 window.kepler.window.minimize();
 window.kepler.window.maximize();
 ```
+
+For Eden book imports, `window.kepler.bookMetadata.lookupIsbn(isbn)` exposes a dedicated fixed-origin Open Library read. The renderer passes only a checksum-valid ISBN; main owns the `openlibrary.org` URL, timeout, response cap and optional same-origin author lookups. This capability requires the extension's existing `networkRead` permission and does not expose a generic JSON proxy.
 
 Они шлют `kepler:extension:window:{close,minimize,maximize}` IPC. Main resolves окно через `BrowserWindow.fromWebContents(e.sender)` и вызывает соответствующий метод. API оставлен для programmatic window actions, но не для рендера кастомных кнопок.
 

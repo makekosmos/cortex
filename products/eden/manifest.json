@@ -18,6 +18,7 @@
     "objects.write",
     "userData.read",
     "userData.write",
+    "network.read",
     "markdownFiles.open",
     "markdownFiles.save"
   ],

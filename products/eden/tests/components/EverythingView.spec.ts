@@ -83,7 +83,7 @@ describe("EverythingView", () => {
     expect(cardIds()).toEqual(["book-covered", "book-fallback", "note-old"]);
     await expect
       .element(screen.getByTestId("everything-card-book-covered"))
-      .toHaveTextContent("Урсула Ле Гуин");
+      .not.toHaveTextContent("Урсула Ле Гуин");
     await expect.element(screen.getByTestId("everything-cover-book-covered")).toBeInTheDocument();
     await expect
       .element(screen.getByTestId("everything-cover-layer-book-covered"))
@@ -152,6 +152,7 @@ describe("EverythingView", () => {
     const originalApi = window.api;
     const originalObserver = window.IntersectionObserver;
     let reveal: (() => void) | undefined;
+    let observerOptions: IntersectionObserverInit | undefined;
     let previewUpdatedAt = 900;
     let previewText = `# Preview heading\n\nPreview body ${"word ".repeat(250)}`;
     const loadEntry = vi.fn(async () =>
@@ -167,7 +168,8 @@ describe("EverythingView", () => {
     );
     window.api = { ...originalApi, loadEntry } as typeof window.api;
     window.IntersectionObserver = class {
-      constructor(callback: IntersectionObserverCallback) {
+      constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+        observerOptions = options;
         reveal = () => callback([{ isIntersecting: true } as IntersectionObserverEntry], this);
       }
       observe() {}
@@ -189,8 +191,11 @@ describe("EverythingView", () => {
         },
       });
       expect(loadEntry).not.toHaveBeenCalled();
+      expect(observerOptions?.root).toBe(await first.getByTestId("everything-view").element());
+      expect(observerOptions?.rootMargin).toBe("50% 0px");
       reveal?.();
       reveal?.();
+      expect(loadEntry).not.toHaveBeenCalled();
       await expect
         .element(first.getByTestId("everything-preview-note-preview"))
         .toHaveTextContent("Preview heading Preview body");
@@ -204,6 +209,7 @@ describe("EverythingView", () => {
       ).toBe(5);
       expect(getComputedStyle(preview).maskImage).toContain("linear-gradient");
       expect(loadEntry).toHaveBeenCalledOnce();
+      expect(loadEntry).toHaveBeenCalledWith("note-preview", { contentOnly: true });
       first.unmount();
 
       const second = render(EverythingView, {
@@ -253,6 +259,19 @@ describe("EverythingView", () => {
       .toHaveTextContent("Без обложки");
   });
 
+  test("uses the dominant cover color for the spine", async () => {
+    const screen = render(EverythingView, {
+      props: { entries: mixedEntries(), noteTypes },
+    });
+    const layer = (await screen
+      .getByTestId("everything-cover-layer-book-covered")
+      .element()) as HTMLElement;
+
+    await expect
+      .poll(() => layer.style.getPropertyValue("--book-cover-spine-color"))
+      .toBe("rgb(255 165 0)");
+  });
+
   test("emits the selected entry id", async () => {
     const onOpenEntry = vi.fn();
     const screen = render(EverythingView, {
@@ -265,15 +284,38 @@ describe("EverythingView", () => {
     expect(onOpenEntry).toHaveBeenCalledWith("book-covered");
   });
 
-  test("renders the empty state", async () => {
+  test("opens the Visuals context menu and emits deletion", async () => {
+    const onDeleteEntry = vi.fn();
     const screen = render(EverythingView, {
-      props: { entries: [], noteTypes },
+      props: { entries: mixedEntries(), noteTypes, onDeleteEntry },
+    });
+
+    const card = await screen.getByTestId("everything-card-book-covered").element();
+    card.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, clientX: 120, clientY: 160 }),
+    );
+    await nextTick();
+
+    const deleteItem = screen.getByRole("menuitem", { name: "Удалить" });
+    await expect.element(deleteItem).toBeVisible();
+    expect((await deleteItem.element()).querySelector("svg")).not.toBeNull();
+    await userEvent.click(deleteItem);
+
+    expect(onDeleteEntry).toHaveBeenCalledOnce();
+    expect(onDeleteEntry).toHaveBeenCalledWith("book-covered");
+  });
+
+  test("renders the add card and emits default entry creation", async () => {
+    const onCreateEntry = vi.fn();
+    const screen = render(EverythingView, {
+      props: { entries: [], noteTypes, onCreateEntry },
     });
 
     await expect
-      .element(screen.getByTestId("everything-empty"))
-      .toHaveTextContent("Здесь пока ничего нет");
-    await expect.element(screen.getByTestId("everything-grid")).not.toBeInTheDocument();
+      .element(screen.getByTestId("everything-add-card"))
+      .toHaveAccessibleName("Добавить заметку");
+    await userEvent.click(screen.getByTestId("everything-add-card"));
+    expect(onCreateEntry).toHaveBeenCalledOnce();
   });
 
   test("keeps column gaps equal, cards indivisible, and rectangles separate", async () => {
@@ -298,30 +340,47 @@ describe("EverythingView", () => {
     view.style.setProperty("--border", "currentColor");
     view.style.setProperty("--surface", "rgb(1, 2, 3)");
     view.style.width = "760px";
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await expect.poll(() => grid.children.length).toBe(2);
 
     const cards = [...grid.querySelectorAll<HTMLElement>('[data-testid^="everything-card-"]')];
+    const addCard = (await screen.getByTestId("everything-add-card").element()) as HTMLElement;
+    const firstCard = (await screen.getByTestId("everything-card-card-0").element()) as HTMLElement;
+    const belowAddCard = (await screen
+      .getByTestId("everything-card-card-1")
+      .element()) as HTMLElement;
     const gridStyle = getComputedStyle(grid);
-    const firstVisual = cards[0]!.querySelector<HTMLElement>(".everything-item-visual")!;
-    const firstCardStyle = getComputedStyle(cards[0]!);
+    const firstVisual = firstCard.querySelector<HTMLElement>(".everything-item-visual")!;
+    const firstCardStyle = getComputedStyle(firstCard);
     const firstVisualStyle = getComputedStyle(firstVisual);
     expect(firstCardStyle.marginBlockEnd).toBe(gridStyle.columnGap);
     expect(firstCardStyle.breakInside).toBe("avoid");
     expect(firstCardStyle.gap).toBe("4px");
     expect(firstVisualStyle.borderTopWidth).toBe("2px");
-    const firstTitle = cards[0]!.querySelector<HTMLElement>(".everything-item-title")!;
+    expect(grid.firstElementChild?.firstElementChild).toBe(addCard);
+    expect(
+      Math.abs(addCard.getBoundingClientRect().width - addCard.getBoundingClientRect().height),
+    ).toBeLessThan(1);
+    expect(firstCard.getBoundingClientRect().left).toBeGreaterThan(
+      addCard.getBoundingClientRect().right,
+    );
+    expect(belowAddCard.getBoundingClientRect().left).toBe(addCard.getBoundingClientRect().left);
+    expect(belowAddCard.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      addCard.getBoundingClientRect().bottom,
+    );
+    const firstTitle = firstCard.querySelector<HTMLElement>(".everything-item-title")!;
     const firstTitleStyle = getComputedStyle(firstTitle);
     expect(firstTitleStyle.whiteSpace).toBe("nowrap");
     expect(firstTitleStyle.textOverflow).toBe("ellipsis");
     expect(firstTitle.scrollWidth).toBeGreaterThan(firstTitle.clientWidth);
 
+    const beforeHoverTop = firstVisual.offsetTop;
     const beforeHover = firstVisual.getBoundingClientRect();
     await userEvent.hover(screen.getByRole("searchbox", { name: "Поиск" }));
-    expect(getComputedStyle(firstVisual).backgroundColor).toBe("rgba(0, 0, 0, 0)");
+    await expect.poll(() => getComputedStyle(firstVisual).backgroundColor).toBe("rgba(0, 0, 0, 0)");
     await userEvent.hover(screen.getByTestId("everything-card-card-0"));
     const afterHover = firstVisual.getBoundingClientRect();
-    expect(getComputedStyle(firstVisual).backgroundColor).toBe("rgb(1, 2, 3)");
-    expect(afterHover.top).toBe(beforeHover.top);
+    await expect.poll(() => getComputedStyle(firstVisual).backgroundColor).toBe("rgb(1, 2, 3)");
+    expect(firstVisual.offsetTop).toBe(beforeHoverTop);
     expect(afterHover.height).toBe(beforeHover.height);
 
     const rects = cards.map((card) => card.getBoundingClientRect());
@@ -332,7 +391,6 @@ describe("EverythingView", () => {
     }
 
     view.style.width = "320px";
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    expect(getComputedStyle(grid).columnCount).toBe("1");
+    await expect.poll(() => grid.children.length).toBe(1);
   });
 });

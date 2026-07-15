@@ -28,9 +28,12 @@ interface Props {
   open: boolean;
   x: number;
   y: number;
+  elevated?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  elevated: true,
+});
 const emit = defineEmits<{
   close: [];
 }>();
@@ -96,7 +99,8 @@ onBeforeUnmount(() => {
     <div
       v-if="props.open"
       ref="root"
-      class="fixed z-[9999] min-w-48 rounded-xl border border-[var(--border)] bg-[var(--popover,var(--background))] p-2 text-[var(--popover-foreground,var(--foreground))] shadow-[var(--shadow-floating)] [corner-shape:var(--corner-shape)]"
+      class="fixed z-[9999] min-w-44 rounded-lg border border-[color-mix(in_srgb,var(--foreground)_10%,var(--border))] bg-[color-mix(in_srgb,var(--foreground)_8%,var(--background))] p-1 text-[var(--popover-foreground,var(--foreground))] [corner-shape:var(--corner-shape)]"
+      :class="props.elevated && 'shadow-[var(--shadow-floating)]'"
       role="menu"
       :style="style"
     >

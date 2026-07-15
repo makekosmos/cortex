@@ -81,7 +81,7 @@ function fieldValue(field: ResolvedNoteTypeField): string {
 .image-object-view {
   height: 100%;
   min-height: 100%;
-  padding: 28px 40px 40px;
+  padding: 80px 40px 40px;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -159,7 +159,7 @@ function fieldValue(field: ResolvedNoteTypeField): string {
 
 @media (max-width: 920px) {
   .image-object-view {
-    padding: 24px 24px 32px;
+    padding: 80px 24px 32px;
   }
 
   .image-object-shell {

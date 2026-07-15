@@ -115,14 +115,6 @@ export const useEdenStore = defineStore("eden", () => {
     return vaultPath.value.split("/").pop() ?? vaultPath.value;
   });
 
-  function createEntry(title: string, noteTypeId: string = SYSTEM_TYPE_NOTE_ID): Entry {
-    const newEntry = createBlankEntry({ id: uuidv4(), title, noteTypeId });
-
-    entries.value = [newEntry, ...entries.value];
-
-    return newEntry;
-  }
-
   // Markdown storage is read tolerantly by CM. Do not rewrite legacy/invalid bodies on open;
   // they become Markdown only through normal editor save.
   async function ensureEntryCmSafe(entry: Entry): Promise<Entry> {
@@ -156,30 +148,39 @@ export const useEdenStore = defineStore("eden", () => {
   }
 
   async function createNewEntry(noteTypeId: string = SYSTEM_TYPE_NOTE_ID) {
+    cancelPendingNavigation();
     activeScreen.value = "notes";
+    const newEntry = createBlankEntry({ id: uuidv4(), title: "", noteTypeId });
+    currentEntry.value = newEntry;
+    loadingEntryId.value = newEntry.id;
 
-    await ensureSystemTypePersisted(noteTypeId);
-
-    const newEntry = createEntry("", noteTypeId);
+    // Show the object page before IPC, but keep the editor unmounted until the primary save lands.
+    await nextTick();
+    await waitForLoadingFrame();
 
     // См. postmortems.md § 2026-06-16. Первичное пустое сохранение должно
     // завершиться до mount редактора, иначе оно гоняется с первым autosave.
     if (window.api) {
       try {
+        await ensureSystemTypePersisted(noteTypeId);
         const result = await window.api.saveEntry(newEntry);
         if (!result.ok) {
           console.warn("[eden] save new entry failed:", result);
-          entries.value = entries.value.filter((e) => e.id !== newEntry.id);
+          if (currentEntry.value?.id === newEntry.id) currentEntry.value = null;
           return;
         }
+        upsertEntryBaseline(newEntry);
       } catch (err) {
         console.error("[eden] save new entry threw:", err);
-        entries.value = entries.value.filter((e) => e.id !== newEntry.id);
+        if (currentEntry.value?.id === newEntry.id) currentEntry.value = null;
         return;
+      } finally {
+        if (loadingEntryId.value === newEntry.id) loadingEntryId.value = null;
       }
+    } else {
+      upsertEntryBaseline(newEntry);
+      loadingEntryId.value = null;
     }
-
-    currentEntry.value = newEntry;
   }
 
   /**
@@ -375,6 +376,16 @@ export const useEdenStore = defineStore("eden", () => {
     currentEntry.value = null;
   }
 
+  async function deleteEntry(entryId: string): Promise<boolean> {
+    if (!window.api?.deleteEntry) return false;
+    const result = await window.api.deleteEntry(entryId);
+    if (!result.ok) return false;
+
+    entries.value = entries.value.filter((entry) => entry.id !== entryId);
+    if (currentEntry.value?.id === entryId) openEverything();
+    return true;
+  }
+
   const { refreshData, initApp, selectFolder, selectVaultPath } = createEdenStoreDataActions({
     activeScreen,
     activeSpace,
@@ -451,8 +462,6 @@ export const useEdenStore = defineStore("eden", () => {
 
     initApp,
 
-    createEntry,
-
     createNewEntry,
 
     openTodayJournal,
@@ -468,6 +477,8 @@ export const useEdenStore = defineStore("eden", () => {
     openDiary,
 
     openEverything,
+
+    deleteEntry,
 
     saveNoteType,
 

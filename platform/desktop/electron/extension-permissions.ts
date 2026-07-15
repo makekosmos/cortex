@@ -17,6 +17,7 @@ export interface ExtensionHostPermissionCheck {
     | "userData.read"
     | "userData.write"
     | "focus.control"
+    | "network.read"
     | "dialogs.directory"
     | "markdownFiles.open"
     | "markdownFiles.save";

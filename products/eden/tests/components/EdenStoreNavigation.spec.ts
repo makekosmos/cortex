@@ -76,4 +76,61 @@ describe("Eden store navigation", () => {
     expect(eden.currentEntry).toBeNull();
     expect(eden.loadingEntryId).toBeNull();
   });
+
+  test("soft-deletes an entry and removes it from Everything after the local write", async () => {
+    const deleteEntry = vi.fn(async () => ({ ok: true as const, entryId: "deleted-entry" }));
+    Object.defineProperty(window, "api", {
+      configurable: true,
+      writable: true,
+      value: { deleteEntry },
+    });
+    const eden = useEdenStore();
+    eden.entries = [cachedEntry("deleted-entry"), cachedEntry("kept-entry")];
+
+    await expect(eden.deleteEntry("deleted-entry")).resolves.toBe(true);
+    expect(deleteEntry).toHaveBeenCalledWith("deleted-entry");
+    expect(eden.entries.map((entry) => entry.id)).toEqual(["kept-entry"]);
+
+    deleteEntry.mockResolvedValueOnce({
+      ok: false,
+      reason: "entry_not_found",
+      message: "not found",
+    });
+    await expect(eden.deleteEntry("kept-entry")).resolves.toBe(false);
+    expect(eden.entries.map((entry) => entry.id)).toEqual(["kept-entry"]);
+  });
+
+  test("opens a new note before persistence and adds it to Everything after save", async () => {
+    let resolveSave!: (result: { ok: true; entryId: string }) => void;
+    const saveEntry = vi.fn(
+      () =>
+        new Promise<{ ok: true; entryId: string }>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    Object.defineProperty(window, "api", {
+      configurable: true,
+      writable: true,
+      value: {
+        saveEntry,
+        saveNoteType: vi.fn(async () => ({ ok: true })),
+      },
+    });
+
+    const eden = useEdenStore();
+    const creation = eden.createNewEntry();
+    const createdId = eden.currentEntry?.id;
+
+    expect(createdId).toBeTruthy();
+    expect(eden.loadingEntryId).toBe(createdId);
+    expect(eden.entries).toHaveLength(0);
+
+    await vi.waitFor(() => expect(saveEntry).toHaveBeenCalledOnce());
+    resolveSave({ ok: true, entryId: createdId! });
+    await creation;
+
+    expect(eden.loadingEntryId).toBeNull();
+    expect(eden.currentEntry?.id).toBe(createdId);
+    expect(eden.entries.map((entry) => entry.id)).toEqual([createdId]);
+  });
 });

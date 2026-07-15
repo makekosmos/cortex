@@ -31,6 +31,17 @@ describe("Eden system type book", () => {
     expect(definition.fields).toEqual([
       expect.objectContaining({ id: "cover_image", kind: "image", required: false }),
       expect.objectContaining({ id: "author", kind: "text", required: false }),
+      expect.objectContaining({ id: "isbn", kind: "text", required: false }),
+      expect.objectContaining({ id: "page_count", kind: "number", required: false }),
+      expect.objectContaining({
+        id: "language",
+        kind: "select",
+        required: false,
+        options: expect.arrayContaining(["Русский", "Английский"]),
+      }),
+      expect.objectContaining({ id: "publisher", kind: "text", required: false }),
+      expect.objectContaining({ id: "published_date", kind: "text", required: false }),
+      expect.objectContaining({ id: "source_url", kind: "url", required: false }),
     ]);
 
     const headerTemplate = parseHeaderTemplate(SYSTEM_TYPE_BOOK.header_template_json);
@@ -39,8 +50,26 @@ describe("Eden system type book", () => {
     const uiSchema = parseNoteTypeUiSchema(SYSTEM_TYPE_BOOK.ui_schema_json);
     expect(uiSchema).toMatchObject({
       featured_fields: ["author"],
-      visible_fields: ["cover_image", "author"],
-      field_order: ["cover_image", "author"],
+      visible_fields: [
+        "cover_image",
+        "author",
+        "isbn",
+        "page_count",
+        "language",
+        "publisher",
+        "published_date",
+        "source_url",
+      ],
+      field_order: [
+        "cover_image",
+        "author",
+        "isbn",
+        "page_count",
+        "language",
+        "publisher",
+        "published_date",
+        "source_url",
+      ],
       collection_name: "Книги",
     });
   });

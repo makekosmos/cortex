@@ -80,30 +80,12 @@
             <BookOpen v-if="preferences.state.readerModeEnabled" :size="16" />
             <Pencil v-else :size="16" />
           </TitlebarButton>
-          <Transition name="eden-titlebar-page-title">
-            <div
-              v-if="showTitlebarPageTitle"
-              :key="titlebarPageTitle"
-              class="eden-titlebar-page-title"
-              data-testid="titlebar-page-title"
-            >
-              <span
-                v-if="showTitlebarPersonIcon"
-                class="eden-titlebar-page-title__icon"
-                aria-hidden="true"
-              >
-                <img v-if="titlebarPersonImageSrc" :src="titlebarPersonImageSrc" alt="" />
-                <User v-else :size="13" />
-              </span>
-              <span class="eden-titlebar-page-title__text">{{ titlebarPageTitle }}</span>
-            </div>
-          </Transition>
         </div>
       </template>
 
       <template #titlebar-center>
         <nav
-          v-if="!layout.isZenMode"
+          v-if="showMainPageNavigation"
           class="eden-top-navigation"
           :class="{ 'is-diary': eden.activeScreen === 'diary' }"
           aria-label="Разделы Eden"
@@ -135,6 +117,24 @@
             Дневник
           </button>
         </nav>
+        <Transition v-else name="eden-titlebar-page-title">
+          <div
+            v-if="showTitlebarPageTitle"
+            :key="titlebarPageTitle"
+            class="eden-titlebar-page-title"
+            data-testid="titlebar-page-title"
+          >
+            <span
+              v-if="showTitlebarPersonIcon"
+              class="eden-titlebar-page-title__icon"
+              aria-hidden="true"
+            >
+              <img v-if="titlebarPersonImageSrc" :src="titlebarPersonImageSrc" alt="" />
+              <User v-else :size="13" />
+            </span>
+            <span class="eden-titlebar-page-title__text">{{ titlebarPageTitle }}</span>
+          </div>
+        </Transition>
       </template>
 
       <template #titlebar-trailing>
@@ -171,6 +171,8 @@
                 class="eden-page-surface"
                 :entries="eden.entries"
                 :note-types="eden.noteTypes"
+                @create-entry="eden.createNewEntry()"
+                @delete-entry="eden.deleteEntry($event)"
                 @open-entry="(id) => eden.navigateTo(id)"
               />
             </KeepAlive>
@@ -188,8 +190,16 @@
                 @create-entry="eden.createNewEntry(activeCollectionType.id)"
               />
               <template v-else-if="eden.currentEntry">
+                <div
+                  v-if="isCreatingCurrentEntry"
+                  class="app-main-loading"
+                  aria-label="Создание страницы"
+                  aria-busy="true"
+                >
+                  Создание страницы...
+                </div>
                 <ImageObjectView
-                  v-if="activeCurrentType?.id === SYSTEM_TYPE_IMAGE_ID"
+                  v-else-if="activeCurrentType?.id === SYSTEM_TYPE_IMAGE_ID"
                   :entry="eden.currentEntry"
                   :note-type="activeCurrentType"
                 />
@@ -208,7 +218,6 @@
                   @set-zen-mode="setZenMode"
                   @entry-draft-change="eden.updateEntryDraft"
                   @live-char-count="liveCharCount = $event"
-                  @title-out-of-view-change="noteTitleOutOfView = $event"
                   @type-change="onCmTypeChange"
                 />
               </template>
@@ -223,6 +232,15 @@
             </div>
           </Transition>
         </template>
+
+        <div
+          v-if="layoutGridVisible"
+          class="eden-layout-grid"
+          data-testid="eden-layout-grid"
+          aria-hidden="true"
+        >
+          <output class="eden-fps-counter" data-testid="eden-fps-counter">{{ fps }} FPS</output>
+        </div>
       </main>
 
       <div
@@ -249,15 +267,7 @@
 </template>
 
 <script setup lang="ts">
-import {
-  computed,
-  defineAsyncComponent,
-  onMounted,
-  onUnmounted,
-  ref,
-  shallowRef,
-  watch,
-} from "vue";
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   DesktopChrome,
   TitlebarButton,
@@ -274,6 +284,7 @@ import { useSearch } from "@/composables/useSearch";
 import { useCharCounter } from "@/composables/useCharCounter";
 import { useDockedWidget } from "@/composables/useDockedWidget";
 import { useNavigationHistory } from "@/composables/useNavigationHistory";
+import { useFpsMonitor } from "@/composables/useFpsMonitor";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { usePreferences } from "@/composables/usePreferences";
 import Titlebar from "./Titlebar.vue";
@@ -298,8 +309,10 @@ const eden = useEdenStore();
 const layout = useLayoutStore();
 const preferences = usePreferences();
 const diaryCalendarOpen = ref(false);
+const layoutGridVisible = ref(false);
+const { fps } = useFpsMonitor();
 const isEverythingHome = computed(
-  () => eden.activeScreen === "notes" && eden.currentEntry === null,
+  () => eden.activeScreen === "notes" && eden.currentEntry === null && eden.loadingEntryId === null,
 );
 
 function mountedEditorKind(): "tiptap" | "spaces" | "other" {
@@ -555,8 +568,6 @@ watch(
 );
 
 const { canGoBack, canGoForward, navigateBack, navigateForward } = useNavigationHistory(eden);
-const noteTitleOutOfView = shallowRef(false);
-
 const { liveCharCount, currentEntryCharCount, charCounterHasOverlap, pluralizeCharacters } =
   useCharCounter(eden, layout);
 
@@ -622,16 +633,20 @@ const titlebarPersonImageSrc = computed(() => {
   return resolveObjectImageSrc(currentHeaderProps.value[imageFieldId], entriesById.value);
 });
 const showTitlebarPersonIcon = computed(() => isCurrentPersonEntry.value);
+const showMainPageNavigation = computed(
+  () => !layout.isZenMode && (isEverythingHome.value || eden.activeScreen === "diary"),
+);
 const titlebarPageTitle = computed(() => {
-  if (layout.isZenMode) return "";
-
-  if (activeCurrentType.value?.id === SYSTEM_TYPE_IMAGE_ID || noteTitleOutOfView.value) {
-    return currentTitlebarTitle.value;
-  }
-
-  return "";
+  if (layout.isZenMode || showMainPageNavigation.value || !eden.currentEntry) return "";
+  return currentTitlebarTitle.value;
 });
 const showTitlebarPageTitle = computed(() => titlebarPageTitle.value.length > 0);
+const isCreatingCurrentEntry = computed(
+  () =>
+    eden.currentEntry !== null &&
+    eden.loadingEntryId === eden.currentEntry.id &&
+    !eden.entries.some((entry) => entry.id === eden.currentEntry?.id),
+);
 
 function closeCurrentEntry() {
   eden.openEverything();
@@ -652,8 +667,33 @@ function setZenMode(enabled: boolean) {
 
 const commandUnsubscribers: Array<() => void> = [];
 
+function handleLayoutGridShortcut(event: KeyboardEvent): void {
+  if (
+    event.code !== "KeyG" ||
+    !event.shiftKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey ||
+    event.repeat
+  )
+    return;
+
+  const target = event.target;
+  if (
+    target instanceof Element &&
+    target.closest(
+      'input, textarea, select, [contenteditable]:not([contenteditable="false"]), .ProseMirror',
+    )
+  )
+    return;
+
+  event.preventDefault();
+  layoutGridVisible.value = !layoutGridVisible.value;
+}
+
 onMounted(() => {
   void eden.initApp();
+  window.addEventListener("keydown", handleLayoutGridShortcut);
   titlebarHoverUnsubscribe =
     window.kepler?.window?.onTitlebarHoverChange?.(setFocusTitlebarHovered) ?? null;
   void window.kepler?.window?.setTitlebarHoverTracking?.(
@@ -690,6 +730,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener("keydown", handleLayoutGridShortcut);
   titlebarHoverUnsubscribe?.();
   titlebarHoverUnsubscribe = null;
   void window.kepler?.window?.setTitlebarHoverTracking?.(false, FOCUS_TITLEBAR_HOVER_HEIGHT);
@@ -705,13 +746,6 @@ onUnmounted(() => {
     }
   }
 });
-
-watch(
-  () => eden.currentEntry?.id,
-  () => {
-    noteTitleOutOfView.value = false;
-  },
-);
 
 watch([() => layout.isZenMode, () => eden.activeScreen], ([isZenMode, activeScreen]) => {
   if (!isZenMode) return;

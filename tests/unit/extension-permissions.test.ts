@@ -165,4 +165,24 @@ describe("extension permissions", () => {
       }),
     ).toThrow("userData.write");
   });
+
+  test("network reads require an explicit host capability for user-installed extensions", () => {
+    expect(() =>
+      assertExtensionHostPermission({
+        extensionId: "book-importer",
+        source: USER,
+        manifestPermissions: [],
+        capability: "network.read",
+      }),
+    ).toThrow("network.read");
+
+    expect(() =>
+      assertExtensionHostPermission({
+        extensionId: "book-importer",
+        source: USER,
+        manifestPermissions: ["network.read"],
+        capability: "network.read",
+      }),
+    ).not.toThrow();
+  });
 });

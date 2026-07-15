@@ -4740,6 +4740,41 @@ span[data-wikilink]:hover {
   overflow: hidden;
 }
 
+.eden-layout-grid {
+  position: absolute;
+  z-index: 150;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--eden-accent-color) 24%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--eden-accent-color) 24%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 8px 8px;
+}
+
+.eden-fps-counter {
+  position: absolute;
+  z-index: 1;
+  top: 8px;
+  right: 8px;
+  display: block;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: var(--kosmos-text-caption-size);
+  line-height: 1;
+}
+
 .app-main--zen {
   flex: 1;
 }
@@ -4959,6 +4994,8 @@ span[data-wikilink]:hover {
 }
 
 .eden-titlebar-page-title {
+  position: absolute;
+  left: 50%;
   width: min(24vw, 280px);
   max-width: min(24vw, 280px);
   overflow: hidden;
@@ -4969,6 +5006,7 @@ span[data-wikilink]:hover {
   pointer-events: none;
   text-align: center;
   text-overflow: ellipsis;
+  translate: -50% 0;
   white-space: nowrap;
   display: inline-flex;
   align-items: center;

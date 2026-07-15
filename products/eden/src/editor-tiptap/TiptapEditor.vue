@@ -59,7 +59,8 @@ import {
 } from "@/lib/entryTitles";
 import { resolveNoteTypeHeaderLayout } from "@/lib/typedNotes";
 import { createHeaderPropsForTypeChange, safeParseHeaderProps } from "@/lib/typedNoteHeaderProps";
-import { SYSTEM_TYPE_NOTE_ID, SYSTEM_TYPE_PERSON_ID } from "@/lib/systemTypes";
+import { SYSTEM_TYPE_BOOK_ID, SYSTEM_TYPE_NOTE_ID, SYSTEM_TYPE_PERSON_ID } from "@/lib/systemTypes";
+import { BOOK_METADATA_FIELD_IDS, isEmptyBookValue, type BookMetadata } from "@/lib/bookMetadata";
 import { isFailedSaveResult } from "@/lib/saveResult";
 import {
   isReadableEntryContent,
@@ -582,8 +583,9 @@ const activeNoteType = computed(
   () => props.noteTypes.find((noteType) => noteType.id === currentTypeId.value) ?? null,
 );
 const isPersonEntry = computed(() => currentTypeId.value === SYSTEM_TYPE_PERSON_ID);
+const isBookEntry = computed(() => currentTypeId.value === SYSTEM_TYPE_BOOK_ID);
 const showTypedHeader = computed(() => Boolean(activeNoteType.value));
-const showTitleInput = computed(() => !isPersonEntry.value);
+const showTitleInput = computed(() => !isPersonEntry.value && !isBookEntry.value);
 const slashCommands = [
   { value: "h1", label: "Заголовок 1", icon: Heading1 },
   { value: "h2", label: "Заголовок 2", icon: Heading2 },
@@ -1005,6 +1007,37 @@ function syncPersistedBaseline(entry: Entry): void {
   bodyEditedSinceEntryLoad = false;
 }
 
+async function cleanupReplacedBookCover(
+  previousTypeId: string,
+  previousHeaderPropsJson: string,
+  savedEntry: Entry,
+): Promise<void> {
+  if (previousTypeId !== SYSTEM_TYPE_BOOK_ID) return;
+  const previousCover = String(
+    (JSON.parse(previousHeaderPropsJson) as Record<string, unknown>).cover_image ?? "",
+  ).trim();
+  const nextCover =
+    savedEntry.type_id === SYSTEM_TYPE_BOOK_ID
+      ? String(
+          (
+            JSON.parse(normalizeHeaderPropsJson(savedEntry.header_props_json)) as Record<
+              string,
+              unknown
+            >
+          ).cover_image ?? "",
+        ).trim()
+      : "";
+  if (!previousCover || previousCover === nextCover) return;
+
+  const userData = window.kepler?.userData;
+  if (!userData?.deleteFile || !userData.path) return;
+  const root = (await userData.path()).replace(/[\\/]+$/, "");
+  const localCoverPrefix = `${root}\\book-covers\\`;
+  if (!previousCover.toLocaleLowerCase().startsWith(localCoverPrefix.toLocaleLowerCase())) return;
+  const relativePath = previousCover.slice(root.length + 1).replaceAll("\\", "/");
+  await userData.deleteFile(relativePath);
+}
+
 function scheduleAutosave(): void {
   if (autosaveTimer !== null) clearTimeout(autosaveTimer);
   autosaveTimer = setTimeout(() => {
@@ -1024,6 +1057,8 @@ async function flushSave(): Promise<void> {
       : props.entry.content_json;
   const entry = buildEntryDraft(contentJson);
   if (!hasEntryDraftChanges(entry)) return;
+  const previousTypeId = lastPersistedTypeId;
+  const previousHeaderPropsJson = lastPersistedHeaderPropsJson;
   emit("entryDraftChange", entry);
   const result = await props.onSave(entry);
   if (isFailedSaveResult(result)) {
@@ -1031,6 +1066,9 @@ async function flushSave(): Promise<void> {
     return;
   }
   syncPersistedBaseline(entry);
+  void cleanupReplacedBookCover(previousTypeId, previousHeaderPropsJson, entry).catch((err) => {
+    console.warn("[eden tiptap] old book cover cleanup failed:", err);
+  });
 }
 
 async function handleTypePick(nextTypeId: string): Promise<void> {
@@ -1047,6 +1085,8 @@ async function handleTypePick(nextTypeId: string): Promise<void> {
     header_layout: headerLayout.value,
     header_props_json: JSON.stringify(headerProps.value),
   };
+  const previousTypeId = lastPersistedTypeId;
+  const previousHeaderPropsJson = lastPersistedHeaderPropsJson;
 
   emit("typeChange", entry);
   emit("entryDraftChange", entry);
@@ -1059,6 +1099,9 @@ async function handleTypePick(nextTypeId: string): Promise<void> {
     return;
   }
   syncPersistedBaseline(entry);
+  void cleanupReplacedBookCover(previousTypeId, previousHeaderPropsJson, entry).catch((err) => {
+    console.warn("[eden tiptap] old book cover cleanup failed:", err);
+  });
 }
 
 function handleHeaderPropChange(fieldId: string, value: unknown): void {
@@ -1067,8 +1110,40 @@ function handleHeaderPropChange(fieldId: string, value: unknown): void {
   scheduleAutosave();
 }
 
+function handleBookMetadataApply(metadata: BookMetadata): void {
+  if (!isBookEntry.value) return;
+
+  let changed = false;
+  let nextTitle = title.value;
+  if (!isEmptyBookValue(metadata.title)) {
+    const incomingTitle = String(metadata.title).replace(/[\r\n]+/g, " ");
+    if (nextTitle !== incomingTitle) {
+      nextTitle = incomingTitle;
+      changed = true;
+    }
+  }
+
+  const nextHeaderProps = { ...headerProps.value };
+  for (const fieldId of BOOK_METADATA_FIELD_IDS) {
+    const incoming = metadata[fieldId];
+    if (isEmptyBookValue(incoming) || nextHeaderProps[fieldId] === incoming) continue;
+    nextHeaderProps[fieldId] = incoming;
+    changed = true;
+  }
+
+  if (!changed) return;
+  title.value = nextTitle;
+  headerProps.value = nextHeaderProps;
+  emit("entryDraftChange", buildEntryDraft());
+  scheduleAutosave();
+}
+
 function handleTitleInput(event: Event): void {
-  title.value = (event.target as HTMLInputElement).value.replace(/[\r\n]+/g, " ");
+  updateTitle((event.target as HTMLInputElement).value);
+}
+
+function updateTitle(value: string): void {
+  title.value = value.replace(/[\r\n]+/g, " ");
   emit("entryDraftChange", buildEntryDraft());
   scheduleAutosave();
 }
@@ -1234,12 +1309,16 @@ onMounted(() => {
         :current-entry-id="entry.id"
         :note-types="noteTypes"
         :editable-type="true"
+        :editable-title="isBookEntry"
         :readonly="props.readerMode"
         :show-type-row="false"
         :show-title="isPersonEntry"
         @header-prop-change="handleHeaderPropChange"
         @object-type-change="handleTypePick"
         @relation-navigate="props.onNavigate"
+        @title-change="updateTitle"
+        @title-commit="flushSave"
+        @book-metadata-apply="handleBookMetadataApply"
       />
     </div>
 
@@ -1312,7 +1391,7 @@ onMounted(() => {
   width: 100%;
   max-width: 760px;
   margin: 0 auto;
-  padding: 18px var(--tiptap-page-gutter) 8px;
+  padding: 80px var(--tiptap-page-gutter) 8px;
   display: grid;
   gap: 10px;
 }
@@ -1337,6 +1416,10 @@ onMounted(() => {
 .tiptap-title-shell :deep(.typed-object-header) {
   margin: 2px 0 8px;
   overflow: visible;
+}
+
+.tiptap-title-shell :deep(.typed-object-header.is-book) {
+  margin-top: 0;
 }
 
 .tiptap-title-shell :deep(.typed-object-header__inner) {

@@ -1,4 +1,5 @@
 import type { ResolvedNoteTypeField } from "./typedNotes";
+import { isBookLanguageField, normalizeBookLanguage } from "./bookLanguages";
 
 const PLAY_STATUS_LABELS: Record<string, string> = {
   not_started: "\u041d\u0435 \u043d\u0430\u0447\u0430\u0442\u0430",
@@ -97,6 +98,10 @@ export function formatObjectFieldValue(field: ResolvedNoteTypeField, value: unkn
 
   if (field.id === "play_status" && typeof value === "string") {
     return PLAY_STATUS_LABELS[value] ?? value;
+  }
+
+  if (isBookLanguageField(field)) {
+    return normalizeBookLanguage(value);
   }
 
   if (field.id === "total_playtime_seconds") {

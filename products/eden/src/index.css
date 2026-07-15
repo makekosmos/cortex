@@ -162,12 +162,14 @@ p {
   margin: 0;
 }
 
-button {
-  font-family: inherit;
-  border: none;
-  background: none;
-  padding: 0;
-  color: inherit;
+@layer base {
+  button {
+    font-family: inherit;
+    border: none;
+    background: none;
+    padding: 0;
+    color: inherit;
+  }
 }
 
 input {

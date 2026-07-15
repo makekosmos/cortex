@@ -21,6 +21,7 @@ import {
 import { createNoteTypeApi } from "./kepler-note-type-api";
 
 type ArkRequest = <T = unknown>(operation: string, params?: Record<string, unknown>) => Promise<T>;
+type LoadEntryOptions = { contentOnly?: boolean };
 
 const LEGACY_JOURNAL_TITLE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -43,7 +44,7 @@ export function createEntryApi(
   loadListableEntry: (id: string, typeIdHint?: string) => Promise<Entry | undefined>;
   listEntries: () => Promise<Entry[]>;
   listAllEntries: () => Promise<Entry[]>;
-  loadEntry: (id: string) => Promise<Entry | undefined>;
+  loadEntry: (id: string, options?: LoadEntryOptions) => Promise<Entry | undefined>;
   saveEntry: (entry: Entry) => Promise<SaveEntryResult>;
   deleteEntry: (entryId: string) => Promise<DeleteEntryResult>;
   listNoteTypes: () => Promise<NoteType[]>;
@@ -103,9 +104,15 @@ export function createEntryApi(
     return ark<unknown>("list_objects").then(ensureList<ArkObjectRecord>);
   }
 
-  async function loadEntry(id: string): Promise<Entry | undefined> {
+  async function loadEntry(id: string, options?: LoadEntryOptions): Promise<Entry | undefined> {
+    const objectRequest = ark<ArkObjectRecord | null>("get_object", { id });
+    if (options?.contentOnly) {
+      const object = await objectRequest;
+      return object && !object.deletedAt ? mapArkObjectToEntry(object, [], undefined) : undefined;
+    }
+
     const [object, links] = await Promise.all([
-      ark<ArkObjectRecord | null>("get_object", { id }),
+      objectRequest,
       ark<unknown>("list_object_links").then(ensureList<ArkObjectLinkRecord>),
     ]);
 

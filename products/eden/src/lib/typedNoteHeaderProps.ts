@@ -76,6 +76,7 @@ export function createHeaderPropsForTypeChange(noteType: NoteType | null, source
 function coerceHeaderFieldValue(field: NoteTypeField, value: unknown) {
   switch (field.kind) {
     case "text":
+    case "url":
     case "long_text":
     case "date":
     case "image":

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const noteFieldKinds = [
   "text",
+  "url",
   "long_text",
   "number",
   "date",

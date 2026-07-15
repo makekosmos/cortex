@@ -1,6 +1,42 @@
 <script lang="ts">
 const notePreviewCache = new Map<string, { updatedAt: number; text: string }>();
 const NOTE_PREVIEW_CHARACTER_LIMIT = 800;
+const NOTE_PREVIEW_LOAD_CONCURRENCY = 4;
+const NOTE_PREVIEW_LOAD_DEBOUNCE_MS = 100;
+const notePreviewLoadQueue: Array<{
+  cancelled: boolean;
+  run: () => Promise<void>;
+}> = [];
+let activeNotePreviewLoads = 0;
+let notePreviewLoadTimer: number | null = null;
+
+function flushNotePreviewLoadQueue(): void {
+  notePreviewLoadTimer = null;
+  while (activeNotePreviewLoads < NOTE_PREVIEW_LOAD_CONCURRENCY) {
+    const item = notePreviewLoadQueue.shift();
+    if (!item) return;
+    if (item.cancelled) continue;
+    activeNotePreviewLoads += 1;
+    void item.run().finally(() => {
+      activeNotePreviewLoads -= 1;
+      flushNotePreviewLoadQueue();
+    });
+  }
+}
+
+function scheduleNotePreviewLoad(run: () => Promise<void>): () => void {
+  const item = { cancelled: false, run };
+  notePreviewLoadQueue.push(item);
+  if (notePreviewLoadTimer === null) {
+    notePreviewLoadTimer = window.setTimeout(
+      flushNotePreviewLoadQueue,
+      NOTE_PREVIEW_LOAD_DEBOUNCE_MS,
+    );
+  }
+  return () => {
+    item.cancelled = true;
+  };
+}
 
 function truncateNotePreview(text: string): string {
   const normalized = text.trim();
@@ -24,6 +60,7 @@ import {
   watch,
 } from "vue";
 import { bubblePlainText } from "@/components/bubbles/bubbleDiaryModel";
+import BookCover from "@/components/books/BookCover.vue";
 import { readEntryTiptapDoc } from "@/editor-content/content";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { resolveObjectImageSrc } from "@/lib/objectImages";
@@ -36,6 +73,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  contextMenu: [event: MouseEvent, entryId: string];
   openEntry: [entryId: string];
 }>();
 
@@ -55,15 +93,9 @@ const headerProps = computed(() => parseHeaderProps(props.entry.header_props_jso
 const title = computed(() =>
   getEntryDisplayTitle(props.entry.title, props.entry.header_props_json),
 );
-const author = computed(() => String(headerProps.value.author ?? "").trim());
 const coverSrc = computed(() =>
   isBook.value ? resolveObjectImageSrc(headerProps.value.cover_image, props.entriesById) : "",
 );
-const coverCrossOrigin = computed(() =>
-  /^kosmos-local-image:/i.test(coverSrc.value) ? "anonymous" : undefined,
-);
-const coverFailed = shallowRef(false);
-const coverColor = shallowRef("");
 const openLabel = computed(() => `Открыть «${title.value}»`);
 const cardElement = shallowRef<HTMLElement | null>(null);
 const cachedPreview = notePreviewCache.get(props.entry.id);
@@ -73,8 +105,9 @@ const notePreview = shallowRef(
 let previewObserver: IntersectionObserver | null = null;
 let previewVisible = false;
 let previewRequestKey = "";
+let cancelScheduledPreview: (() => void) | null = null;
 
-async function loadNotePreview() {
+function loadNotePreview() {
   if (isBook.value) return;
   const id = props.entry.id;
   const updatedAt = props.entry.updated_at;
@@ -86,28 +119,45 @@ async function loadNotePreview() {
   }
   if (previewRequestKey === requestKey) return;
   previewRequestKey = requestKey;
+  cancelScheduledPreview?.();
+  cancelScheduledPreview = scheduleNotePreviewLoad(async () => {
+    cancelScheduledPreview = null;
+    if (!previewVisible || props.entry.id !== id || props.entry.updated_at !== updatedAt) {
+      if (previewRequestKey === requestKey) previewRequestKey = "";
+      return;
+    }
 
-  try {
-    const loaded =
-      props.entry.content_loaded === false ? await window.api?.loadEntry(id) : props.entry;
-    if (!loaded || props.entry.id !== id || props.entry.updated_at !== updatedAt) return;
-    const text = truncateNotePreview(bubblePlainText(readEntryTiptapDoc(loaded.content_json)));
-    notePreviewCache.set(id, { updatedAt, text });
-    notePreview.value = text;
-  } catch {
-    // The title remains usable when a preview cannot be loaded.
-  } finally {
-    if (previewRequestKey === requestKey) previewRequestKey = "";
-  }
+    try {
+      const loaded =
+        props.entry.content_loaded === false
+          ? await window.api?.loadEntry(id, { contentOnly: true })
+          : props.entry;
+      if (!loaded || props.entry.id !== id || props.entry.updated_at !== updatedAt) return;
+      const text = truncateNotePreview(bubblePlainText(readEntryTiptapDoc(loaded.content_json)));
+      notePreviewCache.set(id, { updatedAt, text });
+      notePreview.value = text;
+    } catch {
+      // The title remains usable when a preview cannot be loaded.
+    } finally {
+      if (previewRequestKey === requestKey) previewRequestKey = "";
+    }
+  });
 }
 
 function observePreview() {
   previewObserver?.disconnect();
+  previewVisible = false;
   if (isBook.value || !cardElement.value) return;
-  previewObserver = new IntersectionObserver(([entry]) => {
-    previewVisible = entry?.isIntersecting === true;
-    if (previewVisible) void loadNotePreview();
-  });
+  previewObserver = new IntersectionObserver(
+    ([entry]) => {
+      previewVisible = entry?.isIntersecting === true;
+      if (previewVisible) void loadNotePreview();
+    },
+    {
+      root: cardElement.value.closest(".everything-view"),
+      rootMargin: "50% 0px",
+    },
+  );
   previewObserver.observe(cardElement.value);
 }
 
@@ -115,9 +165,15 @@ onMounted(observePreview);
 onActivated(observePreview);
 onDeactivated(() => {
   previewVisible = false;
+  cancelScheduledPreview?.();
+  cancelScheduledPreview = null;
+  previewRequestKey = "";
   previewObserver?.disconnect();
 });
-onBeforeUnmount(() => previewObserver?.disconnect());
+onBeforeUnmount(() => {
+  cancelScheduledPreview?.();
+  previewObserver?.disconnect();
+});
 
 watch(
   () => [props.entry.id, props.entry.updated_at, props.entry.content_loaded] as const,
@@ -127,65 +183,6 @@ watch(
     if (previewVisible) void loadNotePreview();
   },
 );
-
-watch(coverSrc, () => {
-  coverFailed.value = false;
-  coverColor.value = "";
-});
-
-async function updateCoverColor(event: Event) {
-  const image = event.currentTarget as HTMLImageElement;
-  const source = coverSrc.value;
-  const canvas = document.createElement("canvas");
-  canvas.width = 32;
-  canvas.height = 32;
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) return;
-
-  try {
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-    const colors = new Map<number, { count: number; red: number; green: number; blue: number }>();
-    for (let index = 0; index < pixels.length; index += 4) {
-      if (pixels[index + 3]! < 128) continue;
-      const red = pixels[index]!;
-      const green = pixels[index + 1]!;
-      const blue = pixels[index + 2]!;
-      const key = ((red >> 5) << 6) | ((green >> 5) << 3) | (blue >> 5);
-      const color = colors.get(key);
-      if (color) {
-        color.count += 1;
-        color.red += red;
-        color.green += green;
-        color.blue += blue;
-      } else {
-        colors.set(key, { count: 1, red, green, blue });
-      }
-    }
-    let dominant: { count: number; red: number; green: number; blue: number } | undefined;
-    let fallback = dominant;
-    for (const color of colors.values()) {
-      if (!fallback || color.count > fallback.count) fallback = color;
-      const red = color.red / color.count;
-      const green = color.green / color.count;
-      const blue = color.blue / color.count;
-      if (Math.max(red, green, blue) - Math.min(red, green, blue) < 24) continue;
-      if (!dominant || color.count > dominant.count) dominant = color;
-    }
-    dominant ??= fallback;
-    coverColor.value = dominant
-      ? `rgb(${Math.round(dominant.red / dominant.count)} ${Math.round(dominant.green / dominant.count)} ${Math.round(dominant.blue / dominant.count)})`
-      : "";
-  } catch {
-    const remoteColor = await window.kepler?.images?.dominantColor(source).catch(() => null);
-    if (coverSrc.value === source) coverColor.value = remoteColor ?? "";
-  }
-}
-
-function handleCoverError() {
-  coverFailed.value = true;
-  coverColor.value = "";
-}
 </script>
 
 <template>
@@ -197,38 +194,16 @@ function handleCoverError() {
     :aria-label="openLabel"
     :data-testid="`everything-card-${entry.id}`"
     @click="emit('openEntry', entry.id)"
+    @contextmenu="emit('contextMenu', $event, entry.id)"
   >
     <span class="everything-item-visual" :data-testid="`everything-visual-${entry.id}`">
       <template v-if="isBook">
-        <span
-          v-if="coverSrc && !coverFailed"
-          class="everything-item-cover"
-          :style="{ backgroundColor: coverColor || undefined }"
-        >
-          <img
-            class="everything-item-cover-image"
-            :src="coverSrc"
-            :crossorigin="coverCrossOrigin"
-            alt=""
-            draggable="false"
-            :data-testid="`everything-cover-${entry.id}`"
-            @load="updateCoverColor"
-            @error="handleCoverError"
-          />
-          <span
-            class="everything-item-cover-layer"
-            aria-hidden="true"
-            :data-testid="`everything-cover-layer-${entry.id}`"
-          />
-        </span>
-        <span
-          v-else
-          class="everything-item-cover-fallback"
-          aria-hidden="true"
-          :data-testid="`everything-cover-fallback-${entry.id}`"
-        >
-          Без обложки
-        </span>
+        <BookCover
+          :src="coverSrc"
+          :image-test-id="`everything-cover-${entry.id}`"
+          :layer-test-id="`everything-cover-layer-${entry.id}`"
+          :fallback-test-id="`everything-cover-fallback-${entry.id}`"
+        />
       </template>
 
       <span
@@ -248,7 +223,6 @@ function handleCoverError() {
 
     <span class="everything-item-caption">
       <span class="everything-item-title">{{ title }}</span>
-      <span v-if="isBook && author" class="everything-item-author">{{ author }}</span>
     </span>
   </button>
 </template>
@@ -305,68 +279,6 @@ function handleCoverError() {
   outline-offset: 2px;
 }
 
-.everything-item-cover {
-  position: relative;
-  display: block;
-  width: 100%;
-  overflow: hidden;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-}
-
-.everything-item-cover::before {
-  position: absolute;
-  z-index: 3;
-  inset-block: 0;
-  inset-inline-start: 0;
-  width: 1.6%;
-  background-color: inherit;
-  content: "";
-  pointer-events: none;
-}
-
-.everything-item-cover-image {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.everything-item-cover-layer {
-  position: absolute;
-  z-index: 2;
-  top: 0;
-  left: 1.6%;
-  width: calc(100% - 1.6%);
-  height: 100%;
-  pointer-events: none;
-  background:
-    linear-gradient(201deg, rgb(255 255 255 / 20%), transparent 47%) top / 100% 66.423% no-repeat,
-    linear-gradient(90deg, rgb(255 255 255 / 30%), transparent 5.683%),
-    linear-gradient(
-      90deg,
-      rgb(255 255 255 / 35%) 0%,
-      transparent 1.6%,
-      rgb(0 0 0 / 5%) 3.5%,
-      rgb(0 0 0 / 15%) 5.7%,
-      rgb(255 255 255 / 65%) 6%,
-      transparent 10%
-    ),
-    linear-gradient(270deg, rgb(255 255 255 / 25%), transparent 2%);
-}
-
-.everything-item-cover-fallback {
-  display: flex;
-  aspect-ratio: 2 / 3;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-5);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--foreground) 8%, var(--bg-app));
-  color: var(--muted-foreground);
-  font-size: var(--kosmos-text-body-size);
-  text-align: center;
-}
-
 .everything-item-copy {
   position: relative;
   display: flex;
@@ -406,15 +318,6 @@ function handleCoverError() {
   font-weight: 600;
   letter-spacing: var(--kosmos-text-subheading-letter-spacing);
   line-height: var(--kosmos-text-subheading-line-height);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.everything-item-author {
-  overflow: hidden;
-  color: var(--muted-foreground);
-  font-size: var(--kosmos-text-body-size);
-  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

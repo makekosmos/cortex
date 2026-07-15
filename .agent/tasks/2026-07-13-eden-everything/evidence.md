@@ -1,54 +1,56 @@
 # Evidence
 
-Verified against the final current worktree at `2026-07-13T14:10:44.3375842Z`. The pre-existing modification in `platform/desktop/package.json` was not edited as part of this task.
+Verified against the current dirty worktree on 2026-07-14. Only the Everything/titlebar/create-note changes described below belong to this acceptance pass; the concurrent book metadata/import work remains separate.
 
 ## AC1 — PASS
 
-- `products/eden/tests/components/EdenStoreNavigation.spec.ts` proves stale `eden:nav:lastScreen` / `eden:nav:lastEntryId` keys are ignored and `openEverything()` clears the screen, collection, entry and pending loading state.
-- `products/eden/tests/components/EdenSidebar.spec.ts` proves «Всё» is present, activatable and active only for the home state.
-- `rtk bun run --cwd products/eden test:vue` — PASS: 15 files, 78 tests.
-- `rtk bun run visual:eden` — PASS: after opening a book, the enabled titlebar Back action returns to `everything-view`.
+- `products/eden/src/App.vue` shows the existing «Всё» / «Дневник» switch only for those two main pages. Object pages reuse the existing title presentation in the center slot, including the existing round person image/icon path.
+- `products/eden/tests/components/EdenStoreNavigation.spec.ts` still proves cold-start home state and `openEverything()` cleanup.
+- `tests/e2e/visual.spec.ts` proves the book page has no main navigation, displays `Море внутри`, and centers its title within one CSS pixel of the viewport center.
+- The updated `eden-book-object-layout-win32.png` baseline was inspected at original resolution: the object title is centered and the main-page switch is absent.
 
 ## AC2 — PASS
 
-- `EverythingView.spec.ts` proves mixed filtering (`note_obj` / `book_obj` only), `updated_at DESC`, cover/fallback/note variants, Russian empty state and `open-entry` payload.
-- The view receives only `entries` / `noteTypes`; production build and diff contain no new API, RPC or body hydration path.
-- `rtk bun run --cwd products/eden test:vue` — PASS: 78/78.
+- `EverythingView.spec.ts` proves mixed filtering (`note_obj` / `book_obj` only), `updated_at DESC`, cover/fallback/note variants, search behavior, and `open-entry` payload.
+- The view still consumes the already loaded entries and note types; this change adds no data API or hydration path.
 
 ## AC3 — PASS
 
-- `products/eden/tests/systemTypes.test.ts` proves `book_obj` registration, optional `cover_image:image`, optional `author:text`, `imageFieldId`, collection «Книги», icon `book` and `color: null`.
-- `rtk bun run --cwd products/eden test:unit` — PASS: 95/95.
-- `rtk bun run ark:guard:writes` — PASS: ARK write boundary guard passed.
-- No SQLite migration, RPC, sync protocol or manifest file is present in the task diff.
+- `products/eden/tests/systemTypes.test.ts` proves `book_obj` registration and its typed cover/author schema.
+- `rtk bun run --cwd products/eden test:unit` — PASS: 95 tests.
+- `rtk bun run ark:guard:writes` — PASS.
 
 ## AC4 — PASS
 
-- Browser layout assertions prove equal computed `column-gap` / card bottom margin, `break-inside: avoid`, one narrow column and non-overlapping card rectangles.
-- `rtk bun run visual:eden -- --update-snapshots` — PASS: created `tests/e2e/visual.spec.ts-snapshots/eden-everything-mixed-win32.png` from cold-reopened Eden with two deterministic covers, a fallback book and a note.
-- The baseline was opened at original resolution and visually inspected: natural cover ratios, fallback, three-column rhythm, sidebar home state and hidden reader toggle are correct.
-- `rtk bun run visual:eden` — PASS without update: 1/1 in 4.4 s.
+- `EverythingView.spec.ts` confirms the add card is square and first, the newest card starts to its right, a later card continues below it, narrow width collapses to one column, and existing equal-gap, ellipsis, hover-transition and non-overlap assertions pass.
+- The preview test confirms no body read happens before intersection, the observer is rooted in the Everything scroll container with a `50% 0px` overscan, repeated intersection does not duplicate the read, and cached previews refresh only when `updated_at` changes.
+- The context-menu test confirms right-click opens the shared Visuals menu, the destructive «Удалить» item contains a trash SVG, and the selected entry id is emitted. The store test confirms successful ARK soft-delete removes only that entry from Everything while a failed write preserves it.
+- `eden-everything-context-menu-win32.png` was inspected at original resolution: the flat menu appears at the clicked card with the trash icon and no box-shadow. The Electron flow then deletes the note, observes the menu close, and sees the card count drop from four to three.
+- `eden-top-navigation-mixed-win32.png` was inspected at original resolution: the first column continues below `+` instead of remaining artificially empty.
+
+## AC4a — PASS
+
+- The deferred-save store test proves `createNewEntry()` selects the new object synchronously while `entries` remains unchanged, then adds it to Everything only after successful persistence.
+- `App.vue` keeps the editor unmounted behind the existing loading presentation until that primary save completes, preserving the established empty-save/autosave ordering.
+- The Electron flow clicks `+`, immediately observes an object page with no main navigation and a visible editor after save, then goes Back and observes one additional Everything card.
+- The first clean Electron rerun exposed a live-refresh race: an ARK upsert begun before the primary save could prepend the same ID after `createNewEntry()` had already inserted it. `edenLiveRefreshSubscription.ts` now reuses the store's id-aware upsert, and `EdenLiveRefreshSubscription.spec.ts` deterministically covers that ordering.
 
 ## AC5 — PASS
 
-- `App.vue` only composes store actions and typed component events; cards contain no ARK bridge calls.
-- `rtk bun run --cwd platform/desktop build:js` — PASS, including Eden extension production bundle.
-- `rtk bun run docs:sync` — PASS.
-- `rtk bun run docs:check` — PASS: generated docs fresh, no stale references.
+- Source documentation and the frozen task spec describe the titlebar scope, first-column add card, and immediate-create ordering.
+- `rtk bun run --cwd platform/desktop build:js` — PASS, including Eden's production bundle.
 
-## AC6 — PASS
+## Verification
 
-- `rtk bun run --cwd products/eden test:unit` — 95 passed, 0 failed.
-- `rtk bun run --cwd products/eden test:vue` — 78 passed, 0 failed.
+- `rtk bun run --cwd products/eden test:unit` — 95 passed.
+- `rtk bun run --cwd products/eden test:vue` — 91 passed across 16 files.
 - `rtk bun run ark:guard:writes` — PASS.
 - `rtk bun run --cwd platform/desktop build:js` — PASS.
-- `rtk bun run docs:sync` and `rtk bun run docs:check` — PASS.
-- Visual update and a clean no-update rerun — PASS.
-- `rtk bunx oxfmt --check <17 changed implementation/test/doc files>` — PASS.
-- `rtk git diff --check` — PASS.
-
-The resolved screenshot-capture failure and the non-scope stale editor test are recorded in `problems.md`.
+- `rtk bun run visual:eden --update-snapshots` — PASS; changed baselines were visually inspected at original resolution.
+- `rtk bun run visual:eden` — PASS without snapshot updates after the live-refresh fix: 1/1, including create → Back with exactly one new card.
+- `rtk bunx oxfmt --check <12 scoped files>` and `rtk git diff --check` — PASS.
+- `rtk bun run docs:check` — PASS.
 
 ## Independent verifier
 
-Independent read-only verification after this evidence was written returned `AC1`–`AC6: PASS` with no actionable findings. Its fresh run repeated unit 95/95, Vue 78/78, ARK guard, desktop build, docs check, visual no-update 1/1 and `git diff --check`; it also inspected the baseline at original resolution and confirmed the pre-existing `platform/desktop/package.json` diff remained outside task scope.
+The first read-only review correctly rejected the implementation after reproducing the in-memory duplicate and identifying the live-refresh race. The second read-only review returned PASS: focused navigation/Everything/race tests 14/14 and `visual:eden` 1/1; it independently confirmed exactly one new card after create → Back, scoped main navigation, centered object title, and the add-card column break. Person image/icon and Forward remain code-reviewed reuse paths rather than separate runtime assertions.

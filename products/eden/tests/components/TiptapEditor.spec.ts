@@ -3,7 +3,9 @@ import { userEvent } from "vitest/browser";
 import { render } from "vitest-browser-vue";
 import TiptapEditor from "../../src/editor-tiptap/TiptapEditor.vue";
 import { EMPTY_DOC, makeEntry, markdownEntry } from "./editor-test-helpers";
-import { writeEntryMarkdown } from "../../src/editor-content/content";
+import { readEntryMarkdown, writeEntryMarkdown } from "../../src/editor-content/content";
+import { SYSTEM_TYPE_BOOK, SYSTEM_TYPE_BOOK_ID } from "../../src/lib/systemTypes";
+import { LIVELIB_LIKE_BOOK_PAGE } from "../fixtures/bookMetadataPages";
 
 function tiptapBody(): HTMLElement {
   const el = document.querySelector<HTMLElement>(".tiptap-editor-content .ProseMirror");
@@ -38,6 +40,241 @@ function parseSavedContent(entry: Entry): {
 }
 
 describe("TiptapEditor component", () => {
+  test("lays out a book cover left of its editable object details", async () => {
+    const onSave = vi.fn(async () => null);
+    const entry = {
+      ...makeEntry(EMPTY_DOC),
+      id: "book-layout",
+      title: "Море внутри",
+      type_id: SYSTEM_TYPE_BOOK_ID,
+      header_layout: "inline",
+      header_props_json: JSON.stringify({
+        author: "Fyodor Dostoevsky, Richard Pevear, Larissa Volokhonsky",
+        cover_image:
+          "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300'%3E%3Crect width='200' height='300' fill='navy'/%3E%3C/svg%3E",
+      }),
+    };
+    const screen = render(TiptapEditor, {
+      props: { entry, noteTypes: [SYSTEM_TYPE_BOOK], onSave, zenMode: false },
+    });
+
+    const header = screen.getByTestId("typed-note-header");
+    await expect.element(header).toHaveClass("is-book");
+    expect(
+      getComputedStyle(document.querySelector<HTMLElement>(".typed-object-header__inner")!)
+        .columnGap,
+    ).toBe("36px");
+    expect(document.querySelector(".tiptap-title-input")).toBeNull();
+    const objectTitle = screen.getByRole("textbox", { name: "Название объекта" });
+    await expect.element(objectTitle).toHaveValue("Море внутри");
+    expect((await objectTitle.element()).tagName).toBe("TEXTAREA");
+    const authorField = screen.getByTestId("typed-note-field-author");
+    await expect
+      .element(authorField)
+      .toHaveValue("Fyodor Dostoevsky, Richard Pevear, Larissa Volokhonsky");
+    await vi.waitFor(async () => {
+      const textarea = (await authorField.element()) as HTMLTextAreaElement;
+      expect(textarea.getBoundingClientRect().height).toBeGreaterThan(24);
+      expect(parseFloat(textarea.style.height)).toBe(textarea.scrollHeight);
+    });
+    const typeButton = document.querySelector<HTMLElement>(
+      '[data-testid="typed-note-field-__object_type"] > button',
+    );
+    expect(typeButton).not.toBeNull();
+    expect(getComputedStyle(typeButton!).fontSize).toBe("14px");
+
+    expect(document.querySelector(".typed-object-header__visual")).not.toBeNull();
+    expect(document.querySelector(".book-cover__layer")).not.toBeNull();
+    expect(document.querySelector('[data-testid="typed-note-field-cover_image"]')).toBeNull();
+
+    const longTitle = "Новое очень длинное название книги, которое переносится на следующую строку";
+    await userEvent.fill(objectTitle, longTitle);
+    const titleElement = await objectTitle.element();
+    const titleStyle = getComputedStyle(titleElement);
+    expect(titleElement.getBoundingClientRect().height).toBeGreaterThan(
+      Number.parseFloat(titleStyle.lineHeight) * 1.5,
+    );
+    await userEvent.click(tiptapBody());
+    await vi.waitFor(() =>
+      expect((onSave.mock.calls.at(-1)?.[0] as Entry | undefined)?.title).toBe(longTitle),
+    );
+  });
+
+  test("adds a missing book cover from a URL or local image", async () => {
+    const onSave = vi.fn(async () => null);
+    const entry = {
+      ...makeEntry(EMPTY_DOC),
+      id: "book-cover-picker",
+      title: "Без обложки",
+      type_id: SYSTEM_TYPE_BOOK_ID,
+      header_layout: "inline",
+      header_props_json: JSON.stringify({ author: "Автор" }),
+    };
+    const screen = render(TiptapEditor, {
+      props: { entry, noteTypes: [SYSTEM_TYPE_BOOK], onSave, zenMode: false },
+    });
+
+    const coverButton = screen.getByRole("button", { name: "Изменить обложку" });
+    await expect.element(coverButton).toHaveTextContent("+");
+    expect(document.querySelector(".book-cover__layer")).toBeNull();
+    await userEvent.click(coverButton);
+    await expect.element(screen.getByRole("dialog")).toBeVisible();
+
+    const urlInput = screen.getByRole("textbox", { name: "Ссылка на изображение" });
+    await userEvent.fill(urlInput, "https://example.com/cover.jpg");
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить ссылку" }));
+    await vi.waitFor(() => {
+      const saved = onSave.mock.calls.at(-1)?.[0] as Entry | undefined;
+      expect(JSON.parse(saved?.header_props_json ?? "{}").cover_image).toBe(
+        "https://example.com/cover.jpg",
+      );
+    });
+
+    await userEvent.click(coverButton);
+    const previousKepler = window.kepler;
+    const writeBinary = vi.fn(async () => undefined);
+    window.kepler = {
+      ...(previousKepler ?? {}),
+      userData: {
+        ...(previousKepler?.userData ?? {}),
+        writeBinary,
+        path: vi.fn(async () => "C:\\Kosmos\\Eden"),
+      },
+    } as NonNullable<typeof window.kepler>;
+    try {
+      const dropzone = await screen
+        .getByRole("region", { name: "Загрузка обложки книги" })
+        .element();
+      const transfer = new DataTransfer();
+      transfer.items.add(
+        new File([new Uint8Array([137, 80, 78, 71])], "cover.png", { type: "image/png" }),
+      );
+      dropzone.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: transfer }));
+      await vi.waitFor(() => {
+        const saved = onSave.mock.calls.at(-1)?.[0] as Entry | undefined;
+        expect(JSON.parse(saved?.header_props_json ?? "{}").cover_image).toMatch(
+          /^C:\\Kosmos\\Eden\\book-covers\\book-cover-picker-[0-9a-f-]+\.png$/,
+        );
+      });
+      expect(writeBinary).toHaveBeenCalledWith(
+        expect.stringMatching(/^book-covers\/book-cover-picker-[0-9a-f-]+\.png$/),
+        "iVBORw==",
+      );
+    } finally {
+      window.kepler = previousKepler;
+    }
+  });
+
+  test("deletes a replaced local cover only after the new path is saved", async () => {
+    const onSave = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, reason: "write_failed" })
+      .mockResolvedValueOnce({ ok: true });
+    const deleteFile = vi.fn(async () => true);
+    const previousKepler = window.kepler;
+    window.kepler = {
+      ...(previousKepler ?? {}),
+      userData: {
+        ...(previousKepler?.userData ?? {}),
+        deleteFile,
+        path: vi.fn(async () => "C:\\Kosmos\\Eden"),
+      },
+    } as NonNullable<typeof window.kepler>;
+
+    try {
+      const entry = {
+        ...makeEntry(EMPTY_DOC),
+        id: "book-cover-cleanup",
+        title: "Книга",
+        type_id: SYSTEM_TYPE_BOOK_ID,
+        header_layout: "inline",
+        header_props_json: JSON.stringify({
+          author: "Автор",
+          cover_image: "C:\\Kosmos\\Eden\\book-covers\\old.png",
+        }),
+      };
+      const screen = render(TiptapEditor, {
+        props: { entry, noteTypes: [SYSTEM_TYPE_BOOK], onSave, zenMode: false },
+      });
+      const coverButton = screen.getByRole("button", { name: "Изменить обложку" });
+
+      await userEvent.click(coverButton);
+      await userEvent.fill(
+        screen.getByRole("textbox", { name: "Ссылка на изображение" }),
+        "https://example.com/first.jpg",
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Сохранить ссылку" }));
+      await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1), { timeout: 4000 });
+      expect(deleteFile).not.toHaveBeenCalled();
+
+      await userEvent.click(coverButton);
+      await userEvent.fill(
+        screen.getByRole("textbox", { name: "Ссылка на изображение" }),
+        "https://example.com/second.jpg",
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Сохранить ссылку" }));
+      await vi.waitFor(() => expect(deleteFile).toHaveBeenCalledTimes(1), { timeout: 4000 });
+      expect(deleteFile).toHaveBeenCalledWith("book-covers/old.png");
+    } finally {
+      window.kepler = previousKepler;
+    }
+  });
+
+  test("replaces selected book metadata and preserves the Markdown body", async () => {
+    const onSave = vi.fn(async () => null);
+    const previousKepler = window.kepler;
+    window.kepler = {
+      ...(previousKepler ?? {}),
+      bookMetadata: {
+        fetchPage: vi.fn(async () => LIVELIB_LIKE_BOOK_PAGE),
+      },
+    } as NonNullable<typeof window.kepler>;
+
+    try {
+      const entry = {
+        ...markdownEntry("Личные заметки о книге"),
+        id: "book-metadata-import",
+        title: "Старое название",
+        type_id: SYSTEM_TYPE_BOOK_ID,
+        header_layout: "inline",
+        header_props_json: JSON.stringify({
+          author: "Мой автор",
+          cover_image: "C:\\Kosmos\\Eden\\book-covers\\mine.jpg",
+        }),
+      };
+      const screen = render(TiptapEditor, {
+        props: { entry, noteTypes: [SYSTEM_TYPE_BOOK], onSave, zenMode: false },
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Получить данные" }));
+      await userEvent.fill(
+        screen.getByRole("textbox", { name: "Ссылка или ISBN" }),
+        LIVELIB_LIKE_BOOK_PAGE.finalUrl,
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Найти" }));
+      await expect.element(screen.getByTestId("book-metadata-preview")).toBeVisible();
+      await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+
+      await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1), { timeout: 4000 });
+      const saved = onSave.mock.calls[0]?.[0] as Entry;
+      const savedProps = JSON.parse(saved.header_props_json ?? "{}") as Record<string, unknown>;
+      expect(saved.title).toBe("Марафон в рай");
+      expect(savedProps).toMatchObject({
+        author: "Артур Кларк",
+        cover_image: "https://www.livelib.ru/storage/covers/marafon-v-raj.jpg",
+        isbn: "9780306406157",
+        page_count: 352,
+        language: "Русский",
+        publisher: "АСТ",
+        published_date: "2024",
+        source_url: LIVELIB_LIKE_BOOK_PAGE.finalUrl,
+      });
+      expect(readEntryMarkdown(saved.content_json)).toBe("Личные заметки о книге");
+    } finally {
+      window.kepler = previousKepler;
+    }
+  });
+
   test("body skeleton uses the same content shell as the editor body", async () => {
     render(TiptapEditor, {
       props: { entry: makeEntry(EMPTY_DOC), onSave: vi.fn(async () => null), bodyLoading: true },
