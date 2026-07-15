@@ -17,6 +17,7 @@
 // что и Kepler renderer'у — без дублирования типов в preload.
 
 import { contextBridge, ipcRenderer } from "electron";
+import type { OpenLibraryBookMetadata } from "./book-metadata-open-library";
 
 function platformMarker(): "mac" | "windows" | "linux" {
   if (process.platform === "darwin") return "mac";
@@ -63,6 +64,18 @@ const api = {
   images: {
     dominantColor: (source: string): Promise<string | null> =>
       ipcRenderer.invoke("kepler:extension:image:dominant-color", source) as Promise<string | null>,
+  },
+  bookMetadata: {
+    fetchPage: (url: string): Promise<{ finalUrl: string; html: string } | null> =>
+      ipcRenderer.invoke("kepler:extension:book-metadata:fetch-page", url) as Promise<{
+        finalUrl: string;
+        html: string;
+      } | null>,
+    lookupIsbn: (isbn: string): Promise<OpenLibraryBookMetadata | null> =>
+      ipcRenderer.invoke(
+        "kepler:extension:book-metadata:lookup-isbn",
+        isbn,
+      ) as Promise<OpenLibraryBookMetadata | null>,
   },
   window: {
     close: (): Promise<void> => ipcRenderer.invoke("kepler:extension:window:close"),
