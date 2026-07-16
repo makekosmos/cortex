@@ -1,13 +1,21 @@
-# Kosmos — статус проекта (2026-07-13)
+# Kosmos — статус проекта (2026-07-16)
 
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
-| Kosmos Desktop (win / mac) | 0.6.24 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.6.25 / 0.5.1 |
 | Eden                       | 0.5.4          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
 | Arrancador                 | 0.1.5          |
 | Akasha                     | 0.1.2          |
+
+## 2026-07-16 — Launcher calculator + backend recovery (Kosmos Desktop 0.6.24 -> 0.6.25)
+
+Launcher теперь считает арифметику и валюты прямо в поиске, понимает русские запросы вроде «900 долларов в рублях», показывает отдельную карточку выражения/результата и копирует ответ по Enter. Курсы валют кэшируются локально и обновляются не чаще раза в день.
+
+Backend supervisor больше не принимает поздний `exit` уже заменённого процесса за падение активного backend, поэтому не сбрасывает ArkClient и не запускает каскад дублирующих процессов. Dev shell по умолчанию не занимает production LAN-sync port установленного Kosmos.
+
+Checks: calculator Rust tests, launcher calculator Playwright E2E, backend-supervisor Bun tests, desktop typecheck/build, docs sync/check.
 
 ## 2026-07-13 — Bubble diary threads + focus-session feedback (Kosmos Desktop 0.6.23 -> 0.6.24, Eden 0.5.3 -> 0.5.4)
 
