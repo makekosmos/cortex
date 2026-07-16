@@ -253,5 +253,8 @@ startChild(
   ],
   {
     KEPLER_DEV: "1",
+    // Installed Kosmos may already own the fixed LAN-sync port 21531.
+    // Opt in explicitly with KEPLER_SKIP_SYNC=0 when developing sync itself.
+    KEPLER_SKIP_SYNC: process.env.KEPLER_SKIP_SYNC ?? "1",
   },
 );

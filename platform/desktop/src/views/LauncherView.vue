@@ -19,6 +19,7 @@ import {
   SkipForward,
   Square,
   Pencil,
+  Calculator,
 } from "@lucide/vue";
 import { KbdKey, ActionsPanel } from "@kosmos/visuals";
 import BuiltInIcon from "../components/BuiltInIcon.vue";
@@ -106,6 +107,11 @@ const BUILTIN_ICONS: Record<string, BuiltInIconConfig> = {
     to: "oklch(0.86 0 0)",
     iconColor: "oklch(0.22 0 0)",
   },
+  "calculator:result": {
+    icon: Calculator,
+    from: "oklch(0.68 0.15 250)",
+    to: "oklch(0.42 0.16 270)",
+  },
 };
 
 const FOCUS_GRADIENT = { from: "oklch(0.7 0.16 145)", to: "oklch(0.46 0.14 165)" };
@@ -191,6 +197,7 @@ interface AppEntry {
 }
 const APP_ID_PREFIX = "app:";
 const FILE_ID_PREFIX = "file:";
+const CALCULATOR_RESULT_ID = "calculator:result";
 
 function appToCommand(a: AppEntry): CommandRecord {
   return {
@@ -249,6 +256,20 @@ interface ScoredCommand {
   score: number;
 }
 
+const calculatorResult = ref<{ expression: string; result: string } | null>(null);
+const calculatorCommand = computed<CommandRecord | null>(() =>
+  calculatorResult.value
+    ? {
+        id: CALCULATOR_RESULT_ID,
+        title: calculatorResult.value.result,
+        subtitle: calculatorResult.value.expression,
+        category: "action",
+        kind: "command",
+        appName: "Калькулятор",
+      }
+    : null,
+);
+
 function loadHiddenCommandIds(): string[] {
   try {
     const raw = localStorage.getItem(HIDDEN_COMMANDS_KEY);
@@ -278,7 +299,7 @@ function scoreCommand(cmd: CommandRecord, q: string): number {
   return 100 - subIdx;
 }
 
-const filteredCommands = computed<CommandRecord[]>(() => {
+const matchedCommands = computed<CommandRecord[]>(() => {
   const q = query.value.trim();
   if (!q) return displayCommands.value;
   return displayCommands.value
@@ -287,6 +308,12 @@ const filteredCommands = computed<CommandRecord[]>(() => {
     .sort((a, b) => b.score - a.score)
     .map((x) => x.cmd);
 });
+
+const filteredCommands = computed<CommandRecord[]>(() =>
+  calculatorCommand.value
+    ? [calculatorCommand.value, ...matchedCommands.value]
+    : matchedCommands.value,
+);
 
 const filteredClipboardItems = computed<ClipboardHistoryItem[]>(() => {
   const type = clipboardTypeFilter.value;
@@ -512,7 +539,12 @@ const selectedCommand = computed<CommandRecord | null>(() => {
   if (mode.value !== "commands") return null;
   const row = rowAt(selectedIndex.value);
   if (!row || row.kind !== "cmd") return null;
+  if (row.cmd.id === CALCULATOR_RESULT_ID) return null;
   return row.cmd;
+});
+const calculatorSelected = computed(() => {
+  const row = rowAt(selectedIndex.value);
+  return row?.kind === "cmd" && row.cmd.id === CALCULATOR_RESULT_ID;
 });
 
 function toggleFavorite(id: string) {
@@ -642,6 +674,17 @@ async function invokeSelected() {
   }
   if (row.kind === "banner") {
     await onBannerClick();
+    return;
+  }
+  if (row.cmd.id === CALCULATOR_RESULT_ID && calculatorResult.value) {
+    try {
+      await navigator.clipboard.writeText(calculatorResult.value.result);
+      query.value = "";
+      selectedIndex.value = 0;
+      await window.kepler.window.hide();
+    } catch (error) {
+      console.warn("calculator result copy failed", error);
+    }
     return;
   }
   // Синтетические focus-команды (см. focusLauncherCommands.ts) — управление
@@ -1030,8 +1073,55 @@ let offBackendReady = () => {};
 let offHide = () => {};
 let fileSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let fileSearchRun = 0;
+let calculatorTimer: ReturnType<typeof setTimeout> | null = null;
+let calculatorRun = 0;
 const FILE_SEARCH_DEBOUNCE_MS = 120;
 const MIN_FILE_SEARCH_QUERY_CHARS = 3;
+const CALCULATOR_DEBOUNCE_MS = 60;
+const MAX_CALCULATOR_QUERY_CHARS = 256;
+
+function cancelCalculator(clearResult = true): void {
+  calculatorRun++;
+  if (clearResult) calculatorResult.value = null;
+  if (calculatorTimer) {
+    clearTimeout(calculatorTimer);
+    calculatorTimer = null;
+  }
+}
+
+function looksLikeCalculation(text: string): boolean {
+  return (
+    text.length <= MAX_CALCULATOR_QUERY_CHARS &&
+    /\d/.test(text) &&
+    /[\p{L}()+\-*/^%@×÷]/u.test(text)
+  );
+}
+
+function scheduleCalculator(text: string): void {
+  cancelCalculator(false);
+  if (!looksLikeCalculation(text)) {
+    calculatorResult.value = null;
+    return;
+  }
+  const run = ++calculatorRun;
+  calculatorTimer = setTimeout(async () => {
+    calculatorTimer = null;
+    try {
+      const response = await window.kepler.ark.request<{
+        result: string | null;
+        expression?: string;
+      }>("calculator.evaluate", { query: text });
+      if (run === calculatorRun) {
+        calculatorResult.value = response.result
+          ? { expression: response.expression ?? text, result: response.result }
+          : null;
+      }
+    } catch (error) {
+      if (run === calculatorRun) calculatorResult.value = null;
+      console.warn("calculator.evaluate failed", error);
+    }
+  }, CALCULATOR_DEBOUNCE_MS);
+}
 
 function cancelFileSearch(): void {
   fileSearchRun++;
@@ -1056,10 +1146,12 @@ function scheduleFileSearch(text: string, run: number, delay: number) {
 watch(query, (value) => {
   if (mode.value !== "commands") {
     selectedIndex.value = 0;
+    cancelCalculator();
     cancelFileSearch();
     return;
   }
   const text = value.trim();
+  scheduleCalculator(text);
   if (text.length < MIN_FILE_SEARCH_QUERY_CHARS) {
     // См. postmortems.md § 2026-06-08: короткие query не должны запускать
     // backend file LIKE scan, а hidden launcher обязан оставаться тихим.
@@ -1089,6 +1181,7 @@ onMounted(async () => {
       query.value = "";
       selectedIndex.value = 0;
     }
+    if (mode.value === "commands") scheduleCalculator(query.value.trim());
     void refreshCommands();
     void refreshFocusSnapshot();
     void nextTick(() => {
@@ -1110,6 +1203,7 @@ onMounted(async () => {
     void refreshCommands();
   });
   offHide = window.kepler.window.onHide(() => {
+    cancelCalculator();
     cancelFileSearch();
   });
   offClipboardOpen = window.kepler.clipboardHistory.onOpenShell(() => {
@@ -1166,6 +1260,7 @@ onUnmounted(() => {
   offCommandVisibilityStorage();
   offBackendReady();
   offHide();
+  cancelCalculator();
   cancelFileSearch();
   unsubUpdateState?.();
   unsubPostUpdate?.();
@@ -1534,18 +1629,55 @@ onUnmounted(() => {
           <div v-if="filteredCommands.length === 0 && fileCommands.length === 0" class="empty">
             Ничего не найдено
           </div>
-          <template v-if="filteredCommands.length > 0">
+          <template v-if="calculatorCommand">
+            <div class="section-label">Калькулятор</div>
+            <ul class="results">
+              <li
+                class="result result--calculator"
+                :class="{ selected: (updateBanner ? 1 : 0) === selectedIndex }"
+                @click="
+                  () => {
+                    selectedIndex = updateBanner ? 1 : 0;
+                    void invokeSelected();
+                  }
+                "
+                aria-label="Скопировать результат вычисления"
+              >
+                <div class="calculator-card__side">
+                  <strong class="calculator-card__value calculator-card__expression">{{
+                    calculatorCommand.subtitle
+                  }}</strong>
+                  <span class="calculator-card__badge">Выражение</span>
+                </div>
+                <span class="calculator-card__arrow" aria-hidden="true">→</span>
+                <div class="calculator-card__side calculator-card__side--result">
+                  <strong class="calculator-card__value calculator-card__result">{{
+                    calculatorCommand.title
+                  }}</strong>
+                  <span class="calculator-card__badge">Результат</span>
+                </div>
+              </li>
+            </ul>
+          </template>
+          <template v-if="matchedCommands.length > 0">
             <div class="section-label">Все</div>
             <ul class="results">
               <li
-                v-for="(cmd, idx) in filteredCommands"
+                v-for="(cmd, idx) in matchedCommands"
                 :key="cmd.id"
                 class="result"
-                :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
-                @click="selectedIndex = (updateBanner ? 1 : 0) + idx"
+                :class="{
+                  selected:
+                    (updateBanner ? 1 : 0) + (calculatorCommand ? 1 : 0) + idx === selectedIndex,
+                }"
+                @click="
+                  () => {
+                    selectedIndex = (updateBanner ? 1 : 0) + (calculatorCommand ? 1 : 0) + idx;
+                  }
+                "
                 @dblclick="
                   () => {
-                    selectedIndex = (updateBanner ? 1 : 0) + idx;
+                    selectedIndex = (updateBanner ? 1 : 0) + (calculatorCommand ? 1 : 0) + idx;
                     void invokeSelected();
                   }
                 "
@@ -1726,10 +1858,11 @@ onUnmounted(() => {
       </button>
       <div class="launcher-footer__actions">
         <button type="button" class="launcher-footer__hint-btn" @click="void invokeSelected()">
-          Открыть команды <KbdKey>↵</KbdKey>
+          {{ calculatorSelected ? "Копировать" : "Открыть команды" }} <KbdKey>↵</KbdKey>
         </button>
-        <span class="launcher-footer__sep" aria-hidden="true" />
+        <span v-if="!calculatorSelected" class="launcher-footer__sep" aria-hidden="true" />
         <button
+          v-if="!calculatorSelected"
           type="button"
           class="launcher-footer__hint-btn"
           @click="selectedCommand && (actionsOpen = !actionsOpen)"
@@ -2025,6 +2158,66 @@ onUnmounted(() => {
 .result.selected {
   background: color-mix(in srgb, oklch(1 0 0) 8%, transparent);
   border-color: color-mix(in srgb, oklch(1 0 0) 12%, transparent);
+}
+
+.result--calculator {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 0 minmax(0, 1fr);
+  min-height: 122px;
+  margin: 0 8px 10px;
+  padding: 0;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--foreground) 9%, transparent);
+  contain-intrinsic-size: auto 122px;
+}
+
+.result--calculator:hover,
+.result--calculator.selected {
+  background: color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.calculator-card__side {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px 16px 12px;
+}
+
+.calculator-card__side--result {
+  border-left: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+}
+
+.calculator-card__value {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calculator-card__arrow {
+  align-self: center;
+  justify-self: center;
+  width: 34px;
+  color: color-mix(in srgb, var(--foreground) 75%, transparent);
+  font-size: 18px;
+  text-align: center;
+  z-index: 1;
+}
+
+.calculator-card__badge {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--foreground) 12%, transparent);
+  color: color-mix(in srgb, var(--foreground) 88%, transparent);
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .title {

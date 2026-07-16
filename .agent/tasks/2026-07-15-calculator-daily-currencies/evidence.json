@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-07-15-calculator-daily-currencies",
+  "verified_at": "2026-07-15T16:38:48Z",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "cargo test -p kepler-backend calculator --lib"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "cargo test -p kepler-backend calculator --lib"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "cargo test -p kepler-backend calculator --lib"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "KEPLER_BACKEND_EXE=.tmp/cargo-calculator-currency/debug/kepler-backend.exe bunx playwright test tests/e2e/launcher-calculator.spec.ts --config playwright.config.ts"
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "command": "cargo fmt --check; oxfmt --check; cargo test; live CBR smoke; isolated cargo build; desktop typecheck; launcher E2E; git diff --check"
+    }
+  ]
+}

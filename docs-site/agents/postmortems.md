@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-07-15 — Старый backend exit сбрасывал уже запущенную замену
+
+**Симптомы.** После открытия launcher supervisor сообщал `backend unhealthy — recovering`, затем каскадом появлялись `ArkClient reset`, `Another Kepler instance is already running` и повторные respawn attempts, хотя один backend уже успешно публиковал lock и принимал RPC. Параллельно dev runtime предупреждал о занятом LAN-sync порте `21531`.
+**Где жило.** `platform/desktop/electron/main-backend-supervisor.ts::spawnBackend`, `platform/desktop/scripts/dev.mjs`.
+**Root cause.** `exit`-callback каждого `ChildProcess` обращался к общей переменной `backendProc` и общему `backendStartedAt`. При recovery supervisor убивал старый процесс и сразу записывал новый в тот же slot; поздний `exit` старого процесса затем обнулял slot нового, сбрасывал ArkClient и планировал respawn. Dev shell вдобавок запускал LAN sync по умолчанию, хотя установленный `Kosmos Data Engine.exe` уже владел фиксированным портом `21531`.
+**Fix.** `spawnBackend()` теперь замыкает конкретные `proc` и `startedAt`; exit обрабатывается только если вышедший process всё ещё занимает active slot. Поэтому поздний exit заменённого backend не трогает replacement. `platform/desktop/scripts/dev.mjs` по умолчанию передаёт `KEPLER_SKIP_SYNC=1`, сохраняя явный `KEPLER_SKIP_SYNC=0` для разработки sync.
+**Регрешн-защита.** `platform/desktop/electron/main-backend-supervisor.test.ts` воспроизводит replacement A→B и поздний `exit` A, проверяя, что B остаётся active и ArkClient не сбрасывается повторно; отдельный тест сохраняет штатную обработку exit текущего backend.
+**Prevention.** Async callbacks дочернего процесса обязаны мутировать supervisor state только через identity fence (`active === exiting`); shared process slot и timestamps нельзя читать как принадлежавшие callback'у. Dev-инстансы с отдельными data directories не должны автоматически занимать глобальные fixed ports production-инстанса.
+
 ## 2026-07-14 — Browser fallback повторно резолвил DNS после SSRF-проверки
 
 **Симптомы.** Импорт метаданных книги проверял, что hostname указывает на публичный адрес, но sandboxed Chromium мог выполнить отдельный DNS lookup непосредственно перед запросом и получить уже приватный адрес.

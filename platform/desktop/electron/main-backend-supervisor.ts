@@ -54,7 +54,6 @@ export function createMainBackendSupervisor(
   let backendProc: ChildProcess | null = null;
   let backendLockPath = "";
   let backendCrashStreak = 0;
-  let backendStartedAt = 0;
   let backendRespawnTimer: NodeJS.Timeout | null = null;
   let backendCrashDialogShown = false;
   let bootInitStarted = false;
@@ -89,11 +88,15 @@ export function createMainBackendSupervisor(
     });
     if (!spawned.proc) return;
 
-    backendProc = spawned.proc;
+    const proc = spawned.proc;
+    const startedAt = Date.now();
+    backendProc = proc;
     backendLockPath = spawned.lockPath;
-    backendStartedAt = Date.now();
-    backendProc.on("exit", (code) => {
-      const ranForMs = Date.now() - backendStartedAt;
+    proc.on("exit", (code) => {
+      // См. postmortems.md § 2026-07-15: поздний exit заменённого process
+      // не имеет права очищать slot уже работающего replacement.
+      if (backendProc !== proc) return;
+      const ranForMs = Date.now() - startedAt;
       console.error(
         `[kepler-shell] backend exited code=${code} after ${(ranForMs / 1000).toFixed(1)}s`,
       );

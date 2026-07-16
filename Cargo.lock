@@ -1597,6 +1597,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fend-core"
+version = "1.5.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59b16d394a9991c9b0fee89855daafc7c6cd341be9528ac8b45f9b7aed3d8be8"
+
+[[package]]
 name = "fiat-crypto"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2993,6 +2999,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "csv",
+ "fend-core",
  "flate2",
  "futures-util",
  "globset",
@@ -3006,6 +3013,7 @@ dependencies = [
  "lnk",
  "notify",
  "ntfs-reader",
+ "quick-xml",
  "rand 0.8.6",
  "reqwest 0.12.28",
  "rusqlite",
