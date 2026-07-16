@@ -19,6 +19,7 @@ use crate::app_index::AppIndex;
 use crate::ark_host::ArkHost;
 use crate::arrancador;
 use crate::auth;
+use crate::calculator;
 use crate::command_bus::{ClientId, CommandBus, CommandBusEvent, CommandManifest};
 use crate::diagnostics::{RpcDiagnostics, SharedRpcDiagnostics};
 use crate::dictation::{handle_dictation_op, DictationHost};
@@ -720,6 +721,31 @@ async fn handle_connection(
                 // Intercept app_index.* — app launcher search / launch / rescan.
                 if let Some(rest) = operation.strip_prefix("app_index.") {
                     let resp = handle_app_index_op(rest, params, &app_index).await;
+                    let mut envelope = serde_json::Map::new();
+                    if let Some(id) = req_id {
+                        envelope.insert("id".into(), serde_json::Value::String(id));
+                    }
+                    envelope.insert("ok".into(), serde_json::Value::Bool(resp.ok));
+                    envelope.insert("data".into(), resp.data);
+                    if let Some(err) = resp.error {
+                        envelope.insert("error".into(), serde_json::Value::String(err));
+                    }
+                    let payload = serde_json::Value::Object(envelope).to_string();
+                    observe_rpc_payload(
+                        &rpc_diagnostics,
+                        &operation,
+                        operation_started,
+                        &payload,
+                    );
+                    if sink.send(Message::Text(payload)).await.is_err() {
+                        break;
+                    }
+                    continue;
+                }
+
+                // Intercept calculator.* — bounded launcher previews with daily cached FX rates.
+                if let Some(rest) = operation.strip_prefix("calculator.") {
+                    let resp = handle_calculator_op(rest, params, &agents_data_dir).await;
                     let mut envelope = serde_json::Map::new();
                     if let Some(id) = req_id {
                         envelope.insert("id".into(), serde_json::Value::String(id));
@@ -1549,6 +1575,38 @@ async fn handle_arrancador_op(
     }
 }
 
+async fn handle_calculator_op(
+    subop: &str,
+    params: serde_json::Value,
+    data_dir: &std::path::Path,
+) -> LocalResponse {
+    match subop {
+        "evaluate" => {
+            let query = match params.get("query").and_then(|value| value.as_str()) {
+                Some(query) => query.to_string(),
+                None => return LocalResponse::err("calculator.evaluate: missing 'query'"),
+            };
+            let normalized = calculator::normalize_query(&query);
+            let rates =
+                calculator::exchange_rates_for_query(&normalized.evaluation, data_dir).await;
+            let expression = normalized.display_expression;
+            let evaluation = normalized.evaluation;
+            match tokio::task::spawn_blocking(move || {
+                calculator::evaluate_preview_with_rates(&evaluation, rates)
+            })
+            .await
+            {
+                Ok(result) => LocalResponse::ok(serde_json::json!({
+                    "result": result,
+                    "expression": expression,
+                })),
+                Err(error) => LocalResponse::err(format!("calculator.evaluate: join: {error}")),
+            }
+        }
+        other => LocalResponse::err(format!("calculator.{other}: unknown sub-operation")),
+    }
+}
+
 /// Dispatch `app_index.<subop>` — App Launcher: search / launch / rescan.
 ///
 /// Sub-operations:
@@ -2005,6 +2063,29 @@ mod tests {
 
         assert_eq!(entry["icon_path"], serde_json::Value::Null);
         assert_eq!(entry["icon_ref"], "kosmos-icon://app/calc");
+    }
+
+    #[tokio::test]
+    async fn calculator_op_returns_result_or_quiet_null() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let result = handle_calculator_op(
+            "evaluate",
+            serde_json::json!({ "query": "1200 * 1.2" }),
+            data_dir.path(),
+        )
+        .await;
+        assert!(result.ok);
+        assert_eq!(result.data["result"], "1440");
+        assert_eq!(result.data["expression"], "1200 * 1.2");
+
+        let search_text = handle_calculator_op(
+            "evaluate",
+            serde_json::json!({ "query": "settings" }),
+            data_dir.path(),
+        )
+        .await;
+        assert!(search_text.ok);
+        assert!(search_text.data["result"].is_null());
     }
 
     #[tokio::test]

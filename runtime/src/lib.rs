@@ -18,6 +18,7 @@ pub mod app_index;
 pub mod ark_host;
 pub mod arrancador;
 pub mod auth;
+pub mod calculator;
 pub mod command_bus;
 pub mod crash_reporter;
 pub mod db_backup;
