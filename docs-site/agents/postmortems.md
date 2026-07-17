@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-07-18 — Кодер обновлял локальный кэш, но не профиль LeetCode
+
+**Симптомы.** Сводка Кодера показывала 78 решённых задач, а уровни Easy / Medium / Hard оставались 0/0 даже после кнопки «Обновить».
+**Где жило.** `platform/desktop/src/coder/CoderView.vue`, `platform/desktop/src/coder/useCoderStats.ts`, `platform/runtime/src/integrations.rs::sync_leetcode`.
+**Root cause.** Кнопка «Обновить» вызывала только повторное чтение ARK. Профиль сложности создаётся исключительно сетевой синхронизацией LeetCode, поэтому отсутствующий `coding_profile_obj` никогда не появлялся. На машине эффект усилился смешением нового renderer с установленным `Kosmos Runtime.exe` от 0.6.25: бинарник, обслуживающий ARK, был собран до добавления `coding_profile_obj`.
+**Fix.** Кнопка «Обновить» на странице Кодера теперь запускает `integrations.sync_now` для LeetCode и только после успешной синхронизации перечитывает локальные объекты. Runtime сохраняет отдельный `coding_profile_obj` с точными `submitStatsGlobal` и `allQuestionsCount` из профильного GraphQL-ответа LeetCode.
+**Регрешн-защита.** `useCoderStats.test.ts::refresh synchronizes LeetCode before reading local stats` фиксирует порядок network sync → local load; Rust-тест `leetcode_profile_maps_homepage_difficulty_counts` фиксирует преобразование Easy / Medium / Hard и общих количеств.
+**Prevention.** Кнопка с пользовательским смыслом «обновить внешние данные» не должна быть локальным cache reload. Новое поле, которое создаётся только новым runtime, нужно проверять на связке renderer + фактически запущенный runtime, а не только в HMR renderer: старый sidecar может корректно обслуживать прежний контракт и молча не создавать новые объекты.
+
 ## 2026-07-17 — LeetCode login принимал stale session, а ручной sync вставал в очередь за полным импортом
 
 **Симптомы.** После успешного входа login BrowserWindow не закрывался сразу, подключение становилось видимым только после повторного входа или перезапуска. «Получить сейчас» мог очень долго оставаться в состоянии загрузки без прогресса.

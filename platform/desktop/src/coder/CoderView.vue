@@ -1,13 +1,27 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, shallowRef } from "vue";
 import { Code2, RefreshCw } from "@lucide/vue";
 import { Button, EmptyState } from "@kosmos/visuals";
 import CoderActivity from "./CoderActivity.vue";
 import CoderBreakdown from "./CoderBreakdown.vue";
+import CoderDifficultyGauge from "./CoderDifficultyGauge.vue";
 import CoderSubmissions from "./CoderSubmissions.vue";
 import { useCoderStats } from "./useCoderStats";
 
-const { activity, error, languages, loading, recent, statuses, summary, load } = useCoderStats();
+const {
+  activity,
+  difficulties,
+  error,
+  languages,
+  loading,
+  recent,
+  refreshing,
+  statuses,
+  summary,
+  load,
+  refresh,
+} = useCoderStats();
+const platform = shallowRef<"leetcode" | "codewars">("leetcode");
 
 const statusLabels: Record<string, string> = {
   Accepted: "Принято",
@@ -37,54 +51,72 @@ function openSubmission(url: string): void {
         <h1>Кодер</h1>
         <p>Статистика задач и отправок LeetCode.</p>
       </div>
-      <Button variant="ghost" size="sm" :loading="loading" @click="load">
+      <Button variant="ghost" size="sm" :loading="loading || refreshing" @click="refresh">
         <template #icon><RefreshCw :size="13" /></template>
         Обновить
       </Button>
     </header>
 
-    <EmptyState v-if="loading" title="Собираю статистику…" compact />
-    <EmptyState v-else-if="error" :title="error" compact>
-      <template #action><Button size="sm" @click="load">Повторить</Button></template>
-    </EmptyState>
-    <EmptyState
-      v-else-if="summary.submissions === 0"
-      title="Отправок пока нет"
-      description="Подключите LeetCode в интеграциях и получите данные."
-      compact
-    >
-      <template #icon><Code2 :size="22" /></template>
-    </EmptyState>
+    <nav class="platform-tabs" aria-label="Площадка">
+      <button :aria-pressed="platform === 'leetcode'" @click="platform = 'leetcode'">
+        LeetCode
+      </button>
+      <button :aria-pressed="platform === 'codewars'" @click="platform = 'codewars'">
+        Codewars
+      </button>
+    </nav>
 
-    <template v-else>
-      <section class="summary-grid" aria-label="Сводка">
-        <article>
-          <span>Решено</span><strong>{{ summary.solved }}</strong>
-        </article>
-        <article>
-          <span>Отправок</span><strong>{{ summary.submissions }}</strong>
-        </article>
-        <article>
-          <span>Принято</span><strong>{{ summary.accepted }}</strong>
-        </article>
-        <article>
-          <span>Успешность</span><strong>{{ Math.round(summary.acceptanceRate * 100) }}%</strong>
-        </article>
-        <article>
-          <span>Текущая серия</span><strong>{{ summary.currentStreak }} дн.</strong>
-        </article>
-        <article>
-          <span>Лучшая серия</span><strong>{{ summary.longestStreak }} дн.</strong>
-        </article>
-      </section>
+    <template v-if="platform === 'leetcode'">
+      <EmptyState v-if="loading" title="Собираю статистику…" compact />
+      <EmptyState v-else-if="error" :title="error" compact>
+        <template #action><Button size="sm" @click="load">Повторить</Button></template>
+      </EmptyState>
+      <EmptyState
+        v-else-if="summary.submissions === 0"
+        title="Отправок пока нет"
+        description="Подключите LeetCode в интеграциях и получите данные."
+        compact
+      >
+        <template #icon><Code2 :size="22" /></template>
+      </EmptyState>
 
-      <CoderActivity :days="activity" />
-      <div class="breakdown-grid">
-        <CoderBreakdown title="Языки" :items="languages" />
-        <CoderBreakdown title="Результаты" :items="localizedStatuses" />
-      </div>
-      <CoderSubmissions :submissions="recent" @open="openSubmission" />
+      <template v-else>
+        <section class="summary-grid" aria-label="Сводка">
+          <article>
+            <span>Решено</span><strong>{{ summary.solved }}</strong>
+          </article>
+          <article>
+            <span>Отправок</span><strong>{{ summary.submissions }}</strong>
+          </article>
+          <article>
+            <span>Принято</span><strong>{{ summary.accepted }}</strong>
+          </article>
+          <article>
+            <span>Успешность</span><strong>{{ Math.round(summary.acceptanceRate * 100) }}%</strong>
+          </article>
+          <article>
+            <span>Текущая серия</span><strong>{{ summary.currentStreak }} дн.</strong>
+          </article>
+          <article>
+            <span>Лучшая серия</span><strong>{{ summary.longestStreak }} дн.</strong>
+          </article>
+        </section>
+
+        <CoderDifficultyGauge :stats="difficulties" />
+        <CoderActivity :days="activity" />
+        <div class="breakdown-grid">
+          <CoderBreakdown title="Языки" :items="languages" />
+          <CoderBreakdown title="Результаты" :items="localizedStatuses" />
+        </div>
+        <CoderSubmissions :submissions="recent" @open="openSubmission" />
+      </template>
     </template>
+    <EmptyState
+      v-else
+      title="Codewars пока не подключён"
+      description="Подключение добавим следующим шагом."
+      compact
+    />
   </main>
 </template>
 
@@ -111,6 +143,30 @@ function openSubmission(url: string): void {
 .coder-header h1,
 .coder-header p {
   margin: 0;
+}
+
+.platform-tabs {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.platform-tabs button {
+  margin: 0 0 -1px;
+  padding: 7px 10px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.platform-tabs button[aria-pressed="true"] {
+  border-bottom-color: var(--primary);
+  color: var(--foreground);
 }
 
 .coder-header h1 {

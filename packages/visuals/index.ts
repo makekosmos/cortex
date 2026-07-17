@@ -62,6 +62,7 @@ export {
   KbdKey,
   ActionsPanel,
   Skeleton,
+  Tooltip,
 } from "./components";
 
 // Composables

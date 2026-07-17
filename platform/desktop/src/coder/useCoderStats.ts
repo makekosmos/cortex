@@ -1,7 +1,14 @@
 import { computed, onBeforeUnmount, onMounted, shallowRef } from "vue";
-import type { CoderActivityDay, CoderBreakdownItem, CoderSummary, CodingSubmission } from "./types";
+import type {
+  CoderActivityDay,
+  CoderBreakdownItem,
+  CoderDifficultyStats,
+  CoderSummary,
+  CodingSubmission,
+} from "./types";
 
 const CODING_SUBMISSION_TYPE_ID = "coding_submission_obj";
+const CODING_PROFILE_TYPE_ID = "coding_profile_obj";
 
 interface RawObjectRecord {
   id: string;
@@ -10,6 +17,7 @@ interface RawObjectRecord {
 }
 
 type ArkSubscribe = (event: string, handler: (payload: unknown) => void) => () => void;
+type ArkRequest = (operation: string, params: Record<string, unknown>) => Promise<unknown>;
 
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -80,9 +88,41 @@ export function breakdown(values: string[], total: number): CoderBreakdownItem[]
     .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "ru"));
 }
 
+function count(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+export function profileDifficultyStats(records: RawObjectRecord[]): CoderDifficultyStats {
+  const profile = records.find((record) => {
+    const props = objectValue(record.propsJson);
+    return !record.deletedAt && props.source === "leetcode";
+  });
+  const props = objectValue(profile?.propsJson);
+  const solved = objectValue(props.solved);
+  const available = objectValue(props.available);
+  return {
+    easy: count(solved.easy),
+    easyTotal: count(available.easy),
+    medium: count(solved.medium),
+    mediumTotal: count(available.medium),
+    hard: count(solved.hard),
+    hardTotal: count(available.hard),
+    total: count(solved.all),
+    available: count(available.all),
+  };
+}
+
+export async function refreshLeetCodeStats(request: ArkRequest, load: () => Promise<void>) {
+  // См. postmortems.md § 2026-07-18: local reload не создаёт профиль сложности.
+  await request("integrations.sync_now", { provider: "leetcode" });
+  await load();
+}
+
 export function useCoderStats() {
   const submissions = shallowRef<CodingSubmission[]>([]);
+  const difficulties = shallowRef<CoderDifficultyStats>(profileDifficultyStats([]));
   const loading = shallowRef(true);
+  const refreshing = shallowRef(false);
   const error = shallowRef("");
   let unsubscribe: (() => void) | null = null;
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -139,24 +179,43 @@ export function useCoderStats() {
     loading.value = true;
     error.value = "";
     try {
-      const records = await window.kepler.ark.request<RawObjectRecord[]>("list_objects_by_type", {
-        type_id: CODING_SUBMISSION_TYPE_ID,
-      });
+      const [records, profiles] = await Promise.all([
+        window.kepler.ark.request<RawObjectRecord[]>("list_objects_by_type", {
+          type_id: CODING_SUBMISSION_TYPE_ID,
+        }),
+        window.kepler.ark.request<RawObjectRecord[]>("list_objects_by_type", {
+          type_id: CODING_PROFILE_TYPE_ID,
+        }),
+      ]);
       submissions.value = records
         .map(toSubmission)
         .filter((submission): submission is CodingSubmission => submission !== null)
         .sort((left, right) => Date.parse(right.submittedAt) - Date.parse(left.submittedAt));
+      difficulties.value = profileDifficultyStats(profiles);
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : "Не удалось загрузить статистику";
       submissions.value = [];
+      difficulties.value = profileDifficultyStats([]);
     } finally {
       loading.value = false;
     }
   }
 
+  async function refresh(): Promise<void> {
+    refreshing.value = true;
+    error.value = "";
+    try {
+      await refreshLeetCodeStats(window.kepler.ark.request, load);
+    } catch (cause) {
+      error.value = cause instanceof Error ? cause.message : "Не удалось обновить LeetCode";
+    } finally {
+      refreshing.value = false;
+    }
+  }
+
   function scheduleRefresh(payload: unknown): void {
     const typeId = objectValue(payload).type_id;
-    if (typeId !== CODING_SUBMISSION_TYPE_ID) return;
+    if (typeId !== CODING_SUBMISSION_TYPE_ID && typeId !== CODING_PROFILE_TYPE_ID) return;
     if (refreshTimer) clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => {
       refreshTimer = null;
@@ -182,5 +241,17 @@ export function useCoderStats() {
     if (refreshTimer) clearTimeout(refreshTimer);
   });
 
-  return { activity, error, languages, loading, recent, statuses, summary, load };
+  return {
+    activity,
+    difficulties,
+    error,
+    languages,
+    loading,
+    recent,
+    refreshing,
+    statuses,
+    summary,
+    load,
+    refresh,
+  };
 }

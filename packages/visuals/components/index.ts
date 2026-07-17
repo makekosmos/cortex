@@ -105,3 +105,5 @@ export { default as KbdKey } from "./KbdKey.vue";
 export { default as ActionsPanel } from "./ActionsPanel.vue";
 
 export { default as Skeleton } from "./Skeleton.vue";
+
+export { default as Tooltip } from "./Tooltip.vue";

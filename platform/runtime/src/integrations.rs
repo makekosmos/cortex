@@ -13,6 +13,7 @@ const KEYRING_SERVICE: &str = "kosmos-kepler";
 const WORKOUT_TYPE_ID: &str = "workout_obj";
 const TIME_ENTRY_TYPE_ID: &str = "time_entry_obj";
 const CODING_SUBMISSION_TYPE_ID: &str = "coding_submission_obj";
+const CODING_PROFILE_TYPE_ID: &str = "coding_profile_obj";
 const HEVY_BASE_URL: &str = "https://api.hevyapp.com";
 const TOGGL_BASE_URL: &str = "https://api.track.toggl.com/api/v9";
 const LEETCODE_GRAPHQL_URL: &str = "https://leetcode.com/graphql";
@@ -877,6 +878,89 @@ fn leetcode_submission_object(submission: &Value) -> Result<Value, String> {
     }))
 }
 
+fn leetcode_count(rows: &Value, difficulty: &str) -> u64 {
+    rows.as_array()
+        .and_then(|rows| {
+            rows.iter()
+                .find(|row| row.get("difficulty").and_then(Value::as_str) == Some(difficulty))
+        })
+        .and_then(|row| row.get("count"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0)
+}
+
+fn leetcode_profile_object(username: &str, body: &Value, timestamp: &str) -> Result<Value, String> {
+    let solved = body
+        .pointer("/data/matchedUser/submitStatsGlobal/acSubmissionNum")
+        .ok_or("LeetCode не вернул статистику решённых задач")?;
+    let available = body
+        .pointer("/data/allQuestionsCount")
+        .ok_or("LeetCode не вернул количество задач")?;
+    Ok(json!({
+        "id": "leetcode-profile:current",
+        "typeId": CODING_PROFILE_TYPE_ID,
+        "title": format!("LeetCode — {username}"),
+        "contentJson": {},
+        "propsJson": {
+            "source": "leetcode",
+            "username": username,
+            "solved": {
+                "all": leetcode_count(solved, "All"),
+                "easy": leetcode_count(solved, "Easy"),
+                "medium": leetcode_count(solved, "Medium"),
+                "hard": leetcode_count(solved, "Hard"),
+            },
+            "available": {
+                "all": leetcode_count(available, "All"),
+                "easy": leetcode_count(available, "Easy"),
+                "medium": leetcode_count(available, "Medium"),
+                "hard": leetcode_count(available, "Hard"),
+            },
+        },
+        "createdAt": timestamp,
+        "updatedAt": timestamp,
+        "deletedAt": null,
+    }))
+}
+
+async fn fetch_leetcode_profile(
+    client: &reqwest::Client,
+    secret: &str,
+    timestamp: &str,
+) -> Result<Value, String> {
+    let status: Value = leetcode_request(
+        client,
+        secret,
+        json!({ "query": "query globalData { userStatus { isSignedIn username } }" }),
+    )?
+    .send()
+    .await
+    .map_err(|error| format!("LeetCode: {error}"))?
+    .json()
+    .await
+    .map_err(|error| format!("Некорректный ответ LeetCode: {error}"))?;
+    let username = status
+        .pointer("/data/userStatus/username")
+        .and_then(Value::as_str)
+        .filter(|username| !username.is_empty())
+        .ok_or("LeetCode не вернул имя пользователя — войдите заново")?;
+    let body: Value = leetcode_request(
+        client,
+        secret,
+        json!({
+            "query": "query userProgress($username: String!) { matchedUser(username: $username) { submitStatsGlobal { acSubmissionNum { difficulty count submissions } } } allQuestionsCount { difficulty count } }",
+            "variables": { "username": username },
+        }),
+    )?
+    .send()
+    .await
+    .map_err(|error| format!("LeetCode: {error}"))?
+    .json()
+    .await
+    .map_err(|error| format!("Некорректный ответ LeetCode: {error}"))?;
+    leetcode_profile_object(username, &body, timestamp)
+}
+
 async fn fetch_leetcode_submissions(
     client: &reqwest::Client,
     secret: &str,
@@ -967,6 +1051,7 @@ async fn sync_leetcode(
         .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
         .map(|value| value.with_timezone(&Utc) - ChronoDuration::days(1));
     let submissions = fetch_leetcode_submissions(&client, secret, cutoff).await?;
+    let profile = fetch_leetcode_profile(&client, secret, started_at).await?;
     ensure_object_type(
         ark,
         CODING_SUBMISSION_TYPE_ID,
@@ -974,6 +1059,14 @@ async fn sync_leetcode(
         started_at,
     )
     .await?;
+    ensure_object_type(
+        ark,
+        CODING_PROFILE_TYPE_ID,
+        "Профиль программиста",
+        started_at,
+    )
+    .await?;
+    ark_request(ark, "upsert_object", json!({ "object": profile })).await?;
     let mut imported = 0_u64;
     for submission in submissions {
         ark_request(
@@ -1439,6 +1532,34 @@ mod tests {
         assert_eq!(submission["propsJson"]["status"], "Wrong Answer");
         assert_eq!(submission["propsJson"]["accepted"], false);
         assert!(submission["propsJson"].get("code").is_none());
+    }
+
+    #[test]
+    fn leetcode_profile_maps_homepage_difficulty_counts() {
+        let profile = leetcode_profile_object(
+            "tester",
+            &json!({
+                "data": {
+                    "matchedUser": { "submitStatsGlobal": { "acSubmissionNum": [
+                        { "difficulty": "All", "count": 78 },
+                        { "difficulty": "Easy", "count": 61 },
+                        { "difficulty": "Medium", "count": 17 },
+                        { "difficulty": "Hard", "count": 0 }
+                    ]}},
+                    "allQuestionsCount": [
+                        { "difficulty": "All", "count": 3991 },
+                        { "difficulty": "Easy", "count": 954 },
+                        { "difficulty": "Medium", "count": 2084 },
+                        { "difficulty": "Hard", "count": 953 }
+                    ]
+                }
+            }),
+            "2026-07-18T00:00:00Z",
+        )
+        .expect("profile");
+        assert_eq!(profile["propsJson"]["solved"]["all"], 78);
+        assert_eq!(profile["propsJson"]["solved"]["easy"], 61);
+        assert_eq!(profile["propsJson"]["available"]["hard"], 953);
     }
 
     #[test]

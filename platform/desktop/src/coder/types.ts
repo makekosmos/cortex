@@ -11,6 +11,17 @@ export interface CodingSubmission {
   url: string;
 }
 
+export interface CoderDifficultyStats {
+  easy: number;
+  easyTotal: number;
+  medium: number;
+  mediumTotal: number;
+  hard: number;
+  hardTotal: number;
+  total: number;
+  available: number;
+}
+
 export interface CoderSummary {
   submissions: number;
   accepted: number;
