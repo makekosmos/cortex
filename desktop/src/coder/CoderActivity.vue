@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { Tooltip } from "@kosmos/visuals";
 import type { CoderActivityDay } from "./types";
 
 defineProps<{ days: CoderActivityDay[] }>();
@@ -17,6 +18,12 @@ const monthLabels = computed(() =>
 function dayLabel(day: CoderActivityDay): string {
   return `${dateFormatter.format(new Date(`${day.date}T12:00:00`))} · отправок: ${day.count}`;
 }
+
+function tooltipPlacement(index: number): "top-start" | "top" | "top-end" {
+  if (index < 7) return "top-start";
+  if (index >= 364) return "top-end";
+  return "top";
+}
 </script>
 
 <template>
@@ -32,14 +39,16 @@ function dayLabel(day: CoderActivityDay): string {
       </div>
     </header>
     <div class="activity-grid" aria-label="Календарь отправок">
-      <span
-        v-for="day in days"
+      <Tooltip
+        v-for="(day, index) in days"
         :key="day.date"
-        :class="`level-${day.level}`"
-        :data-tooltip="dayLabel(day)"
-        :aria-label="dayLabel(day)"
-        :tabindex="day.count > 0 ? 0 : -1"
-      />
+        class="activity-tooltip"
+        :text="dayLabel(day)"
+        :placement="tooltipPlacement(index)"
+        :focusable="day.count > 0"
+      >
+        <span :class="['activity-cell', `level-${day.level}`]" aria-hidden="true" />
+      </Tooltip>
     </div>
     <div class="month-labels" aria-hidden="true">
       <span v-for="month in monthLabels" :key="month">{{ month }}</span>
@@ -82,7 +91,7 @@ h2 {
 }
 
 .legend i,
-.activity-grid span {
+.activity-cell {
   border-radius: 3px;
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
 }
@@ -101,61 +110,14 @@ h2 {
   margin-top: 16px;
 }
 
-.activity-grid span {
-  position: relative;
+.activity-tooltip {
   aspect-ratio: 1;
+  min-width: 0;
 }
 
-.activity-grid span::after {
-  position: absolute;
-  z-index: 2;
-  bottom: calc(100% + 7px);
-  left: 50%;
-  width: max-content;
-  max-width: 180px;
-  padding: 5px 7px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  box-shadow: var(--shadow-floating);
-  content: attr(data-tooltip);
-  font-size: 0.6875rem;
-  line-height: 1.3;
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, 2px);
-  transition:
-    opacity 100ms ease,
-    transform 100ms ease;
-  white-space: nowrap;
-}
-
-.activity-grid span:hover::after,
-.activity-grid span:focus-visible::after {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
-
-.activity-grid span:nth-child(-n + 7)::after {
-  left: 0;
-  transform: translate(0, 2px);
-}
-
-.activity-grid span:nth-child(-n + 7):hover::after,
-.activity-grid span:nth-child(-n + 7):focus-visible::after {
-  transform: translate(0, 0);
-}
-
-.activity-grid span:nth-last-child(-n + 7)::after {
-  right: 0;
-  left: auto;
-  transform: translate(0, 2px);
-}
-
-.activity-grid span:nth-last-child(-n + 7):hover::after,
-.activity-grid span:nth-last-child(-n + 7):focus-visible::after {
-  transform: translate(0, 0);
+.activity-cell {
+  width: 100%;
+  height: 100%;
 }
 
 .month-labels {
