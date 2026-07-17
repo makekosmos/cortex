@@ -40,7 +40,7 @@ import {
   SettingsContentHeader,
   SettingsSearchInput,
   SettingsSidebar,
-  SidebarButton,
+  SettingsSidebarButton,
   ToastHost,
   provideToastHost,
   usePlatform,
@@ -557,7 +557,7 @@ onBeforeUnmount(() => {
         <div class="settings-sidebar-scroll kosmos-scroll">
           <template v-if="hasSidebarMatches">
             <div v-if="mainNavigationItems.length > 0" class="settings-sidebar-group">
-              <SidebarButton
+              <SettingsSidebarButton
                 v-for="item in mainNavigationItems"
                 :key="item.tab"
                 :icon="item.icon"
@@ -569,7 +569,7 @@ onBeforeUnmount(() => {
             </div>
 
             <div v-if="advancedNavigationItems.length > 0" class="settings-sidebar-group">
-              <SidebarButton
+              <SettingsSidebarButton
                 v-for="item in advancedNavigationItems"
                 :key="item.tab"
                 :icon="item.icon"

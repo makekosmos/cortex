@@ -43,6 +43,10 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
     shell: {
       openExternal: (url: string) => ipcRenderer.invoke("kepler:shell:openExternal", url),
     },
+    integrations: {
+      connectLeetCode: () => ipcRenderer.invoke("kepler:integrations:leetcode:connect"),
+      disconnectLeetCode: () => ipcRenderer.invoke("kepler:integrations:leetcode:disconnect"),
+    },
     window: {
       hide: () => ipcRenderer.invoke("kepler:window:hide"),
       onShow: (listener) => {

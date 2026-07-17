@@ -12,21 +12,21 @@ const CONFIG_FILE: &str = "integrations.json";
 const KEYRING_SERVICE: &str = "kosmos-kepler";
 const WORKOUT_TYPE_ID: &str = "workout_obj";
 const TIME_ENTRY_TYPE_ID: &str = "time_entry_obj";
+const CODING_SUBMISSION_TYPE_ID: &str = "coding_submission_obj";
 const HEVY_BASE_URL: &str = "https://api.hevyapp.com";
 const TOGGL_BASE_URL: &str = "https://api.track.toggl.com/api/v9";
+const LEETCODE_GRAPHQL_URL: &str = "https://leetcode.com/graphql";
 const ALLOWED_INTERVALS: &[u64] = &[0, 15, 60, 360, 1440];
 
 static CONFIG_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-static SYNC_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+static SYNC_LOCKS: OnceLock<[tokio::sync::Mutex<()>; 3]> = OnceLock::new();
 
 fn config_lock() -> &'static Mutex<()> {
     CONFIG_LOCK.get_or_init(|| Mutex::new(()))
 }
 
-fn sync_lock() -> &'static tokio::sync::Mutex<()> {
-    // ponytail: one global lock is enough for two low-frequency providers; split per provider
-    // only if measured sync latency makes parallel imports useful.
-    SYNC_LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
+fn sync_lock(index: usize) -> &'static tokio::sync::Mutex<()> {
+    &SYNC_LOCKS.get_or_init(|| std::array::from_fn(|_| tokio::sync::Mutex::new(())))[index]
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -34,6 +34,7 @@ fn sync_lock() -> &'static tokio::sync::Mutex<()> {
 pub enum Provider {
     Hevy,
     Toggl,
+    Leetcode,
 }
 
 impl Provider {
@@ -41,6 +42,7 @@ impl Provider {
         match value.trim().to_ascii_lowercase().as_str() {
             "hevy" => Ok(Self::Hevy),
             "toggl" => Ok(Self::Toggl),
+            "leetcode" => Ok(Self::Leetcode),
             _ => Err(format!("Неизвестная интеграция: {value}")),
         }
     }
@@ -49,6 +51,7 @@ impl Provider {
         match self {
             Self::Hevy => "hevy",
             Self::Toggl => "toggl",
+            Self::Leetcode => "leetcode",
         }
     }
 
@@ -56,6 +59,7 @@ impl Provider {
         match self {
             Self::Hevy => "Hevy",
             Self::Toggl => "Toggl Track",
+            Self::Leetcode => "LeetCode",
         }
     }
 
@@ -63,6 +67,7 @@ impl Provider {
         match self {
             Self::Hevy => "API-ключ",
             Self::Toggl => "API-токен",
+            Self::Leetcode => "Сессия LeetCode",
         }
     }
 
@@ -70,6 +75,7 @@ impl Provider {
         match self {
             Self::Hevy => "https://hevy.com/settings?developer",
             Self::Toggl => "https://track.toggl.com/profile",
+            Self::Leetcode => "https://leetcode.com/accounts/login/",
         }
     }
 
@@ -77,6 +83,15 @@ impl Provider {
         match self {
             Self::Hevy => "integration-hevy-api-key",
             Self::Toggl => "integration-toggl-api-token",
+            Self::Leetcode => "integration-leetcode-session",
+        }
+    }
+
+    fn sync_lock_index(self) -> usize {
+        match self {
+            Self::Hevy => 0,
+            Self::Toggl => 1,
+            Self::Leetcode => 2,
         }
     }
 }
@@ -110,6 +125,7 @@ impl Default for ProviderSettings {
 pub struct IntegrationsConfig {
     pub hevy: ProviderSettings,
     pub toggl: ProviderSettings,
+    pub leetcode: ProviderSettings,
     pub body_weight_kg: Option<f64>,
 }
 
@@ -126,6 +142,11 @@ impl Default for IntegrationsConfig {
                 sync_on_startup: false,
                 ..ProviderSettings::default()
             },
+            leetcode: ProviderSettings {
+                interval_minutes: 1440,
+                sync_on_startup: true,
+                ..ProviderSettings::default()
+            },
             body_weight_kg: None,
         }
     }
@@ -136,6 +157,7 @@ impl IntegrationsConfig {
         match provider {
             Provider::Hevy => &self.hevy,
             Provider::Toggl => &self.toggl,
+            Provider::Leetcode => &self.leetcode,
         }
     }
 
@@ -143,6 +165,7 @@ impl IntegrationsConfig {
         match provider {
             Provider::Hevy => &mut self.hevy,
             Provider::Toggl => &mut self.toggl,
+            Provider::Leetcode => &mut self.leetcode,
         }
     }
 }
@@ -252,6 +275,7 @@ fn snapshot(config: &IntegrationsConfig) -> Value {
         "providers": [
             provider_snapshot(Provider::Hevy, &config.hevy),
             provider_snapshot(Provider::Toggl, &config.toggl),
+            provider_snapshot(Provider::Leetcode, &config.leetcode),
         ],
         "bodyWeightKg": config.body_weight_kg,
     })
@@ -290,7 +314,48 @@ fn authenticated_get(
     match provider {
         Provider::Hevy => client.get(url).header("api-key", secret),
         Provider::Toggl => client.get(url).basic_auth(secret, Some("api_token")),
+        Provider::Leetcode => client.get(url),
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LeetcodeCredential {
+    session: String,
+    csrf_token: String,
+}
+
+fn leetcode_request(
+    client: &reqwest::Client,
+    secret: &str,
+    body: Value,
+) -> Result<reqwest::RequestBuilder, String> {
+    let credential: LeetcodeCredential = serde_json::from_str(secret)
+        .map_err(|_| "Сессия LeetCode повреждена — войдите заново".to_string())?;
+    Ok(client
+        .post(LEETCODE_GRAPHQL_URL)
+        .header(
+            reqwest::header::COOKIE,
+            format!(
+                "LEETCODE_SESSION={}; csrftoken={}",
+                credential.session, credential.csrf_token
+            ),
+        )
+        .header("x-csrftoken", credential.csrf_token)
+        .header(reqwest::header::ORIGIN, "https://leetcode.com")
+        .header(reqwest::header::REFERER, "https://leetcode.com/progress/")
+        .json(&body))
+}
+
+fn leetcode_query(offset: u64, last_key: Option<&str>) -> Value {
+    json!({
+        "query": "query submissionList($offset: Int!, $limit: Int!, $lastKey: String) { submissionList(offset: $offset, limit: $limit, lastKey: $lastKey) { lastKey hasNext submissions { id title titleSlug statusDisplay lang timestamp url isPending memory runtime } } }",
+        "variables": {
+            "offset": offset,
+            "limit": 20,
+            "lastKey": last_key,
+        }
+    })
 }
 
 async fn verify_credential_at(
@@ -302,6 +367,26 @@ async fn verify_credential_at(
     let path = match provider {
         Provider::Hevy => "/v1/user/info",
         Provider::Toggl => "/me",
+        Provider::Leetcode => {
+            let response = leetcode_request(&client, secret, leetcode_query(0, None))?
+                .send()
+                .await
+                .map_err(|error| format!("Не удалось подключиться к LeetCode: {error}"))?;
+            if response.status() == reqwest::StatusCode::UNAUTHORIZED
+                || response.status() == reqwest::StatusCode::FORBIDDEN
+            {
+                return Err("Сессия LeetCode истекла — войдите заново".to_string());
+            }
+            let body: Value = response
+                .json()
+                .await
+                .map_err(|error| format!("Некорректный ответ LeetCode: {error}"))?;
+            return body
+                .pointer("/data/submissionList/submissions")
+                .and_then(Value::as_array)
+                .map(|_| ())
+                .ok_or_else(|| "LeetCode не вернул историю — войдите заново".to_string());
+        }
     };
     let request = authenticated_get(&client, provider, format!("{base_url}{path}"), secret);
     let response = request
@@ -330,6 +415,7 @@ async fn verify_credential(provider: Provider, secret: &str) -> Result<(), Strin
         match provider {
             Provider::Hevy => HEVY_BASE_URL,
             Provider::Toggl => TOGGL_BASE_URL,
+            Provider::Leetcode => LEETCODE_GRAPHQL_URL,
         },
     )
     .await
@@ -723,12 +809,192 @@ async fn sync_toggl(
     Ok(imported)
 }
 
+fn leetcode_submission_timestamp(submission: &Value) -> Option<DateTime<Utc>> {
+    submission
+        .get("timestamp")
+        .and_then(Value::as_str)
+        .and_then(|value| value.parse::<i64>().ok())
+        .and_then(|value| DateTime::<Utc>::from_timestamp(value, 0))
+}
+
+fn leetcode_submission_is_new_enough(submission: &Value, cutoff: Option<DateTime<Utc>>) -> bool {
+    cutoff.is_none_or(|cutoff| {
+        leetcode_submission_timestamp(submission).is_none_or(|value| value >= cutoff)
+    })
+}
+
+fn leetcode_page_reached_cutoff(items: &[Value], cutoff: Option<DateTime<Utc>>) -> bool {
+    cutoff.is_some_and(|cutoff| {
+        items.iter().any(|submission| {
+            leetcode_submission_timestamp(submission).is_some_and(|value| value < cutoff)
+        })
+    })
+}
+
+fn leetcode_submission_object(submission: &Value) -> Result<Value, String> {
+    let external_id = submission
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or("LeetCode submission без id")?;
+    let title = submission
+        .get("title")
+        .and_then(Value::as_str)
+        .unwrap_or("LeetCode");
+    let status = submission
+        .get("statusDisplay")
+        .and_then(Value::as_str)
+        .unwrap_or("Unknown");
+    let timestamp = leetcode_submission_timestamp(submission)
+        .map(|value| value.to_rfc3339())
+        .ok_or("LeetCode submission без корректной даты")?;
+    let raw_url = submission.get("url").and_then(Value::as_str).unwrap_or("");
+    let url = if raw_url.starts_with("http") {
+        raw_url.to_string()
+    } else {
+        format!("https://leetcode.com{raw_url}")
+    };
+    Ok(json!({
+        "id": format!("leetcode-submission:{external_id}"),
+        "typeId": CODING_SUBMISSION_TYPE_ID,
+        "title": format!("{title} — {status}"),
+        "contentJson": {},
+        "propsJson": {
+            "source": "leetcode",
+            "externalId": external_id,
+            "problemTitle": title,
+            "problemSlug": submission.get("titleSlug").cloned().unwrap_or(Value::Null),
+            "status": status,
+            "accepted": status == "Accepted",
+            "language": submission.get("lang").cloned().unwrap_or(Value::Null),
+            "runtime": submission.get("runtime").cloned().unwrap_or(Value::Null),
+            "memory": submission.get("memory").cloned().unwrap_or(Value::Null),
+            "submittedAt": timestamp,
+            "url": url,
+        },
+        "createdAt": timestamp,
+        "updatedAt": timestamp,
+        "deletedAt": null,
+    }))
+}
+
+async fn fetch_leetcode_submissions(
+    client: &reqwest::Client,
+    secret: &str,
+    cutoff: Option<DateTime<Utc>>,
+) -> Result<Vec<Value>, String> {
+    let mut submissions = Vec::new();
+    let mut seen = HashSet::new();
+    let mut offset = 0_u64;
+    let mut last_key: Option<String> = None;
+    loop {
+        let response =
+            leetcode_request(client, secret, leetcode_query(offset, last_key.as_deref()))?
+                .send()
+                .await
+                .map_err(|error| format!("LeetCode: {error}"))?;
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED
+            || response.status() == reqwest::StatusCode::FORBIDDEN
+        {
+            return Err("Сессия LeetCode истекла — войдите заново".to_string());
+        }
+        if !response.status().is_success() {
+            return Err(format!("LeetCode вернул HTTP {}", response.status()));
+        }
+        let body: Value = response
+            .json()
+            .await
+            .map_err(|error| format!("Некорректный ответ LeetCode: {error}"))?;
+        if let Some(error) = body
+            .get("errors")
+            .and_then(Value::as_array)
+            .and_then(|errors| errors.first())
+            .and_then(|error| error.get("message"))
+            .and_then(Value::as_str)
+        {
+            return Err(format!("LeetCode: {error}"));
+        }
+        let page = body
+            .pointer("/data/submissionList")
+            .ok_or("LeetCode не вернул историю — войдите заново")?;
+        let items = page
+            .get("submissions")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let page_len = items.len() as u64;
+        let reached_cutoff = leetcode_page_reached_cutoff(&items, cutoff);
+        for submission in items {
+            if !leetcode_submission_is_new_enough(&submission, cutoff) {
+                continue;
+            }
+            if submission
+                .get("id")
+                .and_then(Value::as_str)
+                .is_some_and(|id| seen.insert(id.to_string()))
+            {
+                submissions.push(submission);
+            }
+        }
+        if !page
+            .get("hasNext")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+            || reached_cutoff
+            || page_len == 0
+            || offset >= 10_000
+        {
+            break;
+        }
+        offset += page_len;
+        last_key = page
+            .get("lastKey")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+    }
+    Ok(submissions)
+}
+
+async fn sync_leetcode(
+    ark: &ArkHost,
+    secret: &str,
+    settings: &ProviderSettings,
+    started_at: &str,
+) -> Result<u64, String> {
+    let client = http_client()?;
+    let cutoff = settings
+        .last_success_at
+        .as_deref()
+        .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
+        .map(|value| value.with_timezone(&Utc) - ChronoDuration::days(1));
+    let submissions = fetch_leetcode_submissions(&client, secret, cutoff).await?;
+    ensure_object_type(
+        ark,
+        CODING_SUBMISSION_TYPE_ID,
+        "Отправка задачи",
+        started_at,
+    )
+    .await?;
+    let mut imported = 0_u64;
+    for submission in submissions {
+        ark_request(
+            ark,
+            "upsert_object",
+            json!({ "object": leetcode_submission_object(&submission)? }),
+        )
+        .await?;
+        imported += 1;
+    }
+    Ok(imported)
+}
+
 async fn sync_provider(
     ark: &ArkHost,
     data_dir: &Path,
     provider: Provider,
 ) -> Result<Value, String> {
-    let _guard = sync_lock().lock().await;
+    let _guard = sync_lock(provider.sync_lock_index())
+        .try_lock()
+        .map_err(|_| format!("{} уже синхронизируется", provider.label()))?;
     let secret = read_credential(provider).ok_or_else(|| "Сначала добавьте ключ".to_string())?;
     let started_at = Utc::now().to_rfc3339();
     let settings = mutate_config(data_dir, |config| {
@@ -743,6 +1009,7 @@ async fn sync_provider(
     let result = match provider {
         Provider::Hevy => sync_hevy(ark, &secret, &settings, &started_at).await,
         Provider::Toggl => sync_toggl(ark, &secret, &settings, &started_at).await,
+        Provider::Leetcode => sync_leetcode(ark, &secret, &settings, &started_at).await,
     };
     match result {
         Ok(imported) => {
@@ -784,7 +1051,7 @@ fn is_due(settings: &ProviderSettings, now: DateTime<Utc>) -> bool {
 pub fn spawn_scheduler(ark: Arc<ArkHost>, data_dir: PathBuf) {
     tokio::spawn(async move {
         let startup = read_config(&data_dir);
-        for provider in [Provider::Hevy, Provider::Toggl] {
+        for provider in [Provider::Hevy, Provider::Toggl, Provider::Leetcode] {
             if startup.provider(provider).sync_on_startup && read_credential(provider).is_some() {
                 if let Err(error) = sync_provider(&ark, &data_dir, provider).await {
                     tracing::warn!(provider = provider.id(), %error, "integration startup sync failed");
@@ -799,7 +1066,7 @@ pub fn spawn_scheduler(ark: Arc<ArkHost>, data_dir: PathBuf) {
             timer.tick().await;
             let config = read_config(&data_dir);
             let now = Utc::now();
-            for provider in [Provider::Hevy, Provider::Toggl] {
+            for provider in [Provider::Hevy, Provider::Toggl, Provider::Leetcode] {
                 if read_credential(provider).is_some() && is_due(config.provider(provider), now) {
                     if let Err(error) = sync_provider(&ark, &data_dir, provider).await {
                         tracing::warn!(provider = provider.id(), %error, "integration scheduled sync failed");
@@ -1152,6 +1419,50 @@ mod tests {
         assert_eq!(entry["id"], "toggl-time-entry:42");
         assert_eq!(entry["propsJson"]["endedAt"], Value::Null);
         assert_eq!(entry["propsJson"]["source"], "imported");
+    }
+
+    #[test]
+    fn leetcode_mapping_keeps_attempt_metadata_without_code() {
+        let submission = leetcode_submission_object(&json!({
+            "id": "1972542025",
+            "title": "Contains Duplicate",
+            "titleSlug": "contains-duplicate",
+            "statusDisplay": "Wrong Answer",
+            "lang": "javascript",
+            "timestamp": "1775606400",
+            "url": "/submissions/detail/1972542025/",
+            "runtime": "N/A",
+            "memory": "N/A"
+        }))
+        .expect("map submission");
+        assert_eq!(submission["id"], "leetcode-submission:1972542025");
+        assert_eq!(submission["propsJson"]["status"], "Wrong Answer");
+        assert_eq!(submission["propsJson"]["accepted"], false);
+        assert!(submission["propsJson"].get("code").is_none());
+    }
+
+    #[test]
+    fn leetcode_incremental_page_stops_at_overlap_cutoff() {
+        // Regression: 2026-07-17. Every sync used to walk the complete submission history.
+        let cutoff = DateTime::<Utc>::from_timestamp(150, 0).expect("cutoff");
+        let recent = json!({ "timestamp": "200" });
+        let old = json!({ "timestamp": "100" });
+        let page = vec![recent.clone(), old.clone()];
+
+        assert!(leetcode_page_reached_cutoff(&page, Some(cutoff)));
+        assert!(leetcode_submission_is_new_enough(&recent, Some(cutoff)));
+        assert!(!leetcode_submission_is_new_enough(&old, Some(cutoff)));
+        assert!(!leetcode_page_reached_cutoff(&page, None));
+    }
+
+    #[test]
+    fn duplicate_provider_sync_does_not_wait_for_the_first_one() {
+        // Regression: 2026-07-17. Manual sync queued behind startup sync and then repeated it.
+        let lock = sync_lock(Provider::Leetcode.sync_lock_index());
+        let first = lock.try_lock().expect("first sync owns lock");
+        assert!(lock.try_lock().is_err());
+        drop(first);
+        assert!(lock.try_lock().is_ok());
     }
 
     #[test]

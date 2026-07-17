@@ -4,8 +4,9 @@ import { Modal } from "@kosmos/visuals";
 import IntegrationSettingsPanel from "./IntegrationSettingsPanel.vue";
 import hevyIcon from "./assets/hevy.svg";
 import togglTrackIcon from "./assets/toggl-track.svg";
+import leetcodeIcon from "./assets/leetcode.svg";
 
-type ProviderId = "hevy" | "toggl";
+type ProviderId = "hevy" | "toggl" | "leetcode";
 
 interface ProviderSnapshot {
   id: ProviderId;
@@ -32,6 +33,11 @@ const cards: IntegrationCard[] = [
     id: "toggl",
     label: "Toggl Track",
     icon: togglTrackIcon,
+  },
+  {
+    id: "leetcode",
+    label: "LeetCode",
+    icon: leetcodeIcon,
   },
 ];
 
