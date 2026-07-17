@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-07-17 — LeetCode login принимал stale session, а ручной sync вставал в очередь за полным импортом
+
+**Симптомы.** После успешного входа login BrowserWindow не закрывался сразу, подключение становилось видимым только после повторного входа или перезапуска. «Получить сейчас» мог очень долго оставаться в состоянии загрузки без прогресса.
+**Где жило.** `platform/desktop/electron/leetcode-integration.ts::waitForLeetCodeSession`, `platform/runtime/src/integrations.rs::sync_provider`, `fetch_leetcode_submissions`.
+**Root cause.** Persistent Electron partition проверял любые уже сохранённые cookies и мог завершить ожидание по старой `LEETCODE_SESSION` до нового логина. Даже после получения свежих cookies окно закрывалось только после GraphQL verification и ARK credential write. Runtime использовал один ожидающий mutex для всех provider: manual sync вставал за startup-sync, затем повторно обходил всю историю LeetCode и последовательно upsert-ил те же отправки.
+**Fix.** Перед каждым интерактивным входом cookies partition очищаются; ожидание подписано на cookie events, а login BrowserWindow закрывается сразу после получения свежей пары `LEETCODE_SESSION`/`csrftoken`, до GraphQL verification и записи credential. Sync-lock разделён по provider и берётся через `try_lock`, поэтому повторный ручной запуск сразу сообщает о уже идущей синхронизации. После первого полного импорта LeetCode следующие обходы останавливаются на суточном overlap относительно последней успешной синхронизации.
+**Регресс-защита.** `leetcode-auth-flow.test.ts` фиксирует порядок clear → свежий login → close → persist. Rust-тесты `duplicate_provider_sync_does_not_wait_for_the_first_one` и `leetcode_incremental_page_stops_at_overlap_cutoff` фиксируют fast-fail повторного sync и остановку пагинации на cutoff.
+**Prevention.** Persistent browser partition нельзя считать доказательством нового интерактивного входа: перед re-auth нужен явный freshness boundary. Долгие provider jobs должны иметь отдельный non-waiting lock, а API с исторической пагинацией — инкрементальный cursor/cutoff и небольшой идемпотентный overlap.
+
 ## 2026-07-15 — Старый backend exit сбрасывал уже запущенную замену
 
 **Симптомы.** После открытия launcher supervisor сообщал `backend unhealthy — recovering`, затем каскадом появлялись `ArkClient reset`, `Another Kepler instance is already running` и повторные respawn attempts, хотя один backend уже успешно публиковал lock и принимал RPC. Параллельно dev runtime предупреждал о занятом LAN-sync порте `21531`.

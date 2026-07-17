@@ -16,7 +16,7 @@ withDefaults(defineProps<Props>(), {
   active: false,
   testId: undefined,
   iconImage: "",
-  iconVariant: "tile",
+  iconVariant: "plain",
   iconFrom: "var(--settings-sidebar-icon-from)",
   iconTo: "var(--settings-sidebar-icon-to)",
 });
@@ -30,7 +30,7 @@ defineEmits<{
 <template>
   <button
     type="button"
-    class="kosmos-settings-sidebar-button flex w-full cursor-default select-none items-center gap-2 rounded border-0 bg-transparent p-1 text-left text-[color-mix(in_srgb,var(--foreground)_78%,transparent)] data-[active=true]:bg-[var(--settings-sidebar-active)] data-[active=true]:text-[var(--foreground)]"
+    class="kosmos-settings-sidebar-button flex h-7 w-full cursor-default select-none items-center gap-2 rounded-[5px] border-0 bg-transparent px-2 py-0 text-left text-[color-mix(in_srgb,var(--foreground)_62%,transparent)] transition-[background-color,color] duration-[120ms] hover:bg-[color-mix(in_srgb,var(--foreground)_5%,transparent)] hover:text-[color-mix(in_srgb,var(--foreground)_82%,transparent)] data-[active=true]:bg-[var(--settings-sidebar-active)] data-[active=true]:text-[var(--foreground)]"
     :data-active="active ? 'true' : undefined"
     :data-testid="testId"
     :aria-current="active ? 'page' : undefined"
@@ -38,7 +38,7 @@ defineEmits<{
     @contextmenu="$emit('contextmenu', $event)"
   >
     <span
-      class="inline-flex size-6 shrink-0 items-center justify-center overflow-hidden rounded text-white"
+      class="inline-flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-[3px] text-current"
       :class="
         iconImage
           ? 'bg-none shadow-none'
@@ -54,8 +54,8 @@ defineEmits<{
       }"
       aria-hidden="true"
     >
-      <img v-if="iconImage" class="block size-6 object-contain" :src="iconImage" alt="" />
-      <component v-else :is="icon" :size="14" :stroke-width="2" />
+      <img v-if="iconImage" class="block size-4 object-contain" :src="iconImage" alt="" />
+      <component v-else :is="icon" :size="16" :stroke-width="1.75" />
     </span>
     <span
       class="kosmos-settings-sidebar-button__label min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-[var(--font-sans)] text-[13px] leading-[1.4] font-medium"

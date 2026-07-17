@@ -2,6 +2,7 @@ import { registerMainCommands } from "./main-commands";
 import { registerMainCrashesIpc } from "./main-crashes-ipc";
 import { registerMainDataIpc } from "./main-data-ipc";
 import { registerMainShellIpc } from "./main-shell-ipc";
+import { registerLeetCodeIntegrationIpc } from "./leetcode-integration";
 
 type RegisterMainProcessIpcOptions = {
   awaitArkReady(timeoutMs?: number): Promise<any>;
@@ -25,6 +26,7 @@ export function registerMainProcessIpc(options: RegisterMainProcessIpcOptions) {
     broadcastSettingsSyncUpdated: options.broadcastSettingsSyncUpdated,
   });
   registerMainCrashesIpc();
+  registerLeetCodeIntegrationIpc({ awaitArkReady: options.awaitArkReady });
   registerMainShellIpc({
     getBackendLockPath: options.getBackendLockPath,
     isBackendRunning: options.isBackendRunning,

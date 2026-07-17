@@ -1,0 +1,17 @@
+{
+  "task": "leetcode-coder",
+  "date": "2026-07-17",
+  "status": "pass",
+  "checks": {
+    "typescript_tests": "3 passed",
+    "rust_integration_tests": "8 passed",
+    "typecheck": "passed",
+    "shell_build": "passed",
+    "ark_write_guard": "passed",
+    "cargo_fmt": "passed",
+    "targeted_lint": "passed",
+    "docs_check": "passed",
+    "visual": "successful populated capture inspected; later rerun timed out"
+  },
+  "artifacts": ["raw/coder-page.png"]
+}

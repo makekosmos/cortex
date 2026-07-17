@@ -267,7 +267,11 @@ onMounted(loadSnapshot);
 <style scoped>
 .body-page {
   --body-muscle-empty: color-mix(in srgb, var(--foreground) 12%, var(--background));
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--kosmos-page-max-width, 700px);
   height: 100%;
+  margin: 0 auto;
   overflow-y: auto;
   padding: 20px 24px 28px;
   color: var(--foreground);
@@ -395,6 +399,7 @@ onMounted(loadSnapshot);
 
 .body-workspace {
   align-items: stretch;
+  flex-direction: column;
   gap: 24px;
   margin-top: 18px;
 }
@@ -411,8 +416,8 @@ onMounted(loadSnapshot);
 }
 
 .body-details {
-  width: 250px;
-  flex: 0 0 250px;
+  width: auto;
+  flex: none;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 18px;

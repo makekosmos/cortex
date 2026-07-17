@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { Check, ExternalLink, RefreshCw, Trash2 } from "@lucide/vue";
+import { Check, ExternalLink, LogIn, RefreshCw, Trash2 } from "@lucide/vue";
 import { Button, Toggle, useToast } from "@kosmos/visuals";
 
-type ProviderId = "hevy" | "toggl";
+type ProviderId = "hevy" | "toggl" | "leetcode";
 
 const props = withDefaults(
   defineProps<{
@@ -51,7 +51,7 @@ const toast = useToast();
 const snapshot = ref<IntegrationsSnapshot | null>(null);
 const loading = ref(true);
 const error = ref("");
-const credentials = ref<Record<ProviderId, string>>({ hevy: "", toggl: "" });
+const credentials = ref<Record<ProviderId, string>>({ hevy: "", toggl: "", leetcode: "" });
 const busy = ref(new Set<string>());
 const providers = computed(() =>
   (snapshot.value?.providers ?? []).filter(
@@ -124,13 +124,28 @@ async function saveCredential(provider: ProviderSnapshot) {
 async function clearCredential(provider: ProviderSnapshot) {
   setBusy(provider.id, "credential", true);
   try {
-    snapshot.value = await request<IntegrationsSnapshot>("integrations.clear_credential", {
-      provider: provider.id,
-    });
+    snapshot.value =
+      provider.id === "leetcode"
+        ? await window.kepler.integrations.disconnectLeetCode<IntegrationsSnapshot>()
+        : await request<IntegrationsSnapshot>("integrations.clear_credential", {
+            provider: provider.id,
+          });
     credentials.value[provider.id] = "";
     toast.success(`${provider.label}: ключ удалён`);
   } catch (cause) {
     toast.error(cause instanceof Error ? cause.message : "Не удалось удалить ключ");
+  } finally {
+    setBusy(provider.id, "credential", false);
+  }
+}
+
+async function connectLeetCode(provider: ProviderSnapshot) {
+  setBusy(provider.id, "credential", true);
+  try {
+    snapshot.value = await window.kepler.integrations.connectLeetCode<IntegrationsSnapshot>();
+    toast.success("LeetCode подключён");
+  } catch (cause) {
+    toast.error(cause instanceof Error ? cause.message : "Не удалось войти в LeetCode");
   } finally {
     setBusy(provider.id, "credential", false);
   }
@@ -170,7 +185,7 @@ onMounted(load);
   <div class="integrations-page kosmos-scroll" :class="{ 'integrations-page--compact': compact }">
     <p v-if="!compact" class="integrations-intro">
       Данные импортируются в общую базу Kosmos. Ключи остаются в защищённом хранилище этого
-      устройства.
+      устройства. Для LeetCode сохраняется только сессия входа, код решений не загружается.
     </p>
 
     <div v-if="loading" class="integrations-message">Загрузка…</div>
@@ -183,16 +198,54 @@ onMounted(load);
         <div>
           <h2>{{ provider.label }}</h2>
           <p>
-            {{ provider.id === "hevy" ? "Тренировки и упражнения" : "Записи учёта времени" }}
+            {{
+              provider.id === "hevy"
+                ? "Тренировки и упражнения"
+                : provider.id === "toggl"
+                  ? "Записи учёта времени"
+                  : "Задачи и история отправок"
+            }}
           </p>
         </div>
         <span :class="['provider-status', { 'provider-status--ready': provider.hasCredential }]">
           <Check v-if="provider.hasCredential" :size="13" />
-          {{ provider.hasCredential ? "Подключено" : "Нужен ключ" }}
+          {{
+            provider.hasCredential
+              ? "Подключено"
+              : provider.id === "leetcode"
+                ? "Нужен вход"
+                : "Нужен ключ"
+          }}
         </span>
       </header>
 
-      <div class="provider-section">
+      <div v-if="provider.id === 'leetcode'" class="provider-section">
+        <div class="credential-row credential-row--login">
+          <p>
+            Откроется отдельное окно LeetCode. Войдите обычным способом — пароль Kosmos не увидит.
+          </p>
+          <Button
+            size="sm"
+            :loading="isBusy(provider.id, 'credential')"
+            @click="connectLeetCode(provider)"
+          >
+            <template #icon><LogIn :size="13" /></template>
+            {{ provider.hasCredential ? "Войти заново" : "Войти через LeetCode" }}
+          </Button>
+          <Button
+            v-if="provider.hasCredential"
+            variant="danger"
+            size="sm"
+            :disabled="isBusy(provider.id, 'credential')"
+            @click="clearCredential(provider)"
+          >
+            <template #icon><Trash2 :size="13" /></template>
+            Отключить
+          </Button>
+        </div>
+      </div>
+
+      <div v-else class="provider-section">
         <div class="provider-section__heading">
           <span>{{ provider.credentialLabel }}</span>
           <button type="button" class="provider-link" @click="openCredentialPage(provider)">
@@ -251,9 +304,11 @@ onMounted(load);
         </label>
       </div>
       <p class="provider-sync-note">
-        При первом импорте загружается вся доступная история. Затем — только изменения после
-        последней успешной синхронизации. Записи сопоставляются по ID сервиса без создания дублей;
-        изменённые в сервисе записи обновляют импортированные поля в Kosmos.
+        {{
+          provider.id === "leetcode"
+            ? "При первом импорте загружается вся доступная история отправок. Затем — данные с последней успешной синхронизации с перекрытием в сутки. Записи обновляются по ID без дублей; код решений не запрашивается. Первый импорт может занять несколько минут."
+            : "При первом импорте загружается вся доступная история. Затем — только изменения после последней успешной синхронизации. Записи сопоставляются по ID сервиса без создания дублей; изменённые в сервисе записи обновляют импортированные поля в Kosmos."
+        }}
       </p>
 
       <div class="startup-row">
@@ -423,6 +478,19 @@ onMounted(load);
 
 .credential-row {
   margin-top: 10px;
+}
+
+.credential-row--login {
+  margin-top: 0;
+}
+
+.credential-row--login p {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 1.45;
 }
 
 .credential-row > input,

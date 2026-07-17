@@ -90,6 +90,11 @@ export interface KeplerApi extends KeplerApiShellServices {
     openExternal(url: string): Promise<void>;
   };
 
+  integrations: {
+    connectLeetCode<T = unknown>(): Promise<T>;
+    disconnectLeetCode<T = unknown>(): Promise<T>;
+  };
+
   /** Управление окном launcher'а. */
   window: {
     hide(): Promise<void>;

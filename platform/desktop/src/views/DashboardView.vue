@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { computed, h, onMounted, onUnmounted, ref, type Component } from "vue";
-import { Activity, Unplug } from "@lucide/vue";
+import { Activity, Code2, Unplug } from "@lucide/vue";
 import { PhClock, PhDatabase } from "@phosphor-icons/vue";
 import {
   DesktopChrome,
   SettingsSidebar,
-  SidebarButton,
+  SettingsSidebarButton,
   TitlebarHistoryControls,
   ToastHost,
   provideToastHost,
 } from "@kosmos/visuals";
 import BodyView from "../body/BodyView.vue";
+import CoderView from "../coder/CoderView.vue";
 import ObjectTable from "../dashboard/ObjectTable.vue";
 import UsageTable from "../dashboard/UsageTable.vue";
 import IntegrationsView from "../integrations/IntegrationsView.vue";
@@ -28,14 +29,16 @@ import {
 } from "../dashboard/store";
 import { typeVisualFor } from "../dashboard/typeVisuals";
 
-type DashboardSection = "integrations" | "body" | "data";
+type DashboardSection = "integrations" | "body" | "coder" | "data";
 
 const section = ref<DashboardSection>(
   window.location.hash.startsWith("#/dashboard/integrations")
     ? "integrations"
     : window.location.hash.startsWith("#/dashboard/body")
       ? "body"
-      : "data",
+      : window.location.hash.startsWith("#/dashboard/coder")
+        ? "coder"
+        : "data",
 );
 const showUsage = computed(() => section.value === "data" && currentTypeId.value === "__usage__");
 provideToastHost();
@@ -44,7 +47,7 @@ function phosphorSidebarIcon(icon: Component, weight: "duotone" | "fill"): Compo
   return {
     inheritAttrs: false,
     setup(_, { attrs }) {
-      return () => h(icon, { ...attrs, size: 14, weight });
+      return () => h(icon, { ...attrs, size: 16, weight });
     },
   };
 }
@@ -118,6 +121,11 @@ function selectIntegrations(): void {
   section.value = "integrations";
   window.history.replaceState(null, "", "#/dashboard/integrations");
 }
+
+function selectCoder(): void {
+  section.value = "coder";
+  window.history.replaceState(null, "", "#/dashboard/coder");
+}
 </script>
 
 <template>
@@ -128,7 +136,7 @@ function selectIntegrations(): void {
         <SettingsSidebar title="Kosmos" background="var(--bg-app)">
           <div class="dashboard-sidebar-scroll kosmos-scroll">
             <div class="dashboard-sidebar-group">
-              <SidebarButton
+              <SettingsSidebarButton
                 :icon="Unplug"
                 label="Интеграции"
                 :active="section === 'integrations'"
@@ -137,19 +145,25 @@ function selectIntegrations(): void {
             </div>
 
             <div class="dashboard-sidebar-group">
-              <SidebarButton
+              <SettingsSidebarButton
                 :icon="Activity"
                 label="Тело"
                 :active="section === 'body'"
                 @click="selectBody"
               />
-              <SidebarButton
+              <SettingsSidebarButton
+                :icon="Code2"
+                label="Кодер"
+                :active="section === 'coder'"
+                @click="selectCoder"
+              />
+              <SettingsSidebarButton
                 :icon="currentTypeId === null ? DatabaseFill : DatabaseDuotone"
                 label="Все объекты"
                 :active="section === 'data' && !showUsage && currentTypeId === null"
                 @click="selectAll"
               />
-              <SidebarButton
+              <SettingsSidebarButton
                 :icon="showUsage ? ClockFill : ClockDuotone"
                 label="Затреканное время"
                 :active="showUsage"
@@ -159,7 +173,7 @@ function selectIntegrations(): void {
 
             <div class="dashboard-sidebar-group">
               <div class="dashboard-sidebar-header">Типы</div>
-              <SidebarButton
+              <SettingsSidebarButton
                 v-for="type in objectTypes"
                 :key="type.id"
                 :icon="sidebarIconForType(type.id, currentTypeId === type.id)"
@@ -179,6 +193,7 @@ function selectIntegrations(): void {
       <div class="dashboard-body">
         <IntegrationsView v-if="section === 'integrations'" />
         <BodyView v-else-if="section === 'body'" />
+        <CoderView v-else-if="section === 'coder'" />
         <UsageTable v-else-if="showUsage" :rows="usageRows" :loading="usageLoading" />
         <ObjectTable v-else :rows="objects" :loading="objectsLoading" />
       </div>
@@ -210,6 +225,7 @@ function selectIntegrations(): void {
   gap: 24px;
   overflow-x: hidden;
   overflow-y: auto;
+  padding: 0 8px 8px;
 }
 
 .dashboard-sidebar-header {
