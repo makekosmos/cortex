@@ -20,6 +20,7 @@ import {
   Square,
   Pencil,
   Calculator,
+  Activity as BodyIcon,
 } from "@lucide/vue";
 import { KbdKey, ActionsPanel } from "@kosmos/visuals";
 import BuiltInIcon from "../components/BuiltInIcon.vue";
@@ -84,6 +85,11 @@ const BUILTIN_ICONS: Record<string, BuiltInIconConfig> = {
     icon: DatabaseIcon,
     from: "oklch(0.62 0.16 165)",
     to: "oklch(0.42 0.14 175)",
+  },
+  "kosmos:body": {
+    icon: BodyIcon,
+    from: "oklch(0.7 0.17 145)",
+    to: "oklch(0.45 0.15 165)",
   },
   "kepler:clipboard-history": {
     icon: ClipboardIcon,

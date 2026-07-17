@@ -1,9 +1,19 @@
 <script setup lang="ts">
-import { computed, h, onMounted, onUnmounted, type Component } from "vue";
-import { PhCaretLeft, PhCaretRight, PhClock, PhDatabase } from "@phosphor-icons/vue";
-import { SettingsSidebar, SettingsSidebarButton } from "@kosmos/visuals";
+import { computed, h, onMounted, onUnmounted, ref, type Component } from "vue";
+import { Activity, Unplug } from "@lucide/vue";
+import { PhClock, PhDatabase } from "@phosphor-icons/vue";
+import {
+  DesktopChrome,
+  SettingsSidebar,
+  SidebarButton,
+  TitlebarHistoryControls,
+  ToastHost,
+  provideToastHost,
+} from "@kosmos/visuals";
+import BodyView from "../body/BodyView.vue";
 import ObjectTable from "../dashboard/ObjectTable.vue";
 import UsageTable from "../dashboard/UsageTable.vue";
+import IntegrationsView from "../integrations/IntegrationsView.vue";
 import {
   currentTypeId,
   handleObjectChangeEvent,
@@ -18,7 +28,17 @@ import {
 } from "../dashboard/store";
 import { typeVisualFor } from "../dashboard/typeVisuals";
 
-const showUsage = computed(() => currentTypeId.value === "__usage__");
+type DashboardSection = "integrations" | "body" | "data";
+
+const section = ref<DashboardSection>(
+  window.location.hash.startsWith("#/dashboard/integrations")
+    ? "integrations"
+    : window.location.hash.startsWith("#/dashboard/body")
+      ? "body"
+      : "data",
+);
+const showUsage = computed(() => section.value === "data" && currentTypeId.value === "__usage__");
+provideToastHost();
 
 function phosphorSidebarIcon(icon: Component, weight: "duotone" | "fill"): Component {
   return {
@@ -44,8 +64,10 @@ let unsubscribeObjectUpserted: (() => void) | null = null;
 let unsubscribeObjectDeleted: (() => void) | null = null;
 
 onMounted(async () => {
-  await loadObjectTypes();
-  await loadObjects(null);
+  if (section.value === "data") {
+    await loadObjectTypes();
+    await loadObjects(null);
+  }
 
   const subscribe = (window as unknown as { kepler?: { ark?: { subscribe?: ArkSubscribeFn } } })
     .kepler?.ark?.subscribe;
@@ -70,82 +92,97 @@ onUnmounted(() => {
 });
 
 function selectAll(): void {
+  section.value = "data";
+  window.history.replaceState(null, "", "#/dashboard");
   void loadObjects(null);
 }
 
 function selectUsage(): void {
+  section.value = "data";
+  window.history.replaceState(null, "", "#/dashboard");
   void loadUsageRows();
 }
 
 function selectType(id: string): void {
+  section.value = "data";
+  window.history.replaceState(null, "", "#/dashboard");
   void loadObjects(id);
+}
+
+function selectBody(): void {
+  section.value = "body";
+  window.history.replaceState(null, "", "#/dashboard/body");
+}
+
+function selectIntegrations(): void {
+  section.value = "integrations";
+  window.history.replaceState(null, "", "#/dashboard/integrations");
 }
 </script>
 
 <template>
   <div class="dashboard" tabindex="0">
-    <div class="dashboard-shell">
-      <SettingsSidebar title="Таблица данных">
-        <div class="dashboard-sidebar-scroll kosmos-scroll">
-          <div class="dashboard-sidebar-group">
-            <SettingsSidebarButton
-              :icon="currentTypeId === null ? DatabaseFill : DatabaseDuotone"
-              label="Все объекты"
-              icon-from="var(--destructive)"
-              icon-to="color-mix(in srgb, var(--destructive) 60%, var(--background))"
-              :active="!showUsage && currentTypeId === null"
-              @click="selectAll"
-            />
-            <SettingsSidebarButton
-              :icon="showUsage ? ClockFill : ClockDuotone"
-              label="Затреканное время"
-              icon-from="var(--accent)"
-              icon-to="color-mix(in srgb, var(--accent) 60%, var(--background))"
-              :active="showUsage"
-              @click="selectUsage"
-            />
-          </div>
+    <ToastHost />
+    <DesktopChrome appearance="settings" platform="windows">
+      <template #sidebar>
+        <SettingsSidebar title="Kosmos" background="var(--bg-app)">
+          <div class="dashboard-sidebar-scroll kosmos-scroll">
+            <div class="dashboard-sidebar-group">
+              <SidebarButton
+                :icon="Unplug"
+                label="Интеграции"
+                :active="section === 'integrations'"
+                @click="selectIntegrations"
+              />
+            </div>
 
-          <div class="dashboard-sidebar-group">
-            <div class="dashboard-sidebar-header">Типы</div>
-            <SettingsSidebarButton
-              v-for="type in objectTypes"
-              :key="type.id"
-              :icon="sidebarIconForType(type.id, currentTypeId === type.id)"
-              :label="type.name"
-              :icon-from="typeVisualFor(type.id).from"
-              :icon-to="typeVisualFor(type.id).to"
-              :active="!showUsage && currentTypeId === type.id"
-              @click="selectType(type.id)"
-            />
-          </div>
-        </div>
-      </SettingsSidebar>
+            <div class="dashboard-sidebar-group">
+              <SidebarButton
+                :icon="Activity"
+                label="Тело"
+                :active="section === 'body'"
+                @click="selectBody"
+              />
+              <SidebarButton
+                :icon="currentTypeId === null ? DatabaseFill : DatabaseDuotone"
+                label="Все объекты"
+                :active="section === 'data' && !showUsage && currentTypeId === null"
+                @click="selectAll"
+              />
+              <SidebarButton
+                :icon="showUsage ? ClockFill : ClockDuotone"
+                label="Затреканное время"
+                :active="showUsage"
+                @click="selectUsage"
+              />
+            </div>
 
-      <div class="dashboard-content">
-        <header class="dashboard-titlebar">
-          <div class="dashboard-titlebar__nav">
-            <button type="button" class="chrome-control" disabled title="Назад" aria-label="Назад">
-              <PhCaretLeft :size="14" weight="bold" />
-            </button>
-            <button
-              type="button"
-              class="chrome-control"
-              disabled
-              title="Вперёд"
-              aria-label="Вперёд"
-            >
-              <PhCaretRight :size="14" weight="bold" />
-            </button>
+            <div class="dashboard-sidebar-group">
+              <div class="dashboard-sidebar-header">Типы</div>
+              <SidebarButton
+                v-for="type in objectTypes"
+                :key="type.id"
+                :icon="sidebarIconForType(type.id, currentTypeId === type.id)"
+                :label="type.name"
+                :active="section === 'data' && !showUsage && currentTypeId === type.id"
+                @click="selectType(type.id)"
+              />
+            </div>
           </div>
-        </header>
+        </SettingsSidebar>
+      </template>
 
-        <div class="dashboard-body">
-          <UsageTable v-if="showUsage" :rows="usageRows" :loading="usageLoading" />
-          <ObjectTable v-else :rows="objects" :loading="objectsLoading" />
-        </div>
+      <template #titlebar-leading>
+        <TitlebarHistoryControls :back-disabled="true" :forward-disabled="true" />
+      </template>
+
+      <div class="dashboard-body">
+        <IntegrationsView v-if="section === 'integrations'" />
+        <BodyView v-else-if="section === 'body'" />
+        <UsageTable v-else-if="showUsage" :rows="usageRows" :loading="usageLoading" />
+        <ObjectTable v-else :rows="objects" :loading="objectsLoading" />
       </div>
-    </div>
+    </DesktopChrome>
   </div>
 </template>
 
@@ -155,15 +192,8 @@ function selectType(id: string): void {
   width: 100%;
   height: 100%;
   flex-direction: column;
-  background: var(--main-background-color);
+  background: var(--bg-app);
   outline: none;
-}
-
-.dashboard-shell {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  flex: 1;
 }
 
 .dashboard-sidebar-group {
@@ -178,7 +208,7 @@ function selectType(id: string): void {
   flex: 1;
   flex-direction: column;
   gap: 24px;
-  margin-right: -8px;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -187,56 +217,8 @@ function selectType(id: string): void {
   font-weight: 600;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--foreground) 45%, transparent);
+  color: var(--muted-foreground);
   padding: 4px 10px 6px;
-}
-
-.dashboard-content {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  flex: 1;
-  flex-direction: column;
-  background: var(--main-background-color);
-}
-
-.dashboard-titlebar {
-  display: flex;
-  align-items: center;
-  min-height: 36px;
-  padding: 8px 140px 4px 10px;
-  -webkit-app-region: drag;
-}
-
-.dashboard-titlebar__nav {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  -webkit-app-region: no-drag;
-}
-
-.chrome-control {
-  display: inline-flex;
-  width: 28px;
-  height: 28px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: color-mix(in srgb, var(--foreground) 72%, transparent);
-  -webkit-app-region: no-drag;
-}
-
-.chrome-control:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  color: var(--foreground);
-}
-
-.chrome-control:disabled {
-  cursor: default;
-  opacity: 0.32;
 }
 
 .dashboard-body {
@@ -245,43 +227,9 @@ function selectType(id: string): void {
   overflow: hidden;
 }
 
-@media (max-width: 760px) {
-  :deep(.kosmos-settings-sidebar) {
-    width: 188px;
-    min-width: 188px;
-  }
-
-  :deep(.kosmos-settings-sidebar-button) {
-    width: 172px;
-  }
-
-  .dashboard-titlebar {
-    padding-right: 10px;
-  }
-}
-
 @media (max-width: 560px) {
   :deep(.kosmos-settings-sidebar) {
-    width: 56px;
-    min-width: 56px;
-    padding: 8px;
-  }
-
-  :deep(.kosmos-settings-sidebar__title),
-  :deep(.kosmos-settings-sidebar-button__label),
-  .dashboard-sidebar-header {
     display: none;
-  }
-
-  :deep(.kosmos-settings-sidebar__content) {
-    gap: 16px;
-  }
-
-  :deep(.kosmos-settings-sidebar-button) {
-    width: 40px;
-    height: 34px;
-    justify-content: center;
-    padding: 6px;
   }
 }
 </style>

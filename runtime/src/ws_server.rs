@@ -26,6 +26,7 @@ use crate::dictation::{handle_dictation_op, DictationHost};
 use crate::export;
 use crate::file_index::{FileIndex, FileIndexSettingsPatch};
 use crate::focus::handle_focus_op;
+use crate::integrations;
 use crate::pomodoro_host::{handle_pomodoro_op, PomodoroHost};
 use crate::protocol_version::{Compatibility, ProtocolVersion, PROTOCOL_VERSION};
 use crate::usage_tracker::UsageTrackerDiagnosticsState;
@@ -746,6 +747,41 @@ async fn handle_connection(
                 // Intercept calculator.* — bounded launcher previews with daily cached FX rates.
                 if let Some(rest) = operation.strip_prefix("calculator.") {
                     let resp = handle_calculator_op(rest, params, &agents_data_dir).await;
+                    let mut envelope = serde_json::Map::new();
+                    if let Some(id) = req_id {
+                        envelope.insert("id".into(), serde_json::Value::String(id));
+                    }
+                    envelope.insert("ok".into(), serde_json::Value::Bool(resp.ok));
+                    envelope.insert("data".into(), resp.data);
+                    if let Some(err) = resp.error {
+                        envelope.insert("error".into(), serde_json::Value::String(err));
+                    }
+                    let payload = serde_json::Value::Object(envelope).to_string();
+                    observe_rpc_payload(
+                        &rpc_diagnostics,
+                        &operation,
+                        operation_started,
+                        &payload,
+                    );
+                    if sink.send(Message::Text(payload)).await.is_err() {
+                        break;
+                    }
+                    continue;
+                }
+
+                // Device-local provider settings + ARK-backed imported records.
+                if let Some(rest) = operation.strip_prefix("integrations.") {
+                    let resp = match integrations::handle_operation(
+                        rest,
+                        params,
+                        &ark_host,
+                        &agents_data_dir,
+                    )
+                    .await
+                    {
+                        Ok(data) => LocalResponse::ok(data),
+                        Err(error) => LocalResponse::err(error),
+                    };
                     let mut envelope = serde_json::Map::new();
                     if let Some(id) = req_id {
                         envelope.insert("id".into(), serde_json::Value::String(id));

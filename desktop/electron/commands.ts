@@ -90,6 +90,15 @@ export const COMMANDS: InternalCommand[] = [
     exec: () => openDashboardWindow(),
   },
   {
+    id: "kosmos:body",
+    title: "Открыть тело",
+    subtitle: "Развитие и нагрузка на мышцы",
+    category: "open",
+    kind: "command",
+    appName: "Kosmos",
+    exec: () => openDashboardWindow("body"),
+  },
+  {
     id: "kosmos:my-cosmos",
     title: "Мой космос",
     subtitle: "Граф объектов ARK",

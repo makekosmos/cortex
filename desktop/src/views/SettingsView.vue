@@ -40,7 +40,7 @@ import {
   SettingsContentHeader,
   SettingsSearchInput,
   SettingsSidebar,
-  SettingsSidebarButton,
+  SidebarButton,
   ToastHost,
   provideToastHost,
   usePlatform,
@@ -549,7 +549,7 @@ onBeforeUnmount(() => {
     />
 
     <div class="settings-shell">
-      <SettingsSidebar v-if="!isMac" title="Настройки" background="var(--bg-app, #1d1d1f)">
+      <SettingsSidebar v-if="!isMac" title="Настройки" background="var(--bg-app)">
         <div class="settings-sidebar-search">
           <SettingsSearchInput v-model="searchQuery" placeholder="Поиск" />
         </div>
@@ -557,13 +557,11 @@ onBeforeUnmount(() => {
         <div class="settings-sidebar-scroll kosmos-scroll">
           <template v-if="hasSidebarMatches">
             <div v-if="mainNavigationItems.length > 0" class="settings-sidebar-group">
-              <SettingsSidebarButton
+              <SidebarButton
                 v-for="item in mainNavigationItems"
                 :key="item.tab"
                 :icon="item.icon"
                 :icon-image="item.sidebarImage"
-                :icon-from="item.iconGradient?.from"
-                :icon-to="item.iconGradient?.to"
                 :label="item.label"
                 :active="activeTab === item.tab"
                 @click="selectTab(item.tab)"
@@ -571,13 +569,11 @@ onBeforeUnmount(() => {
             </div>
 
             <div v-if="advancedNavigationItems.length > 0" class="settings-sidebar-group">
-              <SettingsSidebarButton
+              <SidebarButton
                 v-for="item in advancedNavigationItems"
                 :key="item.tab"
                 :icon="item.icon"
                 :icon-image="item.sidebarImage"
-                :icon-from="item.iconGradient?.from"
-                :icon-to="item.iconGradient?.to"
                 :label="item.label"
                 :active="activeTab === item.tab"
                 @click="selectTab(item.tab)"
