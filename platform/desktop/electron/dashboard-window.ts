@@ -89,8 +89,29 @@ function isOnSomeDisplay(x: number, y: number, w: number, h: number): boolean {
   });
 }
 
-export function openDashboardWindow(): void {
+type DashboardSection = "data" | "body";
+
+function routeHash(section: DashboardSection): string {
+  return section === "body" ? "/dashboard/body" : "/dashboard";
+}
+
+function loadDashboardRoute(window: BrowserWindow, section: DashboardSection): void {
+  const devUrl = process.env.VITE_DEV_SERVER_URL;
+  if (devUrl) {
+    void window.loadURL(`${devUrl}#${routeHash(section)}`);
+  } else {
+    void window.loadFile(path.join(__dirname, "../dist/index.html"), {
+      hash: routeHash(section),
+    });
+  }
+}
+
+export function openDashboardWindow(section: DashboardSection = "data"): void {
   if (dashboardWin && !dashboardWin.isDestroyed()) {
+    const expectedHash = `#${routeHash(section)}`;
+    if (!dashboardWin.webContents.getURL().endsWith(expectedHash)) {
+      loadDashboardRoute(dashboardWin, section);
+    }
     if (isHeadlessOrTest()) return;
     dashboardWin.show();
     dashboardWin.focus();
@@ -180,12 +201,5 @@ export function openDashboardWindow(): void {
     dashboardWin = null;
   });
 
-  const devUrl = process.env.VITE_DEV_SERVER_URL;
-  if (devUrl) {
-    void dashboardWin.loadURL(`${devUrl}#/dashboard`);
-  } else {
-    void dashboardWin.loadFile(path.join(__dirname, "../dist/index.html"), {
-      hash: "/dashboard",
-    });
-  }
+  loadDashboardRoute(dashboardWin, section);
 }

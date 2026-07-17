@@ -27,6 +27,7 @@ pub mod dictation;
 pub mod export;
 pub mod file_index;
 pub mod focus;
+pub mod integrations;
 pub mod lock_file;
 pub mod pomodoro_host;
 pub mod priority;

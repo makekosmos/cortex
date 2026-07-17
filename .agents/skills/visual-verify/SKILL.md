@@ -16,6 +16,7 @@ After visible UI changes, verify the result, not only the code:
 4. Wait for the real UI selector that proves the changed surface rendered.
 5. Save a screenshot under `.tmp/` and inspect it with `view_image`.
    For a hidden Electron `BrowserWindow`, a capture immediately after a page transition may be stale or black even after `invalidate()`. Force a full compositor repaint by resizing the window by 1 px and back, then call `invalidate()`, wait for a frame, and use `capturePage()`.
+   A teleported modal can still be omitted from `capturePage()` even when Playwright sees it. For that state, use `page.screenshot()` after the modal assertion; keep `capturePage()` for hidden non-overlay windows because `page.screenshot()` can hang there.
 6. Check the actual acceptance criteria visually: contrast, icon rendering, scroll placement, sticky headers, text overflow, spacing, responsive behavior, and active/inactive states.
 7. Report what was visually verified and be explicit if any part was not checked.
 

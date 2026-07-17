@@ -64,6 +64,7 @@
   --color-shape-highlight-light-solid: oklch(0.18 0 0);
 
   --background: oklch(1 0 0);
+  --bg-app: var(--background);
   --foreground: oklch(0.145 0 0);
   --main-background-color: oklch(0.2002 0 0 / 60%);
   --second-text-color: #717171;
@@ -240,6 +241,7 @@
 
   --color-shape-highlight-light-solid: oklch(0.17 0.003 251);
 
+  --bg-app: #1d1d1f;
   --sidebar-bg: oklch(0.15 0 0);
   --sidebar: var(--sidebar-bg);
   --sidebar-foreground: oklch(0.985 0 0);

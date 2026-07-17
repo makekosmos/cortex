@@ -1,12 +1,14 @@
-# Dashboard — встроенный ARK browser
+# Dashboard — встроенный обзор данных и интеграций
 
 ::: tip Источник правды
 `platform/desktop/src/views/DashboardRoot.vue`, `platform/desktop/src/views/DashboardView.vue`,
-`platform/desktop/src/dashboard/`, `platform/desktop/electron/dashboard-window.ts`
+`platform/desktop/src/dashboard/`, `platform/desktop/src/integrations/`,
+`platform/desktop/src/body/`, `platform/desktop/electron/dashboard-window.ts`,
+`platform/runtime/src/integrations.rs`
 :::
 
-Dashboard — встроенная часть Kepler shell'а (не extension). Read-only
-ARK browser: sidebar с object_types + таблица объектов.
+Dashboard — встроенная часть Kosmos shell (не extension): ARK browser, статистика времени,
+настройка импорта Hevy/Toggl Track и визуализация тренировочных данных в разделе «Тело».
 
 ::: info Pivot 2026-05-14 → 2026-05-15
 До 2026-05-14 Dashboard жил как Vue extension и показывал usage analytics
@@ -28,7 +30,8 @@ ARK browser: sidebar с object_types + таблица объектов.
   (`platform/desktop/electron/dashboard-window.ts`).
 - Routing: hash-based, окно грузится с `#/dashboard` — `DashboardRoot.vue`
   безусловно рендерит `<DashboardView />`.
-- Data access: `window.kepler.ark.request(...)` через main process IPC.
+- Data access: `window.kepler.ark.request(...)` через main process IPC; операции
+  `integrations.*` обслуживает `platform/runtime`.
 - Shared UI: `@kosmos/visuals` (`DesktopChrome`, `DesktopContentSurface`,
   CSS tokens).
 
@@ -45,7 +48,9 @@ platform/desktop/
    ├─ main.ts                    # hash → root view dispatch
    ├─ views/
    │  ├─ DashboardRoot.vue       # wrapper, рендерит DashboardView
-   │  └─ DashboardView.vue       # sidebar + main pane
+   │  └─ DashboardView.vue       # общий sidebar + выбор раздела
+   ├─ integrations/              # плитки и modal настроек Hevy/Toggl
+   ├─ body/                      # развитие и нагрузка по мышцам
    └─ dashboard/
       ├─ KosmosLogo.vue          # SVG sphere icon
       ├─ SidebarItem.vue         # row для sidebar
@@ -56,15 +61,14 @@ platform/desktop/
 
 ## Содержимое
 
-- Sidebar (240px) внутри `<DesktopChrome>` `#sidebar` slot:
-  - «Всё» — load all objects (`list_objects`).
-  - «Настройки» — placeholder stub.
-  - Группа «Типы» — items per `list_object_types`, dot цвет hashed по type id.
-- Main pane (`<DesktopContentSurface>` с `border-left`):
-  - Header с current selection label (имя типа / «Всё» / «Настройки»).
-  - `ObjectTable`: sticky-header table с тремя columns —
-    Значение / Тип / Добавлено.
-  - Row click → `console.log` (заглушка под будущий object inspector).
+- Sidebar использует общие `SettingsSidebar` + `SidebarButton` из `@kosmos/visuals` и ведёт
+  в «Интеграции», «Тело», «Все объекты», «Затреканное время» и ARK-типы.
+- «Интеграции» показывает Hevy/Toggl плитками; настройка открывается в общем `Modal`.
+  Ключи проверяются перед сохранением и хранятся только в системном keyring.
+- Первый импорт получает всю доступную историю провайдера. Последующие синхронизации читают
+  изменения после последней успешной синхронизации и детерминированно обновляют ARK-объекты.
+- «Тело» строит развитие мышц и тоннаж за неделю/месяц/год по импортированным Hevy workouts.
+- Таблицы объектов и usage остаются read-only представлениями ARK.
 
 ## Жёсткие правила
 
@@ -72,12 +76,11 @@ platform/desktop/
 
 - Renderer **никогда** не открывает SQLite напрямую. Все DB reads — через
   `window.kepler.ark.request(...)`.
-- Dashboard — **read-only**. Никаких writes в ARK таблицы.
+- Renderer не пишет в ARK напрямую. Импорт и локальные настройки выполняет Rust runtime через
+  `integrations.*`; ARK writes проходят через `ark_core::db` с sync metadata.
 - Когда возможно — `@kosmos/ark` operations (`list_object_types`,
   `list_objects_by_type`, `list_objects`). Raw SQL — запрещено.
-- Hardcoded `#hex` цвета только для SidebarItem dot'ов (преднамеренно
-  избегаем `var(--accent)` чтобы цвета отличались между типами); остальные
-  цвета — `var(--*)` из `@kosmos/visuals`.
+- Цвета shell, sidebar и контента — semantic `var(--*)` из `@kosmos/visuals`.
 - Окно использует `<DesktopChrome>` + `<DesktopContentSurface>` из
   `@kosmos/visuals` — не дублируй own chrome.
 - Закрытие dashboard окна **не** закрывает Kepler shell.
@@ -100,9 +103,12 @@ bun run --cwd platform/desktop dev                    # backend + extensions + K
 | -------------------- | --------------- | ------------------------------------------------------------------------------- |
 | `kepler:ark:request` | renderer → main | Generic ARK RPC bridge — `arkClient.invokeOperation({ operation, ...params })`. |
 
+Runtime перехватывает namespace `integrations.*`: list/settings/credentials/sync и body snapshot.
+
 Открытие окна:
 
 - Через static launcher command `dashboard:open` («Открыть таблицу данных», `kind: "command"`, `appName: "Kepler"`) в `platform/desktop/electron/commands.ts`. Иконка в launcher — `BuiltInIcon` (teal `Database` glyph).
+- Раздел «Тело» также открывается напрямую командой `kosmos:body`.
 - Из tray menu Dashboard убран (2026-05-16) — теперь там только «Открыть», «Настройки», «Выход».
 
 ## ARK operations, которые Dashboard использует
@@ -110,6 +116,10 @@ bun run --cwd platform/desktop dev                    # backend + extensions + K
 - `list_object_types` — sidebar «Типы».
 - `list_objects` — main pane «Всё».
 - `list_objects_by_type` — main pane после клика по типу в sidebar.
+- `integrations.list`, `integrations.update_settings` — состояние и расписание провайдеров.
+- `integrations.set_credential`, `integrations.clear_credential` — проверка и keyring.
+- `integrations.sync_now` — полный первый импорт или incremental sync.
+- `integrations.body_snapshot`, `integrations.body_weight_set` — данные раздела «Тело».
 
 Если нужен новый endpoint — добавь в `core/ark/crates/ark-core/rust` и `core/ark/packages/ark`,
 не пиши raw SQL в shell.

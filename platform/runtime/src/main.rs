@@ -21,7 +21,7 @@ use chrono::Utc;
 
 use kepler_backend::{
     ark_host::{self, ArkHost},
-    auth, crash_reporter, db_backup,
+    auth, crash_reporter, db_backup, integrations,
     lock_file::{self, KeplerLockFile, LOCK_FILE_FORMAT_VERSION},
     protocol_version::{ProtocolVersion, PROTOCOL_VERSION},
     singleton::SingletonGuard,
@@ -282,6 +282,8 @@ async fn setup() -> Result<SetupState, DynError> {
     };
     lock_file::write_atomic(&lock_path, &lock)?;
     tracing::info!(path = ?lock_path, "lock-file written");
+
+    integrations::spawn_scheduler(ark.clone(), lock_dir.clone());
 
     // LAN sync must not gate local readiness. If its fixed discovery port is
     // busy or slow, Eden/launcher still need immediate local ARK access.

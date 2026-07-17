@@ -72,7 +72,6 @@
   --danger: #f55522;
   --danger-muted: rgba(245, 85, 34, 0.14);
 
-  --bg-app: #1d1d1f;
   --bg-sidebar: var(--sidebar-bg);
   --bg-sidebar-hover: var(--secondary);
   --bg-sidebar-active: var(--surface);

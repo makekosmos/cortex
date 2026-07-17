@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, shallowRef, onMounted, onUnmounted, watch } from "vue";
+import { computed, shallowRef, onMounted, onUnmounted, useSlots, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { ChevronRight, PanelLeftClose } from "@lucide/vue";
 // eslint-disable-next-line import/no-unassigned-import
@@ -13,7 +13,11 @@ import type {
 } from "./types";
 
 interface Props {
-  primaryItems: SidebarNavItem[];
+  mode?: "navigation" | "panel";
+  primaryItems?: SidebarNavItem[];
+  tone?: "default" | "strong";
+  title?: string;
+  background?: string;
   projectItems?: SidebarProjectItem[];
   projectSectionLabel?: string;
   secondaryProjectItems?: SidebarProjectItem[];
@@ -37,6 +41,11 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  mode: "navigation",
+  primaryItems: () => [],
+  tone: "default",
+  title: undefined,
+  background: undefined,
   projectItems: () => [],
   projectSectionLabel: "Проекты",
   secondaryProjectItems: () => [],
@@ -58,6 +67,14 @@ const props = withDefaults(defineProps<Props>(), {
   showToggle: true,
   reserveTopInset: true,
 });
+
+const slots = useSlots();
+const hasPanelTitleBar = computed(
+  () => Boolean(props.title) || Boolean(slots["title-leading"]) || Boolean(slots["title-trailing"]),
+);
+const panelStyle = computed(() => ({
+  "--kosmos-settings-sidebar-bg": props.background ?? "var(--sidebar-bg, var(--bg-app, #1d1d1f))",
+}));
 
 const emit = defineEmits<{
   configChange: [config: SidebarConfig];
@@ -164,7 +181,9 @@ const groupedProjectSections = computed<SidebarProjectGroup[]>(() => {
 });
 
 const hasProjectGroups = computed(() => groupedProjectSections.value.length > 0);
-const hasTopBar = computed(() => props.showToggle || Boolean(props.topItem));
+const hasTopBar = computed(
+  () => props.showToggle || Boolean(props.topItem) || Boolean(props.title),
+);
 const shellClasses = computed(() => [
   "kosmos-sidebar-shell",
   "absolute inset-0 box-border flex h-full min-h-full w-full min-h-0 flex-col justify-between bg-(--sidebar-bg) p-2",
@@ -278,7 +297,7 @@ function matchesShortcut(e: KeyboardEvent, shortcut: string): boolean {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-  if (!props.toggleShortcut) return;
+  if (props.mode !== "navigation" || !props.toggleShortcut) return;
 
   const shortcuts = props.toggleShortcut.split("|");
   if (!shortcuts.some((shortcut) => matchesShortcut(e, shortcut))) return;
@@ -356,7 +375,7 @@ watch(isResizing, (resizing) => {
 });
 
 onMounted(() => {
-  window.addEventListener("keydown", handleKeydown);
+  if (props.mode === "navigation") window.addEventListener("keydown", handleKeydown);
 });
 
 onUnmounted(() => {
@@ -369,8 +388,9 @@ onUnmounted(() => {
 });
 
 const wrapperStyle = computed(() => {
-  if (_hidden.value) return { width: "0px" };
-  return { width: `${width.value}px` };
+  const background = props.background ? { "--sidebar-bg": props.background } : {};
+  if (_hidden.value) return { width: "0px", ...background };
+  return { width: `${width.value}px`, ...background };
 });
 
 const wrapperClasses = computed(() =>
@@ -388,15 +408,52 @@ const wrapperClasses = computed(() =>
 </script>
 
 <template>
-  <div :class="wrapperClasses" :style="wrapperStyle" data-testid="kosmos-sidebar">
+  <aside
+    v-if="props.mode === 'panel'"
+    class="kosmos-settings-sidebar box-border flex h-full w-[228px] min-w-[228px] flex-col gap-4 border-r border-[var(--border-color-strong)] bg-[var(--kosmos-settings-sidebar-bg)] text-white"
+    :data-tone="props.tone"
+    :style="panelStyle"
+  >
+    <div
+      v-if="hasPanelTitleBar"
+      class="kosmos-settings-sidebar__title flex items-center font-[var(--font-sans)] text-[length:var(--kosmos-text-caption-size)] leading-[1.4] font-medium [-webkit-app-region:drag]"
+    >
+      <div
+        v-if="$slots['title-leading']"
+        class="inline-flex shrink-0 items-center [-webkit-app-region:no-drag]"
+      >
+        <slot name="title-leading" />
+      </div>
+      <span v-if="props.title" class="min-w-0 truncate px-1">{{ props.title }}</span>
+      <div
+        v-if="$slots['title-trailing']"
+        class="ml-auto inline-flex shrink-0 items-center [-webkit-app-region:no-drag]"
+      >
+        <slot name="title-trailing" />
+      </div>
+    </div>
+    <div
+      class="kosmos-settings-sidebar__content flex min-h-0 flex-1 flex-col gap-6 [-webkit-app-region:no-drag]"
+    >
+      <slot />
+    </div>
+  </aside>
+
+  <div v-else :class="wrapperClasses" :style="wrapperStyle" data-testid="kosmos-sidebar">
     <div
       class="kosmos-sidebar-content absolute inset-0 flex min-h-0 min-w-0 overflow-hidden bg-(--sidebar-bg) opacity-100 transition-[opacity,background,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
     >
       <aside v-if="!_hidden" :class="shellClasses">
         <div
           v-if="hasTopBar"
-          class="kosmos-sidebar-top relative z-[1] flex items-center justify-end pb-4"
+          :class="[
+            'kosmos-sidebar-top relative z-[1] flex items-center justify-end pb-4',
+            { 'kosmos-sidebar-top--titled': props.title },
+          ]"
         >
+          <span v-if="props.title" class="kosmos-sidebar-title mr-auto min-w-0 truncate px-1">
+            {{ props.title }}
+          </span>
           <button
             v-if="props.topItem"
             type="button"
@@ -438,6 +495,8 @@ const wrapperClasses = computed(() =>
               'onClick' in item && typeof item.onClick === 'function' ? item.onClick() : undefined
             "
           />
+
+          <slot />
 
           <template v-if="hasProjectGroups">
             <div class="mt-4 grid gap-4">
@@ -587,6 +646,25 @@ const wrapperClasses = computed(() =>
 </template>
 
 <style scoped>
+.kosmos-settings-sidebar__title {
+  box-sizing: border-box;
+  height: calc(
+    env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kosmos-settings-titlebar-height))
+  );
+  min-height: calc(
+    env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kosmos-settings-titlebar-height))
+  );
+  gap: var(--kosmos-titlebar-control-gap);
+  border-bottom: 1px solid var(--border-color-strong);
+  padding: env(titlebar-area-y, 0px) 10px 0;
+}
+
+.kosmos-settings-sidebar__title :deep([data-testid="sidebar-header"]) {
+  height: 100%;
+  align-items: center;
+  gap: var(--kosmos-titlebar-control-gap);
+}
+
 .kosmos-sidebar-shell::before {
   content: "";
   position: absolute;
@@ -618,6 +696,27 @@ const wrapperClasses = computed(() =>
 
 .kosmos-sidebar-top-toggle {
   -webkit-app-region: no-drag;
+}
+
+.kosmos-sidebar-top--titled {
+  box-sizing: border-box;
+  height: calc(
+    env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kosmos-settings-titlebar-height))
+  );
+  min-height: calc(
+    env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kosmos-settings-titlebar-height))
+  );
+  margin: -0.5rem -0.5rem 0.5rem;
+  border-bottom: 1px solid var(--border-color-strong);
+  padding: env(titlebar-area-y, 0px) 10px 0;
+}
+
+.kosmos-sidebar-title {
+  color: var(--sidebar-foreground);
+  font-family: var(--font-sans);
+  font-size: var(--kosmos-text-caption-size);
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .kosmos-sidebar-shell--mac-safe-top.kosmos-sidebar-shell--with-top-bar .kosmos-sidebar-body {

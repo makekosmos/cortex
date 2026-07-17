@@ -3,7 +3,8 @@ import type { Component } from "vue";
 import { RouterLink } from "vue-router";
 
 const props = defineProps<{
-  icon: Component;
+  icon?: Component;
+  iconImage?: string;
   to?: string;
   label?: string;
   active?: boolean;
@@ -32,7 +33,8 @@ function className(active: boolean) {
       :title="label"
       @click="navigate"
     >
-      <component :is="icon" :size="24" />
+      <img v-if="iconImage" :src="iconImage" alt="" class="size-6 shrink-0 object-contain" />
+      <component v-else-if="icon" :is="icon" :size="24" />
       <span v-if="label" class="min-w-0 flex-1 truncate text-left">{{ label }}</span>
     </a>
   </RouterLink>
@@ -44,7 +46,8 @@ function className(active: boolean) {
     :title="label"
     @click="emit('click')"
   >
-    <component :is="icon" :size="24" />
+    <img v-if="iconImage" :src="iconImage" alt="" class="size-6 shrink-0 object-contain" />
+    <component v-else-if="icon" :is="icon" :size="24" />
     <span v-if="label" class="min-w-0 flex-1 truncate text-left">{{ label }}</span>
   </button>
 </template>
