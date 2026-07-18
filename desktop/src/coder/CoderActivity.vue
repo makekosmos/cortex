@@ -103,6 +103,7 @@ h2 {
 
 .activity-grid {
   display: grid;
+  aspect-ratio: 53 / 7;
   grid-auto-flow: column;
   grid-template-rows: repeat(7, 1fr);
   grid-template-columns: repeat(53, minmax(6px, 1fr));
@@ -129,15 +130,15 @@ h2 {
 }
 
 .level-1 {
-  background: color-mix(in srgb, var(--accent) 28%, transparent) !important;
+  background: color-mix(in srgb, var(--coder-accent) 22%, transparent) !important;
 }
 .level-2 {
-  background: color-mix(in srgb, var(--accent) 48%, transparent) !important;
+  background: color-mix(in srgb, var(--coder-accent) 38%, transparent) !important;
 }
 .level-3 {
-  background: color-mix(in srgb, var(--accent) 70%, transparent) !important;
+  background: color-mix(in srgb, var(--coder-accent) 56%, transparent) !important;
 }
 .level-4 {
-  background: var(--accent) !important;
+  background: color-mix(in srgb, var(--coder-accent) 76%, transparent) !important;
 }
 </style>

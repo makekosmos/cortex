@@ -832,7 +832,10 @@ fn leetcode_page_reached_cutoff(items: &[Value], cutoff: Option<DateTime<Utc>>) 
     })
 }
 
-fn leetcode_submission_object(submission: &Value) -> Result<Value, String> {
+fn leetcode_submission_object(
+    submission: &Value,
+    question_numbers: &HashMap<String, String>,
+) -> Result<Value, String> {
     let external_id = submission
         .get("id")
         .and_then(Value::as_str)
@@ -845,6 +848,10 @@ fn leetcode_submission_object(submission: &Value) -> Result<Value, String> {
         .get("statusDisplay")
         .and_then(Value::as_str)
         .unwrap_or("Unknown");
+    let slug = submission
+        .get("titleSlug")
+        .and_then(Value::as_str)
+        .unwrap_or("");
     let timestamp = leetcode_submission_timestamp(submission)
         .map(|value| value.to_rfc3339())
         .ok_or("LeetCode submission без корректной даты")?;
@@ -863,7 +870,8 @@ fn leetcode_submission_object(submission: &Value) -> Result<Value, String> {
             "source": "leetcode",
             "externalId": external_id,
             "problemTitle": title,
-            "problemSlug": submission.get("titleSlug").cloned().unwrap_or(Value::Null),
+            "problemSlug": slug,
+            "problemNumber": question_numbers.get(slug).cloned().unwrap_or_default(),
             "status": status,
             "accepted": status == "Accepted",
             "language": submission.get("lang").cloned().unwrap_or(Value::Null),
@@ -876,6 +884,103 @@ fn leetcode_submission_object(submission: &Value) -> Result<Value, String> {
         "updatedAt": timestamp,
         "deletedAt": null,
     }))
+}
+
+fn leetcode_question_numbers_query(slugs: &[String]) -> Value {
+    let declarations = slugs
+        .iter()
+        .enumerate()
+        .map(|(index, _)| format!("$slug{index}: String!"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let fields = slugs
+        .iter()
+        .enumerate()
+        .map(|(index, _)| {
+            format!("q{index}: question(titleSlug: $slug{index}) {{ questionFrontendId }}")
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    let variables = slugs
+        .iter()
+        .enumerate()
+        .map(|(index, slug)| (format!("slug{index}"), json!(slug)))
+        .collect::<serde_json::Map<_, _>>();
+    json!({
+        "query": format!("query questionNumbers({declarations}) {{ {fields} }}"),
+        "variables": variables,
+    })
+}
+
+async fn fetch_leetcode_question_numbers(
+    client: &reqwest::Client,
+    secret: &str,
+    submissions: &[Value],
+) -> Result<HashMap<String, String>, String> {
+    let mut slugs = submissions
+        .iter()
+        .filter_map(|submission| submission.get("titleSlug").and_then(Value::as_str))
+        .filter(|slug| {
+            slug.chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || ch == '-')
+        })
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    slugs.sort();
+    slugs.dedup();
+
+    let mut numbers = HashMap::new();
+    for chunk in slugs.chunks(40) {
+        let response = leetcode_request(client, secret, leetcode_question_numbers_query(chunk))?
+            .send()
+            .await
+            .map_err(|error| format!("LeetCode: {error}"))?;
+        if !response.status().is_success() {
+            return Err(format!("LeetCode вернул HTTP {}", response.status()));
+        }
+        let body: Value = response
+            .json()
+            .await
+            .map_err(|error| format!("Некорректный ответ LeetCode: {error}"))?;
+        for (index, slug) in chunk.iter().enumerate() {
+            if let Some(number) = body
+                .pointer(&format!("/data/q{index}/questionFrontendId"))
+                .and_then(Value::as_str)
+            {
+                numbers.insert(slug.clone(), number.to_string());
+            }
+        }
+    }
+    Ok(numbers)
+}
+
+fn leetcode_objects_need_question_number_backfill(objects: &Value) -> bool {
+    objects.as_array().is_some_and(|objects| {
+        objects.iter().any(|object| {
+            object
+                .get("deletedAt")
+                .or_else(|| object.get("deleted_at"))
+                .is_none_or(Value::is_null)
+                && object
+                    .get("propsJson")
+                    .or_else(|| object.get("props_json"))
+                    .and_then(Value::as_object)
+                    .is_some_and(|props| {
+                        props.get("source").and_then(Value::as_str) == Some("leetcode")
+                            && !props.contains_key("problemNumber")
+                    })
+        })
+    })
+}
+
+async fn leetcode_needs_question_number_backfill(ark: &ArkHost) -> Result<bool, String> {
+    let objects = ark_request(
+        ark,
+        "list_objects_by_type",
+        json!({ "type_id": CODING_SUBMISSION_TYPE_ID }),
+    )
+    .await?;
+    Ok(leetcode_objects_need_question_number_backfill(&objects))
 }
 
 fn leetcode_count(rows: &Value, difficulty: &str) -> u64 {
@@ -1045,12 +1150,18 @@ async fn sync_leetcode(
     started_at: &str,
 ) -> Result<u64, String> {
     let client = http_client()?;
-    let cutoff = settings
-        .last_success_at
-        .as_deref()
-        .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
-        .map(|value| value.with_timezone(&Utc) - ChronoDuration::days(1));
+    let needs_number_backfill = leetcode_needs_question_number_backfill(ark).await?;
+    let cutoff = if needs_number_backfill {
+        None
+    } else {
+        settings
+            .last_success_at
+            .as_deref()
+            .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
+            .map(|value| value.with_timezone(&Utc) - ChronoDuration::days(1))
+    };
     let submissions = fetch_leetcode_submissions(&client, secret, cutoff).await?;
+    let question_numbers = fetch_leetcode_question_numbers(&client, secret, &submissions).await?;
     let profile = fetch_leetcode_profile(&client, secret, started_at).await?;
     ensure_object_type(
         ark,
@@ -1072,7 +1183,7 @@ async fn sync_leetcode(
         ark_request(
             ark,
             "upsert_object",
-            json!({ "object": leetcode_submission_object(&submission)? }),
+            json!({ "object": leetcode_submission_object(&submission, &question_numbers)? }),
         )
         .await?;
         imported += 1;
@@ -1516,22 +1627,57 @@ mod tests {
 
     #[test]
     fn leetcode_mapping_keeps_attempt_metadata_without_code() {
-        let submission = leetcode_submission_object(&json!({
-            "id": "1972542025",
-            "title": "Contains Duplicate",
-            "titleSlug": "contains-duplicate",
-            "statusDisplay": "Wrong Answer",
-            "lang": "javascript",
-            "timestamp": "1775606400",
-            "url": "/submissions/detail/1972542025/",
-            "runtime": "N/A",
-            "memory": "N/A"
-        }))
+        let submission = leetcode_submission_object(
+            &json!({
+                "id": "1972542025",
+                "title": "Contains Duplicate",
+                "titleSlug": "contains-duplicate",
+                "statusDisplay": "Wrong Answer",
+                "lang": "javascript",
+                "timestamp": "1775606400",
+                "url": "/submissions/detail/1972542025/",
+                "runtime": "N/A",
+                "memory": "N/A"
+            }),
+            &HashMap::from([("contains-duplicate".to_string(), "217".to_string())]),
+        )
         .expect("map submission");
         assert_eq!(submission["id"], "leetcode-submission:1972542025");
         assert_eq!(submission["propsJson"]["status"], "Wrong Answer");
         assert_eq!(submission["propsJson"]["accepted"], false);
+        assert_eq!(submission["propsJson"]["problemNumber"], "217");
         assert!(submission["propsJson"].get("code").is_none());
+    }
+
+    #[test]
+    fn leetcode_question_number_query_batches_slugs() {
+        let query = leetcode_question_numbers_query(&[
+            "two-sum".to_string(),
+            "contains-duplicate".to_string(),
+        ]);
+        assert_eq!(query["variables"]["slug0"], "two-sum");
+        assert_eq!(query["variables"]["slug1"], "contains-duplicate");
+        assert!(query["query"]
+            .as_str()
+            .is_some_and(|value| value.contains("q1: question(titleSlug: $slug1)")));
+    }
+
+    #[test]
+    fn leetcode_question_number_backfill_reads_ark_object_shape() {
+        assert!(leetcode_objects_need_question_number_backfill(&json!([{
+            "deletedAt": null,
+            "propsJson": {
+                "source": "leetcode",
+                "problemTitle": "Two Sum"
+            }
+        }])));
+        assert!(!leetcode_objects_need_question_number_backfill(&json!([{
+            "deleted_at": null,
+            "props_json": {
+                "source": "leetcode",
+                "problemNumber": "1"
+            }
+        }])));
     }
 
     #[test]

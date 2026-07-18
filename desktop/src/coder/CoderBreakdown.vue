@@ -79,6 +79,6 @@ p {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--accent);
+  background: var(--coder-accent);
 }
 </style>

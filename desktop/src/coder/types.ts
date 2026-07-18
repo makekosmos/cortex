@@ -2,6 +2,7 @@ export interface CodingSubmission {
   id: string;
   problemTitle: string;
   problemSlug: string;
+  problemNumber: string;
   status: string;
   accepted: boolean;
   language: string;

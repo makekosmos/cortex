@@ -155,11 +155,11 @@ onMounted(load);
 }
 
 .integration-grid {
+  --integration-border: color-mix(in srgb, var(--foreground) 14%, transparent);
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-top: 22px;
-  border-top: 1px solid var(--border);
-  border-left: 1px solid var(--border);
+  border: 1px solid var(--integration-border);
 }
 
 .integration-card {
@@ -171,8 +171,7 @@ onMounted(load);
   gap: 18px;
   padding: 24px;
   border: 0;
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--integration-border);
   border-radius: 0;
   background: transparent;
   color: var(--foreground);
@@ -180,6 +179,10 @@ onMounted(load);
   transition:
     background-color 140ms ease,
     color 140ms ease;
+}
+
+.integration-card:last-child {
+  border-right: 0;
 }
 
 .integration-card:hover {
@@ -212,6 +215,15 @@ onMounted(load);
 @media (max-width: 780px) {
   .integration-grid {
     grid-template-columns: 1fr;
+  }
+
+  .integration-card {
+    border-right: 0;
+    border-bottom: 1px solid var(--integration-border);
+  }
+
+  .integration-card:last-child {
+    border-bottom: 0;
   }
 }
 </style>
