@@ -2,9 +2,10 @@ import { describe, expect, test } from "bun:test";
 import {
   addLocalDays,
   breakdown,
+  codewarsProfileStats,
   localDayKey,
   profileDifficultyStats,
-  refreshLeetCodeStats,
+  refreshCoderStats,
   streaks,
 } from "./useCoderStats";
 
@@ -54,14 +55,38 @@ describe("coder statistics", () => {
     // Regression: 2026-07-18. The Coder refresh button only reread ARK, so a missing
     // coding_profile_obj stayed missing forever.
     const calls: string[] = [];
-    await refreshLeetCodeStats(
+    await refreshCoderStats(
       async (operation, params) => {
         calls.push(`${operation}:${String(params.provider)}`);
       },
+      "leetcode",
       async () => {
         calls.push("load");
       },
     );
     expect(calls).toEqual(["integrations.sync_now:leetcode", "load"]);
+  });
+
+  test("reads Codewars public profile metrics", () => {
+    expect(
+      codewarsProfileStats([
+        {
+          id: "profile",
+          propsJson: {
+            source: "codewars",
+            username: "tester",
+            honor: 544,
+            leaderboardPosition: 134,
+            rank: { name: "3 kyu", score: 2116 },
+          },
+        },
+      ]),
+    ).toEqual({
+      username: "tester",
+      honor: 544,
+      leaderboardPosition: 134,
+      rankName: "3 kyu",
+      rankScore: 2116,
+    });
   });
 });

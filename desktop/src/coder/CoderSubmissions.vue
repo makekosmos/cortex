@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { CodingSubmission } from "./types";
+import type { CoderPlatform, CodingSubmission } from "./types";
 
-defineProps<{ submissions: CodingSubmission[] }>();
+defineProps<{ platform: CoderPlatform; submissions: CodingSubmission[] }>();
 const emit = defineEmits<{ open: [url: string] }>();
 
 const dateFormatter = new Intl.DateTimeFormat("ru", { dateStyle: "medium", timeStyle: "short" });
@@ -16,6 +16,7 @@ const statusLabels: Record<string, string> = {
   "Output Limit Exceeded": "Превышен лимит вывода",
   "Internal Error": "Внутренняя ошибка",
   Unknown: "Неизвестно",
+  Completed: "Завершено",
 };
 
 function statusLabel(status: string): string {
@@ -26,7 +27,7 @@ function problemNumber(value: string): string {
   return /^\d{1,4}$/.test(value) ? value.padStart(4, "0") : value || "—";
 }
 
-function problemUrl(slug: string): string {
+function leetcodeProblemUrl(slug: string): string {
   return slug ? `https://leetcode.com/problems/${encodeURIComponent(slug)}/` : "";
 }
 </script>
@@ -34,29 +35,29 @@ function problemUrl(slug: string): string {
 <template>
   <section class="submissions-panel">
     <header>
-      <h2>Последние отправки</h2>
+      <h2>{{ platform === "leetcode" ? "Последние отправки" : "Последние kata" }}</h2>
       <span>{{ submissions.length }}</span>
     </header>
     <div class="table-scroll kosmos-scroll">
       <table>
         <thead>
           <tr>
-            <th class="problem-number">№</th>
+            <th v-if="platform === 'leetcode'" class="problem-number">№</th>
             <th>Задача</th>
             <th>Результат</th>
             <th>Язык</th>
-            <th>Время</th>
-            <th>Память</th>
+            <th v-if="platform === 'leetcode'">Время</th>
+            <th v-if="platform === 'leetcode'">Память</th>
             <th>Дата</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="submission in submissions" :key="submission.id">
-            <td class="problem-number">
+            <td v-if="platform === 'leetcode'" class="problem-number">
               <a
-                v-if="submission.problemSlug"
-                :href="problemUrl(submission.problemSlug)"
-                @click.prevent="emit('open', problemUrl(submission.problemSlug))"
+                v-if="platform === 'leetcode' && submission.problemSlug"
+                :href="leetcodeProblemUrl(submission.problemSlug)"
+                @click.prevent="emit('open', leetcodeProblemUrl(submission.problemSlug))"
               >
                 {{ problemNumber(submission.problemNumber) }}
               </a>
@@ -72,9 +73,9 @@ function problemUrl(slug: string): string {
               </button>
             </td>
             <td :class="{ accepted: submission.accepted }">{{ statusLabel(submission.status) }}</td>
-            <td>{{ submission.language }}</td>
-            <td>{{ submission.runtime || "—" }}</td>
-            <td>{{ submission.memory || "—" }}</td>
+            <td>{{ submission.languages.join(", ") }}</td>
+            <td v-if="platform === 'leetcode'">{{ submission.runtime || "—" }}</td>
+            <td v-if="platform === 'leetcode'">{{ submission.memory || "—" }}</td>
             <td>{{ dateFormatter.format(new Date(submission.submittedAt)) }}</td>
           </tr>
         </tbody>

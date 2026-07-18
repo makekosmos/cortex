@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { Check, ExternalLink, LogIn, RefreshCw, Trash2 } from "@lucide/vue";
 import { Button, Toggle, useToast } from "@kosmos/visuals";
 
-type ProviderId = "hevy" | "toggl" | "leetcode";
+type ProviderId = "hevy" | "toggl" | "leetcode" | "codewars";
 
 const props = withDefaults(
   defineProps<{
@@ -51,7 +51,12 @@ const toast = useToast();
 const snapshot = ref<IntegrationsSnapshot | null>(null);
 const loading = ref(true);
 const error = ref("");
-const credentials = ref<Record<ProviderId, string>>({ hevy: "", toggl: "", leetcode: "" });
+const credentials = ref<Record<ProviderId, string>>({
+  hevy: "",
+  toggl: "",
+  leetcode: "",
+  codewars: "",
+});
 const busy = ref(new Set<string>());
 const providers = computed(() =>
   (snapshot.value?.providers ?? []).filter(
@@ -113,9 +118,13 @@ async function saveCredential(provider: ProviderSnapshot) {
       credential,
     });
     credentials.value[provider.id] = "";
-    toast.success(`${provider.label}: ключ проверен и сохранён`);
+    toast.success(
+      provider.id === "codewars"
+        ? "Codewars: профиль проверен и сохранён"
+        : `${provider.label}: ключ проверен и сохранён`,
+    );
   } catch (cause) {
-    toast.error(cause instanceof Error ? cause.message : "Ключ не прошёл проверку");
+    toast.error(cause instanceof Error ? cause.message : "Данные не прошли проверку");
   } finally {
     setBusy(provider.id, "credential", false);
   }
@@ -131,7 +140,7 @@ async function clearCredential(provider: ProviderSnapshot) {
             provider: provider.id,
           });
     credentials.value[provider.id] = "";
-    toast.success(`${provider.label}: ключ удалён`);
+    toast.success(`${provider.label}: подключение удалено`);
   } catch (cause) {
     toast.error(cause instanceof Error ? cause.message : "Не удалось удалить ключ");
   } finally {
@@ -185,7 +194,8 @@ onMounted(load);
   <div class="integrations-page kosmos-scroll" :class="{ 'integrations-page--compact': compact }">
     <p v-if="!compact" class="integrations-intro">
       Данные импортируются в общую базу Kosmos. Ключи остаются в защищённом хранилище этого
-      устройства. Для LeetCode сохраняется только сессия входа, код решений не загружается.
+      устройства. Для LeetCode сохраняется только сессия входа, а Codewars подключается по
+      публичному имени пользователя. Код решений не загружается.
     </p>
 
     <div v-if="loading" class="integrations-message">Загрузка…</div>
@@ -203,7 +213,9 @@ onMounted(load);
                 ? "Тренировки и упражнения"
                 : provider.id === "toggl"
                   ? "Записи учёта времени"
-                  : "Задачи и история отправок"
+                  : provider.id === "leetcode"
+                    ? "Задачи и история отправок"
+                    : "Профиль и завершённые kata"
             }}
           </p>
         </div>
@@ -214,7 +226,9 @@ onMounted(load);
               ? "Подключено"
               : provider.id === "leetcode"
                 ? "Нужен вход"
-                : "Нужен ключ"
+                : provider.id === "codewars"
+                  ? "Нужно имя"
+                  : "Нужен ключ"
           }}
         </span>
       </header>
@@ -255,10 +269,16 @@ onMounted(load);
         <div class="credential-row">
           <input
             v-model="credentials[provider.id]"
-            type="password"
+            :type="provider.id === 'codewars' ? 'text' : 'password'"
             autocomplete="off"
             :placeholder="
-              provider.hasCredential ? 'Введите новый ключ для замены' : 'Вставьте ключ'
+              provider.id === 'codewars'
+                ? provider.hasCredential
+                  ? 'Введите другое имя пользователя'
+                  : 'Имя пользователя Codewars'
+                : provider.hasCredential
+                  ? 'Введите новый ключ для замены'
+                  : 'Вставьте ключ'
             "
             :aria-label="`${provider.credentialLabel} для ${provider.label}`"
             @keydown.enter="saveCredential(provider)"
@@ -275,7 +295,7 @@ onMounted(load);
             v-if="provider.hasCredential"
             variant="danger"
             size="sm"
-            aria-label="Удалить ключ"
+            aria-label="Удалить подключение"
             :disabled="isBusy(provider.id, 'credential')"
             @click="clearCredential(provider)"
           >
@@ -307,7 +327,9 @@ onMounted(load);
         {{
           provider.id === "leetcode"
             ? "При первом импорте загружается вся доступная история отправок. Затем — данные с последней успешной синхронизации с перекрытием в сутки. Записи обновляются по ID без дублей; код решений не запрашивается. Первый импорт может занять несколько минут."
-            : "При первом импорте загружается вся доступная история. Затем — только изменения после последней успешной синхронизации. Записи сопоставляются по ID сервиса без создания дублей; изменённые в сервисе записи обновляют импортированные поля в Kosmos."
+            : provider.id === "codewars"
+              ? "При первом импорте загружается вся доступная история завершённых kata. Затем — новые завершения с перекрытием в сутки. Записи обновляются по ID без дублей; решения и неудачные попытки публичный API не отдаёт."
+              : "При первом импорте загружается вся доступная история. Затем — только изменения после последней успешной синхронизации. Записи сопоставляются по ID сервиса без создания дублей; изменённые в сервисе записи обновляют импортированные поля в Kosmos."
         }}
       </p>
 

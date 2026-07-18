@@ -1,9 +1,12 @@
 import { computed, onBeforeUnmount, onMounted, shallowRef } from "vue";
+import type { Ref } from "vue";
 import type {
+  CoderPlatform,
   CoderActivityDay,
   CoderBreakdownItem,
   CoderDifficultyStats,
   CoderSummary,
+  CodewarsProfileStats,
   CodingSubmission,
 } from "./types";
 
@@ -32,16 +35,25 @@ function text(value: unknown): string {
 function toSubmission(record: RawObjectRecord): CodingSubmission | null {
   if (record.deletedAt) return null;
   const props = objectValue(record.propsJson);
+  const source = text(props.source);
+  if (source !== "leetcode" && source !== "codewars") return null;
   const submittedAt = text(props.submittedAt);
   if (!submittedAt || Number.isNaN(Date.parse(submittedAt))) return null;
+  const languages = Array.isArray(props.languages)
+    ? props.languages.filter((value): value is string => typeof value === "string" && !!value)
+    : [];
+  const language = text(props.language) || "Неизвестно";
   return {
     id: record.id,
+    source,
+    username: text(props.username),
     problemTitle: text(props.problemTitle) || "Задача",
     problemSlug: text(props.problemSlug),
     problemNumber: text(props.problemNumber),
     status: text(props.status) || "Неизвестно",
     accepted: props.accepted === true,
-    language: text(props.language) || "Неизвестно",
+    language,
+    languages: languages.length > 0 ? languages : [language],
     runtime: text(props.runtime),
     memory: text(props.memory),
     submittedAt,
@@ -113,20 +125,52 @@ export function profileDifficultyStats(records: RawObjectRecord[]): CoderDifficu
   };
 }
 
-export async function refreshLeetCodeStats(request: ArkRequest, load: () => Promise<void>) {
+export function codewarsProfileStats(records: RawObjectRecord[]): CodewarsProfileStats {
+  const profile = records.find((record) => {
+    const props = objectValue(record.propsJson);
+    return !record.deletedAt && props.source === "codewars";
+  });
+  const props = objectValue(profile?.propsJson);
+  const rank = objectValue(props.rank);
+  return {
+    username: text(props.username),
+    honor: count(props.honor),
+    leaderboardPosition: count(props.leaderboardPosition),
+    rankName: text(rank.name),
+    rankScore: count(rank.score),
+  };
+}
+
+export async function refreshCoderStats(
+  request: ArkRequest,
+  provider: CoderPlatform,
+  load: () => Promise<void>,
+) {
   // См. postmortems.md § 2026-07-18: local reload не создаёт профиль сложности.
-  await request("integrations.sync_now", { provider: "leetcode" });
+  await request("integrations.sync_now", { provider });
   await load();
 }
 
-export function useCoderStats() {
-  const submissions = shallowRef<CodingSubmission[]>([]);
-  const difficulties = shallowRef<CoderDifficultyStats>(profileDifficultyStats([]));
+export function useCoderStats(platform: Ref<CoderPlatform>) {
+  const allSubmissions = shallowRef<CodingSubmission[]>([]);
+  const profiles = shallowRef<RawObjectRecord[]>([]);
   const loading = shallowRef(true);
   const refreshing = shallowRef(false);
   const error = shallowRef("");
   let unsubscribe: (() => void) | null = null;
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const difficulties = computed(() => profileDifficultyStats(profiles.value));
+  const codewarsProfile = computed(() => codewarsProfileStats(profiles.value));
+  const submissions = computed(() =>
+    allSubmissions.value.filter(
+      (submission) =>
+        submission.source === platform.value &&
+        (platform.value !== "codewars" ||
+          submission.username.toLocaleLowerCase() ===
+            codewarsProfile.value.username.toLocaleLowerCase()),
+    ),
+  );
 
   const activeDays = computed(
     () =>
@@ -149,8 +193,8 @@ export function useCoderStats() {
   });
   const languages = computed(() =>
     breakdown(
-      submissions.value.map((submission) => submission.language),
-      submissions.value.length,
+      submissions.value.flatMap((submission) => submission.languages),
+      submissions.value.reduce((total, submission) => total + submission.languages.length, 0),
     ),
   );
   const statuses = computed(() =>
@@ -180,7 +224,7 @@ export function useCoderStats() {
     loading.value = true;
     error.value = "";
     try {
-      const [records, profiles] = await Promise.all([
+      const [records, profileRecords] = await Promise.all([
         window.kepler.ark.request<RawObjectRecord[]>("list_objects_by_type", {
           type_id: CODING_SUBMISSION_TYPE_ID,
         }),
@@ -188,15 +232,15 @@ export function useCoderStats() {
           type_id: CODING_PROFILE_TYPE_ID,
         }),
       ]);
-      submissions.value = records
+      allSubmissions.value = records
         .map(toSubmission)
         .filter((submission): submission is CodingSubmission => submission !== null)
         .sort((left, right) => Date.parse(right.submittedAt) - Date.parse(left.submittedAt));
-      difficulties.value = profileDifficultyStats(profiles);
+      profiles.value = profileRecords;
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : "Не удалось загрузить статистику";
-      submissions.value = [];
-      difficulties.value = profileDifficultyStats([]);
+      allSubmissions.value = [];
+      profiles.value = [];
     } finally {
       loading.value = false;
     }
@@ -206,9 +250,9 @@ export function useCoderStats() {
     refreshing.value = true;
     error.value = "";
     try {
-      await refreshLeetCodeStats(window.kepler.ark.request, load);
+      await refreshCoderStats(window.kepler.ark.request, platform.value, load);
     } catch (cause) {
-      error.value = cause instanceof Error ? cause.message : "Не удалось обновить LeetCode";
+      error.value = cause instanceof Error ? cause.message : "Не удалось обновить статистику";
     } finally {
       refreshing.value = false;
     }
@@ -244,6 +288,7 @@ export function useCoderStats() {
 
   return {
     activity,
+    codewarsProfile,
     difficulties,
     error,
     languages,

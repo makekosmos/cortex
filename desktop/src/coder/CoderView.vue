@@ -7,9 +7,12 @@ import CoderBreakdown from "./CoderBreakdown.vue";
 import CoderDifficultyGauge from "./CoderDifficultyGauge.vue";
 import CoderSubmissions from "./CoderSubmissions.vue";
 import { useCoderStats } from "./useCoderStats";
+import type { CoderPlatform } from "./types";
 
+const platform = shallowRef<CoderPlatform>("leetcode");
 const {
   activity,
+  codewarsProfile,
   difficulties,
   error,
   languages,
@@ -20,8 +23,13 @@ const {
   summary,
   load,
   refresh,
-} = useCoderStats();
-const platform = shallowRef<"leetcode" | "codewars">("leetcode");
+} = useCoderStats(platform);
+
+const pageDescription = computed(() =>
+  platform.value === "leetcode"
+    ? "Статистика задач и отправок LeetCode."
+    : "Статистика завершённых kata и профиля Codewars.",
+);
 
 const statusLabels: Record<string, string> = {
   Accepted: "Принято",
@@ -33,6 +41,7 @@ const statusLabels: Record<string, string> = {
   "Output Limit Exceeded": "Лимит вывода",
   "Internal Error": "Внутренняя ошибка",
   Unknown: "Неизвестно",
+  Completed: "Завершено",
 };
 
 const localizedStatuses = computed(() =>
@@ -50,7 +59,7 @@ function openExternal(url: string): void {
       <header class="coder-header">
         <div>
           <h1>Кодер</h1>
-          <p>Статистика задач и отправок LeetCode.</p>
+          <p>{{ pageDescription }}</p>
         </div>
         <Button variant="ghost" size="sm" :loading="loading || refreshing" @click="refresh">
           <template #icon><RefreshCw :size="13" /></template>
@@ -67,22 +76,26 @@ function openExternal(url: string): void {
         </button>
       </nav>
 
-      <template v-if="platform === 'leetcode'">
-        <EmptyState v-if="loading" title="Собираю статистику…" compact />
-        <EmptyState v-else-if="error" :title="error" compact>
-          <template #action><Button size="sm" @click="load">Повторить</Button></template>
-        </EmptyState>
-        <EmptyState
-          v-else-if="summary.submissions === 0"
-          title="Отправок пока нет"
-          description="Подключите LeetCode в интеграциях и получите данные."
-          compact
-        >
-          <template #icon><Code2 :size="22" /></template>
-        </EmptyState>
+      <EmptyState v-if="loading" title="Собираю статистику…" compact />
+      <EmptyState v-else-if="error" :title="error" compact>
+        <template #action><Button size="sm" @click="load">Повторить</Button></template>
+      </EmptyState>
+      <EmptyState
+        v-else-if="summary.submissions === 0"
+        :title="platform === 'leetcode' ? 'Отправок пока нет' : 'Завершённых kata пока нет'"
+        :description="
+          platform === 'leetcode'
+            ? 'Подключите LeetCode в интеграциях и получите данные.'
+            : 'Подключите профиль Codewars в интеграциях и получите данные.'
+        "
+        compact
+      >
+        <template #icon><Code2 :size="22" /></template>
+      </EmptyState>
 
-        <template v-else>
-          <section class="summary-grid" aria-label="Сводка">
+      <template v-else>
+        <section class="summary-grid" aria-label="Сводка">
+          <template v-if="platform === 'leetcode'">
             <article>
               <span>Решено</span><strong>{{ summary.solved }}</strong>
             </article>
@@ -102,23 +115,42 @@ function openExternal(url: string): void {
             <article>
               <span>Лучшая серия</span><strong>{{ summary.longestStreak }} дн.</strong>
             </article>
-          </section>
+          </template>
+          <template v-else>
+            <article>
+              <span>Завершено</span><strong>{{ summary.solved }}</strong>
+            </article>
+            <article>
+              <span>Ранг</span><strong>{{ codewarsProfile.rankName || "—" }}</strong>
+            </article>
+            <article>
+              <span>Honor</span><strong>{{ codewarsProfile.honor }}</strong>
+            </article>
+            <article>
+              <span>В рейтинге</span
+              ><strong>{{ codewarsProfile.leaderboardPosition || "—" }}</strong>
+            </article>
+            <article>
+              <span>Серия</span><strong>{{ summary.currentStreak }} дн.</strong>
+            </article>
+            <article>
+              <span>Лучшая серия</span><strong>{{ summary.longestStreak }} дн.</strong>
+            </article>
+          </template>
+        </section>
 
-          <CoderDifficultyGauge :stats="difficulties" />
-          <CoderActivity :days="activity" />
-          <div class="breakdown-grid">
-            <CoderBreakdown title="Языки" :items="languages" />
-            <CoderBreakdown title="Результаты" :items="localizedStatuses" />
-          </div>
-          <CoderSubmissions :submissions="recent" @open="openExternal" />
-        </template>
+        <CoderDifficultyGauge v-if="platform === 'leetcode'" :stats="difficulties" />
+        <CoderActivity :days="activity" />
+        <div class="breakdown-grid" :class="{ 'breakdown-grid--single': platform === 'codewars' }">
+          <CoderBreakdown title="Языки" :items="languages" />
+          <CoderBreakdown
+            v-if="platform === 'leetcode'"
+            title="Результаты"
+            :items="localizedStatuses"
+          />
+        </div>
+        <CoderSubmissions :platform="platform" :submissions="recent" @open="openExternal" />
       </template>
-      <EmptyState
-        v-else
-        title="Codewars пока не подключён"
-        description="Подключение добавим следующим шагом."
-        compact
-      />
     </div>
   </main>
 </template>
@@ -245,6 +277,10 @@ function openExternal(url: string): void {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin: 14px 0;
+}
+
+.breakdown-grid--single {
+  grid-template-columns: 1fr;
 }
 
 @media (max-width: 640px) {
