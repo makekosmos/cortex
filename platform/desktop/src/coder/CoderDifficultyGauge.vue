@@ -5,21 +5,26 @@ import type { CoderDifficultyStats } from "./types";
 const props = defineProps<{ stats: CoderDifficultyStats }>();
 
 const segments = computed(() => {
+  let offset = 0;
   return [
-    { key: "easy", count: props.stats.easy, total: props.stats.easyTotal },
-    { key: "medium", count: props.stats.medium, total: props.stats.mediumTotal },
-    { key: "hard", count: props.stats.hard, total: props.stats.hardTotal },
-  ].map((segment, index) => {
-    const length = segment.total > 0 ? Math.min(31, (segment.count / segment.total) * 31) : 0;
-    return {
-      ...segment,
-      style: {
-        strokeDasharray: `${length} ${100 - length}`,
-        strokeDashoffset: `${index * -34.5}`,
-        animationDelay: `${index * 100}ms`,
-      },
-    };
-  });
+    { key: "easy", label: "Лёгкие", count: props.stats.easy },
+    { key: "medium", label: "Средние", count: props.stats.medium },
+    { key: "hard", label: "Сложные", count: props.stats.hard },
+  ]
+    .map((segment, index) => {
+      const share = props.stats.total > 0 ? (segment.count / props.stats.total) * 100 : 0;
+      const result = {
+        ...segment,
+        style: {
+          strokeDasharray: `${Math.max(0, share - 1.5)} ${100 - Math.max(0, share - 1.5)}`,
+          strokeDashoffset: `${-(offset + 0.75)}`,
+          animationDelay: `${index * 100}ms`,
+        },
+      };
+      offset += share;
+      return result;
+    })
+    .filter((segment) => segment.count > 0);
 });
 </script>
 
@@ -31,14 +36,7 @@ const segments = computed(() => {
     </div>
     <div class="gauge-chart">
       <svg viewBox="0 0 200 112" role="img" aria-label="Распределение сложности задач">
-        <path
-          v-for="index in 3"
-          :key="`track-${index}`"
-          :class="['gauge-track', `gauge-track--${index}`]"
-          :style="{ strokeDashoffset: `${(index - 1) * -34.5}` }"
-          pathLength="100"
-          d="M 20 100 A 80 80 0 0 1 180 100"
-        />
+        <path class="gauge-track" pathLength="100" d="M 20 100 A 80 80 0 0 1 180 100" />
         <path
           v-for="segment in segments"
           :key="segment.key"
@@ -46,12 +44,12 @@ const segments = computed(() => {
           :style="segment.style"
           pathLength="100"
           d="M 20 100 A 80 80 0 0 1 180 100"
-        />
+        >
+          <title>{{ segment.label }}: {{ segment.count }}</title>
+        </path>
       </svg>
       <div class="gauge-value">
-        <strong v-if="stats.available > 0"
-          >{{ stats.total }}<small>/{{ stats.available }}</small></strong
-        >
+        <strong v-if="stats.available > 0">{{ stats.total }}</strong>
         <strong v-else>Нет данных</strong>
         <span>Решено</span>
       </div>
@@ -117,11 +115,11 @@ const segments = computed(() => {
 .gauge-segment {
   fill: none;
   stroke-width: 13;
+  stroke-linecap: round;
 }
 
 .gauge-track {
   stroke: color-mix(in srgb, var(--foreground) 7%, transparent);
-  stroke-dasharray: 31 69;
 }
 
 .gauge-segment {
@@ -129,13 +127,13 @@ const segments = computed(() => {
 }
 
 .gauge-segment--easy {
-  stroke: var(--status-success);
+  stroke: var(--coder-easy);
 }
 .gauge-segment--medium {
-  stroke: var(--status-warning);
+  stroke: var(--coder-medium);
 }
 .gauge-segment--hard {
-  stroke: var(--destructive);
+  stroke: var(--coder-hard);
 }
 
 .gauge-value {
@@ -151,12 +149,6 @@ const segments = computed(() => {
 .gauge-value strong {
   color: var(--foreground);
   font-size: 1rem;
-}
-
-.gauge-value small {
-  color: var(--muted-foreground);
-  font-size: 0.6875rem;
-  font-weight: 500;
 }
 
 .gauge-value span,
@@ -190,13 +182,13 @@ const segments = computed(() => {
 }
 
 .difficulty-dot--easy {
-  background: var(--status-success);
+  background: var(--coder-easy);
 }
 .difficulty-dot--medium {
-  background: var(--status-warning);
+  background: var(--coder-medium);
 }
 .difficulty-dot--hard {
-  background: var(--destructive);
+  background: var(--coder-hard);
 }
 
 @keyframes gauge-reveal {

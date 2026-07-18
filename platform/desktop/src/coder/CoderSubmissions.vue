@@ -21,6 +21,14 @@ const statusLabels: Record<string, string> = {
 function statusLabel(status: string): string {
   return statusLabels[status] ?? status;
 }
+
+function problemNumber(value: string): string {
+  return /^\d{1,4}$/.test(value) ? value.padStart(4, "0") : value || "—";
+}
+
+function problemUrl(slug: string): string {
+  return slug ? `https://leetcode.com/problems/${encodeURIComponent(slug)}/` : "";
+}
 </script>
 
 <template>
@@ -33,6 +41,7 @@ function statusLabel(status: string): string {
       <table>
         <thead>
           <tr>
+            <th class="problem-number">№</th>
             <th>Задача</th>
             <th>Результат</th>
             <th>Язык</th>
@@ -43,6 +52,16 @@ function statusLabel(status: string): string {
         </thead>
         <tbody>
           <tr v-for="submission in submissions" :key="submission.id">
+            <td class="problem-number">
+              <a
+                v-if="submission.problemSlug"
+                :href="problemUrl(submission.problemSlug)"
+                @click.prevent="emit('open', problemUrl(submission.problemSlug))"
+              >
+                {{ problemNumber(submission.problemNumber) }}
+              </a>
+              <span v-else>{{ problemNumber(submission.problemNumber) }}</span>
+            </td>
             <td>
               <button
                 type="button"
@@ -99,7 +118,9 @@ table {
   width: 100%;
   border-collapse: collapse;
   color: var(--foreground);
+  font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -116,11 +137,19 @@ th {
   font-weight: 500;
 }
 
+.problem-number {
+  width: 1%;
+  padding-right: 8px;
+  color: var(--muted-foreground);
+  text-align: right;
+}
+
 tbody tr:last-child td {
   border-bottom: 0;
 }
 
-td button {
+td button,
+td a {
   max-width: 260px;
   overflow: hidden;
   border: 0;
@@ -132,12 +161,17 @@ td button {
   white-space: nowrap;
 }
 
-td button:not(:disabled):hover {
-  color: var(--accent);
+td a {
+  text-decoration: none;
+}
+
+td button:not(:disabled):hover,
+td a:hover {
+  color: var(--coder-accent);
   text-decoration: underline;
 }
 
 .accepted {
-  color: var(--accent);
+  color: var(--coder-accent);
 }
 </style>

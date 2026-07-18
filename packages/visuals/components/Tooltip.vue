@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { useId } from "vue";
+import { shallowRef, useId } from "vue";
 
 type TooltipPlacement = "top-start" | "top" | "top-end";
 
-withDefaults(
+defineOptions({ inheritAttrs: false });
+
+const props = withDefaults(
   defineProps<{
     text: string;
     placement?: TooltipPlacement;
@@ -16,19 +18,54 @@ withDefaults(
 );
 
 const tooltipId = useId();
+const visible = shallowRef(false);
+const left = shallowRef(0);
+const top = shallowRef(0);
+
+function show(event: Event): void {
+  const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  left.value =
+    props.placement === "top-start"
+      ? bounds.left
+      : props.placement === "top-end"
+        ? bounds.right
+        : bounds.left + bounds.width / 2;
+  top.value = bounds.top - 7;
+  visible.value = true;
+}
+
+function hide(): void {
+  visible.value = false;
+}
 </script>
 
 <template>
   <span
+    v-bind="$attrs"
     class="kosmos-tooltip"
     :class="`kosmos-tooltip--${placement}`"
     :tabindex="focusable ? 0 : undefined"
     :aria-label="focusable ? text : undefined"
     :aria-describedby="tooltipId"
+    @pointerenter="show"
+    @pointerleave="hide"
+    @focus="show"
+    @blur="hide"
   >
     <slot />
-    <span :id="tooltipId" class="kosmos-tooltip__content" role="tooltip">{{ text }}</span>
   </span>
+  <Teleport to="body">
+    <span
+      v-if="visible"
+      :id="tooltipId"
+      class="kosmos-tooltip__content"
+      :class="`kosmos-tooltip__content--${placement}`"
+      :style="{ left: `${left}px`, top: `${top}px` }"
+      role="tooltip"
+    >
+      {{ text }}
+    </span>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -38,10 +75,8 @@ const tooltipId = useId();
 }
 
 .kosmos-tooltip__content {
-  position: absolute;
-  z-index: 100;
-  bottom: calc(100% + 7px);
-  left: 50%;
+  position: fixed;
+  z-index: 1000;
   width: max-content;
   max-width: 220px;
   padding: 6px 8px;
@@ -51,36 +86,16 @@ const tooltipId = useId();
   color: var(--foreground);
   font-size: 0.6875rem;
   line-height: 1.35;
-  opacity: 0;
   pointer-events: none;
-  transform: translate(-50%, 2px);
-  transition:
-    opacity 100ms ease,
-    transform 100ms ease;
+  transform: translate(-50%, -100%);
   white-space: nowrap;
 }
 
-.kosmos-tooltip--top-start .kosmos-tooltip__content {
-  left: 0;
-  transform: translate(0, 2px);
+.kosmos-tooltip__content--top-start {
+  transform: translate(0, -100%);
 }
 
-.kosmos-tooltip--top-end .kosmos-tooltip__content {
-  right: 0;
-  left: auto;
-  transform: translate(0, 2px);
-}
-
-.kosmos-tooltip:hover .kosmos-tooltip__content,
-.kosmos-tooltip:focus-visible .kosmos-tooltip__content {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
-
-.kosmos-tooltip--top-start:hover .kosmos-tooltip__content,
-.kosmos-tooltip--top-start:focus-visible .kosmos-tooltip__content,
-.kosmos-tooltip--top-end:hover .kosmos-tooltip__content,
-.kosmos-tooltip--top-end:focus-visible .kosmos-tooltip__content {
-  transform: translate(0, 0);
+.kosmos-tooltip__content--top-end {
+  transform: translate(-100%, -100%);
 }
 </style>

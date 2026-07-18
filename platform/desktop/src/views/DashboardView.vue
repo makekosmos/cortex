@@ -191,9 +191,11 @@ function selectCoder(): void {
       </template>
 
       <div class="dashboard-body">
-        <IntegrationsView v-if="section === 'integrations'" />
-        <BodyView v-else-if="section === 'body'" />
-        <CoderView v-else-if="section === 'coder'" />
+        <KeepAlive v-if="section !== 'data'">
+          <IntegrationsView v-if="section === 'integrations'" />
+          <BodyView v-else-if="section === 'body'" />
+          <CoderView v-else-if="section === 'coder'" />
+        </KeepAlive>
         <UsageTable v-else-if="showUsage" :rows="usageRows" :loading="usageLoading" />
         <ObjectTable v-else :rows="objects" :loading="objectsLoading" />
       </div>

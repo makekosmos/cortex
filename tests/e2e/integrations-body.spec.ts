@@ -49,6 +49,22 @@ test("dashboard integration cards open the common provider controls in a modal",
     await expect(dashboard.getByTestId("integration-card-toggl")).toContainText("Не подключено");
     await expect(dashboard.getByTestId("integration-card-hevy").locator("img")).toBeVisible();
     await expect(dashboard.getByTestId("integration-card-toggl").locator("img")).toBeVisible();
+    const tileBorders = await dashboard.locator(".integration-grid").evaluate((grid) => {
+      const cards = [...grid.querySelectorAll<HTMLElement>(".integration-card")];
+      const style = getComputedStyle(grid);
+      return {
+        columns: style.gridTemplateColumns.split(" ").length,
+        outer: style.borderTopWidth,
+        firstDivider: getComputedStyle(cards[0]!).borderRightWidth,
+        lastDivider: getComputedStyle(cards.at(-1)!).borderRightWidth,
+      };
+    });
+    expect(tileBorders).toEqual({
+      columns: 3,
+      outer: "1px",
+      firstDivider: "1px",
+      lastDivider: "0px",
+    });
     await saveScreenshot(app, "#/dashboard/integrations", "integrations-dashboard.png");
 
     await dashboard.getByTestId("integration-card-hevy").click();

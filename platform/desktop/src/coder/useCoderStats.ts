@@ -38,6 +38,7 @@ function toSubmission(record: RawObjectRecord): CodingSubmission | null {
     id: record.id,
     problemTitle: text(props.problemTitle) || "Задача",
     problemSlug: text(props.problemSlug),
+    problemNumber: text(props.problemNumber),
     status: text(props.status) || "Неизвестно",
     accepted: props.accepted === true,
     language: text(props.language) || "Неизвестно",
