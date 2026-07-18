@@ -5,8 +5,9 @@ import IntegrationSettingsPanel from "./IntegrationSettingsPanel.vue";
 import hevyIcon from "./assets/hevy.svg";
 import togglTrackIcon from "./assets/toggl-track.svg";
 import leetcodeIcon from "./assets/leetcode.svg";
+import codewarsIcon from "./assets/codewars.svg";
 
-type ProviderId = "hevy" | "toggl" | "leetcode";
+type ProviderId = "hevy" | "toggl" | "leetcode" | "codewars";
 
 interface ProviderSnapshot {
   id: ProviderId;
@@ -38,6 +39,11 @@ const cards: IntegrationCard[] = [
     id: "leetcode",
     label: "LeetCode",
     icon: leetcodeIcon,
+  },
+  {
+    id: "codewars",
+    label: "Codewars",
+    icon: codewarsIcon,
   },
 ];
 
@@ -157,7 +163,7 @@ onMounted(load);
 .integration-grid {
   --integration-border: color-mix(in srgb, var(--foreground) 14%, transparent);
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 22px;
   border: 1px solid var(--integration-border);
 }

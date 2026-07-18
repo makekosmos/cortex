@@ -17,10 +17,11 @@ const CODING_PROFILE_TYPE_ID: &str = "coding_profile_obj";
 const HEVY_BASE_URL: &str = "https://api.hevyapp.com";
 const TOGGL_BASE_URL: &str = "https://api.track.toggl.com/api/v9";
 const LEETCODE_GRAPHQL_URL: &str = "https://leetcode.com/graphql";
+const CODEWARS_BASE_URL: &str = "https://www.codewars.com/api/v1";
 const ALLOWED_INTERVALS: &[u64] = &[0, 15, 60, 360, 1440];
 
 static CONFIG_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-static SYNC_LOCKS: OnceLock<[tokio::sync::Mutex<()>; 3]> = OnceLock::new();
+static SYNC_LOCKS: OnceLock<[tokio::sync::Mutex<()>; 4]> = OnceLock::new();
 
 fn config_lock() -> &'static Mutex<()> {
     CONFIG_LOCK.get_or_init(|| Mutex::new(()))
@@ -36,6 +37,7 @@ pub enum Provider {
     Hevy,
     Toggl,
     Leetcode,
+    Codewars,
 }
 
 impl Provider {
@@ -44,6 +46,7 @@ impl Provider {
             "hevy" => Ok(Self::Hevy),
             "toggl" => Ok(Self::Toggl),
             "leetcode" => Ok(Self::Leetcode),
+            "codewars" => Ok(Self::Codewars),
             _ => Err(format!("Неизвестная интеграция: {value}")),
         }
     }
@@ -53,6 +56,7 @@ impl Provider {
             Self::Hevy => "hevy",
             Self::Toggl => "toggl",
             Self::Leetcode => "leetcode",
+            Self::Codewars => "codewars",
         }
     }
 
@@ -61,6 +65,7 @@ impl Provider {
             Self::Hevy => "Hevy",
             Self::Toggl => "Toggl Track",
             Self::Leetcode => "LeetCode",
+            Self::Codewars => "Codewars",
         }
     }
 
@@ -69,6 +74,7 @@ impl Provider {
             Self::Hevy => "API-ключ",
             Self::Toggl => "API-токен",
             Self::Leetcode => "Сессия LeetCode",
+            Self::Codewars => "Имя пользователя",
         }
     }
 
@@ -77,6 +83,7 @@ impl Provider {
             Self::Hevy => "https://hevy.com/settings?developer",
             Self::Toggl => "https://track.toggl.com/profile",
             Self::Leetcode => "https://leetcode.com/accounts/login/",
+            Self::Codewars => "https://www.codewars.com/users/",
         }
     }
 
@@ -85,6 +92,7 @@ impl Provider {
             Self::Hevy => "integration-hevy-api-key",
             Self::Toggl => "integration-toggl-api-token",
             Self::Leetcode => "integration-leetcode-session",
+            Self::Codewars => "integration-codewars-username",
         }
     }
 
@@ -93,6 +101,7 @@ impl Provider {
             Self::Hevy => 0,
             Self::Toggl => 1,
             Self::Leetcode => 2,
+            Self::Codewars => 3,
         }
     }
 }
@@ -127,6 +136,7 @@ pub struct IntegrationsConfig {
     pub hevy: ProviderSettings,
     pub toggl: ProviderSettings,
     pub leetcode: ProviderSettings,
+    pub codewars: ProviderSettings,
     pub body_weight_kg: Option<f64>,
 }
 
@@ -148,6 +158,11 @@ impl Default for IntegrationsConfig {
                 sync_on_startup: true,
                 ..ProviderSettings::default()
             },
+            codewars: ProviderSettings {
+                interval_minutes: 1440,
+                sync_on_startup: true,
+                ..ProviderSettings::default()
+            },
             body_weight_kg: None,
         }
     }
@@ -159,6 +174,7 @@ impl IntegrationsConfig {
             Provider::Hevy => &self.hevy,
             Provider::Toggl => &self.toggl,
             Provider::Leetcode => &self.leetcode,
+            Provider::Codewars => &self.codewars,
         }
     }
 
@@ -167,6 +183,7 @@ impl IntegrationsConfig {
             Provider::Hevy => &mut self.hevy,
             Provider::Toggl => &mut self.toggl,
             Provider::Leetcode => &mut self.leetcode,
+            Provider::Codewars => &mut self.codewars,
         }
     }
 }
@@ -277,6 +294,7 @@ fn snapshot(config: &IntegrationsConfig) -> Value {
             provider_snapshot(Provider::Hevy, &config.hevy),
             provider_snapshot(Provider::Toggl, &config.toggl),
             provider_snapshot(Provider::Leetcode, &config.leetcode),
+            provider_snapshot(Provider::Codewars, &config.codewars),
         ],
         "bodyWeightKg": config.body_weight_kg,
     })
@@ -316,6 +334,7 @@ fn authenticated_get(
         Provider::Hevy => client.get(url).header("api-key", secret),
         Provider::Toggl => client.get(url).basic_auth(secret, Some("api_token")),
         Provider::Leetcode => client.get(url),
+        Provider::Codewars => client.get(url),
     }
 }
 
@@ -359,6 +378,24 @@ fn leetcode_query(offset: u64, last_key: Option<&str>) -> Value {
     })
 }
 
+fn codewars_user_url(username: &str, completed_page: Option<u64>) -> Result<reqwest::Url, String> {
+    let mut url = reqwest::Url::parse(&format!("{CODEWARS_BASE_URL}/"))
+        .map_err(|error| format!("Некорректный адрес Codewars: {error}"))?;
+    {
+        let mut segments = url
+            .path_segments_mut()
+            .map_err(|_| "Некорректный адрес Codewars".to_string())?;
+        segments.push("users").push(username);
+        if completed_page.is_some() {
+            segments.push("code-challenges").push("completed");
+        }
+    }
+    if let Some(page) = completed_page {
+        url.query_pairs_mut().append_pair("page", &page.to_string());
+    }
+    Ok(url)
+}
+
 async fn verify_credential_at(
     provider: Provider,
     secret: &str,
@@ -387,6 +424,29 @@ async fn verify_credential_at(
                 .and_then(Value::as_array)
                 .map(|_| ())
                 .ok_or_else(|| "LeetCode не вернул историю — войдите заново".to_string());
+        }
+        Provider::Codewars => {
+            let response = client
+                .get(codewars_user_url(secret, None)?)
+                .send()
+                .await
+                .map_err(|error| format!("Не удалось подключиться к Codewars: {error}"))?;
+            if response.status() == reqwest::StatusCode::NOT_FOUND {
+                return Err("Пользователь Codewars не найден".to_string());
+            }
+            if !response.status().is_success() {
+                return Err(format!("Codewars вернул HTTP {}", response.status()));
+            }
+            let body: Value = response
+                .json()
+                .await
+                .map_err(|error| format!("Некорректный ответ Codewars: {error}"))?;
+            return body
+                .get("username")
+                .and_then(Value::as_str)
+                .filter(|username| !username.is_empty())
+                .map(|_| ())
+                .ok_or_else(|| "Codewars не вернул профиль пользователя".to_string());
         }
     };
     let request = authenticated_get(&client, provider, format!("{base_url}{path}"), secret);
@@ -417,6 +477,7 @@ async fn verify_credential(provider: Provider, secret: &str) -> Result<(), Strin
             Provider::Hevy => HEVY_BASE_URL,
             Provider::Toggl => TOGGL_BASE_URL,
             Provider::Leetcode => LEETCODE_GRAPHQL_URL,
+            Provider::Codewars => CODEWARS_BASE_URL,
         },
     )
     .await
@@ -1191,6 +1252,218 @@ async fn sync_leetcode(
     Ok(imported)
 }
 
+fn codewars_completion_timestamp(completion: &Value) -> Option<DateTime<Utc>> {
+    completion
+        .get("completedAt")
+        .and_then(Value::as_str)
+        .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
+        .map(|value| value.with_timezone(&Utc))
+}
+
+fn codewars_completion_is_new_enough(completion: &Value, cutoff: Option<DateTime<Utc>>) -> bool {
+    cutoff.is_none_or(|cutoff| {
+        codewars_completion_timestamp(completion).is_none_or(|value| value >= cutoff)
+    })
+}
+
+fn codewars_page_reached_cutoff(items: &[Value], cutoff: Option<DateTime<Utc>>) -> bool {
+    cutoff.is_some_and(|cutoff| {
+        !items.is_empty()
+            && items.iter().all(|completion| {
+                codewars_completion_timestamp(completion).is_some_and(|value| value < cutoff)
+            })
+    })
+}
+
+fn codewars_completion_object(username: &str, completion: &Value) -> Result<Value, String> {
+    let external_id = completion
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or("Codewars kata без id")?;
+    let title = completion
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("Codewars kata");
+    let slug = completion.get("slug").and_then(Value::as_str).unwrap_or("");
+    let completed_at = codewars_completion_timestamp(completion)
+        .map(|value| value.to_rfc3339())
+        .ok_or("Codewars kata без корректной даты")?;
+    let mut languages = completion
+        .get("completedLanguages")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    languages.sort();
+    languages.dedup();
+    let language = languages.first().cloned().unwrap_or_default();
+    Ok(json!({
+        "id": format!("codewars-completion:{}:{external_id}", username.to_ascii_lowercase()),
+        "typeId": CODING_SUBMISSION_TYPE_ID,
+        "title": format!("{title} — завершено"),
+        "contentJson": {},
+        "propsJson": {
+            "source": "codewars",
+            "username": username,
+            "externalId": external_id,
+            "problemTitle": title,
+            "problemSlug": slug,
+            "problemNumber": "",
+            "status": "Completed",
+            "accepted": true,
+            "language": language,
+            "languages": languages,
+            "runtime": null,
+            "memory": null,
+            "submittedAt": completed_at,
+            "url": format!("https://www.codewars.com/kata/{slug}"),
+        },
+        "createdAt": completed_at,
+        "updatedAt": completed_at,
+        "deletedAt": null,
+    }))
+}
+
+fn codewars_profile_object(body: &Value, timestamp: &str) -> Result<Value, String> {
+    let username = body
+        .get("username")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or("Codewars не вернул имя пользователя")?;
+    Ok(json!({
+        "id": "codewars-profile:current",
+        "typeId": CODING_PROFILE_TYPE_ID,
+        "title": format!("Codewars — {username}"),
+        "contentJson": {},
+        "propsJson": {
+            "source": "codewars",
+            "username": username,
+            "honor": body.get("honor").cloned().unwrap_or(Value::Null),
+            "leaderboardPosition": body.get("leaderboardPosition").cloned().unwrap_or(Value::Null),
+            "rank": body.pointer("/ranks/overall").cloned().unwrap_or(Value::Null),
+            "languageRanks": body.pointer("/ranks/languages").cloned().unwrap_or(Value::Null),
+            "solved": {
+                "all": body.pointer("/codeChallenges/totalCompleted").cloned().unwrap_or(Value::Null),
+            },
+        },
+        "createdAt": timestamp,
+        "updatedAt": timestamp,
+        "deletedAt": null,
+    }))
+}
+
+async fn fetch_codewars_profile(client: &reqwest::Client, username: &str) -> Result<Value, String> {
+    let response = client
+        .get(codewars_user_url(username, None)?)
+        .send()
+        .await
+        .map_err(|error| format!("Codewars: {error}"))?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err("Пользователь Codewars не найден".to_string());
+    }
+    if !response.status().is_success() {
+        return Err(format!("Codewars вернул HTTP {}", response.status()));
+    }
+    response
+        .json()
+        .await
+        .map_err(|error| format!("Некорректный ответ Codewars: {error}"))
+}
+
+async fn fetch_codewars_completions(
+    client: &reqwest::Client,
+    username: &str,
+    cutoff: Option<DateTime<Utc>>,
+) -> Result<Vec<Value>, String> {
+    let mut page = 0_u64;
+    let mut completions = Vec::new();
+    loop {
+        let response = client
+            .get(codewars_user_url(username, Some(page))?)
+            .send()
+            .await
+            .map_err(|error| format!("Codewars: {error}"))?;
+        if !response.status().is_success() {
+            return Err(format!("Codewars вернул HTTP {}", response.status()));
+        }
+        let body: Value = response
+            .json()
+            .await
+            .map_err(|error| format!("Некорректный ответ Codewars: {error}"))?;
+        let items = body
+            .get("data")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let reached_cutoff = codewars_page_reached_cutoff(&items, cutoff);
+        completions.extend(
+            items
+                .iter()
+                .filter(|item| codewars_completion_is_new_enough(item, cutoff))
+                .cloned(),
+        );
+        let total_pages = body.get("totalPages").and_then(Value::as_u64).unwrap_or(0);
+        if items.is_empty() || reached_cutoff || page + 1 >= total_pages || page >= 10_000 {
+            break;
+        }
+        page += 1;
+    }
+    Ok(completions)
+}
+
+async fn sync_codewars(
+    ark: &ArkHost,
+    username: &str,
+    settings: &ProviderSettings,
+    started_at: &str,
+) -> Result<u64, String> {
+    let client = http_client()?;
+    let cutoff = settings
+        .last_success_at
+        .as_deref()
+        .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
+        .map(|value| value.with_timezone(&Utc) - ChronoDuration::days(1));
+    let profile = fetch_codewars_profile(&client, username).await?;
+    let canonical_username = profile
+        .get("username")
+        .and_then(Value::as_str)
+        .ok_or("Codewars не вернул имя пользователя")?;
+    let completions = fetch_codewars_completions(&client, canonical_username, cutoff).await?;
+    ensure_object_type(
+        ark,
+        CODING_SUBMISSION_TYPE_ID,
+        "Отправка задачи",
+        started_at,
+    )
+    .await?;
+    ensure_object_type(
+        ark,
+        CODING_PROFILE_TYPE_ID,
+        "Профиль программиста",
+        started_at,
+    )
+    .await?;
+    ark_request(
+        ark,
+        "upsert_object",
+        json!({ "object": codewars_profile_object(&profile, started_at)? }),
+    )
+    .await?;
+    let mut imported = 0_u64;
+    for completion in completions {
+        ark_request(
+            ark,
+            "upsert_object",
+            json!({ "object": codewars_completion_object(canonical_username, &completion)? }),
+        )
+        .await?;
+        imported += 1;
+    }
+    Ok(imported)
+}
+
 async fn sync_provider(
     ark: &ArkHost,
     data_dir: &Path,
@@ -1199,7 +1472,8 @@ async fn sync_provider(
     let _guard = sync_lock(provider.sync_lock_index())
         .try_lock()
         .map_err(|_| format!("{} уже синхронизируется", provider.label()))?;
-    let secret = read_credential(provider).ok_or_else(|| "Сначала добавьте ключ".to_string())?;
+    let secret =
+        read_credential(provider).ok_or_else(|| "Сначала подключите интеграцию".to_string())?;
     let started_at = Utc::now().to_rfc3339();
     let settings = mutate_config(data_dir, |config| {
         let settings = config.provider_mut(provider);
@@ -1214,6 +1488,7 @@ async fn sync_provider(
         Provider::Hevy => sync_hevy(ark, &secret, &settings, &started_at).await,
         Provider::Toggl => sync_toggl(ark, &secret, &settings, &started_at).await,
         Provider::Leetcode => sync_leetcode(ark, &secret, &settings, &started_at).await,
+        Provider::Codewars => sync_codewars(ark, &secret, &settings, &started_at).await,
     };
     match result {
         Ok(imported) => {
@@ -1255,7 +1530,12 @@ fn is_due(settings: &ProviderSettings, now: DateTime<Utc>) -> bool {
 pub fn spawn_scheduler(ark: Arc<ArkHost>, data_dir: PathBuf) {
     tokio::spawn(async move {
         let startup = read_config(&data_dir);
-        for provider in [Provider::Hevy, Provider::Toggl, Provider::Leetcode] {
+        for provider in [
+            Provider::Hevy,
+            Provider::Toggl,
+            Provider::Leetcode,
+            Provider::Codewars,
+        ] {
             if startup.provider(provider).sync_on_startup && read_credential(provider).is_some() {
                 if let Err(error) = sync_provider(&ark, &data_dir, provider).await {
                     tracing::warn!(provider = provider.id(), %error, "integration startup sync failed");
@@ -1270,7 +1550,12 @@ pub fn spawn_scheduler(ark: Arc<ArkHost>, data_dir: PathBuf) {
             timer.tick().await;
             let config = read_config(&data_dir);
             let now = Utc::now();
-            for provider in [Provider::Hevy, Provider::Toggl, Provider::Leetcode] {
+            for provider in [
+                Provider::Hevy,
+                Provider::Toggl,
+                Provider::Leetcode,
+                Provider::Codewars,
+            ] {
                 if read_credential(provider).is_some() && is_due(config.provider(provider), now) {
                     if let Err(error) = sync_provider(&ark, &data_dir, provider).await {
                         tracing::warn!(provider = provider.id(), %error, "integration scheduled sync failed");
@@ -1522,10 +1807,24 @@ pub async fn handle_operation(
                 .and_then(Value::as_str)
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
-                .ok_or("Введите ключ")?;
+                .ok_or_else(|| {
+                    if provider == Provider::Codewars {
+                        "Введите имя пользователя Codewars"
+                    } else {
+                        "Введите ключ"
+                    }
+                })?;
             verify_credential(provider, secret).await?;
             save_credential(provider, secret)?;
-            Ok(snapshot(&read_config(data_dir)))
+            let config = mutate_config(data_dir, |config| {
+                let settings = config.provider_mut(provider);
+                settings.last_attempt_at = None;
+                settings.last_success_at = None;
+                settings.last_error = None;
+                settings.imported_count = 0;
+                Ok(())
+            })?;
+            Ok(snapshot(&config))
         }
         "clear_credential" => {
             delete_credential(provider_from_params(&params)?)?;
@@ -1720,6 +2019,75 @@ mod tests {
         assert!(leetcode_submission_is_new_enough(&recent, Some(cutoff)));
         assert!(!leetcode_submission_is_new_enough(&old, Some(cutoff)));
         assert!(!leetcode_page_reached_cutoff(&page, None));
+    }
+
+    #[test]
+    fn codewars_mapping_keeps_completed_kata_without_solution_code() {
+        let completion = codewars_completion_object(
+            "Tester",
+            &json!({
+                "id": "514b92a657cdc65150000006",
+                "name": "Multiples of 3 and 5",
+                "slug": "multiples-of-3-and-5",
+                "completedAt": "2017-04-06T16:32:09Z",
+                "completedLanguages": ["javascript", "ruby", "javascript"]
+            }),
+        )
+        .expect("map completion");
+        assert_eq!(
+            completion["id"],
+            "codewars-completion:tester:514b92a657cdc65150000006"
+        );
+        assert_eq!(completion["propsJson"]["username"], "Tester");
+        assert_eq!(completion["propsJson"]["status"], "Completed");
+        assert_eq!(
+            completion["propsJson"]["languages"],
+            json!(["javascript", "ruby"])
+        );
+        assert_eq!(
+            completion["propsJson"]["url"],
+            "https://www.codewars.com/kata/multiples-of-3-and-5"
+        );
+        assert!(completion["propsJson"].get("code").is_none());
+    }
+
+    #[test]
+    fn codewars_profile_maps_public_rank_and_totals() {
+        let profile = codewars_profile_object(
+            &json!({
+                "username": "tester",
+                "honor": 544,
+                "leaderboardPosition": 134,
+                "ranks": {
+                    "overall": { "rank": -3, "name": "3 kyu", "color": "blue", "score": 2116 },
+                    "languages": { "javascript": { "rank": -3, "name": "3 kyu", "score": 1819 } }
+                },
+                "codeChallenges": { "totalCompleted": 230 }
+            }),
+            "2026-07-18T00:00:00Z",
+        )
+        .expect("profile");
+        assert_eq!(profile["propsJson"]["solved"]["all"], 230);
+        assert_eq!(profile["propsJson"]["rank"]["name"], "3 kyu");
+        assert_eq!(profile["propsJson"]["honor"], 544);
+    }
+
+    #[test]
+    fn codewars_incremental_page_stops_only_when_page_is_old() {
+        let cutoff = DateTime::parse_from_rfc3339("2026-01-02T00:00:00Z")
+            .expect("cutoff")
+            .with_timezone(&Utc);
+        let recent = json!({ "completedAt": "2026-01-03T00:00:00Z" });
+        let old = json!({ "completedAt": "2026-01-01T00:00:00Z" });
+        assert!(!codewars_page_reached_cutoff(
+            &[recent.clone(), old.clone()],
+            Some(cutoff)
+        ));
+        assert!(codewars_page_reached_cutoff(
+            &[old.clone(), old],
+            Some(cutoff)
+        ));
+        assert!(codewars_completion_is_new_enough(&recent, Some(cutoff)));
     }
 
     #[test]

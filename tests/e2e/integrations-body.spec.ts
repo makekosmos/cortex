@@ -45,6 +45,7 @@ test("dashboard integration cards open the common provider controls in a modal",
     await expect(dashboard.getByRole("heading", { name: "Интеграции" })).toBeVisible();
     await expect(dashboard.getByTestId("integration-card-hevy")).toBeVisible();
     await expect(dashboard.getByTestId("integration-card-toggl")).toBeVisible();
+    await expect(dashboard.getByTestId("integration-card-codewars")).toBeVisible();
     await expect(dashboard.getByTestId("integration-card-hevy")).toContainText("Не подключено");
     await expect(dashboard.getByTestId("integration-card-toggl")).toContainText("Не подключено");
     await expect(dashboard.getByTestId("integration-card-hevy").locator("img")).toBeVisible();
@@ -60,7 +61,7 @@ test("dashboard integration cards open the common provider controls in a modal",
       };
     });
     expect(tileBorders).toEqual({
-      columns: 3,
+      columns: 4,
       outer: "1px",
       firstDivider: "1px",
       lastDivider: "0px",
@@ -97,6 +98,13 @@ test("dashboard integration cards open the common provider controls in a modal",
       path: path.join(EVIDENCE_DIR, "integrations-modal-toggl.png"),
       animations: "disabled",
     });
+    await dashboard.getByRole("button", { name: "Закрыть" }).click();
+
+    await dashboard.getByTestId("integration-card-codewars").click();
+    const codewars = dashboard.locator(".provider-card").filter({ hasText: "Codewars" });
+    await expect(codewars).toContainText("Профиль и завершённые kata");
+    await expect(codewars.getByPlaceholder("Имя пользователя Codewars")).toBeVisible();
+    await expect(codewars.getByRole("button", { name: "Получить сейчас" })).toBeDisabled();
   } finally {
     await app.close();
   }

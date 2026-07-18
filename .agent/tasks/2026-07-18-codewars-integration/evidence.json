@@ -1,0 +1,11 @@
+{
+  "task_id": "2026-07-18-codewars-integration",
+  "verified_at": "2026-07-18T01:10:00Z",
+  "results": [
+    { "ac": "AC1", "verdict": "PASS", "command": "targeted integrations Playwright E2E" },
+    { "ac": "AC2", "verdict": "PASS", "command": "Rust integration tests and live test-slot sync" },
+    { "ac": "AC3", "verdict": "PASS", "command": "targeted Coder Playwright E2E" },
+    { "ac": "AC4", "verdict": "PASS", "command": "Rust mapping tests and visual inspection" },
+    { "ac": "AC5", "verdict": "PASS", "command": "typecheck, build, guards, docs, E2E" }
+  ]
+}

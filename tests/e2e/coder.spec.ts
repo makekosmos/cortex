@@ -1,5 +1,7 @@
+import fs from "node:fs";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { launchKepler } from "./helpers/launch";
+import { launchKepler, REPO_ROOT } from "./helpers/launch";
 import { waitForBackendReady } from "./helpers/wait";
 
 test("coder keeps its data and overlays inside the full-width scroll surface", async () => {
@@ -14,6 +16,17 @@ test("coder keeps its data and overlays inside the full-width scroll surface", a
         object_type: {
           id: "coding_submission_obj",
           name: "Отправка задачи",
+          schemaJson: "{}",
+          uiSchemaJson: "{}",
+          createdAt: now,
+          updatedAt: now,
+          systemLocked: false,
+        },
+      });
+      await window.kepler.ark.request("upsert_object_type", {
+        object_type: {
+          id: "coding_profile_obj",
+          name: "Профиль программиста",
           schemaJson: "{}",
           uiSchemaJson: "{}",
           createdAt: now,
@@ -37,6 +50,48 @@ test("coder keeps its data and overlays inside the full-width scroll surface", a
             accepted: true,
             language: "typescript",
             submittedAt: now,
+          },
+          createdAt: now,
+          updatedAt: now,
+          deletedAt: null,
+        },
+      });
+      await window.kepler.ark.request("upsert_object", {
+        object: {
+          id: "codewars-completion:1",
+          typeId: "coding_submission_obj",
+          title: "Multiples of 3 and 5",
+          contentJson: {},
+          propsJson: {
+            source: "codewars",
+            username: "tester",
+            externalId: "1",
+            problemSlug: "multiples-of-3-and-5",
+            problemTitle: "Multiples of 3 and 5",
+            status: "Completed",
+            accepted: true,
+            language: "javascript",
+            languages: ["javascript", "rust"],
+            submittedAt: now,
+            url: "https://www.codewars.com/kata/multiples-of-3-and-5",
+          },
+          createdAt: now,
+          updatedAt: now,
+          deletedAt: null,
+        },
+      });
+      await window.kepler.ark.request("upsert_object", {
+        object: {
+          id: "codewars-profile:current",
+          typeId: "coding_profile_obj",
+          title: "Codewars — tester",
+          contentJson: {},
+          propsJson: {
+            source: "codewars",
+            username: "tester",
+            honor: 544,
+            leaderboardPosition: 134,
+            rank: { name: "3 kyu", score: 2116 },
           },
           createdAt: now,
           updatedAt: now,
@@ -87,6 +142,33 @@ test("coder keeps its data and overlays inside the full-width scroll surface", a
 
     const tabsX = (await dashboard.locator(".platform-tabs").boundingBox())?.x;
     await dashboard.getByRole("button", { name: "Codewars" }).click();
+    await expect(dashboard.locator(".summary-grid")).toContainText("3 kyu");
+    await expect(dashboard.locator(".summary-grid")).toContainText("544");
+    await expect(dashboard.locator(".submissions-panel")).toContainText("Multiples of 3 and 5");
+    await expect(dashboard.locator(".submissions-panel")).toContainText("javascript, rust");
+    const screenshot = await app.evaluate(async ({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows().find((candidate) =>
+        candidate.webContents.getURL().includes("#/dashboard/coder"),
+      );
+      if (!window) throw new Error("coder window not found");
+      const bounds = window.getBounds();
+      window.setBounds({ ...bounds, width: bounds.width + 1 });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      window.setBounds(bounds);
+      window.webContents.invalidate();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      return (await window.webContents.capturePage()).toPNG().toString("base64");
+    });
+    const screenshotPath = path.join(
+      REPO_ROOT,
+      ".agent",
+      "tasks",
+      "2026-07-18-codewars-integration",
+      "raw",
+      "coder-codewars.png",
+    );
+    fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
+    fs.writeFileSync(screenshotPath, Buffer.from(screenshot, "base64"));
     expect((await dashboard.locator(".platform-tabs").boundingBox())?.x).toBe(tabsX);
     await dashboard.getByRole("button", { name: "LeetCode" }).click();
 
