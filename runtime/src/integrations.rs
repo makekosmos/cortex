@@ -1,5 +1,6 @@
 use crate::ark_host::ArkHost;
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
+use futures_util::{stream, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -393,6 +394,16 @@ fn codewars_user_url(username: &str, completed_page: Option<u64>) -> Result<reqw
     if let Some(page) = completed_page {
         url.query_pairs_mut().append_pair("page", &page.to_string());
     }
+    Ok(url)
+}
+
+fn codewars_challenge_url(challenge: &str) -> Result<reqwest::Url, String> {
+    let mut url = reqwest::Url::parse(&format!("{CODEWARS_BASE_URL}/"))
+        .map_err(|error| format!("Некорректный адрес Codewars: {error}"))?;
+    url.path_segments_mut()
+        .map_err(|_| "Некорректный адрес Codewars".to_string())?
+        .push("code-challenges")
+        .push(challenge);
     Ok(url)
 }
 
@@ -1275,7 +1286,11 @@ fn codewars_page_reached_cutoff(items: &[Value], cutoff: Option<DateTime<Utc>>) 
     })
 }
 
-fn codewars_completion_object(username: &str, completion: &Value) -> Result<Value, String> {
+fn codewars_completion_object(
+    username: &str,
+    completion: &Value,
+    rank: &Value,
+) -> Result<Value, String> {
     let external_id = completion
         .get("id")
         .and_then(Value::as_str)
@@ -1317,6 +1332,7 @@ fn codewars_completion_object(username: &str, completion: &Value) -> Result<Valu
             "languages": languages,
             "runtime": null,
             "memory": null,
+            "rank": rank,
             "submittedAt": completed_at,
             "url": format!("https://www.codewars.com/kata/{slug}"),
         },
@@ -1324,6 +1340,79 @@ fn codewars_completion_object(username: &str, completion: &Value) -> Result<Valu
         "updatedAt": completed_at,
         "deletedAt": null,
     }))
+}
+
+fn codewars_objects_need_rank_backfill(objects: &Value, username: &str) -> bool {
+    objects.as_array().is_some_and(|objects| {
+        objects.iter().any(|object| {
+            object
+                .get("deletedAt")
+                .or_else(|| object.get("deleted_at"))
+                .is_none_or(Value::is_null)
+                && object
+                    .get("propsJson")
+                    .or_else(|| object.get("props_json"))
+                    .and_then(Value::as_object)
+                    .is_some_and(|props| {
+                        props.get("source").and_then(Value::as_str) == Some("codewars")
+                            && props
+                                .get("username")
+                                .and_then(Value::as_str)
+                                .is_some_and(|value| value.eq_ignore_ascii_case(username))
+                            && !props.contains_key("rank")
+                    })
+        })
+    })
+}
+
+async fn codewars_needs_rank_backfill(ark: &ArkHost, username: &str) -> Result<bool, String> {
+    let objects = ark_request(
+        ark,
+        "list_objects_by_type",
+        json!({ "type_id": CODING_SUBMISSION_TYPE_ID }),
+    )
+    .await?;
+    Ok(codewars_objects_need_rank_backfill(&objects, username))
+}
+
+async fn fetch_codewars_challenge_rank(
+    client: &reqwest::Client,
+    challenge: &str,
+) -> Result<Value, String> {
+    let response = client
+        .get(codewars_challenge_url(challenge)?)
+        .send()
+        .await
+        .map_err(|error| format!("Codewars: {error}"))?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(Value::Null);
+    }
+    if !response.status().is_success() {
+        return Err(format!("Codewars вернул HTTP {}", response.status()));
+    }
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|error| format!("Некорректный ответ Codewars: {error}"))?;
+    Ok(body.get("rank").cloned().unwrap_or(Value::Null))
+}
+
+async fn fetch_codewars_completion_ranks(
+    client: &reqwest::Client,
+    completions: Vec<Value>,
+) -> Result<Vec<(Value, Value)>, String> {
+    stream::iter(completions)
+        .map(|completion| async move {
+            let challenge = completion
+                .get("id")
+                .and_then(Value::as_str)
+                .ok_or("Codewars kata без id")?;
+            let rank = fetch_codewars_challenge_rank(client, challenge).await?;
+            Ok((completion, rank))
+        })
+        .buffer_unordered(8)
+        .try_collect()
+        .await
 }
 
 fn codewars_profile_object(body: &Value, timestamp: &str) -> Result<Value, String> {
@@ -1420,17 +1509,23 @@ async fn sync_codewars(
     started_at: &str,
 ) -> Result<u64, String> {
     let client = http_client()?;
-    let cutoff = settings
-        .last_success_at
-        .as_deref()
-        .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
-        .map(|value| value.with_timezone(&Utc) - ChronoDuration::days(1));
     let profile = fetch_codewars_profile(&client, username).await?;
     let canonical_username = profile
         .get("username")
         .and_then(Value::as_str)
         .ok_or("Codewars не вернул имя пользователя")?;
+    // ponytail: старые rank кешируем; полный проход нужен только для backfill, пока API не даёт bulk ranks.
+    let cutoff = if codewars_needs_rank_backfill(ark, canonical_username).await? {
+        None
+    } else {
+        settings
+            .last_success_at
+            .as_deref()
+            .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
+            .map(|value| value.with_timezone(&Utc) - ChronoDuration::days(1))
+    };
     let completions = fetch_codewars_completions(&client, canonical_username, cutoff).await?;
+    let completions = fetch_codewars_completion_ranks(&client, completions).await?;
     ensure_object_type(
         ark,
         CODING_SUBMISSION_TYPE_ID,
@@ -1452,11 +1547,11 @@ async fn sync_codewars(
     )
     .await?;
     let mut imported = 0_u64;
-    for completion in completions {
+    for (completion, rank) in completions {
         ark_request(
             ark,
             "upsert_object",
-            json!({ "object": codewars_completion_object(canonical_username, &completion)? }),
+            json!({ "object": codewars_completion_object(canonical_username, &completion, &rank)? }),
         )
         .await?;
         imported += 1;
@@ -2032,6 +2127,7 @@ mod tests {
                 "completedAt": "2017-04-06T16:32:09Z",
                 "completedLanguages": ["javascript", "ruby", "javascript"]
             }),
+            &json!({ "id": -6, "name": "6 kyu", "color": "yellow" }),
         )
         .expect("map completion");
         assert_eq!(
@@ -2040,6 +2136,7 @@ mod tests {
         );
         assert_eq!(completion["propsJson"]["username"], "Tester");
         assert_eq!(completion["propsJson"]["status"], "Completed");
+        assert_eq!(completion["propsJson"]["rank"]["name"], "6 kyu");
         assert_eq!(
             completion["propsJson"]["languages"],
             json!(["javascript", "ruby"])
@@ -2049,6 +2146,32 @@ mod tests {
             "https://www.codewars.com/kata/multiples-of-3-and-5"
         );
         assert!(completion["propsJson"].get("code").is_none());
+    }
+
+    #[test]
+    fn codewars_rank_backfill_reads_ark_object_shape() {
+        assert!(codewars_objects_need_rank_backfill(
+            &json!([{
+                "deletedAt": null,
+                "propsJson": {
+                    "source": "codewars",
+                    "username": "Tester",
+                    "problemTitle": "Multiples of 3 and 5"
+                }
+            }]),
+            "tester"
+        ));
+        assert!(!codewars_objects_need_rank_backfill(
+            &json!([{
+                "deleted_at": null,
+                "props_json": {
+                    "source": "codewars",
+                    "username": "Tester",
+                    "rank": null
+                }
+            }]),
+            "tester"
+        ));
     }
 
     #[test]

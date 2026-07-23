@@ -3,6 +3,7 @@ import {
   addLocalDays,
   breakdown,
   codewarsProfileStats,
+  kyuBreakdown,
   localDayKey,
   profileDifficultyStats,
   refreshCoderStats,
@@ -14,6 +15,13 @@ describe("coder statistics", () => {
     expect(breakdown(["Rust", "TypeScript", "Rust"], 3)).toEqual([
       { label: "Rust", count: 2, share: 2 / 3 },
       { label: "TypeScript", count: 1, share: 1 / 3 },
+    ]);
+  });
+
+  test("groups Codewars kata from 8 kyu to 1 kyu", () => {
+    expect(kyuBreakdown(["6 kyu", "8 kyu", "6 kyu", "1 dan", ""])).toEqual([
+      { label: "8 kyu", count: 1, share: 1 / 3 },
+      { label: "6 kyu", count: 2, share: 2 / 3 },
     ]);
   });
 

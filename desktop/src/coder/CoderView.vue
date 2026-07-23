@@ -13,6 +13,7 @@ const platform = shallowRef<CoderPlatform>("leetcode");
 const {
   activity,
   codewarsProfile,
+  codewarsRanks,
   difficulties,
   error,
   languages,
@@ -140,6 +141,7 @@ function openExternal(url: string): void {
         </section>
 
         <CoderDifficultyGauge v-if="platform === 'leetcode'" :stats="difficulties" />
+        <CoderDifficultyGauge v-else :ranks="codewarsRanks" />
         <CoderActivity :days="activity" />
         <div class="breakdown-grid" :class="{ 'breakdown-grid--single': platform === 'codewars' }">
           <CoderBreakdown title="Языки" :items="languages" />
@@ -208,7 +210,6 @@ function openExternal(url: string): void {
   color: var(--muted-foreground);
   font: inherit;
   font-size: 0.75rem;
-  cursor: pointer;
 }
 
 .platform-tabs button[aria-pressed="true"] {
