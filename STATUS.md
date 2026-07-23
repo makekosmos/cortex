@@ -1359,6 +1359,12 @@ bunx playwright test --list # parse-check
 
 ## ⏳ Не сделано / отложено
 
+### GPUI Shell — эксперимент приостановлен
+
+- Ветка [codex/gpui-shell](https://github.com/ksanrse/kosmos/tree/codex/gpui-shell), commit `0c71eb55`.
+- Эксперимент включает нативный GPUI launcher, hybrid Electron supervisor/fallback, единый `bun run dev` с rebuild/restart, command catalog/icons и виртуализированный список.
+- Работа приостановлена: это не production/default shell, приоритет сейчас у других задач.
+
 ### Phase 7 — Adaptive lifecycle (optional)
 
 LRU eviction, RAM budget management, lazy extension load/unload. Имеет смысл только если open extensions >> память бюджет — для 4 текущих не критично.
