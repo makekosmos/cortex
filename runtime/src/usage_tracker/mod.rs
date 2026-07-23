@@ -34,9 +34,11 @@ use windows_capture::{
 };
 
 const TRACKER_DEVICE_ID_KEY: &str = "usage_tracker.device_id";
-const DEFAULT_POLL_MS: u64 = 1_000;
-const DEFAULT_IDLE_SECS: u64 = 60;
+const DEFAULT_POLL_MS: u64 = 5_000;
+const DEFAULT_IDLE_SECS: u64 = 180;
 const SESSION_HEARTBEAT_FLUSH_MS: i64 = 60_000;
+const USAGE_SPAN_HEARTBEAT_SECS: i64 = 60;
+const WINDOW_TITLE_STABILITY_MS: i64 = 10_000;
 const HIDDEN_INACTIVE_SESSION_TTL_MS: i64 = 10 * 60_000;
 const MAX_ACTIVE_SESSIONS: usize = 256;
 const DIAGNOSTICS_LOG_INTERVAL: Duration = Duration::from_secs(60);
@@ -237,6 +239,7 @@ async fn run(
     // ту же дату. Между перезапусками backend'а first_seen_at будет «сегодня» —
     // приемлемо, regression от прежнего поведения минимальная (см. proposal 8.4).
     let mut first_seen_cache: HashMap<String, String> = HashMap::new();
+    let mut active_usage_span: Option<ActiveUsageSpan> = None;
 
     loop {
         let tick_started = std::time::Instant::now();
@@ -278,7 +281,9 @@ async fn run(
         let sample = tick_probe
             .raw_sample
             .filter(|s| !opts.matches_exclude(&s.process_name, s.window_title.as_deref()));
-        let captured_at = iso_now();
+        let captured_now = chrono::Utc::now();
+        let captured_at = captured_now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let captured_at_unix = captured_now.timestamp();
         let delta_ms = previous_tick.elapsed().as_millis().min(i64::MAX as u128) as i64;
         let foreground_key = sample.as_ref().map(SessionKey::from_sample);
 
@@ -316,18 +321,7 @@ async fn run(
         if let Some(sample) = sample {
             let key = SessionKey::from_sample(&sample);
             if let Some(active) = active_sessions.get_mut(&key) {
-                if let Err(error) = update_active_session(
-                    &ark,
-                    &identity,
-                    active,
-                    sample,
-                    captured_at.clone(),
-                    opts.poll_interval.as_millis() as i64,
-                )
-                .await
-                {
-                    eprintln!("[usage-tracker] update active session failed: {error}");
-                }
+                update_active_session(active, sample, captured_at.clone(), delta_ms);
             } else {
                 match start_session(
                     &ark,
@@ -335,7 +329,6 @@ async fn run(
                     &mut first_seen_cache,
                     sample,
                     captured_at.clone(),
-                    opts.poll_interval.as_millis() as i64,
                     opts.icon_cache_dir.clone(),
                 )
                 .await
@@ -359,6 +352,22 @@ async fn run(
                     eprintln!("[usage-tracker] finalize session failed: {error}");
                 }
             }
+        }
+        let timeline_key = foreground_key
+            .as_ref()
+            .and_then(|key| active_sessions.get(key))
+            .map(UsageTimelineKey::from_session);
+        if let Err(error) = update_usage_timeline(
+            &ark,
+            &identity,
+            &mut active_usage_span,
+            timeline_key,
+            captured_at_unix,
+            &captured_at,
+        )
+        .await
+        {
+            eprintln!("[usage-tracker] persist compact usage span failed: {error}");
         }
         let live_pids = active_sessions
             .keys()
@@ -452,6 +461,8 @@ struct ActiveSession {
     foreground_ms: i64,
     idle_ms: i64,
     window_title: Option<String>,
+    persisted_window_title: Option<String>,
+    pending_window_title: Option<PendingWindowTitle>,
     process_name: String,
     exe_path: String,
     pid_start: i64,
@@ -459,9 +470,47 @@ struct ActiveSession {
     current_is_foreground: bool,
     current_is_visible: bool,
     current_is_idle: bool,
+    current_is_private: bool,
     sample_count: u64,
     heartbeat_elapsed_ms: i64,
     hidden_inactive_elapsed_ms: i64,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone)]
+struct PendingWindowTitle {
+    title: Option<String>,
+    first_seen_at: String,
+    stable_ms: i64,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct UsageTimelineKey {
+    tracked_app_id: String,
+    window_title: Option<String>,
+    is_idle: bool,
+    is_private: bool,
+}
+
+#[cfg(target_os = "windows")]
+impl UsageTimelineKey {
+    fn from_session(session: &ActiveSession) -> Self {
+        Self {
+            tracked_app_id: session.tracked_app.id.clone(),
+            window_title: session.persisted_window_title.clone(),
+            is_idle: session.current_is_idle,
+            is_private: session.current_is_private,
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone)]
+struct ActiveUsageSpan {
+    key: UsageTimelineKey,
+    started_at_unix: i64,
+    last_flushed_at_unix: i64,
 }
 
 /// Локальный snapshot полей TrackedApp. Не используем ark_core::types::TrackedApp
@@ -523,6 +572,53 @@ impl ActiveSession {
             && self.hidden_inactive_elapsed_ms >= ttl_ms
     }
 
+    fn observe_window_title(
+        &mut self,
+        title: Option<String>,
+        captured_at: String,
+        elapsed_ms: i64,
+        is_idle: bool,
+        is_private: bool,
+    ) -> Option<String> {
+        self.window_title = title.clone();
+        if is_private {
+            if title == self.persisted_window_title {
+                self.pending_window_title = None;
+                return None;
+            }
+            self.persisted_window_title = title;
+            self.pending_window_title = None;
+            return Some(captured_at);
+        }
+        if is_idle || title == self.persisted_window_title {
+            self.pending_window_title = None;
+            return None;
+        }
+
+        match self.pending_window_title.as_mut() {
+            Some(pending) if pending.title == title => {
+                pending.stable_ms = pending.stable_ms.saturating_add(elapsed_ms.max(0));
+                if pending.stable_ms < WINDOW_TITLE_STABILITY_MS {
+                    return None;
+                }
+                Some(pending.first_seen_at.clone())
+            }
+            _ => {
+                self.pending_window_title = Some(PendingWindowTitle {
+                    title,
+                    first_seen_at: captured_at,
+                    stable_ms: 0,
+                });
+                None
+            }
+        }
+    }
+
+    fn mark_window_title_persisted(&mut self) {
+        self.persisted_window_title = self.window_title.clone();
+        self.pending_window_title = None;
+    }
+
     fn to_usage_session(&self, identity: &TrackerIdentity, ended_at: Option<String>) -> Value {
         json!({
             "id": self.session_id,
@@ -551,62 +647,31 @@ impl ActiveSession {
 }
 
 #[cfg(target_os = "windows")]
-async fn update_active_session(
-    ark: &Arc<ArkHost>,
-    identity: &TrackerIdentity,
+fn update_active_session(
     active: &mut ActiveSession,
     sample: ForegroundWindowSample,
     captured_at: String,
-    poll_interval_ms: i64,
-) -> Result<(), String> {
+    elapsed_ms: i64,
+) {
     debug_assert!(active.matches(&sample));
-    let previous_window_title = active.window_title.clone();
-    let previous_idle = active.current_is_idle;
     active.tracked_app.last_seen_at = captured_at.clone();
-    active.window_title = sample.window_title.clone();
     active.current_is_foreground = true;
     active.current_is_idle = sample.is_idle;
+    active.current_is_private = sample.is_private;
     active.pid_end = i64::from(sample.pid);
 
-    if previous_window_title != sample.window_title {
-        persist_usage_event(
-            ark,
-            &build_event(
-                active,
-                identity,
-                "window_changed",
-                captured_at.clone(),
-                json!({
-                    "pollIntervalMs": poll_interval_ms,
-                    "windowTitle": sample.window_title,
-                }),
-            ),
-            &identity.device_id,
+    if active
+        .observe_window_title(
+            sample.window_title.clone(),
+            captured_at,
+            elapsed_ms,
+            sample.is_idle,
+            sample.is_private,
         )
-        .await?;
+        .is_some()
+    {
+        active.mark_window_title_persisted();
     }
-    if previous_idle != sample.is_idle {
-        persist_usage_event(
-            ark,
-            &build_event(
-                active,
-                identity,
-                if sample.is_idle {
-                    "idle_started"
-                } else {
-                    "idle_ended"
-                },
-                captured_at,
-                json!({
-                    "idle": sample.is_idle,
-                    "pollIntervalMs": poll_interval_ms,
-                }),
-            ),
-            &identity.device_id,
-        )
-        .await?;
-    }
-    Ok(())
 }
 
 #[cfg(target_os = "windows")]
@@ -616,7 +681,6 @@ async fn start_session(
     first_seen_cache: &mut HashMap<String, String>,
     sample: ForegroundWindowSample,
     captured_at: String,
-    poll_interval_ms: i64,
     icon_cache_dir: Option<PathBuf>,
 ) -> Result<ActiveSession, String> {
     let first_seen_at = first_seen_cache
@@ -645,6 +709,8 @@ async fn start_session(
         foreground_ms: 0,
         idle_ms: 0,
         window_title: sample.window_title.clone(),
+        persisted_window_title: sample.window_title.clone(),
+        pending_window_title: None,
         process_name: sample.process_name.clone(),
         exe_path: sample.exe_path.clone(),
         pid_start: i64::from(sample.pid),
@@ -652,6 +718,7 @@ async fn start_session(
         current_is_foreground: true,
         current_is_visible: true,
         current_is_idle: sample.is_idle,
+        current_is_private: sample.is_private,
         sample_count: 1,
         heartbeat_elapsed_ms: 0,
         hidden_inactive_elapsed_ms: 0,
@@ -663,22 +730,6 @@ async fn start_session(
         &identity.device_id,
     )
     .await?;
-    persist_usage_event(
-        ark,
-        &build_event(
-            &session,
-            identity,
-            "session_started",
-            captured_at,
-            json!({
-                "idle": sample.is_idle,
-                "pollIntervalMs": poll_interval_ms,
-            }),
-        ),
-        &identity.device_id,
-    )
-    .await?;
-
     Ok(session)
 }
 
@@ -779,6 +830,68 @@ fn percentile(samples: &mut [i64], percentile: usize) -> i64 {
 }
 
 #[cfg(target_os = "windows")]
+async fn persist_compact_usage_span(
+    ark: &Arc<ArkHost>,
+    identity: &TrackerIdentity,
+    span: &ActiveUsageSpan,
+    ended_at_unix: i64,
+    updated_at: &str,
+) -> Result<(), String> {
+    if ended_at_unix <= span.started_at_unix {
+        return Ok(());
+    }
+    let flags = i64::from(span.key.is_idle) | (i64::from(span.key.is_private) << 1);
+    ark_request(
+        ark,
+        "upsert_usage_span",
+        json!({
+            "usage_span": {
+                "deviceId": identity.device_id,
+                "startedAtUnix": span.started_at_unix,
+                "endedAtUnix": ended_at_unix,
+                "trackedAppId": span.key.tracked_app_id,
+                "windowTitle": span.key.window_title,
+                "flags": flags,
+                "updatedAt": updated_at,
+            }
+        }),
+    )
+    .await
+    .map(|_| ())
+}
+
+#[cfg(target_os = "windows")]
+async fn update_usage_timeline(
+    ark: &Arc<ArkHost>,
+    identity: &TrackerIdentity,
+    active: &mut Option<ActiveUsageSpan>,
+    current: Option<UsageTimelineKey>,
+    now_unix: i64,
+    updated_at: &str,
+) -> Result<(), String> {
+    let state_changed = active.as_ref().map(|span| &span.key) != current.as_ref();
+    if state_changed {
+        if let Some(previous) = active.as_ref() {
+            persist_compact_usage_span(ark, identity, previous, now_unix, updated_at).await?;
+        }
+        *active = current.map(|key| ActiveUsageSpan {
+            key,
+            started_at_unix: now_unix,
+            last_flushed_at_unix: now_unix,
+        });
+        return Ok(());
+    }
+
+    if let Some(span) = active.as_mut() {
+        if now_unix.saturating_sub(span.last_flushed_at_unix) >= USAGE_SPAN_HEARTBEAT_SECS {
+            persist_compact_usage_span(ark, identity, span, now_unix, updated_at).await?;
+            span.last_flushed_at_unix = now_unix;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
 async fn flush_session_heartbeat(
     ark: &Arc<ArkHost>,
     identity: &TrackerIdentity,
@@ -800,7 +913,7 @@ async fn finalize_session(
     identity: &TrackerIdentity,
     active: &ActiveSession,
     ended_at: String,
-    kind: &str,
+    _kind: &str,
 ) -> Result<(), String> {
     persist_tracked_app(ark, &active.tracked_app, &identity.device_id).await?;
     persist_usage_session(
@@ -809,52 +922,7 @@ async fn finalize_session(
         &identity.device_id,
     )
     .await?;
-    persist_usage_event(
-        ark,
-        &build_event(
-            active,
-            identity,
-            kind,
-            ended_at,
-            json!({
-                "foregroundMs": active.foreground_ms,
-                "idleMs": active.idle_ms,
-                "runtimeMs": active.runtime_ms,
-                "sampleCount": active.sample_count,
-                "visible": active.current_is_visible,
-            }),
-        ),
-        &identity.device_id,
-    )
-    .await?;
     Ok(())
-}
-
-#[cfg(target_os = "windows")]
-fn build_event(
-    active: &ActiveSession,
-    identity: &TrackerIdentity,
-    kind: &str,
-    occurred_at: String,
-    meta_json: Value,
-) -> Value {
-    json!({
-        "id": new_uuid(),
-        "trackedAppId": active.tracked_app.id,
-        "usageSessionId": active.session_id,
-        "deviceId": identity.device_id,
-        "deviceName": identity.device_name,
-        "platform": PLATFORM,
-        "occurredAt": occurred_at,
-        "kind": kind,
-        "windowTitle": active.window_title,
-        "processName": active.process_name,
-        "exePath": active.exe_path,
-        "pid": active.pid_end,
-        "isForeground": active.current_is_foreground,
-        "isIdle": active.current_is_idle,
-        "metaJson": meta_json,
-    })
 }
 
 // ----- ARK access helpers (через ArkHost) -----
@@ -932,20 +1000,6 @@ async fn persist_usage_session(
     .map(|_| ())
 }
 
-async fn persist_usage_event(
-    ark: &Arc<ArkHost>,
-    event: &Value,
-    device_id: &str,
-) -> Result<(), String> {
-    ark_request(
-        ark,
-        "upsert_usage_event",
-        json!({ "usage_event": event, "device_id": device_id }),
-    )
-    .await
-    .map(|_| ())
-}
-
 // ----- utils -----
 
 #[cfg(target_os = "windows")]
@@ -997,12 +1051,6 @@ fn derive_display_name(process_name: &str, window_title: &Option<String>) -> Opt
         .file_stem()
         .and_then(|value| value.to_str())
         .map(|value| value.to_string())
-}
-
-fn iso_now() -> String {
-    chrono::Utc::now()
-        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-        .to_string()
 }
 
 fn new_uuid() -> String {
@@ -1069,6 +1117,8 @@ mod tests {
             foreground_ms: 0,
             idle_ms: 0,
             window_title: Some("Demo".to_string()),
+            persisted_window_title: Some("Demo".to_string()),
+            pending_window_title: None,
             process_name: "demo.exe".to_string(),
             exe_path: r"C:\Games\Demo\demo.exe".to_string(),
             pid_start: 100,
@@ -1076,6 +1126,7 @@ mod tests {
             current_is_foreground: true,
             current_is_visible: true,
             current_is_idle: false,
+            current_is_private: false,
             sample_count: 0,
             heartbeat_elapsed_ms: 0,
             hidden_inactive_elapsed_ms: 0,
@@ -1179,6 +1230,50 @@ mod tests {
 
         session.mark_heartbeat_flushed();
         assert!(!session.should_flush_heartbeat(SESSION_HEARTBEAT_FLUSH_MS));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn window_title_is_persisted_only_after_ten_stable_seconds() {
+        fn observe(
+            session: &mut ActiveSession,
+            title: &str,
+            captured_at: &str,
+            elapsed_ms: i64,
+        ) -> Option<String> {
+            session.observe_window_title(
+                Some(title.to_string()),
+                captured_at.to_string(),
+                elapsed_ms,
+                false,
+                false,
+            )
+        }
+
+        let mut session = test_session();
+        assert_eq!(
+            observe(&mut session, "Flash", "2026-01-01T00:00:01Z", 1_000),
+            None
+        );
+        assert_eq!(
+            observe(&mut session, "Demo", "2026-01-01T00:00:02Z", 1_000),
+            None
+        );
+        let first_seen = "2026-01-01T00:00:03.000Z";
+        assert_eq!(observe(&mut session, "GitHub", first_seen, 1_000), None);
+        assert_eq!(
+            observe(&mut session, "GitHub", "2026-01-01T00:00:12Z", 9_000),
+            None
+        );
+        assert_eq!(
+            observe(&mut session, "GitHub", "2026-01-01T00:00:13Z", 1_000),
+            Some(first_seen.to_string())
+        );
+        session.mark_window_title_persisted();
+        assert_eq!(
+            observe(&mut session, "GitHub", "2026-01-01T00:00:14Z", 1_000),
+            None
+        );
     }
 
     #[cfg(target_os = "windows")]

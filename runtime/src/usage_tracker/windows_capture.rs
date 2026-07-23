@@ -2,6 +2,7 @@
 // refactor). Sync-API: caller вызывает `capture_foreground_window` из контекста
 // `tokio::task::spawn_blocking`.
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::time::Duration;
@@ -10,11 +11,15 @@ use sha2::{Digest, Sha256};
 
 use windows::core::PWSTR;
 use windows::Win32::Foundation::{CloseHandle, BOOL, FILETIME, HWND, LPARAM};
+use windows::Win32::System::Com::{
+    CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
+};
 use windows::Win32::System::SystemInformation::GetTickCount64;
 use windows::Win32::System::Threading::{
     GetProcessTimes, OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
     PROCESS_QUERY_LIMITED_INFORMATION,
 };
+use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation};
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO};
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
@@ -32,6 +37,7 @@ pub struct ForegroundWindowSample {
     pub window_title: Option<String>,
     pub pid: u32,
     pub is_idle: bool,
+    pub is_private: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -145,7 +151,9 @@ pub fn capture_foreground_window_with_diagnostics(
             .and_then(|value| value.to_str())
             .unwrap_or("")
             .to_string();
-        let window_title = read_window_title(hwnd);
+        let native_title = read_window_title(hwnd);
+        let (window_title, is_private) =
+            privacy_safe_window_title(hwnd, &process_name, native_title);
         let idle_duration = current_idle_duration()?;
 
         Ok(Some(ForegroundWindowSample {
@@ -156,6 +164,7 @@ pub fn capture_foreground_window_with_diagnostics(
             window_title,
             pid,
             is_idle: idle_duration >= idle_threshold,
+            is_private,
         }))
     }
 }
@@ -224,6 +233,108 @@ fn process_creation_time_100ns(handle: windows::Win32::Foundation::HANDLE) -> Re
 
 fn filetime_to_u64(value: FILETIME) -> u64 {
     ((value.dwHighDateTime as u64) << 32) | value.dwLowDateTime as u64
+}
+
+thread_local! {
+    static UI_AUTOMATION: RefCell<Option<IUIAutomation>> = const { RefCell::new(None) };
+}
+
+fn is_supported_browser(process_name: &str) -> bool {
+    matches!(
+        process_name.to_ascii_lowercase().as_str(),
+        "chrome.exe"
+            | "msedge.exe"
+            | "firefox.exe"
+            | "brave.exe"
+            | "opera.exe"
+            | "vivaldi.exe"
+            | "chromium.exe"
+            | "arc.exe"
+            | "floorp.exe"
+            | "librewolf.exe"
+            | "waterfox.exe"
+            | "zen.exe"
+    )
+}
+
+fn browser_private_marker(process_name: &str) -> String {
+    let browser = process_name
+        .strip_suffix(".exe")
+        .or_else(|| process_name.strip_suffix(".EXE"))
+        .unwrap_or(process_name);
+    format!("{browser} — private mode")
+}
+
+fn has_private_marker(title: &str) -> bool {
+    let title = title.to_lowercase();
+    [
+        "incognito",
+        "inprivate",
+        "private browsing",
+        "private window",
+        "navigation privée",
+        "navegación privada",
+        "приватн",
+        "инкогнито",
+    ]
+    .iter()
+    .any(|marker| title.contains(marker))
+}
+
+fn titles_indicate_private(native_title: &str, accessible_title: &str) -> bool {
+    has_private_marker(native_title)
+        || has_private_marker(accessible_title)
+        || accessible_title != native_title
+}
+
+fn accessible_window_title(hwnd: HWND) -> Result<String, String> {
+    UI_AUTOMATION.with(|slot| {
+        if slot.borrow().is_none() {
+            unsafe {
+                let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+                let automation: IUIAutomation =
+                    CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
+                        .map_err(|error| error.to_string())?;
+                *slot.borrow_mut() = Some(automation);
+            }
+        }
+        let slot = slot.borrow();
+        let automation = slot
+            .as_ref()
+            .ok_or_else(|| "UI Automation unavailable".to_string())?;
+        let name = unsafe {
+            automation
+                .ElementFromHandle(hwnd)
+                .and_then(|element| element.CurrentName())
+                .map_err(|error| error.to_string())?
+        };
+        Ok(name.to_string())
+    })
+}
+
+fn privacy_safe_window_title(
+    hwnd: HWND,
+    process_name: &str,
+    native_title: Option<String>,
+) -> (Option<String>, bool) {
+    if !is_supported_browser(process_name) {
+        return (native_title, false);
+    }
+    let marker = || Some(browser_private_marker(process_name));
+    let Some(native_title) = native_title else {
+        return (marker(), true);
+    };
+    let accessible_title = match accessible_window_title(hwnd) {
+        Ok(title) if !title.trim().is_empty() => title,
+        _ => return (marker(), true),
+    };
+    let accessible = accessible_title.trim();
+    let private = titles_indicate_private(&native_title, accessible);
+    if private {
+        (marker(), true)
+    } else {
+        (Some(native_title), false)
+    }
 }
 
 fn read_window_title(hwnd: HWND) -> Option<String> {
@@ -348,6 +459,22 @@ mod tests {
         let first = tracked_app_id_for("C:/Games/Demo/Game.EXE");
         let second = tracked_app_id_for("c:\\games\\demo\\game.exe");
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn chromium_accessibility_prefix_marks_private_without_storing_it() {
+        assert!(titles_indicate_private(
+            "Facebook - Google Chrome",
+            "Incognito - Facebook - Google Chrome"
+        ));
+        assert!(!titles_indicate_private(
+            "Facebook - Google Chrome",
+            "Facebook - Google Chrome"
+        ));
+        assert_eq!(
+            browser_private_marker("chrome.exe"),
+            "chrome — private mode"
+        );
     }
 
     #[cfg(target_os = "windows")]
