@@ -72,6 +72,7 @@ test("coder keeps its data and overlays inside the full-width scroll surface", a
             accepted: true,
             language: "javascript",
             languages: ["javascript", "rust"],
+            rank: { id: -6, name: "6 kyu", color: "yellow" },
             submittedAt: now,
             url: "https://www.codewars.com/kata/multiples-of-3-and-5",
           },
@@ -139,11 +140,27 @@ test("coder keeps its data and overlays inside the full-width scroll surface", a
       "href",
       "https://leetcode.com/problems/two-sum/",
     );
+    await expect(dashboard.locator(".difficulty-gauge")).not.toContainText("Решено");
+    expect(
+      await dashboard
+        .locator(".gauge-value strong")
+        .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+    ).toBeGreaterThan(16);
+    expect(
+      await dashboard
+        .getByRole("button", { name: "LeetCode" })
+        .evaluate((element) => getComputedStyle(element).cursor),
+    ).not.toBe("pointer");
 
     const tabsX = (await dashboard.locator(".platform-tabs").boundingBox())?.x;
     await dashboard.getByRole("button", { name: "Codewars" }).click();
     await expect(dashboard.locator(".summary-grid")).toContainText("3 kyu");
     await expect(dashboard.locator(".summary-grid")).toContainText("544");
+    const codewarsGauge = dashboard.locator(".difficulty-gauge");
+    await expect(codewarsGauge).toContainText("6 kyu");
+    await expect(codewarsGauge.locator(".gauge-value strong")).toHaveText("1");
+    await expect(codewarsGauge.locator(".gauge-segment")).toHaveCount(1);
+    await expect(dashboard.getByText("Решённые kata по kyu")).toHaveCount(0);
     await expect(dashboard.locator(".submissions-panel")).toContainText("Multiples of 3 and 5");
     await expect(dashboard.locator(".submissions-panel")).toContainText("javascript, rust");
     const screenshot = await app.evaluate(async ({ BrowserWindow }) => {
@@ -161,11 +178,10 @@ test("coder keeps its data and overlays inside the full-width scroll surface", a
     });
     const screenshotPath = path.join(
       REPO_ROOT,
-      ".agent",
-      "tasks",
-      "2026-07-18-codewars-integration",
-      "raw",
-      "coder-codewars.png",
+      ".tmp",
+      "visual",
+      "2026-07-19-coder-codewars-kyu-chart",
+      "codewars-e2e.png",
     );
     fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
     fs.writeFileSync(screenshotPath, Buffer.from(screenshot, "base64"));

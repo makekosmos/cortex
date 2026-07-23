@@ -43,6 +43,7 @@ function toSubmission(record: RawObjectRecord): CodingSubmission | null {
     ? props.languages.filter((value): value is string => typeof value === "string" && !!value)
     : [];
   const language = text(props.language) || "Неизвестно";
+  const rank = objectValue(props.rank);
   return {
     id: record.id,
     source,
@@ -56,6 +57,7 @@ function toSubmission(record: RawObjectRecord): CodingSubmission | null {
     languages: languages.length > 0 ? languages : [language],
     runtime: text(props.runtime),
     memory: text(props.memory),
+    rankName: text(rank.name),
     submittedAt,
     url: text(props.url),
   };
@@ -99,6 +101,13 @@ export function breakdown(values: string[], total: number): CoderBreakdownItem[]
   return [...counts.entries()]
     .map(([label, count]) => ({ label, count, share: total > 0 ? count / total : 0 }))
     .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "ru"));
+}
+
+export function kyuBreakdown(values: string[]): CoderBreakdownItem[] {
+  const ranks = values.filter((value) => /^[1-8] kyu$/.test(value));
+  return breakdown(ranks, ranks.length).sort(
+    (left, right) => Number.parseInt(right.label) - Number.parseInt(left.label),
+  );
 }
 
 function count(value: unknown): number {
@@ -197,6 +206,9 @@ export function useCoderStats(platform: Ref<CoderPlatform>) {
       submissions.value.reduce((total, submission) => total + submission.languages.length, 0),
     ),
   );
+  const codewarsRanks = computed(() =>
+    kyuBreakdown(submissions.value.map((submission) => submission.rankName)),
+  );
   const statuses = computed(() =>
     breakdown(
       submissions.value.map((submission) => submission.status),
@@ -289,6 +301,7 @@ export function useCoderStats(platform: Ref<CoderPlatform>) {
   return {
     activity,
     codewarsProfile,
+    codewarsRanks,
     difficulties,
     error,
     languages,

@@ -1,22 +1,64 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { CoderDifficultyStats } from "./types";
+import type { CoderBreakdownItem, CoderDifficultyStats } from "./types";
 
-const props = defineProps<{ stats: CoderDifficultyStats }>();
+const props = defineProps<{ stats?: CoderDifficultyStats; ranks?: CoderBreakdownItem[] }>();
 
-const segments = computed(() => {
+const kyuColor = (level: number) => {
+  if (level >= 7) return "var(--foreground)";
+  if (level >= 5) return "var(--status-warning)";
+  if (level >= 3) return "var(--accent)";
+  return "color-mix(in srgb, var(--accent) 68%, var(--destructive))";
+};
+
+const gauge = computed(() => {
+  const source = props.ranks
+    ? props.ranks.map((rank) => {
+        const level = Number.parseInt(rank.label);
+        return {
+          key: `kyu-${level}`,
+          label: rank.label,
+          count: rank.count,
+          value: String(rank.count),
+          color: kyuColor(level),
+        };
+      })
+    : [
+        {
+          key: "easy",
+          label: "Лёгкие",
+          count: props.stats?.easy ?? 0,
+          value: `${props.stats?.easy ?? 0}/${props.stats?.easyTotal ?? 0}`,
+          color: "var(--coder-easy)",
+        },
+        {
+          key: "medium",
+          label: "Средние",
+          count: props.stats?.medium ?? 0,
+          value: `${props.stats?.medium ?? 0}/${props.stats?.mediumTotal ?? 0}`,
+          color: "var(--coder-medium)",
+        },
+        {
+          key: "hard",
+          label: "Сложные",
+          count: props.stats?.hard ?? 0,
+          value: `${props.stats?.hard ?? 0}/${props.stats?.hardTotal ?? 0}`,
+          color: "var(--coder-hard)",
+        },
+      ];
+  const total = props.ranks
+    ? source.reduce((sum, segment) => sum + segment.count, 0)
+    : (props.stats?.total ?? 0);
   let offset = 0;
-  return [
-    { key: "easy", label: "Лёгкие", count: props.stats.easy },
-    { key: "medium", label: "Средние", count: props.stats.medium },
-    { key: "hard", label: "Сложные", count: props.stats.hard },
-  ]
+  const segments = source
     .map((segment, index) => {
-      const share = props.stats.total > 0 ? (segment.count / props.stats.total) * 100 : 0;
+      const share = total > 0 ? (segment.count / total) * 100 : 0;
+      const visibleShare = Math.max(0, share - Math.min(1.5, share * 0.35));
       const result = {
         ...segment,
         style: {
-          strokeDasharray: `${Math.max(0, share - 1.5)} ${100 - Math.max(0, share - 1.5)}`,
+          stroke: segment.color,
+          strokeDasharray: `${visibleShare} ${100 - visibleShare}`,
           strokeDashoffset: `${-(offset + 0.75)}`,
           animationDelay: `${index * 100}ms`,
         },
@@ -25,22 +67,25 @@ const segments = computed(() => {
       return result;
     })
     .filter((segment) => segment.count > 0);
+  return {
+    ariaLabel: props.ranks ? "Распределение kata по kyu" : "Распределение сложности задач",
+    hasData: props.ranks ? total > 0 : (props.stats?.available ?? 0) > 0,
+    legend: source,
+    segments,
+    total,
+  };
 });
 </script>
 
 <template>
-  <section class="difficulty-gauge" aria-label="Уровень алгоритмов">
-    <div class="difficulty-copy">
-      <h2 class="difficulty-title">Уровень алгоритмов</h2>
-      <p class="difficulty-description">По уникальным принятым решениям LeetCode</p>
-    </div>
+  <section class="difficulty-gauge" :aria-label="gauge.ariaLabel">
     <div class="gauge-chart">
-      <svg viewBox="0 0 200 112" role="img" aria-label="Распределение сложности задач">
+      <svg viewBox="0 0 200 112" role="img" :aria-label="gauge.ariaLabel">
         <path class="gauge-track" pathLength="100" d="M 20 100 A 80 80 0 0 1 180 100" />
         <path
-          v-for="segment in segments"
+          v-for="segment in gauge.segments"
           :key="segment.key"
-          :class="['gauge-segment', `gauge-segment--${segment.key}`]"
+          class="gauge-segment"
           :style="segment.style"
           pathLength="100"
           d="M 20 100 A 80 80 0 0 1 180 100"
@@ -49,23 +94,15 @@ const segments = computed(() => {
         </path>
       </svg>
       <div class="gauge-value">
-        <strong v-if="stats.available > 0">{{ stats.total }}</strong>
+        <strong v-if="gauge.hasData">{{ gauge.total }}</strong>
         <strong v-else>Нет данных</strong>
-        <span>Решено</span>
       </div>
     </div>
     <div class="difficulty-legend">
-      <div>
-        <i class="difficulty-dot difficulty-dot--easy" /><span>Лёгкие</span
-        ><strong>{{ stats.easy }}/{{ stats.easyTotal }}</strong>
-      </div>
-      <div>
-        <i class="difficulty-dot difficulty-dot--medium" /><span>Средние</span
-        ><strong>{{ stats.medium }}/{{ stats.mediumTotal }}</strong>
-      </div>
-      <div>
-        <i class="difficulty-dot difficulty-dot--hard" /><span>Сложные</span
-        ><strong>{{ stats.hard }}/{{ stats.hardTotal }}</strong>
+      <div v-for="segment in gauge.legend" :key="segment.key">
+        <i class="difficulty-dot" :style="{ background: segment.color }" />
+        <span>{{ segment.label }}</span>
+        <strong>{{ segment.value }}</strong>
       </div>
     </div>
   </section>
@@ -74,30 +111,14 @@ const segments = computed(() => {
 <style scoped>
 .difficulty-gauge {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 210px minmax(150px, 0.7fr);
+  grid-template-columns: 210px minmax(150px, 0.7fr);
   align-items: center;
+  justify-content: center;
   gap: 18px;
   margin-bottom: 18px;
   padding: 16px 0;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
-}
-
-.difficulty-title,
-.difficulty-description {
-  margin: 0;
-}
-
-.difficulty-title {
-  color: var(--foreground);
-  font-size: 0.875rem;
-}
-
-.difficulty-description {
-  margin-top: 5px;
-  color: var(--muted-foreground);
-  font-size: 0.6875rem;
-  line-height: 1.45;
 }
 
 .gauge-chart {
@@ -126,16 +147,6 @@ const segments = computed(() => {
   animation: gauge-reveal 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.gauge-segment--easy {
-  stroke: var(--coder-easy);
-}
-.gauge-segment--medium {
-  stroke: var(--coder-medium);
-}
-.gauge-segment--hard {
-  stroke: var(--coder-hard);
-}
-
 .gauge-value {
   position: absolute;
   right: 0;
@@ -148,10 +159,9 @@ const segments = computed(() => {
 
 .gauge-value strong {
   color: var(--foreground);
-  font-size: 1rem;
+  font-size: 1.5rem;
 }
 
-.gauge-value span,
 .difficulty-legend span {
   color: var(--muted-foreground);
   font-size: 0.6875rem;
@@ -179,16 +189,6 @@ const segments = computed(() => {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-}
-
-.difficulty-dot--easy {
-  background: var(--coder-easy);
-}
-.difficulty-dot--medium {
-  background: var(--coder-medium);
-}
-.difficulty-dot--hard {
-  background: var(--coder-hard);
 }
 
 @keyframes gauge-reveal {
