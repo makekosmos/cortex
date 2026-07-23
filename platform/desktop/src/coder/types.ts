@@ -13,6 +13,7 @@ export interface CodingSubmission {
   languages: string[];
   runtime: string;
   memory: string;
+  rankName: string;
   submittedAt: string;
   url: string;
 }

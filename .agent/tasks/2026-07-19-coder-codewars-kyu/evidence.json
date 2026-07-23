@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-07-19-coder-codewars-kyu",
+  "verified_at": "2026-07-19T20:08:15Z",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "bunx playwright test tests/e2e/coder.spec.ts"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "node .tmp/visual/2026-07-19-coder-codewars-kyu/verify.mjs"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "cargo test -p kepler-backend --lib integrations::tests::codewars && bun run ark:guard:writes"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "bun test platform/desktop/src/coder/useCoderStats.test.ts && bunx playwright test tests/e2e/coder.spec.ts"
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "command": "bun run desktop:typecheck && bun run desktop:build && git diff --check"
+    }
+  ]
+}

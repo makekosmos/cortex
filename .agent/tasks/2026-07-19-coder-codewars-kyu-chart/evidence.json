@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-07-19-coder-codewars-kyu-chart",
+  "verified_at": "2026-07-19T20:31:51Z",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "node .tmp/visual/2026-07-19-coder-codewars-kyu/verify.mjs"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "bunx playwright test tests/e2e/coder.spec.ts"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "cargo build --manifest-path Cargo.toml --bin kepler-backend --target-dir .tmp/cargo-coder-chart && bun .tmp/visual/2026-07-19-coder-codewars-kyu-chart/backfill.ts"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "node .tmp/visual/2026-07-19-coder-codewars-kyu/verify.mjs"
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "command": "cargo test -p kepler-backend --lib integrations::tests::codewars && bun test platform/desktop/src/coder/useCoderStats.test.ts && bun run desktop:typecheck && bun run desktop:build && bun run ark:guard:writes && bunx playwright test tests/e2e/coder.spec.ts && git diff --check"
+    }
+  ]
+}

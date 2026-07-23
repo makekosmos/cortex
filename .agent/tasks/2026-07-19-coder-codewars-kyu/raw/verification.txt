@@ -1,0 +1,19 @@
+Fresh verifier pass — 2026-07-19T20:11:25Z
+
+AC1 PASS — Electron E2E asserts the platform tab cursor is not pointer.
+AC2 PASS — Electron E2E and inspected LeetCode screenshot confirm the simplified gauge and larger value.
+AC3 PASS — 4 targeted Rust Codewars tests pass; ARK write-boundary guard passes.
+AC4 PASS — 6 coder statistics tests, Electron E2E, and deterministic visual mock confirm kyu counts/order.
+AC5 PASS — desktop typecheck, desktop build, Electron E2E, visual script, and git diff check all pass.
+
+Commands rerun after evidence was written:
+- cargo test -p kepler-backend --lib integrations::tests::codewars
+- bun test platform/desktop/src/coder/useCoderStats.test.ts
+- bun run desktop:typecheck
+- bun run ark:guard:writes
+- bun run desktop:build
+- bunx playwright test tests/e2e/coder.spec.ts
+- node .tmp/visual/2026-07-19-coder-codewars-kyu/verify.mjs
+- git diff --check
+
+Verdict: PASS. No problems.md required.
