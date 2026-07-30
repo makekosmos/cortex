@@ -1,26 +1,125 @@
-# Kosmos
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/readme/header-dark.svg">
+    <img alt="Kosmos — local-first personal software" src=".github/readme/header-light.svg" width="100%">
+  </picture>
+</p>
 
-Kosmos is a monorepo for local-first personal software: a shared ARK data runtime plus focused desktop/mobile surfaces that render or capture specific workflows.
+<p align="center"><strong>One data core. Many focused tools. No cloud required.</strong></p>
 
-## Core
+<p align="center">
+  <a href="https://github.com/ksanrse/kosmos"><img alt="GitHub stars" src="https://shieldcn.dev/github/ksanrse/kosmos/stars.svg?variant=branded&size=sm"></a>
+  <img alt="Last commit" src="https://shieldcn.dev/github/ksanrse/kosmos/last-commit.svg?variant=branded&size=sm">
+  <img alt="Active development" src="https://shieldcn.dev/badge/status-active+development-F59E0B.svg?variant=branded&size=sm">
+</p>
 
-### [ARK](./core/ark/crates/ark-core/README.md) - local-first data runtime
+<p align="center">
+  <a href="./docs-site/">Documentation</a> ·
+  <a href="./docs-site/concepts/architecture.md">Architecture</a> ·
+  <a href="./core/ark/crates/ark-core/README.md">ARK</a> ·
+  <a href="#development">Development</a>
+</p>
 
-ARK is the shared Rust + SQLite runtime for long-lived personal data. The canonical desktop binary is `ark-core-rpc`; Electron integrations talk to it through `@kosmos/ark` from Electron main/preload facades instead of writing directly into ARK SQLite tables.
+## What is Kosmos?
 
-### [Kosmos desktop shell](./platform/desktop/package.json)
+Kosmos is a **local-first personal software system for Windows**. At its center is **ARK**, a shared Rust + SQLite data runtime for typed objects, links, activity data, and synchronization. Around it are focused tools for notes, tasks, games, reading, focus, and personal analytics.
 
-The desktop host is the Electron launcher/settings/runtime shell. It owns extension hosting, the command bus bridge, packaging, and the built-in Dashboard view.
+The UI is replaceable; the data contract is not. Applications do not own isolated databases and do not write directly to SQLite. They communicate with ARK through the same narrow SDK, so a note, task, game, or usage session can remain useful outside the interface that created it.
 
-## Extensions
+<p align="center">
+  <img alt="Eden typed objects in Kosmos" src=".github/readme/eden.png" width="100%">
+</p>
 
-- [Eden](./products/eden/manifest.json) - notes and journal editor.
-- [Delphi](./products/delphi/manifest.json) - task tracking UI.
-- [Arrancador](./incubator/arrancador/manifest.json) - game library, playtime, backups, and ARK game-object integration.
-- [Akasha](./incubator/akasha/README.md) - EPUB reader.
+## Principles
 
-Dashboard is built into the shell under `platform/desktop/src/views/Dashboard*.vue` and `platform/desktop/src/dashboard/`. Focus Session is shell-owned in `platform/desktop/electron/focus-session.ts` and renders through the shared Raycast host.
+- **Local-first** — the complete working dataset lives on the device; the network is optional.
+- **One canonical runtime** — ARK owns persistence, object contracts, links, usage data, and sync.
+- **Focused clients** — each app solves one workflow instead of becoming another silo.
+- **Replaceable interfaces** — desktop apps, future native clients, CLI tools, and projections share stable contracts.
+- **Auditable changes** — substantial work follows a spec → evidence → verification proof loop.
 
-## Current ARK Integration Rule
+## Architecture
 
-New Electron integrations should use `@kosmos/ark` and `ark-core-rpc`. Direct writes into ARK SQLite tables are legacy or migration-only paths; if a process must write directly, it must use `ark_core::db` helpers so sync state is updated consistently.
+```mermaid
+flowchart TB
+  Apps["Eden · Delphi · Arrancador · Akasha"] --> Shell["Kosmos Desktop Shell<br/>Electron · Vue"]
+  Dashboard["Dashboard · Focus · Launcher"] --> Shell
+  Shell --> SDK["@kosmos/ark"]
+  SDK --> Runtime["Kosmos Runtime<br/>Rust · WebSocket · command bus"]
+  Runtime --> ARK["ARK Data Engine<br/>objects · links · usage · sync"]
+  ARK --> DB[("Local SQLite")]
+  ARK --> Sync["LAN / relay synchronization"]
+```
+
+The Electron renderer never opens SQLite. The shell talks to the Rust runtime through `@kosmos/ark`; ARK remains the canonical owner of data and sync state.
+
+## Surfaces
+
+| Surface | Role | State |
+| --- | --- | --- |
+| **Kosmos Shell** | Launcher, extension host, settings, Dashboard, Focus Session | Active |
+| **Eden** | Notes, journal, and typed personal objects | Active |
+| **Delphi** | Tasks and inbox workflows | Active |
+| **Arrancador** | Game library, playtime, backups, and `game_obj` integration | Incubator |
+| **Akasha** | Continuous EPUB reader | Incubator |
+| **ARK** | Shared typed-data runtime, local storage, usage, and sync | Core |
+
+## Stack
+
+<p>
+  <img alt="Local-first" src="https://shieldcn.dev/badge/local--first-by+design-8B5CF6.svg?variant=branded&size=sm&logo=sqlite">
+  <img alt="Windows desktop" src="https://shieldcn.dev/badge/Windows-desktop-0078D4.svg?variant=branded&size=sm&logo=windows11">
+  <img alt="Rust ARK" src="https://shieldcn.dev/badge/Rust-ARK-B7410E.svg?variant=branded&size=sm&logo=rust">
+  <img alt="Electron shell" src="https://shieldcn.dev/badge/Electron-shell-47848F.svg?variant=branded&size=sm&logo=electron">
+  <img alt="Vue extensions" src="https://shieldcn.dev/badge/Vue-extensions-42B883.svg?variant=branded&size=sm&logo=vuedotjs">
+  <img alt="Bun workspace" src="https://shieldcn.dev/badge/Bun-1.3+-000000.svg?variant=branded&size=sm&logo=bun">
+</p>
+
+- **Data:** Rust, SQLite, FTS5, Hybrid Logical Clock, LAN/relay sync
+- **Desktop:** Electron, Vue, TypeScript, Vite
+- **Design:** `@kosmos/visuals`, shared OKLCH tokens and desktop primitives
+- **Quality:** Playwright, Vitest, oxlint, oxfmt, proof-loop evidence
+
+## Repository map
+
+```text
+core/ark/              ARK runtime and @kosmos/ark SDK
+platform/desktop/      Electron host and built-in surfaces
+platform/runtime/      Rust supervisor, gateway, command bus, sync
+products/              Active product extensions
+incubator/             Experimental product surfaces
+packages/visuals/      Shared visual system
+services/              Relay and supporting services
+docs-site/             Architecture, rules, manuals, and agent context
+```
+
+## Development
+
+### Requirements
+
+- Windows 10/11
+- [Bun](https://bun.sh/) 1.3.5+
+- stable [Rust](https://www.rust-lang.org/tools/install) toolchain
+- Node.js 20+
+- PowerShell 7+
+
+```powershell
+git clone https://github.com/ksanrse/kosmos.git
+cd kosmos
+bun install
+
+# Build the Rust backend and launch the desktop shell
+cd platform/desktop
+bun run dev
+```
+
+Useful repository checks:
+
+```powershell
+bun run ark:guard:writes
+bun run ark:smoke
+bun run docs:build
+bun run test:e2e
+```
+
+Read the [getting-started guide](./docs-site/guide/getting-started.md) before changing ARK, sync, or the desktop runtime. The full architecture and repository rules live in [`docs-site/`](./docs-site/).
