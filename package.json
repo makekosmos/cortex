@@ -1,0 +1,8 @@
+{
+  "name": "@kosmos/shell",
+  "private": true,
+  "scripts": {
+    "check:layout": "node scripts/check-layout.mjs"
+  },
+  "packageManager": "bun@1.3.14"
+}
