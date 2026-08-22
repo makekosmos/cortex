@@ -3,7 +3,7 @@ import path from "node:path";
 
 // Source-tree roots for first-party and experimental app packages.
 // User-installed runtime extensions still live in <dataDir>/extensions.
-const REPO_EXTENSION_ROOT_NAMES = ["products", "incubator", "extensions"];
+const REPO_EXTENSION_ROOT_NAMES = ["products", "extensions"];
 
 function repoExtensionRoots(repoRoot) {
   return REPO_EXTENSION_ROOT_NAMES.map((name) => ({ name, dir: path.join(repoRoot, name) })).filter(

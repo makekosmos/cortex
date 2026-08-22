@@ -19,12 +19,12 @@ interface ExtensionRootEntry {
 function resolveExtensionRootEntries(): ExtensionRootEntry[] {
   const roots: ExtensionRootEntry[] = [];
   // Repo dev tree: __dirname is platform/desktop/electron/ (or dist-electron/).
-  // Source packages can live under products/*, incubator/*, or the deprecated
-  // extensions/* compatibility root. In packaged builds we skip this branch:
+  // Source packages can live under products/* or the deprecated extensions/*
+  // compatibility root. In packaged builds we skip this branch:
   // otherwise bundled first-party extensions can be misclassified as dev.
   if (!app.isPackaged) {
     const repoRoot = path.resolve(__dirname, "..", "..", "..");
-    for (const rootName of ["products", "incubator", "extensions"]) {
+    for (const rootName of ["products", "extensions"]) {
       const dev = path.join(repoRoot, rootName);
       if (existsSync(dev)) roots.push({ dir: dev, source: "dev" });
     }

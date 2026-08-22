@@ -60,7 +60,7 @@ function listExtensionIds() {
 
 function readManifest(id) {
   const entry = findRepoExtensionEntry(REPO_ROOT, id);
-  if (!entry) die(`manifest.json не найден для ${id} в products/, incubator/ или extensions/`);
+  if (!entry) die(`manifest.json не найден для ${id} в products/ или extensions/`);
   return entry.manifest;
 }
 
@@ -74,7 +74,7 @@ function packageKext(id, manifest) {
   mkdirSync(outDir, { recursive: true });
   try {
     const entry = findRepoExtensionEntry(REPO_ROOT, id);
-    if (!entry) die(`manifest.json не найден для ${id} в products/, incubator/ или extensions/`);
+    if (!entry) die(`manifest.json не найден для ${id} в products/ или extensions/`);
     return packageExtensionKext(id, manifest, {
       sourceDir: entry.dir,
       repoRoot: REPO_ROOT,

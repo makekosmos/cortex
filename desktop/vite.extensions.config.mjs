@@ -1,7 +1,7 @@
 // Build config для Kepler Vue extension bundles.
 //
-// Source packages are discovered from products/*, incubator/*, and the
-// deprecated compatibility root extensions/*.
+// Source packages are discovered from products/* and the deprecated
+// compatibility root extensions/*.
 //
 // Запуск: vite build --config vite.extensions.config.mjs --mode <id>
 // (см. scripts.build:extensions в package.json — orchestrator проходит по
@@ -58,8 +58,8 @@ export default defineConfig(({ mode }) => {
     base: "./",
     // `@tailwindcss/vite` v4 is a no-op for CSS files that don't `@import "tailwindcss"`,
     // so включение plugin'а глобально безопасно для extensions без Tailwind
-    // (dashboard). Активируется только для delphi/arrancador,
-    // у которых tailwind directives есть в их CSS entry.
+    // (dashboard). Активируется только для Delphi, у которого tailwind
+    // directives есть в CSS entry.
     plugins: [vue({ features: { vaporInterop: true } }), tailwindcss()],
     resolve: {
       alias: [

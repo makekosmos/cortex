@@ -4,7 +4,7 @@
 // Источник правды: GitHub releases в makekosmos/extensions
 // (per-extension tagged: eden-v0.3.0 ...). Per group выбирает
 // highest semver. Metadata (name/description/keplerApiVersion) тянет
-// из локального source — products/<id>, incubator/<id> или legacy extensions/<id>.
+// из локального source — products/<id> или legacy extensions/<id>.
 //
 // Usage:
 //   bun run --cwd platform/desktop ext:catalog -- <output-path>

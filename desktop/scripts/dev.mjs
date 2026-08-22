@@ -76,7 +76,7 @@ function readExtensionDevPorts() {
     process.env.KEPLER_DEV_EXTENSIONS === "1"
       ? null
       : new Set(
-          (process.env.KEPLER_DEV_EXTENSIONS || "akasha")
+          (process.env.KEPLER_DEV_EXTENSIONS || "eden")
             .split(",")
             .map((id) => id.trim())
             .filter(Boolean),
@@ -234,7 +234,7 @@ if (process.env.KEPLER_DEV_EXTENSIONS === "1") {
     process.env.KEPLER_DEV_EXTENSIONS,
   ]);
 } else {
-  startChild("dev-extensions:akasha", "node", ["scripts/dev-extensions.mjs", "--only", "akasha"]);
+  startChild("dev-extensions:eden", "node", ["scripts/dev-extensions.mjs", "--only", "eden"]);
 }
 
 // 2) Shell renderer Vite + Electron (KEPLER_DEV=1 → main process знает что
