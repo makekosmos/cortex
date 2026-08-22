@@ -12,6 +12,8 @@ class FakeProcess extends EventEmitter {
 
 const spawnedProcesses: FakeProcess[] = [];
 let resetCalls = 0;
+let restartCalls = 0;
+let lockProcessAlive = false;
 const controller = {
   awaitArkReady: async () => ({}),
   backendHealthy: async () => false,
@@ -37,7 +39,10 @@ mock.module("./main-ark-client-controller", () => ({
   createMainArkClientController: () => controller,
 }));
 mock.module("./main-backend-process", () => ({
-  killBackendTree: () => {},
+  isBackendLockProcessAlive: () => lockProcessAlive,
+  restartBackendProcess: async () => {
+    restartCalls += 1;
+  },
   spawnBackendProcess: () => {
     const proc = new FakeProcess();
     spawnedProcesses.push(proc);
@@ -50,6 +55,8 @@ const { createMainBackendSupervisor } = await import("./main-backend-supervisor"
 beforeEach(() => {
   spawnedProcesses.length = 0;
   resetCalls = 0;
+  restartCalls = 0;
+  lockProcessAlive = false;
 });
 
 function createTestSupervisor(getIsQuiting: () => boolean) {
@@ -58,7 +65,6 @@ function createTestSupervisor(getIsQuiting: () => boolean) {
     instance: { slot: "test" } as never,
     resolveBackendExe: () => "kepler-backend.exe",
     getIsQuiting,
-    isUsageTrackerEnabled: () => false,
     setupPomodoroNotifier: () => {},
     teardownPomodoroNotifier: () => {},
     setupFocusWidgetBackendSync: () => {},
@@ -66,40 +72,40 @@ function createTestSupervisor(getIsQuiting: () => boolean) {
     setupFocusSessionBackendSync: () => {},
     teardownFocusSessionBackendSync: () => {},
     setupDictationHotkey: async () => {},
-    setExtensionArkBridge: () => {},
     broadcastCommandsUpdated: () => {},
-    broadcastSettingsSyncUpdated: () => {},
   });
 }
 
-test("late exit from replaced backend keeps the active replacement", async () => {
-  let quitting = false;
-  const supervisor = createTestSupervisor(() => quitting);
-
+test("recovery restarts the native core and ensures its supervisor", async () => {
+  const supervisor = createTestSupervisor(() => false);
   supervisor.markBootInitStarted();
   supervisor.spawnBackend();
-  const replaced = spawnedProcesses[0]!;
   await supervisor.recoverBackendIfDead("regression-test");
+
   expect(spawnedProcesses).toHaveLength(2);
-  expect(supervisor.isBackendRunning()).toBe(true);
-  expect(resetCalls).toBe(1);
-
-  // Regression: 2026-07-15. The old process can emit exit after its replacement is active.
-  quitting = true;
-  replaced.emit("exit", null);
-  await Promise.resolve();
-
+  expect(restartCalls).toBe(1);
   expect(supervisor.isBackendRunning()).toBe(true);
   expect(resetCalls).toBe(1);
 });
 
-test("exit from the active backend still clears its process slot", async () => {
+test("Electron shutdown does not kill the independent engine", () => {
   const supervisor = createTestSupervisor(() => true);
   supervisor.spawnBackend();
+  const engine = spawnedProcesses[0]!;
 
-  spawnedProcesses[0]!.emit("exit", 1);
+  supervisor.shutdown();
+
+  expect(engine.killed).toBe(false);
+});
+
+test("idempotent ensure may exit while the lock-owned core stays alive", async () => {
+  const supervisor = createTestSupervisor(() => true);
+  supervisor.spawnBackend();
+  lockProcessAlive = true;
+
+  spawnedProcesses[0]!.emit("exit", 0);
   await Promise.resolve();
 
-  expect(supervisor.isBackendRunning()).toBe(false);
-  expect(resetCalls).toBe(1);
+  expect(supervisor.isBackendRunning()).toBe(true);
+  expect(resetCalls).toBe(0);
 });

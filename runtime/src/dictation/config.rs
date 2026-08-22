@@ -28,7 +28,7 @@ pub enum TriggerMode {
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum InjectMode {
-    /// Default: clipboard сохраняется → текст → paste shortcut → restore clipboard.
+    /// Default: transcript вставляется в активное окно и остаётся в clipboard.
     #[default]
     AutoPaste,
     /// Только записать в буфер обмена, пользователь сам жмёт Ctrl+V.
@@ -302,7 +302,32 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
         f.write_all(bytes)?;
         f.sync_all()?;
     }
-    std::fs::rename(temp_path, path)
+    // `rename` cannot replace an existing file on Windows, so every save
+    // after the first used to leave the previous dictation settings intact.
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::core::PCWSTR;
+        use windows::Win32::Storage::FileSystem::{
+            MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+        };
+
+        let from: Vec<u16> = temp_path.as_os_str().encode_wide().chain([0]).collect();
+        let to: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+        // SAFETY: both buffers are NUL-terminated and live through the call.
+        unsafe {
+            MoveFileExW(
+                PCWSTR(from.as_ptr()),
+                PCWSTR(to.as_ptr()),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            )
+            .map_err(std::io::Error::other)
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        std::fs::rename(temp_path, path)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -371,6 +396,7 @@ pub fn clear_api_key() -> Result<(), keyring::Error> {
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default, clippy::panic)]
 mod tests {
     use super::*;
     use tempfile::TempDir;
@@ -383,6 +409,7 @@ mod tests {
         assert_eq!(cfg.hotkey, "Ctrl+Shift+;");
         assert_eq!(cfg.trigger_mode, TriggerMode::Toggle);
         assert_eq!(cfg.language, "ru");
+        assert_eq!(cfg.inject_mode, InjectMode::AutoPaste);
     }
 
     #[test]
@@ -551,6 +578,24 @@ mod tests {
         let path = tmp.path().join("cfg.json");
         save_to(&path, &DictationConfig::default()).expect("save");
         assert!(backup_path(&path).exists());
+    }
+
+    #[test]
+    fn save_replaces_existing_config() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("cfg.json");
+        save_to(&path, &DictationConfig::default()).expect("first save");
+
+        let cfg = DictationConfig {
+            hotkey: "Ctrl+Shift+K".into(),
+            inject_mode: InjectMode::ClipboardOnly,
+            ..Default::default()
+        };
+        save_to(&path, &cfg).expect("second save");
+
+        let loaded = load_from(&path);
+        assert_eq!(loaded.hotkey, "Ctrl+Shift+K");
+        assert_eq!(loaded.inject_mode, InjectMode::ClipboardOnly);
     }
 
     #[test]

@@ -8,11 +8,10 @@ import { registerMainDataSettingsIpc } from "./main-data-ipc-settings";
 interface MainDataIpcOptions {
   awaitArkReady(): Promise<ArkClient>;
   getArkClient(): ArkClient | null;
-  broadcastSettingsSyncUpdated(): void;
 }
 
 export function registerMainDataIpc(options: MainDataIpcOptions): void {
-  const { awaitArkReady, broadcastSettingsSyncUpdated, getArkClient } = options;
+  const { awaitArkReady, getArkClient } = options;
 
   safeHandle("kepler:search:query", async (_e, text: string): Promise<SearchResult[]> => {
     const arkClient = getArkClient();
@@ -106,112 +105,17 @@ export function registerMainDataIpc(options: MainDataIpcOptions): void {
     return result.filePaths[0];
   });
 
-  safeHandle("kepler:file-search:settings:get", async () => {
-    const client = await awaitArkReady();
-    return client.invokeOperation({ operation: "file_index.settings_get" });
-  });
-
-  safeHandle("kepler:file-search:diagnostics", async () => {
-    const client = await awaitArkReady();
-    return client.invokeOperation({ operation: "file_index.diagnostics" });
-  });
-
-  safeHandle("kepler:file-search:estimate-root", async (_e, pathInput: string) => {
-    if (typeof pathInput !== "string" || pathInput.trim().length === 0) {
-      throw new Error("kepler:file-search:estimate-root invalid path");
-    }
-    const client = await awaitArkReady();
-    return client.invokeOperation({
-      operation: "file_index.estimate_root",
-      path: pathInput,
-    });
-  });
-
-  safeHandle("kepler:file-search:settings:set", async (_e, patch: Record<string, unknown>) => {
-    // Regression H9 (2026-05-24): strict allowlist of bool fields.
-    const ALLOWED_BOOL_FIELDS = [
-      "enabled",
-      "exclude_noisy_folders",
-      "respect_gitignore",
-      "include_hidden",
-      "ntfs_accelerated",
-    ] as const;
-    const sanitized: Record<string, boolean> = {};
-    if (patch && typeof patch === "object") {
-      for (const key of ALLOWED_BOOL_FIELDS) {
-        const value = (patch as Record<string, unknown>)[key];
-        if (typeof value === "boolean") sanitized[key] = value;
-      }
-    }
-    const client = await awaitArkReady();
-    await client.invokeOperation({
-      operation: "file_index.settings_set",
-      ...sanitized,
-    });
-  });
-
-  safeHandle("kepler:file-search:scope:add", async (_e, path: string) => {
-    if (typeof path !== "string" || path.trim().length === 0) {
-      throw new Error("kepler:file-search:scope:add invalid path");
-    }
-    const safety = isLikelyUnsafeScope(path);
-    if (!safety.ok) {
-      throw new Error(safety.reason);
-    }
-    const client = await awaitArkReady();
-    await client.invokeOperation({ operation: "file_index.scope_add", path });
-  });
-
-  safeHandle("kepler:file-search:scope:remove", async (_e, path: string) => {
-    if (typeof path !== "string" || path.trim().length === 0) {
-      throw new Error("kepler:file-search:scope:remove invalid path");
-    }
-    const client = await awaitArkReady();
-    await client.invokeOperation({ operation: "file_index.scope_remove", path });
-  });
-
-  safeHandle("kepler:file-search:ignore:add", async (_e, pattern: string) => {
-    if (typeof pattern !== "string" || pattern.trim().length === 0) {
-      throw new Error("kepler:file-search:ignore:add invalid pattern");
-    }
-    const client = await awaitArkReady();
-    await client.invokeOperation({ operation: "file_index.ignore_add", pattern });
-  });
-
-  safeHandle("kepler:file-search:ignore:remove", async (_e, pattern: string) => {
-    if (typeof pattern !== "string" || pattern.trim().length === 0) {
-      throw new Error("kepler:file-search:ignore:remove invalid pattern");
-    }
-    const client = await awaitArkReady();
-    await client.invokeOperation({
-      operation: "file_index.ignore_remove",
-      pattern,
-    });
-  });
-
-  safeHandle("kepler:file-search:rescan", async () => {
-    const client = await awaitArkReady();
-    await client.invokeOperation({ operation: "file_index.rescan" });
-  });
-
-  safeHandle("kepler:file-search:clear-cache", async () => {
-    const client = await awaitArkReady();
-    await client.invokeOperation({ operation: "file_index.clear_cache" });
-  });
-
-  safeHandle("kepler:file-search:pickScope", async (e): Promise<string | null> => {
-    // Regression M9 (2026-05-24): native dialog would hang e2e under
-    // KOSMOS_HEADLESS=1. Skip silently in headless mode.
-    if (process.env.KOSMOS_HEADLESS === "1") return null;
+  safeHandle("kepler:file-index:pick-root", async (e): Promise<string | null> => {
+    if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1") return null;
     const win = BrowserWindow.fromWebContents(e.sender);
     const result = win
       ? await dialog.showOpenDialog(win, {
-          title: "Добавить папку поиска",
-          properties: ["openDirectory"],
+          title: "Выберите папку для индексации",
+          properties: ["openDirectory", "createDirectory"],
         })
       : await dialog.showOpenDialog({
-          title: "Добавить папку поиска",
-          properties: ["openDirectory"],
+          title: "Выберите папку для индексации",
+          properties: ["openDirectory", "createDirectory"],
         });
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
@@ -238,17 +142,5 @@ export function registerMainDataIpc(options: MainDataIpcOptions): void {
     }
   });
 
-  registerMainDataSettingsIpc({
-    getArkClient,
-    broadcastSettingsSyncUpdated,
-  });
-}
-
-function isLikelyUnsafeScope(raw: string): { ok: true } | { ok: false; reason: string } {
-  // Regression H8 (2026-05-24): refuse UNC and warn-block on whole-drive roots.
-  const trimmed = raw.trim();
-  if (trimmed.startsWith("\\\\") || trimmed.startsWith("//")) {
-    return { ok: false, reason: "Сетевые пути (UNC) пока не поддерживаются" };
-  }
-  return { ok: true };
+  registerMainDataSettingsIpc();
 }

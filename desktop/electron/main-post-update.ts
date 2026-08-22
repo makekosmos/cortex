@@ -6,7 +6,6 @@ import { resolveInstance } from "./instance";
 
 interface PostUpdateLauncher {
   getMainWindow(): BrowserWindow | null;
-  showLauncher(): void;
 }
 
 export function handlePostUpdateFirstLaunch(launcher: PostUpdateLauncher): void {
@@ -20,7 +19,6 @@ export function handlePostUpdateFirstLaunch(launcher: PostUpdateLauncher): void 
     }
     unlinkSync(flag);
     const newVersion = app.getVersion();
-    launcher.showLauncher();
     setTimeout(() => {
       const mainWindow = launcher.getMainWindow();
       if (!mainWindow || mainWindow.isDestroyed()) return;

@@ -5,26 +5,7 @@
 
 import type { Component } from "vue";
 
-export type Tab =
-  | "general"
-  | "about"
-  | "debug"
-  | "security"
-  | "sync"
-  | "secrets"
-  | "notes"
-  | "tasks"
-  | "time-tracker"
-  | "games"
-  | "extensions"
-  | "focus"
-  | "clipboard"
-  | "ai"
-  | "dictation"
-  | "file-search"
-  | "export";
-
-export type AISettingsView = "overview" | "models";
+export type Tab = "general" | "about" | "debug" | "time-tracker" | "file-index" | "export";
 
 export interface SettingsNavigationItem {
   tab: Tab;
@@ -39,7 +20,7 @@ export interface SettingsNavigationItem {
   keywords: string[];
 }
 
-export type AppSettingsTab = "notes" | "tasks" | "time-tracker" | "games" | "dictation";
+export type AppSettingsTab = "time-tracker";
 
 export interface AppCommandSetting {
   id: string;

@@ -1,8 +1,8 @@
 // Backend crash reporter.
 //
-// Регистрирует `std::panic::set_hook` который пишет panic info + backtrace в
-// `<data_dir>/crashes/panic-<timestamp>.log`. После записи передаёт control
-// default hook'у — стандартный stderr вывод + process exit как обычно.
+// Регистрирует `std::panic::set_hook`, который пишет безопасные crash metadata
+// и redacted backtrace в `<data_dir>/crashes/panic-<timestamp>.log`. Default
+// hook не вызывается, потому что он печатает raw panic payload в stderr.
 //
 // Backtrace требует `RUST_BACKTRACE=1` env (выставляется Kepler shell при
 // spawn'е backend, см. shell/electron/main.ts → spawnBackend).
@@ -10,7 +10,7 @@
 // Файл-фрагмент состоит из:
 //   * version (CARGO_PKG_VERSION)
 //   * timestamp ISO 8601
-//   * panic message (info.payload() cast to &str / &String)
+//   * фиксированный marker вместо panic payload
 //   * location (file:line:col)
 //   * backtrace (если доступен)
 //
@@ -26,11 +26,13 @@ static CRASH_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// Initialize panic hook. Должен быть вызван early в main() ПЕРЕД любым
 /// кодом который может panic'нуть. data_dir — base directory (parent от
-/// `kepler.lock.json`), внутри которого будет создан `crashes/`.
-pub fn install(data_dir: PathBuf) {
+/// `engine.lock.json`), внутри которого будет создан `crashes/`.
+pub fn install(data_dir: PathBuf, correlation_id: String) {
     let crash_dir = data_dir.join("crashes");
     if let Err(e) = std::fs::create_dir_all(&crash_dir) {
-        eprintln!("[crash-reporter] failed to create {crash_dir:?}: {e}");
+        crate::observability::stderr(format!(
+            "[crash-reporter] failed to create {crash_dir:?}: {e}"
+        ));
         return;
     }
     if CRASH_DIR.set(crash_dir.clone()).is_err() {
@@ -38,19 +40,23 @@ pub fn install(data_dir: PathBuf) {
         return;
     }
 
-    let default_hook = std::panic::take_hook();
+    drop(std::panic::take_hook());
     std::panic::set_hook(Box::new(move |info| {
         let log_path = generate_log_path();
-        let body = format_panic_log(info);
+        let body = format_panic_log(info, &correlation_id);
         if let Err(e) = write_log(&log_path, &body) {
-            eprintln!("[crash-reporter] failed to write {log_path:?}: {e}");
+            crate::observability::stderr(format!(
+                "[crash-reporter] failed to write {log_path:?}: {e}"
+            ));
         } else {
-            eprintln!("[crash-reporter] wrote crash log: {log_path:?}");
+            crate::observability::stderr(format!("[crash-reporter] wrote crash log: {log_path:?}"));
         }
-        // Передаём control default'у — стандартный stderr вывод сохраняется.
-        default_hook(info);
+        // Default hook не вызываем: он повторно печатает raw panic payload в
+        // stderr и обходит privacy boundary.
     }));
-    eprintln!("[crash-reporter] installed, crashes go to {crash_dir:?}");
+    crate::observability::stderr(format!(
+        "[crash-reporter] installed, crashes go to {crash_dir:?}"
+    ));
 }
 
 fn generate_log_path() -> PathBuf {
@@ -76,26 +82,21 @@ fn write_log(path: &Path, body: &str) -> std::io::Result<()> {
 
 /// Format panic info as multi-line text. Public для test покрытия —
 /// panic hook сам трудно протестировать (test runner intercept'ит panic'и).
-pub fn format_panic_log(info: &std::panic::PanicHookInfo<'_>) -> String {
+pub fn format_panic_log(info: &std::panic::PanicHookInfo<'_>, correlation_id: &str) -> String {
     let mut out = String::new();
     out.push_str(&format!(
         "kepler-backend v{} crashed\n",
         env!("CARGO_PKG_VERSION")
     ));
+    out.push_str(&format!("crash_id: {}\n", crate::observability::crash_id()));
+    out.push_str(&format!("correlation_id: {correlation_id}\n"));
+    out.push_str("component: engine-core\n");
     out.push_str(&format!("timestamp: {}\n", chrono::Utc::now().to_rfc3339()));
-    let payload = info.payload();
-    let message = if let Some(s) = payload.downcast_ref::<&str>() {
-        (*s).to_string()
-    } else if let Some(s) = payload.downcast_ref::<String>() {
-        s.clone()
-    } else {
-        "<panic payload of unknown type>".to_string()
-    };
-    out.push_str(&format!("message: {message}\n"));
+    out.push_str("message: [REDACTED_PANIC_PAYLOAD]\n");
     if let Some(loc) = info.location() {
         out.push_str(&format!(
             "location: {}:{}:{}\n",
-            loc.file(),
+            crate::observability::redact_text(loc.file()),
             loc.line(),
             loc.column()
         ));
@@ -103,7 +104,10 @@ pub fn format_panic_log(info: &std::panic::PanicHookInfo<'_>) -> String {
         out.push_str("location: <unknown>\n");
     }
     out.push_str("\n--- backtrace ---\n");
-    out.push_str(&format!("{}", Backtrace::capture()));
+    out.push_str(&crate::observability::redact_text(&format!(
+        "{}",
+        Backtrace::capture()
+    )));
     out.push('\n');
     out
 }
@@ -114,7 +118,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::panic, reason = "test must trigger the panic hook")]
-    fn format_panic_log_includes_message_and_location() {
+    fn format_panic_log_excludes_message_and_includes_location() {
         // Реалистичный способ получить PanicHookInfo для теста — catch_unwind
         // c custom hook'ом, который перехватит payload.
         use std::sync::Mutex;
@@ -133,7 +137,7 @@ mod tests {
                 )
             };
             move |info| {
-                let s = format_panic_log(info);
+                let s = format_panic_log(info, "00000000-0000-4000-8000-000000000001");
                 *cap_ref.lock().unwrap() = Some(s);
             }
         }));
@@ -145,7 +149,13 @@ mod tests {
             .unwrap()
             .clone()
             .expect("hook should have captured");
-        assert!(log.contains("test panic message xyz"), "log: {log}");
+        assert!(!log.contains("test panic message xyz"), "log: {log}");
+        assert!(log.contains("[REDACTED_PANIC_PAYLOAD]"), "log: {log}");
+        assert!(
+            log.contains("correlation_id: 00000000-0000-4000-8000-000000000001"),
+            "log: {log}"
+        );
+        assert!(log.contains("crash_id:"), "log: {log}");
         assert!(log.contains("kepler-backend v"), "log: {log}");
         assert!(log.contains("location:"), "log: {log}");
         assert!(log.contains("backtrace"), "log: {log}");

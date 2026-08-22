@@ -1,5 +1,7 @@
 use std::fs::{self, OpenOptions};
 use std::io::{self, Cursor, Read, Write};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
@@ -23,6 +25,8 @@ const VULKAN_TOOLS_DIR: &str = "tools/dictation/whisper.cpp-vulkan";
 const OLD_FASTER_WHISPER_TOOLS_DIR: &str = "tools/dictation/faster-whisper";
 const OLD_FASTER_WHISPER_MODEL_CACHE_DIR: &str = "models/whisper";
 const OLD_FASTER_WHISPER_RUNTIME_DIR: &str = "runtimes/faster-whisper";
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 const OLD_FASTER_WHISPER_CUDA_LIBS_DIR: &str = "runtimes/cuda-libs";
 const DOWNLOAD_MAX_ATTEMPTS: usize = 8;
 
@@ -484,12 +488,14 @@ fn vulkan_runtime_available() -> bool {
         .map(PathBuf::from)
         .map(|root| root.join("System32").join("vulkan-1.dll"))
         .is_some_and(|path| path.is_file());
-    system_vulkan
-        || Command::new("where")
-            .arg("vulkan-1.dll")
-            .output()
-            .map(|output| output.status.success())
-            .unwrap_or(false)
+    system_vulkan || {
+        let mut command = Command::new("where");
+        command.arg("vulkan-1.dll");
+        command.creation_flags(CREATE_NO_WINDOW);
+        command.output()
+    }
+    .map(|output| output.status.success())
+    .unwrap_or(false)
 }
 
 #[cfg(windows)]

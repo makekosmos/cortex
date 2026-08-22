@@ -1,39 +1,3 @@
-/**
- * Фича «История буфера обмена» ЗАМОРОЖЕНА (2026-06-06) и скрыта во всех сборках.
- * Единый рубильник: им загейтлены запуск поллинга/IPC (main), команда лаунчера
- * и вкладка настроек (renderer). Код намеренно оставлен в репо для будущей
- * доработки — подробности и причина в `docs-site/concepts/clipboard-history.md`.
- * Чтобы вернуть фичу — поставить `true` (и доделать производительность поллинга).
- */
-export const CLIPBOARD_HISTORY_ENABLED = false;
-
-export interface BackendStatus {
-  running: boolean;
-  pid?: number;
-  wsPort?: number;
-  lockFilePath: string;
-}
-
-export type SyncPeerStatus = "online" | "offline";
-export type SyncPeerDeviceKind = "desktop" | "laptop" | "phone" | "unknown";
-
-export interface SyncPeerInfo {
-  deviceId: string;
-  deviceName: string;
-  lastSeen: string | null;
-  status: SyncPeerStatus;
-  deviceKind: SyncPeerDeviceKind;
-}
-
-export interface SyncStatusSnapshot {
-  running: boolean;
-  transport: "iroh" | "relay" | "lan" | "unknown";
-  pairingAvailable: boolean;
-  ownPairingCodeAvailable: boolean;
-  peers: SyncPeerInfo[];
-  localDevice?: { deviceId: string; deviceName: string } | null;
-}
-
 export interface StorageSummaryItem {
   id: string;
   label: string;
@@ -57,25 +21,6 @@ export interface SearchResult {
   snippet?: string;
 }
 
-export interface MarketplaceExtension {
-  id: string;
-  name: string;
-  description: string;
-  author: string;
-  version: string;
-  keplerApiVersion: string;
-  iconUrl: string | null;
-  downloadUrl: string;
-  sha256: string | null;
-  size: number | null;
-}
-
-export interface MarketplaceCatalog {
-  schemaVersion: number;
-  updatedAt: string;
-  extensions: MarketplaceExtension[];
-}
-
 export interface ExportConverterInfo {
   converter_id: string;
   object_type: string;
@@ -88,111 +33,6 @@ export interface ExportResult {
   files_written: string[];
   bytes: number;
   errors: string[];
-}
-
-export type NtfsStatus = "unknown" | "disabled" | "active" | "fallback" | "unavailable";
-
-export interface FileIndexSettings {
-  enabled: boolean;
-  exclude_noisy_folders: boolean;
-  roots: string[];
-  ignore_patterns: string[];
-  respect_gitignore: boolean;
-  include_hidden: boolean;
-  ntfs_accelerated: boolean;
-  scan_in_progress: boolean;
-  scan_progress: {
-    phase: string;
-    root: string | null;
-    roots_done: number;
-    roots_total: number;
-    files_seen: number;
-    files_indexed: number;
-    message: string;
-  };
-  ntfs_status: NtfsStatus;
-}
-
-export interface FileIndexSettingsPatch {
-  enabled?: boolean;
-  exclude_noisy_folders?: boolean;
-  respect_gitignore?: boolean;
-  include_hidden?: boolean;
-  ntfs_accelerated?: boolean;
-}
-
-type FileSearchRiskLevel = "ok" | "warning" | "danger";
-
-interface FileIndexLastScanSnapshot {
-  finished_at_unix_ms: number;
-  duration_ms: number;
-  indexed_file_count: number;
-  roots_count: number;
-  exclude_noisy_folders: boolean;
-  respect_gitignore: boolean;
-  include_hidden: boolean;
-  ntfs_accelerated: boolean;
-}
-
-interface FileIndexDiagnosticsSnapshot {
-  db_size_bytes: number;
-  wal_size_bytes: number;
-  total_size_bytes: number;
-  scan_in_progress: boolean;
-  scan_progress: FileIndexSettings["scan_progress"];
-  roots: string[];
-  roots_count: number;
-  files_count: number;
-  risk_level: FileSearchRiskLevel;
-  risk_reasons: string[];
-  last_scan_ms: number;
-  last_scan: FileIndexLastScanSnapshot | null;
-  search_count: number;
-  like_search_count: number;
-  query_len_histogram: Record<string, number>;
-}
-
-export interface FileSearchRootEstimate {
-  path: string;
-  scanned_dirs: number;
-  scanned_files: number;
-  ignored_or_skipped_files: number;
-  indexable_text_files_count: number;
-  indexable_text_bytes: number;
-  metadata_only_media_files_count: number;
-  metadata_only_other_files_count: number;
-  estimated_indexed_entries_count: number;
-  estimated_index_size_bytes: number;
-  truncated: boolean;
-  risk_level: FileSearchRiskLevel;
-  risk_reasons: string[];
-  limitations: string[];
-}
-
-export interface FileSearchRootWarning {
-  path: string;
-  risk_level: Exclude<FileSearchRiskLevel, "ok">;
-  risk_reasons: string[];
-}
-
-export type FileSearchDiagnosticsReport = FileIndexDiagnosticsSnapshot;
-
-export interface InstalledExtensionInfo {
-  id: string;
-  name: string;
-  kind: "vue" | "static" | "native" | null;
-  version: string | null;
-  description: string | null;
-  author: string | null;
-  iconDataUri: string | null;
-  backupCount: number;
-  backupTimestamps: string[];
-  /** Источник кода extension'а:
-   * - `"installed"` — user-installed в `<dataDir>/extensions/<id>/` (production flow)
-   * - `"dev"` — repo dev tree (`<repoRoot>/extensions/<id>/`); auto-detect'ится
-   *   когда Kepler shell запущен из репо. UI скрывает revert/uninstall кнопки
-   *   для dev-source extensions (они tracked git'ом, не Kepler'ом). */
-  source: "installed" | "dev";
 }
 
 /** Команда в launcher'е — единица того что пользователь может вызвать. */
@@ -210,50 +50,10 @@ export interface CommandRecord {
   /** Имя родительского приложения для command-плашек (Delphi / Kepler). */
   appName?: string;
   /** Опциональная иконка команды. Data URI (`data:image/png;base64,...`)
-      для open-команд extension'ов; undefined для action-команд. */
+      для open-команд; undefined для action-команд. */
   icon?: string;
   /** Опциональный глобальный хоткей/accelerator, если команда имеет binding. */
   shortcut?: string;
-}
-
-export interface ClipboardHistoryItem {
-  id: string;
-  kind: "text" | "image" | "link" | "color" | "file";
-  text: string;
-  preview: string;
-  createdAt: number;
-  updatedAt: number;
-  charCount: number;
-  pinned: boolean;
-  searchText: string;
-  source?: string;
-  sourceIcon?: string;
-  imageDataUrl?: string;
-  width?: number;
-  height?: number;
-  url?: string;
-  color?: string;
-  filePath?: string;
-  fileName?: string;
-  mimeType?: string;
-  storageBytes?: number;
-}
-
-export interface ClipboardHistorySettings {
-  retentionDays: number;
-  maxBytes: number;
-}
-
-export interface ClipboardHistorySettingsPatch {
-  retentionDays?: number;
-  maxBytes?: number;
-}
-
-export interface ClipboardHistoryStats {
-  itemCount: number;
-  pinnedCount: number;
-  storageBytes: number;
-  oldestItemAt: number | null;
 }
 
 type FocusSessionPhase = "idle" | "work" | "shortBreak" | "longBreak";

@@ -1,12 +1,4 @@
 import { nativeTheme, powerMonitor } from "electron";
-import { CLIPBOARD_HISTORY_ENABLED } from "../shared/ipc-types";
-import {
-  registerClipboardHistoryIpc,
-  setClipboardHistoryShellOpener,
-  startClipboardHistory,
-} from "./clipboard-history";
-import { setExtensionArkBridgeReadyTimeoutMs } from "./extension-host";
-import { registerMarketplaceIpc, startPeriodicCatalogCheck } from "./extension-marketplace";
 import { showFocusBlockOverlay } from "./focus-overlay";
 import {
   setBlockedAppNotifier,
@@ -15,8 +7,6 @@ import {
 } from "./focus-session";
 import { registerMainProtocols } from "./main-protocols";
 import { handlePostUpdateFirstLaunch } from "./main-post-update";
-import { scheduleBenchmarkOpenAllExtensions } from "./main-benchmark-open-all";
-import { openInitialKextFromArgv } from "./main-initial-kext";
 import { setupAutoUpdater } from "./autoupdater-host";
 import {
   getStoredHotkey,
@@ -36,7 +26,6 @@ interface AppReadyBackendSupervisor {
 interface AppReadyInstance {
   autoupdaterEnabled: boolean;
   hotkey: string | null;
-  periodicMarketplaceCheckEnabled: boolean;
   slot: string;
 }
 
@@ -44,6 +33,8 @@ type PostUpdateLauncher = Parameters<typeof handlePostUpdateFirstLaunch>[0];
 
 interface AppReadyLauncher extends PostUpdateLauncher {
   createLauncher(): void;
+  showLauncher(): void;
+  openManager(): void;
   registerLauncherHotkeys(options: {
     slot: string;
     slotHotkey: string | null;
@@ -52,29 +43,20 @@ interface AppReadyLauncher extends PostUpdateLauncher {
     setHotkeyReregisterCallback: typeof setHotkeyReregisterCallback;
   }): void;
   setTrayVisible(visible: boolean): void;
-  showClipboardHistoryLauncher(): void;
   showFocusSessionLauncher(): void;
 }
 
 interface RunAppReadyOptions {
-  arkReadyRequestTimeoutMs: number;
   awaitArkReady: Parameters<typeof registerMainProtocols>[0]["awaitArkReady"];
   backendSupervisor: AppReadyBackendSupervisor;
-  env: NodeJS.ProcessEnv;
   instance: AppReadyInstance;
   launcher: AppReadyLauncher;
   runBootSelfCheck(): void;
 }
 
-export function shouldShowLauncherOnStartup(argv: readonly string[]): boolean {
-  return !argv.includes("--autostart");
-}
-
 export async function runAppReady({
-  arkReadyRequestTimeoutMs,
   awaitArkReady,
   backendSupervisor,
-  env,
   instance,
   launcher,
   runBootSelfCheck,
@@ -89,12 +71,14 @@ export async function runAppReady({
   }
 
   backendSupervisor.spawnBackend();
-  setExtensionArkBridgeReadyTimeoutMs(arkReadyRequestTimeoutMs);
   registerMainProtocols({ awaitArkReady });
-  launcher.createLauncher();
-  if (CLIPBOARD_HISTORY_ENABLED) {
-    setClipboardHistoryShellOpener(launcher.showClipboardHistoryLauncher);
-  }
+  backendSupervisor.markBootInitStarted();
+  const boot = backendSupervisor.initArkClient();
+  if (!process.argv.includes("--autostart")) {
+    const openManager =
+      process.env.KOSMOS_TEST_MODE === "1" ? launcher.showLauncher : launcher.openManager;
+    void boot.then(openManager, openManager);
+  } else void boot;
   setFocusSessionShellOpener(launcher.showFocusSessionLauncher);
   setFocusSessionRuntime({ awaitArkReady });
   setBlockedAppNotifier((app) => {
@@ -102,33 +86,13 @@ export async function runAppReady({
   });
   setTrayVisibilityController(launcher.setTrayVisible);
   launcher.setTrayVisible(isTrayIconEnabled());
-  if (shouldShowLauncherOnStartup(process.argv)) {
-    launcher.showLauncher();
-  }
 
-  backendSupervisor.markBootInitStarted();
-  void backendSupervisor.initArkClient();
   powerMonitor.on("resume", () => {
     void backendSupervisor.recoverBackendIfDead("power-resume");
   });
 
-  if (CLIPBOARD_HISTORY_ENABLED) {
-    registerClipboardHistoryIpc();
-    startClipboardHistory();
-  }
-  registerMarketplaceIpc();
   setupAutoUpdater({ isDev: !instance.autoupdaterEnabled });
   handlePostUpdateFirstLaunch(launcher);
-
-  if (env.KOSMOS_TEST_MODE !== "1" && instance.periodicMarketplaceCheckEnabled) {
-    startPeriodicCatalogCheck();
-  }
-
-  openInitialKextFromArgv(process.argv);
-
-  if (env.KEPLER_BENCHMARK_OPEN_ALL === "1") {
-    scheduleBenchmarkOpenAllExtensions();
-  }
 
   launcher.registerLauncherHotkeys({
     slot: instance.slot,

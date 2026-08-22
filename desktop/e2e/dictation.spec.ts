@@ -20,12 +20,13 @@ import { test, expect } from "@playwright/test";
 import electronBinary from "electron";
 import { _electron as electron, type ElectronApplication, type Page } from "playwright";
 import { waitForBackendReady } from "../../../tests/e2e/helpers/wait";
-import { freshDataDir, launchKeplerWithDataDir } from "../../../tests/e2e/helpers/launch";
+import {
+  freshDataDir,
+  launchKeplerWithDataDir,
+  shutdownKeplerEngine,
+} from "../../../tests/e2e/helpers/launch";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const e2eRoot = path.join(appRoot, ".e2e");
-const userDataDir = path.join(e2eRoot, "kepler-shell-dictation-userdata");
-const dataDir = path.join(e2eRoot, "kepler-shell-dictation-data");
 type KeplerCommand = { id: string; shortcut?: string };
 
 function makeSmokeWavBase64(): string {
@@ -216,23 +217,7 @@ async function submitAudioWithContext(
 }
 
 async function launchKepler(): Promise<ElectronApplication> {
-  fs.mkdirSync(userDataDir, { recursive: true });
-  return electron.launch({
-    executablePath: electronBinary,
-    cwd: appRoot,
-    args: [path.join(appRoot, "dist-electron", "main.js"), `--user-data-dir=${userDataDir}`],
-    env: {
-      ...process.env,
-      NODE_ENV: "test",
-      KEPLER_SKIP_SYNC: "1",
-      // КРИТИЧНО: headless guard. Без него pill window и hotkey пытались бы
-      // зарегистрироваться → ломали бы клавиатуру dev-машины.
-      KOSMOS_HEADLESS: "1",
-      KOSMOS_TEST_MODE: "1",
-      KOSMOS_DATA_DIR: dataDir,
-    },
-    timeout: 20_000,
-  });
+  return launchKeplerWithDataDir(freshDataDir("dictation-command-headless"));
 }
 
 async function launchKeplerWithFakeMedia(
@@ -358,8 +343,9 @@ test.describe("dictation Phase 1", () => {
     }
   });
 
-  test("AC2: kepler:dictation shortcut follows live config and invoke works headless", async () => {
-    const app = await launchKepler();
+  test("AC2: kepler:dictation shortcut invokes Engine headlessly", async () => {
+    const dataDir = freshDataDir("dictation-command-headless");
+    const app = await launchKeplerWithDataDir(dataDir);
     try {
       const launcher = await app.firstWindow();
       await launcher.waitForLoadState("domcontentloaded");
@@ -380,6 +366,9 @@ test.describe("dictation Phase 1", () => {
       expect(dictation?.shortcut).toBe("Ctrl+Alt+D");
 
       await invokeKeplerCommand(launcher, "kepler:dictation");
+      await waitForDictationStateWithContext(launcher, "recording", 10_000);
+      await dictationRequest(launcher, "dictation.cancel");
+      await waitForDictationStateWithContext(launcher, "idle", 10_000);
 
       const state = await app.evaluate(({ BrowserWindow, globalShortcut }) => ({
         visibleWindows: BrowserWindow.getAllWindows().filter((w) => w.isVisible()).length,
@@ -391,7 +380,8 @@ test.describe("dictation Phase 1", () => {
         false,
       );
     } finally {
-      await app.close();
+      app.process().kill();
+      shutdownKeplerEngine(dataDir);
     }
   });
 
@@ -628,6 +618,7 @@ test.describe("dictation mock STT", () => {
     const dataDir = freshDataDir("dictation-local-pill-fake-media");
     const transcript = "voice from fake mic";
     const app = await launchKeplerWithFakeMedia(dataDir, {
+      KOSMOS_TEST_DICTATION_PILL: "1",
       KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT: transcript,
     });
     try {

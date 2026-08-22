@@ -6,6 +6,8 @@ import {
   backgroundMaterialOption,
   type KosmosWindowMaterial,
 } from "./window-effects";
+import { openHostedApp } from "./host-app";
+import { openManager } from "./manager-navigation";
 
 interface LauncherPosition {
   x: number;
@@ -38,10 +40,10 @@ export interface LauncherController {
   createLauncher(): void;
   showLauncher(): void;
   hideLauncher(): void;
-  showClipboardHistoryLauncher(): void;
   showFocusSessionLauncher(): void;
   setLauncherExpanded(expanded: boolean): void;
   setTrayVisible(enabled: boolean): void;
+  openManager(): void;
   registerLauncherHotkeys(options: RegisterLauncherHotkeysOptions): void;
   getMainWindow(): BrowserWindow | null;
   isLauncherHidden(): boolean;
@@ -54,7 +56,6 @@ export function createLauncherController(options: LauncherControllerOptions): La
     getIsQuiting,
     isDev,
     onLauncherShow,
-    openSettings,
     productName,
     quitApplication,
     resolveBackgroundMaterial,
@@ -125,11 +126,12 @@ export function createLauncherController(options: LauncherControllerOptions): La
     // Hide launcher при потере фокуса (клик вне окна / Alt+Tab).
     // В dev пропускаем если фокус ушёл на DevTools - иначе нечем отлаживать.
     mainWindow.on("blur", () => {
+      if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1") return;
       if (isDev && mainWindow?.webContents.isDevToolsFocused()) return;
       hideLauncher();
     });
     mainWindow.on("close", (e) => {
-      if (!getIsQuiting()) {
+      if (!getIsQuiting() && process.env.KOSMOS_HEADLESS !== "1") {
         e.preventDefault();
         hideLauncher();
       }
@@ -163,7 +165,11 @@ export function createLauncherController(options: LauncherControllerOptions): La
     // В headless / test mode окно НИКОГДА не показывается визуально - Playwright
     // работает через webContents без paint'а. Renderer всё равно получает
     // `kepler:window:show` для focus/refresh, и `launcherHidden` обновляется.
-    if (!headless) {
+    if (headless) {
+      // Playwright attaches to a visible Electron target. This branch is only
+      // used by isolated headless/test processes, never by the user build.
+      mainWindow.show();
+    } else {
       if (process.platform === "darwin") {
         // show() на macOS уже вызывает activateIgnoringOtherApps внутри Electron.
         // Не добавляем app.focus({ steal: true }) - двойной activate создавал
@@ -195,16 +201,9 @@ export function createLauncherController(options: LauncherControllerOptions): La
     onLauncherShow?.();
   }
 
-  function showClipboardHistoryLauncher(): void {
-    showLauncher();
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    mainWindow.webContents.send("kepler:clipboard-history:open-shell");
-  }
-
   function showFocusSessionLauncher(): void {
-    showLauncher();
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    mainWindow.webContents.send("kepler:focus-session:open-shell");
+    if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1") return;
+    void openHostedApp("com.kosmos.shell");
   }
 
   function hideLauncher(): void {
@@ -264,10 +263,11 @@ export function createLauncherController(options: LauncherControllerOptions): La
       tray = new Tray(nativeImage.createEmpty());
     }
     tray.setToolTip(productName);
+    console.log("[kepler-shell] tray created");
     tray.setContextMenu(
       Menu.buildFromTemplate([
-        { label: "Открыть", click: () => showLauncher() },
-        { label: "Настройки", click: () => openSettings() },
+        { label: "Открыть", click: () => openManager() },
+        { label: "Настройки", click: () => openManager() },
         { type: "separator" },
         {
           label: "Выход",
@@ -277,7 +277,7 @@ export function createLauncherController(options: LauncherControllerOptions): La
         },
       ]),
     );
-    tray.on("click", () => showLauncher());
+    tray.on("click", () => openManager());
   }
 
   function setTrayVisible(enabled: boolean): void {
@@ -308,8 +308,8 @@ export function createLauncherController(options: LauncherControllerOptions): La
       const gap = now - lastFireAt;
       lastFireAt = now;
       if (gap < 80) return;
-      if (launcherHidden) showLauncher();
-      else hideLauncher();
+      if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1") return;
+      void openHostedApp("com.kosmos.shell");
     };
 
     // Slot'ы без hotkey (dev-<x>, test-<x>) - пропускаем регистрацию вовсе.
@@ -363,10 +363,10 @@ export function createLauncherController(options: LauncherControllerOptions): La
     createLauncher,
     showLauncher,
     hideLauncher,
-    showClipboardHistoryLauncher,
     showFocusSessionLauncher,
     setLauncherExpanded,
     setTrayVisible,
+    openManager,
     registerLauncherHotkeys,
     getMainWindow: () => mainWindow,
     isLauncherHidden: () => launcherHidden,

@@ -61,7 +61,7 @@ unsafe fn build_security_attributes() -> Option<(SECURITY_ATTRIBUTES, PSECURITY_
     let mut sd: PSECURITY_DESCRIPTOR = ptr::null_mut();
     let ok = ConvertStringSecurityDescriptorToSecurityDescriptorW(
         sddl.as_ptr(),
-        SDDL_REVISION_1 as u32,
+        SDDL_REVISION_1,
         &mut sd,
         ptr::null_mut(),
     );

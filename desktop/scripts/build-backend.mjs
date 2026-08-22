@@ -12,21 +12,35 @@ const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const repoRoot = path.resolve(shellRoot, "../..");
 
 const baseArgs = ["build", "--release", "--manifest-path", "../../Cargo.toml"];
-const buildKepler = spawnSync("cargo", [...baseArgs, "--bin", "kepler-backend"], {
-  cwd: shellRoot,
-  stdio: "inherit",
-});
+const buildKepler = spawnSync(
+  "cargo",
+  [...baseArgs, "--bin", "kepler-backend", "--features", "windows-gui-subsystem"],
+  {
+    cwd: shellRoot,
+    stdio: "inherit",
+    windowsHide: true,
+  },
+);
 if ((buildKepler.status ?? 1) !== 0) process.exit(buildKepler.status ?? 1);
 const buildArk = spawnSync(
   "cargo",
-  [...baseArgs, "-p", "ark-core", "--bin", "ark-core-rpc", "--features", "iroh-spike"],
-  { cwd: shellRoot, stdio: "inherit" },
+  [
+    ...baseArgs,
+    "-p",
+    "ark-core",
+    "--bin",
+    "ark-core-rpc",
+    "--features",
+    "iroh-spike,windows-gui-subsystem",
+  ],
+  { cwd: shellRoot, stdio: "inherit", windowsHide: true },
 );
 if ((buildArk.status ?? 1) !== 0) process.exit(buildArk.status ?? 1);
 for (const bin of RUNTIME_BINARIES.slice(2)) {
   const result = spawnSync("cargo", [...baseArgs, "--bin", bin], {
     cwd: shellRoot,
     stdio: "inherit",
+    windowsHide: true,
   });
   if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1);
 }

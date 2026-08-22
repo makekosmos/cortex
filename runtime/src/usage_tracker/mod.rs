@@ -14,7 +14,7 @@ mod windows_capture;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -70,6 +70,8 @@ pub struct UsageTrackerOpts {
 
 #[derive(Debug, Default)]
 pub struct UsageTrackerDiagnosticsState {
+    configured_enabled: AtomicBool,
+    running: AtomicBool,
     tick_p95_ms: AtomicU64,
     active_sessions: AtomicUsize,
     enum_windows_calls_per_tick: AtomicU64,
@@ -78,6 +80,9 @@ pub struct UsageTrackerDiagnosticsState {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct UsageTrackerDiagnosticsSnapshot {
+    pub configured_enabled: bool,
+    pub running: bool,
+    pub status: String,
     pub tick_p95_ms: u64,
     pub active_sessions: usize,
     pub enum_windows_calls_per_tick: u64,
@@ -85,6 +90,19 @@ pub struct UsageTrackerDiagnosticsSnapshot {
 }
 
 impl UsageTrackerDiagnosticsState {
+    pub fn configure(&self, enabled: bool) {
+        self.configured_enabled.store(enabled, Ordering::SeqCst);
+        self.running.store(false, Ordering::SeqCst);
+    }
+
+    pub fn mark_running(&self) {
+        self.running.store(true, Ordering::SeqCst);
+    }
+
+    pub fn mark_stopped(&self) {
+        self.running.store(false, Ordering::SeqCst);
+    }
+
     pub fn observe(
         &self,
         tick_p95_ms: u64,
@@ -102,7 +120,18 @@ impl UsageTrackerDiagnosticsState {
     }
 
     pub fn snapshot(&self) -> UsageTrackerDiagnosticsSnapshot {
+        let configured_enabled = self.configured_enabled.load(Ordering::SeqCst);
+        let running = self.running.load(Ordering::SeqCst);
         UsageTrackerDiagnosticsSnapshot {
+            configured_enabled,
+            running,
+            status: if !configured_enabled {
+                "disabled".to_string()
+            } else if running {
+                "running".to_string()
+            } else {
+                "starting".to_string()
+            },
             tick_p95_ms: self.tick_p95_ms.load(Ordering::SeqCst),
             active_sessions: self.active_sessions.load(Ordering::SeqCst),
             enum_windows_calls_per_tick: self.enum_windows_calls_per_tick.load(Ordering::SeqCst),
@@ -1064,6 +1093,18 @@ fn new_uuid_simple() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn diagnostics_distinguish_disabled_from_running() {
+        let state = UsageTrackerDiagnosticsState::default();
+        assert_eq!(state.snapshot().status, "disabled");
+        state.configure(true);
+        assert_eq!(state.snapshot().status, "starting");
+        state.mark_running();
+        assert_eq!(state.snapshot().status, "running");
+        state.configure(false);
+        assert_eq!(state.snapshot().status, "disabled");
+    }
 
     #[test]
     fn opts_from_env_uses_defaults_when_unset() {

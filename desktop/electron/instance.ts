@@ -28,7 +28,15 @@
 
 import { app } from "electron";
 import path from "node:path";
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
 
 type InstanceKind = "prod" | "dev" | "test";
 
@@ -51,7 +59,6 @@ export interface Instance {
   /** HKCU Run / login item можно трогать? Только в prod. */
   autorunEnabled: boolean;
   /** Периодический marketplace catalog fetch разрешён? Только в prod. */
-  periodicMarketplaceCheckEnabled: boolean;
 }
 
 const SLOT_RE = /^(prod|dev|dev-[a-z0-9][a-z0-9-]*|test-[a-z0-9][a-z0-9-]*)$/;
@@ -162,7 +169,6 @@ export function resolveInstance(): Instance {
     hotkey,
     autoupdaterEnabled: kind === "prod",
     autorunEnabled: kind === "prod",
-    periodicMarketplaceCheckEnabled: kind === "prod",
   });
 }
 
@@ -200,6 +206,7 @@ function pickSlot(): string {
 export function applyInstanceToApp(instance: Instance): void {
   if (instance.slot === "prod") {
     migrateLegacyProdUserData(instance.userDataDir);
+    migrateLegacyProdSettings(app.getPath("appData"), instance.dataDir);
   }
   app.setName(instance.productName);
   app.setPath("userData", instance.userDataDir);
@@ -248,6 +255,20 @@ function migrateLegacyProdUserData(newUserDataDir: string): void {
     console.error(`[kosmos] migrated Electron userData: %APPDATA%/Kepler -> ${newUserDataDir}`);
   } catch (e) {
     console.error("[kosmos] prod userData migration skipped:", e);
+  }
+}
+
+export function migrateLegacyProdSettings(appData: string, dataDir: string): void {
+  try {
+    const target = path.join(dataDir, "kepler-shell-settings.json");
+    if (existsSync(target)) return;
+    const legacy = path.join(appData, "Kepler", "kepler-shell-settings.json");
+    if (!existsSync(legacy)) return;
+    mkdirSync(dataDir, { recursive: true });
+    copyFileSync(legacy, target);
+    console.error(`[kosmos] migrated shell settings: ${legacy} -> ${target}`);
+  } catch (e) {
+    console.error("[kosmos] shell settings migration skipped:", e);
   }
 }
 

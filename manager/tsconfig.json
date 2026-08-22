@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "paths": { "@/*": ["./src/*"], "@kosmos/ark": ["../../core/ark/packages/ark/src/index.ts"] }
+  },
+  "include": ["src", "electron"],
+  "exclude": ["**/*.test.ts"]
+}

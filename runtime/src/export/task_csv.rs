@@ -1,7 +1,7 @@
 // task_obj → CSV. Один файл tasks.csv.
 // Колонки: id, title, project_id, area_id, scheduled_date, deadline, completed, priority, tags
 
-use super::{csv_safe_cell, ConvertResult, Converter};
+use super::{csv_safe_cell, validate_envelopes, CanonicalEnvelope, ConvertResult, Converter};
 use ark_core::types::ArkObject;
 use std::path::Path;
 
@@ -15,7 +15,7 @@ impl Converter for TaskCsvConverter {
         "Задачи → CSV"
     }
     fn object_type(&self) -> &'static str {
-        "task_obj"
+        "com.kosmos.task"
     }
     fn default_format(&self) -> &'static str {
         "csv"
@@ -102,6 +102,93 @@ impl Converter for TaskCsvConverter {
         }
         result
     }
+
+    fn convert_canonical(
+        &self,
+        envelopes: &[CanonicalEnvelope],
+        _format: &str,
+        dest_dir: &Path,
+    ) -> ConvertResult {
+        let mut result = ConvertResult::default();
+        let envelopes = match validate_envelopes(envelopes) {
+            Ok(v) => v,
+            Err(e) => {
+                result.push_error(e);
+                return result;
+            }
+        };
+        let path = dest_dir.join("tasks.csv");
+        let mut w = match csv::WriterBuilder::new().from_path(&path) {
+            Ok(w) => w,
+            Err(e) => {
+                result.push_error(e.to_string());
+                return result;
+            }
+        };
+        let _ = w.write_record([
+            "id",
+            "title",
+            "status",
+            "priority",
+            "scheduledAt",
+            "dueAt",
+            "completedAt",
+            "canceledAt",
+            "checklist",
+            "tags",
+        ]);
+        for e in envelopes
+            .into_iter()
+            .filter(|e| e.object.deleted_at.is_none())
+        {
+            let p = e.object.props_json;
+            let checklist = serde_json::to_string(
+                p.get("checklist")
+                    .unwrap_or(&serde_json::Value::Array(vec![])),
+            )
+            .unwrap_or_default();
+            let tags = e
+                .links
+                .iter()
+                .filter(|l| l.link_type == "tag")
+                .map(|l| l.target_object_id.clone())
+                .collect::<Vec<_>>()
+                .join("|");
+            let row = [
+                e.object.id,
+                e.object.title,
+                p.get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("inbox")
+                    .into(),
+                p.get("priority")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("none")
+                    .into(),
+                p.get("scheduledAt")
+                    .map(ToString::to_string)
+                    .unwrap_or_default(),
+                p.get("dueAt").map(ToString::to_string).unwrap_or_default(),
+                p.get("completedAt")
+                    .map(ToString::to_string)
+                    .unwrap_or_default(),
+                p.get("canceledAt")
+                    .map(ToString::to_string)
+                    .unwrap_or_default(),
+                checklist,
+                tags,
+            ];
+            if let Err(err) = w.write_record(row) {
+                result.push_error(err.to_string());
+            }
+        }
+        let _ = w.flush();
+        drop(w);
+        if let Ok(m) = std::fs::metadata(&path) {
+            result.push_file(path, m.len());
+        }
+        result
+    }
 }
 
 #[cfg(test)]
@@ -114,6 +201,7 @@ mod tests {
         ArkObject {
             id: id.to_string(),
             type_id: "task_obj".to_string(),
+            type_version: "0.0.0-legacy".to_string(),
             title: title.to_string(),
             content_json: json!({}),
             props_json: props,

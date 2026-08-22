@@ -1,21 +1,7 @@
-// Управление child-процессом ark-core-rpc.
-//
-// AC1 (часть): через WS-dispatcher переслать ARK-операцию в child, получить ответ.
-//
-// Wire-протокол ark-core-rpc (см. core/ark/packages/ark-core/rust/src/main.rs):
-//   Request:  {"operation": "<name>", "_req_id": "<id>", ...params}
-//   Response: {"_req_id": "<id>", "ok": true|false, "data"?, "error"?}
-//   Event:    {"event": "<name>", ...}     (нет _req_id, нет ok)
-//
-// Дизайн:
-//   - ArkHost держит child + tokio writer task + reader task.
-//   - request(op, params) — выдаёт req_id, кладёт oneshot::Sender в pending map,
-//     сериализует JSON, отправляет через mpsc в writer task. Возвращает Future.
-//   - Reader task парсит stdout по строкам, по `_req_id` resolve'ит pending, по
-//     `event` — броадкаст в watch/broadcast channel.
-//   - Unit tests используют mock через trait-обобщение по AsyncRead/AsyncWrite,
-//     чтобы не требовать собранного ark-core-rpc.exe.
+// Управление child-процессом ark-core-rpc через newline-delimited JSON-RPC.
 
+use ark_core::canonical_types::game::{GameMutationResult, GameRecord, GameUpsertCommand};
+use ark_core::type_registry::TypeRegistration;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -41,8 +27,6 @@ pub enum ArkHostError {
     ChildDead,
     #[error("request channel closed")]
     ChannelClosed,
-    #[error("response missing _req_id")]
-    UncorrelatedResponse,
 }
 
 pub type ArkResult<T> = Result<T, ArkHostError>;
@@ -68,13 +52,8 @@ pub enum ArkFrame {
     },
 }
 
-/// Resolve путь к ark-core-rpc бинарю. Порядок:
-///   1. ENV `ARK_CORE_RPC_PATH`
-///   2. рядом с current_exe (production bundling)
-///   3. dev fallback: ../../core/ark/packages/ark-core/rust/target/{release,debug}/ark-core-rpc[.exe]
 pub fn resolve_ark_core_rpc_path() -> ArkResult<PathBuf> {
-    let mut candidates: Vec<PathBuf> = Vec::new();
-
+    let mut candidates = Vec::new();
     if let Ok(p) = std::env::var("ARK_CORE_RPC_PATH") {
         let path = PathBuf::from(p);
         if path.exists() {
@@ -82,25 +61,16 @@ pub fn resolve_ark_core_rpc_path() -> ArkResult<PathBuf> {
         }
         candidates.push(path);
     }
-
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(parent) = current_exe.parent() {
             #[cfg(windows)]
-            let packaged_candidate = parent.join("Kosmos Data Engine.exe");
+            let packaged = parent.join("Kosmos Data Engine.exe");
             #[cfg(not(windows))]
-            let packaged_candidate = parent.join("Kosmos Data Engine");
-            #[cfg(not(windows))]
-            if packaged_candidate.exists() {
-                return Ok(packaged_candidate);
+            let packaged = parent.join("Kosmos Data Engine");
+            if packaged.exists() {
+                return Ok(packaged);
             }
-            #[cfg(not(windows))]
-            candidates.push(packaged_candidate);
-            #[cfg(windows)]
-            if packaged_candidate.exists() {
-                return Ok(packaged_candidate);
-            }
-            #[cfg(windows)]
-            candidates.push(packaged_candidate);
+            candidates.push(packaged);
             #[cfg(windows)]
             let candidate = parent.join("ark-core-rpc.exe");
             #[cfg(not(windows))]
@@ -111,50 +81,106 @@ pub fn resolve_ark_core_rpc_path() -> ArkResult<PathBuf> {
             candidates.push(candidate);
         }
     }
-
-    let dev_relative = [
+    #[cfg(debug_assertions)]
+    let workspace_candidates = [
+        "../../target/debug/ark-core-rpc.exe",
+        "../../target/debug/ark-core-rpc",
+        "../../target/release/ark-core-rpc.exe",
+        "../../target/release/ark-core-rpc",
+    ];
+    #[cfg(not(debug_assertions))]
+    let workspace_candidates = [
         "../../target/release/ark-core-rpc.exe",
         "../../target/release/ark-core-rpc",
         "../../target/debug/ark-core-rpc.exe",
         "../../target/debug/ark-core-rpc",
     ];
-    for rel in dev_relative {
-        let p = PathBuf::from(rel);
-        if p.exists() {
-            return Ok(p);
+    for rel in workspace_candidates {
+        let path = PathBuf::from(rel);
+        if path.exists() {
+            return Ok(path);
         }
-        candidates.push(p);
+        candidates.push(path);
     }
-
     Err(ArkHostError::BinaryNotFound(candidates))
 }
 
-/// Сообщение от запроса к writer task.
 struct OutgoingRequest {
-    payload: Vec<u8>, // JSON line с '\n'
+    payload: Vec<u8>,
 }
 
-/// ArkHost — управление child-процессом ark-core-rpc через stdio.
 pub struct ArkHost {
     next_req_id: AtomicU64,
     pending: Arc<Mutex<HashMap<String, oneshot::Sender<ArkResponse>>>>,
     writer_tx: mpsc::UnboundedSender<OutgoingRequest>,
     events_tx: broadcast::Sender<(String, serde_json::Value)>,
+    stderr_tail: Arc<std::sync::Mutex<crate::observability::BoundedTextTail>>,
     _child: tokio::process::Child,
 }
 
+impl Drop for ArkHost {
+    fn drop(&mut self) {
+        let _ = self._child.start_kill();
+    }
+}
+
 impl ArkHost {
-    /// Спавн ark-core-rpc как child, отправка `init` с db_path, ожидание ok.
+    /// Trusted package-install seam. The ARK side owns the SQLite transaction;
+    /// callers never receive a database handle or issue arbitrary SQL.
+    pub async fn register_package_definitions(
+        &self,
+        registrations: Vec<TypeRegistration>,
+    ) -> ArkResult<()> {
+        let response = self
+            .request(
+                "types.registerPackageDefinitions",
+                serde_json::json!({ "registrations": registrations }),
+            )
+            .await?;
+        typed_response(response, "package_definition_registration_failed")
+    }
+    pub async fn canonical_game_list(&self) -> ArkResult<Vec<GameRecord>> {
+        let response = self
+            .request(
+                "canonical.game.list",
+                serde_json::json!({ "deviceId": stable_device_id() }),
+            )
+            .await?;
+        typed_response(response, "game_list_failed")
+    }
+
+    pub async fn canonical_game_get(&self, id: &str) -> ArkResult<Option<GameRecord>> {
+        let response = self
+            .request(
+                "canonical.game.get",
+                serde_json::json!({ "id": id, "deviceId": stable_device_id() }),
+            )
+            .await?;
+        typed_response(response, "game_not_found")
+    }
+
+    pub async fn canonical_game_upsert(
+        &self,
+        mut game: GameUpsertCommand,
+    ) -> ArkResult<GameMutationResult> {
+        game.device_id = Some(stable_device_id());
+        let response = self
+            .request("canonical.game.upsert", serde_json::json!({ "game": game }))
+            .await?;
+        typed_response(response, "game_upsert_failed")
+    }
+
     pub async fn spawn(binary_path: &Path, db_path: &str) -> ArkResult<Self> {
         use tokio::process::Command;
-
-        let mut child = Command::new(binary_path)
+        let mut command = Command::new(binary_path);
+        #[cfg(windows)]
+        command.creation_flags(CREATE_NO_WINDOW);
+        let mut child = command
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .kill_on_drop(true)
             .spawn()?;
-
         let stdin = child
             .stdin
             .take()
@@ -163,52 +189,30 @@ impl ArkHost {
             .stdout
             .take()
             .ok_or_else(|| ArkHostError::Io(std::io::Error::other("child stdout missing")))?;
-
-        let pending: Arc<Mutex<HashMap<String, oneshot::Sender<ArkResponse>>>> =
-            Arc::new(Mutex::new(HashMap::new()));
-        let (events_tx, _) = broadcast::channel::<(String, serde_json::Value)>(128);
-        let (writer_tx, writer_rx) = mpsc::unbounded_channel::<OutgoingRequest>();
-
-        // Writer task: drains mpsc → child.stdin.
-        let writer_task_stdin = stdin;
-        tokio::spawn(writer_loop(writer_task_stdin, writer_rx));
-
-        // Reader task: parses stdout lines.
-        let pending_for_reader = pending.clone();
-        let events_for_reader = events_tx.clone();
-        tokio::spawn(reader_loop(stdout, pending_for_reader, events_for_reader));
-
-        // Stderr drain task: ark-core-rpc пишет диагностику (в т.ч. `[iroh]`
-        // логи) в свой stderr. Pipe ОБЯЗАТЕЛЬНО надо вычитывать: иначе при
-        // заполнении OS-буфера (~64 KB на macOS/Linux) синхронный `eprintln!`
-        // внутри сайдкара заблокируется на write в полный pipe, повесив его
-        // tokio-воркер — и весь sync/RPC встанет. Форвардим построчно в наш
-        // stderr с префиксом, чтобы строки были видны в общем логе backend'а.
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let (events_tx, _) = broadcast::channel(128);
+        let (writer_tx, writer_rx) = mpsc::unbounded_channel();
+        let stderr_tail = Arc::new(std::sync::Mutex::new(
+            crate::observability::BoundedTextTail::new(100, 64 * 1024),
+        ));
+        tokio::spawn(writer_loop(stdin, writer_rx));
+        tokio::spawn(reader_loop(stdout, pending.clone(), events_tx.clone()));
         if let Some(stderr) = child.stderr.take() {
-            tokio::spawn(stderr_loop(stderr));
+            tokio::spawn(stderr_loop(stderr, stderr_tail.clone()));
         }
-
-        let host = ArkHost {
+        let host = Self {
             next_req_id: AtomicU64::new(0),
             pending,
             writer_tx,
             events_tx,
+            stderr_tail,
             _child: child,
         };
-
-        // Init.
-        let init_response = host
-            .request(
-                "init",
-                serde_json::json!({
-                    "dbPath": db_path,
-                }),
-            )
+        let init = host
+            .request("init", serde_json::json!({ "dbPath": db_path }))
             .await?;
-        if !init_response.ok {
-            return Err(ArkHostError::RpcError(
-                init_response.error.unwrap_or_default(),
-            ));
+        if !init.ok {
+            return Err(ArkHostError::RpcError(init.error.unwrap_or_default()));
         }
         Ok(host)
     }
@@ -223,233 +227,133 @@ impl ArkHost {
             ARK_HOST_INTERNAL_REQ_ID_PREFIX,
             self.next_req_id.fetch_add(1, Ordering::Relaxed)
         );
-
         let mut envelope = match params {
             serde_json::Value::Object(map) => map,
             serde_json::Value::Null => serde_json::Map::new(),
             other => {
                 let mut m = serde_json::Map::new();
-                m.insert("params".to_string(), other);
+                m.insert("params".into(), other);
                 m
             }
         };
-        envelope.insert(
-            "operation".to_string(),
-            serde_json::Value::String(operation.to_string()),
-        );
-        envelope.insert(
-            "_req_id".to_string(),
-            serde_json::Value::String(req_id.clone()),
-        );
-
+        envelope.insert("operation".into(), operation.into());
+        envelope.insert("_req_id".into(), serde_json::Value::String(req_id.clone()));
         let mut line = serde_json::to_vec(&serde_json::Value::Object(envelope))?;
         line.push(b'\n');
-
         let (tx, rx) = oneshot::channel();
-        {
-            let mut pending = self.pending.lock().await;
-            pending.insert(req_id, tx);
-        }
-
+        self.pending.lock().await.insert(req_id, tx);
         self.writer_tx
             .send(OutgoingRequest { payload: line })
             .map_err(|_| ArkHostError::ChannelClosed)?;
-
         rx.await.map_err(|_| ArkHostError::ChildDead)
     }
 
     pub fn subscribe_events(&self) -> broadcast::Receiver<(String, serde_json::Value)> {
         self.events_tx.subscribe()
     }
+    pub fn stderr_tail_snapshot(&self) -> Vec<String> {
+        self.stderr_tail
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .snapshot()
+    }
 }
 
+fn stable_device_id() -> String {
+    std::env::var("KOSMOS_DEVICE_ID")
+        .ok()
+        .filter(|id| !id.trim().is_empty())
+        .map(|id| id.trim().to_owned())
+        .unwrap_or_else(|| "ark-host-local".to_owned())
+}
+
+fn typed_response<T: for<'de> Deserialize<'de>>(
+    response: ArkResponse,
+    fallback: &str,
+) -> ArkResult<T> {
+    if !response.ok {
+        return Err(ArkHostError::RpcError(
+            response.error.unwrap_or_else(|| fallback.into()),
+        ));
+    }
+    serde_json::from_value(response.data).map_err(ArkHostError::Json)
+}
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 async fn writer_loop(
     mut stdin: tokio::process::ChildStdin,
     mut rx: mpsc::UnboundedReceiver<OutgoingRequest>,
 ) {
     while let Some(req) = rx.recv().await {
-        if stdin.write_all(&req.payload).await.is_err() {
-            break;
-        }
-        if stdin.flush().await.is_err() {
+        if stdin.write_all(&req.payload).await.is_err() || stdin.flush().await.is_err() {
             break;
         }
     }
 }
-
 async fn reader_loop(
     stdout: tokio::process::ChildStdout,
     pending: Arc<Mutex<HashMap<String, oneshot::Sender<ArkResponse>>>>,
     events_tx: broadcast::Sender<(String, serde_json::Value)>,
 ) {
-    let reader = BufReader::new(stdout);
-    let mut lines = reader.lines();
+    let mut lines = BufReader::new(stdout).lines();
     while let Ok(Some(line)) = lines.next_line().await {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        match serde_json::from_str::<serde_json::Value>(trimmed) {
-            Ok(value) => dispatch_frame(value, &pending, &events_tx).await,
-            Err(_) => {
-                // Малформированная строка — лог в Phase 2, сейчас игнор.
-            }
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(line.trim()) {
+            dispatch_frame(value, &pending, &events_tx).await;
         }
     }
 }
-
-/// Вычитывает stderr сайдкара `ark-core-rpc` построчно и форвардит в наш
-/// stderr с префиксом `[ark-core-rpc]`. Существует ради двух целей: (1) не дать
-/// недренируемому pipe заполниться и заблокировать `eprintln!` внутри сайдкара
-/// (см. `spawn()`), (2) сделать диагностику сайдкара (включая `[iroh]` логи)
-/// видимой в общем логе backend'а.
-async fn stderr_loop(stderr: tokio::process::ChildStderr) {
-    let reader = BufReader::new(stderr);
-    let mut lines = reader.lines();
+async fn stderr_loop(
+    stderr: tokio::process::ChildStderr,
+    tail: Arc<std::sync::Mutex<crate::observability::BoundedTextTail>>,
+) {
+    let mut lines = BufReader::new(stderr).lines();
     while let Ok(Some(line)) = lines.next_line().await {
+        let line = crate::observability::redact_log_line(&line);
+        tail.lock().unwrap_or_else(|e| e.into_inner()).push(&line);
         eprintln!("[ark-core-rpc] {line}");
     }
 }
-
 async fn dispatch_frame(
     value: serde_json::Value,
     pending: &Arc<Mutex<HashMap<String, oneshot::Sender<ArkResponse>>>>,
     events_tx: &broadcast::Sender<(String, serde_json::Value)>,
 ) {
-    // Событие отличается наличием "event" поля.
-    if let Some(event_name) = value.get("event").and_then(|v| v.as_str()) {
-        let event_name = event_name.to_string();
-        let _ = events_tx.send((event_name, value));
+    if let Some(event) = value.get("event").and_then(|v| v.as_str()) {
+        let _ = events_tx.send((event.to_owned(), value));
         return;
     }
-
-    let req_id = match value.get("_req_id").and_then(|v| v.as_str()) {
-        Some(id) => id.to_string(),
-        None => return, // нет _req_id и нет event — игнор.
+    let Some(req_id) = value.get("_req_id").and_then(|v| v.as_str()) else {
+        return;
     };
-
     let response = ArkResponse {
         ok: value.get("ok").and_then(|v| v.as_bool()).unwrap_or(false),
-        data: value
-            .get("data")
-            .cloned()
-            .unwrap_or(serde_json::Value::Null),
+        data: value.get("data").cloned().unwrap_or_default(),
         error: value
             .get("error")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
+            .map(str::to_owned),
     };
-
-    let mut map = pending.lock().await;
-    if let Some(sender) = map.remove(&req_id) {
+    if let Some(sender) = pending.lock().await.remove(req_id) {
         let _ = sender.send(response);
     }
 }
 
-// ----- Unit tests: dispatcher logic без real child -----
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[tokio::test]
     async fn dispatch_response_to_pending() {
         let pending = Arc::new(Mutex::new(HashMap::new()));
-        let (events_tx, _) = broadcast::channel(8);
-
+        let (events, _) = broadcast::channel(8);
         let (tx, rx) = oneshot::channel();
-        pending.lock().await.insert("req-1".to_string(), tx);
-
-        let frame = serde_json::json!({
-            "_req_id": "req-1",
-            "ok": true,
-            "data": { "result": "foo" }
-        });
-
-        dispatch_frame(frame, &pending, &events_tx).await;
-        let response = rx.await.expect("response delivered");
-        assert!(response.ok);
-        assert_eq!(response.data["result"], "foo");
-    }
-
-    #[tokio::test]
-    async fn dispatch_response_with_error() {
-        let pending = Arc::new(Mutex::new(HashMap::new()));
-        let (events_tx, _) = broadcast::channel(8);
-
-        let (tx, rx) = oneshot::channel();
-        pending.lock().await.insert("req-2".to_string(), tx);
-
-        let frame = serde_json::json!({
-            "_req_id": "req-2",
-            "ok": false,
-            "error": "something failed"
-        });
-
-        dispatch_frame(frame, &pending, &events_tx).await;
-        let response = rx.await.unwrap();
-        assert!(!response.ok);
-        assert_eq!(response.error.as_deref(), Some("something failed"));
-    }
-
-    #[tokio::test]
-    async fn dispatch_event_to_broadcast() {
-        let pending = Arc::new(Mutex::new(HashMap::new()));
-        let (events_tx, mut events_rx) = broadcast::channel(8);
-
-        let frame = serde_json::json!({
-            "event": "entity_changed",
-            "entity_type": "object",
-            "id": "abc"
-        });
-
-        dispatch_frame(frame, &pending, &events_tx).await;
-        let (event_name, payload) = events_rx.recv().await.unwrap();
-        assert_eq!(event_name, "entity_changed");
-        assert_eq!(payload["entity_type"], "object");
-    }
-
-    #[tokio::test]
-    async fn dispatch_uncorrelated_response_is_dropped() {
-        let pending = Arc::new(Mutex::new(HashMap::new()));
-        let (events_tx, _) = broadcast::channel(8);
-
-        let frame = serde_json::json!({
-            "_req_id": "unknown",
-            "ok": true,
-            "data": {}
-        });
-
-        dispatch_frame(frame, &pending, &events_tx).await;
-        assert!(pending.lock().await.is_empty());
-    }
-
-    #[tokio::test]
-    async fn dispatch_frame_without_req_id_or_event_is_ignored() {
-        let pending = Arc::new(Mutex::new(HashMap::new()));
-        let (events_tx, mut events_rx) = broadcast::channel(8);
-
-        let frame = serde_json::json!({ "ok": true, "data": {} });
-        dispatch_frame(frame, &pending, &events_tx).await;
-
-        // pending пуст, events пуст
-        assert!(pending.lock().await.is_empty());
-        assert!(events_rx.try_recv().is_err());
-    }
-
-    #[test]
-    fn resolve_returns_error_when_no_candidates_exist() {
-        // В чистой среде без env и без installed бинаря — ожидаем BinaryNotFound.
-        // На dev-машине может найти dev binary, поэтому проверяем условно.
-        std::env::remove_var("ARK_CORE_RPC_PATH");
-        match resolve_ark_core_rpc_path() {
-            Ok(path) => {
-                // Если что-то нашлось — это валидный путь к существующему файлу.
-                assert!(path.exists(), "resolved path doesn't exist: {path:?}");
-            }
-            Err(ArkHostError::BinaryNotFound(candidates)) => {
-                assert!(!candidates.is_empty(), "should report attempted paths");
-            }
-            Err(other) => assert!(matches!(other, ArkHostError::BinaryNotFound(_))),
-        }
+        pending.lock().await.insert("req".into(), tx);
+        dispatch_frame(
+            serde_json::json!({"_req_id":"req","ok":true,"data":{"result":"foo"}}),
+            &pending,
+            &events,
+        )
+        .await;
+        assert_eq!(rx.await.unwrap().data["result"], "foo");
     }
 }

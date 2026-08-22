@@ -6,4 +6,4 @@ export {
   ARK_READY_REQUEST_TIMEOUT_MS,
   createMainBackendSupervisor,
 } from "./main-backend-supervisor";
-export { runAppReady, shouldShowLauncherOnStartup } from "./main-app-ready";
+export { runAppReady } from "./main-app-ready";

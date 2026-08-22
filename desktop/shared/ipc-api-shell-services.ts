@@ -1,6 +1,6 @@
 // Дополнительные секции `window.kepler`, вынесенные из основного KeplerApi-контракта.
 
-import type { StorageSummary, SyncStatusSnapshot, UpdateState } from "./ipc-types";
+import type { StorageSummary, UpdateState } from "./ipc-types";
 
 interface DiagnosticsWindowInfo {
   id: number;
@@ -22,7 +22,7 @@ interface DiagnosticsMetricsSnapshot {
 }
 
 interface DiagnosticsWindowMoveBenchmarkInput {
-  windowKind?: "launcher" | "settings" | "extension" | "flatTest";
+  windowKind?: "launcher" | "settings" | "flatTest";
   steps?: number;
   intervalMs?: number;
   acrossDisplays?: boolean;
@@ -131,68 +131,14 @@ export interface KeplerApiShellServices {
     onCaptureEvent(cb: (payload: Record<string, unknown>) => void): () => void;
   };
 
-  /** Focus mode Windows Service control. Service устанавливается опционально
-      (Settings → Focus → «Установить daemon»). Когда running — hosts
-      модификации идут через named pipe (no UAC). Без service — fallback
-      на helper bin с UAC per toggle. */
-  focusService: {
-    status(): Promise<{ installed: boolean; running: boolean }>;
-    ping(): Promise<boolean>;
-    install(): Promise<{ ok: boolean; error?: string }>;
-    uninstall(): Promise<{ ok: boolean; error?: string }>;
-    start(): Promise<{ ok: boolean; error?: string }>;
-    stop(): Promise<{ ok: boolean; error?: string }>;
-    /** Юзер отклонил auto-install (UAC cancel). Когда true — runHelper не
-        будет повторно триггерить UAC сам, install только через UI кнопку. */
-    autoInstallDeclined: {
-      get(): Promise<boolean>;
-      set(value: boolean): Promise<void>;
-    };
-    /** Listener для изменений status (например, после auto-install service'а
-        в runHelper). UI Settings → Фокус обновляет карточку. */
-    onStatusChanged(cb: () => void): () => void;
-  };
-
-  /** Настройки Kepler (отдельное окно). Phase 1 — read-only hotkey,
-      autostart toggle, версия и backend-статус (через backend.status()). */
+  /** Настройки Kepler (отдельное окно). Shell preferences and updater only. */
   settings: {
     /** Открыть окно настроек (или сфокусировать существующее). */
     open(): Promise<void>;
     /** Закрыть окно настроек (вызывается из SettingsView). */
     close(): Promise<void>;
-    autostart: {
-      get(): Promise<boolean>;
-      /** Разрешён ли autostart toggle в текущем slot'е. true только для
-          prod (installed Kepler). В dev / test возвращает false — UI должен
-          disable'ить toggle, потому что setLoginItemSettings из dev пишет
-          мусор в HKCU Run (electron.exe из node_modules). */
-      allowed(): Promise<boolean>;
-      set(enabled: boolean): Promise<void>;
-    };
     /** Показывать Kepler в системном трее. */
     trayIcon: {
-      get(): Promise<boolean>;
-      set(enabled: boolean): Promise<void>;
-    };
-    /** Sync state for the Settings → Sync tab. */
-    sync: {
-      snapshot(): Promise<SyncStatusSnapshot>;
-      getPairingCode(): Promise<string | null>;
-      disconnectPeer(deviceId: string): Promise<void>;
-      connectWithPairingCode(code: string): Promise<void>;
-      copyPairingCode(code: string): Promise<void>;
-      onUpdated(listener: () => void): () => void;
-    };
-    /** Developer mode — hot reload extension'ов через Vite dev server +
-        F12 для DevTools на extension window. Применяется при следующем
-        открытии extension'а. */
-    developerMode: {
-      get(): Promise<boolean>;
-      set(enabled: boolean): Promise<void>;
-    };
-    /** Трекать активные приложения (usage-tracker в kepler-backend).
-        Изменения применяются после рестарта Kepler. */
-    usageTracker: {
       get(): Promise<boolean>;
       set(enabled: boolean): Promise<void>;
     };
@@ -225,11 +171,6 @@ export interface KeplerApiShellServices {
       onStateChanged(listener: (state: UpdateState) => void): () => void;
     };
   };
-  /** Eden settings window — отдельное окно поверх extension host. */
-  edenSettings: {
-    open(): Promise<void>;
-    close(): Promise<void>;
-  };
   focusOverlay: {
     ready(): void;
     onShow(listener: (feedback: FocusOverlayFeedback) => void): () => void;
@@ -239,31 +180,17 @@ export interface KeplerApiShellServices {
     done(): void;
   };
 
-  /** Crash reports — locations + management для Settings → Диагностика. */
-  crashes: {
-    /** List files в `<data_dir>/crashes/`. Sorted newest first. */
-    list(): Promise<Array<{ name: string; size: number; mtime: string }>>;
-    /** Открыть директорию `<data_dir>/crashes/` в file explorer. */
-    openFolder(): Promise<void>;
-    /** Удалить все crash файлы. Возвращает количество удалённых. */
-    clear(): Promise<{ removed: number }>;
-  };
   /** Phase 4 bug-detection: diagnostics bundle для bug report'ов. */
   diagnostics: {
-    /** Создать ZIP в temp dir с logs + crashes + versions + extensions. */
+    /** Создать ZIP в temp dir с logs + crashes + versions. */
     bundle(): Promise<{ ok: boolean; zipPath?: string; error?: string }>;
-    /** Создать ZIP + показать saveDialog. Returns final path или null
-        если пользователь отменил. */
-    bundleSave(): Promise<string | null>;
-    /** Открыть `<data_dir>/logs/` директорию в Explorer'е. */
-    openLogsFolder(): Promise<void>;
     /** Snapshot Electron process/GPU/window metrics. */
     metrics(): Promise<DiagnosticsMetricsSnapshot>;
     /** Start Chromium content trace collection. */
     traceStart(): Promise<{ ok: true }>;
     /** Stop Chromium trace collection and return the written trace path. */
     traceStop(outPath?: string): Promise<{ path: string }>;
-    /** Repeatable setBounds benchmark for launcher/settings/extension/test windows. */
+    /** Repeatable setBounds benchmark for launcher/settings/test windows. */
     windowMoveBenchmark(
       input?: DiagnosticsWindowMoveBenchmarkInput,
     ): Promise<DiagnosticsWindowMoveBenchmarkResult>;

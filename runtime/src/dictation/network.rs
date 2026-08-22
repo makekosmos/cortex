@@ -117,8 +117,8 @@ pub fn validate_custom_doh_url(url: &str) -> Result<ParsedCustomDoh, String> {
 
 /// Билдит reqwest клиент с timeout 60s + опциональный DoH resolver
 /// + опциональный HTTP/SOCKS proxy. Proxy применяется ПОВЕРХ DNS-настройки:
-/// сначала резолвится host (через выбранный resolver), потом подключение
-/// идёт через proxy (если задан). Это покрывает три сценария РФ-обхода:
+///   сначала резолвится host (через выбранный resolver), потом подключение
+///   идёт через proxy (если задан). Это покрывает три сценария РФ-обхода:
 ///   1. DoH only — DNS poisoning (Cloudflare 1.1.1.1).
 ///   2. Proxy only — IP/SNI block без DNS issue.
 ///   3. DoH + Proxy — двойная защита, если оба слоя проблемные.
@@ -301,6 +301,7 @@ impl Resolve for HickoryDnsResolver {
 }
 
 #[cfg(test)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
 

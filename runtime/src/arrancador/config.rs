@@ -22,7 +22,12 @@ pub struct ArrancadorConfig {
     pub steam_library_override: Option<PathBuf>,
     /// Сколько последних бэкапов сохранять на игру (default 10).
     pub keep_backups: Option<u32>,
+    /// Device-local launcher metadata. This is deliberately not part of the
+    /// canonical Game object or any public Arrancador DTO.
+    pub local_games: std::collections::HashMap<String, LocalGameState>,
 }
+
+pub type LocalGameState = ark_core::canonical_types::game::GameLocalState;
 
 /// Корневая директория конфигов Kosmos. Respect'ит `KOSMOS_DATA_DIR` env (тесты)
 /// и dev-build (`Kosmos-dev`), иначе `%APPDATA%\Kosmos`.
@@ -93,6 +98,7 @@ mod tests {
             sqoba_dest_dir: Some(PathBuf::from("D:\\backups")),
             steam_library_override: None,
             keep_backups: Some(5),
+            local_games: std::collections::HashMap::new(),
         };
         save_to(&path, &cfg).unwrap();
         let loaded = load_from(&path);

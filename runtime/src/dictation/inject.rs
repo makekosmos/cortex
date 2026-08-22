@@ -2,15 +2,11 @@
 // в предыдущем активном окне (HWND, захваченный до показа pill).
 //
 // Поток AutoPaste (см. forbidden.md → Dictation, обязательные задержки):
-//   1. сохранить оригинальный clipboard text
-//   2. clipboard.set_text(transcript)
+//   1. clipboard.set_text(transcript)
 //   3. SetForegroundWindow(prev_hwnd) если есть HWND
 //   4. sleep 80ms — даём ОС вернуть focus в целевое окно
 //   5. terminal-aware paste shortcut (Ctrl+V normally, Shift+Insert for terminals)
-//   6. sleep 80ms — даём ОС прочитать буфер ПЕРЕД restore (иначе race:
-//      Windows может ещё не успеть paste'нуть → восстановим старый текст
-//      раньше времени → вставится старый)
-//   7. clipboard.set_text(original) — restore
+//   6. оставить transcript в clipboard, чтобы его можно было вставить ещё раз
 //
 // Поток ClipboardOnly: только шаг 2. Юзер сам жмёт Ctrl+V.
 //
@@ -18,16 +14,13 @@
 // (особенно SendInput на медленных машинах). Вызываем через
 // `tokio::task::spawn_blocking` в host.
 
-use std::thread;
-use std::time::Duration;
-
 use thiserror::Error;
 
 use super::config::InjectMode;
 
-/// Минимальная задержка после Ctrl+V до restore'а clipboard. 80ms даёт запас
-/// над типичными ~30-50ms которые Windows тратит на обработку paste
-/// (особенно медленный когда target — Electron-based app типа VS Code).
+/// Минимальная задержка после Ctrl+V. 80ms даёт запас над типичными ~30-50ms
+/// которые Windows тратит на обработку paste (особенно когда target —
+/// Electron-based app типа VS Code).
 const POST_PASTE_DELAY_MS: u64 = 80;
 
 /// Задержка после SetForegroundWindow перед симуляцией клавиш. Без неё
@@ -211,39 +204,42 @@ fn send_paste(_prev_hwnd: Option<isize>) -> Result<(), InjectError> {
     Ok(())
 }
 
-/// Blocking impl. Вызывать из `spawn_blocking`. Восстановление clipboard
-/// best-effort: если оригинала не было (текст недоступен / image / files
-/// — пока не поддерживаем) — оставляем transcript в буфере.
+/// Blocking impl. Вызывать из `spawn_blocking`. AutoPaste оставляет transcript
+/// в clipboard после вставки; ClipboardOnly только записывает его туда.
 pub fn inject_blocking(
     text: &str,
     mode: InjectMode,
     prev_hwnd: Option<isize>,
 ) -> Result<(), InjectError> {
-    let mut clipboard = arboard::Clipboard::new()?;
-    let original = clipboard.get_text().ok();
-
-    clipboard.set_text(text.to_owned())?;
-
-    if matches!(mode, InjectMode::ClipboardOnly) {
+    // Host integration tests must never touch the user's clipboard or send
+    // input.  Keep the seam at the shared production entrypoint so every
+    // caller gets the same isolation without an environment-variable race.
+    #[cfg(test)]
+    {
+        let _ = (text, mode, prev_hwnd);
         return Ok(());
     }
 
-    if let Some(hwnd) = prev_hwnd {
-        restore_foreground_window(hwnd);
+    #[cfg(not(test))]
+    {
+        let mut clipboard = arboard::Clipboard::new()?;
+        clipboard.set_text(text.to_owned())?;
+
+        if matches!(mode, InjectMode::ClipboardOnly) {
+            return Ok(());
+        }
+
+        if let Some(hwnd) = prev_hwnd {
+            restore_foreground_window(hwnd);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(REFOCUS_DELAY_MS));
+
+        send_paste(prev_hwnd)?;
+
+        std::thread::sleep(std::time::Duration::from_millis(POST_PASTE_DELAY_MS));
+
+        Ok(())
     }
-    thread::sleep(Duration::from_millis(REFOCUS_DELAY_MS));
-
-    send_paste(prev_hwnd)?;
-
-    thread::sleep(Duration::from_millis(POST_PASTE_DELAY_MS));
-
-    if let Some(orig) = original {
-        // best-effort restore — если не смогли, пользователь увидит transcript
-        // в буфере. Не считаем за ошибку всего inject'а.
-        let _ = clipboard.set_text(orig);
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// GeneralTab — глобальный хоткей лаунчера, autostart, tray icon.
+// GeneralTab — глобальный хоткей лаунчера и tray icon.
 
 import { Button, HotkeyCapture } from "@kosmos/visuals";
 import LegacyRow from "../components/LegacyRow.vue";
@@ -9,16 +9,12 @@ defineProps<{
   loading: boolean;
   hotkey: string;
   hotkeyError: string;
-  autostart: boolean;
-  autostartAllowed: boolean;
-  autostartError: string;
   trayIcon: boolean;
 }>();
 
 defineEmits<{
   launcherHotkeyChange: [v: string];
   resetHotkey: [];
-  toggleAutostart: [e: Event];
   toggleTrayIcon: [e: Event];
 }>();
 </script>
@@ -36,18 +32,6 @@ defineEmits<{
         />
         <Button variant="ghost" size="sm" @click="$emit('resetHotkey')">Сброс</Button>
       </div>
-    </LegacyRow>
-
-    <LegacyRow title="Автозапуск с Windows" :error="autostartError">
-      <template #hint>
-        <template v-if="autostartAllowed">Запускать Kosmos при входе в систему</template>
-        <template v-else>Доступно только в установленной версии (не в dev-сборке)</template>
-      </template>
-      <LegacyToggle
-        :checked="autostart"
-        :disabled="!autostartAllowed"
-        @change="(e: Event) => $emit('toggleAutostart', e)"
-      />
     </LegacyRow>
 
     <LegacyRow title="Показывать в трее" hint="Оставлять значок Kosmos в системном трее">

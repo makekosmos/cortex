@@ -13,7 +13,7 @@ import {
   localImageMimeType,
   parseLocalImageRequestUrl,
   resolveLocalImagePath,
-} from "./local-image-protocol";
+} from "../../shared/electron/local-image-protocol";
 
 interface MainProtocolOptions {
   awaitArkReady(timeoutMs?: number): Promise<ArkClient>;

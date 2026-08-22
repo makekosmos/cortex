@@ -10,6 +10,12 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub const PROTOCOL_VERSION: &str = "1.0.0";
+pub const API_VERSION: &str = "1.0.0";
+pub const API_VERSION_CURRENT: ProtocolVersion = ProtocolVersion {
+    major: 1,
+    minor: 0,
+    patch: 0,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProtocolVersion {
@@ -152,5 +158,11 @@ mod tests {
     fn protocol_version_const_parses() {
         let parsed = ProtocolVersion::parse(PROTOCOL_VERSION).unwrap();
         assert_eq!(parsed, ProtocolVersion::CURRENT);
+    }
+
+    #[test]
+    fn api_version_const_parses() {
+        let parsed = ProtocolVersion::parse(API_VERSION).unwrap();
+        assert_eq!(parsed, API_VERSION_CURRENT);
     }
 }

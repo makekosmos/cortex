@@ -186,9 +186,12 @@ fn filetime_to_unix(universal_time: i64) -> i64 {
 
 pub fn launch_uwp(exec_path: &str) -> Result<()> {
     // exec_path содержит уже `shell:AppsFolder\<AUMID>`.
+    use std::os::windows::process::CommandExt;
     use std::process::Command;
-    Command::new("cmd")
-        .args(["/c", "start", "", exec_path])
+    let mut command = Command::new("cmd");
+    command.args(["/c", "start", "", exec_path]);
+    command.creation_flags(0x08000000);
+    command
         .spawn()
         .map_err(|e| crate::app_index::AppIndexError::Launch(format!("{e}")))?;
     Ok(())

@@ -1,0 +1,1055 @@
+#![cfg(all(windows, feature = "package-worker-fixture"))]
+#![allow(clippy::panic, clippy::unwrap_used)]
+
+use std::{
+    io::Write,
+    path::PathBuf,
+    sync::{Arc, Mutex, MutexGuard, OnceLock},
+    time::{Duration, Instant},
+};
+
+use kepler_backend::{
+    ark_host::{resolve_ark_core_rpc_path, ArkHost},
+    diagnostics::RpcDiagnostics,
+    manager_api::ManagerState,
+    package_manifest::{
+        DataAction, FieldAccess, ManifestData, ManifestTarget, ManifestV2, PackageKind,
+        PackageManifest, TargetOs, TargetRuntime, VersionedManifest,
+    },
+    package_service::PackageService,
+    package_store::PackageStore,
+    package_worker_process::{test_support, FailureStage},
+    package_worker_protocol::BridgeWorkerConfig,
+    package_worker_supervisor::{PackageWorkerSupervisor, WorkerState},
+    protocol_usage::ProtocolUsageStore,
+    usage_tracker::UsageTrackerDiagnosticsState,
+};
+use sha2::{Digest, Sha256};
+use zip::{write::FileOptions, ZipWriter};
+
+static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+struct FixtureEnv<'a> {
+    _lock: MutexGuard<'a, ()>,
+    entry: PathBuf,
+    bootstrap: PathBuf,
+}
+
+impl Drop for FixtureEnv<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            std::env::remove_var("KOSMOS_FIXTURE_ENTRY_MARKER");
+            std::env::remove_var("KOSMOS_FIXTURE_BOOTSTRAP_MARKER");
+        }
+    }
+}
+
+fn fixture_env(directory: &tempfile::TempDir) -> FixtureEnv<'static> {
+    let lock = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let entry = directory.path().join("entry.marker");
+    let bootstrap = directory.path().join("bootstrap.marker");
+    unsafe {
+        std::env::set_var("KOSMOS_FIXTURE_ENTRY_MARKER", &entry);
+        std::env::set_var("KOSMOS_FIXTURE_BOOTSTRAP_MARKER", &bootstrap);
+    }
+    FixtureEnv {
+        _lock: lock,
+        entry,
+        bootstrap,
+    }
+}
+
+fn manifest(id: &str) -> PackageManifest {
+    PackageManifest {
+        schema_version: 1,
+        id: id.into(),
+        name: "fixture".into(),
+        version: "1.0.0".into(),
+        kind: PackageKind::Source,
+        engine_api: ">=1".into(),
+        entrypoint: "package-worker-fixture.exe".into(),
+        publisher: "kosmos".into(),
+        permissions: if id.ends_with(".ark-write") {
+            vec![kepler_backend::package_manifest::PermissionRequest {
+                capability: "ark.write".into(),
+                scopes: vec!["upsert_object_type".into()],
+            }]
+        } else {
+            vec![]
+        },
+    }
+}
+
+fn fixture() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_package-worker-fixture"))
+}
+fn bridge_fixture() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_ark-markdown-bridge"))
+}
+
+fn bridge_manifest() -> PackageManifest {
+    PackageManifest {
+        schema_version: 1,
+        id: "ark-markdown-bridge".into(),
+        name: "ARK Markdown Bridge".into(),
+        version: "1.0.0".into(),
+        kind: PackageKind::Bridge,
+        engine_api: ">=1".into(),
+        entrypoint: "ark-markdown-bridge.exe".into(),
+        publisher: "kosmos".into(),
+        permissions: vec![
+            kepler_backend::package_manifest::PermissionRequest {
+                capability: "ark.read".into(),
+                scopes: vec!["list_objects".into(), "get_object".into()],
+            },
+            kepler_backend::package_manifest::PermissionRequest {
+                capability: "ark.write".into(),
+                scopes: vec!["upsert_object".into(), "external_refs.upsert".into()],
+            },
+            kepler_backend::package_manifest::PermissionRequest {
+                capability: "filesystem.read".into(),
+                scopes: vec![],
+            },
+            kepler_backend::package_manifest::PermissionRequest {
+                capability: "filesystem.write".into(),
+                scopes: vec![],
+            },
+        ],
+    }
+}
+
+fn versioned_manifest(manifest: &PackageManifest) -> VersionedManifest {
+    VersionedManifest::V2(ManifestV2 {
+        schema_version: 2,
+        id: manifest.id.clone(),
+        name: manifest.name.clone(),
+        version: manifest.version.clone(),
+        kind: manifest.kind.clone(),
+        engine_api: manifest.engine_api.clone(),
+        entrypoint: manifest.entrypoint.clone(),
+        icon: None,
+        publisher: manifest.publisher.clone(),
+        permissions: manifest.permissions.clone(),
+        targets: vec![ManifestTarget {
+            runtime: TargetRuntime::Worker,
+            os: vec![TargetOs::Windows],
+            arch: None,
+        }],
+        data: ManifestData {
+            access: (manifest.kind == PackageKind::Bridge)
+                .then_some(kepler_backend::package_manifest::DataAccessRule {
+                    type_id: "note".into(),
+                    versions: "*".into(),
+                    actions: vec![DataAction::Read, DataAction::Update],
+                    fields: FieldAccess {
+                        read: vec!["title".into(), "body".into()],
+                        write: vec!["title".into(), "body".into()],
+                    },
+                    relations: None,
+                })
+                .into_iter()
+                .collect(),
+            defines: vec![],
+            mappings: vec![],
+        },
+    })
+}
+
+fn assert_owner_only_acl(path: &std::path::Path) {
+    let output = std::process::Command::new("icacls")
+        .arg(path)
+        .output()
+        .expect("icacls");
+    assert!(output.status.success(), "icacls failed: {:?}", output);
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !text.contains("(I)"),
+        "inherited ACL remains for {path:?}: {text}"
+    );
+    for principal in ["BUILTIN\\Users", "Everyone", "Authenticated Users"] {
+        assert!(
+            !text.contains(principal),
+            "broad ACL {principal} remains for {path:?}: {text}"
+        );
+    }
+}
+
+fn install_fixture(
+    directory: &tempfile::TempDir,
+    manifest: &PackageManifest,
+) -> (
+    Arc<PackageStore>,
+    kepler_backend::package_store::InstalledPackage,
+) {
+    install_binary(directory, manifest, fixture())
+}
+
+fn install_binary(
+    directory: &tempfile::TempDir,
+    manifest: &PackageManifest,
+    binary: PathBuf,
+) -> (
+    Arc<PackageStore>,
+    kepler_backend::package_store::InstalledPackage,
+) {
+    let archive_path = directory.path().join("worker.kspkg");
+    let file = std::fs::File::create(&archive_path).expect("archive");
+    let mut archive = ZipWriter::new(file);
+    let versioned = versioned_manifest(manifest);
+    archive
+        .start_file("manifest.json", FileOptions::default())
+        .expect("manifest entry");
+    archive
+        .write_all(&serde_json::to_vec(&versioned).expect("manifest json"))
+        .expect("manifest bytes");
+    archive
+        .start_file(versioned.entrypoint(), FileOptions::default())
+        .expect("worker entry");
+    archive
+        .write_all(&std::fs::read(binary).expect("fixture bytes"))
+        .expect("worker bytes");
+    archive.finish().expect("archive finish");
+    let bytes = std::fs::read(&archive_path).expect("archive bytes");
+    let hash = Sha256::digest(&bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let store = Arc::new(PackageStore::new(directory.path().join("store")).expect("store"));
+    let installed = store
+        .install_versioned(&archive_path, bytes.len() as u64, &hash, &versioned, 1)
+        .expect("install");
+    store
+        .enable_worker(&manifest.id, &manifest.version)
+        .expect("enable");
+    (store, installed)
+}
+
+#[tokio::test]
+async fn fixture_workers_validate_protocol_and_fail_closed() {
+    let _lock = test_support::serialized();
+    let directory = tempfile::tempdir().expect("fixture marker directory");
+    let markers = fixture_env(&directory);
+    let supervisor = PackageWorkerSupervisor::new(1);
+    let roots = [std::env::temp_dir()];
+    let normal = manifest("fixture.normal");
+    test_support::reset_resume_count();
+    let mut barrier = test_support::pause_next_before_resume();
+    let start_supervisor = supervisor.clone();
+    let start_manifest = normal.clone();
+    let launch = tokio::spawn(async move {
+        start_supervisor
+            .start(
+                &start_manifest,
+                fixture(),
+                "hash".into(),
+                &[std::env::temp_dir()],
+                "corr".into(),
+                None,
+            )
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(3), barrier.suspended_ready())
+        .await
+        .expect("resume barrier");
+    assert!(!launch.is_finished());
+    assert!(!markers.entry.exists());
+    assert!(!markers.bootstrap.exists());
+    assert_eq!(test_support::resume_count(), 0);
+    barrier.release();
+    tokio::time::timeout(Duration::from_secs(3), launch)
+        .await
+        .expect("normal start timeout")
+        .expect("start task")
+        .expect("normal worker start");
+    assert_eq!(test_support::resume_count(), 1);
+    assert_eq!(
+        supervisor.health(&normal.id, &normal.version).state,
+        WorkerState::Running
+    );
+    assert!(
+        markers.entry.exists(),
+        "entry marker must precede bootstrap"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&markers.bootstrap).unwrap(),
+        "bootstrap:1\n"
+    );
+    assert_eq!(
+        supervisor
+            .start(
+                &normal,
+                fixture(),
+                "hash".into(),
+                &roots,
+                "corr".into(),
+                None
+            )
+            .await,
+        Err("already-running")
+    );
+    supervisor
+        .stop(&normal.id, &normal.version)
+        .await
+        .expect("worker stop");
+
+    let m = manifest("fixture.wrong-token");
+    let started = Instant::now();
+    let result = tokio::time::timeout(
+        Duration::from_secs(45),
+        supervisor.start(&m, fixture(), "hash".into(), &roots, "corr".into(), None),
+    )
+    .await
+    .expect("fixture timeout");
+    assert_eq!(result, Err("worker-unavailable"));
+    assert!(started.elapsed() >= Duration::from_secs(36));
+    assert_eq!(
+        supervisor.health(&m.id, &m.version).state,
+        WorkerState::Failed
+    );
+    let diagnostic = supervisor
+        .diagnostics()
+        .into_iter()
+        .find(|worker| worker.id == m.id)
+        .expect("diagnostic");
+    assert_eq!(diagnostic.generation, 4);
+    assert_eq!(diagnostic.restart_count, 3);
+    let health = format!("{:?}", supervisor.health(&m.id, &m.version));
+    assert!(!health.contains("hash") && !health.contains("corr"));
+}
+
+#[tokio::test]
+async fn stop_suppresses_initial_failure_retries() {
+    let _lock = test_support::serialized();
+    let supervisor = PackageWorkerSupervisor::new(1);
+    let m = manifest("fixture.initial-fail");
+    let start_manifest = m.clone();
+    let running = supervisor.clone();
+    let start = tokio::spawn(async move {
+        running
+            .start(
+                &start_manifest,
+                fixture(),
+                "hash".into(),
+                &[std::env::temp_dir()],
+                "corr".into(),
+                None,
+            )
+            .await
+    });
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    supervisor
+        .stop(&m.id, &m.version)
+        .await
+        .expect("worker stop");
+    assert_eq!(start.await.expect("start task"), Err("worker-unavailable"));
+    let diagnostic = supervisor
+        .diagnostics()
+        .into_iter()
+        .find(|worker| worker.id == m.id)
+        .expect("diagnostic");
+    assert!(diagnostic.generation <= 2);
+    assert_eq!(
+        supervisor.health(&m.id, &m.version).state,
+        WorkerState::Stopped
+    );
+}
+
+#[tokio::test]
+async fn worker_ark_write_uses_host_and_advances_sync_state() {
+    let _lock = test_support::serialized();
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let worker_manifest = manifest("fixture.ark-write");
+    let (store, installed) = install_fixture(&directory, &worker_manifest);
+    let executable = store
+        .immutable_entrypoint(&installed)
+        .expect("immutable entrypoint");
+    let db_path = directory.path().join("ark.db");
+    let ark_binary = resolve_ark_core_rpc_path().expect("ark-core-rpc binary");
+    let ark = Arc::new(
+        ArkHost::spawn(&ark_binary, db_path.to_str().expect("db path"))
+            .await
+            .expect("ark host"),
+    );
+    let supervisor = PackageWorkerSupervisor::with_ark(1, ark.clone());
+    supervisor.bind_store(store);
+    supervisor
+        .start(
+            &worker_manifest,
+            executable,
+            installed.hash,
+            &[],
+            "ark-write-test".into(),
+            None,
+        )
+        .await
+        .expect("worker start");
+    let object_type = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let response = ark
+                .request(
+                    "get_object_type",
+                    serde_json::json!({ "id": "worker_fixture_type" }),
+                )
+                .await
+                .expect("ark request");
+            if response.ok && response.data.get("id").is_some() {
+                break response.data;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("worker ARK dispatch timeout");
+    assert_eq!(object_type["id"], "worker_fixture_type");
+    let sync = ark
+        .request(
+            "get_sync_kv",
+            serde_json::json!({ "key": "lan_sync.version_vector" }),
+        )
+        .await
+        .expect("sync state request");
+    assert!(sync.ok && sync.data.as_str().is_some());
+    supervisor
+        .stop(&worker_manifest.id, &worker_manifest.version)
+        .await
+        .expect("worker stop");
+}
+
+#[tokio::test]
+async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
+    let _lock = test_support::serialized();
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let vault = directory.path().join("vault");
+    let state = directory.path().join("state");
+    std::fs::create_dir(&vault).expect("vault");
+    std::fs::create_dir(&state).expect("state");
+    let manifest = bridge_manifest();
+    let (store, installed) = install_binary(&directory, &manifest, bridge_fixture());
+    let executable = store
+        .immutable_entrypoint(&installed)
+        .expect("immutable entrypoint");
+    let ark_binary = resolve_ark_core_rpc_path().expect("ark-core-rpc binary");
+    let ark = Arc::new(
+        ArkHost::spawn(
+            &ark_binary,
+            directory
+                .path()
+                .join("ark.db")
+                .to_str()
+                .expect("db path is valid UTF-8"),
+        )
+        .await
+        .expect("ark host"),
+    );
+    assert!(ark.request("upsert_object_type", serde_json::json!({"object_type":{"id":"note","name":"Note","schemaJson":"{}","uiSchemaJson":"{}","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","systemLocked":false},"device_id":"bridge-e2e"})).await.expect("type").ok);
+    let object = ark.request("upsert_object", serde_json::json!({"object":{"id":"bridge-note","typeId":"note","title":"Bridge note","contentJson":{},"propsJson":{"body":"from ark"},"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","deletedAt":null},"device_id":"bridge-e2e"})).await.expect("object");
+    assert!(object.ok, "{:?}", object.error);
+    let supervisor = PackageWorkerSupervisor::with_ark(1, ark.clone());
+    supervisor.bind_store(store);
+    let config = BridgeWorkerConfig {
+        vault_root: vault.to_string_lossy().into_owned(),
+        state_root: state.to_string_lossy().into_owned(),
+        selected_types: vec!["note".into()],
+        editable_fields: vec!["title".into(), "body".into()],
+        readonly_fields: vec![],
+    };
+    let roots = [vault.clone(), state.clone()];
+    supervisor
+        .start(
+            &manifest,
+            executable.clone(),
+            installed.hash.clone(),
+            &roots,
+            "bridge-e2e".into(),
+            Some(config.clone()),
+        )
+        .await
+        .expect("bridge start");
+    let markdown_path = vault.join("Bridge note-bridge-note.md");
+    let projected = tokio::time::timeout(Duration::from_secs(8), async {
+        while !markdown_path.exists() {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await;
+    assert!(
+        projected.is_ok(),
+        "projection diagnostics: {:?}",
+        supervisor.diagnostics()
+    );
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !state.join("state.json").exists() {
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("bridge state file");
+    assert_owner_only_acl(&state);
+    assert_owner_only_acl(&state.join("state.json"));
+    let markdown = std::fs::read_to_string(&markdown_path).expect("markdown");
+    assert!(markdown.contains("ark_id: \"bridge-note\""));
+    std::fs::write(&markdown_path, markdown.replace("from ark", "from vault")).expect("edit vault");
+    let round_trip = tokio::time::timeout(Duration::from_secs(8), async {
+        loop {
+            let response = ark
+                .request("get_object", serde_json::json!({"id":"bridge-note"}))
+                .await
+                .expect("read");
+            if response.data["propsJson"]["body"] == "from vault" {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await;
+    assert!(
+        round_trip.is_ok(),
+        "round trip: markdown={} state={}",
+        std::fs::read_to_string(&markdown_path).unwrap_or_default(),
+        std::fs::read_to_string(state.join("state.json")).unwrap_or_default()
+    );
+    let sync = ark
+        .request(
+            "get_sync_kv",
+            serde_json::json!({"key":"lan_sync.version_vector"}),
+        )
+        .await
+        .expect("sync state");
+    assert!(sync.ok && sync.data.as_str().is_some());
+    supervisor
+        .stop(&manifest.id, &manifest.version)
+        .await
+        .expect("worker stop");
+    let after_first = std::fs::read(&markdown_path).expect("projected bytes");
+    supervisor
+        .start(
+            &manifest,
+            executable,
+            installed.hash,
+            &roots,
+            "bridge-e2e-restart".into(),
+            Some(config),
+        )
+        .await
+        .expect("bridge restart");
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert_eq!(
+        std::fs::read(&markdown_path).expect("restarted bytes"),
+        after_first
+    );
+    supervisor
+        .stop(&manifest.id, &manifest.version)
+        .await
+        .expect("worker stop");
+    assert_eq!(
+        supervisor.health(&manifest.id, &manifest.version).state,
+        WorkerState::Stopped
+    );
+}
+
+#[tokio::test]
+async fn activated_worker_restarts_once_and_stop_cancels_more_retries() {
+    let _lock = test_support::serialized();
+    let _ = tracing_subscriber::fmt().with_test_writer().try_init();
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let worker_manifest = manifest("fixture.crash");
+    let (store, installed) = install_fixture(&directory, &worker_manifest);
+    let executable = store
+        .immutable_entrypoint(&installed)
+        .expect("immutable entrypoint");
+    let supervisor = PackageWorkerSupervisor::new(1);
+    supervisor.bind_store(store);
+    supervisor
+        .start(
+            &worker_manifest,
+            executable,
+            installed.hash,
+            &[],
+            "restart-test".into(),
+            None,
+        )
+        .await
+        .expect("initial start");
+    assert!(supervisor.activate(&worker_manifest.id, &worker_manifest.version));
+    let retried = tokio::time::timeout(std::time::Duration::from_secs(4), async {
+        loop {
+            let diagnostic = supervisor
+                .diagnostics()
+                .into_iter()
+                .find(|worker| worker.id == worker_manifest.id)
+                .expect("worker diagnostics");
+            if diagnostic.generation == 2 && diagnostic.state == WorkerState::Running {
+                assert_eq!(diagnostic.restart_count, 1);
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    assert!(
+        retried.is_ok(),
+        "first retry: {:?}",
+        supervisor.diagnostics()
+    );
+    supervisor
+        .stop(&worker_manifest.id, &worker_manifest.version)
+        .await
+        .expect("worker stop");
+    supervisor
+        .stop_all()
+        .await
+        .expect("all worker registries quiesced");
+    let (calls, lifecycles) = supervisor.test_registry_counts();
+    assert_eq!(calls, 0);
+    assert_eq!(lifecycles, 0);
+    assert_eq!(
+        supervisor
+            .health(&worker_manifest.id, &worker_manifest.version)
+            .state,
+        WorkerState::Stopped
+    );
+}
+
+#[tokio::test]
+async fn secret_bearing_worker_failure_is_redacted_end_to_end() {
+    let _lock = test_support::serialized();
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let worker_manifest = manifest("fixture.secret-fail");
+    let (store, installed) = install_fixture(&directory, &worker_manifest);
+    let executable = store
+        .immutable_entrypoint(&installed)
+        .expect("immutable entrypoint");
+    let supervisor = PackageWorkerSupervisor::new(1);
+    supervisor.bind_store(store);
+    supervisor
+        .start(
+            &worker_manifest,
+            executable,
+            installed.hash,
+            &[],
+            "secret-redaction-e2e".into(),
+            None,
+        )
+        .await
+        .expect("secret fixture should complete authenticated hello");
+    assert!(supervisor.activate(&worker_manifest.id, &worker_manifest.version));
+
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            if supervisor
+                .health(&worker_manifest.id, &worker_manifest.version)
+                .state
+                == WorkerState::Failed
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("secret fixture failure was not observed");
+    supervisor
+        .stop(&worker_manifest.id, &worker_manifest.version)
+        .await
+        .expect("worker stop");
+
+    let diagnostics = supervisor.diagnostics();
+    let worker = diagnostics
+        .iter()
+        .find(|item| item.id == worker_manifest.id)
+        .expect("worker diagnostics");
+    let diagnostics_json = serde_json::to_string(&diagnostics).expect("diagnostics json");
+    for forbidden in [
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "ARK_MARKDOWN_BODY_UNIQUE",
+        "MARKDOWN_CONTENT_UNIQUE",
+        "RAW_REQUEST_PAYLOAD_UNIQUE",
+        "WORKER_SECRET_UNIQUE",
+        "secret-user",
+        "fixture.kspkg",
+    ] {
+        assert!(
+            !diagnostics_json.contains(forbidden),
+            "worker diagnostics leaked {forbidden}: {diagnostics_json}"
+        );
+    }
+    assert!(
+        diagnostics_json.contains("[REDACTED]"),
+        "worker tails should retain redaction markers: {diagnostics_json}"
+    );
+    assert!(worker
+        .stdout_tail
+        .iter()
+        .any(|line| line.contains("[REDACTED]")));
+    assert!(worker
+        .stderr_tail
+        .iter()
+        .any(|line| line.contains("[REDACTED]")));
+
+    // Exercise the Manager diagnostics and support-bundle surfaces with the
+    // same Engine-owned supervisor output.
+    let manager_dir = directory.path().join("manager-data");
+    let mut packages = PackageService::open(&manager_dir).expect("manager package service");
+    packages.configure_workers(supervisor.clone(), vec![], "secret-redaction-e2e".into());
+    let packages = std::sync::Arc::new(packages);
+    let manager = ManagerState::new(manager_dir.clone());
+    let snapshot = manager
+        .diagnostics_snapshot(
+            &std::sync::Arc::new(RpcDiagnostics::new()),
+            &std::sync::Arc::new(UsageTrackerDiagnosticsState::default()),
+            &std::sync::Arc::new(ProtocolUsageStore::open(&manager_dir).expect("protocol usage")),
+            &packages,
+        )
+        .await;
+    let manager_json = snapshot.to_string();
+    for forbidden in [
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "ARK_MARKDOWN_BODY_UNIQUE",
+        "MARKDOWN_CONTENT_UNIQUE",
+        "RAW_REQUEST_PAYLOAD_UNIQUE",
+        "WORKER_SECRET_UNIQUE",
+        "secret-user",
+        "fixture.kspkg",
+    ] {
+        assert!(
+            !manager_json.contains(forbidden),
+            "manager diagnostics leaked {forbidden}"
+        );
+    }
+
+    let handle = manager
+        .create_bundle(
+            snapshot,
+            serde_json::json!({"worker_stdout": worker.stdout_tail, "worker_stderr": worker.stderr_tail}),
+        )
+        .await
+        .expect("create support bundle")["handle"]
+        .as_str()
+        .expect("bundle handle")
+        .to_owned();
+    let bundle_path = manager_dir.join("bundle.json");
+    manager
+        .save_bundle(&handle, bundle_path.to_str().expect("bundle path"))
+        .await
+        .expect("save support bundle");
+    let bundle = std::fs::read_to_string(&bundle_path).expect("bundle bytes");
+    for forbidden in [
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "ARK_MARKDOWN_BODY_UNIQUE",
+        "MARKDOWN_CONTENT_UNIQUE",
+        "RAW_REQUEST_PAYLOAD_UNIQUE",
+        "WORKER_SECRET_UNIQUE",
+        "secret-user",
+        "fixture.kspkg",
+    ] {
+        assert!(
+            !bundle.contains(forbidden),
+            "support bundle leaked {forbidden}"
+        );
+    }
+    assert!(bundle.contains("[REDACTED]"));
+
+    // A real crash artifact must preserve only bounded metadata, never the
+    // worker's panic payload or user data.
+    let crash_root = directory.path().join("crash-data");
+    kepler_backend::crash_reporter::install(
+        crash_root.clone(),
+        "00000000-0000-4000-8000-000000000001".into(),
+    );
+    let panic = std::thread::spawn(|| {
+        panic!(
+            "WORKER_SECRET_UNIQUE ARK_MARKDOWN_BODY_UNIQUE RAW_REQUEST_PAYLOAD_UNIQUE C:\\Users\\secret-user\\vault\\private-note.md"
+        )
+    })
+    .join();
+    assert!(panic.is_err());
+    let crash_file = std::fs::read_dir(crash_root.join("crashes"))
+        .expect("crash directory")
+        .flatten()
+        .find(|entry| entry.path().is_file())
+        .expect("crash report");
+    let crash = std::fs::read_to_string(crash_file.path()).expect("crash report bytes");
+    for forbidden in [
+        "WORKER_SECRET_UNIQUE",
+        "ARK_MARKDOWN_BODY_UNIQUE",
+        "RAW_REQUEST_PAYLOAD_UNIQUE",
+        "secret-user",
+        "private-note.md",
+    ] {
+        assert!(
+            !crash.contains(forbidden),
+            "crash report leaked {forbidden}: {crash}"
+        );
+    }
+    assert!(crash.contains("[REDACTED_PANIC_PAYLOAD]"));
+}
+
+#[tokio::test]
+async fn prepublication_wait_failures_quarantine_and_reap_exact_startup() {
+    let _lock = test_support::serialized();
+    for (suffix, cleanup_failure) in [
+        ("wait-timeout", FailureStage::WaitTimeout),
+        ("wait-failed", FailureStage::WaitFailed),
+    ] {
+        test_support::reset();
+        let supervisor = PackageWorkerSupervisor::new(1);
+        let worker = manifest(&format!("fixture.{suffix}"));
+        test_support::fail_next(FailureStage::PreResume);
+        test_support::fail_cleanup_next(cleanup_failure);
+        assert_eq!(
+            supervisor
+                .test_start_once(&worker, fixture(), "hash".into(), &[], suffix.into(),)
+                .await,
+            Err("process-cleanup-failed")
+        );
+        assert_eq!(supervisor.test_registry_snapshot(), (0, 1, 0, 0));
+        assert_eq!(
+            supervisor.test_startup_reservation_snapshot(&worker.id, &worker.version, 1),
+            Some((true, true))
+        );
+        assert_eq!(
+            supervisor
+                .test_start_once(
+                    &worker,
+                    fixture(),
+                    "hash".into(),
+                    &[],
+                    "replacement-before-reap".into(),
+                )
+                .await,
+            Err("already-running")
+        );
+        test_support::reset();
+        supervisor
+            .test_reap_worker_startup(&worker.id, &worker.version)
+            .await;
+        assert_eq!(supervisor.test_registry_snapshot(), (0, 0, 0, 0));
+        test_support::capture_next_process();
+        assert_eq!(
+            supervisor
+                .test_start_once(
+                    &worker,
+                    fixture(),
+                    "hash".into(),
+                    &[],
+                    "replacement-after-reap".into(),
+                )
+                .await,
+            Ok(())
+        );
+        let running = supervisor
+            .test_worker_snapshot(&worker.id, &worker.version)
+            .await;
+        assert!(running.3, "replacement did not publish a real process");
+        assert!(supervisor.stop(&worker.id, &worker.version).await.is_ok());
+        assert!(test_support::take_captured_process()
+            .expect("replacement process")
+            .wait_object_0());
+        assert_eq!(supervisor.test_registry_snapshot(), (0, 0, 0, 0));
+    }
+    test_support::reset();
+}
+
+#[tokio::test]
+async fn supervisor_pid_unavailable_rolls_back_all_worker_reservations() {
+    let _lock = test_support::serialized();
+    let supervisor = PackageWorkerSupervisor::new(1);
+    let worker = manifest("fixture.pid-unavailable");
+    test_support::fail_next(kepler_backend::package_worker_process::FailureStage::PidUnavailable);
+
+    assert_eq!(
+        supervisor
+            .test_start_once(
+                &worker,
+                fixture(),
+                "hash".into(),
+                &[],
+                "pid-unavailable".into(),
+            )
+            .await,
+        Err("pid-unavailable")
+    );
+    assert_eq!(supervisor.test_registry_snapshot(), (0, 0, 0, 0));
+}
+
+#[tokio::test]
+async fn supervisor_cleanup_failure_retains_holder_and_disables_replacement() {
+    let _lock = test_support::serialized();
+    let supervisor = PackageWorkerSupervisor::new(1);
+    let worker = manifest("fixture.cleanup-retained");
+    supervisor
+        .start(
+            &worker,
+            fixture(),
+            "hash".into(),
+            &[],
+            "cleanup-retained".into(),
+            None,
+        )
+        .await
+        .expect("worker start");
+
+    test_support::fail_cleanup_next(
+        kepler_backend::package_worker_process::FailureStage::Terminate,
+    );
+    assert_eq!(
+        supervisor.stop(&worker.id, &worker.version).await,
+        Err("cleanup-failed")
+    );
+    let snapshot = supervisor
+        .test_worker_snapshot(&worker.id, &worker.version)
+        .await;
+    assert_eq!(snapshot.0, WorkerState::Failed);
+    assert_eq!(snapshot.1.as_deref(), Some("cleanup-failed"));
+    assert!(!snapshot.2);
+    assert!(snapshot.3);
+    assert_eq!(
+        supervisor
+            .start(
+                &worker,
+                fixture(),
+                "hash".into(),
+                &[],
+                "replacement".into(),
+                None,
+            )
+            .await,
+        Err("already-running")
+    );
+    assert!(supervisor.stop(&worker.id, &worker.version).await.is_ok());
+    assert!(
+        !supervisor
+            .test_worker_snapshot(&worker.id, &worker.version)
+            .await
+            .3
+    );
+    test_support::capture_next_process();
+    assert!(supervisor
+        .start(
+            &worker,
+            fixture(),
+            "hash".into(),
+            &[],
+            "replacement-after-stop".into(),
+            None,
+        )
+        .await
+        .is_ok());
+    let replacement = supervisor
+        .test_worker_snapshot(&worker.id, &worker.version)
+        .await;
+    assert!(replacement.3, "replacement did not retain a real process");
+    let mut holder_gate = supervisor
+        .test_hold_process_holder(&worker.id, &worker.version)
+        .expect("holder");
+    holder_gate.ready().await;
+    let terminations = test_support::termination_count();
+    assert_eq!(
+        supervisor
+            .test_stop_all_until(std::time::Instant::now() + Duration::from_millis(1))
+            .await,
+        Err("cleanup-failed")
+    );
+    assert_eq!(test_support::termination_count(), terminations);
+    holder_gate.release();
+    assert!(supervisor.stop(&worker.id, &worker.version).await.is_ok());
+    assert!(test_support::take_captured_process()
+        .expect("replacement process")
+        .wait_object_0());
+    assert!(
+        !supervisor
+            .test_worker_snapshot(&worker.id, &worker.version)
+            .await
+            .3
+    );
+}
+
+#[tokio::test]
+async fn cancellation_after_process_publication_reaps_without_losing_holder() {
+    let _lock = test_support::serialized();
+    let supervisor = PackageWorkerSupervisor::new(1);
+    let worker = manifest("fixture.cancel-after-launch");
+    let warmup = manifest("fixture.handle-warmup");
+    supervisor
+        .test_start_once(&warmup, fixture(), "hash".into(), &[], "warmup".into())
+        .await
+        .expect("worker handle accounting warmup");
+    supervisor
+        .stop(&warmup.id, &warmup.version)
+        .await
+        .expect("warmup stop");
+    let baseline_handles = test_support::process_handle_count();
+    test_support::capture_next_process();
+    let mut gate = supervisor.test_pause_after_launch();
+    let task_supervisor = supervisor.clone();
+    let task_worker = worker.clone();
+    let launch = tokio::spawn(async move {
+        task_supervisor
+            .test_start_once(
+                &task_worker,
+                fixture(),
+                "hash".into(),
+                &[],
+                "cancel-after-launch".into(),
+            )
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(5), gate.ready())
+        .await
+        .expect("after-launch gate");
+    assert!(!launch.is_finished());
+    assert_eq!(
+        supervisor.test_startup_reservation_snapshot(&worker.id, &worker.version, 1),
+        Some((true, true))
+    );
+    assert_eq!(supervisor.test_registry_snapshot().1, 1);
+
+    assert_eq!(
+        supervisor
+            .test_start_once(
+                &worker,
+                fixture(),
+                "replacement".into(),
+                &[],
+                "replacement-while-starting".into(),
+            )
+            .await,
+        Err("worker-unavailable")
+    );
+    let cancel_supervisor = supervisor.clone();
+    let cancel_worker = worker.clone();
+    let cancel = tokio::spawn(async move {
+        cancel_supervisor
+            .test_reap_worker_startup(&cancel_worker.id, &cancel_worker.version)
+            .await;
+    });
+    tokio::task::yield_now().await;
+    assert_eq!(
+        supervisor.test_startup_reservation_snapshot(&worker.id, &worker.version, 1),
+        Some((true, true))
+    );
+    assert_eq!(supervisor.test_registry_snapshot().1, 1);
+    assert!(!launch.is_finished());
+
+    gate.release();
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_secs(10), launch)
+            .await
+            .expect("launch cleanup")
+            .expect("launch task"),
+        Err("worker-unavailable")
+    ));
+    tokio::time::timeout(Duration::from_secs(10), cancel)
+        .await
+        .expect("startup cancellation")
+        .expect("cancellation task");
+    assert!(test_support::take_captured_process()
+        .expect("published process")
+        .wait_object_0());
+    assert_eq!(test_support::process_handle_count(), baseline_handles);
+    assert_eq!(
+        supervisor.test_startup_reservation_snapshot(&worker.id, &worker.version, 1),
+        None
+    );
+    assert_eq!(supervisor.test_registry_snapshot(), (0, 0, 0, 0));
+}

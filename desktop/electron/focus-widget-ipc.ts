@@ -1,6 +1,5 @@
 import { BrowserWindow, Menu, ipcMain, type MenuItemConstructorOptions } from "electron";
 import type { ArkClient } from "@kosmos/ark";
-import { assertExtensionSenderHostPermissionIfExtension } from "./extension-host";
 import type { FocusState } from "./focus-widget-state";
 
 export interface FocusWidgetSessionActions {
@@ -44,9 +43,8 @@ export function registerFocusWidgetIpcHandlers(deps: {
   getSessionActions: () => FocusWidgetSessionActions;
   requireRuntime: () => { awaitArkReady: () => Promise<ArkClient> };
 }): void {
-  ipcMain.handle("kepler:focus-widget:set-state", (e, patch: Partial<FocusState>) => {
+  ipcMain.handle("kepler:focus-widget:set-state", (_e, patch: Partial<FocusState>) => {
     if (!patch || typeof patch !== "object") return;
-    assertExtensionSenderHostPermissionIfExtension(e.sender, "focus.control");
     deps.setFocusState(patch);
   });
 

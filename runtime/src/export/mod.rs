@@ -8,7 +8,7 @@
 // Все конвертеры read-only: они получают &[ArkObject] на вход, пишут файлы в
 // dest_dir, ничего не пишут обратно в ARK.
 
-use ark_core::types::ArkObject;
+use ark_core::types::{ArkObject, ObjectLink};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -22,6 +22,56 @@ pub mod time_entry_csv;
 mod util;
 
 pub(crate) use util::{csv_safe_cell, sanitize_filename, unique_path};
+
+/// Validated canonical input shared by every exporter.  Exporters never read
+/// persisted legacy aliases or raw props outside this boundary.
+#[derive(Debug, Clone)]
+pub struct CanonicalEnvelope {
+    pub object: ArkObject,
+    pub links: Vec<ObjectLink>,
+}
+
+pub fn validate_envelopes(
+    envelopes: &[CanonicalEnvelope],
+) -> Result<Vec<CanonicalEnvelope>, String> {
+    let registrations = ark_core::canonical_types::definitions::canonical_type_registrations()
+        .map_err(|e| format!("canonical registry: {e}"))?;
+    let mut out = envelopes.to_vec();
+    for envelope in &out {
+        let object = &envelope.object;
+        let registration = registrations
+            .iter()
+            .find(|r| r.type_id == object.type_id && r.version == object.type_version)
+            .ok_or_else(|| {
+                format!(
+                    "unknown canonical type/version: {}/{}",
+                    object.type_id, object.type_version
+                )
+            })?;
+        ark_core::canonical_types::validation::validate_canonical(
+            registration,
+            &object.props_json,
+            &object.content_json,
+        )
+        .map_err(|e| format!("canonical validation {:?} at {}", e.code, e.pointer))?;
+        for link in &envelope.links {
+            if link.source_object_id != object.id {
+                return Err(format!("link source mismatch at {}", link.id));
+            }
+        }
+    }
+    out.sort_by(|a, b| a.object.id.cmp(&b.object.id));
+    for envelope in &mut out {
+        envelope.links.sort_by(|a, b| {
+            (&a.link_type, &a.target_object_id, &a.id).cmp(&(
+                &b.link_type,
+                &b.target_object_id,
+                &b.id,
+            ))
+        });
+    }
+    Ok(out)
+}
 
 /// Результат одного `convert` вызова — что записали, сколько байт, какие
 /// ошибки встретили (но не упали — partial success возможен).
@@ -59,6 +109,24 @@ pub trait Converter: Send + Sync {
     /// Выполнить конвертацию. dest_dir гарантированно существует (создаётся
     /// диспатчером). Конвертер сам решает, сколько файлов писать.
     fn convert(&self, objects: &[ArkObject], format: &str, dest_dir: &Path) -> ConvertResult;
+    fn convert_canonical(
+        &self,
+        envelopes: &[CanonicalEnvelope],
+        format: &str,
+        dest_dir: &Path,
+    ) -> ConvertResult {
+        match validate_envelopes(envelopes) {
+            Ok(validated) => {
+                let objects = validated.into_iter().map(|e| e.object).collect::<Vec<_>>();
+                self.convert(&objects, format, dest_dir)
+            }
+            Err(error) => {
+                let mut result = ConvertResult::default();
+                result.push_error(error);
+                result
+            }
+        }
+    }
 }
 
 /// Метадата converter'а для `export.list` ответа.

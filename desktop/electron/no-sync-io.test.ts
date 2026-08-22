@@ -8,17 +8,6 @@ import path from "node:path";
 // Файлы вне списка (focus-widget, dashboard-window и т.п.) осознанно не покрыты:
 // их sync-вызовы — мелкие одноразовые JSON state read/write (см. spec § Scope).
 const bannedByFile: Record<string, string[]> = {
-  "extension-installer.ts": [
-    "readFileSync",
-    "writeFileSync",
-    "copyFileSync",
-    "rmSync",
-    "readdirSync",
-    "statSync",
-    "mkdirSync",
-    "cpSync",
-    "copyDirSync",
-  ],
   "diagnostics.ts": [
     "readFileSync",
     "writeFileSync",
@@ -28,7 +17,6 @@ const bannedByFile: Record<string, string[]> = {
     "statSync",
     "spawnSync",
   ],
-  "extension-marketplace.ts": ["readFileSync"],
   "settings-window.ts": ["execFileSync"],
 };
 

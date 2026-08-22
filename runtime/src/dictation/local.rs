@@ -1,6 +1,8 @@
 use std::env;
 use std::fs;
 use std::net::TcpListener;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -24,6 +26,9 @@ use super::local_sidecar_protocol::{
     LocalSttAccelerator, LocalSttModelSpec, LocalSttProfile, LocalSttRequest,
     LocalSttRequestEnvelope, LocalSttResponse, LocalSttResponseEnvelope, LocalSttStatus,
 };
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub const DEFAULT_LOCAL_ENGINE: &str = "whisper.cpp";
 pub const PARAKEET_LOCAL_ENGINE: &str = "parakeet";
@@ -265,7 +270,10 @@ fn local_stt_sidecar_path() -> Result<PathBuf, LocalError> {
 impl LocalSttSidecarClient {
     async fn spawn() -> Result<Self, LocalError> {
         let sidecar_path = local_stt_sidecar_path()?;
-        let mut child = TokioCommand::new(&sidecar_path)
+        let mut command = TokioCommand::new(&sidecar_path);
+        #[cfg(windows)]
+        command.creation_flags(CREATE_NO_WINDOW);
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -409,6 +417,10 @@ struct TestSidecarMock {
 
 #[cfg(test)]
 static TEST_SIDECAR_MOCK: OnceLock<Mutex<Option<TestSidecarMock>>> = OnceLock::new();
+
+#[cfg(test)]
+pub(crate) static TEST_SIDECAR_TEST_LOCK: tokio::sync::Mutex<()> =
+    tokio::sync::Mutex::const_new(());
 
 #[cfg(test)]
 fn test_sidecar_mock_state() -> &'static Mutex<Option<TestSidecarMock>> {
@@ -1116,6 +1128,8 @@ async fn start_whisper_server(
     apply_whisper_quality_args(&mut command, profile);
     apply_whisper_accelerator_args(&mut command, accelerator);
     apply_whisper_vad_args(&mut command, command_path);
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
 
     let child = command.spawn().map_err(|e| {
         LocalError::CommandFailed(format!("не удалось запустить whisper-server: {e}"))
@@ -1331,6 +1345,8 @@ fn run_whisper_cpp(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalE
     if !req.prompt.trim().is_empty() {
         command.arg("--prompt").arg(req.prompt.trim());
     }
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
 
     let output = command.output().map_err(|e| {
         cleanup_temp_outputs(&wav_path, &out_base);
@@ -1518,11 +1534,23 @@ pub async fn unload_sidecar() -> Result<bool, LocalError> {
 }
 
 pub async fn transcribe(req: LocalRequest<'_>) -> Result<TranscriptionResult, LocalError> {
+    tracing::info!(
+        engine = req.engine,
+        model_id = ?req.model_id,
+        model_path_exists = req.model_path.is_some_and(|path| Path::new(path).is_file()),
+        command_path_exists = req.command_path.is_some_and(|path| Path::new(path).is_file()),
+        wav_bytes = req.wav_bytes.len(),
+        device_os = std::env::consts::OS,
+        device_arch = std::env::consts::ARCH,
+        "dictation local transcribe started"
+    );
     if let Some(text) = test_override_transcript() {
-        return Ok(TranscriptionResult {
+        let result = TranscriptionResult {
             text,
             backend: "test_override".into(),
-        });
+        };
+        tracing::info!(backend = %result.backend, "dictation local transcribe completed");
+        return Ok(result);
     }
 
     if !is_supported_engine(req.engine) {
@@ -1551,15 +1579,21 @@ pub async fn transcribe(req: LocalRequest<'_>) -> Result<TranscriptionResult, Lo
     };
 
     match send_sidecar_request(request).await {
-        Ok(LocalSttResponse::Transcription(transcription)) => Ok(TranscriptionResult {
-            // See postmortems.md 2026-07-03: sidecar output still crosses a version boundary.
-            text: clean_whisper_transcript(&transcription.text)
-                .ok_or(LocalError::EmptyTranscript)?,
-            backend: transcription.backend,
-        }),
-        Ok(other) => Err(LocalError::SidecarUnavailable(format!(
-            "unexpected transcribe response: {other:?}"
-        ))),
+        Ok(LocalSttResponse::Transcription(transcription)) => {
+            tracing::info!(backend = %transcription.backend, "dictation local transcribe completed");
+            Ok(TranscriptionResult {
+                // See postmortems.md 2026-07-03: sidecar output still crosses a version boundary.
+                text: clean_whisper_transcript(&transcription.text)
+                    .ok_or(LocalError::EmptyTranscript)?,
+                backend: transcription.backend,
+            })
+        }
+        Ok(other) => {
+            tracing::warn!(response = ?other, "dictation local transcribe failed");
+            Err(LocalError::SidecarUnavailable(format!(
+                "unexpected transcribe response: {other:?}"
+            )))
+        }
         // Explicit debug escape hatch: managed product path must use the Kosmos-owned
         // sidecar. Direct whisper-server/cli execution is available only when the
         // developer opts in with KOSMOS_LOCAL_STT_ALLOW_DIRECT_FALLBACK=1.
@@ -1576,7 +1610,10 @@ pub async fn transcribe(req: LocalRequest<'_>) -> Result<TranscriptionResult, Lo
             })
             .await
         }
-        Err(error) => Err(error),
+        Err(error) => {
+            tracing::warn!(error = %error, "dictation local transcribe failed");
+            Err(error)
+        }
     }
 }
 
@@ -1584,24 +1621,30 @@ pub async fn transcribe(req: LocalRequest<'_>) -> Result<TranscriptionResult, Lo
 mod tests {
     use super::*;
 
-    static ENV_LOCAL_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
     #[test]
-    fn sidecar_candidates_include_packaged_windows_name() {
-        let candidates =
-            local_stt_sidecar_candidate_paths(Path::new(r"C:\Kosmos\resources\Kosmos Runtime.exe"));
+    fn sidecar_candidates_include_current_platform_names() {
+        let current_exe = if cfg!(windows) {
+            Path::new(r"C:\Kosmos\resources\Kosmos Runtime.exe")
+        } else {
+            Path::new("/opt/kosmos/kosmos-runtime")
+        };
+        let candidates = local_stt_sidecar_candidate_paths(current_exe);
         let rendered = candidates
             .iter()
             .map(|path| path.to_string_lossy().to_string())
             .collect::<Vec<_>>();
 
-        assert!(rendered
-            .iter()
-            .any(|path| path.ends_with("kosmos-local-stt.exe")));
         if cfg!(windows) {
             assert!(rendered
                 .iter()
+                .any(|path| path.ends_with("kosmos-local-stt.exe")));
+            assert!(rendered
+                .iter()
                 .any(|path| path.ends_with("Kosmos Local STT.exe")));
+        } else {
+            assert!(rendered
+                .iter()
+                .any(|path| path.ends_with("kosmos-local-stt")));
         }
     }
 
@@ -1627,7 +1670,7 @@ mod tests {
 
     #[tokio::test]
     async fn local_override_is_available_in_unit_tests() {
-        let _guard = ENV_LOCAL_LOCK.lock().await;
+        let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
         env::remove_var("KOSMOS_TEST_MODE");
         env::remove_var("KOSMOS_HEADLESS");
         env::set_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT", "local transcript");
@@ -1641,7 +1684,7 @@ mod tests {
 
     #[tokio::test]
     async fn whisper_cpp_default_idle_unloads_after_timeout() {
-        let _guard = ENV_LOCAL_LOCK.lock().await;
+        let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
         env::remove_var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS");
 
         assert_eq!(
@@ -1659,7 +1702,7 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_direct_idle_unload_uses_config_then_env_override() {
-        let _guard = ENV_LOCAL_LOCK.lock().await;
+        let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
         env::remove_var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS");
 
         // Без env var — возвращает config value.
@@ -1720,7 +1763,7 @@ mod tests {
 
     #[tokio::test]
     async fn server_ready_timeout_is_configurable_and_clamped() {
-        let _guard = ENV_LOCAL_LOCK.lock().await;
+        let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
         env::remove_var("KOSMOS_LOCAL_STT_SERVER_READY_TIMEOUT_MS");
         assert_eq!(
             local_stt_server_ready_timeout(),
@@ -1881,7 +1924,7 @@ mod tests {
 
     #[tokio::test]
     async fn preload_server_prefers_mocked_sidecar() {
-        let _guard = ENV_LOCAL_LOCK.lock().await;
+        let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
         install_test_sidecar_mock(Some(TestSidecarMock {
             transcript: None,
             fail_error: None,
@@ -1961,7 +2004,7 @@ mod tests {
 
     #[tokio::test]
     async fn transcribe_prefers_mocked_sidecar_over_direct_whisper_binaries() {
-        let _guard = ENV_LOCAL_LOCK.lock().await;
+        let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
         env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
         env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
         install_test_sidecar_mock(Some(TestSidecarMock {
@@ -1991,7 +2034,7 @@ mod tests {
 
     #[tokio::test]
     async fn transcribe_cleans_sidecar_transcript_before_returning() {
-        let _guard = ENV_LOCAL_LOCK.lock().await;
+        let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
         env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
         env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
         let text = "This is a long dictation transcript that should only appear once.";
@@ -2024,7 +2067,7 @@ mod tests {
 
     #[tokio::test]
     async fn transcribe_retries_once_after_sidecar_unavailable() {
-        let _guard = ENV_LOCAL_LOCK.lock().await;
+        let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
         env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
         env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
         install_test_sidecar_mock(Some(TestSidecarMock {
@@ -2057,7 +2100,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_override_transcript_bypasses_sidecar_requests() {
-        let _guard = ENV_LOCAL_LOCK.lock().await;
+        let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
         env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
         env::set_var(
             "KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT",

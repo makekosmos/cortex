@@ -2,7 +2,9 @@
 // Frontmatter: id, type, project_id, area_id, scheduled_date, deadline, priority, completed, tags.
 // Body: notes (если есть) + checklist в виде `- [ ] item` / `- [x] item`.
 
-use super::{sanitize_filename, unique_path, ConvertResult, Converter};
+use super::{
+    sanitize_filename, unique_path, validate_envelopes, CanonicalEnvelope, ConvertResult, Converter,
+};
 use ark_core::types::ArkObject;
 use serde_json::Value;
 use std::fs;
@@ -18,7 +20,7 @@ impl Converter for TaskMdConverter {
         "Задачи → Markdown"
     }
     fn object_type(&self) -> &'static str {
-        "task_obj"
+        "com.kosmos.task"
     }
     fn default_format(&self) -> &'static str {
         "md"
@@ -52,6 +54,62 @@ impl Converter for TaskMdConverter {
                     result.push_file(path, bytes);
                 }
                 Err(e) => result.push_error(format!("write {path:?}: {e}")),
+            }
+        }
+        result
+    }
+
+    fn convert_canonical(
+        &self,
+        envelopes: &[CanonicalEnvelope],
+        _format: &str,
+        dest_dir: &Path,
+    ) -> ConvertResult {
+        let mut result = ConvertResult::default();
+        let envelopes = match validate_envelopes(envelopes) {
+            Ok(v) => v,
+            Err(e) => {
+                result.push_error(e);
+                return result;
+            }
+        };
+        for e in envelopes
+            .into_iter()
+            .filter(|e| e.object.deleted_at.is_none())
+        {
+            let o = e.object;
+            let p = o.props_json;
+            let title = if o.title.is_empty() {
+                "untitled"
+            } else {
+                &o.title
+            };
+            let path = unique_path(dest_dir, &sanitize_filename(title), "md");
+            let tags = e
+                .links
+                .iter()
+                .filter(|l| l.link_type == "tag")
+                .map(|l| l.target_object_id.clone())
+                .collect::<Vec<_>>();
+            let mut out=format!("---\nid: {}\ntype: {}\ntypeVersion: {}\ntitle: {}\nstatus: {}\npriority: {}\nscheduledAt: {}\ndueAt: {}\ncompletedAt: {}\ncanceledAt: {}\ntags: [{}]\n---\n\n",yaml(&o.id),yaml(&o.type_id),yaml(&o.type_version),yaml(title),yaml(p.get("status").and_then(|v|v.as_str()).unwrap_or("inbox")),yaml(p.get("priority").and_then(|v|v.as_str()).unwrap_or("none")),yaml(&p.get("scheduledAt").map(ToString::to_string).unwrap_or_default()),yaml(&p.get("dueAt").map(ToString::to_string).unwrap_or_default()),yaml(&p.get("completedAt").map(ToString::to_string).unwrap_or_default()),yaml(&p.get("canceledAt").map(ToString::to_string).unwrap_or_default()),tags.iter().map(|v|yaml(v)).collect::<Vec<_>>().join(", "));
+            out.push_str(&collect_doc_text(&o.content_json));
+            out.push('\n');
+            if let Some(items) = p.get("checklist").and_then(|v| v.as_array()) {
+                for item in items {
+                    let done = item
+                        .get("isCompleted")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    out.push_str(&format!(
+                        "- [{}] {}\n",
+                        if done { "x" } else { " " },
+                        item.get("title").and_then(|v| v.as_str()).unwrap_or("")
+                    ));
+                }
+            }
+            match fs::write(&path, out.as_bytes()) {
+                Ok(()) => result.push_file(path, out.len() as u64),
+                Err(err) => result.push_error(err.to_string()),
             }
         }
         result
@@ -192,6 +250,7 @@ mod tests {
         ArkObject {
             id: id.to_string(),
             type_id: "task_obj".to_string(),
+            type_version: "0.0.0-legacy".to_string(),
             title: title.to_string(),
             content_json: json!({ "type": "doc", "content": [] }),
             props_json: props,

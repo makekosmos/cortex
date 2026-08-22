@@ -16,7 +16,7 @@ import {
   normalizeDictationConfig,
   resolveAvailableDictationVoiceModelValue,
   type DictationLocalModelsSnapshot,
-} from "./settings/composables/useDictationConfig.shared";
+} from "./dictation-model-selection";
 
 type PillStatus = "idle" | "recording" | "transcribing" | "waiting" | "error";
 
@@ -28,6 +28,7 @@ const subText = ref<string>("");
 const elapsedSec = ref<number>(0);
 const DEFAULT_DICTATION_HOTKEY = "Ctrl+Shift+;";
 const dictationHotkey = ref<string>(DEFAULT_DICTATION_HOTKEY);
+const injectMode = ref<"auto_paste" | "clipboard_only">("auto_paste");
 const WAVEFORM_HISTORY_SIZE = 120;
 const WAVEFORM_BAR_WIDTH_PX = 3;
 const WAVEFORM_BAR_GAP_PX = 2;
@@ -66,6 +67,7 @@ let captureGeneration = 0;
 /** Reentrancy guard для stopAndSubmit — пока идёт grace-wait/submit, повторный
  *  stop не должен запустить второй submit того же аудио (double-submit). */
 let stopInFlight = false;
+let pcmSampleCount = 0;
 
 const TARGET_SAMPLE_RATE = 16000;
 /** После этого окна тишины stream закрывается полностью (track.stop),
@@ -169,10 +171,12 @@ function splitHotkey(value: string): string[] {
 async function loadDictationConfig(): Promise<void> {
   try {
     const cfg = (await window.kepler.ark.request("dictation.get_config", {})) as {
-      config?: { hotkey?: string | null };
+      config?: { hotkey?: string | null; injectMode?: string | null };
     };
     const hotkey = cfg.config?.hotkey?.trim();
     if (hotkey) dictationHotkey.value = hotkey;
+    if (cfg.config?.injectMode === "clipboard_only") injectMode.value = "clipboard_only";
+    else if (cfg.config?.injectMode === "auto_paste") injectMode.value = "auto_paste";
   } catch {
     /* keep last known backend value */
   }
@@ -425,7 +429,12 @@ function canSubmit(nextStatus: PillStatus): boolean {
  *  не должен закрывать stream под ногами. */
 async function ensureStream(): Promise<MediaStream> {
   cancelStreamShutdown();
-  if (mediaStream && mediaStream.active) return mediaStream;
+  if (mediaStream && mediaStream.active) {
+    console.debug("[dictation-pill] microphone stream reused", {
+      tracks: mediaStream.getAudioTracks().length,
+    });
+    return mediaStream;
+  }
 
   // Cold start: запрашиваем нужное устройство из config'а.
   let preferredDeviceId: string | null = null;
@@ -457,6 +466,13 @@ async function ensureStream(): Promise<MediaStream> {
   } else {
     mediaStream = await navigator.mediaDevices.getUserMedia({ audio: baseConstraints });
   }
+  const track = mediaStream.getAudioTracks()[0];
+  console.info("[dictation-pill] microphone stream ready", {
+    tracks: mediaStream.getAudioTracks().length,
+    deviceIdAvailable: Boolean(track?.getSettings().deviceId),
+    sampleRate: track?.getSettings().sampleRate ?? null,
+    channelCount: track?.getSettings().channelCount ?? null,
+  });
   return mediaStream;
 }
 
@@ -503,9 +519,11 @@ function closeStream(): void {
 
 async function startCapture(): Promise<void> {
   if (status.value === "recording" || startInFlight) return;
+  console.info("[dictation-pill] capture start", { status: status.value });
   const generation = ++captureGeneration;
   startInFlight = true;
   pcmChunks = [];
+  pcmSampleCount = 0;
   errorText.value = "";
   elapsedSec.value = 0;
   await loadDictationConfig();
@@ -524,7 +542,7 @@ async function startCapture(): Promise<void> {
     startInFlight = false;
     status.value = "error";
     errorText.value = "Нет доступа к микрофону";
-    console.error("[dictation-pill] getUserMedia failed:", e);
+    console.error("[dictation-pill] getUserMedia failed", { error: String(e) });
     try {
       await window.kepler.ark.request("dictation.cancel", {});
     } catch {
@@ -562,6 +580,14 @@ async function startCapture(): Promise<void> {
       i16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
     }
     pcmChunks.push(i16);
+    pcmSampleCount += i16.length;
+    if (pcmChunks.length === 1 || pcmChunks.length % 20 === 0) {
+      console.debug("[dictation-pill] pcm chunk", {
+        chunks: pcmChunks.length,
+        chunkSamples: i16.length,
+        totalSamples: pcmSampleCount,
+      });
+    }
   };
   source.connect(processor);
   processor.connect(audioCtx.destination);
@@ -722,6 +748,10 @@ async function stopAndSubmit(): Promise<void> {
   stopInFlight = true;
   const generation = captureGeneration;
   try {
+    console.info("[dictation-pill] capture stop", {
+      chunks: pcmChunks.length,
+      samples: pcmSampleCount,
+    });
     const sampleRate = audioCtx?.sampleRate ?? TARGET_SAMPLE_RATE;
     // Короткая фраза: processor мог ещё не отдать первый буфер. Ждём (bounded)
     // первые кадры ДО teardownCapture — пока граф ещё подключён.
@@ -745,6 +775,12 @@ async function stopAndSubmit(): Promise<void> {
     pcmChunks = [];
     const durationSec = pcm.length / sampleRate;
     const wav = encodeWav(pcm, sampleRate);
+    console.info("[dictation-pill] wav encoded", {
+      samples: pcm.length,
+      sampleRate,
+      durationSec,
+      bytes: wav.byteLength,
+    });
     const b64 = bytesToBase64(wav);
     let queuedUuid: string | null = null;
     try {
@@ -763,7 +799,8 @@ async function stopAndSubmit(): Promise<void> {
         // с error mark. Pending всё ещё на диске — юзер увидит в Settings.
         status.value = "error";
         errorText.value = resp.error ?? "Не удалось распознать";
-        console.warn("[dictation-pill] submit_audio returned error:", {
+        console.warn("[dictation-pill] submit_audio response", {
+          state: resp.state,
           uuid: resp.uuid,
           error: errorText.value,
         });
@@ -771,10 +808,15 @@ async function stopAndSubmit(): Promise<void> {
         // Первая попытка fail → backend запустил auto-retry в фоне.
         // Поллим очередь со спиннером "Жду сеть…".
         queuedUuid = resp.uuid;
-        console.info("[dictation-pill] queued for background retry:", resp.uuid);
+        console.info("[dictation-pill] submit_audio response", { state: "pending", queued: true });
       } else {
-        // Success path — text уже инжектнут, pill закрывается.
-        if (resp.injected === false) {
+        console.info("[dictation-pill] submit_audio response", {
+          state: resp.state ?? "unknown",
+          injected: resp.injected ?? null,
+        });
+        // Clipboard-only is a valid success path: backend intentionally does
+        // not report an OS paste in that mode.
+        if (resp.injected === false && injectMode.value === "auto_paste") {
           status.value = "error";
           errorText.value = "Текст распознан, но не вставлен. Он в буфере обмена.";
         } else {
@@ -784,7 +826,7 @@ async function stopAndSubmit(): Promise<void> {
     } catch (e) {
       status.value = "error";
       errorText.value = (e as Error)?.message ?? "Ошибка распознавания";
-      console.error("[dictation-pill] submit_audio failed:", e);
+      console.error("[dictation-pill] submit_audio failed", { error: String(e) });
     }
     scheduleStreamShutdown();
 
@@ -835,12 +877,17 @@ async function waitForQueueResolve(uuid: string, timeoutMs: number): Promise<voi
 }
 
 async function cancelCapture(): Promise<void> {
+  console.info("[dictation-pill] capture cancel", {
+    chunks: pcmChunks.length,
+    samples: pcmSampleCount,
+  });
   captureGeneration++;
   startInFlight = false;
   stopAfterStart = false;
   stopInFlight = false;
   teardownCapture();
   pcmChunks = [];
+  pcmSampleCount = 0;
   status.value = "idle";
   try {
     await window.kepler.ark.request("dictation.cancel", {});
@@ -858,6 +905,7 @@ onMounted(() => {
     return;
   }
   unsubscribeCommand = window.kepler.dictation.onCommand((cmd) => {
+    console.info("[dictation-pill] command received", { kind: cmd.kind });
     if (cmd.kind === "start") {
       void startCapture();
     } else if (cmd.kind === "stop") {

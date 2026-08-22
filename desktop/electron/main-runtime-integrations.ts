@@ -16,7 +16,7 @@ import {
   teardownFocusSessionBackendSync,
 } from "./focus-session";
 import { setupPomodoroNotifier, teardownPomodoroNotifier } from "./pomodoro-notifier";
-import { isUsageTrackerEnabled, openSettings } from "./settings-window";
+import { openSettings } from "./settings-window";
 
 type AwaitArkReady = (timeoutMs?: number) => Promise<any>;
 type DictationArkClient = {
@@ -80,7 +80,6 @@ export function setupMainDictationRuntime(options: {
 }
 
 export {
-  isUsageTrackerEnabled,
   openSettings,
   setupDictationHotkey,
   setupFocusSessionBackendSync,

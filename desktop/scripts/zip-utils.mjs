@@ -1,6 +1,6 @@
-// Минимальный ZIP reader + writer для .kext format.
+// Минимальный ZIP reader + writer для Package v1 archive format.
 //
-// .kext = ZIP-архив с обязательным `manifest.json` в root. Используем только
+// Package archive = ZIP-архив с обязательным `manifest.json` в root. Используем только
 // нужные нам части ZIP-spec'а (PKZIP APPNOTE 6.3.x):
 //   - End of central directory record (EOCD, signature 0x06054b50);
 //   - Central directory header (CDFH, 0x02014b50);
@@ -24,7 +24,7 @@ const LFH_SIG = 0x04034b50;
 const ZIP64_EOCD_LOCATOR_SIG = 0x07064b50;
 
 /**
- * Возвращает массив entries из .kext / .zip файла.
+ * Возвращает массив entries из .zip файла.
  * Каждая entry: { name, isDir, data: Buffer } — data уже декомпрессирована.
  */
 export function readZip(zipPath) {
@@ -81,7 +81,7 @@ function findEOCD(buf) {
       const cdEntries = buf.readUInt16LE(i + 10);
       const cdSize = buf.readUInt32LE(i + 12);
       const cdOffset = buf.readUInt32LE(i + 16);
-      // ZIP64 not supported — большие архивы редкость для extensions.
+      // ZIP64 not supported — Package v1 archives remain intentionally small.
       if (cdEntries === 0xffff || cdOffset === 0xffffffff || cdSize === 0xffffffff) {
         throw new Error("zip: ZIP64 archives not supported");
       }
@@ -139,7 +139,7 @@ export function extractZip(zipPath, targetDir) {
 
 // ---------------------------------------------------------------------------
 // Writer — минимальный, stored (без сжатия) для удобства dev/test'ов.
-// Используется в тестах для генерации .kext fixture'ов.
+// Используется в тестах для генерации Package v1 fixtures.
 // ---------------------------------------------------------------------------
 
 import crypto from "node:crypto";

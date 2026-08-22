@@ -4,13 +4,10 @@ import type { Component } from "vue";
 import {
   Settings as SettingsIcon,
   Database as DatabaseIcon,
-  Clipboard as ClipboardIcon,
   Target as TargetIcon,
   ArrowLeft,
   ArrowUpCircle,
   EyeOff,
-  ChevronDown,
-  ListFilter,
   Loader2,
   RefreshCw,
   Check,
@@ -24,7 +21,6 @@ import {
 } from "@lucide/vue";
 import { KbdKey, ActionsPanel } from "@kosmos/visuals";
 import BuiltInIcon from "../components/BuiltInIcon.vue";
-import ClipboardQuickPanel from "../components/ClipboardQuickPanel.vue";
 import FileSearchResultRow from "../components/FileSearchResultRow.vue";
 import FocusCommandPanel from "../components/FocusCommandPanel.vue";
 import { dedupeCommandsById } from "../lib/launcherCommands";
@@ -42,12 +38,7 @@ import arraSvg from "../assets/arra.svg";
 import edenSvg from "../assets/eden.svg";
 import edenAddSvg from "../assets/eden-add.svg";
 import edenDiarySvg from "../assets/eden-diary.svg";
-import type {
-  ClipboardHistoryItem,
-  CommandRecord,
-  FocusSessionSnapshot,
-  UpdateState,
-} from "@shared/ipc-types";
+import type { CommandRecord, FocusSessionSnapshot, UpdateState } from "@shared/ipc-types";
 
 interface BuiltInIconConfig {
   icon?: Component;
@@ -90,11 +81,6 @@ const BUILTIN_ICONS: Record<string, BuiltInIconConfig> = {
     icon: BodyIcon,
     from: "oklch(0.7 0.17 145)",
     to: "oklch(0.45 0.15 165)",
-  },
-  "kepler:clipboard-history": {
-    icon: ClipboardIcon,
-    from: "oklch(0.72 0.15 260)",
-    to: "oklch(0.48 0.17 270)",
   },
   "kepler:focus-session": {
     icon: TargetIcon,
@@ -173,13 +159,8 @@ async function refreshFocusSnapshot(): Promise<void> {
     /* main may not be ready — ignore */
   }
 }
-type LauncherMode = "commands" | "clipboard" | "focus" | "hidden";
+type LauncherMode = "commands" | "focus" | "hidden";
 const mode = ref<LauncherMode>("commands");
-const clipboardItems = ref<ClipboardHistoryItem[]>([]);
-const clipboardLoading = ref(false);
-type ClipboardTypeFilter = "all" | ClipboardHistoryItem["kind"];
-const clipboardTypeFilter = ref<ClipboardTypeFilter>("all");
-const clipboardTypeFilterOpen = ref(false);
 const inputRef = ref<HTMLInputElement | null>(null);
 const listRef = ref<HTMLDivElement | null>(null);
 const focusPanelRef = ref<{ start: () => Promise<void> } | null>(null);
@@ -321,37 +302,7 @@ const filteredCommands = computed<CommandRecord[]>(() =>
     : matchedCommands.value,
 );
 
-const filteredClipboardItems = computed<ClipboardHistoryItem[]>(() => {
-  const type = clipboardTypeFilter.value;
-  const q = query.value.trim().toLocaleLowerCase("ru-RU");
-  return clipboardItems.value.filter((item) => {
-    if (type !== "all" && item.kind !== type) return false;
-    if (!q) return true;
-    return item.searchText.toLocaleLowerCase("ru-RU").includes(q);
-  });
-});
-
-const selectedClipboardItem = computed<ClipboardHistoryItem | null>(
-  () => filteredClipboardItems.value[selectedIndex.value] ?? null,
-);
-
-const clipboardTypeFilterLabel = computed(() =>
-  clipboardTypeFilter.value === "image"
-    ? "Изображения"
-    : clipboardTypeFilter.value === "link"
-      ? "Ссылки"
-      : clipboardTypeFilter.value === "color"
-        ? "Цвета"
-        : clipboardTypeFilter.value === "file"
-          ? "Файлы"
-          : clipboardTypeFilter.value === "text"
-            ? "Текст"
-            : "Все типы",
-);
-
-const searchPlaceholder = computed(() =>
-  mode.value === "clipboard" ? "Фильтр записей..." : "Поиск команд, приложений и файлов",
-);
+const searchPlaceholder = computed(() => "Поиск команд, приложений и файлов");
 
 const headerTitle = computed(() =>
   mode.value === "focus" ? "Фокус" : mode.value === "hidden" ? "Скрытые команды" : "",
@@ -387,12 +338,7 @@ function loadPersistedState(): PersistedLauncherState | null {
       typeof parsed.savedAt !== "number"
     )
       return null;
-    if (
-      parsed.mode !== undefined &&
-      parsed.mode !== "commands" &&
-      parsed.mode !== "clipboard" &&
-      parsed.mode !== "focus"
-    )
+    if (parsed.mode !== undefined && parsed.mode !== "commands" && parsed.mode !== "focus")
       return null;
     return parsed;
   } catch {
@@ -620,7 +566,7 @@ function onListScroll() {
 // клавиатурная навигация/ввод. Держим фокус на поиске (click по @click ряду всё
 // равно срабатывает). В focus-режиме (своя contenteditable-панель) — не вмешиваемся.
 function onListMouseDown(e: MouseEvent) {
-  if (mode.value !== "commands" && mode.value !== "clipboard") return;
+  if (mode.value !== "commands") return;
   const target = e.target as HTMLElement | null;
   if (!target) return;
   if (target.closest('input, textarea, [contenteditable="true"]')) return;
@@ -632,7 +578,6 @@ function onListMouseDown(e: MouseEvent) {
 // banner, далее recent, далее all. flatList используется для invocation
 // (banner не реальная команда, потому фильтруется).
 function totalRows(): number {
-  if (mode.value === "clipboard") return filteredClipboardItems.value.length;
   if (mode.value === "focus") return 0;
   const banner = updateBanner.value ? 1 : 0;
   if (groupedNoQuery.value) {
@@ -646,12 +591,7 @@ function totalRows(): number {
   return banner + filteredCommands.value.length + fileCommands.value.length;
 }
 
-function rowAt(
-  idx: number,
-): { kind: "banner" } | { kind: "cmd"; cmd: CommandRecord } | { kind: "clipboard" } | null {
-  if (mode.value === "clipboard") {
-    return filteredClipboardItems.value[idx] ? { kind: "clipboard" } : null;
-  }
+function rowAt(idx: number): { kind: "banner" } | { kind: "cmd"; cmd: CommandRecord } | null {
   if (mode.value === "focus") return null;
   const banner = updateBanner.value ? 1 : 0;
   if (banner && idx === 0) return { kind: "banner" };
@@ -674,10 +614,6 @@ function rowAt(
 async function invokeSelected() {
   const row = rowAt(selectedIndex.value);
   if (!row) return;
-  if (row.kind === "clipboard") {
-    await copyClipboardItem(selectedIndex.value);
-    return;
-  }
   if (row.kind === "banner") {
     await onBannerClick();
     return;
@@ -762,45 +698,6 @@ async function invokeSelected() {
   }
 }
 
-async function refreshClipboardHistory(): Promise<void> {
-  clipboardLoading.value = true;
-  try {
-    clipboardItems.value = await window.kepler.clipboardHistory.list();
-    if (selectedIndex.value >= filteredClipboardItems.value.length) {
-      selectedIndex.value = Math.max(0, filteredClipboardItems.value.length - 1);
-    }
-  } catch (e) {
-    console.warn("clipboardHistory.list failed", e);
-    clipboardItems.value = [];
-  } finally {
-    clipboardLoading.value = false;
-  }
-}
-
-async function enterClipboardMode(): Promise<void> {
-  actionsOpen.value = false;
-  menuOpen.value = false;
-  hiddenPanelOpen.value = false;
-  mode.value = "clipboard";
-  query.value = "";
-  selectedIndex.value = 0;
-  cancelFileSearch();
-  await refreshClipboardHistory();
-  await nextTick();
-  inputRef.value?.focus();
-  inputRef.value?.select();
-  if (listRef.value) listRef.value.scrollTop = 0;
-  savePersistedState();
-}
-
-function leaveClipboardMode(): void {
-  mode.value = "commands";
-  query.value = "";
-  selectedIndex.value = 0;
-  clipboardTypeFilterOpen.value = false;
-  savePersistedState();
-}
-
 async function enterFocusMode(edit = false): Promise<void> {
   actionsOpen.value = false;
   menuOpen.value = false;
@@ -832,10 +729,6 @@ function leaveFocusMode(): void {
 }
 
 function leaveCommandMode(): void {
-  if (mode.value === "clipboard") {
-    leaveClipboardMode();
-    return;
-  }
   if (mode.value === "focus") {
     leaveFocusMode();
     return;
@@ -843,61 +736,6 @@ function leaveCommandMode(): void {
   if (mode.value === "hidden") {
     leaveHiddenMode();
   }
-}
-
-function setClipboardTypeFilter(value: ClipboardTypeFilter): void {
-  clipboardTypeFilter.value = value;
-  clipboardTypeFilterOpen.value = false;
-  selectedIndex.value = 0;
-}
-
-async function copyClipboardItem(index: number): Promise<void> {
-  const item = filteredClipboardItems.value[index];
-  if (!item) return;
-  const ok = await window.kepler.clipboardHistory.copy(item.id);
-  if (ok) {
-    leaveClipboardMode();
-    await window.kepler.window.hide();
-  }
-}
-
-async function removeClipboardItem(index: number): Promise<void> {
-  const item = filteredClipboardItems.value[index];
-  if (!item) return;
-  const ok = await window.kepler.clipboardHistory.delete(item.id);
-  if (ok) {
-    await refreshClipboardHistory();
-    selectedIndex.value = Math.min(index, Math.max(0, filteredClipboardItems.value.length - 1));
-  }
-}
-
-async function openClipboardItem(index: number): Promise<void> {
-  const item = filteredClipboardItems.value[index];
-  if (!item) return;
-  const ok = await window.kepler.clipboardHistory.open(item.id);
-  if (ok) {
-    leaveClipboardMode();
-    await window.kepler.window.hide();
-  }
-}
-
-async function toggleClipboardPin(index: number): Promise<void> {
-  const item = filteredClipboardItems.value[index];
-  if (!item) return;
-  const ok = await window.kepler.clipboardHistory.togglePin(item.id);
-  if (ok) await refreshClipboardHistory();
-}
-
-async function clearClipboardHistory(): Promise<void> {
-  await window.kepler.clipboardHistory.clear();
-  selectedIndex.value = 0;
-  await refreshClipboardHistory();
-}
-
-async function clearAllClipboardHistory(): Promise<void> {
-  await window.kepler.clipboardHistory.clearAll();
-  selectedIndex.value = 0;
-  await refreshClipboardHistory();
 }
 
 const SCROLL_EDGE_PADDING = 8;
@@ -962,42 +800,6 @@ function onKey(e: KeyboardEvent) {
     }
     return;
   }
-  if (mode.value === "clipboard") {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      if (clipboardTypeFilterOpen.value) {
-        clipboardTypeFilterOpen.value = false;
-        return;
-      }
-      leaveClipboardMode();
-      void window.kepler.window.hide();
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      moveSelection(1);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      moveSelection(-1);
-    } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === "KeyX") {
-      e.preventDefault();
-      void clearAllClipboardHistory();
-    } else if ((e.ctrlKey || e.metaKey) && e.code === "KeyX") {
-      e.preventDefault();
-      void removeClipboardItem(selectedIndex.value);
-    } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === "KeyP") {
-      e.preventDefault();
-      void toggleClipboardPin(selectedIndex.value);
-    } else if ((e.ctrlKey || e.metaKey) && e.code === "KeyO") {
-      e.preventDefault();
-      void openClipboardItem(selectedIndex.value);
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      void copyClipboardItem(selectedIndex.value);
-    } else if (e.key === "Delete") {
-      e.preventDefault();
-      void removeClipboardItem(selectedIndex.value);
-    }
-    return;
-  }
   if (e.key === "Escape") {
     e.preventDefault();
     if (actionsOpen.value) {
@@ -1048,7 +850,7 @@ async function refreshCommands() {
     return [] as CommandRecord[];
   });
   if (run !== commandsRefreshRun) return; // более свежий refresh победил
-  // Фаза 1: built-in/extension команды появляются мгновенно, но уже известные
+  // Фаза 1: built-in команды появляются мгновенно, но уже известные
   // apps сохраняем — список не теряет элементы между открытиями.
   const phase1 = dedupeCommandsById([...cmds, ...prevApps]);
   allCommandsCache.value = phase1;
@@ -1070,8 +872,6 @@ const hiddenCommandsList = computed<CommandRecord[]>(() =>
 
 let offShow = () => {};
 let offCommandsUpdated = () => {};
-let offClipboardOpen = () => {};
-let offClipboardUpdated = () => {};
 let offFocusOpen = () => {};
 let offFocusSessionUpdated = () => {};
 let offCommandVisibilityStorage = () => {};
@@ -1181,7 +981,6 @@ onMounted(async () => {
       mode.value = persisted.mode ?? "commands";
       query.value = persisted.query;
       selectedIndex.value = persisted.selectedIndex;
-      if (mode.value === "clipboard") void refreshClipboardHistory();
     } else {
       mode.value = "commands";
       query.value = "";
@@ -1211,12 +1010,6 @@ onMounted(async () => {
   offHide = window.kepler.window.onHide(() => {
     cancelCalculator();
     cancelFileSearch();
-  });
-  offClipboardOpen = window.kepler.clipboardHistory.onOpenShell(() => {
-    void enterClipboardMode();
-  });
-  offClipboardUpdated = window.kepler.clipboardHistory.onUpdated(() => {
-    if (mode.value === "clipboard") void refreshClipboardHistory();
   });
   offFocusOpen = window.kepler.focusSession.onOpenShell(() => {
     void enterFocusMode();
@@ -1259,8 +1052,6 @@ onMounted(async () => {
 onUnmounted(() => {
   offShow();
   offCommandsUpdated();
-  offClipboardOpen();
-  offClipboardUpdated();
   offFocusSessionUpdated();
   offFocusOpen();
   offCommandVisibilityStorage();
@@ -1279,7 +1070,6 @@ onUnmounted(() => {
       class="search-bar"
       :class="{
         'search-bar--subpage': mode !== 'commands',
-        'search-bar--clipboard': mode === 'clipboard',
         'search-bar--hidden': mode === 'hidden',
       }"
     >
@@ -1306,92 +1096,15 @@ onUnmounted(() => {
         @input="onInput"
       />
       <div v-else class="search-heading">{{ headerTitle }}</div>
-      <button
-        v-if="mode === 'clipboard'"
-        class="type-filter-button"
-        type="button"
-        title="Фильтр типа"
-        :aria-expanded="clipboardTypeFilterOpen"
-        @click="clipboardTypeFilterOpen = !clipboardTypeFilterOpen"
-      >
-        <ListFilter :size="17" />
-        <span>{{ clipboardTypeFilterLabel }}</span>
-        <ChevronDown :size="14" />
-      </button>
-      <div v-if="mode === 'clipboard' && clipboardTypeFilterOpen" class="type-filter-menu">
-        <button
-          class="type-filter-menu__item"
-          :class="{ 'type-filter-menu__item--active': clipboardTypeFilter === 'all' }"
-          type="button"
-          @click="setClipboardTypeFilter('all')"
-        >
-          Все типы
-        </button>
-        <button
-          class="type-filter-menu__item"
-          :class="{ 'type-filter-menu__item--active': clipboardTypeFilter === 'text' }"
-          type="button"
-          @click="setClipboardTypeFilter('text')"
-        >
-          Текст
-        </button>
-        <button
-          class="type-filter-menu__item"
-          :class="{ 'type-filter-menu__item--active': clipboardTypeFilter === 'image' }"
-          type="button"
-          @click="setClipboardTypeFilter('image')"
-        >
-          Изображения
-        </button>
-        <button
-          class="type-filter-menu__item"
-          :class="{ 'type-filter-menu__item--active': clipboardTypeFilter === 'link' }"
-          type="button"
-          @click="setClipboardTypeFilter('link')"
-        >
-          Ссылки
-        </button>
-        <button
-          class="type-filter-menu__item"
-          :class="{ 'type-filter-menu__item--active': clipboardTypeFilter === 'color' }"
-          type="button"
-          @click="setClipboardTypeFilter('color')"
-        >
-          Цвета
-        </button>
-        <button
-          class="type-filter-menu__item"
-          :class="{ 'type-filter-menu__item--active': clipboardTypeFilter === 'file' }"
-          type="button"
-          @click="setClipboardTypeFilter('file')"
-        >
-          Файлы
-        </button>
-      </div>
     </div>
     <div
       ref="listRef"
       class="list kosmos-scroll"
-      :class="{ 'list--clipboard': mode === 'clipboard', 'list--focus': mode === 'focus' }"
+      :class="{ 'list--focus': mode === 'focus' }"
       @scroll="onListScroll"
       @mousedown="onListMouseDown"
     >
-      <ClipboardQuickPanel
-        v-if="mode === 'clipboard'"
-        :items="filteredClipboardItems"
-        :selected-item="selectedClipboardItem"
-        :selected-index="selectedIndex"
-        :loading="clipboardLoading"
-        :empty-label="clipboardItems.length === 0 ? 'История пока пустая' : 'Ничего не найдено'"
-        @select="selectedIndex = $event"
-        @copy="copyClipboardItem"
-        @open="openClipboardItem"
-        @toggle-pin="toggleClipboardPin"
-        @remove="removeClipboardItem"
-        @clear="clearClipboardHistory"
-        @clear-all="clearAllClipboardHistory"
-      />
-      <FocusCommandPanel v-else-if="mode === 'focus'" ref="focusPanelRef" />
+      <FocusCommandPanel v-if="mode === 'focus'" ref="focusPanelRef" />
       <template v-else-if="mode === 'hidden'">
         <div v-if="hiddenCommandsList.length === 0" class="empty">Нет скрытых команд</div>
         <ul v-else class="results">
@@ -1805,39 +1518,6 @@ onUnmounted(() => {
       </span>
     </div>
 
-    <!-- Footer: clipboard mode -->
-    <div v-else-if="mode === 'clipboard'" class="launcher-footer">
-      <span class="launcher-footer__left launcher-footer__left--mode">
-        <ClipboardIcon :size="14" />
-        Буфер обмена
-      </span>
-      <div class="launcher-footer__actions">
-        <button
-          type="button"
-          class="launcher-footer__hint-btn launcher-footer__hint-btn--primary"
-          @click="void copyClipboardItem(selectedIndex)"
-        >
-          Отправить <KbdKey>↵</KbdKey>
-        </button>
-        <span class="launcher-footer__sep" aria-hidden="true" />
-        <button
-          type="button"
-          class="launcher-footer__hint-btn"
-          @click="void openClipboardItem(selectedIndex)"
-        >
-          Открыть <KbdKey>Ctrl</KbdKey><KbdKey>O</KbdKey>
-        </button>
-        <span class="launcher-footer__sep" aria-hidden="true" />
-        <button
-          type="button"
-          class="launcher-footer__hint-btn"
-          @click="void removeClipboardItem(selectedIndex)"
-        >
-          Удалить <KbdKey>Ctrl</KbdKey><KbdKey>X</KbdKey>
-        </button>
-      </div>
-    </div>
-
     <!-- Footer: focus mode -->
     <div v-else-if="mode === 'focus'" class="launcher-footer">
       <span class="launcher-footer__left launcher-footer__left--mode">
@@ -1931,8 +1611,7 @@ onUnmounted(() => {
   font-weight: 750;
 }
 
-.search-icon-button,
-.type-filter-button {
+.search-icon-button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1948,45 +1627,6 @@ onUnmounted(() => {
   flex: 0 0 auto;
 }
 
-.type-filter-button {
-  min-width: 126px;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 11px;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.type-filter-menu {
-  position: absolute;
-  top: 52px;
-  right: 14px;
-  z-index: 10;
-  display: grid;
-  width: 150px;
-  gap: 2px;
-  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--background) 92%, var(--foreground) 8%);
-  padding: 5px;
-  box-shadow: 0 16px 36px color-mix(in srgb, var(--background) 52%, transparent);
-}
-
-.type-filter-menu__item {
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--foreground);
-  padding: 7px 9px;
-  text-align: left;
-  font-size: 12px;
-}
-
-.type-filter-menu__item:hover,
-.type-filter-menu__item--active {
-  background: color-mix(in srgb, var(--foreground) 9%, transparent);
-}
-
 .search::placeholder {
   color: color-mix(in srgb, var(--foreground) 36%, transparent);
 }
@@ -1999,7 +1639,6 @@ onUnmounted(() => {
   scrollbar-gutter: stable both-edges;
 }
 
-.list--clipboard,
 .list--focus {
   border-top: 0;
   padding: 0;

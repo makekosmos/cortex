@@ -1,0 +1,92 @@
+import { afterEach, expect, mock, test } from "bun:test";
+import { ReconnectingEngineClient } from "../../../core/ark/packages/ark/src/reconnecting-engine-client.js";
+
+const firstLock = { http_port: 4317, auth_token: "a".repeat(64) };
+const secondLock = { http_port: 4318, auth_token: "b".repeat(64) };
+let discoveries = [firstLock, secondLock];
+const originalFetch = globalThis.fetch;
+
+class FakeArkClient {
+  async start(): Promise<void> {}
+  async stop(): Promise<void> {}
+  async invokeOperation<T>(): Promise<T> {
+    throw new Error("not used");
+  }
+  onArkEvent(): () => void {
+    return () => {};
+  }
+}
+
+mock.module("@kosmos/ark", () => ({
+  ArkClient: FakeArkClient,
+  ensureEngineRunning: async () => ({ kind: "connected", lock: discoveries.shift()! }),
+  ReconnectingEngineClient,
+}));
+
+const { EngineClient } = await import("./host-api");
+
+afterEach(() => {
+  discoveries = [firstLock, secondLock];
+  globalThis.fetch = originalFetch;
+});
+
+test("Host retries only its idempotent lifecycle settings request after 401", async () => {
+  let calls = 0;
+  const fetchMock = mock(async (input: string) => {
+    calls += 1;
+    if (calls === 1) return new Response("", { status: 401 });
+    return new Response(
+      JSON.stringify({ ok: true, data: { desktop_host: { warm_timeout_seconds: 300 } } }),
+    );
+  });
+  globalThis.fetch = fetchMock as typeof fetch;
+
+  const client = new EngineClient("C:\\Kosmos-test");
+  await expect(client.getWarmTimeout()).resolves.toEqual({ ok: true, data: 300 });
+  expect(fetchMock.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+    "http://127.0.0.1:4317/v1/rpc",
+    "http://127.0.0.1:4318/v1/rpc",
+  ]);
+});
+
+test("Host does not replay launch after 401 and uses the replacement for the following request", async () => {
+  let calls = 0;
+  const fetchMock = mock(async (input: string) => {
+    calls += 1;
+    if (calls === 1) return new Response("", { status: 401 });
+    return new Response(
+      JSON.stringify({ ok: true, data: { desktop_host: { warm_timeout_seconds: 0 } } }),
+    );
+  });
+  globalThis.fetch = fetchMock as typeof fetch;
+
+  const client = new EngineClient("C:\\Kosmos-test");
+  await expect(client.launchApp("demo")).resolves.toMatchObject({ ok: false });
+  await expect(client.getWarmTimeout()).resolves.toEqual({ ok: true, data: 0 });
+  expect(fetchMock.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+    "http://127.0.0.1:4317/v1/apps/launch",
+    "http://127.0.0.1:4318/v1/rpc",
+  ]);
+});
+
+test("Host does not replay revoke after a closed transport and uses the replacement for the following request", async () => {
+  let calls = 0;
+  const fetchMock = mock(async (input: string) => {
+    calls += 1;
+    if (calls === 1) throw new Error("transport closed");
+    return new Response(
+      JSON.stringify({ ok: true, data: { desktop_host: { warm_timeout_seconds: 300 } } }),
+    );
+  });
+  globalThis.fetch = fetchMock as typeof fetch;
+
+  const client = new EngineClient("C:\\Kosmos-test");
+  await expect(client.revokeApp("123e4567-e89b-12d3-a456-426614174000")).resolves.toMatchObject({
+    ok: false,
+  });
+  await expect(client.getWarmTimeout()).resolves.toEqual({ ok: true, data: 300 });
+  expect(fetchMock.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+    "http://127.0.0.1:4317/v1/apps/launch/123e4567-e89b-12d3-a456-426614174000",
+    "http://127.0.0.1:4318/v1/rpc",
+  ]);
+});

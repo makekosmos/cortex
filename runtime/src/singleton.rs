@@ -1,8 +1,8 @@
-// Singleton enforcement — копия паттерна из services/usage-tracker/src/singleton.rs,
-// адаптированная под Kepler. SQLite WAL `BEGIN IMMEDIATE` лочит на уровне OS;
+// Singleton enforcement — копия паттерна из services/usage-tracker/src/singleton.rs.
+// SQLite WAL `BEGIN IMMEDIATE` лочит на уровне OS;
 // если другой инстанс держит соединение, наша попытка падает быстро.
 //
-// AC2 spec: вторая копия Kepler падает с понятным сообщением и exit code != 0.
+// AC2 spec: вторая копия Engine падает с понятным сообщением и exit code != 0.
 
 use rusqlite::Connection;
 use std::fs;
@@ -24,7 +24,7 @@ pub enum SingletonError {
     OpenDb(String),
     #[error("Failed to configure singleton lock: {0}")]
     Configure(String),
-    #[error("Another Kepler instance is already running")]
+    #[error("Another Engine instance is already running")]
     AlreadyRunning,
     #[error("Failed to clear stale lock file: {0}")]
     ClearStaleLock(String),
@@ -59,7 +59,7 @@ impl Drop for SingletonGuard {
     }
 }
 
-/// Acquire singleton + удалить stale `kepler.lock.json` если он был.
+/// Acquire singleton + удалить stale `engine.lock.json` если он был.
 ///
 /// Почему так: `SingletonGuard` (SQLite WAL exclusive lock на
 /// `kepler-singleton.lock.db`) — настоящий OS-level gate, kernel
@@ -82,13 +82,13 @@ pub fn acquire_clearing_stale_lock(
 ) -> Result<(SingletonGuard, Option<u32>), SingletonError> {
     let guard = SingletonGuard::acquire(singleton_path)?;
 
-    let stale_pid = match lock_file::read(lock_path) {
+    let stale_pid = match lock_file::read_engine(lock_path) {
         Ok(lock) => Some(lock.pid),
         Err(LockFileError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => {
             // JSON есть, но не парсится (corrupt). Удалим — у нас singleton lock,
             // мы вправе перетереть. Логируем для observability.
-            tracing::warn!(error = %e, "stale kepler.lock.json corrupt, removing");
+            tracing::warn!(error = %e, "stale engine.lock.json corrupt, removing");
             None
         }
     };
@@ -108,19 +108,20 @@ pub fn acquire_clearing_stale_lock(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lock_file::{write_atomic, KeplerLockFile, LOCK_FILE_FORMAT_VERSION};
+    use crate::lock_file::{write_engine_atomic, EngineLockFile, ENGINE_LOCK_FILE_FORMAT_VERSION};
     use crate::protocol_version::ProtocolVersion;
     use tempfile::tempdir;
 
-    fn sample_lock(pid: u32, port: u16) -> KeplerLockFile {
-        KeplerLockFile {
-            format_version: LOCK_FILE_FORMAT_VERSION,
-            protocol_version: ProtocolVersion::CURRENT,
+    fn sample_lock(pid: u32, port: u16) -> EngineLockFile {
+        EngineLockFile {
+            format_version: ENGINE_LOCK_FILE_FORMAT_VERSION,
+            api_version: ProtocolVersion::CURRENT,
             pid,
+            http_port: port,
             ws_port: port,
             auth_token: "deadbeef".repeat(8),
             started_at: "2026-05-23T17:56:07Z".into(),
-            db_path: "C:\\fake\\ark.db".into(),
+            correlation_id: "00000000-0000-4000-8000-000000000001".into(),
         }
     }
 
@@ -156,7 +157,7 @@ mod tests {
         assert!(lock_path.parent().unwrap().exists());
     }
 
-    // Regression: 2026-05-23. Pid reuse: kepler.lock.json остался от упавшего
+    // Regression: 2026-05-23. Pid reuse: engine.lock.json остался от упавшего
     // backend'а, его PID Windows переиспользовала для unrelated живого процесса
     // (electron, chrome). Старый код гейтил startup на `is_pid_alive(stale.pid)`
     // → backend никогда не стартовал. После фикса: trust SingletonGuard, JSON
@@ -164,13 +165,13 @@ mod tests {
     #[test]
     fn stale_lock_with_live_unrelated_pid_does_not_block_acquire() {
         let dir = tempdir().expect("temp dir");
-        let lock_path = dir.path().join("kepler.lock.json");
-        let singleton_path = dir.path().join("kepler-singleton.lock.db");
+        let lock_path = dir.path().join("engine.lock.json");
+        let singleton_path = dir.path().join("engine-singleton.lock.db");
 
         // PID текущего теста — это cargo test binary, гарантированно живой и
         // гарантированно НЕ kepler-backend. Симулирует pid reuse.
         let stale = sample_lock(std::process::id(), 60803);
-        write_atomic(&lock_path, &stale).expect("write stale lock");
+        write_engine_atomic(&lock_path, &stale).expect("write stale lock");
 
         let (_guard, reported_pid) = acquire_clearing_stale_lock(&lock_path, &singleton_path)
             .expect("must acquire despite stale json with live unrelated pid");
@@ -184,10 +185,21 @@ mod tests {
     }
 
     #[test]
+    fn singleton_uses_only_engine_lock_contract() {
+        let source = include_str!("singleton.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("singleton production source");
+        assert!(source.contains("read_engine"));
+        assert!(!source.contains("lock_file::read("));
+        assert!(!source.contains("kepler.lock.json"));
+    }
+
+    #[test]
     fn acquire_clearing_stale_lock_handles_missing_json() {
         let dir = tempdir().expect("temp dir");
-        let lock_path = dir.path().join("kepler.lock.json");
-        let singleton_path = dir.path().join("kepler-singleton.lock.db");
+        let lock_path = dir.path().join("engine.lock.json");
+        let singleton_path = dir.path().join("engine-singleton.lock.db");
 
         let (_guard, reported_pid) = acquire_clearing_stale_lock(&lock_path, &singleton_path)
             .expect("first-time startup без существующего JSON должен пройти");
@@ -199,8 +211,8 @@ mod tests {
     #[test]
     fn acquire_clearing_stale_lock_removes_corrupt_json() {
         let dir = tempdir().expect("temp dir");
-        let lock_path = dir.path().join("kepler.lock.json");
-        let singleton_path = dir.path().join("kepler-singleton.lock.db");
+        let lock_path = dir.path().join("engine.lock.json");
+        let singleton_path = dir.path().join("engine-singleton.lock.db");
 
         // Crash во время write_atomic мог оставить мусор — наш acquire всё
         // равно должен пройти и снести битый файл.
@@ -224,8 +236,8 @@ mod tests {
         // Cross-process валидация запланирована отдельной задачей:
         // .agent/tasks/2026-05-23-singleton-cross-process-test/spec.md.
         let dir = tempdir().expect("temp dir");
-        let lock_path = dir.path().join("kepler.lock.json");
-        let singleton_path = dir.path().join("kepler-singleton.lock.db");
+        let lock_path = dir.path().join("engine.lock.json");
+        let singleton_path = dir.path().join("engine-singleton.lock.db");
 
         let _first = acquire_clearing_stale_lock(&lock_path, &singleton_path)
             .expect("первый acquire должен пройти");
@@ -236,8 +248,8 @@ mod tests {
         // Сообщение об ошибке — часть контракта. Должно быть human-readable.
         let msg = SingletonError::AlreadyRunning.to_string();
         assert!(
-            msg.contains("Kepler"),
-            "ошибка должна упоминать Kepler для diagnosability, got: {msg}"
+            msg.contains("Engine"),
+            "ошибка должна упоминать Engine для diagnosability, got: {msg}"
         );
     }
 }

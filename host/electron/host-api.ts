@@ -1,0 +1,478 @@
+import {
+  ArkClient,
+  ensureEngineRunning,
+  ReconnectingEngineClient,
+  type EngineLockInfo,
+} from "@kosmos/ark";
+import { randomUUID } from "node:crypto";
+
+export type AppLaunch = {
+  id: string;
+  version: string;
+  name: string;
+  launch_url: string;
+  permissions: PermissionGrant[];
+  launch_id: string;
+  ttl_seconds: number;
+  expires_at: string;
+  /** Runtime-issued authority; never cross the preload/renderer boundary. */
+  broker_token?: string;
+  /** Launch-scoped Engine endpoint; retained only by the main-process manifest. */
+  data_api?: string;
+  /** Runtime marker selecting the launch-scoped v2 broker contract. */
+  manifest_schema_version?: number;
+  /** Concrete ARK type ids allowed for v2 read/subscribe event fan-out. */
+  effective_read_types?: string[];
+};
+export type LaunchRenewal = {
+  launch_id: string;
+  ttl_seconds: number;
+  expires_at: string;
+};
+export type AppResolve = {
+  id: string;
+  version: string;
+  name: string;
+  permissions: PermissionGrant[];
+  enabled: true;
+  revoked: false;
+};
+export type PermissionGrant = { capability: string; scopes?: string[] };
+export type SidecarEvent = { event: string; [key: string]: unknown };
+export type CrashDetails = { reason?: unknown; exitCode?: unknown };
+
+export type EngineResult<T> = { ok: true; data: T } | { ok: false; message: string };
+
+const API_VERSION = "1.0.0";
+const SAFE_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
+const SAFE_LAUNCH_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const READ_OPS = new Set([
+  "list_objects",
+  "get_object",
+  "search_objects",
+  "list_object_types",
+  "get_object_type",
+  "list_object_links",
+  "get_sync_kv",
+]);
+const WRITE_OPS = new Set([
+  "upsert_object",
+  "delete_object",
+  "upsert_object_type",
+  "delete_object_type",
+  "upsert_object_link",
+  "delete_object_link",
+  "set_sync_kv",
+]);
+
+export function requiredCapability(operation: string): "ark.read" | "ark.write" | undefined {
+  return READ_OPS.has(operation) ? "ark.read" : WRITE_OPS.has(operation) ? "ark.write" : undefined;
+}
+
+export function hasManifestGrant(
+  permissions: PermissionGrant[] | undefined,
+  capability: "ark.read" | "ark.write",
+  operation: string,
+): boolean {
+  return (
+    permissions?.some(
+      (grant) =>
+        grant.capability === capability &&
+        Array.isArray(grant.scopes) &&
+        grant.scopes.length > 0 &&
+        grant.scopes.includes(operation),
+    ) ?? false
+  );
+}
+
+export function hasArkGrant(permissions: PermissionGrant[] | undefined): boolean {
+  return (
+    permissions?.some(
+      (grant) =>
+        (grant.capability === "ark.read" || grant.capability === "ark.write") &&
+        Array.isArray(grant.scopes) &&
+        grant.scopes.length > 0,
+    ) ?? false
+  );
+}
+
+/**
+ * A launch is v2 only when Engine explicitly marks it (or supplies its
+ * launch authority). Missing v2 authority must never fall back to global ARK.
+ */
+export function isV2Launch(
+  launch: Pick<AppLaunch, "manifest_schema_version" | "broker_token" | "data_api">,
+): boolean {
+  return (
+    launch.manifest_schema_version === 2 ||
+    typeof launch.broker_token === "string" ||
+    typeof launch.data_api === "string"
+  );
+}
+
+export function hasLaunchReadPermission(
+  launch: AppLaunch,
+  event?: Record<string, unknown>,
+): boolean {
+  if (isV2Launch(launch)) {
+    if (!Array.isArray(launch.effective_read_types) || launch.effective_read_types.length === 0)
+      return false;
+    if (!event) return true;
+    const typeId = eventTypeId(event);
+    return typeId !== undefined && launch.effective_read_types.includes(typeId);
+  }
+  return hasArkReadPermission(launch.permissions);
+}
+
+function eventTypeId(event: Record<string, unknown>): string | undefined {
+  const readTypeId = (value: unknown): string | undefined => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+    const record = value as Record<string, unknown>;
+    return typeof record.type_id === "string"
+      ? record.type_id
+      : typeof record.typeId === "string"
+        ? record.typeId
+        : undefined;
+  };
+
+  const direct = readTypeId(event);
+  if (direct) return direct;
+  const entity = event.entity;
+  const entityType = readTypeId(entity);
+  if (entityType) return entityType;
+  if (entity && typeof entity === "object" && !Array.isArray(entity)) {
+    const data = (entity as Record<string, unknown>).data;
+    const dataType = readTypeId(data);
+    if (dataType) return dataType;
+  }
+  return readTypeId(event.data);
+}
+
+export function launchRenewalDelayMs(
+  expiresAt: string,
+  now = Date.now(),
+  retry = false,
+): number | null {
+  const expiry = Date.parse(expiresAt);
+  if (!Number.isFinite(expiry)) return null;
+  const untilExpiry = expiry - now;
+  if (untilExpiry <= 1_000) return null;
+  return retry
+    ? Math.max(1_000, Math.min(30_000, untilExpiry - 1_000))
+    : Math.max(1_000, untilExpiry - 30_000);
+}
+
+function hasArkReadPermission(permissions: PermissionGrant[] | undefined): boolean {
+  return (
+    permissions?.some(
+      (grant) =>
+        grant.capability === "ark.read" && Array.isArray(grant.scopes) && grant.scopes.length > 0,
+    ) ?? false
+  );
+}
+
+export function hasLauncherGrant(
+  permissions: PermissionGrant[] | undefined,
+  operation: string,
+): boolean {
+  return (
+    permissions?.some(
+      (grant) =>
+        grant.capability === "launcher.search" &&
+        Array.isArray(grant.scopes) &&
+        grant.scopes.includes(operation),
+    ) ?? false
+  );
+}
+
+export function isInstalledEnabledApp<
+  T extends {
+    id?: unknown;
+    enabled?: unknown;
+    revoked?: unknown;
+  },
+>(item: T): item is T & { id: string; enabled: true; revoked: false } {
+  return (
+    SAFE_ID.test(typeof item.id === "string" ? item.id : "") &&
+    item.enabled === true &&
+    item.revoked === false
+  );
+}
+
+const CRASH_REASONS = new Set([
+  "clean-exit",
+  "abnormal-exit",
+  "killed",
+  "crashed",
+  "oom",
+  "launch-failed",
+  "integrity-failure",
+]);
+
+export function redactedCrashMetadata(
+  appId: string | undefined,
+  version: string | undefined,
+  details: CrashDetails,
+) {
+  return {
+    component: "renderer",
+    ...(appId ? { app_id: appId.slice(0, 128) } : {}),
+    ...(version ? { version: version.slice(0, 64) } : {}),
+    reason:
+      typeof details.reason === "string" && CRASH_REASONS.has(details.reason)
+        ? details.reason
+        : "unknown",
+    exit_code:
+      typeof details.exitCode === "number" && Number.isInteger(details.exitCode)
+        ? details.exitCode
+        : null,
+  };
+}
+
+export class EngineClient {
+  private lock: EngineLockInfo | null = null;
+  private readonly reconnectingArk: ReconnectingEngineClient<ArkClient>;
+
+  constructor(
+    private readonly appDataPath: string,
+    private readonly dataDir?: string,
+  ) {
+    this.reconnectingArk = new ReconnectingEngineClient({
+      discover: () =>
+        ensureEngineRunning({
+          appDataPath: this.appDataPath,
+          dataDir: this.dataDir,
+          clientProtocolMajor: 1,
+          autoLaunch: true,
+        }),
+      createTransport: (lock) => {
+        this.lock = lock;
+        return new ArkClient({
+          spaceId: "desktop-host",
+          deviceId: `desktop-host-${process.pid}`,
+          engineLock: lock,
+          engineClientClass: "desktop-host",
+          engineClientVersion: "1.0.0",
+        });
+      },
+    });
+  }
+
+  async ensureEngineRunning(): Promise<EngineResult<void>> {
+    try {
+      await this.reconnectingArk.getTransport();
+      return { ok: true, data: undefined };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : "Engine API v1 недоступен.",
+      };
+    }
+  }
+
+  onArkEvent(listener: (event: SidecarEvent) => void): () => void {
+    const unsubscribe = this.reconnectingArk.onArkEvent((event) => listener(event as SidecarEvent));
+    void this.ensureArkClient();
+    return unsubscribe;
+  }
+
+  private async ensureArkClient(): Promise<ArkClient | null> {
+    try {
+      return await this.reconnectingArk.getTransport();
+    } catch {
+      return null;
+    }
+  }
+
+  private async request<T>(
+    path: string,
+    init: RequestInit = {},
+    replay = false,
+  ): Promise<EngineResult<T>> {
+    try {
+      return await this.reconnectingArk.execute(() => this.requestWithCurrentLock<T>(path, init), {
+        idempotent: replay,
+      });
+    } catch {
+      return {
+        ok: false,
+        message: "Не удалось связаться с Engine. Повторите попытку.",
+      };
+    }
+  }
+
+  private async requestWithCurrentLock<T>(
+    path: string,
+    init: RequestInit = {},
+  ): Promise<EngineResult<T>> {
+    if (!this.lock) {
+      const connected = await this.ensureEngineRunning();
+      if (!connected.ok) return connected;
+    }
+    const lock = this.lock;
+    if (!lock) return { ok: false, message: "Engine API v1 недоступен." };
+    const response = await fetch(`http://127.0.0.1:${lock.http_port}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${lock.auth_token}`,
+        "Content-Type": "application/json",
+        "X-Kosmos-Api-Version": API_VERSION,
+        "X-Kosmos-Client-Class": "desktop-host",
+        "X-Kosmos-Client-Version": "1.0.0",
+        "X-Kosmos-Client-Pid": String(process.pid),
+        ...init.headers,
+      },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if ([401, 403, 426].includes(response.status))
+      throw Object.assign(new Error(`HTTP ${response.status}`), {
+        status: response.status,
+      });
+    const value = (await response.json()) as {
+      ok?: boolean;
+      data?: T;
+      error?: string;
+    };
+    if (!response.ok || value.ok === false || value.data === undefined) {
+      return { ok: false, message: "Engine отклонил операцию." };
+    }
+    return { ok: true, data: value.data };
+  }
+
+  async resolveApp(id: string, version?: string): Promise<EngineResult<AppResolve>> {
+    if (!SAFE_ID.test(id)) return { ok: false, message: "Некорректный идентификатор приложения." };
+    return this.request<AppResolve>(
+      "/v1/apps/resolve",
+      {
+        method: "POST",
+        body: JSON.stringify(version ? { id, version } : { id }),
+      },
+      true,
+    );
+  }
+
+  async launchApp(id: string, version?: string): Promise<EngineResult<AppLaunch>> {
+    if (!SAFE_ID.test(id)) return { ok: false, message: "Некорректный идентификатор приложения." };
+    return this.request<AppLaunch>("/v1/apps/launch", {
+      method: "POST",
+      body: JSON.stringify(version ? { id, version } : { id }),
+    });
+  }
+
+  async revokeApp(launchId: string): Promise<EngineResult<{ launch_id: string; revoked: true }>> {
+    if (!SAFE_LAUNCH_ID.test(launchId))
+      return { ok: false, message: "Некорректный идентификатор запуска." };
+    return this.request<{ launch_id: string; revoked: true }>(`/v1/apps/launch/${launchId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async renewLaunch(launchId: string, brokerToken: string): Promise<EngineResult<LaunchRenewal>> {
+    if (!SAFE_LAUNCH_ID.test(launchId) || !isSafeBrokerToken(brokerToken)) {
+      return { ok: false, message: "Некорректное продление запуска." };
+    }
+    return this.request<LaunchRenewal>(`/v1/apps/launch/${launchId}/renew`, {
+      method: "POST",
+      headers: { "X-Kosmos-Launch-Token": brokerToken },
+    });
+  }
+
+  async getWarmTimeout(): Promise<EngineResult<0 | 300>> {
+    const result = await this.request<{
+      desktop_host?: { warm_timeout_seconds?: number };
+    }>(
+      "/v1/rpc",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          operation: "engine.settings.get",
+          _req_id: randomUUID(),
+        }),
+      },
+      true,
+    );
+    if (!result.ok) return result;
+    const timeout = result.data.desktop_host?.warm_timeout_seconds;
+    return timeout === 0 || timeout === 300
+      ? { ok: true, data: timeout }
+      : {
+          ok: false,
+          message: "Настройка времени ожидания Engine некорректна.",
+        };
+  }
+
+  async arkRequest(
+    operation: string,
+    params: Record<string, unknown>,
+  ): Promise<EngineResult<unknown>> {
+    try {
+      const data = await this.reconnectingArk.invokeOperation(
+        { ...params, operation },
+        { idempotent: READ_OPS.has(operation) },
+      );
+      return { ok: true, data };
+    } catch {
+      return { ok: false, message: "Engine отклонил операцию." };
+    }
+  }
+
+  async launchArkRequest(
+    launchId: string,
+    brokerToken: string,
+    operation: string,
+    params: Record<string, unknown>,
+  ): Promise<EngineResult<unknown>> {
+    if (!SAFE_LAUNCH_ID.test(launchId) || !operation || !isSafeBrokerToken(brokerToken)) {
+      return { ok: false, message: "Некорректный launch-scoped запрос ARK." };
+    }
+    return this.request<unknown>(`/v1/apps/launch/${launchId}/ark`, {
+      method: "POST",
+      headers: { "X-Kosmos-Launch-Token": brokerToken },
+      body: JSON.stringify({ operation, params }),
+    });
+  }
+
+  async arkDataRequest(request: Record<string, unknown>): Promise<EngineResult<unknown>> {
+    if (
+      typeof request.kind !== "string" ||
+      request.kind === "raw" ||
+      "operation" in request ||
+      "params" in request
+    )
+      return { ok: false, message: "Некорректный типизированный запрос ARK." };
+    try {
+      const data = await this.reconnectingArk.invokeOperation(
+        request as Record<string, unknown> & { operation: string },
+        {
+          idempotent: request.kind === "read_object" || request.kind === "list_objects",
+        },
+      );
+      return { ok: true, data };
+    } catch {
+      return { ok: false, message: "Engine отклонил типизированный запрос ARK." };
+    }
+  }
+  async launcherRequest(
+    operation: string,
+    params: Record<string, unknown>,
+  ): Promise<EngineResult<unknown>> {
+    return this.request<unknown>("/v1/rpc", {
+      method: "POST",
+      body: JSON.stringify({ operation, _req_id: randomUUID(), ...params }),
+    });
+  }
+}
+
+export { SAFE_ID };
+
+function isSafeBrokerToken(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= 256 &&
+    ![...value].some((character) => {
+      const code = character.charCodeAt(0);
+      return code <= 0x20 || code === 0x7f;
+    })
+  );
+}

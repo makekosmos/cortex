@@ -38,22 +38,15 @@ if (process.platform === "darwin") {
 }
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CLIPBOARD_HISTORY_ENABLED } from "../shared/ipc-types";
-import { setExtensionArkBridge } from "./extension-host";
 import {
   APP_ICON_PROTOCOL,
   LOCAL_IMAGE_PROTOCOL,
-  findKextInArgv,
   keplerLog,
-  openInstallExtensionWindow,
   resolveWindowMaterial,
   safeHandle,
-  stopClipboardHistory,
   type KosmosWindowMaterial,
 } from "./main-shell-services";
 import {
-  isUsageTrackerEnabled,
-  openSettings,
   setupFocusWidgetBackendSync,
   teardownFocusWidgetBackendSync,
   setupMainDictationRuntime,
@@ -65,34 +58,31 @@ import {
   teardownPomodoroNotifier,
 } from "./main-runtime-integrations";
 import { createLauncherController } from "./main-launcher";
+import { openSettings } from "./settings-window";
+import { check as checkUpdates, install as installUpdate } from "./autoupdater-host";
 import { registerMainProcessIpc } from "./main-ipc-registrations";
 import {
   resolveBackendExePath,
   runBootSelfCheckWithDeps,
-  ARK_READY_REQUEST_TIMEOUT_MS,
   createMainBackendSupervisor,
   runAppReady,
 } from "./main-backend-entry";
 
-export { shouldShowLauncherOnStartup } from "./main-backend-entry";
-
 // См. postmortems.md § 2026-05-30: focus-block dynamic chunk imports from
 // main.js after Vite/Rolldown code-splitting, so these helper APIs must remain
 // visible on the entry module namespace.
-export { getServiceStatus, runServiceCliElevated, pingService, sendViaPipe } from "./focus-service";
-export {
-  isFocusServiceAutoInstallDeclined,
-  setFocusServiceAutoInstallDeclined,
-} from "./settings-window";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const WINDOW_WIDTH = 720;
 const WINDOW_HEIGHT = 460;
+const env = process.env;
+const devServerUrl = env.VITE_DEV_SERVER_URL;
 
-const env = process.env,
-  devServerUrl = env.VITE_DEV_SERVER_URL;
+function resolveLauncherBgMaterial(): KosmosWindowMaterial {
+  return resolveWindowMaterial("none");
+}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -114,12 +104,23 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-// Window backdrops are currently forced off globally in `window-effects.ts`.
-function resolveLauncherBgMaterial(): KosmosWindowMaterial {
-  return resolveWindowMaterial("none");
-}
-
 let isQuiting = false;
+
+const backendSupervisor = createMainBackendSupervisor({
+  env,
+  instance: KEPLER_INSTANCE,
+  resolveBackendExe,
+  getIsQuiting: () => isQuiting,
+  setupPomodoroNotifier,
+  teardownPomodoroNotifier,
+  setupFocusWidgetBackendSync,
+  teardownFocusWidgetBackendSync,
+  setupFocusSessionBackendSync,
+  teardownFocusSessionBackendSync,
+  setupDictationHotkey,
+  broadcastCommandsUpdated,
+});
+
 const launcherController = createLauncherController({
   isDev: !!devServerUrl,
   productName: KEPLER_INSTANCE.productName,
@@ -134,44 +135,10 @@ const launcherController = createLauncherController({
     isQuiting = true;
     app.quit();
   },
-  onLauncherShow: () => {
-    // Self-heal: если backend умер (например после сна) — поднимаем его при
-    // открытии launcher'а. No-op пока backend жив или идёт штатный (re)connect.
-    void backendSupervisor.recoverBackendIfDead("launcher-show");
-  },
+  onLauncherShow: () => void backendSupervisor.recoverBackendIfDead("launcher-show"),
 });
 
-const { showLauncher, hideLauncher, setLauncherExpanded } = launcherController;
-
-const backendSupervisor = createMainBackendSupervisor({
-  env,
-  instance: KEPLER_INSTANCE,
-  resolveBackendExe,
-  getIsQuiting: () => isQuiting,
-  isUsageTrackerEnabled,
-  setupPomodoroNotifier,
-  teardownPomodoroNotifier,
-  setupFocusWidgetBackendSync,
-  teardownFocusWidgetBackendSync,
-  setupFocusSessionBackendSync,
-  teardownFocusSessionBackendSync,
-  setupDictationHotkey,
-  setExtensionArkBridge,
-  broadcastCommandsUpdated,
-  broadcastSettingsSyncUpdated,
-});
-
-function broadcastSettingsSyncUpdated(): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) {
-      try {
-        win.webContents.send("kepler:settings:sync:updated");
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-}
+const { hideLauncher, setLauncherExpanded } = launcherController;
 
 export function broadcastCommandsUpdated(): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -188,9 +155,6 @@ export function broadcastCommandsUpdated(): void {
 const commandsController = registerMainProcessIpc({
   awaitArkReady,
   getArkClient: () => backendSupervisor.getArkClient(),
-  broadcastSettingsSyncUpdated,
-  getBackendLockPath: () => backendSupervisor.getBackendLockPath(),
-  isBackendRunning: () => backendSupervisor.isBackendRunning(),
   hideLauncher,
   setLauncherExpanded,
 });
@@ -214,21 +178,16 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.on("second-instance", (_event, argv) => {
-  // Если второй instance запустился с .kext в argv (file association /
-  // повторный запуск через CLI) — форвардим в running instance, открываем
-  // install dialog и НЕ показываем launcher.
-  const kext = findKextInArgv(argv);
-  if (kext) {
-    openInstallExtensionWindow(kext);
+  if (argv.includes("--autostart")) return;
+  if (argv.includes("--kosmos-update-check")) {
+    void checkUpdates();
     return;
   }
-  // Если второй instance — autorun (Windows зачем-то выстрелил Run-entry
-  // повторно при уже запущенном Kepler), не дёргаем launcher: пользователь
-  // не нажимал хоткей.
-  if (argv.includes("--autostart")) {
+  if (argv.includes("--kosmos-update-install")) {
+    installUpdate();
     return;
   }
-  showLauncher();
+  launcherController.openManager();
 });
 
 // --- Electron crash reporter ------------------------------------------------
@@ -244,6 +203,23 @@ crashReporter.start({
   uploadToServer: false,
   submitURL: "",
   compress: false,
+});
+
+app.on("render-process-gone", (_event, webContents, details) => {
+  keplerLog.crash("electron-renderer", {
+    webContentsId: webContents.id,
+    reason: details.reason,
+    exitCode: details.exitCode,
+  });
+});
+
+app.on("child-process-gone", (_event, details) => {
+  keplerLog.crash(`electron-${details.type}`, {
+    reason: details.reason,
+    exitCode: details.exitCode,
+    serviceName: details.serviceName,
+    name: details.name,
+  });
 });
 
 // --- backend spawn -----------------------------------------------------------
@@ -276,10 +252,8 @@ safeHandle("kepler:backend:restart", async () => {
 
 void app.whenReady().then(() =>
   runAppReady({
-    arkReadyRequestTimeoutMs: ARK_READY_REQUEST_TIMEOUT_MS,
     awaitArkReady,
     backendSupervisor,
-    env,
     instance: KEPLER_INSTANCE,
     launcher: launcherController,
     runBootSelfCheck,
@@ -287,14 +261,7 @@ void app.whenReady().then(() =>
 );
 
 app.on("window-all-closed", () => {
-  // Test mode (KOSMOS_TEST_MODE=1, выставляется tests/e2e/helpers/launch.ts):
-  // выходим, чтобы Playwright app.close() не висел до timeout — обычное
-  // behaviour Kepler'а — tray-resident, не quit'ить, но в тестах окна
-  // не закрываются (launcher hidden default'ом), и quit нужен.
-  if (env.KOSMOS_TEST_MODE === "1") {
-    app.quit();
-  }
-  // иначе не выходим — Kepler tray-resident; закрытие окна только hide
+  app.quit();
 });
 
 // Любой источник app.quit() (Playwright, programmatic, signals) должен
@@ -307,7 +274,6 @@ app.on("before-quit", () => {
 app.on("will-quit", () => {
   console.error("[kepler-shell] will-quit: starting cleanup");
   globalShortcut.unregisterAll();
-  if (CLIPBOARD_HISTORY_ENABLED) stopClipboardHistory();
   backendSupervisor.shutdown();
   console.error("[kepler-shell] will-quit: cleanup done");
 });

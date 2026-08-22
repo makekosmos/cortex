@@ -4,7 +4,9 @@
 // Frontmatter: YAML (id, type, created_at, updated_at, title, header_props).
 // Body: TipTap JSON dom → markdown (recursive walk).
 
-use super::{sanitize_filename, unique_path, ConvertResult, Converter};
+use super::{
+    sanitize_filename, unique_path, validate_envelopes, CanonicalEnvelope, ConvertResult, Converter,
+};
 use ark_core::types::ArkObject;
 use serde_json::Value;
 use std::fs;
@@ -20,7 +22,7 @@ impl Converter for NoteMdConverter {
         "Заметки → Markdown"
     }
     fn object_type(&self) -> &'static str {
-        "note_obj"
+        "com.kosmos.note"
     }
     fn default_format(&self) -> &'static str {
         "md"
@@ -48,6 +50,62 @@ impl Converter for NoteMdConverter {
                     let bytes = content.len() as u64;
                     result.push_file(path, bytes);
                 }
+                Err(e) => result.push_error(format!("write {path:?}: {e}")),
+            }
+        }
+        result
+    }
+
+    fn convert_canonical(
+        &self,
+        envelopes: &[CanonicalEnvelope],
+        _format: &str,
+        dest_dir: &Path,
+    ) -> ConvertResult {
+        let mut result = ConvertResult::default();
+        let envelopes = match validate_envelopes(envelopes) {
+            Ok(value) => value,
+            Err(error) => {
+                result.push_error(error);
+                return result;
+            }
+        };
+        for envelope in envelopes
+            .into_iter()
+            .filter(|e| e.object.deleted_at.is_none())
+        {
+            let obj = envelope.object;
+            let title = if obj.title.trim().is_empty() {
+                "untitled".to_owned()
+            } else {
+                obj.title.clone()
+            };
+            let path = unique_path(dest_dir, &sanitize_filename(&title), "md");
+            let tags = envelope
+                .links
+                .iter()
+                .filter(|l| l.link_type == "tag")
+                .map(|l| l.target_object_id.clone())
+                .collect::<Vec<_>>();
+            let related = envelope
+                .links
+                .iter()
+                .filter(|l| l.link_type == "related")
+                .map(|l| l.target_object_id.clone())
+                .collect::<Vec<_>>();
+            let description = obj
+                .props_json
+                .get("description")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let mut content = format!("---\nid: {}\ntype: {}\ntypeVersion: {}\ntitle: {}\ntags: [{}]\nrelated: [{}]\ncreatedAt: {}\nupdatedAt: {}\n---\n\n", yaml_scalar(&obj.id), yaml_scalar(&obj.type_id), yaml_scalar(&obj.type_version), yaml_scalar(&title), tags.iter().map(|v| yaml_scalar(v)).collect::<Vec<_>>().join(", "), related.iter().map(|v| yaml_scalar(v)).collect::<Vec<_>>().join(", "), yaml_scalar(&obj.created_at), yaml_scalar(&obj.updated_at));
+            content.push_str(description);
+            if !description.is_empty() {
+                content.push_str("\n\n");
+            }
+            content.push_str(&render_tiptap_doc(&obj.content_json, &mut result));
+            match fs::write(&path, content.as_bytes()) {
+                Ok(()) => result.push_file(path, content.len() as u64),
                 Err(e) => result.push_error(format!("write {path:?}: {e}")),
             }
         }
@@ -353,6 +411,7 @@ mod tests {
         ArkObject {
             id: id.to_string(),
             type_id: "note_obj".to_string(),
+            type_version: "0.0.0-legacy".to_string(),
             title: title.to_string(),
             content_json: body,
             props_json: json!({ "title": title }),

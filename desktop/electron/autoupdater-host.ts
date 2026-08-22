@@ -29,9 +29,15 @@ const STATE_CHANGED_CHANNEL = "kepler:settings:update:state";
 
 let currentState: UpdateState = { kind: "idle" };
 let initialized = false;
+const stateFile = () => path.join(keplerDataDir(), "update-state.json");
 
 function broadcast(state: UpdateState): void {
   currentState = state;
+  try {
+    writeFileSync(stateFile(), JSON.stringify(state), "utf8");
+  } catch (e) {
+    console.warn("[autoUpdater] failed to persist state:", e);
+  }
   for (const win of BrowserWindow.getAllWindows()) {
     if (win.isDestroyed()) continue;
     try {

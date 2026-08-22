@@ -107,6 +107,7 @@ function main() {
     cwd: SHELL_ROOT,
     stdio: "inherit",
     shell: true,
+    windowsHide: true,
   });
 
   if (ebResult.status !== 0) {
@@ -129,6 +130,7 @@ function main() {
     {
       cwd: SHELL_ROOT,
       stdio: "inherit",
+      windowsHide: true,
     },
   );
 

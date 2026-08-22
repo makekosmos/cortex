@@ -4,8 +4,8 @@
  * Общая (cross-app) обвязка страницы настроек — layout `.settings`/
  * `.settings-shell`/`.settings-content`, `content-header`, `.rows`, секции,
  * типографика, `.btn` — вынесена в `@kosmos/visuals/components/settings-shell.css`
- * (чтобы extension'ы вроде Eden использовали ровно те же стили). Здесь остаются
- * только классы, специфичные для Kepler shell'а (hotkey/autostart, security,
+ * (чтобы все экраны использовали ровно те же стили). Здесь остаются
+ * только классы, специфичные для Kepler shell'а (hotkey, security,
  * stats-карточки dictation и т. п.).
  *
  * Все правила scoped под `.settings-shell` — корневой класс settings-области.

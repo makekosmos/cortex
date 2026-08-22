@@ -10,22 +10,16 @@
 //   stdin недоступен → передаём request через `--input <file>` арг,
 //   читаем response из `--output <file>`. Cleanup temp файлов.
 //
-// Wire-up: extension-host.ts hooks `kepler:extension:ark:request` →
 // после успешного `focus.set_active_state` вызывает `applyFocusBlock(...)`.
 
 import { spawn } from "node:child_process";
 import { promises as fsp } from "node:fs";
-import { setTimeout as delay } from "node:timers/promises";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import { app, BrowserWindow } from "electron";
 import { fileURLToPath } from "node:url";
-import { getServiceStatus, pingService, runServiceCliElevated, sendViaPipe } from "./focus-service";
-import {
-  isFocusServiceAutoInstallDeclined,
-  setFocusServiceAutoInstallDeclined,
-} from "./settings-window";
+import { pingService, sendViaPipe } from "../../shared/focus-service-client";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -79,7 +73,10 @@ function runHelperDirect(req: HelperRequest): Promise<HelperResponse | "needs_el
 
     let child;
     try {
-      child = spawn(bin, [], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+      child = spawn(bin, [], {
+        stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
+      });
     } catch (e: unknown) {
       const code = (e as NodeJS.ErrnoException).code;
       // ERROR_ELEVATION_REQUIRED (740) → нужен RunAs flow.
@@ -120,7 +117,10 @@ function runHelperDirect(req: HelperRequest): Promise<HelperResponse | "needs_el
       try {
         resolve(parseHelperResponse(trimmed));
       } catch {
-        resolve({ ok: false, error: `unparseable helper response: ${trimmed.slice(0, 200)}` });
+        resolve({
+          ok: false,
+          error: `unparseable helper response: ${trimmed.slice(0, 200)}`,
+        });
       }
     });
 
@@ -187,60 +187,16 @@ async function runHelperElevated(req: HelperRequest): Promise<HelperResponse> {
   }
 }
 
-// Session-scoped: пометка что мы уже пытались auto-install service'а в эту
-// сессию и юзер либо отменил UAC, либо install упал. Без этой пометки каждое
-// включение блокировки будет триггерить UAC prompt установки.
-let autoInstallAttemptedThisSession = false;
-
-async function tryAutoInstallService(): Promise<boolean> {
-  if (autoInstallAttemptedThisSession) return false;
-  if (isFocusServiceAutoInstallDeclined()) return false;
-  autoInstallAttemptedThisSession = true;
-
-  console.log("[focus-block] auto-install kepler-focus-svc (one-time UAC prompt)");
-  const installResult = await runServiceCliElevated("install");
-  if (!installResult.ok) {
-    // User cancelled UAC, или install реально упал. Persistим decline чтобы
-    // повторно не спрашивать в следующих сессиях — юзер может включить через
-    // Settings UI вручную.
-    console.warn("[focus-block] auto-install failed/declined:", installResult.error);
-    setFocusServiceAutoInstallDeclined(true);
-    return false;
-  }
-
-  // Сбрасываем декланд флаг если он был — install прошёл успешно.
-  setFocusServiceAutoInstallDeclined(false);
-
-  // Notify renderer'ы — Settings → Focus покажет «daemon установлен».
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) {
-      try {
-        win.webContents.send("kepler:focus-service:status-changed");
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  // Install handler уже стартанул service (см. cli.rs install). Просто
-  // verify status + ping. Poll до 3s — service handshake'ит pipe чуть-чуть.
-  for (let i = 0; i < 30; i++) {
-    const status = await getServiceStatus();
-    if (status.installed && status.running) {
-      if (await pingService()) return true;
-    }
-    await delay(100);
-  }
-  console.warn("[focus-block] auto-install ok but pipe не отвечает за 3s");
-  return false;
-}
-
 async function trySendViaPipe(req: HelperRequest): Promise<HelperResponse | null> {
   try {
     if (!(await pingService())) return null;
     const resp = await sendViaPipe(req);
     if (resp.ok || resp.error) {
-      return { ok: !!resp.ok, active_domains: resp.active_domains, error: resp.error };
+      return {
+        ok: !!resp.ok,
+        active_domains: resp.active_domains,
+        error: resp.error,
+      };
     }
     return null;
   } catch (e) {
@@ -254,20 +210,11 @@ async function runHelper(req: HelperRequest): Promise<HelperResponse> {
   const piped = await trySendViaPipe(req);
   if (piped) return piped;
 
-  // 2. Auto-install service: один UAC сейчас → zero UAC потом.
-  //    Только если юзер не отклонил это раньше. Промазав, идём дальше на
-  //    helper-фоллбэк (UAC per-call, как было раньше).
-  const installed = await tryAutoInstallService();
-  if (installed) {
-    const retry = await trySendViaPipe(req);
-    if (retry) return retry;
-  }
-
-  // 3. Helper fallback: direct spawn (если Kepler сам admin → no UAC).
+  // Helper fallback: direct spawn (если Kepler сам admin → no UAC).
   const direct = await runHelperDirect(req);
   if (direct !== "needs_elevation") return direct;
 
-  // 4. Elevated helper fallback: PowerShell RunAs (UAC prompt).
+  // Elevated helper fallback: PowerShell RunAs (UAC prompt).
   return runHelperElevated(req);
 }
 

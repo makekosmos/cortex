@@ -1,5 +1,7 @@
 use std::env;
 use std::io::{self, BufRead, Write};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
 use std::sync::mpsc;
@@ -22,6 +24,9 @@ use super::local_sidecar_protocol::{
     LocalSttRequestEnvelope, LocalSttResponse, LocalSttResponseEnvelope, LocalSttStatus,
     LocalSttTranscription,
 };
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 use super::local_whisper_dll::{whisper_dll_available, WhisperDllEngine};
 
 #[derive(Default)]
@@ -305,20 +310,20 @@ fn selected_device(model: &LocalSttModelSpec) -> Option<String> {
     if !matches!(effective_accelerator(model), LocalSttAccelerator::Gpu) {
         return None;
     }
-    Command::new("nvidia-smi")
-        .args(["--query-gpu=name", "--format=csv,noheader"])
-        .output()
-        .ok()
-        .and_then(|output| {
-            if output.status.success() {
-                String::from_utf8(output.stdout)
-                    .ok()
-                    .and_then(|text| text.lines().next().map(str::trim).map(str::to_owned))
-                    .filter(|text| !text.is_empty())
-            } else {
-                None
-            }
-        })
+    let mut command = Command::new("nvidia-smi");
+    command.args(["--query-gpu=name", "--format=csv,noheader"]);
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
+    command.output().ok().and_then(|output| {
+        if output.status.success() {
+            String::from_utf8(output.stdout)
+                .ok()
+                .and_then(|text| text.lines().next().map(str::trim).map(str::to_owned))
+                .filter(|text| !text.is_empty())
+        } else {
+            None
+        }
+    })
 }
 
 pub async fn run_stdio_service() -> io::Result<()> {

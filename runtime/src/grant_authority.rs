@@ -1,0 +1,495 @@
+use crate::handle_relative_fs::{self, RootHandle, RootIdentity};
+use serde::{Deserialize, Serialize};
+#[cfg(test)]
+use std::cell::Cell;
+use std::{
+    collections::HashMap,
+    fs, io,
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
+
+#[cfg(test)]
+thread_local! {
+    static FAIL_PERSIST_AFTER_FSYNC: Cell<bool> = const { Cell::new(false) };
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GrantProvenance {
+    NativeDialog,
+    PersistedUserData,
+}
+impl GrantProvenance {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "native-dialog" => Some(Self::NativeDialog),
+            "persisted" | "persisted-userdata" => Some(Self::PersistedUserData),
+            _ => None,
+        }
+    }
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NativeDialog => "native-dialog",
+            Self::PersistedUserData => "persisted",
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GrantOwner {
+    pub session_id: String,
+    pub generation: u64,
+    pub connection_id: u64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PersistedRecord {
+    version: u32,
+    persistent_grant_id: String,
+    extension_id: String,
+    provenance: GrantProvenance,
+    exact_file: bool,
+    selected_path: String,
+    root_identity: RootIdentity,
+    exact_file_identity: Option<RootIdentity>,
+    revoked: bool,
+}
+struct Grant {
+    owner: GrantOwner,
+    extension_id: String,
+    exact_file: bool,
+    selected_name: Option<String>,
+    root: RootHandle,
+    identity: RootIdentity,
+    persistent_id: Option<String>,
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GrantError {
+    Invalid,
+    NotFound,
+    OwnerMismatch,
+    ExtensionMismatch,
+    ScopeMismatch,
+    IdentityChanged,
+    Persistence,
+}
+pub struct GrantAuthorityRegistry {
+    grants: Mutex<HashMap<String, Grant>>,
+    data_dir: Option<PathBuf>,
+}
+impl Default for GrantAuthorityRegistry {
+    fn default() -> Self {
+        Self {
+            grants: Mutex::new(HashMap::new()),
+            data_dir: None,
+        }
+    }
+}
+impl GrantAuthorityRegistry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn with_data_dir(data_dir: PathBuf) -> Self {
+        Self {
+            grants: Mutex::new(HashMap::new()),
+            data_dir: Some(data_dir),
+        }
+    }
+    fn record_path(&self) -> Option<PathBuf> {
+        self.data_dir
+            .as_ref()
+            .map(|d| d.join("grant-authority.json"))
+    }
+    fn load_records(&self) -> Result<Vec<PersistedRecord>, GrantError> {
+        let Some(path) = self.record_path() else {
+            return Ok(Vec::new());
+        };
+        let bytes = match fs::read(path) {
+            Ok(v) => v,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(_) => return Err(GrantError::Persistence),
+        };
+        let records: Vec<PersistedRecord> =
+            serde_json::from_slice(&bytes).map_err(|_| GrantError::Persistence)?;
+        if records.iter().any(|record| {
+            record.version != 1
+                || !Path::new(&record.selected_path).is_absolute()
+                || record.persistent_grant_id.is_empty()
+                || record.extension_id.is_empty()
+        }) {
+            return Err(GrantError::Persistence);
+        }
+        Ok(records)
+    }
+    fn save_records(&self, records: &[PersistedRecord]) -> Result<(), GrantError> {
+        let Some(path) = self.record_path() else {
+            return Ok(());
+        };
+        let dir = path.parent().ok_or(GrantError::Persistence)?;
+        fs::create_dir_all(dir).map_err(|_| GrantError::Persistence)?;
+        let tmp = path.with_extension("json.tmp");
+        let bytes = serde_json::to_vec(records).map_err(|_| GrantError::Persistence)?;
+        {
+            use std::io::Write;
+            let mut f = fs::OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .write(true)
+                .open(&tmp)
+                .map_err(|_| GrantError::Persistence)?;
+            if f.write_all(&bytes).is_err() || f.sync_all().is_err() {
+                let _ = fs::remove_file(&tmp);
+                return Err(GrantError::Persistence);
+            }
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600)).map_err(|_| {
+                let _ = fs::remove_file(&tmp);
+                GrantError::Persistence
+            })?;
+        }
+        #[cfg(test)]
+        if FAIL_PERSIST_AFTER_FSYNC.with(Cell::get) {
+            let _ = fs::remove_file(&tmp);
+            return Err(GrantError::Persistence);
+        }
+        fs::rename(&tmp, &path).map_err(|_| {
+            let _ = fs::remove_file(&tmp);
+            GrantError::Persistence
+        })?;
+        #[cfg(unix)]
+        {
+            fs::File::open(dir)
+                .and_then(|f| f.sync_all())
+                .map_err(|_| GrantError::Persistence)?;
+        }
+        Ok(())
+    }
+    fn open_selected(
+        path: &Path,
+        exact_file: bool,
+    ) -> Result<
+        (
+            RootHandle,
+            RootIdentity,
+            Option<String>,
+            Option<RootIdentity>,
+        ),
+        GrantError,
+    > {
+        if !path.is_absolute() {
+            return Err(GrantError::Invalid);
+        }
+        let (root_path, name) = if exact_file {
+            (
+                path.parent().ok_or(GrantError::Invalid)?,
+                Some(
+                    path.file_name()
+                        .and_then(|x| x.to_str())
+                        .ok_or(GrantError::Invalid)?
+                        .to_owned(),
+                ),
+            )
+        } else {
+            (path, None)
+        };
+        let root = handle_relative_fs::open_root(root_path).map_err(|_| GrantError::Invalid)?;
+        let identity = handle_relative_fs::root_identity(&root).map_err(|_| GrantError::Invalid)?;
+        let file_identity = if exact_file {
+            Some(
+                handle_relative_fs::file_identity(
+                    &root,
+                    name.as_deref().ok_or(GrantError::Invalid)?,
+                )
+                .map_err(|_| GrantError::Invalid)?,
+            )
+        } else {
+            None
+        };
+        Ok((root, identity, name, file_identity))
+    }
+    pub fn register(
+        &self,
+        owner: &GrantOwner,
+        extension_id: &str,
+        selected_root: &Path,
+        exact_file: bool,
+        provenance: GrantProvenance,
+        persisted_version: Option<u64>,
+    ) -> Result<(String, RootIdentity, Option<String>), GrantError> {
+        if extension_id.is_empty() {
+            return Err(GrantError::Invalid);
+        }
+        let (root, identity, selected_name, file_identity) =
+            Self::open_selected(selected_root, exact_file)?;
+        let persistent_id =
+            (provenance == GrantProvenance::NativeDialog).then(|| uuid::Uuid::new_v4().to_string());
+        if let Some(ref id) = persistent_id {
+            let mut records = self.load_records()?;
+            records.retain(|r| r.persistent_grant_id != *id);
+            records.push(PersistedRecord {
+                version: persisted_version.unwrap_or(1) as u32,
+                persistent_grant_id: id.clone(),
+                extension_id: extension_id.to_owned(),
+                provenance,
+                exact_file,
+                selected_path: selected_root.to_string_lossy().into_owned(),
+                root_identity: identity,
+                exact_file_identity: file_identity,
+                revoked: false,
+            });
+            self.save_records(&records)?;
+        }
+        let id = uuid::Uuid::new_v4().to_string();
+        self.grants
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(
+                id.clone(),
+                Grant {
+                    owner: owner.clone(),
+                    extension_id: extension_id.to_owned(),
+                    exact_file,
+                    selected_name,
+                    root,
+                    identity,
+                    persistent_id: persistent_id.clone(),
+                },
+            );
+        Ok((id, identity, persistent_id))
+    }
+    pub fn reopen(
+        &self,
+        owner: &GrantOwner,
+        persistent_id: &str,
+        extension_id: &str,
+    ) -> Result<(String, RootIdentity), GrantError> {
+        let record = self
+            .load_records()?
+            .into_iter()
+            .find(|r| r.persistent_grant_id == persistent_id && !r.revoked)
+            .ok_or(GrantError::NotFound)?;
+        if record.extension_id != extension_id || record.provenance != GrantProvenance::NativeDialog
+        {
+            return Err(GrantError::ExtensionMismatch);
+        }
+        let (root, identity, selected_name, file_identity) =
+            Self::open_selected(Path::new(&record.selected_path), record.exact_file)?;
+        if identity != record.root_identity || file_identity != record.exact_file_identity {
+            return Err(GrantError::IdentityChanged);
+        }
+        let id = uuid::Uuid::new_v4().to_string();
+        self.grants
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(
+                id.clone(),
+                Grant {
+                    owner: owner.clone(),
+                    extension_id: extension_id.to_owned(),
+                    exact_file: record.exact_file,
+                    selected_name,
+                    root,
+                    identity,
+                    persistent_id: Some(persistent_id.to_owned()),
+                },
+            );
+        Ok((id, identity))
+    }
+    pub fn read(
+        &self,
+        grant_id: &str,
+        owner: &GrantOwner,
+        extension_id: &str,
+        requested: &[&str],
+        max_bytes: usize,
+    ) -> Result<Vec<u8>, GrantError> {
+        let grants = self.grants.lock().unwrap_or_else(|p| p.into_inner());
+        let grant = grants.get(grant_id).ok_or(GrantError::NotFound)?;
+        if &grant.owner != owner {
+            return Err(GrantError::OwnerMismatch);
+        }
+        if grant.extension_id != extension_id {
+            return Err(GrantError::ExtensionMismatch);
+        }
+        if handle_relative_fs::root_identity(&grant.root)
+            .map_err(|_| GrantError::IdentityChanged)?
+            != grant.identity
+        {
+            return Err(GrantError::IdentityChanged);
+        }
+        if grant.exact_file
+            && (requested.len() != 1
+                || grant.selected_name.as_deref() != requested.first().copied())
+        {
+            return Err(GrantError::ScopeMismatch);
+        }
+        handle_relative_fs::read_relative(&grant.root, requested, max_bytes)
+            .map_err(|_| GrantError::ScopeMismatch)
+    }
+    pub fn close_owner(&self, owner: GrantOwner) -> usize {
+        let mut grants = self.grants.lock().unwrap_or_else(|p| p.into_inner());
+        let before = grants.len();
+        grants.retain(|_, g| g.owner != owner);
+        before - grants.len()
+    }
+    pub fn close_generation(&self, session_id: &str, generation: u64) -> usize {
+        let mut grants = self.grants.lock().unwrap_or_else(|p| p.into_inner());
+        let before = grants.len();
+        grants
+            .retain(|_, g| !(g.owner.session_id == session_id && g.owner.generation == generation));
+        before - grants.len()
+    }
+    pub fn len(&self) -> usize {
+        self.grants.lock().unwrap_or_else(|p| p.into_inner()).len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn owner(n: u64) -> GrantOwner {
+        GrantOwner {
+            session_id: "s".into(),
+            generation: n,
+            connection_id: n,
+        }
+    }
+    #[test]
+    fn persisted_reopen_same_identity_reads_bytes_and_owner_is_fenced() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.txt");
+        fs::write(&file, b"bytes").unwrap();
+        let reg = GrantAuthorityRegistry::with_data_dir(dir.path().join("engine"));
+        let old = owner(1);
+        let (_, _, persistent) = reg
+            .register(
+                &old,
+                "ext",
+                &file,
+                true,
+                GrantProvenance::NativeDialog,
+                None,
+            )
+            .unwrap();
+        let persistent = persistent.unwrap();
+        assert_eq!(reg.close_owner(old), 1);
+        let new = owner(2);
+        let (id, _) = reg.reopen(&new, &persistent, "ext").unwrap();
+        assert_eq!(
+            reg.read(&id, &new, "ext", &["a.txt"], 64).unwrap(),
+            b"bytes"
+        );
+        assert_eq!(
+            reg.read(&id, &owner(1), "ext", &["a.txt"], 64),
+            Err(GrantError::OwnerMismatch)
+        );
+    }
+    #[test]
+    fn replacement_root_and_exact_file_are_denied() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("root");
+        fs::create_dir(&root).unwrap();
+        let file = root.join("a.txt");
+        fs::write(&file, b"a").unwrap();
+        let reg = GrantAuthorityRegistry::with_data_dir(dir.path().join("engine"));
+        let o = owner(1);
+        let (_, _, p) = reg
+            .register(&o, "ext", &root, false, GrantProvenance::NativeDialog, None)
+            .unwrap();
+        let p = p.unwrap();
+        fs::rename(&root, dir.path().join("A")).unwrap();
+        fs::create_dir(&root).unwrap();
+        assert_eq!(reg.reopen(&o, &p, "ext"), Err(GrantError::IdentityChanged));
+        let root2 = dir.path().join("root2");
+        fs::create_dir(&root2).unwrap();
+        let f = root2.join("x");
+        fs::write(&f, b"a").unwrap();
+        let (_, _, p2) = reg
+            .register(&o, "ext", &f, true, GrantProvenance::NativeDialog, None)
+            .unwrap();
+        let p2 = p2.unwrap();
+        fs::remove_file(&f).unwrap();
+        fs::write(&f, b"b").unwrap();
+        assert_eq!(reg.reopen(&o, &p2, "ext"), Err(GrantError::IdentityChanged));
+    }
+    #[cfg(unix)]
+    #[test]
+    fn root_symlink_and_child_symlink_are_denied() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().unwrap();
+        let real = dir.path().join("real");
+        fs::create_dir(&real).unwrap();
+        fs::write(real.join("a"), b"a").unwrap();
+        symlink(&real, dir.path().join("link")).unwrap();
+        let reg = GrantAuthorityRegistry::new();
+        let o = owner(1);
+        assert_eq!(
+            reg.register(
+                &o,
+                "ext",
+                &dir.path().join("link"),
+                false,
+                GrantProvenance::NativeDialog,
+                None
+            ),
+            Err(GrantError::Invalid)
+        );
+        symlink(real.join("a"), real.join("b")).unwrap();
+        let (id, _, _) = reg
+            .register(&o, "ext", &real, false, GrantProvenance::NativeDialog, None)
+            .unwrap();
+        assert!(reg.read(&id, &o, "ext", &["b"], 64).is_err());
+    }
+    #[test]
+    fn ten_thousand_reads_keep_cardinality_bounded() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("a");
+        fs::write(&f, b"a").unwrap();
+        let reg = GrantAuthorityRegistry::new();
+        let o = owner(1);
+        let (id, _, _) = reg
+            .register(&o, "ext", &f, true, GrantProvenance::NativeDialog, None)
+            .unwrap();
+        for _ in 0..10_000 {
+            assert_eq!(reg.read(&id, &o, "ext", &["a"], 8).unwrap(), b"a");
+        }
+        assert_eq!(reg.len(), 1);
+        assert_eq!(reg.close_owner(o), 1);
+        assert_eq!(reg.len(), 0);
+    }
+
+    #[test]
+    fn persistence_failure_after_fsync_preserves_previous_record_and_redacts_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a");
+        fs::write(&file, b"a").unwrap();
+        let data = dir.path().join("engine");
+        let reg = GrantAuthorityRegistry::with_data_dir(data.clone());
+        let o = owner(1);
+        let (_, _, persistent) = reg
+            .register(&o, "ext", &file, true, GrantProvenance::NativeDialog, None)
+            .unwrap();
+        let path = data.join("grant-authority.json");
+        let before = fs::read(&path).unwrap();
+        FAIL_PERSIST_AFTER_FSYNC.with(|fail| fail.set(true));
+        let result = reg.register(&o, "ext", &file, true, GrantProvenance::NativeDialog, None);
+        FAIL_PERSIST_AFTER_FSYNC.with(|fail| fail.set(false));
+        assert_eq!(result, Err(GrantError::Persistence));
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert!(!path.with_extension("json.tmp").exists());
+        let reopened = GrantAuthorityRegistry::with_data_dir(data);
+        assert!(reopened
+            .reopen(&owner(2), persistent.as_deref().unwrap(), "ext")
+            .is_ok());
+        fs::write(
+            &path,
+            br#"[{"version":99,"selected_path":"/secret","extension_id":"ext"}]"#,
+        )
+        .unwrap();
+        let error = reopened.reopen(&owner(2), "secret", "ext").unwrap_err();
+        let text = format!("{error:?}");
+        assert!(!text.contains("/secret"));
+        assert!(!text.contains("ext"));
+    }
+}

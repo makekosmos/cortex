@@ -1,16 +1,10 @@
 // Static command registry — open-commands ("Открыть <App>") открывают
-// апки как Vue extension'ы внутри Kepler через extension-host (Phase 4 + 6).
 //
 // Action-commands (Pomodoro start, create note и т.п.) приходят dynamic от
 // running extension'ов через kepler-backend command bus.
 
-// extensionIconDataUri / openExtension больше не используются здесь —
-// extension-команды объявляются в их manifest.commands[] и резолвятся
-// через `loadDeclaredCommands` (extension-host.ts).
 import { openDashboardWindow } from "./dashboard-window";
-import { openMyCosmosWindow } from "./my-cosmos-window";
-import { openClipboardHistoryShell } from "./clipboard-history";
-import { CLIPBOARD_HISTORY_ENABLED } from "../shared/ipc-types";
+import { openHostedApp } from "./host-app";
 import {
   openFocusSessionShell,
   pauseFocusSessionCommand,
@@ -40,11 +34,8 @@ export interface InternalCommand {
    * internal команды (settings/dashboard/check-updates) оставляют поле
    * undefined и видны всегда.
    */
-  requiresExtension?: string;
   /**
    * Опциональная иконка как data URI. Для open-команд extension'ов берётся
-   * из `extensionIconDataUri(<id>)`. Lazy getter — читаем с диска один раз,
-   * результат кешируется в extension-host.
    */
   icon?: () => string | undefined;
   shortcut?: string | (() => string | undefined | Promise<string | undefined>);
@@ -79,7 +70,6 @@ async function runCheckUpdates(): Promise<void> {
 export const COMMANDS: InternalCommand[] = [
   // Kepler-internal команды (shell-owned, не extensions). Extension'ы
   // объявляют свои команды в `manifest.commands[]` — см.
-  // `loadDeclaredCommands` в extension-host.ts и docs-site/concepts/command-bus.md.
   {
     id: "dashboard:open",
     title: "Открыть таблицу данных",
@@ -105,23 +95,8 @@ export const COMMANDS: InternalCommand[] = [
     category: "open",
     kind: "command",
     appName: "Kosmos",
-    exec: () => openMyCosmosWindow(),
+    exec: () => openHostedApp("com.kosmos.graph"),
   },
-  // Буфер обмена заморожен — команда скрыта (CLIPBOARD_HISTORY_ENABLED).
-  ...(CLIPBOARD_HISTORY_ENABLED
-    ? [
-        {
-          id: "kepler:clipboard-history",
-          title: "Открыть буфер обмена",
-          subtitle: "История скопированного текста",
-          category: "open",
-          kind: "command",
-          appName: "Kepler",
-          keepsLauncherOpen: true,
-          exec: () => openClipboardHistoryShell(),
-        } satisfies InternalCommand,
-      ]
-    : []),
   {
     id: "kepler:focus-session",
     title: "Начать фокус",

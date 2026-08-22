@@ -4,13 +4,8 @@ import { keplerDataDir } from "./data-dir";
 import { resolveInstance } from "./instance";
 
 interface KeplerShellSettings {
-  developerMode?: boolean;
   hotkey?: string;
   showTrayIcon?: boolean;
-  /** Трекать активные приложения (usage-tracker модуль в kepler-backend). */
-  usageTrackerEnabled?: boolean;
-  /** Юзер отклонил auto-install kepler-focus-svc. */
-  focusServiceAutoInstallDeclined?: boolean;
   /** Сколько минут хранить позицию в лаунчере. 0 = всегда ресетим. */
   launcherStateTtlMinutes?: number;
 }
@@ -91,18 +86,6 @@ export function writeSettings(patch: Partial<KeplerShellSettings>): void {
   } catch (e) {
     console.error("[kepler-shell] settings write failed:", e);
   }
-}
-
-export function isFocusServiceAutoInstallDeclined(): boolean {
-  return readSettings().focusServiceAutoInstallDeclined === true;
-}
-
-export function setFocusServiceAutoInstallDeclined(value: boolean): void {
-  writeSettings({ focusServiceAutoInstallDeclined: value });
-}
-
-export function isUsageTrackerEnabled(): boolean {
-  return readSettings().usageTrackerEnabled !== false;
 }
 
 export function isTrayIconEnabled(): boolean {

@@ -17,13 +17,16 @@
 // гигиены, не Phase 4 scope).
 
 import { appendFileSync, mkdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { keplerDataDir } from "./data-dir";
+import { createCrashMetadata, redactText, redactUnknown } from "./redaction";
 
 type LogLevel = "INFO" | "WARN" | "ERROR";
 
 let cachedLogFilePath: string | null = null;
 let cachedLogFileDate: string | null = null;
+let correlationId = validUuid(process.env.KOSMOS_CORRELATION_ID) ?? randomUUID();
 
 function ensureLogFilePath(): string {
   const today = new Date().toISOString().slice(0, 10);
@@ -43,13 +46,15 @@ function ensureLogFilePath(): string {
 }
 
 function write(level: LogLevel, scope: string, msg: string, meta?: object): void {
+  const safeMeta = (redactUnknown(meta ?? {}) ?? {}) as Record<string, unknown>;
   const line =
     JSON.stringify({
+      ...safeMeta,
       t: new Date().toISOString(),
       level,
-      scope,
-      msg,
-      ...meta,
+      scope: redactText(scope),
+      msg: redactText(msg),
+      correlationId,
     }) + "\n";
 
   // 1. Stderr — для dev visibility и для parent process (если shell спавнен
@@ -78,6 +83,18 @@ export const keplerLog = {
   error(scope: string, msg: string, meta?: object): void {
     write("ERROR", scope, msg, meta);
   },
+  crash(component: string, meta?: object): string {
+    const crash = createCrashMetadata(component, correlationId, meta);
+    write("ERROR", "crash", "process terminated", crash);
+    return String(crash.crashId);
+  },
+  setCorrelationId(value: string): void {
+    const valid = validUuid(value);
+    if (valid) correlationId = valid;
+  },
+  correlationId(): string {
+    return correlationId;
+  },
   /** Текущий путь к лог-файлу — для bug bundle / диагностики. */
   currentLogFile(): string {
     return ensureLogFilePath();
@@ -88,3 +105,10 @@ export const keplerLog = {
     return path.join(keplerDataDir(), "logs");
   },
 };
+
+function validUuid(value: string | undefined): string | null {
+  return value &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : null;
+}

@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from "electron";
-import { ArkClient, ensureKeplerRunning } from "@kosmos/ark";
+import { ArkClient, ensureEngineRunning } from "@kosmos/ark";
+import type { EngineLockInfo, EngineState } from "@kosmos/ark";
 import type { Instance } from "./instance";
 import { keplerDataDir } from "./data-dir";
 import { keplerLog } from "./logging";
@@ -15,12 +16,7 @@ interface MainArkClientControllerOptions {
   setupFocusSessionBackendSync(options: { arkClient: ArkClient }): void;
   teardownFocusSessionBackendSync(): void;
   setupDictationHotkey(): Promise<void>;
-  setExtensionArkBridge(bridge: {
-    request: ((req: Record<string, unknown>) => Promise<unknown>) | null;
-    subscribe: ((event: string, handler: (event: unknown) => void) => () => void) | null;
-  }): void;
   broadcastCommandsUpdated(): void;
-  broadcastSettingsSyncUpdated(): void;
 }
 
 const ARK_CLIENT_LOCK_WAIT_MS = 30_000;
@@ -45,7 +41,6 @@ export function createMainArkClientController(
   options: MainArkClientControllerOptions,
 ): MainArkClientController {
   let arkClient: ArkClient | null = null;
-  let syncEventsUnsubscribe: (() => void) | null = null;
   let arkRendererEventsUnsubscribe: (() => void) | null = null;
   let arkInitRetryTimer: NodeJS.Timeout | null = null;
   let arkInitRetryAttempt = 0;
@@ -53,6 +48,7 @@ export function createMainArkClientController(
   let arkClientReady: Promise<ArkClient> | null = null;
   let arkClientReadyResolve: ((c: ArkClient) => void) | null = null;
   let arkClientReadyReject: ((e: Error) => void) | null = null;
+  let lastEngineFailure: EngineState["kind"] | null = null;
 
   function broadcastBackendEvent(
     event: "kepler:backend:ready" | "kepler:backend:disconnected",
@@ -76,20 +72,6 @@ export function createMainArkClientController(
         /* ignore */
       }
     }
-  }
-
-  function wireSyncEventBroadcast(client: ArkClient): void {
-    syncEventsUnsubscribe?.();
-    syncEventsUnsubscribe = client.onArkEvent((event) => {
-      if (
-        event.event === "peer_connected" ||
-        event.event === "peer_disconnected" ||
-        event.event === "peer_list_updated" ||
-        event.event === "sync_error"
-      ) {
-        options.broadcastSettingsSyncUpdated();
-      }
-    });
   }
 
   function ensureArkReadyPromise(): Promise<ArkClient> {
@@ -117,9 +99,6 @@ export function createMainArkClientController(
     const prev = arkClient;
     arkClient = null;
     clearMainProtocolCaches();
-    options.setExtensionArkBridge({ request: null, subscribe: null });
-    syncEventsUnsubscribe?.();
-    syncEventsUnsubscribe = null;
     arkRendererEventsUnsubscribe?.();
     arkRendererEventsUnsubscribe = null;
     if (wasConnected) broadcastBackendEvent("kepler:backend:disconnected");
@@ -167,42 +146,36 @@ export function createMainArkClientController(
     }
   }
 
-  function requestArkOperation(req: Record<string, unknown>): Promise<unknown> {
-    if (!arkClient) throw new Error("ArkClient not ready");
-    return arkClient.invokeOperation(req as { operation: string; [key: string]: unknown });
-  }
-
-  function subscribeArkEvent(event: string, handler: (event: unknown) => void): () => void {
-    if (!arkClient) return () => {};
-    return arkClient.onArkEvent((payload) => {
-      if (payload.event !== event) return;
-      handler(payload);
-    });
-  }
-
   async function initArkClient(): Promise<void> {
     arkInitInFlight = true;
     try {
       ensureArkReadyPromise();
-      const state = await ensureKeplerRunning({
+      const state = await ensureEngineRunning({
         appDataPath: app.getPath("appData"),
         dataDir: keplerDataDir(),
         waitMs: ARK_CLIENT_LOCK_WAIT_MS,
         autoLaunch: false,
       });
       if (state.kind !== "connected") {
-        const detail = "reason" in state ? ` (${state.reason})` : "";
-        console.error(
-          `[kepler-shell] kepler-backend ${state.kind}: ArkClient unavailable${detail}`,
-        );
+        if (lastEngineFailure !== state.kind) {
+          keplerLog.error("ark", `Engine: ${state.error.message}`, {
+            classification: state.kind,
+          });
+          lastEngineFailure = state.kind;
+        }
         scheduleArkClientInitRetry(state.kind);
         return;
       }
+      const engineLock: EngineLockInfo = state.lock;
+      lastEngineFailure = null;
+      keplerLog.setCorrelationId(engineLock.correlation_id);
       const client = new ArkClient({
         spaceId: KEPLER_SPACE_ID,
         deviceId: `kepler-shell-${options.instance.slot}`,
         deviceName: "Kosmos Desktop",
-        keplerLock: state.lock,
+        engineLock,
+        engineClientClass: "kosmos-desktop",
+        engineClientVersion: app.getVersion(),
         requestTimeoutMs: ARK_REQUEST_TIMEOUT_MS,
       });
       await client.start();
@@ -210,9 +183,10 @@ export function createMainArkClientController(
       arkInitRetryAttempt = 0;
       arkClientReadyResolve?.(client);
       broadcastBackendEvent("kepler:backend:ready");
-      console.error(
-        `[kepler-shell] ArkClient connected to kepler-backend (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
-      );
+      keplerLog.info("ark", "ArkClient connected to Engine", {
+        enginePid: engineLock.pid,
+        wsPort: engineLock.ws_port,
+      });
       setupConnectedClient(client);
     } catch (e) {
       keplerLog.error("ark", "ArkClient init failed", { err: String(e) });
@@ -241,13 +215,8 @@ export function createMainArkClientController(
     void options
       .setupDictationHotkey()
       .catch((e) => keplerLog.error("dictation", "hotkey setup failed", { err: String(e) }));
-    options.setExtensionArkBridge({
-      request: requestArkOperation,
-      subscribe: subscribeArkEvent,
-    });
     arkRendererEventsUnsubscribe?.();
     arkRendererEventsUnsubscribe = client.onArkEvent(broadcastArkRendererEvent);
-    wireSyncEventBroadcast(client);
     client.commands.onChanged(() => {
       options.broadcastCommandsUpdated();
     });
@@ -273,7 +242,6 @@ export function createMainArkClientController(
   }
 
   function shutdown(): void {
-    options.setExtensionArkBridge({ request: null, subscribe: null });
     options.teardownFocusSessionBackendSync();
     options.teardownPomodoroNotifier();
     if (arkClient) {

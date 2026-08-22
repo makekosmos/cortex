@@ -24,6 +24,7 @@ function run(args) {
   const result = spawnSync("cargo", args, {
     cwd: new URL("..", import.meta.url),
     stdio: "inherit",
+    windowsHide: true,
   });
   if ((result.status ?? 1) !== 0) {
     process.exit(result.status ?? 1);

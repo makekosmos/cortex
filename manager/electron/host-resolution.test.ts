@@ -1,0 +1,13 @@
+import { describe, expect, test } from "bun:test";
+import path from "node:path";
+import { resolvePackagedHostExecutable } from "./host-resolution";
+
+describe("Manager packaged Host resolution", () => {
+  test("walks from nested Manager resources to its Desktop Host sibling", () => {
+    const desktopResources = path.join("C:\\", "Kosmos", "resources");
+    const managerResources = path.join(desktopResources, "components", "manager", "resources");
+    expect(resolvePackagedHostExecutable(managerResources)).toBe(
+      path.join(desktopResources, "components", "host", "Kosmos Package Host.exe"),
+    );
+  });
+});

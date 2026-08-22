@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// AboutTab — версия Kepler + кнопка «Проверить обновления».
+// AboutTab — informational version and storage details.
 
 import { computed, onMounted, ref } from "vue";
-import { Button, SettingsList, SettingsRow } from "@kosmos/visuals";
+import { SettingsList, SettingsRow } from "@kosmos/visuals";
 import type { StorageSummary } from "@shared/ipc-types";
 import AdvancedPageLayout, { type IntroDescriptor } from "../components/AdvancedPageLayout.vue";
 
@@ -13,8 +13,6 @@ defineProps<{
   updateChecking: boolean;
   isDownloading: boolean;
 }>();
-
-defineEmits<{ checkUpdates: [] }>();
 
 const storageSummary = ref<StorageSummary | null>(null);
 const storageError = ref("");
@@ -51,20 +49,9 @@ onMounted(() => {
 <template>
   <AdvancedPageLayout :intro="intro">
     <SettingsList>
-      <SettingsRow title="Версия Kosmos" :description="checkResultLabel">
+      <SettingsRow title="Версия Kosmos" description="Текущая версия приложения">
         <template #control>
-          <div class="about-actions">
-            <code class="about-value">{{ version }}</code>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              :disabled="updateChecking || isDownloading"
-              @click="$emit('checkUpdates')"
-            >
-              {{ updateChecking ? "Проверяем…" : "Проверить обновления" }}
-            </Button>
-          </div>
+          <code class="about-value">{{ version }}</code>
         </template>
       </SettingsRow>
     </SettingsList>

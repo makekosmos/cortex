@@ -383,9 +383,7 @@ impl AgentsService {
 
     async fn add_project(&self, raw_path: &str) -> Result<Value, String> {
         let requested = PathBuf::from(raw_path);
-        let root = git_output(&requested, &["rev-parse", "--show-toplevel"]).await?;
-        let canonical =
-            std::fs::canonicalize(root.trim()).map_err(|e| format!("repository path: {e}"))?;
+        let canonical = git_repository_root(&requested)?;
         let path = canonical.to_string_lossy().into_owned();
         let name = canonical
             .file_name()
@@ -1505,7 +1503,10 @@ fn turn_policy(mode: &str) -> Value {
     })
 }
 fn codex_command() -> Command {
-    if std::env::var("KOSMOS_TEST_MODE").as_deref() == Ok("1") {
+    // Unit tests may run alongside other runtime tests that mutate the shared
+    // KOSMOS_TEST_MODE environment variable. The fake app-server variables are
+    // test-only and are the stable selector for this command override.
+    if cfg!(test) || std::env::var("KOSMOS_TEST_MODE").as_deref() == Ok("1") {
         if let (Ok(executable), Ok(script)) = (
             std::env::var("DAEDALUS_FAKE_APP_SERVER_EXE"),
             std::env::var("DAEDALUS_FAKE_APP_SERVER_SCRIPT"),
@@ -1573,7 +1574,10 @@ fn untracked_patch(path: &str, content: &str) -> String {
     format!("\ndiff --git a/{normalized} b/{normalized}\nnew file mode 100644\n--- /dev/null\n+++ b/{normalized}\n@@ -0,0 +1,{line_count} @@\n{body}")
 }
 fn git_dirty(path: &Path) -> bool {
-    std::process::Command::new("git")
+    if git_cwd_is_isolated(path).is_err() {
+        return false;
+    }
+    isolated_std_git()
         .args(["status", "--porcelain"])
         .current_dir(path)
         .output()
@@ -1589,7 +1593,8 @@ fn is_binary(path: &Path) -> bool {
 }
 
 async fn git_output(cwd: &Path, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
+    git_cwd_is_isolated(cwd)?;
+    let output = isolated_async_git()
         .args(args)
         .current_dir(cwd)
         .output()
@@ -1599,6 +1604,82 @@ async fn git_output(cwd: &Path, args: &[&str]) -> Result<String, String> {
         return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn git_cwd_is_isolated(cwd: &Path) -> Result<(), String> {
+    let requested = cwd
+        .canonicalize()
+        .map_err(|error| format!("Git working directory is unavailable: {error}"))?;
+    let output = isolated_std_git()
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(&requested)
+        .output()
+        .map_err(|error| format!("Git repository probe failed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    let root = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim())
+        .canonicalize()
+        .map_err(|error| format!("Git repository root is unavailable: {error}"))?;
+    if requested != root {
+        return Err(format!(
+            "Git repository escaped requested fixture: {} -> {}",
+            requested.display(),
+            root.display()
+        ));
+    }
+    Ok(())
+}
+
+fn git_repository_root(path: &Path) -> Result<PathBuf, String> {
+    let requested = path
+        .canonicalize()
+        .map_err(|error| format!("Git repository path is unavailable: {error}"))?;
+    let output = isolated_std_git()
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(&requested)
+        .output()
+        .map_err(|error| format!("Git repository probe failed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    PathBuf::from(String::from_utf8_lossy(&output.stdout).trim())
+        .canonicalize()
+        .map_err(|error| format!("Git repository root is unavailable: {error}"))
+}
+
+fn isolated_std_git() -> std::process::Command {
+    let mut command = std::process::Command::new("git");
+    for key in [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_COMMON_DIR",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_GRAFT_FILE",
+        "GIT_NAMESPACE",
+    ] {
+        command.env_remove(key);
+    }
+    command
+}
+
+fn isolated_async_git() -> Command {
+    let mut command = Command::new("git");
+    for key in [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_COMMON_DIR",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_GRAFT_FILE",
+        "GIT_NAMESPACE",
+    ] {
+        command.env_remove(key);
+    }
+    command
 }
 async fn git_status(cwd: &Path, args: &[&str]) -> Result<(), String> {
     git_output(cwd, args).await.map(|_| ())
@@ -1668,7 +1749,35 @@ fn approval_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Approval> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::process::Command as StdCommand;
+
+    struct StdCommand;
+    impl StdCommand {
+        fn new(program: &str) -> std::process::Command {
+            assert_eq!(program, "git");
+            isolated_std_git()
+        }
+    }
+
+    #[test]
+    fn git_fixture_rejects_a_cwd_that_would_fall_back_to_the_outer_repo() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        assert!(StdCommand::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&repo)
+            .status()
+            .unwrap()
+            .success());
+        let nested = repo.join("nested-fixture");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        // Regression: 2026-08-15. A failed fixture init must never let Git
+        // discover the implementation repository and mutate it.
+        let error = git_cwd_is_isolated(&nested).unwrap_err();
+        assert!(error.contains("escaped requested fixture") || error.contains("not a git"));
+    }
+
     #[test]
     fn slug_is_git_safe() {
         assert_eq!(prompt_slug(" Fix: login!!! "), "fix-login");
@@ -2050,7 +2159,6 @@ mod tests {
             .join("../../tests/e2e/fixtures/daedalus-fake-app-server.mjs")
             .canonicalize()
             .unwrap();
-        std::env::set_var("KOSMOS_TEST_MODE", "1");
         std::env::set_var("DAEDALUS_FAKE_APP_SERVER_EXE", "bun");
         std::env::set_var("DAEDALUS_FAKE_APP_SERVER_SCRIPT", &script);
 
@@ -2126,7 +2234,6 @@ mod tests {
         reopened.shutdown().await;
         assert!(reopened.runtimes().is_empty());
 
-        std::env::remove_var("KOSMOS_TEST_MODE");
         std::env::remove_var("DAEDALUS_FAKE_APP_SERVER_EXE");
         std::env::remove_var("DAEDALUS_FAKE_APP_SERVER_SCRIPT");
     }

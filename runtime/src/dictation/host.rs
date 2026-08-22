@@ -423,6 +423,7 @@ pub async fn handle_dictation_op(
     params: Value,
     host: &Arc<DictationHost>,
 ) -> DictationResponse {
+    tracing::debug!(subop, "dictation operation received");
     match subop {
         "get_state" => DictationResponse::ok(host.current_state().await),
         "get_config" => {
@@ -1179,6 +1180,7 @@ async fn op_start_recording(host: &DictationHost) -> DictationResponse {
     let snapshot = s.clone();
     drop(s);
     host.emit_state(&snapshot).await;
+    tracing::info!(state = "recording", "dictation recording started");
     super::audio_duck::duck_if_enabled(cfg.duck_audio_during_recording);
     preload_local_runtime_for_recording(host).await;
     DictationResponse::ok(json!({ "state": "recording" }))
@@ -1202,6 +1204,7 @@ async fn op_cancel(host: &DictationHost) -> DictationResponse {
         });
     }
     host.emit_state(&snapshot).await;
+    tracing::info!(state = "idle", "dictation recording cancelled");
     DictationResponse::ok(json!({ "state": "idle" }))
 }
 
@@ -1225,6 +1228,11 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
             return DictationResponse::err(format!("submit_audio: битое аудио ({e})"));
         }
     };
+    tracing::info!(
+        bytes = wav_bytes.len(),
+        duration_sec = record_seconds,
+        "dictation audio received"
+    );
 
     // Validate state — должны быть в Recording.
     {
@@ -1627,6 +1635,10 @@ async fn process_one_attempt(
             } else {
                 inject_mode
             };
+            // `injected` reports an OS paste, not merely writing the
+            // transcript to clipboard. ClipboardOnly is a successful
+            // delivery path but must remain false in the API/event result.
+            let os_inject_requested = matches!(inject_mode, InjectMode::AutoPaste);
             let text_for_inject = text.clone();
             let inject_res = tokio::task::spawn_blocking(move || {
                 inject::inject_blocking(&text_for_inject, inject_mode, prev_hwnd)
@@ -1644,7 +1656,7 @@ async fn process_one_attempt(
             }
 
             let injected = match &inject_res {
-                Ok(Ok(())) => true,
+                Ok(Ok(())) => os_inject_requested,
                 Ok(Err(e)) => {
                     tracing::warn!(
                         %uuid,
@@ -2696,7 +2708,7 @@ mod tests {
 
         let outcome =
             process_one_attempt(&host, &uuid, "fake-key", 1.0, AttemptDelivery::Active).await;
-        assert_eq!(outcome, AttemptOutcome::Success { injected: true });
+        assert_eq!(outcome, AttemptOutcome::Success { injected: false });
 
         // pending удалён
         assert!(super::super::pending::list(&host.data_dir)
@@ -2739,7 +2751,7 @@ mod tests {
         let outcome =
             process_one_attempt(&host, &uuid, "fake-key", 1.0, AttemptDelivery::Background).await;
 
-        assert_eq!(outcome, AttemptOutcome::Success { injected: true });
+        assert_eq!(outcome, AttemptOutcome::Success { injected: false });
         assert!(super::super::pending::list(&host.data_dir)
             .unwrap()
             .is_empty());
@@ -3147,7 +3159,7 @@ mod tests {
 
     #[tokio::test]
     async fn start_recording_preloads_local_sidecar() {
-        let _guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        let _guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
         let td = tempfile::TempDir::new().unwrap();
         let mut cfg = test_cfg();
         cfg.provider = "local".into();
@@ -3180,7 +3192,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_local_models_clears_stale_missing_local_selection() {
-        let _guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        let _guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
         let td = tempfile::TempDir::new().unwrap();
         let mut cfg = test_cfg();
         cfg.provider = "local".into();
@@ -3332,11 +3344,9 @@ mod tests {
         );
     }
 
-    static ENV_DICTATION_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
     #[tokio::test]
     async fn mock_transcript_override_requires_test_mode() {
-        let _guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        let _guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
         std::env::remove_var("KOSMOS_TEST_MODE");
         std::env::remove_var("KOSMOS_HEADLESS");
         std::env::set_var(
@@ -3375,7 +3385,7 @@ mod tests {
 
     #[tokio::test]
     async fn submit_audio_mock_transcript_succeeds_without_api_key_and_cleans_up() {
-        let _guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        let _guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
         std::env::set_var("KOSMOS_TEST_MODE", "1");
         std::env::set_var("KOSMOS_TEST_DICTATION_TRANSCRIPT", "привет из теста");
 
@@ -3451,7 +3461,7 @@ mod tests {
 
     #[tokio::test]
     async fn submit_audio_groq_transcript_succeeds_with_test_api_key_and_cleans_up() {
-        let _guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        let _guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
         std::env::set_var("KOSMOS_TEST_MODE", "1");
         std::env::set_var("KOSMOS_TEST_GROQ_API_KEY", "test-groq-api-key");
         std::env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
@@ -3527,7 +3537,7 @@ mod tests {
         assert_eq!(transcript_evt["text"], "groq runtime transcript");
         assert_eq!(transcript_evt["language"], "ru");
         assert_eq!(transcript_evt["uuid"], resp.data["uuid"]);
-        assert_eq!(transcript_evt["injected"], true);
+        assert_eq!(transcript_evt["injected"], false);
         assert!(saw_stats, "submit_audio must emit dictation_stats_changed");
         assert!(saw_idle, "submit_audio must return the host to idle");
 
@@ -3555,7 +3565,7 @@ mod tests {
 
     #[tokio::test]
     async fn submit_audio_local_transcript_succeeds_without_api_key_and_cleans_up() {
-        let _guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        let _guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
         std::env::set_var("KOSMOS_TEST_MODE", "1");
         std::env::set_var(
             "KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT",
@@ -3614,7 +3624,7 @@ mod tests {
         let transcript_evt = saw_transcript.expect("missing dictation_transcript event");
         assert_eq!(transcript_evt["text"], "локальная расшифровка");
         assert_eq!(transcript_evt["language"], "ru");
-        assert_eq!(transcript_evt["injected"], true);
+        assert_eq!(transcript_evt["injected"], false);
 
         let pending = op_list_pending(&host).await;
         assert!(pending.ok);
@@ -3666,7 +3676,7 @@ mod tests {
 
     #[tokio::test]
     async fn submit_audio_local_sidecar_unavailable_keeps_pending() {
-        let _guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        let _guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
         let td = tempfile::TempDir::new().unwrap();
         let mut cfg = test_cfg();
         cfg.provider = "local".into();
@@ -3760,7 +3770,7 @@ mod tests {
     #[tokio::test]
     async fn update_config_persists_and_emits_event() {
         let _guard = ENV_DATA_DIR_LOCK.lock().await;
-        let _dictation_guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        let _dictation_guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
         let tmp = tempfile::TempDir::new().expect("tempdir");
         std::env::set_var("KOSMOS_DATA_DIR", tmp.path());
         let model_path = tmp.path().join("local-whisper.bin");
@@ -3818,7 +3828,7 @@ mod tests {
     #[tokio::test]
     async fn update_config_unloads_local_sidecar_when_provider_switches_away() {
         let _data_guard = ENV_DATA_DIR_LOCK.lock().await;
-        let _dictation_guard = ENV_DICTATION_TEST_LOCK.lock().await;
+        let _dictation_guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
         let tmp = tempfile::TempDir::new().expect("tempdir");
         std::env::set_var("KOSMOS_DATA_DIR", tmp.path());
 
@@ -3849,6 +3859,7 @@ mod tests {
         assert!(ops.iter().any(|op| op == "unload"), "ops: {ops:?}");
     }
 
+    #[cfg(windows)]
     #[tokio::test]
     async fn local_models_list_and_use_downloaded_model_updates_config() {
         let _guard = ENV_DATA_DIR_LOCK.lock().await;

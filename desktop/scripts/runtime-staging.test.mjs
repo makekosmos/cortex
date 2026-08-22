@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -14,6 +14,15 @@ const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const repoRoot = path.resolve(shellRoot, "../..");
 
 test("non-default Cargo runtime is the one mapped into the Windows package", () => {
+  assert.deepEqual(RUNTIME_BINARIES, [
+    "kepler-backend",
+    "ark-core-rpc",
+    "kepler-focus-helper",
+    "kepler-focus-svc",
+  ]);
+  assert.doesNotMatch(readFileSync(path.join(repoRoot, "Cargo.toml"), "utf8"), /kepler-watcher/);
+  assert.equal(existsSync(path.join(repoRoot, "platform/native-services/kepler-watcher")), false);
+
   const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-runtime-stage-"));
   try {
     const configured = path.join(root, "alternate-cargo-target");

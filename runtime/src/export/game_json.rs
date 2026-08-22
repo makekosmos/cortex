@@ -1,6 +1,6 @@
 // game_obj → JSON. Один файл games.json (pretty-printed массив объектов).
 
-use super::{ConvertResult, Converter};
+use super::{validate_envelopes, CanonicalEnvelope, ConvertResult, Converter};
 use ark_core::types::ArkObject;
 use std::fs;
 use std::path::Path;
@@ -15,7 +15,7 @@ impl Converter for GameJsonConverter {
         "Игры → JSON"
     }
     fn object_type(&self) -> &'static str {
-        "game_obj"
+        "com.kosmos.game"
     }
     fn default_format(&self) -> &'static str {
         "json"
@@ -37,6 +37,40 @@ impl Converter for GameJsonConverter {
         }
         result
     }
+
+    fn convert_canonical(
+        &self,
+        envelopes: &[CanonicalEnvelope],
+        _format: &str,
+        dest_dir: &Path,
+    ) -> ConvertResult {
+        let mut result = ConvertResult::default();
+        let envelopes = match validate_envelopes(envelopes) {
+            Ok(v) => v,
+            Err(e) => {
+                result.push_error(e);
+                return result;
+            }
+        };
+        let rows = envelopes.into_iter().filter(|e| e.object.deleted_at.is_none()).map(|e| {
+            let p = e.object.props_json;
+            serde_json::json!({ "id": e.object.id, "typeId": e.object.type_id, "typeVersion": e.object.type_version,
+                "title": e.object.title, "playStatus": p.get("playStatus"), "userRating": p.get("userRating"),
+                "genres": p.get("genres"), "platforms": p.get("platforms"), "released": p.get("released"),
+                "description": p.get("description"),
+                "cover": e.links.iter().find(|l| l.link_type == "cover-image").map(|l| l.target_object_id.clone()),
+                "background": e.links.iter().find(|l| l.link_type == "background-image").map(|l| l.target_object_id.clone()) })
+        }).collect::<Vec<_>>();
+        let path = dest_dir.join("games.json");
+        match serde_json::to_vec_pretty(&rows) {
+            Ok(bytes) => match fs::write(&path, &bytes) {
+                Ok(()) => result.push_file(path, bytes.len() as u64),
+                Err(e) => result.push_error(format!("write {path:?}: {e}")),
+            },
+            Err(e) => result.push_error(format!("serialize games: {e}")),
+        }
+        result
+    }
 }
 
 #[cfg(test)]
@@ -49,6 +83,7 @@ mod tests {
         ArkObject {
             id: id.to_string(),
             type_id: "game_obj".to_string(),
+            type_version: "0.0.0-legacy".to_string(),
             title: title.to_string(),
             content_json: json!({}),
             props_json: props,

@@ -6,7 +6,7 @@ const props = withDefaults(
   defineProps<{
     icon?: Component | null;
     /** Монохромный глиф (fill="white" в svg) поверх gradient'а, 18×18
-            в squircle 20×20. Для брендовых иконок extension'ов. */
+            в squircle 20×20. Для брендовых иконок. */
     svgSrc?: string | null;
     from?: string;
     to?: string;

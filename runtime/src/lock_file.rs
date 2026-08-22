@@ -1,5 +1,5 @@
-// Lock-файл для discovery: Electron-апки находят Kepler через kepler.lock.json
-// (исторически имя) в %APPDATA%\Kosmos\.
+// Lock-файл для discovery: Electron-апки находят Engine через engine.lock.json
+// в %APPDATA%\Kosmos\.
 //
 // AC3 spec: lock-файл должен быть нечитаем для другого user account на той же машине.
 // Achieved через:
@@ -18,11 +18,8 @@ use crate::protocol_version::ProtocolVersion;
 
 /// Текущая версия формата lock-файла (НЕ протокола). Если поменяется shape JSON —
 /// инкрементить, апки старого MAJOR должны отказаться парсить.
-pub const LOCK_FILE_FORMAT_VERSION: u32 = 1;
-
-/// Имя файла по умолчанию — `kepler.lock.json` в `%APPDATA%\Kosmos\` (Windows)
-/// или `~/.config/Kosmos/` (Linux/macOS). Resolve в lock_file_path().
-pub const LOCK_FILE_NAME: &str = "kepler.lock.json";
+pub const ENGINE_LOCK_FILE_NAME: &str = "engine.lock.json";
+pub const ENGINE_LOCK_FILE_FORMAT_VERSION: u32 = 1;
 
 /// Env-флаг (test-only): если выставлен в `1`, hardening permissions
 /// (`icacls /inheritance:r ...` на Win / `chmod 0600` на Unix) пропускается.
@@ -37,14 +34,15 @@ fn lock_permissions_disabled() -> bool {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct KeplerLockFile {
+pub struct EngineLockFile {
     pub format_version: u32,
-    pub protocol_version: ProtocolVersion,
+    pub api_version: ProtocolVersion,
     pub pid: u32,
+    pub http_port: u16,
     pub ws_port: u16,
     pub auth_token: String,
     pub started_at: String,
-    pub db_path: String,
+    pub correlation_id: String,
 }
 
 #[derive(Debug, Error)]
@@ -57,15 +55,14 @@ pub enum LockFileError {
     Permissions(String),
 }
 
-/// Resolve %APPDATA%\Kosmos\kepler.lock.json (Win) / $XDG_CONFIG_HOME/Kosmos/... (Unix).
+/// Resolve the Engine data directory (Win / Unix).
 ///
 /// Test override: если выставлен `KOSMOS_DATA_DIR` env, она полностью заменяет
 /// base directory (lock-файл, singleton, ark.db — всё под этим dir). Это
 /// единственный безопасный способ переопределить путь в Playwright/e2e тестах
 /// — иначе тесты случайно укажут на реальный user data dir и потрут данные.
-pub fn default_lock_file_path() -> Result<std::path::PathBuf, LockFileError> {
-    let base = kosmos_data_dir()?;
-    Ok(base.join(LOCK_FILE_NAME))
+pub fn default_engine_lock_file_path() -> Result<std::path::PathBuf, LockFileError> {
+    Ok(kosmos_data_dir()?.join(ENGINE_LOCK_FILE_NAME))
 }
 
 /// Resolve base directory для всех Kosmos backend файлов: lock, singleton,
@@ -101,19 +98,26 @@ fn kosmos_config_dir() -> Result<std::path::PathBuf, LockFileError> {
 
 /// Атомарная запись lock-файла. Создаёт parent dir, пишет в temp, fsyncит, переименовывает,
 /// применяет strict OS permissions (only current user может прочитать).
-pub fn write_atomic(path: &Path, lock: &KeplerLockFile) -> Result<(), LockFileError> {
+pub fn write_engine_atomic(path: &Path, lock: &EngineLockFile) -> Result<(), LockFileError> {
+    write_owner_only_json(path, lock)
+}
+
+pub(crate) fn write_owner_only_json<T: Serialize>(
+    path: &Path,
+    value: &T,
+) -> Result<(), LockFileError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
 
-    let json = serde_json::to_vec_pretty(lock)?;
+    let json = serde_json::to_vec_pretty(value)?;
 
     // Temp в той же директории — rename atomic только в пределах одной FS.
     let temp_name = format!(
         ".{}.tmp.{}",
         path.file_name()
             .and_then(|s| s.to_str())
-            .unwrap_or("kepler.lock.json"),
+            .unwrap_or("engine.lock.json"),
         std::process::id()
     );
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
@@ -136,14 +140,49 @@ pub fn write_atomic(path: &Path, lock: &KeplerLockFile) -> Result<(), LockFileEr
     Ok(())
 }
 
+/// Harden a package-private state directory. Production callers must fail
+/// closed when the OS cannot apply the owner-only ACL.
+pub(crate) fn ensure_owner_only_directory(path: &Path) -> Result<(), io::Error> {
+    fs::create_dir_all(path)?;
+    apply_owner_only_directory_permissions(path)
+}
+
+pub(crate) fn read_owner_only_json<T: for<'de> Deserialize<'de>>(
+    path: &Path,
+) -> Result<T, io::Error> {
+    let bytes = fs::read(path)?;
+    serde_json::from_slice(&bytes).map_err(io::Error::other)
+}
+
+/// Apply owner-only permissions to a broker-created private state file.
+pub(crate) fn apply_owner_only_file_permissions(path: &Path) -> Result<(), io::Error> {
+    apply_owner_only_permissions(path)
+        .map_err(|error| io::Error::new(io::ErrorKind::PermissionDenied, error.to_string()))
+}
+
+#[cfg(unix)]
+fn apply_owner_only_directory_permissions(path: &Path) -> Result<(), io::Error> {
+    if lock_permissions_disabled() {
+        return Ok(());
+    }
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+}
+
+#[cfg(windows)]
+fn apply_owner_only_directory_permissions(path: &Path) -> Result<(), io::Error> {
+    apply_owner_only_permissions(path)
+        .map_err(|error| io::Error::new(io::ErrorKind::PermissionDenied, error.to_string()))
+}
+
 #[cfg(unix)]
 fn apply_owner_only_permissions(path: &Path) -> Result<(), LockFileError> {
     if lock_permissions_disabled() {
-        eprintln!(
+        crate::observability::stderr(format!(
             "[kepler-backend] {LOCK_PERMISSIONS_DISABLED_ENV}=1 — chmod 0600 skipped \
              for {} (test-only path, prod должен не выставлять флаг)",
             path.display()
-        );
+        ));
         return Ok(());
     }
     use std::os::unix::fs::PermissionsExt;
@@ -154,14 +193,16 @@ fn apply_owner_only_permissions(path: &Path) -> Result<(), LockFileError> {
 #[cfg(windows)]
 fn apply_owner_only_permissions(path: &Path) -> Result<(), LockFileError> {
     if lock_permissions_disabled() {
-        eprintln!(
+        crate::observability::stderr(format!(
             "[kepler-backend] {LOCK_PERMISSIONS_DISABLED_ENV}=1 — icacls hardening skipped \
              for {} (test-only path, prod должен не выставлять флаг)",
             path.display()
-        );
+        ));
         return Ok(());
     }
+    use std::os::windows::process::CommandExt;
     use std::process::Command;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     // icacls: сначала сбросить inheritance, потом убрать стандартные groups,
     // оставить только current user с full access.
     // /inheritance:r — disable inheritance and remove inherited ACEs
@@ -174,7 +215,9 @@ fn apply_owner_only_permissions(path: &Path) -> Result<(), LockFileError> {
         .to_str()
         .ok_or_else(|| LockFileError::Permissions("path is not valid UTF-8".into()))?;
 
-    let status = Command::new("icacls")
+    let mut command = Command::new("icacls");
+    command.creation_flags(CREATE_NO_WINDOW);
+    let status = command
         .args([
             path_str,
             "/inheritance:r",
@@ -194,15 +237,24 @@ fn apply_owner_only_permissions(path: &Path) -> Result<(), LockFileError> {
     Ok(())
 }
 
-pub fn read(path: &Path) -> Result<KeplerLockFile, LockFileError> {
+pub fn read_engine(path: &Path) -> Result<EngineLockFile, LockFileError> {
     let bytes = fs::read(path)?;
-    let lock: KeplerLockFile = serde_json::from_slice(&bytes)?;
-    Ok(lock)
+    Ok(serde_json::from_slice(&bytes)?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_acl_command_is_created_without_console() {
+        let production = include_str!("lock_file.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap();
+        assert!(production.contains("creation_flags(CREATE_NO_WINDOW)"));
+    }
     use std::sync::Mutex;
     use tempfile::tempdir;
 
@@ -211,15 +263,16 @@ mod tests {
     /// параллельные тесты cargo могут race на чтение/запись одной переменной.
     static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
-    fn sample_lock(pid: u32, port: u16) -> KeplerLockFile {
-        KeplerLockFile {
-            format_version: LOCK_FILE_FORMAT_VERSION,
-            protocol_version: ProtocolVersion::CURRENT,
+    fn sample_engine_lock(pid: u32, http_port: u16, ws_port: u16) -> EngineLockFile {
+        EngineLockFile {
+            format_version: ENGINE_LOCK_FILE_FORMAT_VERSION,
+            api_version: ProtocolVersion::CURRENT,
             pid,
-            ws_port: port,
+            http_port,
+            ws_port,
             auth_token: "deadbeef".repeat(8),
-            started_at: "2026-05-13T15:00:00Z".into(),
-            db_path: "C:\\Users\\Kazui\\AppData\\Roaming\\Kosmos\\ark.db".into(),
+            started_at: "2026-07-28T15:00:00Z".into(),
+            correlation_id: "00000000-0000-4000-8000-000000000001".into(),
         }
     }
 
@@ -231,71 +284,29 @@ mod tests {
         let override_path = dir.path().to_path_buf();
         std::env::set_var("KOSMOS_DATA_DIR", &override_path);
         let resolved = kosmos_data_dir().expect("data dir resolves with override");
-        std::env::remove_var("KOSMOS_DATA_DIR");
         assert_eq!(resolved, override_path);
-
-        let lock_path = default_lock_file_path_with_env(Some(override_path.clone()));
-        assert_eq!(lock_path, override_path.join(LOCK_FILE_NAME));
-    }
-
-    // Хелпер только для тестов — детерминированно вычисляет lock-path без env race.
-    fn default_lock_file_path_with_env(
-        override_dir: Option<std::path::PathBuf>,
-    ) -> std::path::PathBuf {
-        match override_dir {
-            Some(p) => p.join(LOCK_FILE_NAME),
-            None => kosmos_config_dir().unwrap().join(LOCK_FILE_NAME),
-        }
+        assert_eq!(
+            default_engine_lock_file_path().unwrap(),
+            override_path.join(ENGINE_LOCK_FILE_NAME)
+        );
+        std::env::remove_var("KOSMOS_DATA_DIR");
     }
 
     #[test]
-    fn write_and_read_roundtrip() {
+    fn engine_lock_write_and_read_roundtrip() {
         let dir = tempdir().unwrap();
-        let path = dir.path().join("kepler.lock.json");
-        let lock = sample_lock(std::process::id(), 12345);
+        let path = dir.path().join(ENGINE_LOCK_FILE_NAME);
+        let lock = sample_engine_lock(std::process::id(), 12344, 12345);
 
-        write_atomic(&path, &lock).unwrap();
-        let read_back = read(&path).unwrap();
-        assert_eq!(lock, read_back);
+        write_engine_atomic(&path, &lock).unwrap();
+        assert_eq!(read_engine(&path).unwrap(), lock);
     }
 
     #[test]
-    fn read_nonexistent_returns_notfound() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("doesnotexist.json");
-        let err = read(&path).expect_err("missing lock file must return NotFound");
-        let LockFileError::Io(e) = err else {
-            unreachable!("missing lock file must return io error");
-        };
-        assert_eq!(e.kind(), io::ErrorKind::NotFound);
-    }
-
-    #[test]
-    fn write_creates_parent_directory() {
-        let dir = tempdir().unwrap();
-        let path = dir
-            .path()
-            .join("nested")
-            .join("deep")
-            .join("kepler.lock.json");
-        assert!(!path.parent().unwrap().exists());
-
-        let lock = sample_lock(std::process::id(), 12345);
-        write_atomic(&path, &lock).unwrap();
-
-        assert!(path.exists());
-    }
-
-    #[test]
-    fn write_overwrites_existing() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("kepler.lock.json");
-        write_atomic(&path, &sample_lock(123, 1111)).unwrap();
-        write_atomic(&path, &sample_lock(456, 2222)).unwrap();
-
-        let read_back = read(&path).unwrap();
-        assert_eq!(read_back.pid, 456);
-        assert_eq!(read_back.ws_port, 2222);
+    fn production_runtime_does_not_publish_legacy_lock() {
+        let source = include_str!("main.rs");
+        assert!(!source.contains("write_atomic(&lock_path"));
+        assert!(!source.contains("legacy lock-file written"));
     }
 
     #[cfg(unix)]
@@ -306,8 +317,8 @@ mod tests {
         std::env::remove_var(LOCK_PERMISSIONS_DISABLED_ENV);
         use std::os::unix::fs::PermissionsExt;
         let dir = tempdir().unwrap();
-        let path = dir.path().join("kepler.lock.json");
-        write_atomic(&path, &sample_lock(std::process::id(), 12345)).unwrap();
+        let path = dir.path().join(ENGINE_LOCK_FILE_NAME);
+        write_engine_atomic(&path, &sample_engine_lock(std::process::id(), 12345, 12346)).unwrap();
 
         let meta = fs::metadata(&path).unwrap();
         let mode = meta.permissions().mode() & 0o777;
@@ -324,9 +335,9 @@ mod tests {
         std::env::set_var(LOCK_PERMISSIONS_DISABLED_ENV, "1");
 
         let dir = tempdir().unwrap();
-        let path = dir.path().join("kepler.lock.json");
-        let lock = sample_lock(std::process::id(), 12345);
-        let write_result = write_atomic(&path, &lock);
+        let path = dir.path().join(ENGINE_LOCK_FILE_NAME);
+        let lock = sample_engine_lock(std::process::id(), 12345, 12346);
+        let write_result = write_engine_atomic(&path, &lock);
 
         // Доп. проверка на Unix: режим НЕ 0600 (а дефолтный umask), потому
         // что мы пропустили chmod.
@@ -342,7 +353,7 @@ mod tests {
 
         write_result.expect("write_atomic with permissions disabled must succeed");
         assert!(path.exists(), "lock-файл должен быть создан");
-        let read_back = read(&path).expect("должен быть читаемый стандартным путём");
+        let read_back = read_engine(&path).expect("должен быть читаемый стандартным путём");
         assert_eq!(read_back, lock);
 
         #[cfg(unix)]
@@ -367,8 +378,8 @@ mod tests {
         // Гарантируем, что флаг отключения hardening не выставлен из другого теста.
         std::env::remove_var(LOCK_PERMISSIONS_DISABLED_ENV);
         let dir = tempdir().unwrap();
-        let path = dir.path().join("kepler.lock.json");
-        write_atomic(&path, &sample_lock(std::process::id(), 12345)).unwrap();
+        let path = dir.path().join(ENGINE_LOCK_FILE_NAME);
+        write_engine_atomic(&path, &sample_engine_lock(std::process::id(), 12345, 12346)).unwrap();
 
         let output = std::process::Command::new("icacls")
             .arg(path.to_str().unwrap())

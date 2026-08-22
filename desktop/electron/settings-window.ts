@@ -17,28 +17,18 @@ import {
   resolveWindowMaterial,
 } from "./window-effects";
 import { buildStorageSummary } from "./settings-storage-summary";
-import {
-  isAutostartAllowed,
-  isAutostartEnabled,
-  setAutostartEnabled,
-} from "./settings-autostart-controller";
 export {
   DEFAULT_HOTKEY,
   getStoredHotkey,
-  isFocusServiceAutoInstallDeclined,
   isTrayIconEnabled,
-  isUsageTrackerEnabled,
   normalizeHotkeyAccelerator,
-  setFocusServiceAutoInstallDeclined,
 } from "./settings-store";
 import {
   DEFAULT_HOTKEY,
   getLauncherStateTtlMinutes,
   getStoredHotkey,
   isTrayIconEnabled,
-  isUsageTrackerEnabled,
   normalizeHotkeyAccelerator,
-  readSettings,
   setStoredHotkey,
   setTrayIconEnabled,
   writeSettings,
@@ -143,14 +133,6 @@ ipcMain.handle("kepler:settings:close", () => {
   }
 });
 
-ipcMain.handle("kepler:settings:autostart:get", () => isAutostartEnabled());
-
-ipcMain.handle("kepler:settings:autostart:allowed", () => isAutostartAllowed());
-
-ipcMain.handle("kepler:settings:autostart:set", async (_e, enabled: boolean) => {
-  await setAutostartEnabled(!!enabled);
-});
-
 ipcMain.handle("kepler:settings:tray-icon:get", () => isTrayIconEnabled());
 
 ipcMain.handle("kepler:settings:tray-icon:set", (_e, enabled: boolean) => {
@@ -197,21 +179,6 @@ let setTrayVisibilityCallback: ((enabled: boolean) => void) | null = null;
 export function setTrayVisibilityController(cb: (enabled: boolean) => void): void {
   setTrayVisibilityCallback = cb;
 }
-
-ipcMain.handle(
-  "kepler:settings:developer-mode:get",
-  () => process.env.KEPLER_DEV === "1" || !!readSettings().developerMode,
-);
-
-ipcMain.handle("kepler:settings:developer-mode:set", (_e, enabled: boolean) => {
-  writeSettings({ developerMode: !!enabled });
-});
-
-ipcMain.handle("kepler:settings:usage-tracker:get", () => isUsageTrackerEnabled());
-
-ipcMain.handle("kepler:settings:usage-tracker:set", (_e, enabled: boolean) => {
-  writeSettings({ usageTrackerEnabled: !!enabled });
-});
 
 ipcMain.handle("kepler:settings:launcher-state-ttl:get", () => getLauncherStateTtlMinutes());
 

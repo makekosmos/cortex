@@ -1,0 +1,33 @@
+{
+  "name": "@kosmos/desktop-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "e2e": "bunx playwright test --config playwright.config.ts"
+  },
+  "dependencies": {
+    "@kosmos/ark": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.2",
+    "electron": "^42.2.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.3",
+    "vite-plugin-electron": "1.0.0-beta.2"
+  },
+  "build": {
+    "appId": "com.kosmos.package-host",
+    "productName": "Kosmos Package Host",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ]
+  }
+}

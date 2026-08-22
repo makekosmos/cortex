@@ -1,6 +1,6 @@
 // tag_obj → JSON. Один файл tags.json (pretty-printed массив объектов).
 
-use super::{ConvertResult, Converter};
+use super::{validate_envelopes, CanonicalEnvelope, ConvertResult, Converter};
 use ark_core::types::ArkObject;
 use std::fs;
 use std::path::Path;
@@ -15,7 +15,7 @@ impl Converter for TagJsonConverter {
         "Теги → JSON"
     }
     fn object_type(&self) -> &'static str {
-        "tag_obj"
+        "com.kosmos.tag"
     }
     fn default_format(&self) -> &'static str {
         "json"
@@ -37,6 +37,36 @@ impl Converter for TagJsonConverter {
         }
         result
     }
+
+    fn convert_canonical(
+        &self,
+        envelopes: &[CanonicalEnvelope],
+        _format: &str,
+        dest_dir: &Path,
+    ) -> ConvertResult {
+        let mut result = ConvertResult::default();
+        let envelopes = match validate_envelopes(envelopes) {
+            Ok(v) => v,
+            Err(e) => {
+                result.push_error(e);
+                return result;
+            }
+        };
+        let rows = envelopes.into_iter().filter(|e| e.object.deleted_at.is_none()).map(|e| serde_json::json!({
+            "id": e.object.id, "typeId": e.object.type_id, "typeVersion": e.object.type_version,
+            "name": e.object.title, "color": e.object.props_json.get("color").cloned().unwrap_or(serde_json::Value::Null),
+            "parent": e.links.iter().find(|l| l.link_type == "parent").map(|l| l.target_object_id.clone()),
+        })).collect::<Vec<_>>();
+        let path = dest_dir.join("tags.json");
+        match serde_json::to_vec_pretty(&rows) {
+            Ok(bytes) => match fs::write(&path, &bytes) {
+                Ok(()) => result.push_file(path, bytes.len() as u64),
+                Err(e) => result.push_error(format!("write {path:?}: {e}")),
+            },
+            Err(e) => result.push_error(format!("serialize tags: {e}")),
+        }
+        result
+    }
 }
 
 #[cfg(test)]
@@ -49,6 +79,7 @@ mod tests {
         ArkObject {
             id: id.to_string(),
             type_id: "tag_obj".to_string(),
+            type_version: "0.0.0-legacy".to_string(),
             title: title.to_string(),
             content_json: json!({}),
             props_json: props,

@@ -1,11 +1,8 @@
 <script setup lang="ts">
-// AppCommandsTab — единый таб для четырёх «приложений» (notes/tasks/
-// time-tracker/games).
+// AppCommandsTab — Shell command visibility for the Focus timer route.
 
 import { Check } from "@lucide/vue";
 import AdvancedPageLayout, { type IntroDescriptor } from "../components/AdvancedPageLayout.vue";
-import LegacyRow from "../components/LegacyRow.vue";
-import LegacyToggle from "../components/LegacyToggle.vue";
 import type { AppSettingsTab } from "../navigation";
 
 interface AppCommandSetting {
@@ -21,30 +18,16 @@ defineProps<{
   intro: IntroDescriptor | null;
   activeTab: AppSettingsTab;
   commands: AppCommandSetting[];
-  usageTracker: boolean;
   isCommandVisible: (id: string) => boolean;
 }>();
 
 defineEmits<{
-  toggleUsageTracker: [e: Event];
   toggleCommandVisibility: [id: string, e: Event];
 }>();
 </script>
 
 <template>
   <AdvancedPageLayout :intro="intro">
-    <div v-if="activeTab === 'time-tracker'" class="rows command-settings-list time-settings-list">
-      <LegacyRow
-        title="Трекать активные приложения"
-        hint="Записывает в ARK какое окно сейчас активно. Изменение применится после перезапуска Kepler."
-      >
-        <LegacyToggle
-          :checked="usageTracker"
-          @change="(e: Event) => $emit('toggleUsageTracker', e)"
-        />
-      </LegacyRow>
-    </div>
-
     <div>
       <h2 class="advanced-section-title">Команды</h2>
       <div class="rows command-settings-list">
@@ -86,10 +69,6 @@ defineEmits<{
 <style scoped>
 .command-settings-list {
   width: 100%;
-}
-
-.time-settings-list {
-  margin-top: 16px;
 }
 
 .command-row-label {

@@ -92,4 +92,19 @@ test.describe("kepler-shell smoke", () => {
     // Закрытие — единственная проверка; await не должен висеть/throw'ать.
     await app.close();
   });
+
+  test("AC4: headless startup preserves historical clipboard JSON", async () => {
+    const filePath = path.join(dataDir, "clipboard-history.json");
+    const seed = Buffer.from('{"sensitive":"keep me"}\n', "utf8");
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(filePath, seed);
+    const app = await launchKepler();
+    try {
+      await app.evaluate(({ app: electronApp }) => electronApp.getName());
+    } finally {
+      await app.close();
+      expect(fs.readFileSync(filePath).equals(seed)).toBe(true);
+      fs.rmSync(filePath, { force: true });
+    }
+  });
 });

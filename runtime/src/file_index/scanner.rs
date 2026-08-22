@@ -1,6 +1,8 @@
 use super::{FileIndexError, IndexedFile, NtfsStatus, Result, ScanOptions};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -531,8 +533,10 @@ pub fn default_roots() -> Vec<PathBuf> {
 
 #[cfg(windows)]
 pub fn open_file(path: &str) -> Result<()> {
-    Command::new("cmd")
-        .args(["/C", "start", "", path])
+    let mut command = Command::new("cmd");
+    command.args(["/C", "start", "", path]);
+    command.creation_flags(0x08000000);
+    command
         .spawn()
         .map(|_| ())
         .map_err(|e| FileIndexError::Open(e.to_string()))

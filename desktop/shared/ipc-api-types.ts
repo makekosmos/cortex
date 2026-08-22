@@ -2,68 +2,21 @@ import type { KeplerApiShellServices } from "./ipc-api-shell-services";
 // Контракт renderer API для `window.kepler` (см. preload.ts).
 
 import type {
-  CommandActionRequest,
-  CommandActionResult,
-  CommandFeedbackEvent,
-  CommandFilePickerRequest,
-  CommandFilePickerResult,
-  CommandSnapshot,
-} from "./command-ipc";
-import type {
-  BackendStatus,
-  ClipboardHistoryItem,
-  ClipboardHistorySettings,
-  ClipboardHistorySettingsPatch,
-  ClipboardHistoryStats,
   CommandRecord,
   ExportConverterInfo,
   ExportResult,
-  FileIndexSettings,
-  FileIndexSettingsPatch,
-  FileSearchDiagnosticsReport,
-  FileSearchRootEstimate,
   FocusBlocklist,
   FocusSessionSnapshot,
   FocusSessionTask,
-  InstalledExtensionInfo,
-  MarketplaceCatalog,
   SearchResult,
   StartFocusSessionInput,
 } from "./ipc-types";
 
 /**
- * Manifest preview данные для install dialog'а (.kext / dir).
- * Соответствует `KextManifestPreview` из `platform/desktop/electron/extension-installer.ts`.
  */
-interface ExtensionInstallPreview {
-  manifest: {
-    id: string;
-    name: string;
-    version?: string;
-    description?: string;
-    author?: string;
-    permissions?: string[];
-    keplerApiVersion?: string;
-    kind?: "vue" | "static" | "native";
-    icon?: string;
-    native?: {
-      executable: string;
-      devExecutable?: string;
-      cargoPackage?: string;
-      args?: string[];
-      singleInstance?: boolean;
-    };
-  };
-  iconDataUri: string | null;
-  apiCompatError: string | null;
-  isUpgrade: boolean;
-  currentVersion: string | null;
-}
-
 export interface KeplerApi extends KeplerApiShellServices {
   /** Состояние kepler-backend подпроцесса. */
   backend: {
-    status(): Promise<BackendStatus>;
     /** Перезапустить backend (если упал). */
     restart(): Promise<void>;
     /** Subscribe на event «ArkClient handshake done, готов принимать запросы».
@@ -140,24 +93,6 @@ export interface KeplerApi extends KeplerApiShellServices {
     onUpdated(listener: () => void): () => void;
   };
 
-  /** Host-local clipboard history. Хранится в instance-scoped JSON storage
-      и не синхронизируется через ARK. */
-  clipboardHistory: {
-    list(): Promise<ClipboardHistoryItem[]>;
-    copy(id: string): Promise<boolean>;
-    open(id: string): Promise<boolean>;
-    togglePin(id: string): Promise<boolean>;
-    delete(id: string): Promise<boolean>;
-    clear(): Promise<void>;
-    clearAll(): Promise<void>;
-    settings(): Promise<ClipboardHistorySettings>;
-    updateSettings(patch: ClipboardHistorySettingsPatch): Promise<ClipboardHistorySettings>;
-    stats(): Promise<ClipboardHistoryStats>;
-    hide(): Promise<void>;
-    onOpenShell(listener: () => void): () => void;
-    onUpdated(listener: () => void): () => void;
-  };
-
   /** Shell-owned Focus Session command page. Main process owns pomodoro,
       ARK time_entry and blocklist side effects; renderer only sends intents. */
   focusSession: {
@@ -180,45 +115,9 @@ export interface KeplerApi extends KeplerApiShellServices {
     snoozeApp(appId: string): Promise<void>;
   };
 
-  /** Command host snapshots. Renderer-only read model for
-      `kind:"command-extension"` view commands. */
-  command: {
-    snapshot(sessionId: string): Promise<CommandSnapshot | null>;
-    action(sessionId: string, action: CommandActionRequest): Promise<CommandActionResult>;
-    pickFiles(
-      sessionId: string,
-      request: CommandFilePickerRequest,
-    ): Promise<CommandFilePickerResult>;
-    onSnapshotUpdated(sessionId: string, listener: (snapshot: CommandSnapshot) => void): () => void;
-    onFeedback(sessionId: string, listener: (event: CommandFeedbackEvent) => void): () => void;
-  };
-
-  /** Управление установкой / список / revert user-extensions. */
-  extension: {
-    /** Прочитать manifest preview из .kext или dir без extract'а. */
-    installPreview(sourcePath: string): Promise<ExtensionInstallPreview>;
-    /** Выполнить установку .kext / dir в `extensions/<id>/` с backup'ом. */
-    installDo(sourcePath: string): Promise<ExtensionInstallPreview>;
-    /** Список installed user-extensions с metadata. */
-    installedList(): Promise<InstalledExtensionInfo[]>;
-    /** Восстановить extension из backup'а. timestamp опционален — без него
-        берётся самый свежий. Возвращает true если revert удался. */
-    revert(id: string, timestamp?: string): Promise<boolean>;
-    /** Список ISO-timestamp'ов доступных backup'ов для id (свежие первыми). */
-    backupsList(id: string): Promise<string[]>;
-    /** Удалить user copy extension'а. */
-    uninstall(id: string): Promise<boolean>;
-    /** Marketplace: получить catalog.json из makekosmos/extensions. Cache 1h в
-        main; `force=true` обходит cache. */
-    catalogFetch(force?: boolean): Promise<MarketplaceCatalog>;
-    /** Скачать .kext по URL и установить через existing installFromPath.
-        Validate sha256 если передан. */
-    installFromUrl(url: string, expectedSha256?: string | null): Promise<ExtensionInstallPreview>;
-  };
-
   /** Универсальный per-type data export. Phase 7. Конвертеры регистрируются
       в kepler-backend (`platform/runtime/src/export/`). Shell-only —
-      extensions не получают доступ к export API. */
+      external clients не получают доступ к export API. */
   export: {
     /** Список зарегистрированных converters (метадата для UI). */
     list(): Promise<ExportConverterInfo[]>;
@@ -229,19 +128,8 @@ export interface KeplerApi extends KeplerApiShellServices {
     pickDir(): Promise<string | null>;
   };
 
-  /** Host-local File Search index settings. Storage lives in file-index.db,
-      not ARK sync. */
-  fileSearch: {
-    settingsGet(): Promise<FileIndexSettings>;
-    settingsSet(patch: FileIndexSettingsPatch): Promise<void>;
-    diagnostics(): Promise<FileSearchDiagnosticsReport>;
-    estimateRoot(path: string): Promise<FileSearchRootEstimate>;
-    scopeAdd(path: string): Promise<void>;
-    scopeRemove(path: string): Promise<void>;
-    ignoreAdd(pattern: string): Promise<void>;
-    ignoreRemove(pattern: string): Promise<void>;
-    rescan(): Promise<void>;
-    clearCache(): Promise<void>;
-    pickScope(): Promise<string | null>;
+  /** Shell-owned настройки индекса; сам индекс остаётся в Engine. */
+  fileIndex: {
+    pickRoot(): Promise<string | null>;
   };
 }

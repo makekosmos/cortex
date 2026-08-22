@@ -1,0 +1,102 @@
+import { contextBridge, ipcRenderer } from "electron";
+import type { DictationProgressEvent, ManagerApi } from "../src/manager-api";
+const invoke = (channel: string, input?: unknown) => ipcRenderer.invoke(channel, input);
+let dictationListener: ((event: DictationProgressEvent) => void) | null = null;
+ipcRenderer.on("manager:dictation-event", (_event, value: DictationProgressEvent) => {
+  dictationListener?.(value);
+});
+const api: ManagerApi = {
+  getAppVersion: () => invoke("manager.getAppVersion"),
+  getDesktopUpdateState: () => invoke("manager.getDesktopUpdateState"),
+  checkDesktopUpdates: () => invoke("manager.checkDesktopUpdates"),
+  installDesktopUpdate: () => invoke("manager.installDesktopUpdate"),
+  getHealth: () => invoke("manager.getHealth"),
+  getInfo: () => invoke("manager.getInfo"),
+  getDataSummary: () => invoke("manager.getDataSummary"),
+  listObjectTypes: () => invoke("manager.listObjectTypes"),
+  listObjects: (v) => invoke("manager.listObjects", v),
+  searchObjects: (v) => invoke("manager.searchObjects", v),
+  getSyncSnapshot: () => invoke("manager.getSyncSnapshot"),
+  getPairingCode: () => invoke("manager.getPairingCode"),
+  connectWithPairingCode: (v) => invoke("manager.connectWithPairingCode", v),
+  getIntegrations: () => invoke("manager.getIntegrations"),
+  loginLeetCode: () => invoke("manager.loginLeetCode"),
+  updateIntegrationSettings: (v) => invoke("manager.updateIntegrationSettings", v),
+  setIntegrationCredential: (v) => invoke("manager.setIntegrationCredential", v),
+  clearIntegrationCredential: (v) => invoke("manager.clearIntegrationCredential", v),
+  syncIntegrationNow: (v) => invoke("manager.syncIntegrationNow", v),
+  disconnectPeer: (v) => invoke("manager.disconnectPeer", v),
+  getPackages: (v) => invoke("manager.getPackages", v),
+  getStoreCatalog: () => invoke("manager.getStoreCatalog"),
+  refreshStoreCatalog: () => invoke("manager.refreshStoreCatalog"),
+  openStoreExternal: (v) => invoke("manager.openStoreExternal", v),
+  getPackageTrustStatus: () => invoke("manager.getPackageTrustStatus"),
+  refreshPackageCatalog: () => invoke("manager.refreshPackageCatalog"),
+  installPackage: (v) => invoke("manager.installPackage", v),
+  openPackage: (v) => invoke("manager.openPackage", v),
+  setPackageEnabled: (v) => invoke("manager.setPackageEnabled", v),
+  uninstallPackage: (v) => invoke("manager.uninstallPackage", v),
+  getBridgeConfig: (v) => invoke("manager.getBridgeConfig", v),
+  setBridgeConfig: (v) => invoke("manager.setBridgeConfig", v),
+  getDiagnosticsSnapshot: () => invoke("manager.getDiagnosticsSnapshot"),
+  getDiagnosticLogTail: (v) => invoke("manager.getDiagnosticLogTail", v),
+  listCrashReports: () => invoke("manager.listCrashReports"),
+  clearCrashReports: () => invoke("manager.clearCrashReports"),
+  openCrashReportsFolder: () => invoke("manager.openCrashReportsFolder"),
+  openLogsFolder: () => invoke("manager.openLogsFolder"),
+  saveSupportBundle: () => invoke("manager.saveSupportBundle"),
+  getAutostart: () => invoke("manager.getAutostart"),
+  setAutostart: (v) => invoke("manager.setAutostart", v),
+  getEngineSettings: () => invoke("manager.getEngineSettings"),
+  setWarmTimeout: (v) => invoke("manager.setWarmTimeout", v),
+  setUsageTracker: (v) => invoke("manager.setUsageTracker", v),
+  getDictationConfig: () => invoke("manager.getDictationConfig"),
+  updateDictationConfig: (v) => invoke("manager.updateDictationConfig", v),
+  getDictationStats: () => invoke("manager.getDictationStats"),
+  beginDictationHotkeyCapture: () => invoke("manager.beginDictationHotkeyCapture"),
+  endDictationHotkeyCapture: () => invoke("manager.endDictationHotkeyCapture"),
+  verifyDictationApiKey: (v) => invoke("manager.verifyDictationApiKey", v),
+  setDictationApiKey: (v) => invoke("manager.setDictationApiKey", v),
+  clearDictationApiKey: () => invoke("manager.clearDictationApiKey"),
+  testDictationConnectivity: () => invoke("manager.testDictationConnectivity"),
+  listDictationLocalModels: () => invoke("manager.listDictationLocalModels"),
+  downloadDictationLocalModel: (v) => invoke("manager.downloadDictationLocalModel", v),
+  useDictationLocalModel: (v) => invoke("manager.useDictationLocalModel", v),
+  deleteDictationLocalModel: (v) => invoke("manager.deleteDictationLocalModel", v),
+  listDictationPending: () => invoke("manager.listDictationPending"),
+  retryDictation: (v) => invoke("manager.retryDictation", v),
+  discardDictation: (v) => invoke("manager.discardDictation", v),
+  retryAllDictation: () => invoke("manager.retryAllDictation"),
+  discardAllDictation: () => invoke("manager.discardAllDictation"),
+  onDictationEvent: (listener) => {
+    if (!dictationListener) void invoke("manager.subscribeDictationEvents");
+    dictationListener = listener;
+    return () => {
+      if (dictationListener === listener) {
+        dictationListener = null;
+        void invoke("manager.unsubscribeDictationEvents");
+      }
+    };
+  },
+  getFocusBlocklists: () => invoke("manager.getFocusBlocklists"),
+  getFocusActiveState: () => invoke("manager.getFocusActiveState"),
+  upsertFocusBlocklist: (v) => invoke("manager.upsertFocusBlocklist", v),
+  deleteFocusBlocklist: (v) => invoke("manager.deleteFocusBlocklist", v),
+  getFocusServiceStatus: () => invoke("manager.getFocusServiceStatus"),
+  pingFocusService: () => invoke("manager.pingFocusService"),
+  installFocusService: () => invoke("manager.installFocusService"),
+  uninstallFocusService: () => invoke("manager.uninstallFocusService"),
+  startFocusService: () => invoke("manager.startFocusService"),
+  stopFocusService: () => invoke("manager.stopFocusService"),
+  getFileIndexSettings: () => invoke("manager.getFileIndexSettings"),
+  setFileIndexSettings: (v) => invoke("manager.setFileIndexSettings", v),
+  getFileIndexDiagnostics: () => invoke("manager.getFileIndexDiagnostics"),
+  addFileIndexRoot: (v) => invoke("manager.addFileIndexRoot", v),
+  removeFileIndexRoot: (v) => invoke("manager.removeFileIndexRoot", v),
+  addFileIndexIgnore: (v) => invoke("manager.addFileIndexIgnore", v),
+  removeFileIndexIgnore: (v) => invoke("manager.removeFileIndexIgnore", v),
+  rescanFileIndex: () => invoke("manager.rescanFileIndex"),
+  clearFileIndexCache: () => invoke("manager.clearFileIndexCache"),
+  pickFileIndexRoot: () => invoke("manager.pickFileIndexRoot"),
+};
+contextBridge.exposeInMainWorld("kosmosManager", api);

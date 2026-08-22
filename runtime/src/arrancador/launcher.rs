@@ -1,6 +1,6 @@
 // Game launcher.
 //
-// Резолвит ArkObject (game_obj) → способ запуска:
+// Резолвит typed Game DTO → способ запуска:
 //   * source == "steam" + source_app_id → `steam://rungameid/<id>` через ShellExecute
 //     (на Windows — `cmd /c start <url>`, на других платформах — TODO).
 //   * exe_path задан → spawn напрямую с cwd = install_dir.
@@ -10,8 +10,16 @@
 // и сам отметит usage_session по имени exe. Прямая game_id → pid привязка —
 // TODO follow-up (требует registry shared между tracker'ом и launcher'ом).
 
-use ark_core::types::ArkObject;
+use ark_core::canonical_types::game::GameLocalState;
 use serde::Serialize;
+
+pub type LocalGameState = GameLocalState;
+
+#[derive(Debug, Clone)]
+pub struct LaunchGame {
+    pub id: String,
+    pub title: String,
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,11 +31,11 @@ pub struct LaunchResult {
 
 #[derive(Debug, thiserror::Error)]
 pub enum LaunchError {
-    #[error("game_obj missing 'source' in propsJson")]
+    #[error("local launcher state missing 'source'")]
     MissingSource,
-    #[error("steam source missing source_app_id in propsJson")]
+    #[error("local launcher state missing source_app_id")]
     MissingSteamAppId,
-    #[error("non-steam source missing exe_path in propsJson")]
+    #[error("local launcher state missing exe_path")]
     MissingExePath,
     #[error("spawn failed: {0}")]
     SpawnFailed(#[from] std::io::Error),
@@ -42,18 +50,16 @@ type LaunchCommand = (
 
 /// Резолвит команду без spawn'а. Возвращает (program, args, cwd_optional, method).
 /// Чистая функция — тестируется без процесс-spawn'а.
-pub fn resolve_launch_command(game: &ArkObject) -> Result<LaunchCommand, LaunchError> {
-    let props = &game.props_json;
-    let source = props
-        .get("source")
-        .and_then(|v| v.as_str())
-        .ok_or(LaunchError::MissingSource)?;
+pub fn resolve_launch_command(
+    _game: &LaunchGame,
+    local: &LocalGameState,
+) -> Result<LaunchCommand, LaunchError> {
+    let source = local.source.as_deref().ok_or(LaunchError::MissingSource)?;
 
     if source == "steam" {
-        let app_id = props
-            .get("source_app_id")
-            .and_then(|v| v.as_str())
-            .or_else(|| props.get("sourceAppId").and_then(|v| v.as_str()))
+        let app_id = local
+            .source_app_id
+            .as_deref()
             .ok_or(LaunchError::MissingSteamAppId)?;
         let url = format!("steam://rungameid/{app_id}");
         #[cfg(windows)]
@@ -72,21 +78,13 @@ pub fn resolve_launch_command(game: &ArkObject) -> Result<LaunchCommand, LaunchE
     }
 
     // Direct exe path.
-    let exe_path = props
-        .get("exe_path")
-        .and_then(|v| v.as_str())
-        .or_else(|| props.get("exePath").and_then(|v| v.as_str()))
-        .ok_or(LaunchError::MissingExePath)?;
-    let cwd = props
-        .get("install_dir")
-        .and_then(|v| v.as_str())
-        .or_else(|| props.get("installDir").and_then(|v| v.as_str()))
-        .map(std::path::PathBuf::from);
-    Ok((exe_path.to_string(), Vec::new(), cwd, "direct_exe"))
+    let exe_path = local.exe_path.as_ref().ok_or(LaunchError::MissingExePath)?;
+    let cwd = local.install_dir.as_ref().map(std::path::PathBuf::from);
+    Ok((exe_path.clone(), Vec::new(), cwd, "direct_exe"))
 }
 
-pub fn launch(game: &ArkObject) -> Result<LaunchResult, LaunchError> {
-    let (program, args, cwd, method) = resolve_launch_command(game)?;
+pub fn launch(game: &LaunchGame, local: &LocalGameState) -> Result<LaunchResult, LaunchError> {
+    let (program, args, cwd, method) = resolve_launch_command(game, local)?;
     let mut cmd = std::process::Command::new(&program);
     cmd.args(&args);
     if let Some(dir) = cwd.as_ref() {
@@ -107,26 +105,22 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn make_game(props: serde_json::Value) -> ArkObject {
-        ArkObject {
+    fn make_game(_props: serde_json::Value) -> LaunchGame {
+        LaunchGame {
             id: "g1".into(),
-            type_id: "game_obj".into(),
             title: "Test".into(),
-            content_json: json!({}),
-            props_json: props,
-            created_at: "2026-05-18T00:00:00Z".into(),
-            updated_at: "2026-05-18T00:00:00Z".into(),
-            deleted_at: None,
         }
     }
 
     #[test]
     fn launcher_steam_url_format() {
-        let game = make_game(json!({
-            "source": "steam",
-            "source_app_id": "570",
-        }));
-        let (program, args, _cwd, method) = resolve_launch_command(&game).unwrap();
+        let game = make_game(json!({}));
+        let local = LocalGameState {
+            source: Some("steam".into()),
+            source_app_id: Some("570".into()),
+            ..Default::default()
+        };
+        let (program, args, _cwd, method) = resolve_launch_command(&game, &local).unwrap();
         assert_eq!(method, "steam_url");
         let joined = format!("{program} {}", args.join(" "));
         assert!(
@@ -137,22 +131,26 @@ mod tests {
 
     #[test]
     fn launcher_accepts_camelcase_app_id() {
-        let game = make_game(json!({
-            "source": "steam",
-            "sourceAppId": "238320",
-        }));
-        let (_program, args, _cwd, _) = resolve_launch_command(&game).unwrap();
+        let game = make_game(json!({}));
+        let local = LocalGameState {
+            source: Some("steam".into()),
+            source_app_id: Some("238320".into()),
+            ..Default::default()
+        };
+        let (_program, args, _cwd, _) = resolve_launch_command(&game, &local).unwrap();
         assert!(args.iter().any(|a| a.contains("238320")));
     }
 
     #[test]
     fn launcher_direct_exe_resolves() {
-        let game = make_game(json!({
-            "source": "epic",
-            "exe_path": "C:\\Games\\Hades\\Hades.exe",
-            "install_dir": "C:\\Games\\Hades",
-        }));
-        let (program, args, cwd, method) = resolve_launch_command(&game).unwrap();
+        let game = make_game(json!({}));
+        let local = LocalGameState {
+            source: Some("epic".into()),
+            exe_path: Some("C:\\Games\\Hades\\Hades.exe".into()),
+            install_dir: Some("C:\\Games\\Hades".into()),
+            ..Default::default()
+        };
+        let (program, args, cwd, method) = resolve_launch_command(&game, &local).unwrap();
         assert_eq!(method, "direct_exe");
         assert!(program.contains("Hades.exe"));
         assert!(args.is_empty());
@@ -162,26 +160,35 @@ mod tests {
     #[test]
     fn launcher_missing_source_errors() {
         let game = make_game(json!({}));
+        let local = LocalGameState::default();
         assert!(matches!(
-            resolve_launch_command(&game),
+            resolve_launch_command(&game, &local),
             Err(LaunchError::MissingSource)
         ));
     }
 
     #[test]
     fn launcher_steam_without_app_id_errors() {
-        let game = make_game(json!({ "source": "steam" }));
+        let game = make_game(json!({}));
+        let local = LocalGameState {
+            source: Some("steam".into()),
+            ..Default::default()
+        };
         assert!(matches!(
-            resolve_launch_command(&game),
+            resolve_launch_command(&game, &local),
             Err(LaunchError::MissingSteamAppId)
         ));
     }
 
     #[test]
     fn launcher_non_steam_without_exe_errors() {
-        let game = make_game(json!({ "source": "epic" }));
+        let game = make_game(json!({}));
+        let local = LocalGameState {
+            source: Some("epic".into()),
+            ..Default::default()
+        };
         assert!(matches!(
-            resolve_launch_command(&game),
+            resolve_launch_command(&game, &local),
             Err(LaunchError::MissingExePath)
         ));
     }

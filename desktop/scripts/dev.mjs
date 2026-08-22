@@ -1,20 +1,11 @@
-// Orchestrator для `bun run dev`: параллельно поднимает:
-//   1) Vite dev server'ы всех Vue extension'ов (через dev-extensions.mjs) —
-//      даёт HMR в Eden / Delphi / Arrancador / Akasha.
-//   2) Vite renderer для shell (KEPLER_DEV=1 — Electron подхватывает
-//      hot reload главного окна + extension dev mode загружается с
-//      http://localhost:<devPort>/ при включённом Settings → Developer mode).
-//
-// Backend и one-shot build extension'ов должны быть выполнены до запуска
-// этого скрипта (см. package.json `dev`). SIGINT/SIGTERM пробрасывается
-// children, чтобы Ctrl+C корректно убивал всё дерево.
+// Orchestrator для `bun run dev`: поднимает Vite renderer и Electron shell.
+// Backend должен быть собран до запуска этого скрипта (см. package.json `dev`).
 
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { listRepoExtensionEntries } from "./repo-extension-roots.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const shellRoot = path.resolve(__dirname, "..");
@@ -71,26 +62,6 @@ if (!Number.isInteger(shellDevPort) || shellDevPort < 1 || shellDevPort > 65535)
 
 const children = [];
 
-function readExtensionDevPorts() {
-  const requestedIds =
-    process.env.KEPLER_DEV_EXTENSIONS === "1"
-      ? null
-      : new Set(
-          (process.env.KEPLER_DEV_EXTENSIONS || "eden")
-            .split(",")
-            .map((id) => id.trim())
-            .filter(Boolean),
-        );
-  return listRepoExtensionEntries(repoRoot)
-    .filter((e) => !requestedIds || requestedIds.has(e.id) || requestedIds.has(e.folder))
-    .map((e) => {
-      const { manifest } = e;
-      if (manifest.kind !== "vue" || !manifest.devPort) return null;
-      return { label: e.id, port: Number(manifest.devPort) };
-    })
-    .filter(Boolean);
-}
-
 function isPortAvailable(port, host = "127.0.0.1") {
   return new Promise((resolve) => {
     const server = net.createServer();
@@ -103,7 +74,7 @@ function isPortAvailable(port, host = "127.0.0.1") {
 }
 
 async function assertDevPortsAvailable() {
-  const checks = [{ label: "shell", port: shellDevPort }, ...readExtensionDevPorts()];
+  const checks = [{ label: "shell", port: shellDevPort }];
   const labelsByPort = new Map();
   for (const check of checks) {
     const previous = labelsByPort.get(check.port);
@@ -211,33 +182,7 @@ function shutdown(signal) {
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
-// 1) Vite dev server'ы для extension'ов (HMR live-reload).
-//
-//    Akasha default-on: это маленький reader extension без editor autosave
-//    footgun'а, и в активной разработке он должен hot-reload'иться из обычного
-//    `bun run --cwd platform/desktop dev`.
-//
-//    Все extensions opt-in через `KEPLER_DEV_EXTENSIONS=1`. Это сохраняет
-//    прежнюю защиту Eden: HMR трогает Editor.vue mid-typing, useEditor создаёт
-//    новый editor instance, и напечатанный пользователем но не успевший в
-//    autosave (debounce 800ms) контент может потеряться.
-//
-//    Когда сервера подняты — extension-host автоматически использует их через
-//    TCP probe (см. resolveExtensionSource в extension-host.ts). Без живого
-//    порта — fallback на one-shot dist build.
-if (process.env.KEPLER_DEV_EXTENSIONS === "1") {
-  startChild("dev-extensions", "node", ["scripts/dev-extensions.mjs"]);
-} else if (process.env.KEPLER_DEV_EXTENSIONS) {
-  startChild("dev-extensions", "node", [
-    "scripts/dev-extensions.mjs",
-    "--only",
-    process.env.KEPLER_DEV_EXTENSIONS,
-  ]);
-} else {
-  startChild("dev-extensions:eden", "node", ["scripts/dev-extensions.mjs", "--only", "eden"]);
-}
-
-// 2) Shell renderer Vite + Electron (KEPLER_DEV=1 → main process знает что
+// Shell renderer Vite + Electron (KEPLER_DEV=1 → main process знает что
 //    мы в dev-сессии, не загружает production-mode пути).
 startChild(
   "kepler-shell",

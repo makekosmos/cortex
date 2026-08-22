@@ -77,6 +77,10 @@ function isHeadless(): boolean {
   return process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
 }
 
+function isPillRendererEnabled(): boolean {
+  return !isHeadless() || process.env.KOSMOS_TEST_DICTATION_PILL === "1";
+}
+
 function createPill(): BrowserWindow {
   // Позиционируем над cursor monitor'ом (более интуитивно чем primary
   // если у юзера multi-monitor setup).
@@ -129,6 +133,18 @@ function createPill(): BrowserWindow {
   });
 
   win.setAlwaysOnTop(true, "screen-saver", 1);
+
+  // Subscribe before navigation: loading the packaged local file can finish
+  // before a listener added afterwards, leaving the command invocation waiting
+  // on pillReady forever.
+  pillReady = new Promise<void>((resolve) => {
+    win.webContents.once("did-finish-load", () => {
+      // Один tick после load — Vue компонент успевает выполнить onMounted
+      // (там подписка на onCommand).
+      setTimeout(resolve, 50);
+    });
+  });
+
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) {
     void win.loadURL(`${devUrl}#dictation-pill`);
@@ -141,17 +157,6 @@ function createPill(): BrowserWindow {
   win.on("closed", () => {
     pillWindow = null;
     pillReady = null;
-  });
-
-  // Renderer должен иметь shot подписаться на `kepler:dictation:command` ДО
-  // того как мы пошлём первую команду, иначе start теряется и виджет висит
-  // в idle. Ждём did-finish-load + один tick (Vue mount).
-  pillReady = new Promise<void>((resolve) => {
-    win.webContents.once("did-finish-load", () => {
-      // Один tick после load — Vue компонент успевает выполнить onMounted
-      // (там подписка на onCommand).
-      setTimeout(resolve, 50);
-    });
   });
 
   return win;
@@ -175,11 +180,12 @@ async function sendPillCommand(cmd: { kind: "start" | "stop" | "cancel" }): Prom
     }
   }
   if (win.isDestroyed()) return;
-  console.log(`[dictation-pill] -> renderer: ${cmd.kind}`);
+  console.info("[dictation-pill] command sent", { kind: cmd.kind });
   win.webContents.send("kepler:dictation:command", cmd);
 }
 
 function showPill(): void {
+  if (!isPillRendererEnabled()) return;
   const win = ensureWindow();
   if (isHeadless()) return;
   // Re-assert the native topmost level on every show. The pill window is kept
@@ -216,6 +222,7 @@ async function invokeDictationCommand(): Promise<void> {
 
 /** Главный entry-point из hotkey'я и UI "Тест" кнопки. */
 export async function toggleDictation(): Promise<void> {
+  console.info("[dictation-pill] hotkey command received", { recording: isRecording });
   if (toggleInFlight) {
     console.warn("[dictation-pill] toggleDictation re-entry ignored");
     return;
@@ -238,6 +245,7 @@ export async function toggleDictation(): Promise<void> {
       try {
         await callBackend("dictation.start_recording");
         started = true;
+        console.info("[dictation-pill] backend recording started");
       } catch (e) {
         const msg = String(e);
         if (msg.includes("state must be idle")) {
@@ -263,6 +271,7 @@ export async function toggleDictation(): Promise<void> {
       await sendPillCommand({ kind: "start" });
     } else {
       isRecording = false;
+      console.info("[dictation-pill] backend recording stopping");
       // Renderer сам отправит submit_audio и далее pillFinished.
       await sendPillCommand({ kind: "stop" });
     }

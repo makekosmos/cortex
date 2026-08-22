@@ -1,7 +1,7 @@
 // time_entry_obj → CSV. Один файл time-entries.csv.
 // Колонки: id, title, started_at, ended_at, duration_minutes, task_id, source
 
-use super::{csv_safe_cell, ConvertResult, Converter};
+use super::{csv_safe_cell, validate_envelopes, CanonicalEnvelope, ConvertResult, Converter};
 use ark_core::types::ArkObject;
 use std::path::Path;
 
@@ -15,7 +15,7 @@ impl Converter for TimeEntryCsvConverter {
         "Тайм-трекинг → CSV"
     }
     fn object_type(&self) -> &'static str {
-        "time_entry_obj"
+        "com.kosmos.time-entry"
     }
     fn default_format(&self) -> &'static str {
         "csv"
@@ -84,6 +84,80 @@ impl Converter for TimeEntryCsvConverter {
         }
         result
     }
+
+    fn convert_canonical(
+        &self,
+        envelopes: &[CanonicalEnvelope],
+        _format: &str,
+        dest_dir: &Path,
+    ) -> ConvertResult {
+        let mut result = ConvertResult::default();
+        let envelopes = match validate_envelopes(envelopes) {
+            Ok(v) => v,
+            Err(e) => {
+                result.push_error(e);
+                return result;
+            }
+        };
+        let path = dest_dir.join("time-entries.csv");
+        let mut w = match csv::WriterBuilder::new().from_path(&path) {
+            Ok(w) => w,
+            Err(e) => {
+                result.push_error(e.to_string());
+                return result;
+            }
+        };
+        let _ = w.write_record([
+            "id",
+            "title",
+            "startedAt",
+            "endedAt",
+            "duration",
+            "source",
+            "taskId",
+            "projectId",
+        ]);
+        for e in envelopes
+            .into_iter()
+            .filter(|e| e.object.deleted_at.is_none())
+        {
+            let p = e.object.props_json;
+            let task = e
+                .links
+                .iter()
+                .find(|l| l.link_type == "for-task")
+                .map(|l| l.target_object_id.clone())
+                .unwrap_or_default();
+            let row = [
+                e.object.id,
+                e.object.title,
+                p.get("startedAt")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_owned(),
+                p.get("endedAt")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_owned(),
+                String::new(),
+                p.get("source")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("manual")
+                    .to_owned(),
+                task,
+                String::new(),
+            ];
+            if let Err(err) = w.write_record(row) {
+                result.push_error(err.to_string());
+            }
+        }
+        let _ = w.flush();
+        drop(w);
+        if let Ok(m) = std::fs::metadata(&path) {
+            result.push_file(path, m.len());
+        }
+        result
+    }
 }
 
 #[cfg(test)]
@@ -96,6 +170,7 @@ mod tests {
         ArkObject {
             id: id.to_string(),
             type_id: "time_entry_obj".to_string(),
+            type_version: "0.0.0-legacy".to_string(),
             title: title.to_string(),
             content_json: json!({}),
             props_json: props,

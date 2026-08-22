@@ -13,7 +13,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, Mutex};
+use std::sync::Mutex;
+
+use tokio::sync::broadcast;
 
 /// Identifier of a WS connection within this process. Assigned by `ws_server`
 /// at accept-time (monotonic u64), used as the registration key.
@@ -67,7 +69,10 @@ impl CommandBus {
     /// client, entries are deduped by `id` — last-write-wins (existing entries
     /// with same id are replaced).
     pub async fn register(&self, client_id: ClientId, manifests: Vec<CommandManifest>) {
-        let mut guard = self.registrations.lock().await;
+        let mut guard = self
+            .registrations
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let entry = guard.entry(client_id).or_default();
         for m in manifests {
             if let Some(pos) = entry.iter().position(|e| e.id == m.id) {
@@ -81,7 +86,10 @@ impl CommandBus {
     /// Remove the listed `ids` from `client_id`'s registration list. Ids not
     /// owned by the client are ignored silently.
     pub async fn unregister(&self, client_id: ClientId, ids: &[String]) {
-        let mut guard = self.registrations.lock().await;
+        let mut guard = self
+            .registrations
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(entry) = guard.get_mut(&client_id) {
             entry.retain(|m| !ids.iter().any(|i| i == &m.id));
             if entry.is_empty() {
@@ -91,16 +99,45 @@ impl CommandBus {
     }
 
     /// Drop every command owned by `client_id`. Used on WS disconnect.
-    pub async fn unregister_all(&self, client_id: ClientId) {
-        let mut guard = self.registrations.lock().await;
-        guard.remove(&client_id);
+    pub async fn unregister_all(&self, client_id: ClientId) -> bool {
+        let mut guard = self
+            .registrations
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard.remove(&client_id).is_some()
+    }
+
+    /// Synchronous ownership removal used by bounded operation cleanup. The
+    /// registry lock is not async, so cleanup cannot be detached or cancelled
+    /// while ownership is still present.
+    pub fn unregister_all_sync(&self, client_id: ClientId) -> Option<Vec<CommandManifest>> {
+        let mut guard = self
+            .registrations
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard.remove(&client_id).map(|_| {
+            guard
+                .values()
+                .flat_map(|entry| entry.iter().cloned())
+                .collect()
+        })
+    }
+
+    pub fn registration_count_sync(&self) -> usize {
+        self.registrations
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .len()
     }
 
     /// Flat snapshot of every currently-registered command across all clients.
     /// Order is not stable across clients (HashMap iteration), but per-client
     /// insertion order is preserved.
     pub async fn list(&self) -> Vec<CommandManifest> {
-        let guard = self.registrations.lock().await;
+        let guard = self
+            .registrations
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut out = Vec::new();
         for entry in guard.values() {
             out.extend(entry.iter().cloned());
@@ -117,6 +154,10 @@ impl CommandBus {
     /// there are no subscribers are ignored (normal during startup).
     pub async fn broadcast_changed(&self) {
         let snapshot = self.list().await;
+        self.broadcast_changed_snapshot(snapshot);
+    }
+
+    pub fn broadcast_changed_snapshot(&self, snapshot: Vec<CommandManifest>) {
         let _ = self.events_tx.send(CommandBusEvent::Changed(snapshot));
     }
 
@@ -183,6 +224,18 @@ mod tests {
         let all = bus.list().await;
         assert_eq!(all.len(), 1, "only client 2's commands must remain");
         assert_eq!(all[0].id, "delphi.open");
+    }
+
+    #[tokio::test]
+    async fn unregister_all_sync_returns_snapshot_for_bounded_cleanup() {
+        let bus = CommandBus::new();
+        bus.register(1, vec![manifest("eden.open", "Open Eden", "open")])
+            .await;
+
+        let snapshot = bus.unregister_all_sync(1).expect("client had commands");
+
+        assert!(snapshot.is_empty());
+        assert!(bus.list().await.is_empty());
     }
 
     #[tokio::test]
