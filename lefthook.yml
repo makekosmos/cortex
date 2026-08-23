@@ -15,6 +15,10 @@ pre-commit:
 pre-push:
   parallel: false
   commands:
+    source-size-tests:
+      run: bun run test:source-size
+    backend-clippy:
+      run: cargo clippy -p kepler-backend --all-targets -- -D warnings
     backend-tests:
       run: bun run test:backend
     runtime-staging:

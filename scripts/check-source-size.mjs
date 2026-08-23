@@ -10,6 +10,7 @@ const ROOT = rootIndex === -1
   ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
   : path.resolve(process.argv[rootIndex + 1]);
 const SOURCE_LIMIT = 300;
+const SOURCE_EXTENSIONS = new Set([".cjs", ".js", ".jsx", ".mjs", ".rs", ".ts", ".tsx", ".vue"]);
 const GRANDFATHERED = new Set([
   // Static debt baseline. Additions here require an intentional review.
   "desktop/e2e/dictation.spec.ts",
@@ -21,6 +22,8 @@ const GRANDFATHERED = new Set([
   "desktop/electron/focus-session.ts",
   "desktop/electron/instance.ts",
   "desktop/electron/main-launcher.ts",
+  "desktop/scripts/candidate-installed-smoke.mjs",
+  "desktop/scripts/verify-release-channel.mjs",
   "desktop/src/body/BodyView.vue",
   "desktop/src/coder/CoderView.vue",
   "desktop/src/coder/useCoderStats.ts",
@@ -86,7 +89,6 @@ const GRANDFATHERED = new Set([
   "runtime/src/dictation/network.rs",
   "runtime/src/dictation/pending.rs",
   "runtime/src/dictation/retry.rs",
-  "runtime/src/engine_api/handlers.rs",
   "runtime/src/engine_api/lifecycle.rs",
   "runtime/src/engine_api/server.rs",
   "runtime/src/engine_api/tests_core.rs",
@@ -96,14 +98,12 @@ const GRANDFATHERED = new Set([
   "runtime/src/engine_supervisor.rs",
   "runtime/src/export/note_md.rs",
   "runtime/src/export/task_md.rs",
-  "runtime/src/file_index/mod.rs",
   "runtime/src/file_index/scanner.rs",
   "runtime/src/file_index/store.rs",
   "runtime/src/focus.rs",
   "runtime/src/grant_authority.rs",
   "runtime/src/handle_relative_fs.rs",
   "runtime/src/integration-codewars.rs",
-  "runtime/src/integrations.rs",
   "runtime/src/lock_file.rs",
   "runtime/src/main.rs",
   "runtime/src/manager_api.rs",
@@ -115,7 +115,6 @@ const GRANDFATHERED = new Set([
   "runtime/src/package_store.rs",
   "runtime/src/package_trust.rs",
   "runtime/src/package_worker_broker.rs",
-  "runtime/src/package_worker_process.rs",
   "runtime/src/package_worker_protocol.rs",
   "runtime/src/package_worker_supervisor.rs",
   "runtime/src/package_worker_supervisor_core.rs",
@@ -151,7 +150,7 @@ async function collect(dir, files = []) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (entry.isDirectory() && !IGNORED.has(entry.name)) {
       await collect(path.join(dir, entry.name), files);
-    } else if (entry.isFile() && [".js", ".jsx", ".ts", ".tsx", ".vue", ".rs"].includes(path.extname(entry.name))) {
+    } else if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name))) {
       files.push(path.join(dir, entry.name));
     }
   }

@@ -1,5 +1,4 @@
 #[allow(clippy::panic)]
-#[allow(clippy::panic)]
 pub(crate) mod tests {
     use super::*;
     use crate::{

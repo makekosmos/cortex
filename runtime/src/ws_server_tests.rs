@@ -8,8 +8,8 @@ mod tests {
         // Regression: 2026-08-19. Base64 WAV used to exceed the 1 MiB WS limit
         // and tungstenite closed the whole Engine connection before dispatch.
         const PCM_BYTES_PER_SECOND: usize = 16_000 * 2;
-        const FIVE_MINUTE_WAV_BASE64_BYTES: usize = ((44 + PCM_BYTES_PER_SECOND * 300) + 2) / 3 * 4;
-        assert!(MAX_WS_MESSAGE_BYTES >= FIVE_MINUTE_WAV_BASE64_BYTES + 1024);
+        const FIVE_MINUTE_WAV_BASE64_BYTES: usize = (44 + PCM_BYTES_PER_SECOND * 300).div_ceil(3) * 4;
+        const { assert!(MAX_WS_MESSAGE_BYTES >= FIVE_MINUTE_WAV_BASE64_BYTES + 1024) };
     }
     use crate::app_index::{App, AppKind};
     use tokio::io::AsyncReadExt;
