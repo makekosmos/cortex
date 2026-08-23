@@ -17,8 +17,13 @@ import {
   resolveAvailableDictationVoiceModelValue,
   type DictationLocalModelsSnapshot,
 } from "./dictation-model-selection";
-
-type PillStatus = "idle" | "recording" | "transcribing" | "waiting" | "error";
+import {
+  drawWaveformCanvas,
+  idleBars,
+  WAVEFORM_SENSITIVITY,
+  WAVE_BAR_COUNT,
+  type PillStatus,
+} from "./dictation-pill-waveform";
 
 const status = ref<PillStatus>("idle");
 const errorText = ref<string>("");
@@ -29,15 +34,6 @@ const elapsedSec = ref<number>(0);
 const DEFAULT_DICTATION_HOTKEY = "Ctrl+Shift+;";
 const dictationHotkey = ref<string>(DEFAULT_DICTATION_HOTKEY);
 const injectMode = ref<"auto_paste" | "clipboard_only">("auto_paste");
-const WAVEFORM_HISTORY_SIZE = 120;
-const WAVEFORM_BAR_WIDTH_PX = 3;
-const WAVEFORM_BAR_GAP_PX = 2;
-const WAVEFORM_BAR_RADIUS_PX = 8;
-const WAVEFORM_BASE_BAR_HEIGHT_PX = 4;
-const WAVEFORM_FADE_WIDTH_PX = 48;
-const WAVEFORM_SENSITIVITY = 0.8;
-const WAVEFORM_RECORDING_COLOR = "#71717a";
-const WAVE_BAR_COUNT = WAVEFORM_HISTORY_SIZE;
 const levelBars = ref<number[]>(Array.from({ length: WAVE_BAR_COUNT }, () => 0));
 
 // Audio capture lifecycle:
@@ -83,7 +79,6 @@ const hasDictationBridge = () => Boolean(window.kepler?.dictation);
 const isPreview =
   new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("preview") === "1" ||
   !hasDictationBridge();
-const idleBars = Array.from({ length: WAVE_BAR_COUNT }, () => 0);
 const previewBars = Array.from({ length: WAVE_BAR_COUNT }, (_, i) => {
   const centered = (i - WAVE_BAR_COUNT / 2) / (WAVE_BAR_COUNT / 2);
   const voiceShape = 0.34 + Math.sin(i * 0.39) * 0.2 + Math.cos(i * 0.17) * 0.12;
@@ -147,14 +142,12 @@ function stopProcessingWave(): void {
   processingTransitionProgress = 0;
   requestWaveformDraw();
 }
-
 function formatElapsed(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(total / 60);
   const rest = total % 60;
   return `${minutes}:${rest.toString().padStart(2, "0")}`;
 }
-
 const dictationHotkeyParts = computed(() => splitHotkey(dictationHotkey.value));
 
 function hotkeyPartLabel(value: string): string {
@@ -167,7 +160,6 @@ function splitHotkey(value: string): string[] {
     .map((part) => part.trim())
     .filter(Boolean);
 }
-
 async function loadDictationConfig(): Promise<void> {
   try {
     const cfg = (await window.kepler.ark.request("dictation.get_config", {})) as {
@@ -181,7 +173,6 @@ async function loadDictationConfig(): Promise<void> {
     /* keep last known backend value */
   }
 }
-
 async function ensureReadyDictationModel(): Promise<boolean> {
   try {
     const cfgResp = (await window.kepler.ark.request("dictation.get_config", {})) as {
@@ -235,111 +226,6 @@ function waveformBarsForStatus(nextStatus: PillStatus, preview = false): number[
     return processingBars.value;
   }
   return idleBars;
-}
-
-function waveformColorForStatus(nextStatus: PillStatus): string {
-  if (nextStatus === "waiting") return "#f5a524";
-  if (nextStatus === "error") return "#ff453a";
-  return WAVEFORM_RECORDING_COLOR;
-}
-
-function sampleWaveformValue(values: number[], index: number, count: number): number {
-  if (values.length === 0) return 0;
-  const sourceIndex = Math.round((index / Math.max(1, count - 1)) * (values.length - 1));
-  return Math.max(0, Math.min(1, values[sourceIndex] ?? 0));
-}
-
-function drawRoundedBar(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): void {
-  const radius = Math.min(WAVEFORM_BAR_RADIUS_PX, width / 2, height / 2);
-  if ("roundRect" in ctx) {
-    ctx.beginPath();
-    ctx.roundRect(x, y, width, height, radius);
-    ctx.fill();
-    return;
-  }
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  ctx.lineTo(x + radius, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.fill();
-}
-
-function drawWaveformCanvas(
-  canvas: HTMLCanvasElement,
-  values: number[],
-  nextStatus: PillStatus,
-): void {
-  const rect = canvas.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) return;
-
-  const dpr = window.devicePixelRatio || 1;
-  const targetWidth = Math.max(1, Math.floor(rect.width * dpr));
-  const targetHeight = Math.max(1, Math.floor(rect.height * dpr));
-  if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-  }
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, rect.width, rect.height);
-
-  const step = WAVEFORM_BAR_WIDTH_PX + WAVEFORM_BAR_GAP_PX;
-  const barCount = Math.max(1, Math.floor(rect.width / step));
-  const totalWidth = barCount * WAVEFORM_BAR_WIDTH_PX + (barCount - 1) * WAVEFORM_BAR_GAP_PX;
-  const startX = (rect.width - totalWidth) / 2;
-  const centerY = rect.height / 2;
-
-  if (nextStatus === "idle") {
-    ctx.strokeStyle = waveformColorForStatus(nextStatus);
-    ctx.globalAlpha = 0.22;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([2, 4]);
-    ctx.beginPath();
-    ctx.moveTo(0, centerY);
-    ctx.lineTo(rect.width, centerY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  } else {
-    ctx.fillStyle = waveformColorForStatus(nextStatus);
-    for (let i = 0; i < barCount; i++) {
-      const value = sampleWaveformValue(values, i, barCount);
-      const barHeight = Math.max(
-        WAVEFORM_BASE_BAR_HEIGHT_PX,
-        value * rect.height * WAVEFORM_SENSITIVITY,
-      );
-      const x = startX + i * step;
-      const y = centerY - barHeight / 2;
-      ctx.globalAlpha = 0.4 + value * 0.6;
-      drawRoundedBar(ctx, x, y, WAVEFORM_BAR_WIDTH_PX, barHeight);
-    }
-  }
-  ctx.globalAlpha = 1;
-
-  const fade = Math.min(0.3, WAVEFORM_FADE_WIDTH_PX / Math.max(1, rect.width));
-  ctx.globalCompositeOperation = "destination-out";
-  const gradient = ctx.createLinearGradient(0, 0, rect.width, 0);
-  gradient.addColorStop(0, "rgba(255,255,255,1)");
-  gradient.addColorStop(fade, "rgba(255,255,255,0)");
-  gradient.addColorStop(1 - fade, "rgba(255,255,255,0)");
-  gradient.addColorStop(1, "rgba(255,255,255,1)");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, rect.width, rect.height);
-  ctx.globalCompositeOperation = "source-over";
 }
 
 function drawWaveforms(): void {

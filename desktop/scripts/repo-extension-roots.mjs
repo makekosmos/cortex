@@ -4,11 +4,19 @@ import path from "node:path";
 // Source-tree roots for first-party and experimental app packages.
 // User-installed runtime extensions still live in <dataDir>/extensions.
 const REPO_EXTENSION_ROOT_NAMES = ["products", "extensions"];
+const SIBLING_EXTENSION_REPOS = ["memoria", "agenda", "arcadia", "dictation"];
 
 function repoExtensionRoots(repoRoot) {
-  return REPO_EXTENSION_ROOT_NAMES.map((name) => ({ name, dir: path.join(repoRoot, name) })).filter(
-    (root) => existsSync(root.dir),
-  );
+  const monorepoRoots = REPO_EXTENSION_ROOT_NAMES.map((name) => ({
+    name,
+    dir: path.join(repoRoot, name),
+  }));
+  const siblingRoots = SIBLING_EXTENSION_REPOS.map((name) => ({
+    name,
+    dir: path.join(repoRoot, name),
+    standalone: true,
+  }));
+  return [...monorepoRoots, ...siblingRoots].filter((root) => existsSync(root.dir));
 }
 
 function readManifestSafe(dir) {
@@ -25,6 +33,14 @@ export function listRepoExtensionEntries(repoRoot) {
   const out = [];
   const seen = new Set();
   for (const root of repoExtensionRoots(repoRoot)) {
+    if (root.standalone) {
+      const manifest = readManifestSafe(root.dir);
+      if (manifest?.id && typeof manifest.id === "string" && !seen.has(manifest.id)) {
+        seen.add(manifest.id);
+        out.push({ id: manifest.id, folder: root.name, dir: root.dir, rootName: root.name, manifest });
+      }
+      continue;
+    }
     for (const entry of readdirSync(root.dir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       const dir = path.join(root.dir, entry.name);

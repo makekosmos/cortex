@@ -2,7 +2,9 @@
   "name": "@kosmos/shell",
   "private": true,
   "scripts": {
-    "check:layout": "node scripts/check-layout.mjs"
+    "check:layout": "node scripts/check-layout.mjs",
+    "check:source-size": "node scripts/check-source-size.mjs",
+    "test:backend": "node runtime/scripts/test-lib.mjs"
   },
   "packageManager": "bun@1.3.14"
 }

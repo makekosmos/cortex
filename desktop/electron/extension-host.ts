@@ -45,6 +45,7 @@ import {
 import { registerExtensionMarkdownIpc } from "./extension-markdown-ipc";
 import { registerExtensionUserDataIpc } from "./extension-user-data-ipc";
 import { registerExtensionInstallerIpc } from "./extension-installer-ipc";
+import { registerMarketplaceIpc, startPeriodicCatalogCheck } from "./extension-marketplace";
 import { clearExtensionWindowIpcState, registerExtensionWindowIpc } from "./extension-window-ipc";
 import { registerExtensionArkIpc } from "./extension-ark-ipc";
 import { registerExtensionImageColorIpc } from "./extension-image-color-ipc";
@@ -378,3 +379,5 @@ registerExtensionUserDataIpc({
 // uninstall — удалить user copy.
 
 registerExtensionInstallerIpc();
+registerMarketplaceIpc();
+startPeriodicCatalogCheck();

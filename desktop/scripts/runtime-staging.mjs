@@ -25,3 +25,11 @@ export function stageRuntimeBinaries(releaseDir, stageDir, platform = process.pl
     copyFileSync(source, path.join(stageDir, `${binary}${suffix}`));
   }
 }
+
+export function stageRuntimeBinary(binary, releaseDir, stageDir, platform = process.platform) {
+  const suffix = platform === "win32" ? ".exe" : "";
+  mkdirSync(stageDir, { recursive: true });
+  const source = path.join(releaseDir, `${binary}${suffix}`);
+  if (!existsSync(source)) throw new Error(`freshly built binary missing: ${source}`);
+  copyFileSync(source, path.join(stageDir, `${binary}${suffix}`));
+}

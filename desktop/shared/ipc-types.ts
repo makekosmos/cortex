@@ -35,6 +35,127 @@ export interface ExportResult {
   errors: string[];
 }
 
+export type NtfsStatus = "unknown" | "disabled" | "active" | "fallback" | "unavailable";
+
+export interface FileIndexSettings {
+  enabled: boolean;
+  exclude_noisy_folders: boolean;
+  roots: string[];
+  ignore_patterns: string[];
+  respect_gitignore: boolean;
+  include_hidden: boolean;
+  ntfs_accelerated: boolean;
+  scan_in_progress: boolean;
+  scan_progress: {
+    phase: string;
+    root: string | null;
+    roots_done: number;
+    roots_total: number;
+    files_seen: number;
+    files_indexed: number;
+    message: string;
+  };
+  ntfs_status: NtfsStatus;
+}
+
+export interface FileIndexSettingsPatch {
+  enabled?: boolean;
+  exclude_noisy_folders?: boolean;
+  respect_gitignore?: boolean;
+  include_hidden?: boolean;
+  ntfs_accelerated?: boolean;
+}
+
+type FileSearchRiskLevel = "ok" | "warning" | "danger";
+
+interface FileIndexLastScanSnapshot {
+  finished_at_unix_ms: number;
+  duration_ms: number;
+  indexed_file_count: number;
+  roots_count: number;
+  exclude_noisy_folders: boolean;
+  respect_gitignore: boolean;
+  include_hidden: boolean;
+  ntfs_accelerated: boolean;
+}
+
+interface FileIndexDiagnosticsSnapshot {
+  db_size_bytes: number;
+  wal_size_bytes: number;
+  total_size_bytes: number;
+  scan_in_progress: boolean;
+  scan_progress: FileIndexSettings["scan_progress"];
+  roots: string[];
+  roots_count: number;
+  files_count: number;
+  risk_level: FileSearchRiskLevel;
+  risk_reasons: string[];
+  last_scan_ms: number;
+  last_scan: FileIndexLastScanSnapshot | null;
+  search_count: number;
+  like_search_count: number;
+  query_len_histogram: Record<string, number>;
+}
+
+export interface FileSearchRootEstimate {
+  path: string;
+  scanned_dirs: number;
+  scanned_files: number;
+  ignored_or_skipped_files: number;
+  indexable_text_files_count: number;
+  indexable_text_bytes: number;
+  metadata_only_media_files_count: number;
+  metadata_only_other_files_count: number;
+  estimated_indexed_entries_count: number;
+  estimated_index_size_bytes: number;
+  truncated: boolean;
+  risk_level: FileSearchRiskLevel;
+  risk_reasons: string[];
+  limitations: string[];
+}
+
+export interface FileSearchRootWarning {
+  path: string;
+  risk_level: Exclude<FileSearchRiskLevel, "ok">;
+  risk_reasons: string[];
+}
+
+export type FileSearchDiagnosticsReport = FileIndexDiagnosticsSnapshot;
+
+export interface InstalledExtensionInfo {
+  id: string;
+  appId: string | null;
+  name: string;
+  kind: string | null;
+  version: string | null;
+  description: string | null;
+  author: string | null;
+  iconDataUri: string | null;
+  backupCount: number;
+  backupTimestamps: string[];
+  source: "installed" | "dev";
+}
+
+export interface MarketplaceExtension {
+  id: string;
+  appId: string | null;
+  name: string;
+  description: string;
+  author: string | null;
+  version: string;
+  keplerApiVersion: string;
+  iconUrl: string | null;
+  downloadUrl: string;
+  sha256: string | null;
+  size: number | null;
+}
+
+export interface MarketplaceCatalog {
+  schemaVersion: number;
+  updatedAt: string;
+  extensions: MarketplaceExtension[];
+}
+
 /** Команда в launcher'е — единица того что пользователь может вызвать. */
 export interface CommandRecord {
   id: string;

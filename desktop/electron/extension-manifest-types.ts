@@ -32,6 +32,8 @@ interface KextManifestCommand {
 
 export interface ExtensionManifest {
   id: string;
+  /** Immutable application identity used by update registries. */
+  appId?: string;
   name: string;
   /**
    * Собственная версия extension'а (semver `MAJOR.MINOR.PATCH`). Показывается

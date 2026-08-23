@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, test } from "bun:test";
-import { ensureEngineRunning } from "@kosmos/ark";
+import { ensureKeplerRunning } from "@kosmos/ark";
 
 const tempDirs: string[] = [];
 afterEach(() => {
@@ -15,51 +15,45 @@ function createDataDir(): string {
   return dir;
 }
 
-function engineLock(pid = process.pid): Record<string, unknown> {
+function keplerLock(pid = process.pid): Record<string, unknown> {
   return {
     format_version: 1,
-    api_version: { major: 1, minor: 0, patch: 0 },
+    protocol_version: { major: 1, minor: 0, patch: 0 },
     pid,
-    http_port: 4317,
     ws_port: 4318,
     auth_token: "b".repeat(64),
     started_at: "2026-07-29T00:00:00Z",
-    correlation_id: "123e4567-e89b-12d3-a456-426614174000",
+    db_path: path.join(os.tmpdir(), "kosmos-test.db"),
   };
 }
 
-test("Desktop strict discovery prefers Engine when both locks exist", async () => {
+test("Desktop discovery connects to a live Kepler lock", async () => {
   const dataDir = createDataDir();
-  writeFileSync(path.join(dataDir, "engine.lock.json"), JSON.stringify(engineLock()));
-  writeFileSync(
-    path.join(dataDir, "kepler.lock.json"),
-    JSON.stringify({ protocol_version: { major: 1, minor: 0, patch: 0 }, pid: process.pid }),
-  );
+  writeFileSync(path.join(dataDir, "kepler.lock.json"), JSON.stringify(keplerLock()));
 
-  const state = await ensureEngineRunning({
+  const state = await ensureKeplerRunning({
     appDataPath: dataDir,
     dataDir,
     autoLaunch: false,
     waitMs: 100,
   });
   expect(state.kind).toBe("connected");
-  if (state.kind === "connected") expect(state.lock.api_version.major).toBe(1);
+  if (state.kind === "connected") expect(state.lock.protocol_version.major).toBe(1);
 });
 
-test("Desktop strict discovery fails closed with legacy lock only", async () => {
+test("Desktop discovery fails closed on an incomplete legacy lock", async () => {
   const dataDir = createDataDir();
   writeFileSync(
     path.join(dataDir, "kepler.lock.json"),
     JSON.stringify({ protocol_version: { major: 1, minor: 0, patch: 0 }, pid: process.pid }),
   );
 
-  const state = await ensureEngineRunning({
+  const state = await ensureKeplerRunning({
     appDataPath: dataDir,
     dataDir,
     autoLaunch: false,
     waitMs: 100,
   });
-  expect(state.kind).toBe("absent");
-  expect(JSON.stringify(state)).not.toContain("kepler.lock.json");
+  expect(state.kind).toBe("launch-failed");
   expect(JSON.stringify(state)).not.toContain("protocolVersion");
 });

@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from "electron";
-import { ArkClient, ensureEngineRunning } from "@kosmos/ark";
-import type { EngineLockInfo, EngineState } from "@kosmos/ark";
+import { ArkClient, ensureKeplerRunning } from "@kosmos/ark";
+import type { KeplerLockInfo, KeplerState } from "@kosmos/ark";
 import type { Instance } from "./instance";
 import { keplerDataDir } from "./data-dir";
 import { keplerLog } from "./logging";
@@ -48,7 +48,7 @@ export function createMainArkClientController(
   let arkClientReady: Promise<ArkClient> | null = null;
   let arkClientReadyResolve: ((c: ArkClient) => void) | null = null;
   let arkClientReadyReject: ((e: Error) => void) | null = null;
-  let lastEngineFailure: EngineState["kind"] | null = null;
+  let lastEngineFailure: KeplerState["kind"] | null = null;
 
   function broadcastBackendEvent(
     event: "kepler:backend:ready" | "kepler:backend:disconnected",
@@ -150,7 +150,7 @@ export function createMainArkClientController(
     arkInitInFlight = true;
     try {
       ensureArkReadyPromise();
-      const state = await ensureEngineRunning({
+      const state = await ensureKeplerRunning({
         appDataPath: app.getPath("appData"),
         dataDir: keplerDataDir(),
         waitMs: ARK_CLIENT_LOCK_WAIT_MS,
@@ -158,7 +158,7 @@ export function createMainArkClientController(
       });
       if (state.kind !== "connected") {
         if (lastEngineFailure !== state.kind) {
-          keplerLog.error("ark", `Engine: ${state.error.message}`, {
+          keplerLog.error("ark", `Kepler: ${state.kind}`, {
             classification: state.kind,
           });
           lastEngineFailure = state.kind;
@@ -166,16 +166,13 @@ export function createMainArkClientController(
         scheduleArkClientInitRetry(state.kind);
         return;
       }
-      const engineLock: EngineLockInfo = state.lock;
+      const engineLock: KeplerLockInfo = state.lock;
       lastEngineFailure = null;
-      keplerLog.setCorrelationId(engineLock.correlation_id);
       const client = new ArkClient({
         spaceId: KEPLER_SPACE_ID,
         deviceId: `kepler-shell-${options.instance.slot}`,
         deviceName: "Kosmos Desktop",
-        engineLock,
-        engineClientClass: "kosmos-desktop",
-        engineClientVersion: app.getVersion(),
+        keplerLock: engineLock,
         requestTimeoutMs: ARK_REQUEST_TIMEOUT_MS,
       });
       await client.start();

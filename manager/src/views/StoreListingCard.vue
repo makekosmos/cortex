@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { Button, Package as PackageIcon } from "@kosmos/visuals";
+import { Button } from "@kosmos/visuals";
+import { Package as PackageIcon } from "@lucide/vue";
 import type { InstalledStoreItem, StoreListing } from "../manager-api";
 
 const props = defineProps<{

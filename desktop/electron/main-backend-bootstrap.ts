@@ -21,9 +21,9 @@ export function resolveBackendExe({
   const backendBin = platform === "win32" ? "kepler-backend.exe" : "kepler-backend";
   const packagedRuntime = platform === "win32" ? "Kosmos Runtime.exe" : "Kosmos Runtime";
 
-  const devDebug = path.resolve(dirname, "../../../target/debug", backendBin);
+  const devDebug = path.resolve(dirname, "../../target/debug", backendBin);
   if (existsSync(devDebug)) return devDebug;
-  const devRelease = path.resolve(dirname, "../../../target/release", backendBin);
+  const devRelease = path.resolve(dirname, "../../target/release", backendBin);
   if (existsSync(devRelease)) return devRelease;
 
   const packaged = path.join(resourcesPath, packagedRuntime);

@@ -21,6 +21,7 @@ import { extractZipTo, readZipEntries } from "./extension-zip";
 
 interface ExtensionManifest {
   id: string;
+  appId?: string;
   name: string;
   kind?: "app" | "native" | string;
   version?: string;

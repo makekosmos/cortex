@@ -1,26 +1,33 @@
-import { beforeEach, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, test } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
-let nextState: unknown = {
-  kind: "incompatible",
-  error: { kind: "incompatible", message: "Версия Engine несовместима. Обновите Kosmos." },
-  engineMajor: 2,
-  clientMajor: 1,
-};
+let dataDir = "";
 
 mock.module("electron", () => ({
   app: { getPath: () => "C:\\Kosmos-test", getVersion: () => "9.8.7" },
 }));
-mock.module("@kosmos/ark", () => ({ ensureEngineRunning: async () => nextState }));
-
 const { connectEngine } = await import("./engine-client");
 
 beforeEach(() => {
-  nextState = {
-    kind: "incompatible",
-    error: { kind: "incompatible", message: "Версия Engine несовместима. Обновите Kosmos." },
-    engineMajor: 2,
-    clientMajor: 1,
-  };
+  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-manager-engine-"));
+  process.env.KOSMOS_DATA_DIR = dataDir;
+  fs.writeFileSync(
+    path.join(dataDir, "engine.lock.json"),
+    JSON.stringify({
+      format_version: 1,
+      api_version: { major: 2, minor: 0, patch: 0 },
+      pid: 1,
+      http_port: 12345,
+      auth_token: "test-token",
+    }),
+  );
+});
+
+afterEach(() => {
+  delete process.env.KOSMOS_DATA_DIR;
+  fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
 test("Manager maps strict Engine incompatible state to safe Russian result", async () => {

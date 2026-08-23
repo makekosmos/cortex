@@ -10,7 +10,6 @@
     "e2e": "bunx playwright test --config playwright.config.ts"
   },
   "dependencies": {
-    "@kosmos/ark": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.9.2",

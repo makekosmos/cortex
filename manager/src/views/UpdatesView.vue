@@ -7,11 +7,11 @@ import { installTarget } from "../store-helpers";
 import UpdatesRow from "./UpdatesRow.vue";
 import { updateSequentially } from "../updates-helpers";
 import desktopIcon from "../../../desktop/build/icon.png";
-import shellIcon from "../../../../products/shell/icon.ico";
-import edenIcon from "../../../../products/eden/icon.ico";
-import delphiIcon from "../../../../products/delphi/icon.ico";
-import dictationIcon from "../../../../products/dictation/icon.ico";
-import graphIcon from "../../../../products/cosmos-graph/icon.ico";
+import shellIcon from "../../../desktop/build/icon.png";
+import edenIcon from "../../../../memoria/icon.png";
+import delphiIcon from "../../../../agenda/icon.png";
+import dictationIcon from "../../../../dictation/icon.svg";
+import graphIcon from "../../../desktop/build/icon.png";
 
 const props = defineProps<{ client: ManagerClient }>();
 const desktopVersion = ref("—");
@@ -27,7 +27,7 @@ let timer: ReturnType<typeof setInterval> | undefined;
 const apps = [
   ["com.kosmos.shell", "Kosmos Shell", shellIcon],
   ["com.kosmos.eden", "Eden", edenIcon],
-  ["com.kosmos.delphi", "Delphi", delphiIcon],
+  ["com.kosmos.agenda", "Delphi", delphiIcon],
   ["com.kosmos.graph", "Cosmos Graph", graphIcon],
   ["com.kosmos.dictation", "Dictation", dictationIcon],
 ] as const;

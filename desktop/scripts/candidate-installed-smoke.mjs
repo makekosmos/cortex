@@ -367,7 +367,7 @@ try {
   const catalog = await rpc("packages.list", { kind: "app" });
   const shell = catalog.ok && catalog.data.catalog.find((item) => item.id === "com.kosmos.shell");
   expect(shell, "default catalog does not contain com.kosmos.shell");
-  for (const id of ["com.kosmos.eden", "com.kosmos.delphi"]) {
+  for (const id of ["com.kosmos.eden", "com.kosmos.agenda"]) {
     expect(
       catalog.data.catalog.some((item) => item.id === id),
       `default catalog lacks ${id}`,
@@ -387,7 +387,7 @@ try {
       [
         "com.kosmos.shell",
         "com.kosmos.eden",
-        "com.kosmos.delphi",
+        "com.kosmos.agenda",
         "ark-markdown-bridge",
         "external.obsidian",
       ].every((id) => storeIds.has(id)),
@@ -412,7 +412,7 @@ try {
   const installed = await rpc("packages.list", { kind: "app" });
   expect(
     installed.ok &&
-      ["com.kosmos.shell", "com.kosmos.eden", "com.kosmos.delphi"].every((id) =>
+      ["com.kosmos.shell", "com.kosmos.eden", "com.kosmos.agenda"].every((id) =>
         installed.data.packages.some((item) => item.id === id),
       ) &&
       installed.data.packages.some((item) => item.id === "com.kosmos.shell" && item.enabled),

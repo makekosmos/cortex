@@ -22,13 +22,13 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "@kosmos/ark": path.resolve(__dirname, "../../core/ark/packages/ark/src/index.ts"),
+      "@kosmos/ark": path.resolve(__dirname, "../../arca-sdk/src/index.ts"),
       "@kosmos/visuals/theme/css": path.resolve(
         __dirname,
-        "../../packages/visuals/theme/css-variables.css",
+        "../../imago/theme/css-variables.css",
       ),
-      "@kosmos/visuals": path.resolve(__dirname, "../../packages/visuals"),
-      "@raycast/api": path.resolve(__dirname, "../../packages/raycast-api/src/index.ts"),
+      "@kosmos/visuals": path.resolve(__dirname, "../../imago"),
+      "@raycast/api": path.resolve(__dirname, "../../core/packages/raycast-api/src/index.ts"),
       "@shared": path.resolve(__dirname, "./shared"),
     },
     dedupe: ["vue"],

@@ -6,13 +6,13 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const desktopRoot = path.resolve(__dirname, "..");
-const repoRoot = path.resolve(desktopRoot, "..", "..");
+const cortexRoot = path.resolve(desktopRoot, "..");
 
 if (process.platform !== "darwin") {
   process.exit(0);
 }
 
-const sourceDir = path.join(repoRoot, "platform", "runtime", "native", "macos");
+const sourceDir = path.join(cortexRoot, "runtime", "native", "macos");
 const outDir = path.join(desktopRoot, ".tmp", "native", "macos");
 const moduleCacheDir = path.join(desktopRoot, ".tmp", "swift-module-cache");
 mkdirSync(outDir, { recursive: true });

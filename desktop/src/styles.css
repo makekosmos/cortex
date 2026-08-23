@@ -1,6 +1,6 @@
 /* Tailwind v4 utilities for shell + shared @kosmos/visuals components. */
 @import "tailwindcss";
-@source "../../../packages/visuals/**/*.{vue,ts}";
+@source "../../../imago/**/*.{vue,ts}";
 
 @import "@kosmos/visuals/theme/css";
 

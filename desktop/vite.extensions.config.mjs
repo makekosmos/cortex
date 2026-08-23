@@ -96,19 +96,19 @@ export default defineConfig(({ mode }) => {
         },
         {
           find: /^@kosmos\/ark$/,
-          replacement: path.resolve(__dirname, "../../core/ark/packages/ark/src/index.ts"),
+          replacement: path.resolve(__dirname, "../../arca-sdk/src/index.ts"),
         },
         {
           find: /^@kosmos\/visuals\/theme\/css$/,
-          replacement: path.resolve(__dirname, "../../packages/visuals/theme/css-variables.css"),
+          replacement: path.resolve(__dirname, "../../imago/theme/css-variables.css"),
         },
         {
           find: /^@kosmos\/visuals\/(.+)$/,
-          replacement: path.resolve(__dirname, "../../packages/visuals/$1"),
+          replacement: path.resolve(__dirname, "../../imago/$1"),
         },
         {
           find: /^@kosmos\/visuals$/,
-          replacement: path.resolve(__dirname, "../../packages/visuals"),
+          replacement: path.resolve(__dirname, "../../imago"),
         },
         {
           find: /^@lucide\/vue$/,

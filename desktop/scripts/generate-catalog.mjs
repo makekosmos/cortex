@@ -132,6 +132,10 @@ async function main() {
       console.warn(`[ext:catalog] нет локального manifest.json для ${id} — skip`);
       continue;
     }
+    if (typeof manifest.appId !== "string" || manifest.appId.length === 0) {
+      console.warn(`[ext:catalog] manifest.json для ${id} не содержит appId — skip`);
+      continue;
+    }
     const asset = info.release.assets.find((a) => a.name.endsWith(".kext"));
     if (!asset) {
       console.warn(`[ext:catalog] no .kext asset для ${info.release.tag_name} — skip`);
@@ -145,6 +149,7 @@ async function main() {
     }
     extensions.push({
       id,
+      appId: manifest.appId,
       name: manifest.name ?? id,
       description: manifest.description ?? "",
       // author — optional. Раньше fallback'или на owner org, но это
@@ -161,7 +166,7 @@ async function main() {
   }
 
   const catalog = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     updatedAt: new Date().toISOString(),
     extensions: extensions.sort((a, b) => a.id.localeCompare(b.id)),
   };

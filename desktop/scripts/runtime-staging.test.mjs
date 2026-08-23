@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -11,7 +11,8 @@ import {
 } from "./runtime-staging.mjs";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
-const repoRoot = path.resolve(shellRoot, "../..");
+const cortexRoot = path.resolve(shellRoot, "..");
+const coreRoot = path.resolve(cortexRoot, "..", "core");
 
 test("non-default Cargo runtime is the one mapped into the Windows package", () => {
   assert.deepEqual(RUNTIME_BINARIES, [
@@ -20,8 +21,7 @@ test("non-default Cargo runtime is the one mapped into the Windows package", () 
     "kepler-focus-helper",
     "kepler-focus-svc",
   ]);
-  assert.doesNotMatch(readFileSync(path.join(repoRoot, "Cargo.toml"), "utf8"), /kepler-watcher/);
-  assert.equal(existsSync(path.join(repoRoot, "platform/native-services/kepler-watcher")), false);
+  assert.doesNotMatch(readFileSync(path.join(coreRoot, "Cargo.toml"), "utf8"), /kepler-watcher/);
 
   const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-runtime-stage-"));
   try {
@@ -33,7 +33,7 @@ test("non-default Cargo runtime is the one mapped into the Windows package", () 
       writeFileSync(path.join(releaseDir, `${binary}.exe`), `fresh:${binary}`);
     }
 
-    assert.equal(effectiveCargoTargetDir(shellRoot, repoRoot, configured), configured);
+    assert.equal(effectiveCargoTargetDir(shellRoot, cortexRoot, configured), configured);
     stageRuntimeBinaries(releaseDir, stageDir, "win32");
 
     const packageJson = JSON.parse(readFileSync(path.join(shellRoot, "package.json"), "utf8"));

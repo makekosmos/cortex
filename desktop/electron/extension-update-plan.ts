@@ -18,6 +18,7 @@ interface SemVer {
 interface UpdateCatalog {
   extensions: Array<{
     id: string;
+    appId: string | null;
     version: string;
     downloadUrl: string;
     sha256: string | null;
@@ -45,12 +46,17 @@ export function findExtensionUpdates(
   installed: InstalledExtensionInfo[],
   catalog: UpdateCatalog,
 ): ExtensionUpdateCandidate[] {
-  const byId = new Map(catalog.extensions.map((ext) => [ext.id, ext]));
+  const byAppId = new Map<string, UpdateCatalog["extensions"][number]>();
+  for (const entry of catalog.extensions) {
+    if (!entry.appId) continue;
+    byAppId.set(entry.appId, entry);
+  }
   const out: ExtensionUpdateCandidate[] = [];
 
   for (const ext of installed) {
     if (ext.source !== "installed") continue;
-    const entry = byId.get(ext.id);
+    if (!ext.appId) continue;
+    const entry = byAppId.get(ext.appId);
     if (!entry) continue;
 
     const current = parseSemver(ext.version);

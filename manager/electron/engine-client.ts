@@ -1,9 +1,6 @@
 import { app } from "electron";
-import { ensureEngineRunning, type EngineLockInfo } from "@kosmos/ark";
-import {
-  ReconnectingEngineClient,
-  type ReconnectingEngineTransport,
-} from "@kosmos/ark/reconnecting-engine-client";
+import fs from "node:fs";
+import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { ManagerErrorCode, ManagerResult } from "../src/manager-api";
 
@@ -11,28 +8,47 @@ type Json = Record<string, unknown>;
 const ENGINE_API_VERSION = "1.0.0";
 let dictationEventListener: ((event: unknown) => void) | null = null;
 
-class EngineHttpTransport implements ReconnectingEngineTransport {
-  constructor(readonly lock: EngineLockInfo) {}
-  async start(): Promise<void> {}
-  async stop(): Promise<void> {}
-  async invokeOperation<T>(): Promise<T> {
-    throw new Error("Manager HTTP transport does not support ARK operations");
-  }
-  onArkEvent(): () => void {
-    return () => {};
-  }
+interface EngineLockInfo {
+  format_version: number;
+  api_version: { major: number; minor: number; patch: number };
+  pid: number;
+  http_port: number;
+  auth_token: string;
 }
 
-const engine = new ReconnectingEngineClient<EngineHttpTransport>({
-  discover: () =>
-    ensureEngineRunning({
-      appDataPath: app.getPath("appData"),
-      dataDir: process.env.KOSMOS_DATA_DIR,
-      clientProtocolMajor: 1,
-      autoLaunch: true,
-    }),
-  createTransport: (lock) => new EngineHttpTransport(lock),
-});
+function readEngineLock(): EngineLockInfo {
+  const dataDir = process.env.KOSMOS_DATA_DIR || path.join(app.getPath("appData"), "Kosmos");
+  const lockPath = path.join(dataDir, "engine.lock.json");
+  let value: unknown;
+  try {
+    value = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+  } catch {
+    throw new Error("Engine lock недоступен");
+  }
+  if (!isEngineLock(value)) throw new Error("Engine lock повреждён");
+  if (value.api_version.major !== 1) throw new Error("Engine version incompatible");
+  return value;
+}
+
+function isEngineLock(value: unknown): value is EngineLockInfo {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const lock = value as Record<string, unknown>;
+  const version = lock.api_version;
+  return (
+    lock.format_version === 1 &&
+    typeof lock.pid === "number" &&
+    typeof lock.http_port === "number" &&
+    lock.http_port > 0 &&
+    typeof lock.auth_token === "string" &&
+    Boolean(lock.auth_token) &&
+    Boolean(version) &&
+    typeof version === "object" &&
+    !Array.isArray(version) &&
+    typeof (version as Record<string, unknown>).major === "number" &&
+    typeof (version as Record<string, unknown>).minor === "number" &&
+    typeof (version as Record<string, unknown>).patch === "number"
+  );
+}
 
 function fail(code: ManagerErrorCode, message: string): ManagerResult<never> {
   return { ok: false, code, message };
@@ -67,8 +83,7 @@ function rejectRecoverable(response: Response): void {
 
 export async function connectEngine(): Promise<ManagerResult<{ apiVersion: string }>> {
   try {
-    const transport = await engine.getTransport();
-    const { api_version: version } = transport.lock;
+    const { api_version: version } = readEngineLock();
     return {
       ok: true,
       data: {
@@ -81,29 +96,31 @@ export async function connectEngine(): Promise<ManagerResult<{ apiVersion: strin
 }
 
 export function engineConnected(): boolean {
-  return engine.isConnected();
+  try {
+    readEngineLock();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function subscribeDictationEvents(listener: (event: unknown) => void): () => void {
   dictationEventListener = listener;
-  const stop = engine.onArkEvent((event) => {
-    if (typeof event.event === "string") dictationEventListener?.(event);
-  });
   return () => {
     if (dictationEventListener === listener) {
       dictationEventListener = null;
-      stop();
     }
   };
 }
 
 export async function disconnectEngine(): Promise<void> {
-  await engine.stop();
+  dictationEventListener = null;
 }
 
 export async function rpc(operation: string, params: Json = {}): Promise<ManagerResult<unknown>> {
   try {
-    return await engine.execute(async ({ lock }) => {
+    const lock = readEngineLock();
+    return await (async () => {
       const response = await fetch(`http://127.0.0.1:${lock.http_port}/v1/rpc`, {
         method: "POST",
         headers: headers(lock),
@@ -119,7 +136,7 @@ export async function rpc(operation: string, params: Json = {}): Promise<Manager
       if (!response.ok || value.ok === false)
         return fail("engine", value.error ? "Engine отклонил операцию." : "Engine вернул ошибку.");
       return { ok: true, data: value.data ?? value };
-    });
+    })();
   } catch (error) {
     return mapError(error);
   }
@@ -127,8 +144,8 @@ export async function rpc(operation: string, params: Json = {}): Promise<Manager
 
 export async function status(pathname: "/v1/health" | "/v1/info"): Promise<ManagerResult<unknown>> {
   try {
-    return await engine.execute(
-      async ({ lock }) => {
+    const lock = readEngineLock();
+    return await (async () => {
         const response = await fetch(`http://127.0.0.1:${lock.http_port}${pathname}`, {
           headers: headers(lock),
           signal: AbortSignal.timeout(8_000),
@@ -136,9 +153,7 @@ export async function status(pathname: "/v1/health" | "/v1/info"): Promise<Manag
         rejectRecoverable(response);
         const value = (await response.json()) as unknown;
         return response.ok ? { ok: true, data: value } : fail("engine", "Engine вернул ошибку.");
-      },
-      { idempotent: true },
-    );
+    })();
   } catch (error) {
     return mapError(error);
   }

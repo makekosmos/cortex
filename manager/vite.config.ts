@@ -18,12 +18,12 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@kosmos/ark": path.resolve(root, "../../core/ark/packages/ark/src/index.ts"),
+      "@kosmos/ark": path.resolve(root, "../../arca-sdk/src/index.ts"),
       "@kosmos/visuals/theme/css": path.resolve(
         root,
-        "../../packages/visuals/theme/css-variables.css",
+        "../../imago/theme/css-variables.css",
       ),
-      "@kosmos/visuals": path.resolve(root, "../../packages/visuals"),
+      "@kosmos/visuals": path.resolve(root, "../../imago"),
     },
     dedupe: ["vue"],
   },

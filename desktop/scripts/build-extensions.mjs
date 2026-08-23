@@ -78,11 +78,12 @@ function changedExtensionIds(allIds) {
     files.some(
       (file) =>
         file === "bun.lock" ||
-        file === "platform/desktop/package.json" ||
-        file === "platform/desktop/vite.extensions.config.mjs" ||
-        file === "platform/desktop/scripts/build-extensions.mjs" ||
-        file.startsWith("packages/visuals/") ||
-        file.startsWith("core/ark/packages/ark/"),
+        file === "cortex/desktop/package.json" ||
+        file === "cortex/desktop/vite.extensions.config.mjs" ||
+        file === "cortex/desktop/scripts/build-extensions.mjs" ||
+        file.startsWith("imago/") ||
+        file.startsWith("arca-sdk/") ||
+        file.startsWith("core/"),
     )
   ) {
     return allIds;

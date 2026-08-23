@@ -2,13 +2,12 @@ import { beforeEach, expect, mock, test } from "bun:test";
 
 const engineLock = {
   format_version: 1,
-  api_version: { major: 1, minor: 0, patch: 0 },
+  protocol_version: { major: 1, minor: 0, patch: 0 },
   pid: 42,
-  http_port: 4317,
   ws_port: 4318,
   auth_token: "a".repeat(64),
   started_at: "2026-07-29T00:00:00Z",
-  correlation_id: "123e4567-e89b-12d3-a456-426614174000",
+  db_path: "C:\\Kosmos-test\\data.db",
 };
 
 let nextState: unknown = { kind: "connected", lock: engineLock };
@@ -38,7 +37,7 @@ mock.module("electron", () => ({
 }));
 mock.module("@kosmos/ark", () => ({
   ArkClient: FakeArkClient,
-  ensureEngineRunning: async () => nextState,
+  ensureKeplerRunning: async () => nextState,
 }));
 mock.module("./data-dir", () => ({ keplerDataDir: () => "C:\\Kosmos-test" }));
 mock.module("./logging", () => ({
@@ -68,20 +67,20 @@ beforeEach(() => {
   capturedOptions = null;
 });
 
-test("Desktop creates only Engine v1 ArkClient with attribution metadata", async () => {
+test("Desktop creates ArkClient with the Kepler lock", async () => {
   const controller = createController();
   await controller.initArkClient();
 
-  expect(capturedOptions?.engineLock).toEqual(engineLock);
-  expect(capturedOptions?.keplerLock).toBeUndefined();
-  expect(capturedOptions?.engineClientClass).toBe("kosmos-desktop");
-  expect(capturedOptions?.engineClientVersion).toBe("9.8.7");
+  expect(capturedOptions?.keplerLock).toEqual(engineLock);
+  expect(capturedOptions?.engineLock).toBeUndefined();
+  expect(capturedOptions?.engineClientClass).toBeUndefined();
+  expect(capturedOptions?.engineClientVersion).toBeUndefined();
 });
 
-test("Desktop fails closed on legacy-only/typed Engine failure", async () => {
+test("Desktop fails closed when Kepler cannot launch", async () => {
   nextState = {
-    kind: "absent",
-    error: { kind: "absent", message: "Engine не установлен или не запущен." },
+    kind: "launch-failed",
+    reason: "Kepler did not start",
   };
   const controller = createController();
   await controller.initArkClient();

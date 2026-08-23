@@ -5,6 +5,7 @@ import { keplerDataDir } from "./data-dir";
 
 interface ExtensionManifest {
   id: string;
+  appId?: string;
   name: string;
   kind?: "app" | "native" | string;
   version?: string;
@@ -22,6 +23,8 @@ interface ExtensionManifest {
 
 export interface InstalledExtensionInfo {
   id: string;
+  /** Immutable application identity. Null only for pre-appId extensions. */
+  appId: string | null;
   name: string;
   kind: ExtensionManifest["kind"] | null;
   version: string | null;
@@ -212,6 +215,7 @@ async function scanExtensionsDir(
     const backups = source === "installed" ? await listBackups(id) : [];
     out.push({
       id,
+      appId: manifest.appId ?? null,
       name: manifest.name,
       kind: manifest.kind ?? null,
       version: manifest.version ?? null,

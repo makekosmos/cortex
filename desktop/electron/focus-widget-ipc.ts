@@ -2,6 +2,8 @@ import { BrowserWindow, Menu, ipcMain, type MenuItemConstructorOptions } from "e
 import type { ArkClient } from "@kosmos/ark";
 import type { FocusState } from "./focus-widget-state";
 
+type ArkRequest = Parameters<ArkClient["invokeOperation"]>[0];
+
 export interface FocusWidgetSessionActions {
   pause: () => Promise<unknown>;
   resume: () => Promise<unknown>;
@@ -161,10 +163,10 @@ async function stopManualStopwatch(
     // в ARK (`list_running_time_entries`). До 2026-05-21 здесь был
     // list_objects_by_type + client-side фильтр/сортировка — на больших
     // историях это тянуло всю time_entry_obj таблицу через WS.
-    const running = (await client.invokeOperation({
+    const running = await client.invokeOperation<ArkObjectLike[]>({
       operation: "list_running_time_entries",
       source: "manual",
-    } as { operation: string; [k: string]: unknown })) as ArkObjectLike[];
+    });
     if (!Array.isArray(running)) return;
     const nowIso = new Date().toISOString();
     // Backend уже отсортировал startedAt DESC и отфильтровал endedAt/deleted_at.
@@ -194,10 +196,11 @@ async function stopManualStopwatch(
       updatedAt: nowIso,
       deletedAt: target.deletedAt ?? target.deleted_at ?? null,
     };
-    await client.invokeOperation({
+    const request: ArkRequest = {
       operation: "upsert_object",
       object: record,
-    } as { operation: string; [k: string]: unknown });
+    };
+    await client.invokeOperation(request);
   } catch (e) {
     console.error("[focus-widget] stopwatch stop failed:", e);
   }

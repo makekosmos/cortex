@@ -20,11 +20,11 @@
     "noFallthroughCasesInSwitch": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@kosmos/ark": ["../../core/ark/packages/ark/src/index.ts"],
-      "@kosmos/visuals": ["../../packages/visuals/index.ts"],
-      "@kosmos/visuals/*": ["../../packages/visuals/*"],
-      "@raycast/api": ["../../packages/raycast-api/src/index.ts"],
-      "@raycast/api/*": ["../../packages/raycast-api/src/*"],
+      "@kosmos/ark": ["../../arca-sdk/src/index.ts"],
+      "@kosmos/visuals": ["../../imago/index.ts"],
+      "@kosmos/visuals/*": ["../../imago/*"],
+      "@raycast/api": ["../../core/packages/raycast-api/src/index.ts"],
+      "@raycast/api/*": ["../../core/packages/raycast-api/src/*"],
       "@shared/*": ["./shared/*"]
     }
   },

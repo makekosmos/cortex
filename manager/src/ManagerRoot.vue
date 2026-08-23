@@ -13,12 +13,14 @@ import {
   DesktopContentSurface,
   SettingsSidebar,
   SettingsSidebarButton,
+} from "@kosmos/visuals";
+import {
   Activity,
   Database,
   Package,
   RefreshCw,
   Settings2,
-} from "@kosmos/visuals";
+} from "@lucide/vue";
 import { useManagerClient } from "./composables/useManagerClient";
 import DataView from "./views/DataView.vue";
 import SyncView from "./views/SyncView.vue";

@@ -27,11 +27,8 @@
     "test:e2e:headed": "bun run build:js && playwright test --config playwright.config.ts --headed"
   },
   "dependencies": {
-    "@kosmos/ark": "workspace:*",
-    "@kosmos/visuals": "workspace:*",
     "@lucide/vue": "^1.16.0",
     "@phosphor-icons/vue": "^2.2.1",
-    "@raycast/api": "workspace:*",
     "electron-updater": "^6.3.9"
   },
   "devDependencies": {

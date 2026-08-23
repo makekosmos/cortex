@@ -51,6 +51,28 @@ let lastBlockedAppIds: string[] = [];
 let lastBlockedApps: FocusBlockedApp[] = [];
 let lastRawBlockedApps: FocusBlockedApp[] = [];
 let sideEffectQueue: Promise<void> = Promise.resolve();
+type ArkRequest = Parameters<ArkClient["invokeOperation"]>[0];
+type ArkRequestParams = Omit<ArkRequest, "operation">;
+type ArkValue = ArkRequestParams[string];
+
+function isArkValue(value: unknown): value is ArkValue {
+  if (value === undefined || value === null) return true;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return true;
+  }
+  if (Array.isArray(value)) return value.every(isArkValue);
+  if (typeof value !== "object") return false;
+  return Object.values(value).every(isArkValue);
+}
+
+function arkParams(params: Record<string, unknown>): ArkRequestParams {
+  const out: ArkRequestParams = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (!isArkValue(value)) throw new Error(`Unsupported ARK parameter: ${key}`);
+    out[key] = value;
+  }
+  return out;
+}
 
 function broadcastFocusSessionUpdated(): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -65,10 +87,8 @@ async function invoke<T = unknown>(
   params?: Record<string, unknown>,
 ): Promise<T> {
   const client = await requireFocusSessionRuntime().awaitArkReady();
-  return client.invokeOperation({ operation, ...params } as {
-    operation: string;
-    [key: string]: unknown;
-  }) as Promise<T>;
+  const request: ArkRequest = params ? { operation, ...arkParams(params) } : { operation };
+  return client.invokeOperation<T>(request);
 }
 
 const { rehydrateRunningEntry, startTimeEntry, closeTimeEntry, markTaskDone } =

@@ -42,17 +42,18 @@ export function useExtensionsTab() {
     }
   }
 
-  function catalogById(id: string): MarketplaceExtension | undefined {
-    return catalog.value?.extensions.find((e) => e.id === id);
+  function catalogByAppId(appId: string | null): MarketplaceExtension | undefined {
+    if (!appId) return undefined;
+    return catalog.value?.extensions.find((e) => e.appId === appId);
   }
 
   function hasUpdate(i: InstalledExtensionInfo): boolean {
-    const c = catalogById(i.id);
+    const c = catalogByAppId(i.appId);
     return !!(c && i.version && c.version !== i.version);
   }
 
   async function onUpdate(i: InstalledExtensionInfo) {
-    const c = catalogById(i.id);
+    const c = catalogByAppId(i.appId);
     if (!c || installingId.value) return;
     installingId.value = i.id;
     marketError.value = "";
@@ -113,8 +114,12 @@ export function useExtensionsTab() {
 
   const availableInCatalog = computed<MarketplaceExtension[]>(() => {
     if (!catalog.value) return [];
-    const installedIds = new Set(installed.value.map((i) => i.id));
-    return catalog.value.extensions.filter((c) => !installedIds.has(c.id));
+    const installedAppIds = new Set(
+      installed.value.map((i) => i.appId).filter((appId): appId is string => !!appId),
+    );
+    return catalog.value.extensions.filter(
+      (c) => !c.appId || !installedAppIds.has(c.appId),
+    );
   });
 
   return {
@@ -129,7 +134,7 @@ export function useExtensionsTab() {
     availableInCatalog,
     loadExtensions,
     loadCatalog,
-    catalogById,
+    catalogByAppId,
     hasUpdate,
     onUpdate,
     onInstallNew,

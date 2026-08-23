@@ -19,6 +19,7 @@ import { reloadExtensionWindow } from "./extension-host";
 
 interface CatalogExtension {
   id: string;
+  appId: string | null;
   name: string;
   description: string;
   /** Optional — null/undefined значит «автор не указан» (UI просто не рендерит). */
@@ -54,10 +55,11 @@ function isNullableNumber(value: unknown): value is number | null {
   return value === null || typeof value === "number";
 }
 
-function isCatalogExtension(value: unknown): value is CatalogExtension {
+function isCatalogExtension(value: unknown, requireAppId: boolean): value is CatalogExtension {
   if (!isRecord(value)) return false;
   return (
     typeof value.id === "string" &&
+    (typeof value.appId === "string" || (!requireAppId && value.appId === undefined)) &&
     typeof value.name === "string" &&
     typeof value.description === "string" &&
     isNullableString(value.author) &&
@@ -71,12 +73,17 @@ function isCatalogExtension(value: unknown): value is CatalogExtension {
 }
 
 function isCatalog(value: unknown): value is Catalog {
+  if (
+    !isRecord(value) ||
+    typeof value.schemaVersion !== "number" ||
+    typeof value.updatedAt !== "string"
+  ) {
+    return false;
+  }
+  if (value.schemaVersion !== 1 && value.schemaVersion !== 2) return false;
   return (
-    isRecord(value) &&
-    typeof value.schemaVersion === "number" &&
-    typeof value.updatedAt === "string" &&
     Array.isArray(value.extensions) &&
-    value.extensions.every(isCatalogExtension)
+    value.extensions.every((entry) => isCatalogExtension(entry, value.schemaVersion === 2))
   );
 }
 
@@ -170,13 +177,20 @@ async function fetchCatalog(force = false): Promise<Catalog> {
     throw new Error("catalog.json: invalid format");
   }
   // Tolerate unknown fields. Reject incompatible major schema version.
-  if (parsed.schemaVersion !== 1) {
+  if (parsed.schemaVersion !== 1 && parsed.schemaVersion !== 2) {
     throw new Error(
       `catalog.json: schemaVersion ${parsed.schemaVersion} не поддерживается этой версией Kepler`,
     );
   }
-  cachedCatalog = { data: parsed, fetchedAt: now };
-  return parsed;
+  const data: Catalog = {
+    ...parsed,
+    extensions: parsed.extensions.map((entry) => ({
+      ...entry,
+      appId: entry.appId ?? null,
+    })),
+  };
+  cachedCatalog = { data, fetchedAt: now };
+  return data;
 }
 
 async function installFromUrl(

@@ -131,6 +131,20 @@ export interface KeplerApiShellServices {
     onCaptureEvent(cb: (payload: Record<string, unknown>) => void): () => void;
   };
 
+  focusService: {
+    status(): Promise<{ installed: boolean; running: boolean }>;
+    ping(): Promise<boolean>;
+    install(): Promise<{ ok: boolean; error?: string }>;
+    uninstall(): Promise<{ ok: boolean; error?: string }>;
+    start(): Promise<{ ok: boolean; error?: string }>;
+    stop(): Promise<{ ok: boolean; error?: string }>;
+    autoInstallDeclined: {
+      get(): Promise<boolean>;
+      set(value: boolean): Promise<void>;
+    };
+    onStatusChanged(cb: () => void): () => void;
+  };
+
   /** Настройки Kepler (отдельное окно). Shell preferences and updater only. */
   settings: {
     /** Открыть окно настроек (или сфокусировать существующее). */

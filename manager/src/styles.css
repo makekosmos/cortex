@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@source "../../../packages/visuals/**/*.{vue,ts}";
+@source "../../../imago/**/*.{vue,ts}";
 
 :root {
   color: var(--foreground);

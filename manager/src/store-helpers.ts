@@ -3,7 +3,7 @@ import type { InstalledStoreItem, StoreListing } from "./manager-api";
 const canonicalPackageIds = new Set([
   "com.kosmos.shell",
   "com.kosmos.eden",
-  "com.kosmos.delphi",
+  "com.kosmos.agenda",
   "com.kosmos.graph",
   "com.kosmos.dictation",
 ]);

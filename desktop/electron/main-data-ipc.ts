@@ -9,6 +9,8 @@ interface MainDataIpcOptions {
   awaitArkReady(): Promise<ArkClient>;
   getArkClient(): ArkClient | null;
 }
+type ArkRequest = Parameters<ArkClient["invokeOperation"]>[0];
+type ArkRequestParams = Omit<ArkRequest, "operation">;
 
 export function registerMainDataIpc(options: MainDataIpcOptions): void {
   const { awaitArkReady, getArkClient } = options;
@@ -46,13 +48,13 @@ export function registerMainDataIpc(options: MainDataIpcOptions): void {
 
   safeHandle(
     "kepler:ark:request",
-    async (_e, operation: string, params?: Record<string, unknown>) => {
+    async (_e, operation: string, params?: ArkRequestParams) => {
       if (typeof operation !== "string" || operation.length === 0) {
         throw new Error("kepler:ark:request: operation must be a non-empty string");
       }
       const client = await awaitArkReady();
-      const req: Record<string, unknown> = { operation, ...params };
-      return client.invokeOperation(req as { operation: string; [key: string]: unknown });
+      const req: ArkRequest = params ? { operation, ...params } : { operation };
+      return client.invokeOperation(req);
     },
   );
 

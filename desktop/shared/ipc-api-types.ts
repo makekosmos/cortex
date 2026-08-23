@@ -5,12 +5,26 @@ import type {
   CommandRecord,
   ExportConverterInfo,
   ExportResult,
+  FileIndexSettings,
+  FileIndexSettingsPatch,
+  FileSearchDiagnosticsReport,
+  FileSearchRootEstimate,
   FocusBlocklist,
   FocusSessionSnapshot,
   FocusSessionTask,
+  InstalledExtensionInfo,
+  MarketplaceCatalog,
   SearchResult,
   StartFocusSessionInput,
 } from "./ipc-types";
+import type {
+  CommandActionRequest,
+  CommandActionResult,
+  CommandFeedbackEvent,
+  CommandFilePickerRequest,
+  CommandFilePickerResult,
+  CommandSnapshot,
+} from "./command-ipc";
 
 /**
  */
@@ -46,6 +60,14 @@ export interface KeplerApi extends KeplerApiShellServices {
   integrations: {
     connectLeetCode<T = unknown>(): Promise<T>;
     disconnectLeetCode<T = unknown>(): Promise<T>;
+  };
+
+  extension: {
+    installedList(): Promise<InstalledExtensionInfo[]>;
+    catalogFetch(force?: boolean): Promise<MarketplaceCatalog>;
+    installFromUrl(url: string, sha256: string | null): Promise<unknown>;
+    revert(id: string, timestamp?: string): Promise<boolean>;
+    uninstall(id: string): Promise<boolean>;
   };
 
   /** Управление окном launcher'а. */
@@ -93,6 +115,23 @@ export interface KeplerApi extends KeplerApiShellServices {
     onUpdated(listener: () => void): () => void;
   };
 
+  command: {
+    snapshot(sessionId: string): Promise<CommandSnapshot | null>;
+    action(sessionId: string, action: CommandActionRequest): Promise<CommandActionResult>;
+    pickFiles(
+      sessionId: string,
+      request: CommandFilePickerRequest,
+    ): Promise<CommandFilePickerResult>;
+    onSnapshotUpdated(
+      sessionId: string,
+      listener: (snapshot: CommandSnapshot) => void,
+    ): () => void;
+    onFeedback(
+      sessionId: string,
+      listener: (event: CommandFeedbackEvent) => void,
+    ): () => void;
+  };
+
   /** Shell-owned Focus Session command page. Main process owns pomodoro,
       ARK time_entry and blocklist side effects; renderer only sends intents. */
   focusSession: {
@@ -126,6 +165,20 @@ export interface KeplerApi extends KeplerApiShellServices {
     /** Открыть native directory picker и вернуть выбранный путь
         (или null если пользователь отменил). */
     pickDir(): Promise<string | null>;
+  };
+
+  fileSearch: {
+    settingsGet(): Promise<FileIndexSettings>;
+    settingsSet(patch: FileIndexSettingsPatch): Promise<void>;
+    diagnostics(): Promise<FileSearchDiagnosticsReport>;
+    estimateRoot(path: string): Promise<FileSearchRootEstimate>;
+    scopeAdd(path: string): Promise<void>;
+    scopeRemove(path: string): Promise<void>;
+    ignoreAdd(pattern: string): Promise<void>;
+    ignoreRemove(pattern: string): Promise<void>;
+    rescan(): Promise<void>;
+    clearCache(): Promise<void>;
+    pickScope(): Promise<string | null>;
   };
 
   /** Shell-owned настройки индекса; сам индекс остаётся в Engine. */

@@ -1,4 +1,5 @@
 import { ipcRenderer } from "electron";
+import type { CommandFeedbackEvent, CommandSnapshot } from "../shared/command-ipc";
 import type { KeplerApi } from "../shared/ipc-types";
 import { createKeplerSettingsBridge } from "./preload-settings-bridge";
 
@@ -14,6 +15,11 @@ type KeplerTestApi = {
 };
 
 type KeplerPreloadApi = KeplerApi & KeplerTestApi;
+type CommandIpcPayload = {
+  sessionId?: string;
+  snapshot?: CommandSnapshot;
+  event?: CommandFeedbackEvent;
+};
 
 export function installKeplerPlatformMarker(): void {
   const platform = platformMarker();
@@ -45,6 +51,15 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
     integrations: {
       connectLeetCode: () => ipcRenderer.invoke("kepler:integrations:leetcode:connect"),
       disconnectLeetCode: () => ipcRenderer.invoke("kepler:integrations:leetcode:disconnect"),
+    },
+    extension: {
+      installedList: () => ipcRenderer.invoke("kepler:extension:installed:list"),
+      catalogFetch: (force?: boolean) => ipcRenderer.invoke("kepler:extension:catalog:fetch", force),
+      installFromUrl: (url: string, sha256: string | null) =>
+        ipcRenderer.invoke("kepler:extension:install:fromUrl", url, sha256),
+      revert: (id: string, timestamp?: string) =>
+        ipcRenderer.invoke("kepler:extension:revert", id, timestamp),
+      uninstall: (id: string) => ipcRenderer.invoke("kepler:extension:uninstall", id),
     },
     window: {
       hide: () => ipcRenderer.invoke("kepler:window:hide"),
@@ -84,6 +99,30 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
         return () => ipcRenderer.removeListener("kepler:commands:updated", handler);
       },
     },
+    command: {
+      snapshot: (sessionId) => ipcRenderer.invoke("kepler:command:snapshot", sessionId),
+      action: (sessionId, action) => ipcRenderer.invoke("kepler:command:action", sessionId, action),
+      pickFiles: (sessionId, request) =>
+        ipcRenderer.invoke("kepler:command:pick-files", sessionId, request),
+      onSnapshotUpdated: (sessionId, listener) => {
+        const handler = (_event: Electron.IpcRendererEvent, payload: CommandIpcPayload) => {
+          if (payload.sessionId === sessionId && payload.snapshot !== undefined) {
+            listener(payload.snapshot);
+          }
+        };
+        ipcRenderer.on("kepler:command:snapshot-updated", handler);
+        return () => ipcRenderer.removeListener("kepler:command:snapshot-updated", handler);
+      },
+      onFeedback: (sessionId, listener) => {
+        const handler = (_event: Electron.IpcRendererEvent, payload: CommandIpcPayload) => {
+          if (payload.sessionId === sessionId && payload.event !== undefined) {
+            listener(payload.event);
+          }
+        };
+        ipcRenderer.on("kepler:command:feedback", handler);
+        return () => ipcRenderer.removeListener("kepler:command:feedback", handler);
+      },
+    },
     focusSession: {
       open: () => ipcRenderer.invoke("kepler:focus-session:open"),
       snapshot: () => ipcRenderer.invoke("kepler:focus-session:snapshot"),
@@ -120,6 +159,19 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
     },
     fileIndex: {
       pickRoot: () => ipcRenderer.invoke("kepler:file-index:pick-root"),
+    },
+    fileSearch: {
+      settingsGet: () => ipcRenderer.invoke("kepler:file-search:settings:get"),
+      settingsSet: (patch) => ipcRenderer.invoke("kepler:file-search:settings:set", patch),
+      diagnostics: () => ipcRenderer.invoke("kepler:file-search:diagnostics"),
+      estimateRoot: (path) => ipcRenderer.invoke("kepler:file-search:estimate-root", path),
+      scopeAdd: (path) => ipcRenderer.invoke("kepler:file-search:scope:add", path),
+      scopeRemove: (path) => ipcRenderer.invoke("kepler:file-search:scope:remove", path),
+      ignoreAdd: (pattern) => ipcRenderer.invoke("kepler:file-search:ignore:add", pattern),
+      ignoreRemove: (pattern) => ipcRenderer.invoke("kepler:file-search:ignore:remove", pattern),
+      rescan: () => ipcRenderer.invoke("kepler:file-search:rescan"),
+      clearCache: () => ipcRenderer.invoke("kepler:file-search:clear-cache"),
+      pickScope: () => ipcRenderer.invoke("kepler:file-search:pickScope"),
     },
     focusWidget: {
       setState: (patch) => ipcRenderer.invoke("kepler:focus-widget:set-state", patch),
@@ -169,6 +221,23 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
           cb(payload as Record<string, unknown>);
         ipcRenderer.on("kepler:dictation:capture", wrapper);
         return () => ipcRenderer.removeListener("kepler:dictation:capture", wrapper);
+      },
+    },
+    focusService: {
+      status: () => ipcRenderer.invoke("kepler:focus-service:status"),
+      ping: () => ipcRenderer.invoke("kepler:focus-service:ping"),
+      install: () => ipcRenderer.invoke("kepler:focus-service:install"),
+      uninstall: () => ipcRenderer.invoke("kepler:focus-service:uninstall"),
+      start: () => ipcRenderer.invoke("kepler:focus-service:start"),
+      stop: () => ipcRenderer.invoke("kepler:focus-service:stop"),
+      autoInstallDeclined: {
+        get: () => ipcRenderer.invoke("kepler:focus-service:auto-install-declined:get"),
+        set: (value) => ipcRenderer.invoke("kepler:focus-service:auto-install-declined:set", value),
+      },
+      onStatusChanged: (cb) => {
+        const wrapper = () => cb();
+        ipcRenderer.on("kepler:focus-service:status-changed", wrapper);
+        return () => ipcRenderer.removeListener("kepler:focus-service:status-changed", wrapper);
       },
     },
     ...createKeplerSettingsBridge(),

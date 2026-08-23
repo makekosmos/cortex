@@ -33,33 +33,10 @@ const launcherSource = await readFile(
   path.join(import.meta.dir, "../src/views/LauncherView.vue"),
   "utf8",
 );
-const edenManifest = JSON.parse(
-  await readFile(path.join(import.meta.dir, "../../../products/eden/manifest.json"), "utf8"),
-) as {
-  schema_version: number;
-  id: string;
-  kind: string;
-  targets: Array<{ runtime: string }>;
-  data?: { access?: Array<{ type: string }> };
-};
-const delphiManifest = JSON.parse(
-  await readFile(path.join(import.meta.dir, "../../../products/delphi/manifest.json"), "utf8"),
-) as {
-  schema_version: number;
-  id: string;
-  kind: string;
-  targets: Array<{ runtime: string }>;
-  data?: { access?: Array<{ type: string }> };
-};
-const arrancadorManifest = JSON.parse(
-  await readFile(path.join(import.meta.dir, "../../../incubator/arrancador/manifest.json"), "utf8"),
-) as {
-  schema_version: number;
-  id: string;
-  kind: string;
-  targets: Array<{ runtime: string }>;
-  data?: { access?: Array<{ type: string }> };
-};
+const launcherTemplateSource = await readFile(
+  path.join(import.meta.dir, "../src/views/LauncherView.html"),
+  "utf8",
+);
 const clipboardRetirementSources = await Promise.all(
   [
     "main.ts",
@@ -137,7 +114,7 @@ test("isolated upgrade fixture preserves historical clipboard JSON bytes", async
   }
 });
 
-test("package manifests stay v2 host-targeted while launcher visibility remains owner", () => {
+test("launcher visibility remains owner", () => {
   for (const source of [
     settingsNavigationSource,
     settingsNavigationDataSource,
@@ -157,21 +134,8 @@ test("package manifests stay v2 host-targeted while launcher visibility remains 
   expect(settingsViewSource).toContain("hiddenCommandIds.value.includes(id)");
   expect(settingsViewSource).toContain("localStorage.setItem(HIDDEN_COMMANDS_KEY");
   expect(launcherSource).toContain("hiddenCommandIds.value.includes(cmd.id)");
-  expect(launcherSource).toContain("toggleCommandVisibility(selectedCommand.id)");
+  expect(launcherTemplateSource).toContain("toggleCommandVisibility(selectedCommand.id)");
 
-  for (const [manifest, id, accessType] of [
-    [edenManifest, "com.kosmos.eden", "com.kosmos.note"],
-    [delphiManifest, "com.kosmos.delphi", "com.kosmos.task"],
-    [arrancadorManifest, "com.kosmos.arrancador", "com.kosmos.game"],
-  ] as const) {
-    expect(manifest.schema_version).toBe(2);
-    expect(manifest.id).toBe(id);
-    expect(manifest.kind).toBe("app");
-    expect(manifest.targets).toEqual(
-      expect.arrayContaining([{ runtime: "kosmos-host", os: ["windows"] }]),
-    );
-    expect(manifest.data?.access?.map((entry) => entry.type)).toContain(accessType);
-  }
 });
 
 function extractFunction(source: string, name: string): string {

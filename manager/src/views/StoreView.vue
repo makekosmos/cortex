@@ -5,11 +5,11 @@ import type { ManagerClient } from "../composables/useManagerClient";
 import { useStoreCatalog } from "../composables/useStoreCatalog";
 import { installKey, installTarget, installedForListing } from "../store-helpers";
 import StoreListingCard from "./StoreListingCard.vue";
-import shellIcon from "../../../../products/shell/icon.ico";
-import edenIcon from "../../../../products/eden/icon.png";
-import delphiIcon from "../../../../products/delphi/icon.png";
-import dictationIcon from "../../../../products/dictation/icon.ico";
-import graphIcon from "../../../../products/cosmos-graph/icon.ico";
+import shellIcon from "../../../desktop/build/icon.png";
+import edenIcon from "../../../../memoria/icon.png";
+import delphiIcon from "../../../../agenda/icon.png";
+import dictationIcon from "../../../../dictation/icon.svg";
+import graphIcon from "../../../desktop/build/icon.png";
 
 const props = defineProps<{ client: ManagerClient }>();
 const { snapshot, error, listings, installed, load } = useStoreCatalog(props.client);
@@ -32,7 +32,7 @@ const canonicalApps: StoreListing[] = [
     icon_url: edenIcon,
   },
   {
-    id: "com.kosmos.delphi",
+    id: "com.kosmos.agenda",
     kind: "kosmos-package",
     name: "Delphi",
     publisher: "Kosmos",

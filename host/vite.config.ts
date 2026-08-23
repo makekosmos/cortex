@@ -9,7 +9,7 @@ export default defineConfig({
     electron({ main: { entry: "electron/main.ts" }, preload: { input: "electron/preload.ts" } }),
   ],
   resolve: {
-    alias: { "@kosmos/ark": path.resolve(root, "../../core/ark/packages/ark/src/index.ts") },
+    alias: { "@kosmos/ark": path.resolve(root, "../../arca-sdk/src/index.ts") },
   },
   build: { outDir: "dist" },
 });
