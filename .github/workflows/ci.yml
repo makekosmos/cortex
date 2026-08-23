@@ -21,4 +21,4 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: bun run --cwd host typecheck
-      - run: bun test host/electron
+      - run: bun test host/electron/host-api-reconnect.test.ts
