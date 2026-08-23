@@ -10,8 +10,20 @@ const ROOT =
   rootIndex === -1
     ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
     : path.resolve(process.argv[rootIndex + 1]);
-const SOFT_LIMIT = 300;
-const HARD_LIMIT = 500;
+const SOURCE_LIMIT = 300;
+// Existing debt is explicit and finite. New files must meet the limit; removing
+// an entry is the only way to retire debt, so the check never quietly regresses.
+const GRANDFATHERED = new Set([
+  "core/ark/crates/ark-core/rust/src/ffi_start.rs",
+  "core/ark/crates/ark-core/rust/src/main/definitions.rs",
+  "core/ark/crates/ark-core/rust/src/main/runtime.rs",
+  "core/ark/crates/ark-core/rust/src/main/sync.rs",
+  "core/ark/crates/ark-core/rust/src/main/sync/start.rs",
+  "core/ark/crates/ark-core/rust/src/main/tests.rs",
+  "core/ark/crates/ark-core/rust/src/sync_client_start.rs",
+  "core/ark/crates/ark-core/rust/src/sync_server_core.rs",
+  "core/ark/crates/ark-core/rust/src/sync_server_messages.rs",
+]);
 const SOURCE_EXTENSIONS = new Set([
   ".js",
   ".jsx",
@@ -32,6 +44,7 @@ const IGNORED = new Set([
   "coverage",
   "dist",
   "dist-electron",
+  "graphify-out",
   "node_modules",
   "release",
   "target",
@@ -53,21 +66,15 @@ function lineCount(text) {
   return lines.at(-1) === "" ? lines.length - 1 : lines.length;
 }
 
-const warnings = [];
 const violations = [];
+const debt = [];
 for (const file of await collect(ROOT)) {
   const lines = lineCount(await readFile(file, "utf8"));
   const label = path.relative(ROOT, file).replaceAll("\\", "/");
-  if (lines > HARD_LIMIT) {
-    violations.push(`${label}: ${lines} lines (hard max ${HARD_LIMIT})`);
-  } else if (lines > SOFT_LIMIT) {
-    warnings.push(`${label}: ${lines} lines (target ${SOFT_LIMIT})`);
+  if (lines > SOURCE_LIMIT) {
+    if (GRANDFATHERED.has(label)) debt.push(`${label}: ${lines} lines`);
+    else violations.push(`${label}: ${lines} lines (max ${SOURCE_LIMIT})`);
   }
-}
-
-if (warnings.length) {
-  console.warn(`source size warning (${warnings.length} file(s))`);
-  console.warn(warnings.sort().join("\n"));
 }
 
 if (violations.length) {
@@ -76,4 +83,7 @@ if (violations.length) {
   process.exit(1);
 }
 
-console.log("source size check passed");
+console.log(
+  `source size check passed (${debt.length} grandfathered file(s) over ${SOURCE_LIMIT} lines)`,
+);
+if (debt.length) console.log(`baseline debt:\n${debt.sort().join("\n")}`);
