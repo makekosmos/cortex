@@ -3,7 +3,11 @@ import { computed, onMounted, ref } from "vue";
 import type { InstalledStoreItem, StoreListing } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
 import { useStoreCatalog } from "../composables/useStoreCatalog";
-import { installKey, installTarget, installedForListing } from "../store-helpers";
+import {
+  installKey,
+  installTarget,
+  installedForListing,
+} from "../store-helpers";
 import StoreListingCard from "./StoreListingCard.vue";
 import shellIcon from "../../../desktop/build/icon.png";
 import edenIcon from "../../../../memoria/icon.png";
@@ -12,9 +16,13 @@ import dictationIcon from "../../../../dictation/icon.svg";
 import graphIcon from "../../../desktop/build/icon.png";
 
 const props = defineProps<{ client: ManagerClient }>();
-const { snapshot, error, listings, installed, load } = useStoreCatalog(props.client);
+const { snapshot, error, listings, installed, load } = useStoreCatalog(
+  props.client,
+);
 const installing = ref(new Set<string>());
-const feedback = ref(new Map<string, { kind: "success" | "error"; message: string }>());
+const feedback = ref(
+  new Map<string, { kind: "success" | "error"; message: string }>(),
+);
 
 const canonicalApps: StoreListing[] = [
   {
@@ -32,7 +40,7 @@ const canonicalApps: StoreListing[] = [
     icon_url: edenIcon,
   },
   {
-    id: "com.kosmos.agenda",
+    id: "com.kosmos.delphi",
     kind: "kosmos-package",
     name: "Delphi",
     publisher: "Kosmos",
@@ -54,14 +62,20 @@ const canonicalApps: StoreListing[] = [
   },
 ];
 const rows = computed(() => {
-  const apps = listings.value.filter((listing) => listing.kind === "kosmos-package");
+  const apps = listings.value.filter(
+    (listing) => listing.kind === "kosmos-package",
+  );
   const canonical = canonicalApps.map((app) => {
     const listing = apps.find((candidate) => candidate.id === app.id);
-    return listing ? { ...app, ...listing, icon_url: listing.icon_url ?? app.icon_url } : app;
+    return listing
+      ? { ...app, ...listing, icon_url: listing.icon_url ?? app.icon_url }
+      : app;
   });
   return [
     ...canonical,
-    ...apps.filter((listing) => !canonicalApps.some((app) => app.id === listing.id)),
+    ...apps.filter(
+      (listing) => !canonicalApps.some((app) => app.id === listing.id),
+    ),
   ];
 });
 function installedFor(listing: StoreListing) {
@@ -109,7 +123,11 @@ async function openPackage(item: InstalledStoreItem) {
     if (!enabled) return;
     await load();
   }
-  await props.client.call("openPackage", { package_id: item.id }, `store-open:${item.id}`);
+  await props.client.call(
+    "openPackage",
+    { package_id: item.id },
+    `store-open:${item.id}`,
+  );
 }
 onMounted(() => void load());
 </script>
