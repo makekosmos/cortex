@@ -2,12 +2,18 @@
 
 | Компонент                  | Версия         |
 | -------------------------- | -------------- |
-| Kosmos Desktop (win / mac) | 0.6.25 / 0.5.1 |
+| Kosmos Desktop (win / mac) | 0.8.12 / 0.5.1 |
 | Eden                       | 0.5.4          |
 | Delphi                     | 0.1.8          |
 | Horologion                 | 0.1.4          |
 | Arrancador                 | 0.1.5          |
 | Akasha                     | 0.1.2          |
+
+## 2026-08-23 — Централизованные секреты приложений (Kosmos Desktop 0.8.11 -> 0.8.12, Arcadia 0.1.5 -> 0.1.6)
+
+Kosmos Manager стал единственным местом для API-ключей приложений. RAWG-ключ Arcadia хранится в системном хранилище секретов, а Arcadia использует уже настроенный ключ без собственного поля ввода. Расширения не могут читать или менять секреты через bridge.
+
+Checks: desktop typecheck, Rust tests, unit tests, docs check, Arcadia validate/build/package, Windows installer build and release-channel verification.
 
 ## 2026-07-16 — Launcher calculator + backend recovery (Kosmos Desktop 0.6.24 -> 0.6.25)
 
