@@ -43,6 +43,10 @@ describe("Desktop update bridge binding", () => {
       executable,
       stateFile: path.join(dataDir, "update-state.json"),
     });
+    expect(resolveDesktopUpdateBridge({ ...input, env: {} })).toEqual({
+      executable,
+      stateFile: path.join(dataDir, "update-state.json"),
+    });
     expect(
       resolveDesktopUpdateBridge({
         ...input,

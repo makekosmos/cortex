@@ -44,10 +44,8 @@ export function resolveDesktopUpdateBridge(input: {
   const configuredStateFile = env.KOSMOS_UPDATE_STATE_FILE?.trim();
   const configuredExecutable = env.KOSMOS_APP_EXECUTABLE?.trim();
   if (
-    !configuredStateFile ||
-    !configuredExecutable ||
-    !samePath(configuredStateFile, stateFile, platform) ||
-    !samePath(configuredExecutable, executable, platform) ||
+    (configuredStateFile && !samePath(configuredStateFile, stateFile, platform)) ||
+    (configuredExecutable && !samePath(configuredExecutable, executable, platform)) ||
     !exists(executable)
   )
     return null;
