@@ -1,6 +1,0 @@
-@import "tailwindcss";
-@source "../components/**/*.{vue,ts}";
-@source "../patterns/**/*.{ts}";
-
-@import "./css-variables.css";
-@import "../components/sidebar.css";

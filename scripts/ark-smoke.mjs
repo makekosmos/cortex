@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
+const arcaSdkRoot = path.resolve(repoRoot, "..", "arca-sdk");
 const taskId = process.env.ARK_SMOKE_TASK_ID || "2026-04-26-ark-initial-plan-close";
 const smokeRoot = path.join(repoRoot, ".agent", "tasks", taskId, "smoke");
 
@@ -22,19 +23,10 @@ const steps = [
     args: ["test", "--manifest-path", "core/ark/crates/ark-core/rust/Cargo.toml"],
   },
   {
-    name: "kepler-backend Rust tests (включая usage_tracker модуль)",
-    command: "cargo",
-    args: ["test", "--manifest-path", "platform/runtime/Cargo.toml", "--lib"],
-  },
-  {
     name: "@kosmos/ark typecheck",
     command: "bun",
-    args: ["run", "--cwd", "core/ark/packages/ark", "typecheck"],
-  },
-  {
-    name: "desktop host + extensions build",
-    command: "bun",
-    args: ["run", "--cwd", "platform/desktop", "build:js"],
+    args: ["run", "typecheck"],
+    cwd: arcaSdkRoot,
   },
 ];
 

@@ -65,7 +65,17 @@ async function collectScripts() {
       }
     }
   }
-  await walkPkg(ROOT);
+  const scriptRoots = [
+    ROOT,
+    ...new Set(
+      SIBLING_REPO_PATHS.map(([, sibling]) =>
+        path.resolve(ROOT, sibling.split("/").join(path.sep)),
+      ),
+    ),
+  ];
+  for (const scriptRoot of scriptRoots) {
+    if (existsSync(scriptRoot)) await walkPkg(scriptRoot);
+  }
   return scripts;
 }
 
@@ -110,9 +120,53 @@ const KNOWN_NONEXISTENT = new Set([
   "apps/eden/ts",
   "apps/eden/kotlin",
   "platform/runtime/src/backup.rs", // Phase 11 backup module — TBD
+  "platform/desktop/src/components/ClipboardQuickPanel.vue", // retired clipboard UI
+  "platform/desktop/electron/clipboard-history-store.ts", // retired clipboard history
+  "platform/desktop/electron/clipboard-history.ts", // retired clipboard history
+]);
+
+// Commands from the retired monorepo shell/extension pipeline. Keep this list
+// explicit: new commands still must exist in an active sibling package.json.
+const KNOWN_RETIRED_COMMANDS = new Set([
+  "build:extensions",
+  "build:extensions:only",
+  "build:extensions:changed",
+  "build:extensions:vue",
+  "build:extension",
+  "dev:extensions",
+  "dev:extensions:only",
+  "ext:install",
+  "ext:uninstall",
+  "ext:build",
+  "ext:publish",
+  "ext:publish-all",
+  "ext:catalog",
+  "desktop:typecheck",
+  "shell:build",
+  "shell:typecheck",
+  "products:build",
+  "visual:regression",
+  "visual:launcher",
+  "visual:eden",
+  "test:e2e:debug",
 ]);
 
 // внутренние markdown-ссылки `/section/page` (с возможным якорем)
+const SIBLING_REPO_PATHS = [
+  ["core/ark/packages/ark", "../arca-sdk"],
+  ["packages/visuals", "../imago"],
+  ["products/eden", "../memoria"],
+  ["products/delphi", "../agenda"],
+  ["products/daedalus", "../incubator/daedalus"],
+  ["incubator/arrancador", "../incubator/arrancador"],
+  ["incubator/akasha", "../incubator/akasha"],
+  ["incubator/mobile", "../incubator/mobile"],
+  ["platform/desktop", "../cortex/desktop"],
+  ["platform/runtime", "../cortex/runtime"],
+  ["platform/native-services", "../cortex/native-services"],
+  ["services/relay-reference", "../relay-reference"],
+];
+
 const INTERNAL_LINK_RE = /\]\((\/[a-z0-9\-/]+)(?:#[a-z0-9-]+)?\)/gi;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,7 +175,14 @@ const INTERNAL_LINK_RE = /\]\((\/[a-z0-9\-/]+)(?:#[a-z0-9-]+)?\)/gi;
 
 function pathExists(p) {
   // Пути могут быть с / или \, приводим к OS
-  const norm = p.replace(/\//g, path.sep);
+  const norm = p.replaceAll("\\", "/").replace(/\/+$/, "");
+  const sibling = SIBLING_REPO_PATHS.find(
+    ([legacy]) => norm === legacy || norm.startsWith(`${legacy}/`),
+  );
+  if (sibling) {
+    const suffix = norm.slice(sibling[0].length).replace(/^[/\\]/, "");
+    return existsSync(path.join(ROOT, sibling[1], suffix));
+  }
   return existsSync(path.join(ROOT, norm));
 }
 
@@ -202,7 +263,7 @@ async function main() {
     // 2. bun run <script>
     for (const m of text.matchAll(BUN_CMD_RE)) {
       const cmd = m[1];
-      if (!scripts.has(cmd)) {
+      if (!scripts.has(cmd) && !KNOWN_RETIRED_COMMANDS.has(cmd)) {
         issues.push({
           file: rel,
           kind: "cmd",

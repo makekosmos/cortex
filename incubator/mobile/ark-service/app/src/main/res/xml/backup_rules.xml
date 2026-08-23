@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<full-backup-content>
-    <!-- Include the Room database files -->
-    <include domain="database" path="." />
-    <!-- Include shared preferences -->
-    <include domain="sharedpref" path="." />
-</full-backup-content>

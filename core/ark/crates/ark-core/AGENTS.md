@@ -10,7 +10,6 @@
 Компактный локальный boot context. Подробности читай в source docs ниже по необходимости.
 
 ---
-
 ## Source Docs
 
 - `docs-site/packages/ark-core.md`

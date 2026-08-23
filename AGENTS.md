@@ -87,6 +87,7 @@ Noisy build output — через `rtk err <cmd>` или лог в `.tmp/*.log`,
 
 ## Universal never rules
 
+- **Принцип нулевого техдолга:** не добавляй временные aliases, compatibility-ветки или legacy-имена без согласованного срока удаления и проверки, которая не позволит им стать постоянными.
 - ❌ Direct SQL writes в ARK sync tables из app TS / renderer; renderer не открывает SQLite.
 - ❌ Rust writer в sync table без version-vector bump (`record_local_upsert/delete` или equivalent).
 - ❌ Destructive migrations (`DROP TABLE`, несовместимый `ALTER COLUMN`). Только additive.
@@ -100,6 +101,7 @@ Noisy build output — через `rtk err <cmd>` или лог в `.tmp/*.log`,
 - ❌ `git add -A`, `--no-verify`, `git reset --hard`, force-push в main/master.
 - ❌ Bump/release/version change без явной команды пользователя.
 - ❌ Попутный рефакторинг; один логический change — один коммит.
+- ❌ Создавать или сохранять legacy product/app IDs для удобства миграции. Если ID необходимо сменить, выполняй полную миграцию всех потребителей и удаляй старый ID без fallback.
 - ❌ Объявлять PASS без релевантных checks; для UI — visual verify или явно “не проверял визуально”.
 
 Полный список: `docs-site/agents/forbidden/index.md` и узкие файлы в `docs-site/agents/forbidden/`.

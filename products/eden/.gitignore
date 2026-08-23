@@ -1,7 +1,0 @@
-dist/
-node_modules/
-# Vitest browser — screenshots failures + attachments не должны попадать в репо.
-# Регенерируются на каждом upgraded `vitest run --browser`. Если понадобится
-# visual regression — настроим explicit baseline directory отдельно.
-tests/components/__screenshots__/
-.vitest-attachments/

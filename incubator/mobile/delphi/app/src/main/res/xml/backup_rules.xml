@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<full-backup-content>
-    <!-- Include DataStore preferences (space code, sync state, version vector) -->
-    <include domain="file" path="datastore/" />
-    <!-- Include SharedPreferences (space code backup) -->
-    <include domain="sharedpref" path="." />
-</full-backup-content>

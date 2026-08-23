@@ -265,6 +265,20 @@ pub fn ensure_legacy_type_version(
     ui_schema_json: &str,
     created_at: &str,
 ) -> Result<(), String> {
+    let current_version: Option<String> = conn
+        .query_row(
+            "SELECT current_version FROM object_types WHERE id=?1",
+            params![type_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if current_version
+        .as_deref()
+        .is_some_and(|version| version != LEGACY_VERSION)
+    {
+        return Ok(());
+    }
     let has_versions: bool = conn
         .query_row(
             "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='object_type_versions')",
@@ -683,6 +697,57 @@ pub fn register_type(conn: &Connection, registration: &TypeRegistration) -> Resu
         .map_err(|e| e.to_string())?
         .is_some()
     {
+        // Package definitions are replayed on every runtime start. A replay
+        // is safe only when the canonical summary and requested version are
+        // identical; conflicting definitions remain errors.
+        let existing_name: String = conn
+            .query_row(
+                "SELECT name FROM object_types WHERE id=?1",
+                params![registration.type_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        let existing = get_type(conn, &registration.type_id, Some(&registration.version))?
+            .ok_or_else(|| "canonical type already exists".to_string())?;
+        let definition = &existing.definition;
+        let canonical = canonical_definition(&TypeVersion {
+            type_id: registration.type_id.clone(),
+            version: registration.version.clone(),
+            schema_json: registration.schema_json.clone(),
+            ui_schema_json: registration.ui_schema_json.clone(),
+            content_contract_json: registration.content_contract_json.clone(),
+            relations_json: registration.relations_json.clone(),
+            sync_policy_json: registration.sync_policy_json.clone(),
+            schema_hash: registration.schema_hash.clone(),
+            created_at: registration.created_at.clone(),
+        })?;
+        let canonical_hash = canonical
+            .4
+            .split('|')
+            .next()
+            .ok_or_else(|| "canonical hash metadata missing".to_string())?;
+        if existing_name == registration.name
+            && existing.summary.owner_kind == registration.owner_kind
+            && existing.summary.owner_id == registration.owner_id
+            && existing.summary.status == registration.status
+            && existing.summary.base_type_id == registration.base_type_id
+            && definition.type_id == registration.type_id
+            && definition.version == registration.version
+            && definition.schema_json == canonical.0
+            && definition.ui_schema_json == canonical.1
+            && definition.content_contract_json == canonical.2
+            && definition.relations_json == canonical.3
+            && definition.sync_policy_json
+                == serde_json::to_string(&canonical_value(&parse_json(
+                    &registration.sync_policy_json,
+                    "sync_policy_json",
+                )?))
+                .map_err(|e| e.to_string())?
+            && definition.schema_hash == canonical_hash
+            && definition.created_at == registration.created_at
+        {
+            return Ok(());
+        }
         return Err("canonical type already exists".into());
     }
 
@@ -704,7 +769,7 @@ pub fn register_type(conn: &Connection, registration: &TypeRegistration) -> Resu
     let result = (|| {
         conn.execute(
                 "INSERT INTO object_types (id,name,schema_json,ui_schema_json,created_at,updated_at,system_locked,owner_kind,owner_id,current_version,status,base_type_id) VALUES (?1,?2,?3,?4,?5,?5,0,?6,?7,?8,?9,?10)",
-                params![registration.type_id, registration.name, registration.schema_json, registration.ui_schema_json, registration.created_at, registration.owner_kind, registration.owner_id, LEGACY_VERSION, registration.status, registration.base_type_id],
+                params![registration.type_id, registration.name, registration.schema_json, registration.ui_schema_json, registration.created_at, registration.owner_kind, registration.owner_id, registration.version, registration.status, registration.base_type_id],
             )
             .map_err(|e| e.to_string())?;
         insert_type_version(
@@ -798,7 +863,9 @@ pub fn migrate_phase2(conn: &Connection) -> Result<(), String> {
         }
         conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_object_type_versions_lookup ON object_type_versions(type_id,version); CREATE INDEX IF NOT EXISTS idx_object_type_aliases_canonical ON object_type_aliases(canonical_type_id); CREATE INDEX IF NOT EXISTS idx_objects_type_version ON objects(type_id,type_version); CREATE INDEX IF NOT EXISTS idx_sync_pending_awaited_type_version ON sync_pending_objects(awaited_type_id,awaited_type_version);").map_err(|e|e.to_string())?;
         let mut stmt = conn
-            .prepare("SELECT id,schema_json,ui_schema_json,created_at FROM object_types")
+            .prepare(
+                "SELECT id,schema_json,ui_schema_json,created_at,current_version FROM object_types",
+            )
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |r| {
@@ -807,13 +874,17 @@ pub fn migrate_phase2(conn: &Connection) -> Result<(), String> {
                     r.get::<_, String>(1)?,
                     r.get::<_, String>(2)?,
                     r.get::<_, String>(3)?,
+                    r.get::<_, String>(4)?,
                 ))
             })
             .map_err(|e| e.to_string())?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?;
         drop(stmt);
-        for (id, schema, ui, created) in rows {
+        for (id, schema, ui, created, current_version) in rows {
+            if current_version != LEGACY_VERSION {
+                continue;
+            }
             let v = TypeVersion {
                 type_id: id.clone(),
                 version: LEGACY_VERSION.into(),

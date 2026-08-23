@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
+const coreRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
+const makekosmosRoot = path.resolve(coreRoot, "..");
 
 // Multi-scan invariant guard. Запускается через `bun run ark:guard:writes`
 // и в lefthook pre-commit. Каждая отдельная проверка возвращает массив
@@ -51,7 +52,7 @@ function walk(dir, files = []) {
 }
 
 function relRepo(p) {
-  return path.relative(repoRoot, p).replaceAll(path.sep, "/");
+  return path.relative(makekosmosRoot, p).replaceAll(path.sep, "/");
 }
 
 // --- Check 1: direct SQL writes ---------------------------------------------
@@ -74,19 +75,14 @@ const writePattern = new RegExp(
 
 function checkDirectSqlWrites() {
   const roots = [
-    "incubator/arrancador/src",
-    "extensions/dashboard/src",
-    "products/delphi/src",
-    "products/eden/src",
-    "products/delphi/src",
-    "products/eden/src",
-    "incubator/arrancador/src",
-    "incubator/akasha/src",
-    "platform/desktop/electron",
+    "agenda/src",
+    "memoria/src",
+    "arcadia/src",
+    "cortex/desktop/electron",
   ];
   const findings = [];
   for (const root of roots) {
-    for (const filePath of walk(path.join(repoRoot, root))) {
+    for (const filePath of walk(path.join(makekosmosRoot, root))) {
       const text = fs.readFileSync(filePath, "utf8");
       text.split(/\r?\n/).forEach((line, index) => {
         if (writePattern.test(line)) {
@@ -108,8 +104,8 @@ function checkDirectSqlWrites() {
 const userDataPattern = /\bapp\.getPath\s*\(\s*["']userData["']\s*\)/;
 
 function checkUserDataAccess() {
-  const root = path.join(repoRoot, "platform/desktop/electron");
-  const allowlist = new Set(["platform/desktop/electron/instance.ts"]);
+  const root = path.join(makekosmosRoot, "cortex/desktop/electron");
+  const allowlist = new Set(["cortex/desktop/electron/instance.ts"]);
   const findings = [];
   for (const filePath of walk(root)) {
     const rel = relRepo(filePath);
@@ -136,10 +132,11 @@ function checkUserDataAccess() {
 const pathJoinBrandPattern = /\bpath\.join\s*\([^)]*["'](?:Kosmos|Kepler)["']/;
 
 function checkBrandPathJoin() {
-  const root = path.join(repoRoot, "platform/desktop/electron");
+  const root = path.join(makekosmosRoot, "cortex/desktop/electron");
   const allowlist = new Set([
-    "platform/desktop/electron/instance.ts",
-    "platform/desktop/electron/data-dir.ts",
+    "cortex/desktop/electron/instance.ts",
+    "cortex/desktop/electron/data-dir.ts",
+    "cortex/desktop/electron/instance.test.ts",
   ]);
   const findings = [];
   for (const filePath of walk(root)) {
@@ -169,8 +166,8 @@ const kosmosDataAppdataPattern =
   /KOSMOS_DATA_DIR[\s\S]{0,200}(?:%APPDATA%|process\.env\.APPDATA|AppData[\\/]Roaming|getPath\(["']appData["']\))/;
 
 function checkTestsAppdataDataDir() {
-  const root = path.join(repoRoot, "tests/e2e");
-  const allowlist = new Set(["tests/e2e/helpers/launch.ts"]);
+  const root = path.join(makekosmosRoot, "cortex/desktop/e2e");
+  const allowlist = new Set(["cortex/desktop/e2e/helpers/launch.ts"]);
   const findings = [];
   for (const filePath of walk(root)) {
     const rel = relRepo(filePath);

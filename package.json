@@ -1,13 +1,11 @@
 {
   "name": "kosmos",
   "private": true,
-  "workspaces": [
-    "core/ark/packages/ark"
-  ],
   "scripts": {
     "prepare": "lefthook install",
     "ark:guard:writes": "node scripts/check-ark-write-boundaries.mjs",
     "ark:smoke": "node scripts/ark-smoke.mjs",
+    "check:source-size": "node scripts/check-source-size.mjs",
     "lint": "oxlint",
     "format": "oxfmt",
     "format:check": "oxfmt --check",

@@ -1,11 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
+const desktopRoot = path.resolve(repoRoot, "../cortex/desktop");
 const require = createRequire(import.meta.url);
 
 function makeSmokeWavBase64() {
@@ -82,6 +83,13 @@ const expectedSubstring =
   process.env.KOSMOS_TEST_DICTATION_EXPECTED_TRANSCRIPT_SUBSTRING?.trim() || null;
 const outputDir = mkdtempSync(path.join(os.tmpdir(), "kosmos-dictation-groq-smoke-"));
 const playwrightCliPath = resolvePlaywrightCliPath();
+const playwrightConfig = path.join(desktopRoot, "playwright.config.ts");
+const dictationSpec = path.join(desktopRoot, "e2e/dictation.spec.ts");
+
+if (!existsSync(playwrightConfig) || !existsSync(dictationSpec)) {
+  console.error(`Cortex desktop test files are unavailable under ${desktopRoot}`);
+  process.exit(1);
+}
 
 if (usingSyntheticAudio) {
   console.log("No KOSMOS_TEST_DICTATION_AUDIO_B64 provided; using a synthetic WAV fixture.");
@@ -99,11 +107,11 @@ if (usingSyntheticAudio) {
 const playwrightArgs = [
   "test",
   "--config",
-  "platform/desktop/playwright.config.ts",
+  playwrightConfig,
   "--reporter=line",
   "--output",
   outputDir,
-  "platform/desktop/e2e/dictation.spec.ts",
+  dictationSpec,
   "-g",
   "opt-in real provider path works headless without microphone",
 ];
@@ -112,7 +120,7 @@ console.log(`$ node ${quoteForDisplay(playwrightCliPath)} ${playwrightArgs.join(
 console.log(`Playwright output dir: ${outputDir}`);
 
 const result = spawnSync(process.execPath, [playwrightCliPath, ...playwrightArgs], {
-  cwd: repoRoot,
+  cwd: desktopRoot,
   env: {
     ...process.env,
     KOSMOS_TEST_GROQ_API_KEY: apiKey,
