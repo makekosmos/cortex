@@ -17,7 +17,6 @@ pub mod host;
 pub mod iroh_transport;
 pub mod mesh;
 pub mod net;
-pub mod pomodoro;
 pub mod protocol;
 pub mod relay_sync;
 pub mod relay_transport;
