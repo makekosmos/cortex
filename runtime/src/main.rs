@@ -1120,7 +1120,7 @@ mod tests {
     }
 
     #[test]
-    fn packaged_windows_subsystem_keeps_debug_console_and_worker_hidden() {
+    fn packaged_windows_subsystem_keeps_debug_console_hidden() {
         let source = include_str!("main.rs");
         let crate_attributes = source.lines().take(8).collect::<Vec<_>>().join("\n");
         assert!(crate_attributes.contains("all(windows, feature = \"windows-gui-subsystem\")"));
@@ -1128,13 +1128,5 @@ mod tests {
 
         let package_build = include_str!("../../desktop/scripts/build-backend.mjs");
         assert!(package_build.contains("--features\", \"windows-gui-subsystem"));
-
-        let supervisor = include_str!("engine_supervisor.rs");
-        let spawn = supervisor
-            .split_once("fn spawn_core_worker")
-            .and_then(|(_, rest)| rest.split_once("fn read_sync_env"))
-            .map(|(body, _)| body)
-            .expect("spawn_core_worker source");
-        assert!(spawn.contains("creation_flags(CREATE_NO_WINDOW)"));
     }
 }

@@ -50,7 +50,7 @@ test("retired Godfile paths cannot reuse an old exemption", async () => {
 });
 
 test("only the explicit debt baseline is grandfathered", async () => {
-  const result = await runFixture({ "runtime/src/engine_supervisor.rs": lines(301) });
+  const result = await runFixture({ "runtime/src/main.rs": lines(301) });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /1 grandfathered file/);
 });
