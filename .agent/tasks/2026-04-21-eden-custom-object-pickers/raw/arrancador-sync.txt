@@ -1,4 +1,0 @@
-apps/arrancador/electron/main/services/ark-game-objects.ts
-- mergeArkGameProps(): reads props.play_status and props.genres from Ark object props into Arrancador game rows.
-- buildGameObjectProps(): writes game.play_status and game.genres back into Ark object props.
-Implication: when Eden and Arrancador point at the same Ark DB/selected space, status and genres are shared through Ark object props.

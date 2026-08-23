@@ -1,8 +1,0 @@
-
-  transition: width 0.375s cubic-bezier(0.22, 1, 0.36, 1);
-.kosmos-sidebar-wrapper.animating {
-  transition: width 0.33s cubic-bezier(0.22, 1, 0.36, 1);
-.kosmos-sidebar-wrapper.is-resizing {
-.kosmos-sidebar-wrapper.is-resizing .kosmos-resize-handle-line {
-
-

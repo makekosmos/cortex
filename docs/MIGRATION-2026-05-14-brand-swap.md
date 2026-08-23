@@ -114,6 +114,5 @@ Remove-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Run KosmosKe
 
 ## Связанные документы
 
-- `scripts/migrate-kepler-to-kosmos.ps1` — сам скрипт.
-- `scripts/migrate-kepler-to-kosmos-smoke.ps1` — smoke-тест.
-- `scripts/check-swap-completeness.ps1` — verify, что все упоминания старых токенов в коде заменены.
+- `Cortex/scripts/release/migrate-kepler-to-kosmos.ps1` — сам скрипт.
+- `Cortex/scripts/release/migrate-kepler-to-kosmos-smoke.ps1` — smoke-тест.

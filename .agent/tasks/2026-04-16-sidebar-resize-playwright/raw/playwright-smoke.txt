@@ -1,4 +1,0 @@
-Smoke dashboard DB seeded at D:\Personal\Hobby\Coding\kosmos\apps\dashboard\.e2e\smoke-dashboard.db
-electron.launch: spawn EPERM
-Call log:
-- launching electron.exe ... dist-electron/main.js

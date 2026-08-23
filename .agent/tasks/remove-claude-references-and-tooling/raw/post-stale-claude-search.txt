@@ -1,1 +1,0 @@
-AGENTS.md:36:- Prefer updating and maintaining `AGENTS.md` files rather than reintroducing `CLAUDE.md` files.

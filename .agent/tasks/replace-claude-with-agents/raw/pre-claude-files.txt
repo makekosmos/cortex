@@ -1,8 +1,0 @@
-CLAUDE.md
-apps/delphi/CLAUDE.md
-apps/delphi/kotlin/CLAUDE.md
-apps/delphi/swift-archive/CLAUDE.md
-apps/eden/CLAUDE.md
-apps/elysium/CLAUDE.md
-apps/olympia/CLAUDE.md
-packages/ark-core/CLAUDE.md

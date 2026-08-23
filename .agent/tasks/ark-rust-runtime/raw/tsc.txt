@@ -1,3 +1,0 @@
-$ cd apps/delphi/ts && bunx tsc --noEmit
-EXIT_CODE=0
-(no diagnostics — zero lines of output)

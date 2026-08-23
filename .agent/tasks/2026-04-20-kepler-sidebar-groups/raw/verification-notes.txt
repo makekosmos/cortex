@@ -1,6 +1,0 @@
-Verification summary
-
-- bun run build: PASS
-- UTF-8 source checks via Get-Content -Encoding utf8: PASS
-- Electron runtime automation: blocked by spawn EPERM in sandbox
-- Playwright Chromium automation: blocked by spawn EPERM in sandbox

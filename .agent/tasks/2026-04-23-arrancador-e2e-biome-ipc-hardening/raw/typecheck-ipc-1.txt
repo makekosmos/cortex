@@ -1,7 +1,0 @@
-$ tsc --noEmit
-src/lib/browser.ts(132,33): error TS2339: Property 'invoke' does not exist on type 'ArrancadorBridge'.
-src/lib/browser.ts(148,33): error TS2339: Property 'invoke' does not exist on type 'ArrancadorBridge'.
-src/lib/browser.ts(182,20): error TS2339: Property 'invoke' does not exist on type 'ArrancadorBridge'.
-src/lib/browser.ts(184,20): error TS2339: Property 'invoke' does not exist on type 'ArrancadorBridge'.
-src/lib/browser.ts(223,25): error TS2339: Property 'invoke' does not exist on type 'ArrancadorBridge'.
-src/lib/browser.ts(232,18): error TS2339: Property 'invoke' does not exist on type 'ArrancadorBridge'.

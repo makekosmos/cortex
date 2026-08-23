@@ -13,7 +13,6 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
-    "electron": "^42.2.0",
     "knip": "^6.14.1",
     "lefthook": "^2.1.8",
     "oxfmt": "0.51.0",

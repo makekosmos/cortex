@@ -1,7 +1,0 @@
-bun : $ tsc --noEmit
-строка:2 знак:1
-+ bun run typecheck *> 'D:\Personal\Hobby\Coding\kosmos\.agent\tasks\20 ...
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: ($ tsc --noEmit:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 

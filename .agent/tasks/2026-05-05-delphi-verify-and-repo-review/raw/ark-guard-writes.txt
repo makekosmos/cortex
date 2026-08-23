@@ -1,1 +1,0 @@
-ARK write boundary guard passed.

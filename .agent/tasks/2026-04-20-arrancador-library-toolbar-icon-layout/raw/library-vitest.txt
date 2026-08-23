@@ -1,8 +1,0 @@
-$ bunx vitest run --configLoader native --config vitest.config.mjs src/test/library.test.tsx
-
-RUN  v4.1.4 D:/Personal/Hobby/Coding/kosmos/apps/arrancador
-
-Test Files  1 passed (1)
-Tests  6 passed (6)
-Start at  02:19:13
-Duration  3.38s (transform 177ms, setup 167ms, import 791ms, tests 980ms, environment 1.21s)

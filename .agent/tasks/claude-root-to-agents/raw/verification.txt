@@ -1,7 +1,0 @@
-AC1=PASS
-AC2=PASS
-AC3_skills_exists=PASS
-AC3_agents_exists=PASS
-AC4_skills_exists=PASS
-AC4_agents_exists=PASS
-OVERALL=PASS

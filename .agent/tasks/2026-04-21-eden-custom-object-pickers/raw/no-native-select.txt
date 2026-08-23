@@ -1,4 +1,0 @@
-Command: rg -n "<select|native select" D:\Personal\Hobby\Coding\kosmos\apps\eden\ts\src\components\typed-notes
-Exit code: 0
-Output:
-no matches

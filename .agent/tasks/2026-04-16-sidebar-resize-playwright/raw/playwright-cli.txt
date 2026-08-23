@@ -1,4 +1,0 @@
-Smoke dashboard DB seeded at D:\Personal\Hobby\Coding\kosmos\apps\dashboard\.e2e\smoke-dashboard.db
-Running 1 test using 1 worker
-Error: spawn EPERM
-at WorkerHost.startRunner

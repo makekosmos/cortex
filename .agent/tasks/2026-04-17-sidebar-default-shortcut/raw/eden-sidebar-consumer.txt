@@ -1,8 +1,0 @@
-
-  <KosmosSidebar
-    @config-change="emit('configChange', $event)"
-    @update:hidden="emit('update:hidden', $event)"
-  Sidebar as KosmosSidebar,
-  "update:hidden": [hidden: boolean];
-
-

@@ -1,8 +1,0 @@
-task-builder.md
-task-builder.toml
-task-fixer.md
-task-fixer.toml
-task-spec-freezer.md
-task-spec-freezer.toml
-task-verifier.md
-task-verifier.toml

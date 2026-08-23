@@ -1,9 +1,0 @@
-Command: Select-String -Path "D:\Personal\Hobby\Coding\kosmos\apps\eden\ts\src\components\typed-notes\ObjectPropertyField.vue","D:\Personal\Hobby\Coding\kosmos\apps\eden\ts\src\components\typed-notes\ObjectPropertyPicker.vue" -Pattern "Без значения","Нет вариантов","Нет связей","Выбрать варианты","Нет доступных объектов"
-Working directory: D:\Personal\Hobby\Coding\kosmos
-Exit code: 0
-Output:
-apps\eden\ts\src\components\typed-notes\ObjectPropertyField.vue:124:      return "Выбрать варианты";
-apps\eden\ts\src\components\typed-notes\ObjectPropertyField.vue:213:          Нет связей
-apps\eden\ts\src\components\typed-notes\ObjectPropertyField.vue:224:          empty-options-label="Нет доступных объектов"
-apps\eden\ts\src\components\typed-notes\ObjectPropertyPicker.vue:22:  emptyLabel: "Без значения",
-apps\eden\ts\src\components\typed-notes\ObjectPropertyPicker.vue:23:  emptyOptionsLabel: "Нет вариантов",

@@ -17,16 +17,7 @@
   ],
   "workspaces": {
     ".": {
-      "entry": [
-        "tests/**/*.spec.ts",
-        "tests/**/*.test.ts",
-        "tests/**/*.bench.ts",
-        "scripts/ark-inspect.mjs",
-        "scripts/fix-mojibake.mjs",
-        "scripts/merge-swap.mjs",
-        "scripts/run-dictation-groq-smoke.mjs",
-        "site/src/main.ts"
-      ]
+      "entry": ["scripts/ark-inspect.mjs", "scripts/fix-mojibake.mjs"]
     },
     "platform/desktop": {
       "entry": [

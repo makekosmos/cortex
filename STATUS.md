@@ -1355,12 +1355,10 @@ bunx playwright test --list # parse-check
 
 ### Migration scripts
 
-- `scripts/migrate-kepler-to-kosmos.ps1` — user data `%APPDATA%\Kepler` → `%APPDATA%\Kosmos` (atomic Move-Item + lock-файл renames + HKCU Run update).
-- `scripts/migrate-kepler-to-kosmos-smoke.ps1` — isolated smoke test (16/16 assertions pass).
-- `scripts/check-swap-completeness.ps1` — grep audit forbidden token patterns.
-- `scripts/measure-kepler-ram.ps1` — baseline / kepler / `-Compare` modes для RAM benchmarks.
+- `Cortex/scripts/release/migrate-kepler-to-kosmos.ps1` — user data `%APPDATA%\Kepler` → `%APPDATA%\Kosmos` (atomic Move-Item + lock-файл renames + HKCU Run update).
+- `Cortex/scripts/release/migrate-kepler-to-kosmos-smoke.ps1` — isolated smoke test (16/16 assertions pass).
+- `Cortex/scripts/release/measure-kepler-ram.ps1` — baseline / kepler / `-Compare` modes для RAM benchmarks.
 - `scripts/fix-mojibake.mjs` — UTF-8 recovery после PowerShell encoding bugs.
-- `scripts/merge-swap.mjs` — token swap helper после `git checkout --theirs` merge conflicts.
 - `platform/desktop/scripts/dev-extensions.mjs` — orchestrator для Vite dev servers per extension.
 
 ## ⏳ Не сделано / отложено

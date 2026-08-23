@@ -1,7 +1,0 @@
-bun : $ tsc
-строка:2 знак:1
-+ bun run build > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04- ...
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: ($ tsc:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 

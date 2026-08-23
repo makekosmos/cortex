@@ -1,4 +1,0 @@
-RUN  v4.1.4 D:/Personal/Hobby/Coding/kosmos/apps/arrancador
-Test Files  3 passed (3)
-Tests  4 passed (4)
-PASS

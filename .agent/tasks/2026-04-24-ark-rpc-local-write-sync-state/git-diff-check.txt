@@ -1,3 +1,0 @@
-warning: in the working copy of 'packages/ark-core/rust/src/db.rs', LF will be replaced by CRLF the next time Git touches it
-warning: in the working copy of 'packages/ark-core/rust/src/main.rs', LF will be replaced by CRLF the next time Git touches it
-warning: in the working copy of 'packages/arksync-node/src/ark-client.ts', LF will be replaced by CRLF the next time Git touches it

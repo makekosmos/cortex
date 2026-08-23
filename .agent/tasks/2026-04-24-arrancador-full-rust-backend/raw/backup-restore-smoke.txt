@@ -1,2 +1,0 @@
-{"event":"backup_progress","progress":{"stage":"restore","current":"D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-04-24-arrancador-full-rust-backend\\raw\\backup-smoke-fixture-4\\restore\\save-b.bin","done":2,"total":2}}
-{"ok":true,"data":true}

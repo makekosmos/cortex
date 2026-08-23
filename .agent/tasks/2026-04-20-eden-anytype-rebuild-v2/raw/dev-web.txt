@@ -1,8 +1,0 @@
-bun run dev:web
-
-VITE v8.0.3 ready in 396 ms
-Local: http://localhost:5173/
-
-Notes:
-- This web-only config bypasses the Electron plugin and starts the UI shell without the Rust/Electron child-process chain.
-- It exists to speed up visual iteration on the Vue UI path.

@@ -1,9 +1,0 @@
-Smoke dashboard DB seeded at D:\Personal\Hobby\Coding\kosmos\apps\dashboard\.tmp\smoke-dashboard.db
-node : (node:37112) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
-строка:2 знак:1
-+ node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts ...
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: ((node:37112) Ex...nge at any time:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
-(Use `node --trace-warnings ...` to show where the warning was created)

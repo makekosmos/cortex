@@ -1,9 +1,0 @@
-Verification summary:
-
-- Direct dashboard Vite build: PASS
-- Playwright CLI runner: FAIL (spawn EPERM before worker starts)
-- Direct Playwright/Electron smoke runner: FAIL (electron.launch spawn EPERM)
-
-Current code changes address the two renderer-side root causes found during investigation:
-- shared sidebar slot clipping in DesktopChrome
-- sidebar drag-region overlay on interactive controls

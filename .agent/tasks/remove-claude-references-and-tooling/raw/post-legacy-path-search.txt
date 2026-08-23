@@ -1,1 +1,0 @@
-.agents/skills/repo-task-proof-loop/README.md:60:If your environment still reads `.claude/skills/`, point it at the same canonical `.agents/skills/` location via a symlink.

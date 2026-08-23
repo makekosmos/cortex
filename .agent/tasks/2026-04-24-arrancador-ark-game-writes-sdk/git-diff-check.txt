@@ -1,4 +1,0 @@
-warning: in the working copy of 'apps/arrancador/electron-builder.yml', LF will be replaced by CRLF the next time Git touches it
-warning: in the working copy of 'apps/arrancador/electron/main/services/ark-game-objects.ts', LF will be replaced by CRLF the next time Git touches it
-warning: in the working copy of 'apps/arrancador/package.json', LF will be replaced by CRLF the next time Git touches it
-warning: in the working copy of 'packages/arksync-node/src/index.ts', LF will be replaced by CRLF the next time Git touches it

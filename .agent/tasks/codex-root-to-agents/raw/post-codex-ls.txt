@@ -1,1 +1,0 @@
-lrwxrwxrwx 1 node node 7 Apr 10 13:13 .codex -> .agents

@@ -1,8 +1,0 @@
-cmd : $ biome check .
-строка:2 знак:1
-+ cmd /c bun run biome:check > D:\Personal\Hobby\Coding\kosmos\.agent\t ...
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: ($ biome check .:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
-Checked 150 files in 112ms. No fixes applied.

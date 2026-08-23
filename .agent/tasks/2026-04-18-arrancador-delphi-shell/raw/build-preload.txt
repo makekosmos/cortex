@@ -1,4 +1,0 @@
-bun run build:preload
-Bundled 3 modules in 13ms
-index.js  0.81 KB  (entry point)
-EXIT_CODE=0

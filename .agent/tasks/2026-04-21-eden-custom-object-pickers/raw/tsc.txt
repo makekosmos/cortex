@@ -1,4 +1,0 @@
-Command: D:\Personal\Hobby\Coding\kosmos\apps\eden\ts\node_modules\.bin\tsc.exe --noEmit -p D:\Personal\Hobby\Coding\kosmos\apps\eden\ts\tsconfig.json
-Exit code: 0
-Output:
-(no output)

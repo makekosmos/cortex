@@ -81,6 +81,10 @@ __pycache__/
 *.db-wal
 
 # === Agent artifacts ===
+.agent/
+.agents/
+.claude
+graphify-out/
 .serena/
 .headroom/
 .desloppify/

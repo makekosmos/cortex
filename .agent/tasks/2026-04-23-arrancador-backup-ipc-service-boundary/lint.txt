@@ -1,4 +1,0 @@
-$ bun run typecheck && bun run biome:check
-$ tsc --noEmit
-$ biome check .
-Checked 181 files in 116ms. No fixes applied.

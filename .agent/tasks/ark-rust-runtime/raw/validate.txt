@@ -1,9 +1,0 @@
-{
-  "repo_root": "/Users/kirill/Documents/projects/kepler",
-  "task_id": "ark-rust-runtime",
-  "task_dir": "/Users/kirill/Documents/projects/kepler/.agent/tasks/ark-rust-runtime",
-  "valid": true,
-  "missing_files": [],
-  "errors": []
-}
-EXIT_CODE=0
