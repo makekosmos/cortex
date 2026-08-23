@@ -2,8 +2,6 @@
 # Install: brew install lefthook && lefthook install
 
 pre-commit:
-  # docs-sync mutates generated docs, so keep pre-commit sequential:
-  # oxfmt must check the post-sync tree, not a file mid-rewrite.
   parallel: false
   commands:
     ark-core-rust:
@@ -28,12 +26,6 @@ pre-commit:
     ark-guard-writes:
       glob: "scripts/**/*.{ts,tsx,mjs,cjs,js}"
       run: bun run ark:guard:writes
-    docs-sync:
-      glob: "docs-site/**/*.md"
-      run: bun run docs:sync && git diff --exit-code AGENTS.md CLAUDE.md core/ark/crates/ark-core/AGENTS.md docs-site/public/llms.txt docs-site/public/full-llms.txt
-    docs-check:
-      glob: "docs-site/**/*.md"
-      run: bun run docs:check
     oxfmt:
       run: bunx oxfmt --check .
     source-size:

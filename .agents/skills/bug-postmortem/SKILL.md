@@ -6,7 +6,7 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 
 # bug-postmortem
 
-Стандартный workflow для bug fix задач в Kosmos. Цель: каждый исправленный баг оставляет след в `docs-site/agents/postmortems.md` так, чтобы будущий ты (или другой агент) не наступил на те же грабли.
+Стандартный workflow для bug fix задач в Kosmos. Цель: каждый исправленный баг оставляет след в `https://github.com/makekosmos/docs/blob/main/agents/postmortems.md` так, чтобы будущий ты (или другой агент) не наступил на те же грабли.
 
 ## Когда применять
 
@@ -30,7 +30,7 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 
 ### 2. Сделай запись в постмортемах **ДО** фикса
 
-Открой `docs-site/agents/postmortems.md`, добавь блок сверху (под шаблоном). Формат:
+Открой `https://github.com/makekosmos/docs/blob/main/agents/postmortems.md`, добавь блок сверху (под шаблоном). Формат:
 
 ```markdown
 ## YYYY-MM-DD — короткое название
@@ -63,11 +63,11 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob
   - Rust: `cargo test -p <crate> <test_name>`
   - Изменения в data-слое: `bun run ark:guard:writes`
   - Substantial: `bun run ark:smoke`
-  - Docs: `bun run docs:check` + `bun run docs:sync` если правил `docs-site/`
+  - Docs: `bun --cwd ../docs run build` после правок в `makekosmos/docs`
 
 ### 5. Дополни постмортем **после** фикса
 
-Вернись в `docs-site/agents/postmortems.md`, заполни `**Fix.**`, `**Регрешн-защита.**`, `**Prevention.**`. Самое важное — **Prevention**. Это не «было плохо, стало хорошо» — это **общий вывод**, на что обращать внимание в похожих случаях. Примеры хороших prevention-нот:
+Вернись в `https://github.com/makekosmos/docs/blob/main/agents/postmortems.md`, заполни `**Fix.**`, `**Регрешн-защита.**`, `**Prevention.**`. Самое важное — **Prevention**. Это не «было плохо, стало хорошо» — это **общий вывод**, на что обращать внимание в похожих случаях. Примеры хороших prevention-нот:
 
 - «Любой bulk-insert по сырым данным из внешнего источника обязан дедупиться перед INSERT.»
 - «`std::sync::Mutex` в долгих транзакциях, вызываемых из async task'а — анти-паттерн. Используй `spawn_blocking` или отдельный thread.»
@@ -79,20 +79,20 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 
 - Закоммить **одним коммитом**: фикс + тест + postmortem entry + (если нужно) sidebar update.
 - Сообщение: `fix(<scope>): <short> + postmortem`.
-- Если фикс substantial (несколько файлов / новая абстракция) — создай ещё `.agent/tasks/<DATE>-<slug>/` proof loop с evidence (см. `docs-site/concepts/proof-loop.md`).
+- Если фикс substantial (несколько файлов / новая абстракция) — создай ещё `.agent/tasks/<DATE>-<slug>/` proof loop с evidence (см. `https://github.com/makekosmos/docs/blob/main/concepts/proof-loop.md`).
 
 ## Что НЕ делать
 
 - ❌ Описывать постмортем **после** фикса по памяти. Контекст теряется, формулировки становятся ленивыми.
 - ❌ Писать в постмортем «починили баг, всё работает». Это **не** prevention. Запиши **почему** баг был возможен и **что** нужно изменить в подходе, чтобы класс таких багов отсекался заранее.
 - ❌ Пропускать регрешн-тест. Без него запись в постмортеме — пустая бумажка.
-- ❌ Создавать отдельный файл `postmortem-YYYY-MM-DD.md`. Все записи живут в одном `docs-site/agents/postmortems.md`. Свежие — сверху.
+- ❌ Создавать отдельный файл `postmortem-YYYY-MM-DD.md`. Все записи живут в одном `https://github.com/makekosmos/docs/blob/main/agents/postmortems.md`. Свежие — сверху.
 - ❌ Удалять старые записи. Журнал растёт. Если запись устарела — добавь подзаголовок «UPDATE YYYY-MM-DD: …», не удаляй.
 
 ## Ключевые ссылки
 
-- Журнал: `docs-site/agents/postmortems.md`
-- Proof loop для substantial-задач: `docs-site/concepts/proof-loop.md`
-- Гварды и команды: `docs-site/reference/commands.md`
-- Db resilience (Mutex/poison/backup): `docs-site/concepts/db-resilience.md`
-- Запреты: `docs-site/agents/forbidden.md`
+- Журнал: `https://github.com/makekosmos/docs/blob/main/agents/postmortems.md`
+- Proof loop для substantial-задач: `https://github.com/makekosmos/docs/blob/main/concepts/proof-loop.md`
+- Гварды и команды: `https://github.com/makekosmos/docs/blob/main/reference/commands.md`
+- Db resilience (Mutex/poison/backup): `https://github.com/makekosmos/docs/blob/main/concepts/db-resilience.md`
+- Запреты: `https://github.com/makekosmos/docs/blob/main/agents/forbidden.md`

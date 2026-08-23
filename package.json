@@ -9,11 +9,6 @@
     "lint": "oxlint",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "docs:dev": "bun run --cwd docs-site dev",
-    "docs:build": "bun run docs:sync && bun run --cwd docs-site build",
-    "docs:preview": "bun run --cwd docs-site preview",
-    "docs:sync": "node scripts/sync-agents-docs.mjs",
-    "docs:check": "node scripts/check-docs-freshness.mjs",
     "test:e2e": "playwright test"
   },
   "devDependencies": {
@@ -23,8 +18,7 @@
     "lefthook": "^2.1.8",
     "oxfmt": "0.51.0",
     "oxlint": "1.66.0",
-    "playwright": "^1.60.0",
-    "vue": "^3.6.0-beta.12"
+    "playwright": "^1.60.0"
   },
   "overrides": {
     "vite": "^8.0.3"

@@ -4,8 +4,6 @@
     ".agent/**",
     ".desloppify/**",
     ".tmp/**",
-    "docs-site/.vitepress/cache/**",
-    "docs-site/public/**",
     "site/vite.config.ts",
     "incubator/akasha/vite.config.mjs",
     "incubator/akasha/src/global.d.ts",

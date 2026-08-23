@@ -35,9 +35,7 @@
     "sample/**",
     "tests/.e2e/**",
     "shell/.e2e/**",
-    "site/dist/**",
-    "docs-site/.vitepress/dist/**",
-    "docs-site/.vitepress/cache/**"
+    "site/dist/**"
   ],
   "overrides": [
     {

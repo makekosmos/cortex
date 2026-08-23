@@ -54,10 +54,10 @@ git log --oneline -20      # последние коммиты в сессии
 Правило локальности (из user memory "TECHDEBT locality"): **AGENTS.md живёт рядом с приложением**. Для изменения в `products/delphi/src/foo.ts` релевантны:
 
 - корневой `AGENTS.md` — общий компактный контекст Kosmos;
-- source docs из `docs-site/apps/delphi.md`, если меняется поведение Delphi;
+- source docs из `https://github.com/makekosmos/docs/blob/main/apps/delphi.md`, если меняется поведение Delphi;
 - сгенерированный app-local `AGENTS.md`, если он существует рядом с затронутой областью.
 
-Для Android Delphi / Ark service (`incubator/mobile/delphi/*`, `incubator/mobile/ark-service/*`) релевантен `incubator/mobile/delphi/AGENTS.md` и source docs из `docs-site/apps/`.
+Для Android Delphi / Ark service (`incubator/mobile/delphi/*`, `incubator/mobile/ark-service/*`) релевантен `incubator/mobile/delphi/AGENTS.md` и source docs из `https://github.com/makekosmos/docs/blob/main/apps/`.
 Для `core/ark/*` — ближайший `core/ark/**/AGENTS.md` и ARK docs.
 Корневой `/AGENTS.md` — только если изменение архитектурного уровня (monorepo-wide, новое приложение, смена стека).
 
@@ -86,7 +86,7 @@ git log --oneline -20      # последние коммиты в сессии
 - Прогони `git diff <AGENTS.md>` — сам убедись, что изменения осмысленные, а не косметика
 - Нет ли дубликатов между секциями (правило описано дважды)?
 - Нет ли ссылок на несуществующие файлы? Проверь через `Glob` / `Read`
-- Корневой `AGENTS.md` не раздут до >200 строк? Если да — перенеси детали в `docs-site/` и регенерируй через `bun run docs:sync`.
+- Корневой `AGENTS.md` не раздут до >200 строк? Если да — перенеси детали в `makekosmos/docs`.
 
 ### 5. Коммит
 
@@ -103,7 +103,7 @@ git log --oneline -20      # последние коммиты в сессии
 - **Добавить changelog** — нет, это `git log`'овое
 - **Описать то, что ещё только планируется** — в доках только то, что в коде СЕЙЧАС
 - **Скопировать комменты из кода дословно** — резюмируй правило одной строкой
-- **Забыть про дочерние AGENTS.md** — одна фича может затрагивать root `AGENTS.md`, app-local `AGENTS.md` и source docs в `docs-site/`
+- **Забыть про дочерние AGENTS.md** — одна фича может затрагивать root `AGENTS.md`, app-local `AGENTS.md` и source docs в `https://github.com/makekosmos/docs/blob/main/`
 - **Добавить в docs TODO/FIXME** — это не доки, это таски
 
 ## Примеры

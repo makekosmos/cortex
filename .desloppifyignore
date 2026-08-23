@@ -5,8 +5,6 @@ release
 dist-electron
 dist
 .tmp
-docs-site/public
-docs-site/.vitepress/cache
 .agent
 sample
 core/ark/packages/ark/src/generated

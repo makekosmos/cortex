@@ -14,8 +14,8 @@
 </p>
 
 <p align="center">
-  <a href="./docs-site/">Documentation</a> ·
-  <a href="./docs-site/concepts/architecture.md">Architecture</a> ·
+  <a href="https://github.com/makekosmos/docs">Documentation</a> ·
+  <a href="https://github.com/makekosmos/docs/blob/main/concepts/architecture.md">Architecture</a> ·
   <a href="./core/ark/crates/ark-core/README.md">ARK</a> ·
   <a href="#development">Development</a>
 </p>
@@ -118,6 +118,6 @@ bun run ark:smoke
 cargo test -p ark-core
 ```
 
-Read the [getting-started guide](./docs-site/guide/getting-started.md) before
+Read the [getting-started guide](https://github.com/makekosmos/docs/blob/main/guide/getting-started.md) before
 changing ARK or sync. Desktop development happens in
 [`makekosmos/cortex`](https://github.com/makekosmos/cortex).

@@ -150,16 +150,16 @@
 
 ## Verification Plan
 
-| ID | Шаг | Команда / Проверка | Ожидаемый результат |
+| ID  | Шаг                                        | Команда / Проверка                                                              | Ожидаемый результат                                               |
 | --- | ------------------------------------------ | ------------------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------- | ------------ |
-| V1 | Структура проекта | `ls apps/ark-data/app/src/main/java/com/kosmos/ark/data/` | Директория существует, содержит `.kt` файлы |
-| V2 | Headless: нет LAUNCHER | `grep -r "LAUNCHER" apps/ark-data/app/src/main/AndroidManifest.xml` | Нет совпадений |
-| V3 | Provider зарегистрирован | `grep "authorities" apps/ark-data/app/src/main/AndroidManifest.xml` | `android:authorities="com.kosmos.ark.data"` |
-| V4 | Permission signature-level | `grep "protectionLevel" apps/ark-data/app/src/main/AndroidManifest.xml` | `android:protectionLevel="signature"` |
-| V5 | Entities в ArkDatabase | Читать `ArkDatabase.kt`, проверить `entities = [...]` | Содержит все 7 todos-сущностей + `Note::class` |
-| V6 | URI patterns в провайдере | Читать `ArkDataProvider.kt`, проверить `UriMatcher` | Все URI для todos, notes, projects, areas и т.д. зарегистрированы |
-| V7 | Сборка ark-data | `./gradlew :apps:ark-data:app:assembleDebug` | `BUILD SUCCESSFUL` |
-| V8 | Класс в APK | `unzip -p build/outputs/apk/debug/app-debug.apk classes.dex                     | strings                                                           | grep ArkDataProvider` | Класс найден |
-| V9 | Сборка Delphi | `./gradlew :apps:delphi:kotlin:app:assembleDebug` | `BUILD SUCCESSFUL` |
-| V10 | Delphi не использует TodoDao напрямую в VM | `grep -r "todoDao\." apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/ui/` | Нет совпадений |
-| V11 | Обработка отсутствия ark-data | Читать код Delphi — поиск try/catch или проверки provider | Обработчик присутствует |
+| V1  | Структура проекта                          | `ls apps/ark-data/app/src/main/java/com/kosmos/ark/data/`                       | Директория существует, содержит `.kt` файлы                       |
+| V2  | Headless: нет LAUNCHER                     | `grep -r "LAUNCHER" apps/ark-data/app/src/main/AndroidManifest.xml`             | Нет совпадений                                                    |
+| V3  | Provider зарегистрирован                   | `grep "authorities" apps/ark-data/app/src/main/AndroidManifest.xml`             | `android:authorities="com.kosmos.ark.data"`                       |
+| V4  | Permission signature-level                 | `grep "protectionLevel" apps/ark-data/app/src/main/AndroidManifest.xml`         | `android:protectionLevel="signature"`                             |
+| V5  | Entities в ArkDatabase                     | Читать `ArkDatabase.kt`, проверить `entities = [...]`                           | Содержит все 7 todos-сущностей + `Note::class`                    |
+| V6  | URI patterns в провайдере                  | Читать `ArkDataProvider.kt`, проверить `UriMatcher`                             | Все URI для todos, notes, projects, areas и т.д. зарегистрированы |
+| V7  | Сборка ark-data                            | `./gradlew :apps:ark-data:app:assembleDebug`                                    | `BUILD SUCCESSFUL`                                                |
+| V8  | Класс в APK                                | `unzip -p build/outputs/apk/debug/app-debug.apk classes.dex                     | strings                                                           | grep ArkDataProvider` | Класс найден |
+| V9  | Сборка Delphi                              | `./gradlew :apps:delphi:kotlin:app:assembleDebug`                               | `BUILD SUCCESSFUL`                                                |
+| V10 | Delphi не использует TodoDao напрямую в VM | `grep -r "todoDao\." apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/ui/` | Нет совпадений                                                    |
+| V11 | Обработка отсутствия ark-data              | Читать код Delphi — поиск try/catch или проверки provider                       | Обработчик присутствует                                           |

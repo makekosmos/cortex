@@ -80,20 +80,20 @@ bun run --cwd platform/desktop build:extensions
   - Обнови таблицу версий в шапке (Kepler / Eden / Delphi / Horologion / Arrancador).
   - Добавь раздел с датой bump'а и описанием: `## YYYY-MM-DD — <название итерации> (Kepler X.Y.Z, Eden A.B.C)`.
   - В тоне «развёрнуто, для следующего агента / разработчика» — технические детали, ссылки на коммиты / спеки.
-- **`docs-site/whats-new/<area>.md`** — **user-facing** changelog. Тон «о, круто», без жаргона типа `IPC` / `manifest.commands[]`. Добавляй карточку **только если фича user-visible** (то что пользователь заметит): новая команда в launcher'е, новый хоткей, изменение UX, исправление заметного бага. Внутренние рефакторы / fix билдов / typecheck — **не** добавляй.
+- **`https://github.com/makekosmos/docs/blob/main/whats-new/<area>.md`** — **user-facing** changelog. Тон «о, круто», без жаргона типа `IPC` / `manifest.commands[]`. Добавляй карточку **только если фича user-visible** (то что пользователь заметит): новая команда в launcher'е, новый хоткей, изменение UX, исправление заметного бага. Внутренние рефакторы / fix билдов / typecheck — **не** добавляй.
   - `whats-new/kepler.md` — лаунчер (хоткеи, маркетплейс, focus widget, обновления, settings).
   - `whats-new/extensions.md` — Eden, Horologion, Delphi, Arrancador (per-app section).
   - Формат карточки: `### Заголовок <Badge type="tip" text="0.1.X" />` + 1-3 коротких абзаца на человеческом языке. Указывай что юзер делает, а не как код работает.
 
 **Опционально** (если архитектура / поведение реально изменились):
 
-- `docs-site/apps/<name>.md` — для дев-доки конкретного компонента.
-- `docs-site/concepts/<name>-*.md` — для cross-cutting концептов (extension-host, command-bus, distribution).
-- `docs-site/agents/forbidden.md` — если новая фича вводит инвариант, нарушение которого опасно (например «не выключай `keepAliveInBackground` для Horologion без переноса side-effects в main»).
+- `https://github.com/makekosmos/docs/blob/main/apps/<name>.md` — для дев-доки конкретного компонента.
+- `https://github.com/makekosmos/docs/blob/main/concepts/<name>-*.md` — для cross-cutting концептов (extension-host, command-bus, distribution).
+- `https://github.com/makekosmos/docs/blob/main/agents/forbidden.md` — если новая фича вводит инвариант, нарушение которого опасно (например «не выключай `keepAliveInBackground` для Horologion без переноса side-effects в main»).
 
-**После правок в `docs-site/`**:
+**После правок в `https://github.com/makekosmos/docs/blob/main/`**:
 
-- `bun run docs:sync` — регенерация `AGENTS.md` / `CLAUDE.md` / `llms.txt`. Иначе разъедутся.
+- `bun --cwd ../docs run build` — проверка документационного сайта.
 - Если документация уже обновлена в предыдущих коммитах текущей сессии — пропусти этот шаг (не дублируй).
 
 ### 4. Commit + push

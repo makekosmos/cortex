@@ -95,7 +95,9 @@ const companyName = "Acme Corp";
 <script setup>
 import { ref } from "vue";
 
-const list = ref([/* many items */]);
+const list = ref([
+  /* many items */
+]);
 const selectedId = ref(null);
 
 // When selectedId changes:
@@ -122,7 +124,9 @@ const selectedId = ref(null);
 <script setup>
 const selectedId = ref(null);
 const editingId = ref(null);
-const items = ref([/* ... */]);
+const items = ref([
+  /* ... */
+]);
 </script>
 ```
 

@@ -25,14 +25,7 @@ function swap(s) {
   return r;
 }
 
-const filesToSwap = [
-  "apps/delphi/AGENTS.md",
-  "apps/delphi/kotlin/AGENTS.md",
-  "docs-site/apps/delphi.md",
-  "docs-site/apps/index.md",
-  "docs-site/public/llms.txt",
-  "docs-site/reference/commands.md",
-];
+const filesToSwap = ["apps/delphi/AGENTS.md", "apps/delphi/kotlin/AGENTS.md"];
 
 for (const f of filesToSwap) {
   if (!existsSync(f)) {
