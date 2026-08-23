@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::game::{
     get_game, list_games, upsert_game, GameLink, GameLocalState, GameQuarantine, GameUpsertCommand,
 };

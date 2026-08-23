@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use ark_core::ffi::{ArkCore, ArkCoreError};
 use serde_json::json;
 use std::sync::Arc;

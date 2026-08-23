@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::definitions::canonical_type_registrations;
 use ark_core::canonical_types::migration_registry::{
     apply_registry, apply_registry_with_failure, preflight_registry, RegistryError,

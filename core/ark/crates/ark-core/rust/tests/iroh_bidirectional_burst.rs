@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 #![cfg(feature = "iroh-spike")]
 #![allow(clippy::unwrap_used)]
 
@@ -58,6 +59,8 @@ fn make_burst_message(prefix: &str, i: usize) -> (String, LanSyncMessage) {
         },
         hlc: format!("2026-06-17T00:00:00.000Z:{i:06}:{prefix}"),
         deleted: None,
+        origin_device_id: None,
+        origin_seq: None,
     };
     let msg = LanSyncMessage::LiveChange {
         change_id: change_id.clone(),

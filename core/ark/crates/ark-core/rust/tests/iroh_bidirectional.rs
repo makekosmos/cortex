@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 #![cfg(feature = "iroh-spike")]
 #![allow(clippy::unwrap_used)]
 
@@ -152,6 +153,8 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         },
         hlc: "2026-06-17T00:00:00.000Z:000001:device-B".to_string(),
         deleted: None,
+        origin_device_id: None,
+        origin_seq: None,
     };
 
     let live_change = LanSyncMessage::LiveChange {

@@ -232,9 +232,7 @@ await ark.links.upsert({
 const usage = await ark.usage.loadAll();
 const recent = await ark.usage.processes.recent(10);
 const summary = await ark.usage.gamePlaytime.summary({ bindings, rangeStart, rangeEnd });
-await ark.usage.trackedApps.upsert({
-  /* ... */
-});
+await ark.usage.trackedApps.upsert({/* ... */});
 await ark.usage.sessions.delete("session-1");
 ```
 

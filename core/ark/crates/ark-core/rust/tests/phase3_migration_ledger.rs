@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::migration_ledger::{
     begin_or_resume, ensure_ledger_schema, ChildSavepoint, ItemCheckpoint, ItemStatus, LedgerError,
     MigrationRunStatus,

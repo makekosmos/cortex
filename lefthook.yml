@@ -9,6 +9,9 @@ pre-commit:
     ark-core-rust:
       glob: "core/ark/crates/ark-core/rust/**/*.rs"
       run: cd core/ark/crates/ark-core/rust && cargo check --quiet
+    rustfmt:
+      glob: "**/*.rs"
+      run: cargo fmt --check
     # Phase 5 bug-detection: ts-rs bindings up-to-date guard.
     # Если правил types.rs и забыл cargo test --features ts-rs — fail.
     ts-rs-bindings-fresh:
@@ -17,8 +20,8 @@ pre-commit:
         cd core/ark/crates/ark-core/rust && \
         cargo test --features ts-rs --quiet --lib export_bindings 2>&1 > /dev/null && \
         cd - && \
-        bunx oxfmt ../arca-sdk/src/generated/ && \
-        git -C ../arca-sdk diff --exit-code src/generated/
+        bunx oxfmt core/ark/packages/ark/src/generated/ && \
+        git diff --exit-code core/ark/packages/ark/src/generated/
     oxlint:
       glob: "*.{ts,tsx,vue,mjs,cjs,js,jsx}"
       run: bunx oxlint {staged_files}
@@ -33,6 +36,8 @@ pre-commit:
       run: bun run docs:check
     oxfmt:
       run: bunx oxfmt --check .
+    source-size:
+      run: bun run check:source-size
 
 pre-push:
   parallel: false

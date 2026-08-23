@@ -84,9 +84,7 @@ db.prepare("DELETE FROM tracked_apps WHERE id = ?").run(...);
 ```ts
 import { ArkClient } from "@kosmos/ark";
 
-const ark = new ArkClient({
-  /* ... */
-});
+const ark = new ArkClient({/* ... */});
 await ark.start();
 
 await ark.objects.upsert({

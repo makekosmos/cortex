@@ -74,12 +74,7 @@ const writePattern = new RegExp(
 );
 
 function checkDirectSqlWrites() {
-  const roots = [
-    "agenda/src",
-    "memoria/src",
-    "arcadia/src",
-    "cortex/desktop/electron",
-  ];
+  const roots = ["agenda/src", "memoria/src", "arcadia/src", "cortex/desktop/electron"];
   const findings = [];
   for (const root of roots) {
     for (const filePath of walk(path.join(makekosmosRoot, root))) {

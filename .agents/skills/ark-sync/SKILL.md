@@ -24,9 +24,7 @@ Every data change is an **immutable event**. Never mutate events; append new one
     "source_id": "<entity-uuid>",
     "summary": "Human-readable text",
     "occurred_at": "2025-03-29T10:00:00Z",
-    "data": {
-      /* full entity fields */
-    }
+    "data": {/* full entity fields */}
   }
 }
 ```

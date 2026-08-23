@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 #![cfg(feature = "iroh-spike")]
 #![allow(clippy::unwrap_used)]
 
@@ -137,6 +138,8 @@ async fn iroh_ticket_pairing_round_trip() {
         },
         hlc: "2026-06-16T00:00:00.000Z:000001:device-A".to_string(),
         deleted: None,
+        origin_device_id: None,
+        origin_seq: None,
     };
 
     let msg = LanSyncMessage::LiveChange {

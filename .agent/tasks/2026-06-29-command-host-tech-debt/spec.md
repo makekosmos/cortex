@@ -15,11 +15,12 @@
 и matching падает на `event.key.toLowerCase() === shortcut.key`.
 
 Проблема: DOM `KeyboardEvent.key` не совпадает с Raycast API именами:
-| Raycast API key | DOM event.key | Совпадение |
-|-----------------|--------------|------------|
-| `"return"` | `"Enter"` | ❌ `"enter" !== "return"` |
-| `"space"` | `" "` | ❌ `" " !== "space"` |
-| `"escape"` | `"Escape"` | ❌ `"escape" !== "escape"` ← это совпадёт, на самом деле |
+
+| Raycast API key | DOM event.key | Совпадение                                               |
+| --------------- | ------------- | -------------------------------------------------------- |
+| `"return"`      | `"Enter"`     | ❌ `"enter" !== "return"`                                |
+| `"space"`       | `" "`         | ❌ `" " !== "space"`                                     |
+| `"escape"`      | `"Escape"`    | ❌ `"escape" !== "escape"` ← это совпадёт, на самом деле |
 
 **Фикс:** В `actionShortcut` добавить нормализацию перед `return` и назначить `code` для известных спецклавиш:
 

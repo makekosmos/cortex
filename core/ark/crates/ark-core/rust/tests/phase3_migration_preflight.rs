@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::preflight::{inventory_sources, preflight_phase3, SourceKind};
 use ark_core::db::init_schema_prerequisites_for_phase3;
 use rusqlite::{params, Connection};

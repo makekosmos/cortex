@@ -25,9 +25,7 @@ ark.onEntityChanged((entityJson) => {
 await ark.broadcastChange("object", "obj-1", {
   type: "object",
   id: "obj-1",
-  data: {
-    /* ... */
-  },
+  data: {/* ... */},
   hlc: "0:0:device-1",
 });
 

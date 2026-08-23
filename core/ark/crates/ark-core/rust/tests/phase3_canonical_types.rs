@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::definitions::canonical_type_registrations;
 use ark_core::db::{init_schema, upsert_object_type};
 use ark_core::type_registry::{canonical_schema_hash, resolve_alias};

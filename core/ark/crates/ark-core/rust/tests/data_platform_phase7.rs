@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use ark_core::{data_platform, db};
 use rusqlite::Connection;
 

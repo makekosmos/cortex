@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use ark_core::db::{backup_to_file, clear_all, init_schema, load_all, open_db};
 use rusqlite::{params, Connection};
 use serde_json::json;

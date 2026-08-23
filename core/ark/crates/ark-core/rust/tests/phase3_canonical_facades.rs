@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::facades::{asset_sources, set_book_cover, AssetSourceError};
 use ark_core::db;
 use ark_core::types::ArkObject;
