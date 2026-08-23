@@ -25,6 +25,20 @@ export interface ExtensionHostPermissionCheck {
 
 const TRUSTED_SOURCES = new Set<ExtensionSource>(["dev", "bundled"]);
 
+// Extensions are never secret owners. These host operations remain available to
+// Kosmos Manager's own renderer, but are blocked before the trusted-source
+// shortcut so a bundled or development product cannot bypass the boundary.
+const SECRET_OPERATIONS = new Set([
+  "dictation.set_api_key",
+  "dictation.clear_api_key",
+  "dictation.verify_api_key",
+  "arrancador.config.get_rawg_key",
+  "arrancador.config.set_rawg_key",
+  "arrancador.config.clear_rawg_key",
+  "integrations.set_credential",
+  "integrations.clear_credential",
+]);
+
 const OBJECT_READ_OPS = new Set([
   "load_all",
   "list_objects",
@@ -219,10 +233,15 @@ async function deleteObjectCapabilities(check: ExtensionPermissionCheck): Promis
 }
 
 export async function assertExtensionArkPermission(check: ExtensionPermissionCheck): Promise<void> {
-  if (isTrustedSource(check.source)) return;
   if (typeof check.operation !== "string" || check.operation.length === 0) {
     throw new Error("[kepler-shell] extension ARK operation must be a non-empty string");
   }
+  if (SECRET_OPERATIONS.has(check.operation)) {
+    throw new Error(
+      `[kepler-shell] extension '${check.extensionId}' cannot access manager-owned secrets`,
+    );
+  }
+  if (isTrustedSource(check.source)) return;
   if (check.operation === "delete_object") {
     const required = await deleteObjectCapabilities(check);
     if (hasAnyCapability(check.manifestPermissions, required)) return;

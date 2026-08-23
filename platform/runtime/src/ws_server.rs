@@ -1429,39 +1429,39 @@ async fn handle_arrancador_op(
         }
         "config.get" => {
             let cfg = arrancador::config::load();
-            // Не возвращаем raw rawg_api_key — только статус.
+            // Секрет RAWG остаётся в Credential Manager; приложению доступен только статус.
             let payload = serde_json::json!({
-                "rawg_api_key_set": cfg.rawg_api_key.as_deref().map(|s| !s.is_empty()).unwrap_or(false),
+                "rawg_api_key_set": arrancador::config::rawg_api_key().is_some(),
                 "custom_scan_paths": cfg.custom_scan_paths,
                 "sqoba_dest_dir": cfg.sqoba_dest_dir,
                 "keep_backups": cfg.keep_backups,
             });
             LocalResponse::ok(payload)
         }
-        "config.get_rawg_key" => {
-            let cfg = arrancador::config::load();
-            LocalResponse::ok(serde_json::json!({ "key": cfg.rawg_api_key }))
-        }
         "config.set_rawg_key" => {
-            let key = params
+            let Some(key) = params
                 .get("key")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            let mut cfg = arrancador::config::load();
-            cfg.rawg_api_key = key.filter(|s| !s.is_empty());
-            match arrancador::config::save(&cfg) {
-                Ok(()) => LocalResponse::ok(serde_json::json!({ "ok": true })),
+                .filter(|key| !key.trim().is_empty())
+            else {
+                return LocalResponse::err("arrancador.config.set_rawg_key: missing or empty 'key'");
+            };
+            match arrancador::config::set_rawg_api_key(key) {
+                Ok(()) => LocalResponse::ok(serde_json::json!({ "has_key": true })),
                 Err(e) => LocalResponse::err(format!("arrancador.config.set_rawg_key: {e}")),
             }
         }
+        "config.clear_rawg_key" => match arrancador::config::clear_rawg_api_key() {
+            Ok(()) => LocalResponse::ok(serde_json::json!({ "has_key": false })),
+            Err(e) => LocalResponse::err(format!("arrancador.config.clear_rawg_key: {e}")),
+        },
         "rawg.search" => {
             let query = match params.get("query").and_then(|v| v.as_str()) {
                 Some(s) => s.to_string(),
                 None => return LocalResponse::err("arrancador.rawg.search: missing 'query'"),
             };
-            let cfg = arrancador::config::load();
-            let api_key = match cfg.rawg_api_key.as_deref() {
-                Some(k) if !k.is_empty() => k.to_string(),
+            let api_key = match arrancador::config::rawg_api_key() {
+                Some(k) if !k.is_empty() => k,
                 _ => return LocalResponse::err("RAWG API key not configured"),
             };
             match arrancador::rawg::search(&query, &api_key).await {
@@ -1488,9 +1488,8 @@ async fn handle_arrancador_op(
                 },
                 None => return LocalResponse::err("arrancador.rawg.apply: missing 'rawg_id'"),
             };
-            let cfg = arrancador::config::load();
-            let api_key = match cfg.rawg_api_key.as_deref() {
-                Some(k) if !k.is_empty() => k.to_string(),
+            let api_key = match arrancador::config::rawg_api_key() {
+                Some(k) if !k.is_empty() => k,
                 _ => return LocalResponse::err("RAWG API key not configured"),
             };
             match arrancador::rawg::apply_to_game_obj(ark_host, &game_id, rawg_id, &api_key).await {

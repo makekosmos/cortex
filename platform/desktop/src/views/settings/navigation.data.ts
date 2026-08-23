@@ -4,6 +4,7 @@ import {
   Clipboard,
   Gamepad2,
   Info,
+  KeyRound,
   ListTodo,
   Mic,
   MicVocal,
@@ -135,6 +136,15 @@ export const settingsNavigationItems: SettingsNavigationItem[] = [
       "speech to text",
       "stt",
     ],
+  },
+  {
+    tab: "secrets",
+    label: "Секреты",
+    group: "advanced",
+    layout: "advanced",
+    icon: KeyRound,
+    description: "API-ключи, токены и подключения сервисов для всех приложений Kosmos.",
+    keywords: ["секреты", "api", "api ключ", "ключ", "token", "groq", "rawg", "credentials"],
   },
   {
     tab: "extensions",

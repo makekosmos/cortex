@@ -20,6 +20,24 @@ describe("extension permissions", () => {
     ).resolves.toBeUndefined();
   });
 
+  test("extensions cannot access manager-owned secrets, even when bundled", async () => {
+    await expect(
+      assertExtensionArkPermission({
+        extensionId: "arcadia",
+        source: "bundled",
+        operation: "arrancador.config.get_rawg_key",
+      }),
+    ).rejects.toThrow("manager-owned secrets");
+
+    await expect(
+      assertExtensionArkPermission({
+        extensionId: "dictation",
+        source: "dev",
+        operation: "dictation.set_api_key",
+      }),
+    ).rejects.toThrow("manager-owned secrets");
+  });
+
   test("user-installed extensions are denied by default", async () => {
     // Regression: 2026-06-04. User-installed extensions must not inherit the
     // full first-party ARK bridge just because preload exposes ark.request.

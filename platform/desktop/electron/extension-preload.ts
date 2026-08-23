@@ -234,16 +234,12 @@ const api = {
         }) as Promise<T>,
     },
     config: {
-      getRawgKey: <T = unknown>(): Promise<T> =>
+      get: <T = unknown>(): Promise<T> =>
         ipcRenderer.invoke(
           "kepler:extension:ark:request",
-          "arrancador.config.get_rawg_key",
+          "arrancador.config.get",
           {},
         ) as Promise<T>,
-      setRawgKey: <T = unknown>(key: string): Promise<T> =>
-        ipcRenderer.invoke("kepler:extension:ark:request", "arrancador.config.set_rawg_key", {
-          key,
-        }) as Promise<T>,
     },
   },
   focusWidget: {
