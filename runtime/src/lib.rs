@@ -70,6 +70,7 @@ pub mod package_worker_broker;
 pub mod package_worker_process;
 pub mod package_worker_protocol;
 pub mod package_worker_supervisor;
+pub mod pomodoro;
 pub mod pomodoro_host;
 pub mod priority;
 pub mod protocol_usage;

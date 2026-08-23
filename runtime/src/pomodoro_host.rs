@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use ark_core::pomodoro::{
+use crate::pomodoro::{
     Clock, PersistedSession, Phase, Session, SessionConfig, SessionEvent, SystemClock,
 };
 use serde_json::{json, Value};
@@ -238,7 +238,7 @@ fn load_state(data_dir: &Path) -> Option<PersistedSession> {
     Some(parsed)
 }
 
-fn state_to_value(s: &ark_core::pomodoro::SessionState) -> Value {
+fn state_to_value(s: &crate::pomodoro::SessionState) -> Value {
     json!({
         "phase": phase_to_str(s.phase),
         "remainingMs": s.remaining_ms,
@@ -304,7 +304,7 @@ async fn persist_after_event(session: &Arc<Mutex<Session>>, data_dir: Option<&Pa
     persist_snapshot(data_dir, &snapshot);
 }
 
-fn merge_state(v: &mut Value, state: &ark_core::pomodoro::SessionState) {
+fn merge_state(v: &mut Value, state: &crate::pomodoro::SessionState) {
     let st = state_to_value(state);
     if let (Some(obj), Some(st_obj)) = (v.as_object_mut(), st.as_object()) {
         for (k, val) in st_obj {
