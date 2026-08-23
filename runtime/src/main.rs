@@ -937,9 +937,8 @@ mod tests {
     async fn run_core_worker_readiness_requires_both_production_adapters_and_emits_authenticated_core_ready_once(
     ) {
         let dir = tempfile::tempdir().unwrap();
-        let binary = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/debug/ark-core-rpc");
-        assert!(binary.exists(), "real ark-core-rpc fixture must be built");
+        let binary = crate::ark_host::resolve_ark_core_rpc_path()
+            .expect("real ark-core-rpc fixture must be built");
         let ark = Arc::new(
             ArkHost::spawn(&binary, &dir.path().join("ark.db").to_string_lossy())
                 .await

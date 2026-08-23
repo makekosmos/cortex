@@ -653,15 +653,18 @@ pub fn compile_manifest_v2(
         .iter()
         .flat_map(|permission| {
             permission.scopes.iter().filter_map(move |scope| {
-                matches!(
+                if matches!(
                     (permission.capability.as_str(), scope.as_str()),
                     ("ark.read", "dictation.get_state" | "dictation.get_config")
                         | (
                             "ark.write",
                             "dictation.start_recording" | "dictation.cancel"
                         )
-                )
-                .then(|| scope.clone())
+                ) {
+                    Some(scope.clone())
+                } else {
+                    None
+                }
             })
         })
         .collect::<BTreeSet<_>>()

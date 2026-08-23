@@ -82,20 +82,18 @@ pub fn resolve_ark_core_rpc_path() -> ArkResult<PathBuf> {
         }
     }
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // In the standalone layout ARK is a sibling repository, while Cargo's
-    // backend artifacts remain in the Cortex workspace target directory.
-    // Keep both roots explicit so tests do not depend on the old monorepo
-    // working directory or on a packaged executable being present.
-    let core_target = manifest_dir.join("../../core/target");
     let backend_target = std::env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else {
+                manifest_dir.join(path)
+            }
+        })
         .unwrap_or_else(|| manifest_dir.join("../target"));
     #[cfg(debug_assertions)]
     let workspace_candidates = [
-        core_target.join("debug/ark-core-rpc.exe"),
-        core_target.join("debug/ark-core-rpc"),
-        core_target.join("release/ark-core-rpc.exe"),
-        core_target.join("release/ark-core-rpc"),
         backend_target.join("debug/ark-core-rpc.exe"),
         backend_target.join("debug/ark-core-rpc"),
         backend_target.join("release/ark-core-rpc.exe"),
@@ -103,12 +101,8 @@ pub fn resolve_ark_core_rpc_path() -> ArkResult<PathBuf> {
     ];
     #[cfg(not(debug_assertions))]
     let workspace_candidates = [
-        core_target.join("release/ark-core-rpc.exe"),
-        core_target.join("release/ark-core-rpc"),
         backend_target.join("release/ark-core-rpc.exe"),
         backend_target.join("release/ark-core-rpc"),
-        core_target.join("debug/ark-core-rpc.exe"),
-        core_target.join("debug/ark-core-rpc"),
         backend_target.join("debug/ark-core-rpc.exe"),
         backend_target.join("debug/ark-core-rpc"),
     ];

@@ -117,6 +117,7 @@ dependencies = [
 [[package]]
 name = "ark-core"
 version = "0.1.0"
+source = "git+https://github.com/makekosmos/core.git?rev=eaaacf4cbbdf2808d74e556d7de346b60bd562e3#eaaacf4cbbdf2808d74e556d7de346b60bd562e3"
 dependencies = [
  "async-trait",
  "chrono",

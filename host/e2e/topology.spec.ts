@@ -67,7 +67,12 @@ function build(trust: { root: string; releases: string }): {
     KOSMOS_PACKAGE_ROOT_KEY_JSON: trust.root,
     KOSMOS_PACKAGE_RELEASE_KEYS_JSON: trust.releases,
   };
-  execFileSync("cargo", ["build", "-p", "ark-core", "--bin", "ark-core-rpc"], {
+  execFileSync("node", [
+    path.join(repositoryRoot, "desktop", "scripts", "ark-core-rpc.mjs"),
+    "--debug",
+    "--target-dir",
+    path.join(target, "debug"),
+  ], {
     cwd: repositoryRoot,
     env,
     stdio: "inherit",
@@ -943,7 +948,7 @@ test("real installed Host resource scenarios", async () => {
           "-ExecutionPolicy",
           "Bypass",
           "-File",
-          path.join(repositoryRoot, "scripts", "measure-kepler-ram.ps1"),
+          path.join(repositoryRoot, "scripts", "release", "measure-kepler-ram.ps1"),
           "-Mode",
           "lego",
           "-Scenario",

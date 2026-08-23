@@ -42,7 +42,13 @@ const buildEngine = (trust: {
     KOSMOS_PACKAGE_ROOT_KEY_JSON: trust.root,
     KOSMOS_PACKAGE_RELEASE_KEYS_JSON: trust.releases,
   };
-  execFileSync("cargo", ["build", "-p", "ark-core", "--bin", "ark-core-rpc"], {
+  const target = cargoTarget();
+  execFileSync("node", [
+    path.join(repositoryRoot, "desktop", "scripts", "ark-core-rpc.mjs"),
+    "--debug",
+    "--target-dir",
+    path.join(target, "debug"),
+  ], {
     cwd: repositoryRoot,
     env,
     stdio: "inherit",
@@ -52,7 +58,6 @@ const buildEngine = (trust: {
     env,
     stdio: "inherit",
   });
-  const target = cargoTarget();
   return {
     engine: path.join(target, "debug", "kepler-backend.exe"),
     ark: path.join(target, "debug", "ark-core-rpc.exe"),

@@ -10,12 +10,9 @@ This repository owns the desktop shell and its host-side services:
 ## Current boundary
 
 This repository owns the desktop runtime boundary. Its Rust workspace is
-self-contained; ARK remains an explicit source dependency from the adjacent
-`core` checkout until the SDK and visuals packages are published.
-
-The runtime also has a source dependency on ARK (`../core/core/ark`). Keep that
-dependency explicit while the ARK package contract is being stabilized; do not
-copy ARK into this repository.
+self-contained; ARK is a pinned Git dependency in `runtime/Cargo.toml`.
+The desktop scripts fetch and cache the matching `ark-core-rpc` sidecar from
+the same Core revision, so a sibling `core` checkout is not required.
 
 Dictation is a separate product in `makekosmos/dictation`; Cortex provides the
 host integration it needs at runtime.

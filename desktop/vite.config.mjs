@@ -28,7 +28,7 @@ export default defineConfig({
         "../../imago/theme/css-variables.css",
       ),
       "@kosmos/visuals": path.resolve(__dirname, "../../imago"),
-      "@raycast/api": path.resolve(__dirname, "../../core/packages/raycast-api/src/index.ts"),
+      "@raycast/api": path.resolve(__dirname, "../packages/raycast-api/src/index.ts"),
       "@shared": path.resolve(__dirname, "./shared"),
     },
     dedupe: ["vue"],

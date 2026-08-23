@@ -1,0 +1,21 @@
+pre-commit:
+  parallel: true
+  commands:
+    source-size:
+      run: bun run check:source-size
+    rustfmt:
+      run: cargo fmt --all -- --check
+    desktop-typecheck:
+      run: bun run --cwd desktop typecheck
+    host-typecheck:
+      run: bun run --cwd host typecheck
+    manager-typecheck:
+      run: bun run --cwd manager typecheck
+
+pre-push:
+  parallel: false
+  commands:
+    backend-tests:
+      run: bun run test:backend
+    runtime-staging:
+      run: bun run --cwd desktop test:runtime-staging
