@@ -55,14 +55,14 @@ The Electron renderer never opens SQLite. The shell talks to the Rust runtime th
 
 ## Surfaces
 
-| Surface | Role | State |
-| --- | --- | --- |
-| **Kosmos Shell** | Launcher, extension host, settings, Dashboard, Focus Session | Active |
-| **Eden** | Notes, journal, and typed personal objects | Active |
-| **Delphi** | Tasks and inbox workflows | Active |
-| **Arrancador** | Game library, playtime, backups, and `game_obj` integration | Incubator |
-| **Akasha** | Continuous EPUB reader | Incubator |
-| **ARK** | Shared typed-data runtime, local storage, usage, and sync | Core |
+| Surface          | Role                                                         | State     |
+| ---------------- | ------------------------------------------------------------ | --------- |
+| **Kosmos Shell** | Launcher, extension host, settings, Dashboard, Focus Session | Active    |
+| **Eden**         | Notes, journal, and typed personal objects                   | Active    |
+| **Delphi**       | Tasks and inbox workflows                                    | Active    |
+| **Arrancador**   | Game library, playtime, backups, and `game_obj` integration  | Incubator |
+| **Akasha**       | Continuous EPUB reader                                       | Incubator |
+| **ARK**          | Shared typed-data runtime, local storage, usage, and sync    | Core      |
 
 ## Stack
 

@@ -77,7 +77,7 @@ state: Transcribing → Idle  +  pill.pillFinished() → hide window
 
 ## Безопасность ключа
 
-API key Groq хранится в нативном secret store через крейт `keyring` (target `kosmos-kepler`, user `groq-api-key`): **Windows Credential Manager** (feature `windows-native`) и **macOS Keychain** (feature `apple-native`). Это enterprise-стандарт (так делают Raycast на macOS Keychain, gh CLI, git-credential-manager).
+API key Groq вводится и управляется только в **Kosmos Manager → Секреты** и хранится в нативном secret store через крейт `keyring` (target `kosmos-kepler`, user `groq-api-key`): **Windows Credential Manager** (feature `windows-native`) и **macOS Keychain** (feature `apple-native`). Dictation получает лишь статус ключа и никогда не читает его значение.
 
 > ⚠️ keyring без backend-feature для текущей платформы молча использует **mock store** (запись «успешна», но ключ не персистит между процессами). На macOS это давало `submit_audio: API key не задан` после ввода ключа — оба feature должны быть в `platform/runtime/Cargo.toml`.
 

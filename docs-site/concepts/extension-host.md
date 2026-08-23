@@ -320,6 +320,10 @@ Trust определяется **по source**, а не по `extension.id`:
 - При открытии окна `extension-host.ts` сохраняет snapshot `{ id, source,
 manifest.permissions }` по `webContents.id`; последующие IPC checks используют
   этот snapshot, а не пере-resolve'ят папку с диска.
+- API-ключи, токены и OAuth credentials принадлежат **только Kosmos Manager →
+  Секреты**. Даже trusted (`dev` / bundled) extension не может вызвать операцию
+  чтения, записи, очистки или проверки секрета: приложение получает лишь статус
+  и выполняет provider-запрос через host.
 
 Базовые capabilities:
 

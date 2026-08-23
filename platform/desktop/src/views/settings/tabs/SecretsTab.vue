@@ -8,7 +8,7 @@
 // Toggle on без ключа → открыть AddApiKeyModal.
 
 import { computed, inject, onMounted, ref } from "vue";
-import { Toggle } from "@kosmos/visuals";
+import { Button, TextInput, Toggle } from "@kosmos/visuals";
 import { ExternalLink, Plus, Trash2 } from "@lucide/vue";
 import { DictationConfigKey } from "../composables/useDictationConfig";
 import AddApiKeyModal from "./AddApiKeyModal.vue";
@@ -22,6 +22,10 @@ const { dictationHasApiKey, dictationApiKeyBusy, loadDictationConfig, onDictatio
 const { dictationConfig, onDictationProviderEnabledChange } = ctx;
 
 const modalOpen = ref(false);
+const rawgHasApiKey = ref(false);
+const rawgApiKeyInput = ref("");
+const rawgApiKeyBusy = ref(false);
+const rawgApiKeyMessage = ref("");
 
 const GROQ_CONSOLE_URL = "https://console.groq.com/keys";
 
@@ -29,6 +33,7 @@ const GROQ_CONSOLE_URL = "https://console.groq.com/keys";
 /// если у него уже есть ключ, плюс disabled. При расширении (Anthropic /
 /// OpenAI и др.) проверять через список "providers без ключа".
 const canAddMoreKeys = computed(() => !dictationHasApiKey.value);
+const hasAnyKey = computed(() => dictationHasApiKey.value || rawgHasApiKey.value);
 const addDisabledTitle = computed(() =>
   canAddMoreKeys.value
     ? "Добавить ключ"
@@ -37,7 +42,46 @@ const addDisabledTitle = computed(() =>
 
 onMounted(() => {
   void loadDictationConfig();
+  void loadRawgStatus();
 });
+
+async function loadRawgStatus() {
+  const config = (await window.kepler.ark.request("arrancador.config.get", {})) as {
+    rawg_api_key_set?: boolean;
+  };
+  rawgHasApiKey.value = config.rawg_api_key_set === true;
+}
+
+async function saveRawgApiKey() {
+  const key = rawgApiKeyInput.value.trim();
+  if (!key) return;
+  rawgApiKeyBusy.value = true;
+  rawgApiKeyMessage.value = "";
+  try {
+    await window.kepler.ark.request("arrancador.config.set_rawg_key", { key });
+    rawgApiKeyInput.value = "";
+    rawgApiKeyMessage.value = "Ключ RAWG сохранён";
+    await loadRawgStatus();
+  } catch (error) {
+    rawgApiKeyMessage.value = `Ошибка: ${(error as Error).message}`;
+  } finally {
+    rawgApiKeyBusy.value = false;
+  }
+}
+
+async function clearRawgApiKey() {
+  rawgApiKeyBusy.value = true;
+  rawgApiKeyMessage.value = "";
+  try {
+    await window.kepler.ark.request("arrancador.config.clear_rawg_key", {});
+    rawgApiKeyMessage.value = "Ключ RAWG удалён";
+    await loadRawgStatus();
+  } catch (error) {
+    rawgApiKeyMessage.value = `Ошибка: ${(error as Error).message}`;
+  } finally {
+    rawgApiKeyBusy.value = false;
+  }
+}
 
 function openAddModal() {
   if (!canAddMoreKeys.value) return;
@@ -60,6 +104,10 @@ function onToggleGroq(next: boolean) {
 function openConsole() {
   window.open(GROQ_CONSOLE_URL, "_blank", "noopener,noreferrer");
 }
+
+function openRawgConsole() {
+  window.open("https://rawg.io/apidocs", "_blank", "noopener,noreferrer");
+}
 </script>
 
 <template>
@@ -80,9 +128,9 @@ function openConsole() {
       </button>
     </div>
 
-    <div v-if="!dictationHasApiKey" class="secrets-empty">Нет API-ключей</div>
-    <div v-else class="secrets-list">
-      <div class="secrets-item">
+    <div v-if="!hasAnyKey" class="secrets-empty">Нет API-ключей</div>
+    <div class="secrets-list">
+      <div v-if="dictationHasApiKey" class="secrets-item">
         <ProviderIcon provider="groq" :size="18" />
         <div class="secrets-item__main">
           <div class="secrets-item__provider">Groq</div>
@@ -112,6 +160,54 @@ function openConsole() {
           aria-label="Включить Groq"
           @update:model-value="onToggleGroq"
         />
+      </div>
+      <div class="secrets-item secrets-item--rawg">
+        <ProviderIcon provider="rawg" :size="18" />
+        <div class="secrets-item__main">
+          <div class="secrets-item__provider">RAWG</div>
+          <div v-if="!rawgHasApiKey" class="secrets-item__hint">Для поиска игр в Arcadia</div>
+          <div v-if="rawgApiKeyMessage" class="secrets-item__message">{{ rawgApiKeyMessage }}</div>
+        </div>
+        <template v-if="rawgHasApiKey">
+          <button
+            type="button"
+            class="secrets-item__icon-btn"
+            aria-label="Удалить ключ RAWG"
+            title="Удалить ключ RAWG"
+            :disabled="rawgApiKeyBusy"
+            @click="clearRawgApiKey"
+          >
+            <Trash2 :size="14" />
+          </button>
+          <button
+            type="button"
+            class="secrets-item__icon-btn"
+            aria-label="Открыть RAWG"
+            title="Открыть RAWG"
+            @click="openRawgConsole"
+          >
+            <ExternalLink :size="14" />
+          </button>
+        </template>
+        <template v-else>
+          <TextInput
+            v-model="rawgApiKeyInput"
+            class="secrets-item__key-input"
+            type="password"
+            autocomplete="new-password"
+            placeholder="API-ключ RAWG"
+            @keydown.enter="saveRawgApiKey"
+          />
+          <Button
+            variant="primary"
+            size="sm"
+            :disabled="!rawgApiKeyInput.trim()"
+            :loading="rawgApiKeyBusy"
+            @click="saveRawgApiKey"
+          >
+            Сохранить
+          </Button>
+        </template>
       </div>
     </div>
 
@@ -198,6 +294,17 @@ function openConsole() {
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--foreground);
+}
+
+.secrets-item__hint,
+.secrets-item__message {
+  margin-top: 2px;
+  font-size: 0.6875rem;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+.secrets-item__key-input {
+  width: 180px;
 }
 
 /* Иконочные кнопки (ExternalLink / Trash) — без фона и border'а по дефолту,
