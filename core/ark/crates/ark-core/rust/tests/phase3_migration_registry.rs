@@ -2,6 +2,7 @@ use ark_core::canonical_types::definitions::canonical_type_registrations;
 use ark_core::canonical_types::migration_registry::{
     apply_registry, apply_registry_with_failure, preflight_registry, RegistryError,
 };
+use ark_core::type_registry::legacy_compatibility_version;
 use rusqlite::Connection;
 
 fn db() -> Connection {
@@ -85,6 +86,50 @@ fn mismatch_is_read_only_and_structured() {
         conn.query_row("SELECT count(*) FROM object_types", [], |r| r
             .get::<_, i64>(0))
             .unwrap(),
+        1
+    );
+}
+
+#[test]
+fn generated_legacy_definition_at_canonical_id_is_promoted_losslessly() {
+    let conn = db();
+    let (legacy_version, legacy_hash) = legacy_compatibility_version("{}", "{}").unwrap();
+    conn.execute("INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,updated_at,system_locked,owner_kind,owner_id,current_version,status,base_type_id) VALUES('com.kosmos.note','Заметка','{}','{}','legacy-created','legacy-updated',1,'system',NULL,?1,'active',NULL)", [&legacy_version]).unwrap();
+    conn.execute("INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at) VALUES('com.kosmos.note',?1,'{}','{}','{}','[]','{}',?2,'legacy-created')", [&legacy_version, &legacy_hash]).unwrap();
+    conn.execute("INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,updated_at,deleted_at) VALUES('note-1','com.kosmos.note',?1,'Legacy note','{}','{}','created','updated',NULL)", [&legacy_version]).unwrap();
+
+    let plan = preflight_registry(&conn).unwrap();
+    apply_registry(&conn, &plan).unwrap();
+
+    assert_eq!(
+        conn.query_row(
+            "SELECT current_version FROM object_types WHERE id='com.kosmos.note'",
+            [],
+            |row| row.get::<_, String>(0)
+        )
+        .unwrap(),
+        "1.0.0"
+    );
+    assert_eq!(
+        conn.query_row(
+            "SELECT type_version FROM objects WHERE id='note-1'",
+            [],
+            |row| row.get::<_, String>(0)
+        )
+        .unwrap(),
+        legacy_version
+    );
+    assert_eq!(
+        conn.query_row(
+            "SELECT count(*) FROM object_type_versions WHERE type_id='com.kosmos.note'",
+            [],
+            |row| row.get::<_, i64>(0)
+        )
+        .unwrap(),
+        2
+    );
+    assert_eq!(
+        conn.query_row("SELECT count(*) FROM legacy_type_definition_archive WHERE legacy_type_id='com.kosmos.note'", [], |row| row.get::<_, i64>(0)).unwrap(),
         1
     );
 }
