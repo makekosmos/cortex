@@ -147,12 +147,12 @@
       "oneClick": true,
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": false,
       "shortcutName": "Kosmos",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
-      "runAfterFinish": true,
+      "runAfterFinish": false,
       "deleteAppDataOnUninstall": false,
       "include": "build/installer.nsh"
     }

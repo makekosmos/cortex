@@ -7,8 +7,16 @@
 ;   - customRemoveFiles — финальная очистка
 
 !macro customInstall
-  ; Kepler → Kosmos product rename. electron-builder создаст новые shortcuts
-  ; `Kosmos`; legacy shortcuts убираем best-effort, user data не трогаем.
+  ; Kosmos is the Manager. Shell remains a separate background application.
+  ; electron-builder does not create its own Shell shortcut; create both user
+  ; entry points directly for the staged Manager component.
+  Delete "$DESKTOP\Kosmos.lnk"
+  Delete "$SMPROGRAMS\Kosmos.lnk"
+  CreateShortCut "$DESKTOP\Kosmos.lnk" "$INSTDIR\resources\components\manager\Kosmos Manager.exe"
+  CreateShortCut "$SMPROGRAMS\Kosmos.lnk" "$INSTDIR\resources\components\manager\Kosmos Manager.exe"
+
+  ; Kepler → Kosmos product rename. Legacy shortcuts are removed best-effort;
+  ; user data remains untouched.
   Delete "$DESKTOP\Kepler.lnk"
   Delete "$SMPROGRAMS\Kepler.lnk"
 
@@ -49,6 +57,9 @@
 !macroend
 
 !macro customUnInstall
+  Delete "$DESKTOP\Kosmos.lnk"
+  Delete "$SMPROGRAMS\Kosmos.lnk"
+
   ; Runtime держится независимо от Electron, поэтому освобождаем executable
   ; перед update/uninstall.
   IfFileExists "$INSTDIR\resources\Kosmos Runtime.exe" 0 runtime_stopped
