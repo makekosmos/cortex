@@ -17,6 +17,7 @@ const TAG: &str = "[SyncServer]";
 const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
 const KNOWN_PEERS_KEY: &str = "sync.peers";
 const REMOVED_PEERS_KEY: &str = "sync.removed_peers";
+const SYNC_LOAD_PAGE_SIZE: usize = 100;
 
 // ---------------------------------------------------------------------------
 // StorageBackend trait
@@ -25,6 +26,12 @@ const REMOVED_PEERS_KEY: &str = "sync.removed_peers";
 #[async_trait::async_trait]
 pub trait StorageBackend: Send + Sync {
     async fn load_entities(&self, vector: &VersionVector) -> Vec<SyncEntity>;
+    async fn load_entities_page(
+        &self,
+        vector: &VersionVector,
+        offset: usize,
+        limit: usize,
+    ) -> Vec<SyncEntity>;
     async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String>;
     async fn get_kv(&self, key: &str) -> Option<String>;
     async fn set_kv(&self, key: &str, value: &str);
@@ -805,54 +812,52 @@ async fn handle_message(
 
             let mut local_vector = load_version_vector(storage).await;
 
-            // Load all entities and build vector if empty
-            let all_entities = storage.load_entities(&local_vector).await;
             let mut vector_updated = false;
-            for entity in &all_entities {
-                if !local_vector.contains_key(&entity.id) {
-                    local_vector.insert(entity.id.clone(), entity.hlc.clone());
-                    vector_updated = true;
+            let mut offset = 0;
+            loop {
+                let mut load_vector = local_vector.clone();
+                merge_usage_cursors(&mut load_vector, &remote_vector);
+                let entities = storage
+                    .load_entities_page(&load_vector, offset, SYNC_LOAD_PAGE_SIZE)
+                    .await;
+                if entities.is_empty() {
+                    break;
                 }
-            }
-            if vector_updated {
-                save_version_vector(storage, &local_vector).await;
-            }
-
-            // Compute what remote needs
-            let mut to_send: Vec<SyncEntity> = Vec::new();
-            for entity in &all_entities {
-                let remote_hlc = remote_vector.get(&entity.id);
-                match remote_hlc {
-                    None => to_send.push(entity.clone()),
-                    Some(rh) if HLC::is_newer(&entity.hlc, rh) => to_send.push(entity.clone()),
-                    _ => {}
+                offset += entities.len();
+                let mut to_send = Vec::new();
+                for entity in entities {
+                    if !is_usage_entity(&entity) && !local_vector.contains_key(&entity.id) {
+                        local_vector.insert(entity.id.clone(), entity.hlc.clone());
+                        vector_updated = true;
+                    }
+                    if should_send_entity(&remote_vector, &entity) {
+                        to_send.push(entity);
+                    }
                 }
-            }
-
-            if to_send.is_empty() {
-                send_msg(
-                    &tx,
-                    &LanSyncMessage::SyncChanges {
-                        batch_id: generate_id(),
-                        entities: vec![],
-                        is_last: true,
-                        origin_device_id: None,
-                    },
-                );
-            } else {
-                let batches = split_into_batches(&to_send);
-                for (i, batch) in batches.iter().enumerate() {
+                for batch in split_into_batches(&to_send) {
                     send_msg(
                         &tx,
                         &LanSyncMessage::SyncChanges {
                             batch_id: generate_id(),
-                            entities: batch.clone(),
-                            is_last: i == batches.len() - 1,
+                            entities: batch,
+                            is_last: false,
                             origin_device_id: None,
                         },
                     );
                 }
             }
+            if vector_updated {
+                save_version_vector(storage, &local_vector).await;
+            }
+            send_msg(
+                &tx,
+                &LanSyncMessage::SyncChanges {
+                    batch_id: generate_id(),
+                    entities: vec![],
+                    is_last: true,
+                    origin_device_id: None,
+                },
+            );
 
             // Mark sync complete
             {
@@ -895,6 +900,7 @@ async fn handle_message(
 
             let mut local_vector = load_version_vector(storage).await;
             let mut accepted = 0;
+            let mut vector_updated = false;
 
             let peer_device_id = {
                 let peers_guard = peers.lock().await;
@@ -905,16 +911,15 @@ async fn handle_message(
             };
 
             for entity in &entities {
-                let local_hlc = local_vector.get(&entity.id);
-                let should_apply = match local_hlc {
-                    None => true,
-                    Some(lh) => HLC::is_newer(&entity.hlc, lh),
-                };
+                let should_apply = is_usage_entity(entity)
+                    || local_vector
+                        .get(&entity.id)
+                        .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc));
 
                 if should_apply {
                     match storage.apply_entity(entity).await {
                         Ok(()) => {
-                            local_vector.insert(entity.id.clone(), entity.hlc.clone());
+                            vector_updated |= observe_non_usage_entity(&mut local_vector, entity);
                             accepted += 1;
 
                             if let Some(handler) = on_change.lock().await.as_ref() {
@@ -935,7 +940,10 @@ async fn handle_message(
                 }
             }
 
-            save_version_vector(storage, &local_vector).await;
+            if vector_updated {
+                merge_usage_cursors(&mut local_vector, &load_version_vector(storage).await);
+                save_version_vector(storage, &local_vector).await;
+            }
             send_msg(&tx, &LanSyncMessage::SyncAck { batch_id, accepted });
 
             if is_last {
@@ -962,17 +970,21 @@ async fn handle_message(
             }
 
             let mut local_vector = load_version_vector(storage).await;
-            let local_hlc = local_vector.get(&entity.id);
-            let should_apply = match local_hlc {
-                None => true,
-                Some(lh) => HLC::is_newer(&entity.hlc, lh),
-            };
+            let should_apply = is_usage_entity(&entity)
+                || local_vector
+                    .get(&entity.id)
+                    .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc));
 
             if should_apply {
                 match storage.apply_entity(&entity).await {
                     Ok(()) => {
-                        local_vector.insert(entity.id.clone(), entity.hlc.clone());
-                        save_version_vector(storage, &local_vector).await;
+                        if observe_non_usage_entity(&mut local_vector, &entity) {
+                            merge_usage_cursors(
+                                &mut local_vector,
+                                &load_version_vector(storage).await,
+                            );
+                            save_version_vector(storage, &local_vector).await;
+                        }
 
                         if let Some(handler) = on_change.lock().await.as_ref() {
                             handler(entity.clone());
@@ -1125,6 +1137,21 @@ mod tests {
     impl StorageBackend for MemBackend {
         async fn load_entities(&self, _vector: &VersionVector) -> Vec<SyncEntity> {
             self.entities.lock().unwrap().values().cloned().collect()
+        }
+        async fn load_entities_page(
+            &self,
+            _vector: &VersionVector,
+            offset: usize,
+            limit: usize,
+        ) -> Vec<SyncEntity> {
+            self.entities
+                .lock()
+                .unwrap()
+                .values()
+                .skip(offset)
+                .take(limit)
+                .cloned()
+                .collect()
         }
         async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String> {
             if entity.deleted == Some(true) {

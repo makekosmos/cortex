@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use tokio::sync::{mpsc, Mutex};
 
@@ -14,6 +15,7 @@ use crate::types::{PeerRecord, SyncEntity, VersionVector};
 
 const TAG: &str = "[RelaySync]";
 const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
+const SYNC_LOAD_PAGE_SIZE: usize = 100;
 
 #[derive(Debug, Clone)]
 pub struct RelaySyncConfig {
@@ -31,12 +33,19 @@ struct RelayPeerState {
     authenticated: bool,
 }
 
+struct IncomingSyncState {
+    vector: VersionVector,
+    changed: bool,
+    last_update: Instant,
+}
+
 pub struct RelaySync {
     storage: Arc<dyn StorageBackend>,
     transport: Arc<dyn SyncTransport>,
     config: RelaySyncConfig,
     auth_secret: Option<String>,
     peers: Arc<Mutex<HashMap<String, RelayPeerState>>>,
+    incoming_sync: Arc<Mutex<Option<IncomingSyncState>>>,
     on_change: Arc<Mutex<Option<OnChangeCallback>>>,
     on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
     on_peer_disconnect: Arc<Mutex<Option<OnPeerDisconnectCallback>>>,
@@ -74,6 +83,7 @@ impl RelaySync {
             config,
             auth_secret,
             peers: Arc::new(Mutex::new(HashMap::new())),
+            incoming_sync: Arc::new(Mutex::new(None)),
             on_change: Arc::new(Mutex::new(None)),
             on_peer_connect: Arc::new(Mutex::new(None)),
             on_peer_disconnect: Arc::new(Mutex::new(None)),
@@ -100,6 +110,21 @@ impl RelaySync {
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 this.handle_event(event).await;
+            }
+        });
+        let incoming_sync = self.incoming_sync.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                let mut incoming = incoming_sync.lock().await;
+                let stale = incoming
+                    .as_ref()
+                    .is_some_and(|state| state.last_update.elapsed() >= Duration::from_secs(60));
+                if stale {
+                    *incoming = None;
+                    drop(incoming);
+                    trim_process_heap();
+                }
             }
         });
 
@@ -151,11 +176,13 @@ impl RelaySync {
             }
             TransportEvent::Connected { .. } => {}
             TransportEvent::Disconnected { device_id } => {
+                self.peers.lock().await.remove(&device_id);
                 if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
                     handler(device_id, self.peers.lock().await.len());
                 }
             }
         }
+        trim_process_heap();
     }
 
     async fn handle_message(&self, from_device_id: String, msg: LanSyncMessage) {
@@ -229,6 +256,7 @@ impl RelaySync {
 
             LanSyncMessage::SyncChanges {
                 entities,
+                is_last,
                 origin_device_id,
                 ..
             } => {
@@ -236,7 +264,7 @@ impl RelaySync {
                 if !self.is_authenticated_peer(&origin).await {
                     return;
                 }
-                self.apply_entities(&entities).await;
+                self.apply_entities(&entities, is_last).await;
             }
 
             LanSyncMessage::LiveChange {
@@ -248,7 +276,7 @@ impl RelaySync {
                 if !self.is_authenticated_peer(&origin).await {
                     return;
                 }
-                self.apply_entities(&[entity]).await;
+                self.apply_entities(&[entity], true).await;
             }
 
             _ => {}
@@ -299,69 +327,70 @@ impl RelaySync {
     }
 
     async fn send_missing_entities(&self, remote_vector: &VersionVector) {
-        let mut local_vector = load_version_vector(&self.storage).await;
-        let all_entities = self.storage.load_entities(&local_vector).await;
-        let mut vector_updated = false;
+        let mut load_vector = load_version_vector(&self.storage).await;
+        merge_usage_cursors(&mut load_vector, remote_vector);
+        let mut offset = 0;
 
-        for entity in &all_entities {
-            if !local_vector.contains_key(&entity.id) {
-                local_vector.insert(entity.id.clone(), entity.hlc.clone());
-                vector_updated = true;
+        loop {
+            let entities = self
+                .storage
+                .load_entities_page(&load_vector, offset, SYNC_LOAD_PAGE_SIZE)
+                .await;
+            if entities.is_empty() {
+                break;
             }
-        }
-        if vector_updated {
-            save_version_vector(&self.storage, &local_vector).await;
-        }
+            offset += entities.len();
 
-        let mut to_send: Vec<SyncEntity> = Vec::new();
-        for entity in &all_entities {
-            match remote_vector.get(&entity.id) {
-                None => to_send.push(entity.clone()),
-                Some(remote_hlc) if HLC::is_newer(&entity.hlc, remote_hlc) => {
-                    to_send.push(entity.clone())
+            let mut to_send = Vec::new();
+            for entity in entities {
+                if should_send_entity(remote_vector, &entity) {
+                    to_send.push(entity);
                 }
-                _ => {}
+            }
+
+            for batch in split_into_batches(&to_send) {
+                let _ = self.transport.send(LanSyncMessage::SyncChanges {
+                    batch_id: generate_id(),
+                    entities: batch,
+                    is_last: false,
+                    origin_device_id: Some(self.config.device_id.clone()),
+                });
             }
         }
 
-        if to_send.is_empty() {
-            let _ = self.transport.send(LanSyncMessage::SyncChanges {
-                batch_id: generate_id(),
-                entities: vec![],
-                is_last: true,
-                origin_device_id: Some(self.config.device_id.clone()),
-            });
-            return;
-        }
-
-        let batches = split_into_batches(&to_send);
-        for (i, batch) in batches.iter().enumerate() {
-            let _ = self.transport.send(LanSyncMessage::SyncChanges {
-                batch_id: generate_id(),
-                entities: batch.clone(),
-                is_last: i == batches.len() - 1,
-                origin_device_id: Some(self.config.device_id.clone()),
-            });
-        }
+        let _ = self.transport.send(LanSyncMessage::SyncChanges {
+            batch_id: generate_id(),
+            entities: vec![],
+            is_last: true,
+            origin_device_id: Some(self.config.device_id.clone()),
+        });
     }
 
-    async fn apply_entities(&self, entities: &[SyncEntity]) {
-        let mut local_vector = load_version_vector(&self.storage).await;
-        let mut changed = false;
+    async fn apply_entities(&self, entities: &[SyncEntity], is_last: bool) {
+        let mut incoming = self.incoming_sync.lock().await;
+        if incoming.is_none() {
+            *incoming = Some(IncomingSyncState {
+                vector: load_version_vector(&self.storage).await,
+                changed: false,
+                last_update: Instant::now(),
+            });
+        }
+        let state = incoming.as_mut().expect("incoming sync state initialized");
+        state.last_update = Instant::now();
 
         for entity in entities {
-            let should_apply = match local_vector.get(&entity.id) {
-                None => true,
-                Some(local_hlc) => HLC::is_newer(&entity.hlc, local_hlc),
-            };
+            let should_apply = is_usage_entity(entity)
+                || state
+                    .vector
+                    .get(&entity.id)
+                    .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc));
             if !should_apply {
                 continue;
             }
 
             match self.storage.apply_entity(entity).await {
                 Ok(()) => {
-                    local_vector.insert(entity.id.clone(), entity.hlc.clone());
-                    changed = true;
+                    state.changed |= observe_non_usage_entity(&mut state.vector, entity);
                     if let Some(handler) = self.on_change.lock().await.as_ref() {
                         handler(entity.clone());
                     }
@@ -375,11 +404,32 @@ impl RelaySync {
             }
         }
 
-        if changed {
-            save_version_vector(&self.storage, &local_vector).await;
+        if is_last {
+            if state.changed {
+                merge_usage_cursors(&mut state.vector, &load_version_vector(&self.storage).await);
+                save_version_vector(&self.storage, &state.vector).await;
+            }
+            *incoming = None;
+            drop(incoming);
+            trim_process_heap();
         }
     }
 }
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+pub fn trim_process_heap() {
+    unsafe extern "C" {
+        fn malloc_trim(pad: usize) -> i32;
+    }
+    // SAFETY: glibc's malloc_trim only asks the allocator to return unused
+    // arena pages. It does not invalidate live allocations.
+    unsafe {
+        let _ = malloc_trim(0);
+    }
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+pub fn trim_process_heap() {}
 
 async fn load_version_vector(storage: &Arc<dyn StorageBackend>) -> VersionVector {
     match storage.get_kv(VERSION_VECTOR_KEY).await {
@@ -504,7 +554,7 @@ mod tests {
         init_schema(&conn).expect("schema");
         let shared = Arc::new(StdMutex::new(conn));
         let backend = Arc::new(SqliteStorageBackend::new(shared));
-        backend.set_device_id(device_id);
+        backend.set_device_id(device_id).unwrap();
         backend
     }
 
@@ -544,6 +594,8 @@ mod tests {
             data,
             hlc: format!("2026-04-25T00:00:00.000Z:{counter:06}:{device_id}"),
             deleted: None,
+            origin_device_id: None,
+            origin_seq: None,
         }
     }
 

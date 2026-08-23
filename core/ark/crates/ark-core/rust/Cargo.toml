@@ -17,6 +17,11 @@ path = "src/main.rs"
 name = "uniffi-bindgen"
 path = "src/bin/uniffi-bindgen.rs"
 
+[[bin]]
+name = "ark-sync-node"
+path = "src/bin/ark-sync-node.rs"
+required-features = ["iroh-spike"]
+
 [dependencies]
 rusqlite.workspace = true
 tokio = { version = "1", features = [
@@ -27,12 +32,14 @@ tokio = { version = "1", features = [
   "sync",
   "io-util",
   "io-std",
+  "signal",
 ] }
 tokio-tungstenite.workspace = true
 futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+semver.workspace = true
 chrono.workspace = true
 rand.workspace = true
 async-trait = "0.1"
@@ -66,6 +73,7 @@ proptest = "1.5"
 
 [features]
 bench-fixtures = []
+windows-gui-subsystem = []
 # Phase 5: opt-in для cargo test --features ts-rs (генерирует bindings/*.ts).
 ts-rs = ["dep:ts-rs"]
 # Фаза 0 iroh-spike: см. .agent/tasks/2026-06-16-iroh-transport/spec.md.

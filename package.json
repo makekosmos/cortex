@@ -2,16 +2,7 @@
   "name": "kosmos",
   "private": true,
   "workspaces": [
-    "platform/desktop",
-    "products/*",
-    "incubator/akasha",
-    "incubator/arrancador",
-    "extensions/*",
-    "apps/*",
-    "services/*",
-    "core/ark/packages/ark",
-    "packages/*",
-    "docs-site"
+    "core/ark/packages/ark"
   ],
   "scripts": {
     "prepare": "lefthook install",
@@ -25,19 +16,7 @@
     "docs:preview": "bun run --cwd docs-site preview",
     "docs:sync": "node scripts/sync-agents-docs.mjs",
     "docs:check": "node scripts/check-docs-freshness.mjs",
-    "shell:typecheck": "bun run --cwd platform/desktop typecheck",
-    "shell:build": "bun run --cwd platform/desktop build:js:shell",
-    "ext:build": "bun run --cwd platform/desktop build:extension",
-    "desktop:typecheck": "bun run --cwd platform/desktop typecheck",
-    "desktop:build": "bun run --cwd platform/desktop build:js:shell",
-    "products:build": "bun run --cwd platform/desktop build:extensions",
-    "products:dev": "bun run --cwd platform/desktop dev:extensions",
-    "visual:regression": "playwright test tests/e2e/visual.spec.ts",
-    "visual:launcher": "playwright test tests/e2e/visual.spec.ts --grep \"launcher\"",
-    "visual:eden": "playwright test tests/e2e/visual.spec.ts --grep \"eden\"",
-    "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",

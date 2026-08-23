@@ -28,7 +28,7 @@ fn make_storage(device_id: &str) -> Arc<SqliteStorageBackend> {
     init_schema(&conn).expect("schema");
     let shared = Arc::new(StdMutex::new(conn));
     let backend = Arc::new(SqliteStorageBackend::new(shared));
-    backend.set_device_id(device_id);
+    backend.set_device_id(device_id).unwrap();
     backend
 }
 
@@ -63,6 +63,8 @@ fn todo_entity(id: &str, title: &str, device_id: &str, counter: u64) -> SyncEnti
         data,
         hlc: format!("2026-04-01T00:00:00.000Z:{counter:06}:{device_id}"),
         deleted: None,
+        origin_device_id: None,
+        origin_seq: None,
     }
 }
 
@@ -83,6 +85,9 @@ fn sync_entity_from_value(
         data,
         hlc: format!("2026-04-01T00:00:00.000Z:{counter:06}:{device_id}"),
         deleted: None,
+        origin_device_id: ark_core::db::is_sequenced_usage_entity(entity_type)
+            .then(|| device_id.to_string()),
+        origin_seq: ark_core::db::is_sequenced_usage_entity(entity_type).then_some(counter),
     }
 }
 

@@ -6,12 +6,26 @@ use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row};
 use serde::Serialize;
 use serde_json::{json, Value};
 
+use crate::canonical_types::migration;
+pub use crate::canonical_types::pending::{
+    count_pending_for_type, insert_pending_object, replay_pending_for_type,
+};
 use crate::hlc::HLC;
 use crate::schema::{CREATE_OBJECT_SEARCH_FTS, CREATE_TABLES};
 use crate::sync_server::StorageBackend;
+use crate::type_registry;
 use crate::types::*;
 
 const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
+const USAGE_SEQUENCE_MIGRATION_KEY: &str = "usage_sync.sequence_v1";
+
+pub fn is_sequenced_usage_entity(entity_type: &str) -> bool {
+    matches!(entity_type, "usage_session" | "usage_event" | "usage_day")
+}
+
+fn usage_cursor_key(device_id: &str) -> String {
+    format!("@usage:{device_id}")
+}
 
 // ---------------------------------------------------------------------------
 // Open and init
@@ -42,17 +56,67 @@ pub fn check_integrity(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-pub fn init_schema(conn: &Connection) -> Result<(), String> {
+fn phase3_migration_completed(conn: &Connection) -> Result<bool, String> {
+    let table_exists: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='canonical_migration_runs')",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if !table_exists {
+        return Ok(false);
+    }
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM canonical_migration_runs WHERE contract_version='phase3-canonical-v1' AND status='completed')",
+        [],
+        |row| row.get(0),
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// Initializes the schema and all Phase 2 prerequisites, but does not run Phase 3.
+#[doc(hidden)]
+pub fn init_schema_prerequisites_for_phase3(conn: &Connection) -> Result<(), String> {
     check_integrity(conn)?;
+    // Prevent repeated replacement of the large sync version-vector value
+    // from leaving permanent freelist growth. Existing databases adopt this
+    // mode after the explicit maintenance VACUUM.
+    conn.pragma_update(None, "auto_vacuum", "FULL")
+        .map_err(|e| e.to_string())?;
     conn.execute_batch(CREATE_TABLES)
         .map_err(|e| e.to_string())?;
     ensure_usage_runtime_ms(conn)?;
-    let object_search_fts_enabled = ensure_object_search_fts(conn).is_ok();
-    seed_builtin_object_types(conn)?;
-    if object_search_fts_enabled {
-        rebuild_object_search_fts(conn)?;
+    conn.execute_batch("SAVEPOINT ark_phase2_init")
+        .map_err(|e| e.to_string())?;
+    let phase2_result = (|| {
+        type_registry::migrate_phase2(conn)?;
+        crate::data_platform::ensure_schema(conn)?;
+        let object_search_fts_enabled = ensure_object_search_fts(conn).is_ok();
+        if object_search_fts_enabled {
+            rebuild_object_search_fts(conn)?;
+        }
+        Ok::<bool, String>(object_search_fts_enabled)
+    })();
+    match phase2_result {
+        Ok(_) => conn
+            .execute_batch("RELEASE SAVEPOINT ark_phase2_init")
+            .map_err(|e| e.to_string())?,
+        Err(error) => {
+            let _ = conn.execute_batch(
+                "ROLLBACK TO SAVEPOINT ark_phase2_init; RELEASE SAVEPOINT ark_phase2_init",
+            );
+            return Err(error);
+        }
     }
     Ok(())
+}
+
+pub fn init_schema(conn: &Connection) -> Result<(), String> {
+    init_schema_prerequisites_for_phase3(conn)?;
+    migration::migrate_phase3(conn)
+        .map(|_| ())
+        .map_err(|error| format!("phase3 migration during init_schema failed: {error:?}"))
 }
 
 fn ensure_usage_runtime_ms(conn: &Connection) -> Result<(), String> {
@@ -119,347 +183,8 @@ pub fn backup_to_file_chunked(
         .map_err(|e| format!("backup_to_file_chunked run failed: {e}"))
 }
 
-#[allow(dead_code)]
-fn builtin_note_object_type() -> ObjectType {
-    ObjectType {
-        id: "note_obj".to_string(),
-        name: "Заметка".to_string(),
-        schema_json: json!({
-            "fields": [
-                {
-                    "id": "description",
-                    "label": "Описание",
-                    "kind": "long_text",
-                    "required": false,
-                    "visible": true,
-                    "read_only": false,
-                },
-                {
-                    "id": "related_notes",
-                    "label": "Связанные заметки",
-                    "kind": "relation",
-                    "required": false,
-                    "visible": true,
-                    "read_only": false,
-                    "link_type": "related",
-                }
-            ]
-        })
-        .to_string(),
-        ui_schema_json: json!({
-            "visible_fields": ["description", "related_notes"],
-            "hidden_fields": ["created_at", "updated_at", "deleted_at"],
-            "read_only_fields": [],
-        })
-        .to_string(),
-        created_at: "1970-01-01T00:00:00.000Z".to_string(),
-        updated_at: "1970-01-01T00:00:00.000Z".to_string(),
-        system_locked: true,
-    }
-}
-
-#[allow(dead_code)]
-fn builtin_game_object_type() -> ObjectType {
-    ObjectType {
-        id: "game_obj".to_string(),
-        name: "Игра".to_string(),
-        schema_json: json!({
-            "fields": [
-                { "id": "description", "label": "Описание", "kind": "long_text", "required": false, "visible": true, "read_only": false },
-                { "id": "user_rating", "label": "Оценка", "kind": "number", "required": false, "visible": true, "read_only": false },
-                {
-                    "id": "play_status",
-                    "label": "Статус",
-                    "kind": "select",
-                    "required": false,
-                    "visible": true,
-                    "read_only": false,
-                    "options": ["not_started", "in_progress", "completed", "abandoned"]
-                },
-                { "id": "genres", "label": "Жанры", "kind": "text", "required": false, "visible": true, "read_only": false },
-                { "id": "cover_image", "label": "Обложка", "kind": "image", "required": false, "visible": true, "read_only": false },
-                { "id": "background_image", "label": "Фон", "kind": "image", "required": false, "visible": true, "read_only": false },
-                {
-                    "id": "related_notes",
-                    "label": "Связанные заметки",
-                    "kind": "relation",
-                    "required": false,
-                    "visible": true,
-                    "read_only": false,
-                    "link_type": "related"
-                },
-                { "id": "exe_path", "label": "Путь к игре", "kind": "text", "required": false, "visible": true, "read_only": false },
-                { "id": "save_path", "label": "Путь к сейвам", "kind": "text", "required": false, "visible": true, "read_only": false },
-                { "id": "total_playtime_seconds", "label": "Время игры", "kind": "number", "required": false, "visible": true, "read_only": true },
-                { "id": "last_played_at", "label": "Последний запуск", "kind": "date", "required": false, "visible": true, "read_only": true },
-                { "id": "play_count", "label": "Запусков", "kind": "number", "required": false, "visible": true, "read_only": true },
-                { "id": "save_exists", "label": "Сейв найден", "kind": "boolean", "required": false, "visible": true, "read_only": true },
-                { "id": "rawg_id", "label": "RAWG ID", "kind": "text", "required": false, "visible": false, "read_only": true },
-                { "id": "exe_name", "label": "Имя exe", "kind": "text", "required": false, "visible": false, "read_only": true }
-            ]
-        })
-        .to_string(),
-        ui_schema_json: json!({
-            "visible_fields": [
-                "description",
-                "user_rating",
-                "play_status",
-                "genres",
-                "cover_image",
-                "background_image",
-                "related_notes",
-                "exe_path",
-                "save_path",
-                "total_playtime_seconds",
-                "last_played_at",
-                "play_count",
-                "save_exists"
-            ],
-            "hidden_fields": ["created_at", "updated_at", "deleted_at", "rawg_id", "exe_name", "sync_source"],
-            "read_only_fields": ["total_playtime_seconds", "last_played_at", "play_count", "save_exists", "rawg_id", "exe_name"],
-        })
-        .to_string(),
-        created_at: "1970-01-01T00:00:00.000Z".to_string(),
-        updated_at: "1970-01-01T00:00:00.000Z".to_string(),
-        system_locked: true,
-    }
-}
-
-fn builtin_note_object_type_v2() -> ObjectType {
-    ObjectType {
-        id: "note_obj".to_string(),
-        name: "Заметка".to_string(),
-        schema_json: json!({
-            "fields": [
-                {
-                    "id": "description",
-                    "label": "Описание",
-                    "kind": "long_text",
-                    "required": false,
-                    "visible": true,
-                    "read_only": false,
-                    "system": false
-                },
-                {
-                    "id": "related_notes",
-                    "label": "Связанные заметки",
-                    "kind": "relation",
-                    "required": false,
-                    "visible": true,
-                    "read_only": false,
-                    "link_type": "related",
-                    "system": false
-                }
-            ]
-        })
-        .to_string(),
-        ui_schema_json: json!({
-            "featured_fields": ["description"],
-            "visible_fields": ["description", "related_notes"],
-            "hidden_fields": ["created_at", "updated_at", "deleted_at"],
-            "read_only_fields": [],
-            "field_order": ["description", "related_notes"],
-            "header_layout": "inline",
-            "default_layout": "page",
-            "default_template_id": null,
-        })
-        .to_string(),
-        created_at: "1970-01-01T00:00:00.000Z".to_string(),
-        updated_at: "1970-01-01T00:00:00.000Z".to_string(),
-        system_locked: true,
-    }
-}
-
-fn builtin_game_object_type_v2() -> ObjectType {
-    ObjectType {
-        id: "game_obj".to_string(),
-        name: "Игра".to_string(),
-        schema_json: json!({
-            "fields": [
-                { "id": "description", "label": "Описание", "kind": "long_text", "required": false, "visible": true, "read_only": false, "system": false },
-                { "id": "user_rating", "label": "Оценка", "kind": "number", "required": false, "visible": true, "read_only": false, "system": false },
-                {
-                    "id": "play_status",
-                    "label": "Статус",
-                    "kind": "select",
-                    "required": false,
-                    "visible": true,
-                    "read_only": false,
-                    "options": ["not_started", "in_progress", "completed", "abandoned"],
-                    "system": false
-                },
-                { "id": "genres", "label": "Жанры", "kind": "text", "required": false, "visible": true, "read_only": false, "system": false },
-                { "id": "cover_image", "label": "Обложка", "kind": "image", "required": false, "visible": true, "read_only": false, "system": false },
-                { "id": "background_image", "label": "Фон", "kind": "image", "required": false, "visible": true, "read_only": false, "system": false },
-                {
-                    "id": "related_notes",
-                    "label": "Связанные заметки",
-                    "kind": "relation",
-                    "required": false,
-                    "visible": true,
-                    "read_only": false,
-                    "link_type": "related",
-                    "system": false
-                },
-                { "id": "exe_path", "label": "Путь к игре", "kind": "text", "required": false, "visible": true, "read_only": false, "system": true },
-                { "id": "save_path", "label": "Путь к сейвам", "kind": "text", "required": false, "visible": true, "read_only": false, "system": true },
-                { "id": "total_playtime_seconds", "label": "Время игры", "kind": "number", "required": false, "visible": true, "read_only": true, "system": true },
-                { "id": "last_played_at", "label": "Последний запуск", "kind": "date", "required": false, "visible": true, "read_only": true, "system": true },
-                { "id": "play_count", "label": "Запусков", "kind": "number", "required": false, "visible": true, "read_only": true, "system": true },
-                { "id": "save_exists", "label": "Сейв найден", "kind": "boolean", "required": false, "visible": true, "read_only": true, "system": true },
-                { "id": "rawg_id", "label": "RAWG ID", "kind": "text", "required": false, "visible": false, "read_only": true, "system": true },
-                { "id": "exe_name", "label": "Имя exe", "kind": "text", "required": false, "visible": false, "read_only": true, "system": true }
-            ]
-        })
-        .to_string(),
-        ui_schema_json: json!({
-            "featured_fields": [],
-            "visible_fields": [
-                "play_status",
-                "genres",
-                "total_playtime_seconds",
-                "last_played_at"
-            ],
-            "hidden_fields": [
-                "created_at",
-                "updated_at",
-                "deleted_at",
-                "description",
-                "user_rating",
-                "cover_image",
-                "background_image",
-                "related_notes",
-                "exe_path",
-                "save_path",
-                "play_count",
-                "save_exists",
-                "rawg_id",
-                "exe_name",
-                "sync_source"
-            ],
-            "read_only_fields": ["total_playtime_seconds", "last_played_at", "play_count", "save_exists", "rawg_id", "exe_name"],
-            "field_order": [
-                "play_status",
-                "genres",
-                "total_playtime_seconds",
-                "last_played_at",
-                "description",
-                "user_rating",
-                "play_count",
-                "save_exists",
-                "cover_image",
-                "background_image",
-                "related_notes",
-                "exe_path",
-                "save_path",
-                "rawg_id",
-                "exe_name"
-            ],
-            "header_layout": "inline",
-            "default_layout": "page",
-            "default_template_id": null,
-        })
-        .to_string(),
-        created_at: "1970-01-01T00:00:00.000Z".to_string(),
-        updated_at: "1970-01-01T00:00:00.000Z".to_string(),
-        system_locked: true,
-    }
-}
-
-fn builtin_time_entry_object_type() -> ObjectType {
-    ObjectType {
-        id: "time_entry_obj".to_string(),
-        name: "Запись времени".to_string(),
-        schema_json: json!({
-            "fields": [
-                { "id": "started_at",            "label": "Начало",          "kind": "date",     "required": true,  "visible": true,  "read_only": false, "system": true },
-                { "id": "ended_at",              "label": "Конец",           "kind": "date",     "required": false, "visible": true,  "read_only": false, "system": true },
-                { "id": "kind",                  "label": "Тип",             "kind": "select",   "required": true,  "visible": true,  "read_only": false, "options": ["manual", "pomodoro_work", "pomodoro_break"], "system": true },
-                { "id": "source",                "label": "Источник",        "kind": "select",   "required": false, "visible": true,  "read_only": false, "options": ["manual", "pomodoro", "imported"], "system": true },
-                { "id": "pomodoro_session_id",   "label": "Pomodoro-сессия", "kind": "text",     "required": false, "visible": false, "read_only": true,  "system": true },
-                { "id": "billable",              "label": "Оплачиваемое",    "kind": "boolean",  "required": false, "visible": true,  "read_only": false, "system": false },
-                { "id": "description",           "label": "Описание",        "kind": "long_text","required": false, "visible": true,  "read_only": false, "system": false },
-                { "id": "tags",                  "label": "Теги",            "kind": "relation", "required": false, "visible": true,  "read_only": false, "link_type": "tagged",   "system": false },
-                { "id": "for_task",              "label": "Задача",          "kind": "relation", "required": false, "visible": true,  "read_only": false, "link_type": "for-task", "system": false }
-            ]
-        })
-        .to_string(),
-        ui_schema_json: json!({
-            "featured_fields": ["description"],
-            "visible_fields": ["started_at", "ended_at", "kind", "billable", "description", "tags", "for_task"],
-            "hidden_fields": ["pomodoro_session_id", "source", "created_at", "updated_at", "deleted_at"],
-            "read_only_fields": ["pomodoro_session_id"],
-            "field_order": ["started_at", "ended_at", "kind", "description", "tags", "for_task", "billable", "source", "pomodoro_session_id"],
-            "header_layout": "inline",
-            "default_layout": "page",
-            "default_template_id": null,
-        })
-        .to_string(),
-        created_at: "1970-01-01T00:00:00.000Z".to_string(),
-        updated_at: "1970-01-01T00:00:00.000Z".to_string(),
-        system_locked: true,
-    }
-}
-
-fn builtin_tag_object_type() -> ObjectType {
-    ObjectType {
-        id: "tag_obj".to_string(),
-        name: "Тег".to_string(),
-        schema_json: json!({
-            "fields": [
-                { "id": "color",       "label": "Цвет",     "kind": "text",     "required": false, "visible": true,  "read_only": false, "system": false },
-                { "id": "description", "label": "Описание", "kind": "long_text","required": false, "visible": true,  "read_only": false, "system": false }
-            ]
-        })
-        .to_string(),
-        ui_schema_json: json!({
-            "featured_fields": [],
-            "visible_fields": ["color", "description"],
-            "hidden_fields": ["created_at", "updated_at", "deleted_at"],
-            "read_only_fields": [],
-            "field_order": ["color", "description"],
-            "header_layout": "inline",
-            "default_layout": "page",
-            "default_template_id": null,
-        })
-        .to_string(),
-        created_at: "1970-01-01T00:00:00.000Z".to_string(),
-        updated_at: "1970-01-01T00:00:00.000Z".to_string(),
-        system_locked: true,
-    }
-}
-
-fn seed_builtin_object_types(conn: &Connection) -> Result<(), String> {
-    for object_type in [
-        builtin_note_object_type_v2(),
-        builtin_game_object_type_v2(),
-        builtin_time_entry_object_type(),
-        builtin_tag_object_type(),
-    ] {
-        seed_builtin_object_type(conn, &object_type)?;
-    }
-    Ok(())
-}
-
-fn seed_builtin_object_type(conn: &Connection, builtin: &ObjectType) -> Result<(), String> {
-    let existing = get_object_type(conn, &builtin.id)?;
-
-    let merged = if let Some(existing) = existing {
-        ObjectType {
-            id: builtin.id.clone(),
-            name: builtin.name.clone(),
-            schema_json: builtin.schema_json.clone(),
-            ui_schema_json: existing.ui_schema_json,
-            created_at: existing.created_at,
-            updated_at: builtin.updated_at.clone(),
-            system_locked: true,
-        }
-    } else {
-        builtin.clone()
-    };
-
-    upsert_object_type(conn, &merged)
-}
+// Legacy registry definitions are owned by canonical_types::definitions.
+// Historical rows remain readable through the Phase 3 migration/archive path.
 
 // ---------------------------------------------------------------------------
 // Todo CRUD
@@ -681,8 +406,30 @@ fn parse_json_or_default(raw: String) -> Value {
 }
 
 pub fn upsert_object_type(conn: &Connection, object_type: &ObjectType) -> Result<(), String> {
-    // Do not use SQLite REPLACE here: it deletes the old row first and cascades.
-    // См. postmortems.md § 2026-06-04.
+    // A canonical ID cannot reuse an existing alias name. Check this before
+    // mutating object_types so the legacy write remains fail-closed and atomic.
+    let has_aliases: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='object_type_aliases')",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| e.to_string())?
+        != 0;
+    if has_aliases
+        && conn
+            .query_row(
+                "SELECT 1 FROM object_type_aliases WHERE alias=?1 LIMIT 1",
+                params![object_type.id],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?
+            .is_some()
+    {
+        return Err("alias collides with canonical type".into());
+    }
+
     conn.execute(
         "INSERT INTO object_types
             (id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked)
@@ -705,14 +452,73 @@ pub fn upsert_object_type(conn: &Connection, object_type: &ObjectType) -> Result
         ],
     )
     .map_err(|e| e.to_string())?;
-    // Phase 2: после появления типа replay'ить objects, которые ждали этот type_id.
-    replay_pending_for_type(conn, &object_type.id)?;
+    let has_versions: bool = conn
+        .query_row("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='object_type_versions')", [], |row| row.get::<_, i64>(0))
+        .map_err(|e| e.to_string())? != 0;
+    if has_versions {
+        type_registry::ensure_legacy_type_version(
+            conn,
+            &object_type.id,
+            &object_type.schema_json,
+            &object_type.ui_schema_json,
+            &object_type.created_at,
+        )?;
+        let (compat_version, full_hash) = type_registry::legacy_compatibility_version(
+            &object_type.schema_json,
+            &object_type.ui_schema_json,
+        )?;
+        let existing_hash = conn
+            .query_row(
+                "SELECT schema_hash FROM object_type_versions WHERE type_id=?1 AND version=?2",
+                params![object_type.id, compat_version],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+        if let Some(existing_hash) = existing_hash {
+            if existing_hash != full_hash {
+                return Err("legacy compatibility version hash conflict".into());
+            }
+        } else {
+            conn.execute("INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at) VALUES (?1,?2,?3,?4,'{}','[]','{}',?5,?6)", params![object_type.id, compat_version, object_type.schema_json, object_type.ui_schema_json, full_hash, object_type.created_at]).map_err(|e| e.to_string())?;
+        }
+        conn.execute(
+            "UPDATE object_types SET current_version=?1,status='active' WHERE id=?2",
+            params![compat_version, object_type.id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    let has_current_version: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('object_types') WHERE name='current_version')",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| e.to_string())?
+        != 0;
+    let current_version = if has_current_version {
+        conn.query_row(
+            "SELECT current_version FROM object_types WHERE id=?1",
+            params![object_type.id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?
+    } else {
+        "0.0.0-legacy".to_string()
+    };
+    replay_pending_for_type(conn, &object_type.id, &current_version)?;
+    if current_version != type_registry::LEGACY_VERSION {
+        replay_pending_for_type(conn, &object_type.id, type_registry::LEGACY_VERSION)?;
+    }
     Ok(())
 }
 
 pub fn delete_object_type(conn: &Connection, id: &str) -> Result<(), String> {
-    conn.execute("DELETE FROM object_types WHERE id = ?1", params![id])
-        .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE object_types SET status='deprecated' WHERE id = ?1",
+        params![id],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -732,96 +538,23 @@ pub fn is_object_type_known(conn: &Connection, type_id: &str) -> Result<bool, St
     .map_err(|e| e.to_string())
 }
 
-/// Сохранить SyncEntity типа "object" в `sync_pending_objects` до появления нужного type.
-pub fn insert_pending_object(
+pub fn is_object_definition_known(
     conn: &Connection,
-    entity: &SyncEntity,
-    awaited_type_id: &str,
-) -> Result<(), String> {
-    let payload = serde_json::to_string(entity).map_err(|e| e.to_string())?;
-    let now = Utc::now().to_rfc3339();
-    conn.execute(
-        "INSERT INTO sync_pending_objects (id, payload, awaited_type_id, received_at)
-         VALUES (?1, ?2, ?3, ?4)
-         ON CONFLICT(id) DO UPDATE SET
-            payload = excluded.payload,
-            awaited_type_id = excluded.awaited_type_id,
-            received_at = excluded.received_at",
-        params![entity.id, payload, awaited_type_id, now],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-/// Replay'нуть все pending objects, ожидающие указанного `type_id`. Для каждого:
-/// 1. parse payload → SyncEntity → ArkObject
-/// 2. upsert_object
-/// 3. DELETE из pending
-/// 4. emit `sync_replay` event
-///
-/// Возвращает количество replayed.
-pub fn replay_pending_for_type(conn: &Connection, type_id: &str) -> Result<usize, String> {
-    let mut stmt = conn
-        .prepare("SELECT id, payload FROM sync_pending_objects WHERE awaited_type_id = ?1")
-        .map_err(|e| e.to_string())?;
-    let rows: Vec<(String, String)> = stmt
-        .query_map(params![type_id], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    drop(stmt);
-
-    conn.execute_batch("SAVEPOINT ark_replay_pending")
-        .map_err(|e| e.to_string())?;
-    let mut replayed = 0usize;
-    let result = (|| {
-        for (entity_id, payload_json) in &rows {
-            let entity: SyncEntity =
-                serde_json::from_str(payload_json).map_err(|e| e.to_string())?;
-            let mut data = entity.data.clone();
-            data.insert("id".to_string(), Value::String(entity.id.clone()));
-            let object: ArkObject =
-                serde_json::from_value(Value::Object(data)).map_err(|e| e.to_string())?;
-            upsert_object(conn, &object)?;
-            conn.execute(
-                "DELETE FROM sync_pending_objects WHERE id = ?1",
-                params![entity_id],
-            )
-            .map_err(|e| e.to_string())?;
-            replayed += 1;
-        }
-        Ok::<_, String>(())
-    })();
-    match result {
-        Ok(()) => {
-            conn.execute_batch("RELEASE SAVEPOINT ark_replay_pending")
-                .map_err(|e| e.to_string())?;
-        }
-        Err(e) => {
-            rollback_savepoint(conn, "ark_replay_pending");
-            return Err(e);
-        }
-    }
-    for (entity_id, _) in &rows {
-        crate::events::emit_event(json!({
-            "event": "sync_replay",
-            "entity_type": "object",
-            "entity_id": entity_id,
-            "type_id": type_id,
-        }));
-    }
-    Ok(replayed)
-}
-
-/// Сколько объектов сейчас ждёт указанный type_id (utility для тестов / observability).
-pub fn count_pending_for_type(conn: &Connection, type_id: &str) -> Result<i64, String> {
+    type_id: &str,
+    type_version: &str,
+) -> Result<bool, String> {
+    let Ok((canonical_type_id, canonical_version)) =
+        crate::type_registry::resolve_object_type_identity(conn, type_id, Some(type_version))
+    else {
+        return Ok(false);
+    };
     conn.query_row(
-        "SELECT COUNT(*) FROM sync_pending_objects WHERE awaited_type_id = ?1",
-        params![type_id],
-        |row| row.get::<_, i64>(0),
+        "SELECT 1 FROM object_type_versions WHERE type_id=?1 AND version=?2",
+        params![canonical_type_id, canonical_version],
+        |_| Ok(true),
     )
+    .optional()
+    .map(|opt| opt.unwrap_or(false))
     .map_err(|e| e.to_string())
 }
 
@@ -830,6 +563,7 @@ pub fn list_object_types(conn: &Connection) -> Result<Vec<ObjectType>, String> {
         .prepare(
             "SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked
              FROM object_types
+             WHERE status != 'deprecated'
              ORDER BY system_locked DESC, name ASC",
         )
         .map_err(|e| e.to_string())?;
@@ -854,7 +588,7 @@ pub fn get_object_type(conn: &Connection, id: &str) -> Result<Option<ObjectType>
     conn.query_row(
         "SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked
          FROM object_types
-         WHERE id = ?1",
+         WHERE id = ?1 AND status != 'deprecated'",
         params![id],
         |row| {
             Ok(ObjectType {
@@ -952,6 +686,44 @@ fn rollback_savepoint(conn: &Connection, name: &str) {
 }
 
 pub fn upsert_object(conn: &Connection, object: &ArkObject) -> Result<(), String> {
+    let registry_ready: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='object_type_versions')",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| e.to_string())?
+        != 0;
+    if registry_ready {
+        let (canonical_type_id, canonical_version) =
+            crate::type_registry::resolve_object_type_identity(
+                conn,
+                &object.type_id,
+                Some(&object.type_version),
+            )?;
+        let mut canonical_object = object.clone();
+        canonical_object.type_id = canonical_type_id;
+        canonical_object.type_version = canonical_version;
+        return upsert_object_inner(conn, &canonical_object);
+    }
+    upsert_object_inner(conn, object)
+}
+
+fn upsert_object_inner(conn: &Connection, object: &ArkObject) -> Result<(), String> {
+    let has_type_version: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('objects') WHERE name='type_version')",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| e.to_string())?
+        != 0;
+    if !has_type_version {
+        conn.execute_batch(
+            "ALTER TABLE objects ADD COLUMN type_version TEXT NOT NULL DEFAULT '0.0.0-legacy'",
+        )
+        .map_err(|e| e.to_string())?;
+    }
     conn.execute_batch("SAVEPOINT ark_upsert_object")
         .map_err(|e| e.to_string())?;
     let result = (|| -> Result<(), String> {
@@ -959,10 +731,11 @@ pub fn upsert_object(conn: &Connection, object: &ArkObject) -> Result<(), String
         // См. postmortems.md § 2026-06-04.
         conn.execute(
             "INSERT INTO objects
-                (id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                (id, type_id, type_version, title, content_json, props_json, created_at, updated_at, deleted_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(id) DO UPDATE SET
                 type_id = excluded.type_id,
+                type_version = excluded.type_version,
                 title = excluded.title,
                 content_json = excluded.content_json,
                 props_json = excluded.props_json,
@@ -972,6 +745,7 @@ pub fn upsert_object(conn: &Connection, object: &ArkObject) -> Result<(), String
             params![
                 object.id,
                 object.type_id,
+                object.type_version,
                 object.title,
                 serialize_json(&object.content_json)?,
                 serialize_json(&object.props_json)?,
@@ -1017,12 +791,13 @@ fn map_ark_object_row(row: &Row<'_>) -> rusqlite::Result<ArkObject> {
     Ok(ArkObject {
         id: row.get(0)?,
         type_id: row.get(1)?,
-        title: row.get(2)?,
-        content_json: parse_json_or_default(row.get(3)?),
-        props_json: parse_json_or_default(row.get(4)?),
-        created_at: row.get(5)?,
-        updated_at: row.get(6)?,
-        deleted_at: row.get(7)?,
+        type_version: row.get(2)?,
+        title: row.get(3)?,
+        content_json: parse_json_or_default(row.get(4)?),
+        props_json: parse_json_or_default(row.get(5)?),
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
+        deleted_at: row.get(8)?,
     })
 }
 
@@ -1030,18 +805,19 @@ fn map_ark_object_summary_row(row: &Row<'_>) -> rusqlite::Result<ArkObjectSummar
     Ok(ArkObjectSummary {
         id: row.get(0)?,
         type_id: row.get(1)?,
-        title: row.get(2)?,
-        props_json: parse_json_or_default(row.get(3)?),
-        created_at: row.get(4)?,
-        updated_at: row.get(5)?,
-        deleted_at: row.get(6)?,
+        type_version: row.get(2)?,
+        title: row.get(3)?,
+        props_json: parse_json_or_default(row.get(4)?),
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
+        deleted_at: row.get(7)?,
     })
 }
 
 pub fn list_objects(conn: &Connection) -> Result<Vec<ArkObject>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at
+            "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at, deleted_at
              FROM objects
              ORDER BY updated_at DESC, created_at DESC",
         )
@@ -1056,7 +832,7 @@ pub fn list_objects(conn: &Connection) -> Result<Vec<ArkObject>, String> {
 pub fn list_object_summaries(conn: &Connection) -> Result<Vec<ArkObjectSummary>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, type_id, title, props_json, created_at, updated_at, deleted_at
+            "SELECT id, type_id, type_version, title, props_json, created_at, updated_at, deleted_at
              FROM objects
              ORDER BY updated_at DESC, created_at DESC",
         )
@@ -1068,10 +844,27 @@ pub fn list_object_summaries(conn: &Connection) -> Result<Vec<ArkObjectSummary>,
         .map_err(|e| e.to_string())
 }
 
+fn canonical_query_type_id(conn: &Connection, type_id: &str) -> Result<String, String> {
+    let registry_ready: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='object_type_aliases')",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| e.to_string())?
+        != 0;
+    if registry_ready {
+        return Ok(crate::type_registry::resolve_type_id(conn, type_id)?
+            .unwrap_or_else(|| type_id.to_string()));
+    }
+    Ok(type_id.to_string())
+}
+
 pub fn list_objects_by_type(conn: &Connection, type_id: &str) -> Result<Vec<ArkObject>, String> {
+    let type_id = canonical_query_type_id(conn, type_id)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at
+            "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at, deleted_at
              FROM objects
              WHERE type_id = ?1
              ORDER BY updated_at DESC, created_at DESC",
@@ -1088,9 +881,10 @@ pub fn list_object_summaries_by_type(
     conn: &Connection,
     type_id: &str,
 ) -> Result<Vec<ArkObjectSummary>, String> {
+    let type_id = canonical_query_type_id(conn, type_id)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, type_id, title, props_json, created_at, updated_at, deleted_at
+            "SELECT id, type_id, type_version, title, props_json, created_at, updated_at, deleted_at
              FROM objects
              WHERE type_id = ?1
              ORDER BY updated_at DESC, created_at DESC",
@@ -1114,18 +908,19 @@ pub fn list_running_time_entries(
     conn: &Connection,
     source_filter: Option<&str>,
 ) -> Result<Vec<ArkObject>, String> {
+    let time_entry_type_id = canonical_query_type_id(conn, "time_entry_obj")?;
     let base_sql =
-        "SELECT id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at
+        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at, deleted_at
          FROM objects
-         WHERE type_id = 'time_entry_obj'
+         WHERE type_id = ?1
            AND deleted_at IS NULL
            AND json_extract(props_json, '$.endedAt') IS NULL";
     let order = " ORDER BY json_extract(props_json, '$.startedAt') DESC";
     if let Some(source) = source_filter {
-        let sql = format!("{base_sql} AND json_extract(props_json, '$.source') = ?1{order}");
+        let sql = format!("{base_sql} AND json_extract(props_json, '$.source') = ?2{order}");
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
         let rows = stmt
-            .query_map(params![source], map_ark_object_row)
+            .query_map(params![time_entry_type_id, source], map_ark_object_row)
             .map_err(|e| e.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())
@@ -1133,7 +928,7 @@ pub fn list_running_time_entries(
         let sql = format!("{base_sql}{order}");
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
         let rows = stmt
-            .query_map([], map_ark_object_row)
+            .query_map(params![time_entry_type_id], map_ark_object_row)
             .map_err(|e| e.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())
@@ -1150,7 +945,7 @@ pub fn get_objects_by_ids(conn: &Connection, ids: &[String]) -> Result<Vec<ArkOb
         .collect::<Vec<_>>()
         .join(", ");
     let sql = format!(
-        "SELECT id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at
+        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at, deleted_at
          FROM objects
          WHERE id IN ({placeholders})
          ORDER BY updated_at DESC, created_at DESC"
@@ -1165,7 +960,7 @@ pub fn get_objects_by_ids(conn: &Connection, ids: &[String]) -> Result<Vec<ArkOb
 
 pub fn get_object(conn: &Connection, id: &str) -> Result<Option<ArkObject>, String> {
     conn.query_row(
-        "SELECT id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at
+        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at, deleted_at
          FROM objects
          WHERE id = ?1",
         params![id],
@@ -1214,7 +1009,7 @@ fn search_objects_with_fts(
 
     let mut stmt = conn
         .prepare(
-            "SELECT objects.id, objects.title, objects.content_json, objects.props_json
+            "SELECT objects.id, objects.type_id, objects.type_version, objects.title, objects.content_json, objects.props_json
              FROM object_search_fts
              JOIN objects ON objects.id = object_search_fts.object_id
              WHERE object_search_fts MATCH ?1
@@ -1225,12 +1020,13 @@ fn search_objects_with_fts(
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map(params![fts_query], |row| {
-            let content_json: String = row.get(2)?;
-            let props_json: String = row.get(3)?;
+            let content_json: String = row.get(4)?;
+            let props_json: String = row.get(5)?;
             Ok(ArkObject {
                 id: row.get(0)?,
-                type_id: String::new(),
-                title: row.get(1)?,
+                type_id: row.get(1)?,
+                type_version: row.get(2)?,
+                title: row.get(3)?,
                 content_json: parse_json_or_default(content_json),
                 props_json: parse_json_or_default(props_json),
                 created_at: String::new(),
@@ -1716,6 +1512,231 @@ pub fn delete_usage_event(conn: &Connection, id: &str) -> Result<(), String> {
     conn.execute("DELETE FROM usage_events WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+pub fn upsert_usage_day(conn: &Connection, day: &UsageDay) -> Result<(), String> {
+    let payload_json = serde_json::to_string(&day.payload_json).map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO usage_days (id, device_id, day, payload_json, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(id) DO UPDATE SET
+            device_id = excluded.device_id,
+            day = excluded.day,
+            payload_json = excluded.payload_json,
+            updated_at = excluded.updated_at",
+        params![day.id, day.device_id, day.day, payload_json, day.updated_at,],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn delete_usage_day(conn: &Connection, id: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM usage_days WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn load_usage_day(conn: &Connection, id: &str) -> Result<Option<UsageDay>, String> {
+    conn.query_row(
+        "SELECT id, device_id, day, payload_json, updated_at
+         FROM usage_days WHERE id = ?1",
+        params![id],
+        |row| {
+            let payload: String = row.get(3)?;
+            Ok(UsageDay {
+                id: row.get(0)?,
+                device_id: row.get(1)?,
+                day: row.get(2)?,
+                payload_json: serde_json::from_str(&payload)
+                    .unwrap_or_else(|_| json!({ "a": [], "t": [], "s": [] })),
+                updated_at: row.get(4)?,
+            })
+        },
+    )
+    .optional()
+    .map_err(|e| e.to_string())
+}
+
+fn payload_strings(payload: &Value, key: &str) -> Vec<String> {
+    payload
+        .get(key)
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn payload_spans(payload: &Value) -> Vec<Vec<i64>> {
+    payload
+        .get("s")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_array)
+                .filter_map(|span| span.iter().map(Value::as_i64).collect::<Option<Vec<_>>>())
+                .filter(|span| span.len() == 5 && span[1] > 0)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn dictionary_index(values: &mut Vec<String>, value: &str) -> i64 {
+    if let Some(index) = values.iter().position(|item| item == value) {
+        index as i64
+    } else {
+        values.push(value.to_string());
+        (values.len() - 1) as i64
+    }
+}
+
+fn merge_usage_spans(mut spans: Vec<Vec<i64>>) -> Vec<Vec<i64>> {
+    spans.sort_by_key(|span| span[0]);
+    let mut merged: Vec<Vec<i64>> = Vec::with_capacity(spans.len());
+    for span in spans {
+        if let Some(previous) = merged.last_mut() {
+            let previous_end = previous[0].saturating_add(previous[1]);
+            if previous[2..] == span[2..] && span[0] <= previous_end {
+                let span_end = span[0].saturating_add(span[1]);
+                previous[1] = previous[1].max(span_end.saturating_sub(previous[0]));
+                continue;
+            }
+        }
+        merged.push(span);
+    }
+    merged
+}
+
+fn upsert_usage_day_fragment(
+    conn: &Connection,
+    write: &UsageSpanWrite,
+    day: &str,
+    day_start_unix: i64,
+    fragment_start: i64,
+    fragment_end: i64,
+) -> Result<UsageDay, String> {
+    let id = format!("usage-day:{}:{day}", write.device_id);
+    let mut usage_day = load_usage_day(conn, &id)?.unwrap_or_else(|| UsageDay {
+        id,
+        device_id: write.device_id.clone(),
+        day: day.to_string(),
+        payload_json: json!({ "a": [], "t": [], "s": [] }),
+        updated_at: write.updated_at.clone(),
+    });
+    let mut apps = payload_strings(&usage_day.payload_json, "a");
+    let mut titles = payload_strings(&usage_day.payload_json, "t");
+    let mut spans = payload_spans(&usage_day.payload_json);
+    let app_index = dictionary_index(&mut apps, &write.tracked_app_id);
+    let title_index = write
+        .window_title
+        .as_deref()
+        .map(|title| dictionary_index(&mut titles, title))
+        .unwrap_or(-1);
+    let start_second = fragment_start.saturating_sub(day_start_unix);
+    let duration_seconds = fragment_end.saturating_sub(fragment_start);
+    let replacement = vec![
+        start_second,
+        duration_seconds,
+        app_index,
+        title_index,
+        write.flags,
+    ];
+    if let Some(existing) = spans
+        .iter_mut()
+        .find(|span| span[0] == start_second && span[2] == app_index)
+    {
+        *existing = replacement;
+    } else {
+        spans.push(replacement);
+    }
+    usage_day.payload_json = json!({
+        "a": apps,
+        "t": titles,
+        "s": merge_usage_spans(spans),
+    });
+    usage_day.updated_at.clone_from(&write.updated_at);
+    upsert_usage_day(conn, &usage_day)?;
+    Ok(usage_day)
+}
+
+pub fn upsert_usage_span(
+    conn: &Connection,
+    write: &UsageSpanWrite,
+) -> Result<Vec<UsageDay>, String> {
+    if write.ended_at_unix <= write.started_at_unix {
+        return Ok(Vec::new());
+    }
+    let mut cursor = write.started_at_unix;
+    let mut days = Vec::new();
+    while cursor < write.ended_at_unix {
+        let date = chrono::DateTime::from_timestamp(cursor, 0)
+            .ok_or_else(|| format!("invalid usage span timestamp: {cursor}"))?
+            .date_naive();
+        let day = date.format("%Y-%m-%d").to_string();
+        let day_start_unix = date
+            .and_hms_opt(0, 0, 0)
+            .ok_or_else(|| format!("invalid usage day: {day}"))?
+            .and_utc()
+            .timestamp();
+        let fragment_end = write
+            .ended_at_unix
+            .min(day_start_unix.saturating_add(86_400));
+        days.push(upsert_usage_day_fragment(
+            conn,
+            write,
+            &day,
+            day_start_unix,
+            cursor,
+            fragment_end,
+        )?);
+        cursor = fragment_end;
+    }
+    Ok(days)
+}
+
+pub fn get_usage_title_total(conn: &Connection, query: &str) -> Result<UsageTitleTotal, String> {
+    let query = query.trim().to_lowercase();
+    if query.is_empty() {
+        return Ok(UsageTitleTotal {
+            active_seconds: 0,
+            idle_seconds: 0,
+        });
+    }
+    let mut statement = conn
+        .prepare("SELECT payload_json FROM usage_days ORDER BY day ASC")
+        .map_err(|error| error.to_string())?;
+    let payloads = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?;
+    let mut total = UsageTitleTotal {
+        active_seconds: 0,
+        idle_seconds: 0,
+    };
+    for payload in payloads {
+        let payload: Value = serde_json::from_str(&payload.map_err(|error| error.to_string())?)
+            .unwrap_or_else(|_| json!({}));
+        let titles = payload_strings(&payload, "t");
+        for span in payload_spans(&payload) {
+            let title_matches = usize::try_from(span[3])
+                .ok()
+                .and_then(|index| titles.get(index))
+                .is_some_and(|title| title.to_lowercase().contains(&query));
+            if !title_matches {
+                continue;
+            }
+            if span[4] & 1 == 1 {
+                total.idle_seconds = total.idle_seconds.saturating_add(span[1]);
+            } else {
+                total.active_seconds = total.active_seconds.saturating_add(span[1]);
+            }
+        }
+    }
+    Ok(total)
 }
 
 fn clamp_positive_i64(value: i64, fallback: i64) -> i64 {
@@ -2466,7 +2487,7 @@ pub fn set_sync_kv(conn: &Connection, key: &str, value: &str) -> Result<(), Stri
     Ok(())
 }
 
-fn upsert_sync_tombstone(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
+pub(crate) fn upsert_sync_tombstone(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
     conn.execute(
         "INSERT INTO sync_tombstones (id, entity_type, hlc, deleted_at)
          VALUES (?1, ?2, ?3, ?4)
@@ -2487,11 +2508,286 @@ pub fn delete_sync_tombstone(conn: &Connection, id: &str) -> Result<(), String> 
     Ok(())
 }
 
-pub fn bump_sync_version_vector(
+pub fn ensure_usage_sequence_migrated(conn: &Connection, device_id: &str) -> Result<(), String> {
+    conn.execute_batch("SAVEPOINT usage_sequence_migration")
+        .map_err(|e| e.to_string())?;
+    match ensure_usage_sequence_migrated_inner(conn, device_id) {
+        Ok(()) => {
+            conn.execute_batch("RELEASE usage_sequence_migration")
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        }
+        Err(error) => {
+            let _ = conn.execute_batch(
+                "ROLLBACK TO usage_sequence_migration; RELEASE usage_sequence_migration",
+            );
+            Err(error)
+        }
+    }
+}
+
+fn ensure_usage_sequence_migrated_inner(conn: &Connection, device_id: &str) -> Result<(), String> {
+    if get_sync_kv(conn, USAGE_SEQUENCE_MIGRATION_KEY)?.as_deref() == Some("1") {
+        return Ok(());
+    }
+
+    let raw = get_sync_kv(conn, VERSION_VECTOR_KEY)?;
+    let mut vector: VersionVector = raw
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| serde_json::from_str(value).map_err(|e| e.to_string()))
+        .transpose()?
+        .unwrap_or_default();
+    let mut statement = conn
+        .prepare(
+            "SELECT entity_type, id FROM (
+                SELECT 'usage_session' AS entity_type, id FROM usage_sessions
+                UNION ALL
+                SELECT 'usage_event', id FROM usage_events
+                UNION ALL
+                SELECT 'usage_day', id FROM usage_days
+             )
+             ORDER BY entity_type, id",
+        )
+        .map_err(|e| e.to_string())?;
+    let refs = statement
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    drop(statement);
+
+    let wall_time = Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+    let mut seq = 0u64;
+    for (entity_type, entity_id) in refs {
+        seq = seq.saturating_add(1);
+        let hlc = HLC::new(wall_time.clone(), seq, device_id.to_string()).to_string();
+        conn.execute(
+            "INSERT OR REPLACE INTO usage_sync_versions(entity_type, entity_id, hlc)
+             VALUES (?1, ?2, ?3)",
+            params![entity_type, entity_id, hlc],
+        )
+        .map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT OR REPLACE INTO usage_sync_log
+                (device_id, seq, entity_type, entity_id, hlc, deleted)
+             VALUES (?1, ?2, ?3, ?4, ?5, 0)",
+            params![device_id, seq as i64, entity_type, entity_id, hlc],
+        )
+        .map_err(|e| e.to_string())?;
+        vector.remove(&entity_id);
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO usage_sync_heads(device_id, max_seq) VALUES (?1, 0)",
+        params![device_id],
+    )
+    .map_err(|e| e.to_string())?;
+    let mut head = conn
+        .query_row(
+            "SELECT max_seq FROM usage_sync_heads WHERE device_id = ?1",
+            params![device_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| e.to_string())?
+        .max(0) as u64;
+    while conn
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM usage_sync_log WHERE device_id = ?1 AND seq = ?2
+             )",
+            params![device_id, head.saturating_add(1) as i64],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| e.to_string())?
+        != 0
+    {
+        head = head.saturating_add(1);
+    }
+    conn.execute(
+        "UPDATE usage_sync_heads SET max_seq = ?2 WHERE device_id = ?1",
+        params![device_id, head as i64],
+    )
+    .map_err(|e| e.to_string())?;
+    vector.insert(usage_cursor_key(device_id), head.to_string());
+    set_sync_kv(
+        conn,
+        VERSION_VECTOR_KEY,
+        &serde_json::to_string(&vector).map_err(|e| e.to_string())?,
+    )?;
+    set_sync_kv(conn, USAGE_SEQUENCE_MIGRATION_KEY, "1")
+}
+
+fn next_usage_sequence(conn: &Connection, device_id: &str) -> Result<u64, String> {
+    conn.query_row(
+        "INSERT INTO usage_sync_heads(device_id, max_seq) VALUES (?1, 1)
+         ON CONFLICT(device_id) DO UPDATE SET max_seq = max_seq + 1
+         RETURNING max_seq",
+        params![device_id],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|value| value.max(0) as u64)
+    .map_err(|e| e.to_string())
+}
+
+fn record_usage_sequence(
     conn: &Connection,
+    entity_type: &str,
     entity_id: &str,
     device_id: &str,
+    seq: u64,
+    hlc: &str,
+    deleted: bool,
+) -> Result<(), String> {
+    conn.execute(
+        "INSERT OR IGNORE INTO usage_sync_log
+            (device_id, seq, entity_type, entity_id, hlc, deleted)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            device_id,
+            seq as i64,
+            entity_type,
+            entity_id,
+            hlc,
+            deleted as i64
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO usage_sync_heads(device_id, max_seq) VALUES (?1, ?2)
+         ON CONFLICT(device_id) DO UPDATE SET max_seq = MAX(max_seq, excluded.max_seq)",
+        params![device_id, seq as i64],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let raw = get_sync_kv(conn, VERSION_VECTOR_KEY)?;
+    let mut vector: VersionVector = raw
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .and_then(|value| serde_json::from_str(value).ok())
+        .unwrap_or_default();
+    let cursor_key = usage_cursor_key(device_id);
+    let mut contiguous = vector
+        .get(&cursor_key)
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(0);
+    while conn
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM usage_sync_log WHERE device_id = ?1 AND seq = ?2
+             )",
+            params![device_id, contiguous.saturating_add(1) as i64],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| e.to_string())?
+        != 0
+    {
+        contiguous = contiguous.saturating_add(1);
+    }
+    vector.insert(cursor_key, contiguous.to_string());
+    vector.remove(entity_id);
+    set_sync_kv(
+        conn,
+        VERSION_VECTOR_KEY,
+        &serde_json::to_string(&vector).map_err(|e| e.to_string())?,
+    )
+}
+
+fn usage_origin_for_entity(
+    conn: &Connection,
+    entity: &SyncEntity,
+) -> Result<(String, u64), String> {
+    if let (Some(device_id), Some(seq)) = (&entity.origin_device_id, entity.origin_seq) {
+        return Ok((device_id.clone(), seq));
+    }
+    if let Some(existing) = conn
+        .query_row(
+            "SELECT device_id, seq FROM usage_sync_log
+             WHERE entity_type = ?1 AND entity_id = ?2 AND hlc = ?3
+             LIMIT 1",
+            params![entity.entity_type, entity.id, entity.hlc],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+    {
+        return Ok((existing.0, existing.1.max(0) as u64));
+    }
+    let parsed = HLC::from_string(&entity.hlc);
+    let source_device_id = if parsed.device_id.is_empty() {
+        "legacy-usage".to_string()
+    } else {
+        parsed.device_id
+    };
+    let device_id = format!("legacy:{source_device_id}");
+    let seq = next_usage_sequence(conn, &device_id)?;
+    Ok((device_id, seq))
+}
+
+fn usage_entity_is_newer(conn: &Connection, entity: &SyncEntity) -> Result<bool, String> {
+    let local = conn
+        .query_row(
+            "SELECT hlc FROM usage_sync_versions
+             WHERE entity_type = ?1 AND entity_id = ?2",
+            params![entity.entity_type, entity.id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    Ok(local
+        .as_deref()
+        .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc)))
+}
+
+fn finish_usage_entity_sync(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO usage_sync_versions(entity_type, entity_id, hlc)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(entity_type, entity_id) DO UPDATE SET hlc = excluded.hlc
+         WHERE excluded.hlc > usage_sync_versions.hlc",
+        params![entity.entity_type, entity.id, entity.hlc],
+    )
+    .map_err(|e| e.to_string())?;
+    let (device_id, seq) = usage_origin_for_entity(conn, entity)?;
+    record_usage_sequence(
+        conn,
+        &entity.entity_type,
+        &entity.id,
+        &device_id,
+        seq,
+        &entity.hlc,
+        entity.deleted == Some(true),
+    )
+}
+
+pub fn bump_sync_version_vector(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+    device_id: &str,
+    deleted: bool,
 ) -> Result<String, String> {
+    if is_sequenced_usage_entity(entity_type) {
+        ensure_usage_sequence_migrated(conn, device_id)?;
+        let seq = next_usage_sequence(conn, device_id)?;
+        let hlc = HLC::new(
+            Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+            seq,
+            device_id.to_string(),
+        )
+        .to_string();
+        conn.execute(
+            "INSERT INTO usage_sync_versions(entity_type, entity_id, hlc)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(entity_type, entity_id) DO UPDATE SET hlc = excluded.hlc",
+            params![entity_type, entity_id, hlc],
+        )
+        .map_err(|e| e.to_string())?;
+        record_usage_sequence(conn, entity_type, entity_id, device_id, seq, &hlc, deleted)?;
+        return Ok(hlc);
+    }
+
     let raw = get_sync_kv(conn, VERSION_VECTOR_KEY)?;
     let mut vector: VersionVector = raw
         .as_deref()
@@ -2538,6 +2834,8 @@ pub fn record_sync_tombstone(
         data: serde_json::Map::new(),
         hlc: hlc.to_string(),
         deleted: Some(true),
+        origin_device_id: None,
+        origin_seq: None,
     };
     upsert_sync_tombstone(conn, &entity)
 }
@@ -2558,6 +2856,8 @@ fn load_sync_tombstones(conn: &Connection) -> Result<Vec<SyncEntity>, String> {
                 hlc: row.get(2)?,
                 data: serde_json::Map::new(),
                 deleted: Some(true),
+                origin_device_id: None,
+                origin_seq: None,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -2574,10 +2874,36 @@ pub fn clear_all(conn: &Connection) -> Result<(), String> {
         conn.execute("DELETE FROM object_search_fts", [])
             .map_err(|e| e.to_string())?;
     }
+    let phase3_completed = phase3_migration_completed(conn)?;
+    for table in [
+        "object_migration_quarantine",
+        "object_local_state",
+        "canonical_migration_items",
+        "canonical_migration_runs",
+        "object_sync_versions",
+    ] {
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
+                [table],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if exists {
+            conn.execute(&format!("DELETE FROM {table}"), [])
+                .map_err(|e| e.to_string())?;
+        } else if phase3_completed {
+            return Err(format!("clear_all missing owned table: {table}"));
+        }
+    }
     conn.execute_batch(
         "DELETE FROM object_links;
          DELETE FROM objects;
+         DELETE FROM sync_pending_objects;
+         DELETE FROM object_type_aliases WHERE canonical_type_id IN (SELECT id FROM object_types WHERE system_locked = 0);
+         DELETE FROM object_type_versions WHERE type_id IN (SELECT id FROM object_types WHERE system_locked = 0);
          DELETE FROM object_types WHERE system_locked = 0;
+         DELETE FROM usage_days;
          DELETE FROM usage_events;
          DELETE FROM usage_sessions;
          DELETE FROM tracked_apps;
@@ -2602,17 +2928,43 @@ pub fn delete_trashed(conn: &Connection) -> Result<usize, String> {
 // ---------------------------------------------------------------------------
 
 pub fn load_all(conn: &Connection) -> Result<LoadAllData, String> {
-    let todos = load_all_todos(conn)?;
-    let projects = load_all_projects(conn)?;
-    let areas = load_all_areas(conn)?;
-    let tags = load_all_tags(conn)?;
-    let headings = load_all_headings(conn)?;
-    let tracked_apps = load_all_tracked_apps(conn)?;
-    let usage_sessions = load_all_usage_sessions(conn)?;
-    let usage_events = load_all_usage_events(conn)?;
-    let objects = list_objects(conn)?;
-    let object_types = list_object_types(conn)?;
-    let object_links = list_object_links(conn)?;
+    let mut todos = load_all_todos(conn)?;
+    let mut projects = load_all_projects(conn)?;
+    let mut areas = load_all_areas(conn)?;
+    let mut tags = load_all_tags(conn)?;
+    let mut headings = load_all_headings(conn)?;
+    let mut tracked_apps = load_all_tracked_apps(conn)?;
+    let mut usage_sessions = load_all_usage_sessions(conn)?;
+    let mut usage_events = load_all_usage_events(conn)?;
+    let mut objects = list_objects(conn)?;
+    let mut object_types = list_object_types(conn)?;
+    let mut object_type_summaries = type_registry::list_type_summaries(conn)?;
+    let mut object_type_versions = type_registry::list_all_type_versions(conn)?;
+    let mut object_type_aliases = type_registry::list_aliases(conn)?;
+    let mut object_links = list_object_links(conn)?;
+
+    // The export contract is deterministic even when SQLite's query planner or
+    // insertion order changes.  Keep the legacy collections and the additive
+    // registry collections stable by their primary-key tuples.
+    todos.sort_by(|a, b| a.id.cmp(&b.id));
+    projects.sort_by(|a, b| a.id.cmp(&b.id));
+    areas.sort_by(|a, b| a.id.cmp(&b.id));
+    tags.sort_by(|a, b| a.id.cmp(&b.id));
+    headings.sort_by(|a, b| a.id.cmp(&b.id));
+    tracked_apps.sort_by(|a, b| a.id.cmp(&b.id));
+    usage_sessions.sort_by(|a, b| a.id.cmp(&b.id));
+    usage_events.sort_by(|a, b| a.id.cmp(&b.id));
+    objects.sort_by(|a, b| a.id.cmp(&b.id));
+    object_types.sort_by(|a, b| a.id.cmp(&b.id));
+    object_type_summaries.sort_by(|a, b| a.type_id.cmp(&b.type_id));
+    object_type_versions.sort_by(|a, b| {
+        a.type_id
+            .cmp(&b.type_id)
+            .then_with(|| a.version.cmp(&b.version))
+    });
+    object_type_aliases.sort_by(|a, b| a.alias.cmp(&b.alias));
+    object_links.sort_by(|a, b| a.id.cmp(&b.id));
+
     Ok(LoadAllData {
         todos,
         projects,
@@ -2624,6 +2976,9 @@ pub fn load_all(conn: &Connection) -> Result<LoadAllData, String> {
         usage_events,
         objects,
         object_types,
+        object_type_summaries,
+        object_type_versions,
+        object_type_aliases,
         object_links,
     })
 }
@@ -2806,18 +3161,60 @@ fn load_all_tracked_apps(conn: &Connection) -> Result<Vec<TrackedApp>, String> {
 }
 
 fn load_all_usage_sessions(conn: &Connection) -> Result<Vec<UsageSession>, String> {
+    load_usage_sessions_page(conn, -1, 0)
+}
+
+fn load_usage_session(conn: &Connection, id: &str) -> Result<Option<UsageSession>, String> {
+    conn.query_row(
+        "SELECT id, tracked_app_id, device_id, device_name, platform, started_at,
+                ended_at, runtime_ms, foreground_ms, idle_ms, window_title, process_name,
+                exe_path, pid_start, pid_end, meta_json
+         FROM usage_sessions WHERE id = ?1",
+        params![id],
+        |row| {
+            let meta_json: String = row.get(15)?;
+            Ok(UsageSession {
+                id: row.get(0)?,
+                tracked_app_id: row.get(1)?,
+                device_id: row.get(2)?,
+                device_name: row.get(3)?,
+                platform: row.get(4)?,
+                started_at: row.get(5)?,
+                ended_at: row.get(6)?,
+                runtime_ms: row.get(7)?,
+                foreground_ms: row.get(8)?,
+                idle_ms: row.get(9)?,
+                window_title: row.get(10)?,
+                process_name: row.get(11)?,
+                exe_path: row.get(12)?,
+                pid_start: row.get(13)?,
+                pid_end: row.get(14)?,
+                meta_json: serde_json::from_str(&meta_json).unwrap_or_else(|_| json!({})),
+            })
+        },
+    )
+    .optional()
+    .map_err(|e| e.to_string())
+}
+
+fn load_usage_sessions_page(
+    conn: &Connection,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<UsageSession>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, tracked_app_id, device_id, device_name, platform, started_at,
                     ended_at, runtime_ms, foreground_ms, idle_ms, window_title, process_name,
                     exe_path, pid_start, pid_end, meta_json
              FROM usage_sessions
-             ORDER BY started_at DESC, id ASC",
+             ORDER BY id ASC
+             LIMIT ?1 OFFSET ?2",
         )
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
-        .query_map([], |row| {
+        .query_map(params![limit, offset], |row| {
             let meta_json_str: String = row.get(15)?;
             let meta_json: Value = serde_json::from_str(&meta_json_str).unwrap_or(json!({}));
             Ok(UsageSession {
@@ -2846,18 +3243,59 @@ fn load_all_usage_sessions(conn: &Connection) -> Result<Vec<UsageSession>, Strin
 }
 
 fn load_all_usage_events(conn: &Connection) -> Result<Vec<UsageEvent>, String> {
+    load_usage_events_page(conn, -1, 0)
+}
+
+fn load_usage_event(conn: &Connection, id: &str) -> Result<Option<UsageEvent>, String> {
+    conn.query_row(
+        "SELECT id, tracked_app_id, usage_session_id, device_id, device_name, platform,
+                occurred_at, kind, window_title, process_name, exe_path, pid,
+                is_foreground, is_idle, meta_json
+         FROM usage_events WHERE id = ?1",
+        params![id],
+        |row| {
+            let meta_json: String = row.get(14)?;
+            Ok(UsageEvent {
+                id: row.get(0)?,
+                tracked_app_id: row.get(1)?,
+                usage_session_id: row.get(2)?,
+                device_id: row.get(3)?,
+                device_name: row.get(4)?,
+                platform: row.get(5)?,
+                occurred_at: row.get(6)?,
+                kind: row.get(7)?,
+                window_title: row.get(8)?,
+                process_name: row.get(9)?,
+                exe_path: row.get(10)?,
+                pid: row.get(11)?,
+                is_foreground: row.get::<_, i64>(12)? != 0,
+                is_idle: row.get::<_, i64>(13)? != 0,
+                meta_json: serde_json::from_str(&meta_json).unwrap_or_else(|_| json!({})),
+            })
+        },
+    )
+    .optional()
+    .map_err(|e| e.to_string())
+}
+
+fn load_usage_events_page(
+    conn: &Connection,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<UsageEvent>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, tracked_app_id, usage_session_id, device_id, device_name, platform,
                     occurred_at, kind, window_title, process_name, exe_path, pid,
                     is_foreground, is_idle, meta_json
              FROM usage_events
-             ORDER BY occurred_at DESC, id ASC",
+             ORDER BY id ASC
+             LIMIT ?1 OFFSET ?2",
         )
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
-        .query_map([], |row| {
+        .query_map(params![limit, offset], |row| {
             let meta_json_str: String = row.get(14)?;
             let meta_json: Value = serde_json::from_str(&meta_json_str).unwrap_or(json!({}));
             Ok(UsageEvent {
@@ -2909,6 +3347,122 @@ pub fn delete_tag(conn: &Connection, id: &str) -> Result<(), String> {
 // `tokio::task::spawn_blocking` so it doesn't stall the async runtime.
 // ---------------------------------------------------------------------------
 
+fn load_usage_sequence_page(
+    conn: &Connection,
+    remote_vector: &VersionVector,
+    offset: usize,
+    limit: usize,
+) -> Result<Vec<SyncEntity>, String> {
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
+    let mut cursors = remote_vector
+        .iter()
+        .filter_map(|(key, value)| {
+            key.strip_prefix("@usage:")
+                .and_then(|device_id| value.parse::<i64>().ok().map(|seq| (device_id, seq)))
+        })
+        .collect::<Vec<_>>();
+    cursors.sort_unstable_by(|a, b| a.0.cmp(b.0));
+
+    let mut sql = String::from(
+        "SELECT device_id, seq, entity_type, entity_id
+         FROM usage_sync_log WHERE seq > ",
+    );
+    let mut values = Vec::<rusqlite::types::Value>::new();
+    if cursors.is_empty() {
+        sql.push('0');
+    } else {
+        sql.push_str("CASE device_id ");
+        for (device_id, seq) in cursors {
+            sql.push_str("WHEN ? THEN ? ");
+            values.push(device_id.to_string().into());
+            values.push(seq.into());
+        }
+        sql.push_str("ELSE 0 END");
+    }
+    sql.push_str(" ORDER BY device_id, seq LIMIT ? OFFSET ?");
+    values.push((limit as i64).into());
+    values.push((offset as i64).into());
+
+    let mut statement = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let refs = statement
+        .query_map(params_from_iter(values), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    drop(statement);
+
+    fn to_data_map<T: serde::Serialize>(item: &T) -> serde_json::Map<String, Value> {
+        match serde_json::to_value(item) {
+            Ok(Value::Object(mut map)) => {
+                map.remove("id");
+                map
+            }
+            _ => serde_json::Map::new(),
+        }
+    }
+
+    let mut entities = Vec::with_capacity(refs.len());
+    for (origin_device_id, seq, entity_type, entity_id) in refs {
+        let hlc = conn
+            .query_row(
+                "SELECT hlc FROM usage_sync_versions
+                 WHERE entity_type = ?1 AND entity_id = ?2",
+                params![entity_type, entity_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?
+            .unwrap_or_else(|| HLC::now(&origin_device_id).to_string());
+        let deleted = conn
+            .query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM sync_tombstones
+                    WHERE entity_type = ?1 AND id = ?2
+                 )",
+                params![entity_type, entity_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(|e| e.to_string())?
+            != 0;
+        let data = if deleted {
+            Some(serde_json::Map::new())
+        } else {
+            match entity_type.as_str() {
+                "usage_session" => load_usage_session(conn, &entity_id)?
+                    .as_ref()
+                    .map(to_data_map),
+                "usage_event" => load_usage_event(conn, &entity_id)?
+                    .as_ref()
+                    .map(to_data_map),
+                "usage_day" => load_usage_day(conn, &entity_id)?.as_ref().map(to_data_map),
+                _ => None,
+            }
+        };
+        let Some(data) = data else {
+            continue;
+        };
+        entities.push(SyncEntity {
+            entity_type,
+            id: entity_id,
+            data,
+            hlc,
+            deleted: deleted.then_some(true),
+            origin_device_id: Some(origin_device_id),
+            origin_seq: Some(seq.max(0) as u64),
+        });
+    }
+    Ok(entities)
+}
+
 pub struct SqliteStorageBackend {
     conn: Arc<Mutex<rusqlite::Connection>>,
     device_id: Arc<Mutex<String>>,
@@ -2925,12 +3479,15 @@ impl SqliteStorageBackend {
     /// Set the device id used to stamp HLCs on entities that don't yet carry
     /// one in the version vector. Matches the TS `DelphiStorage` behaviour
     /// (`HLC.now(deviceId)` when `vector[id]` is missing).
-    pub fn set_device_id(&self, device_id: &str) {
+    pub fn set_device_id(&self, device_id: &str) -> Result<(), String> {
         // Poison recovery: device_id — простой String, poison невозможен от
         // sane code path, но защита cheap и согласована с остальными
         // SqliteStorageBackend lock'ами (см. load_entities / apply_entity).
         let mut guard = self.device_id.lock().unwrap_or_else(|e| e.into_inner());
         *guard = device_id.to_string();
+        drop(guard);
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
+        ensure_usage_sequence_migrated(&conn, device_id)
     }
 
     pub fn device_id(&self) -> String {
@@ -2946,8 +3503,29 @@ impl SqliteStorageBackend {
         device_id: &str,
     ) -> Vec<SyncEntity> {
         let mut entities = Vec::new();
+        let mut offset = 0;
+        loop {
+            let page = Self::collect_entities_page_blocking(conn, vector, device_id, offset, 100);
+            if page.is_empty() {
+                break;
+            }
+            offset += page.len();
+            entities.extend(page);
+        }
+        entities
+    }
 
-        // Helper: convert a Serialize value to serde_json::Map, stripping the "id" key.
+    fn collect_entities_page_blocking(
+        conn: &Connection,
+        remote_vector: &VersionVector,
+        device_id: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Vec<SyncEntity> {
+        if limit == 0 {
+            return Vec::new();
+        }
+
         fn to_data_map<T: serde::Serialize>(item: &T) -> serde_json::Map<String, Value> {
             match serde_json::to_value(item) {
                 Ok(Value::Object(mut map)) => {
@@ -2958,158 +3536,125 @@ impl SqliteStorageBackend {
             }
         }
 
-        // Use the HLC already stored in the version vector if present;
-        // otherwise stamp a fresh `HLC::now(device_id)` so the initial sync
-        // has a defined ordering. This mirrors `DelphiStorage.loadEntities`
-        // (`vector[todo.id] || HLC.now(this.deviceId).toString()`).
-        let hlc_for = |id: &str| -> String {
-            if let Some(existing) = vector.get(id) {
-                existing.clone()
-            } else {
-                HLC::now(device_id).to_string()
-            }
+        let local_vector = remote_vector;
+        let make_entity = |entity_type: &str, id: &str, data| SyncEntity {
+            entity_type: entity_type.to_string(),
+            id: id.to_string(),
+            data,
+            hlc: local_vector
+                .get(id)
+                .cloned()
+                .unwrap_or_else(|| HLC::now(device_id).to_string()),
+            deleted: None,
+            origin_device_id: None,
+            origin_seq: None,
         };
 
-        if let Ok(todos) = load_all_todos(conn) {
-            for todo in &todos {
-                entities.push(SyncEntity {
-                    entity_type: "todo".to_string(),
-                    id: todo.id.clone(),
-                    data: to_data_map(todo),
-                    hlc: hlc_for(&todo.id),
-                    deleted: None,
-                });
+        let fixed_count: usize = conn
+            .query_row(
+                "SELECT
+                    (SELECT COUNT(*) FROM todos) +
+                    (SELECT COUNT(*) FROM projects) +
+                    (SELECT COUNT(*) FROM areas) +
+                    (SELECT COUNT(*) FROM tags) +
+                    (SELECT COUNT(*) FROM headings) +
+                    (SELECT COUNT(*) FROM tracked_apps) +
+                    (SELECT COUNT(*) FROM object_types) +
+                    (SELECT COUNT(*) FROM objects) +
+                    (SELECT COUNT(*) FROM object_links) +
+                    (SELECT COUNT(*) FROM sync_tombstones)",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        let mut fixed = Vec::new();
+        macro_rules! add_entities {
+            ($items:expr, $kind:literal) => {
+                if let Ok(items) = $items {
+                    for item in &items {
+                        fixed.push(make_entity($kind, &item.id, to_data_map(item)));
+                    }
+                }
+            };
+        }
+        if offset < fixed_count {
+            add_entities!(load_all_todos(conn), "todo");
+            add_entities!(load_all_projects(conn), "project");
+            add_entities!(load_all_areas(conn), "area");
+            add_entities!(load_all_tags(conn), "tag");
+            add_entities!(load_all_headings(conn), "heading");
+            add_entities!(load_all_tracked_apps(conn), "tracked_app");
+            add_entities!(list_object_types(conn), "object_type");
+            add_entities!(list_objects(conn), "object");
+            add_entities!(list_object_links(conn), "object_link");
+            if let Ok(tombstones) = load_sync_tombstones(conn) {
+                fixed.extend(tombstones);
             }
+            fixed.sort_by(|a, b| {
+                a.entity_type
+                    .cmp(&b.entity_type)
+                    .then_with(|| a.id.cmp(&b.id))
+            });
         }
 
-        if let Ok(projects) = load_all_projects(conn) {
-            for project in &projects {
-                entities.push(SyncEntity {
-                    entity_type: "project".to_string(),
-                    id: project.id.clone(),
-                    data: to_data_map(project),
-                    hlc: hlc_for(&project.id),
-                    deleted: None,
-                });
-            }
+        let mut entities: Vec<_> = fixed.iter().skip(offset).take(limit).cloned().collect();
+        if entities.len() == limit {
+            return entities;
         }
 
-        if let Ok(areas) = load_all_areas(conn) {
-            for area in &areas {
-                entities.push(SyncEntity {
-                    entity_type: "area".to_string(),
-                    id: area.id.clone(),
-                    data: to_data_map(area),
-                    hlc: hlc_for(&area.id),
-                    deleted: None,
-                });
-            }
+        let usage_offset = offset.saturating_sub(fixed_count);
+        let remaining = limit - entities.len();
+        match load_usage_sequence_page(conn, remote_vector, usage_offset, remaining) {
+            Ok(usage) => entities.extend(usage),
+            Err(error) => eprintln!("[ark-core] failed to load usage sync page: {error}"),
         }
-
-        if let Ok(tags) = load_all_tags(conn) {
-            for tag in &tags {
-                entities.push(SyncEntity {
-                    entity_type: "tag".to_string(),
-                    id: tag.id.clone(),
-                    data: to_data_map(tag),
-                    hlc: hlc_for(&tag.id),
-                    deleted: None,
-                });
-            }
-        }
-
-        if let Ok(headings) = load_all_headings(conn) {
-            for heading in &headings {
-                entities.push(SyncEntity {
-                    entity_type: "heading".to_string(),
-                    id: heading.id.clone(),
-                    data: to_data_map(heading),
-                    hlc: hlc_for(&heading.id),
-                    deleted: None,
-                });
-            }
-        }
-
-        if let Ok(tracked_apps) = load_all_tracked_apps(conn) {
-            for tracked_app in &tracked_apps {
-                entities.push(SyncEntity {
-                    entity_type: "tracked_app".to_string(),
-                    id: tracked_app.id.clone(),
-                    data: to_data_map(tracked_app),
-                    hlc: hlc_for(&tracked_app.id),
-                    deleted: None,
-                });
-            }
-        }
-
-        if let Ok(usage_sessions) = load_all_usage_sessions(conn) {
-            for session in &usage_sessions {
-                entities.push(SyncEntity {
-                    entity_type: "usage_session".to_string(),
-                    id: session.id.clone(),
-                    data: to_data_map(session),
-                    hlc: hlc_for(&session.id),
-                    deleted: None,
-                });
-            }
-        }
-
-        if let Ok(usage_events) = load_all_usage_events(conn) {
-            for event in &usage_events {
-                entities.push(SyncEntity {
-                    entity_type: "usage_event".to_string(),
-                    id: event.id.clone(),
-                    data: to_data_map(event),
-                    hlc: hlc_for(&event.id),
-                    deleted: None,
-                });
-            }
-        }
-
-        if let Ok(object_types) = list_object_types(conn) {
-            for object_type in &object_types {
-                entities.push(SyncEntity {
-                    entity_type: "object_type".to_string(),
-                    id: object_type.id.clone(),
-                    data: to_data_map(object_type),
-                    hlc: hlc_for(&object_type.id),
-                    deleted: None,
-                });
-            }
-        }
-
-        if let Ok(objects) = list_objects(conn) {
-            for object in &objects {
-                entities.push(SyncEntity {
-                    entity_type: "object".to_string(),
-                    id: object.id.clone(),
-                    data: to_data_map(object),
-                    hlc: hlc_for(&object.id),
-                    deleted: None,
-                });
-            }
-        }
-
-        if let Ok(object_links) = list_object_links(conn) {
-            for object_link in &object_links {
-                entities.push(SyncEntity {
-                    entity_type: "object_link".to_string(),
-                    id: object_link.id.clone(),
-                    data: to_data_map(object_link),
-                    hlc: hlc_for(&object_link.id),
-                    deleted: None,
-                });
-            }
-        }
-
-        if let Ok(tombstones) = load_sync_tombstones(conn) {
-            entities.extend(tombstones);
-        }
-
         entities
     }
 
     fn apply_entity_blocking(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
+        conn.execute_batch("SAVEPOINT sync_entity_apply")
+            .map_err(|e| e.to_string())?;
+        match Self::apply_entity_blocking_inner(conn, entity) {
+            Ok(()) => {
+                conn.execute_batch("RELEASE sync_entity_apply")
+                    .map_err(|e| e.to_string())?;
+                Ok(())
+            }
+            Err(error) => {
+                let _ =
+                    conn.execute_batch("ROLLBACK TO sync_entity_apply; RELEASE sync_entity_apply");
+                Err(error)
+            }
+        }
+    }
+
+    fn apply_entity_blocking_inner(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
+        let sequenced_usage = is_sequenced_usage_entity(&entity.entity_type);
+        if sequenced_usage && !usage_entity_is_newer(conn, entity)? {
+            let (device_id, seq) = usage_origin_for_entity(conn, entity)?;
+            return record_usage_sequence(
+                conn,
+                &entity.entity_type,
+                &entity.id,
+                &device_id,
+                seq,
+                &entity.hlc,
+                entity.deleted == Some(true),
+            );
+        }
+        if matches!(entity.entity_type.as_str(), "area" | "heading") {
+            return Err("LegacyPlanningReadOnly".into());
+        }
+        if matches!(entity.entity_type.as_str(), "todo" | "project" | "tag")
+            && entity.deleted == Some(true)
+        {
+            let mut canonical = entity.clone();
+            canonical.entity_type = "object".into();
+            return crate::canonical_types::facades::apply_canonical_object_entity(
+                conn, &canonical,
+            );
+        }
+
         if entity.deleted == Some(true) {
             match entity.entity_type.as_str() {
                 "todo" => delete_todo(conn, &entity.id),
@@ -3120,12 +3665,17 @@ impl SqliteStorageBackend {
                 "tracked_app" => delete_tracked_app(conn, &entity.id),
                 "usage_session" => delete_usage_session(conn, &entity.id),
                 "usage_event" => delete_usage_event(conn, &entity.id),
+                "usage_day" => delete_usage_day(conn, &entity.id),
                 "object_type" => delete_object_type(conn, &entity.id),
                 "object" => delete_object(conn, &entity.id),
                 "object_link" => delete_object_link(conn, &entity.id),
                 _ => Err(format!("unknown sync entity type '{}'", entity.entity_type)),
             }?;
-            return upsert_sync_tombstone(conn, entity);
+            upsert_sync_tombstone(conn, entity)?;
+            if sequenced_usage {
+                finish_usage_entity_sync(conn, entity)?;
+            }
+            return Ok(());
         }
 
         let mut full_data = entity.data.clone();
@@ -3133,21 +3683,10 @@ impl SqliteStorageBackend {
         let value = Value::Object(full_data);
 
         let result = match entity.entity_type.as_str() {
-            "todo" => serde_json::from_value::<TodoItem>(value)
-                .map_err(|e| e.to_string())
-                .and_then(|todo| upsert_todo(conn, &todo)),
-            "project" => serde_json::from_value::<Project>(value)
-                .map_err(|e| e.to_string())
-                .and_then(|project| upsert_project(conn, &project)),
-            "area" => serde_json::from_value::<Area>(value)
-                .map_err(|e| e.to_string())
-                .and_then(|area| upsert_area(conn, &area)),
-            "tag" => serde_json::from_value::<Tag>(value)
-                .map_err(|e| e.to_string())
-                .and_then(|tag| upsert_tag(conn, &tag)),
-            "heading" => serde_json::from_value::<Heading>(value)
-                .map_err(|e| e.to_string())
-                .and_then(|heading| upsert_heading(conn, &heading)),
+            "todo" | "project" | "tag" => {
+                crate::canonical_types::facades::apply_legacy_compat_entity(conn, entity)
+            }
+            "area" | "heading" => Err("LegacyPlanningReadOnly".into()),
             "tracked_app" => serde_json::from_value::<TrackedApp>(value)
                 .map_err(|e| e.to_string())
                 .and_then(|tracked_app| upsert_tracked_app(conn, &tracked_app)),
@@ -3157,35 +3696,50 @@ impl SqliteStorageBackend {
             "usage_event" => serde_json::from_value::<UsageEvent>(value)
                 .map_err(|e| e.to_string())
                 .and_then(|event| upsert_usage_event(conn, &event)),
+            "usage_day" => serde_json::from_value::<UsageDay>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|day| upsert_usage_day(conn, &day)),
             "object_type" => serde_json::from_value::<ObjectType>(value)
                 .map_err(|e| e.to_string())
                 .and_then(|object_type| upsert_object_type(conn, &object_type)),
-            "object" => (|| -> Result<(), String> {
-                let object = serde_json::from_value::<ArkObject>(value.clone())
+            "object" => {
+                // The canonical ingress owns identity resolution and validation;
+                // pending replay uses this same branch after the registry arrives.
+                let mut object_data = match value.clone() {
+                    Value::Object(map) => map,
+                    _ => return Err("object payload must be an object".into()),
+                };
+                object_data
+                    .entry("typeVersion".to_string())
+                    .or_insert_with(|| Value::String("0.0.0-legacy".to_string()));
+                let object = serde_json::from_value::<ArkObject>(Value::Object(object_data))
                     .map_err(|e| e.to_string())?;
-                // Phase 2: hold-and-replay для schema drift. Если type_id неизвестен,
-                // кладём payload в sync_pending_objects, эмитим sync_error, treat as applied
-                // (version_vector advances). При появлении object_type — replay в upsert_object_type.
-                if !is_object_type_known(conn, &object.type_id)? {
+                if !is_object_definition_known(conn, &object.type_id, &object.type_version)? {
                     insert_pending_object(conn, entity, &object.type_id)?;
                     crate::events::emit_event(json!({
                         "event": "sync_error",
-                        "code": "unknown_type_id",
+                        "code": "unknown_type_version",
                         "entity_type": "object",
                         "entity_id": entity.id,
                         "awaited_type_id": object.type_id,
+                        "awaited_type_version": object.type_version,
                     }));
-                    return Ok(());
+                    Ok(())
+                } else {
+                    crate::canonical_types::facades::apply_canonical_object_entity(conn, entity)
                 }
-                upsert_object(conn, &object)
-            })(),
+            }
             "object_link" => serde_json::from_value::<ObjectLink>(value)
                 .map_err(|e| e.to_string())
                 .and_then(|link| upsert_object_link(conn, &link)),
             _ => Err(format!("unknown sync entity type '{}'", entity.entity_type)),
         };
         result?;
-        delete_sync_tombstone(conn, &entity.id)
+        delete_sync_tombstone(conn, &entity.id)?;
+        if sequenced_usage {
+            finish_usage_entity_sync(conn, entity)?;
+        }
+        Ok(())
     }
 }
 
@@ -3203,6 +3757,23 @@ impl StorageBackend for SqliteStorageBackend {
             // фейлится навсегда после первого panic'а в этом процессе.
             let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
             Self::collect_entities_blocking(&guard, &vector, &device_id)
+        })
+        .await
+        .unwrap_or_default()
+    }
+
+    async fn load_entities_page(
+        &self,
+        vector: &VersionVector,
+        offset: usize,
+        limit: usize,
+    ) -> Vec<SyncEntity> {
+        let conn = self.conn.clone();
+        let vector = vector.clone();
+        let device_id = self.device_id();
+        tokio::task::spawn_blocking(move || {
+            let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
+            Self::collect_entities_page_blocking(&guard, &vector, &device_id, offset, limit)
         })
         .await
         .unwrap_or_default()
@@ -3356,6 +3927,7 @@ mod tests {
         ArkObject {
             id: id.to_string(),
             type_id: type_id.to_string(),
+            type_version: "0.0.0-legacy".to_string(),
             title: title.to_string(),
             content_json: json!({
                 "type": "doc",
@@ -3537,8 +4109,27 @@ mod tests {
             .unwrap();
         assert_eq!(tombstone_table_count, 1);
         let object_types = list_object_types(&conn).unwrap();
-        assert!(object_types.iter().any(|item| item.id == "note_obj"));
-        assert!(object_types.iter().any(|item| item.id == "game_obj"));
+        assert!(object_types.iter().any(|item| item.id == "com.kosmos.note"));
+        assert!(object_types.iter().any(|item| item.id == "com.kosmos.task"));
+        let migrated: (String, String) = conn
+            .query_row(
+                "SELECT type_id, type_version FROM objects WHERE id = 'legacy-todo'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            migrated,
+            ("com.kosmos.task".to_string(), "1.0.0".to_string()),
+        );
+        let canonical_type_exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM object_types WHERE id = 'com.kosmos.task'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(canonical_type_exists, 1);
     }
 
     #[test]
@@ -3929,11 +4520,12 @@ mod tests {
     #[test]
     fn test_object_model_crud() {
         let conn = setup_db();
-        let object_type = make_object_type("book_obj", "Книга");
+        let object_type = make_object_type("crud_fixture_book_type", "Книга");
         upsert_object_type(&conn, &object_type).unwrap();
+        upsert_object_type(&conn, &make_object_type("crud_fixture_type", "Заметка")).unwrap();
 
-        let note = make_object("obj-1", "note_obj", "Первая заметка");
-        let book = make_object("obj-2", "book_obj", "Clean Code");
+        let note = make_object("obj-1", "crud_fixture_type", "Первая заметка");
+        let book = make_object("obj-2", "crud_fixture_book_type", "Clean Code");
         upsert_object(&conn, &note).unwrap();
         upsert_object(&conn, &book).unwrap();
 
@@ -3941,20 +4533,32 @@ mod tests {
         upsert_object_link(&conn, &link).unwrap();
 
         let data = load_all(&conn).unwrap();
-        assert!(data.object_types.iter().any(|item| item.id == "note_obj"));
-        assert!(data.object_types.iter().any(|item| item.id == "game_obj"));
-        assert!(data.object_types.iter().any(|item| item.id == "book_obj"));
+        assert!(data
+            .object_types
+            .iter()
+            .any(|item| item.id == "com.kosmos.note"));
+        assert!(data
+            .object_types
+            .iter()
+            .any(|item| item.id == "com.kosmos.game"));
+        assert!(data
+            .object_types
+            .iter()
+            .any(|item| item.id == "crud_fixture_book_type"));
         assert_eq!(data.objects.len(), 2);
         assert_eq!(data.object_links.len(), 1);
         assert_eq!(data.object_links[0].source_object_id, "obj-1");
 
         delete_object_link(&conn, "link-1").unwrap();
         delete_object(&conn, "obj-2").unwrap();
-        delete_object_type(&conn, "book_obj").unwrap();
+        delete_object_type(&conn, "crud_fixture_book_type").unwrap();
         let data = load_all(&conn).unwrap();
         assert_eq!(data.object_links.len(), 0);
         assert_eq!(data.objects.len(), 1);
-        assert!(!data.object_types.iter().any(|item| item.id == "book_obj"));
+        assert!(!data
+            .object_types
+            .iter()
+            .any(|item| item.id == "crud_fixture_book_type"));
     }
 
     #[test]
@@ -4055,15 +4659,30 @@ mod tests {
     #[test]
     fn object_query_helpers_filter_by_type_and_ids() {
         let conn = setup_db();
-        let object_type = make_object_type("book_obj", "Book");
+        let object_type = make_object_type("query_fixture_book_type", "Book");
         upsert_object_type(&conn, &object_type).unwrap();
-        upsert_object(&conn, &make_object("obj-1", "note_obj", "Journal")).unwrap();
-        upsert_object(&conn, &make_object("obj-2", "book_obj", "Clean Code")).unwrap();
-        upsert_object(&conn, &make_object("obj-3", "book_obj", "Rust Book")).unwrap();
+        upsert_object_type(&conn, &make_object_type("query_fixture_type", "Journal")).unwrap();
+        upsert_object(
+            &conn,
+            &make_object("obj-1", "query_fixture_type", "Journal"),
+        )
+        .unwrap();
+        upsert_object(
+            &conn,
+            &make_object("obj-2", "query_fixture_book_type", "Clean Code"),
+        )
+        .unwrap();
+        upsert_object(
+            &conn,
+            &make_object("obj-3", "query_fixture_book_type", "Rust Book"),
+        )
+        .unwrap();
 
-        let books = list_objects_by_type(&conn, "book_obj").unwrap();
+        let books = list_objects_by_type(&conn, "query_fixture_book_type").unwrap();
         assert_eq!(books.len(), 2);
-        assert!(books.iter().all(|object| object.type_id == "book_obj"));
+        assert!(books
+            .iter()
+            .all(|object| object.type_id == "query_fixture_book_type"));
 
         let ids = vec![
             "obj-3".to_string(),
@@ -4084,17 +4703,18 @@ mod tests {
     #[test]
     fn object_summary_queries_skip_body_and_filter_by_type() {
         let conn = setup_db();
-        let object_type = make_object_type("book_obj", "Book");
+        let object_type = make_object_type("summary_fixture_book_type", "Book");
         upsert_object_type(&conn, &object_type).unwrap();
+        upsert_object_type(&conn, &make_object_type("summary_fixture_type", "Journal")).unwrap();
 
-        let mut older = make_object("obj-1", "note_obj", "Journal");
+        let mut older = make_object("obj-1", "summary_fixture_type", "Journal");
         older.content_json = json!({ "text": "large body that must not be selected by summaries" });
         older.props_json = json!({ "kind": "note" });
         older.created_at = "2026-01-01T00:00:00.000Z".to_string();
         older.updated_at = "2026-01-01T00:00:00.000Z".to_string();
         upsert_object(&conn, &older).unwrap();
 
-        let mut newer = make_object("obj-2", "book_obj", "Clean Code");
+        let mut newer = make_object("obj-2", "summary_fixture_book_type", "Clean Code");
         newer.content_json = json!({ "text": "another body" });
         newer.props_json = json!({ "kind": "book" });
         newer.created_at = "2026-01-02T00:00:00.000Z".to_string();
@@ -4107,10 +4727,11 @@ mod tests {
         assert_eq!(summaries[0].props_json, json!({ "kind": "book" }));
         assert_eq!(summaries[1].id, "obj-1");
 
-        let book_summaries = list_object_summaries_by_type(&conn, "book_obj").unwrap();
+        let book_summaries =
+            list_object_summaries_by_type(&conn, "summary_fixture_book_type").unwrap();
         assert_eq!(book_summaries.len(), 1);
         assert_eq!(book_summaries[0].id, "obj-2");
-        assert_eq!(book_summaries[0].type_id, "book_obj");
+        assert_eq!(book_summaries[0].type_id, "summary_fixture_book_type");
     }
 
     fn make_time_entry(
@@ -4122,6 +4743,7 @@ mod tests {
         ArkObject {
             id: id.to_string(),
             type_id: "time_entry_obj".to_string(),
+            type_version: "0.0.0-legacy".to_string(),
             title: format!("entry {id}"),
             content_json: json!({}),
             props_json: json!({
@@ -4330,8 +4952,14 @@ mod tests {
         assert_eq!(data.usage_events.len(), 0);
         assert_eq!(data.objects.len(), 0);
         assert_eq!(data.object_links.len(), 0);
-        assert!(data.object_types.iter().any(|item| item.id == "note_obj"));
-        assert!(data.object_types.iter().any(|item| item.id == "game_obj"));
+        assert!(data
+            .object_types
+            .iter()
+            .any(|item| item.id == "com.kosmos.note"));
+        assert!(data
+            .object_types
+            .iter()
+            .any(|item| item.id == "com.kosmos.game"));
         assert_eq!(get_sync_kv(&conn, "k").unwrap(), None);
     }
 
@@ -4378,7 +5006,7 @@ mod tests {
         let conn = setup_db();
         let shared = Arc::new(Mutex::new(conn));
         let backend = SqliteStorageBackend::new(shared);
-        backend.set_device_id("device-under-test");
+        backend.set_device_id("device-under-test").unwrap();
         backend
     }
 
@@ -4396,6 +5024,8 @@ mod tests {
             data: map,
             hlc: "2026-01-01T00:00:00.000Z:000001:peer-a".to_string(),
             deleted: None,
+            origin_device_id: None,
+            origin_seq: None,
         }
     }
 
@@ -4413,6 +5043,8 @@ mod tests {
             data: map,
             hlc: "2026-01-01T00:00:00.000Z:000001:peer-a".to_string(),
             deleted: None,
+            origin_device_id: None,
+            origin_seq: None,
         }
     }
 
@@ -4430,6 +5062,8 @@ mod tests {
             data: map,
             hlc: "2026-01-01T00:00:00.000Z:000002:peer-a".to_string(),
             deleted: None,
+            origin_device_id: Some("peer-a".to_string()),
+            origin_seq: Some(2),
         }
     }
 
@@ -4447,6 +5081,8 @@ mod tests {
             data: map,
             hlc: "2026-01-01T00:00:00.000Z:000003:peer-a".to_string(),
             deleted: None,
+            origin_device_id: Some("peer-a".to_string()),
+            origin_seq: Some(3),
         }
     }
 
@@ -4464,6 +5100,8 @@ mod tests {
             data: map,
             hlc: "2026-01-01T00:00:00.000Z:000010:peer-a".to_string(),
             deleted: None,
+            origin_device_id: None,
+            origin_seq: None,
         }
     }
 
@@ -4481,6 +5119,8 @@ mod tests {
             data: map,
             hlc: "2026-01-01T00:00:00.000Z:000011:peer-a".to_string(),
             deleted: None,
+            origin_device_id: None,
+            origin_seq: None,
         }
     }
 
@@ -4496,7 +5136,7 @@ mod tests {
             .iter()
             .find(|e| e.id == "tbk1")
             .expect("inserted todo should be loaded");
-        assert_eq!(found.entity_type, "todo");
+        assert_eq!(found.entity_type, "object");
         assert_eq!(
             found.data.get("title").and_then(|v| v.as_str()),
             Some("Roundtrip")
@@ -4587,6 +5227,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn storage_backend_pages_large_usage_history() {
+        let conn = setup_db();
+        upsert_tracked_app(&conn, &make_tracked_app("app-paged")).unwrap();
+        for index in 0..250 {
+            upsert_usage_event(
+                &conn,
+                &make_usage_event(&format!("event-paged-{index:03}"), "app-paged", None),
+            )
+            .unwrap();
+        }
+        let backend = SqliteStorageBackend::new(Arc::new(Mutex::new(conn)));
+        backend.set_device_id("device-paged").unwrap();
+        let vector = VersionVector::new();
+        let mut offset = 0;
+        let mut usage_event_ids = std::collections::HashSet::new();
+
+        loop {
+            let page = backend.load_entities_page(&vector, offset, 100).await;
+            assert!(page.len() <= 100);
+            if page.is_empty() {
+                break;
+            }
+            offset += page.len();
+            usage_event_ids.extend(
+                page.into_iter()
+                    .filter(|entity| entity.entity_type == "usage_event")
+                    .map(|entity| entity.id),
+            );
+        }
+
+        assert_eq!(usage_event_ids.len(), 250);
+    }
+
+    #[tokio::test]
     async fn storage_backend_roundtrip_object_entities() {
         let backend = make_backend();
         backend
@@ -4637,6 +5311,8 @@ mod tests {
             data: serde_json::Map::new(),
             hlc: "2026-01-02T00:00:00.000Z:000001:peer-a".to_string(),
             deleted: Some(true),
+            origin_device_id: None,
+            origin_seq: None,
         };
         backend.apply_entity(&tombstone).await.unwrap();
 
@@ -4646,7 +5322,7 @@ mod tests {
             .iter()
             .find(|e| e.id == "tbk2")
             .expect("deleted entity should be emitted as a tombstone");
-        assert_eq!(found.entity_type, "todo");
+        assert_eq!(found.entity_type, "object");
         assert_eq!(found.deleted, Some(true));
         assert_eq!(found.hlc, "2026-01-02T00:00:00.000Z:000001:peer-a");
         assert!(found.data.is_empty());
@@ -4664,6 +5340,8 @@ mod tests {
             data: serde_json::Map::new(),
             hlc: "2026-01-02T00:00:00.000Z:000002:peer-a".to_string(),
             deleted: Some(true),
+            origin_device_id: None,
+            origin_seq: None,
         };
         backend.apply_entity(&tombstone).await.unwrap();
 
@@ -4687,6 +5365,8 @@ mod tests {
             data: serde_json::Map::new(),
             hlc: "2026-01-02T00:00:00.000Z:000001:peer-a".to_string(),
             deleted: Some(true),
+            origin_device_id: None,
+            origin_seq: None,
         };
         backend.apply_entity(&tombstone).await.unwrap();
 
@@ -4711,8 +5391,10 @@ mod tests {
     #[test]
     fn local_sync_version_bump_persists_hlc_for_entity() {
         let conn = setup_db();
-        let first = bump_sync_version_vector(&conn, "obj-local", "device-local").unwrap();
-        let second = bump_sync_version_vector(&conn, "obj-local", "device-local").unwrap();
+        let first =
+            bump_sync_version_vector(&conn, "object", "obj-local", "device-local", false).unwrap();
+        let second =
+            bump_sync_version_vector(&conn, "object", "obj-local", "device-local", false).unwrap();
 
         assert!(HLC::is_newer(&second, &first) || second > first);
         let raw = get_sync_kv(&conn, VERSION_VECTOR_KEY)
@@ -4778,6 +5460,8 @@ mod tests {
             data: serde_json::Map::new(),
             hlc: "2026-01-02T00:00:00.000Z:000001:peer-a".to_string(),
             deleted: Some(true),
+            origin_device_id: Some("peer-a".to_string()),
+            origin_seq: Some(4),
         };
         backend.apply_entity(&tombstone).await.unwrap();
 
@@ -4843,6 +5527,10 @@ mod tests {
     fn phase2_make_sync_entity_object(id: &str, type_id: &str, title: &str) -> SyncEntity {
         let mut data = serde_json::Map::new();
         data.insert("typeId".to_string(), Value::String(type_id.to_string()));
+        data.insert(
+            "typeVersion".to_string(),
+            Value::String("0.0.0-legacy".to_string()),
+        );
         data.insert("title".to_string(), Value::String(title.to_string()));
         data.insert("contentJson".to_string(), json!({}));
         data.insert("propsJson".to_string(), json!({}));
@@ -4860,6 +5548,8 @@ mod tests {
             data,
             hlc: "2026-01-01T00:00:00.000Z:000001:test".to_string(),
             deleted: None,
+            origin_device_id: None,
+            origin_seq: None,
         }
     }
 
@@ -4991,10 +5681,14 @@ mod tests {
         {
             let conn = open_db(path.to_str().unwrap()).unwrap();
             init_schema(&conn).unwrap();
-            let object_type = make_object_type("note_obj", "Note");
+            let object_type = make_object_type("corruption_fixture_type", "Note");
             upsert_object_type(&conn, &object_type).unwrap();
             for i in 0..100 {
-                let mut obj = make_object(&format!("obj-{i}"), "note_obj", &format!("Title {i}"));
+                let mut obj = make_object(
+                    &format!("obj-{i}"),
+                    "corruption_fixture_type",
+                    &format!("Title {i}"),
+                );
                 obj.props_json = json!({ "n": i, "padding": "x".repeat(200) });
                 upsert_object(&conn, &obj).unwrap();
             }
@@ -5034,9 +5728,9 @@ mod tests {
     fn backup_to_file_creates_valid_copy() {
         let conn = setup_db();
         // Положим test данные.
-        let object_type = make_object_type("note_obj", "Note");
+        let object_type = make_object_type("backup_fixture_type", "Note");
         upsert_object_type(&conn, &object_type).unwrap();
-        let mut object = make_object("obj-backup", "note_obj", "Backup test");
+        let mut object = make_object("obj-backup", "backup_fixture_type", "Backup test");
         object.props_json = json!({"tag": "test"});
         upsert_object(&conn, &object).unwrap();
 
@@ -5067,10 +5761,14 @@ mod tests {
             // коннекшном (а не из переданного &Connection).
             let conn = open_db(src_str).unwrap();
             init_schema(&conn).unwrap();
-            upsert_object_type(&conn, &make_object_type("note_obj", "Note")).unwrap();
+            upsert_object_type(
+                &conn,
+                &make_object_type("backup_chunk_fixture_type", "Note"),
+            )
+            .unwrap();
             upsert_object(
                 &conn,
-                &make_object("obj-chunked", "note_obj", "Chunked backup"),
+                &make_object("obj-chunked", "backup_chunk_fixture_type", "Chunked backup"),
             )
             .unwrap();
         }
@@ -5131,5 +5829,225 @@ mod tests {
             types.iter().any(|t| t.id == "ot-nested"),
             "object_type должен быть записан"
         );
+    }
+
+    #[test]
+    fn compact_usage_span_is_idempotent_and_dictionary_encoded() {
+        let conn = setup_db();
+        let mut write = UsageSpanWrite {
+            device_id: "device-compact".to_string(),
+            started_at_unix: 1_767_225_600,
+            ended_at_unix: 1_767_225_630,
+            tracked_app_id: "browser".to_string(),
+            window_title: Some("Facebook".to_string()),
+            flags: 0,
+            updated_at: "2026-01-01T00:00:30.000Z".to_string(),
+        };
+        upsert_usage_span(&conn, &write).unwrap();
+        write.ended_at_unix += 30;
+        upsert_usage_span(&conn, &write).unwrap();
+
+        let day = load_usage_day(&conn, "usage-day:device-compact:2026-01-01")
+            .unwrap()
+            .unwrap();
+        assert_eq!(day.payload_json["a"], json!(["browser"]));
+        assert_eq!(day.payload_json["t"], json!(["Facebook"]));
+        assert_eq!(day.payload_json["s"], json!([[0, 60, 0, 0, 0]]));
+        assert_eq!(
+            get_usage_title_total(&conn, "face").unwrap(),
+            UsageTitleTotal {
+                active_seconds: 60,
+                idle_seconds: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn compact_usage_span_splits_at_utc_midnight_and_syncs() {
+        let source = setup_db();
+        let write = UsageSpanWrite {
+            device_id: "device-midnight".to_string(),
+            started_at_unix: 1_767_311_990,
+            ended_at_unix: 1_767_312_010,
+            tracked_app_id: "reader".to_string(),
+            window_title: Some("Book".to_string()),
+            flags: 1,
+            updated_at: "2026-01-02T00:00:10.000Z".to_string(),
+        };
+        let days = upsert_usage_span(&source, &write).unwrap();
+        assert_eq!(days.len(), 2);
+        ensure_usage_sequence_migrated(&source, "source-device").unwrap();
+
+        let entities = SqliteStorageBackend::collect_entities_blocking(
+            &source,
+            &VersionVector::new(),
+            "source-device",
+        );
+        let usage_days = entities
+            .iter()
+            .filter(|entity| entity.entity_type == "usage_day")
+            .collect::<Vec<_>>();
+        assert_eq!(usage_days.len(), 2);
+
+        let peer = setup_db();
+        for entity in usage_days {
+            SqliteStorageBackend::apply_entity_blocking(&peer, entity).unwrap();
+        }
+        assert_eq!(
+            peer.query_row("SELECT COUNT(*) FROM usage_days", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            2
+        );
+    }
+
+    #[test]
+    fn usage_sequence_cursor_waits_for_missing_entries() {
+        let conn = setup_db();
+
+        record_usage_sequence(
+            &conn,
+            "usage_day",
+            "day-2",
+            "peer-device",
+            2,
+            "2026-01-02T00:00:00.000Z:000002:peer-device",
+            false,
+        )
+        .unwrap();
+        let vector: VersionVector =
+            serde_json::from_str(&get_sync_kv(&conn, VERSION_VECTOR_KEY).unwrap().unwrap())
+                .unwrap();
+        assert_eq!(vector.get("@usage:peer-device"), Some(&"0".to_string()));
+
+        record_usage_sequence(
+            &conn,
+            "usage_day",
+            "day-1",
+            "peer-device",
+            1,
+            "2026-01-01T00:00:00.000Z:000001:peer-device",
+            false,
+        )
+        .unwrap();
+        let vector: VersionVector =
+            serde_json::from_str(&get_sync_kv(&conn, VERSION_VECTOR_KEY).unwrap().unwrap())
+                .unwrap();
+        assert_eq!(vector.get("@usage:peer-device"), Some(&"2".to_string()));
+    }
+
+    #[test]
+    fn local_usage_versions_use_one_device_cursor() {
+        let conn = setup_db();
+        let first =
+            bump_sync_version_vector(&conn, "usage_day", "day-a", "local-device", false).unwrap();
+        let second =
+            bump_sync_version_vector(&conn, "usage_day", "day-b", "local-device", false).unwrap();
+
+        let vector: VersionVector =
+            serde_json::from_str(&get_sync_kv(&conn, VERSION_VECTOR_KEY).unwrap().unwrap())
+                .unwrap();
+        assert_eq!(vector.get("@usage:local-device"), Some(&"2".to_string()));
+        assert!(!vector.contains_key("day-a"));
+        assert!(!vector.contains_key("day-b"));
+        assert!(HLC::is_newer(&second, &first));
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM usage_sync_log", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .unwrap(),
+            2
+        );
+    }
+
+    #[test]
+    fn legacy_usage_replay_keeps_one_synthetic_sequence() {
+        let conn = setup_db();
+        let day = UsageDay {
+            id: "usage-day:legacy:2026-01-01".to_string(),
+            device_id: "legacy".to_string(),
+            day: "2026-01-01".to_string(),
+            payload_json: json!({"a": ["browser"], "t": ["Example"], "s": [[0, 30, 0, 0, 0]]}),
+            updated_at: "2026-01-01T00:00:30.000Z".to_string(),
+        };
+        let mut data = serde_json::to_value(&day)
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .clone();
+        data.remove("id");
+        let entity = SyncEntity {
+            entity_type: "usage_day".to_string(),
+            id: day.id.clone(),
+            data,
+            hlc: "2026-01-01T00:00:30.000Z:000007:old-peer".to_string(),
+            deleted: None,
+            origin_device_id: None,
+            origin_seq: None,
+        };
+
+        SqliteStorageBackend::apply_entity_blocking(&conn, &entity).unwrap();
+        SqliteStorageBackend::apply_entity_blocking(&conn, &entity).unwrap();
+
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM usage_sync_log", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .unwrap(),
+            1
+        );
+        let vector: VersionVector =
+            serde_json::from_str(&get_sync_kv(&conn, VERSION_VECTOR_KEY).unwrap().unwrap())
+                .unwrap();
+        assert_eq!(
+            vector.get("@usage:legacy:old-peer").map(String::as_str),
+            Some("1")
+        );
+        assert!(!vector.contains_key(&day.id));
+    }
+
+    #[tokio::test]
+    async fn storage_backend_versioned_object_matrix_holds_unknown_payload_and_replays_exactly() {
+        let backend = make_backend();
+        let conn = backend.conn.clone();
+        {
+            let guard = conn.lock().unwrap();
+            upsert_object_type(&guard, &make_object_type("remote-type", "Remote")).unwrap();
+        }
+        let mut old = sync_object("remote-old", "remote-type", "old-wire");
+        old.data.remove("typeVersion");
+        backend.apply_entity(&old).await.unwrap();
+        assert_eq!(
+            get_object(&conn.lock().unwrap(), "remote-old")
+                .unwrap()
+                .unwrap()
+                .type_version,
+            type_registry::LEGACY_VERSION
+        );
+        let mut unknown = sync_object("remote-unknown", "remote-type", "unknown-wire");
+        unknown.data.insert("typeVersion".into(), json!("9.9.9"));
+        unknown
+            .data
+            .insert("futurePayload".into(), json!({"keep":true}));
+        backend.apply_entity(&unknown).await.unwrap();
+        let guard = conn.lock().unwrap();
+        assert!(get_object(&guard, "remote-unknown").unwrap().is_none());
+        let payload: String = guard
+            .query_row(
+                "SELECT payload FROM sync_pending_objects WHERE id='remote-unknown'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(payload.contains("futurePayload"));
+        drop(guard);
+        let replayed = {
+            let guard = conn.lock().unwrap();
+            replay_pending_for_type(&guard, "remote-type", type_registry::LEGACY_VERSION).unwrap()
+        };
+        assert_eq!(replayed, 0);
+        assert!(get_object(&conn.lock().unwrap(), "remote-unknown")
+            .unwrap()
+            .is_none());
     }
 }

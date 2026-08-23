@@ -183,6 +183,41 @@ pub struct UsageEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct UsageDay {
+    pub id: String,
+    pub device_id: String,
+    pub day: String,
+    #[serde(default = "default_usage_day_payload")]
+    pub payload_json: Value,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageSpanWrite {
+    pub device_id: String,
+    pub started_at_unix: i64,
+    pub ended_at_unix: i64,
+    pub tracked_app_id: String,
+    pub window_title: Option<String>,
+    #[serde(default)]
+    pub flags: i64,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageTitleTotal {
+    pub active_seconds: i64,
+    pub idle_seconds: i64,
+}
+
+fn default_usage_day_payload() -> Value {
+    serde_json::json!({ "a": [], "t": [], "s": [] })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
@@ -191,6 +226,7 @@ pub struct UsageEvent {
 pub struct ArkObject {
     pub id: String,
     pub type_id: String,
+    pub type_version: String,
     pub title: String,
     #[serde(default = "default_content_json")]
     #[cfg_attr(feature = "ts-rs", ts(type = "unknown"))]
@@ -213,6 +249,7 @@ pub struct ArkObject {
 pub struct ArkObjectSummary {
     pub id: String,
     pub type_id: String,
+    pub type_version: String,
     pub title: String,
     #[serde(default = "default_props_json")]
     #[cfg_attr(feature = "ts-rs", ts(type = "Record<string, unknown>"))]
@@ -220,6 +257,39 @@ pub struct ArkObjectSummary {
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArkObjectWrite {
+    pub id: String,
+    pub type_id: String,
+    #[serde(default)]
+    pub type_version: Option<String>,
+    pub title: String,
+    #[serde(default = "default_content_json")]
+    pub content_json: Value,
+    #[serde(default = "default_props_json")]
+    pub props_json: Value,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+}
+
+impl ArkObjectWrite {
+    pub fn with_type_version(self, type_version: String) -> ArkObject {
+        ArkObject {
+            id: self.id,
+            type_id: self.type_id,
+            type_version,
+            title: self.title,
+            content_json: self.content_json,
+            props_json: self.props_json,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            deleted_at: self.deleted_at,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -287,6 +357,9 @@ pub struct LoadAllData {
     pub usage_events: Vec<UsageEvent>,
     pub objects: Vec<ArkObject>,
     pub object_types: Vec<ObjectType>,
+    pub object_type_summaries: Vec<crate::type_registry::TypeSummary>,
+    pub object_type_versions: Vec<crate::type_registry::TypeVersion>,
+    pub object_type_aliases: Vec<crate::type_registry::AliasRecord>,
     pub object_links: Vec<ObjectLink>,
 }
 
@@ -501,6 +574,10 @@ pub struct SyncEntity {
     pub hlc: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_device_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_seq: Option<u64>,
 }
 
 // ---------------------------------------------------------------------------

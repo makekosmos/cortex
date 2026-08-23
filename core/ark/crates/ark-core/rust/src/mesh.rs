@@ -131,6 +131,8 @@ mod tests {
                 hlc: hlc.to_string(),
                 data: serde_json::Map::new(),
                 deleted: None,
+                origin_device_id: None,
+                origin_seq: None,
             },
             origin_device_id: None,
         }

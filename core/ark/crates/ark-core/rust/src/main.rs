@@ -1,4 +1,8 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
+#![cfg_attr(
+    all(windows, feature = "windows-gui-subsystem"),
+    windows_subsystem = "windows"
+)]
 
 //! ark-core-rpc: stdin/stdout JSON-RPC binary used as a sidecar by Electron
 //! and any other embedder that wants the full DB + sync runtime without
@@ -30,6 +34,7 @@ use tokio::sync::{mpsc, Mutex as TokioMutex};
 use ark_core::beacon::{BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions};
 use ark_core::db::{self, SqliteStorageBackend};
 use ark_core::events::{emit_event, set_event_sender};
+use ark_core::hlc::HLC;
 use ark_core::host::{get_host_device_name, get_own_addresses};
 use ark_core::net::is_address_routable;
 use ark_core::protocol::LAN_SYNC_PORT;
@@ -180,6 +185,12 @@ enum Request {
         #[serde(default)]
         device_id: Option<String>,
     },
+    UpsertUsageSpan {
+        usage_span: UsageSpanWrite,
+    },
+    GetUsageTitleTotal {
+        query: String,
+    },
     GetUsageAnalytics {
         #[serde(default)]
         range_days: Option<i64>,
@@ -225,8 +236,43 @@ enum Request {
     GetObject {
         id: String,
     },
+    #[serde(rename = "canonical.game.list")]
+    CanonicalGameList {
+        #[serde(default)]
+        device_id: Option<String>,
+    },
+    #[serde(rename = "canonical.game.get")]
+    CanonicalGameGet {
+        id: String,
+        #[serde(default)]
+        device_id: Option<String>,
+    },
+    #[serde(rename = "canonical.game.upsert")]
+    CanonicalGameUpsert {
+        game: ark_core::canonical_types::game::GameUpsertCommand,
+        #[serde(default)]
+        device_id: Option<String>,
+    },
+    #[serde(rename = "canonical.asset_sources")]
+    CanonicalAssetSources {
+        #[serde(rename = "objectIds")]
+        object_ids: Vec<String>,
+    },
+    #[serde(rename = "canonical.set_book_cover")]
+    CanonicalSetBookCover {
+        #[serde(rename = "bookId")]
+        book_id: String,
+        #[serde(default, rename = "sourceRef")]
+        source_ref: Option<String>,
+        #[serde(default, rename = "existingImageId")]
+        existing_image_id: Option<String>,
+        #[serde(default)]
+        alt_text: String,
+        #[serde(default)]
+        device_id: Option<String>,
+    },
     UpsertObject {
-        object: ArkObject,
+        object: ArkObjectWrite,
         #[serde(default)]
         device_id: Option<String>,
     },
@@ -234,6 +280,28 @@ enum Request {
         id: String,
         #[serde(default)]
         device_id: Option<String>,
+    },
+    #[serde(rename = "types.list")]
+    TypesList,
+    #[serde(rename = "types.get")]
+    TypesGet {
+        #[serde(rename = "typeId")]
+        type_id: String,
+        #[serde(default)]
+        version: Option<String>,
+    },
+    #[serde(rename = "types.listVersions")]
+    TypesListVersions {
+        #[serde(rename = "typeId")]
+        type_id: String,
+    },
+    #[serde(rename = "types.resolveAlias")]
+    TypesResolveAlias {
+        alias: String,
+    },
+    #[serde(rename = "types.registerPackageDefinitions")]
+    TypesRegisterPackageDefinitions {
+        registrations: Vec<ark_core::type_registry::TypeRegistration>,
     },
     ListObjectTypes,
     GetObjectType {
@@ -565,12 +633,12 @@ fn local_write_device_id(device_id: Option<String>) -> String {
 
 fn record_local_upsert(
     conn: &rusqlite::Connection,
-    _entity_type: &str,
+    entity_type: &str,
     entity_id: &str,
     device_id: Option<String>,
 ) -> Result<String, String> {
     let device_id = local_write_device_id(device_id);
-    let hlc = db::bump_sync_version_vector(conn, entity_id, &device_id)?;
+    let hlc = db::bump_sync_version_vector(conn, entity_type, entity_id, &device_id, false)?;
     db::delete_sync_tombstone(conn, entity_id)?;
     Ok(hlc)
 }
@@ -582,7 +650,7 @@ fn record_local_delete(
     device_id: Option<String>,
 ) -> Result<String, String> {
     let device_id = local_write_device_id(device_id);
-    let hlc = db::bump_sync_version_vector(conn, entity_id, &device_id)?;
+    let hlc = db::bump_sync_version_vector(conn, entity_type, entity_id, &device_id, true)?;
     db::record_sync_tombstone(conn, entity_type, entity_id, &hlc)?;
     Ok(hlc)
 }
@@ -604,12 +672,15 @@ fn make_sync_entity(
         }
         _ => serde_json::Map::new(),
     };
+    let origin = db::is_sequenced_usage_entity(entity_type).then(|| HLC::from_string(&hlc));
     SyncEntity {
         entity_type: entity_type.to_string(),
         id: id.to_string(),
         data,
         hlc,
         deleted,
+        origin_device_id: origin.as_ref().map(|value| value.device_id.clone()),
+        origin_seq: origin.map(|value| value.counter),
     }
 }
 
@@ -643,8 +714,47 @@ async fn broadcast_local_change(entity: SyncEntity) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Request dispatcher
+fn legacy_content() -> Value {
+    json!({"type":"doc","content":[{"type":"paragraph"}]})
+}
+
+fn legacy_record(
+    id: &str,
+    legacy_type_id: &str,
+    title: &str,
+    props: Value,
+    created_at: &str,
+    deleted_at: Option<String>,
+) -> ark_core::canonical_types::compatibility::LegacyRecord {
+    ark_core::canonical_types::compatibility::LegacyRecord {
+        id: id.into(),
+        legacy_type_id: legacy_type_id.into(),
+        title: title.into(),
+        content: legacy_content(),
+        props,
+        created_at: created_at.into(),
+        updated_at: created_at.into(),
+        deleted_at,
+    }
+}
+
+fn write_legacy_graph(
+    conn: &rusqlite::Connection,
+    records: &[ark_core::canonical_types::compatibility::LegacyRecord],
+    device_id: Option<String>,
+) -> Result<Vec<SyncEntity>, String> {
+    ark_core::canonical_types::facades::write_legacy_records(conn, records, "rpc", device_id)
+}
+
+fn tombstone_legacy(
+    conn: &rusqlite::Connection,
+    id: &str,
+    expected_type_id: &str,
+    device_id: Option<String>,
+) -> Result<SyncEntity, String> {
+    ark_core::canonical_types::facades::delete_legacy_object(conn, id, expected_type_id, device_id)
+}
+
 // ---------------------------------------------------------------------------
 
 async fn handle_request(request: Request) -> Result<Value, String> {
@@ -671,29 +781,41 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         // 2026-06-17: все write-handlers теперь рассылают LiveChange через
         // broadcast_local_change — фикс live-sync gap.
         Request::UpsertTodo { todo, device_id } => {
-            let entity = with_write_tx(|conn| {
-                db::upsert_todo(conn, &todo)?;
-                let hlc = record_local_upsert(conn, "todo", &todo.id, device_id)?;
-                Ok(make_sync_entity(
-                    "todo",
-                    &todo.id,
-                    serde_json::to_value(&todo).unwrap_or(json!({})),
-                    hlc,
-                    None,
-                ))
-            })?;
+            let record = legacy_record(
+                &todo.id,
+                "task_obj",
+                &todo.title,
+                json!({
+                    "priority": todo.priority, "scheduled_date": todo.scheduled_date, "deadline": todo.deadline,
+                    "reminder_date": todo.reminder_date, "is_today": todo.is_today, "is_evening": todo.is_evening,
+                    "is_someday": todo.is_someday, "is_completed": todo.is_completed, "completed_at": todo.completed_at,
+                    "is_cancelled": todo.is_cancelled, "cancelled_at": todo.cancelled_at, "checklist_items": todo.checklist_items,
+                    "recurrence_rule": todo.recurrence_rule, "project_id": todo.project_id, "tag_ids": todo.tag_ids,
+                }),
+                &todo.created_at,
+                None,
+            );
+            let entities = with_write_tx(|conn| write_legacy_graph(conn, &[record], device_id))?;
+            tokio::spawn(async move {
+                for entity in entities {
+                    broadcast_local_change(entity).await;
+                }
+            });
+            Ok(json!(true))
+        }
+
+        Request::DeleteTodo { id, device_id } => {
+            let entity =
+                with_write_tx(|conn| tombstone_legacy(conn, &id, "com.kosmos.task", device_id))?;
             tokio::spawn(async move {
                 broadcast_local_change(entity).await;
             });
             Ok(json!(true))
         }
 
-        Request::DeleteTodo { id, device_id } => {
-            let entity = with_write_tx(|conn| {
-                db::delete_todo(conn, &id)?;
-                let hlc = record_local_delete(conn, "todo", &id, device_id)?;
-                Ok(make_sync_entity("todo", &id, json!({}), hlc, Some(true)))
-            })?;
+        Request::DeleteProject { id, device_id } => {
+            let entity =
+                with_write_tx(|conn| tombstone_legacy(conn, &id, "com.kosmos.project", device_id))?;
             tokio::spawn(async move {
                 broadcast_local_change(entity).await;
             });
@@ -701,24 +823,14 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         }
 
         Request::BatchUpsertTodos { todos, device_id } => {
-            // db::batch_upsert_todos использует SAVEPOINT ark_batch_upsert_todos,
-            // поэтому вкладывается в BEGIN IMMEDIATE из with_write_tx.
-            // entity-батч + sync-meta записываются атомарно в одной транзакции.
-            let entities = with_write_tx(|conn| {
-                db::batch_upsert_todos(conn, &todos)?;
-                let mut entities = Vec::with_capacity(todos.len());
-                for todo in &todos {
-                    let hlc = record_local_upsert(conn, "todo", &todo.id, device_id.clone())?;
-                    entities.push(make_sync_entity(
-                        "todo",
-                        &todo.id,
-                        serde_json::to_value(todo).unwrap_or(json!({})),
-                        hlc,
-                        None,
-                    ));
-                }
-                Ok(entities)
-            })?;
+            let records = todos.iter().map(|todo| legacy_record(&todo.id, "task_obj", &todo.title, json!({
+                "priority": todo.priority, "scheduled_date": todo.scheduled_date, "deadline": todo.deadline,
+                "reminder_date": todo.reminder_date, "is_today": todo.is_today, "is_evening": todo.is_evening,
+                "is_someday": todo.is_someday, "is_completed": todo.is_completed, "completed_at": todo.completed_at,
+                "is_cancelled": todo.is_cancelled, "cancelled_at": todo.cancelled_at, "checklist_items": todo.checklist_items,
+                "recurrence_rule": todo.recurrence_rule, "project_id": todo.project_id, "tag_ids": todo.tag_ids,
+            }), &todo.created_at, None)).collect::<Vec<_>>();
+            let entities = with_write_tx(|conn| write_legacy_graph(conn, &records, device_id))?;
             tokio::spawn(async move {
                 for entity in entities {
                     broadcast_local_change(entity).await;
@@ -728,100 +840,55 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         }
 
         Request::UpsertProject { project, device_id } => {
-            let entity = with_write_tx(|conn| {
-                db::upsert_project(conn, &project)?;
-                let hlc = record_local_upsert(conn, "project", &project.id, device_id)?;
-                Ok(make_sync_entity(
-                    "project",
-                    &project.id,
-                    serde_json::to_value(&project).unwrap_or(json!({})),
-                    hlc,
-                    None,
-                ))
-            })?;
+            let record = legacy_record(
+                &project.id,
+                "project_obj",
+                &project.title,
+                json!({"status": project.status, "scheduled_date": project.scheduled_date, "deadline": project.deadline, "color": project.color_tag}),
+                &project.created_at,
+                None,
+            );
+            let entities = with_write_tx(|conn| write_legacy_graph(conn, &[record], device_id))?;
             tokio::spawn(async move {
-                broadcast_local_change(entity).await;
+                for entity in entities {
+                    broadcast_local_change(entity).await;
+                }
             });
             Ok(json!(true))
         }
 
-        Request::DeleteProject { id, device_id } => {
-            let entity = with_write_tx(|conn| {
-                db::delete_project(conn, &id)?;
-                let hlc = record_local_delete(conn, "project", &id, device_id)?;
-                Ok(make_sync_entity("project", &id, json!({}), hlc, Some(true)))
-            })?;
-            tokio::spawn(async move {
-                broadcast_local_change(entity).await;
-            });
-            Ok(json!(true))
-        }
-
-        Request::UpsertArea { area, device_id } => {
-            let entity = with_write_tx(|conn| {
-                db::upsert_area(conn, &area)?;
-                let hlc = record_local_upsert(conn, "area", &area.id, device_id)?;
-                Ok(make_sync_entity(
-                    "area",
-                    &area.id,
-                    serde_json::to_value(&area).unwrap_or(json!({})),
-                    hlc,
-                    None,
-                ))
-            })?;
-            tokio::spawn(async move {
-                broadcast_local_change(entity).await;
-            });
-            Ok(json!(true))
-        }
+        Request::UpsertArea {
+            area: _area,
+            device_id: _device_id,
+        } => Err("LegacyPlanningReadOnly".to_string()),
 
         Request::UpsertTag { tag, device_id } => {
-            let entity = with_write_tx(|conn| {
-                db::upsert_tag(conn, &tag)?;
-                let hlc = record_local_upsert(conn, "tag", &tag.id, device_id)?;
-                Ok(make_sync_entity(
-                    "tag",
-                    &tag.id,
-                    serde_json::to_value(&tag).unwrap_or(json!({})),
-                    hlc,
-                    None,
-                ))
-            })?;
+            let record = legacy_record(
+                &tag.id,
+                "tag_obj",
+                &tag.title,
+                json!({"color": tag.color}),
+                &tag.created_at,
+                None,
+            );
+            let entities = with_write_tx(|conn| write_legacy_graph(conn, &[record], device_id))?;
             tokio::spawn(async move {
-                broadcast_local_change(entity).await;
+                for entity in entities {
+                    broadcast_local_change(entity).await;
+                }
             });
             Ok(json!(true))
         }
 
-        Request::UpsertHeading { heading, device_id } => {
-            let entity = with_write_tx(|conn| {
-                db::upsert_heading(conn, &heading)?;
-                let hlc = record_local_upsert(conn, "heading", &heading.id, device_id)?;
-                Ok(make_sync_entity(
-                    "heading",
-                    &heading.id,
-                    serde_json::to_value(&heading).unwrap_or(json!({})),
-                    hlc,
-                    None,
-                ))
-            })?;
-            tokio::spawn(async move {
-                broadcast_local_change(entity).await;
-            });
-            Ok(json!(true))
-        }
+        Request::UpsertHeading {
+            heading: _heading,
+            device_id: _device_id,
+        } => Err("LegacyPlanningReadOnly".to_string()),
 
-        Request::DeleteHeading { id, device_id } => {
-            let entity = with_write_tx(|conn| {
-                db::delete_heading(conn, &id)?;
-                let hlc = record_local_delete(conn, "heading", &id, device_id)?;
-                Ok(make_sync_entity("heading", &id, json!({}), hlc, Some(true)))
-            })?;
-            tokio::spawn(async move {
-                broadcast_local_change(entity).await;
-            });
-            Ok(json!(true))
-        }
+        Request::DeleteHeading {
+            id: _id,
+            device_id: _device_id,
+        } => Err("LegacyPlanningReadOnly".to_string()),
 
         Request::UpsertTrackedApp {
             tracked_app,
@@ -867,6 +934,10 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             device_id,
         } => {
             let entity = with_write_tx(|conn| {
+                db::ensure_usage_sequence_migrated(
+                    conn,
+                    &local_write_device_id(device_id.clone()),
+                )?;
                 db::upsert_usage_session(conn, &usage_session)?;
                 let hlc = record_local_upsert(conn, "usage_session", &usage_session.id, device_id)?;
                 Ok(make_sync_entity(
@@ -885,6 +956,10 @@ async fn handle_request(request: Request) -> Result<Value, String> {
 
         Request::DeleteUsageSession { id, device_id } => {
             let entity = with_write_tx(|conn| {
+                db::ensure_usage_sequence_migrated(
+                    conn,
+                    &local_write_device_id(device_id.clone()),
+                )?;
                 db::delete_usage_session(conn, &id)?;
                 let hlc = record_local_delete(conn, "usage_session", &id, device_id)?;
                 Ok(make_sync_entity(
@@ -906,6 +981,10 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             device_id,
         } => {
             let entity = with_write_tx(|conn| {
+                db::ensure_usage_sequence_migrated(
+                    conn,
+                    &local_write_device_id(device_id.clone()),
+                )?;
                 db::upsert_usage_event(conn, &usage_event)?;
                 let hlc = record_local_upsert(conn, "usage_event", &usage_event.id, device_id)?;
                 Ok(make_sync_entity(
@@ -924,6 +1003,10 @@ async fn handle_request(request: Request) -> Result<Value, String> {
 
         Request::DeleteUsageEvent { id, device_id } => {
             let entity = with_write_tx(|conn| {
+                db::ensure_usage_sequence_migrated(
+                    conn,
+                    &local_write_device_id(device_id.clone()),
+                )?;
                 db::delete_usage_event(conn, &id)?;
                 let hlc = record_local_delete(conn, "usage_event", &id, device_id)?;
                 Ok(make_sync_entity(
@@ -939,6 +1022,43 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             });
             Ok(json!(true))
         }
+        Request::UpsertUsageSpan { usage_span } => {
+            let entities = with_write_tx(|conn| {
+                db::ensure_usage_sequence_migrated(conn, &usage_span.device_id)?;
+                db::upsert_usage_span(conn, &usage_span)?
+                    .into_iter()
+                    .map(|day| {
+                        let hlc = record_local_upsert(
+                            conn,
+                            "usage_day",
+                            &day.id,
+                            Some(usage_span.device_id.clone()),
+                        )?;
+                        Ok(make_sync_entity(
+                            "usage_day",
+                            &day.id,
+                            serde_json::to_value(&day).unwrap_or(json!({})),
+                            hlc,
+                            None,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, String>>()
+            })?;
+            let ids = entities
+                .iter()
+                .map(|entity| entity.id.clone())
+                .collect::<Vec<_>>();
+            tokio::spawn(async move {
+                for entity in entities {
+                    broadcast_local_change(entity).await;
+                }
+            });
+            Ok(json!({ "usageDayIds": ids }))
+        }
+        Request::GetUsageTitleTotal { query } => with_conn(|conn| {
+            serde_json::to_value(db::get_usage_title_total(conn, &query)?)
+                .map_err(|error| error.to_string())
+        }),
         Request::GetUsageAnalytics {
             range_days,
             top_apps_limit,
@@ -1005,14 +1125,103 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let object = db::get_object(conn, &id)?;
             serde_json::to_value(object).map_err(|e| e.to_string())
         }),
+        Request::CanonicalGameList { device_id } => {
+            let device = local_write_device_id(device_id);
+            with_conn(|conn| {
+                serde_json::to_value(ark_core::canonical_types::game::list_games(conn, &device)?)
+                    .map_err(|e| e.to_string())
+            })
+        }
+        Request::CanonicalGameGet { id, device_id } => {
+            let device = local_write_device_id(device_id);
+            with_conn(|conn| {
+                serde_json::to_value(ark_core::canonical_types::game::get_game(
+                    conn, &id, &device,
+                )?)
+                .map_err(|e| e.to_string())
+            })
+        }
+        Request::CanonicalGameUpsert { game, device_id } => {
+            let device = local_write_device_id(device_id);
+            let record = with_write_tx(|conn| {
+                ark_core::canonical_types::game::upsert_game(conn, game, &device)
+            })?;
+            if record.changed {
+                emit_event(json!({"event":"arrancador.changed"}));
+            }
+            serde_json::to_value(record).map_err(|e| e.to_string())
+        }
+        Request::CanonicalAssetSources { object_ids } => with_conn(|conn| {
+            serde_json::to_value(
+                ark_core::canonical_types::facades::asset_sources(conn, &object_ids)
+                    .map_err(|error| error.to_string())?,
+            )
+            .map_err(|e| e.to_string())
+        }),
+        Request::CanonicalSetBookCover {
+            book_id,
+            source_ref,
+            existing_image_id,
+            alt_text,
+            device_id,
+        } => {
+            let device_id = local_write_device_id(device_id);
+            let book_id_for_event = book_id.clone();
+            let mutation = with_write_tx(|conn| {
+                let mutation = ark_core::canonical_types::facades::set_book_cover(
+                    conn,
+                    &book_id,
+                    source_ref.as_deref(),
+                    existing_image_id.as_deref(),
+                    &alt_text,
+                    &device_id,
+                )
+                .map_err(|error| error.to_string())?;
+                if !mutation.changed {
+                    return Ok(mutation);
+                }
+                let book_hlc =
+                    record_local_upsert(conn, "object", &book_id, Some(device_id.clone()))?;
+                conn.execute(
+                    "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE excluded.hlc > object_sync_versions.hlc",
+                    rusqlite::params![book_id, book_hlc],
+                )
+                .map_err(|e| e.to_string())?;
+                for link in &mutation.links {
+                    let link_hlc = record_local_upsert(
+                        conn,
+                        "object_link",
+                        &link.id,
+                        Some(device_id.clone()),
+                    )?;
+                    conn.execute(
+                        "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE excluded.hlc > object_sync_versions.hlc",
+                        rusqlite::params![link.id, link_hlc],
+                    )
+                    .map_err(|e| e.to_string())?;
+                }
+                for id in &mutation.deleted_link_ids {
+                    record_local_delete(conn, "object_link", id, Some(device_id.clone()))?;
+                }
+                if let Some(image) = &mutation.image {
+                    record_local_upsert(conn, "object", &image.id, Some(device_id.clone()))?;
+                }
+                Ok(mutation)
+            })?;
+            if mutation.changed {
+                emit_event(json!({
+                    "event": "canonical_book_cover_changed",
+                    "bookId": book_id_for_event,
+                }));
+            }
+            Ok(json!(true))
+        }
         Request::UpsertObject { object, device_id } => {
             let object_id = object.id.clone();
             let object_type_id = object.type_id.clone();
-            // Emit ТОЛЬКО на успешный local write. `set_on_change` (sync_server)
-            // эмитит entity_changed на incoming peer-write — это другой код path,
-            // не дублирует это событие. Cross-app live updates (Eden TaskRef
-            // подписан на object_upserted) — это primary consumer.
             let entity = with_write_tx(|conn| {
+                let object = ark_core::canonical_types::ingress::prepare_object(conn, object)
+                    .map_err(|error| error.to_string())?;
                 db::upsert_object(conn, &object)?;
                 let hlc = record_local_upsert(conn, "object", &object.id, device_id)?;
                 Ok(make_sync_entity(
@@ -1052,6 +1261,37 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             }));
             Ok(json!(true))
         }
+        Request::TypesList => with_conn(|conn| {
+            serde_json::to_value(ark_core::type_registry::list_type_summaries(conn)?)
+                .map_err(|e| e.to_string())
+        }),
+        Request::TypesRegisterPackageDefinitions { registrations } => with_write_tx(|conn| {
+            for registration in &registrations {
+                ark_core::type_registry::register_type(conn, registration)?;
+            }
+            Ok(json!(true))
+        }),
+        Request::TypesGet { type_id, version } => with_conn(|conn| {
+            serde_json::to_value(ark_core::type_registry::get_type(
+                conn,
+                &type_id,
+                version.as_deref(),
+            )?)
+            .map_err(|e| e.to_string())
+        }),
+        Request::TypesListVersions { type_id } => with_conn(|conn| {
+            let Some(canonical) = ark_core::type_registry::resolve_type_id(conn, &type_id)? else {
+                return Ok(json!([]));
+            };
+            serde_json::to_value(ark_core::type_registry::list_type_versions(
+                conn, &canonical,
+            )?)
+            .map_err(|e| e.to_string())
+        }),
+        Request::TypesResolveAlias { alias } => with_conn(|conn| {
+            serde_json::to_value(ark_core::type_registry::resolve_alias(conn, &alias)?)
+                .map_err(|e| e.to_string())
+        }),
         Request::ListObjectTypes => with_conn(|conn| {
             let object_types = db::list_object_types(conn)?;
             serde_json::to_value(object_types).map_err(|e| e.to_string())
@@ -1344,7 +1584,7 @@ async fn handle_start_sync(
 
     let shared_conn = get_shared_conn()?;
     let storage = Arc::new(SqliteStorageBackend::new(shared_conn.clone()));
-    storage.set_device_id(&device_id);
+    storage.set_device_id(&device_id)?;
 
     let server = Arc::new(SyncServer::new(storage.clone() as Arc<dyn StorageBackend>));
     server.set_auth_secret(auth_secret.clone()).await;
@@ -1919,14 +2159,19 @@ async fn handle_get_sync_snapshot() -> Result<Value, String> {
         }
     };
 
-    let connected = runtime.server.get_connected_peer_entries().await;
+    let mut connected = runtime.server.get_connected_peer_entries().await;
+    if let Some(relay) = runtime.relay.as_ref() {
+        connected.extend(relay.get_connected_peer_entries().await);
+    }
     let known = runtime.server.get_known_peers().await;
     let connected_ids: std::collections::HashSet<String> =
         connected.iter().map(|(id, _)| id.clone()).collect();
-    let peers: Vec<Value> = known
+    let mut represented_ids = std::collections::HashSet::new();
+    let mut peers: Vec<Value> = known
         .into_iter()
         .filter(|peer| peer.device_id != runtime.device_id)
         .map(|peer| {
+            represented_ids.insert(peer.device_id.clone());
             let status = if connected_ids.contains(&peer.device_id) {
                 "online"
             } else {
@@ -1940,6 +2185,21 @@ async fn handle_get_sync_snapshot() -> Result<Value, String> {
             })
         })
         .collect();
+    peers.extend(
+        connected
+            .into_iter()
+            .filter(|(device_id, _)| {
+                device_id != &runtime.device_id && !represented_ids.contains(device_id)
+            })
+            .map(|(device_id, device_name)| {
+                json!({
+                    "device_id": device_id,
+                    "device_name": device_name,
+                    "last_seen": chrono::Utc::now().to_rfc3339(),
+                    "status": "online",
+                })
+            }),
+    );
 
     Ok(json!({
         "running": true,
@@ -2127,6 +2387,20 @@ async fn handle_add_seed_peer(addresses: Vec<String>) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn release_package_wires_windows_gui_subsystem_only_for_ark_binary() {
+        let source = include_str!("main.rs");
+        let cargo = include_str!("../Cargo.toml");
+        let package_build =
+            include_str!("../../../../../../platform/desktop/scripts/build-backend.mjs");
+
+        assert!(cargo.contains("windows-gui-subsystem = []"));
+        assert!(source.contains("all(windows, feature = \"windows-gui-subsystem\")"));
+        assert!(source.contains("windows_subsystem = \"windows\""));
+        assert!(package_build.contains("\"-p\",\n    \"ark-core\""));
+        assert!(package_build.contains("\"--features\",\n    \"iroh-spike,windows-gui-subsystem\""));
+    }
 
     static TEST_DB_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     static TEST_EVENT_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -2409,12 +2683,21 @@ mod tests {
         .await
         .unwrap();
 
-        let object = ArkObject {
+        let object = ArkObjectWrite {
             id: "obj-local-write".to_string(),
-            type_id: "game_obj".to_string(),
+            type_id: "com.kosmos.game".to_string(),
+            type_version: Some("1.0.0".to_string()),
             title: "Local Game".to_string(),
-            content_json: json!({ "type": "doc", "content": [] }),
-            props_json: json!({ "source": "test" }),
+            content_json: json!({}),
+            props_json: json!({
+                "playStatus": null,
+                "userRating": null,
+                "genres": [],
+                "platforms": [],
+                "released": null,
+                "description": null,
+                "extensions": {}
+            }),
             created_at: "2026-04-24T00:00:00.000Z".to_string(),
             updated_at: "2026-04-24T00:00:00.000Z".to_string(),
             deleted_at: None,
@@ -2507,12 +2790,7 @@ mod tests {
             .unwrap()
             .expect("version vector should be stored");
         let vector: VersionVector = serde_json::from_str(&raw).unwrap();
-        for id in [
-            "obj-local-write",
-            "app-local-write",
-            "session-local-write",
-            "event-local-write",
-        ] {
+        for id in ["obj-local-write", "app-local-write"] {
             assert!(
                 vector
                     .get(id)
@@ -2520,6 +2798,12 @@ mod tests {
                 "{id} should have a local HLC in the version vector",
             );
         }
+        assert_eq!(
+            vector.get("@usage:device-local").map(String::as_str),
+            Some("2")
+        );
+        assert!(!vector.contains_key("session-local-write"));
+        assert!(!vector.contains_key("event-local-write"));
 
         let tombstone_count: i64 = guard
             .query_row(
@@ -2544,7 +2828,7 @@ mod tests {
 
         let timestamp = "2026-04-24T00:00:00.000Z".to_string();
         let object_type = ObjectType {
-            id: "game_obj".to_string(),
+            id: "rpc-game-type".to_string(),
             name: "Game".to_string(),
             schema_json: "{}".to_string(),
             ui_schema_json: "{}".to_string(),
@@ -2573,9 +2857,10 @@ mod tests {
         .await
         .unwrap();
 
-        let source = ArkObject {
+        let source = ArkObjectWrite {
             id: "source-object".to_string(),
             type_id: object_type.id.clone(),
+            type_version: Some("0.0.0-legacy".to_string()),
             title: "Source".to_string(),
             content_json: json!({}),
             props_json: json!({}),
@@ -2583,9 +2868,10 @@ mod tests {
             updated_at: timestamp.clone(),
             deleted_at: None,
         };
-        let target = ArkObject {
+        let target = ArkObjectWrite {
             id: "target-object".to_string(),
             type_id: object_type.id.clone(),
+            type_version: Some("0.0.0-legacy".to_string()),
             title: "Target".to_string(),
             content_json: json!({}),
             props_json: json!({}),
@@ -2639,7 +2925,7 @@ mod tests {
             .unwrap()
             .expect("version vector should be stored");
         let vector: VersionVector = serde_json::from_str(&raw).unwrap();
-        for id in ["game_obj", "link-local-write", "empty_type_for_delete"] {
+        for id in ["rpc-game-type", "link-local-write", "empty_type_for_delete"] {
             assert!(
                 vector
                     .get(id)
@@ -2667,11 +2953,8 @@ mod tests {
         assert_eq!(type_tombstone_count, 1);
     }
 
-    /// Regression for 2026-05-18 audit finding: legacy entity write handlers
-    /// (UpsertTodo, UpsertProject, UpsertArea, UpsertTag, UpsertHeading и их
-    /// Delete*, BatchUpsertTodos) пропускали bump_sync_version_vector. Локальные
-    /// правки тихо терялись для LAN sync. Тест проверяет что каждый legacy
-    /// entity получает HLC в version vector и delete'ы пишут tombstone.
+    /// Regression for the legacy Todo/Project/Tag write handlers: local writes
+    /// must record an HLC in the version vector and deletes must write a tombstone.
     #[tokio::test]
     async fn legacy_entity_writes_bump_version_vector() {
         let _guard = TEST_DB_MUTEX.lock().await;
@@ -2685,19 +2968,6 @@ mod tests {
 
         let device = Some("device-legacy".to_string());
         let timestamp = "2026-05-18T00:00:00.000Z".to_string();
-
-        let area = Area {
-            id: "area-legacy".to_string(),
-            title: "Area".to_string(),
-            sort_order: 0,
-            created_at: timestamp.clone(),
-        };
-        handle_request(Request::UpsertArea {
-            area,
-            device_id: device.clone(),
-        })
-        .await
-        .unwrap();
 
         let project = Project {
             id: "project-legacy".to_string(),
@@ -2731,19 +3001,6 @@ mod tests {
         .await
         .unwrap();
 
-        let heading = Heading {
-            id: "heading-legacy".to_string(),
-            title: "Heading".to_string(),
-            sort_order: 0,
-            project_id: "project-legacy".to_string(),
-        };
-        handle_request(Request::UpsertHeading {
-            heading,
-            device_id: device.clone(),
-        })
-        .await
-        .unwrap();
-
         let make_todo = |id: &str| TodoItem {
             id: id.to_string(),
             title: "Todo".to_string(),
@@ -2755,14 +3012,14 @@ mod tests {
             is_today: false,
             is_evening: false,
             is_someday: false,
-            is_completed: false,
+            is_completed: true,
             completed_at: None,
             is_cancelled: false,
             cancelled_at: None,
             is_trashed: false,
             sort_order: 0,
             heading_id: None,
-            project_id: None,
+            project_id: Some("project-legacy".to_string()),
             area_id: None,
             tag_ids: vec![],
             checklist_items: json!([]),
@@ -2786,12 +3043,6 @@ mod tests {
         .unwrap();
 
         // Delete legacy — должен записать tombstone.
-        handle_request(Request::DeleteHeading {
-            id: "heading-legacy".to_string(),
-            device_id: device.clone(),
-        })
-        .await
-        .unwrap();
         handle_request(Request::DeleteTodo {
             id: "todo-batch-1".to_string(),
             device_id: device.clone(),
@@ -2806,10 +3057,8 @@ mod tests {
             .expect("version vector should be stored");
         let vector: VersionVector = serde_json::from_str(&raw).unwrap();
         for id in [
-            "area-legacy",
             "project-legacy",
             "tag-legacy",
-            "heading-legacy",
             "todo-legacy",
             "todo-batch-1",
             "todo-batch-2",
@@ -2822,26 +3071,84 @@ mod tests {
             );
         }
 
-        let heading_tombstone: i64 = guard
-            .query_row(
-                "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
-                rusqlite::params!["heading-legacy", "heading"],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(
-            heading_tombstone, 1,
-            "DeleteHeading должен записать tombstone"
-        );
-
         let todo_tombstone: i64 = guard
             .query_row(
                 "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
-                rusqlite::params!["todo-batch-1", "todo"],
+                rusqlite::params!["todo-batch-1", "object"],
                 |row| row.get(0),
             )
             .unwrap();
         assert_eq!(todo_tombstone, 1, "DeleteTodo должен записать tombstone");
+    }
+
+    #[tokio::test]
+    async fn legacy_planning_writes_are_read_only_without_sync_side_effects() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+
+        let snapshot = || {
+            let shared = get_shared_conn().unwrap();
+            let conn = shared.lock().unwrap();
+            let vector = db::get_sync_kv(&conn, "lan_sync.version_vector").unwrap();
+            let counts = [
+                "areas",
+                "headings",
+                "todos",
+                "projects",
+                "tags",
+                "objects",
+                "object_links",
+                "sync_tombstones",
+                "sync_kv",
+            ]
+            .map(|table| {
+                conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get::<_, i64>(0)
+                })
+                .unwrap()
+            });
+            (vector, counts)
+        };
+
+        let before = snapshot();
+        let area = Area {
+            id: "area-read-only".to_string(),
+            title: "Area".to_string(),
+            sort_order: 0,
+            created_at: "2026-05-18T00:00:00.000Z".to_string(),
+        };
+        let heading = Heading {
+            id: "heading-read-only".to_string(),
+            title: "Heading".to_string(),
+            sort_order: 0,
+            project_id: "project-read-only".to_string(),
+        };
+        for request in [
+            Request::UpsertArea {
+                area,
+                device_id: Some("device-read-only".to_string()),
+            },
+            Request::UpsertHeading {
+                heading,
+                device_id: Some("device-read-only".to_string()),
+            },
+            Request::DeleteHeading {
+                id: "heading-read-only".to_string(),
+                device_id: Some("device-read-only".to_string()),
+            },
+        ] {
+            assert_eq!(
+                handle_request(request).await.unwrap_err(),
+                "LegacyPlanningReadOnly"
+            );
+        }
+        assert_eq!(snapshot(), before);
     }
 
     // -----------------------------------------------------------------------
@@ -2891,7 +3198,7 @@ mod tests {
         });
 
         let backend = Arc::new(ark_core::db::SqliteStorageBackend::new(shared_conn));
-        backend.set_device_id("test-device");
+        backend.set_device_id("test-device").unwrap();
 
         let relay = RelaySync::with_transport(
             backend.clone() as Arc<dyn StorageBackend>,
@@ -2956,7 +3263,7 @@ mod tests {
 
         let shared = get_shared_conn().unwrap();
         let backend = Arc::new(ark_core::db::SqliteStorageBackend::new(shared));
-        backend.set_device_id("device-local");
+        backend.set_device_id("device-local").unwrap();
 
         let peer = PeerRecord {
             device_id: "peer-123".to_string(),
@@ -3075,9 +3382,10 @@ mod tests {
         let shared = get_shared_conn().unwrap();
         let captured = setup_sync_with_capturing_transport(shared).await;
 
-        let object = ArkObject {
+        let object = ArkObjectWrite {
             id: "live-obj-1".to_string(),
             type_id: "note".to_string(),
+            type_version: Some("0.0.0-legacy".to_string()),
             title: "Live Test".to_string(),
             content_json: json!({ "type": "doc", "content": [] }),
             props_json: json!({}),
@@ -3139,9 +3447,10 @@ mod tests {
         .unwrap();
 
         // Создаём объект сначала
-        let object = ArkObject {
+        let object = ArkObjectWrite {
             id: "live-obj-del".to_string(),
             type_id: "note".to_string(),
+            type_version: Some("0.0.0-legacy".to_string()),
             title: "To Delete".to_string(),
             content_json: json!({}),
             props_json: json!({}),
@@ -3189,6 +3498,51 @@ mod tests {
     // RED-тесты: fail-closed + атомарность entity/sync-meta (2026-06-18)
     // -----------------------------------------------------------------------
 
+    #[tokio::test]
+    async fn legacy_alias_object_write_read_and_filter_is_canonical() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        handle_request(Request::Init {
+            db_path: dir.path().join("ark.db").to_string_lossy().into_owned(),
+        })
+        .await
+        .unwrap();
+
+        handle_request(Request::UpsertObject {
+            object: ArkObjectWrite {
+                id: "alias-note".into(),
+                type_id: "com.kosmos.note".into(),
+                type_version: Some("1.0.0".into()),
+                title: "Alias note".into(),
+                content_json: json!({"type":"doc","content":[]}),
+                props_json: json!({"description":null,"extensions":{}}),
+                created_at: "2026-06-18T00:00:00.000Z".into(),
+                updated_at: "2026-06-18T00:00:00.000Z".into(),
+                deleted_at: None,
+            },
+            device_id: None,
+        })
+        .await
+        .unwrap();
+
+        let object = handle_request(Request::GetObject {
+            id: "alias-note".into(),
+        })
+        .await
+        .unwrap();
+        assert_eq!(object["typeId"], "com.kosmos.note");
+        assert_eq!(object["typeVersion"], "1.0.0");
+        for type_id in ["note_obj", "com.kosmos.note"] {
+            let objects = handle_request(Request::ListObjectsByType {
+                type_id: type_id.into(),
+            })
+            .await
+            .unwrap();
+            assert_eq!(objects.as_array().unwrap().len(), 1);
+            assert_eq!(objects[0]["id"], "alias-note");
+        }
+    }
+
     /// FK violation → handle_request должен возвращать Err.
     /// Текущий код проглатывает ошибку и возвращает Ok(true) → RED.
     #[tokio::test]
@@ -3203,9 +3557,10 @@ mod tests {
         .unwrap();
 
         // type_id "nonexistent_type" не существует → FK violation в db::upsert_object
-        let object = ArkObject {
+        let object = ArkObjectWrite {
             id: "obj-bad-type".to_string(),
             type_id: "nonexistent_type".to_string(),
+            type_version: Some("0.0.0-legacy".to_string()),
             title: "Bad Object".to_string(),
             content_json: json!({}),
             props_json: json!({}),
@@ -3242,9 +3597,10 @@ mod tests {
         .unwrap();
 
         // type_id "ghost_type" не существует → upsert упадёт на FK
-        let object = ArkObject {
+        let object = ArkObjectWrite {
             id: "obj-ghost".to_string(),
             type_id: "ghost_type".to_string(),
+            type_version: Some("0.0.0-legacy".to_string()),
             title: "Ghost".to_string(),
             content_json: json!({}),
             props_json: json!({}),
@@ -3289,5 +3645,327 @@ mod tests {
             );
         }
         // Если vv_raw == None — version_vector ещё не создавался, тест проходит
+    }
+
+    #[test]
+    fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
+        let _guard = TEST_DB_MUTEX.blocking_lock();
+        let path = std::env::temp_dir().join(format!("ark-phase2-rpc-{}.db", std::process::id()));
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            handle_request(Request::Init { db_path: path.to_string_lossy().into_owned() }).await.unwrap();
+            let type_request: Request = serde_json::from_value(json!({
+                "operation": "upsert_object_type",
+                "object_type": {"id":"rpc-phase2", "name":"RPC", "schemaJson":"{}", "uiSchemaJson":"{}", "createdAt":"c", "updatedAt":"u", "systemLocked":false}
+            })).unwrap();
+            handle_request(type_request).await.unwrap();
+            let object_request: Request = serde_json::from_value(json!({
+                "operation": "upsert_object",
+                "object": {"id":"rpc-object", "typeId":"rpc-phase2", "title":"x", "contentJson":{}, "propsJson":{}, "createdAt":"c", "updatedAt":"u", "deletedAt":null}
+            })).unwrap();
+            handle_request(object_request).await.unwrap();
+            let stored = handle_request(Request::GetObject { id: "rpc-object".into() }).await.unwrap();
+            assert!(stored["typeVersion"]
+                .as_str()
+                .is_some_and(|version| version.starts_with("0.0.0+legacy.")));
+            let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel();
+            set_event_sender(event_tx);
+            let before = with_conn(|conn| {
+                Ok((
+                    conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0)).map_err(|e| e.to_string())?,
+                    db::get_sync_kv(conn, "lan_sync.version_vector")?,
+                ))
+            }).unwrap();
+            let unknown_request: Request = serde_json::from_value(json!({
+                "operation": "upsert_object",
+                "object": {"id":"rpc-unknown", "typeId":"rpc-phase2", "typeVersion":"9.9.9", "title":"unknown", "contentJson":{}, "propsJson":{}, "createdAt":"c", "updatedAt":"u", "deletedAt":null}
+            })).unwrap();
+            assert!(handle_request(unknown_request).await.is_err());
+            let after = with_conn(|conn| {
+                Ok((
+                    conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0)).map_err(|e| e.to_string())?,
+                    db::get_sync_kv(conn, "lan_sync.version_vector")?,
+                ))
+            }).unwrap();
+            assert_eq!(before, after);
+            assert!(!matches!(event_rx.try_recv(), Ok(event) if event["event"] == "object_upserted"));
+            let result = handle_request(Request::TypesGet {
+                type_id: "rpc-phase2".into(),
+                version: None,
+            })
+            .await
+            .unwrap();
+            assert!(result["summary"].is_object());
+            assert!(result["definition"].is_object());
+            let alias = handle_request(Request::TypesResolveAlias { alias: "not-an-alias".into() }).await.unwrap();
+            assert!(alias.is_null());
+            let versions = handle_request(Request::TypesListVersions { type_id: "missing".into() }).await.unwrap();
+            assert_eq!(versions, json!([]));
+        });
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn dotted_type_rpc_handlers_cover_aliases_versions_nulls_and_ordering() {
+        let _guard = TEST_DB_MUTEX.blocking_lock();
+        let path =
+            std::env::temp_dir().join(format!("ark-phase2-rpc-matrix-{}.db", std::process::id()));
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            handle_request(Request::Init {
+                db_path: path.to_string_lossy().into_owned(),
+            })
+            .await
+            .unwrap();
+            for id in ["rpc-z", "rpc-a"] {
+                handle_request(Request::UpsertObjectType {
+                    object_type: ObjectType {
+                        id: id.into(),
+                        name: id.into(),
+                        schema_json: "{}".into(),
+                        ui_schema_json: "{}".into(),
+                        created_at: "c".into(),
+                        updated_at: "u".into(),
+                        system_locked: false,
+                    },
+                    device_id: None,
+                })
+                .await
+                .unwrap();
+            }
+            with_conn(|conn| {
+                ark_core::type_registry::register_alias(
+                    conn,
+                    &ark_core::type_registry::AliasRecord {
+                        alias: "rpc.alias".into(),
+                        canonical_type_id: "rpc-a".into(),
+                        created_at: "a".into(),
+                    },
+                )
+            })
+            .unwrap();
+            let list = handle_request(Request::TypesList).await.unwrap();
+            let list_ids = list
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v["typeId"].as_str().unwrap())
+                .collect::<Vec<_>>();
+            assert!(list_ids.windows(2).all(|w| w[0] <= w[1]));
+            let alias_get = handle_request(Request::TypesGet {
+                type_id: "rpc.alias".into(),
+                version: None,
+            })
+            .await
+            .unwrap();
+            assert_eq!(alias_get["summary"]["typeId"], "rpc-a");
+            let alias_versions = handle_request(Request::TypesListVersions {
+                type_id: "rpc.alias".into(),
+            })
+            .await
+            .unwrap();
+            assert!(!alias_versions.as_array().unwrap().is_empty());
+            assert!(handle_request(Request::TypesGet {
+                type_id: "unknown".into(),
+                version: None
+            })
+            .await
+            .unwrap()
+            .is_null());
+            assert_eq!(
+                handle_request(Request::TypesResolveAlias {
+                    alias: "unknown".into()
+                })
+                .await
+                .unwrap(),
+                Value::Null
+            );
+            assert_eq!(
+                handle_request(Request::TypesListVersions {
+                    type_id: "unknown".into()
+                })
+                .await
+                .unwrap(),
+                json!([])
+            );
+            let exact_keys = alias_get
+                .as_object()
+                .unwrap()
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>();
+            assert!(
+                exact_keys.contains(&"summary".into()) && exact_keys.contains(&"definition".into())
+            );
+        });
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn dotted_type_operations_are_exact_and_underscore_aliases_rejected() {
+        for operation in [
+            "types.list",
+            "types.get",
+            "types.listVersions",
+            "types.resolveAlias",
+        ] {
+            let mut value = json!({"operation": operation});
+            if operation == "types.get" || operation == "types.listVersions" {
+                value["typeId"] = json!("x");
+            }
+            if operation == "types.resolveAlias" {
+                value["alias"] = json!("x");
+            }
+            assert!(
+                serde_json::from_value::<Request>(value).is_ok(),
+                "{operation}"
+            );
+        }
+        for operation in [
+            "types_list",
+            "types_get",
+            "types_list_versions",
+            "types_resolve_alias",
+        ] {
+            assert!(
+                serde_json::from_value::<Request>(json!({"operation": operation})).is_err(),
+                "{operation}"
+            );
+        }
+    }
+
+    fn canonical_task_object(type_version: Option<&str>, props_json: Value) -> ArkObjectWrite {
+        ArkObjectWrite {
+            id: "canonical-task-ingress".to_string(),
+            type_id: "com.kosmos.task".to_string(),
+            type_version: type_version.map(str::to_owned),
+            title: "Canonical task".to_string(),
+            content_json: json!({"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"hello"}]}]}),
+            props_json,
+            created_at: "2026-08-11T00:00:00.000Z".to_string(),
+            updated_at: "2026-08-11T00:00:00.000Z".to_string(),
+            deleted_at: None,
+        }
+    }
+
+    fn canonical_task_props() -> Value {
+        json!({"status":"todo","priority":"medium","scheduledAt":null,"dueAt":null,"reminderAt":null,"completedAt":null,"canceledAt":null,"recurrence":null,"checklist":[],"extensions":{"vendor":{"opaque":true}}})
+    }
+
+    #[tokio::test]
+    async fn canonical_upsert_object_rpc_persists_registered_identity() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+        handle_request(Request::UpsertObject {
+            object: canonical_task_object(Some("1.0.0"), canonical_task_props()),
+            device_id: Some("device-canonical".to_string()),
+        })
+        .await
+        .unwrap();
+        let object = with_conn(|conn| db::get_object(conn, "canonical-task-ingress"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(object.type_id, "com.kosmos.task");
+        assert_eq!(object.type_version, "1.0.0");
+        assert_eq!(object.props_json["status"], "todo");
+    }
+
+    #[tokio::test]
+    async fn canonical_upsert_object_rpc_rejects_omitted_version_without_side_effects() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+        let result = handle_request(Request::UpsertObject {
+            object: canonical_task_object(None, canonical_task_props()),
+            device_id: Some("device-canonical".to_string()),
+        })
+        .await;
+        assert_eq!(
+            result.unwrap_err(),
+            "canonical_ingress:invalid_request:canonical_version_required"
+        );
+        let object_count = with_conn(|conn| {
+            conn.query_row("SELECT COUNT(*) FROM objects", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .map_err(|error| error.to_string())
+        })
+        .unwrap();
+        assert_eq!(object_count, 0);
+    }
+
+    #[tokio::test]
+    async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutation() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+
+        let mut props = canonical_task_props();
+        props["unexpected"] = json!(true);
+        let result = handle_request(Request::UpsertObject {
+            object: canonical_task_object(Some("1.0.0"), props),
+            device_id: Some("device-canonical".to_string()),
+        })
+        .await;
+        assert_eq!(
+            result.unwrap_err(),
+            "canonical_ingress:invalid_request:canonical_field:/unexpected"
+        );
+        let (objects, versions) = with_conn(|conn| {
+            let objects = conn
+                .query_row("SELECT COUNT(*) FROM objects", [], |row| {
+                    row.get::<_, i64>(0)
+                })
+                .map_err(|error| error.to_string())?;
+            let versions = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sync_kv WHERE key = 'lan_sync.version_vector'",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .map_err(|error| error.to_string())?;
+            Ok((objects, versions))
+        })
+        .unwrap();
+        assert_eq!((objects, versions), (0, 0));
+    }
+
+    #[tokio::test]
+    async fn canonical_upsert_object_rpc_rejects_legacy_alias_as_new_write() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+        let mut object = canonical_task_object(Some("1.0.0"), canonical_task_props());
+        object.type_id = "task_obj".to_string();
+        let result = handle_request(Request::UpsertObject {
+            object,
+            device_id: None,
+        })
+        .await;
+        assert_eq!(
+            result.unwrap_err(),
+            "canonical_ingress:invalid_request:legacy_alias_new_write"
+        );
     }
 }

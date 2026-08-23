@@ -9,7 +9,8 @@ pub use auth::{
     compute_hello_auth_hmac, generate_auth_nonce, normalize_auth_secret, verify_hello_auth_hmac,
 };
 pub use vector::{
-    compute_local_excess, compute_vector_diff, merge_peer_records, split_into_batches,
+    compute_local_excess, compute_vector_diff, is_usage_entity, merge_peer_records,
+    merge_usage_cursors, observe_non_usage_entity, should_send_entity, split_into_batches,
 };
 
 // ---------------------------------------------------------------------------
@@ -199,6 +200,8 @@ mod tests {
             data: serde_json::Map::new(),
             hlc: "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
             deleted: None,
+            origin_device_id: None,
+            origin_seq: None,
         };
         let msg = LanSyncMessage::SyncChanges {
             batch_id: "123-abc".to_string(),
@@ -224,6 +227,8 @@ mod tests {
             data: serde_json::Map::new(),
             hlc: "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
             deleted: Some(true),
+            origin_device_id: None,
+            origin_seq: None,
         };
         let json_str = serde_json::to_string(&entity).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
@@ -243,6 +248,8 @@ mod tests {
             },
             hlc: "2026-01-01T00:00:00.000Z:000001:dev".to_string(),
             deleted: None,
+            origin_device_id: None,
+            origin_seq: None,
         };
         let msg = LanSyncMessage::LiveChange {
             change_id: "ch-1".to_string(),

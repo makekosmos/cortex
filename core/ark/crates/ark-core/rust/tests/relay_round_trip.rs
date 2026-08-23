@@ -174,6 +174,8 @@ async fn relay_round_trip() {
         },
         hlc: "2026-04-09T00:00:00.000Z:000001:device-A".to_string(),
         deleted: None,
+        origin_device_id: None,
+        origin_seq: None,
     };
 
     let change_id = "change-relay-test-001".to_string();

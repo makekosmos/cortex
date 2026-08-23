@@ -5,6 +5,42 @@ use crate::types::{PeerRecord, SyncEntity, VersionVector};
 
 use super::{MAX_BATCH_BYTES, MAX_BATCH_SIZE};
 
+pub fn is_usage_entity(entity: &SyncEntity) -> bool {
+    matches!(
+        entity.entity_type.as_str(),
+        "usage_session" | "usage_event" | "usage_day"
+    )
+}
+
+pub fn should_send_entity(remote: &VersionVector, entity: &SyncEntity) -> bool {
+    if let (Some(device_id), Some(seq)) = (&entity.origin_device_id, entity.origin_seq) {
+        return remote
+            .get(&format!("@usage:{device_id}"))
+            .and_then(|value| value.parse::<u64>().ok())
+            .is_none_or(|cursor| seq > cursor);
+    }
+    remote
+        .get(&entity.id)
+        .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc))
+}
+
+pub fn observe_non_usage_entity(vector: &mut VersionVector, entity: &SyncEntity) -> bool {
+    if is_usage_entity(entity) {
+        return false;
+    }
+    let changed = vector.get(&entity.id) != Some(&entity.hlc);
+    vector.insert(entity.id.clone(), entity.hlc.clone());
+    changed
+}
+
+pub fn merge_usage_cursors(target: &mut VersionVector, source: &VersionVector) {
+    for (key, value) in source {
+        if key.starts_with("@usage:") {
+            target.insert(key.clone(), value.clone());
+        }
+    }
+}
+
 /// Compute which entity IDs from `remote` are missing or outdated in `local`.
 pub fn compute_vector_diff(local: &VersionVector, remote: &VersionVector) -> HashSet<String> {
     let mut needed = HashSet::new();
@@ -180,6 +216,8 @@ mod tests {
                 data: serde_json::Map::new(),
                 hlc: "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
                 deleted: None,
+                origin_device_id: None,
+                origin_seq: None,
             })
             .collect();
 
@@ -202,6 +240,8 @@ mod tests {
                     data,
                     hlc: "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
                     deleted: None,
+                    origin_device_id: None,
+                    origin_seq: None,
                 }
             })
             .collect();

@@ -5,6 +5,8 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
 pub mod beacon;
+pub mod canonical_types;
+pub mod data_platform;
 pub mod db;
 pub mod delphi;
 pub mod events;
@@ -25,6 +27,7 @@ pub mod sync_client;
 pub mod sync_server;
 pub mod sync_transport;
 pub mod transport_select;
+pub mod type_registry;
 pub mod types;
 
 uniffi::setup_scaffolding!();
@@ -44,6 +47,7 @@ pub use protocol::{
 };
 pub use sync_server::StorageBackend;
 pub use types::{
-    Area, ArkObject, Heading, LoadAllData, ObjectLink, ObjectType, PeerRecord, Project, SyncEntity,
-    Tag, TodoItem, TrackedApp, UsageEvent, UsageSession, VersionVector,
+    Area, ArkObject, ArkObjectSummary, ArkObjectWrite, Heading, LoadAllData, ObjectLink,
+    ObjectType, PeerRecord, Project, SyncEntity, Tag, TodoItem, TrackedApp, UsageEvent,
+    UsageSession, VersionVector,
 };

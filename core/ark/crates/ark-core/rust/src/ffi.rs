@@ -6,8 +6,9 @@
 //!   - Each UniFFI-exposed struct holds its own tokio runtime. Callbacks run
 //!     on a dedicated thread so they can invoke the Kotlin listener without
 //!     blocking the sync engine.
-//!   - Errors are flattened to `ArkCoreError::Generic(String)` — the binding
-//!     layer does not need structured error variants right now.
+//!   - Errors remain `ArkCoreError::Generic(String)` for wire compatibility,
+//!     but compatibility failures use a stable JSON category/code/pointer
+//!     payload rather than free-form strings.
 //!   - Types that cross the FFI boundary are plain JSON strings for
 //!     entities and simple owned strings/ints everywhere else. UniFFI
 //!     callback interfaces only support primitive / String / owned struct
@@ -19,7 +20,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
 
 use rusqlite::Connection;
-use serde_json::Value;
+use serde_json::{json, Value};
 use tokio::runtime::Runtime;
 use tokio::sync::{Mutex as TokioMutex, RwLock};
 
@@ -28,14 +29,10 @@ type ShutdownTx = tokio::sync::oneshot::Sender<()>;
 
 use crate::beacon::{BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions};
 use crate::db::{
-    batch_upsert_todos as db_batch_upsert_todos, clear_all as db_clear_all,
-    delete_heading as db_delete_heading, delete_project as db_delete_project,
-    delete_todo as db_delete_todo, delete_tracked_app as db_delete_tracked_app,
+    clear_all as db_clear_all, delete_tracked_app as db_delete_tracked_app,
     delete_trashed as db_delete_trashed, delete_usage_event as db_delete_usage_event,
     delete_usage_session as db_delete_usage_session, get_sync_kv as db_get_kv, init_schema,
-    load_all as db_load_all, open_db, set_sync_kv as db_set_kv, upsert_area as db_upsert_area,
-    upsert_heading as db_upsert_heading, upsert_project as db_upsert_project,
-    upsert_tag as db_upsert_tag, upsert_todo as db_upsert_todo,
+    load_all as db_load_all, open_db, set_sync_kv as db_set_kv,
     upsert_tracked_app as db_upsert_tracked_app, upsert_usage_event as db_upsert_usage_event,
     upsert_usage_session as db_upsert_usage_session, SqliteStorageBackend,
 };
@@ -46,8 +43,8 @@ use crate::relay_sync::{RelaySync, RelaySyncConfig};
 use crate::sync_client::SyncClient;
 use crate::sync_server::{StorageBackend, SyncServer};
 use crate::types::{
-    Area, Heading, LoadAllData, PeerRecord, Project, SyncEntity, Tag, TodoItem, TrackedApp,
-    UsageEvent, UsageSession,
+    LoadAllData, PeerRecord, Project, SyncEntity, Tag, TodoItem, TrackedApp, UsageEvent,
+    UsageSession,
 };
 
 // ---------------------------------------------------------------------------
@@ -76,6 +73,46 @@ type Result<T> = std::result::Result<T, ArkCoreError>;
 
 fn err<S: Into<String>>(msg: S) -> ArkCoreError {
     ArkCoreError::Generic(msg.into())
+}
+
+fn structured_error(category: &str, code: &str, pointer: Option<&str>) -> ArkCoreError {
+    err(serde_json::json!({
+        "category": category,
+        "code": code,
+        "pointer": pointer,
+    })
+    .to_string())
+}
+
+fn compatibility_error<E: std::fmt::Display>(message: E) -> ArkCoreError {
+    let message = message.to_string();
+    let mut parts = message.splitn(3, ':');
+    let code = parts.next().unwrap_or("storage");
+    let source_id = parts.next().unwrap_or("");
+    let pointer = parts.next().unwrap_or("");
+    err(serde_json::json!({
+        "category": "compatibility",
+        "code": code,
+        "pointer": pointer,
+        "sourceKind": "ffi",
+        "sourceId": source_id,
+    })
+    .to_string())
+}
+
+fn malformed_json_error(pointer: &'static str) -> ArkCoreError {
+    structured_error("invalid_request", "malformed_json", Some(pointer))
+}
+
+fn ingress_error(error: crate::canonical_types::ingress::CanonicalIngressError) -> ArkCoreError {
+    if error
+        .pointer
+        .as_deref()
+        .is_some_and(|pointer| pointer.starts_with("/content"))
+    {
+        return structured_error("compatibility", "DATA_LOSS_RISK", error.pointer.as_deref());
+    }
+    structured_error(error.category, error.code, error.pointer.as_deref())
 }
 
 // ---------------------------------------------------------------------------
@@ -208,80 +245,87 @@ impl ArkCore {
     }
 
     pub fn upsert_todo_json(&self, todo_json: String) -> Result<bool> {
-        let todo: TodoItem = serde_json::from_str(&todo_json).map_err(|e| err(e.to_string()))?;
+        let todo: TodoItem =
+            serde_json::from_str(&todo_json).map_err(|_| malformed_json_error("/todo"))?;
         self.with_conn(|conn| {
-            db_upsert_todo(conn, &todo).map_err(ArkCoreError::from)?;
-            Ok(true)
+            ffi_write_legacy_records(conn, vec![ffi_todo_record(&todo)])
+                .map(|_| true)
+                .map_err(compatibility_error)
         })
     }
 
     pub fn delete_todo(&self, id: String) -> Result<bool> {
         self.with_conn(|conn| {
-            db_delete_todo(conn, &id).map_err(ArkCoreError::from)?;
-            Ok(true)
+            ffi_delete_planning_object(conn, &id, "com.kosmos.task")
+                .map(|_| true)
+                .map_err(compatibility_error)
         })
     }
 
     pub fn batch_upsert_todos_json(&self, todos_json: String) -> Result<bool> {
         let todos: Vec<TodoItem> =
-            serde_json::from_str(&todos_json).map_err(|e| err(e.to_string()))?;
+            serde_json::from_str(&todos_json).map_err(|_| malformed_json_error("/todos"))?;
         self.with_conn(|conn| {
-            db_batch_upsert_todos(conn, &todos).map_err(ArkCoreError::from)?;
-            Ok(true)
+            ffi_write_legacy_records(conn, todos.iter().map(ffi_todo_record).collect())
+                .map(|_| true)
+                .map_err(compatibility_error)
         })
     }
 
     pub fn upsert_project_json(&self, project_json: String) -> Result<bool> {
         let project: Project =
-            serde_json::from_str(&project_json).map_err(|e| err(e.to_string()))?;
+            serde_json::from_str(&project_json).map_err(|_| malformed_json_error("/project"))?;
         self.with_conn(|conn| {
-            db_upsert_project(conn, &project).map_err(ArkCoreError::from)?;
-            Ok(true)
+            ffi_write_legacy_records(conn, vec![ffi_project_record(&project)])
+                .map(|_| true)
+                .map_err(compatibility_error)
         })
     }
 
     pub fn delete_project(&self, id: String) -> Result<bool> {
         self.with_conn(|conn| {
-            db_delete_project(conn, &id).map_err(ArkCoreError::from)?;
-            Ok(true)
+            ffi_delete_planning_object(conn, &id, "com.kosmos.project")
+                .map(|_| true)
+                .map_err(compatibility_error)
         })
     }
 
-    pub fn upsert_area_json(&self, area_json: String) -> Result<bool> {
-        let area: Area = serde_json::from_str(&area_json).map_err(|e| err(e.to_string()))?;
-        self.with_conn(|conn| {
-            db_upsert_area(conn, &area).map_err(ArkCoreError::from)?;
-            Ok(true)
-        })
+    pub fn upsert_area_json(&self, _area_json: String) -> Result<bool> {
+        Err(structured_error(
+            "compatibility",
+            "LEGACY_PLANNING_READ_ONLY",
+            None,
+        ))
     }
 
     pub fn upsert_tag_json(&self, tag_json: String) -> Result<bool> {
-        let tag: Tag = serde_json::from_str(&tag_json).map_err(|e| err(e.to_string()))?;
+        let tag: Tag = serde_json::from_str(&tag_json).map_err(|_| malformed_json_error("/tag"))?;
         self.with_conn(|conn| {
-            db_upsert_tag(conn, &tag).map_err(ArkCoreError::from)?;
-            Ok(true)
+            ffi_write_legacy_records(conn, vec![ffi_tag_record(&tag)])
+                .map(|_| true)
+                .map_err(compatibility_error)
         })
     }
 
-    pub fn upsert_heading_json(&self, heading_json: String) -> Result<bool> {
-        let heading: Heading =
-            serde_json::from_str(&heading_json).map_err(|e| err(e.to_string()))?;
-        self.with_conn(|conn| {
-            db_upsert_heading(conn, &heading).map_err(ArkCoreError::from)?;
-            Ok(true)
-        })
+    pub fn upsert_heading_json(&self, _heading_json: String) -> Result<bool> {
+        Err(structured_error(
+            "compatibility",
+            "LEGACY_PLANNING_READ_ONLY",
+            None,
+        ))
     }
 
-    pub fn delete_heading(&self, id: String) -> Result<bool> {
-        self.with_conn(|conn| {
-            db_delete_heading(conn, &id).map_err(ArkCoreError::from)?;
-            Ok(true)
-        })
+    pub fn delete_heading(&self, _id: String) -> Result<bool> {
+        Err(structured_error(
+            "compatibility",
+            "LEGACY_PLANNING_READ_ONLY",
+            None,
+        ))
     }
 
     pub fn upsert_tracked_app_json(&self, tracked_app_json: String) -> Result<bool> {
-        let tracked_app: TrackedApp =
-            serde_json::from_str(&tracked_app_json).map_err(|e| err(e.to_string()))?;
+        let tracked_app: TrackedApp = serde_json::from_str(&tracked_app_json)
+            .map_err(|_| malformed_json_error("/trackedApp"))?;
         self.with_conn(|conn| {
             db_upsert_tracked_app(conn, &tracked_app).map_err(ArkCoreError::from)?;
             Ok(true)
@@ -296,8 +340,8 @@ impl ArkCore {
     }
 
     pub fn upsert_usage_session_json(&self, usage_session_json: String) -> Result<bool> {
-        let usage_session: UsageSession =
-            serde_json::from_str(&usage_session_json).map_err(|e| err(e.to_string()))?;
+        let usage_session: UsageSession = serde_json::from_str(&usage_session_json)
+            .map_err(|_| malformed_json_error("/usageSession"))?;
         self.with_conn(|conn| {
             db_upsert_usage_session(conn, &usage_session).map_err(ArkCoreError::from)?;
             Ok(true)
@@ -312,8 +356,8 @@ impl ArkCore {
     }
 
     pub fn upsert_usage_event_json(&self, usage_event_json: String) -> Result<bool> {
-        let usage_event: UsageEvent =
-            serde_json::from_str(&usage_event_json).map_err(|e| err(e.to_string()))?;
+        let usage_event: UsageEvent = serde_json::from_str(&usage_event_json)
+            .map_err(|_| malformed_json_error("/usageEvent"))?;
         self.with_conn(|conn| {
             db_upsert_usage_event(conn, &usage_event).map_err(ArkCoreError::from)?;
             Ok(true)
@@ -450,7 +494,9 @@ impl ArkCore {
 
                 let setup_result = runtime_handle.block_on(async {
                     let storage = Arc::new(SqliteStorageBackend::new(shared_conn.clone()));
-                    storage.set_device_id(&config.device_id);
+                    storage
+                        .set_device_id(&config.device_id)
+                        .map_err(ArkCoreError::from)?;
 
                     let device_name = config
                         .device_name
@@ -727,9 +773,116 @@ impl ArkCore {
         })
     }
 
+    /// Typed canonical Image/rich-text source projection. The JSON string is
+    /// deliberately the only FFI wire type so bindings remain stable.
+    pub fn canonical_asset_sources_json(&self, object_ids_json: String) -> Result<String> {
+        let object_ids: Vec<String> = serde_json::from_str(&object_ids_json).map_err(|_| {
+            structured_error("invalid_request", "malformed_json", Some("/objectIds"))
+        })?;
+        self.with_conn(|conn| {
+            let sources = crate::canonical_types::facades::asset_sources(conn, &object_ids)
+                .map_err(|e| structured_error("canonical", e.code, e.pointer.as_deref()))?;
+            serde_json::to_string(&sources)
+                .map_err(|_| structured_error("storage", "serialize", None))
+        })
+    }
+
+    /// Typed canonical Book cover command. No legacy `cover_image` property
+    /// is read or written by this boundary.
+    pub fn canonical_set_book_cover(
+        &self,
+        book_id: String,
+        source_ref: Option<String>,
+        existing_image_id: Option<String>,
+        alt_text: String,
+    ) -> Result<bool> {
+        self.with_conn(|conn| {
+            conn.execute_batch("SAVEPOINT ffi_canonical_cover")
+                .map_err(|e| err(e.to_string()))?;
+            let result = (|| {
+                let mutation = crate::canonical_types::facades::set_book_cover(
+                    conn,
+                    &book_id,
+                    source_ref.as_deref(),
+                    existing_image_id.as_deref(),
+                    &alt_text,
+                    "ffi-local",
+                )
+                .map_err(|e| structured_error("canonical", e.code, e.pointer.as_deref()))?;
+                if mutation.changed {
+                    let object_hlc = crate::db::bump_sync_version_vector(
+                        conn,
+                        "object",
+                        &book_id,
+                        "ffi-local",
+                        false,
+                    )?;
+                    conn.execute(
+                        "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE excluded.hlc > object_sync_versions.hlc",
+                        rusqlite::params![book_id, object_hlc],
+                    )
+                    .map_err(|e| e.to_string())?;
+                    for link in &mutation.links {
+                        let link_hlc = crate::db::bump_sync_version_vector(
+                            conn,
+                            "object_link",
+                            &link.id,
+                            "ffi-local",
+                            false,
+                        )?;
+                        conn.execute(
+                            "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE excluded.hlc > object_sync_versions.hlc",
+                            rusqlite::params![link.id, link_hlc],
+                        )
+                        .map_err(|e| e.to_string())?;
+                    }
+                    for link_id in &mutation.deleted_link_ids {
+                        crate::db::bump_sync_version_vector(
+                            conn,
+                            "object_link",
+                            link_id,
+                            "ffi-local",
+                            true,
+                        )?;
+                    }
+                }
+                Ok(mutation.changed)
+            })();
+            match result {
+                Ok(changed) => {
+                    conn.execute_batch("RELEASE ffi_canonical_cover")
+                        .map_err(|e| err(e.to_string()))?;
+                    Ok(changed)
+                }
+                Err(error) => {
+                    let _ = conn.execute_batch(
+                        "ROLLBACK TO ffi_canonical_cover; RELEASE ffi_canonical_cover",
+                    );
+                    Err(error)
+                }
+            }
+        })
+    }
+
     pub fn broadcast_change_json(&self, entity_json: String) -> Result<bool> {
         let mut entity: SyncEntity =
-            serde_json::from_str(&entity_json).map_err(|e| err(e.to_string()))?;
+            serde_json::from_str(&entity_json).map_err(|_| malformed_json_error("/entity"))?;
+        if entity.entity_type != "object" {
+            return Err(err(
+                "canonical_ingress:invalid_request:canonical_entity_type",
+            ));
+        }
+        if entity.deleted != Some(true) {
+            self.with_conn(|conn| {
+                let mut data = entity.data.clone();
+                data.insert("id".into(), Value::String(entity.id.clone()));
+                let input: crate::types::ArkObjectWrite =
+                    serde_json::from_value(Value::Object(data)).map_err(|e| err(e.to_string()))?;
+                crate::canonical_types::ingress::prepare_object(conn, input)
+                    .map_err(ingress_error)?;
+                Ok(())
+            })?;
+        }
         self.runtime.block_on(async {
             let guard = self.sync.lock().await;
             let runtime = guard
@@ -832,6 +985,132 @@ impl ArkCore {
             .await;
             Ok(true)
         })
+    }
+}
+
+fn ffi_legacy_record(
+    id: &str,
+    legacy_type_id: &str,
+    title: &str,
+    props: Value,
+    created_at: &str,
+) -> crate::canonical_types::compatibility::LegacyRecord {
+    crate::canonical_types::compatibility::LegacyRecord {
+        id: id.into(),
+        legacy_type_id: legacy_type_id.into(),
+        title: title.into(),
+        content: json!({"type":"doc","content":[{"type":"paragraph"}]}),
+        props,
+        created_at: created_at.into(),
+        updated_at: created_at.into(),
+        deleted_at: None,
+    }
+}
+
+fn ffi_clean_planning_props(mut props: Value) -> Value {
+    if let Some(map) = props.as_object_mut() {
+        map.retain(|key, value| {
+            !value.is_null()
+                && !(matches!(
+                    key.as_str(),
+                    "is_completed" | "is_cancelled" | "is_someday" | "is_today" | "is_evening"
+                ) && value.as_bool() == Some(false))
+        });
+    }
+    props
+}
+
+fn ffi_todo_record(todo: &TodoItem) -> crate::canonical_types::compatibility::LegacyRecord {
+    ffi_legacy_record(
+        &todo.id,
+        "task_obj",
+        &todo.title,
+        ffi_clean_planning_props(json!({
+            "priority": todo.priority, "scheduled_date": todo.scheduled_date,
+            "deadline": todo.deadline, "reminder_date": todo.reminder_date,
+            "is_today": todo.is_today, "is_evening": todo.is_evening,
+            "is_someday": todo.is_someday, "is_completed": todo.is_completed,
+            "completed_at": todo.completed_at, "is_cancelled": todo.is_cancelled,
+            "cancelled_at": todo.cancelled_at, "checklist_items": todo.checklist_items,
+            "recurrence_rule": todo.recurrence_rule, "project_id": todo.project_id,
+            "tag_ids": todo.tag_ids,
+        })),
+        &todo.created_at,
+    )
+}
+
+fn ffi_project_record(project: &Project) -> crate::canonical_types::compatibility::LegacyRecord {
+    ffi_legacy_record(
+        &project.id,
+        "project_obj",
+        &project.title,
+        json!({
+            "status": project.status, "scheduled_date": project.scheduled_date,
+            "deadline": project.deadline, "color": project.color_tag,
+        }),
+        &project.created_at,
+    )
+}
+
+fn ffi_tag_record(tag: &Tag) -> crate::canonical_types::compatibility::LegacyRecord {
+    ffi_legacy_record(
+        &tag.id,
+        "tag_obj",
+        &tag.title,
+        json!({"color": tag.color}),
+        &tag.created_at,
+    )
+}
+
+fn ffi_write_legacy_records(
+    conn: &Connection,
+    records: Vec<crate::canonical_types::compatibility::LegacyRecord>,
+) -> std::result::Result<Vec<SyncEntity>, String> {
+    conn.execute_batch("SAVEPOINT ffi_legacy_write")
+        .map_err(|e| e.to_string())?;
+    let result = crate::canonical_types::facades::write_legacy_records(
+        conn,
+        &records,
+        "ffi",
+        Some("ark-core-ffi".into()),
+    );
+    match result {
+        Ok(entities) => {
+            conn.execute_batch("RELEASE ffi_legacy_write")
+                .map_err(|e| e.to_string())?;
+            Ok(entities)
+        }
+        Err(error) => {
+            let _ = conn.execute_batch("ROLLBACK TO ffi_legacy_write; RELEASE ffi_legacy_write");
+            Err(error)
+        }
+    }
+}
+
+fn ffi_delete_planning_object(
+    conn: &Connection,
+    id: &str,
+    expected_type_id: &str,
+) -> std::result::Result<(), String> {
+    conn.execute_batch("SAVEPOINT ffi_legacy_delete")
+        .map_err(|e| e.to_string())?;
+    let result = crate::canonical_types::facades::delete_legacy_object(
+        conn,
+        id,
+        expected_type_id,
+        Some("ark-core-ffi".into()),
+    )
+    .map(|_| ());
+    match result {
+        Ok(()) => {
+            conn.execute_batch("RELEASE ffi_legacy_delete")
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        }
+        Err(error) => {
+            let _ = conn.execute_batch("ROLLBACK TO ffi_legacy_delete; RELEASE ffi_legacy_delete");
+            Err(error)
+        }
     }
 }
 

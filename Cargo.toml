@@ -2,11 +2,6 @@
 resolver = "2"
 members = [
   "core/ark/crates/ark-core/rust",
-  "platform/runtime",
-  "services/relay-reference",
-  "platform/native-services/kepler-watcher",
-  "platform/native-services/kepler-focus-helper",
-  "platform/native-services/kepler-focus-svc",
 ]
 
 [workspace.package]
@@ -55,6 +50,7 @@ thiserror = "1"
 rand = "0.8"
 hostname = "0.4"
 sha2 = "0.10"
+semver = "1"
 futures-util = "0.3"
 tokio-tungstenite = "0.24"
 tempfile = "3"

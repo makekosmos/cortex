@@ -72,6 +72,7 @@ fn make_obj(id: &str, title: &str) -> ArkObject {
     ArkObject {
         id: id.to_string(),
         type_id: TEST_TYPE_ID.to_string(),
+        type_version: "0.0.0-legacy".to_string(),
         title: title.to_string(),
         content_json: json!({ "type": "doc", "content": [] }),
         props_json: json!({ "padding": "x" }),
@@ -82,12 +83,13 @@ fn make_obj(id: &str, title: &str) -> ArkObject {
 }
 
 fn bump_local_upsert(conn: &Connection, id: &str) {
-    let _ = db::bump_sync_version_vector(conn, id, TEST_DEVICE_ID);
+    let _ = db::bump_sync_version_vector(conn, "object", id, TEST_DEVICE_ID, false);
     let _ = db::delete_sync_tombstone(conn, id);
 }
 
 fn bump_local_delete(conn: &Connection, id: &str) {
-    let hlc = db::bump_sync_version_vector(conn, id, TEST_DEVICE_ID).expect("bump should succeed");
+    let hlc = db::bump_sync_version_vector(conn, "object", id, TEST_DEVICE_ID, true)
+        .expect("bump should succeed");
     let _ = db::record_sync_tombstone(conn, "object", id, &hlc);
 }
 

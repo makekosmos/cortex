@@ -8,8 +8,8 @@
 <p align="center"><strong>One data core. Many focused tools. No cloud required.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/ksanrse/kosmos"><img alt="GitHub stars" src="https://shieldcn.dev/github/ksanrse/kosmos/stars.svg?variant=branded&size=sm"></a>
-  <img alt="Last commit" src="https://shieldcn.dev/github/ksanrse/kosmos/last-commit.svg?variant=branded&size=sm">
+  <a href="https://github.com/makekosmos/core"><img alt="GitHub stars" src="https://shieldcn.dev/github/makekosmos/core/stars.svg?variant=branded&size=sm"></a>
+  <img alt="Last commit" src="https://shieldcn.dev/github/makekosmos/core/last-commit.svg?variant=branded&size=sm">
   <img alt="Active development" src="https://shieldcn.dev/badge/status-active+development-F59E0B.svg?variant=branded&size=sm">
 </p>
 
@@ -51,7 +51,8 @@ flowchart TB
   ARK --> Sync["LAN / relay synchronization"]
 ```
 
-The Electron renderer never opens SQLite. The shell talks to the Rust runtime through `@kosmos/ark`; ARK remains the canonical owner of data and sync state.
+The Electron renderer never opens SQLite. Cortex talks to ARK through
+`@kosmos/ark`; ARK remains the canonical owner of data and sync state.
 
 ## Surfaces
 
@@ -80,18 +81,15 @@ The Electron renderer never opens SQLite. The shell talks to the Rust runtime th
 - **Design:** `@kosmos/visuals`, shared OKLCH tokens and desktop primitives
 - **Quality:** Playwright, Vitest, oxlint, oxfmt, proof-loop evidence
 
-## Repository map
+## Repository boundary
 
 ```text
-core/ark/              ARK runtime and @kosmos/ark SDK
-platform/desktop/      Electron host and built-in surfaces
-platform/runtime/      Rust supervisor, gateway, command bus, sync
-products/              Active product extensions
-incubator/             Experimental product surfaces
-packages/visuals/      Shared visual system
-services/              Relay and supporting services
-docs-site/             Architecture, rules, manuals, and agent context
+core/ark/              ARK storage engine, schema, sync and RPC sidecar
 ```
+
+Desktop, Manager, runtime supervisor and native Windows services live in
+[`makekosmos/cortex`](https://github.com/makekosmos/cortex). The TypeScript
+SDK and visuals package are maintained in `arca-sdk` and `imago`.
 
 ## Development
 
@@ -104,13 +102,12 @@ docs-site/             Architecture, rules, manuals, and agent context
 - PowerShell 7+
 
 ```powershell
-git clone https://github.com/ksanrse/kosmos.git
-cd kosmos
+git clone https://github.com/makekosmos/core.git
+cd core
 bun install
 
-# Build the Rust backend and launch the desktop shell
-cd platform/desktop
-bun run dev
+# Check the ARK storage engine
+cargo check -p ark-core
 ```
 
 Useful repository checks:
@@ -118,8 +115,9 @@ Useful repository checks:
 ```powershell
 bun run ark:guard:writes
 bun run ark:smoke
-bun run docs:build
-bun run test:e2e
+cargo test -p ark-core
 ```
 
-Read the [getting-started guide](./docs-site/guide/getting-started.md) before changing ARK, sync, or the desktop runtime. The full architecture and repository rules live in [`docs-site/`](./docs-site/).
+Read the [getting-started guide](./docs-site/guide/getting-started.md) before
+changing ARK or sync. Desktop development happens in
+[`makekosmos/cortex`](https://github.com/makekosmos/cortex).
