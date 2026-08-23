@@ -3,7 +3,7 @@ import {
   ensureEngineRunning,
   ReconnectingEngineClient,
   type EngineLockInfo,
-} from "@kosmos/ark";
+} from "@makekosmos/ark";
 import { randomUUID } from "node:crypto";
 
 export type AppLaunch = {

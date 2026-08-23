@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ArkClient } from "@kosmos/ark";
+import { ArkClient } from "@makekosmos/ark";
 import { expect, test, type ElectronApplication } from "@playwright/test";
 import { _electron as electron, chromium, type Browser } from "playwright";
 import electronBinary from "electron";

@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "@kosmos/desktop-host",
+      "dependencies": {
+        "@makekosmos/ark": "0.1.1",
+      },
       "devDependencies": {
         "@types/node": "^24.9.2",
         "electron": "^42.2.0",
@@ -17,6 +20,8 @@
     "@electron-internal/extract-zip": ["@electron-internal/extract-zip@1.0.5", "", {}, "sha512-+bqFCP98pLI0Tt0XQo1TmlXtwjWchISndDOxCkEcIuUgXWpBnLyRI+2DU+mesvnMMX6L1XDqYNA0lXNDHd/yiA=="],
 
     "@electron/get": ["@electron/get@5.1.0", "", { "dependencies": { "debug": "^4.1.1", "env-paths": "^3.0.0", "graceful-fs": "^4.2.11", "progress": "^2.0.3", "semver": "^7.6.3", "sumchecker": "^3.0.1" }, "optionalDependencies": { "undici": "^7.24.4" } }, "sha512-3kSBtG8ObcTVfXanm5vVJ6UnBLEVmVsRk1M+vGqCuMBV+XLCbJYuWQful+yIy0GQDsSlK0kHEriEHn7SPk4EnA=="],
+
+    "@makekosmos/ark": ["@makekosmos/ark@0.1.1", "https://npm.pkg.github.com/download/@makekosmos/ark/0.1.1/d177ae9519e1c8b724283d2e71d8f4095ddc9029", {}, "sha512-Dr6q/wkOsqObWBgcFGVAYsQewxG1wTncLD11Zd4V2QJytOSg9QJzIW/H2DiOKhuzxXZmkANNaccj3GN0aHlBCw=="],
 
     "@oxc-project/types": ["@oxc-project/types@0.146.0", "", {}, "sha512-XC0QsnnhVe7sLIWmYmdPw7x5P0h4W8vUU3Nv1ySgWXtvCz8NizoAEpGXA0sOYoJQV2Rl13LgURAHQ5cI5ILCSA=="],
 

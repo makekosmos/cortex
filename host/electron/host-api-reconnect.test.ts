@@ -1,5 +1,5 @@
 import { afterEach, expect, mock, test } from "bun:test";
-import { ReconnectingEngineClient } from "../../../core/ark/packages/ark/src/reconnecting-engine-client.js";
+import { ReconnectingEngineClient } from "@makekosmos/ark";
 
 const firstLock = { http_port: 4317, auth_token: "a".repeat(64) };
 const secondLock = { http_port: 4318, auth_token: "b".repeat(64) };
@@ -17,7 +17,7 @@ class FakeArkClient {
   }
 }
 
-mock.module("@kosmos/ark", () => ({
+mock.module("@makekosmos/ark", () => ({
   ArkClient: FakeArkClient,
   ensureEngineRunning: async () => ({ kind: "connected", lock: discoveries.shift()! }),
   ReconnectingEngineClient,

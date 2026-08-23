@@ -10,8 +10,7 @@
     "types": ["node"],
     "allowImportingTsExtensions": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "paths": { "@kosmos/ark": ["../../core/ark/packages/ark/src/index.ts"] }
+    "noUnusedParameters": true
   },
   "include": ["electron", "src"],
   "exclude": ["**/*.test.ts"]
