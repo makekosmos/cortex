@@ -3,7 +3,10 @@ import path from "node:path";
 import fs from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { encodeLeetCodeCredential } from "./leetcode-login-flow";
-import { resolvePackagedHostExecutable } from "./host-resolution";
+import {
+  resolvePackagedHostExecutable,
+  resolvePackagedRuntimeExecutable,
+} from "./host-resolution";
 import { resolveInstance } from "../../desktop/electron/instance";
 import { keplerDataDir } from "../../desktop/electron/data-dir";
 import { resolveDesktopUpdateBridge } from "./desktop-update-bridge";
@@ -47,6 +50,19 @@ function openHostedPackage(id: string) {
     return true;
   }
   return false;
+}
+
+function startPackagedRuntime(): boolean {
+  const executable = resolvePackagedRuntimeExecutable(process.resourcesPath);
+  if (!app.isPackaged || process.platform !== "win32" || !fs.existsSync(executable)) return false;
+  const child = spawn(executable, ["--start"], {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  child.once("error", () => undefined);
+  child.unref();
+  return true;
 }
 
 const bounded = (value: unknown, max: number): value is string =>
@@ -193,4 +209,4 @@ function createLeetCodeLoginWindow(sender: WebContents): BrowserWindow {
     },
   });
 }
-export { openHostedPackage, bounded, isObject, validation, integrationProviders, integrationIntervals, LEETCODE_PARTITION, AUTOSTART_ARGS, readDesktopUpdateState, requestDesktopUpdate, validIntegrationInput, normalizeIntegrationSnapshot, waitForLeetCodeCredential, createLeetCodeLoginWindow };
+export { openHostedPackage, startPackagedRuntime, bounded, isObject, validation, integrationProviders, integrationIntervals, LEETCODE_PARTITION, AUTOSTART_ARGS, readDesktopUpdateState, requestDesktopUpdate, validIntegrationInput, normalizeIntegrationSnapshot, waitForLeetCodeCredential, createLeetCodeLoginWindow };

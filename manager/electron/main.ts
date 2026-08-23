@@ -70,6 +70,7 @@ import {
   openHostedPackage,
   readDesktopUpdateState,
   requestDesktopUpdate,
+  startPackagedRuntime,
   validIntegrationInput,
   validation,
   waitForLeetCodeCredential,
@@ -1180,8 +1181,10 @@ if (!app.requestSingleInstanceLock()) {
       }),
     );
     registerAll();
-    if (process.env.KOSMOS_HEADLESS !== "1" && process.env.KOSMOS_TEST_MODE !== "1")
+    if (process.env.KOSMOS_HEADLESS !== "1" && process.env.KOSMOS_TEST_MODE !== "1") {
+      startPackagedRuntime();
       await waitForEngineReady();
+    }
     await createWindow();
   });
   app.on("activate", () => void createWindow());

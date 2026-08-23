@@ -57,13 +57,14 @@ describe("standalone Manager boundary", () => {
     const api = source("../src/manager-api.ts");
     const preload = source("preload.ts");
     const main = source("main.ts");
+    const helpers = source("main-helpers.ts");
     const operations = source("../src/manager-api.ts");
     const root = source("../src/ManagerRoot.vue");
     expect(api).toContain("getIntegrations");
     expect(preload).toContain("manager.getIntegrations");
     expect(main).toContain("normalizeIntegrationSnapshot");
     expect(operations).toContain("integrations.update_settings");
-    expect(main).toContain("--open-app=${id}");
+    expect(helpers).toContain("--open-app=${id}");
     expect(api).toContain("openPackage");
     expect(preload).toContain('openPackage: (v) => invoke("manager.openPackage", v)');
     expect(main).toContain('ipcMain.handle("manager.openPackage"');
@@ -72,13 +73,14 @@ describe("standalone Manager boundary", () => {
 
   test("uses the Desktop Host sibling, refreshes integrations after sync, and keeps one Manager", () => {
     const main = source("main.ts");
+    const helpers = source("main-helpers.ts");
     const hostResolution = source("host-resolution.ts");
     const sync = main.slice(
       main.indexOf('ipcMain.handle("manager.syncIntegrationNow"'),
       main.indexOf('ipcMain.handle("manager.getDictationConfig"'),
     );
     expect(hostResolution).toContain('"..", "..", "host"');
-    expect(main).toContain("resolvePackagedHostExecutable(process.resourcesPath)");
+    expect(helpers).toContain("resolvePackagedHostExecutable(process.resourcesPath)");
     expect(main).toContain('process.env.KOSMOS_HEADLESS === "1"');
     expect(sync).toContain("const refreshed = await rpc(op.getIntegrations)");
     expect(sync).toContain("normalizeIntegrationSnapshot(refreshed.data)");
@@ -86,13 +88,14 @@ describe("standalone Manager boundary", () => {
     expect(main).toContain('app.on("second-instance"');
     expect(main).toContain("win.focus()");
     expect(main).toContain("await waitForEngineReady()");
-    expect(main).toContain("windowsHide: true");
+    expect(helpers).toContain("windowsHide: true");
   });
 
   test("keeps LeetCode login in the main process with fresh cookies and a headless guard", () => {
     const api = source("../src/manager-api.ts");
     const preload = source("preload.ts");
     const main = source("main.ts");
+    const helpers = source("main-helpers.ts");
     const flow = source("leetcode-login-flow.ts");
     const login = main.slice(
       main.indexOf('ipcMain.handle("manager.loginLeetCode"'),
@@ -105,10 +108,10 @@ describe("standalone Manager boundary", () => {
     expect(login).toContain('process.env.KOSMOS_HEADLESS === "1"');
     expect(login).toContain('clearStorageData({ storages: ["cookies"] })');
     expect(login).toContain("https://leetcode.com/accounts/login/");
-    expect(main).toContain('url: "https://leetcode.com/"');
+    expect(helpers).toContain('url: "https://leetcode.com/"');
     expect(login).toContain("op.setIntegrationCredential");
     expect(login).not.toContain("console.");
-    expect(flow).toContain("closeWindow();\n    return await flow.persistCredential(credential)");
+    expect(flow).toMatch(/closeWindow\(\);\r?\n\s+return await flow\.persistCredential\(credential\)/);
   });
 
   test("normalizes Engine settings and accepts only a boolean Usage Tracker patch", () => {
@@ -461,9 +464,9 @@ describe("standalone Manager boundary", () => {
   });
 
   test("every Manager child process stays console-free on Windows", () => {
-    const main = source("main.ts");
-    expect(main.match(/\bspawn\(/g)).toHaveLength(3);
-    expect(main.match(/windowsHide: true/g)).toHaveLength(3);
+    const helpers = source("main-helpers.ts");
+    expect(helpers.match(/\bspawn\(/g)).toHaveLength(4);
+    expect(helpers.match(/windowsHide: true/g)).toHaveLength(4);
   });
 
   test("About version is a fixed read-only app capability", () => {
