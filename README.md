@@ -9,18 +9,16 @@ This repository owns the desktop shell and its host-side services:
 
 ## Current boundary
 
-This is the first ownership split, not yet a standalone installer repository.
-The shell currently consumes two shared packages from the Kosmos source tree:
-`@kosmos/visuals` and `@kosmos/ark`. Those packages must become versioned
-artifacts before this repository can install and build independently.
+This repository owns the desktop runtime boundary. Its Rust workspace is
+self-contained; ARK remains an explicit source dependency from the adjacent
+`core` checkout until the SDK and visuals packages are published.
 
-The runtime also has a source dependency on ARK (`core/ark`). Keep that
+The runtime also has a source dependency on ARK (`../core/core/ark`). Keep that
 dependency explicit while the ARK package contract is being stabilized; do not
 copy ARK into this repository.
 
-Dictation remains shell-owned for now: its UI/IPC lives under `desktop/` and
-its backend implementation lives under `runtime/`. It is not a separate
-repository in this split.
+Dictation is a separate product in `makekosmos/dictation`; Cortex provides the
+host integration it needs at runtime.
 
 ## What is intentionally not promised
 
