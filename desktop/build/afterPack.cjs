@@ -1,13 +1,8 @@
 /**
  * electron-builder afterPack hook: embed icon в final exe.
  *
- * Зачем: `win.signAndEditExecutable: false` отрубает встроенный rcedit
- * у electron-builder (workaround под падение winCodeSign symlinks на Windows
- * без Developer Mode). Без него .exe выходит с дефолтной Electron-иконкой
- * → нет иконки в taskbar / Start Menu / Explorer. Здесь дёргаем rcedit
- * руками из npm-пакета `rcedit` (бандлит rcedit-x64.exe) и проставляем
- * иконку + version-string метаданные. productName читается из контекста,
- * хук переносим между приложениями Kepler без правок.
+ * Проверяем, что финальный .exe получает иконку и метаданные даже при
+ * отключённой Windows-подписи. Без этого Windows показывает значок Electron.
  */
 
 const path = require("node:path");

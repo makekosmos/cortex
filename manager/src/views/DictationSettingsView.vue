@@ -455,6 +455,5 @@ onBeforeUnmount(() => stopEvents?.());
         <SettingsRow v-if="!pending.length" title="Очередь пуста" />
       </SettingsList>
     </template>
-    <Button variant="ghost" @click="refresh">Обновить</Button>
   </section>
 </template>

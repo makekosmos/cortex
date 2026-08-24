@@ -153,18 +153,14 @@ test("Manager diagnostics stays metadata-only and headless-safe", async () => {
         for (const title of [
           "Kosmos Desktop",
           "Kosmos Shell",
-          "Eden",
-          "Delphi",
-          "Cosmos Graph",
-          "Dictation",
+          "Memoria",
+          "Agenda",
         ])
           await expect(page.getByText(title, { exact: true })).toBeVisible();
         for (const id of [
           "com.kosmos.shell",
           "com.kosmos.eden",
-          "com.kosmos.agenda",
-          "com.kosmos.graph",
-          "com.kosmos.dictation",
+          "com.kosmos.delphi",
         ])
           await expect(page.getByText(id, { exact: true })).toHaveCount(0);
       }

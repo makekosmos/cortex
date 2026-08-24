@@ -78,6 +78,12 @@ import {
 let dictationSubscriber: WebContents | null = null;
 let stopDictationEvents: (() => void) | null = null;
 
+function desktopVersion(): string {
+  const launchedVersion = process.env.KOSMOS_DESKTOP_VERSION?.trim();
+  if (launchedVersion) return launchedVersion;
+  return path.basename(process.execPath).toLowerCase() === "electron.exe" ? "—" : app.getVersion();
+}
+
 function addDictationSubscriber(sender: WebContents) {
   dictationSubscriber = sender;
   sender.once("destroyed", () => {
@@ -111,25 +117,15 @@ function register(
 function registerAll() {
   ipcMain.handle("manager.getAppVersion", () => ({
     ok: true,
-    data: app.getVersion(),
+    data: desktopVersion(),
   }));
   ipcMain.handle("manager.getDesktopUpdateState", () => {
     const state = readDesktopUpdateState();
-    return state
-      ? { ok: true, data: state }
-      : {
-          ok: false,
-          code: "engine",
-          message: "Kosmos Desktop недоступен для проверки обновлений.",
-        };
+    return { ok: true, data: state ?? { kind: "idle" } };
   });
   ipcMain.handle("manager.checkDesktopUpdates", () => {
     if (!requestDesktopUpdate("--kosmos-update-check"))
-      return {
-        ok: false,
-        code: "engine",
-        message: "Kosmos Desktop недоступен для проверки обновлений.",
-      };
+      return { ok: true, data: { kind: "idle" } };
     return { ok: true, data: readDesktopUpdateState() ?? { kind: "checking" } };
   });
   ipcMain.handle("manager.installDesktopUpdate", () => {
@@ -1072,6 +1068,9 @@ function registerAll() {
 
 let managerWindow: BrowserWindow | null = null;
 let managerWindowReady = false;
+const styleSource = process.env.VITE_DEV_SERVER_URL
+  ? "style-src 'self' 'unsafe-inline'"
+  : "style-src 'self'";
 
 function presentManagerWindow(win: BrowserWindow) {
   if (
@@ -1175,7 +1174,7 @@ if (!app.requestSingleInstanceLock()) {
         responseHeaders: {
           ...details.responseHeaders,
           "Content-Security-Policy": [
-            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'",
+            `default-src 'self'; script-src 'self'; ${styleSource}; img-src 'self' data:; font-src 'self'`,
           ],
         },
       }),
@@ -1183,7 +1182,7 @@ if (!app.requestSingleInstanceLock()) {
     registerAll();
     if (process.env.KOSMOS_HEADLESS !== "1" && process.env.KOSMOS_TEST_MODE !== "1") {
       startPackagedRuntime();
-      await waitForEngineReady();
+      void waitForEngineReady();
     }
     await createWindow();
   });

@@ -11,17 +11,17 @@ describe("Manager surface contract", () => {
       "com.kosmos.shell",
       "com.kosmos.eden",
       "com.kosmos.delphi",
-      "com.kosmos.graph",
-      "com.kosmos.dictation",
+      "com.kosmos.arcadia",
     ]) {
       expect(source).toContain(id);
     }
     expect(source).not.toContain("Рекомендуем");
     expect(source).not.toContain("store-section-title");
     expect(source).toContain("store-grid");
-    expect(source).toContain("icon_url: listing.icon_url ?? app.icon_url");
-    expect(source).toContain('name: "Cosmos Graph"');
-    expect(source).toContain('name: "Dictation"');
+    expect(source).toContain("? { ...listing, ...app }");
+    expect(source).toContain('name: "Memoria"');
+    expect(source).toContain('name: "Agenda"');
+    expect(source).toContain('name: "Arcadia"');
   });
 
   test("data and titlebar use the shared contracts", () => {
@@ -32,10 +32,40 @@ describe("Manager surface contract", () => {
     );
     expect(data).toContain("<SettingsList>");
     expect(data).toContain("<SettingsRow");
+    expect(data).toContain('title="Типы данных пока недоступны." muted');
+    expect(data).toContain('title="Нет объектов для отображения." muted');
+    expect(data).toContain('class="list-title settings-list__title"');
+    expect(data).not.toContain('<p v-if="!summaryTypes.length"');
+    expect(data).not.toContain('<p v-if="!rows.length"');
     expect(root).toContain("#titlebar-leading");
-    expect(root).toContain("Cosmos");
+    expect(root).toContain("Kosmos");
     expect(root).toContain("<DesktopChrome");
-    expect(root).toContain("titlebar-above-sidebar");
+    expect(root).toContain("kosmos-titlebar-brand");
+    expect(
+      readFileSync(new URL("./main.ts", import.meta.url), "utf8"),
+    ).toContain('import "@kosmos/visuals/css"');
+    const chrome = readFileSync(
+      new URL("../../../imago/components/DesktopChrome.vue", import.meta.url),
+      "utf8",
+    );
+    expect(chrome).toContain("grid-rows-[auto_minmax(0,1fr)]");
+    expect(chrome).toContain("col-span-full row-start-1");
+    expect(chrome).toContain("col-start-1 row-start-2");
+    expect(chrome).toContain("sidebar-titlebar-divider");
+    expect(chrome).toContain("border-r border-[var(--border-color-low-emphasis)]");
+    expect(chrome).toContain("background: var(--kosmos-titlebar-background)");
+    const sidebar = readFileSync(
+      new URL("../../../imago/components/Sidebar.vue", import.meta.url),
+      "utf8",
+    );
+    expect(sidebar).toContain("scrollbar-gutter: stable both-edges");
+    expect(sidebar).toContain("padding-inline: 0");
+    const theme = readFileSync(
+      new URL("../../../imago/theme/css-variables.css", import.meta.url),
+      "utf8",
+    );
+    expect(theme).toContain("--kosmos-titlebar-background: #2a2a2a");
+    expect(theme).toContain("letter-spacing: -0.015em");
     expect(
       readFileSync(new URL("./styles.css", import.meta.url), "utf8"),
     ).not.toContain(".manager-chrome .kosmos-desktop-chrome-settings__header");
@@ -68,23 +98,23 @@ describe("Manager surface contract", () => {
     expect(about).not.toContain("<Button");
   });
 
-  test("marketplace icon is a rounded square", () => {
+  test("marketplace icons are uniform and have no background frame", () => {
     const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
     const card = read("StoreListingCard.vue");
     expect(card).toContain("store-card-icon-frame");
     expect(css).toContain(".store-card-icon");
     expect(css).toMatch(
-      /\.store-card-icon-frame\s*\{[^}]*width: 48px;[^}]*height: 48px;[^}]*overflow: hidden;[^}]*border: 2px solid var\(--border-color-strong\);[^}]*border-radius: var\(--radius-input\);[^}]*background: var\(--surface\);/s,
+      /\.store-card-icon-frame\s*\{[^}]*width: 32px;[^}]*height: 32px;[^}]*flex: none;/s,
     );
     expect(css).toMatch(
-      /\.store-card-icon\s*\{[^}]*width: 100%;[^}]*height: 100%;[^}]*object-fit: cover;[^}]*border-radius: 0;/s,
+      /\.store-view \.store-card-icon-frame\s*\{[^}]*width: 48px;[^}]*height: 48px;/s,
     );
-    for (const app of ["shell", "eden", "delphi", "graph", "dictation"]) {
-      expect(css).toContain(`.store-card-icon-frame--com-kosmos-${app}`);
-    }
+    expect(css).toMatch(
+      /\.store-card-icon\s*\{[^}]*width: 100%;[^}]*height: 100%;[^}]*object-fit: contain;[^}]*border-radius: 0;/s,
+    );
     expect(css).toContain("filter: sepia(1)");
     expect(css).not.toContain(".store-card-featured .store-card-icon");
-    expect(card).toContain("https:|http:|file:|data:image\\/|\\/");
+    expect(card).toContain("https:|http:|file:|data:image\\/|\\/|\\.\\/assets\\/");
   });
 
   test("updates reuse the Marketplace icon identity palette", () => {
@@ -95,10 +125,10 @@ describe("Manager surface contract", () => {
     expect(row).toContain("Доступна {{ available }}");
     expect(row).toContain('class="store-card-icon-frame"');
     expect(row).toContain('class="store-card-icon"');
-    expect(css).toContain(".store-card-icon-frame--desktop");
-    expect(css).not.toContain("updates-row-icon-frame--com-kosmos-");
-    for (const app of ["shell", "eden", "delphi", "graph", "dictation"])
-      expect(row).not.toContain(`updates-row-icon-frame--com-kosmos-${app}`);
+    expect(row).toContain('class="store-card-icon-frame"');
+    expect(css).toMatch(
+      /\.store-card-icon-frame\s*\{(?![^}]*background:)[^}]*\}/s,
+    );
   });
 
   test("updates keep canonical titles and shared row roots", () => {
@@ -106,7 +136,15 @@ describe("Manager surface contract", () => {
     const row = read("UpdatesRow.vue");
     const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
     expect(updates).toContain("name: fallbackName");
+    expect(updates).toContain('"Memoria"');
+    expect(updates).toContain('"Agenda"');
+    expect(updates).toContain('"Arcadia"');
+    expect(updates).not.toContain("com.kosmos.graph");
+    expect(updates).not.toContain("com.kosmos.dictation");
     expect(updates).not.toContain("listing?.name ?? fallbackName");
+    expect(updates).toContain("memoriaIcon");
+    expect(updates).toContain("agendaIcon");
+    expect(updates).toContain("arcadiaIcon");
     expect(row).toMatch(
       /<template>\s*<SettingsRow[\s\S]*<\/SettingsRow>\s*<\/template>/,
     );
@@ -128,5 +166,6 @@ describe("Manager surface contract", () => {
     expect(updates).toContain("item.listing?.distribution?.version");
     expect(updates).toContain("actionLabel(item)");
     expect(updates).toContain("updates-initial-store-catalog");
+    expect(updates).toContain("createDesktopVersionCache");
   });
 });

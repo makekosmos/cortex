@@ -46,21 +46,8 @@ summary:focus-visible {
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 0;
   overflow-y: auto;
-  scrollbar-gutter: stable;
-  padding: calc(
-      env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kosmos-settings-titlebar-height))
-    )
-    var(--space-1) var(--space-1);
-}
-.manager-chrome {
-  position: relative;
-}
-.manager-titlebar-brand {
-  color: var(--foreground);
-  font-size: var(--kosmos-text-subheading-size);
-  font-weight: var(--kosmos-text-heading-weight);
 }
 .manager-sidebar-group {
   display: flex;
@@ -74,7 +61,12 @@ summary:focus-visible {
   padding-top: var(--space-1);
 }
 .settings-page {
-  max-width: 760px;
+  width: 100%;
+}
+.manager-sidebar-footer-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-1);
 }
 .visually-hidden {
   position: absolute;
@@ -87,7 +79,6 @@ summary:focus-visible {
   white-space: nowrap;
   border: 0;
 }
-.page-header,
 .toolbar,
 .card-heading,
 .row,
@@ -95,19 +86,6 @@ summary:focus-visible {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-}
-.page-header {
-  justify-content: space-between;
-}
-.page-header h1 {
-  margin: var(--space-1) 0 0;
-  font-size: var(--kosmos-text-page-title-size);
-  line-height: var(--kosmos-text-page-title-line-height);
-  font-weight: var(--kosmos-text-heading-weight);
-}
-.page-header--connections {
-  justify-content: center;
-  text-align: center;
 }
 .connections-view > .muted {
   text-align: center;
@@ -155,6 +133,7 @@ summary:focus-visible {
 .store-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(var(--space-1) / 2);
   border: 0;
   padding: 0;
   background: transparent;
@@ -210,7 +189,7 @@ summary:focus-visible {
   object-fit: contain;
 }
 .connection-card-mark {
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-input);
   color: var(--muted-foreground);
   background: var(--surface);
@@ -267,9 +246,9 @@ summary:focus-visible {
   min-height: 96px;
   min-width: 0;
   padding: var(--space-2);
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-card);
-  background: var(--card);
+  background: var(--settings-list-background);
 }
 .updates-toolbar {
   display: flex;
@@ -282,9 +261,6 @@ summary:focus-visible {
   display: flex;
   gap: var(--space-1);
   flex-wrap: wrap;
-}
-.store-card-icon-frame--desktop {
-  background: color-mix(in srgb, var(--accent) 72%, var(--surface));
 }
 .updates-row-control {
   display: flex;
@@ -330,43 +306,34 @@ summary:focus-visible {
   min-width: 0;
 }
 .store-card-icon-frame {
-  display: grid;
-  width: 48px;
-  height: 48px;
-  place-items: center;
+  display: block;
+  width: 32px;
+  height: 32px;
   flex: none;
-  overflow: hidden;
-  border: 2px solid var(--border-color-strong);
-  border-radius: var(--radius-input);
-  background: var(--surface);
 }
-.store-card-icon-frame--com-kosmos-shell {
-  background: var(--surface);
-}
-.store-card-icon-frame--com-kosmos-eden {
-  background: var(--surface);
-}
-.store-card-icon-frame--com-kosmos-delphi {
-  background: var(--surface);
-}
-.store-card-icon-frame--com-kosmos-graph {
-  background: var(--surface);
-}
-.store-card-icon-frame--com-kosmos-dictation {
-  background: var(--surface);
+.manager-sidebar-group--secondary,
+.manager-sidebar-group--apps {
+  padding-top: var(--space-2);
 }
 .store-card-icon {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  display: block;
+  object-fit: contain;
   border-radius: 0;
   filter: grayscale(1) brightness(1.35) opacity(0.8);
 }
 .store-card-icon-frame--com-kosmos-eden .store-card-icon {
-  filter: sepia(1) saturate(2.3) hue-rotate(340deg) brightness(1.1);
+  filter: none;
 }
 .store-card-icon-frame--com-kosmos-delphi .store-card-icon {
-  filter: sepia(1) saturate(2.4) hue-rotate(155deg) brightness(1.1);
+  filter: none;
+}
+.store-card-icon-frame--com-kosmos-arcadia .store-card-icon {
+  filter: none;
+}
+.store-card-icon-frame--desktop .store-card-icon {
+  filter: none;
 }
 .store-card-icon-frame--com-kosmos-graph .store-card-icon {
   filter: sepia(1) saturate(2) hue-rotate(75deg) brightness(1.05);
@@ -376,6 +343,10 @@ summary:focus-visible {
 }
 .store-card-icon-fallback {
   color: var(--muted-foreground);
+}
+.store-view .store-card-icon-frame {
+  width: 48px;
+  height: 48px;
 }
 .store-card-action {
   display: grid;
@@ -395,7 +366,6 @@ summary:focus-visible {
 .store-card-copy {
   min-width: 0;
 }
-.store-card-publisher,
 .store-card-description {
   margin: var(--space-1) 0 0;
   color: var(--muted-foreground);
@@ -580,9 +550,6 @@ summary:focus-visible {
 }
 
 @media (max-width: 720px) {
-  .page-header h1 {
-    font-size: var(--kosmos-text-heading-size);
-  }
   .toolbar {
     align-items: stretch;
     flex-wrap: wrap;

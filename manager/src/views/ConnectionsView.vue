@@ -78,8 +78,8 @@ onMounted(load);
 
 <template>
   <section class="stack connections-view">
-    <p class="muted">
-      Подключения работают через Engine и сохраняют данные только в его защищённом хранилище.
+    <p class="muted text-[length:var(--kosmos-text-caption-size)] leading-[1.4]">
+      Интеграции работают через Engine и сохраняют данные только в его защищённом хранилище.
     </p>
     <div class="connections-grid">
       <button
@@ -114,7 +114,7 @@ onMounted(load);
 
     <Modal
       :open="selected !== undefined"
-      :title="selected ? `Настройка ${selected.label}` : 'Настройка подключения'"
+      :title="selected ? `Настройка ${selected.label}` : 'Настройка интеграции'"
       width="min(720px, 94vw)"
       @close="closePanel"
     >

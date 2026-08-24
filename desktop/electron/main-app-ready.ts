@@ -77,7 +77,8 @@ export async function runAppReady({
   if (!process.argv.includes("--autostart")) {
     const openManager =
       process.env.KOSMOS_TEST_MODE === "1" ? launcher.showLauncher : launcher.openManager;
-    void boot.then(openManager, openManager);
+    openManager();
+    void boot;
   } else void boot;
   setFocusSessionShellOpener(launcher.showFocusSessionLauncher);
   setFocusSessionRuntime({ awaitArkReady });

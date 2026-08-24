@@ -10,10 +10,9 @@ import {
 } from "../store-helpers";
 import StoreListingCard from "./StoreListingCard.vue";
 import shellIcon from "../../../desktop/build/icon.png";
-import edenIcon from "../../../../memoria/icon.png";
-import delphiIcon from "../../../../agenda/icon.png";
-import dictationIcon from "../../../../dictation/icon.svg";
-import graphIcon from "../../../desktop/build/icon.png";
+import memoriaIcon from "../../../desktop/build/app-icons/memoria.png";
+import agendaIcon from "../../../desktop/build/app-icons/agenda.png";
+import arcadiaIcon from "../../../desktop/build/app-icons/arcadia.png";
 
 const props = defineProps<{ client: ManagerClient }>();
 const { snapshot, error, listings, installed, load } = useStoreCatalog(
@@ -35,30 +34,23 @@ const canonicalApps: StoreListing[] = [
   {
     id: "com.kosmos.eden",
     kind: "kosmos-package",
-    name: "Eden",
+    name: "Memoria",
     publisher: "Kosmos",
-    icon_url: edenIcon,
+    icon_url: memoriaIcon,
   },
   {
     id: "com.kosmos.delphi",
     kind: "kosmos-package",
-    name: "Delphi",
+    name: "Agenda",
     publisher: "Kosmos",
-    icon_url: delphiIcon,
+    icon_url: agendaIcon,
   },
   {
-    id: "com.kosmos.graph",
+    id: "com.kosmos.arcadia",
     kind: "kosmos-package",
-    name: "Cosmos Graph",
+    name: "Arcadia",
     publisher: "Kosmos",
-    icon_url: graphIcon,
-  },
-  {
-    id: "com.kosmos.dictation",
-    kind: "kosmos-package",
-    name: "Dictation",
-    publisher: "Kosmos",
-    icon_url: dictationIcon,
+    icon_url: arcadiaIcon,
   },
 ];
 const rows = computed(() => {
@@ -68,7 +60,7 @@ const rows = computed(() => {
   const canonical = canonicalApps.map((app) => {
     const listing = apps.find((candidate) => candidate.id === app.id);
     return listing
-      ? { ...app, ...listing, icon_url: listing.icon_url ?? app.icon_url }
+      ? { ...listing, ...app }
       : app;
   });
   return [

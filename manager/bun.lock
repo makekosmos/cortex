@@ -6,6 +6,7 @@
       "name": "@kosmos/engine-manager",
       "dependencies": {
         "@lucide/vue": "^1.16.0",
+        "@phosphor-icons/vue": "^2.2.1",
         "vue": "^3.6.0-beta.12",
       },
       "devDependencies": {
@@ -77,6 +78,8 @@
     "@peculiar/utils": ["@peculiar/utils@2.0.3", "", { "dependencies": { "tslib": "^2.8.1" } }, "sha512-+oL3HPFRIZ1St2K50lWCXiioIgSoxzz7R1J3uF6neO2yl1sgmpgY6XXJH4BdpoDkMWznQTeYF6oWNDZLCdQ4eQ=="],
 
     "@peculiar/webcrypto": ["@peculiar/webcrypto@1.7.1", "", { "dependencies": { "@peculiar/asn1-schema": "^2.7.0", "@peculiar/json-schema": "^1.1.12", "@peculiar/utils": "^2.0.2", "tslib": "^2.8.1", "webcrypto-core": "^1.9.2" } }, "sha512-ODOov0sGMJMf3jPonOkgGqPknTsu+DdQ7kD++gz8aI+aFMOMHFbWAA2taqXXVTdP+OTOQR/znGvSpmkeI0WTYQ=="],
+
+    "@phosphor-icons/vue": ["@phosphor-icons/vue@2.2.1", "", { "peerDependencies": { "vue": ">=3.2.39" } }, "sha512-3RNg1utc2Z5RwPKWFkW3eXI/0BfQAwXgtFxPUPeSzi55jGYUq16b+UqcgbKLazWFlwg5R92OCLKjDiJjeiJcnA=="],
 
     "@rolldown/binding-android-arm-eabi": ["@rolldown/binding-android-arm-eabi@1.2.5", "", { "os": "android", "cpu": "arm" }, "sha512-DLe/i+l8ynIBY7XEQ191TeZvCoowIGa18R+dIV30GW7DiOtp74i/xX8hs8GUjW5ARV7VZuie3d6AumSmCwbeRA=="],
 

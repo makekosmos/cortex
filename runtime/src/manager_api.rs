@@ -27,6 +27,29 @@ fn canonical_identity(type_id: &str) -> Option<(&'static str, &'static str)> {
     })
 }
 
+fn canonical_type_sources(types: &[Value]) -> Vec<(&'static str, &'static str, String)> {
+    let mut sources = HashMap::new();
+    for value in types {
+        let Some(id) = value.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some((canonical_id, _)) = canonical_identity(id) else {
+            continue;
+        };
+        if id == canonical_id || !sources.contains_key(canonical_id) {
+            sources.insert(canonical_id, id.to_owned());
+        }
+    }
+    CANONICAL_TYPES
+        .iter()
+        .filter_map(|(canonical_id, _, _)| {
+            sources
+                .remove(canonical_id)
+                .map(|source| (*canonical_id, CANONICAL_VERSION, source))
+        })
+        .collect()
+}
+
 #[derive(Clone)]
 pub struct ManagerState {
     data_dir: Arc<PathBuf>,
@@ -57,11 +80,9 @@ impl ManagerState {
             .map_err(|e| e.to_string())?;
         let mut out = Vec::new();
         let mut total = 0_u64;
-        for ty in types.data.as_array().cloned().unwrap_or_default() {
-            let id = ty.get("id").and_then(Value::as_str).unwrap_or_default();
-            let Some((canonical_id, version)) = canonical_identity(id) else {
-                continue;
-            };
+        for (canonical_id, version, id) in
+            canonical_type_sources(types.data.as_array().map(Vec::as_slice).unwrap_or_default())
+        {
             let rows = ark
                 .request("list_object_summaries_by_type", json!({"type_id": id}))
                 .await
@@ -97,11 +118,13 @@ impl ManagerState {
             .await
             .map_err(|e| e.to_string())?;
         let mut types = Vec::new();
-        for value in response.data.as_array().cloned().unwrap_or_default() {
-            let id = value.get("id").and_then(Value::as_str).unwrap_or_default();
-            let Some((canonical_id, version)) = canonical_identity(id) else {
-                continue;
-            };
+        for (canonical_id, version, id) in canonical_type_sources(
+            response
+                .data
+                .as_array()
+                .map(Vec::as_slice)
+                .unwrap_or_default(),
+        ) {
             let rows = ark
                 .request("list_object_summaries_by_type", json!({"type_id": id}))
                 .await
@@ -613,6 +636,25 @@ mod tests {
         std::fs::create_dir_all(&packages).unwrap();
         std::fs::write(packages.join("state.json"), [0_u8; 5]).unwrap();
         assert_eq!(managed_bytes(dir.path(), &packages), 14);
+    }
+
+    #[test]
+    fn canonical_type_sources_deduplicate_aliases_and_prefer_canonical_ids() {
+        let sources = canonical_type_sources(&[
+            json!({"id": "note_obj"}),
+            json!({"id": "com.kosmos.note"}),
+            json!({"id": "task_obj"}),
+            json!({"id": "com.kosmos.game"}),
+            json!({"id": "unknown"}),
+        ]);
+        assert_eq!(
+            sources,
+            vec![
+                ("com.kosmos.note", "1.0.0", "com.kosmos.note".to_owned()),
+                ("com.kosmos.task", "1.0.0", "task_obj".to_owned()),
+                ("com.kosmos.game", "1.0.0", "com.kosmos.game".to_owned()),
+            ]
+        );
     }
 
     #[test]

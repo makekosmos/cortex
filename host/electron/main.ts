@@ -15,6 +15,7 @@ import {
 } from "./host-api";
 import { HostLifecycle } from "./lifecycle";
 import { LaunchOwnership, type OwnedLaunch } from "./launch-ownership";
+import { kosmosAppIcon, kosmosAppName, kosmosAppShortcutIcon } from "./kosmos-app-branding";
 import { reconcileShortcuts } from "./shortcuts";
 
 const requested = (argv: string[]) => {
@@ -174,9 +175,11 @@ async function openApp(id: string, initial = false): Promise<void> {
     return;
   }
   const manifest = result.data;
+  const name = kosmosAppName(manifest.id, manifest.name);
   const win = new BrowserWindow({
     show: !headless,
-    title: manifest.name,
+    title: name,
+    icon: kosmosAppIcon(process.resourcesPath, manifest.id),
     autoHideMenuBar: true,
     width: 1100,
     height: 760,
@@ -188,10 +191,16 @@ async function openApp(id: string, initial = false): Promise<void> {
       nodeIntegration: false,
       preload: fileURLToPath(new URL("./preload.mjs", import.meta.url)),
       additionalArguments: [
-        `--kosmos-app=${JSON.stringify({ id: manifest.id, version: manifest.version, name: manifest.name })}`,
+        `--kosmos-app=${JSON.stringify({ id: manifest.id, version: manifest.version, name })}`,
         `--kosmos-ark=${isV2Launch(manifest) || hasArkGrant(manifest.permissions) ? "1" : "0"}`,
       ],
     },
+  });
+  // Package HTML may still carry its legacy document title (Eden/Delphi).
+  // Keep the native window, taskbar, and Alt+Tab name canonical.
+  win.on("page-title-updated", (event) => {
+    event.preventDefault();
+    win.setTitle(name);
   });
   const webContentsId = win.webContents.id;
   const { current: claim, replaced } = ownership.claim(id, win, webContentsId, manifest.launch_id);
@@ -388,10 +397,12 @@ if (!singleInstance) {
             .filter(isInstalledEnabledApp)
             .map((item) => ({
               id: item.id,
-              name: typeof item.name === "string" ? item.name : item.id,
+              name: kosmosAppName(item.id, typeof item.name === "string" ? item.name : item.id),
               enabled: true,
               revoked: false,
-              iconPath: typeof item.icon_path === "string" ? item.icon_path : undefined,
+              iconPath:
+                kosmosAppShortcutIcon(process.resourcesPath, item.id) ??
+                (typeof item.icon_path === "string" ? item.icon_path : undefined),
             })),
         );
       }

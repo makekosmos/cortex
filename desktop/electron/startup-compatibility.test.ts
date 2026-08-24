@@ -60,8 +60,9 @@ test("runAppReady opens Manager on manual launch and keeps autostart silent", ()
   expect(appReadySource).toContain("? launcher.showLauncher");
   expect(appReadySource).toContain(": launcher.openManager");
   expect(appReadySource.indexOf("initArkClient()")).toBeLessThan(
-    appReadySource.indexOf("boot.then(openManager"),
+    appReadySource.indexOf("openManager();"),
   );
+  expect(appReadySource).not.toContain("boot.then(openManager");
   expect(appReadySource).toContain("launcher.setTrayVisible");
   expect(appReadySource).toContain("launcher.registerLauncherHotkeys");
   expect(appReadySource).toContain('"--autostart"');

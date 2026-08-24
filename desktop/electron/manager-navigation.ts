@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { app } from "electron";
 import { keplerDataDir } from "./data-dir";
 
 export function resolvePackagedManagerExecutable(
@@ -18,6 +19,7 @@ export function openManager(): void {
   const managerEnv = {
     ...process.env,
     KOSMOS_APP_EXECUTABLE: process.execPath,
+    KOSMOS_DESKTOP_VERSION: app.isPackaged ? app.getVersion() : "",
     KOSMOS_UPDATE_STATE_FILE: path.join(keplerDataDir(), "update-state.json"),
   };
   if (executable) {

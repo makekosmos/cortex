@@ -6,7 +6,16 @@ import type { ManagerClient } from "../composables/useManagerClient";
 const props = defineProps<{ client: ManagerClient }>();
 const enabled = ref(false);
 const available = ref(false);
+const trayIcon = ref(true);
 const label = computed(() => (enabled.value ? "Включён" : "Отключён"));
+
+type TraySettingsBridge = {
+  trayIcon: { get(): Promise<boolean>; set(enabled: boolean): Promise<void> };
+};
+
+function trayBridge() {
+  return (window as typeof window & { kepler?: { settings?: TraySettingsBridge } }).kepler?.settings;
+}
 
 async function load() {
   const result = await props.client.call<{ enabled: boolean; available: boolean }>(
@@ -17,6 +26,14 @@ async function load() {
   if (!result) return;
   enabled.value = result.enabled;
   available.value = result.available;
+  try {
+    const bridge = trayBridge();
+    trayIcon.value = bridge
+      ? await bridge.trayIcon.get()
+      : localStorage.getItem("kosmos.trayIcon") !== "false";
+  } catch {
+    trayIcon.value = true;
+  }
 }
 
 async function setAutostart(value: boolean) {
@@ -28,6 +45,17 @@ async function setAutostart(value: boolean) {
   if (!result) return;
   enabled.value = result.enabled;
   available.value = result.available;
+}
+
+async function setTrayIcon(value: boolean) {
+  trayIcon.value = value;
+  const bridge = trayBridge();
+  try {
+    if (bridge) await bridge.trayIcon.set(value);
+    else localStorage.setItem("kosmos.trayIcon", String(value));
+  } catch {
+    localStorage.setItem("kosmos.trayIcon", String(value));
+  }
 }
 
 onMounted(() => void load());
@@ -44,9 +72,13 @@ onMounted(() => void load());
         :disabled="!available"
         @update:model-value="setAutostart"
       />
+      <SettingsToggleRow
+        title="Показывать Kosmos в системном трее"
+        description="Управляет значком Kosmos в области уведомлений Windows."
+        :model-value="trayIcon"
+        :label="trayIcon ? 'Показывать' : 'Скрывать'"
+        @update:model-value="setTrayIcon"
+      />
     </SettingsList>
-    <p v-if="!available" class="muted">
-      Настройка доступна только в установленном приложении Kosmos.
-    </p>
   </section>
 </template>

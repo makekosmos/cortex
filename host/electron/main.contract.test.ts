@@ -25,6 +25,11 @@ describe("Host window safety contracts", () => {
     );
   });
 
+  test("legacy package documents cannot overwrite the native Kosmos window name", () => {
+    expect(source).toContain('win.on("page-title-updated"');
+    expect(source).toContain("win.setTitle(name);");
+  });
+
   test("Electron wiring delegates terminal cleanup to the ownership authority", () => {
     expect(source).toContain(
       'import { LaunchOwnership, type OwnedLaunch } from "./launch-ownership";',

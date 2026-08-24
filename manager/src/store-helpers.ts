@@ -4,6 +4,7 @@ const canonicalPackageIds = new Set([
   "com.kosmos.shell",
   "com.kosmos.eden",
   "com.kosmos.agenda",
+  "com.kosmos.arcadia",
   "com.kosmos.graph",
   "com.kosmos.dictation",
 ]);

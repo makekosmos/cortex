@@ -175,17 +175,17 @@ onMounted(() => void refresh());
         :title="String(type.name ?? type.id)"
         :description="`${type.count ?? 0} объектов · ${type.logical_bytes ?? 0} Б логических данных`"
       />
-      <p v-if="!summaryTypes.length" class="muted">Типы данных пока недоступны.</p>
+      <SettingsRow v-if="!summaryTypes.length" title="Типы данных пока недоступны." muted />
     </SettingsList>
     <SettingsList aria-labelledby="data-heading">
-      <h2 id="data-heading" class="list-title">Метаданные объектов</h2>
+      <h2 id="data-heading" class="list-title settings-list__title">Метаданные объектов</h2>
       <SettingsRow
         v-for="row in rows"
         :key="String(row.id)"
         :title="String(row.title ?? row.id)"
         :description="`${row.type ?? 'Тип не указан'} · ${row.updated_at ?? 'Дата не указана'}`"
       />
-      <p v-if="!rows.length" class="muted">Нет объектов для отображения.</p>
+      <SettingsRow v-if="!rows.length" title="Нет объектов для отображения." muted />
       <Button v-if="cursor" variant="ghost" size="sm" @click="loadObjects(generation, true)"
         >Показать ещё</Button
       >

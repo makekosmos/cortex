@@ -20,10 +20,10 @@ const emit = defineEmits<{
 
 const iconFailed = ref(false);
 const icon = computed(() => {
-  const local = props.installed?.icon_path?.trim();
-  if (local) return `file:///${local.replace(/\\/g, "/")}`;
   const remote = props.listing.icon_url?.trim();
-  return remote && /^(https:|http:|file:|data:image\/|\/)/.test(remote) ? remote : null;
+  if (remote && /^(https:|http:|file:|data:image\/|\/|\.\/assets\/)/.test(remote)) return remote;
+  const local = props.installed?.icon_path?.trim();
+  return local ? `file:///${local.replace(/\\/g, "/")}` : null;
 });
 const canOpen = computed(
   () => props.listing.kind === "external-app" || props.installed?.kind === "app",
@@ -69,7 +69,6 @@ function open() {
       </span>
       <div class="store-card-copy">
         <h2>{{ listing.name }}</h2>
-        <p class="store-card-publisher">{{ listing.publisher || "Kosmos" }}</p>
         <p v-if="featured && listing.description" class="store-card-description">
           {{ listing.description }}
         </p>
@@ -89,7 +88,7 @@ function open() {
         }}</Button
       >
       <Button v-else-if="canOpen" size="sm" block @click="open">Открыть</Button>
-      <Button v-else size="sm" block variant="ghost" disabled>
+      <Button v-else size="sm" block variant="surface" disabled>
         {{ installed ? "Установлено" : "Недоступно" }}
       </Button>
       <small

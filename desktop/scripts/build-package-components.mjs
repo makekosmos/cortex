@@ -8,6 +8,12 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const version = JSON.parse(
   readFileSync(path.join(root, "desktop", "release-versions.json"), "utf8"),
 ).win;
+const icons = spawnSync("bun", ["run", "scripts/build-app-icons.mjs"], {
+  cwd: path.join(root, "desktop"),
+  stdio: "inherit",
+  windowsHide: true,
+});
+if (icons.status !== 0) process.exit(icons.status ?? 1);
 const components = ["manager", "host"];
 for (const component of components) {
   const cwd = path.join(root, component);
@@ -25,7 +31,7 @@ for (const component of components) {
       "--win",
       "--dir",
       `--config.extraMetadata.version=${version}`,
-      "--config.win.signAndEditExecutable=false",
+      "--config.win.signExecutable=false",
       `--config.directories.output=${output}`,
     ],
     { cwd, stdio: "inherit", windowsHide: true },

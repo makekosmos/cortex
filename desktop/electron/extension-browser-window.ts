@@ -25,6 +25,8 @@ import {
 } from "./extension-window-profile";
 import { openIncompatibilityWindow } from "./extension-native-runner";
 import type { ExtensionSource } from "./extension-permissions";
+import { resolveExtensionWindowIcon } from "./extension-window-icon";
+import { extensionDisplayName } from "./extension-display-name";
 
 interface ExtensionWindowEntry {
   win: BrowserWindow;
@@ -102,6 +104,11 @@ export async function openExtensionBrowserWindow({
   const defaultWidth = settingsBounds?.width ?? manifest.width ?? 1200;
   const defaultHeight = settingsBounds?.height ?? manifest.height ?? 800;
   const preload = resolvePreloadForManifest(manifest, extensionDir);
+  const icon = resolveExtensionWindowIcon(
+    extensionDir,
+    manifest.icon,
+    path.join(process.resourcesPath, "icon.png"),
+  );
 
   const stateFile = path.join(extensionUserDataDir(id), "window-state.json");
   let savedState: {
@@ -170,7 +177,8 @@ export async function openExtensionBrowserWindow({
     y: initialY,
     show: !headless,
     skipTaskbar: headless,
-    title: manifest.name,
+    title: extensionDisplayName(id, manifest.name),
+    icon,
     backgroundColor: wantsBackdrop ? "#00000000" : "#1a1a1a",
     ...backgroundMaterialOption(backgroundMaterial),
     frame: true,

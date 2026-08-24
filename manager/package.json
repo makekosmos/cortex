@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@lucide/vue": "^1.16.0",
+    "@phosphor-icons/vue": "^2.2.1",
     "vue": "^3.6.0-beta.12"
   },
   "devDependencies": {
@@ -29,7 +30,7 @@
     "productName": "Kosmos Manager",
     "icon": "../desktop/build/icon.ico",
     "win": {
-      "signAndEditExecutable": false
+      "signExecutable": false
     },
     "directories": {
       "output": "release"

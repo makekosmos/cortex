@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { Button, SettingsList, SettingsRow, StatusDot, TextInput } from "@kosmos/visuals";
+import {
+  Button,
+  Modal,
+  SettingsButtonRow,
+  SettingsList,
+  SettingsRow,
+  TextInput,
+  StatusDot,
+} from "@kosmos/visuals";
 import type { PairingCode, SyncPeer, SyncSnapshot } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
 
@@ -8,6 +16,7 @@ const props = defineProps<{ client: ManagerClient }>();
 const snapshot = ref<SyncSnapshot | null>(null);
 const pairingInput = ref("");
 const pairingCode = ref<PairingCode | null | undefined>(undefined);
+const pairingModalOpen = ref(false);
 const copied = ref(false);
 const loading = ref(true);
 const refreshing = ref(false);
@@ -17,6 +26,9 @@ let timer: ReturnType<typeof setInterval> | null = null;
 
 const syncStatusLabel = computed(() =>
   snapshot.value?.status === "running" ? "Работает" : snapshot.value ? "Остановлена" : "Недоступна",
+);
+const syncStatusTone = computed(() =>
+  snapshot.value?.status === "running" ? "success" : snapshot.value ? "warning" : "danger",
 );
 const transportLabel = computed(
   () =>
@@ -44,6 +56,10 @@ async function requestPairingCode() {
   );
   copied.value = false;
 }
+async function openPairingModal() {
+  pairingModalOpen.value = true;
+  if (snapshot.value?.own_pairing_code_available) await requestPairingCode();
+}
 async function copyPairingCode() {
   if (!pairingCode.value?.code) return;
   try {
@@ -61,6 +77,7 @@ async function connect() {
   }
   if (await props.client.call("connectWithPairingCode", { code }, "connect")) {
     pairingInput.value = "";
+    pairingModalOpen.value = false;
     await refresh();
   }
 }
@@ -87,64 +104,123 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="stack">
-    <div class="card">
-      <div class="card-heading">
-        <span>Состояние синхронизации</span
-        ><StatusDot :tone="snapshot?.status === 'running' ? 'success' : 'warning'" /><strong>{{
-          syncStatusLabel
-        }}</strong>
-      </div>
-      <p class="muted">Транспорт: {{ transportLabel }}</p>
-      <p v-if="snapshot?.local_device" class="muted">
-        Это устройство:
-        {{ snapshot.local_device.name || snapshot.local_device.id }}
-      </p>
-      <p v-if="props.client.error.value" class="error">
-        {{ props.client.error.value }}
-      </p>
-      <Button variant="ghost" size="sm" :disabled="refreshing" @click="refresh"
-        >Повторить запрос</Button
-      >
-    </div>
-    <div class="card">
-      <h2>Сопряжение</h2>
-      <p class="muted">Код доступен только после явного действия.</p>
-      <div class="toolbar">
-        <Button
-          size="sm"
-          :disabled="
-            !snapshot || snapshot.status !== 'running' || !snapshot.own_pairing_code_available
-          "
-          @click="requestPairingCode"
-          >Показать код</Button
+    <SettingsList>
+      <SettingsRow title="Состояние синхронизации" :description="`Транспорт: ${transportLabel}`">
+        <template #control>
+          <div class="flex items-center gap-2">
+            <StatusDot
+              :tone="syncStatusTone"
+              :label="syncStatusLabel"
+            />
+          </div>
+        </template>
+      </SettingsRow>
+      <SettingsRow
+        v-if="snapshot?.local_device"
+        title="Локальное устройство"
+        :description="snapshot.local_device.name || snapshot.local_device.id"
+      />
+      <SettingsButtonRow
+        v-if="props.client.error.value"
+        title="Менеджер недоступен"
+        :description="props.client.error.value"
+        button-label="Повторить"
+        variant="surface"
+        :disabled="refreshing"
+        @click="refresh"
+      />
+      <SettingsButtonRow
+        v-else
+        title="Состояние синхронизации"
+        description="Обновить данные подключения"
+        button-label="Обновить"
+        variant="surface"
+        :disabled="refreshing"
+        @click="refresh"
+      />
+    </SettingsList>
+    <SettingsList>
+      <SettingsRow title="Сопряжение" description="Код доступен только после явного действия.">
+        <template #control>
+          <Button
+            variant="surface"
+            size="sm"
+            class="!h-8 !w-8 !p-0"
+            aria-label="Открыть сопряжение"
+            title="Открыть сопряжение"
+            @click="openPairingModal"
+          >
+            <svg
+              aria-hidden="true"
+              class="size-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m10 13 2-2a4 4 0 0 1 6 0l1 1a4 4 0 0 1-6 6l-1-1" />
+              <path d="m14 11-2 2a4 4 0 0 1-6 0l-1-1a4 4 0 0 1 6-6l1 1" />
+            </svg>
+          </Button>
+        </template>
+      </SettingsRow>
+    </SettingsList>
+    <Modal :open="pairingModalOpen" title="Сопряжение устройства" @close="pairingModalOpen = false">
+      <div class="stack">
+        <SettingsRow
+          title="Ваш код"
+          :description="pairingCode?.code ?? 'Код недоступен.'"
+          :muted="!pairingCode?.code"
         >
-        <code v-if="pairingCode?.code">{{ pairingCode.code }}</code>
-        <Button v-if="pairingCode?.code" variant="ghost" size="sm" @click="copyPairingCode">{{
-          copied ? "Скопировано" : "Копировать"
-        }}</Button>
-        <span v-else-if="pairingCode === null && snapshot">Код недоступен.</span>
+          <template #control>
+            <Button
+              variant="surface"
+              size="sm"
+              :disabled="!pairingCode?.code"
+              @click="copyPairingCode"
+            >
+              {{ copied ? "Скопировано" : "Копировать" }}
+            </Button>
+          </template>
+        </SettingsRow>
+        <SettingsRow title="Код подключения" stacked>
+          <template #control>
+            <div class="flex w-full items-center gap-2">
+              <TextInput
+                v-model="pairingInput"
+                class="min-w-0 flex-1"
+                placeholder="Код сопряжения"
+              />
+              <Button
+                :variant="pairingInput.trim() ? 'surface' : 'ghost'"
+                size="sm"
+                class="!h-8 !w-8 !p-0"
+                :disabled="!pairingInput.trim()"
+                aria-label="Подключить устройство"
+                title="Подключить устройство"
+                @click="connect"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="size-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m13 6 6 6-6 6" />
+                </svg>
+              </Button>
+            </div>
+          </template>
+        </SettingsRow>
       </div>
-      <div class="toolbar">
-        <TextInput
-          v-model="pairingInput"
-          class="toolbar-input"
-          aria-label="Код сопряжения"
-          maxlength="256"
-          placeholder="Введите код сопряжения"
-        />
-        <Button
-          size="sm"
-          :disabled="
-            !snapshot ||
-            snapshot.status !== 'running' ||
-            !snapshot.pairing_available ||
-            !pairingInput.trim()
-          "
-          @click="connect"
-          >Подключить</Button
-        >
-      </div>
-    </div>
+    </Modal>
     <SettingsList>
       <SettingsRow
         v-for="peer in snapshot?.peers ?? []"

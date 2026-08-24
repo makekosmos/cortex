@@ -196,6 +196,7 @@ onMounted(() => void refresh());
           <template #control>
             <Button
               v-if="item.catalog && !item.revoked"
+              variant="surface"
               size="sm"
               :disabled="trust?.state !== 'usable'"
               @click="install(item)"

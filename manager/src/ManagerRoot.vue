@@ -15,12 +15,18 @@ import {
   SettingsSidebarButton,
 } from "@kosmos/visuals";
 import {
-  Activity,
-  Database,
-  Package,
-  RefreshCw,
-  Settings2,
-} from "@lucide/vue";
+  PhArrowsClockwise,
+  PhCrosshair,
+  PhDatabase,
+  PhEngine,
+  PhGauge,
+  PhGear,
+  PhInfo,
+  PhMicrophone,
+  PhPackage,
+  PhPlugsConnected,
+  PhStorefront,
+} from "@phosphor-icons/vue";
 import { useManagerClient } from "./composables/useManagerClient";
 import DataView from "./views/DataView.vue";
 import SyncView from "./views/SyncView.vue";
@@ -85,7 +91,7 @@ const views: Record<ViewId, { label: string; hint: string; component: Component 
   },
   focus: { label: "Фокус", hint: "Блок-листы и служба", component: FocusView },
   connections: {
-    label: "Подключения",
+    label: "Интеграции",
     hint: "Источники данных",
     component: ConnectionsView,
   },
@@ -101,30 +107,27 @@ const views: Record<ViewId, { label: string; hint: string; component: Component 
   },
 };
 const icons = {
-  data: Database,
-  sync: RefreshCw,
-  packages: Package,
-  diagnostics: Activity,
-  engine: Settings2,
-  settings: Settings2,
-  dictation: Settings2,
-  focus: Settings2,
-  connections: RefreshCw,
-  about: Settings2,
-  updates: RefreshCw,
+  data: PhDatabase,
+  sync: PhArrowsClockwise,
+  packages: PhStorefront,
+  diagnostics: PhGauge,
+  engine: PhEngine,
+  settings: PhGear,
+  dictation: PhMicrophone,
+  focus: PhCrosshair,
+  connections: PhPlugsConnected,
+  about: PhInfo,
+  updates: PhPackage,
 };
-const mainViewIds: Exclude<ViewId, "about">[] = [
+const primaryViewIds: Exclude<ViewId, "about" | "dictation" | "focus" | "packages" | "updates" | "settings">[] = [
   "data",
   "sync",
-  "packages",
   "diagnostics",
   "engine",
-  "settings",
-  "dictation",
-  "focus",
   "connections",
-  "updates",
 ];
+const commerceViewIds: Extract<ViewId, "packages" | "updates">[] = ["packages", "updates"];
+const appViewIds: Extract<ViewId, "dictation" | "focus">[] = ["dictation", "focus"];
 const active = computed(() => views[view.value]);
 
 async function select(next: ViewId) {
@@ -144,44 +147,78 @@ onMounted(() => {
   <DesktopChrome
     appearance="settings"
     platform="windows"
-    titlebar-above-sidebar
-    class="manager-chrome"
   >
     <template #titlebar-leading>
-      <span class="manager-titlebar-brand">Cosmos</span>
+      <span class="kosmos-titlebar-brand">Kosmos</span>
     </template>
     <template #sidebar>
       <SettingsSidebar aria-label="Разделы менеджера" background="var(--bg-app)">
         <div class="manager-sidebar-scroll kosmos-scroll">
           <div class="manager-sidebar-group">
             <SettingsSidebarButton
-              v-for="id in mainViewIds"
+              v-for="id in primaryViewIds"
               :key="id"
               :icon="icons[id]"
               :label="views[id].label"
               :title="views[id].hint"
               :active="view === id"
+              icon-variant="plain"
+              :icon-weight="view === id ? 'duotone' : 'regular'"
+              @click="select(id)"
+            />
+          </div>
+          <div class="manager-sidebar-group manager-sidebar-group--secondary">
+            <SettingsSidebarButton
+              v-for="id in commerceViewIds"
+              :key="id"
+              :icon="icons[id]"
+              :label="views[id].label"
+              :title="views[id].hint"
+              :active="view === id"
+              icon-variant="plain"
+              :icon-weight="view === id ? 'duotone' : 'regular'"
+              @click="select(id)"
+            />
+          </div>
+          <div class="manager-sidebar-group manager-sidebar-group--apps">
+            <SettingsSidebarButton
+              v-for="id in appViewIds"
+              :key="id"
+              :icon="icons[id]"
+              :label="views[id].label"
+              :title="views[id].hint"
+              :active="view === id"
+              icon-variant="plain"
+              :icon-weight="view === id ? 'duotone' : 'regular'"
               @click="select(id)"
             />
           </div>
         </div>
         <div class="manager-sidebar-footer">
-          <SettingsSidebarButton
-            :icon="icons.about"
-            label="О приложении"
-            title="Версия и сведения о Kosmos"
-            :active="view === 'about'"
-            @click="select('about')"
-          />
+          <div class="manager-sidebar-footer-actions">
+            <SettingsSidebarButton
+              :icon="icons.about"
+              label=""
+              title="О приложении"
+              icon-only
+              :active="view === 'about'"
+              :icon-weight="view === 'about' ? 'duotone' : 'regular'"
+              @click="select('about')"
+            />
+            <SettingsSidebarButton
+              :icon="icons.settings"
+              label=""
+              title="Настройки"
+              icon-only
+              :active="view === 'settings'"
+              :icon-weight="view === 'settings' ? 'duotone' : 'regular'"
+              @click="select('settings')"
+            />
+          </div>
         </div>
       </SettingsSidebar>
     </template>
     <DesktopContentSurface ref="surface" :scrollable="true" class="surface kosmos-scroll">
-      <header class="page-header" :class="{ 'page-header--connections': view === 'connections' }">
-        <div>
-          <h1>{{ active.label }}</h1>
-        </div>
-      </header>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <KeepAlive>
         <component :is="active.component" :client="client" />

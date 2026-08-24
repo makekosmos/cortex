@@ -1,5 +1,6 @@
 import { createApp } from "vue";
 import App from "./App.vue";
+import "@kosmos/visuals/css";
 import "@kosmos/visuals/theme/css";
 import "./styles.css";
 

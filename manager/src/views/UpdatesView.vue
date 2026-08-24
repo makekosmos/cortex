@@ -12,10 +12,10 @@ import UpdatesRow from "./UpdatesRow.vue";
 import { updateSequentially } from "../updates-helpers";
 import desktopIcon from "../../../desktop/build/icon.png";
 import shellIcon from "../../../desktop/build/icon.png";
-import edenIcon from "../../../../memoria/icon.png";
-import delphiIcon from "../../../../agenda/icon.png";
-import dictationIcon from "../../../../dictation/icon.svg";
-import graphIcon from "../../../desktop/build/icon.png";
+import memoriaIcon from "../../../desktop/build/app-icons/memoria.png";
+import agendaIcon from "../../../desktop/build/app-icons/agenda.png";
+import arcadiaIcon from "../../../desktop/build/app-icons/arcadia.png";
+import { createDesktopVersionCache } from "../updates-version-cache";
 
 const props = defineProps<{ client: ManagerClient }>();
 const desktopVersion = ref("—");
@@ -30,11 +30,13 @@ let timer: ReturnType<typeof setInterval> | undefined;
 
 const apps = [
   ["com.kosmos.shell", "Kosmos Shell", shellIcon],
-  ["com.kosmos.eden", "Eden", edenIcon],
-  ["com.kosmos.delphi", "Delphi", delphiIcon],
-  ["com.kosmos.graph", "Cosmos Graph", graphIcon],
-  ["com.kosmos.dictation", "Dictation", dictationIcon],
+  ["com.kosmos.eden", "Memoria", memoriaIcon],
+  ["com.kosmos.delphi", "Agenda", agendaIcon],
+  ["com.kosmos.arcadia", "Arcadia", arcadiaIcon],
 ] as const;
+const loadDesktopVersion = createDesktopVersionCache(() =>
+  props.client.call<string>("getAppVersion", undefined, "updates-version"),
+);
 const rows = computed(() =>
   apps.map(([id, fallbackName, icon]) => {
     const installedItem = installed.value.find((item) => item.id === id);
@@ -42,7 +44,9 @@ const rows = computed(() =>
     return {
       id,
       name: fallbackName,
-      icon: listing?.icon_url ?? icon,
+      // Catalog package icons can point to removed files.  The three built-in
+      // apps always use the bundled Kosmos mark and a per-app CSS tint.
+      icon,
       listing,
       installedItem,
     };
@@ -72,12 +76,7 @@ function appStatus(item: (typeof rows.value)[number]) {
   return "";
 }
 async function load() {
-  desktopVersion.value =
-    (await props.client.call<string>(
-      "getAppVersion",
-      undefined,
-      "updates-version",
-    )) ?? "—";
+  desktopVersion.value = await loadDesktopVersion();
   const [state, catalog, packages] = await Promise.all([
     props.client.call<DesktopUpdateState>(
       "getDesktopUpdateState",

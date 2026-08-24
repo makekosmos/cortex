@@ -6,3 +6,4 @@ declare module "*.vue" {
 
 declare module "*.css";
 declare module "@kosmos/visuals/theme/css";
+declare module "@kosmos/visuals/css";

@@ -68,7 +68,7 @@ describe("standalone Manager boundary", () => {
     expect(api).toContain("openPackage");
     expect(preload).toContain('openPackage: (v) => invoke("manager.openPackage", v)');
     expect(main).toContain('ipcMain.handle("manager.openPackage"');
-    expect(root).toContain("Подключения");
+    expect(root).toContain("Интеграции");
   });
 
   test("uses the Desktop Host sibling, refreshes integrations after sync, and keeps one Manager", () => {

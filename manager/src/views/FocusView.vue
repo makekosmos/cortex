@@ -138,7 +138,7 @@ onMounted(() => void refresh());
       </SettingsRow>
       <SettingsRow title="Управление службой" description="Установка и запуск службы фокуса">
         <template #control>
-          <Button size="sm" :disabled="busy" @click="serviceAction('installFocusService')">{{
+          <Button variant="surface" size="sm" :disabled="busy" @click="serviceAction('installFocusService')">{{
             service.installed ? "Переустановить" : "Установить"
           }}</Button>
           <Button
@@ -194,6 +194,7 @@ onMounted(() => void refresh());
         title="Блок-листы"
         description="Наборы доменов и ссылок для режима фокуса"
         button-label="Создать"
+        variant="surface"
         @click="beginCreate"
       />
       <SettingsRow
