@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { lookupOpenLibraryIsbn } from "./book-metadata-open-library";
+import type { JsonValue } from "./json-contracts";
 
-function json(value: unknown, status = 200): Response {
+function json(value: JsonValue, status = 200): Response {
   return new Response(JSON.stringify(value), {
     status,
     headers: { "content-type": "application/json" },

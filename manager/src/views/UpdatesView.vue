@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { Button, SettingsList } from "@kosmos/visuals";
+import { SettingsList } from "@kosmos/visuals";
 import type {
   DesktopUpdateState,
   InstalledStoreItem,
@@ -9,7 +9,6 @@ import type {
 import type { ManagerClient } from "../composables/useManagerClient";
 import { installTarget, packageAction } from "../store-helpers";
 import UpdatesRow from "./UpdatesRow.vue";
-import { updateSequentially } from "../updates-helpers";
 import desktopIcon from "../../../desktop/build/icon.png";
 import shellIcon from "../../../desktop/build/icon.png";
 import memoriaIcon from "../../../desktop/build/app-icons/memoria.png";
@@ -24,8 +23,6 @@ const listings = ref<StoreListing[]>([]);
 const installed = ref<InstalledStoreItem[]>([]);
 const packagesAvailable = ref(false);
 const busy = ref<string | null>(null);
-const message = ref("");
-const failures = ref<string[]>([]);
 let timer: ReturnType<typeof setInterval> | undefined;
 
 const apps = [
@@ -51,11 +48,6 @@ const rows = computed(() =>
       installedItem,
     };
   }),
-);
-const availableCount = computed(() =>
-  packagesAvailable.value
-    ? rows.value.filter((row) => row.installedItem?.update_version).length
-    : 0,
 );
 
 function desktopStatus() {
@@ -98,27 +90,6 @@ async function load() {
   if (catalog) listings.value = catalog.listings;
   if (packages) installed.value = packages.packages;
   packagesAvailable.value = catalog !== null && packages !== null;
-}
-async function check() {
-  message.value = "Проверяем обновления…";
-  failures.value = [];
-  await props.client.call(
-    "refreshPackageCatalog",
-    undefined,
-    "updates-refresh-catalog",
-  );
-  await props.client.call(
-    "refreshStoreCatalog",
-    undefined,
-    "updates-refresh-store",
-  );
-  await props.client.call<DesktopUpdateState>(
-    "checkDesktopUpdates",
-    undefined,
-    "desktop-update-check",
-  );
-  await load();
-  message.value = "Проверка завершена.";
 }
 function actionFor(item: (typeof rows.value)[number]) {
   return packageAction(
@@ -175,16 +146,6 @@ async function update(
     busy.value = null;
   }
 }
-async function updateAll() {
-  failures.value = [];
-  failures.value = await updateSequentially(
-    rows.value.filter((item) => actionFor(item) === "update"),
-    update,
-  );
-  message.value = failures.value.length
-    ? "Обновление завершено с ошибками."
-    : "Все доступные обновления установлены.";
-}
 async function installDesktop() {
   await props.client.call(
     "installDesktopUpdate",
@@ -194,16 +155,11 @@ async function installDesktop() {
   await load();
 }
 onMounted(() => {
-  void props.client
-    .call("refreshPackageCatalog", undefined, "updates-initial-package-catalog")
-    .then(() =>
-      props.client.call(
-        "refreshStoreCatalog",
-        undefined,
-        "updates-initial-store-catalog",
-      ),
-    )
-    .finally(() => void load());
+  void Promise.all([
+    props.client.call("refreshPackageCatalog", undefined, "updates-initial-package-catalog"),
+    props.client.call("refreshStoreCatalog", undefined, "updates-initial-store-catalog"),
+    props.client.call<DesktopUpdateState>("checkDesktopUpdates", undefined, "desktop-update-check"),
+  ]).finally(() => void load());
   timer = setInterval(() => void load(), 1500);
 });
 onBeforeUnmount(() => clearInterval(timer));
@@ -211,25 +167,6 @@ onBeforeUnmount(() => clearInterval(timer));
 
 <template>
   <section class="stack updates-view" aria-label="Обновления">
-    <div class="updates-toolbar">
-      <div class="updates-actions">
-        <Button variant="ghost" :disabled="busy !== null" @click="check"
-          >Проверить обновления</Button
-        >
-        <Button
-          :disabled="busy !== null || availableCount === 0"
-          @click="updateAll"
-          >Обновить всё</Button
-        >
-      </div>
-    </div>
-    <p v-if="availableCount === 0" class="muted">
-      Нет доступных обновлений приложений.
-    </p>
-    <p v-if="message" class="updates-message" role="status">{{ message }}</p>
-    <p v-for="failure in failures" :key="failure" class="error" role="alert">
-      {{ failure }}
-    </p>
     <SettingsList>
       <UpdatesRow
         title="Kosmos Desktop"

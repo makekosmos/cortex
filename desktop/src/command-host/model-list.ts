@@ -1,5 +1,6 @@
 import type { CommandSnapshotNode } from "../../shared/command-ipc";
 import { collectNodes, findFirst, imageProp, stringArrayProp, textProp } from "./model";
+import { isRecord, isString } from "../shared/runtimeGuards";
 import type {
   CommandListDropdownModel,
   CommandListDropdownOptionModel,
@@ -8,16 +9,17 @@ import type {
   CommandListSectionModel,
 } from "./model";
 
-function accessoryText(value: unknown): string | null {
-  if (typeof value === "string" && value.trim().length > 0) return value;
-  if (!value || typeof value !== "object") return null;
-  const record = value as Record<string, unknown>;
+function accessoryText<T>(value: T): string | null {
+  if (isString(value) && value.trim().length > 0) return value;
+  if (!isRecord(value)) return null;
+// SAFETY: the surrounding domain validation preserves the asserted contract.
+  const record = value;
   return (
     textProp(record.text) ?? textProp(record.title) ?? textProp(record.tag) ?? textProp(record.date)
   );
 }
 
-function accessoryTexts(value: unknown): string[] {
+function accessoryTexts<T>(value: T): string[] {
   if (!Array.isArray(value)) return [];
   return value.map(accessoryText).filter((item): item is string => item !== null);
 }
@@ -121,14 +123,14 @@ export function listSelectedItemId(snapshot: CommandSnapshotNode): string | null
 
 export function listSearchCallbackNode(snapshot: CommandSnapshotNode): CommandSnapshotNode | null {
   const root = listRoot(snapshot);
-  return typeof root?.props.__onSearchTextChangeId === "string" ? root : null;
+  return isString(root?.props.__onSearchTextChangeId) ? root : null;
 }
 
 export function listSelectionCallbackNode(
   snapshot: CommandSnapshotNode,
 ): CommandSnapshotNode | null {
   const root = listRoot(snapshot);
-  return typeof root?.props.__onSelectionChangeId === "string" ? root : null;
+  return isString(root?.props.__onSelectionChangeId) ? root : null;
 }
 
 export function listDropdown(snapshot: CommandSnapshotNode): CommandListDropdownModel | null {

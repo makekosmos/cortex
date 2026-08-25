@@ -2,6 +2,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { keplerDataDir } from "./data-dir";
 import { resolveInstance } from "./instance";
+import { isNumber } from "../src/shared/runtimeGuards";
 
 interface KeplerShellSettings {
   hotkey?: string;
@@ -13,7 +14,7 @@ interface KeplerShellSettings {
 const DEFAULT_HOTKEY_PROD = process.platform === "darwin" ? "Command+Space" : "Alt+Space";
 export const DEFAULT_HOTKEY = resolveInstance().hotkey ?? DEFAULT_HOTKEY_PROD;
 
-const MODIFIER_ALIASES: Record<string, string> = {
+const MODIFIER_ALIASES = {
   cmd: "Command",
   command: "Command",
   meta: process.platform === "darwin" ? "Command" : "Super",
@@ -25,7 +26,7 @@ const MODIFIER_ALIASES: Record<string, string> = {
   ctrl: "Control",
   control: "Control",
   shift: "Shift",
-};
+} satisfies Record<string, string>;
 
 const MODIFIER_ORDER = ["Command", "Control", "Alt", "Shift", "Super"];
 const DEFAULT_LAUNCHER_STATE_TTL_MIN = 5;
@@ -37,7 +38,11 @@ function settingsFilePath(): string {
 function normalizeHotkeyPart(part: string): string {
   const trimmed = part.trim();
   if (!trimmed) return "";
-  const alias = MODIFIER_ALIASES[trimmed.toLowerCase()];
+  const aliasKey = trimmed.toLowerCase();
+  // SAFETY: membership is checked before indexing the literal alias map.
+  const alias = aliasKey in MODIFIER_ALIASES
+    ? MODIFIER_ALIASES[aliasKey as keyof typeof MODIFIER_ALIASES]
+    : undefined;
   if (alias) return alias;
   if (trimmed.length === 1) return trimmed.toUpperCase();
   if (trimmed.toLowerCase() === "space") return "Space";
@@ -69,6 +74,7 @@ export function readSettings(): KeplerShellSettings {
   try {
     const file = settingsFilePath();
     if (!existsSync(file)) return {};
+    // SAFETY: the settings file is written by this module using KeplerShellSettings.
     return JSON.parse(readFileSync(file, "utf8")) as KeplerShellSettings;
   } catch {
     return {};
@@ -112,7 +118,7 @@ export function setStoredHotkey(value: string): void {
 
 export function getLauncherStateTtlMinutes(): number {
   const v = readSettings().launcherStateTtlMinutes;
-  if (typeof v !== "number" || Number.isNaN(v) || v < 0) {
+  if (!isNumber(v) || Number.isNaN(v) || v < 0) {
     return DEFAULT_LAUNCHER_STATE_TTL_MIN;
   }
   return Math.floor(v);

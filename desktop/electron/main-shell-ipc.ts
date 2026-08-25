@@ -13,7 +13,7 @@ export function registerMainShellIpc(options: MainShellIpcOptions): void {
 
   if (process.env.KOSMOS_TEST_MODE === "1") {
     ipcMain.handle("kepler:__test:waitForReady", async (_e, timeoutMs?: number): Promise<void> => {
-      const ms = typeof timeoutMs === "number" && timeoutMs > 0 ? timeoutMs : 15000;
+      const ms = isPositiveNumber(timeoutMs) ? timeoutMs : 15000;
       await awaitArkReady(ms);
     });
     ipcMain.handle("kepler:__test:getStats", async () => {
@@ -40,4 +40,8 @@ export function registerMainShellIpc(options: MainShellIpcOptions): void {
   ipcMain.handle("kepler:window:setExpanded", (_e, expanded: boolean) =>
     setLauncherExpanded(!!expanded),
   );
+}
+
+function isPositiveNumber(value: number | undefined): value is number {
+  return typeof value === "number" && value > 0;
 }

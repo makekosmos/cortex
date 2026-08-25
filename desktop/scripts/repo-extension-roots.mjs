@@ -35,7 +35,7 @@ export function listRepoExtensionEntries(repoRoot) {
   for (const root of repoExtensionRoots(repoRoot)) {
     if (root.standalone) {
       const manifest = readManifestSafe(root.dir);
-      if (manifest?.id && typeof manifest.id === "string" && !seen.has(manifest.id)) {
+      if (manifest?.id && Object.prototype.toString.call(manifest.id) === "[object String]" && !seen.has(manifest.id)) {
         seen.add(manifest.id);
         out.push({ id: manifest.id, folder: root.name, dir: root.dir, rootName: root.name, manifest });
       }
@@ -45,7 +45,7 @@ export function listRepoExtensionEntries(repoRoot) {
       if (!entry.isDirectory()) continue;
       const dir = path.join(root.dir, entry.name);
       const manifest = readManifestSafe(dir);
-      if (!manifest?.id || typeof manifest.id !== "string") continue;
+      if (!manifest?.id || Object.prototype.toString.call(manifest.id) !== "[object String]") continue;
       if (seen.has(manifest.id)) continue;
       seen.add(manifest.id);
       out.push({ id: manifest.id, folder: entry.name, dir, rootName: root.name, manifest });

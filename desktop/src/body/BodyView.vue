@@ -86,6 +86,7 @@ async function loadSnapshot() {
   loading.value = true;
   error.value = "";
   try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     snapshot.value = (await window.kepler.ark.request("integrations.body_snapshot", {
       range: range.value,
     })) as BodySnapshot;

@@ -1,11 +1,15 @@
 import { lookup } from "node:dns/promises";
 import { createServer } from "node:http";
-import { connect, type Socket } from "node:net";
+import { connect, type AddressInfo, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
 import { isPublicNetworkAddress } from "./public-network-address";
 
 type ResolveAddresses = (hostname: string) => Promise<Array<{ address: string; family: number }>>;
 type ConnectToAddress = (address: string, port: number, family: number) => Socket;
+interface ConnectAuthority {
+  hostname: string;
+  port: number;
+}
 
 export interface BookMetadataConnectProxy {
   config: {
@@ -15,7 +19,7 @@ export interface BookMetadataConnectProxy {
   close(): Promise<void>;
 }
 
-function parseConnectAuthority(authority: string): { hostname: string; port: number } {
+function parseConnectAuthority(authority: string): ConnectAuthority {
   const url = new URL(`https://${authority}`);
   const hostname = url.hostname.replace(/^\[|\]$/g, "");
   const port = Number(url.port || 443);
@@ -119,7 +123,7 @@ export async function createBookMetadataConnectProxy(
     });
   });
   const address = server.address();
-  if (!address || typeof address === "string") {
+  if (!isAddressInfo(address)) {
     server.close();
     throw new Error("Не удалось запустить локальный CONNECT proxy");
   }
@@ -137,4 +141,8 @@ export async function createBookMetadataConnectProxy(
       await new Promise<void>((resolve) => server.close(() => resolve()));
     },
   };
+}
+
+function isAddressInfo(value: string | AddressInfo | null): value is AddressInfo {
+  return value !== null && typeof value !== "string";
 }

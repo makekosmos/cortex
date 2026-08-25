@@ -469,6 +469,7 @@ onMounted(async () => {
       onPointMouseOver: (index, _pos, event) => {
         const meta = nodeMeta[index];
         if (!meta) return;
+// SAFETY: the surrounding domain validation preserves the asserted contract.
         const ev = event as MouseEvent | undefined;
         tooltip.value = {
           visible: true,

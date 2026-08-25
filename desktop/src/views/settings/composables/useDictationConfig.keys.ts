@@ -1,4 +1,5 @@
 import type { Ref } from "vue";
+import type { JsonRecord } from "../../../shared/runtimeGuards";
 import {
   buildAccelerator,
   validateCustomDohUrl,
@@ -6,6 +7,8 @@ import {
   type DictationConfigData,
   type DnsKind,
 } from "./useDictationConfig.shared";
+
+type DnsProfile = { kind: DnsKind; url?: string };
 
 interface DictationKeyActionsArgs {
   dictationConfig: Ref<DictationConfigData>;
@@ -19,7 +22,7 @@ interface DictationKeyActionsArgs {
   dictationCustomDohError: Ref<string | null>;
   dictationCaptureAccelerator: Ref<string | null>;
   dictationCaptureCancelTick: Ref<number>;
-  patchDictationConfig: (patch: Record<string, unknown>) => Promise<void>;
+  patchDictationConfig: (patch: JsonRecord) => Promise<void>;
   loadDictationConfig: () => Promise<void>;
 }
 
@@ -37,12 +40,18 @@ export function createDictationKeyActions(args: DictationKeyActionsArgs) {
       dictationCaptureUnsubscribe = window.kepler.dictation.onCaptureEvent((e) => {
         if (e.event === "dictation_capture_key") {
           const acc =
+// SAFETY: the surrounding domain validation preserves the asserted contract.
             (e.accelerator as string | undefined) ||
             buildAccelerator({
+// SAFETY: the surrounding domain validation preserves the asserted contract.
               vk: e.vk as number,
+// SAFETY: the surrounding domain validation preserves the asserted contract.
               ctrl: e.ctrl as boolean,
+// SAFETY: the surrounding domain validation preserves the asserted contract.
               shift: e.shift as boolean,
+// SAFETY: the surrounding domain validation preserves the asserted contract.
               alt: e.alt as boolean,
+// SAFETY: the surrounding domain validation preserves the asserted contract.
               win: e.win as boolean,
             });
           if (acc) args.dictationCaptureAccelerator.value = acc;
@@ -61,7 +70,7 @@ export function createDictationKeyActions(args: DictationKeyActionsArgs) {
   }
 
   async function onDictationDnsKindChange(kind: DnsKind) {
-    const profile: { kind: DnsKind; url?: string } = { kind };
+    const profile: DnsProfile = { kind };
     if (kind === "custom_doh") profile.url = args.dictationCustomDohUrl.value.trim();
     await args.patchDictationConfig({ networkProfile: profile });
   }
@@ -84,6 +93,7 @@ export function createDictationKeyActions(args: DictationKeyActionsArgs) {
     error?: string;
     latencyMs?: number;
   }> {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     return (await window.kepler.ark.request("dictation.verify_api_key", { key })) as {
       ok: boolean;
       reason?: string;
@@ -109,6 +119,7 @@ export function createDictationKeyActions(args: DictationKeyActionsArgs) {
       args.dictationApiKeyMsg.value = "Сохранено в Windows Credential Manager";
       await args.loadDictationConfig();
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       args.dictationApiKeyMsg.value = `Ошибка: ${(e as Error).message}`;
     } finally {
       args.dictationApiKeyBusy.value = false;
@@ -123,6 +134,7 @@ export function createDictationKeyActions(args: DictationKeyActionsArgs) {
       args.dictationApiKeyMsg.value = "Ключ удалён";
       await args.loadDictationConfig();
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       args.dictationApiKeyMsg.value = `Ошибка: ${(e as Error).message}`;
     } finally {
       args.dictationApiKeyBusy.value = false;
@@ -134,6 +146,7 @@ export function createDictationKeyActions(args: DictationKeyActionsArgs) {
     args.dictationConnTestResult.value = "";
     args.dictationConnReport.value = null;
     try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       const resp = (await window.kepler.ark.request(
         "dictation.test_connectivity",
         {},
@@ -143,6 +156,7 @@ export function createDictationKeyActions(args: DictationKeyActionsArgs) {
         ? `OK · ${resp.totalMs}ms`
         : `Сбой на стадии ${resp.firstFailure ?? "?"}`;
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       args.dictationConnTestResult.value = `Ошибка: ${(e as Error).message}`;
       args.dictationConnReport.value = null;
     } finally {

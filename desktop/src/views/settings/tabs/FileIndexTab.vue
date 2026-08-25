@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 import { Button, TextInput } from "@kosmos/visuals";
 import LegacyRow from "../components/LegacyRow.vue";
 import LegacyToggle from "../components/LegacyToggle.vue";
+import { isRecord } from "../../../shared/runtimeGuards";
 
 type FileIndexSettings = {
   enabled: boolean;
@@ -36,14 +37,18 @@ const ignore = ref("");
 const busy = ref(false);
 const error = ref("");
 
-function unwrap<T>(value: unknown): T {
-  if (value && typeof value === "object" && "data" in value) {
+function unwrap<T, V>(value: V): T {
+  if (isRecord(value) && "data" in value) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     return (value as { data: T }).data;
   }
+// SAFETY: the surrounding domain validation preserves the asserted contract.
   return value as T;
 }
 
-async function request<T>(operation: string, params: Record<string, unknown> = {}): Promise<T> {
+type FileIndexRequest = Record<string, string | boolean | string[]>;
+
+async function request<T>(operation: string, params: FileIndexRequest = {}): Promise<T> {
   return unwrap<T>(await window.kepler.ark.request(operation, params));
 }
 

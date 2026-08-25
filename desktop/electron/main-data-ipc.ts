@@ -11,6 +11,7 @@ interface MainDataIpcOptions {
 }
 type ArkRequest = Parameters<ArkClient["invokeOperation"]>[0];
 type ArkRequestParams = Omit<ArkRequest, "operation">;
+type ExportResponse = { converters?: unknown } | unknown[] | null;
 
 export function registerMainDataIpc(options: MainDataIpcOptions): void {
   const { awaitArkReady, getArkClient } = options;
@@ -49,7 +50,7 @@ export function registerMainDataIpc(options: MainDataIpcOptions): void {
   safeHandle(
     "kepler:ark:request",
     async (_e, operation: string, params?: ArkRequestParams) => {
-      if (typeof operation !== "string" || operation.length === 0) {
+      if (!isNonEmptyString(operation)) {
         throw new Error("kepler:ark:request: operation must be a non-empty string");
       }
       const client = await awaitArkReady();
@@ -61,17 +62,13 @@ export function registerMainDataIpc(options: MainDataIpcOptions): void {
   safeHandle("kepler:export:list", async () => {
     const client = await awaitArkReady();
     // Backend returns `{ converters: [...] }`. Renderer ожидает плоский массив.
-    const resp = (await client.invokeOperation({ operation: "export.list" })) as
-      | { converters?: unknown }
-      | unknown[]
-      | null;
+    // SAFETY: export.list returns either a converter array or an object containing one.
+    const resp = (await client.invokeOperation({ operation: "export.list" })) as ExportResponse;
     if (Array.isArray(resp)) return resp;
     if (
-      resp &&
-      typeof resp === "object" &&
-      Array.isArray((resp as { converters?: unknown }).converters)
+      isExportResponse(resp) && Array.isArray(resp.converters)
     ) {
-      return (resp as { converters: unknown[] }).converters;
+      return resp.converters;
     }
     return [];
   });
@@ -79,7 +76,7 @@ export function registerMainDataIpc(options: MainDataIpcOptions): void {
   safeHandle(
     "kepler:export:run",
     async (_e, args: { converter_id: string; format: string; dest_dir: string }) => {
-      if (!args || typeof args.converter_id !== "string") {
+      if (!isNonEmptyString(args.converter_id)) {
         throw new Error("kepler:export:run: invalid args");
       }
       const client = await awaitArkReady();
@@ -126,7 +123,7 @@ export function registerMainDataIpc(options: MainDataIpcOptions): void {
   safeHandle("kepler:objects:listRecent", async (_e, limit?: number): Promise<SearchResult[]> => {
     const arkClient = getArkClient();
     if (!arkClient) return [];
-    const cap = typeof limit === "number" && limit > 0 ? Math.min(limit, 500) : 200;
+    const cap = isPositiveNumber(limit) ? Math.min(limit, 500) : 200;
     try {
       const records = await arkClient.objects.list();
       const sorted = records
@@ -145,4 +142,17 @@ export function registerMainDataIpc(options: MainDataIpcOptions): void {
   });
 
   registerMainDataSettingsIpc();
+}
+
+function isNonEmptyString(value: string): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+function isPositiveNumber(value: number | undefined): value is number {
+  return typeof value === "number" && value > 0;
+}
+
+function isExportResponse(value: ExportResponse): value is { converters: unknown[] } {
+  return value !== null && typeof value === "object" && !Array.isArray(value) &&
+    Array.isArray(value.converters);
 }

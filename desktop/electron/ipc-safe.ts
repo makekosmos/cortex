@@ -24,12 +24,13 @@ export function safeHandle<P extends unknown[], R>(
   handler: (event: Electron.IpcMainInvokeEvent, ...args: P) => Promise<R> | R,
 ): void {
   ipcMain.handle(channel, (event, ...args) =>
+    // SAFETY: Electron forwards the registered handler arguments unchanged.
     Promise.resolve()
       .then(() => handler(event, ...(args as P)))
       .catch((err) => {
         keplerLog.error("ipc", `${channel} threw`, {
           err: String(err),
-          stack: err instanceof Error ? err.stack : undefined,
+          stack: err instanceof Error ? err.stack ?? null : null,
         });
         throw err;
       }),

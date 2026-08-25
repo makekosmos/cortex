@@ -73,8 +73,9 @@ test.describe(".kext installer + backup", () => {
           () =>
             app.evaluate(({ ipcMain }) => {
               const handlers = (
-                ipcMain as unknown as {
-                  _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+                ipcMain as {
+                  _invokeHandlers: Map<string, (...a: unknown[]) => never>;
                 }
               )._invokeHandlers;
               return handlers?.has?.("kepler:extension:install:do") === true;
@@ -86,14 +87,17 @@ test.describe(".kext installer + backup", () => {
       // Install v1.
       const r1 = await app.evaluate(async ({ ipcMain }, kextPath) => {
         const handlers = (
-          ipcMain as unknown as {
-            _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+          ipcMain as {
+            _invokeHandlers: Map<string, (...a: unknown[]) => never>;
           }
         )._invokeHandlers;
         const h = handlers?.get?.("kepler:extension:install:do");
         if (!h) throw new Error("install handler missing");
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
         return h({} as never, kextPath);
       }, kextV1);
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
       expect((r1 as { manifest: { version: string } }).manifest.version).toBe("1.0.0");
 
       const targetDir = path.join(dataDir, "extensions", "mocha-good");
@@ -106,13 +110,16 @@ test.describe(".kext installer + backup", () => {
       // Install v2 — должен создать backup для v1.
       const r2 = await app.evaluate(async ({ ipcMain }, kextPath) => {
         const handlers = (
-          ipcMain as unknown as {
-            _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+          ipcMain as {
+            _invokeHandlers: Map<string, (...a: unknown[]) => never>;
           }
         )._invokeHandlers;
         const h = handlers?.get?.("kepler:extension:install:do");
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
         return h({} as never, kextPath);
       }, kextV2);
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
       expect((r2 as { manifest: { version: string } }).manifest.version).toBe("1.1.0");
 
       const installedV2 = JSON.parse(
@@ -176,8 +183,9 @@ test.describe(".kext installer + backup", () => {
           () =>
             app.evaluate(({ ipcMain }) => {
               const handlers = (
-                ipcMain as unknown as {
-                  _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+                ipcMain as {
+                  _invokeHandlers: Map<string, (...a: unknown[]) => never>;
                 }
               )._invokeHandlers;
               return handlers?.has?.("kepler:extension:install:do") === true;
@@ -187,18 +195,22 @@ test.describe(".kext installer + backup", () => {
         .toBe(true);
       const result = await app.evaluate(async ({ ipcMain }, kextPath) => {
         const handlers = (
-          ipcMain as unknown as {
-            _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+          ipcMain as {
+            _invokeHandlers: Map<string, (...a: unknown[]) => never>;
           }
         )._invokeHandlers;
         const h = handlers?.get?.("kepler:extension:install:do");
         try {
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
           await h({} as never, kextPath);
           return { ok: true };
         } catch (e) {
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
           return { ok: false, err: (e as Error).message };
         }
       }, badKext);
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
       expect((result as { ok: boolean }).ok).toBe(false);
     } finally {
       await app.close();

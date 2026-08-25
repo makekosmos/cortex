@@ -1,4 +1,3 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   configureRaycastRuntime,
@@ -16,7 +15,12 @@ import {
   resolveCommandEntry,
   type CommandPackageManifest,
 } from "./manifest";
-import { normalizeCommandNode, type CommandViewCallbackRegistry } from "./view-model";
+import {
+  normalizeCommandNode,
+  type CommandValue,
+  type CommandViewCallbackRegistry,
+} from "./view-model";
+import { createCacheStorage, createStorage } from "./storage";
 import type { CommandSnapshotNode } from "../../shared/command-ipc";
 import type { CommandFeedbackEvent } from "../../shared/command-ipc";
 
@@ -45,7 +49,7 @@ export interface RunCommandNoViewOptions {
   confirmAlert?: (options: AlertOptions) => Promise<boolean>;
   feedback?: (event: CommandFeedbackEvent) => void;
   navigation?: {
-    push(target: unknown): void;
+    push(target: CommandValue): void;
     pop(): void;
     popToRoot(): void;
   };
@@ -58,61 +62,11 @@ export interface RunCommandViewOptions extends RunCommandNoViewOptions {
 
 export interface CommandLaunchProps {
   launchType?: LaunchTypeValue;
-  arguments?: Record<string, unknown>;
+  arguments?: object;
   fallbackText?: string;
   launchContext?: unknown;
 }
 
-function readJsonFile(filePath: string): Record<string, string> {
-  if (!existsSync(filePath)) return {};
-  try {
-    const parsed = JSON.parse(readFileSync(filePath, "utf8")) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, string>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeJsonFile(filePath: string, value: Record<string, string>): void {
-  mkdirSync(path.dirname(filePath), { recursive: true });
-  writeFileSync(filePath, JSON.stringify(value, null, 2), "utf8");
-}
-
-function createStorage(filePath: string): {
-  get(key: string): string | undefined;
-  all(): Record<string, string>;
-  set(key: string, value: string): void;
-  remove(key: string): void;
-  clear(): void;
-} {
-  return {
-    get(key) {
-      return readJsonFile(filePath)[key];
-    },
-    all() {
-      return { ...readJsonFile(filePath) };
-    },
-    set(key, value) {
-      const data = readJsonFile(filePath);
-      data[key] = value;
-      writeJsonFile(filePath, data);
-    },
-    remove(key) {
-      const data = readJsonFile(filePath);
-      delete data[key];
-      writeJsonFile(filePath, data);
-    },
-    clear() {
-      writeJsonFile(filePath, {});
-    },
-  };
-}
-
-function createCacheStorage(filePath: string, namespace: string): ReturnType<typeof createStorage> {
-  return createStorage(path.join(filePath, `${namespace}.json`));
-}
 
 function createRuntimeAdapter(
   manifest: CommandPackageManifest,
@@ -195,7 +149,10 @@ function createRuntimeAdapter(
       createCacheStorage(cacheDir, namespace).clear();
     },
     getPreferenceValues() {
-      return commandPreferenceDefaults(manifest, options.commandName);
+      // SAFETY: parsed manifest defaults contain only JSON preference values accepted by Raycast.
+      return commandPreferenceDefaults(manifest, options.commandName) as ReturnType<
+        RaycastRuntimeAdapter["getPreferenceValues"]
+      >;
     },
     async launchCommand(commandOptions) {
       if (!options.launchCommand) {
@@ -204,7 +161,8 @@ function createRuntimeAdapter(
       await options.launchCommand(commandOptions);
     },
     navigationPush(target) {
-      options.navigation?.push(target);
+      // SAFETY: Raycast navigation targets are serialized command values at this boundary.
+      options.navigation?.push(target as CommandValue);
     },
     navigationPop() {
       options.navigation?.pop();
@@ -215,12 +173,7 @@ function createRuntimeAdapter(
   };
 }
 
-function commandLaunchProps(options: RunCommandNoViewOptions): {
-  launchType: LaunchTypeValue;
-  arguments: Record<string, unknown>;
-  fallbackText?: string;
-  launchContext?: unknown;
-} {
+function commandLaunchProps(options: RunCommandNoViewOptions): CommandLaunchProps {
   return {
     launchType: options.launch?.launchType ?? LaunchType.UserInitiated,
     arguments: options.launch?.arguments ?? {},
@@ -253,10 +206,11 @@ export async function runCommandNoView(options: RunCommandNoViewOptions): Promis
 
   configureRaycastRuntime(createRuntimeAdapter(manifest, options));
   const imported = await importCommandModule(entry, options.userDataDir);
-  if (typeof imported.default !== "function") {
+  if (!imported.default) {
     throw new Error(`[kepler-shell] command '${entry}' must export default function`);
   }
-  await imported.default(commandLaunchProps(options));
+  // SAFETY: command launch props are produced by the local Raycast runtime adapter.
+  await imported.default(commandLaunchProps(options) as CommandValue);
 }
 
 export async function runCommandView(options: RunCommandViewOptions): Promise<CommandSnapshotNode> {
@@ -284,11 +238,13 @@ export async function runCommandView(options: RunCommandViewOptions): Promise<Co
 
   configureRaycastRuntime(createRuntimeAdapter(manifest, options));
   const imported = await importCommandModule(entry, options.userDataDir);
-  if (typeof imported.default !== "function") {
+  if (!imported.default) {
     throw new Error(`[kepler-shell] command '${entry}' must export default function`);
   }
-  const root = await imported.default(commandLaunchProps(options));
-  const snapshot = normalizeCommandNode(root, options.callbacks);
+  // SAFETY: command launch props are produced by the local Raycast runtime adapter.
+  const root = await imported.default(commandLaunchProps(options) as CommandValue);
+  // SAFETY: the command module runs inside the Raycast bridge and returns the documented element tree.
+  const snapshot = normalizeCommandNode(root as CommandValue, options.callbacks);
   if (!snapshot) {
     throw new Error(
       `[kepler-shell] view command '${options.extensionId}:${options.commandName}' returned no UI`,

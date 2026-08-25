@@ -26,6 +26,7 @@
 import { ipcMain } from "electron";
 import type { ArkClient } from "@kosmos/ark";
 import { notify } from "./system-notifications";
+import { isNumber, isRecord, isString } from "../src/shared/runtimeGuards";
 
 type Phase = "idle" | "work" | "shortBreak" | "longBreak";
 
@@ -62,10 +63,10 @@ function pluralMinutes(n: number): string {
 function subscribePhaseChanged(arkClient: ArkClient): () => void {
   return arkClient.onArkEvent((e) => {
     if (e.event !== "pomodoro_phase_changed") return;
-    const raw = e as unknown as Record<string, unknown>;
-    const from = (typeof raw.from === "string" ? raw.from : "idle") as Phase;
-    const to = (typeof raw.to === "string" ? raw.to : "idle") as Phase;
-    const totalMs = typeof raw.totalMs === "number" ? raw.totalMs : 0;
+    const raw = isRecord(e) ? e : undefined;
+    const from = phaseValue(raw?.from);
+    const to = phaseValue(raw?.to);
+    const totalMs = isNumber(raw?.totalMs) ? raw.totalMs : 0;
 
     // → idle: юзер сам остановил, native toast не нужен.
     if (to === "idle") return;
@@ -88,6 +89,17 @@ function subscribePhaseChanged(arkClient: ArkClient): () => void {
     // Остальные комбинации (work → work, break → break) теоретически
     // невозможны — игнор.
   });
+}
+
+function phaseValue<T>(value: T): Phase {
+  return isPhase(value) ? value : "idle";
+}
+
+function isPhase<T>(value: T): value is T & Phase {
+  return (
+    isString(value) &&
+    (value === "idle" || value === "work" || value === "shortBreak" || value === "longBreak")
+  );
 }
 
 let currentUnsubscribe: (() => void) | null = null;

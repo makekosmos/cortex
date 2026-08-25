@@ -1,14 +1,29 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
 import { _electron as electron, type ElectronApplication } from "playwright";
 import electronBinary from "electron";
 
-const managerRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const engineBinary = path.resolve(managerRoot, "..", "..", "target", "debug", "kepler-backend.exe");
-const runRoot = path.join(managerRoot, ".e2e", "diagnostics", `${process.pid}-${Date.now()}`);
+const managerRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
+const engineBinary = path.resolve(
+  managerRoot,
+  "..",
+  "..",
+  "target",
+  "debug",
+  "kepler-backend.exe",
+);
+const runRoot = path.join(
+  managerRoot,
+  ".e2e",
+  "diagnostics",
+  `${process.pid}-${Date.now()}`,
+);
 const dataDir = process.env.KOSMOS_DATA_DIR || path.join(runRoot, "data");
 const lockPath = path.join(dataDir, "engine.lock.json");
 
@@ -18,6 +33,7 @@ function wait(ms: number) {
 async function waitForLock() {
   for (let i = 0; i < 150; i += 1) {
     try {
+      // SAFETY: the fixture lock file is written by the Engine launcher with this schema.
       const lock = JSON.parse(fs.readFileSync(lockPath, "utf8")) as {
         pid: number;
         http_port: number;
@@ -78,27 +94,47 @@ test("Manager diagnostics stays metadata-only and headless-safe", async () => {
       if (message.type() === "error") errors.push(message.text());
     });
     await page.getByRole("button", { name: "Диагностика" }).click();
-    await expect(page.getByRole("heading", { name: "Пакет поддержки" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Рабочие процессы" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Последние сообщения" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Сохранить пакет поддержки" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Пакет поддержки" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Рабочие процессы" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Последние сообщения" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Сохранить пакет поддержки" }),
+    ).toBeVisible();
     await expect(page.getByText("fixture.log")).toBeVisible();
-    await expect(page.getByText("raw crash payload must stay hidden")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Открыть логи" })).toBeVisible();
-    const snapshot = await page.evaluate(() => window.kosmosManager.getDiagnosticsSnapshot());
+    await expect(
+      page.getByText("raw crash payload must stay hidden"),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Открыть логи" }),
+    ).toBeVisible();
+    const snapshot = await page.evaluate(() =>
+      window.kosmosManager.getDiagnosticsSnapshot(),
+    );
     expect(snapshot.ok).toBe(true);
     const tail = await page.evaluate(() =>
       window.kosmosManager.getDiagnosticLogTail({ lines: 100 }),
     );
     expect(tail.ok).toBe(true);
-    const support = await page.evaluate(() => window.kosmosManager.saveSupportBundle());
+    const support = await page.evaluate(() =>
+      window.kosmosManager.saveSupportBundle(),
+    );
     expect(support).toEqual({
       ok: true,
       data: { saved: false, cancelled: true },
     });
-    const openedLogs = await page.evaluate(() => window.kosmosManager.openLogsFolder());
+    const openedLogs = await page.evaluate(() =>
+      window.kosmosManager.openLogsFolder(),
+    );
     expect(openedLogs).toEqual({ ok: true, data: { opened: false } });
-    const openedCrashes = await page.evaluate(() => window.kosmosManager.openCrashReportsFolder());
+    const openedCrashes = await page.evaluate(() =>
+      window.kosmosManager.openCrashReportsFolder(),
+    );
     expect(openedCrashes).toEqual({ ok: true, data: { opened: false } });
     const body = await page.locator("body").innerText();
     expect(body).not.toContain(dataDir);
@@ -107,8 +143,12 @@ test("Manager diagnostics stays metadata-only and headless-safe", async () => {
     await expect(page.getByText("Отчётов нет.")).toBeVisible();
     await page.reload();
     await expect(page.locator(".eyebrow")).toHaveCount(0);
-    await expect(page.locator(".page-header").getByRole("button")).toHaveCount(0);
-    await expect(page.getByText("raw crash payload must stay hidden")).toHaveCount(0);
+    await expect(page.locator(".page-header").getByRole("button")).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByText("raw crash payload must stay hidden"),
+    ).toHaveCount(0);
     expect(await page.locator("body").innerText()).not.toContain(dataDir);
     const evidenceDir = process.env.KOSMOS_VISUAL_EVIDENCE_DIR;
     for (const section of [
@@ -127,7 +167,9 @@ test("Manager diagnostics stays metadata-only and headless-safe", async () => {
         page.getByRole("heading", { name: section, exact: true, level: 1 }),
       ).toBeVisible();
       if (section === "О приложении") {
-        await expect(page.getByText("Загрузка…", { exact: true })).toHaveCount(0);
+        await expect(page.getByText("Загрузка…", { exact: true })).toHaveCount(
+          0,
+        );
       }
       if (section === "Подключения") {
         await expect(page.locator(".connection-card")).toHaveCount(4);
@@ -137,18 +179,29 @@ test("Manager diagnostics stays metadata-only and headless-safe", async () => {
         );
         await page.locator(".connection-card").first().click();
         await expect(page.getByRole("dialog")).toBeVisible();
-        await expect(page.getByRole("dialog").getByText("Синхронизация")).toBeVisible();
+        await expect(
+          page.getByRole("dialog").getByText("Синхронизация"),
+        ).toBeVisible();
         await expect(
           page.getByRole("dialog").getByRole("button", { name: "Закрыть" }),
         ).toBeVisible();
-        await page.getByRole("dialog").getByRole("button", { name: "Закрыть" }).click();
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: "Закрыть" })
+          .click();
         await expect(page.getByRole("dialog")).toHaveCount(0);
       }
       if (section === "Обновления") {
-        await expect(page.getByRole("button", { name: "Проверить обновления" })).toBeVisible();
-        await expect(page.getByRole("button", { name: "Обновить всё" })).toBeVisible();
         await expect(
-          page.getByText("Проверка Desktop и приложений через их штатные каналы."),
+          page.getByRole("button", { name: "Проверить обновления" }),
+        ).toBeVisible();
+        await expect(
+          page.getByRole("button", { name: "Обновить всё" }),
+        ).toBeVisible();
+        await expect(
+          page.getByText(
+            "Проверка Desktop и приложений через их штатные каналы.",
+          ),
         ).toHaveCount(0);
         for (const title of [
           "Kosmos Desktop",
@@ -172,12 +225,19 @@ test("Manager diagnostics stays metadata-only and headless-safe", async () => {
           contents.invalidate();
           return (await contents.capturePage()).toPNG().toString("base64");
         });
-        fs.writeFileSync(path.join(evidenceDir, `${section.toLowerCase()}.png`), png, "base64");
+        fs.writeFileSync(
+          path.join(evidenceDir, `${section.toLowerCase()}.png`),
+          png,
+          "base64",
+        );
       }
     }
-    const version = await page.evaluate(() => window.kosmosManager.getAppVersion());
+    const version = await page.evaluate(() =>
+      window.kosmosManager.getAppVersion(),
+    );
     expect(version.ok).toBe(true);
-    if (version.ok) await expect(page.getByText(version.data, { exact: true })).toBeVisible();
+    if (version.ok)
+      await expect(page.getByText(version.data, { exact: true })).toBeVisible();
     expect(errors).toEqual([]);
     const windows = await manager.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows().map((window) => window.isVisible()),
@@ -196,6 +256,7 @@ test("Manager diagnostics stays metadata-only and headless-safe", async () => {
     });
     await wait(500);
     if (engine.exitCode === null) engine.kill();
-    if (!process.env.KOSMOS_DATA_DIR) fs.rmSync(runRoot, { recursive: true, force: true });
+    if (!process.env.KOSMOS_DATA_DIR)
+      fs.rmSync(runRoot, { recursive: true, force: true });
   }
 });

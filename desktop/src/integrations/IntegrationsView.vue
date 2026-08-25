@@ -63,6 +63,7 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = "";
   try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     snapshot.value = (await window.kepler.ark.request(
       "integrations.list",
       {},

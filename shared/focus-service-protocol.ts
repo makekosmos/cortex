@@ -20,39 +20,42 @@ export type FocusServiceCliResult = {
   needs_elevation?: boolean;
   error?: string;
 };
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+type JsonPrimitive = boolean | number | string | null;
+type JsonValue = JsonPrimitive | JsonValue[] | JsonRecord;
+interface JsonRecord {
+  [key: string]: JsonValue;
+}
+
+const isJsonRecord = (value: JsonValue): value is JsonRecord =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const isString = (value: JsonValue): value is string => typeof value === "string";
+
+const isCliResult = (value: JsonValue): value is FocusServiceCliResult => {
+  if (!isJsonRecord(value) || typeof value.ok !== "boolean") return false;
+  return (value.installed === undefined || typeof value.installed === "boolean") &&
+    (value.running === undefined || typeof value.running === "boolean") &&
+    (value.service_name === undefined || typeof value.service_name === "string") &&
+    (value.needs_elevation === undefined || typeof value.needs_elevation === "boolean") &&
+    (value.error === undefined || typeof value.error === "string");
+};
+
+const isServiceResponse = (value: JsonValue): value is FocusServiceResponse => {
+  if (!isJsonRecord(value) || typeof value.ok !== "boolean") return false;
+  return (value.active_domains === undefined ||
+      (Array.isArray(value.active_domains) && value.active_domains.every(isString))) &&
+    (value.error === undefined || typeof value.error === "string") &&
+    (value.pong === undefined || typeof value.pong === "boolean");
+};
+
 export function parseCliResult(text: string): FocusServiceCliResult {
-  const value: unknown = JSON.parse(text);
-  if (!isRecord(value) || typeof value.ok !== "boolean")
-    return { ok: false, error: "invalid cli response shape" };
-  if (value.installed !== undefined && typeof value.installed !== "boolean")
-    return { ok: false, error: "invalid cli response shape" };
-  if (value.running !== undefined && typeof value.running !== "boolean")
-    return { ok: false, error: "invalid cli response shape" };
-  if (value.service_name !== undefined && typeof value.service_name !== "string")
-    return { ok: false, error: "invalid cli response shape" };
-  if (value.needs_elevation !== undefined && typeof value.needs_elevation !== "boolean")
-    return { ok: false, error: "invalid cli response shape" };
-  if (value.error !== undefined && typeof value.error !== "string")
-    return { ok: false, error: "invalid cli response shape" };
-  return value as FocusServiceCliResult;
+  const value: JsonValue = JSON.parse(text);
+  return isCliResult(value) ? value : { ok: false, error: "invalid cli response shape" };
 }
 export function parseServiceResponse(text: string): FocusServiceResponse {
-  const value: unknown = JSON.parse(text);
-  if (!isRecord(value) || typeof value.ok !== "boolean")
-    return { ok: false, error: "invalid service response shape" };
-  if (
-    value.active_domains !== undefined &&
-    (!Array.isArray(value.active_domains) ||
-      value.active_domains.some((domain) => typeof domain !== "string"))
-  )
-    return { ok: false, error: "invalid service response shape" };
-  if (value.error !== undefined && typeof value.error !== "string")
-    return { ok: false, error: "invalid service response shape" };
-  if (value.pong !== undefined && typeof value.pong !== "boolean")
-    return { ok: false, error: "invalid service response shape" };
-  return value as FocusServiceResponse;
+  const value: JsonValue = JSON.parse(text);
+  return isServiceResponse(value) ? value : { ok: false, error: "invalid service response shape" };
 }
 export function resolveFocusServicePath(input: {
   packaged: boolean;
@@ -82,7 +85,7 @@ export function sendViaPipePath(
       try {
         client.write(JSON.stringify(req) + "\n");
       } catch (error) {
-        finish({ ok: false, error: `pipe write: ${(error as Error).message}` });
+        finish({ ok: false, error: `pipe write: ${error instanceof Error ? error.message : String(error)}` });
         client.destroy();
       }
     });
@@ -100,7 +103,7 @@ export function sendViaPipePath(
         try {
           finish(parseServiceResponse(buffer.trim()));
         } catch (error) {
-          finish({ ok: false, error: `pipe parse: ${(error as Error).message}` });
+          finish({ ok: false, error: `pipe parse: ${error instanceof Error ? error.message : String(error)}` });
         }
       }
     });

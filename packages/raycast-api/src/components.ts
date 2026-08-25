@@ -6,6 +6,7 @@ export function createRaycastElement<TType extends string, TProps extends object
   props: TProps,
   ...children: RaycastChild[]
 ): RaycastElement<TType, TProps> {
+  // SAFETY: component props are the typed object supplied by the caller; only its optional child is read.
   const propsWithChildren = props as TProps & { children?: RaycastChild | RaycastChild[] };
   const propChildren = propsWithChildren.children;
   const normalizedChildren =
@@ -27,9 +28,15 @@ export function createRaycastElement<TType extends string, TProps extends object
   };
 }
 
-function component<TType extends string, TProps extends object = Record<string, unknown>>(
+type RaycastArgumentValue = string | number | boolean | null | RaycastArgumentMap | RaycastArgumentMap[];
+interface RaycastArgumentMap {
+  [key: string]: RaycastArgumentValue | undefined;
+}
+
+function component<TType extends string, TProps extends object = object>(
   type: TType,
 ) {
+  // SAFETY: an omitted component props object is the empty object for every component contract.
   return (props = {} as TProps): RaycastElement<TType, TProps> => createRaycastElement(type, props);
 }
 
@@ -226,12 +233,12 @@ export const Action = Object.assign(baseAction, {
     title?: string;
     name: string;
     extensionName?: string;
-    arguments?: Record<string, unknown>;
+    arguments?: RaycastArgumentMap;
     context?: unknown;
     fallbackText?: string;
     shortcut?: unknown;
   }) => createRaycastElement("Action.LaunchCommand", props),
-  SubmitForm: (props: { title?: string; onSubmit: (values: Record<string, unknown>) => void }) =>
+  SubmitForm: (props: { title?: string; onSubmit: (values: RaycastArgumentMap) => void }) =>
     createRaycastElement("Action.SubmitForm", props),
 });
 

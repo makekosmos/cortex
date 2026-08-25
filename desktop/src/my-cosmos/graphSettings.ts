@@ -1,5 +1,7 @@
 // Shared types and helpers for graph settings persistence.
 
+import { isBoolean, isNumber, isRecord } from "../shared/runtimeGuards";
+
 export interface GraphSettings {
   gravity: number;
   repulsion: number;
@@ -30,10 +32,11 @@ export const DEFAULT_GRAPH_SETTINGS: GraphSettings = {
 
 const LS_KEY = "kosmos.myCosmos.graphSettings";
 
-function mergeGraphSettings(value: unknown): GraphSettings {
+function mergeGraphSettings<T>(value: T): GraphSettings {
   const next = { ...DEFAULT_GRAPH_SETTINGS };
-  if (!value || typeof value !== "object" || Array.isArray(value)) return next;
-  const parsed = value as Record<string, unknown>;
+  if (!isRecord(value) || Array.isArray(value)) return next;
+// SAFETY: the surrounding domain validation preserves the asserted contract.
+  const parsed = value;
 
   for (const key of [
     "gravity",
@@ -44,13 +47,13 @@ function mergeGraphSettings(value: unknown): GraphSettings {
     "linkOpacity",
     "gap",
   ] as const) {
-    if (typeof parsed[key] === "number" && Number.isFinite(parsed[key])) {
+    if (isNumber(parsed[key]) && Number.isFinite(parsed[key])) {
       next[key] = parsed[key];
     }
   }
 
   for (const key of ["curvedLinks", "highlightNeighbors", "frozen", "antiOverlap"] as const) {
-    if (typeof parsed[key] === "boolean") {
+    if (isBoolean(parsed[key])) {
       next[key] = parsed[key];
     }
   }
@@ -60,7 +63,7 @@ function mergeGraphSettings(value: unknown): GraphSettings {
 
 export function loadGraphSettings(): GraphSettings {
   try {
-    if (typeof localStorage === "undefined") return { ...DEFAULT_GRAPH_SETTINGS };
+    if (!("localStorage" in globalThis)) return { ...DEFAULT_GRAPH_SETTINGS };
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return { ...DEFAULT_GRAPH_SETTINGS };
     return mergeGraphSettings(JSON.parse(raw));
@@ -71,7 +74,7 @@ export function loadGraphSettings(): GraphSettings {
 
 export function saveGraphSettings(settings: GraphSettings): void {
   try {
-    if (typeof localStorage === "undefined") return;
+    if (!("localStorage" in globalThis)) return;
     localStorage.setItem(LS_KEY, JSON.stringify(settings));
   } catch {
     // storage might be full or unavailable — silently ignore

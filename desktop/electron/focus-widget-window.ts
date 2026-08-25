@@ -25,12 +25,17 @@ function readPersistedBounds(): PersistedBounds | null {
   try {
     const p = statePath();
     if (!existsSync(p)) return null;
+// SAFETY: The surrounding boundary establishes this documented contract.
     const data = JSON.parse(readFileSync(p, "utf8")) as Partial<PersistedBounds>;
-    if (typeof data.x !== "number" || typeof data.y !== "number") return null;
+    if (!isNumber(data.x) || !isNumber(data.y)) return null;
     return { x: data.x, y: data.y };
   } catch {
     return null;
   }
+}
+
+function isNumber(value: number | undefined): value is number {
+  return typeof value === "number";
 }
 
 function writePersistedBoundsNow(b: PersistedBounds): void {

@@ -132,7 +132,7 @@ async function main() {
       console.warn(`[ext:catalog] нет локального manifest.json для ${id} — skip`);
       continue;
     }
-    if (typeof manifest.appId !== "string" || manifest.appId.length === 0) {
+    if (Object.prototype.toString.call(manifest.appId) !== "[object String]" || manifest.appId.length === 0) {
       console.warn(`[ext:catalog] manifest.json для ${id} не содержит appId — skip`);
       continue;
     }
@@ -143,7 +143,7 @@ async function main() {
     }
     // digest от gh api приходит как "sha256:..." (если GitHub его считал)
     let sha256 = null;
-    if (asset.digest && typeof asset.digest === "string") {
+    if (asset.digest && Object.prototype.toString.call(asset.digest) === "[object String]") {
       const m = /^sha256:([0-9a-f]{64})$/i.exec(asset.digest);
       if (m) sha256 = m[1].toLowerCase();
     }

@@ -83,8 +83,10 @@ async function waitForRenderedPage(win: BrowserWindow): Promise<BookMetadataPage
       throw new Error("Не удалось открыть страницу");
     }
     try {
+      // SAFETY: The isolated-world script returns the documented page snapshot contract.
       const snapshot = (await win.webContents.executeJavaScriptInIsolatedWorld(1001, [
         { code: snapshotScript() },
+// SAFETY: The surrounding boundary establishes this documented contract.
       ])) as PageSnapshot | null;
       if (snapshot?.tooLarge) throw new Error("Страница слишком большая");
       if (snapshot?.ready && !snapshot.challenge && snapshot.textLength >= 100 && snapshot.html) {

@@ -2,6 +2,14 @@ const OPEN_LIBRARY_ORIGIN = "https://openlibrary.org";
 const MAX_RESPONSE_BYTES = 256 * 1024;
 const MAX_AUTHORS = 4;
 const MAX_REDIRECTS = 3;
+import {
+  isNumber,
+  isRecord,
+  isString,
+  parseJsonRecord,
+  type JsonRecord,
+  type JsonValue,
+} from "./json-contracts";
 
 export interface OpenLibraryBookMetadata {
   title?: string;
@@ -15,8 +23,6 @@ export interface OpenLibraryBookMetadata {
 }
 
 type Fetcher = typeof fetch;
-type JsonRecord = Record<string, unknown>;
-
 function isValidIsbn13(value: string): boolean {
   if (!/^\d{13}$/.test(value)) return false;
   const sum = value
@@ -78,31 +84,31 @@ async function fetchJson(path: string, fetcher: Fetcher): Promise<JsonRecord | n
     if (!response.ok) throw new Error(`Open Library вернул HTTP ${response.status}`);
     const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
     if (!contentType.includes("application/json")) throw new Error("Open Library вернул не JSON");
-    return JSON.parse(await readLimitedText(response)) as JsonRecord;
+    return parseJsonRecord(JSON.parse(await readLimitedText(response)));
   }
 }
 
-function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+function text(value: JsonValue | undefined): string {
+  return isString(value) ? value.trim() : "";
 }
 
-function stringList(value: unknown): string {
+function stringList(value: JsonValue | undefined): string {
   return Array.isArray(value) ? value.map(text).filter(Boolean).join(", ") : "";
 }
 
-function languageList(value: unknown): string {
+function languageList(value: JsonValue | undefined): string {
   if (!Array.isArray(value)) return "";
   return value
-    .map((item) => (item && typeof item === "object" ? text((item as JsonRecord).key) : ""))
+    .map((item) => (isRecord(item) ? text(item.key) : ""))
     .map((key) => key.split("/").at(-1) ?? "")
     .filter(Boolean)
     .join(", ");
 }
 
-async function authorNames(value: unknown, fetcher: Fetcher): Promise<string> {
+async function authorNames(value: JsonValue | undefined, fetcher: Fetcher): Promise<string> {
   if (!Array.isArray(value)) return "";
   const keys = value
-    .map((item) => (item && typeof item === "object" ? text((item as JsonRecord).key) : ""))
+    .map((item) => (isRecord(item) ? text(item.key) : ""))
     .filter((key) => /^\/authors\/OL\d+A$/.test(key))
     .slice(0, MAX_AUTHORS);
   const authors = await Promise.all(
@@ -129,11 +135,11 @@ export async function lookupOpenLibraryIsbn(
   const publishedDate = text(edition.publish_date);
   const language = languageList(edition.languages);
   const pageCount =
-    typeof edition.number_of_pages === "number" && edition.number_of_pages > 0
+    isNumber(edition.number_of_pages) && edition.number_of_pages > 0
       ? edition.number_of_pages
       : undefined;
   const coverId = Array.isArray(edition.covers)
-    ? edition.covers.find((value) => typeof value === "number" && value > 0)
+    ? edition.covers.find((value) => isNumber(value) && value > 0)
     : undefined;
 
   return {

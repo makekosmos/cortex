@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, test } from "bun:test";
 import { ensureKeplerRunning } from "@kosmos/ark";
+import type { JsonRecord } from "./extension-permissions";
 
 const tempDirs: string[] = [];
 afterEach(() => {
@@ -15,7 +16,7 @@ function createDataDir(): string {
   return dir;
 }
 
-function keplerLock(pid = process.pid): Record<string, unknown> {
+function keplerLock(pid = process.pid): JsonRecord {
   return {
     format_version: 1,
     protocol_version: { major: 1, minor: 0, patch: 0 },

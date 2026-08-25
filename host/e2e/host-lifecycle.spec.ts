@@ -6,6 +6,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
 import { _electron as electron, type ElectronApplication } from "playwright";
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue };
+const isString = (value: JsonValue | undefined): value is string => typeof value === "string";
+type EngineBinaries = { engine: string; ark: string };
 import electronBinary from "electron";
 import { createSignedApps } from "./fixtures/signed-apps";
 
@@ -36,7 +45,7 @@ const cargoTarget = (): string =>
 const buildEngine = (trust: {
   root: string;
   releases: string;
-}): { engine: string; ark: string } => {
+}): EngineBinaries => {
   const env = {
     ...process.env,
     KOSMOS_PACKAGE_ROOT_KEY_JSON: trust.root,
@@ -58,10 +67,11 @@ const buildEngine = (trust: {
     env,
     stdio: "inherit",
   });
-  return {
+  const binaries: EngineBinaries = {
     engine: path.join(target, "debug", "kepler-backend.exe"),
     ark: path.join(target, "debug", "ark-core-rpc.exe"),
   };
+  return binaries;
 };
 
 const startEngine = async (
@@ -83,6 +93,7 @@ const startEngine = async (
   });
   const lock = await waitFor(() => {
     try {
+      // SAFETY: waitFor only resolves after the Engine lock file is written.
       return JSON.parse(fs.readFileSync(path.join(dataDir, "engine.lock.json"), "utf8")) as Lock;
     } catch {
       return undefined;
@@ -91,7 +102,7 @@ const startEngine = async (
   return { child, lock };
 };
 
-const rpc = async (lock: Lock, operation: string, params: Record<string, unknown> = {}) => {
+const rpc = async (lock: Lock, operation: string, params: Record<string, JsonValue> = {}) => {
   console.log(`[host-e2e] rpc start operation=${operation}`);
   const response = await fetch(`http://127.0.0.1:${lock.http_port}/v1/rpc`, {
     method: "POST",
@@ -107,15 +118,16 @@ const rpc = async (lock: Lock, operation: string, params: Record<string, unknown
     body: JSON.stringify({ operation, _req_id: randomUUID(), ...params }),
     signal: AbortSignal.timeout(20_000),
   });
-  const result = (await response.json()) as { ok: boolean; data?: unknown; error?: unknown };
+  // SAFETY: the test Engine endpoint returns the documented JSON RPC envelope.
+  const result = (await response.json()) as { ok: boolean; data?: JsonValue; error?: JsonValue };
   console.log(
     `[host-e2e] rpc result operation=${operation} ok=${result.ok} error=${rpcError(result)}`,
   );
   return result;
 };
 
-const rpcError = (result: { error?: unknown }): string =>
-  typeof result.error === "string" ? result.error.slice(0, 256) : "unknown error";
+const rpcError = (result: { error?: JsonValue }): string =>
+  isString(result.error) ? result.error.slice(0, 256) : "unknown error";
 
 const invoke = (id: string, userData: string, env: NodeJS.ProcessEnv): Promise<number | null> =>
   new Promise((resolve, reject) => {
@@ -191,7 +203,8 @@ const closeHost = async (host: ElectronApplication | undefined): Promise<void> =
 };
 
 const recordCleanup = (manifestPath: string, root: string, pids: Set<number>): void => {
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+    // SAFETY: the cleanup manifest is written by this test with the expected arrays.
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
     roots?: unknown;
     pids?: unknown;
   };
@@ -228,7 +241,8 @@ test("real signed Apps use one headless Host and preserve the Engine across rest
     const trustStatus = await rpc(lock, "packages.trust_status");
     expect(trustStatus.ok, `packages.trust_status: ${rpcError(trustStatus)}`).toBe(true);
     expect(
-      (trustStatus.data as { trust?: { configured?: unknown } } | undefined)?.trust?.configured,
+      // SAFETY: packages.trust_status returns the documented trust object.
+      (trustStatus.data as { trust?: { configured?: JsonValue } } | undefined)?.trust?.configured,
     ).toBe(true);
     const catalogApplied = await rpc(lock, "packages.catalog_apply", {
       document: apps.catalog,
@@ -330,9 +344,11 @@ test("real signed Apps use one headless Host and preserve the Engine across rest
     host = undefined;
     expect(fs.existsSync(path.join(dataDir, "engine.lock.json"))).toBe(true);
     expect(
+      // SAFETY: the Engine lock file is written by the test Engine and contains its pid.
       JSON.parse(fs.readFileSync(path.join(dataDir, "engine.lock.json"), "utf8")) as Lock,
     ).toMatchObject({ pid: initialEnginePid });
     expect(fs.existsSync(path.join(appData, "Kosmos", "engine.lock.json"))).toBe(false);
+    // SAFETY: the Engine info endpoint returns the documented protocol usage shape.
     const info = (await fetch(`http://127.0.0.1:${lock.http_port}/v1/info`, {
       headers: {
         Authorization: `Bearer ${lock.auth_token}`,
@@ -345,7 +361,7 @@ test("real signed Apps use one headless Host and preserve the Engine across rest
       protocol_usage: {
         api_v1: { connections: number };
         legacy: { connections: number };
-        clients: Record<string, unknown>;
+        clients: Record<string, JsonValue>;
       };
     };
     expect(info.protocol_usage.api_v1.connections).toBeGreaterThan(0);

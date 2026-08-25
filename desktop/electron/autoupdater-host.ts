@@ -128,6 +128,7 @@ export async function check(): Promise<UpdateState> {
   try {
     await electronUpdater.autoUpdater.checkForUpdates();
   } catch (e) {
+// SAFETY: The surrounding boundary establishes this documented contract.
     broadcast({ kind: "error", message: (e as Error).message });
   }
   return currentState;

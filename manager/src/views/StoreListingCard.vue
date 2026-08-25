@@ -79,6 +79,7 @@ function open() {
       <Button
         v-if="canInstall"
         size="sm"
+        variant="surface"
         block
         :loading="installing"
         :aria-busy="installing"
@@ -87,7 +88,7 @@ function open() {
           installing ? "Установка…" : installed?.update_version ? "Обновить" : "Установить"
         }}</Button
       >
-      <Button v-else-if="canOpen" size="sm" block @click="open">Открыть</Button>
+      <Button v-else-if="canOpen" size="sm" block variant="surface" @click="open">Открыть</Button>
       <Button v-else size="sm" block variant="surface" disabled>
         {{ installed ? "Установлено" : "Недоступно" }}
       </Button>

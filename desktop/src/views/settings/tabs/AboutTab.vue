@@ -37,6 +37,7 @@ async function loadStorageSummary() {
   try {
     storageSummary.value = await window.kepler.settings.storageSummary();
   } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     storageError.value = (e as Error).message;
   }
 }

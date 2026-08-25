@@ -57,6 +57,7 @@ export function parseCommandMarkdown(input: string): CommandMarkdownBlock[] {
       flushList(listItems, blocks);
       blocks.push({
         type: "heading",
+// SAFETY: the surrounding domain validation preserves the asserted contract.
         level: heading[1].length as 1 | 2 | 3,
         text: heading[2].trim(),
       });

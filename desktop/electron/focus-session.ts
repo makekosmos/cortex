@@ -55,7 +55,7 @@ type ArkRequest = Parameters<ArkClient["invokeOperation"]>[0];
 type ArkRequestParams = Omit<ArkRequest, "operation">;
 type ArkValue = ArkRequestParams[string];
 
-function isArkValue(value: unknown): value is ArkValue {
+function isArkValue<T>(value: T): value is T & ArkValue {
   if (value === undefined || value === null) return true;
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return true;
@@ -65,7 +65,7 @@ function isArkValue(value: unknown): value is ArkValue {
   return Object.values(value).every(isArkValue);
 }
 
-function arkParams(params: Record<string, unknown>): ArkRequestParams {
+function arkParams(params: Record<string, ArkValue>): ArkRequestParams {
   const out: ArkRequestParams = {};
   for (const [key, value] of Object.entries(params)) {
     if (!isArkValue(value)) throw new Error(`Unsupported ARK parameter: ${key}`);
@@ -84,7 +84,7 @@ function broadcastFocusSessionUpdated(): void {
 
 async function invoke<T = unknown>(
   operation: string,
-  params?: Record<string, unknown>,
+  params?: Record<string, ArkValue>,
 ): Promise<T> {
   const client = await requireFocusSessionRuntime().awaitArkReady();
   const request: ArkRequest = params ? { operation, ...arkParams(params) } : { operation };
@@ -92,8 +92,12 @@ async function invoke<T = unknown>(
 }
 
 const { rehydrateRunningEntry, startTimeEntry, closeTimeEntry, markTaskDone } =
-  createFocusTimeEntryApi(invoke);
-const { resolveCategoryDomains, listTasks, listBlocklists } = createFocusSessionDataApi(invoke);
+  // SAFETY: invoke validates every dynamic ARK value before forwarding it to the typed helper.
+  createFocusTimeEntryApi(invoke as Parameters<typeof createFocusTimeEntryApi>[0]);
+const { resolveCategoryDomains, listTasks, listBlocklists } = createFocusSessionDataApi(
+  // SAFETY: invoke validates every dynamic ARK value before forwarding it to ArkClient.
+  invoke as Parameters<typeof createFocusSessionDataApi>[0],
+);
 
 function enqueueSideEffect(work: () => Promise<void>): Promise<void> {
   const next = sideEffectQueue.then(work, work).catch((e) => {

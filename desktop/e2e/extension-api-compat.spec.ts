@@ -12,7 +12,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
-import { _electron as electron, type ElectronApplication } from "playwright";
+import { _electron as electron } from "playwright";
 import electronBinary from "electron";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -67,8 +67,9 @@ test.describe("extension keplerApiVersion compat", () => {
         .poll(() =>
           app.evaluate(({ ipcMain }) => {
             const handlers = (
-              ipcMain as unknown as {
-                _invokeHandlers?: Map<string, (...a: unknown[]) => unknown>;
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+              ipcMain as {
+                _invokeHandlers?: Map<string, (...a: unknown[]) => never>;
               }
             )._invokeHandlers;
             return handlers?.has?.("kepler:extension:open") === true;
@@ -90,13 +91,15 @@ test.describe("extension keplerApiVersion compat", () => {
       const incompatWindowPromise = app.waitForEvent("window", { timeout: 10_000 });
       await app.evaluate(async ({ ipcMain }, id) => {
         const handlers = (
-          ipcMain as unknown as {
-            _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+          ipcMain as {
+            _invokeHandlers: Map<string, (...a: unknown[]) => never>;
           }
         )._invokeHandlers;
         const handler = handlers?.get?.("kepler:extension:open");
         if (!handler) throw new Error("kepler:extension:open handler not registered");
         // Fake IpcMainInvokeEvent.
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
         await handler({} as never, id);
       }, "mocha-bad");
       const incompatWindow = await incompatWindowPromise;

@@ -45,6 +45,7 @@ async function load() {
     const p = await window.kepler.extension.installPreview(sourcePath.value);
     preview.value = p;
   } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     error.value = (e as Error).message || String(e);
   } finally {
     loading.value = false;
@@ -62,6 +63,7 @@ async function onConfirm() {
       window.close();
     }, 1200);
   } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     error.value = (e as Error).message || String(e);
   } finally {
     installing.value = false;

@@ -108,6 +108,7 @@ export function findKextInArgv(argv: string[]): string | null {
           // мусор от Electron-runtime'а.
           // (require fs inline'ом чтобы не тащить top-level import.)
           // eslint-disable-next-line @typescript-eslint/no-require-imports
+          // SAFETY: the built-in Node module exposes the exact runtime API required here.
           const fs = require("node:fs") as typeof import("node:fs");
           if (fs.existsSync(a)) return path.resolve(a);
         } catch {

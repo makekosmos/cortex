@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { listExtensions, loadExtensionManifest, resolveExtensionDir } from "./extension-manifest";
+import { isRecord, isString } from "../src/shared/runtimeGuards";
 
 /**
  * Manifest-declared command, обогащённая resolved icon data:URI + metadata
@@ -82,7 +83,7 @@ function extensionIconDataUri(id: string): string | undefined {
  * если файл отсутствует / выходит за пределы extension dir / unreadable.
  */
 function readManifestIconAsDataUri(id: string, iconRel: string): string | undefined {
-  if (!iconRel || typeof iconRel !== "string") return;
+  if (!iconRel || !isString(iconRel)) return;
   const dir = resolveExtensionDir(id);
   if (!dir) return;
   const resolved = path.resolve(path.join(dir, iconRel));
@@ -106,14 +107,14 @@ export function loadDeclaredCommands(): DeclaredCommand[] {
   for (const manifest of listExtensions()) {
     if (!Array.isArray(manifest.commands)) continue;
     for (const cmd of manifest.commands) {
-      if (!cmd || typeof cmd !== "object") continue;
-      if (typeof cmd.id !== "string" || !declaredCommandIdRe.test(cmd.id)) {
+      if (!isRecord(cmd)) continue;
+      if (!isString(cmd.id) || !declaredCommandIdRe.test(cmd.id)) {
         console.warn(
           `[kepler-shell] extension '${manifest.id}' command id invalid: ${JSON.stringify(cmd.id)} — skipped`,
         );
         continue;
       }
-      if (typeof cmd.title !== "string" || cmd.title.trim().length === 0) {
+      if (!isString(cmd.title) || cmd.title.trim().length === 0) {
         console.warn(
           `[kepler-shell] extension '${manifest.id}' command '${cmd.id}' missing title — skipped`,
         );

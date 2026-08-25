@@ -1,3 +1,5 @@
+import type { JsonRecord } from "../src/shared/runtimeGuards";
+
 export type PomodoroPhase = "idle" | "work" | "shortBreak" | "longBreak";
 
 export interface PomodoroState {
@@ -19,8 +21,8 @@ export interface ArkObjectLike {
   title?: string | null;
   contentJson?: unknown;
   content_json?: unknown;
-  propsJson?: Record<string, unknown>;
-  props_json?: Record<string, unknown>;
+  propsJson?: JsonRecord;
+  props_json?: JsonRecord;
   createdAt?: string;
   created_at?: string;
   updatedAt?: string;

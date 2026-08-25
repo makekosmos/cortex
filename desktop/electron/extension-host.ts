@@ -52,6 +52,7 @@ import { registerExtensionImageColorIpc } from "./extension-image-color-ipc";
 import { registerExtensionBookMetadataIpc } from "./extension-book-metadata-ipc";
 import { isNativeExtensionRunning, openNativeExtension } from "./extension-native-runner";
 import { openExtensionBrowserWindow } from "./extension-browser-window";
+import type { JsonValue } from "./extension-permissions";
 
 export { setExtensionArkBridge, setExtensionArkBridgeReadyTimeoutMs } from "./extension-ark-ipc";
 
@@ -338,7 +339,7 @@ ipcMain.handle("kepler:extension:dialogs:pick-directory", async (event) => {
 
 // Reserved для будущих host-action типа "show settings", "focus launcher" и т.п.
 // Сейчас просто логирует и возвращает false (action not handled).
-ipcMain.handle("kepler:extension:invoke-host", (_e, action: string, _payload?: unknown) => {
+ipcMain.handle("kepler:extension:invoke-host", (_e, action: string, _payload?: JsonValue) => {
   console.error(`[kepler-shell] extension invoke-host: ${action} (no handler)`);
   return false;
 });

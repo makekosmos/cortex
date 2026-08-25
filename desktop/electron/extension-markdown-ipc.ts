@@ -17,6 +17,11 @@ import {
   type MarkdownVaultExportFile,
   type MarkdownVaultOpenResult,
 } from "./extension-markdown-vault";
+import { isString } from "../src/shared/runtimeGuards";
+
+type MarkdownSuggestedName = string | null | undefined;
+type MarkdownContentInput = string | null | undefined;
+type MarkdownFilesInput = MarkdownVaultExportFile[] | null | undefined;
 
 type MarkdownCapability = "markdownFiles.open" | "markdownFiles.save";
 
@@ -121,15 +126,19 @@ export function registerExtensionMarkdownIpc({
 
   ipcMain.handle(
     "kepler:extension:markdownFiles:save",
-    async (e, suggestedName: unknown, content: unknown): Promise<{ path: string } | null> => {
+    async (
+      e,
+      suggestedName: MarkdownSuggestedName,
+      content: MarkdownContentInput,
+    ): Promise<{ path: string } | null> => {
       assertHostPermission(e.sender, "markdownFiles.save");
-      if (typeof content !== "string") {
+      if (!isString(content)) {
         throw new Error("[kepler-shell] Markdown export content must be a string");
       }
       const parent = markdownDialogParent(e.sender);
       const options: SaveDialogOptions = {
         title: "Экспорт Markdown",
-        defaultPath: safeMarkdownDefaultName(suggestedName),
+        defaultPath: safeMarkdownDefaultName(suggestedName ?? ""),
         filters: [{ name: "Markdown", extensions: ["md"] }],
       };
       const result = parent
@@ -144,7 +153,7 @@ export function registerExtensionMarkdownIpc({
 
   ipcMain.handle(
     "kepler:extension:markdownFiles:exportVault",
-    async (e, files: unknown): Promise<{ outputDir: string; exportedCount: number } | null> => {
+    async (e, files: MarkdownFilesInput): Promise<{ outputDir: string; exportedCount: number } | null> => {
       assertHostPermission(e.sender, "markdownFiles.save");
       if (!Array.isArray(files)) {
         throw new Error("[kepler-shell] Markdown vault export files must be an array");
@@ -168,8 +177,9 @@ export function registerExtensionMarkdownIpc({
       let exportedCount = 0;
       let skippedAssetCount = 0;
       const writtenPaths = new Set<string>();
+      // SAFETY: the IPC payload is checked as an array before iterating its export entries.
       for (const file of files as MarkdownVaultExportFile[]) {
-        if (!file || typeof file.relativePath !== "string") {
+        if (!file || !isString(file.relativePath)) {
           continue;
         }
 
@@ -180,13 +190,13 @@ export function registerExtensionMarkdownIpc({
         writtenPaths.add(outputPath);
         mkdirSync(path.dirname(outputPath), { recursive: true });
 
-        if (typeof file.content === "string") {
+        if (isString(file.content)) {
           writeFileSync(outputPath, file.content, "utf8");
           exportedCount += 1;
           continue;
         }
 
-        if (typeof file.sourcePath === "string") {
+        if (isString(file.sourcePath)) {
           if (copyMarkdownVaultAsset(file.sourcePath, outputPath)) {
             exportedCount += 1;
           } else {

@@ -1,6 +1,7 @@
 // Дополнительные секции `window.kepler`, вынесенные из основного KeplerApi-контракта.
 
 import type { StorageSummary, UpdateState } from "./ipc-types";
+import type { IpcJsonObject } from "./ipc-json";
 
 interface DiagnosticsWindowInfo {
   id: number;
@@ -16,7 +17,7 @@ interface DiagnosticsWindowInfo {
 interface DiagnosticsMetricsSnapshot {
   at: string;
   appMetrics: unknown[];
-  gpuFeatureStatus: Record<string, unknown>;
+  gpuFeatureStatus: IpcJsonObject;
   gpuInfo: unknown;
   windows: DiagnosticsWindowInfo[];
 }
@@ -128,7 +129,7 @@ export interface KeplerApiShellServices {
      * shift, alt, win }` (Windows) либо `{ accelerator }` (macOS — адаптер
      * резолвит mac keyCode в строку сам) или `dictation_capture_cancelled`
      * (Esc). */
-    onCaptureEvent(cb: (payload: Record<string, unknown>) => void): () => void;
+    onCaptureEvent(cb: (payload: IpcJsonObject) => void): () => void;
   };
 
   focusService: {

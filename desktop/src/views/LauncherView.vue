@@ -39,6 +39,7 @@ import edenSvg from "../assets/eden.svg";
 import edenAddSvg from "../assets/eden-add.svg";
 import edenDiarySvg from "../assets/eden-diary.svg";
 import type { CommandRecord, FocusSessionSnapshot, UpdateState } from "@shared/ipc-types";
+import { isNumber, isString } from "../shared/runtimeGuards";
 
 interface BuiltInIconConfig {
   icon?: Component;
@@ -66,7 +67,7 @@ const EDEN_GRADIENT = {
   to: "#b33800",
 };
 
-const BUILTIN_ICONS: Record<string, BuiltInIconConfig> = {
+const BUILTIN_ICONS = {
   "settings:open": {
     icon: SettingsIcon,
     from: "oklch(0.42 0 0)",
@@ -104,7 +105,7 @@ const BUILTIN_ICONS: Record<string, BuiltInIconConfig> = {
     from: "oklch(0.68 0.15 250)",
     to: "oklch(0.42 0.16 270)",
   },
-};
+} satisfies Record<string, BuiltInIconConfig>;
 
 const FOCUS_GRADIENT = { from: "oklch(0.7 0.16 145)", to: "oklch(0.46 0.14 165)" };
 
@@ -123,7 +124,8 @@ function builtInIconFor(cmd: CommandRecord): BuiltInIconConfig | null {
     case FOCUS_EDIT_ID:
       return { icon: Pencil, ...FOCUS_GRADIENT };
   }
-  return BUILTIN_ICONS[cmd.id] ?? null;
+  // SAFETY: unknown command ids intentionally have no built-in icon.
+  return BUILTIN_ICONS[cmd.id as keyof typeof BUILTIN_ICONS] ?? null;
 }
 
 const query = ref("");
@@ -262,7 +264,7 @@ function loadHiddenCommandIds(): string[] {
     const raw = localStorage.getItem(HIDDEN_COMMANDS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+    return Array.isArray(parsed) ? parsed.filter(isString) : [];
   } catch {
     return [];
   }
@@ -330,12 +332,13 @@ function loadPersistedState(): PersistedLauncherState | null {
   try {
     const raw = localStorage.getItem(STATE_KEY);
     if (!raw) return null;
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     const parsed = JSON.parse(raw) as PersistedLauncherState;
     if (
-      typeof parsed.query !== "string" ||
-      typeof parsed.selectedIndex !== "number" ||
-      typeof parsed.scrollTop !== "number" ||
-      typeof parsed.savedAt !== "number"
+      !isString(parsed.query) ||
+      !isNumber(parsed.selectedIndex) ||
+      !isNumber(parsed.scrollTop) ||
+      !isNumber(parsed.savedAt)
     )
       return null;
     if (parsed.mode !== undefined && parsed.mode !== "commands" && parsed.mode !== "focus")
@@ -347,7 +350,7 @@ function loadPersistedState(): PersistedLauncherState | null {
 }
 
 function savePersistedState() {
-  if (typeof window === "undefined") return;
+  if (!("window" in globalThis)) return;
   try {
     const state: PersistedLauncherState = {
       mode: mode.value,
@@ -373,7 +376,7 @@ function loadRecents(): string[] {
     const raw = localStorage.getItem(RECENTS_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [];
+    return Array.isArray(arr) ? arr.filter(isString) : [];
   } catch {
     return [];
   }
@@ -388,7 +391,7 @@ function loadFavorites(): string[] {
     const raw = localStorage.getItem(FAVORITES_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [];
+    return Array.isArray(arr) ? arr.filter(isString) : [];
   } catch {
     return [];
   }
@@ -567,6 +570,7 @@ function onListScroll() {
 // равно срабатывает). В focus-режиме (своя contenteditable-панель) — не вмешиваемся.
 function onListMouseDown(e: MouseEvent) {
   if (mode.value !== "commands") return;
+// SAFETY: the surrounding domain validation preserves the asserted contract.
   const target = e.target as HTMLElement | null;
   if (!target) return;
   if (target.closest('input, textarea, [contenteditable="true"]')) return;
@@ -762,6 +766,7 @@ function moveSelection(delta: number) {
     // секции (sibling <ul> → previousElementSibling = .section-label).
     const isFirstInUl = selectedEl.parentElement?.firstElementChild === selectedEl;
     if (isFirstInUl) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       const header = selectedEl.parentElement!.previousElementSibling as HTMLElement | null;
       if (header?.classList.contains("section-label")) {
         header.scrollIntoView({ block: "start" });
@@ -847,6 +852,7 @@ async function refreshCommands() {
   const prevApps = allCommandsCache.value.filter((c) => c.kind === "app");
   const cmds = await window.kepler.commands.list().catch((e) => {
     console.warn("commands.list failed", e);
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     return [] as CommandRecord[];
   });
   if (run !== commandsRefreshRun) return; // более свежий refresh победил

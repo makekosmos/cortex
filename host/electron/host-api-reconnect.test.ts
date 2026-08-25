@@ -32,13 +32,14 @@ afterEach(() => {
 
 test("Host retries only its idempotent lifecycle settings request after 401", async () => {
   let calls = 0;
-  const fetchMock = mock(async (input: string) => {
+  const fetchMock = mock(async (_input: string) => {
     calls += 1;
     if (calls === 1) return new Response("", { status: 401 });
     return new Response(
       JSON.stringify({ ok: true, data: { desktop_host: { warm_timeout_seconds: 300 } } }),
     );
   });
+  // SAFETY: Bun's mock function has the same call signature as global fetch in this test.
   globalThis.fetch = fetchMock as typeof fetch;
 
   const client = new EngineClient("C:\\Kosmos-test");
@@ -51,13 +52,14 @@ test("Host retries only its idempotent lifecycle settings request after 401", as
 
 test("Host does not replay launch after 401 and uses the replacement for the following request", async () => {
   let calls = 0;
-  const fetchMock = mock(async (input: string) => {
+  const fetchMock = mock(async (_input: string) => {
     calls += 1;
     if (calls === 1) return new Response("", { status: 401 });
     return new Response(
       JSON.stringify({ ok: true, data: { desktop_host: { warm_timeout_seconds: 0 } } }),
     );
   });
+  // SAFETY: Bun's mock function has the same call signature as global fetch in this test.
   globalThis.fetch = fetchMock as typeof fetch;
 
   const client = new EngineClient("C:\\Kosmos-test");
@@ -71,13 +73,14 @@ test("Host does not replay launch after 401 and uses the replacement for the fol
 
 test("Host does not replay revoke after a closed transport and uses the replacement for the following request", async () => {
   let calls = 0;
-  const fetchMock = mock(async (input: string) => {
+  const fetchMock = mock(async (_input: string) => {
     calls += 1;
     if (calls === 1) throw new Error("transport closed");
     return new Response(
       JSON.stringify({ ok: true, data: { desktop_host: { warm_timeout_seconds: 300 } } }),
     );
   });
+  // SAFETY: Bun's mock function has the same call signature as global fetch in this test.
   globalThis.fetch = fetchMock as typeof fetch;
 
   const client = new EngineClient("C:\\Kosmos-test");

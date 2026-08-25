@@ -59,7 +59,9 @@ test("headless repeat-open does not show existing settings/dashboard windows", a
     });
 
     await app.evaluate(({ app: electronApp }) => {
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
       electronApp.emit("second-instance", {} as never, ["Kosmos.exe", "--autostart"]);
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
       electronApp.emit("second-instance", {} as never, ["Kosmos.exe", "--autostart"]);
     });
 

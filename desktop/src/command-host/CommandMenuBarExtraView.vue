@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, shallowRef } from "vue";
 import type { CommandSnapshotNode } from "../../shared/command-ipc";
+import { isString } from "../shared/runtimeGuards";
 import { menuBarIsLoading, menuBarSections, menuBarTitle } from "./model-menu";
 import type { CommandMenuBarItemModel } from "./model";
 
@@ -18,7 +19,7 @@ const hasItems = computed(() => sections.value.some((section) => section.items.l
 
 async function executeItem(item: CommandMenuBarItemModel): Promise<void> {
   const callbackId = item.node.props.__callbackId;
-  if (typeof callbackId !== "string") return;
+  if (!isString(callbackId)) return;
 
   const result = await window.kepler.command.action(props.sessionId, {
     type: item.node.type,

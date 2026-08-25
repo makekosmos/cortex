@@ -31,6 +31,7 @@ defineEmits<{ action: [] }>();
         <Button
           v-if="actionLabel"
           size="sm"
+          variant="surface"
           :disabled="disabled || busy"
           :loading="busy"
           @click="$emit('action')"

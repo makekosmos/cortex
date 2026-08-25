@@ -1,7 +1,9 @@
+import type { IpcJsonObject } from "./ipc-json";
+
 export interface CommandSnapshotNode {
   type: string;
   text?: string;
-  props: Record<string, unknown>;
+  props: IpcJsonObject;
   children: CommandSnapshotNode[];
 }
 
@@ -24,8 +26,8 @@ export interface CommandFeedbackEvent {
 
 export interface CommandActionRequest {
   type: string;
-  props: Record<string, unknown>;
-  payload?: Record<string, unknown>;
+  props: IpcJsonObject;
+  payload?: IpcJsonObject;
 }
 
 export interface CommandActionResult {

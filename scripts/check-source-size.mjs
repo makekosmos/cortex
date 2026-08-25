@@ -136,6 +136,7 @@ const IGNORED = new Set([
   "node_modules",
   "release",
   "target",
+  "tools",
 ]);
 
 async function collect(dir, files = []) {

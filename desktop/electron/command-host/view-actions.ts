@@ -1,20 +1,29 @@
 import { clipboard, shell } from "electron";
 import type { LaunchCommandOptions } from "@raycast/api";
 import type { CommandActionRequest, CommandActionResult } from "../../shared/command-ipc";
+import type { CommandRecord, CommandValue } from "./view-model";
 
-function actionStringProp(props: Record<string, unknown>, ...keys: string[]): string | null {
+function isString(value: CommandValue): value is string {
+  return typeof value === "string";
+}
+
+function isRecord(value: CommandValue): value is CommandRecord {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function actionStringProp(props: CommandRecord, ...keys: string[]): string | null {
   for (const key of keys) {
     const value = props[key];
-    if (typeof value === "string" && value.trim().length > 0) return value;
+    if (isString(value) && value.trim().length > 0) return value;
   }
   return null;
 }
 
-function actionPathTargets(props: Record<string, unknown>): string[] {
+function actionPathTargets(props: CommandRecord): string[] {
   const paths = props.paths;
   if (Array.isArray(paths)) {
     return paths.filter(
-      (item): item is string => typeof item === "string" && item.trim().length > 0,
+      (item): item is string => isString(item) && item.trim().length > 0,
     );
   }
   const single = actionStringProp(props, "path", "target");
@@ -23,14 +32,17 @@ function actionPathTargets(props: Record<string, unknown>): string[] {
 
 export async function handleCommandAction(options: {
   action: CommandActionRequest;
-  callback?: (payload?: Record<string, unknown>) => unknown | Promise<unknown>;
+  callback?: (payload?: CommandRecord) => void | Promise<void>;
   launcher?: (options: LaunchCommandOptions) => Promise<void>;
 }): Promise<CommandActionResult> {
   const { action, callback, launcher } = options;
+  // SAFETY: IPC action props are validated by the command snapshot serializer before dispatch.
+  const props = action.props as CommandRecord;
 
   if (callback) {
     try {
-      await callback(action.payload);
+      // SAFETY: callback payloads come from the command host's serialized action envelope.
+      await callback(action.payload as CommandRecord | undefined);
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -38,29 +50,29 @@ export async function handleCommandAction(options: {
   }
 
   if (action.type === "Action.CopyToClipboard") {
-    const content = action.props.content;
-    if (typeof content !== "string") return { ok: false, error: "missing_content" };
+    const content = props.content;
+    if (!isString(content)) return { ok: false, error: "missing_content" };
     clipboard.writeText(content);
     return { ok: true };
   }
 
   if (action.type === "Action.Paste") {
-    const content = action.props.content;
-    if (typeof content !== "string") return { ok: false, error: "missing_content" };
+    const content = props.content;
+    if (!isString(content)) return { ok: false, error: "missing_content" };
     clipboard.writeText(content);
     return { ok: true };
   }
 
   if (action.type === "Action.OpenInBrowser") {
-    const url = action.props.url;
-    if (typeof url !== "string") return { ok: false, error: "missing_url" };
+    const url = props.url;
+    if (!isString(url)) return { ok: false, error: "missing_url" };
     await shell.openExternal(url);
     return { ok: true };
   }
 
   if (action.type === "Action.Open") {
-    const target = action.props.target;
-    if (typeof target !== "string") return { ok: false, error: "missing_target" };
+    const target = props.target;
+    if (!isString(target)) return { ok: false, error: "missing_target" };
     if (/^https?:\/\//i.test(target)) {
       await shell.openExternal(target);
       return { ok: true };
@@ -71,41 +83,42 @@ export async function handleCommandAction(options: {
   }
 
   if (action.type === "Action.ShowInFinder") {
-    const target = actionStringProp(action.props, "path", "target");
+    // SAFETY: action props are produced by the normalized command snapshot serializer.
+    const target = actionStringProp(props, "path", "target");
     if (!target) return { ok: false, error: "missing_path" };
     shell.showItemInFolder(target);
     return { ok: true };
   }
 
   if (action.type === "Action.Trash") {
-    const targets = actionPathTargets(action.props);
+    // SAFETY: action props are produced by the normalized command snapshot serializer.
+    const targets = actionPathTargets(props);
     if (targets.length === 0) return { ok: false, error: "missing_path" };
     for (const target of targets) await shell.trashItem(target);
     return { ok: true };
   }
 
   if (action.type === "Action.LaunchCommand") {
-    const name = action.props.name;
-    if (typeof name !== "string") return { ok: false, error: "missing_name" };
+    const name = props.name;
+    if (!isString(name)) return { ok: false, error: "missing_name" };
     if (!launcher) return { ok: false, error: "launcher_not_configured" };
     const extensionName =
-      typeof action.props.extensionName === "string" ? action.props.extensionName : undefined;
+      isString(props.extensionName) ? props.extensionName : undefined;
     const fallbackText =
-      typeof action.props.fallbackText === "string" ? action.props.fallbackText : undefined;
-    const type =
-      typeof action.props.type === "string"
-        ? (action.props.type as LaunchCommandOptions["type"])
-        : undefined;
+      isString(props.fallbackText) ? props.fallbackText : undefined;
+    // SAFETY: Raycast launch options constrain the type field to LaunchCommandOptions values.
+    const type = isString(props.type) ? (props.type as LaunchCommandOptions["type"]) : undefined;
     const args =
-      action.props.arguments && typeof action.props.arguments === "object"
-        ? (action.props.arguments as Record<string, unknown>)
+      props.arguments && isRecord(props.arguments)
+        ? props.arguments
         : undefined;
     await launcher({
       name,
       extensionName,
       type,
       arguments: args,
-      context: action.props.context,
+      // SAFETY: Raycast launch context is an object when supplied by the command bridge.
+      context: props.context as object | undefined,
       fallbackText,
     });
     return { ok: true };

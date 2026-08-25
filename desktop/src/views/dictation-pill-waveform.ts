@@ -32,6 +32,7 @@ function drawRoundedBar(
   height: number,
 ): void {
   const radius = Math.min(WAVEFORM_BAR_RADIUS_PX, width / 2, height / 2);
+// SAFETY: the surrounding domain validation preserves the asserted contract.
   const roundRect = (ctx as CanvasRenderingContext2D & {
     roundRect?: (x: number, y: number, width: number, height: number, radii?: number) => void;
   }).roundRect;

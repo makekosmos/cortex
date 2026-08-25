@@ -12,6 +12,7 @@ function response(
   headers: Record<string, string>,
   body: string | Buffer = "",
 ): IncomingMessage {
+  // SAFETY: Object.assign adds the IncomingMessage fields used by the fetch test double.
   return Object.assign(Readable.from([body]), { statusCode, headers }) as IncomingMessage;
 }
 
@@ -92,6 +93,7 @@ describe("book metadata page fetch", () => {
         throw new Error("expected HTTP error");
       } catch (error) {
         expect(error).toBeInstanceOf(BookMetadataHttpError);
+        // SAFETY: the preceding assertion establishes the concrete error contract.
         expect((error as BookMetadataHttpError).statusCode).toBe(status);
       }
     }

@@ -1,4 +1,5 @@
 import type { CommandPackageManifest } from "./command-host/manifest";
+import type { JsonRecord } from "./extension-permissions";
 
 export type ExtensionKind = "vue" | "static" | "native" | "command-extension";
 
@@ -182,7 +183,7 @@ export interface ExtensionManifest {
       sample?: {
         title?: string;
         content?: unknown;
-        props?: Record<string, unknown>;
+        props?: JsonRecord;
       };
     };
   };

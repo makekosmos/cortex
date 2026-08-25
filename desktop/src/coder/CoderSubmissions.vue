@@ -6,7 +6,7 @@ const emit = defineEmits<{ open: [url: string] }>();
 
 const dateFormatter = new Intl.DateTimeFormat("ru", { dateStyle: "medium", timeStyle: "short" });
 
-const statusLabels: Record<string, string> = {
+const statusLabels = {
   Accepted: "Принято",
   "Wrong Answer": "Неверный ответ",
   "Time Limit Exceeded": "Превышен лимит времени",
@@ -17,10 +17,11 @@ const statusLabels: Record<string, string> = {
   "Internal Error": "Внутренняя ошибка",
   Unknown: "Неизвестно",
   Completed: "Завершено",
-};
+} satisfies Record<string, string>;
 
 function statusLabel(status: string): string {
-  return statusLabels[status] ?? status;
+  // SAFETY: unknown upstream status labels intentionally fall back to themselves.
+  return statusLabels[status as keyof typeof statusLabels] ?? status;
 }
 
 function problemNumber(value: string): string {

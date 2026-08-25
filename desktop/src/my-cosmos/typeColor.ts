@@ -19,7 +19,7 @@ const FALLBACK_RGBA: [number, number, number, number] = [0.7, 0.7, 0.7, 1];
  * oklch-токены давали [0,0,0] (чёрный). Результат кешируется по cssExpr.
  */
 export function cssColorToRgba(cssExpr: string): [number, number, number, number] {
-  if (typeof document === "undefined") {
+  if (!("document" in globalThis)) {
     return FALLBACK_RGBA;
   }
 

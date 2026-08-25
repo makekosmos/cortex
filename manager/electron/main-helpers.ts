@@ -10,6 +10,7 @@ import {
 import { resolveInstance } from "../../desktop/electron/instance";
 import { keplerDataDir } from "../../desktop/electron/data-dir";
 import { resolveDesktopUpdateBridge } from "./desktop-update-bridge";
+import { isNumber, isObject, isString, type Input } from "./manager-contract";
 function openHostedPackage(id: string) {
   if (
     !/^[a-z0-9][a-z0-9._-]{0,127}$/.test(id) ||
@@ -20,7 +21,8 @@ function openHostedPackage(id: string) {
   const configured = process.env.KOSMOS_HOST_EXECUTABLE?.trim();
   const executable = configured && path.resolve(configured);
   const devMain =
-    process.env.KOSMOS_HOST_MAIN?.trim() && path.resolve(process.env.KOSMOS_HOST_MAIN);
+    process.env.KOSMOS_HOST_MAIN?.trim() &&
+    path.resolve(process.env.KOSMOS_HOST_MAIN);
   const packaged = resolvePackagedHostExecutable(process.resourcesPath);
   if (executable && fs.existsSync(executable)) {
     const child = spawn(executable, [`--open-app=${id}`], {
@@ -54,7 +56,12 @@ function openHostedPackage(id: string) {
 
 function startPackagedRuntime(): boolean {
   const executable = resolvePackagedRuntimeExecutable(process.resourcesPath);
-  if (!app.isPackaged || process.platform !== "win32" || !fs.existsSync(executable)) return false;
+  if (
+    !app.isPackaged ||
+    process.platform !== "win32" ||
+    !fs.existsSync(executable)
+  )
+    return false;
   const child = spawn(executable, ["--start"], {
     detached: true,
     stdio: "ignore",
@@ -65,12 +72,12 @@ function startPackagedRuntime(): boolean {
   return true;
 }
 
-const bounded = (value: unknown, max: number): value is string =>
-  typeof value === "string" && value.trim().length > 0 && value.length <= max;
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === "object" && !Array.isArray(value);
-const validation = (condition: boolean, message = "Проверьте введённые данные."): string | null =>
-  condition ? null : message;
+const bounded = (value: Input, max: number): value is string =>
+  isString(value) && value.trim().length > 0 && value.length <= max;
+const validation = (
+  condition: boolean,
+  message = "Проверьте введённые данные.",
+): string | null => (condition ? null : message);
 const integrationProviders = ["hevy", "toggl", "leetcode", "codewars"];
 const integrationIntervals = [0, 15, 60, 360, 1440];
 const LEETCODE_PARTITION = "persist:kosmos-manager-leetcode";
@@ -90,12 +97,14 @@ function readDesktopUpdateState() {
     const bridge = desktopUpdateBridge();
     if (!bridge) return null;
     const value = JSON.parse(fs.readFileSync(bridge.stateFile, "utf8"));
-    return value && typeof value.kind === "string" ? value : null;
+    return isObject(value) && isString(value.kind) ? value : null;
   } catch {
     return null;
   }
 }
-function requestDesktopUpdate(flag: "--kosmos-update-check" | "--kosmos-update-install") {
+function requestDesktopUpdate(
+  flag: "--kosmos-update-check" | "--kosmos-update-install",
+) {
   const bridge = desktopUpdateBridge();
   if (!bridge) return false;
   spawnSync(bridge.executable, [flag], {
@@ -105,18 +114,18 @@ function requestDesktopUpdate(flag: "--kosmos-update-check" | "--kosmos-update-i
   });
   return true;
 }
-const validIntegrationInput = (value: unknown): value is { provider: string } =>
+const validIntegrationInput = (value: Input): value is { provider: string } =>
   isObject(value) &&
-  typeof value.provider === "string" &&
+  isString(value.provider) &&
   integrationProviders.includes(value.provider);
-function normalizeIntegrationSnapshot(value: unknown) {
+function normalizeIntegrationSnapshot(value: Input) {
   const raw = isObject(value) ? value : {};
   const providers = Array.isArray(raw.providers) ? raw.providers : [];
   return {
-    providers: providers.flatMap((entry) => {
+    providers: providers.flatMap((entry: Input) => {
       if (
         !isObject(entry) ||
-        typeof entry.id !== "string" ||
+        !isString(entry.id) ||
         !integrationProviders.includes(entry.id)
       )
         return [];
@@ -124,11 +133,13 @@ function normalizeIntegrationSnapshot(value: unknown) {
       return [
         {
           id: entry.id,
-          label: typeof entry.label === "string" ? entry.label.slice(0, 64) : entry.id,
-          credentialLabel:
-            typeof entry.credentialLabel === "string" ? entry.credentialLabel.slice(0, 64) : "Ключ",
-          credentialUrl:
-            typeof entry.credentialUrl === "string" ? entry.credentialUrl.slice(0, 256) : "",
+          label: isString(entry.label) ? entry.label.slice(0, 64) : entry.id,
+          credentialLabel: isString(entry.credentialLabel)
+            ? entry.credentialLabel.slice(0, 64)
+            : "Ключ",
+          credentialUrl: isString(entry.credentialUrl)
+            ? entry.credentialUrl.slice(0, 256)
+            : "",
           hasCredential: entry.hasCredential === true,
           settings: {
             intervalMinutes:
@@ -137,25 +148,25 @@ function normalizeIntegrationSnapshot(value: unknown) {
                 ? Number(settings.intervalMinutes)
                 : 0,
             syncOnStartup: settings.syncOnStartup === true,
-            lastAttemptAt:
-              typeof settings.lastAttemptAt === "string"
-                ? settings.lastAttemptAt.slice(0, 64)
-                : null,
-            lastSuccessAt:
-              typeof settings.lastSuccessAt === "string"
-                ? settings.lastSuccessAt.slice(0, 64)
-                : null,
-            lastError:
-              typeof settings.lastError === "string" ? settings.lastError.slice(0, 256) : null,
+            lastAttemptAt: isString(settings.lastAttemptAt)
+              ? settings.lastAttemptAt.slice(0, 64)
+              : null,
+            lastSuccessAt: isString(settings.lastSuccessAt)
+              ? settings.lastSuccessAt.slice(0, 64)
+              : null,
+            lastError: isString(settings.lastError)
+              ? settings.lastError.slice(0, 256)
+              : null,
             importedCount:
-              Number.isInteger(settings.importedCount) && Number(settings.importedCount) >= 0
+              Number.isInteger(settings.importedCount) &&
+              Number(settings.importedCount) >= 0
                 ? Number(settings.importedCount)
                 : 0,
           },
         },
       ];
     }),
-    bodyWeightKg: typeof raw.bodyWeightKg === "number" ? raw.bodyWeightKg : null,
+    bodyWeightKg: isNumber(raw.bodyWeightKg) ? raw.bodyWeightKg : null,
   };
 }
 
@@ -180,7 +191,10 @@ async function waitForLeetCodeCredential(win: BrowserWindow): Promise<string> {
         cookies.get({ url: "https://leetcode.com/", name: "LEETCODE_SESSION" }),
         cookies.get({ url: "https://leetcode.com/", name: "csrftoken" }),
       ]);
-      const credential = encodeLeetCodeCredential(sessionCookie[0]?.value, csrfCookie[0]?.value);
+      const credential = encodeLeetCodeCredential(
+        sessionCookie[0]?.value,
+        csrfCookie[0]?.value,
+      );
       if (credential) finish(undefined, credential);
     };
     const onCookieChanged = () => void check().catch(() => undefined);
@@ -201,7 +215,6 @@ function createLeetCodeLoginWindow(sender: WebContents): BrowserWindow {
     title: "Вход в LeetCode",
     autoHideMenuBar: true,
     webPreferences: {
-
       partition: LEETCODE_PARTITION,
       contextIsolation: true,
       nodeIntegration: false,
@@ -209,4 +222,20 @@ function createLeetCodeLoginWindow(sender: WebContents): BrowserWindow {
     },
   });
 }
-export { openHostedPackage, startPackagedRuntime, bounded, isObject, validation, integrationProviders, integrationIntervals, LEETCODE_PARTITION, AUTOSTART_ARGS, readDesktopUpdateState, requestDesktopUpdate, validIntegrationInput, normalizeIntegrationSnapshot, waitForLeetCodeCredential, createLeetCodeLoginWindow };
+export {
+  openHostedPackage,
+  startPackagedRuntime,
+  bounded,
+  isObject,
+  validation,
+  integrationProviders,
+  integrationIntervals,
+  LEETCODE_PARTITION,
+  AUTOSTART_ARGS,
+  readDesktopUpdateState,
+  requestDesktopUpdate,
+  validIntegrationInput,
+  normalizeIntegrationSnapshot,
+  waitForLeetCodeCredential,
+  createLeetCodeLoginWindow,
+};

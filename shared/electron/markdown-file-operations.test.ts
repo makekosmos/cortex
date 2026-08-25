@@ -5,11 +5,12 @@ import path from "node:path";
 import { performMarkdownFileOperation, type MarkdownFileDialogs } from "./markdown-file-operations";
 
 const roots: string[] = [];
+type MarkdownFixture = { root: string; dialogs: MarkdownFileDialogs };
 afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 
-function fixture(): { root: string; dialogs: MarkdownFileDialogs } {
+function fixture(): MarkdownFixture {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-markdown-operation-"));
   roots.push(root);
   const dialogs: MarkdownFileDialogs = {

@@ -50,9 +50,9 @@ export type MarkdownVaultExportFile =
       content?: never;
     };
 
-export function safeMarkdownDefaultName(name: unknown): string {
+export function safeMarkdownDefaultName(name: string | null): string {
   const fallback = "eden-object.md";
-  if (typeof name !== "string") return fallback;
+  if (name === null) return fallback;
   const base = path
     .basename(name)
     .replace(/[<>:"/\\|?*]/g, "-")

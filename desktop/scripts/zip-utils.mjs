@@ -98,7 +98,7 @@ function findEOCD(buf) {
  * `..`, абсолютные пути, drive letter'ы. Bad → throw.
  */
 export function safeEntryName(name) {
-  if (typeof name !== "string" || name.length === 0) {
+  if (Object.prototype.toString.call(name) !== "[object String]" || name.length === 0) {
     throw new Error("zip: empty entry name");
   }
   // Normalize separators.

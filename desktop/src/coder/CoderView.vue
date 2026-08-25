@@ -32,7 +32,7 @@ const pageDescription = computed(() =>
     : "Статистика завершённых kata и профиля Codewars.",
 );
 
-const statusLabels: Record<string, string> = {
+const statusLabels = {
   Accepted: "Принято",
   "Wrong Answer": "Неверный ответ",
   "Time Limit Exceeded": "Лимит времени",
@@ -43,10 +43,14 @@ const statusLabels: Record<string, string> = {
   "Internal Error": "Внутренняя ошибка",
   Unknown: "Неизвестно",
   Completed: "Завершено",
-};
+} satisfies Record<string, string>;
 
 const localizedStatuses = computed(() =>
-  statuses.value.map((item) => ({ ...item, label: statusLabels[item.label] ?? item.label })),
+  statuses.value.map((item) => ({
+    ...item,
+    // SAFETY: unknown upstream status labels intentionally fall back to themselves.
+    label: statusLabels[item.label as keyof typeof statusLabels] ?? item.label,
+  })),
 );
 
 function openExternal(url: string): void {

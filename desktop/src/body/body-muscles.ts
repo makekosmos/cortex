@@ -8,8 +8,7 @@ export interface MuscleRegion {
   label: string;
   points: string[];
 }
-
-export const muscleLabels: Record<string, string> = {
+export const muscleLabels = {
   chest: "Грудь",
   obliques: "Косые мышцы живота",
   abs: "Пресс",
@@ -28,10 +27,11 @@ export const muscleLabels: Record<string, string> = {
   "upper-back": "Верх спины",
   "lower-back": "Низ спины",
   gluteal: "Ягодицы",
-};
+} satisfies Record<string, string>;
 
 function region(muscle: string, points: string[]): MuscleRegion {
-  return { muscle, label: muscleLabels[muscle] ?? muscle, points };
+  // SAFETY: muscle names are the catalog keys used by the geometry below.
+  return { muscle, label: muscleLabels[muscle as keyof typeof muscleLabels] ?? muscle, points };
 }
 
 export const frontMuscles: MuscleRegion[] = [

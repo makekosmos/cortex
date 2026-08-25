@@ -2,11 +2,19 @@ import { onBeforeUnmount, ref, type Ref } from "vue";
 import type { ManagerApi, ManagerResult } from "../manager-api";
 
 type ManagerMethod = keyof ManagerApi;
+type JsonValue = string | number | boolean | null | JsonRecord | JsonValue[];
+interface JsonRecord {
+  [key: string]: JsonValue;
+}
 
 export interface ManagerClient {
   loading: Ref<boolean>;
   error: Ref<string | null>;
-  call<T>(method: ManagerMethod, payload?: unknown, key?: string): Promise<T | null>;
+  call<T>(
+    method: ManagerMethod,
+    payload?: JsonValue,
+    key?: string,
+  ): Promise<T | null>;
 }
 
 function getApi(): ManagerApi | undefined {
@@ -21,7 +29,7 @@ export function useManagerClient(): ManagerClient {
 
   async function call<T>(
     method: ManagerMethod,
-    payload?: unknown,
+    payload?: JsonValue,
     key = method,
   ): Promise<T | null> {
     const request = (requests.get(key) ?? 0) + 1;
@@ -29,7 +37,10 @@ export function useManagerClient(): ManagerClient {
     loading.value = true;
     error.value = null;
     try {
-      const handler = getApi()?.[method] as (value?: unknown) => Promise<ManagerResult<T>>;
+      // SAFETY: ManagerApi methods share the JSON payload boundary used by the IPC preload.
+      const handler = getApi()?.[method] as (
+        value?: JsonValue,
+      ) => Promise<ManagerResult<T>>;
       if (!handler) throw new Error("Менеджер недоступен");
       const result = await handler(payload);
       if (disposed || requests.get(key) !== request) return null;
@@ -40,7 +51,10 @@ export function useManagerClient(): ManagerClient {
       return result.data;
     } catch (cause) {
       if (!disposed && requests.get(key) === request) {
-        error.value = cause instanceof Error ? cause.message : "Не удалось связаться с движком";
+        error.value =
+          cause instanceof Error
+            ? cause.message
+            : "Не удалось связаться с движком";
       }
       return null;
     } finally {

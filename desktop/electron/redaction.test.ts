@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import type { JsonRecord } from "./extension-permissions";
 
 import {
   createCrashMetadata,
@@ -21,13 +22,15 @@ test("redactText masks secrets, email and user paths", () => {
 });
 
 test("redactUnknown recursively removes sensitive values", () => {
+  // SAFETY: The fixture is a JSON object and redaction preserves its object shape.
   const output = redactUnknown({
     safe: "ok",
     nested: {
       token: "secret-value",
       payload: { title: "private note" },
     },
-  }) as Record<string, unknown>;
+// SAFETY: The surrounding boundary establishes this documented contract.
+  }) as JsonRecord;
   expect(output.safe).toBe("ok");
   expect(JSON.stringify(output)).not.toContain("secret-value");
   expect(JSON.stringify(output)).not.toContain("private note");

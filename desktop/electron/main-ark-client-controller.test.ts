@@ -1,4 +1,5 @@
 import { beforeEach, expect, mock, test } from "bun:test";
+import type { JsonRecord } from "./extension-permissions";
 
 const engineLock = {
   format_version: 1,
@@ -10,12 +11,15 @@ const engineLock = {
   db_path: "C:\\Kosmos-test\\data.db",
 };
 
-let nextState: unknown = { kind: "connected", lock: engineLock };
-let capturedOptions: Record<string, unknown> | null = null;
+type TestState =
+  | { kind: "connected"; lock: typeof engineLock }
+  | { kind: "launch-failed"; reason: string };
+let nextState: TestState = { kind: "connected", lock: engineLock };
+let capturedOptions: JsonRecord | null = null;
 
 class FakeArkClient {
   commands = { list: async () => [] };
-  constructor(options: Record<string, unknown>) {
+  constructor(options: JsonRecord) {
     capturedOptions = options;
   }
   async start(): Promise<void> {}
@@ -49,6 +53,7 @@ const { createMainArkClientController } = await import("./main-ark-client-contro
 
 function createController() {
   return createMainArkClientController({
+    // SAFETY: The test supplies the minimal instance shape consumed by the controller.
     instance: { slot: "test" } as never,
     isBackendRunning: () => true,
     setupPomodoroNotifier: () => {},

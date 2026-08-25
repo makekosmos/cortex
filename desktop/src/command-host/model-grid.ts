@@ -1,4 +1,5 @@
 import type { CommandSnapshotNode } from "../../shared/command-ipc";
+import { isString } from "../shared/runtimeGuards";
 import {
   collectNodes,
   findFirst,
@@ -99,13 +100,13 @@ export function gridSelectedItemId(snapshot: CommandSnapshotNode): string | null
 }
 
 export function gridSearchCallbackNode(snapshot: CommandSnapshotNode): CommandSnapshotNode | null {
-  return typeof snapshot.props.__onSearchTextChangeId === "string" ? snapshot : null;
+  return isString(snapshot.props.__onSearchTextChangeId) ? snapshot : null;
 }
 
 export function gridSelectionCallbackNode(
   snapshot: CommandSnapshotNode,
 ): CommandSnapshotNode | null {
-  return typeof snapshot.props.__onSelectionChangeId === "string" ? snapshot : null;
+  return isString(snapshot.props.__onSelectionChangeId) ? snapshot : null;
 }
 
 export function gridDropdown(snapshot: CommandSnapshotNode): CommandGridDropdownModel | null {

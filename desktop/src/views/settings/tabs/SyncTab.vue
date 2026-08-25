@@ -11,6 +11,7 @@ import {
   TextInput,
   useToast,
 } from "@kosmos/visuals";
+import { isRecord, isString } from "../../../shared/runtimeGuards";
 
 type SyncPeerStatus = "online" | "offline";
 type SyncPeerDeviceKind = "desktop" | "laptop" | "phone" | "unknown";
@@ -62,9 +63,9 @@ function normalizeSnapshot(raw: any): SyncStatusSnapshot {
         deviceId: String(p?.deviceId ?? p?.device_id ?? ""),
         deviceName: String(p?.deviceName ?? p?.device_name ?? "Неизвестное устройство"),
         lastSeen:
-          typeof p?.lastSeen === "string"
+          isString(p?.lastSeen)
             ? p.lastSeen
-            : typeof p?.last_seen === "string"
+            : isString(p?.last_seen)
               ? p.last_seen
               : null,
         status: p?.status === "online" ? "online" : "offline",
@@ -76,7 +77,7 @@ function normalizeSnapshot(raw: any): SyncStatusSnapshot {
     : [];
   const ld = raw?.localDevice ?? raw?.local_device;
   const localDevice =
-    ld && typeof ld === "object"
+    isRecord(ld)
       ? {
           deviceId: String(ld.deviceId ?? ld.device_id ?? ""),
           deviceName: String(ld.deviceName ?? ld.device_name ?? ""),

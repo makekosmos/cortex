@@ -1,18 +1,23 @@
 import { ipcMain } from "electron";
 
-import type { StartFocusSessionInput } from "./focus-session-types";
+import type {
+  DelphiTask,
+  FocusBlocklist,
+  FocusSessionSnapshot,
+  StartFocusSessionInput,
+} from "./focus-session-types";
 
 export function registerFocusSessionIpc(handlers: {
   open: () => void;
-  snapshot: () => Promise<unknown>;
-  listTasks: () => Promise<unknown>;
-  listBlocklists: () => Promise<unknown>;
-  start: (input: StartFocusSessionInput) => Promise<unknown>;
-  pause: () => Promise<unknown>;
-  resume: () => Promise<unknown>;
-  skip: () => Promise<unknown>;
-  stop: () => Promise<unknown>;
-  complete: () => Promise<unknown>;
+  snapshot: () => Promise<FocusSessionSnapshot>;
+  listTasks: () => Promise<DelphiTask[]>;
+  listBlocklists: () => Promise<FocusBlocklist[]>;
+  start: (input: StartFocusSessionInput) => Promise<FocusSessionSnapshot>;
+  pause: () => Promise<FocusSessionSnapshot>;
+  resume: () => Promise<FocusSessionSnapshot>;
+  skip: () => Promise<FocusSessionSnapshot>;
+  stop: () => Promise<FocusSessionSnapshot>;
+  complete: () => Promise<FocusSessionSnapshot>;
   snoozeApp: (appId: string) => void;
 }): void {
   ipcMain.handle("kepler:focus-session:open", () => {

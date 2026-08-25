@@ -7,7 +7,7 @@ import path from "node:path";
 // Для каждого файла — список запрещённых синхронных вызовов на его горячих путях.
 // Файлы вне списка (focus-widget, dashboard-window и т.п.) осознанно не покрыты:
 // их sync-вызовы — мелкие одноразовые JSON state read/write (см. spec § Scope).
-const bannedByFile: Record<string, string[]> = {
+const bannedByFile = {
   "diagnostics.ts": [
     "readFileSync",
     "writeFileSync",
@@ -18,7 +18,7 @@ const bannedByFile: Record<string, string[]> = {
     "spawnSync",
   ],
   "settings-window.ts": ["execFileSync"],
-};
+} satisfies Record<string, readonly string[]>;
 
 for (const [file, banned] of Object.entries(bannedByFile)) {
   test(`${file}: нет синхронного I/O на горячих путях`, async () => {

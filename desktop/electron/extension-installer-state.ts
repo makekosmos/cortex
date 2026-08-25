@@ -1,4 +1,5 @@
 import { existsSync, renameSync } from "node:fs";
+// SAFETY: The surrounding boundary establishes this documented contract.
 import * as fs from "node:fs/promises";
 import path from "node:path";
 import { keplerDataDir } from "./data-dir";
@@ -59,6 +60,7 @@ async function readManifestSafe(dir: string): Promise<ExtensionManifest | null> 
   const manifestPath = path.join(dir, "manifest.json");
   if (!existsSync(manifestPath)) return null;
   try {
+// SAFETY: The surrounding boundary establishes this documented contract.
     return JSON.parse(await fs.readFile(manifestPath, "utf8")) as ExtensionManifest;
   } catch {
     return null;

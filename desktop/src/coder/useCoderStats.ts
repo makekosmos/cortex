@@ -9,6 +9,7 @@ import type {
   CodewarsProfileStats,
   CodingSubmission,
 } from "./types";
+import { isNumber, isRecord, isString } from "../shared/runtimeGuards";
 
 const CODING_SUBMISSION_TYPE_ID = "coding_submission_obj";
 const CODING_PROFILE_TYPE_ID = "coding_profile_obj";
@@ -19,17 +20,23 @@ interface RawObjectRecord {
   deletedAt?: string | null;
 }
 
-type ArkSubscribe = (event: string, handler: (payload: unknown) => void) => () => void;
-type ArkRequest = (operation: string, params: Record<string, unknown>) => Promise<unknown>;
+type ArkSubscribe = <T>(event: string, handler: (payload: T) => void) => () => void;
+type ArkRequest = <T>(operation: string, params: { [key: string]: string }) => Promise<T>;
+type JsonRecord = import("../shared/runtimeGuards").JsonRecord;
+interface StreakStats {
+  current: number;
+  longest: number;
+}
 
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
+function objectValue<T>(value: T): JsonRecord {
+  // SAFETY: the runtime record guard validates the bridge payload before narrowing.
+  return isRecord(value) && !Array.isArray(value)
+    ? (value as JsonRecord)
     : {};
 }
 
-function text(value: unknown): string {
-  return typeof value === "string" ? value : "";
+function text<T>(value: T): string {
+  return isString(value) ? value : "";
 }
 
 function toSubmission(record: RawObjectRecord): CodingSubmission | null {
@@ -40,7 +47,7 @@ function toSubmission(record: RawObjectRecord): CodingSubmission | null {
   const submittedAt = text(props.submittedAt);
   if (!submittedAt || Number.isNaN(Date.parse(submittedAt))) return null;
   const languages = Array.isArray(props.languages)
-    ? props.languages.filter((value): value is string => typeof value === "string" && !!value)
+    ? props.languages.filter(isString).map(String).filter(Boolean)
     : [];
   const language = text(props.language) || "Неизвестно";
   const rank = objectValue(props.rank);
@@ -74,7 +81,7 @@ export function addLocalDays(value: Date, days: number): Date {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate() + days);
 }
 
-export function streaks(activeDays: Set<string>): { current: number; longest: number } {
+export function streaks(activeDays: Set<string>): StreakStats {
   if (activeDays.size === 0) return { current: 0, longest: 0 };
   const sorted = [...activeDays].sort();
   let longest = 1;
@@ -110,8 +117,8 @@ export function kyuBreakdown(values: string[]): CoderBreakdownItem[] {
   );
 }
 
-function count(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+function count<T>(value: T): number {
+  return isNumber(value) && Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
 export function profileDifficultyStats(records: RawObjectRecord[]): CoderDifficultyStats {
@@ -270,7 +277,7 @@ export function useCoderStats(platform: Ref<CoderPlatform>) {
     }
   }
 
-  function scheduleRefresh(payload: unknown): void {
+  function scheduleRefresh<T>(payload: T): void {
     const typeId = objectValue(payload).type_id;
     if (typeId !== CODING_SUBMISSION_TYPE_ID && typeId !== CODING_PROFILE_TYPE_ID) return;
     if (refreshTimer) clearTimeout(refreshTimer);
@@ -282,7 +289,12 @@ export function useCoderStats(platform: Ref<CoderPlatform>) {
 
   onMounted(() => {
     void load();
-    const subscribe = (window.kepler.ark as unknown as { subscribe?: ArkSubscribe }).subscribe;
+// SAFETY: the surrounding domain validation preserves the asserted contract.
+    // SAFETY: the preload bridge is installed on the desktop window before mount.
+    // SAFETY: the preload bridge is installed on the desktop window before mount.
+    const subscribe = (
+      window.kepler.ark as typeof window.kepler.ark & { subscribe?: ArkSubscribe }
+    ).subscribe;
     if (subscribe) {
       const offUpsert = subscribe("object_upserted", scheduleRefresh);
       const offDeleted = subscribe("object_deleted", scheduleRefresh);

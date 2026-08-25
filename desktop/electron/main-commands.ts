@@ -3,7 +3,7 @@ import { type IpcMainInvokeEvent } from "electron";
 import type { ArkClient } from "@kosmos/ark";
 import type { CommandRecord } from "../shared/ipc-types";
 import { safeHandle } from "./ipc-safe";
-import { COMMANDS, findCommand } from "./commands";
+import { COMMANDS, findCommand, type InternalCommand } from "./commands";
 import { keplerLog } from "./logging";
 
 interface MainCommandsOptions {
@@ -31,7 +31,7 @@ export function registerMainCommands(options: MainCommandsOptions): MainCommands
     const records: CommandRecord[] = [];
     for (const c of COMMANDS) {
       const shortcut =
-        typeof c.shortcut === "function"
+        isShortcut(c.shortcut)
           ? await Promise.resolve(c.shortcut()).catch(() => undefined)
           : c.shortcut;
       records.push({
@@ -48,14 +48,14 @@ export function registerMainCommands(options: MainCommandsOptions): MainCommands
     return records;
   }
 
-  function mergeDynamicCommands(byId: Map<string, CommandRecord>, dynamic: unknown): void {
+  function mergeDynamicCommands(byId: Map<string, CommandRecord>, dynamic: CommandRecord[]): void {
     if (!Array.isArray(dynamic)) {
       keplerLog.warn("commands", "commands.list returned non-array");
       return;
     }
     for (const c of dynamic) {
-      if (!c || typeof c !== "object" || typeof c.id !== "string" || byId.has(c.id)) continue;
-      const d = c as CommandRecord & { kind?: "app" | "command"; appName?: string };
+      if (!c.id || !c.title || byId.has(c.id)) continue;
+      const d = c;
       byId.set(c.id, {
         id: c.id,
         title: c.title,
@@ -76,12 +76,13 @@ export function registerMainCommands(options: MainCommandsOptions): MainCommands
       try {
         mergeDynamicCommands(
           byId,
-          await Promise.race([
+          // SAFETY: The command bus returns the documented command-record array.
+          (await Promise.race([
             arkClient.commands.list(),
             delay(2000).then(() => {
               throw new Error("dynamic commands timeout");
             }),
-          ]),
+          ])) as CommandRecord[],
         );
       } catch (e) {
         keplerLog.warn("commands", "commands.list failed", { err: String(e) });
@@ -119,4 +120,10 @@ export function registerMainCommands(options: MainCommandsOptions): MainCommands
   });
 
   return { invokeCommandById, broadcastCommandsUpdated };
+}
+
+function isShortcut(
+  value: InternalCommand["shortcut"],
+): value is () => string | undefined | Promise<string | undefined> {
+  return typeof value === "function";
 }

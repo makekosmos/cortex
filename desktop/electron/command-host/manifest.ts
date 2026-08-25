@@ -1,6 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+type JsonPrimitive = string | number | boolean | null;
+interface JsonRecord {
+  [key: string]: JsonValue;
+}
+type JsonValue = JsonPrimitive | JsonValue[] | JsonRecord;
 type CommandMode = "view" | "no-view" | "menu-bar";
 
 interface CommandPreference {
@@ -8,7 +13,7 @@ interface CommandPreference {
   title?: string;
   type?: string;
   required?: boolean;
-  default?: unknown;
+  default?: JsonValue;
 }
 
 interface CommandManifestEntry {
@@ -20,7 +25,7 @@ interface CommandManifestEntry {
   mode: CommandMode;
   keywords?: string[];
   preferences?: CommandPreference[];
-  arguments?: Array<Record<string, unknown>>;
+  arguments?: JsonRecord[];
 }
 
 interface CommandKosmosCommandConfig {
@@ -46,29 +51,39 @@ export interface CommandPackageManifest {
   kosmos?: CommandKosmosConfig;
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
+function isRecord(value: JsonValue | undefined): value is JsonRecord {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function optionalString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+function asRecord(value: JsonValue | undefined): JsonRecord | null {
+  return isRecord(value) ? value : null;
 }
 
-function stringArray(value: unknown): string[] | undefined {
+function isString(value: JsonValue | undefined): value is string {
+  return typeof value === "string";
+}
+
+function isBoolean(value: JsonValue | undefined): value is boolean {
+  return typeof value === "boolean";
+}
+
+function optionalString(value: JsonValue | undefined): string | undefined {
+  return isString(value) && value.trim().length > 0 ? value : undefined;
+}
+
+function stringArray(value: JsonValue | undefined): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const strings = value.filter((item): item is string => typeof item === "string");
   return strings.length > 0 ? strings : undefined;
 }
 
-function parseAuthor(value: unknown): string | undefined {
-  if (typeof value === "string") return optionalString(value);
+function parseAuthor(value: JsonValue | undefined): string | undefined {
+  if (isString(value)) return optionalString(value);
   const record = asRecord(value);
   return optionalString(record?.name);
 }
 
-function parsePreferences(value: unknown): CommandPreference[] | undefined {
+function parsePreferences(value: JsonValue | undefined): CommandPreference[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const preferences: CommandPreference[] = [];
   for (const item of value) {
@@ -79,20 +94,20 @@ function parsePreferences(value: unknown): CommandPreference[] | undefined {
       name,
       title: optionalString(record.title),
       type: optionalString(record.type),
-      required: typeof record.required === "boolean" ? record.required : undefined,
+      required: isBoolean(record.required) ? record.required : undefined,
       default: record.default,
     });
   }
   return preferences.length > 0 ? preferences : undefined;
 }
 
-function parseCommandMode(value: unknown): CommandMode | null {
+function parseCommandMode(value: JsonValue | undefined): CommandMode | null {
   if (value === undefined || value === null || value === "") return "view";
   if (value === "view" || value === "no-view" || value === "menu-bar") return value;
   return null;
 }
 
-function parseCommands(value: unknown): CommandManifestEntry[] {
+function parseCommands(value: JsonValue | undefined): CommandManifestEntry[] {
   if (!Array.isArray(value)) return [];
   const commands: CommandManifestEntry[] = [];
   for (const item of value) {
@@ -111,14 +126,14 @@ function parseCommands(value: unknown): CommandManifestEntry[] {
       keywords: stringArray(record.keywords),
       preferences: parsePreferences(record.preferences),
       arguments: Array.isArray(record.arguments)
-        ? record.arguments.filter((arg): arg is Record<string, unknown> => asRecord(arg) !== null)
+        ? record.arguments.filter((arg): arg is JsonRecord => asRecord(arg) !== null)
         : undefined,
     });
   }
   return commands;
 }
 
-function parseKosmosConfig(value: unknown): CommandKosmosConfig | undefined {
+function parseKosmosConfig(value: JsonValue | undefined): CommandKosmosConfig | undefined {
   const record = asRecord(value);
   if (!record) return undefined;
   const commandsRecord = asRecord(record.commands);
@@ -146,7 +161,7 @@ function parseKosmosConfig(value: unknown): CommandKosmosConfig | undefined {
     : undefined;
 }
 
-export function parseCommandPackageManifest(value: unknown): CommandPackageManifest | null {
+export function parseCommandPackageManifest(value: JsonValue): CommandPackageManifest | null {
   const record = asRecord(value);
   const name = optionalString(record?.name);
   if (!record || !name) return null;
@@ -169,7 +184,8 @@ export function loadCommandPackageManifest(extensionDir: string): CommandPackage
   const manifestPath = path.join(extensionDir, "package.json");
   if (!existsSync(manifestPath)) return null;
   try {
-    return parseCommandPackageManifest(JSON.parse(readFileSync(manifestPath, "utf8")));
+    // SAFETY: package.json is parsed into the closed JSON value grammar before validation.
+    return parseCommandPackageManifest(JSON.parse(readFileSync(manifestPath, "utf8")) as JsonValue);
   } catch (error) {
     console.error(`[kepler-shell] Command package.json invalid: ${extensionDir}`, error);
     return null;
@@ -203,9 +219,9 @@ export function resolveCommandEntry(
 export function commandPreferenceDefaults(
   manifest: CommandPackageManifest,
   commandName: string,
-): Record<string, unknown> {
+): JsonRecord {
   const command = manifest.commands.find((item) => item.name === commandName);
-  const values: Record<string, unknown> = {};
+  const values: JsonRecord = {};
   for (const preference of [...(manifest.preferences ?? []), ...(command?.preferences ?? [])]) {
     if (preference.default !== undefined) values[preference.name] = preference.default;
   }

@@ -8,6 +8,10 @@ import {
   uninstallExtension,
 } from "./extension-installer";
 
+function isString(value: string): value is string {
+  return typeof value === "string";
+}
+
 function notifyCommandsChanged(): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
@@ -20,14 +24,14 @@ function notifyCommandsChanged(): void {
 
 export function registerExtensionInstallerIpc(): void {
   ipcMain.handle("kepler:extension:install:preview", async (_e, sourcePath: string) => {
-    if (typeof sourcePath !== "string") {
+    if (!isString(sourcePath)) {
       throw new Error("install:preview: sourcePath must be a string");
     }
     return previewSource(sourcePath);
   });
 
   ipcMain.handle("kepler:extension:install:do", async (_e, sourcePath: string) => {
-    if (typeof sourcePath !== "string") {
+    if (!isString(sourcePath)) {
       throw new Error("install:do: sourcePath must be a string");
     }
     const result = await installFromPath(sourcePath);
@@ -40,7 +44,7 @@ export function registerExtensionInstallerIpc(): void {
   });
 
   ipcMain.handle("kepler:extension:revert", async (_e, id: string, timestamp?: string) => {
-    if (typeof id !== "string") {
+    if (!isString(id)) {
       throw new Error("revert: id must be a string");
     }
     const result = await revertExtension(id, timestamp);
@@ -49,14 +53,14 @@ export function registerExtensionInstallerIpc(): void {
   });
 
   ipcMain.handle("kepler:extension:backups:list", async (_e, id: string) => {
-    if (typeof id !== "string") {
+    if (!isString(id)) {
       throw new Error("backups:list: id must be a string");
     }
     return listBackups(id);
   });
 
   ipcMain.handle("kepler:extension:uninstall", async (_e, id: string) => {
-    if (typeof id !== "string") {
+    if (!isString(id)) {
       throw new Error("uninstall: id must be a string");
     }
     const result = await uninstallExtension(id);

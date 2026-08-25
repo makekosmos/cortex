@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type { Instance } from "./instance";
+import type { JsonRecord } from "./extension-permissions";
 
 interface ResolveBackendExeArgs {
   dirname: string;
@@ -32,8 +33,8 @@ export function resolveBackendExe({
 }
 
 interface BootSelfCheckLogger {
-  error(scope: string, message: string, data?: Record<string, unknown>): void;
-  info(scope: string, message: string, data?: Record<string, unknown>): void;
+  error(scope: string, message: string, data?: JsonRecord): void;
+  info(scope: string, message: string, data?: JsonRecord): void;
 }
 
 interface RunBootSelfCheckArgs {

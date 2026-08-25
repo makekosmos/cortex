@@ -1,5 +1,6 @@
 import { computed, shallowRef, watch } from "vue";
 import type { CommandSnapshotNode } from "../../shared/command-ipc";
+import { isString } from "../shared/runtimeGuards";
 import {
   gridDropdown,
   gridEmptyActions,
@@ -142,7 +143,7 @@ export function useCommandGridView(props: { root: CommandSnapshotNode; sessionId
 
     const callbackNode = searchCallbackNode.value;
     const callbackId = callbackNode?.props.__onSearchTextChangeId;
-    if (!callbackNode || typeof callbackId !== "string") return;
+    if (!callbackNode || !isString(callbackId)) return;
 
     const result = await window.kepler.command.action(props.sessionId, {
       type: callbackNode.type,
@@ -160,7 +161,7 @@ export function useCommandGridView(props: { root: CommandSnapshotNode; sessionId
     if (!notify) return;
     const callbackNode = selectionCallbackNode.value;
     const callbackId = callbackNode?.props.__onSelectionChangeId;
-    if (!callbackNode || typeof callbackId !== "string") return;
+    if (!callbackNode || !isString(callbackId)) return;
 
     const result = await window.kepler.command.action(props.sessionId, {
       type: callbackNode.type,

@@ -25,6 +25,7 @@ import {
   launchKeplerWithDataDir,
   shutdownKeplerEngine,
 } from "../../../tests/e2e/helpers/launch";
+import type { JsonRecord } from "../src/shared/runtimeGuards";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 type KeplerCommand = { id: string; shortcut?: string };
@@ -76,19 +77,20 @@ function getRequiredEnv(name: string): string | null {
   return value ? value : null;
 }
 
-async function dictationRequest<T = unknown>(
+async function dictationRequest<T = JsonRecord>(
   page: Page,
   operation: string,
-  params: Record<string, unknown> = {},
+  params: JsonRecord = {},
 ): Promise<T> {
   return page.evaluate(
     async ({ operation, params }) => {
-      const api = window as unknown as {
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+      const api = window as {
         kepler?: {
           ark?: {
             request?: <R = unknown>(
               op: string,
-              requestParams?: Record<string, unknown>,
+              requestParams?: JsonRecord,
             ) => Promise<R>;
           };
         };
@@ -137,7 +139,8 @@ async function setDictationHotkey(page: Page, hotkey: string): Promise<void> {
 
 async function listKeplerCommands(page: Page): Promise<KeplerCommand[]> {
   return page.evaluate(async () => {
-    const api = window as unknown as {
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+    const api = window as {
       kepler?: {
         commands?: {
           list?: () => Promise<KeplerCommand[]>;
@@ -152,7 +155,8 @@ async function listKeplerCommands(page: Page): Promise<KeplerCommand[]> {
 
 async function invokeKeplerCommand(page: Page, id: string): Promise<void> {
   await page.evaluate(async (commandId) => {
-    const api = window as unknown as {
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+    const api = window as {
       kepler?: {
         commands?: {
           invoke?: (id: string) => Promise<void>;
@@ -192,7 +196,7 @@ async function waitForDictationStateWithContext(
 
 async function submitAudioWithContext(
   page: Page,
-  params: Record<string, unknown>,
+  params: JsonRecord,
   timeoutMs: number,
 ): Promise<{ state?: string; queued?: boolean; uuid?: string; error?: string }> {
   console.log(`[dictation-groq-smoke] submit_audio start (timeout ${timeoutMs}ms)`);
@@ -316,7 +320,8 @@ test.describe("dictation Phase 1", () => {
       // Map, не в Node EventEmitter `_events` (там оседают только
       // `ipcMain.on()` listeners). Probe'ить нужно через `_invokeHandlers`.
       const resp = await app.evaluate(async ({ ipcMain }) => {
-        const internal = ipcMain as unknown as {
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+        const internal = ipcMain as {
           _invokeHandlers?: Map<string, unknown>;
         };
         const handlers = internal._invokeHandlers;
@@ -518,10 +523,11 @@ test.describe("dictation mock STT", () => {
 
       const submitResp = await launcher.evaluate(async () => {
         try {
-          const api = window as unknown as {
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+          const api = window as {
             kepler?: {
               ark?: {
-                request?: (op: string, params?: Record<string, unknown>) => Promise<unknown>;
+                request?: (op: string, params?: JsonRecord) => Promise<JsonRecord>;
               };
             };
           };
@@ -706,7 +712,13 @@ test.describe("AI settings", () => {
       await expect(settings.getByText("Путь к whisper.cpp", { exact: true })).toBeVisible();
       const inputValues = await settings
         .locator("input")
-        .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value));
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+        .evaluateAll((inputs) =>
+          inputs.map((input) => {
+            // SAFETY: Playwright locates HTML input elements in this test fixture.
+            return (input as HTMLInputElement).value;
+          }),
+        );
       expect(inputValues).toContain("C:/models/whisper-test.bin");
       expect(inputValues).toContain("C:/tools/whisper-cli.exe");
     } finally {

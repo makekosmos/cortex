@@ -16,6 +16,7 @@ import { installFromPath, listInstalledUserExtensions } from "./extension-instal
 import type { KextManifestPreview } from "./extension-installer";
 import { findExtensionUpdates } from "./extension-update-plan";
 import { reloadExtensionWindow } from "./extension-host";
+import { isRecord, isString } from "../src/shared/runtimeGuards";
 
 interface CatalogExtension {
   id: string;
@@ -43,19 +44,18 @@ const CACHE_TTL_MS = 60 * 60 * 1000; // 1h
 
 let cachedCatalog: { data: Catalog; fetchedAt: number } | null = null;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function isNullableString(value: unknown): value is string | null {
+function isNullableString<T>(value: T): value is T & (string | null) {
   return value === null || typeof value === "string";
 }
 
-function isNullableNumber(value: unknown): value is number | null {
+function isNullableNumber<T>(value: T): value is T & (number | null) {
   return value === null || typeof value === "number";
 }
 
-function isCatalogExtension(value: unknown, requireAppId: boolean): value is CatalogExtension {
+function isCatalogExtension<T>(
+  value: T,
+  requireAppId: boolean,
+): value is T & CatalogExtension {
   if (!isRecord(value)) return false;
   return (
     typeof value.id === "string" &&
@@ -72,7 +72,7 @@ function isCatalogExtension(value: unknown, requireAppId: boolean): value is Cat
   );
 }
 
-function isCatalog(value: unknown): value is Catalog {
+function isCatalog<T>(value: T): value is T & Catalog {
   if (
     !isRecord(value) ||
     typeof value.schemaVersion !== "number" ||
@@ -171,6 +171,7 @@ async function fetchCatalog(force = false): Promise<Catalog> {
   try {
     parsed = JSON.parse(raw);
   } catch (e) {
+    // SAFETY: JSON.parse errors are Error instances in the Node runtime.
     throw new Error(`catalog.json: invalid JSON (${(e as Error).message})`);
   }
   if (!isCatalog(parsed)) {
@@ -197,7 +198,7 @@ async function installFromUrl(
   url: string,
   expectedSha256?: string | null,
 ): Promise<KextManifestPreview> {
-  if (typeof url !== "string" || !url.startsWith("https://")) {
+  if (!isString(url) || !url.startsWith("https://")) {
     throw new Error("installFromUrl: только https:// URL");
   }
   const tmpRoot = path.join(tmpdir(), "kepler-ext-download");

@@ -48,6 +48,7 @@ function readState(): Partial<DashboardWindowState> | null {
   const p = stateFilePath();
   if (!existsSync(p)) return null;
   try {
+    // SAFETY: The persisted state is written by writeStateNow with this shape.
     return JSON.parse(readFileSync(p, "utf8")) as Partial<DashboardWindowState>;
   } catch {
     return null;
@@ -128,10 +129,10 @@ export function openDashboardWindow(section: DashboardSection = "data"): void {
   const saved = readState();
   if (
     saved &&
-    typeof saved.width === "number" &&
-    typeof saved.height === "number" &&
-    typeof saved.x === "number" &&
-    typeof saved.y === "number" &&
+    isNumber(saved.width) &&
+    isNumber(saved.height) &&
+    isNumber(saved.x) &&
+    isNumber(saved.y) &&
     isOnSomeDisplay(saved.x, saved.y, saved.width, saved.height)
   ) {
     width = saved.width;
@@ -202,4 +203,8 @@ export function openDashboardWindow(section: DashboardSection = "data"): void {
   });
 
   loadDashboardRoute(dashboardWin, section);
+}
+
+function isNumber(value: number | undefined): value is number {
+  return typeof value === "number";
 }

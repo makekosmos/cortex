@@ -28,9 +28,11 @@ export function resolveWindowMaterial(
   return "none";
 }
 
-export function backgroundMaterialOption(material: KosmosWindowMaterial): {
+interface BackgroundMaterialOption {
   backgroundMaterial: KosmosWindowMaterial;
-} {
+}
+
+export function backgroundMaterialOption(material: KosmosWindowMaterial): BackgroundMaterialOption {
   return { backgroundMaterial: material };
 }
 

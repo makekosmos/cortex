@@ -493,7 +493,7 @@ async function main() {
     }
 
     // Size check
-    if (typeof expectedSize === "number" && !isNaN(expectedSize)) {
+    if (Object.prototype.toString.call(expectedSize) === "[object Number]" && !isNaN(expectedSize)) {
       if (actual.size !== expectedSize) {
         issues.push(
           `size MISMATCH:\n      ${channelFile}: ${expectedSize} bytes\n      actual:     ${actual.size} bytes`,

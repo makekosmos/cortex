@@ -3,7 +3,12 @@ import { LaunchOwnership } from "./launch-ownership";
 
 type Claim = ReturnType<LaunchOwnership["claim"]>["current"];
 
-const claim = (ownership: LaunchOwnership, id: string, owner: object, launchId: string): Claim =>
+const claim = (
+  ownership: LaunchOwnership,
+  id: string,
+  owner: NonNullable<unknown>,
+  launchId: string,
+): Claim =>
   ownership.claim(id, owner, 1, launchId).current;
 
 describe("LaunchOwnership", () => {

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { Check, ExternalLink, LogIn, RefreshCw, Trash2 } from "@lucide/vue";
 import { Button, Toggle, useToast } from "@kosmos/visuals";
+import type { JsonRecord } from "../shared/runtimeGuards";
 
 type ProviderId = "hevy" | "toggl" | "leetcode" | "codewars";
 
@@ -75,7 +76,8 @@ function isBusy(provider: ProviderId, action: string) {
   return busy.value.has(`${provider}:${action}`);
 }
 
-async function request<T>(operation: string, params: Record<string, unknown> = {}) {
+async function request<T>(operation: string, params: JsonRecord = {}) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
   return (await window.kepler.ark.request(operation, params)) as T;
 }
 

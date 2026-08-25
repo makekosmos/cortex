@@ -8,7 +8,7 @@ export function fail(message) {
 
 export function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
-  if (value && typeof value === "object") {
+  if (value && Object.prototype.toString.call(value) === "[object Object]") {
     return Object.fromEntries(
       Object.keys(value)
         .sort()
@@ -24,7 +24,7 @@ export function bytes(value) {
 
 export async function readJson(file) {
   const value = JSON.parse(await fs.readFile(file, "utf8"));
-  if (!value || typeof value !== "object" || Array.isArray(value))
+  if (!value || Object.prototype.toString.call(value) !== "[object Object]" || Array.isArray(value))
     fail("input must be a JSON object");
   return value;
 }
@@ -60,20 +60,20 @@ export function integer(value, name) {
 }
 
 export function iso(value, name) {
-  if (typeof value !== "string" || !value.endsWith("Z") || Number.isNaN(Date.parse(value)))
+  if (Object.prototype.toString.call(value) !== "[object String]" || !value.endsWith("Z") || Number.isNaN(Date.parse(value)))
     fail(`${name} must be an ISO UTC timestamp`);
   return value;
 }
 
 export function safeId(value, name) {
-  if (typeof value !== "string" || !/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/.test(value))
+  if (Object.prototype.toString.call(value) !== "[object String]" || !/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/.test(value))
     fail(`${name} must be a safe identifier`);
   return value;
 }
 
 export function semver(value, name) {
   if (
-    typeof value !== "string" ||
+    Object.prototype.toString.call(value) !== "[object String]" ||
     !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(value)
   )
     fail(`${name} must be semantic version`);
@@ -81,7 +81,7 @@ export function semver(value, name) {
 }
 
 export function sha256(value, name) {
-  if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value))
+  if (Object.prototype.toString.call(value) !== "[object String]" || !/^[a-f0-9]{64}$/.test(value))
     fail(`${name} must be lowercase SHA-256`);
   return value;
 }

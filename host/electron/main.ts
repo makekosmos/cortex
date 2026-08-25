@@ -12,6 +12,9 @@ import {
   SAFE_ID,
   type AppLaunch,
   type SidecarEvent,
+  type JsonRecord,
+  isJsonRecord,
+  isJsonString,
 } from "./host-api";
 import { HostLifecycle } from "./lifecycle";
 import { LaunchOwnership, type OwnedLaunch } from "./launch-ownership";
@@ -30,6 +33,9 @@ const requested = (argv: string[]) => {
   }
   return undefined;
 };
+const isOperationRequest = (
+  value: JsonRecord,
+): value is JsonRecord & { operation: string } => isJsonString(value.operation);
 const hasOpenApp = (argv: string[]) =>
   argv.some((argument) => argument === "--open-app" || argument.startsWith("--open-app="));
 const windows = new Map<string, BrowserWindow>();
@@ -76,7 +82,7 @@ function scheduleLaunchRenewal(manifest: AppLaunch, retry = false): void {
       result.ok &&
       result.data.launch_id === manifest.launch_id &&
       Number.isFinite(result.data.ttl_seconds) &&
-      typeof result.data.expires_at === "string"
+      isJsonString(result.data.expires_at)
     ) {
       manifest.ttl_seconds = result.data.ttl_seconds;
       manifest.expires_at = result.data.expires_at;
@@ -294,17 +300,18 @@ if (!singleInstance) {
       const manifest = appId ? manifests.get(appId) : undefined;
       if (manifest && hasLaunchReadPermission(manifest)) eventSubscribers.add(event.sender.id);
     });
-    ipcMain.handle("host:ark-request", async (event, input: unknown) => {
+    ipcMain.handle("host:ark-request", async (event, input: JsonRecord | undefined) => {
       const win = BrowserWindow.fromWebContents(event.sender);
       const appId = [...windows.entries()].find(([, candidate]) => candidate === win)?.[0];
       const manifest = appId ? manifests.get(appId) : undefined;
-      if (!manifest || !input || typeof input !== "object")
+      if (!manifest || !isJsonRecord(input))
         return { ok: false, message: "Некорректный типизированный запрос ARK." };
-      const request = input as Record<string, unknown>;
-      if (typeof request.operation === "string") {
+      const request = input;
+      if (isOperationRequest(request)) {
+        const operation = request.operation;
         const params =
-          request.params && typeof request.params === "object"
-            ? (request.params as Record<string, unknown>)
+          isJsonRecord(request.params)
+            ? request.params
             : {};
         if (isV2Launch(manifest)) {
           if (!manifest.broker_token)
@@ -315,7 +322,7 @@ if (!singleInstance) {
           return engine.launchArkRequest(
             manifest.launch_id,
             manifest.broker_token,
-            request.operation,
+            operation,
             params,
           );
         }
@@ -323,7 +330,7 @@ if (!singleInstance) {
           (grant) =>
             (grant.capability === "ark.read" || grant.capability === "ark.write") &&
             Array.isArray(grant.scopes) &&
-            grant.scopes.includes(request.operation as string),
+            grant.scopes.includes(operation),
         );
         if (!granted) return { ok: false, message: "Операция ARK не разрешена приложению." };
         return engine.arkRequest(request.operation, params);
@@ -332,15 +339,15 @@ if (!singleInstance) {
     });
     ipcMain.handle(
       "host:launcher-request",
-      async (event, input: { operation?: unknown; params?: unknown }) => {
+      async (event, input: JsonRecord | undefined) => {
         const win = BrowserWindow.fromWebContents(event.sender);
         const appId = win
           ? [...windows.entries()].find(([, candidate]) => candidate === win)?.[0]
           : undefined;
-        const operation = typeof input?.operation === "string" ? input.operation : "";
+        const operation = isJsonString(input?.operation) ? input.operation : "";
         const params =
-          input?.params && typeof input.params === "object"
-            ? (input.params as Record<string, unknown>)
+          isJsonRecord(input?.params)
+            ? input.params
             : {};
         const manifest = appId ? manifests.get(appId) : undefined;
         const allowed = new Set([
@@ -376,33 +383,22 @@ if (!singleInstance) {
     }
     if (process.platform === "win32") {
       const listed = await engine.arkRequest("packages.list", { kind: "app" });
-      if (
-        listed.ok &&
-        listed.data &&
-        typeof listed.data === "object" &&
-        Array.isArray((listed.data as { packages?: unknown }).packages)
-      ) {
+      const packageList =
+        listed.ok && isJsonRecord(listed.data) && Array.isArray(listed.data.packages)
+          ? listed.data.packages
+              .flatMap((item) => (isJsonRecord(item) ? [item] : []))
+              .filter(isInstalledEnabledApp)
+          : [];
+      if (packageList.length > 0) {
         reconcileShortcuts(
-          (
-            listed.data as {
-              packages: Array<{
-                id?: unknown;
-                name?: unknown;
-                enabled?: unknown;
-                revoked?: unknown;
-                icon_path?: unknown;
-              }>;
-            }
-          ).packages
-            .filter(isInstalledEnabledApp)
-            .map((item) => ({
+          packageList.map((item) => ({
               id: item.id,
-              name: kosmosAppName(item.id, typeof item.name === "string" ? item.name : item.id),
+              name: kosmosAppName(item.id, isJsonString(item.name) ? item.name : item.id),
               enabled: true,
               revoked: false,
               iconPath:
                 kosmosAppShortcutIcon(process.resourcesPath, item.id) ??
-                (typeof item.icon_path === "string" ? item.icon_path : undefined),
+                (isJsonString(item.icon_path) ? item.icon_path : undefined),
             })),
         );
       }

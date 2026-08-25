@@ -16,6 +16,7 @@ import {
   scheduleFocusWidgetBoundsPersist,
 } from "./focus-widget-window";
 import { registerFocusWidgetIpcHandlers, type FocusWidgetSessionActions } from "./focus-widget-ipc";
+import { isRecord } from "../src/shared/runtimeGuards";
 
 type FocusWidgetRuntime = {
   awaitArkReady: () => Promise<ArkClient>;
@@ -191,16 +192,17 @@ export function setupFocusWidgetBackendSync(opts: { arkClient: ArkClient }): voi
     ) {
       return;
     }
-    const raw = e as unknown as PomodoroEventState;
+    // SAFETY: the backend event discriminator above establishes the pomodoro event payload contract.
+    const raw = e as PomodoroEventState;
     const patch = deriveFocusStateFromBackend(raw);
     setFocusState(patch);
   });
 
   void opts.arkClient
-    .invokeOperation({ operation: "pomodoro.get_state" } as { operation: string })
+    .invokeOperation({ operation: "pomodoro.get_state" })
     .then((s) => {
-      if (s && typeof s === "object") {
-        setFocusState(deriveFocusStateFromBackend(s as PomodoroEventState));
+      if (isPomodoroEventState(s)) {
+        setFocusState(deriveFocusStateFromBackend(s));
       }
     })
     .catch((err) => {
@@ -208,6 +210,10 @@ export function setupFocusWidgetBackendSync(opts: { arkClient: ArkClient }): voi
     });
 
   console.log("[focus-widget] subscribed to backend pomodoro events");
+}
+
+function isPomodoroEventState<T>(value: T): value is T & PomodoroEventState {
+  return isRecord(value);
 }
 
 export function teardownFocusWidgetBackendSync(): void {

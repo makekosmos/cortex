@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createServer as createTcpServer, connect as connectTcp, type Server } from "node:net";
 import { createBookMetadataConnectProxy } from "./book-metadata-connect-proxy";
+import { isString } from "./json-contracts";
 
 const servers: Server[] = [];
 
@@ -18,7 +19,7 @@ function listen(server: Server): Promise<number> {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
-      if (!address || typeof address === "string") reject(new Error("listen failed"));
+      if (!address || isString(address)) reject(new Error("listen failed"));
       else resolve(address.port);
     });
   });

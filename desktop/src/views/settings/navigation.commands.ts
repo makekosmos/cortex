@@ -10,12 +10,13 @@ import {
 
 import type { AppCommandSetting, AppSettingsTab } from "./navigation";
 
+
 const FOCUS_COMMAND_GRADIENT = {
   iconFrom: "oklch(0.7 0.16 145)",
   iconTo: "oklch(0.46 0.14 165)",
 };
 
-export const appCommandSettings: Record<AppSettingsTab, AppCommandSetting[]> = {
+export const appCommandSettings = {
   "time-tracker": [
     {
       id: FOCUS_START_COMMAND_ID,
@@ -54,4 +55,4 @@ export const appCommandSettings: Record<AppSettingsTab, AppCommandSetting[]> = {
       ...FOCUS_COMMAND_GRADIENT,
     },
   ],
-};
+} satisfies Record<AppSettingsTab, AppCommandSetting[]>;

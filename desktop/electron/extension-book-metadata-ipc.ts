@@ -8,6 +8,7 @@ import {
 } from "./book-metadata-fetch";
 import { keplerLog } from "./logging";
 import { lookupOpenLibraryIsbn, type OpenLibraryBookMetadata } from "./book-metadata-open-library";
+import { isString } from "../src/shared/runtimeGuards";
 
 const CHANNEL = "kepler:extension:book-metadata:fetch-page";
 const ISBN_CHANNEL = "kepler:extension:book-metadata:lookup-isbn";
@@ -15,9 +16,9 @@ const ISBN_CHANNEL = "kepler:extension:book-metadata:lookup-isbn";
 export function registerExtensionBookMetadataIpc(options: {
   assertNetworkRead(sender: WebContents): void;
 }): void {
-  ipcMain.handle(CHANNEL, async (event, source: unknown): Promise<BookMetadataPage | null> => {
+  ipcMain.handle(CHANNEL, async <T>(event: Electron.IpcMainInvokeEvent, source: T): Promise<BookMetadataPage | null> => {
     options.assertNetworkRead(event.sender);
-    if (typeof source !== "string" || source.length > 4096) {
+    if (!isString(source) || source.length > 4096) {
       throw new Error("Некорректная ссылка");
     }
     try {
@@ -39,9 +40,9 @@ export function registerExtensionBookMetadataIpc(options: {
 
   ipcMain.handle(
     ISBN_CHANNEL,
-    async (event, isbn: unknown): Promise<OpenLibraryBookMetadata | null> => {
+    async <T>(event: Electron.IpcMainInvokeEvent, isbn: T): Promise<OpenLibraryBookMetadata | null> => {
       options.assertNetworkRead(event.sender);
-      if (typeof isbn !== "string") throw new Error("Некорректный ISBN");
+      if (!isString(isbn)) throw new Error("Некорректный ISBN");
       return await lookupOpenLibraryIsbn(isbn);
     },
   );

@@ -7,7 +7,7 @@ export type RaycastChild =
   | undefined
   | RaycastChild[];
 
-export interface RaycastElement<TType extends string = string, TProps = Record<string, unknown>> {
+export interface RaycastElement<TType extends string = string, TProps = object> {
   readonly $$typeof: "kosmos.raycast.element";
   readonly type: TType;
   readonly props: TProps & { children?: RaycastChild[] };
@@ -20,7 +20,7 @@ interface Icon {
 
 export type ImageLike = string | Icon;
 
-export interface LaunchProps<TArguments = Record<string, unknown>, TContext = unknown> {
+export interface LaunchProps<TArguments = object, TContext = object> {
   arguments?: TArguments;
   launchContext?: TContext;
   launchType: LaunchTypeValue;
@@ -39,8 +39,8 @@ export interface LaunchCommandOptions {
   name: string;
   extensionName?: string;
   type?: LaunchTypeValue;
-  context?: unknown;
-  arguments?: Record<string, unknown>;
+  context?: object;
+  arguments?: object;
   fallbackText?: string;
 }
 
@@ -51,6 +51,8 @@ export interface AlertOptions {
   dismissAction?: { title: string };
 }
 
+export type PreferenceValue = string | number | boolean | null | readonly string[];
+
 export interface PreferenceValues {
-  [key: string]: unknown;
+  [key: string]: PreferenceValue;
 }

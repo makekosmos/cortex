@@ -16,8 +16,7 @@ export interface DashboardTypeVisual {
   from: string;
   to: string;
 }
-
-const TYPE_VISUALS: Record<string, DashboardTypeVisual> = {
+const TYPE_VISUALS = {
   note_obj: {
     icon: PhArticle,
     from: "color-mix(in srgb, var(--status-warning) 64%, var(--destructive))",
@@ -48,7 +47,7 @@ const TYPE_VISUALS: Record<string, DashboardTypeVisual> = {
     from: "color-mix(in srgb, var(--accent) 82%, var(--status-success))",
     to: "color-mix(in srgb, var(--accent) 52%, var(--background))",
   },
-};
+} satisfies Record<string, DashboardTypeVisual>;
 
 const FALLBACK_VISUALS: DashboardTypeVisual[] = [
   {
@@ -85,5 +84,6 @@ function fallbackVisualForType(id: string): DashboardTypeVisual {
 }
 
 export function typeVisualFor(id: string): DashboardTypeVisual {
-  return TYPE_VISUALS[id] ?? fallbackVisualForType(id);
+  // SAFETY: unknown ids intentionally use the deterministic fallback visual.
+  return TYPE_VISUALS[id as keyof typeof TYPE_VISUALS] ?? fallbackVisualForType(id);
 }

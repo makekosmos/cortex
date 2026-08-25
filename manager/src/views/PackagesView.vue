@@ -181,6 +181,7 @@ onMounted(() => void refresh());
         title="Каталог"
         description="Установку выполняет движок из подписанного каталога."
         button-label="Обновить каталог"
+        variant="surface"
         @click="refreshCatalog"
       />
       <SettingsRow
@@ -203,14 +204,14 @@ onMounted(() => void refresh());
               >Установить</Button
             ><Button
               v-if="!item.catalog && !item.revoked"
-              variant="ghost"
+              variant="surface"
               size="sm"
               :disabled="item.revoked"
               @click="toggle(item)"
               >{{ item.enabled ? "Отключить" : "Включить" }}</Button
             ><Button
               v-if="!item.catalog && !item.revoked && item.update_version"
-              variant="ghost"
+              variant="surface"
               size="sm"
               @click="install(item)"
               >Обновить до {{ item.update_version }}</Button
@@ -265,7 +266,7 @@ onMounted(() => void refresh());
               @update:model-value="
                 bridge[bridgeKey(item)].readonly_fields = fields($event)
               " /></label
-          ><Button size="sm" @click="saveBridge(item)">Сохранить настройки</Button>
+          ><Button size="sm" variant="surface" @click="saveBridge(item)">Сохранить настройки</Button>
         </details>
       </template>
       <SettingsRow v-if="!items.length" title="Пакеты не найдены" />

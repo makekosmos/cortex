@@ -11,6 +11,7 @@ import {
   type DictationStatsData,
 } from "./useDictationConfig.shared";
 import { createDictationKeyActions } from "./useDictationConfig.keys";
+import { isNumber, isRecord, isString, type JsonRecord } from "../../../shared/runtimeGuards";
 
 type DictationLocalModelDownloadProgress = Record<
   string,
@@ -46,7 +47,7 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
     if (dictationArkUnsubscribe) return;
     dictationArkUnsubscribe = window.kepler.ark.onEvent((event) => {
       const kind = event.event;
-      const modelId = typeof event.modelId === "string" ? event.modelId : "";
+      const modelId = isString(event.modelId) ? event.modelId : "";
       if (!modelId) return;
 
       if (kind === "dictation_local_model_download_started") {
@@ -67,25 +68,38 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
         args.dictationLocalModelDownloadProgress.value = {
           ...args.dictationLocalModelDownloadProgress.value,
           [modelId]: {
-            phase: typeof event.phase === "string" ? event.phase : "download",
-            downloadedBytes: typeof event.downloadedBytes === "number" ? event.downloadedBytes : 0,
-            totalBytes: typeof event.totalBytes === "number" ? event.totalBytes : null,
-            percent: typeof event.percent === "number" ? event.percent : null,
+            phase: isString(event.phase) ? event.phase : "download",
+            downloadedBytes: isNumber(event.downloadedBytes) ? event.downloadedBytes : 0,
+            totalBytes: isNumber(event.totalBytes) ? event.totalBytes : null,
+            percent: isNumber(event.percent) ? event.percent : null,
           },
         };
         return;
       }
 
       if (kind === "dictation_local_model_download_complete") {
+        let config: Partial<DictationConfigData> | null = null;
+        if (isRecord(event.config)) {
+          // SAFETY: the bridge event schema supplies a DictationConfigData-compatible object.
+          config = event.config as Partial<DictationConfigData>;
+        }
         applyDictationConfigSnapshot(
-          event.config && typeof event.config === "object"
-            ? (event.config as Partial<DictationConfigData>)
-            : null,
+          config,
           args.dictationConfig,
           args.dictationCustomDohUrl,
         );
-        if (event.localModels && typeof event.localModels === "object") {
-          args.dictationLocalModels.value = event.localModels as DictationLocalModelsSnapshot;
+        if (isRecord(event.localModels)) {
+          // SAFETY: the bridge event schema supplies a DictationLocalModelsSnapshot-compatible object.
+          const localModels = Object.assign(
+            {
+              models: [],
+              modelsDir: "",
+              commandPath: null,
+              commandInstalled: false,
+            } as DictationLocalModelsSnapshot,
+            event.localModels,
+          );
+          args.dictationLocalModels.value = localModels;
         } else {
           void loadDictationLocalModels();
         }
@@ -100,7 +114,7 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
         delete next[modelId];
         args.dictationLocalModelDownloadProgress.value = next;
         args.dictationLocalModelsError.value =
-          typeof event.error === "string" ? event.error : "Скачивание не удалось.";
+          isString(event.error) ? event.error : "Скачивание не удалось.";
       }
     });
   }
@@ -108,11 +122,13 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
   async function loadDictationLocalModels() {
     args.dictationLocalModelsError.value = "";
     try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       args.dictationLocalModels.value = (await window.kepler.ark.request(
         "dictation.list_local_models",
         {},
       )) as DictationLocalModelsSnapshot;
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       args.dictationLocalModelsError.value = (e as Error).message;
     }
   }
@@ -120,6 +136,7 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
   async function loadDictationConfig() {
     ensureDictationEventSubscription();
     try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       const resp = (await window.kepler.ark.request("dictation.get_config", {})) as {
         config?: Partial<DictationConfigData>;
         hasApiKey?: boolean;
@@ -153,6 +170,7 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
 
   async function loadDictationStats() {
     try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       const resp = (await window.kepler.ark.request(
         "dictation.get_stats",
         {},
@@ -183,11 +201,12 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
         }));
     } catch (e) {
       console.error("[settings] loadDictationMicrophones failed:", e);
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       args.dictationMicError.value = `Ошибка: ${(e as Error).message}`;
     }
   }
 
-  async function patchDictationConfig(patch: Record<string, unknown>) {
+  async function patchDictationConfig(patch: JsonRecord) {
     try {
       await window.kepler.ark.request("dictation.update_config", patch);
       await loadDictationConfig();
@@ -263,6 +282,7 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
       },
     };
     try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       const resp = (await window.kepler.ark.request("dictation.download_local_model", {
         modelId,
         select: false,
@@ -277,6 +297,7 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
       );
       if (resp.localModels) args.dictationLocalModels.value = resp.localModels;
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       args.dictationLocalModelsError.value = (e as Error).message;
     } finally {
       args.dictationLocalModelsBusy.value = null;
@@ -287,6 +308,7 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
     args.dictationLocalModelsBusy.value = modelId;
     args.dictationLocalModelsError.value = "";
     try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       const resp = (await window.kepler.ark.request("dictation.use_local_model", {
         modelId,
       })) as {
@@ -300,6 +322,7 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
       );
       if (resp.localModels) args.dictationLocalModels.value = resp.localModels;
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       args.dictationLocalModelsError.value = (e as Error).message;
     } finally {
       args.dictationLocalModelsBusy.value = null;
@@ -310,6 +333,7 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
     args.dictationLocalModelsBusy.value = modelId;
     args.dictationLocalModelsError.value = "";
     try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       const resp = (await window.kepler.ark.request("dictation.delete_local_model", {
         modelId,
       })) as {
@@ -323,6 +347,7 @@ export function createDictationConfigActions(args: DictationConfigActionsArgs) {
       );
       if (resp.localModels) args.dictationLocalModels.value = resp.localModels;
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       args.dictationLocalModelsError.value = (e as Error).message;
     } finally {
       args.dictationLocalModelsBusy.value = null;

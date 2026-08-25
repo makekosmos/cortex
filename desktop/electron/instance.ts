@@ -61,6 +61,12 @@ export interface Instance {
   /** Периодический marketplace catalog fetch разрешён? Только в prod. */
 }
 
+interface UserDataMatch {
+  ok: boolean;
+  expected: string;
+  actual: string;
+}
+
 const SLOT_RE = /^(prod|dev|dev-[a-z0-9][a-z0-9-]*|test-[a-z0-9][a-z0-9-]*)$/;
 
 let cached: Instance | null = null;
@@ -280,11 +286,7 @@ export function migrateLegacyProdSettings(appData: string, dataDir: string): voi
  * легитимный вызов `app.getPath('userData')` вне `applyInstanceToApp` —
  * guard `ark:guard:writes` whitelist'ит только этот файл.
  */
-export function verifyUserDataMatches(instance: Instance): {
-  ok: boolean;
-  expected: string;
-  actual: string;
-} {
+export function verifyUserDataMatches(instance: Instance): UserDataMatch {
   const actual = app.getPath("userData");
   return { ok: actual === instance.userDataDir, expected: instance.userDataDir, actual };
 }

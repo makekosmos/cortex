@@ -3,15 +3,22 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+type ShortcutWriteOptions = {
+  target: string;
+  args: string;
+  description: string;
+  icon?: string;
+  iconIndex?: number;
+};
 const writes: Array<{
   file: string;
   operation: string;
-  options: Record<string, unknown>;
+  options: ShortcutWriteOptions;
 }> = [];
 mock.module("electron", () => ({
   app: { getPath: () => "unused" },
   shell: {
-    writeShortcutLink: (file: string, operation: string, options: Record<string, unknown>) => {
+    writeShortcutLink: (file: string, operation: string, options: ShortcutWriteOptions) => {
       writes.push({ file, operation, options });
       fs.writeFileSync(file, "shortcut");
       return true;

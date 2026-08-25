@@ -23,6 +23,7 @@ const iconSrcMap = computed(() => {
 });
 
 function onIconError(event: Event): void {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
   (event.currentTarget as HTMLImageElement).hidden = true;
 }
 

@@ -50,11 +50,13 @@ function registerAppIconProtocol(options: MainProtocolOptions): void {
       }
 
       const client = await options.awaitArkReady(5_000);
+      // SAFETY: app_index.icon_path returns an object with an optional path.
       const resp = (await client.invokeOperation({
         operation: "app_index.icon_path",
         id: appId,
-      })) as { path?: unknown };
-      const iconPath = typeof resp?.path === "string" ? resp.path : "";
+// SAFETY: The surrounding boundary establishes this documented contract.
+      })) as { path?: string };
+      const iconPath = resp?.path ?? "";
       if (!iconPath || !existsSync(iconPath)) {
         return new Response(null, { status: 404 });
       }
@@ -77,6 +79,7 @@ function registerAppIconProtocol(options: MainProtocolOptions): void {
     }
   });
 }
+
 
 function registerLocalImageProtocol(): void {
   protocol.handle(LOCAL_IMAGE_PROTOCOL, async (request) => {

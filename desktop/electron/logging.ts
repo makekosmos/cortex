@@ -21,6 +21,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { keplerDataDir } from "./data-dir";
 import { createCrashMetadata, redactText, redactUnknown } from "./redaction";
+import type { JsonRecord } from "./redaction";
 
 type LogLevel = "INFO" | "WARN" | "ERROR";
 
@@ -45,8 +46,11 @@ function ensureLogFilePath(): string {
   return cachedLogFilePath;
 }
 
-function write(level: LogLevel, scope: string, msg: string, meta?: object): void {
-  const safeMeta = (redactUnknown(meta ?? {}) ?? {}) as Record<string, unknown>;
+type LogMetadata = JsonRecord;
+
+function write(level: LogLevel, scope: string, msg: string, meta?: LogMetadata): void {
+  const redactedMeta = redactUnknown(meta ?? {});
+  const safeMeta: JsonRecord = isJsonRecord(redactedMeta) ? redactedMeta : {};
   const line =
     JSON.stringify({
       ...safeMeta,
@@ -74,16 +78,16 @@ function write(level: LogLevel, scope: string, msg: string, meta?: object): void
 }
 
 export const keplerLog = {
-  info(scope: string, msg: string, meta?: object): void {
+  info(scope: string, msg: string, meta?: LogMetadata): void {
     write("INFO", scope, msg, meta);
   },
-  warn(scope: string, msg: string, meta?: object): void {
+  warn(scope: string, msg: string, meta?: LogMetadata): void {
     write("WARN", scope, msg, meta);
   },
-  error(scope: string, msg: string, meta?: object): void {
+  error(scope: string, msg: string, meta?: LogMetadata): void {
     write("ERROR", scope, msg, meta);
   },
-  crash(component: string, meta?: object): string {
+  crash(component: string, meta?: LogMetadata): string {
     const crash = createCrashMetadata(component, correlationId, meta);
     write("ERROR", "crash", "process terminated", crash);
     return String(crash.crashId);
@@ -105,6 +109,10 @@ export const keplerLog = {
     return path.join(keplerDataDir(), "logs");
   },
 };
+
+function isJsonRecord<T>(value: T): value is T & JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 function validUuid(value: string | undefined): string | null {
   return value &&

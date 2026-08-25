@@ -1,5 +1,7 @@
 import { ipcRenderer } from "electron";
 import type { KeplerApi } from "../shared/ipc-types";
+import type { FocusOverlayFeedback } from "../shared/ipc-api-shell-services";
+import type { UpdateState } from "../shared/ipc-types";
 
 type KeplerSettingsBridge = Pick<
   KeplerApi,
@@ -30,7 +32,7 @@ export function createKeplerSettingsBridge(): KeplerSettingsBridge {
         install: () => ipcRenderer.invoke("kepler:settings:update:install"),
         state: () => ipcRenderer.invoke("kepler:settings:update:state"),
         onStateChanged: (listener) => {
-          const handler = (_e: unknown, state: unknown) => listener(state as never);
+          const handler = (_e: Electron.IpcRendererEvent, state: UpdateState) => listener(state);
           ipcRenderer.on("kepler:settings:update:state", handler);
           return () => ipcRenderer.removeListener("kepler:settings:update:state", handler);
         },
@@ -39,8 +41,8 @@ export function createKeplerSettingsBridge(): KeplerSettingsBridge {
     focusOverlay: {
       ready: () => ipcRenderer.send("kepler:focus-overlay:ready"),
       onShow: (listener) => {
-        const handler = (_e: Electron.IpcRendererEvent, feedback: unknown) =>
-          listener(feedback as Parameters<typeof listener>[0]);
+        const handler = (_e: Electron.IpcRendererEvent, feedback: FocusOverlayFeedback) =>
+          listener(feedback);
         ipcRenderer.on("kepler:focus-overlay:show", handler);
         return () => ipcRenderer.removeListener("kepler:focus-overlay:show", handler);
       },
@@ -59,7 +61,8 @@ export function createKeplerSettingsBridge(): KeplerSettingsBridge {
     },
     postUpdate: {
       onShown: (listener) => {
-        const handler = (_e: unknown, payload: unknown) => listener(payload as { version: string });
+        const handler = (_e: Electron.IpcRendererEvent, payload: { version: string }) =>
+          listener(payload);
         ipcRenderer.on("kepler:post-update", handler);
         return () => ipcRenderer.removeListener("kepler:post-update", handler);
       },

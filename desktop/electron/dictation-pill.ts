@@ -23,6 +23,7 @@
 import { BrowserWindow, ipcMain, screen, webContents as electronWebContents } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { JsonRecord } from "../src/shared/runtimeGuards";
 
 import type { ArkClient } from "@kosmos/ark";
 
@@ -206,10 +207,10 @@ function hidePill(): void {
 
 async function callBackend(
   operation: string,
-  params: Record<string, unknown> = {},
-): Promise<unknown> {
+  params: JsonRecord = {},
+): Promise<JsonRecord> {
   const ark = await requireDictationRuntime().awaitArkReady();
-  return ark.invokeOperation({ operation, ...params });
+  return ark.invokeOperation<JsonRecord>({ operation, ...params });
 }
 
 async function invokeDictationCommand(): Promise<void> {
@@ -358,6 +359,7 @@ export async function setupDictationHotkey(): Promise<void> {
   try {
     const runtime = requireDictationRuntime();
     const ark = await runtime.awaitArkReady();
+    // SAFETY: dictation.get_config returns the config envelope defined by the backend contract.
     const cfg = (await ark.invokeOperation({ operation: "dictation.get_config" })) as
       | { config?: { hotkey?: string; triggerMode?: "toggle" | "push_to_talk" } }
       | undefined;
@@ -387,6 +389,7 @@ export async function setupDictationHotkey(): Promise<void> {
       if (e.event === "dictation_config_changed") {
         void (async () => {
           try {
+            // SAFETY: dictation.get_config returns the config envelope defined by the backend contract.
             const updated = (await ark.invokeOperation({
               operation: "dictation.get_config",
             })) as

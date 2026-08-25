@@ -34,12 +34,13 @@ const exited = await new Promise((resolve, reject) => {
 });
 
 let cleanupFailed = false;
+const isString = (value) => value?.constructor === String;
 try {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   if (!Array.isArray(manifest.roots) || !Array.isArray(manifest.pids))
     throw new Error("invalid cleanup manifest");
   for (const root of manifest.roots) {
-    const resolved = typeof root === "string" ? path.resolve(root) : "";
+    const resolved = isString(root) ? path.resolve(root) : "";
     if (
       path.dirname(resolved).toLowerCase() !== tempRoot.toLowerCase() ||
       !path.basename(resolved).startsWith("kosmos-host-e2e-")

@@ -12,6 +12,14 @@ import {
   type ExtensionManifest,
 } from "./extension-manifest";
 import { macWindowChrome } from "./mac-window";
+
+interface ExtensionWindowState {
+  width?: number;
+  height?: number;
+  x?: number;
+  y?: number;
+  isMaximized?: boolean;
+}
 import {
   applyWindowMaterial,
   backgroundMaterialOption,
@@ -111,15 +119,10 @@ export async function openExtensionBrowserWindow({
   );
 
   const stateFile = path.join(extensionUserDataDir(id), "window-state.json");
-  let savedState: {
-    width?: number;
-    height?: number;
-    x?: number;
-    y?: number;
-    isMaximized?: boolean;
-  } = {};
+  let savedState: ExtensionWindowState = {};
   if (traits.persistWindowState && existsSync(stateFile)) {
     try {
+      // SAFETY: The state file is written by this module with the saved-window-state shape.
       savedState = JSON.parse(readFileSync(stateFile, "utf8")) as typeof savedState;
     } catch (error) {
       console.warn(`[kepler-shell] extension '${id}' window-state.json invalid, ignoring:`, error);
@@ -144,10 +147,10 @@ export async function openExtensionBrowserWindow({
   let initialY: number | undefined = Math.round((display.height - defaultHeight) / 2);
 
   if (
-    typeof savedState.width === "number" &&
-    typeof savedState.height === "number" &&
-    typeof savedState.x === "number" &&
-    typeof savedState.y === "number" &&
+    isNumber(savedState.width) &&
+    isNumber(savedState.height) &&
+    isNumber(savedState.x) &&
+    isNumber(savedState.y) &&
     isVisibleOnAnyDisplay(savedState.x, savedState.y, savedState.width, savedState.height)
   ) {
     width = savedState.width;
@@ -309,4 +312,8 @@ export async function openExtensionBrowserWindow({
   } else if (source.file) {
     void win.loadFile(source.file, route?.startsWith("#") ? { hash: route.slice(1) } : undefined);
   }
+}
+
+function isNumber(value: number | undefined): value is number {
+  return typeof value === "number";
 }

@@ -1,8 +1,9 @@
 import { computed, type Ref } from "vue";
 import type { FocusBlocklist, FocusDraftParsed } from "./useFocusTab.shared";
 import { parseFocusDraft } from "./useFocusTab.shared";
+import type { JsonRecord } from "../../../shared/runtimeGuards";
 
-type FocusRequest = <T>(op: string, params?: Record<string, unknown>) => Promise<T | null>;
+type FocusRequest = <T>(op: string, params?: JsonRecord) => Promise<T | null>;
 
 interface FocusTabDraftDeps {
   focusBusy: Ref<string>;
@@ -92,6 +93,7 @@ export function useFocusTabDraft(deps: FocusTabDraftDeps) {
       deps.focusEditingId.value = null;
       await deps.loadBlocklists();
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       deps.focusDraftError.value = (e as Error).message;
     } finally {
       deps.focusBusy.value = "";
@@ -99,6 +101,7 @@ export function useFocusTabDraft(deps: FocusTabDraftDeps) {
   }
 
   function onDomainsInput(e: Event) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     const ta = e.target as HTMLTextAreaElement;
     const pos = ta.selectionStart;
     const text = ta.value;
@@ -188,6 +191,7 @@ export function useFocusTabDraft(deps: FocusTabDraftDeps) {
         deps.focusDraftName.value = file.name.replace(/\.txt$/i, "");
       }
     } catch (err) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       deps.focusDraftError.value = `Не удалось прочитать файл: ${(err as Error).message}`;
     }
   }

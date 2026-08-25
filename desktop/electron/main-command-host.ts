@@ -10,6 +10,12 @@ import {
 import { runCommandNoView, type CommandLaunchProps } from "./command-host/command-runner";
 import { openCommandViewCommand } from "./command-host/view-host";
 
+interface CommandSystemAdapter {
+  open(target: string): Promise<void>;
+  showInFinder(path: string): Promise<void>;
+  trash(path: string): Promise<void>;
+}
+
 function commandLaunchFromOptions(options: LaunchCommandOptions): CommandLaunchProps {
   return {
     launchType: options.type ?? LaunchType.LaunchCommand,
@@ -44,11 +50,7 @@ async function openCommandSystemTarget(target: string): Promise<void> {
   if (error) throw new Error(error);
 }
 
-function commandSystemAdapter(): {
-  open(target: string): Promise<void>;
-  showInFinder(path: string): Promise<void>;
-  trash(path: string): Promise<void>;
-} {
+function commandSystemAdapter(): CommandSystemAdapter {
   return {
     open: openCommandSystemTarget,
     async showInFinder(target) {

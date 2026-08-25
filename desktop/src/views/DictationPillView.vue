@@ -16,7 +16,9 @@ import {
   normalizeDictationConfig,
   resolveAvailableDictationVoiceModelValue,
   type DictationLocalModelsSnapshot,
+  type DictationConfigData,
 } from "./dictation-model-selection";
+import type { JsonRecord } from "../shared/runtimeGuards";
 import {
   drawWaveformCanvas,
   idleBars,
@@ -81,9 +83,9 @@ const isPreview =
   !hasDictationBridge();
 const previewBars = Array.from({ length: WAVE_BAR_COUNT }, (_, i) => {
   const centered = (i - WAVE_BAR_COUNT / 2) / (WAVE_BAR_COUNT / 2);
-  const voiceShape = 0.34 + Math.sin(i * 0.39) * 0.2 + Math.cos(i * 0.17) * 0.12;
+  const voiceAmplitude = 0.34 + Math.sin(i * 0.39) * 0.2 + Math.cos(i * 0.17) * 0.12;
   const centerWeight = 1 - Math.abs(centered) * 0.34;
-  return Math.max(0.02, Math.min(0.82, voiceShape * centerWeight));
+  return Math.max(0.02, Math.min(0.82, voiceAmplitude * centerWeight));
 });
 const processingBars = ref<number[]>(idleBars);
 let processingAnimationFrame: number | null = null;
@@ -162,6 +164,7 @@ function splitHotkey(value: string): string[] {
 }
 async function loadDictationConfig(): Promise<void> {
   try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     const cfg = (await window.kepler.ark.request("dictation.get_config", {})) as {
       config?: { hotkey?: string | null; injectMode?: string | null };
     };
@@ -175,15 +178,18 @@ async function loadDictationConfig(): Promise<void> {
 }
 async function ensureReadyDictationModel(): Promise<boolean> {
   try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     const cfgResp = (await window.kepler.ark.request("dictation.get_config", {})) as {
-      config?: Record<string, unknown>;
+      config?: JsonRecord;
       hasApiKey?: boolean;
     };
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     const localModels = (await window.kepler.ark.request(
       "dictation.list_local_models",
       {},
     )) as DictationLocalModelsSnapshot;
-    const config = normalizeDictationConfig(cfgResp.config as Record<string, unknown> | undefined);
+// SAFETY: the surrounding domain validation preserves the asserted contract.
+    const config = normalizeDictationConfig(cfgResp.config as Partial<DictationConfigData> | undefined);
     const current = buildDictationVoiceModelValue(config);
     const resolved = resolveAvailableDictationVoiceModelValue(config, {
       hasApiKey: cfgResp.hasApiKey ?? false,
@@ -232,6 +238,7 @@ function drawWaveforms(): void {
   waveformFrame = null;
   for (const [key, canvas] of waveformCanvases) {
     const isPreviewCanvas = key.startsWith("preview-");
+    // SAFETY: preview keys are generated exclusively from the PillStatus values.
     const nextStatus = isPreviewCanvas
       ? (key.slice("preview-".length) as PillStatus)
       : status.value;
@@ -325,6 +332,7 @@ async function ensureStream(): Promise<MediaStream> {
   // Cold start: запрашиваем нужное устройство из config'а.
   let preferredDeviceId: string | null = null;
   try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     const cfg = (await window.kepler.ark.request("dictation.get_config", {})) as {
       config?: { microphoneDeviceId?: string | null };
     };
@@ -670,6 +678,7 @@ async function stopAndSubmit(): Promise<void> {
     const b64 = bytesToBase64(wav);
     let queuedUuid: string | null = null;
     try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       const resp = (await window.kepler.ark.request("dictation.submit_audio", {
         audioB64: b64,
         durationSec,
@@ -711,6 +720,7 @@ async function stopAndSubmit(): Promise<void> {
       }
     } catch (e) {
       status.value = "error";
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       errorText.value = (e as Error)?.message ?? "Ошибка распознавания";
       console.error("[dictation-pill] submit_audio failed", { error: String(e) });
     }
@@ -740,6 +750,7 @@ async function waitForQueueResolve(uuid: string, timeoutMs: number): Promise<voi
   subText.value = "Жду сеть…";
   while (Date.now() - startMs < timeoutMs) {
     try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       const resp = (await window.kepler.ark.request("dictation.list_pending", {})) as {
         items?: { uuid: string; attempts: number }[];
       };

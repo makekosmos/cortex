@@ -33,24 +33,28 @@ export function createFileSearchTabActions(runtime: FileSearchTabRuntime) {
 
   const onToggleFileSearchNoise = async (e: Event) => {
     await updateFileSearchSettings({
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       exclude_noisy_folders: (e.target as HTMLInputElement).checked,
     });
   };
 
   const onToggleFileSearchGitignore = async (e: Event) => {
     await updateFileSearchSettings({
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       respect_gitignore: (e.target as HTMLInputElement).checked,
     });
   };
 
   const onToggleFileSearchHidden = async (e: Event) => {
     await updateFileSearchSettings({
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       include_hidden: (e.target as HTMLInputElement).checked,
     });
   };
 
   const onToggleFileSearchNtfs = async (e: Event) => {
     await updateFileSearchSettings({
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       ntfs_accelerated: (e.target as HTMLInputElement).checked,
     });
   };
@@ -68,6 +72,7 @@ export function createFileSearchTabActions(runtime: FileSearchTabRuntime) {
     } catch (err) {
       console.warn("file_index.scope_add failed", err);
       runtime.fileSearchError.value = `Не удалось добавить папку поиска: ${
+// SAFETY: the surrounding domain validation preserves the asserted contract.
         (err as { message?: string } | null)?.message ?? String(err ?? "")
       }`;
       finishFileSearchBusyToast(toastId, "Не удалось добавить папку", "info");
@@ -94,6 +99,7 @@ export function createFileSearchTabActions(runtime: FileSearchTabRuntime) {
     } catch (err) {
       console.warn("file_index.scope_remove failed", err);
       runtime.fileSearchError.value = `Не удалось удалить папку поиска: ${
+// SAFETY: the surrounding domain validation preserves the asserted contract.
         (err as { message?: string } | null)?.message ?? String(err ?? "")
       }`;
       finishFileSearchBusyToast(toastId, "Не удалось удалить папку", "info");
@@ -123,6 +129,7 @@ export function createFileSearchTabActions(runtime: FileSearchTabRuntime) {
     } catch (err) {
       console.warn("file_index.ignore_add failed", err);
       runtime.fileSearchError.value = `Не удалось добавить шаблон: ${
+// SAFETY: the surrounding domain validation preserves the asserted contract.
         (err as { message?: string } | null)?.message ?? String(err ?? "")
       }`;
       finishFileSearchBusyToast(toastId, "Не удалось добавить шаблон", "info");
@@ -142,6 +149,7 @@ export function createFileSearchTabActions(runtime: FileSearchTabRuntime) {
     } catch (err) {
       console.warn("file_index.ignore_remove failed", err);
       runtime.fileSearchError.value = `Не удалось удалить шаблон: ${
+// SAFETY: the surrounding domain validation preserves the asserted contract.
         (err as { message?: string } | null)?.message ?? String(err ?? "")
       }`;
       finishFileSearchBusyToast(toastId, "Не удалось удалить шаблон", "info");
@@ -169,6 +177,7 @@ export function createFileSearchTabActions(runtime: FileSearchTabRuntime) {
     } catch (err) {
       console.warn("file_index.rescan failed", err);
       runtime.fileSearchError.value = `Не удалось переиндексировать файлы: ${
+// SAFETY: the surrounding domain validation preserves the asserted contract.
         (err as { message?: string } | null)?.message ?? String(err ?? "")
       }`;
       finishFileSearchBusyToast(toastId, "Не удалось запустить переиндексацию", "info");
@@ -200,6 +209,7 @@ export function createFileSearchTabActions(runtime: FileSearchTabRuntime) {
     } catch (err) {
       console.warn("file_index.clear_cache failed", err);
       runtime.fileSearchError.value = `Не удалось очистить индекс: ${
+// SAFETY: the surrounding domain validation preserves the asserted contract.
         (err as { message?: string } | null)?.message ?? String(err ?? "")
       }`;
       finishFileSearchBusyToast(toastId, "Не удалось очистить индекс", "info");

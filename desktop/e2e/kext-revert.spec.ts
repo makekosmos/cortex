@@ -65,12 +65,14 @@ test("AC: revert восстанавливает предыдущую верси�
       return app.evaluate(
         async ({ ipcMain }, { ch, a }) => {
           const handlers = (
-            ipcMain as unknown as {
-              _invokeHandlers: Map<string, (...x: unknown[]) => unknown>;
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+            ipcMain as {
+              _invokeHandlers: Map<string, (...x: unknown[]) => never>;
             }
           )._invokeHandlers;
           const h = handlers?.get?.(ch);
           if (!h) throw new Error(`no handler: ${ch}`);
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
           return h({} as never, ...a);
         },
         { ch: channel, a: args },
@@ -82,8 +84,9 @@ test("AC: revert восстанавливает предыдущую верси�
         () =>
           app.evaluate(({ ipcMain }) => {
             const handlers = (
-              ipcMain as unknown as {
-                _invokeHandlers: Map<string, (...x: unknown[]) => unknown>;
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
+              ipcMain as {
+                _invokeHandlers: Map<string, (...x: unknown[]) => never>;
               }
             )._invokeHandlers;
             return (
@@ -103,6 +106,7 @@ test("AC: revert восстанавливает предыдущую верси�
     const beforeRevert = JSON.parse(fs.readFileSync(targetManifest, "utf8"));
     expect(beforeRevert.version).toBe("1.1.0");
 
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
     const backups = (await call("kepler:extension:backups:list", "rev-target")) as string[];
     expect(backups.length).toBeGreaterThanOrEqual(1);
 
@@ -113,6 +117,7 @@ test("AC: revert восстанавливает предыдущую верси�
     expect(afterRevert.version).toBe("1.0.0");
 
     // После revert'а должен появиться backup с pre-revert v1.1.0.
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
     const backupsAfter = (await call("kepler:extension:backups:list", "rev-target")) as string[];
     expect(backupsAfter.length).toBeGreaterThanOrEqual(backups.length);
   } finally {

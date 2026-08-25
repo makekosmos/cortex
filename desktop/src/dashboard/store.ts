@@ -7,6 +7,7 @@
 import { ref } from "vue";
 import type { DashboardObjectRow, DashboardObjectType, DashboardUsageRow } from "./types";
 import { HIDDEN_DASHBOARD_TYPE_IDS } from "./typeVisuals";
+import { isRecord, isString, type JsonRecord } from "../shared/runtimeGuards";
 
 export const objectTypes = ref<DashboardObjectType[]>([]);
 const objectTypesLoading = ref<boolean>(false);
@@ -68,7 +69,7 @@ interface RawAppIndexEntry {
   icon_ref?: string | null;
 }
 
-function arkRequest<T>(operation: string, params?: Record<string, unknown>): Promise<T> {
+function arkRequest<T>(operation: string, params?: JsonRecord): Promise<T> {
   return window.kepler.ark.request<T>(operation, params);
 }
 
@@ -95,9 +96,10 @@ export async function loadObjectTypes(): Promise<void> {
 function pickPrimary(rec: RawObjectRecord): string {
   if (rec.title && rec.title.length > 0) return rec.title;
   const c = rec.contentJson;
-  if (c && typeof c === "object" && !Array.isArray(c)) {
-    for (const v of Object.values(c as Record<string, unknown>)) {
-      if (typeof v === "string" && v.length > 0) return v;
+  if (isRecord(c) && !Array.isArray(c)) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
+    for (const v of Object.values(c)) {
+      if (isString(v) && v.length > 0) return v;
     }
   }
   return rec.id;

@@ -2,10 +2,11 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { keplerDataDir } from "./data-dir";
+import type { JsonRecord } from "./extension-permissions";
 
 interface BackendProcessLogger {
-  error(scope: string, message: string, data?: Record<string, unknown>): void;
-  info(scope: string, message: string, data?: Record<string, unknown>): void;
+  error(scope: string, message: string, data?: JsonRecord): void;
+  info(scope: string, message: string, data?: JsonRecord): void;
 }
 
 interface SpawnBackendProcessArgs {

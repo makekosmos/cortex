@@ -7,10 +7,17 @@ export interface LeetCodeLoginFlow<TWindow, TResult> {
   persistCredential(credential: string): Promise<TResult>;
 }
 
-export function encodeLeetCodeCredential(session: unknown, csrfToken: unknown): string | null {
+type CredentialInput = string | null;
+const isCredential = (value: CredentialInput | undefined): value is string =>
+  typeof value === "string";
+
+export function encodeLeetCodeCredential(
+  session: CredentialInput,
+  csrfToken: CredentialInput,
+): string | null {
   if (
-    typeof session !== "string" ||
-    typeof csrfToken !== "string" ||
+    !isCredential(session) ||
+    !isCredential(csrfToken) ||
     !session ||
     !csrfToken ||
     session.length > 1024 ||

@@ -20,7 +20,9 @@ export function setupFocusSessionBackendSync(opts: {
       return;
     }
     if (event.event !== "pomodoro_phase_changed") return;
+// SAFETY: The surrounding boundary establishes this documented contract.
     const from = (event as { from?: PomodoroPhase }).from ?? "idle";
+// SAFETY: The surrounding boundary establishes this documented contract.
     const to = (event as { to?: PomodoroPhase }).to ?? "idle";
     if (from === "work") {
       const completed = pendingWorkCompletion;

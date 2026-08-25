@@ -149,7 +149,7 @@ ipcMain.handle("kepler:settings:hotkey", () => getStoredHotkey());
 
 ipcMain.handle(
   "kepler:settings:hotkey:set",
-  (_e, value: string): { ok: boolean; error?: string } => {
+  (_e, value: string) => {
     const normalized = normalizeHotkeyAccelerator(String(value || "").trim());
     if (!normalized) return { ok: false, error: "empty" };
     try {
@@ -158,6 +158,7 @@ ipcMain.handle(
       setStoredHotkey(normalized);
       return { ok: true };
     } catch (e) {
+      // SAFETY: Hotkey registration failures are Error instances from Electron.
       return { ok: false, error: (e as Error).message };
     }
   },

@@ -17,6 +17,7 @@ import {
 } from "./focus-session";
 import { setupPomodoroNotifier, teardownPomodoroNotifier } from "./pomodoro-notifier";
 import { openSettings } from "./settings-window";
+import { isString } from "../src/shared/runtimeGuards";
 
 type AwaitArkReady = (timeoutMs?: number) => Promise<any>;
 type DictationArkClient = {
@@ -42,7 +43,7 @@ async function resolveLiveDictationShortcut(
       }),
     ]);
     const hotkey = resp?.config?.hotkey;
-    const normalized = typeof hotkey === "string" && hotkey.trim() ? hotkey.trim() : undefined;
+    const normalized = isString(hotkey) && hotkey.trim() ? hotkey.trim() : undefined;
     if (normalized) {
       dictationHotkeyCache = normalized;
       return normalized;
@@ -56,7 +57,7 @@ async function resolveLiveDictationShortcut(
 }
 
 function setDictationHotkeyCache(hotkey?: string | null): void {
-  dictationHotkeyCache = typeof hotkey === "string" && hotkey.trim() ? hotkey.trim() : null;
+  dictationHotkeyCache = isString(hotkey) && hotkey.trim() ? hotkey.trim() : null;
 }
 
 export function setupMainFocusRuntime(awaitArkReady: AwaitArkReady): void {

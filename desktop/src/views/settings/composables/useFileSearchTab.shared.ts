@@ -27,7 +27,8 @@ export function shortenPath(path: string): string {
   return `${path.slice(0, 18)}…${path.slice(-20)}`;
 }
 
-export function describeFileSearchError(err: unknown, fallback: string): string {
+export function describeFileSearchError<T>(err: T, fallback: string): string {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
   const raw = (err as { message?: string } | null)?.message ?? String(err ?? "");
   const trimmed = raw.trim();
   if (!trimmed) return fallback;

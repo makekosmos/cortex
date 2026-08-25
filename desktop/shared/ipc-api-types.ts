@@ -1,4 +1,5 @@
 import type { KeplerApiShellServices } from "./ipc-api-shell-services";
+import type { IpcJsonObject, IpcJsonValue } from "./ipc-json";
 // Контракт renderer API для `window.kepler` (см. preload.ts).
 
 import type {
@@ -65,7 +66,7 @@ export interface KeplerApi extends KeplerApiShellServices {
   extension: {
     installedList(): Promise<InstalledExtensionInfo[]>;
     catalogFetch(force?: boolean): Promise<MarketplaceCatalog>;
-    installFromUrl(url: string, sha256: string | null): Promise<unknown>;
+    installFromUrl(url: string, sha256: string | null): Promise<IpcJsonValue>;
     revert(id: string, timestamp?: string): Promise<boolean>;
     uninstall(id: string): Promise<boolean>;
   };
@@ -98,8 +99,8 @@ export interface KeplerApi extends KeplerApiShellServices {
       для list_object_types / list_objects / list_objects_by_type. Main
       проксирует на ArkClient (см. main.ts). */
   ark: {
-    request<T = unknown>(operation: string, params?: Record<string, unknown>): Promise<T>;
-    onEvent(listener: (event: Record<string, unknown>) => void): () => void;
+    request<T = unknown>(operation: string, params?: IpcJsonObject): Promise<T>;
+    onEvent(listener: (event: IpcJsonObject) => void): () => void;
   };
 
   /** Command registry — то что показывает launcher: список запуска апок +

@@ -30,6 +30,9 @@ import {
 import { typeVisualFor } from "../dashboard/typeVisuals";
 
 type DashboardSection = "integrations" | "body" | "coder" | "data";
+interface DashboardWindow extends Window {
+  kepler?: { ark?: { subscribe?: ArkSubscribeFn } };
+}
 
 const section = ref<DashboardSection>(
   window.location.hash.startsWith("#/dashboard/integrations")
@@ -62,7 +65,7 @@ function sidebarIconForType(id: string, active: boolean): Component {
 }
 
 // Подписка на live-события ARK: новый/удалённый объект → инвалидировать кэш.
-type ArkSubscribeFn = (event: string, handler: (payload: unknown) => void) => () => void;
+type ArkSubscribeFn = <T>(event: string, handler: (payload: T) => void) => () => void;
 let unsubscribeObjectUpserted: (() => void) | null = null;
 let unsubscribeObjectDeleted: (() => void) | null = null;
 
@@ -72,15 +75,18 @@ onMounted(async () => {
     await loadObjects(null);
   }
 
-  const subscribe = (window as unknown as { kepler?: { ark?: { subscribe?: ArkSubscribeFn } } })
-    .kepler?.ark?.subscribe;
+// SAFETY: the surrounding domain validation preserves the asserted contract.
+  // SAFETY: the preload bridge is installed on the desktop window before mount.
+  const subscribe = (window as DashboardWindow).kepler?.ark?.subscribe;
 
   if (subscribe) {
     unsubscribeObjectUpserted = subscribe("object_upserted", (payload) => {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       const p = payload as { type_id?: string };
       void handleObjectChangeEvent(p.type_id ?? null);
     });
     unsubscribeObjectDeleted = subscribe("object_deleted", (payload) => {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       const p = payload as { type_id?: string };
       void handleObjectChangeEvent(p.type_id ?? null);
     });

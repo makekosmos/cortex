@@ -5,8 +5,10 @@ import {
   resolveMarkdownVaultSourcePath,
   safeVaultOutputPath,
   scanMarkdownVault,
+  type MarkdownVaultOpenResult,
   type MarkdownVaultExportFile,
 } from "./markdown-vault";
+import { isString } from "./json-contracts";
 
 const MAX_VAULT_FILES = 5_000;
 const MAX_VAULT_IMAGES = 5_000;
@@ -15,8 +17,19 @@ export type MarkdownFileOperation = "open" | "openVault" | "save" | "exportVault
 export type MarkdownFileDialogs = {
   openFile(): Promise<string | null>;
   openDirectory(mode: "import" | "export"): Promise<string | null>;
-  saveFile(suggestedName: unknown): Promise<string | null>;
+  saveFile(suggestedName: string | undefined): Promise<string | null>;
 };
+export type MarkdownFileInput = {
+  content?: unknown;
+  suggestedName?: string;
+  files?: unknown;
+};
+export type MarkdownFileOperationResult =
+  | { path: string; name: string; content: string }
+  | { path: string }
+  | MarkdownVaultOpenResult
+  | { outputDir: string; exportedCount: number }
+  | null;
 export type MarkdownAssetCopy = (
   sourcePath: string,
   outputPath: string,
@@ -45,10 +58,10 @@ function requireDirectory(directoryPath: string): void {
 
 export async function performMarkdownFileOperation(
   operation: MarkdownFileOperation,
-  input: Record<string, unknown>,
+  input: MarkdownFileInput,
   dialogs: MarkdownFileDialogs,
   copyAsset: MarkdownAssetCopy = defaultAssetCopy,
-): Promise<unknown | null> {
+): Promise<MarkdownFileOperationResult> {
   if (operation === "open") {
     const filePath = await dialogs.openFile();
     if (!filePath) return null;
@@ -71,7 +84,7 @@ export async function performMarkdownFileOperation(
 
   if (operation === "save") {
     const content = input.content;
-    if (typeof content !== "string" || Buffer.byteLength(content) > MARKDOWN_FILE_MAX_BYTES)
+    if (!isString(content) || Buffer.byteLength(content) > MARKDOWN_FILE_MAX_BYTES)
       throw new Error("Invalid Markdown content");
     const filePath = await dialogs.saveFile(input.suggestedName);
     if (!filePath) return null;
@@ -89,18 +102,19 @@ export async function performMarkdownFileOperation(
   let imageCount = 0;
   const writtenPaths = new Set<string>();
   const planned: Array<{ file: MarkdownVaultExportFile; outputPath: string }> = [];
+  // SAFETY: the export payload is validated field-by-field before use.
   for (const file of files as MarkdownVaultExportFile[]) {
-    if (!file || typeof file.relativePath !== "string")
+    if (!file || !isString(file.relativePath))
       throw new Error("Invalid Markdown vault file");
     const outputPath = safeVaultOutputPath(outputDir, file.relativePath);
     const outputKey = process.platform === "win32" ? outputPath.toLowerCase() : outputPath;
     if (writtenPaths.has(outputKey)) throw new Error("Duplicate Markdown vault path");
     writtenPaths.add(outputKey);
-    if (typeof file.content === "string") {
+    if (isString(file.content)) {
       textCount += 1;
       if (textCount > MAX_VAULT_FILES || Buffer.byteLength(file.content) > MARKDOWN_FILE_MAX_BYTES)
         throw new Error("Markdown vault text limit exceeded");
-    } else if (typeof file.sourcePath === "string") {
+    } else if (isString(file.sourcePath)) {
       imageCount += 1;
       if (imageCount > MAX_VAULT_IMAGES) throw new Error("Markdown vault image limit exceeded");
     } else {
@@ -111,7 +125,7 @@ export async function performMarkdownFileOperation(
   let exportedCount = 0;
   for (const { file, outputPath } of planned) {
     mkdirSync(path.dirname(outputPath), { recursive: true });
-    if (typeof file.content === "string") {
+    if (isString(file.content)) {
       writeFileSync(outputPath, file.content, "utf8");
       exportedCount += 1;
     } else if (await copyAsset(file.sourcePath, outputPath)) {

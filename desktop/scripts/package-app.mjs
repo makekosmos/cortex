@@ -46,10 +46,10 @@ function releaseMetadata(options) {
   const issuedAt = options["issued-at"];
   const expiresAt = options["expires-at"];
   if (
-    typeof issuedAt !== "string" ||
+    Object.prototype.toString.call(issuedAt) !== "[object String]" ||
     !issuedAt.endsWith("Z") ||
     Number.isNaN(Date.parse(issuedAt)) ||
-    typeof expiresAt !== "string" ||
+    Object.prototype.toString.call(expiresAt) !== "[object String]" ||
     !expiresAt.endsWith("Z") ||
     Number.isNaN(Date.parse(expiresAt))
   )
@@ -66,7 +66,7 @@ function validateManifest(manifest, source) {
     manifest.publisher !== "kosmos"
   )
     throw new Error("package manifest must be a compiled Manifest v2 package");
-  if (typeof manifest.entrypoint !== "string" || manifest.entrypoint.startsWith("/"))
+  if (Object.prototype.toString.call(manifest.entrypoint) !== "[object String]" || manifest.entrypoint.startsWith("/"))
     throw new Error("package entrypoint must be relative");
   const relativeEntrypoint =
     path.basename(source).toLowerCase() === "dist" && manifest.entrypoint.startsWith("dist/")
@@ -79,7 +79,7 @@ function validateManifest(manifest, source) {
   if (manifest.icon !== undefined) {
     const icon = manifest.icon;
     if (
-      typeof icon !== "string" ||
+      Object.prototype.toString.call(icon) !== "[object String]" ||
       icon.includes("\\") ||
       icon.includes("\0") ||
       path.posix.isAbsolute(icon) ||

@@ -1,4 +1,5 @@
 import type { CommandSnapshotNode } from "../../shared/command-ipc";
+import { isRecord, isString } from "../shared/runtimeGuards";
 
 export interface CommandListItemModel {
   id: string;
@@ -148,21 +149,22 @@ const ACTION_TYPES = new Set([
 
 const ACTION_PANEL_ENTRY_TYPES = new Set([...ACTION_TYPES, "ActionPanel.Submenu"]);
 
-export function textProp(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value : null;
+export function textProp<T>(value: T): string | null {
+  return isString(value) && value.trim().length > 0 ? value : null;
 }
 
-export function stringArrayProp(value: unknown): string[] {
+export function stringArrayProp<T>(value: T): string[] {
   return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string")
+    ? value.filter(isString)
     : [];
 }
 
-export function imageProp(value: unknown): string | null {
-  if (typeof value === "string" && value.trim().length > 0) return value;
-  if (value && typeof value === "object") {
+export function imageProp<T>(value: T): string | null {
+  if (isString(value) && value.trim().length > 0) return value;
+  if (isRecord(value)) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     const source = (value as { source?: unknown }).source;
-    if (typeof source === "string" && source.trim().length > 0) return source;
+    if (isString(source) && source.trim().length > 0) return source;
   }
   return null;
 }
@@ -240,8 +242,9 @@ export function actionSubmenuActions(node: CommandSnapshotNode): CommandSnapshot
 
 export function actionShortcut(action: CommandSnapshotNode): CommandActionShortcutModel | null {
   const shortcut = action.props.shortcut;
-  if (!shortcut || typeof shortcut !== "object") return null;
-  const record = shortcut as Record<string, unknown>;
+  if (!isRecord(shortcut)) return null;
+// SAFETY: the surrounding domain validation preserves the asserted contract.
+  const record = shortcut;
   const key = textProp(record.key);
   if (!key) return null;
 

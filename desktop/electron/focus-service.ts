@@ -11,6 +11,7 @@ import net from "node:net";
 import path from "node:path";
 import { app } from "electron";
 import { fileURLToPath } from "node:url";
+import { isRecord, isString } from "../src/shared/runtimeGuards";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,23 +49,19 @@ interface CliResult {
   error?: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function isServiceResponse(value: unknown): value is ServiceResponse {
+function isServiceResponse<T>(value: T): value is T & ServiceResponse {
   return (
     isRecord(value) &&
     typeof value.ok === "boolean" &&
     (value.active_domains === undefined ||
       (Array.isArray(value.active_domains) &&
-        value.active_domains.every((domain) => typeof domain === "string"))) &&
+        value.active_domains.every((domain) => isString(domain)))) &&
     (value.error === undefined || typeof value.error === "string") &&
     (value.pong === undefined || typeof value.pong === "boolean")
   );
 }
 
-function isCliResult(value: unknown): value is CliResult {
+function isCliResult<T>(value: T): value is T & CliResult {
   return (
     isRecord(value) &&
     typeof value.ok === "boolean" &&
@@ -177,6 +174,7 @@ function sendViaPipePath(pipePath: string, req: ServiceRequest): Promise<Service
       try {
         client.write(JSON.stringify(req) + "\n");
       } catch (e) {
+        // SAFETY: Node event handlers provide Error-like failures here.
         finish({ ok: false, error: `pipe write: ${(e as Error).message}` });
         client.destroy();
       }
@@ -200,6 +198,7 @@ function sendViaPipePath(pipePath: string, req: ServiceRequest): Promise<Service
         try {
           finish(parseServiceResponse(buffer.trim()));
         } catch (e) {
+          // SAFETY: JSON parsing failures are Error instances in this boundary.
           finish({ ok: false, error: `pipe parse: ${(e as Error).message}` });
         }
       }

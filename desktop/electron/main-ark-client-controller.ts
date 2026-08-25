@@ -5,6 +5,7 @@ import type { Instance } from "./instance";
 import { keplerDataDir } from "./data-dir";
 import { keplerLog } from "./logging";
 import { clearMainProtocolCaches } from "./main-protocols";
+type ArkRendererEvent = Parameters<Parameters<ArkClient["onArkEvent"]>[0]>[0];
 
 interface MainArkClientControllerOptions {
   instance: Instance;
@@ -63,7 +64,7 @@ export function createMainArkClientController(
     }
   }
 
-  function broadcastArkRendererEvent(event: unknown): void {
+  function broadcastArkRendererEvent(event: ArkRendererEvent): void {
     for (const win of BrowserWindow.getAllWindows()) {
       if (win.isDestroyed()) continue;
       try {

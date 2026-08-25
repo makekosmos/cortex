@@ -29,8 +29,6 @@ const pending = ref<DictationPendingItem[]>([]);
 const microphones = ref<Array<{ value: string; label: string }>>([
   { value: "", label: "Системный микрофон" },
 ]);
-const apiKey = ref("");
-const credentialMessage = ref("");
 const connectivity = ref<DictationConnectivity | null>(null);
 const modelInput = ref("");
 const customDohUrl = ref("");
@@ -139,38 +137,6 @@ function onEvent(event: DictationProgressEvent) {
   delete next[event.modelId];
   downloads.value = next;
   void refresh();
-}
-async function verifyKey() {
-  const result = await props.client.call<{ valid: boolean; message: string }>(
-    "verifyDictationApiKey",
-    { key: apiKey.value },
-    "credential",
-  );
-  if (result) credentialMessage.value = result.valid ? "Ключ принят." : result.message;
-}
-async function saveKey() {
-  const result = await props.client.call<{ saved: boolean }>(
-    "setDictationApiKey",
-    { key: apiKey.value },
-    "credential",
-  );
-  if (result?.saved) {
-    apiKey.value = "";
-    credentialMessage.value = "Ключ сохранён в Windows Credential Manager.";
-    await refresh();
-  }
-}
-async function clearKey() {
-  const result = await props.client.call<{ cleared: boolean }>(
-    "clearDictationApiKey",
-    undefined,
-    "credential",
-  );
-  if (result?.cleared) {
-    apiKey.value = "";
-    credentialMessage.value = "Ключ удалён.";
-    await refresh();
-  }
 }
 async function testConnectivity() {
   const result = await props.client.call<DictationConnectivity>(
@@ -332,7 +298,7 @@ onBeforeUnmount(() => stopEvents?.());
         <SettingsButtonRow
           title="Проверить соединение"
           button-label="Проверить"
-          variant="ghost"
+          variant="surface"
           @click="testConnectivity"
         />
       </SettingsList>
@@ -355,44 +321,6 @@ onBeforeUnmount(() => stopEvents?.());
       </SettingsList>
       <SettingsList>
         <SettingsRow
-          title="Groq API ключ"
-          :description="snapshot.hasApiKey ? 'Ключ настроен' : 'Ключ не настроен'"
-          ><template #control
-            ><TextInput
-              v-model="apiKey"
-              type="password"
-              autocomplete="new-password"
-              placeholder="Новый ключ" /></template
-        ></SettingsRow>
-        <SettingsRow
-          v-if="credentialMessage"
-          title="Статус ключа"
-          :description="credentialMessage"
-        />
-        <SettingsButtonRow
-          title="Проверить ключ"
-          button-label="Проверить"
-          variant="ghost"
-          :disabled="!apiKey"
-          @click="verifyKey"
-        />
-        <SettingsButtonRow
-          title="Сохранить ключ"
-          button-label="Сохранить"
-          variant="ghost"
-          :disabled="!apiKey"
-          @click="saveKey"
-        />
-        <SettingsButtonRow
-          title="Удалить ключ"
-          button-label="Удалить"
-          variant="ghost"
-          :disabled="!snapshot.hasApiKey"
-          @click="clearKey"
-        />
-      </SettingsList>
-      <SettingsList>
-        <SettingsRow
           v-for="model in models"
           :key="model.id"
           :title="model.name"
@@ -405,19 +333,19 @@ onBeforeUnmount(() => stopEvents?.());
               <Button
                 v-if="!model.downloaded"
                 size="sm"
-                variant="ghost"
+                variant="surface"
                 @click="downloadModel(model.id)"
                 >Скачать</Button
               ><Button
                 v-else-if="!model.selected"
                 size="sm"
-                variant="ghost"
+                variant="surface"
                 @click="useModel(model.id)"
                 >Использовать</Button
               ><Button
                 v-if="model.downloaded"
                 size="sm"
-                variant="ghost"
+                variant="surface"
                 @click="deleteModel(model.id)"
                 >Удалить</Button
               >
@@ -429,14 +357,14 @@ onBeforeUnmount(() => stopEvents?.());
         <SettingsButtonRow
           title="Повторить все"
           button-label="Повторить"
-          variant="ghost"
+          variant="surface"
           :disabled="!pending.length"
           @click="retryAll"
         />
         <SettingsButtonRow
           title="Удалить все"
           button-label="Удалить"
-          variant="ghost"
+          variant="surface"
           :disabled="!pending.length"
           @click="discardAll"
         />
@@ -447,8 +375,8 @@ onBeforeUnmount(() => stopEvents?.());
           :description="item.lastError || 'Ожидает повторной отправки'"
           ><template #control
             ><div class="row">
-              <Button size="sm" variant="ghost" @click="retry(item.uuid)">Повторить</Button
-              ><Button size="sm" variant="ghost" @click="discard(item.uuid)">Удалить</Button>
+              <Button size="sm" variant="surface" @click="retry(item.uuid)">Повторить</Button
+              ><Button size="sm" variant="surface" @click="discard(item.uuid)">Удалить</Button>
             </div></template
           ></SettingsRow
         >

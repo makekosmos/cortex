@@ -32,11 +32,11 @@ describe("Manager surface contract", () => {
     );
     expect(data).toContain("<SettingsList>");
     expect(data).toContain("<SettingsRow");
-    expect(data).toContain('title="Типы данных пока недоступны." muted');
-    expect(data).toContain('title="Нет объектов для отображения." muted');
-    expect(data).toContain('class="list-title settings-list__title"');
+    expect(data).toContain("const objectCount");
+    expect(data).toContain('title="Данных"');
+    expect(data).not.toContain("listObjects");
+    expect(data).not.toContain("searchObjects");
     expect(data).not.toContain('<p v-if="!summaryTypes.length"');
-    expect(data).not.toContain('<p v-if="!rows.length"');
     expect(root).toContain("#titlebar-leading");
     expect(root).toContain("Kosmos");
     expect(root).toContain("<DesktopChrome");
@@ -86,13 +86,15 @@ describe("Manager surface contract", () => {
     );
     expect(root).toContain('label: "Обновления"');
     expect(root).toContain("UpdatesView");
-    expect(updates).toContain("Проверить обновления");
-    expect(updates).toContain("Обновить всё");
+    expect(updates).not.toContain("Проверить обновления");
+    expect(updates).not.toContain("Обновить всё");
     expect(updates).not.toContain(
       "Проверка Desktop и приложений через их штатные каналы.",
     );
     expect(updates).toContain("<SettingsList>");
-    expect(updates).toContain('<Button variant="ghost"');
+    expect(updates).toContain('"checkDesktopUpdates"');
+    expect(updates).not.toContain("updates-toolbar");
+    expect(read("UpdatesRow.vue")).toContain('variant="surface"');
     expect(updates).toContain("Перезапустить и установить");
     expect(about).not.toContain("@click=\"$emit('checkUpdates')\"");
     expect(about).not.toContain("<Button");

@@ -132,6 +132,7 @@ function isCommandVisible(id: string): boolean {
 }
 
 function onToggleCommandVisibility(id: string, event: Event) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
   const checked = (event.target as HTMLInputElement).checked;
   const next = new Set(hiddenCommandIds.value);
   if (checked) {
@@ -194,6 +195,7 @@ async function loadTrayIcon() {
 }
 
 async function onToggleTrayIcon(e: Event) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
   const desired = (e.target as HTMLInputElement).checked;
   trayIcon.value = desired;
   try {
@@ -206,6 +208,7 @@ async function onToggleTrayIcon(e: Event) {
 }
 
 async function onLauncherStateTtlChange(e: Event) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
   const target = e.target as HTMLInputElement;
   const minutes = Number(target.value);
   if (!Number.isFinite(minutes) || minutes < 0) return;

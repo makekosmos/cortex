@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, shallowRef } from "vue";
 import type { CommandSnapshotNode } from "../../shared/command-ipc";
+import { isString } from "../shared/runtimeGuards";
 import {
   actionNodes,
   actionSections,
@@ -31,7 +32,7 @@ onBeforeUnmount(() => {
 
 function actionTitle(action: CommandSnapshotNode): string {
   const title = action.props.title;
-  if (typeof title === "string" && title.trim()) return title;
+  if (isString(title) && title.trim()) return title;
   if (action.type === "Action.CopyToClipboard") return "Скопировать";
   if (action.type === "Action.Paste") return "Вставить";
   if (action.type === "Action.Push") return "Открыть";
@@ -48,8 +49,8 @@ function actionTitle(action: CommandSnapshotNode): string {
 
 function actionKey(action: CommandSnapshotNode, prefix: string): string {
   const title = action.props.title;
-  const id = typeof action.props.id === "string" ? action.props.id : null;
-  return `${prefix}:${id ?? action.type}:${typeof title === "string" ? title : ""}`;
+  const id = isString(action.props.id) ? action.props.id : null;
+  return `${prefix}:${id ?? action.type}:${isString(title) ? title : ""}`;
 }
 
 function toggleSubmenu(id: string): void {

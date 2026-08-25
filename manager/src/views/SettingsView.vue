@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { SettingsList, SettingsToggleRow } from "@kosmos/visuals";
+import { Button, SettingsList, SettingsRow, SettingsToggleRow } from "@kosmos/visuals";
 import type { ManagerClient } from "../composables/useManagerClient";
 
 const props = defineProps<{ client: ManagerClient }>();
@@ -14,15 +14,17 @@ type TraySettingsBridge = {
 };
 
 function trayBridge() {
-  return (window as typeof window & { kepler?: { settings?: TraySettingsBridge } }).kepler?.settings;
+  // SAFETY: preload exposes the optional kepler settings bridge on window.
+  return (
+    window as typeof window & { kepler?: { settings?: TraySettingsBridge } }
+  ).kepler?.settings;
 }
 
 async function load() {
-  const result = await props.client.call<{ enabled: boolean; available: boolean }>(
-    "getAutostart",
-    undefined,
-    "autostart",
-  );
+  const result = await props.client.call<{
+    enabled: boolean;
+    available: boolean;
+  }>("getAutostart", undefined, "autostart");
   if (!result) return;
   enabled.value = result.enabled;
   available.value = result.available;
@@ -37,11 +39,10 @@ async function load() {
 }
 
 async function setAutostart(value: boolean) {
-  const result = await props.client.call<{ enabled: boolean; available: boolean }>(
-    "setAutostart",
-    { enabled: value },
-    "autostart",
-  );
+  const result = await props.client.call<{
+    enabled: boolean;
+    available: boolean;
+  }>("setAutostart", { enabled: value }, "autostart");
   if (!result) return;
   enabled.value = result.enabled;
   available.value = result.available;
@@ -56,6 +57,10 @@ async function setTrayIcon(value: boolean) {
   } catch {
     localStorage.setItem("kosmos.trayIcon", String(value));
   }
+}
+
+async function downloadLogs() {
+  await props.client.call("saveSupportBundle", undefined, "support-bundle");
 }
 
 onMounted(() => void load());
@@ -79,6 +84,14 @@ onMounted(() => void load());
         :label="trayIcon ? 'Показывать' : 'Скрывать'"
         @update:model-value="setTrayIcon"
       />
+      <SettingsRow
+        title="Скачать логи"
+        description="Сохранить локальный архив с журналами приложения."
+      >
+        <template #control>
+          <Button size="sm" variant="surface" @click="downloadLogs">Скачать</Button>
+        </template>
+      </SettingsRow>
     </SettingsList>
   </section>
 </template>

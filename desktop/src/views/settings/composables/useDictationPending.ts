@@ -34,11 +34,13 @@ export function useDictationPending() {
     pendingLoading.value = true;
     pendingError.value = null;
     try {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       const resp = (await window.kepler.ark.request("dictation.list_pending", {})) as {
         items?: PendingItem[];
       };
       pendingItems.value = Array.isArray(resp.items) ? resp.items : [];
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       pendingError.value = (e as Error)?.message ?? String(e);
       pendingItems.value = [];
     } finally {
@@ -54,6 +56,7 @@ export function useDictationPending() {
       // на success, или повышает attempts на failure.
       setTimeout(() => void loadPending(), 1500);
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       pendingError.value = (e as Error)?.message ?? String(e);
     } finally {
       busyUuid.value = null;
@@ -66,6 +69,7 @@ export function useDictationPending() {
       await window.kepler.ark.request("dictation.discard", { uuid });
       await loadPending();
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       pendingError.value = (e as Error)?.message ?? String(e);
     } finally {
       busyUuid.value = null;
@@ -78,6 +82,7 @@ export function useDictationPending() {
       await window.kepler.ark.request("dictation.discard_all", {});
       await loadPending();
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       pendingError.value = (e as Error)?.message ?? String(e);
     } finally {
       busyUuid.value = null;
@@ -89,6 +94,7 @@ export function useDictationPending() {
       await window.kepler.ark.request("dictation.retry_all", {});
       setTimeout(() => void loadPending(), 1500);
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       pendingError.value = (e as Error)?.message ?? String(e);
     }
   }

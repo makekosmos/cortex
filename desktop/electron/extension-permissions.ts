@@ -1,11 +1,17 @@
 export type ExtensionSource = "dev" | "user" | "bundled";
 
+type JsonPrimitive = string | number | boolean | null;
+export interface JsonRecord {
+  [key: string]: JsonValue;
+}
+export type JsonValue = JsonPrimitive | JsonValue[] | JsonRecord;
+
 export interface ExtensionPermissionCheck {
   extensionId: string;
   source: ExtensionSource;
   manifestPermissions?: readonly string[];
   operation: string;
-  params?: Record<string, unknown>;
+  params?: JsonRecord;
   resolveObjectType?: (id: string) => Promise<string | null>;
 }
 
@@ -82,32 +88,40 @@ function hasAnyCapability(
   return required.some((capability) => hasCapability(granted, capability));
 }
 
-function objectTypeFromParams(params: Record<string, unknown> | undefined): string | null {
+function isRecord(value: JsonValue | undefined): value is JsonRecord {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isString(value: JsonValue | undefined): value is string {
+  return typeof value === "string";
+}
+
+function objectTypeFromParams(params: JsonRecord | undefined): string | null {
   const object = params?.object;
-  if (!object || typeof object !== "object") return null;
-  const record = object as Record<string, unknown>;
+  if (!isRecord(object)) return null;
+  const record = object;
   const raw = record.type_id ?? record.typeId;
-  return typeof raw === "string" && raw.length > 0 ? raw : null;
+  return isString(raw) && raw.length > 0 ? raw : null;
 }
 
 function commandIdsFromParams(
   operation: string,
-  params: Record<string, unknown> | undefined,
+  params: JsonRecord | undefined,
 ): string[] {
   if (operation === "commands.invoke") {
-    return typeof params?.id === "string" ? [params.id] : [];
+    return isString(params?.id) ? [params.id] : [];
   }
   if (operation === "commands.unregister") {
-    return Array.isArray(params?.ids) ? params.ids.filter((id) => typeof id === "string") : [];
+    return Array.isArray(params?.ids) ? params.ids.filter(isString) : [];
   }
   if (operation !== "commands.register") return [];
   const commands = params?.commands;
   if (!Array.isArray(commands)) return [];
   return commands
     .map((command) => {
-      if (!command || typeof command !== "object") return null;
-      const id = (command as Record<string, unknown>).id;
-      return typeof id === "string" ? id : null;
+      if (!isRecord(command)) return null;
+      const id = command.id;
+      return isString(id) ? id : null;
     })
     .filter((id): id is string => Boolean(id));
 }
@@ -127,7 +141,7 @@ function assertOwnCommandNamespace(
   }
 }
 
-function requiredCapabilities(operation: string, params?: Record<string, unknown>): string[] {
+function requiredCapabilities(operation: string, params?: JsonRecord): string[] {
   if (OBJECT_READ_OPS.has(operation)) return ["objects.read"];
   if (OBJECT_WRITE_OPS.has(operation)) return ["objects.write"];
   if (operation === "upsert_object") {
@@ -213,14 +227,14 @@ function requiredCapabilities(operation: string, params?: Record<string, unknown
 async function deleteObjectCapabilities(check: ExtensionPermissionCheck): Promise<string[]> {
   if (hasCapability(check.manifestPermissions, "objects.write")) return ["objects.write"];
   const id = check.params?.id;
-  if (typeof id !== "string" || !check.resolveObjectType) return ["objects.write"];
+  if (!isString(id) || !check.resolveObjectType) return ["objects.write"];
   const typeId = await check.resolveObjectType(id);
   return typeId ? [`objects.write:${typeId}`, "objects.write"] : ["objects.write"];
 }
 
 export async function assertExtensionArkPermission(check: ExtensionPermissionCheck): Promise<void> {
   if (isTrustedSource(check.source)) return;
-  if (typeof check.operation !== "string" || check.operation.length === 0) {
+  if (!check.operation || check.operation.length === 0) {
     throw new Error("[kepler-shell] extension ARK operation must be a non-empty string");
   }
   if (check.operation === "delete_object") {

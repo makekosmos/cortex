@@ -50,16 +50,13 @@ export function extensionUserDataDir(id: string): string {
 const USER_DATA_NAME_RE = /^[\w][\w.-]*$/;
 const USER_DATA_PATH_SEGMENT_RE = /^[\w][\w.-]*$/;
 
-export function assertSafeUserDataName(name: unknown): asserts name is string {
-  if (typeof name !== "string" || !USER_DATA_NAME_RE.test(name)) {
+export function assertSafeUserDataName(name: string): asserts name is string {
+  if (!USER_DATA_NAME_RE.test(name)) {
     throw new Error(`[kepler-shell] invalid user data file name: ${String(name)}`);
   }
 }
 
-export function resolveSafeUserDataPath(dir: string, name: unknown): string {
-  if (typeof name !== "string") {
-    throw new Error(`[kepler-shell] invalid user data path: ${String(name)}`);
-  }
+export function resolveSafeUserDataPath(dir: string, name: string): string {
   const normalized = name.replace(/\\/g, "/");
   if (!normalized || path.isAbsolute(normalized) || normalized.includes("\0")) {
     throw new Error(`[kepler-shell] invalid user data path: ${name}`);

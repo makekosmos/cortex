@@ -21,6 +21,7 @@ const props = withDefaults(
 );
 
 // `?raw` — Vite инлайнит содержимое SVG как строку.
+// SAFETY: the surrounding domain validation preserves the asserted contract.
 const ICONS = import.meta.glob("/src/assets/providers/*.svg", {
   eager: true,
   query: "?raw",

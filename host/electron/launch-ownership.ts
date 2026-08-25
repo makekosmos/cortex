@@ -1,6 +1,6 @@
 export type OwnedLaunch = Readonly<{
   id: string;
-  owner: object;
+  owner: NonNullable<unknown>;
   webContentsId: number;
   generation: number;
   launchId: string;
@@ -20,7 +20,12 @@ export class LaunchOwnership {
   private readonly claims = new Map<string, OwnedLaunch>();
   private generation = 0;
 
-  claim(id: string, owner: object, webContentsId: number, launchId: string): ClaimResult {
+  claim(
+    id: string,
+    owner: NonNullable<unknown>,
+    webContentsId: number,
+    launchId: string,
+  ): ClaimResult {
     const replaced = this.claims.get(id);
     const current: OwnedLaunch = {
       id,
@@ -30,7 +35,7 @@ export class LaunchOwnership {
       generation: ++this.generation,
     };
     this.claims.set(id, current);
-    return { current, ...(replaced ? { replaced } : {}) };
+    return replaced ? { current, replaced } : { current };
   }
 
   current(id: string): OwnedLaunch | undefined {
@@ -50,7 +55,7 @@ export class LaunchOwnership {
 
   async release(
     claim: OwnedLaunch,
-    revoke: (launchId: string) => Promise<unknown>,
+    revoke: (launchId: string) => Promise<void>,
   ): Promise<boolean> {
     const launchId = this.take(claim);
     if (!launchId) return false;
@@ -58,7 +63,7 @@ export class LaunchOwnership {
     return true;
   }
 
-  async drain(revoke: (launchId: string) => Promise<unknown>): Promise<void> {
+  async drain(revoke: (launchId: string) => Promise<void>): Promise<void> {
     const launches = [...this.claims.values()];
     this.claims.clear();
     await Promise.allSettled(launches.map((launch) => revoke(launch.launchId)));

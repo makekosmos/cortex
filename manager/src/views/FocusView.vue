@@ -11,7 +11,10 @@ import {
 } from "@kosmos/visuals";
 import type { FocusBlocklist, FocusServiceStatus } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
-
+import {
+  parseFocusDomains,
+  type FocusUpsertParams,
+} from "./focus-view-helpers";
 const props = defineProps<{ client: ManagerClient }>();
 const blocklists = ref<FocusBlocklist[]>([]);
 const activeId = ref<string | null>(null);
@@ -30,13 +33,9 @@ const kind = ref<"domains" | "raw">("domains");
 const busy = ref(false);
 const message = ref("");
 
-const activeList = computed(() => blocklists.value.find((item) => item.id === activeId.value));
-const parseDomains = () =>
-  domains.value
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
+const activeList = computed(() =>
+  blocklists.value.find((item) => item.id === activeId.value),
+);
 async function refresh() {
   const [lists, state, health] = await Promise.all([
     props.client.call("getFocusBlocklists", undefined, "focus-lists"),
@@ -75,16 +74,19 @@ async function save() {
   if (!name.value.trim() || busy.value) return;
   busy.value = true;
   message.value = "";
+  const params: FocusUpsertParams = {
+    name: name.value.trim(),
+    domains: parseFocusDomains(domains.value),
+    icon: icon.value,
+    kind: kind.value,
+  };
+  if (editing.value) {
+    params.id = editing.value.id;
+    params.preset = editing.value.preset;
+  }
   const result = await props.client.call(
     "upsertFocusBlocklist",
-    {
-      ...(editing.value ? { id: editing.value.id } : {}),
-      name: name.value.trim(),
-      domains: parseDomains(),
-      icon: icon.value,
-      kind: kind.value,
-      ...(editing.value ? { preset: editing.value.preset } : {}),
-    },
+    params,
     "focus-save",
   );
   busy.value = false;
@@ -99,7 +101,11 @@ async function remove(item: FocusBlocklist) {
     return;
   }
   busy.value = true;
-  await props.client.call("deleteFocusBlocklist", { id: item.id }, `focus-delete-${item.id}`);
+  await props.client.call(
+    "deleteFocusBlocklist",
+    { id: item.id },
+    `focus-delete-${item.id}`,
+  );
   busy.value = false;
   if (editing.value?.id === item.id) editing.value = null;
   await refresh();
@@ -129,22 +135,39 @@ onMounted(() => void refresh());
       >
         <template #control>
           <StatusDot
-            :tone="service.healthy ? 'success' : service.installed ? 'warning' : 'neutral'"
+            :tone="
+              service.healthy
+                ? 'success'
+                : service.installed
+                  ? 'warning'
+                  : 'neutral'
+            "
             :label="
-              service.healthy ? 'Работает' : service.installed ? 'Не отвечает' : 'Не установлена'
+              service.healthy
+                ? 'Работает'
+                : service.installed
+                  ? 'Не отвечает'
+                  : 'Не установлена'
             "
           />
         </template>
       </SettingsRow>
-      <SettingsRow title="Управление службой" description="Установка и запуск службы фокуса">
+      <SettingsRow
+        title="Управление службой"
+        description="Установка и запуск службы фокуса"
+      >
         <template #control>
-          <Button variant="surface" size="sm" :disabled="busy" @click="serviceAction('installFocusService')">{{
-            service.installed ? "Переустановить" : "Установить"
-          }}</Button>
+          <Button
+            variant="surface"
+            size="sm"
+            :disabled="busy"
+            @click="serviceAction('installFocusService')"
+            >{{ service.installed ? "Переустановить" : "Установить" }}</Button
+          >
           <Button
             v-if="service.installed && !service.running"
             size="sm"
-            variant="ghost"
+            variant="surface"
             :disabled="busy"
             @click="serviceAction('startFocusService')"
             >Запустить</Button
@@ -152,7 +175,7 @@ onMounted(() => void refresh());
           <Button
             v-if="service.running"
             size="sm"
-            variant="ghost"
+            variant="surface"
             :disabled="busy"
             @click="serviceAction('stopFocusService')"
             >Остановить</Button
@@ -204,8 +227,16 @@ onMounted(() => void refresh());
         :description="`${item.domains.length} ${item.domains.length === 1 ? 'домен' : 'доменов'}${item.id === activeId ? ' · активен' : ''}`"
       >
         <template #control>
-          <Button size="sm" variant="ghost" @click="beginEdit(item)">Настроить</Button>
-          <Button size="sm" variant="danger" :disabled="busy" @click="remove(item)">Удалить</Button>
+          <Button size="sm" variant="surface" @click="beginEdit(item)"
+            >Настроить</Button
+          >
+          <Button
+            size="sm"
+            variant="danger"
+            :disabled="busy"
+            @click="remove(item)"
+            >Удалить</Button
+          >
         </template>
       </SettingsRow>
       <SettingsRow v-if="!blocklists.length" title="Блок-листов нет" />
@@ -214,13 +245,19 @@ onMounted(() => void refresh());
 
     <form v-if="formOpen" class="stack" @submit.prevent="save">
       <SettingsList>
-        <SettingsRow :title="editing ? 'Изменить блок-лист' : 'Новый блок-лист'">
+        <SettingsRow
+          :title="editing ? 'Изменить блок-лист' : 'Новый блок-лист'"
+        >
           <template #control
-            ><Button size="sm" type="submit" :disabled="busy">Сохранить</Button></template
+            ><Button size="sm" variant="surface" type="submit" :disabled="busy"
+              >Сохранить</Button
+            ></template
           >
         </SettingsRow>
         <SettingsRow title="Название">
-          <template #control><TextInput v-model="name" placeholder="Например, Работа" /></template>
+          <template #control
+            ><TextInput v-model="name" placeholder="Например, Работа"
+          /></template>
         </SettingsRow>
         <SettingsRow title="Иконка">
           <template #control><TextInput v-model="icon" /></template>
@@ -230,8 +267,13 @@ onMounted(() => void refresh());
         </SettingsRow>
         <SettingsRow title="Формат">
           <template #control>
-            <label class="kind"><input v-model="kind" type="radio" value="domains" /> Домены</label>
-            <label class="kind"><input v-model="kind" type="radio" value="raw" /> Ссылки</label>
+            <label class="kind"
+              ><input v-model="kind" type="radio" value="domains" />
+              Домены</label
+            >
+            <label class="kind"
+              ><input v-model="kind" type="radio" value="raw" /> Ссылки</label
+            >
           </template>
         </SettingsRow>
       </SettingsList>

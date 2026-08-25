@@ -1,6 +1,7 @@
 import { assertContext, type BrokerTransport, type LaunchContext } from "./types";
-export type ArkRequest = Readonly<Record<string, unknown>> & { kind: string };
-export type ArkResponse = unknown;
+type ArkValue = string | number | boolean | null | readonly ArkValue[] | { readonly [key: string]: ArkValue };
+export type ArkRequest = Readonly<{ kind: string; [key: string]: ArkValue }>;
+export type ArkResponse = object;
 export class ArkBroker {
   constructor(private readonly transport: BrokerTransport<ArkRequest, ArkResponse>) {}
   request(context: LaunchContext, request: ArkRequest) {

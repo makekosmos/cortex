@@ -19,9 +19,9 @@ import {
   PhCrosshair,
   PhDatabase,
   PhEngine,
-  PhGauge,
   PhGear,
   PhInfo,
+  PhKey,
   PhMicrophone,
   PhPackage,
   PhPlugsConnected,
@@ -31,7 +31,6 @@ import { useManagerClient } from "./composables/useManagerClient";
 import DataView from "./views/DataView.vue";
 import SyncView from "./views/SyncView.vue";
 import StoreView from "./views/StoreView.vue";
-import DiagnosticsView from "./views/DiagnosticsView.vue";
 import EngineSettingsView from "./views/EngineSettingsView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import DictationSettingsView from "./views/DictationSettingsView.vue";
@@ -39,25 +38,26 @@ import FocusView from "./views/FocusView.vue";
 import ConnectionsView from "./views/ConnectionsView.vue";
 import AboutView from "./views/AboutView.vue";
 import UpdatesView from "./views/UpdatesView.vue";
+import SecretsView from "./views/SecretsView.vue";
 
 type ViewId =
   | "data"
   | "sync"
   | "packages"
-  | "diagnostics"
   | "engine"
   | "settings"
   | "dictation"
   | "focus"
   | "connections"
   | "about"
-  | "updates";
+  | "updates"
+  | "secrets";
 const client = useManagerClient();
 const { error } = client;
 const view = ref<ViewId>("data");
 const surface = useTemplateRef<ComponentPublicInstance>("surface");
 const scrollPositions = new Map<ViewId, number>();
-const views: Record<ViewId, { label: string; hint: string; component: Component }> = {
+const views = {
   data: { label: "Данные", hint: "Типы и объекты", component: DataView },
   sync: {
     label: "Синхронизация",
@@ -68,11 +68,6 @@ const views: Record<ViewId, { label: string; hint: string; component: Component 
     label: "Маркетплейс",
     hint: "Приложения и интеграции",
     component: StoreView,
-  },
-  diagnostics: {
-    label: "Диагностика",
-    hint: "Состояние системы",
-    component: DiagnosticsView,
   },
   engine: {
     label: "Движок",
@@ -105,12 +100,12 @@ const views: Record<ViewId, { label: string; hint: string; component: Component 
     hint: "Kosmos Desktop и приложения",
     component: UpdatesView,
   },
+  secrets: { label: "Ключи", hint: "API-ключи и провайдеры", component: SecretsView },
 };
 const icons = {
   data: PhDatabase,
   sync: PhArrowsClockwise,
   packages: PhStorefront,
-  diagnostics: PhGauge,
   engine: PhEngine,
   settings: PhGear,
   dictation: PhMicrophone,
@@ -118,19 +113,27 @@ const icons = {
   connections: PhPlugsConnected,
   about: PhInfo,
   updates: PhPackage,
-};
-const primaryViewIds: Exclude<ViewId, "about" | "dictation" | "focus" | "packages" | "updates" | "settings">[] = [
-  "data",
-  "sync",
-  "diagnostics",
-  "engine",
-  "connections",
+  secrets: PhKey,
+} satisfies Record<
+  ViewId,
+  { label: string; hint: string; component: Component }
+>;
+const primaryViewIds: Exclude<
+  ViewId,
+  "about" | "dictation" | "focus" | "packages" | "updates" | "settings" | "secrets"
+>[] = ["data", "sync", "engine", "connections", "secrets"];
+const commerceViewIds: Extract<ViewId, "packages" | "updates">[] = [
+  "packages",
+  "updates",
 ];
-const commerceViewIds: Extract<ViewId, "packages" | "updates">[] = ["packages", "updates"];
-const appViewIds: Extract<ViewId, "dictation" | "focus">[] = ["dictation", "focus"];
+const appViewIds: Extract<ViewId, "dictation" | "focus">[] = [
+  "dictation",
+  "focus",
+];
 const active = computed(() => views[view.value]);
 
 async function select(next: ViewId) {
+  // SAFETY: the template ref targets the root element of the active view component.
   const element = surface.value?.$el as HTMLElement | undefined;
   if (element) scrollPositions.set(view.value, element.scrollTop);
   view.value = next;
@@ -144,15 +147,15 @@ onMounted(() => {
 </script>
 
 <template>
-  <DesktopChrome
-    appearance="settings"
-    platform="windows"
-  >
+  <DesktopChrome appearance="settings" platform="windows">
     <template #titlebar-leading>
       <span class="kosmos-titlebar-brand">Kosmos</span>
     </template>
     <template #sidebar>
-      <SettingsSidebar aria-label="Разделы менеджера" background="var(--bg-app)">
+      <SettingsSidebar
+        aria-label="Разделы менеджера"
+        background="var(--bg-app)"
+      >
         <div class="manager-sidebar-scroll kosmos-scroll">
           <div class="manager-sidebar-group">
             <SettingsSidebarButton
@@ -218,7 +221,11 @@ onMounted(() => {
         </div>
       </SettingsSidebar>
     </template>
-    <DesktopContentSurface ref="surface" :scrollable="true" class="surface kosmos-scroll">
+    <DesktopContentSurface
+      ref="surface"
+      :scrollable="true"
+      class="surface kosmos-scroll"
+    >
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <KeepAlive>
         <component :is="active.component" :client="client" />

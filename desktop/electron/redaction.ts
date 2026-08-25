@@ -1,5 +1,7 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import type { JsonRecord, JsonValue } from "./extension-permissions";
+export type { JsonRecord } from "./extension-permissions";
 
 const MAX_LOG_TEXT_BYTES = 16 * 1024;
 export const MAX_SUPPORT_TEXT_FILE_BYTES = 1024 * 1024;
@@ -23,6 +25,9 @@ const SENSITIVE_KEYS = new Set([
   "token",
 ]);
 
+interface RedactableObject {}
+type RedactableValue = JsonValue | RedactableObject;
+
 export function redactText(value: string): string {
   let output = value
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
@@ -41,10 +46,13 @@ export function redactText(value: string): string {
   return output;
 }
 
-export function redactUnknown(value: unknown, key = "", depth = 0): unknown {
+export function redactUnknown(value: RedactableValue, key = "", depth = 0): JsonValue {
   if (SENSITIVE_KEYS.has(normalizeKey(key))) return "[REDACTED]";
-  if (typeof value === "string") return redactText(value);
-  if (value === null || typeof value !== "object") return value;
+  if (isJsonString(value)) return redactText(value);
+  if (value === null || !isJsonObject(value)) {
+    // SAFETY: Primitive inputs are already members of the JSON value contract.
+    return value as JsonValue;
+  }
   if (depth >= 6) return "[TRUNCATED]";
   if (Array.isArray(value)) {
     return value.slice(0, 50).map((item) => redactUnknown(item, "", depth + 1));
@@ -78,16 +86,25 @@ export function redactTextFile(contents: string): string {
 export function createCrashMetadata(
   component: string,
   correlationId: string,
-  meta?: object,
-): Record<string, unknown> {
-  return redactUnknown({
+  meta?: RedactableObject,
+): JsonRecord {
+  const redacted = redactUnknown({
     ...meta,
     component,
     correlationId,
     crashId: randomUUID(),
-  }) as Record<string, unknown>;
+  });
+  return isJsonObject(redacted) ? redacted : {};
 }
 
 function normalizeKey(key: string): string {
   return key.toLowerCase().replace(/[^a-z]/g, "");
+}
+
+function isJsonString(value: RedactableValue): value is string {
+  return typeof value === "string";
+}
+
+function isJsonObject(value: RedactableValue): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

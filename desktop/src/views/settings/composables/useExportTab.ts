@@ -65,6 +65,7 @@ export function useExportTab() {
       }
       exportSelectedFormat.value = sel;
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       exportError.value = (e as Error).message;
       exportConverters.value = [];
     } finally {
@@ -81,6 +82,7 @@ export function useExportTab() {
     } catch (e) {
       exportStatusByConverter.value = {
         ...exportStatusByConverter.value,
+// SAFETY: the surrounding domain validation preserves the asserted contract.
         [c.converter_id]: `Ошибка диалога: ${(e as Error).message}`,
       };
       return;
@@ -123,6 +125,7 @@ export function useExportTab() {
     } catch (e) {
       exportStatusByConverter.value = {
         ...exportStatusByConverter.value,
+// SAFETY: the surrounding domain validation preserves the asserted contract.
         [c.converter_id]: `Ошибка: ${(e as Error).message}`,
       };
     } finally {

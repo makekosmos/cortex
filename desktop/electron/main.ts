@@ -217,8 +217,8 @@ app.on("child-process-gone", (_event, details) => {
   keplerLog.crash(`electron-${details.type}`, {
     reason: details.reason,
     exitCode: details.exitCode,
-    serviceName: details.serviceName,
-    name: details.name,
+    serviceName: details.serviceName ?? null,
+    name: details.name ?? null,
   });
 });
 

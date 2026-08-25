@@ -83,6 +83,7 @@ async function waitForRenderedPage(win: BrowserWindow): Promise<BookMetadataPage
       throw new Error("Не удалось открыть страницу");
     }
     try {
+      // SAFETY: the isolated snapshot script returns the PageSnapshot contract above.
       const snapshot = (await win.webContents.executeJavaScriptInIsolatedWorld(1001, [
         { code: snapshotScript() },
       ])) as PageSnapshot | null;

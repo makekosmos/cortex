@@ -42,9 +42,7 @@ impl Provider {
             "toggl" => Ok(Self::Toggl),
             "leetcode" => Ok(Self::Leetcode),
             "codewars" => Ok(Self::Codewars),
-            _ => Err(format!(
-                "РќРµРёР·РІРµСЃС‚РЅР°СЏ РёРЅС‚РµРіСЂР°С†РёСЏ: {value}"
-            )),
+            _ => Err(format!("Неизвестная интеграция: {value}")),
         }
     }
 
@@ -68,10 +66,10 @@ impl Provider {
 
     pub(crate) fn credential_label(self) -> &'static str {
         match self {
-            Self::Hevy => "API-РєР»СЋС‡",
-            Self::Toggl => "API-С‚РѕРєРµРЅ",
-            Self::Leetcode => "РЎРµСЃСЃРёСЏ LeetCode",
-            Self::Codewars => "РРјСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ",
+            Self::Hevy => "API-ключ",
+            Self::Toggl => "API-токен",
+            Self::Leetcode => "Сессия LeetCode",
+            Self::Codewars => "Имя пользователя",
         }
     }
 
@@ -207,19 +205,15 @@ pub(crate) fn write_config_unlocked(
     data_dir: &Path,
     config: &IntegrationsConfig,
 ) -> Result<(), String> {
-    fs::create_dir_all(data_dir)
-        .map_err(|error| format!("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ РїР°РїРєСѓ: {error}"))?;
+    fs::create_dir_all(data_dir).map_err(|error| format!("Не удалось создать папку: {error}"))?;
     let target = config_path(data_dir);
     let temporary = target.with_extension("json.tmp");
-    let json = serde_json::to_vec_pretty(config).map_err(|error| {
-        format!("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРµСЂРёР°Р»РёР·РѕРІР°С‚СЊ РЅР°СЃС‚СЂРѕР№РєРё: {error}")
-    })?;
-    fs::write(&temporary, json).map_err(|error| {
-        format!("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РЅР°СЃС‚СЂРѕР№РєРё: {error}")
-    })?;
-    fs::rename(&temporary, &target).map_err(|error| {
-        format!("РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРёРјРµРЅРёС‚СЊ РЅР°СЃС‚СЂРѕР№РєРё: {error}")
-    })
+    let json = serde_json::to_vec_pretty(config)
+        .map_err(|error| format!("Не удалось сериализовать настройки: {error}"))?;
+    fs::write(&temporary, json)
+        .map_err(|error| format!("Не удалось сохранить настройки: {error}"))?;
+    fs::rename(&temporary, &target)
+        .map_err(|error| format!("Не удалось применить настройки: {error}"))
 }
 
 pub(crate) fn mutate_config(

@@ -38,14 +38,36 @@ export type AppResolve = {
   revoked: false;
 };
 export type PermissionGrant = { capability: string; scopes?: string[] };
-export type SidecarEvent = { event: string; [key: string]: unknown };
-export type CrashDetails = { reason?: unknown; exitCode?: unknown };
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue };
+export type JsonRecord = { [key: string]: JsonValue };
+export type SidecarEvent = JsonRecord & { event: string };
+export type CrashDetails = { reason?: JsonValue; exitCode?: JsonValue };
+type CrashMetadata = {
+  component: string;
+  app_id?: string;
+  version?: string;
+  reason: string;
+  exit_code: number | null;
+};
 
 export type EngineResult<T> = { ok: true; data: T } | { ok: false; message: string };
 
 const API_VERSION = "1.0.0";
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const SAFE_LAUNCH_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export const isJsonString = (value: JsonValue | undefined): value is string => typeof value === "string";
+export const isJsonNumber = (value: JsonValue | undefined): value is number => typeof value === "number";
+export const isJsonRecord = (value: JsonValue | undefined): value is JsonRecord =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+const isString = isJsonString;
+const isNumber = isJsonNumber;
+const isRecord = isJsonRecord;
 
 const READ_OPS = new Set([
   "list_objects",
@@ -106,14 +128,14 @@ export function isV2Launch(
 ): boolean {
   return (
     launch.manifest_schema_version === 2 ||
-    typeof launch.broker_token === "string" ||
-    typeof launch.data_api === "string"
+    launch.broker_token !== undefined ||
+    launch.data_api !== undefined
   );
 }
 
 export function hasLaunchReadPermission(
   launch: AppLaunch,
-  event?: Record<string, unknown>,
+  event?: JsonRecord,
 ): boolean {
   if (isV2Launch(launch)) {
     if (!Array.isArray(launch.effective_read_types) || launch.effective_read_types.length === 0)
@@ -125,13 +147,13 @@ export function hasLaunchReadPermission(
   return hasArkReadPermission(launch.permissions);
 }
 
-function eventTypeId(event: Record<string, unknown>): string | undefined {
-  const readTypeId = (value: unknown): string | undefined => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-    const record = value as Record<string, unknown>;
-    return typeof record.type_id === "string"
+function eventTypeId(event: JsonRecord): string | undefined {
+  const readTypeId = (value: JsonValue | undefined): string | undefined => {
+    if (!isRecord(value)) return undefined;
+    const record = value;
+    return isString(record.type_id)
       ? record.type_id
-      : typeof record.typeId === "string"
+      : isString(record.typeId)
         ? record.typeId
         : undefined;
   };
@@ -141,8 +163,8 @@ function eventTypeId(event: Record<string, unknown>): string | undefined {
   const entity = event.entity;
   const entityType = readTypeId(entity);
   if (entityType) return entityType;
-  if (entity && typeof entity === "object" && !Array.isArray(entity)) {
-    const data = (entity as Record<string, unknown>).data;
+  if (isRecord(entity)) {
+    const data = entity.data;
     const dataType = readTypeId(data);
     if (dataType) return dataType;
   }
@@ -215,19 +237,14 @@ export function redactedCrashMetadata(
   version: string | undefined,
   details: CrashDetails,
 ) {
-  return {
+  const metadata: CrashMetadata = {
     component: "renderer",
-    ...(appId ? { app_id: appId.slice(0, 128) } : {}),
-    ...(version ? { version: version.slice(0, 64) } : {}),
-    reason:
-      typeof details.reason === "string" && CRASH_REASONS.has(details.reason)
-        ? details.reason
-        : "unknown",
-    exit_code:
-      typeof details.exitCode === "number" && Number.isInteger(details.exitCode)
-        ? details.exitCode
-        : null,
+    reason: isString(details.reason) && CRASH_REASONS.has(details.reason) ? details.reason : "unknown",
+    exit_code: isNumber(details.exitCode) && Number.isInteger(details.exitCode) ? details.exitCode : null,
   };
+  if (appId) metadata.app_id = appId.slice(0, 128);
+  if (version) metadata.version = version.slice(0, 64);
+  return metadata;
 }
 
 export class EngineClient {
@@ -272,6 +289,7 @@ export class EngineClient {
   }
 
   onArkEvent(listener: (event: SidecarEvent) => void): () => void {
+    // SAFETY: Ark event payloads are emitted by the typed reconnecting client.
     const unsubscribe = this.reconnectingArk.onArkEvent((event) => listener(event as SidecarEvent));
     void this.ensureArkClient();
     return unsubscribe;
@@ -329,6 +347,7 @@ export class EngineClient {
       throw Object.assign(new Error(`HTTP ${response.status}`), {
         status: response.status,
       });
+    // SAFETY: Engine responses are checked below before their generic payload is returned.
     const value = (await response.json()) as {
       ok?: boolean;
       data?: T;
@@ -404,14 +423,15 @@ export class EngineClient {
 
   async arkRequest(
     operation: string,
-    params: Record<string, unknown>,
-  ): Promise<EngineResult<unknown>> {
+    params: JsonRecord,
+  ): Promise<EngineResult<JsonValue>> {
     try {
       const data = await this.reconnectingArk.invokeOperation(
         { ...params, operation },
         { idempotent: READ_OPS.has(operation) },
       );
-      return { ok: true, data };
+      // SAFETY: ArkClient returns JSON-compatible operation payloads.
+      return { ok: true, data: data as JsonValue };
     } catch {
       return { ok: false, message: "Engine отклонил операцию." };
     }
@@ -421,21 +441,21 @@ export class EngineClient {
     launchId: string,
     brokerToken: string,
     operation: string,
-    params: Record<string, unknown>,
-  ): Promise<EngineResult<unknown>> {
+    params: JsonRecord,
+  ): Promise<EngineResult<JsonValue>> {
     if (!SAFE_LAUNCH_ID.test(launchId) || !operation || !isSafeBrokerToken(brokerToken)) {
       return { ok: false, message: "Некорректный launch-scoped запрос ARK." };
     }
-    return this.request<unknown>(`/v1/apps/launch/${launchId}/ark`, {
+    return this.request<JsonValue>(`/v1/apps/launch/${launchId}/ark`, {
       method: "POST",
       headers: { "X-Kosmos-Launch-Token": brokerToken },
       body: JSON.stringify({ operation, params }),
     });
   }
 
-  async arkDataRequest(request: Record<string, unknown>): Promise<EngineResult<unknown>> {
+  async arkDataRequest(request: JsonRecord): Promise<EngineResult<JsonValue>> {
     if (
-      typeof request.kind !== "string" ||
+      !isString(request.kind) ||
       request.kind === "raw" ||
       "operation" in request ||
       "params" in request
@@ -443,21 +463,23 @@ export class EngineClient {
       return { ok: false, message: "Некорректный типизированный запрос ARK." };
     try {
       const data = await this.reconnectingArk.invokeOperation(
-        request as Record<string, unknown> & { operation: string },
+        // SAFETY: the checks above reject raw requests and require a string kind.
+        request as JsonRecord & { operation: string },
         {
           idempotent: request.kind === "read_object" || request.kind === "list_objects",
         },
       );
-      return { ok: true, data };
+      // SAFETY: ArkClient returns JSON-compatible operation payloads.
+      return { ok: true, data: data as JsonValue };
     } catch {
       return { ok: false, message: "Engine отклонил типизированный запрос ARK." };
     }
   }
   async launcherRequest(
     operation: string,
-    params: Record<string, unknown>,
-  ): Promise<EngineResult<unknown>> {
-    return this.request<unknown>("/v1/rpc", {
+    params: JsonRecord,
+  ): Promise<EngineResult<JsonValue>> {
+    return this.request<JsonValue>("/v1/rpc", {
       method: "POST",
       body: JSON.stringify({ operation, _req_id: randomUUID(), ...params }),
     });

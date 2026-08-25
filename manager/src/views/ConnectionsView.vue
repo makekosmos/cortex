@@ -1,6 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { Button, Modal, StatusDot } from "@kosmos/visuals";
+import {
+  Button,
+  Dropdown,
+  Modal,
+  SettingsList,
+  SettingsRow,
+  SettingsToggleRow,
+  TextInput,
+} from "@kosmos/visuals";
+import codewarsIcon from "../../../desktop/src/integrations/assets/codewars.svg";
+import leetcodeIcon from "../../../desktop/src/integrations/assets/leetcode.svg";
 import hevyIcon from "../assets/integrations/hevy.svg";
 import togglTrackIcon from "../assets/integrations/toggl-track.svg";
 import type { IntegrationProvider, IntegrationsSnapshot } from "../manager-api";
@@ -8,28 +18,45 @@ import type { ManagerClient } from "../composables/useManagerClient";
 
 const props = defineProps<{ client: ManagerClient }>();
 const snapshot = ref<IntegrationsSnapshot | null>(null);
-const credential = ref<Record<string, string>>({});
+type CredentialMap = Record<string, string>;
+type SettingsPatch = { intervalMinutes?: number; syncOnStartup?: boolean };
+const credential = ref<CredentialMap>({});
 const busy = ref<string | null>(null);
 const intervals = [0, 15, 60, 360, 1440] as const;
 const selectedProvider = ref<string | null>(null);
-const intervalLabels: Record<number, string> = {
+const intervalLabels = {
   0: "Вручную",
   15: "15 минут",
   60: "Час",
   360: "6 часов",
   1440: "Раз в день",
-};
-const providerIcons: Record<string, string> = {
+} satisfies Record<number, string>;
+const intervalOptions = intervals.map((value) => ({
+  value,
+  label: intervalLabels[value],
+}));
+const providerIcons = {
   hevy: hevyIcon,
   toggl: togglTrackIcon,
-};
+  leetcode: leetcodeIcon,
+  codewars: codewarsIcon,
+} satisfies Record<string, string>;
 const selected = computed(() =>
-  snapshot.value?.providers.find((provider) => provider.id === selectedProvider.value),
+  snapshot.value?.providers.find(
+    (provider) => provider.id === selectedProvider.value,
+  ),
 );
 async function load() {
-  snapshot.value = await props.client.call("getIntegrations", undefined, "integrations");
+  snapshot.value = await props.client.call(
+    "getIntegrations",
+    undefined,
+    "integrations",
+  );
 }
-async function act(provider: IntegrationProvider, action: "save" | "clear" | "sync") {
+async function act(
+  provider: IntegrationProvider,
+  action: "save" | "clear" | "sync",
+) {
   busy.value = `${provider.id}:${action}`;
   if (action === "save")
     await props.client.call(
@@ -61,7 +88,7 @@ async function loginLeetCode() {
   busy.value = null;
   await load();
 }
-async function update(provider: IntegrationProvider, patch: Record<string, unknown>) {
+async function update(provider: IntegrationProvider, patch: SettingsPatch) {
   await props.client.call(
     "updateIntegrationSettings",
     { provider: provider.id, ...patch },
@@ -78,9 +105,6 @@ onMounted(load);
 
 <template>
   <section class="stack connections-view">
-    <p class="muted text-[length:var(--kosmos-text-caption-size)] leading-[1.4]">
-      Интеграции работают через Engine и сохраняют данные только в его защищённом хранилище.
-    </p>
     <div class="connections-grid">
       <button
         v-for="provider in snapshot?.providers ?? []"
@@ -102,13 +126,13 @@ onMounted(load);
           {{ provider.label.slice(0, 2) }}
         </span>
         <strong class="connection-card-name">{{ provider.label }}</strong>
-        <span class="connection-card-status">
-          <span
-            class="connection-card-status-dot"
-            :class="{ 'connection-card-status-dot--connected': provider.hasCredential }"
-          />
-          {{ provider.hasCredential ? "Подключено" : "Не подключено" }}
-        </span>
+        <span
+          class="connection-card-status"
+          :class="{
+            'connection-card-status--connected': provider.hasCredential,
+          }"
+          aria-hidden="true"
+        />
       </button>
     </div>
 
@@ -119,74 +143,74 @@ onMounted(load);
       @close="closePanel"
     >
       <article v-if="selected" class="stack connection-panel">
-        <div class="card-heading">
-          <div>
-            <p class="eyebrow">Источник данных</p>
-            <h2>{{ selected.label }}</h2>
-          </div>
-          <StatusDot
-            :tone="selected.hasCredential ? 'success' : 'neutral'"
-            :label="selected.hasCredential ? 'Подключено' : 'Не подключено'"
+        <SettingsList class-name="!bg-transparent">
+          <SettingsRow title="Синхронизация">
+            <template #control>
+              <Dropdown
+                :model-value="selected.settings.intervalMinutes"
+                :options="intervalOptions"
+                :searchable="false"
+                @update:model-value="
+                  (interval) =>
+                    update(selected, { intervalMinutes: Number(interval) })
+                "
+              />
+            </template>
+          </SettingsRow>
+          <SettingsToggleRow
+            title="Синхронизировать при запуске"
+            :model-value="selected.settings.syncOnStartup"
+            @update:model-value="
+              (syncOnStartup) => update(selected, { syncOnStartup })
+            "
           />
-        </div>
-        <label class="field"
-          ><span>Синхронизация</span
-          ><select
-            :value="selected.settings.intervalMinutes"
-            @change="
-              update(selected, {
-                intervalMinutes: Number(($event.target as HTMLSelectElement).value),
-              })
-            "
+          <SettingsRow
+            v-if="selected.id !== 'leetcode'"
+            :title="selected.credentialLabel"
           >
-            <option v-for="interval in intervals" :key="interval" :value="interval">
-              {{ intervalLabels[interval] }}
-            </option>
-          </select></label
-        >
-        <label class="field checkbox"
-          ><input
-            type="checkbox"
-            :checked="selected.settings.syncOnStartup"
-            @change="
-              update(selected, { syncOnStartup: ($event.target as HTMLInputElement).checked })
-            "
-          /><span>Синхронизировать при запуске Engine</span></label
-        >
-        <label v-if="selected.id !== 'leetcode'" class="field"
-          ><span>{{ selected.credentialLabel }}</span
-          ><input
-            v-model="credential[selected.id]"
-            type="password"
-            autocomplete="off"
-            :placeholder="
-              selected.hasCredential ? 'Оставьте пустым, чтобы не менять' : 'Введите значение'
-            "
-        /></label>
-        <p v-if="selected.settings.lastError" class="error">{{ selected.settings.lastError }}</p>
+            <template #control>
+              <TextInput
+                v-model="credential[selected.id]"
+                class="w-56"
+                type="password"
+                autocomplete="off"
+                :placeholder="
+                  selected.hasCredential
+                    ? 'Оставьте пустым, чтобы не менять'
+                    : 'Введите значение'
+                "
+              />
+            </template>
+          </SettingsRow>
+        </SettingsList>
+        <p v-if="selected.settings.lastError" class="error">
+          {{ selected.settings.lastError }}
+        </p>
         <div class="actions">
           <Button
             v-if="selected.id === 'leetcode'"
+            variant="surface"
             size="sm"
             :disabled="busy !== null"
             @click="loginLeetCode"
             >Войти в LeetCode</Button
           ><Button
             v-else-if="credential[selected.id]"
+            variant="surface"
             size="sm"
             :disabled="busy !== null"
             @click="act(selected, 'save')"
             >Сохранить</Button
           ><Button
             v-if="selected.hasCredential"
+            variant="surface"
             size="sm"
-            variant="ghost"
             :disabled="busy !== null"
             @click="act(selected, 'clear')"
             >Отключить</Button
           ><Button
+            variant="surface"
             size="sm"
-            variant="ghost"
             :disabled="busy !== null || !selected.hasCredential"
             @click="act(selected, 'sync')"
             >Синхронизировать</Button

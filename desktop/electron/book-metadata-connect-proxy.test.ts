@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { createServer as createTcpServer, connect as connectTcp, type Server } from "node:net";
+import { createServer as createTcpServer, connect as connectTcp, type AddressInfo, type Server } from "node:net";
 import { createBookMetadataConnectProxy } from "./book-metadata-connect-proxy";
 
 const servers: Server[] = [];
@@ -18,10 +18,14 @@ function listen(server: Server): Promise<number> {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
-      if (!address || typeof address === "string") reject(new Error("listen failed"));
+      if (!isAddressInfo(address)) reject(new Error("listen failed"));
       else resolve(address.port);
     });
   });
+}
+
+function isAddressInfo(value: string | AddressInfo | null): value is AddressInfo {
+  return value !== null && typeof value !== "string";
 }
 
 function proxyPort(proxyRules: string): number {

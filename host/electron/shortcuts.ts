@@ -41,9 +41,9 @@ function readIndex(root: string): Entry[] {
       ? value
           .filter(
             (e): e is Entry =>
-              typeof e?.id === "string" &&
+              e?.id?.constructor === String &&
               SAFE_ID.test(e.id) &&
-              typeof e?.file === "string" &&
+              e?.file?.constructor === String &&
               path.dirname(path.resolve(e.file)) === resolvedRoot &&
               path.extname(e.file).toLowerCase() === ".lnk",
           )
@@ -117,16 +117,16 @@ export function reconcileShortcuts(apps: ShortcutApp[], executable = process.exe
     if (!item.enabled || item.revoked || !SAFE_ID.test(item.id)) continue;
     const file = files.get(item.id);
     if (!file) continue;
-    if (
-      shell.writeShortcutLink(file, "create", {
-        target: executable,
-        args: shortcutArgs(appPath, item.id),
-        description: `Kosmos: ${item.name}`,
-        ...(item.iconPath && fs.existsSync(item.iconPath)
-          ? { icon: item.iconPath, iconIndex: 0 }
-          : {}),
-      })
-    )
+    const shortcut = {
+      target: executable,
+      args: shortcutArgs(appPath, item.id),
+      description: `Kosmos: ${item.name}`,
+    };
+    const shortcutWithIcon =
+      item.iconPath && fs.existsSync(item.iconPath)
+        ? { ...shortcut, icon: item.iconPath, iconIndex: 0 }
+        : shortcut;
+    if (shell.writeShortcutLink(file, "create", shortcutWithIcon))
       next.push({ id: item.id, file });
   }
   const index = path.join(root, INDEX);

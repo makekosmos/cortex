@@ -1,5 +1,6 @@
 import { computed, shallowReactive, shallowRef } from "vue";
 import type { CommandSnapshotNode } from "../../shared/command-ipc";
+import { isBoolean, isString } from "../shared/runtimeGuards";
 import { actionNodes } from "./model";
 import { formModel } from "./model-form";
 
@@ -16,7 +17,7 @@ export function useCommandFormView(props: { root: CommandSnapshotNode; sessionId
 
   for (const field of form.value.fields) {
     if (field.type === "Form.Description" || field.type === "Form.Separator") continue;
-    if (typeof field.defaultValue === "boolean") {
+    if (isBoolean(field.defaultValue)) {
       values[field.id] = field.defaultValue;
     } else if (Array.isArray(field.defaultValue)) {
       values[field.id] = [...field.defaultValue];
@@ -76,7 +77,7 @@ export function useCommandFormView(props: { root: CommandSnapshotNode; sessionId
 
   function inputValue(id: string): string {
     const value = values[id];
-    return typeof value === "string" ? value : "";
+    return isString(value) ? value : "";
   }
 
   function fileValues(id: string): string[] {

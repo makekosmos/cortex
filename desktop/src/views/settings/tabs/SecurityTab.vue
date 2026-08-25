@@ -26,19 +26,19 @@ const {
   onDictationTestConnectivity,
 } = ctx;
 
-const STAGE_LABELS: Record<string, string> = {
+const STAGE_LABELS = {
   client_build: "Сборка HTTP клиента",
   dns_resolve: "DNS-резолв",
   tcp_connect: "TCP-коннект",
   http_head: "HTTPS-запрос",
-};
+} satisfies Record<string, string>;
 
-const STAGE_HINTS: Record<string, string> = {
+const STAGE_HINTS = {
   client_build: "Невалидный DoH URL — проверьте поле выше.",
   dns_resolve: "DNS не работает. Попробуйте Cloudflare/Google DoH вместо «Системный».",
   tcp_connect: "TCP-коннект отвергнут. Возможен IP-блок.",
   http_head: "TLS handshake или HTTP не прошёл. Возможен SNI-блок.",
-};
+} satisfies Record<string, string>;
 
 onMounted(() => {
   void loadDictationConfig();

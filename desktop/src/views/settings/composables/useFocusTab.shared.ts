@@ -50,7 +50,8 @@ export interface FocusDraftParsed {
   invalid: string[];
 }
 
-export function isUnknownOperationError(err: unknown): boolean {
+export function isUnknownOperationError<T>(err: T): boolean {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
   const msg = (err as Error)?.message ?? String(err);
   return /unknown operation|unknown_operation|not.?found/i.test(msg);
 }

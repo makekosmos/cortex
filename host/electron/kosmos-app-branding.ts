@@ -1,6 +1,7 @@
 import path from "node:path";
 
-const brands: Record<string, { name: string; icon: string }> = {
+type AppBrand = { name: string; icon: string };
+const brands = {
   "com.kosmos.eden": { name: "Memoria", icon: "memoria.png" },
   "com.kosmos.memoria": { name: "Memoria", icon: "memoria.png" },
   eden: { name: "Memoria", icon: "memoria.png" },
@@ -14,18 +15,21 @@ const brands: Record<string, { name: string; icon: string }> = {
   shell: { name: "Kosmos Shell", icon: "kosmos.png" },
   "com.kosmos.dictation": { name: "Dictation", icon: "dictation.png" },
   dictation: { name: "Dictation", icon: "dictation.png" },
-};
+} satisfies Record<string, AppBrand>;
+
+const appBrand = (id: string): AppBrand | undefined =>
+  Object.entries(brands).find(([key]) => key === id)?.[1];
 
 export function kosmosAppName(id: string, fallback: string): string {
-  return brands[id]?.name ?? fallback;
+  return appBrand(id)?.name ?? fallback;
 }
 
 export function kosmosAppIcon(resourcesPath: string, id: string): string | undefined {
-  const icon = brands[id]?.icon;
+  const icon = appBrand(id)?.icon;
   return icon ? path.join(resourcesPath, "app-icons", icon) : undefined;
 }
 
 export function kosmosAppShortcutIcon(resourcesPath: string, id: string): string | undefined {
-  const icon = brands[id]?.icon?.replace(/\.png$/u, ".ico");
+  const icon = appBrand(id)?.icon?.replace(/\.png$/u, ".ico");
   return icon ? path.join(resourcesPath, "app-icons", icon) : undefined;
 }

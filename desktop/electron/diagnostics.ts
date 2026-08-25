@@ -43,6 +43,19 @@ interface BundleResult {
   error?: string;
 }
 
+interface VersionsSnapshot {
+  kepler: string;
+  electron: string;
+  node: string;
+  chromium: string;
+  v8: string;
+  platform: NodeJS.Platform;
+  arch: string;
+  osRelease: string;
+  slot: string;
+  capturedAt: string;
+}
+
 async function copyRecentTextFilesRedacted(
   srcDir: string,
   destDir: string,
@@ -92,7 +105,7 @@ export async function copyRedactedTextFileBounded(
 }
 
 function buildVersionsJson(): string {
-  const versions: Record<string, unknown> = {
+  const versions: VersionsSnapshot = {
     kepler: app.getVersion(),
     electron: process.versions.electron,
     node: process.versions.node,

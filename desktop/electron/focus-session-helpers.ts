@@ -1,7 +1,9 @@
 import type { FocusBlockedApp, PomodoroState } from "./focus-session-types";
 import type { FocusState } from "./focus-widget";
 
-const EMPTY_BLOCKED_APPS = Object.freeze([]) as unknown as FocusBlockedApp[];
+// SAFETY: this shared empty list is intentionally frozen and only returned as a read-only fallback.
+const EMPTY_BLOCKED_APPS: FocusBlockedApp[] = [];
+Object.freeze(EMPTY_BLOCKED_APPS);
 
 function normalizeBlockedApps(apps: FocusBlockedApp[]): FocusBlockedApp[] {
   const byId = new Map<string, FocusBlockedApp>();

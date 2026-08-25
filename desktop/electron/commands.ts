@@ -53,10 +53,14 @@ export function setDictationShortcutResolver(resolver: DictationShortcutResolver
 async function resolveDictationShortcut(): Promise<string> {
   try {
     const live = await dictationShortcutResolver?.();
-    return typeof live === "string" && live.trim() ? live.trim() : DEFAULT_HOTKEY;
+    return isNonEmptyString(live) ? live.trim() : DEFAULT_HOTKEY;
   } catch {
     return DEFAULT_HOTKEY;
   }
+}
+
+function isNonEmptyString(value: string | undefined): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 async function runCheckUpdates(): Promise<void> {

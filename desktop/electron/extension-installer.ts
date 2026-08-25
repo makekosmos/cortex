@@ -18,6 +18,7 @@ import {
 } from "./extension-installer-state";
 import type { InstalledExtensionInfo } from "./extension-installer-state";
 import { extractZipTo, readZipEntries } from "./extension-zip";
+import { isString } from "../src/shared/runtimeGuards";
 
 interface ExtensionManifest {
   id: string;
@@ -66,17 +67,19 @@ async function previewKext(kextPath: string): Promise<KextManifestPreview> {
   }
   let manifest: ExtensionManifest;
   try {
+    // SAFETY: manifest.json is validated against ExtensionManifest fields immediately below.
     manifest = JSON.parse(manifestEntry.data.toString("utf8")) as ExtensionManifest;
   } catch (e) {
+    // SAFETY: JSON.parse errors are Error instances in the Node runtime.
     throw new Error(`manifest.json повреждён: ${(e as Error).message}`);
   }
-  if (!manifest.id || typeof manifest.id !== "string") {
+  if (!manifest.id || !isString(manifest.id)) {
     throw new Error("manifest.id обязателен и должен быть строкой");
   }
   if (!/^[\w][\w.-]*$/.test(manifest.id)) {
     throw new Error(`manifest.id невалиден: ${manifest.id}`);
   }
-  if (!manifest.name || typeof manifest.name !== "string") {
+  if (!manifest.name || !isString(manifest.name)) {
     throw new Error("manifest.name обязателен");
   }
 
@@ -111,6 +114,7 @@ async function previewKext(kextPath: string): Promise<KextManifestPreview> {
   if (existsSync(path.join(currentDir, "manifest.json"))) {
     isUpgrade = true;
     try {
+      // SAFETY: the stored manifest is validated when the extension is installed.
       const cur = JSON.parse(
         await fs.readFile(path.join(currentDir, "manifest.json"), "utf8"),
       ) as ExtensionManifest;
@@ -130,8 +134,10 @@ async function previewDir(extDir: string): Promise<KextManifestPreview> {
   }
   let manifest: ExtensionManifest;
   try {
+    // SAFETY: manifest.json is validated against ExtensionManifest fields immediately below.
     manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as ExtensionManifest;
   } catch (e) {
+    // SAFETY: JSON.parse errors are Error instances in the Node runtime.
     throw new Error(`manifest.json повреждён: ${(e as Error).message}`);
   }
   if (!manifest.id || !manifest.name) {
@@ -166,6 +172,7 @@ async function previewDir(extDir: string): Promise<KextManifestPreview> {
   if (existsSync(path.join(currentDir, "manifest.json"))) {
     isUpgrade = true;
     try {
+      // SAFETY: the stored manifest is validated when the extension is installed.
       const cur = JSON.parse(
         await fs.readFile(path.join(currentDir, "manifest.json"), "utf8"),
       ) as ExtensionManifest;
@@ -226,6 +233,7 @@ export async function installFromPath(sourcePath: string): Promise<KextManifestP
     } else {
       await extractZipTo(sourcePath, tmpDir);
     }
+    // SAFETY: the extracted archive contains the manifest validated during preview.
     const extractedManifest = JSON.parse(
       await fs.readFile(path.join(tmpDir, "manifest.json"), "utf8"),
     ) as ExtensionManifest;

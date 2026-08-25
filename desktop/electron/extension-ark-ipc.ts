@@ -3,11 +3,13 @@ import {
   assertExtensionArkPermission,
   assertExtensionEventPermission,
   type ExtensionSource,
+  type JsonRecord,
+  type JsonValue,
 } from "./extension-permissions";
 import { applyFocusBlock } from "./focus-block";
 
-export type ArkRequestFn = (req: Record<string, unknown>) => Promise<unknown>;
-export type ArkSubscribeFn = (event: string, handler: (payload: unknown) => void) => () => void;
+export type ArkRequestFn = (req: JsonRecord) => Promise<JsonValue>;
+export type ArkSubscribeFn = (event: string, handler: (payload: JsonValue) => void) => () => void;
 
 interface ExtensionArkContext {
   id: string;
@@ -17,6 +19,23 @@ interface ExtensionArkContext {
 
 interface ExtensionArkIpcOptions {
   contextForSender(sender: WebContents): ExtensionArkContext;
+}
+
+interface FocusResolution {
+  domains?: string[];
+}
+
+interface BlocklistResponse {
+  blocklists?: Array<{ id: string; domains: string[] }>;
+}
+
+interface ObjectTypeResponse {
+  typeId?: string;
+  type_id?: string;
+}
+
+function isString(value: JsonValue | undefined): value is string {
+  return typeof value === "string";
 }
 
 let arkRequest: ArkRequestFn | null = null;
@@ -66,15 +85,15 @@ async function resolveFocusBlockDomains(
   blocklistId: string,
 ): Promise<string[]> {
   try {
+    // SAFETY: the ARK focus operation returns the documented domain list shape.
     const resolved = (await request({
       operation: "focus.resolve_blocklist_domains",
       id: blocklistId,
-    })) as { domains?: string[] } | null;
+    })) as FocusResolution | null;
     return Array.isArray(resolved?.domains) ? resolved.domains : [];
   } catch {
-    const resp = (await request({ operation: "focus.list_blocklists" })) as {
-      blocklists?: Array<{ id: string; domains: string[] }>;
-    } | null;
+    // SAFETY: the ARK list operation returns the documented blocklist shape.
+    const resp = (await request({ operation: "focus.list_blocklists" })) as BlocklistResponse | null;
     const list = Array.isArray(resp?.blocklists) ? resp.blocklists : [];
     const found = list.find((blocklist) => blocklist.id === blocklistId);
     return Array.isArray(found?.domains) ? found.domains : [];
@@ -82,11 +101,11 @@ async function resolveFocusBlockDomains(
 }
 
 async function onFocusStateChanged(
-  params: Record<string, unknown> | undefined,
+  params: JsonRecord | undefined,
   request: ArkRequestFn,
 ): Promise<void> {
   const active = !!params?.active;
-  const blocklistId = (params?.blocklist_id as string | null | undefined) ?? null;
+  const blocklistId = isString(params?.blocklist_id) ? params.blocklist_id : null;
 
   if (!active || !blocklistId) {
     await applyFocusBlock({ active: false, domains: [] });
@@ -107,7 +126,7 @@ const extensionEventUnsubscribers = new Map<string, () => void>();
 export function registerExtensionArkIpc({ contextForSender }: ExtensionArkIpcOptions): void {
   ipcMain.handle(
     "kepler:extension:ark:request",
-    async (e, operation: string, params?: Record<string, unknown>) => {
+    async (e, operation: string, params?: JsonRecord) => {
       await awaitArkBridgeReady();
       const request = arkRequest;
       if (!request) {
@@ -125,15 +144,16 @@ export function registerExtensionArkIpc({ contextForSender }: ExtensionArkIpcOpt
         operation,
         params,
         resolveObjectType: async (id) => {
+          // SAFETY: get_object returns the documented object type metadata.
           const object = (await request({ operation: "get_object", id })) as
-            | { typeId?: unknown; type_id?: unknown }
+            | ObjectTypeResponse
             | null
             | undefined;
           const typeId = object?.typeId ?? object?.type_id;
-          return typeof typeId === "string" ? typeId : null;
+          return isString(typeId) ? typeId : null;
         },
       });
-      const req: Record<string, unknown> = { ...params, operation };
+      const req: JsonRecord = { ...params, operation };
       const result = await request(req);
 
       if (operation === "focus.set_active_state") {

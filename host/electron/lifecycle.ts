@@ -1,12 +1,12 @@
 export type Timer = {
-  setTimeout(callback: () => void, ms: number): unknown;
-  clearTimeout(handle: unknown): void;
+  setTimeout(callback: () => void, ms: number): ReturnType<typeof setTimeout>;
+  clearTimeout(handle: ReturnType<typeof setTimeout>): void;
 };
 
 export class HostLifecycle {
   private windows = 0;
   private hasOpened = false;
-  private pending: unknown = null;
+  private pending: ReturnType<typeof setTimeout> | null = null;
   constructor(
     private readonly exit: () => void,
     private readonly timer: Timer = { setTimeout, clearTimeout },

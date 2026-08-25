@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { findExtensionUpdates } from "./extension-update-plan";
 
 test("updates match the immutable appId, not a display or extension id", () => {
+  // SAFETY: Test fixtures satisfy the installed-extension contract.
   const installed = [
     {
       id: "eden",
@@ -10,6 +11,7 @@ test("updates match the immutable appId, not a display or extension id", () => {
       version: "1.0.0",
       source: "installed",
     },
+// SAFETY: The surrounding boundary establishes this documented contract.
   ] as never;
   const catalog = {
     extensions: [
@@ -29,8 +31,10 @@ test("updates match the immutable appId, not a display or extension id", () => {
 });
 
 test("legacy extensions without appId are never auto-updated by a name match", () => {
+  // SAFETY: Test fixtures satisfy the installed-extension contract.
   const installed = [
     { id: "eden", appId: null, name: "Eden", version: "1.0.0", source: "installed" },
+// SAFETY: The surrounding boundary establishes this documented contract.
   ] as never;
   const catalog = {
     extensions: [
@@ -48,6 +52,7 @@ test("legacy extensions without appId are never auto-updated by a name match", (
 });
 
 test("different appIds never match a catalog record", () => {
+  // SAFETY: Test fixtures satisfy the installed-extension contract.
   const installed = [
     {
       id: "delphi",
@@ -56,6 +61,7 @@ test("different appIds never match a catalog record", () => {
       version: "1.0.0",
       source: "installed",
     },
+// SAFETY: The surrounding boundary establishes this documented contract.
   ] as never;
   const catalog = {
     extensions: [

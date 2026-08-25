@@ -31,9 +31,9 @@ function validate(input) {
   for (const entry of packages) {
     if (
       !entry ||
-      typeof entry !== "object" ||
+      entry === null || Object.prototype.toString.call(entry) !== "[object Object]" ||
       !entry.manifest ||
-      typeof entry.manifest !== "object"
+      entry.manifest === null || Object.prototype.toString.call(entry.manifest) !== "[object Object]"
     )
       fail("entry.manifest is required");
     const manifest = entry.manifest;
@@ -51,11 +51,11 @@ function validate(input) {
       if (!(field in manifest)) fail(`manifest.${field} is required`);
     if (
       manifest.schema_version !== 2 ||
-      typeof manifest.name !== "string" ||
+      Object.prototype.toString.call(manifest.name) !== "[object String]" ||
       !manifest.name ||
-      typeof manifest.engine_api !== "string" ||
+      Object.prototype.toString.call(manifest.engine_api) !== "[object String]" ||
       !manifest.engine_api ||
-      typeof manifest.entrypoint !== "string" ||
+      Object.prototype.toString.call(manifest.entrypoint) !== "[object String]" ||
       !manifest.entrypoint ||
       !["app", "source", "bridge"].includes(manifest.kind) ||
       manifest.publisher !== "kosmos" ||
@@ -66,7 +66,7 @@ function validate(input) {
       !Array.isArray(manifest.targets) ||
       !manifest.targets.length ||
       !manifest.data ||
-      typeof manifest.data !== "object" ||
+      manifest.data === null || Object.prototype.toString.call(manifest.data) !== "[object Object]" ||
       !Array.isArray(manifest.data.access) ||
       !Array.isArray(manifest.data.defines) ||
       !Array.isArray(manifest.data.mappings)
@@ -74,7 +74,7 @@ function validate(input) {
       fail("invalid v2 package manifest contract");
     safeId(manifest.id, "manifest.id");
     semver(manifest.version, "manifest.version");
-    if (typeof entry.archive_url !== "string" || !entry.archive_url.startsWith("https://"))
+    if (Object.prototype.toString.call(entry.archive_url) !== "[object String]" || !entry.archive_url.startsWith("https://"))
       fail("archive_url must use HTTPS");
     sha256(entry.sha256, "entry.sha256");
     if (integer(entry.size, "entry.size") === 0) fail("entry.size must be greater than zero");

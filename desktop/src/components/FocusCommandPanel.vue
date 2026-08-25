@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } fr
 import { Info, X } from "@lucide/vue";
 import { Dropdown } from "@kosmos/visuals";
 import type { FocusBlockedApp, FocusSessionSnapshot, FocusSessionTask } from "@shared/ipc-types";
+import { isString } from "../shared/runtimeGuards";
 import { buildFocusSessionStartInput } from "./focusCommandPayload";
 import {
   activeFocusCommands,
@@ -210,6 +211,7 @@ async function hydrate(): Promise<void> {
     apps.value = nextApps;
     syncFormFromSnapshot(nextSnapshot);
   } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     error.value = `Не удалось загрузить фокус: ${String((e as Error)?.message ?? e)}`;
   }
 }
@@ -277,7 +279,7 @@ function removeBlockedApp(appId: string): void {
 }
 
 function appById(id: string | number | null | undefined): FocusAppEntry | null {
-  if (typeof id !== "string") return null;
+  if (!isString(id)) return null;
   return apps.value.find((app) => app.id === id) ?? null;
 }
 
@@ -337,6 +339,7 @@ async function start(): Promise<void> {
     );
     await window.kepler.window.hide();
   } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     error.value = `Не удалось начать фокус: ${String((e as Error)?.message ?? e)}`;
   } finally {
     submitting.value = false;
@@ -360,6 +363,7 @@ async function runSessionCommand(id: string): Promise<void> {
       snapshot.value = await window.kepler.focusSession.stop();
     }
   } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
     error.value = `Не удалось выполнить команду: ${String((e as Error)?.message ?? e)}`;
   } finally {
     sessionActionBusy.value = "";

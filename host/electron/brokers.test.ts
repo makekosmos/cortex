@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ArkBroker } from "./brokers/ark";
+import { ArkBroker, type ArkRequest } from "./brokers/ark";
 import { createHostBrokers } from "./brokers";
 import { HostBrokerError } from "./brokers/types";
 
@@ -12,7 +12,7 @@ const context = {
   origin: "https://pkg.invalid",
   generation: 0,
 } as const;
-const transport = async (_context: typeof context, request: unknown) => request;
+const transport = async (_context: typeof context, request: ArkRequest) => request;
 
 describe("typed host brokers", () => {
   test("forwards authenticated typed requests without exposing authority", async () => {

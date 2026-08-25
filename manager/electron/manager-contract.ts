@@ -18,19 +18,34 @@ import type {
   PackageSnapshot,
   PackageTrustStatus,
   SyncSnapshot,
+  JsonRecord,
+  JsonValue,
 } from "../src/manager-api";
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
+export type Input = JsonValue | undefined;
+export type InputRecord = JsonRecord;
+export const isString = (value: Input | undefined): value is string =>
+  typeof value === "string";
+export const isNumber = (value: Input | undefined): value is number =>
+  typeof value === "number";
+export const isBoolean = (value: Input | undefined): value is boolean =>
+  typeof value === "boolean";
+
+export const isObject = (value: Input | undefined): value is InputRecord =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
-const text = (value: unknown, max: number, fallback = ""): string =>
-  typeof value === "string" && value.length <= max ? value : fallback;
-const number = (value: unknown, fallback = 0, max = Number.MAX_SAFE_INTEGER): number =>
-  typeof value === "number" && Number.isFinite(value)
+const text = (value: Input | undefined, max: number, fallback = ""): string =>
+  isString(value) && value.length <= max ? value : fallback;
+const number = (
+  value: Input | undefined,
+  fallback = 0,
+  max = Number.MAX_SAFE_INTEGER,
+): number =>
+  isNumber(value) && Number.isFinite(value)
     ? Math.max(0, Math.min(max, value))
     : fallback;
-const flag = (value: unknown): boolean => value === true;
+const flag = (value: Input | undefined): boolean => value === true;
 
-export function normalizeEngineSettings(value: unknown): EngineSettings {
+export function normalizeEngineSettings(value: Input): EngineSettings {
   const root = isObject(value) ? value : {};
   const host = isObject(root.desktop_host) ? root.desktop_host : {};
   const tracker = isObject(root.usage_tracker) ? root.usage_tracker : {};
@@ -42,36 +57,57 @@ export function normalizeEngineSettings(value: unknown): EngineSettings {
   };
 }
 
-export function validateUsageTrackerSettingsPatch(value: unknown): value is { enabled: boolean } {
-  return isObject(value) && Object.keys(value).length === 1 && typeof value.enabled === "boolean";
+export function validateUsageTrackerSettingsPatch(
+  value: Input,
+): value is { enabled: boolean } {
+  return (
+    isObject(value) &&
+    Object.keys(value).length === 1 &&
+    isBoolean(value.enabled)
+  );
 }
 
-const boundedList = (value: unknown, maxItems: number, maxLength: number): string[] =>
+const boundedList = (
+  value: Input,
+  maxItems: number,
+  maxLength: number,
+): string[] =>
   Array.isArray(value)
     ? value
-        .filter((item): item is string => typeof item === "string" && item.length <= maxLength)
+        .filter(
+          (item): item is string => isString(item) && item.length <= maxLength,
+        )
         .slice(0, maxItems)
     : [];
 
-export function validPackageId(value: unknown): value is string {
-  return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
+export function validPackageId(value: Input): value is string {
+  return isString(value) && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
 }
 
-export function validPackageVersion(value: unknown): value is string {
+export function validPackageVersion(value: Input): value is string {
   return (
-    typeof value === "string" &&
+    isString(value) &&
     /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(
       value,
     )
   );
 }
 
-function packageKind(value: unknown): PackageItem["kind"] | null {
-  return value === "app" || value === "source" || value === "bridge" ? value : null;
+function packageKind(value: Input): PackageItem["kind"] | null {
+  return value === "app" || value === "source" || value === "bridge"
+    ? value
+    : null;
 }
 
-function normalizePackageItem(value: unknown, catalog: boolean): PackageItem | null {
-  if (!isObject(value) || !validPackageId(value.id) || !validPackageVersion(value.version))
+function normalizePackageItem(
+  value: Input,
+  catalog: boolean,
+): PackageItem | null {
+  if (
+    !isObject(value) ||
+    !validPackageId(value.id) ||
+    !validPackageVersion(value.version)
+  )
     return null;
   const kind = packageKind(value.kind);
   if (!kind) return null;
@@ -86,25 +122,34 @@ function normalizePackageItem(value: unknown, catalog: boolean): PackageItem | n
     revoked: value.revoked === true,
     revocation_reason: text(value.revocation_reason, 256) || null,
     worker_state: text(value.worker_state, 64, catalog ? "catalog" : "stopped"),
-    worker_health: text(value.worker_health, 64, text(value.worker_state, 64, "unknown")),
-    update_version: validPackageVersion(value.update_version) ? value.update_version : null,
+    worker_health: text(
+      value.worker_health,
+      64,
+      text(value.worker_state, 64, "unknown"),
+    ),
+    update_version: validPackageVersion(value.update_version)
+      ? value.update_version
+      : null,
     catalog,
   };
 }
 
-export function normalizePackageSnapshot(value: unknown): PackageSnapshot {
+export function normalizePackageSnapshot(value: Input): PackageSnapshot {
   const raw = isObject(value) ? value : {};
   const installed = Array.isArray(raw.packages)
-    ? raw.packages.flatMap((item) => {
+    ? raw.packages.flatMap((item: Input) => {
         const normalized = normalizePackageItem(item, false);
         return normalized ? [normalized] : [];
       })
     : [];
-  const installedKeys = new Set(installed.map((item) => `${item.id}@${item.version}`));
+  const installedKeys = new Set(
+    installed.map((item: PackageItem) => `${item.id}@${item.version}`),
+  );
   const catalog = Array.isArray(raw.catalog)
-    ? raw.catalog.flatMap((item) => {
+    ? raw.catalog.flatMap((item: Input) => {
         const normalized = normalizePackageItem(item, true);
-        return normalized && !installedKeys.has(`${normalized.id}@${normalized.version}`)
+        return normalized &&
+          !installedKeys.has(`${normalized.id}@${normalized.version}`)
           ? [normalized]
           : [];
       })
@@ -117,7 +162,7 @@ export function normalizePackageSnapshot(value: unknown): PackageSnapshot {
   };
 }
 
-export function normalizePackageTrustStatus(value: unknown): PackageTrustStatus {
+export function normalizePackageTrustStatus(value: Input): PackageTrustStatus {
   const root = isObject(value) ? value : {};
   const trust = isObject(root.trust) ? root.trust : {};
   const catalog = isObject(root.catalog) ? root.catalog : {};
@@ -143,16 +188,20 @@ export function normalizePackageTrustStatus(value: unknown): PackageTrustStatus 
     message,
     configured,
     revoked_packages: number(trust.revoked_packages, 0, 100_000),
-    catalog_sequence: number(trust.catalog_sequence, 0, Number.MAX_SAFE_INTEGER),
+    catalog_sequence: number(
+      trust.catalog_sequence,
+      0,
+      Number.MAX_SAFE_INTEGER,
+    ),
     expires_at: expiresAt,
   };
 }
 
-function normalizeScanProgress(value: unknown): FileIndexScanProgress {
+function normalizeScanProgress(value: Input): FileIndexScanProgress {
   const raw = isObject(value) ? value : {};
   return {
     phase: text(raw.phase, 64, "idle"),
-    root: typeof raw.root === "string" && raw.root.length <= 4096 ? raw.root : null,
+    root: isString(raw.root) && raw.root.length <= 4096 ? raw.root : null,
     roots_done: number(raw.roots_done, 0, 100_000),
     roots_total: number(raw.roots_total, 0, 100_000),
     files_seen: number(raw.files_seen, 0, 10_000_000_000),
@@ -161,7 +210,9 @@ function normalizeScanProgress(value: unknown): FileIndexScanProgress {
   };
 }
 
-export function validateFileIndexSettingsPatch(value: unknown): FileIndexSettingsPatch | null {
+export function validateFileIndexSettingsPatch(
+  value: Input,
+): FileIndexSettingsPatch | null {
   if (!isObject(value)) return null;
   const keys = Object.keys(value);
   const allowed = new Set([
@@ -172,20 +223,28 @@ export function validateFileIndexSettingsPatch(value: unknown): FileIndexSetting
     "ntfs_accelerated",
   ]);
   if (!keys.length || keys.some((key) => !allowed.has(key))) return null;
-  if (keys.some((key) => typeof value[key] !== "boolean")) return null;
+  if (keys.some((key) => !isBoolean(value[key]))) return null;
+  // SAFETY: keys and boolean values were validated immediately above.
   return value as FileIndexSettingsPatch;
 }
 
-export function validateFileIndexPath(value: unknown, maxLength = 4096): value is string {
-  if (typeof value !== "string" || value.trim().length === 0 || value.length > maxLength)
+export function validateFileIndexPath(
+  value: Input,
+  maxLength = 4096,
+): value is string {
+  if (!isString(value) || value.trim().length === 0 || value.length > maxLength)
     return false;
   const path = value.trim();
   return !path.startsWith("\\\\") && !path.startsWith("//");
 }
 
-export function normalizeFileIndexSettings(value: unknown): FileIndexSettings {
+export function normalizeFileIndexSettings(value: Input): FileIndexSettings {
   const raw =
-    isObject(value) && isObject(value.settings) ? value.settings : isObject(value) ? value : {};
+    isObject(value) && isObject(value.settings)
+      ? value.settings
+      : isObject(value)
+        ? value
+        : {};
   const ntfsStatus = raw.ntfs_status;
   return {
     enabled: flag(raw.enabled),
@@ -207,19 +266,28 @@ export function normalizeFileIndexSettings(value: unknown): FileIndexSettings {
   };
 }
 
-export function normalizeFileIndexDiagnostics(value: unknown): FileIndexDiagnostics {
+export function normalizeFileIndexDiagnostics(
+  value: Input,
+): FileIndexDiagnostics {
   const raw =
     isObject(value) && isObject(value.diagnostics)
       ? value.diagnostics
       : isObject(value)
         ? value
         : {};
-  const risk = raw.risk_level === "warning" || raw.risk_level === "danger" ? raw.risk_level : "ok";
+  const risk =
+    raw.risk_level === "warning" || raw.risk_level === "danger"
+      ? raw.risk_level
+      : "ok";
   const riskReasons =
     risk === "danger"
-      ? ["Индекс содержит потенциально слишком широкий корень или большой объём."]
+      ? [
+          "Индекс содержит потенциально слишком широкий корень или большой объём.",
+        ]
       : risk === "warning"
-        ? ["Индекс требует внимания по ограничению размера или полноте диагностики."]
+        ? [
+            "Индекс требует внимания по ограничению размера или полноте диагностики.",
+          ]
         : [];
   return {
     db_size_bytes: number(raw.db_size_bytes, 0, Number.MAX_SAFE_INTEGER),
@@ -236,7 +304,9 @@ export function normalizeFileIndexDiagnostics(value: unknown): FileIndexDiagnost
   };
 }
 
-export function normalizeDictationConfig(value: unknown): DictationConfigSnapshot {
+export function normalizeDictationConfig(
+  value: Input,
+): DictationConfigSnapshot {
   const root = isObject(value) ? value : {};
   const raw = isObject(root.config) ? root.config : root;
   const profile = isObject(raw.networkProfile) ? raw.networkProfile : {};
@@ -249,15 +319,21 @@ export function normalizeDictationConfig(value: unknown): DictationConfigSnapsho
         : { kind: "system" };
   return {
     config: {
-      microphoneDeviceId:
-        typeof raw.microphoneDeviceId === "string" ? text(raw.microphoneDeviceId, 512) : null,
+      microphoneDeviceId: isString(raw.microphoneDeviceId)
+        ? text(raw.microphoneDeviceId, 512)
+        : null,
       language: text(raw.language, 32, "ru"),
-      triggerMode: raw.triggerMode === "push_to_talk" ? "push_to_talk" : "toggle",
-      injectMode: raw.injectMode === "clipboard_only" ? "clipboard_only" : "auto_paste",
+      triggerMode:
+        raw.triggerMode === "push_to_talk" ? "push_to_talk" : "toggle",
+      injectMode:
+        raw.injectMode === "clipboard_only" ? "clipboard_only" : "auto_paste",
       hotkey: text(raw.hotkey, 128, "CTRL+SHIFT+SPACE"),
       duckAudioDuringRecording: flag(raw.duckAudioDuringRecording),
       localIdleUnloadMs: number(raw.localIdleUnloadMs, 300_000, 86_400_000),
-      provider: raw.provider === "local" || raw.provider === "mock" ? raw.provider : "groq",
+      provider:
+        raw.provider === "local" || raw.provider === "mock"
+          ? raw.provider
+          : "groq",
       providerEnabled: raw.providerEnabled !== false,
       model: text(raw.model, 128, "whisper-large-v3-turbo"),
       networkProfile,
@@ -266,42 +342,67 @@ export function normalizeDictationConfig(value: unknown): DictationConfigSnapsho
   };
 }
 
-export function validateDictationConfigPatch(value: unknown): DictationConfigPatch | null {
+export function validateDictationConfigPatch(
+  value: Input,
+): DictationConfigPatch | null {
   if (!isObject(value)) return null;
   const entries = Object.entries(value);
   if (
     !entries.length ||
-    entries.some(([key]) => !DICTATION_PATCH_KEYS.has(key as keyof DictationConfigPatch))
+    // SAFETY: the key is checked against the finite DictationConfigPatch key set.
+    entries.some(
+      ([key]) => !DICTATION_PATCH_KEYS.has(key as keyof DictationConfigPatch),
+    )
   )
     return null;
   const patch: DictationConfigPatch = {};
   for (const [key, item] of entries) {
     if (key === "microphoneDeviceId" && (item === null || text(item, 512)))
       patch.microphoneDeviceId = item === null ? null : text(item, 512);
-    else if (key === "language" && text(item, 32)) patch.language = text(item, 32);
-    else if (key === "triggerMode" && (item === "toggle" || item === "push_to_talk"))
+    else if (key === "language" && text(item, 32))
+      patch.language = text(item, 32);
+    else if (
+      key === "triggerMode" &&
+      (item === "toggle" || item === "push_to_talk")
+    )
       patch.triggerMode = item;
-    else if (key === "injectMode" && (item === "auto_paste" || item === "clipboard_only"))
+    else if (
+      key === "injectMode" &&
+      (item === "auto_paste" || item === "clipboard_only")
+    )
       patch.injectMode = item;
-    else if (key === "hotkey" && text(item, 128)) patch.hotkey = text(item, 128);
-    else if (key === "duckAudioDuringRecording" && typeof item === "boolean")
+    else if (key === "hotkey" && text(item, 128))
+      patch.hotkey = text(item, 128);
+    else if (key === "duckAudioDuringRecording" && isBoolean(item))
       patch.duckAudioDuringRecording = item;
     else if (
       key === "localIdleUnloadMs" &&
+      isNumber(item) &&
       Number.isInteger(item) &&
-      (item as number) >= 0 &&
-      (item as number) <= 86_400_000
+      item >= 0 &&
+      item <= 86_400_000
     )
-      patch.localIdleUnloadMs = item as number;
-    else if (key === "provider" && (item === "groq" || item === "local" || item === "mock"))
+      patch.localIdleUnloadMs = item;
+    else if (
+      key === "provider" &&
+      (item === "groq" || item === "local" || item === "mock")
+    )
       patch.provider = item;
-    else if (key === "providerEnabled" && typeof item === "boolean") patch.providerEnabled = item;
+    else if (key === "providerEnabled" && isBoolean(item))
+      patch.providerEnabled = item;
     else if (key === "model" && text(item, 128)) patch.model = text(item, 128);
     else if (key === "networkProfile" && isObject(item)) {
       const kind = item.kind;
-      if (kind === "system" || kind === "cloudflare_doh" || kind === "google_doh")
+      if (
+        kind === "system" ||
+        kind === "cloudflare_doh" ||
+        kind === "google_doh"
+      )
         patch.networkProfile = { kind };
-      else if (kind === "custom_doh" && text(item.url, 2048).startsWith("https://"))
+      else if (
+        kind === "custom_doh" &&
+        text(item.url, 2048).startsWith("https://")
+      )
         patch.networkProfile = { kind, url: text(item.url, 2048) };
       else return null;
     } else return null;
@@ -323,11 +424,11 @@ export const DICTATION_PATCH_KEYS = new Set<keyof DictationConfigPatch>([
   "networkProfile",
 ]);
 
-export function validDictationId(value: unknown): value is string {
-  return typeof value === "string" && /^[A-Za-z0-9._-]{1,128}$/.test(value);
+export function validDictationId(value: Input): value is string {
+  return isString(value) && /^[A-Za-z0-9._-]{1,128}$/.test(value);
 }
 
-export function normalizeDictationStats(value: unknown): DictationStats {
+export function normalizeDictationStats(value: Input): DictationStats {
   const raw = isObject(value) ? value : {};
   return {
     totalSeconds: number(raw.totalSeconds ?? raw.totalRecordSeconds),
@@ -336,10 +437,12 @@ export function normalizeDictationStats(value: unknown): DictationStats {
   };
 }
 
-export function normalizeDictationLocalModels(value: unknown): DictationLocalModels {
+export function normalizeDictationLocalModels(
+  value: Input,
+): DictationLocalModels {
   const raw = isObject(value) ? value : {};
   return Array.isArray(raw.models)
-    ? raw.models.flatMap((item) => {
+    ? raw.models.flatMap((item: Input) => {
         if (!isObject(item) || !validDictationId(item.id)) return [];
         return [
           {
@@ -354,37 +457,39 @@ export function normalizeDictationLocalModels(value: unknown): DictationLocalMod
     : [];
 }
 
-export function normalizeDictationPending(value: unknown): DictationPendingItem[] {
+export function normalizeDictationPending(
+  value: Input,
+): DictationPendingItem[] {
   const raw = Array.isArray(value)
     ? value
     : isObject(value) && Array.isArray(value.items)
       ? value.items
       : [];
-  return raw.flatMap((item) => {
+  return raw.flatMap((item: Input) => {
     if (!isObject(item) || !validDictationId(item.uuid)) return [];
     return [
       {
         uuid: item.uuid,
         createdAt: text(item.createdAt, 64),
         attempts: number(item.attempts),
-        lastError: typeof item.lastError === "string" ? text(item.lastError, 512) : null,
+        lastError: isString(item.lastError) ? text(item.lastError, 512) : null,
       },
     ];
   });
 }
 
-export function normalizeConnectivity(value: unknown): DictationConnectivity {
+export function normalizeConnectivity(value: Input): DictationConnectivity {
   const raw = isObject(value) ? value : {};
   return {
     stages: Array.isArray(raw.stages)
-      ? raw.stages.flatMap((item) =>
+      ? raw.stages.flatMap((item: Input) =>
           isObject(item) && text(item.name, 64)
             ? [
                 {
                   name: text(item.name, 64),
                   ok: flag(item.ok),
                   ms: number(item.ms),
-                  error: typeof item.error === "string" ? text(item.error, 512) : null,
+                  error: isString(item.error) ? text(item.error, 512) : null,
                 },
               ]
             : [],
@@ -393,7 +498,9 @@ export function normalizeConnectivity(value: unknown): DictationConnectivity {
   };
 }
 
-export function normalizeDictationEvent(value: unknown): DictationProgressEvent | null {
+export function normalizeDictationEvent(
+  value: Input,
+): DictationProgressEvent | null {
   const event = isObject(value) ? value : {};
   if (event.event === "dictation_capture_key")
     return {
@@ -408,7 +515,7 @@ export function normalizeDictationEvent(value: unknown): DictationProgressEvent 
     return {
       kind: "download",
       modelId: event.modelId,
-      percent: typeof event.percent === "number" ? number(event.percent, 0, 100) : null,
+      percent: isNumber(event.percent) ? number(event.percent, 0, 100) : null,
     };
   if (event.event === "dictation_local_model_download_complete")
     return { kind: "download_complete", modelId: event.modelId };
@@ -417,45 +524,53 @@ export function normalizeDictationEvent(value: unknown): DictationProgressEvent 
   return null;
 }
 
-export function toPairingParams(code: string): Record<string, string> {
+type PairingParams = { pairing_code: string };
+type DeviceParams = { device_id: string };
+
+export function toPairingParams(code: string): PairingParams {
   return { pairing_code: code.trim() };
 }
 
-export function toDeviceParams(peerId: string): Record<string, string> {
+export function toDeviceParams(peerId: string): DeviceParams {
   return { device_id: peerId.trim() };
 }
 
-export function validPairingCode(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length >= 8 && value.trim().length <= 256;
+export function validPairingCode(value: Input): value is string {
+  return (
+    isString(value) && value.trim().length >= 8 && value.trim().length <= 256
+  );
 }
 
-export function normalizePairingCode(value: unknown): string | null {
-  if (typeof value !== "string") return null;
+export function normalizePairingCode(value: Input): string | null {
+  if (!isString(value)) return null;
   const code = value.trim();
   return code && code.length <= 4096 ? code : null;
 }
 
-export function normalizeSyncSnapshot(value: unknown): SyncSnapshot {
-  const raw = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-  const rawLocal =
-    raw.local_device && typeof raw.local_device === "object"
-      ? (raw.local_device as Record<string, unknown>)
-      : {};
+export function normalizeSyncSnapshot(value: Input): SyncSnapshot {
+  const raw = isObject(value) ? value : {};
+  const rawLocal = isObject(raw.local_device) ? raw.local_device : {};
   const transport =
-    raw.transport === "iroh" || raw.transport === "relay" || raw.transport === "lan"
+    raw.transport === "iroh" ||
+    raw.transport === "relay" ||
+    raw.transport === "lan"
       ? raw.transport
       : "unknown";
-  const validIso = (candidate: unknown): string | null => {
+  const validIso = (candidate: Input): string | null => {
     if (
-      typeof candidate !== "string" ||
+      !isString(candidate) ||
       candidate.length > 128 ||
-      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(candidate)
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(
+        candidate,
+      )
     )
       return null;
     const [, year, month, day, hour, minute, second] = candidate.match(
       /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/,
     )!;
-    const daysInMonth = new Date(Date.UTC(Number(year), Number(month), 0)).getUTCDate();
+    const daysInMonth = new Date(
+      Date.UTC(Number(year), Number(month), 0),
+    ).getUTCDate();
     if (
       Number(month) < 1 ||
       Number(month) > 12 ||
@@ -470,26 +585,29 @@ export function normalizeSyncSnapshot(value: unknown): SyncSnapshot {
     return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
   };
   const peers: SyncSnapshot["peers"] = Array.isArray(raw.peers)
-    ? raw.peers.flatMap((peer) => {
-        if (!peer || typeof peer !== "object") return [];
-        const item = peer as Record<string, unknown>;
-        const id =
-          typeof item.device_id === "string"
-            ? item.device_id
-            : typeof item.id === "string"
-              ? item.id
-              : "";
+    ? raw.peers.flatMap((peer: Input) => {
+        if (!isObject(peer)) return [];
+        const item = peer;
+        const id = isString(item.device_id)
+          ? item.device_id
+          : isString(item.id)
+            ? item.id
+            : "";
         if (!id.trim() || id.length > 256) return [];
         const status =
-          item.status === "online" || item.status === "offline" ? item.status : "unknown";
+          item.status === "online" || item.status === "offline"
+            ? item.status
+            : "unknown";
+        // SAFETY: id/name/status are normalized to the peer contract before this cast.
         const normalized = {
           id,
           name:
-            typeof item.device_name === "string" && item.device_name.trim().length <= 256
+            isString(item.device_name) && item.device_name.trim().length <= 256
               ? item.device_name.trim()
-              : typeof item.name === "string" && item.name.trim().length <= 256
+              : isString(item.name) && item.name.trim().length <= 256
                 ? item.name.trim()
                 : id,
+          // SAFETY: status is restricted to the SyncSnapshot peer status literals above.
           status: status as SyncSnapshot["peers"][number]["status"],
         } as SyncSnapshot["peers"][number];
         const lastSeen = validIso(item.last_seen);
@@ -498,13 +616,14 @@ export function normalizeSyncSnapshot(value: unknown): SyncSnapshot {
       })
     : [];
   const running = raw.running === true;
-  const boundedText = (candidate: unknown): string | null => {
-    if (typeof candidate !== "string") return null;
+  const boundedText = (candidate: Input): string | null => {
+    if (!isString(candidate)) return null;
     const text = candidate.trim();
     return text.length > 0 && text.length <= 256 ? text : null;
   };
   const localId = boundedText(rawLocal.device_id) ?? boundedText(rawLocal.id);
-  const localName = boundedText(rawLocal.device_name) ?? boundedText(rawLocal.name);
+  const localName =
+    boundedText(rawLocal.device_name) ?? boundedText(rawLocal.name);
   const result: SyncSnapshot = {
     running,
     status: running ? "running" : "stopped",
@@ -513,17 +632,21 @@ export function normalizeSyncSnapshot(value: unknown): SyncSnapshot {
     peers,
   };
   if (raw.pairing_available === true) result.pairing_available = true;
-  if (raw.own_pairing_code_available === true) result.own_pairing_code_available = true;
+  if (raw.own_pairing_code_available === true)
+    result.own_pairing_code_available = true;
   return result;
 }
 
-export function normalizeFocusBlocklists(value: unknown): FocusBlocklist[] {
-  const raw = isObject(value) && Array.isArray(value.blocklists) ? value.blocklists : [];
-  return raw.flatMap((item) => {
-    if (!isObject(item) || !validFocusId(item.id) || !text(item.name, 256)) return [];
+export function normalizeFocusBlocklists(value: Input): FocusBlocklist[] {
+  const raw =
+    isObject(value) && Array.isArray(value.blocklists) ? value.blocklists : [];
+  return raw.flatMap((item: Input) => {
+    if (!isObject(item) || !validFocusId(item.id) || !text(item.name, 256))
+      return [];
     const domains = Array.isArray(item.domains)
       ? item.domains.filter(
-          (entry): entry is string => typeof entry === "string" && entry.length <= 512,
+          (entry: Input): entry is string =>
+            isString(entry) && entry.length <= 512,
         )
       : [];
     return [
@@ -540,7 +663,7 @@ export function normalizeFocusBlocklists(value: unknown): FocusBlocklist[] {
   });
 }
 
-export function normalizeFocusActiveState(value: unknown): FocusActiveState {
+export function normalizeFocusActiveState(value: Input): FocusActiveState {
   const raw = isObject(value) ? value : {};
   return {
     active: raw.active === true,
@@ -549,13 +672,13 @@ export function normalizeFocusActiveState(value: unknown): FocusActiveState {
   };
 }
 
-export function isActiveFocusBlocklist(value: unknown, id: string): boolean {
+export function isActiveFocusBlocklist(value: Input, id: string): boolean {
   const state = normalizeFocusActiveState(value);
   return state.active && state.blocklist_id === id;
 }
 
-export function isValidFocusActiveState(value: unknown): boolean {
-  if (!isObject(value) || typeof value.active !== "boolean") return false;
+export function isValidFocusActiveState(value: Input): boolean {
+  if (!isObject(value) || !isBoolean(value.active)) return false;
   if (
     value.blocklist_id !== undefined &&
     value.blocklist_id !== null &&
@@ -569,11 +692,11 @@ export function isValidFocusActiveState(value: unknown): boolean {
   );
 }
 
-export function validFocusId(value: unknown): value is string {
+export function validFocusId(value: Input): value is string {
   return typeof value === "string" && /^[A-Za-z0-9._:-]{1,128}$/.test(value);
 }
 
-export function normalizeFocusServiceStatus(value: unknown) {
+export function normalizeFocusServiceStatus(value: Input) {
   const raw = isObject(value) ? value : {};
   return {
     installed: raw.installed === true,

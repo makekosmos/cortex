@@ -1,4 +1,9 @@
-import type { AlertOptions, LaunchCommandOptions, PreferenceValues } from "./types";
+import type {
+  AlertOptions,
+  LaunchCommandOptions,
+  PreferenceValues,
+  RaycastChild,
+} from "./types";
 
 export interface ToastOptions {
   style?: ToastStyle;
@@ -16,6 +21,16 @@ export const Toast = {
 } as const;
 
 export type ToastStyle = (typeof Toast.Style)[keyof typeof Toast.Style];
+
+interface RaycastNavigation {
+  push(target: RaycastChild): void;
+  pop(): void;
+  popToRoot(): void;
+}
+
+function isToastStyle(value: ToastOptions | ToastStyle): value is ToastStyle {
+  return typeof value === "string";
+}
 
 export interface RaycastRuntimeAdapter {
   showToast(options: ToastOptions): Promise<void>;
@@ -39,7 +54,7 @@ export interface RaycastRuntimeAdapter {
   cacheClear(namespace: string): Promise<void>;
   getPreferenceValues(): PreferenceValues;
   launchCommand(options: LaunchCommandOptions): Promise<void>;
-  navigationPush(target: unknown): void;
+  navigationPush(target: RaycastChild): void;
   navigationPop(): void;
   navigationPopToRoot(): void;
 }
@@ -140,7 +155,7 @@ export function getRaycastRuntime(): RaycastRuntimeAdapter {
 }
 
 export async function showToast(options: ToastOptions | ToastStyle, title?: string): Promise<void> {
-  if (typeof options === "string") {
+  if (isToastStyle(options)) {
     await runtime.showToast({ style: options, title: title ?? "" });
     return;
   }
@@ -208,6 +223,7 @@ export class Cache {
 }
 
 export function getPreferenceValues<T extends PreferenceValues = PreferenceValues>(): T {
+  // SAFETY: the configured runtime adapter returns the preference contract requested by the caller.
   return runtime.getPreferenceValues() as T;
 }
 
@@ -215,11 +231,7 @@ export function launchCommand(options: LaunchCommandOptions): Promise<void> {
   return runtime.launchCommand(options);
 }
 
-export function useNavigation(): {
-  push(target: unknown): void;
-  pop(): void;
-  popToRoot(): void;
-} {
+export function useNavigation(): RaycastNavigation {
   return {
     push: (target) => runtime.navigationPush(target),
     pop: () => runtime.navigationPop(),

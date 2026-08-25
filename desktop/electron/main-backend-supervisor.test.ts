@@ -62,6 +62,7 @@ beforeEach(() => {
 function createTestSupervisor(getIsQuiting: () => boolean) {
   return createMainBackendSupervisor({
     env: {},
+// SAFETY: The surrounding boundary establishes this documented contract.
     instance: { slot: "test" } as never,
     resolveBackendExe: () => "kepler-backend.exe",
     getIsQuiting,

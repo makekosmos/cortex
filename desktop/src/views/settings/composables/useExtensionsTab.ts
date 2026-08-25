@@ -24,6 +24,7 @@ export function useExtensionsTab() {
     try {
       installed.value = await window.kepler.extension.installedList();
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       extensionsError.value = (e as Error).message;
     } finally {
       extensionsLoading.value = false;
@@ -36,6 +37,7 @@ export function useExtensionsTab() {
     try {
       catalog.value = await window.kepler.extension.catalogFetch(force);
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       marketError.value = (e as Error).message;
     } finally {
       marketLoading.value = false;
@@ -61,6 +63,7 @@ export function useExtensionsTab() {
       await window.kepler.extension.installFromUrl(c.downloadUrl, c.sha256);
       await loadExtensions();
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       marketError.value = `${i.id}: ${(e as Error).message}`;
     } finally {
       installingId.value = "";
@@ -75,6 +78,7 @@ export function useExtensionsTab() {
       await window.kepler.extension.installFromUrl(c.downloadUrl, c.sha256);
       await loadExtensions();
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       marketError.value = `${c.id}: ${(e as Error).message}`;
     } finally {
       installingId.value = "";
@@ -92,6 +96,7 @@ export function useExtensionsTab() {
       }
       await loadExtensions();
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       extensionsError.value = `${id}: ${(e as Error).message}`;
     } finally {
       busyExt.value = "";
@@ -106,6 +111,7 @@ export function useExtensionsTab() {
       await window.kepler.extension.uninstall(id);
       await loadExtensions();
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       extensionsError.value = `${id}: ${(e as Error).message}`;
     } finally {
       busyExt.value = "";

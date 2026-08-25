@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, shallowRef } from "vue";
 import { DesktopChrome, DesktopContentSurface, type ToastTone } from "@kosmos/visuals";
 import type { CommandFeedbackEvent, CommandSnapshot } from "../../shared/command-ipc";
+import { isFunction } from "../shared/runtimeGuards";
 import CommandFormView from "../command-host/CommandFormView.vue";
 import CommandGridView from "../command-host/CommandGridView.vue";
 import CommandListView from "../command-host/CommandListView.vue";
@@ -36,7 +37,7 @@ onMounted(async () => {
   }
   try {
     stopFeedback = window.kepler.command.onFeedback(id, showFeedback);
-    if (typeof window.kepler.command.onSnapshotUpdated === "function") {
+    if (isFunction(window.kepler.command.onSnapshotUpdated)) {
       stopSnapshotUpdates = window.kepler.command.onSnapshotUpdated(id, (nextSnapshot) => {
         snapshot.value = nextSnapshot;
         error.value = null;

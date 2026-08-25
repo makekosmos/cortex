@@ -1,4 +1,5 @@
 import type { CommandSnapshotNode } from "../../shared/command-ipc";
+import { isBoolean, isString } from "../shared/runtimeGuards";
 import {
   findFirst,
   textProp,
@@ -119,19 +120,19 @@ function formDefaultValue(node: CommandSnapshotNode): string | boolean | string[
   const value = node.props.defaultValue ?? node.props.value;
   if (node.type === "Form.FilePicker" || node.type === "Form.TagPicker") {
     if (Array.isArray(value))
-      return value.filter((item): item is string => typeof item === "string");
-    return typeof value === "string" ? [value] : [];
+      return value.filter(isString);
+    return isString(value) ? [value] : [];
   }
   if (node.type === "Form.DatePicker") {
     return dateInputValue(value);
   }
-  if (typeof value === "string" || typeof value === "boolean") return value;
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  if (isString(value) || isBoolean(value)) return value;
+  if (Array.isArray(value)) return value.filter(isString);
   return null;
 }
 
-function dateInputValue(value: unknown): string | null {
-  if (!(typeof value === "string" && value.trim().length > 0)) return null;
+function dateInputValue<T>(value: T): string | null {
+  if (!(isString(value) && value.trim().length > 0)) return null;
   const trimmed = value.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
   const date = new Date(trimmed);

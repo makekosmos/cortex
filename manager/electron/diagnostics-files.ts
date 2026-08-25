@@ -16,7 +16,10 @@ function normalizeMtime(value: Date): string {
   return iso.length <= 64 ? iso : iso.slice(0, 64);
 }
 
-async function diagnosticsDir(root: string, kind: "logs" | "crashes"): Promise<string | null> {
+async function diagnosticsDir(
+  root: string,
+  kind: "logs" | "crashes",
+): Promise<string | null> {
   const dir = path.join(root, kind);
   try {
     const stat = await lstat(dir);
@@ -24,12 +27,15 @@ async function diagnosticsDir(root: string, kind: "logs" | "crashes"): Promise<s
       throw new Error("diagnostics root is not a real directory");
     return dir;
   } catch (error) {
+    // SAFETY: Node filesystem errors expose an optional errno code.
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   }
 }
 
-export async function listCrashReports(root: string): Promise<CrashReportMetadata[]> {
+export async function listCrashReports(
+  root: string,
+): Promise<CrashReportMetadata[]> {
   const dir = await diagnosticsDir(root, "crashes");
   if (!dir) return [];
   const names = await readdir(dir);
@@ -38,7 +44,12 @@ export async function listCrashReports(root: string): Promise<CrashReportMetadat
     if (!allowed(name)) continue;
     try {
       const stat = await lstat(path.join(dir, name));
-      if (!stat.isFile() || stat.size < 0 || stat.size > Number.MAX_SAFE_INTEGER) continue;
+      if (
+        !stat.isFile() ||
+        stat.size < 0 ||
+        stat.size > Number.MAX_SAFE_INTEGER
+      )
+        continue;
       result.push({ name, size: stat.size, mtime: normalizeMtime(stat.mtime) });
     } catch {
       // Files can disappear while the directory is being inspected.
@@ -66,11 +77,15 @@ export async function clearCrashReports(root: string): Promise<number> {
   return removed;
 }
 
-export async function ensureDiagnosticsDir(root: string, kind: "logs" | "crashes") {
+export async function ensureDiagnosticsDir(
+  root: string,
+  kind: "logs" | "crashes",
+) {
   const dir = path.join(root, kind);
   const existing = await diagnosticsDir(root, kind);
   if (existing) return existing;
   await mkdir(dir, { recursive: true });
-  if (!(await diagnosticsDir(root, kind))) throw new Error("diagnostics root was not created");
+  if (!(await diagnosticsDir(root, kind)))
+    throw new Error("diagnostics root was not created");
   return dir;
 }

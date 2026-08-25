@@ -14,23 +14,24 @@ async function launchIsolated(
   ambientAppDataDir?: string,
 ): Promise<{ app: ElectronApplication; userDataDir: string }> {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-desktop-userdata-"));
+  const env = {
+    ...process.env,
+    NODE_ENV: "test",
+    KOSMOS_DATA_DIR: dataDir,
+    KOSMOS_TEST_MODE: "1",
+    KOSMOS_HEADLESS: "1",
+    KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
+    KEPLER_SKIP_SYNC: "1",
+    KEPLER_BACKEND_EXE:
+      process.env.KEPLER_BACKEND_EXE ??
+      path.resolve(appRoot, "../../target/debug/kepler-backend.exe"),
+  };
+  if (ambientAppDataDir) env.APPDATA = ambientAppDataDir;
   const app = await electron.launch({
     executablePath: electronBinary,
     cwd: appRoot,
     args: [path.join(appRoot, "dist-electron", "main.js"), `--user-data-dir=${userDataDir}`],
-    env: {
-      ...process.env,
-      NODE_ENV: "test",
-      KOSMOS_DATA_DIR: dataDir,
-      KOSMOS_TEST_MODE: "1",
-      KOSMOS_HEADLESS: "1",
-      KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
-      KEPLER_SKIP_SYNC: "1",
-      ...(ambientAppDataDir ? { APPDATA: ambientAppDataDir } : {}),
-      KEPLER_BACKEND_EXE:
-        process.env.KEPLER_BACKEND_EXE ??
-        path.resolve(appRoot, "../../target/debug/kepler-backend.exe"),
-    },
+    env,
     timeout: 20_000,
   });
   return { app, userDataDir };
@@ -43,19 +44,20 @@ async function launchManagerIsolated(
   ambientAppDataDir?: string,
 ): Promise<{ app: ElectronApplication; userDataDir: string }> {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-manager-userdata-"));
+  const env = {
+    ...process.env,
+    NODE_ENV: "test",
+    KOSMOS_DATA_DIR: dataDir,
+    KOSMOS_TEST_MODE: "1",
+    KOSMOS_HEADLESS: "1",
+    KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
+  };
+  if (ambientAppDataDir) env.APPDATA = ambientAppDataDir;
   const app = await electron.launch({
     executablePath: electronBinary,
     cwd: managerRoot,
     args: [path.join(managerRoot, "dist-electron", "main.js"), `--user-data-dir=${userDataDir}`],
-    env: {
-      ...process.env,
-      NODE_ENV: "test",
-      KOSMOS_DATA_DIR: dataDir,
-      KOSMOS_TEST_MODE: "1",
-      KOSMOS_HEADLESS: "1",
-      KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
-      ...(ambientAppDataDir ? { APPDATA: ambientAppDataDir } : {}),
-    },
+    env,
     timeout: 20_000,
   });
   return { app, userDataDir };
@@ -66,6 +68,7 @@ function usageSnapshot(dataDir: string): {
   legacy?: { connections?: number };
 } | null {
   try {
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
     return JSON.parse(fs.readFileSync(path.join(dataDir, "protocol-usage.json"), "utf8")) as {
       clients?: Record<string, number>;
       legacy?: { connections?: number };
@@ -93,8 +96,9 @@ function shutdownIsolatedEngine(dataDir: string): void {
   if (!fs.existsSync(lockPath)) return;
   const pid = (() => {
     try {
+// SAFETY: the test fixture or assertion setup establishes the expected contract.
       const parsed = JSON.parse(fs.readFileSync(lockPath, "utf8")) as { pid?: unknown };
-      return typeof parsed.pid === "number" && Number.isInteger(parsed.pid) ? parsed.pid : null;
+      return isInteger(parsed.pid) ? parsed.pid : null;
     } catch {
       return null;
     }
@@ -123,6 +127,10 @@ function shutdownIsolatedEngine(dataDir: string): void {
       // Process already exited after the graceful request.
     }
   }
+}
+
+function isInteger<T>(value: T): value is T & number {
+  return typeof value === "number" && Number.isInteger(value);
 }
 
 test("Desktop and Manager share Engine v1 attribution without ambient-data access", async () => {

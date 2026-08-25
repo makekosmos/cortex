@@ -13,13 +13,13 @@ import {
 function validate(input) {
   if (input.schema_version !== 1) fail("schema_version must be 1");
   if (
-    typeof input.old_key_id !== "string" ||
+    Object.prototype.toString.call(input.old_key_id) !== "[object String]" ||
     !input.old_key_id ||
     !input.new_key ||
-    typeof input.new_key !== "object"
+    input.new_key === null || Object.prototype.toString.call(input.new_key) !== "[object Object]"
   )
     fail("old_key_id and new_key are required");
-  if (typeof input.new_key.key_id !== "string" || typeof input.new_key.public_key !== "string")
+  if (Object.prototype.toString.call(input.new_key.key_id) !== "[object String]" || Object.prototype.toString.call(input.new_key.public_key) !== "[object String]")
     fail("new_key.key_id and new_key.public_key are required");
   safeId(input.old_key_id, "old_key_id");
   safeId(input.new_key.key_id, "new_key.key_id");

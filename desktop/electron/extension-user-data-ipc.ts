@@ -2,6 +2,7 @@ import { ipcMain, type WebContents } from "electron";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { assertSafeUserDataName, resolveSafeUserDataPath } from "./extension-manifest";
+import type { JsonValue } from "./extension-permissions";
 
 type UserDataCapability = "userData.read" | "userData.write";
 
@@ -19,21 +20,22 @@ export function registerExtensionUserDataIpc({
     return userDataDirForSender(e.sender);
   });
 
-  ipcMain.handle("kepler:extension:userData:readJson", (e, name: string): unknown => {
+  ipcMain.handle("kepler:extension:userData:readJson", (e, name: string): JsonValue | null => {
     assertHostPermission(e.sender, "userData.read");
     assertSafeUserDataName(name);
     const dir = userDataDirForSender(e.sender);
     const filePath = path.join(dir, name);
     if (!existsSync(filePath)) return null;
     try {
-      return JSON.parse(readFileSync(filePath, "utf8")) as unknown;
+      // SAFETY: Files written by writeJson contain JSON-compatible values.
+      return JSON.parse(readFileSync(filePath, "utf8")) as JsonValue;
     } catch (err) {
       console.warn(`[kepler-shell] userData.readJson failed for ${filePath}:`, err);
       return null;
     }
   });
 
-  ipcMain.handle("kepler:extension:userData:writeJson", (e, name: string, value: unknown): void => {
+  ipcMain.handle("kepler:extension:userData:writeJson", (e, name: string, value: JsonValue): void => {
     assertHostPermission(e.sender, "userData.write");
     assertSafeUserDataName(name);
     const dir = userDataDirForSender(e.sender);
@@ -60,9 +62,6 @@ export function registerExtensionUserDataIpc({
     (e, name: string, content: string): void => {
       assertHostPermission(e.sender, "userData.write");
       assertSafeUserDataName(name);
-      if (typeof content !== "string") {
-        throw new Error("[kepler-shell] userData.writeFile: content must be a string");
-      }
       const dir = userDataDirForSender(e.sender);
       const filePath = path.join(dir, name);
       writeFileSync(filePath, content, "utf8");
@@ -86,9 +85,6 @@ export function registerExtensionUserDataIpc({
     "kepler:extension:userData:writeBinary",
     (e, name: string, base64: string): void => {
       assertHostPermission(e.sender, "userData.write");
-      if (typeof base64 !== "string") {
-        throw new Error("[kepler-shell] userData.writeBinary: content must be a base64 string");
-      }
       const dir = userDataDirForSender(e.sender);
       const filePath = resolveSafeUserDataPath(dir, name);
       mkdirSync(path.dirname(filePath), { recursive: true });

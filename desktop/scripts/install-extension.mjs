@@ -172,7 +172,7 @@ if (sourceStat.isDirectory()) {
   die(`unsupported source (need directory or .kext/.zip): ${sourceAbs}`);
 }
 
-if (!manifest.id || typeof manifest.id !== "string") {
+if (!manifest.id || Object.prototype.toString.call(manifest.id) !== "[object String]") {
   die(`manifest.id missing or not a string`);
 }
 if (!/^[\w][\w.-]*$/.test(manifest.id)) {

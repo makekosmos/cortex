@@ -109,8 +109,8 @@ async function dominantRemoteImageColor(source: string): Promise<string | null> 
 export function registerExtensionImageColorIpc(options: {
   extensionIdForSender(sender: WebContents): string | null;
 }): void {
-  ipcMain.handle(CHANNEL, async (event, source: unknown) => {
-    if (options.extensionIdForSender(event.sender) !== "eden" || typeof source !== "string") {
+  ipcMain.handle(CHANNEL, async (event, source: string) => {
+    if (options.extensionIdForSender(event.sender) !== "eden") {
       return null;
     }
     try {

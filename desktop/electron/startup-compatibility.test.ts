@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import type { JsonValue } from "./extension-permissions";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -154,8 +155,8 @@ function extractFunction(source: string, name: string): string {
 function compileFunction(
   source: string,
   name: string,
-  bindings: Record<string, unknown>,
-): (...args: unknown[]) => unknown {
+  bindings: CompileBindings,
+): (...args: JsonValue[]) => JsonValue {
   const js = extractFunction(source, name)
     .replaceAll("): string[] {", "){")
     .replaceAll("): boolean {", "){")
@@ -167,8 +168,11 @@ function compileFunction(
     ...Object.keys(bindings),
     `const HIDDEN_COMMANDS_KEY = "kepler.launcher.hiddenCommandIds"; ${js}; return ${name};`,
   );
-  return factory(...Object.values(bindings)) as (...args: unknown[]) => unknown;
+  // SAFETY: The extracted function is compiled from the named source and returns JSON-compatible test data.
+  return factory(...Object.values(bindings)) as (...args: JsonValue[]) => JsonValue;
 }
+
+interface CompileBindings {}
 
 test("seeded hidden command state is shared by Settings and Launcher and recovers", () => {
   const values = new Map<string, string>();
@@ -180,7 +184,9 @@ test("seeded hidden command state is shared by Settings and Launcher and recover
   const seeded = ["eden:open", "delphi:task:create", "arrancador:open"];
   values.set(key, JSON.stringify(seeded));
 
+  // SAFETY: Test state is intentionally initialized as a string-id collection.
   const settingsState = { value: [] as string[] };
+  // SAFETY: Test state is intentionally initialized as a string-id collection.
   const launcherState = { value: [] as string[] };
   const settingsLoad = compileFunction(settingsViewSource, "loadHiddenCommandIds", {
     localStorage: storage,
@@ -188,7 +194,9 @@ test("seeded hidden command state is shared by Settings and Launcher and recover
   const launcherLoad = compileFunction(launcherSource, "loadHiddenCommandIds", {
     localStorage: storage,
   });
+  // SAFETY: The extracted loaders return the seeded string-id arrays.
   settingsState.value = settingsLoad() as string[];
+  // SAFETY: The extracted loaders return the seeded string-id arrays.
   launcherState.value = launcherLoad() as string[];
   expect(settingsState.value).toEqual(seeded);
   expect(launcherState.value).toEqual(seeded);
@@ -196,6 +204,7 @@ test("seeded hidden command state is shared by Settings and Launcher and recover
   const launcherVisible = compileFunction(launcherSource, "isCommandVisible", {
     hiddenCommandIds: launcherState,
   });
+  // SAFETY: The extracted visibility function accepts command-shaped JSON objects.
   expect(launcherVisible({ id: "eden:open" })).toBe(false);
   expect(launcherVisible({ id: "delphi:task:today" })).toBe(true);
 

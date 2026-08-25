@@ -115,7 +115,7 @@ export function registerExtensionWindowIpc({
   });
 
   ipcMain.handle("kepler:extension:window:zoom-set", (e, factor: number): number => {
-    const next = typeof factor === "number" && Number.isFinite(factor) ? factor : 1;
+    const next = isFiniteNumber(factor) ? factor : 1;
     const clamped = Math.max(0.5, Math.min(2.0, next));
     e.sender.setZoomFactor(clamped);
     const win = windowForSender(e.sender);
@@ -141,7 +141,7 @@ export function registerExtensionWindowIpc({
   ipcMain.handle("kepler:extension:window:begin-manual-drag", (e, point) => {
     const win = windowForSender(e.sender);
     if (!win || win.isDestroyed()) return;
-    if (!point || typeof point.screenX !== "number" || typeof point.screenY !== "number") return;
+    if (!point || !Number.isFinite(point.screenX) || !Number.isFinite(point.screenY)) return;
 
     if (win.isMaximized()) win.unmaximize();
     extensionWindowDrags.set(e.sender.id, {
@@ -155,7 +155,7 @@ export function registerExtensionWindowIpc({
     const win = windowForSender(e.sender);
     const drag = extensionWindowDrags.get(e.sender.id);
     if (!win || win.isDestroyed() || !drag) return;
-    if (!point || typeof point.screenX !== "number" || typeof point.screenY !== "number") return;
+    if (!point || !Number.isFinite(point.screenX) || !Number.isFinite(point.screenY)) return;
 
     win.setBounds({
       ...drag.startBounds,
@@ -180,7 +180,7 @@ export function registerExtensionWindowIpc({
       return;
     }
 
-    const titlebarHeight = typeof height === "number" && height > 0 ? height : 56;
+    const titlebarHeight = isFiniteNumber(height) && height > 0 ? height : 56;
     let lastHovered: boolean | null = null;
 
     const interval = setInterval(() => {
@@ -263,4 +263,8 @@ export function registerExtensionWindowIpc({
     const id = extensionIdForSender(e.sender);
     return id ? dockedState.has(id) : false;
   });
+}
+
+function isFiniteNumber(value: number): value is number {
+  return Number.isFinite(value);
 }

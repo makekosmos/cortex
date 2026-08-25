@@ -20,6 +20,7 @@ import crypto from "node:crypto";
 import { app, BrowserWindow } from "electron";
 import { fileURLToPath } from "node:url";
 import { pingService, sendViaPipe } from "../../shared/focus-service-client";
+import type { JsonRecord, JsonValue } from "./extension-permissions";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,23 +36,27 @@ interface HelperResponse {
   error?: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord(value: JsonValue | undefined): value is JsonRecord {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-function isHelperResponse(value: unknown): value is HelperResponse {
+function isHelperResponse(value: JsonValue): value is JsonRecord & HelperResponse {
   return (
     isRecord(value) &&
     typeof value.ok === "boolean" &&
     (value.active_domains === undefined ||
       (Array.isArray(value.active_domains) &&
-        value.active_domains.every((domain) => typeof domain === "string"))) &&
+        value.active_domains.every(isString))) &&
     (value.error === undefined || typeof value.error === "string")
   );
 }
 
+function isString(value: JsonValue): value is string {
+  return typeof value === "string";
+}
+
 function parseHelperResponse(text: string): HelperResponse {
-  const parsed: unknown = JSON.parse(text);
+  const parsed: JsonValue = JSON.parse(text);
   if (isHelperResponse(parsed)) return parsed;
   return { ok: false, error: "invalid helper response shape" };
 }
@@ -78,12 +83,15 @@ function runHelperDirect(req: HelperRequest): Promise<HelperResponse | "needs_el
         windowsHide: true,
       });
     } catch (e: unknown) {
+      // SAFETY: Node spawn errors expose the documented errno shape.
       const code = (e as NodeJS.ErrnoException).code;
       // ERROR_ELEVATION_REQUIRED (740) → нужен RunAs flow.
+      // SAFETY: Node spawn errors expose an Error-compatible message.
       if (code === "UNKNOWN" || (e as Error).message.includes("740")) {
         resolve("needs_elevation");
         return;
       }
+      // SAFETY: The catch value is an Error from the child-process boundary.
       resolve({ ok: false, error: `spawn failed: ${(e as Error).message}` });
       return;
     }
@@ -178,6 +186,7 @@ async function runHelperElevated(req: HelperRequest): Promise<HelperResponse> {
   } catch (e) {
     return {
       ok: false,
+      // SAFETY: The elevated process boundary reports Error instances.
       error: `elevated run failed: ${(e as Error).message}`,
     };
   } finally {
@@ -200,6 +209,7 @@ async function trySendViaPipe(req: HelperRequest): Promise<HelperResponse | null
     }
     return null;
   } catch (e) {
+    // SAFETY: The service client rejects with an Error-shaped failure.
     console.warn("[focus-block] service path failed:", (e as Error).message);
     return null;
   }

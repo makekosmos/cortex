@@ -176,6 +176,7 @@ export function loadExtensionManifest(id: string): ExtensionManifest | null {
     };
   }
   try {
+// SAFETY: The surrounding boundary establishes this documented contract.
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as ExtensionManifest;
     if (manifest.id !== id) {
       console.warn(

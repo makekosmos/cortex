@@ -2,6 +2,7 @@ import { ipcRenderer } from "electron";
 import type { CommandFeedbackEvent, CommandSnapshot } from "../shared/command-ipc";
 import type { KeplerApi } from "../shared/ipc-types";
 import { createKeplerSettingsBridge } from "./preload-settings-bridge";
+import type { JsonRecord } from "./extension-permissions";
 
 type KeplerTestApi = {
   __test?: {
@@ -20,6 +21,20 @@ type CommandIpcPayload = {
   snapshot?: CommandSnapshot;
   event?: CommandFeedbackEvent;
 };
+
+type ArkEventPayload = JsonRecord;
+type BlockedApp = { id: string; title: string; icon?: string | null };
+type FocusWidgetState = {
+  active: boolean;
+  remainingSec: number;
+  totalSec: number;
+  label: string;
+  mode: "work" | "break" | "stopwatch";
+  blockingActive: boolean;
+  isPaused: boolean;
+};
+type DictationCommand = { kind: "start" | "stop" | "cancel" };
+type DictationCapturePayload = JsonRecord;
 
 export function installKeplerPlatformMarker(): void {
   const platform = platformMarker();
@@ -84,8 +99,10 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
     ark: {
       request: (operation, params) => ipcRenderer.invoke("kepler:ark:request", operation, params),
       onEvent: (listener) => {
-        const handler = (_e: Electron.IpcRendererEvent, event: unknown) =>
-          listener(event as Record<string, unknown>);
+        const handler = (_e: Electron.IpcRendererEvent, event: ArkEventPayload) => {
+          // SAFETY: The main process emits structured Ark events on this channel.
+          listener(event);
+        };
         ipcRenderer.on("kepler:ark:event", handler);
         return () => ipcRenderer.removeListener("kepler:ark:event", handler);
       },
@@ -145,8 +162,10 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
         return () => ipcRenderer.removeListener("kepler:focus-session:updated", handler);
       },
       onAppBlocked: (listener) => {
-        const handler = (_e: Electron.IpcRendererEvent, app: unknown) =>
-          listener(app as { id: string; title: string; icon?: string | null });
+        const handler = (_e: Electron.IpcRendererEvent, app: BlockedApp) => {
+          // SAFETY: The focus IPC channel emits the documented blocked-app shape.
+          listener(app);
+        };
         ipcRenderer.on("kepler:focus:app-blocked", handler);
         return () => ipcRenderer.removeListener("kepler:focus:app-blocked", handler);
       },
@@ -190,18 +209,10 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
       },
       showMenu: () => ipcRenderer.invoke("kepler:focus-widget:show-menu"),
       onState: (handler) => {
-        const wrapper = (_e: Electron.IpcRendererEvent, state: unknown) =>
-          handler(
-            state as {
-              active: boolean;
-              remainingSec: number;
-              totalSec: number;
-              label: string;
-              mode: "work" | "break" | "stopwatch";
-              blockingActive: boolean;
-              isPaused: boolean;
-            },
-          );
+        const wrapper = (_e: Electron.IpcRendererEvent, state: FocusWidgetState) => {
+          // SAFETY: The focus-widget IPC channel emits the documented state shape.
+          handler(state);
+        };
         ipcRenderer.on("kepler:focus-widget:state", wrapper);
         return () => ipcRenderer.removeListener("kepler:focus-widget:state", wrapper);
       },
@@ -211,14 +222,18 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
       cancel: () => ipcRenderer.invoke("kepler:dictation:cancel"),
       pillFinished: () => ipcRenderer.invoke("kepler:dictation:pill-finished"),
       onCommand: (cb) => {
-        const wrapper = (_e: Electron.IpcRendererEvent, cmd: unknown) =>
-          cb(cmd as { kind: "start" | "stop" | "cancel" });
+        const wrapper = (_e: Electron.IpcRendererEvent, cmd: DictationCommand) => {
+          // SAFETY: The dictation IPC channel emits one of the documented commands.
+          cb(cmd);
+        };
         ipcRenderer.on("kepler:dictation:command", wrapper);
         return () => ipcRenderer.removeListener("kepler:dictation:command", wrapper);
       },
       onCaptureEvent: (cb) => {
-        const wrapper = (_e: Electron.IpcRendererEvent, payload: unknown) =>
-          cb(payload as Record<string, unknown>);
+        const wrapper = (_e: Electron.IpcRendererEvent, payload: DictationCapturePayload) => {
+          // SAFETY: The dictation capture channel emits structured event payloads.
+          cb(payload);
+        };
         ipcRenderer.on("kepler:dictation:capture", wrapper);
         return () => ipcRenderer.removeListener("kepler:dictation:capture", wrapper);
       },
@@ -248,6 +263,7 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
       waitForReady: (timeoutMs?: number) =>
         ipcRenderer.invoke("kepler:__test:waitForReady", timeoutMs),
       getStats: () =>
+        // SAFETY: The test IPC handler returns the documented stats snapshot.
         ipcRenderer.invoke("kepler:__test:getStats") as Promise<{
           arkConnected: boolean;
           commands: string[];

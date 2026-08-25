@@ -1,15 +1,17 @@
 import { BrowserWindow, Menu, ipcMain, type MenuItemConstructorOptions } from "electron";
 import type { ArkClient } from "@kosmos/ark";
 import type { FocusState } from "./focus-widget-state";
+import type { FocusSessionSnapshot } from "./focus-session-types";
+import type { JsonRecord, JsonValue } from "./extension-permissions";
 
 type ArkRequest = Parameters<ArkClient["invokeOperation"]>[0];
 
 export interface FocusWidgetSessionActions {
-  pause: () => Promise<unknown>;
-  resume: () => Promise<unknown>;
-  skip: () => Promise<unknown>;
-  stop: () => Promise<unknown>;
-  complete: () => Promise<unknown>;
+  pause: () => Promise<FocusSessionSnapshot>;
+  resume: () => Promise<FocusSessionSnapshot>;
+  skip: () => Promise<FocusSessionSnapshot>;
+  stop: () => Promise<FocusSessionSnapshot>;
+  complete: () => Promise<FocusSessionSnapshot>;
 }
 
 interface ArkObjectLike {
@@ -17,10 +19,10 @@ interface ArkObjectLike {
   typeId?: string;
   type_id?: string;
   title?: string | null;
-  contentJson?: unknown;
-  content_json?: unknown;
-  propsJson?: Record<string, unknown>;
-  props_json?: Record<string, unknown>;
+  contentJson?: JsonValue;
+  content_json?: JsonValue;
+  propsJson?: JsonRecord;
+  props_json?: JsonRecord;
   createdAt?: string;
   created_at?: string;
   updatedAt?: string;
@@ -29,9 +31,9 @@ interface ArkObjectLike {
   deleted_at?: string | null;
 }
 
-const EMPTY_PROPS: Record<string, never> = Object.freeze({});
+const EMPTY_PROPS: JsonRecord = Object.freeze({});
 
-function timeEntryProps(record: ArkObjectLike): Record<string, unknown> {
+function timeEntryProps(record: ArkObjectLike): JsonRecord {
   return record.propsJson ?? record.props_json ?? EMPTY_PROPS;
 }
 
@@ -46,7 +48,6 @@ export function registerFocusWidgetIpcHandlers(deps: {
   requireRuntime: () => { awaitArkReady: () => Promise<ArkClient> };
 }): void {
   ipcMain.handle("kepler:focus-widget:set-state", (_e, patch: Partial<FocusState>) => {
-    if (!patch || typeof patch !== "object") return;
     deps.setFocusState(patch);
   });
 
@@ -146,7 +147,10 @@ function focusSessionMenuItems(
   ];
 }
 
-async function runFocusAction(name: string, action: () => Promise<unknown>): Promise<void> {
+async function runFocusAction(
+  name: string,
+  action: () => Promise<FocusSessionSnapshot>,
+): Promise<void> {
   try {
     await action();
   } catch (error) {
@@ -176,7 +180,7 @@ async function stopManualStopwatch(
     const target = running.find((o) => {
       const props = timeEntryProps(o);
       const started = props.startedAt;
-      return typeof started === "string" && started.length > 0;
+      return isNonEmptyString(started);
     });
     if (!target) {
       console.warn("[focus-widget] stopwatch stop: no running manual time_entry");
@@ -204,4 +208,8 @@ async function stopManualStopwatch(
   } catch (e) {
     console.error("[focus-widget] stopwatch stop failed:", e);
   }
+}
+
+function isNonEmptyString(value: JsonValue | undefined): value is string {
+  return typeof value === "string" && value.length > 0;
 }

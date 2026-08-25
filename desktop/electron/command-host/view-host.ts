@@ -5,7 +5,13 @@ import { extensionUserDataDir } from "../extension-host";
 import { isHeadless, isHeadlessOrTest } from "../extension-manifest";
 import { runCommandView, type CommandLaunchProps } from "./command-runner";
 import { handleCommandAction } from "./view-actions";
-import { normalizeCommandNode, type CommandViewCallbackRegistry } from "./view-model";
+import {
+  normalizeCommandNode,
+  isString,
+  type CommandRecord,
+  type CommandValue,
+  type CommandViewCallbackRegistry,
+} from "./view-model";
 import type { ExtensionSource } from "../extension-permissions";
 import type {
   CommandActionRequest,
@@ -16,10 +22,8 @@ import type {
   CommandSnapshot,
 } from "../../shared/command-ipc";
 import type { LaunchCommandOptions } from "@raycast/api";
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 const COMMAND_HOST_WIDTH = 760;
 const COMMAND_HOST_HEIGHT = 560;
 const COMMAND_HOST_MIN_WIDTH = 620;
@@ -28,7 +32,7 @@ const COMMAND_HOST_MIN_HEIGHT = 420;
 const sessions = new Map<string, CommandSnapshot>();
 const callbacks = new Map<
   string,
-  Map<string, (payload?: Record<string, unknown>) => unknown | Promise<unknown>>
+  Map<string, (payload?: CommandRecord) => void | Promise<void>>
 >();
 const launchers = new Map<string, (options: LaunchCommandOptions) => Promise<void>>();
 const windows = new Map<string, BrowserWindow>();
@@ -85,7 +89,7 @@ export async function openCommandViewCommand(options: {
 }): Promise<void> {
   const sessionCallbacks = new Map<
     string,
-    (payload?: Record<string, unknown>) => unknown | Promise<unknown>
+    (payload?: CommandRecord) => void | Promise<void>
   >();
   let nextCallbackId = 0;
   const sessionId = `${options.extensionId}:${options.commandName}:${Date.now()}`;
@@ -112,7 +116,7 @@ export async function openCommandViewCommand(options: {
     });
   }
 
-  function pushNavigationTarget(target: unknown): void {
+  function pushNavigationTarget(target: CommandValue): void {
     const node = normalizeCommandNode(target, callbackRegistry);
     if (!node) return;
     navigationStack.push(node);
@@ -237,7 +241,7 @@ function getCommandSnapshot(sessionId: string): CommandSnapshot | null {
 }
 
 ipcMain.handle("kepler:command:snapshot", (_event, sessionId: string): CommandSnapshot | null => {
-  if (typeof sessionId !== "string") return null;
+  if (!sessionId) return null;
   return getCommandSnapshot(sessionId);
 });
 
@@ -248,7 +252,7 @@ ipcMain.handle(
     sessionId: string,
     request: CommandFilePickerRequest,
   ): Promise<CommandFilePickerResult> => {
-    if (typeof sessionId !== "string" || !request || typeof request !== "object") {
+    if (!sessionId || !request) {
       return { ok: false, paths: [], error: "invalid_request" };
     }
 
@@ -272,15 +276,16 @@ ipcMain.handle(
 ipcMain.handle(
   "kepler:command:action",
   async (event, sessionId: string, action: CommandActionRequest): Promise<CommandActionResult> => {
-    if (typeof sessionId !== "string" || !action || typeof action !== "object") {
+    if (!sessionId || !action) {
       return { ok: false, error: "invalid_request" };
     }
 
     const sessionWindow = sessionWindowFromSender(sessionId, event.sender);
     if (!sessionWindow) return { ok: false, error: "session_not_found" };
 
-    const callbackId = action.props.__callbackId;
-    if (typeof callbackId === "string") {
+    // SAFETY: action props are validated by the command snapshot serializer.
+    const callbackId = action.props.__callbackId as CommandValue;
+    if (isString(callbackId)) {
       const callback = callbacks.get(sessionId)?.get(callbackId);
       if (!callback) return { ok: false, error: "callback_not_found" };
     }
@@ -288,7 +293,7 @@ ipcMain.handle(
     return handleCommandAction({
       action,
       callback:
-        typeof callbackId === "string" ? callbacks.get(sessionId)?.get(callbackId) : undefined,
+        isString(callbackId) ? callbacks.get(sessionId)?.get(callbackId) : undefined,
       launcher: launchers.get(sessionId),
     });
   },

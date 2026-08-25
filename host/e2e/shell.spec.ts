@@ -7,6 +7,14 @@ import { fileURLToPath } from "node:url";
 import { ArkClient } from "@makekosmos/ark";
 import { expect, test, type ElectronApplication } from "@playwright/test";
 import { _electron as electron, chromium, type Browser } from "playwright";
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue };
+type RpcResponse = { ok: boolean; data?: JsonValue };
 import electronBinary from "electron";
 import { createSignedApps } from "./fixtures/signed-apps";
 
@@ -39,6 +47,7 @@ const gone = async (pid: number, label: string) => {
   if (alive(pid)) throw new Error(`${label} PID remains alive`);
 };
 const target = () =>
+  // SAFETY: cargo metadata always returns the target_directory string field.
   JSON.parse(
     execFileSync("cargo", ["metadata", "--no-deps", "--format-version=1"], {
       cwd: repositoryRoot,
@@ -87,6 +96,7 @@ const startEngine = async (engine: string, ark: string, dataDir: string) => {
   });
   const lock = await waitFor(() => {
     try {
+      // SAFETY: waitFor only resolves after the Engine lock file is written.
       return JSON.parse(fs.readFileSync(path.join(dataDir, "engine.lock.json"), "utf8")) as Lock;
     } catch {
       return undefined;
@@ -94,7 +104,7 @@ const startEngine = async (engine: string, ark: string, dataDir: string) => {
   }, "Engine lock");
   return { child, lock };
 };
-const rpc = async (lock: Lock, operation: string, params: Record<string, unknown> = {}) => {
+const rpc = async (lock: Lock, operation: string, params: Record<string, JsonValue> = {}) => {
   const response = await fetch(`http://127.0.0.1:${lock.http_port}/v1/rpc`, {
     method: "POST",
     headers: {
@@ -109,7 +119,8 @@ const rpc = async (lock: Lock, operation: string, params: Record<string, unknown
     body: JSON.stringify({ operation, _req_id: randomUUID(), ...params }),
     signal: AbortSignal.timeout(20_000),
   });
-  return response.json() as Promise<{ ok: boolean; data?: unknown }>;
+  // SAFETY: the test Engine endpoint returns the documented JSON RPC envelope.
+  return response.json() as Promise<RpcResponse>;
 };
 const invoke = (id: string, userData: string, env: NodeJS.ProcessEnv) =>
   new Promise<number | null>((resolve, reject) => {
@@ -205,7 +216,8 @@ test("signed Shell is capability-scoped, warm-reopens, and leaves Graph availabl
       .poll(
         async () => {
           const response = await rpc(lock, "file_index.search", { query: "shell-fixture" });
-          return (response.data as { results?: unknown[] } | undefined)?.results?.length ?? 0;
+          // SAFETY: file_index.search returns a results array in its RPC data payload.
+          return (response.data as { results?: readonly JsonValue[] } | undefined)?.results?.length ?? 0;
         },
         { timeout: 30_000 },
       )
@@ -282,6 +294,7 @@ test("signed Shell is capability-scoped, warm-reopens, and leaves Graph availabl
     await expect.poll(() => host!.windows().length).toBe(0);
     expect(alive(host.process().pid)).toBe(true);
     expect(
+      // SAFETY: the Engine lock file is written by the test Engine and contains a numeric pid.
       (JSON.parse(fs.readFileSync(path.join(dataDir, "engine.lock.json"), "utf8")) as Lock).pid,
     ).toBe(enginePid);
     expect(await invoke("com.kosmos.shell", userData, environment)).toBe(0);
@@ -295,6 +308,7 @@ test("signed Shell is capability-scoped, warm-reopens, and leaves Graph availabl
       "[shell-e2e] signed search, keyboard, command invoke, capability denial, and warm reopen verified",
     );
 
+    // SAFETY: the launch endpoint returns the documented launch_url envelope.
     const shellLaunch = (await fetch(`http://127.0.0.1:${lock.http_port}/v1/apps/launch`, {
       method: "POST",
       headers: {
@@ -324,7 +338,7 @@ test("signed Shell is capability-scoped, warm-reopens, and leaves Graph availabl
           }),
         },
         identity: {},
-      } as unknown as typeof window.kosmosApp;
+      };
     });
     await visualPage.goto(shellLaunch.data!.launch_url!, { waitUntil: "networkidle" });
     await expect(visualPage.getByText("Команда Shell")).toBeVisible();
@@ -374,6 +388,7 @@ test("signed Shell is capability-scoped, warm-reopens, and leaves Graph availabl
     expect(fs.existsSync(path.join(shortcutDir, "host-e2e-app-b.lnk"))).toBe(true);
     expect((await rpc(lock, "list_object_types")).ok).toBe(true);
     expect(
+      // SAFETY: the Engine lock file is written by the test Engine and contains a numeric pid.
       (JSON.parse(fs.readFileSync(path.join(dataDir, "engine.lock.json"), "utf8")) as Lock).pid,
     ).toBe(enginePid);
     console.log(
@@ -385,6 +400,7 @@ test("signed Shell is capability-scoped, warm-reopens, and leaves Graph availabl
     await closeHost(host);
     await stopEngine(engine, path.join(target(), "debug", "kepler-backend.exe"), dataDir);
     for (const pid of pids) await gone(pid, "recorded process");
+    // SAFETY: the fixture manifest is generated by the test setup with this shape.
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
       roots: string[];
       pids: number[];

@@ -28,10 +28,15 @@ import {
   type DictationProvider,
 } from "./useDictationConfig.data";
 
+interface FormattedMetric {
+  value: string;
+  unit: string;
+}
+
 function vkToKeyName(vk: number): string {
   if ((vk >= 0x41 && vk <= 0x5a) || (vk >= 0x30 && vk <= 0x39)) return String.fromCharCode(vk);
   if (vk >= 0x70 && vk <= 0x87) return `F${vk - 0x6f}`;
-  const oem: Record<number, string> = {
+  const oem = {
     0xba: ";",
     0xbb: "+",
     0xbc: ",",
@@ -43,9 +48,10 @@ function vkToKeyName(vk: number): string {
     0xdc: "\\",
     0xdd: "]",
     0xde: "'",
-  };
-  if (oem[vk]) return oem[vk];
-  const named: Record<number, string> = {
+  } satisfies Record<number, string>;
+  const oemValue = Object.entries(oem).find(([key]) => Number(key) === vk)?.[1];
+  if (oemValue) return oemValue;
+  const named = {
     0x08: "Backspace",
     0x09: "Tab",
     0x0d: "Enter",
@@ -60,8 +66,8 @@ function vkToKeyName(vk: number): string {
     0x28: "Down",
     0x2d: "Insert",
     0x2e: "Delete",
-  };
-  return named[vk] ?? "";
+  } satisfies Record<number, string>;
+  return Object.entries(named).find(([key]) => Number(key) === vk)?.[1] ?? "";
 }
 
 export function buildAccelerator(payload: {
@@ -82,13 +88,13 @@ export function buildAccelerator(payload: {
   return parts.join("+");
 }
 
-function formatTimeSaved(sec: number): { value: string; unit: string } {
+function formatTimeSaved(sec: number): FormattedMetric {
   if (sec < 60) return { value: String(Math.max(0, Math.round(sec))), unit: "сек" };
   if (sec < 3600) return { value: String(Math.round(sec / 60)), unit: "мин" };
   return { value: (sec / 3600).toFixed(1), unit: "ч" };
 }
 
-function formatTotalWords(n: number): { value: string; unit: string } {
+function formatTotalWords(n: number): FormattedMetric {
   if (n < 1000) return { value: String(n), unit: "" };
   if (n < 1_000_000) return { value: (n / 1000).toFixed(1), unit: "k" };
   return { value: (n / 1_000_000).toFixed(1), unit: "M" };

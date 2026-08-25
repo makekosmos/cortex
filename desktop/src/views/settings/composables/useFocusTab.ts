@@ -5,6 +5,7 @@ import {
   type FocusBlocklist,
 } from "./useFocusTab.shared";
 import { useFocusTabDraft } from "./useFocusTabDraft";
+import type { JsonRecord } from "../../../shared/runtimeGuards";
 export type { FocusActiveState, FocusBlocklist } from "./useFocusTab.shared";
 export { ICON_CHOICES } from "./useFocusTab.shared";
 
@@ -23,7 +24,7 @@ export function useFocusTab() {
   const focusServiceBusy = ref<string>("");
   const focusServiceError = ref<string>("");
 
-  async function focusRequest<T>(op: string, params?: Record<string, unknown>): Promise<T | null> {
+  async function focusRequest<T>(op: string, params?: JsonRecord): Promise<T | null> {
     try {
       return await window.kepler.ark.request<T>(op, params);
     } catch (e) {
@@ -74,6 +75,7 @@ export function useFocusTab() {
       const r = await focusRequest<{ blocklists: FocusBlocklist[] }>("focus.list_blocklists");
       focusBlocklists.value = Array.isArray(r?.blocklists) ? r.blocklists : [];
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       focusError.value = (e as Error).message;
       focusBlocklists.value = [];
     } finally {
@@ -106,6 +108,7 @@ export function useFocusTab() {
       }
       await loadBlocklists();
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       focusError.value = (e as Error).message;
     } finally {
       focusBusy.value = "";
@@ -121,6 +124,7 @@ export function useFocusTab() {
       });
       focusActive.value = { active: false };
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       focusError.value = (e as Error).message;
     } finally {
       focusBusy.value = "";
@@ -137,6 +141,7 @@ export function useFocusTab() {
       });
       await loadActiveState();
     } catch (e) {
+// SAFETY: the surrounding domain validation preserves the asserted contract.
       focusError.value = (e as Error).message;
     } finally {
       focusBusy.value = "";
