@@ -6,10 +6,10 @@ import {
   kosmosAppShortcutIcon,
 } from "./kosmos-app-branding";
 
-test("brands legacy package windows with Kosmos names and icons", () => {
-  expect(kosmosAppName("com.kosmos.eden", "Eden")).toBe("Memoria");
-  expect(kosmosAppName("delphi", "Delphi")).toBe("Agenda");
-  expect(kosmosAppIcon("C:\\Kosmos\\resources", "com.kosmos.eden")).toBe(
+test("brands current package windows with Kosmos names and icons", () => {
+  expect(kosmosAppName("com.kosmos.memoria", "Memoria")).toBe("Memoria");
+  expect(kosmosAppName("com.kosmos.agenda", "Agenda")).toBe("Agenda");
+  expect(kosmosAppIcon("C:\\Kosmos\\resources", "com.kosmos.memoria")).toBe(
     path.join("C:\\Kosmos\\resources", "app-icons", "memoria.png"),
   );
   expect(kosmosAppName("arrancador", "Arrancador")).toBe("Arcadia");

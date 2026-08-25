@@ -2,12 +2,8 @@ import path from "node:path";
 
 type AppBrand = { name: string; icon: string };
 const brands = {
-  "com.kosmos.eden": { name: "Memoria", icon: "memoria.png" },
   "com.kosmos.memoria": { name: "Memoria", icon: "memoria.png" },
-  eden: { name: "Memoria", icon: "memoria.png" },
-  "com.kosmos.delphi": { name: "Agenda", icon: "agenda.png" },
   "com.kosmos.agenda": { name: "Agenda", icon: "agenda.png" },
-  delphi: { name: "Agenda", icon: "agenda.png" },
   "com.kosmos.arcadia": { name: "Arcadia", icon: "arcadia.png" },
   arcadia: { name: "Arcadia", icon: "arcadia.png" },
   arrancador: { name: "Arcadia", icon: "arcadia.png" },
