@@ -63,12 +63,10 @@ fn provider_snapshot(provider: Provider, settings: &ProviderSettings) -> Value {
 
 pub(crate) fn snapshot(config: &IntegrationsConfig) -> Value {
     json!({
-        "providers": [
-            provider_snapshot(Provider::Hevy, &config.hevy),
-            provider_snapshot(Provider::Toggl, &config.toggl),
-            provider_snapshot(Provider::Leetcode, &config.leetcode),
-            provider_snapshot(Provider::Codewars, &config.codewars),
-        ],
+        "providers": Provider::ALL
+            .into_iter()
+            .map(|provider| provider_snapshot(provider, config.provider(provider)))
+            .collect::<Vec<_>>(),
         "bodyWeightKg": config.body_weight_kg,
     })
 }

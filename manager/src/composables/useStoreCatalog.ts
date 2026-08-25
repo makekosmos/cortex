@@ -2,6 +2,7 @@ import { computed, ref } from "vue";
 import type { ManagerClient } from "./useManagerClient";
 import type {
   InstalledStoreItem,
+  PackageItem,
   PackageSnapshot,
   StoreCatalogSnapshot,
   StoreListing,
@@ -12,6 +13,7 @@ export function useStoreCatalog(client: ManagerClient) {
   const loading = ref(false);
   const error = ref<string | null>(null);
   const tab = ref("discover");
+  const catalogPackages = ref<PackageItem[]>([]);
   const listings = computed(() =>
     (snapshot.value?.listings ?? []).filter((listing) =>
       (listing.availability?.platforms ?? []).includes("windows"),
@@ -31,6 +33,7 @@ export function useStoreCatalog(client: ManagerClient) {
         undefined,
         "store-packages",
       );
+      catalogPackages.value = packages?.catalog ?? [];
       const details = new Map(packages?.packages.map((item) => [item.id, item]) ?? []);
       snapshot.value = {
         ...result,
@@ -50,6 +53,7 @@ export function useStoreCatalog(client: ManagerClient) {
     tab,
     listings,
     installed,
+    catalogPackages,
     load,
   };
 }

@@ -272,6 +272,7 @@ impl PackageService {
                 name: entry.manifest.name().to_owned(),
                 kind: entry.manifest.kind().clone(),
                 publisher: entry.manifest.publisher().to_owned(),
+                archive_size: entry.size,
                 revoked: state
                     .trust
                     .as_ref()

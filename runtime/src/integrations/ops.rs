@@ -52,6 +52,8 @@ pub(crate) async fn verify_credential_at(
                 .map(|_| ())
                 .ok_or_else(|| "Codewars не вернул профиль пользователя".to_string());
         }
+        Provider::Greatfrontend => return verify_greatfrontend(secret).await,
+        Provider::Bigfrontend => return verify_bigfrontend(secret).await,
     };
     let request = authenticated_get(&client, provider, format!("{base_url}{path}"), secret);
     let response = request
@@ -82,6 +84,8 @@ pub(crate) async fn verify_credential(provider: Provider, secret: &str) -> Resul
             Provider::Toggl => TOGGL_BASE_URL,
             Provider::Leetcode => LEETCODE_GRAPHQL_URL,
             Provider::Codewars => CODEWARS_BASE_URL,
+            Provider::Greatfrontend => "https://www.greatfrontend.com",
+            Provider::Bigfrontend => "https://bigfrontend.dev",
         },
     )
     .await

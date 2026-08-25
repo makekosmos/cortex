@@ -13,6 +13,7 @@ import {
   DesktopContentSurface,
   SettingsSidebar,
   SettingsSidebarButton,
+  TitlebarButton,
 } from "@kosmos/visuals";
 import {
   PhArrowsClockwise,
@@ -27,6 +28,7 @@ import {
   PhPlugsConnected,
   PhStorefront,
 } from "@phosphor-icons/vue";
+import { ChevronLeft } from "@lucide/vue";
 import { useManagerClient } from "./composables/useManagerClient";
 import DataView from "./views/DataView.vue";
 import SyncView from "./views/SyncView.vue";
@@ -56,6 +58,8 @@ const client = useManagerClient();
 const { error } = client;
 const view = ref<ViewId>("data");
 const surface = useTemplateRef<ComponentPublicInstance>("surface");
+const activeView = useTemplateRef<{ backToCatalog?: () => void }>("activeView");
+const storeDetailActive = ref(false);
 const scrollPositions = new Map<ViewId, number>();
 const views = {
   data: { label: "Данные", hint: "Типы и объекты", component: DataView },
@@ -137,8 +141,12 @@ async function select(next: ViewId) {
   const element = surface.value?.$el as HTMLElement | undefined;
   if (element) scrollPositions.set(view.value, element.scrollTop);
   view.value = next;
+  storeDetailActive.value = false;
   await nextTick();
   element?.scrollTo({ top: scrollPositions.get(next) ?? 0 });
+}
+function backFromStoreDetail() {
+  activeView.value?.backToCatalog?.();
 }
 
 onMounted(() => {
@@ -150,6 +158,17 @@ onMounted(() => {
   <DesktopChrome appearance="settings" platform="windows">
     <template #titlebar-leading>
       <span class="kosmos-titlebar-brand">Kosmos</span>
+    </template>
+    <template #titlebar-content-leading>
+      <TitlebarButton
+        v-if="storeDetailActive"
+        class="store-detail-titlebar-back"
+        title="Назад к Marketplace"
+        aria-label="Назад к Marketplace"
+        @click="backFromStoreDetail"
+      >
+        <ChevronLeft :size="16" />
+      </TitlebarButton>
     </template>
     <template #sidebar>
       <SettingsSidebar
@@ -228,7 +247,12 @@ onMounted(() => {
     >
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <KeepAlive>
-        <component :is="active.component" :client="client" />
+        <component
+          ref="activeView"
+          :is="active.component"
+          :client="client"
+          @detailChange="storeDetailActive = $event"
+        />
       </KeepAlive>
     </DesktopContentSurface>
   </DesktopChrome>

@@ -131,6 +131,7 @@ pub struct CatalogPackageSummary {
     pub name: String,
     pub kind: PackageKind,
     pub publisher: String,
+    pub archive_size: u64,
     pub revoked: bool,
 }
 

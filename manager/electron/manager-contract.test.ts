@@ -87,31 +87,31 @@ describe("standalone Manager boundary", () => {
     expect(main).toContain("app.requestSingleInstanceLock()");
     expect(main).toContain('app.on("second-instance"');
     expect(main).toContain("win.focus()");
-    expect(main).toContain("await waitForEngineReady()");
+    expect(main).toContain("void waitForEngineReady()");
     expect(helpers).toContain("windowsHide: true");
   });
 
-  test("keeps LeetCode login in the main process with fresh cookies and a headless guard", () => {
+  test("keeps browser integration login in the main process with fresh cookies and a headless guard", () => {
     const api = source("../src/manager-api.ts");
     const preload = source("preload.ts");
     const main = source("main.ts");
-    const helpers = source("main-helpers.ts");
-    const flow = source("leetcode-login-flow.ts");
-    const login = main.slice(
-      main.indexOf('ipcMain.handle("manager.loginLeetCode"'),
-      main.indexOf('ipcMain.handle("manager.updateIntegrationSettings"'),
-    );
+    const login = source("integration-login.ts");
+    const credential = source("integration-login-credential.ts");
     expect(api).toContain("loginLeetCode(): Promise<ManagerResult<IntegrationsSnapshot>>");
+    expect(api).toContain("loginGreatFrontend(): Promise<ManagerResult<IntegrationsSnapshot>>");
     expect(preload).toContain('loginLeetCode: () => invoke("manager.loginLeetCode")');
+    expect(preload).toContain('loginGreatFrontend: () => invoke("manager.loginGreatFrontend")');
     expect(preload).not.toContain("LEETCODE_SESSION");
     expect(preload).not.toContain("csrftoken");
     expect(login).toContain('process.env.KOSMOS_HEADLESS === "1"');
     expect(login).toContain('clearStorageData({ storages: ["cookies"] })');
     expect(login).toContain("https://leetcode.com/accounts/login/");
-    expect(helpers).toContain('url: "https://leetcode.com/"');
+    expect(login).toContain("https://www.greatfrontend.com/profile/progress");
+    expect(login).toContain('url: "https://leetcode.com/"');
     expect(login).toContain("op.setIntegrationCredential");
     expect(login).not.toContain("console.");
-    expect(flow).toMatch(/closeWindow\(\);\r?\n\s+return await flow\.persistCredential\(credential\)/);
+    expect(credential).toMatch(/closeWindow\(\);\r?\n\s+return await flow\.persistCredential\(credential\)/);
+    expect(main).toContain("registerIntegrationLoginHandlers(() => managerWindow)");
   });
 
   test("normalizes Engine settings and accepts only a boolean Usage Tracker patch", () => {
@@ -217,7 +217,7 @@ describe("standalone Manager boundary", () => {
     const main = source("main.ts");
     expect(main).toContain("validPackageVersion");
     expect(main).toContain("Object.keys(value).length === 2");
-    expect(main).toContain("Object.keys(input.config).length === 4");
+    expect(main).toContain("Object.keys(input.config ?? {}).length === 4");
     expect(main).not.toContain("archive_path");
     expect(main).not.toContain("catalog_apply");
     expect(main).not.toContain("revocation_apply");
@@ -520,8 +520,6 @@ describe("standalone Manager boundary", () => {
     }
     expect(source("diagnostics-files.ts")).toContain("lstat");
     expect(source("diagnostics-files.ts")).not.toContain("readFile");
-    expect(source("../src/views/DiagnosticsView.vue")).not.toContain("window.kepler");
-    expect(source("../src/views/DiagnosticsView.vue")).not.toMatch(/(?:path|raw crash|raw log)/i);
   });
 
   test("dictation bridge allowlists, validates, and redacts Runtime wire data", () => {

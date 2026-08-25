@@ -317,13 +317,11 @@ pub(crate) mod tests {
                 .sequence,
             1
         );
-        assert_eq!(
-            service
-                .catalog_packages(Some(&PackageKind::App))
-                .expect("app catalog")
-                .len(),
-            1
-        );
+        let app_catalog = service
+            .catalog_packages(Some(&PackageKind::App))
+            .expect("app catalog");
+        assert_eq!(app_catalog.len(), 1);
+        assert_eq!(app_catalog[0].archive_size, 1);
         assert!(service
             .catalog_packages(Some(&PackageKind::Source))
             .expect("source catalog")

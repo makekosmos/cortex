@@ -49,6 +49,18 @@ summary:focus-visible {
   gap: 0;
   overflow-y: auto;
 }
+.store-detail-titlebar-back {
+  flex: 0 0 var(--kosmos-titlebar-control-icon-size);
+  width: var(--kosmos-titlebar-control-icon-size);
+  min-width: var(--kosmos-titlebar-control-icon-size);
+  height: var(--kosmos-titlebar-control-icon-size);
+  min-height: var(--kosmos-titlebar-control-icon-size);
+  border-radius: 0;
+}
+.store-detail-titlebar-back:hover:not(:disabled) {
+  background: transparent;
+  color: color-mix(in srgb, var(--sidebar-foreground, var(--foreground)) 72%, transparent);
+}
 .manager-sidebar-group {
   display: flex;
   flex-direction: column;
@@ -147,6 +159,83 @@ summary:focus-visible {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
   gap: calc(var(--space-1) / 2);
+}
+.store-detail-app-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+.store-detail-app-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.store-detail-app-copy h1,
+.store-detail-app-copy p {
+  margin: 0;
+}
+.store-detail-app-copy h1 {
+  font-size: var(--kosmos-text-heading-size);
+}
+.store-detail-app-copy p {
+  color: var(--muted-foreground);
+  font-size: var(--kosmos-text-body-size);
+}
+.store-detail-app-header img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+}
+.store-detail-app-header > .inline-flex {
+  margin-left: auto;
+}
+.store-detail-gallery {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, 42%);
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-1);
+}
+.store-detail-metadata {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-input);
+  background: var(--settings-list-background);
+}
+.store-detail-metadata dt,
+.store-detail-metadata dd {
+  margin: 0;
+}
+.store-detail-metadata dt {
+  color: var(--muted-foreground);
+  font-size: var(--kosmos-text-caption-size);
+}
+.store-detail-metadata dd {
+  margin-top: var(--space-1);
+  color: var(--foreground);
+  font-size: var(--kosmos-text-body-size);
+  font-weight: 600;
+}
+@media (max-width: 720px) {
+  .store-detail-metadata { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.store-detail-shot {
+  display: grid;
+  aspect-ratio: 16 / 9;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  background: var(--settings-list-background);
+}
+.store-detail-shot img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
 }
 .connection-card {
   display: flex;

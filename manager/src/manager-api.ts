@@ -86,6 +86,7 @@ export type PackageItem = {
   worker_state?: string;
   worker_health?: string;
   update_version?: string | null;
+  archive_size?: number;
   catalog?: boolean;
 };
 export type PackageSnapshot = {
@@ -124,6 +125,7 @@ export type StoreListing = {
     | { package_id: string; version: string; connects_to: string };
   connects_to?: string;
   icon_url?: string;
+  screenshots?: string[];
 };
 export type InstalledStoreItem = PackageItem & {
   effective_grants?: Array<{
@@ -188,7 +190,13 @@ export type EngineSettings = {
 export type PairingCode = { code: string; expires_at?: string };
 
 export type IntegrationProvider = {
-  id: "hevy" | "toggl" | "leetcode" | "codewars";
+  id:
+    | "hevy"
+    | "toggl"
+    | "leetcode"
+    | "codewars"
+    | "greatfrontend"
+    | "bigfrontend";
   label: string;
   credentialLabel: string;
   credentialUrl: string;
@@ -371,6 +379,7 @@ export interface ManagerApi {
   }): Promise<ManagerResult<unknown>>;
   getIntegrations(): Promise<ManagerResult<IntegrationsSnapshot>>;
   loginLeetCode(): Promise<ManagerResult<IntegrationsSnapshot>>;
+  loginGreatFrontend(): Promise<ManagerResult<IntegrationsSnapshot>>;
   updateIntegrationSettings(input: {
     provider: IntegrationProvider["id"];
     intervalMinutes?: 0 | 15 | 60 | 360 | 1440;

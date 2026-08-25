@@ -2,7 +2,63 @@ use super::integration_codewars::{
     codewars_completion_is_new_enough, codewars_completion_object,
     codewars_objects_need_rank_backfill, codewars_page_reached_cutoff, codewars_profile_object,
 };
+use super::web_progress::{bigfrontend_completion_object, greatfrontend_completion_object};
+use super::web_progress_fetch::{bigfrontend_profile, greatfrontend_cookie};
 use super::*;
+
+#[test]
+fn frontend_platform_mappings_keep_source_and_completion_time() {
+    let big = bigfrontend_completion_object(&json!({
+        "id": 554011,
+        "createdAt": 1787594023_i64,
+        "user": { "username": "ksanrse" },
+        "target": {
+            "targetType": "problem",
+            "title": "122. implement memoizeOne()",
+            "permalink": "implement-memoizeOne"
+        }
+    }))
+    .expect("BigFrontend mapping");
+    assert_eq!(big["id"], "bigfrontend-completion:554011");
+    assert_eq!(big["propsJson"]["source"], "bigfrontend");
+    assert_eq!(big["propsJson"]["username"], "ksanrse");
+    assert_eq!(
+        big["propsJson"]["url"],
+        "https://bigfrontend.dev/problem/implement-memoizeOne"
+    );
+
+    let great = greatfrontend_completion_object(&json!({
+        "id": "progress-1",
+        "createdAt": "2026-07-15T12:51:00Z",
+        "metadata": {
+            "title": "Data Merging",
+            "slug": "data-merging",
+            "format": "js-function",
+            "href": "/questions/javascript/data-merging"
+        }
+    }))
+    .expect("GreatFrontEnd mapping");
+    assert_eq!(great["id"], "greatfrontend-completion:progress-1");
+    assert_eq!(great["propsJson"]["source"], "greatfrontend");
+    assert_eq!(great["propsJson"]["format"], "js-function");
+    assert_eq!(great["createdAt"], "2026-07-15T12:51:00+00:00");
+}
+
+#[test]
+fn frontend_platform_credentials_and_profile_stay_bounded() {
+    let profile = bigfrontend_profile(
+        r#"<script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"profile":{"id":59712}}}}</script>"#,
+    )
+    .expect("BigFrontend profile");
+    assert_eq!(profile["props"]["pageProps"]["profile"]["id"], 59712);
+
+    let cookie = greatfrontend_cookie(
+        r#"{"cookies":[{"name":"__session","value":"secret"},{"name":"bad;name","value":"ignored"}]}"#,
+    )
+    .expect("GreatFrontEnd cookie");
+    assert_eq!(cookie, "__session=secret");
+    assert!(greatfrontend_cookie(r#"{"cookies":[]}"#).is_err());
+}
 
 #[test]
 fn codewars_mapping_keeps_completed_kata_without_solution_code() {
@@ -161,11 +217,13 @@ fn provider_parameters_are_trimmed_and_case_insensitive() {
 fn default_snapshot_exposes_all_providers_without_credentials() {
     let snapshot = snapshot(&IntegrationsConfig::default());
     let providers = snapshot["providers"].as_array().expect("providers");
-    assert_eq!(providers.len(), 4);
+    assert_eq!(providers.len(), 6);
     assert_eq!(providers[0]["id"], "hevy");
     assert_eq!(providers[1]["id"], "toggl");
     assert_eq!(providers[2]["id"], "leetcode");
     assert_eq!(providers[3]["id"], "codewars");
+    assert_eq!(providers[4]["id"], "greatfrontend");
+    assert_eq!(providers[5]["id"], "bigfrontend");
     assert!(providers.iter().all(|provider| {
         provider["hasCredential"] == false && provider["settings"]["importedCount"] == 0
     }));

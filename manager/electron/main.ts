@@ -68,17 +68,15 @@ import {
   listCrashReports,
   resolveManagerDataDir,
 } from "./diagnostics-files";
-import { runLeetCodeLogin } from "./leetcode-login-flow";
+import { registerIntegrationLoginHandlers } from "./integration-login";
 import { resolveInstance } from "../../desktop/electron/instance";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import {
   AUTOSTART_ARGS,
   bounded,
-  createLeetCodeLoginWindow,
   integrationIntervals,
   isObject,
-  LEETCODE_PARTITION,
   normalizeIntegrationSnapshot,
   openHostedPackage,
   readDesktopUpdateState,
@@ -86,7 +84,6 @@ import {
   startPackagedRuntime,
   validIntegrationInput,
   validation,
-  waitForLeetCodeCredential,
 } from "./main-helpers";
 let dictationSubscriber: WebContents | null = null;
 let stopDictationEvents: (() => void) | null = null;
@@ -225,70 +222,7 @@ function registerAll() {
       ? { ok: true, data: normalizeIntegrationSnapshot(result.data) }
       : result;
   });
-  ipcMain.handle("manager.loginLeetCode", async (event, value) => {
-    if (value !== undefined)
-      return {
-        ok: false,
-        code: "validation",
-        message: "Недопустимые параметры входа.",
-      };
-    if (
-      process.env.KOSMOS_HEADLESS === "1" ||
-      process.env.KOSMOS_TEST_MODE === "1"
-    )
-      return {
-        ok: false,
-        code: "engine_unavailable",
-        message: "Вход через LeetCode недоступен в этом режиме.",
-      };
-    if (BrowserWindow.fromWebContents(event.sender) !== managerWindow)
-      return {
-        ok: false,
-        code: "validation",
-        message: "Недопустимый источник входа.",
-      };
-    try {
-      return await runLeetCodeLogin({
-        clearCookies: () =>
-          session
-            .fromPartition(LEETCODE_PARTITION)
-            .clearStorageData({ storages: ["cookies"] }),
-        createWindow: () => createLeetCodeLoginWindow(event.sender),
-        loadLogin: (win) => win.loadURL("https://leetcode.com/accounts/login/"),
-        waitForCredential: waitForLeetCodeCredential,
-        closeWindow: (win) => {
-          if (!win.isDestroyed()) win.close();
-        },
-        persistCredential: async (credential) => {
-          const result = await rpc(op.setIntegrationCredential, {
-            provider: "leetcode",
-            credential,
-          });
-          return result.ok
-            ? { ok: true, data: normalizeIntegrationSnapshot(result.data) }
-            : result;
-        },
-      });
-    } catch (cause) {
-      if (cause instanceof Error && cause.message === "cancelled")
-        return {
-          ok: false,
-          code: "cancelled",
-          message: "Вход в LeetCode отменён.",
-        };
-      if (cause instanceof Error && cause.message === "timeout")
-        return {
-          ok: false,
-          code: "cancelled",
-          message: "Время входа в LeetCode истекло.",
-        };
-      return {
-        ok: false,
-        code: "engine",
-        message: "Не удалось завершить вход в LeetCode.",
-      };
-    }
-  });
+  registerIntegrationLoginHandlers(() => managerWindow);
   ipcMain.handle("manager.updateIntegrationSettings", async (_event, value) => {
     if (!validIntegrationInput(value))
       return {

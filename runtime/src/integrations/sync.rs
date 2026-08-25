@@ -80,6 +80,8 @@ pub(crate) async fn sync_provider(
         Provider::Codewars => {
             integration_codewars::sync_codewars(ark, &secret, &settings, &started_at).await
         }
+        Provider::Greatfrontend => sync_greatfrontend(ark, &secret, &settings, &started_at).await,
+        Provider::Bigfrontend => sync_bigfrontend(ark, &secret, &settings, &started_at).await,
     };
     match result {
         Ok(imported) => {
@@ -121,12 +123,7 @@ pub(crate) fn is_due(settings: &ProviderSettings, now: DateTime<Utc>) -> bool {
 pub fn spawn_scheduler(ark: Arc<ArkHost>, data_dir: PathBuf) {
     tokio::spawn(async move {
         let startup = read_config(&data_dir);
-        for provider in [
-            Provider::Hevy,
-            Provider::Toggl,
-            Provider::Leetcode,
-            Provider::Codewars,
-        ] {
+        for provider in Provider::ALL {
             if startup.provider(provider).sync_on_startup && read_credential(provider).is_some() {
                 if let Err(error) = sync_provider(&ark, &data_dir, provider).await {
                     tracing::warn!(provider = provider.id(), %error, "integration startup sync failed");
@@ -141,12 +138,7 @@ pub fn spawn_scheduler(ark: Arc<ArkHost>, data_dir: PathBuf) {
             timer.tick().await;
             let config = read_config(&data_dir);
             let now = Utc::now();
-            for provider in [
-                Provider::Hevy,
-                Provider::Toggl,
-                Provider::Leetcode,
-                Provider::Codewars,
-            ] {
+            for provider in Provider::ALL {
                 if read_credential(provider).is_some() && is_due(config.provider(provider), now) {
                     if let Err(error) = sync_provider(&ark, &data_dir, provider).await {
                         tracing::warn!(provider = provider.id(), %error, "integration scheduled sync failed");

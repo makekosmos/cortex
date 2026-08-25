@@ -16,7 +16,7 @@ pub(crate) const CODEWARS_BASE_URL: &str = "https://www.codewars.com/api/v1";
 pub(crate) const ALLOWED_INTERVALS: &[u64] = &[0, 15, 60, 360, 1440];
 
 pub(crate) static CONFIG_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-pub(crate) static SYNC_LOCKS: OnceLock<[tokio::sync::Mutex<()>; 4]> = OnceLock::new();
+pub(crate) static SYNC_LOCKS: OnceLock<[tokio::sync::Mutex<()>; 6]> = OnceLock::new();
 
 pub(crate) fn config_lock() -> &'static Mutex<()> {
     CONFIG_LOCK.get_or_init(|| Mutex::new(()))
@@ -33,15 +33,28 @@ pub enum Provider {
     Toggl,
     Leetcode,
     Codewars,
+    Greatfrontend,
+    Bigfrontend,
 }
 
 impl Provider {
+    pub(crate) const ALL: [Self; 6] = [
+        Self::Hevy,
+        Self::Toggl,
+        Self::Leetcode,
+        Self::Codewars,
+        Self::Greatfrontend,
+        Self::Bigfrontend,
+    ];
+
     pub(crate) fn parse(value: &str) -> Result<Self, String> {
         match value.trim().to_ascii_lowercase().as_str() {
             "hevy" => Ok(Self::Hevy),
             "toggl" => Ok(Self::Toggl),
             "leetcode" => Ok(Self::Leetcode),
             "codewars" => Ok(Self::Codewars),
+            "greatfrontend" => Ok(Self::Greatfrontend),
+            "bigfrontend" => Ok(Self::Bigfrontend),
             _ => Err(format!("Неизвестная интеграция: {value}")),
         }
     }
@@ -52,6 +65,8 @@ impl Provider {
             Self::Toggl => "toggl",
             Self::Leetcode => "leetcode",
             Self::Codewars => "codewars",
+            Self::Greatfrontend => "greatfrontend",
+            Self::Bigfrontend => "bigfrontend",
         }
     }
 
@@ -61,6 +76,8 @@ impl Provider {
             Self::Toggl => "Toggl Track",
             Self::Leetcode => "LeetCode",
             Self::Codewars => "Codewars",
+            Self::Greatfrontend => "GreatFrontEnd",
+            Self::Bigfrontend => "BigFrontend",
         }
     }
 
@@ -70,6 +87,8 @@ impl Provider {
             Self::Toggl => "API-токен",
             Self::Leetcode => "Сессия LeetCode",
             Self::Codewars => "Имя пользователя",
+            Self::Greatfrontend => "Сессия GreatFrontEnd",
+            Self::Bigfrontend => "Имя пользователя",
         }
     }
 
@@ -79,6 +98,8 @@ impl Provider {
             Self::Toggl => "https://track.toggl.com/profile",
             Self::Leetcode => "https://leetcode.com/accounts/login/",
             Self::Codewars => "https://www.codewars.com/users/",
+            Self::Greatfrontend => "https://www.greatfrontend.com/profile/progress",
+            Self::Bigfrontend => "https://bigfrontend.dev/user/",
         }
     }
 
@@ -88,6 +109,8 @@ impl Provider {
             Self::Toggl => "integration-toggl-api-token",
             Self::Leetcode => "integration-leetcode-session",
             Self::Codewars => "integration-codewars-username",
+            Self::Greatfrontend => "integration-greatfrontend-session",
+            Self::Bigfrontend => "integration-bigfrontend-username",
         }
     }
 
@@ -97,6 +120,8 @@ impl Provider {
             Self::Toggl => 1,
             Self::Leetcode => 2,
             Self::Codewars => 3,
+            Self::Greatfrontend => 4,
+            Self::Bigfrontend => 5,
         }
     }
 }
@@ -132,6 +157,8 @@ pub struct IntegrationsConfig {
     pub toggl: ProviderSettings,
     pub leetcode: ProviderSettings,
     pub codewars: ProviderSettings,
+    pub greatfrontend: ProviderSettings,
+    pub bigfrontend: ProviderSettings,
     pub body_weight_kg: Option<f64>,
 }
 
@@ -158,6 +185,16 @@ impl Default for IntegrationsConfig {
                 sync_on_startup: true,
                 ..ProviderSettings::default()
             },
+            greatfrontend: ProviderSettings {
+                interval_minutes: 1440,
+                sync_on_startup: true,
+                ..ProviderSettings::default()
+            },
+            bigfrontend: ProviderSettings {
+                interval_minutes: 1440,
+                sync_on_startup: true,
+                ..ProviderSettings::default()
+            },
             body_weight_kg: None,
         }
     }
@@ -170,6 +207,8 @@ impl IntegrationsConfig {
             Provider::Toggl => &self.toggl,
             Provider::Leetcode => &self.leetcode,
             Provider::Codewars => &self.codewars,
+            Provider::Greatfrontend => &self.greatfrontend,
+            Provider::Bigfrontend => &self.bigfrontend,
         }
     }
 
@@ -179,6 +218,8 @@ impl IntegrationsConfig {
             Provider::Toggl => &mut self.toggl,
             Provider::Leetcode => &mut self.leetcode,
             Provider::Codewars => &mut self.codewars,
+            Provider::Greatfrontend => &mut self.greatfrontend,
+            Provider::Bigfrontend => &mut self.bigfrontend,
         }
     }
 }

@@ -35,13 +35,15 @@ pub async fn handle_operation(
                 .and_then(Value::as_str)
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| {
-                    if provider == Provider::Codewars {
-                        "Р’РІРµРґРёС‚Рµ РёРјСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ Codewars"
-                    } else {
-                        "Р’РІРµРґРёС‚Рµ РєР»СЋС‡"
-                    }
-                })?;
+                .ok_or_else(|| format!("Укажите: {}", provider.credential_label()))?;
+            let max_len = if provider == Provider::Greatfrontend {
+                16_384
+            } else {
+                2_048
+            };
+            if secret.len() > max_len {
+                return Err("Данные подключения слишком длинные".to_string());
+            }
             verify_credential(provider, secret).await?;
             save_credential(provider, secret)?;
             let config = mutate_config(data_dir, |config| {

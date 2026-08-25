@@ -1,8 +1,7 @@
-import { app, BrowserWindow, type WebContents } from "electron";
+import { app } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
-import { encodeLeetCodeCredential } from "./leetcode-login-flow";
 import {
   resolvePackagedHostExecutable,
   resolvePackagedRuntimeExecutable,
@@ -78,9 +77,15 @@ const validation = (
   condition: boolean,
   message = "Проверьте введённые данные.",
 ): string | null => (condition ? null : message);
-const integrationProviders = ["hevy", "toggl", "leetcode", "codewars"];
+const integrationProviders = [
+  "hevy",
+  "toggl",
+  "leetcode",
+  "codewars",
+  "greatfrontend",
+  "bigfrontend",
+];
 const integrationIntervals = [0, 15, 60, 360, 1440];
-const LEETCODE_PARTITION = "persist:kosmos-manager-leetcode";
 const AUTOSTART_ARGS = ["--autostart"];
 const desktopUpdateBridge = () =>
   resolveDesktopUpdateBridge({
@@ -170,58 +175,6 @@ function normalizeIntegrationSnapshot(value: Input) {
   };
 }
 
-async function waitForLeetCodeCredential(win: BrowserWindow): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    let timeout: ReturnType<typeof setTimeout> | null = null;
-    const cookies = win.webContents.session.cookies;
-    const finish = (reason?: "cancelled" | "timeout", credential?: string) => {
-      if (settled) return;
-      settled = true;
-      if (timeout) clearTimeout(timeout);
-      cookies.removeListener("changed", onCookieChanged);
-      win.removeListener("closed", onClosed);
-      if (reason) reject(new Error(reason));
-      else resolve(credential!);
-    };
-    const onClosed = () => finish("cancelled");
-    const check = async () => {
-      if (win.isDestroyed()) return;
-      const [sessionCookie, csrfCookie] = await Promise.all([
-        cookies.get({ url: "https://leetcode.com/", name: "LEETCODE_SESSION" }),
-        cookies.get({ url: "https://leetcode.com/", name: "csrftoken" }),
-      ]);
-      const credential = encodeLeetCodeCredential(
-        sessionCookie[0]?.value,
-        csrfCookie[0]?.value,
-      );
-      if (credential) finish(undefined, credential);
-    };
-    const onCookieChanged = () => void check().catch(() => undefined);
-    timeout = setTimeout(() => finish("timeout"), 5 * 60_000);
-    cookies.on("changed", onCookieChanged);
-    win.once("closed", onClosed);
-    void check().catch(() => undefined);
-  });
-}
-
-function createLeetCodeLoginWindow(sender: WebContents): BrowserWindow {
-  const parent = BrowserWindow.fromWebContents(sender) ?? undefined;
-  return new BrowserWindow({
-    parent,
-    modal: Boolean(parent),
-    width: 1080,
-    height: 760,
-    title: "Вход в LeetCode",
-    autoHideMenuBar: true,
-    webPreferences: {
-      partition: LEETCODE_PARTITION,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-}
 export {
   openHostedPackage,
   startPackagedRuntime,
@@ -230,12 +183,9 @@ export {
   validation,
   integrationProviders,
   integrationIntervals,
-  LEETCODE_PARTITION,
   AUTOSTART_ARGS,
   readDesktopUpdateState,
   requestDesktopUpdate,
   validIntegrationInput,
   normalizeIntegrationSnapshot,
-  waitForLeetCodeCredential,
-  createLeetCodeLoginWindow,
 };

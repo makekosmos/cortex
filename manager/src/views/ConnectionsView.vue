@@ -13,6 +13,8 @@ import codewarsIcon from "../../../desktop/src/integrations/assets/codewars.svg"
 import leetcodeIcon from "../../../desktop/src/integrations/assets/leetcode.svg";
 import hevyIcon from "../assets/integrations/hevy.svg";
 import togglTrackIcon from "../assets/integrations/toggl-track.svg";
+import bigfrontendIcon from "../assets/integrations/bigfrontend.svg";
+import greatfrontendIcon from "../assets/integrations/greatfrontend.svg";
 import type { IntegrationProvider, IntegrationsSnapshot } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
 
@@ -40,6 +42,8 @@ const providerIcons = {
   toggl: togglTrackIcon,
   leetcode: leetcodeIcon,
   codewars: codewarsIcon,
+  greatfrontend: greatfrontendIcon,
+  bigfrontend: bigfrontendIcon,
 } satisfies Record<string, string>;
 const selected = computed(() =>
   snapshot.value?.providers.find(
@@ -82,9 +86,13 @@ async function act(
   busy.value = null;
   await load();
 }
-async function loginLeetCode() {
-  busy.value = "leetcode:login";
-  await props.client.call("loginLeetCode", undefined, "integration:leetcode");
+async function login(provider: "leetcode" | "greatfrontend") {
+  busy.value = `${provider}:login`;
+  await props.client.call(
+    provider === "leetcode" ? "loginLeetCode" : "loginGreatFrontend",
+    undefined,
+    `integration:${provider}`,
+  );
   busy.value = null;
   await load();
 }
@@ -165,7 +173,7 @@ onMounted(load);
             "
           />
           <SettingsRow
-            v-if="selected.id !== 'leetcode'"
+            v-if="selected.id !== 'leetcode' && selected.id !== 'greatfrontend'"
             :title="selected.credentialLabel"
           >
             <template #control>
@@ -188,12 +196,12 @@ onMounted(load);
         </p>
         <div class="actions">
           <Button
-            v-if="selected.id === 'leetcode'"
+            v-if="selected.id === 'leetcode' || selected.id === 'greatfrontend'"
             variant="surface"
             size="sm"
             :disabled="busy !== null"
-            @click="loginLeetCode"
-            >Войти в LeetCode</Button
+            @click="login(selected.id)"
+            >Войти в {{ selected.label }}</Button
           ><Button
             v-else-if="credential[selected.id]"
             variant="surface"

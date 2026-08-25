@@ -19,6 +19,8 @@ pub(crate) fn authenticated_get(
         Provider::Toggl => client.get(url).basic_auth(secret, Some("api_token")),
         Provider::Leetcode => client.get(url),
         Provider::Codewars => client.get(url),
+        Provider::Greatfrontend => client.get(url),
+        Provider::Bigfrontend => client.get(url),
     }
 }
 

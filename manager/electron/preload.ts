@@ -29,6 +29,7 @@ const api: ManagerApi = {
   connectWithPairingCode: (v) => invoke("manager.connectWithPairingCode", v),
   getIntegrations: () => invoke("manager.getIntegrations"),
   loginLeetCode: () => invoke("manager.loginLeetCode"),
+  loginGreatFrontend: () => invoke("manager.loginGreatFrontend"),
   updateIntegrationSettings: (v) =>
     invoke("manager.updateIntegrationSettings", v),
   setIntegrationCredential: (v) =>

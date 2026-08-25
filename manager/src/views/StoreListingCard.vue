@@ -16,6 +16,7 @@ const emit = defineEmits<{
   install: [StoreListing];
   open: [InstalledStoreItem];
   external: [StoreListing];
+  details: [StoreListing];
 }>();
 
 const iconFailed = ref(false);
@@ -40,21 +41,25 @@ function open() {
   if (props.listing.kind === "external-app") emit("external", props.listing);
   else if (props.installed?.kind === "app") emit("open", props.installed);
 }
+
+function details() {
+  emit("details", props.listing);
+}
 </script>
 
 <template>
   <article
     class="store-card"
     :class="{
-      'store-card-clickable': canOpen,
+      'store-card-clickable': true,
       'store-card-featured': featured,
     }"
-    :role="canOpen ? 'button' : undefined"
-    :tabindex="canOpen ? 0 : undefined"
-    :aria-label="canOpen ? `Открыть ${listing.name}` : undefined"
-    @click="open"
-    @keydown.enter="open"
-    @keydown.space.prevent="open"
+    role="button"
+    tabindex="0"
+    :aria-label="`Подробнее: ${listing.name}`"
+    @click="details"
+    @keydown.enter="details"
+    @keydown.space.prevent="details"
   >
     <div class="store-card-main">
       <span

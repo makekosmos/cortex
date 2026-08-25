@@ -20,6 +20,8 @@ mod leetcode_sync;
 mod ops;
 mod sync;
 mod toggl;
+mod web_progress;
+mod web_progress_fetch;
 
 pub(crate) use body::*;
 pub(crate) use config::{
@@ -36,6 +38,8 @@ pub(crate) use leetcode_sync::*;
 pub(crate) use ops::*;
 pub(crate) use sync::sync_provider;
 pub(crate) use toggl::*;
+use web_progress::*;
+use web_progress_fetch::*;
 
 #[cfg(test)]
 mod tests_mappings;
