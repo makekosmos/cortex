@@ -8,6 +8,7 @@ use thiserror::Error;
 
 const MAX_ID: usize = 64;
 const MAX_NAME: usize = 128;
+const MAX_DESCRIPTION: usize = 4096;
 const MAX_ENTRYPOINT: usize = 256;
 const MAX_ICON: usize = 256;
 const MAX_PERMISSIONS: usize = 32;
@@ -179,6 +180,8 @@ pub struct ManifestV2 {
     pub schema_version: u32,
     pub id: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     pub version: String,
     pub kind: PackageKind,
     pub engine_api: String,
@@ -467,6 +470,12 @@ fn validate_identity(
     Ok(())
 }
 fn validate_v2(m: &ManifestV2) -> Result<(), ManifestError> {
+    if m.description
+        .as_ref()
+        .is_some_and(|description| description.len() > MAX_DESCRIPTION)
+    {
+        return Err(ManifestError::InvalidField("description"));
+    }
     if m.icon.as_ref().is_some_and(|icon| !safe_icon_path(icon)) {
         return Err(ManifestError::InvalidField("icon"));
     }

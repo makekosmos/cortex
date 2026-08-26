@@ -9,8 +9,9 @@ import {
 import { resolveInstance } from "../../desktop/electron/instance";
 import { keplerDataDir } from "../../desktop/electron/data-dir";
 import { resolveDesktopUpdateBridge } from "./desktop-update-bridge";
+import type { DevPackage } from "./dev-packages";
 import { isNumber, isObject, isString, type Input } from "./manager-contract";
-function openHostedPackage(id: string) {
+function openHostedPackage(id: string, development?: DevPackage) {
   if (
     !/^[a-z0-9][a-z0-9._-]{0,127}$/.test(id) ||
     process.env.KOSMOS_HEADLESS === "1" ||
@@ -24,19 +25,21 @@ function openHostedPackage(id: string) {
     path.resolve(process.env.KOSMOS_HOST_MAIN);
   const packaged = resolvePackagedHostExecutable(process.resourcesPath);
   if (executable && fs.existsSync(executable)) {
-    const child = spawn(executable, [`--open-app=${id}`], {
+    const child = spawn(executable, hostArgs(id, development), {
       detached: true,
       stdio: "ignore",
       windowsHide: true,
+      env: development ? { ...process.env, KOSMOS_DEV_MODE: "1" } : process.env,
     });
     child.unref();
     return true;
   }
   if (devMain && fs.existsSync(devMain)) {
-    const child = spawn(process.execPath, [devMain, `--open-app=${id}`], {
+    const child = spawn(process.execPath, [devMain, ...hostArgs(id, development)], {
       detached: true,
       stdio: "ignore",
       windowsHide: true,
+      env: development ? { ...process.env, KOSMOS_DEV_MODE: "1" } : process.env,
     });
     child.unref();
     return true;
@@ -51,6 +54,10 @@ function openHostedPackage(id: string) {
     return true;
   }
   return false;
+}
+
+function hostArgs(id: string, development?: DevPackage): string[] {
+  return development ? [`--open-app=${id}`, `--dev-url=${development.url}`] : [`--open-app=${id}`];
 }
 
 function startPackagedRuntime(): boolean {

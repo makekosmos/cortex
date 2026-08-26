@@ -112,6 +112,7 @@
             schema_version: 2,
             id: "com.kosmos.worker".into(),
             name: "Worker".into(),
+            description: None,
             version: "1.0.0".into(),
             kind: PackageKind::Source,
             engine_api: ">=1.0.0".into(),

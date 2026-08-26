@@ -146,6 +146,13 @@ export type StoreCatalogSnapshot = {
   listings: StoreListing[];
   installed: InstalledStoreItem[];
 };
+export type DevelopmentPackage = {
+  id: string;
+  name: string;
+  version: string;
+  publisher: string;
+  icon_url: string;
+};
 export type BridgeConfig = {
   vault_root: string;
   selected_types: string[];
@@ -413,6 +420,8 @@ export interface ManagerApi {
   openPackage(input: {
     package_id: string;
   }): Promise<ManagerResult<{ opened: boolean }>>;
+  getDevelopmentPackages(): Promise<ManagerResult<DevelopmentPackage[]>>;
+  openDevelopmentPackage(input: { package_id: string }): Promise<ManagerResult<{ opened: boolean }>>;
   setPackageEnabled(input: {
     package_id: string;
     version: string;

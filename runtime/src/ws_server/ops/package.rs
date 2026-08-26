@@ -121,6 +121,28 @@ pub(in crate::ws_server) async fn handle_package_op(
                 package_response(subop, service.install_from_catalog(&id, &version).await)
             }
         }
+        "install_development" => {
+            let Some(id) = params
+                .get("id")
+                .or_else(|| params.get("package_id"))
+                .and_then(serde_json::Value::as_str)
+            else {
+                return LocalResponse::err("packages.install_development: invalid-request");
+            };
+            let Some(version) = params.get("version").and_then(serde_json::Value::as_str) else {
+                return LocalResponse::err("packages.install_development: invalid-request");
+            };
+            let Some(archive_path) = params
+                .get("archive_path")
+                .and_then(serde_json::Value::as_str)
+            else {
+                return LocalResponse::err("packages.install_development: invalid-request");
+            };
+            package_response(
+                subop,
+                service.install_development_app_from_path(id, version, archive_path),
+            )
+        }
         "set_enabled" => {
             let Some(id) = params
                 .get("id")

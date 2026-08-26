@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { Button, SettingsList, SettingsRow } from "@kosmos/visuals";
-import type { InstalledStoreItem, StoreListing } from "../manager-api";
+import type { DevelopmentPackage, InstalledStoreItem, StoreListing } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
 import { useStoreCatalog } from "../composables/useStoreCatalog";
 import {
@@ -10,10 +10,6 @@ import {
   installedForListing,
 } from "../store-helpers";
 import StoreListingCard from "./StoreListingCard.vue";
-import shellIcon from "../../../desktop/build/icon.png";
-import memoriaIcon from "../../../desktop/build/app-icons/memoria.png";
-import agendaIcon from "../../../desktop/build/app-icons/agenda.png";
-import arcadiaIcon from "../../../desktop/build/app-icons/arcadia.png";
 
 const props = defineProps<{ client: ManagerClient }>();
 const emit = defineEmits<{ detailChange: [boolean] }>();
@@ -21,57 +17,25 @@ const { snapshot, error, listings, installed, catalogPackages, load } = useStore
   props.client,
 );
 const installing = ref(new Set<string>());
+const retiredListingIds = new Set(["com.kosmos.eden", "com.kosmos.delphi"]);
 const feedback = ref(
   new Map<string, { kind: "success" | "error"; message: string }>(),
 );
 const selectedListing = ref<StoreListing | null>(null);
-
-const canonicalApps: StoreListing[] = [
-  {
-    id: "com.kosmos.shell",
-    kind: "kosmos-package",
-    name: "Kosmos Shell",
-    publisher: "Kosmos",
-    icon_url: shellIcon,
-  },
-  {
-    id: "com.kosmos.eden",
-    kind: "kosmos-package",
-    name: "Memoria",
-    publisher: "Kosmos",
-    icon_url: memoriaIcon,
-  },
-  {
-    id: "com.kosmos.delphi",
-    kind: "kosmos-package",
-    name: "Agenda",
-    publisher: "Kosmos",
-    icon_url: agendaIcon,
-  },
-  {
-    id: "com.kosmos.arcadia",
-    kind: "kosmos-package",
-    name: "Arcadia",
-    publisher: "Kosmos",
-    icon_url: arcadiaIcon,
-  },
-];
+const development = ref<DevelopmentPackage[]>([]);
 const rows = computed(() => {
   const apps = listings.value.filter(
-    (listing) => listing.kind === "kosmos-package",
+    (listing) => listing.kind === "kosmos-package" && !retiredListingIds.has(listing.id),
   );
-  const canonical = canonicalApps.map((app) => {
-    const listing = apps.find((candidate) => candidate.id === app.id);
-    return listing
-      ? { ...listing, ...app }
-      : app;
-  });
-  return [
-    ...canonical,
-    ...apps.filter(
-      (listing) => !canonicalApps.some((app) => app.id === listing.id),
-    ),
-  ];
+  const local = development.value.map((entry) => ({
+    id: entry.id,
+    kind: "kosmos-package" as const,
+    name: entry.name,
+    publisher: entry.publisher,
+    icon_url: entry.icon_url,
+    distribution: { package_id: entry.id, version: entry.version },
+  }));
+  return [...local, ...apps.filter((listing) => !development.value.some((entry) => entry.id === listing.id))];
 });
 const detail = computed(() => {
   const listing = selectedListing.value;
@@ -79,9 +43,8 @@ const detail = computed(() => {
   const summary = listing.description ??
     ({
       "com.kosmos.shell": "Рабочее пространство Kosmos для команд, данных и приложений.",
-      "com.kosmos.eden": "Личное пространство для заметок и знаний.",
-      "com.kosmos.delphi": "Планирование задач, встреч и повседневных дел.",
       "com.kosmos.arcadia": "Пространство для игр и игровых данных в Kosmos.",
+      "com.kosmos.focus": "Таймер для фокус-сессий с блок-листами и нижним индикатором.",
     }[listing.id] ?? "Приложение для работы в экосистеме Kosmos.");
   const catalogPackage = catalogPackages.value.find(
     (item) => item.id === listing.distribution?.package_id,
@@ -115,12 +78,15 @@ function formatDate(value?: string) {
 const detailAction = computed(() => {
   const listing = selectedListing.value;
   if (!listing) return null;
+  if (development.value.some((entry) => entry.id === listing.id)) {
+    return { label: "Открыть", item: undefined, development: true };
+  }
   const item = installedFor(listing);
-  if (item?.kind === "app") return { label: "Открыть", item };
+  if (item?.kind === "app") return { label: "Открыть", item, development: false };
   const target = installTarget(listing, item);
   return target && snapshot.value?.state === "fresh"
-    ? { label: "Установить", item: undefined }
-    : { label: "Недоступно", item: undefined, disabled: true };
+    ? { label: "Установить", item: undefined, development: false }
+    : { label: "Недоступно", item: undefined, disabled: true, development: false };
 });
 function installedFor(listing: StoreListing) {
   return installedForListing(listing, installed.value);
@@ -173,9 +139,18 @@ async function openPackage(item: InstalledStoreItem) {
     `store-open:${item.id}`,
   );
 }
+async function openDevelopmentPackage(listing: StoreListing) {
+  await props.client.call(
+    "openDevelopmentPackage",
+    { package_id: listing.id },
+    `store-dev-open:${listing.id}`,
+  );
+}
 function runDetailAction() {
   if (!detailAction.value) return;
-  if (detailAction.value.item) void openPackage(detailAction.value.item);
+  if (detailAction.value.development && selectedListing.value)
+    void openDevelopmentPackage(selectedListing.value);
+  else if (detailAction.value.item) void openPackage(detailAction.value.item);
   else if (!detailAction.value.disabled && selectedListing.value)
     void install(selectedListing.value);
 }
@@ -188,7 +163,14 @@ function backToCatalog() {
   emit("detailChange", false);
 }
 defineExpose({ backToCatalog });
-onMounted(() => void load());
+onMounted(async () => {
+  await Promise.all([
+    props.client.call("refreshPackageCatalog", undefined, "store-initial-package-catalog"),
+    props.client.call("refreshStoreCatalog", undefined, "store-initial-catalog"),
+  ]);
+  await load();
+  development.value = await props.client.call<DevelopmentPackage[]>("getDevelopmentPackages") ?? [];
+});
 </script>
 
 <template>
@@ -247,9 +229,11 @@ onMounted(() => void load());
         :catalog-available="snapshot?.state === 'fresh'"
         :installing="isInstalling(listing)"
         :feedback="installFeedback(listing)"
+        :development="development.some((entry) => entry.id === listing.id)"
         @install="install"
         @open="openPackage"
         @details="showDetails"
+        @development="openDevelopmentPackage"
       />
       </div>
       <p v-else class="muted">Приложений не найдено.</p>

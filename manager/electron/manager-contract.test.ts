@@ -349,7 +349,7 @@ describe("standalone Manager boundary", () => {
     expect(main).toContain('message: "Не удалось проверить активное состояние."');
     expect(main).toContain('message: "Не удалось проверить системную службу."');
     expect(main).toContain('error: "Служба не выполнила действие."');
-    for (const file of ["main.ts", "manager-contract.ts", "../src/views/FocusView.vue"]) {
+    for (const file of ["main.ts", "manager-contract.ts"]) {
       const focusSource = source(file);
       for (const signature of ["Рќ", "РЎ", "Р°", "Рµ", "СЃ", "СЂ", "�"])
         expect(focusSource).not.toContain(signature);

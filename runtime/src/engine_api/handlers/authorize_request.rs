@@ -9,12 +9,14 @@ async fn authorize_app_request(
         .as_object_mut()
         .ok_or("app params must be an object")?;
     match operation {
-        "dictation.get_state"
-        | "dictation.get_config"
-        | "dictation.start_recording"
-        | "dictation.cancel" => {
+        operation if crate::runtime_grants::dictation_operation_capability(operation).is_some() => {
             if !grant.allows_dictation_operation(operation) {
                 return Err("dictation grant denied");
+            }
+        }
+        operation if crate::runtime_grants::focus_operation_capability(operation).is_some() => {
+            if !grant.allows_focus_operation(operation) {
+                return Err("focus grant denied");
             }
         }
         "list_objects_by_type" | "list_object_summaries_by_type" => {

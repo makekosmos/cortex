@@ -1,4 +1,52 @@
 impl PackageService {
+    /// Development-only app install. Production packages must continue through
+    /// the signed catalog path above.
+    pub fn install_development_app_from_path(
+        &self,
+        id: &str,
+        version: &str,
+        path: impl AsRef<Path>,
+    ) -> Result<PackageSummary, PackageError> {
+        if !cfg!(debug_assertions) {
+            return Err(PackageError::Invalid);
+        }
+        let path = path.as_ref();
+        if id.len() > 64 || version.len() > 64 || !path.is_absolute() {
+            return Err(PackageError::Invalid);
+        }
+        let bytes = fs::read(path).map_err(|_| PackageError::Invalid)?;
+        let mut archive = ZipArchive::new(fs::File::open(path).map_err(|_| PackageError::Invalid)?)
+            .map_err(|_| PackageError::Invalid)?;
+        let mut raw_manifest = String::new();
+        archive
+            .by_name("manifest.json")
+            .map_err(|_| PackageError::Invalid)?
+            .read_to_string(&mut raw_manifest)
+            .map_err(|_| PackageError::Invalid)?;
+        let manifest = PackageManifest::parse(&raw_manifest).map_err(|_| PackageError::Invalid)?;
+        if !matches!(manifest.kind(), PackageKind::App)
+            || manifest.id() != id
+            || manifest.version() != version
+        {
+            return Err(PackageError::Invalid);
+        }
+        let hash = format!("{:x}", Sha256::digest(&bytes));
+        let package = self.store.install_versioned(
+            path,
+            bytes.len() as u64,
+            &hash,
+            &manifest,
+            0,
+        )?;
+        self.ensure_typed_grant(&package)?;
+        self.store.enable(id, version)?;
+        Ok(summary(
+            self.store.installed(id, version)?,
+            self.worker.as_ref(),
+            &self.store,
+        ))
+    }
+
     pub fn list(&self) -> Result<PackageListSummary, PackageError> {
         self.list_filtered(None)
     }

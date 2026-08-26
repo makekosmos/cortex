@@ -33,6 +33,19 @@ const requested = (argv: string[]) => {
   }
   return undefined;
 };
+const requestedDevelopmentUrl = (argv: string[]): string | undefined => {
+  if (process.env.KOSMOS_DEV_MODE !== "1") return undefined;
+  const value = argv.find((argument) => argument.startsWith("--dev-url="))?.slice("--dev-url=".length);
+  try {
+    if (!value) return undefined;
+    const url = new URL(value);
+    return url?.protocol === "http:" && ["127.0.0.1", "localhost"].includes(url.hostname) && url.port
+      ? url.toString()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
 const isOperationRequest = (
   value: JsonRecord,
 ): value is JsonRecord & { operation: string } => isJsonString(value.operation);
@@ -165,7 +178,11 @@ function cleanupReplacedLaunch(replaced: OwnedLaunch): void {
   void revokeLaunch(replaced.id, replaced.launchId);
 }
 
-async function openApp(id: string, initial = false): Promise<void> {
+async function openApp(
+  id: string,
+  initial = false,
+  developmentUrl = requestedDevelopmentUrl(process.argv),
+): Promise<void> {
   const existing = windows.get(id);
   if (existing && !existing.isDestroyed()) {
     if (!headless) {
@@ -217,7 +234,7 @@ async function openApp(id: string, initial = false): Promise<void> {
   scheduleLaunchRenewal(manifest);
   const launchOrigin = (() => {
     try {
-      return new URL(manifest.launch_url).origin;
+      return new URL(developmentUrl ?? manifest.launch_url).origin;
     } catch {
       return "";
     }
@@ -258,7 +275,7 @@ async function openApp(id: string, initial = false): Promise<void> {
     releaseLaunch(id, win, claim, webContentsId);
   });
   try {
-    await win.loadURL(manifest.launch_url);
+    await win.loadURL(developmentUrl ?? manifest.launch_url);
     void resolveLiveLaunchManifest(id, manifest);
   } catch {
     // Closing a window while navigation is pending is normal lifecycle, not a launch failure.
@@ -280,7 +297,7 @@ if (!singleInstance) {
     console.warn("[host-lifecycle] second instance", { app_id: id ?? null });
     if (id) {
       await app.whenReady();
-      await openApp(id);
+      await openApp(id, false, requestedDevelopmentUrl(argv));
     } else if (hasOpenApp(argv)) reportFailure("Некорректный идентификатор приложения.");
   });
   app.whenReady().then(async () => {

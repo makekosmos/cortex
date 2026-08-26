@@ -24,13 +24,6 @@ const APP_GRAPH_WRITES: &[&str] = &[
     "upsert_object_link",
     "delete_object_link",
 ];
-const APP_DICTATION_OPERATIONS: &[&str] = &[
-    "dictation.get_state",
-    "dictation.get_config",
-    "dictation.start_recording",
-    "dictation.cancel",
-];
-
 fn parse_app_rpc(
     value: Value,
     grant: &LaunchGrant,
@@ -40,8 +33,10 @@ fn parse_app_rpc(
     let operation = envelope.operation.as_str();
     if !(APP_GRAPH_READS.contains(&operation)
         || APP_GRAPH_WRITES.contains(&operation)
-        || (APP_DICTATION_OPERATIONS.contains(&operation)
-            && grant.allows_dictation_operation(operation)))
+        || (crate::runtime_grants::dictation_operation_capability(operation).is_some()
+            && grant.allows_dictation_operation(operation))
+        || (crate::runtime_grants::focus_operation_capability(operation).is_some()
+            && grant.allows_focus_operation(operation)))
     {
         return Err("unsupported app operation");
     }

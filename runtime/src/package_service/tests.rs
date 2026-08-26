@@ -38,6 +38,7 @@ pub(crate) mod tests {
             schema_version: 2,
             id: "com.kosmos.demo".into(),
             name: "Demo".into(),
+            description: None,
             version: "1.0.0".into(),
             kind: PackageKind::App,
             engine_api: ">=1.0.0".into(),
@@ -77,6 +78,7 @@ pub(crate) mod tests {
             schema_version: 2,
             id: "com.kosmos.demo".into(),
             name: "Demo v2".into(),
+            description: None,
             version: "2.0.0".into(),
             kind: PackageKind::App,
             engine_api: ">=1.0.0".into(),
@@ -210,6 +212,23 @@ pub(crate) mod tests {
         let icon = listed.icon_path.expect("icon path");
         assert!(icon.ends_with("icon.ico"));
         assert!(!icon.starts_with(r"\\?\"));
+    }
+
+    #[test]
+    fn development_app_install_uses_the_validated_archive_manifest() {
+        let dir = tempdir().expect("temp dir");
+        let manifest = VersionedManifest::V2(manifest_v2_with_canonical_access());
+        let (archive, _, _) = archive_with_versioned_manifest(dir.path(), &manifest);
+        let (trust_store, _, _) = trust();
+        let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
+
+        let installed = service
+            .install_development_app_from_path("com.kosmos.demo", "2.0.0", &archive)
+            .expect("development install");
+
+        assert!(installed.enabled);
+        assert_eq!(installed.id, "com.kosmos.demo");
+        assert_eq!(installed.version, "2.0.0");
     }
 
     fn archive_with_versioned_manifest_and_documents(
@@ -991,7 +1010,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn live_v2_manifests_compile_with_wildcards() {
+    fn live_v2_manifests_compile_against_canonical_registry() {
         let registry = canonical_registry_snapshot().expect("canonical registry");
         let candidates = [
             (
@@ -1003,25 +1022,31 @@ pub(crate) mod tests {
                 Path::new(env!("CARGO_MANIFEST_DIR")).join("../../memoria/manifest.json"),
             ),
         ];
-        let mut found_v2 = 0;
         for (package, path) in candidates {
-            let Ok(raw) = fs::read_to_string(path) else {
-                continue;
+            let raw = fs::read_to_string(path).unwrap_or_else(|_| panic!("{package} manifest"));
+            let VersionedManifest::V2(manifest) = PackageManifest::parse(&raw)
+                .unwrap_or_else(|_| panic!("{package} manifest"))
+            else {
+                panic!("{package} must use a v2 manifest");
             };
-            let Ok(parsed) = PackageManifest::parse(&raw) else {
-                continue;
-            };
-            let VersionedManifest::V2(manifest) = parsed else {
-                continue;
-            };
-            found_v2 += 1;
             let grant = compile_manifest_v2(&manifest, &registry, "test-digest")
                 .unwrap_or_else(|_| panic!("{package} grant"));
             assert!(!grant.rules.is_empty(), "{package} grant has no rules");
         }
-        if found_v2 == 0 {
-            eprintln!("no sibling Makekosmos package manifests with schema_version=2; skipping live manifest contract");
-        }
+    }
+
+    #[test]
+    fn dictation_package_manifest_has_only_the_required_engine_grants() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dictation/manifest.json");
+        let raw = fs::read_to_string(path).expect("Dictation package manifest");
+        let VersionedManifest::V2(manifest) = PackageManifest::parse(&raw).expect("valid Dictation manifest") else {
+            panic!("Dictation must be a v2 package");
+        };
+        let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "test-digest")
+            .expect("compiled Dictation grant");
+        assert!(grant.allows_dictation_operation("dictation.get_config"));
+        assert!(grant.allows_dictation_operation("dictation.update_config"));
+        assert!(!grant.allows_dictation_operation("dictation.submit_audio"));
     }
 
     #[test]
@@ -1143,6 +1168,7 @@ pub(crate) mod tests {
             schema_version: 2,
             id: "ark-markdown-bridge".into(),
             name: "ARK Markdown Bridge".into(),
+            description: None,
             version: "1.0.0".into(),
             kind: PackageKind::Bridge,
             engine_api: ">=1".into(),

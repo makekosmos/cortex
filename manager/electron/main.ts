@@ -9,6 +9,7 @@ import {
   type WebContents,
   type OpenDialogOptions,
 } from "electron";
+import { statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -85,6 +86,7 @@ import {
   validIntegrationInput,
   validation,
 } from "./main-helpers";
+import { developmentPackage, developmentPackages } from "./dev-packages";
 let dictationSubscriber: WebContents | null = null;
 let stopDictationEvents: (() => void) | null = null;
 
@@ -741,7 +743,7 @@ function registerAll() {
       ),
     // SAFETY: validator requires package_id and version fields.
     (value) => ({
-      id: (value as { package_id: string }).package_id,
+      package_id: (value as { package_id: string }).package_id,
       version: (value as { version: string }).version,
     }),
   );
@@ -794,7 +796,7 @@ function registerAll() {
         };
       };
       return {
-        id: input.package_id,
+        package_id: input.package_id,
         version: input.version,
         config: input.config,
       };
@@ -827,7 +829,7 @@ function registerAll() {
     )
       return null;
     const result: InputRecord = {
-      id: value.package_id,
+      package_id: value.package_id,
       version: value.version,
     };
     if (enabled) result.enabled = value.enabled;
@@ -849,12 +851,12 @@ function registerAll() {
       isObject(packages.data) &&
       Array.isArray(packages.data.packages)
         ? packages.data.packages.find(
-            (item: Input) => isObject(item) && item.id === input.id,
+            (item: Input) => isObject(item) && item.id === input.package_id,
           )
         : null;
     if (isObject(installed) && installed.kind === "app") {
       const enabled = await rpc(op.setPackageEnabled, {
-        id: input.id,
+        package_id: input.package_id,
         version: input.version,
         enabled: true,
       });
@@ -867,7 +869,7 @@ function registerAll() {
           ok: true,
           data: { installed: true, enabled: true, opened: false },
         };
-      if (!openHostedPackage(String(input.id)))
+      if (!openHostedPackage(String(input.package_id)))
         return {
           ok: false,
           code: "engine",
@@ -894,6 +896,30 @@ function registerAll() {
     return openHostedPackage(value.package_id)
       ? { ok: true, data: { opened: true } }
       : { ok: false, code: "engine", message: "Package Host недоступен." };
+  });
+  ipcMain.handle("manager.getDevelopmentPackages", () => ({
+    ok: true,
+    data: developmentPackages().map(({ archivePath: _archivePath, iconPath, url, ...entry }) => {
+      const iconUrl = new URL(path.basename(iconPath), url);
+      iconUrl.searchParams.set("v", String(statSync(iconPath).mtimeMs));
+      return { ...entry, icon_url: iconUrl.toString() };
+    }),
+  }));
+  ipcMain.handle("manager.openDevelopmentPackage", async (_event, value) => {
+    if (!isObject(value) || Object.keys(value).length !== 1 || !validPackageId(value.package_id))
+      return { ok: false, code: "validation", message: "Invalid development package." };
+    const development = developmentPackage(value.package_id);
+    if (!development)
+      return { ok: false, code: "validation", message: "Development package is not running." };
+    const installed = await rpc("packages.install_development", {
+      package_id: development.id,
+      version: development.version,
+      archive_path: development.archivePath,
+    });
+    if (!installed.ok) return installed;
+    return openHostedPackage(development.id, development)
+      ? { ok: true, data: { opened: true } }
+      : { ok: false, code: "engine", message: "Package Host unavailable." };
   });
   ipcMain.handle("manager.setPackageEnabled", async (_event, value) => {
     const input = packageInput(value, true);
@@ -1175,6 +1201,9 @@ let managerWindowReady = false;
 const styleSource = process.env.VITE_DEV_SERVER_URL
   ? "style-src 'self' 'unsafe-inline'"
   : "style-src 'self'";
+const imageSource = process.env.KOSMOS_DEV_PACKAGES === "1"
+  ? "img-src 'self' data: https: http://127.0.0.1:* http://localhost:*"
+  : "img-src 'self' data: https:";
 
 function presentManagerWindow(win: BrowserWindow) {
   if (
@@ -1284,7 +1313,7 @@ if (!app.requestSingleInstanceLock()) {
         responseHeaders: {
           ...details.responseHeaders,
           "Content-Security-Policy": [
-            `default-src 'self'; script-src 'self'; ${styleSource}; img-src 'self' data:; font-src 'self'`,
+            `default-src 'self'; script-src 'self'; ${styleSource}; ${imageSource}; font-src 'self'`,
           ],
         },
       }),

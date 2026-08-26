@@ -11,6 +11,55 @@ use std::{
 };
 use thiserror::Error;
 
+/// Dictation is an Engine-owned privileged service. Package manifests can only
+/// request these named operations; microphone capture itself never crosses the
+/// package boundary.
+pub const DICTATION_READ_OPERATIONS: &[&str] = &["dictation.get_state", "dictation.get_config"];
+pub const DICTATION_WRITE_OPERATIONS: &[&str] = &[
+    "dictation.update_config",
+    "dictation.start_recording",
+    "dictation.cancel",
+];
+
+pub fn dictation_operation_capability(operation: &str) -> Option<&'static str> {
+    if DICTATION_READ_OPERATIONS.contains(&operation) {
+        Some("ark.read")
+    } else if DICTATION_WRITE_OPERATIONS.contains(&operation) {
+        Some("ark.write")
+    } else {
+        None
+    }
+}
+
+/// Focus packages can manage only their own persisted block-lists and timer.
+/// Native blocking remains a Host concern and is never an ARK permission.
+pub const FOCUS_READ_OPERATIONS: &[&str] = &[
+    "focus.list_blocklists",
+    "focus.get_active_state",
+    "focus.resolve_blocklist_domains",
+    "pomodoro.get_state",
+];
+pub const FOCUS_WRITE_OPERATIONS: &[&str] = &[
+    "focus.upsert_blocklist",
+    "focus.delete_blocklist",
+    "focus.set_active_state",
+    "pomodoro.start",
+    "pomodoro.pause",
+    "pomodoro.resume",
+    "pomodoro.skip",
+    "pomodoro.stop",
+];
+
+pub fn focus_operation_capability(operation: &str) -> Option<&'static str> {
+    if FOCUS_READ_OPERATIONS.contains(&operation) {
+        Some("ark.read")
+    } else if FOCUS_WRITE_OPERATIONS.contains(&operation) {
+        Some("ark.write")
+    } else {
+        None
+    }
+}
+
 const MAX_RULES: usize = 64;
 const MAX_CAPABILITIES: usize = 64;
 const MAX_BATCH: usize = 100;
@@ -648,19 +697,14 @@ pub fn compile_manifest_v2(
         CompileInput::new(&manifest.id, &manifest.version, manifest_digest, rules),
         registry,
     )?;
-    let operations: Vec<String> = manifest
+    let dictation_operations: Vec<String> = manifest
         .permissions
         .iter()
         .flat_map(|permission| {
             permission.scopes.iter().filter_map(move |scope| {
-                if matches!(
-                    (permission.capability.as_str(), scope.as_str()),
-                    ("ark.read", "dictation.get_state" | "dictation.get_config")
-                        | (
-                            "ark.write",
-                            "dictation.start_recording" | "dictation.cancel"
-                        )
-                ) {
+                if dictation_operation_capability(scope.as_str())
+                    == Some(permission.capability.as_str())
+                {
                     Some(scope.clone())
                 } else {
                     None
@@ -670,10 +714,32 @@ pub fn compile_manifest_v2(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
-    if !operations.is_empty() {
-        grant
-            .capabilities
-            .push(ScopedCapability::Dictation { operations });
+    if !dictation_operations.is_empty() {
+        grant.capabilities.push(ScopedCapability::Dictation {
+            operations: dictation_operations,
+        });
+    }
+    let focus_operations: Vec<String> = manifest
+        .permissions
+        .iter()
+        .flat_map(|permission| {
+            permission.scopes.iter().filter_map(move |scope| {
+                if focus_operation_capability(scope.as_str())
+                    == Some(permission.capability.as_str())
+                {
+                    Some(scope.clone())
+                } else {
+                    None
+                }
+            })
+        })
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    if !focus_operations.is_empty() {
+        grant.capabilities.push(ScopedCapability::Focus {
+            operations: focus_operations,
+        });
     }
     Ok(grant)
 }
@@ -739,6 +805,9 @@ pub enum ScopedCapability {
         actions: Vec<String>,
     },
     Dictation {
+        operations: Vec<String>,
+    },
+    Focus {
         operations: Vec<String>,
     },
 }
@@ -845,6 +914,12 @@ impl LaunchGrant {
     pub fn allows_dictation_operation(&self, operation: &str) -> bool {
         self.capabilities.iter().any(|capability| {
             matches!(capability, ScopedCapability::Dictation { operations } if operations.iter().any(|allowed| allowed == operation))
+        })
+    }
+
+    pub fn allows_focus_operation(&self, operation: &str) -> bool {
+        self.capabilities.iter().any(|capability| {
+            matches!(capability, ScopedCapability::Focus { operations } if operations.iter().any(|allowed| allowed == operation))
         })
     }
 
@@ -1213,5 +1288,45 @@ mod tests {
         assert!(grant.allows_dictation_operation("dictation.cancel"));
         assert!(!grant.allows_dictation_operation("dictation.get_config"));
         assert!(!grant.allows_dictation_operation("dictation.start_recording"));
+    }
+
+    #[test]
+    fn manifest_v2_grants_dictation_config_updates_only_with_write_scope() {
+        assert_eq!(
+            dictation_operation_capability("dictation.update_config"),
+            Some("ark.write")
+        );
+        assert_eq!(
+            dictation_operation_capability("dictation.submit_audio"),
+            None
+        );
+    }
+
+    #[test]
+    fn manifest_v2_grants_only_requested_focus_operations() {
+        let raw = r#"{
+            "schema_version": 2, "id": "com.kosmos.focus", "name": "Focus",
+            "version": "0.1.0", "kind": "app", "engine_api": ">=1.0.0",
+            "entrypoint": "dist/index.html", "publisher": "kosmos",
+            "permissions": [
+                {"capability": "ark.read", "scopes": ["pomodoro.get_state"]},
+                {"capability": "ark.write", "scopes": ["pomodoro.start", "focus.set_active_state"]}
+            ],
+            "targets": [{"runtime": "kosmos-host", "os": ["windows"]}],
+            "data": {"access": [], "defines": [], "mappings": []}
+        }"#;
+        let crate::package_manifest::VersionedManifest::V2(manifest) =
+            crate::package_manifest::PackageManifest::parse(raw).expect("valid manifest")
+        else {
+            unreachable!("expected v2 manifest");
+        };
+
+        let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "digest")
+            .expect("compiled grant");
+        assert!(grant.allows_focus_operation("pomodoro.get_state"));
+        assert!(grant.allows_focus_operation("pomodoro.start"));
+        assert!(grant.allows_focus_operation("focus.set_active_state"));
+        assert!(!grant.allows_focus_operation("pomodoro.stop"));
+        assert!(!grant.allows_focus_operation("focus.delete_blocklist"));
     }
 }

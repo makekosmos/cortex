@@ -453,6 +453,22 @@ summary:focus-visible {
 .store-card-copy {
   min-width: 0;
 }
+.store-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.store-card-development {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-2);
+  color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  font-size: var(--kosmos-text-caption-size);
+  line-height: 1.2;
+}
 .store-card-description {
   margin: var(--space-1) 0 0;
   color: var(--muted-foreground);

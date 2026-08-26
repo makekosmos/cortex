@@ -17,13 +17,11 @@ import {
 } from "@kosmos/visuals";
 import {
   PhArrowsClockwise,
-  PhCrosshair,
   PhDatabase,
   PhEngine,
   PhGear,
   PhInfo,
   PhKey,
-  PhMicrophone,
   PhPackage,
   PhPlugsConnected,
   PhStorefront,
@@ -35,8 +33,6 @@ import SyncView from "./views/SyncView.vue";
 import StoreView from "./views/StoreView.vue";
 import EngineSettingsView from "./views/EngineSettingsView.vue";
 import SettingsView from "./views/SettingsView.vue";
-import DictationSettingsView from "./views/DictationSettingsView.vue";
-import FocusView from "./views/FocusView.vue";
 import ConnectionsView from "./views/ConnectionsView.vue";
 import AboutView from "./views/AboutView.vue";
 import UpdatesView from "./views/UpdatesView.vue";
@@ -48,8 +44,6 @@ type ViewId =
   | "packages"
   | "engine"
   | "settings"
-  | "dictation"
-  | "focus"
   | "connections"
   | "about"
   | "updates"
@@ -83,12 +77,6 @@ const views = {
     hint: "Запуск Kosmos",
     component: SettingsView,
   },
-  dictation: {
-    label: "Диктовка и AI",
-    hint: "Микрофон, модели и ключи",
-    component: DictationSettingsView,
-  },
-  focus: { label: "Фокус", hint: "Блок-листы и служба", component: FocusView },
   connections: {
     label: "Интеграции",
     hint: "Источники данных",
@@ -112,8 +100,6 @@ const icons = {
   packages: PhStorefront,
   engine: PhEngine,
   settings: PhGear,
-  dictation: PhMicrophone,
-  focus: PhCrosshair,
   connections: PhPlugsConnected,
   about: PhInfo,
   updates: PhPackage,
@@ -124,15 +110,11 @@ const icons = {
 >;
 const primaryViewIds: Exclude<
   ViewId,
-  "about" | "dictation" | "focus" | "packages" | "updates" | "settings" | "secrets"
+  "about" | "packages" | "updates" | "settings" | "secrets"
 >[] = ["data", "sync", "engine", "connections", "secrets"];
 const commerceViewIds: Extract<ViewId, "packages" | "updates">[] = [
   "packages",
   "updates",
-];
-const appViewIds: Extract<ViewId, "dictation" | "focus">[] = [
-  "dictation",
-  "focus",
 ];
 const active = computed(() => views[view.value]);
 
@@ -192,19 +174,6 @@ onMounted(() => {
           <div class="manager-sidebar-group manager-sidebar-group--secondary">
             <SettingsSidebarButton
               v-for="id in commerceViewIds"
-              :key="id"
-              :icon="icons[id]"
-              :label="views[id].label"
-              :title="views[id].hint"
-              :active="view === id"
-              icon-variant="plain"
-              :icon-weight="view === id ? 'duotone' : 'regular'"
-              @click="select(id)"
-            />
-          </div>
-          <div class="manager-sidebar-group manager-sidebar-group--apps">
-            <SettingsSidebarButton
-              v-for="id in appViewIds"
               :key="id"
               :icon="icons[id]"
               :label="views[id].label"

@@ -11,12 +11,14 @@ const props = defineProps<{
   installing?: boolean;
   feedback?: { kind: "success" | "error"; message: string };
   featured?: boolean;
+  development?: boolean;
 }>();
 const emit = defineEmits<{
   install: [StoreListing];
   open: [InstalledStoreItem];
   external: [StoreListing];
   details: [StoreListing];
+  development: [StoreListing];
 }>();
 
 const iconFailed = ref(false);
@@ -27,10 +29,11 @@ const icon = computed(() => {
   return local ? `file:///${local.replace(/\\/g, "/")}` : null;
 });
 const canOpen = computed(
-  () => props.listing.kind === "external-app" || props.installed?.kind === "app",
+  () => props.development || props.listing.kind === "external-app" || props.installed?.kind === "app",
 );
 const canInstall = computed(
   () =>
+    !props.development &&
     (!props.installed || Boolean(props.installed.update_version)) &&
     props.catalogAvailable &&
     props.listing.distribution &&
@@ -38,7 +41,8 @@ const canInstall = computed(
 );
 
 function open() {
-  if (props.listing.kind === "external-app") emit("external", props.listing);
+  if (props.development) emit("development", props.listing);
+  else if (props.listing.kind === "external-app") emit("external", props.listing);
   else if (props.installed?.kind === "app") emit("open", props.installed);
 }
 
@@ -73,7 +77,10 @@ function details() {
         <PackageIcon :size="40" />
       </span>
       <div class="store-card-copy">
-        <h2>{{ listing.name }}</h2>
+        <div class="store-card-title">
+          <h2>{{ listing.name }}</h2>
+          <small v-if="development" class="store-card-development">Разработка</small>
+        </div>
         <p v-if="featured && listing.description" class="store-card-description">
           {{ listing.description }}
         </p>
