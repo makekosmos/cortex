@@ -22,10 +22,8 @@
         let port = server.port();
         let task = tokio::spawn(server.run());
         let mut child_command = if cfg!(windows) {
-            let mut command = std::process::Command::new(
-                std::env::var_os("ComSpec").unwrap_or_else(|| "cmd.exe".into()),
-            );
-            command.args(["/C", "timeout", "/T", "5", "/NOBREAK"]);
+            let mut command = std::process::Command::new("powershell.exe");
+            command.args(["-NoProfile", "-Command", "Start-Sleep -Seconds 5"]);
             #[cfg(windows)]
             std::os::windows::process::CommandExt::creation_flags(&mut command, 0x0800_0000);
             command
