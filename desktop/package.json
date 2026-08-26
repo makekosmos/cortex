@@ -52,6 +52,7 @@
   "build": {
     "appId": "com.kazui.kosmos",
     "productName": "Kosmos",
+    "artifactName": "Kosmos-Setup-${version}.${ext}",
     "electronLanguages": [
       "en-US",
       "ru"
