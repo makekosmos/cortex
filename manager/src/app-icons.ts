@@ -3,12 +3,14 @@ import arcadiaIcon from "../../desktop/build/app-icons/arcadia.png";
 import dictationIcon from "../../desktop/build/app-icons/dictation.png";
 import kosmosIcon from "../../desktop/build/app-icons/kosmos.png";
 import memoriaIcon from "../../desktop/build/app-icons/memoria.png";
+import ordoIcon from "../../desktop/build/app-icons/ordo.png";
 
 const appIcons = new Map([
   ["com.kosmos.agenda", agendaIcon],
   ["com.kosmos.arcadia", arcadiaIcon],
   ["com.kosmos.dictation", dictationIcon],
   ["com.kosmos.memoria", memoriaIcon],
+  ["com.kosmos.focus", ordoIcon],
   ["com.kosmos.shell", kosmosIcon],
 ]);
 

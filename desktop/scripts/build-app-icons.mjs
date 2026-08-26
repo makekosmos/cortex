@@ -7,6 +7,7 @@ import sharp from "sharp";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = path.join(root, "build", "icon.png");
+const ordoSource = path.resolve(root, "..", "..", "focus", "icon.png");
 const target = path.join(root, "build", "app-icons");
 mkdirSync(target, { recursive: true });
 const icon = async (name, image) => {
@@ -21,4 +22,5 @@ await Promise.all([
   icon("agenda", sharp(source).tint("#27c7b4")),
   icon("arcadia", sharp(source).tint("#ef3f52")),
   icon("dictation", sharp(source).tint("#c65df7")),
+  icon("ordo", sharp(ordoSource)),
 ]);

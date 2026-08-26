@@ -7,6 +7,7 @@ test("prefers bundled Kosmos icons and preserves external fallbacks", () => {
     arcadia: "arcadia.png",
     dictation: "dictation.png",
     memoria: "memoria.png",
+    focus: "ordo.png",
     shell: "kosmos.png",
   })) {
     expect(appIcon(`com.kosmos.${id}`, "https://old/icon.png")).toEndWith(file);

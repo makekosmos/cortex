@@ -408,25 +408,6 @@ summary:focus-visible {
   display: block;
   object-fit: contain;
   border-radius: 0;
-  filter: grayscale(1) brightness(1.35) opacity(0.8);
-}
-.store-card-icon-frame--com-kosmos-eden .store-card-icon {
-  filter: none;
-}
-.store-card-icon-frame--com-kosmos-delphi .store-card-icon {
-  filter: none;
-}
-.store-card-icon-frame--com-kosmos-arcadia .store-card-icon {
-  filter: none;
-}
-.store-card-icon-frame--desktop .store-card-icon {
-  filter: none;
-}
-.store-card-icon-frame--com-kosmos-graph .store-card-icon {
-  filter: sepia(1) saturate(2) hue-rotate(75deg) brightness(1.05);
-}
-.store-card-icon-frame--com-kosmos-dictation .store-card-icon {
-  filter: sepia(1) saturate(2) hue-rotate(295deg) brightness(1.1);
 }
 .store-card-icon-fallback {
   color: var(--muted-foreground);
