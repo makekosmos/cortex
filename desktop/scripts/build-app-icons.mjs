@@ -11,8 +11,9 @@ const target = path.join(root, "build", "app-icons");
 mkdirSync(target, { recursive: true });
 const icon = async (name, image) => {
   const png = path.join(target, `${name}.png`);
-  await image.png().toFile(png);
-  writeFileSync(path.join(target, `${name}.ico`), await pngToIco(png));
+  const fullSize = await image.png().toBuffer();
+  await sharp(fullSize).resize(256, 256).png({ compressionLevel: 9 }).toFile(png);
+  writeFileSync(path.join(target, `${name}.ico`), await pngToIco(fullSize));
 };
 await Promise.all([
   icon("kosmos", sharp(source)),
