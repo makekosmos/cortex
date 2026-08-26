@@ -16,18 +16,28 @@ export function listingPackageId(listing: StoreListing): string | null {
   return canonicalPackageIds.has(listing.id) ? listing.id : null;
 }
 
+export function latestInstalledPackages(installed: InstalledStoreItem[]) {
+  const latest = new Map<string, InstalledStoreItem>();
+  for (const item of installed) {
+    const current = latest.get(item.id);
+    if (
+      !current ||
+      current.version.localeCompare(item.version, undefined, {
+        numeric: true,
+      }) < 0
+    )
+      latest.set(item.id, item);
+  }
+  return [...latest.values()];
+}
+
 export function installedForListing(
   listing: StoreListing,
   installed: InstalledStoreItem[],
 ) {
   const packageId = listingPackageId(listing);
   return packageId
-    ? installed
-        .filter((item) => item.id === packageId)
-        .sort((left, right) =>
-          left.version.localeCompare(right.version, undefined, { numeric: true }),
-        )
-        .at(-1)
+    ? latestInstalledPackages(installed).find((item) => item.id === packageId)
     : undefined;
 }
 

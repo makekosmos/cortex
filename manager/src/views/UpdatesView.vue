@@ -7,7 +7,12 @@ import type {
   StoreListing,
 } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
-import { installTarget, listingPackageId, packageAction } from "../store-helpers";
+import {
+  installTarget,
+  latestInstalledPackages,
+  listingPackageId,
+  packageAction,
+} from "../store-helpers";
 import UpdatesRow from "./UpdatesRow.vue";
 import desktopIcon from "../../../desktop/build/icon.png";
 import { createDesktopVersionCache } from "../updates-version-cache";
@@ -25,7 +30,7 @@ const loadDesktopVersion = createDesktopVersionCache(() =>
   props.client.call<string>("getAppVersion", undefined, "updates-version"),
 );
 const rows = computed(() =>
-  installed.value.map((installedItem) => {
+  latestInstalledPackages(installed.value).map((installedItem) => {
     const listing = listings.value.find(
       (item) => listingPackageId(item) === installedItem.id,
     );

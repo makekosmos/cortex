@@ -4,6 +4,7 @@ import {
   installTarget,
   installKey,
   installedForListing,
+  latestInstalledPackages,
   packageAction,
 } from "./store-helpers";
 
@@ -52,9 +53,13 @@ describe("store helpers", () => {
     const previous = { ...installed("pkg.notes"), version: "1.0.0" };
     const current = { ...installed("pkg.notes"), version: "1.1.0", update_version: null };
 
-    expect(installedForListing(listing("listing.notes", "pkg.notes"), [previous, current])).toBe(
-      current,
-    );
+    expect(
+      installedForListing(listing("listing.notes", "pkg.notes"), [
+        previous,
+        current,
+      ]),
+    ).toBe(current);
+    expect(latestInstalledPackages([previous, current])).toEqual([current]);
   });
 
   test("matches installed canonical apps when the catalog omits distribution", () => {
