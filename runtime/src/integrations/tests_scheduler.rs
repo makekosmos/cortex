@@ -52,12 +52,9 @@ fn frontend_platform_credentials_and_profile_stay_bounded() {
     .expect("BigFrontend profile");
     assert_eq!(profile["props"]["pageProps"]["profile"]["id"], 59712);
 
-    let cookie = greatfrontend_cookie(
-        r#"{"cookies":[{"name":"__session","value":"secret"},{"name":"bad;name","value":"ignored"}]}"#,
-    )
-    .expect("GreatFrontEnd cookie");
-    assert_eq!(cookie, "__session=secret");
-    assert!(greatfrontend_cookie(r#"{"cookies":[]}"#).is_err());
+    let cookie = greatfrontend_cookie("secret").expect("GreatFrontEnd cookie");
+    assert_eq!(cookie, "supabase-auth-token=secret");
+    assert!(greatfrontend_cookie("bad;token").is_err());
 }
 
 #[test]

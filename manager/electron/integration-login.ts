@@ -8,7 +8,7 @@ import { rpc } from "./engine-client";
 import { managerOperations as op } from "../src/manager-api";
 import { normalizeIntegrationSnapshot } from "./main-helpers";
 import {
-  encodeCookieCredential,
+  encodeGreatFrontendCredential,
   encodeLeetCodeCredential,
   runIntegrationLogin,
 } from "./integration-login-credential";
@@ -66,7 +66,7 @@ function waitForGreatFrontendCredential(win: BrowserWindow): Promise<string> {
     const cookies = await win.webContents.session.cookies.get({
       url: "https://www.greatfrontend.com/",
     });
-    return encodeCookieCredential(cookies);
+    return encodeGreatFrontendCredential(cookies);
   });
 }
 

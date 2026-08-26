@@ -2,17 +2,6 @@ use super::*;
 
 const GREATFRONTEND_INPUT: &str = r#"{"0":{"json":null,"meta":{"values":["undefined"],"v":1}}}"#;
 
-#[derive(Deserialize)]
-struct CookieCredential {
-    cookies: Vec<CookiePair>,
-}
-
-#[derive(Deserialize)]
-struct CookiePair {
-    name: String,
-    value: String,
-}
-
 pub(super) fn bigfrontend_profile(body: &str) -> Result<Value, String> {
     let marker = r#"<script id="__NEXT_DATA__" type="application/json">"#;
     let json = body
@@ -72,22 +61,9 @@ pub(super) async fn fetch_bigfrontend_items(
 }
 
 pub(super) fn greatfrontend_cookie(secret: &str) -> Result<String, String> {
-    let credential: CookieCredential = serde_json::from_str(secret)
-        .map_err(|_| "Сессия GreatFrontEnd повреждена — войдите заново".to_string())?;
-    let cookies = credential
-        .cookies
-        .into_iter()
-        .filter(|cookie| {
-            !cookie.name.is_empty()
-                && !cookie.value.is_empty()
-                && !cookie.name.contains([';', '\r', '\n'])
-                && !cookie.value.contains([';', '\r', '\n'])
-        })
-        .map(|cookie| format!("{}={}", cookie.name, cookie.value))
-        .collect::<Vec<_>>();
-    (!cookies.is_empty())
-        .then(|| cookies.join("; "))
-        .ok_or_else(|| "Сессия GreatFrontEnd пуста — войдите заново".to_string())
+    (!secret.is_empty() && !secret.contains([';', '\r', '\n']))
+        .then(|| format!("supabase-auth-token={secret}"))
+        .ok_or_else(|| "Сессия GreatFrontEnd повреждена — войдите заново".to_string())
 }
 
 pub(super) async fn fetch_greatfrontend_items(

@@ -16,21 +16,19 @@ export function encodeLeetCodeCredential(
   return credential.length <= 2048 ? credential : null;
 }
 
-export function encodeCookieCredential(input: CookieInput[]): string | null {
-  const cookies = input
-    .filter(
-      ({ name, value, httpOnly }) =>
-        value.length > 0 &&
-        value.length <= 8192 &&
-        !name.includes(";") &&
-        !value.includes(";") &&
-        (httpOnly || /auth|session|token/i.test(name)),
-    )
-    .slice(0, 32)
-    .map(({ name, value }) => ({ name, value }));
-  if (cookies.length === 0) return null;
-  const credential = JSON.stringify({ cookies });
-  return credential.length <= 16_384 ? credential : null;
+export function encodeGreatFrontendCredential(
+  input: CookieInput[],
+): string | null {
+  const token = input.find(
+    ({ name, value }) =>
+      name === "supabase-auth-token" &&
+      value.length > 0 &&
+      value.length <= 1_280 &&
+      !value.includes(";") &&
+      !value.includes("\r") &&
+      !value.includes("\n"),
+  )?.value;
+  return token ?? null;
 }
 
 interface IntegrationLoginFlow<TWindow, TResult> {
@@ -54,8 +52,9 @@ export async function runIntegrationLogin<TWindow, TResult>(
   try {
     await flow.loadLogin(window);
     const credential = await flow.waitForCredential(window);
+    const result = await flow.persistCredential(credential);
     closeWindow();
-    return await flow.persistCredential(credential);
+    return result;
   } finally {
     closeWindow();
   }

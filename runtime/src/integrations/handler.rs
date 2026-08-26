@@ -37,7 +37,7 @@ pub async fn handle_operation(
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| format!("Укажите: {}", provider.credential_label()))?;
             let max_len = if provider == Provider::Greatfrontend {
-                16_384
+                1_280
             } else {
                 2_048
             };

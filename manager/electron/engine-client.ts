@@ -163,7 +163,7 @@ export async function rpc(
       if (!response.ok || value.ok === false)
         return fail(
           "engine",
-          value.error ? "Engine отклонил операцию." : "Engine вернул ошибку.",
+          isString(value.error) ? value.error : "Engine вернул ошибку.",
         );
       return { ok: true, data: value.data ?? value };
     })();

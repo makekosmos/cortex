@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
-  encodeCookieCredential,
+  encodeGreatFrontendCredential,
   encodeLeetCodeCredential,
   runIntegrationLogin,
 } from "./integration-login-credential";
 
 describe("Manager integration login flow", () => {
-  test("closes before Engine persistence and never returns the credential", async () => {
+  test("closes only after Engine persistence and never returns the credential", async () => {
     const events: string[] = [];
     let persisted = "";
     const result = await runIntegrationLogin({
@@ -30,25 +30,27 @@ describe("Manager integration login flow", () => {
       "create",
       "load",
       "fresh-cookies",
-      "close",
       "persist",
+      "close",
     ]);
     expect(persisted).toBe('{"session":"session","csrfToken":"csrf"}');
     expect(JSON.stringify(result)).not.toContain("session");
   });
 
-  test("keeps only authentication cookies within the credential bound", () => {
+  test("keeps only the GreatFrontEnd session token within the keyring bound", () => {
     expect(
-      encodeCookieCredential([
+      encodeGreatFrontendCredential([
         { name: "_ga", value: "analytics", httpOnly: false },
-        { name: "sb-project-auth-token", value: "token", httpOnly: false },
-        { name: "__session", value: "session", httpOnly: true },
+        { name: "csrf-token", value: "csrf", httpOnly: true },
+        { name: "supabase-auth-token", value: "session", httpOnly: false },
       ]),
-    ).toBe(
-      '{"cookies":[{"name":"sb-project-auth-token","value":"token"},{"name":"__session","value":"session"}]}',
-    );
-    expect(encodeCookieCredential([])).toBeNull();
-    expect(encodeCookieCredential([{ name: "bad", value: "x; y", httpOnly: true }])).toBeNull();
+    ).toBe("session");
+    expect(encodeGreatFrontendCredential([])).toBeNull();
+    expect(
+      encodeGreatFrontendCredential([
+        { name: "supabase-auth-token", value: "x; y", httpOnly: true },
+      ]),
+    ).toBeNull();
   });
 
   test("rejects missing or oversized LeetCode cookies", () => {
