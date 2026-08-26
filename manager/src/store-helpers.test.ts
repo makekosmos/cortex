@@ -48,6 +48,15 @@ describe("store helpers", () => {
     );
   });
 
+  test("uses the latest installed version for an app update", () => {
+    const previous = { ...installed("pkg.notes"), version: "1.0.0" };
+    const current = { ...installed("pkg.notes"), version: "1.1.0", update_version: null };
+
+    expect(installedForListing(listing("listing.notes", "pkg.notes"), [previous, current])).toBe(
+      current,
+    );
+  });
+
   test("matches installed canonical apps when the catalog omits distribution", () => {
     const dictation = {
       ...listing("com.kosmos.dictation", "unused"),

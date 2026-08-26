@@ -22,7 +22,12 @@ export function installedForListing(
 ) {
   const packageId = listingPackageId(listing);
   return packageId
-    ? installed.find((item) => item.id === packageId)
+    ? installed
+        .filter((item) => item.id === packageId)
+        .sort((left, right) =>
+          left.version.localeCompare(right.version, undefined, { numeric: true }),
+        )
+        .at(-1)
     : undefined;
 }
 
