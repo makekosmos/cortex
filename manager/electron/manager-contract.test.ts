@@ -91,7 +91,7 @@ describe("standalone Manager boundary", () => {
     expect(helpers).toContain("windowsHide: true");
   });
 
-  test("keeps browser integration login in the main process with fresh cookies and a headless guard", () => {
+  test("keeps persistent browser login in the main process with a headless guard", () => {
     const api = source("../src/manager-api.ts");
     const preload = source("preload.ts");
     const main = source("main.ts");
@@ -104,14 +104,18 @@ describe("standalone Manager boundary", () => {
     expect(preload).not.toContain("LEETCODE_SESSION");
     expect(preload).not.toContain("csrftoken");
     expect(login).toContain('process.env.KOSMOS_HEADLESS === "1"');
-    expect(login).toContain('clearStorageData({ storages: ["cookies"] })');
+    expect(login).toContain("browserPartition(config.partition, persistent)");
+    expect(login).not.toContain('clearStorageData({ storages: ["cookies"] })');
     expect(login).toContain("https://leetcode.com/accounts/login/");
     expect(login).toContain("https://www.greatfrontend.com/profile/progress");
+    expect(login).not.toContain("getURL().startsWith(GREATFRONTEND_PROGRESS)");
     expect(login).toContain('url: "https://leetcode.com/"');
     expect(login).toContain("op.setIntegrationCredential");
     expect(login).not.toContain("console.");
     expect(credential).toMatch(/closeWindow\(\);\r?\n\s+return await flow\.persistCredential\(credential\)/);
-    expect(main).toContain("registerIntegrationLoginHandlers(() => managerWindow)");
+    expect(main).toContain("registerIntegrationLoginHandlers(");
+    expect(api).toContain("getBrowserSettings");
+    expect(preload).toContain("manager.getBrowserSettings");
   });
 
   test("normalizes Engine settings and accepts only a boolean Usage Tracker patch", () => {

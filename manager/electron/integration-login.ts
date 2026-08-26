@@ -12,9 +12,10 @@ import {
   encodeLeetCodeCredential,
   runIntegrationLogin,
 } from "./integration-login-credential";
+import { browserPartition } from "./browser-settings";
 
-const LEETCODE_PARTITION = "persist:kosmos-manager-leetcode";
-const GREATFRONTEND_PARTITION = "persist:kosmos-manager-greatfrontend";
+const LEETCODE_PARTITION = "kosmos-manager-leetcode";
+const GREATFRONTEND_PARTITION = "kosmos-manager-greatfrontend";
 const GREATFRONTEND_PROGRESS =
   "https://www.greatfrontend.com/profile/progress";
 
@@ -62,7 +63,6 @@ function waitForLeetCodeCredential(win: BrowserWindow): Promise<string> {
 
 function waitForGreatFrontendCredential(win: BrowserWindow): Promise<string> {
   return waitForCredential(win, async () => {
-    if (!win.webContents.getURL().startsWith(GREATFRONTEND_PROGRESS)) return null;
     const cookies = await win.webContents.session.cookies.get({
       url: "https://www.greatfrontend.com/",
     });
@@ -112,6 +112,7 @@ async function login(
   sender: WebContents,
   provider: LoginProvider,
   getManagerWindow: () => BrowserWindow | null,
+  persistBrowserData: () => boolean,
 ) {
   const config = loginConfig[provider];
   if (
@@ -130,13 +131,11 @@ async function login(
       message: "Недопустимый источник входа.",
     };
   try {
+    const persistent = persistBrowserData();
+    const partition = browserPartition(config.partition, persistent);
     return await runIntegrationLogin({
-      clearCookies: () =>
-        session
-          .fromPartition(config.partition)
-          .clearStorageData({ storages: ["cookies"] }),
       createWindow: () =>
-        createLoginWindow(sender, config.partition, `Вход в ${config.label}`),
+        createLoginWindow(sender, partition, `Вход в ${config.label}`),
       loadLogin: (win) => win.loadURL(config.url),
       waitForCredential: config.wait,
       closeWindow: (win) => {
@@ -169,15 +168,26 @@ async function login(
 
 export function registerIntegrationLoginHandlers(
   getManagerWindow: () => BrowserWindow | null,
+  persistBrowserData: () => boolean,
 ) {
   ipcMain.handle("manager.loginLeetCode", (event, value) =>
     value === undefined
-      ? login(event.sender, "leetcode", getManagerWindow)
+      ? login(event.sender, "leetcode", getManagerWindow, persistBrowserData)
       : { ok: false, code: "validation", message: "Недопустимые параметры входа." },
   );
   ipcMain.handle("manager.loginGreatFrontend", (event, value) =>
     value === undefined
-      ? login(event.sender, "greatfrontend", getManagerWindow)
+      ? login(event.sender, "greatfrontend", getManagerWindow, persistBrowserData)
       : { ok: false, code: "validation", message: "Недопустимые параметры входа." },
+  );
+}
+
+export async function clearIntegrationBrowserData() {
+  await Promise.all(
+    [LEETCODE_PARTITION, GREATFRONTEND_PARTITION].map((partition) =>
+      session
+        .fromPartition(browserPartition(partition, true))
+        .clearStorageData(),
+    ),
   );
 }

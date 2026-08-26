@@ -34,7 +34,6 @@ export function encodeCookieCredential(input: CookieInput[]): string | null {
 }
 
 interface IntegrationLoginFlow<TWindow, TResult> {
-  clearCookies(): Promise<void>;
   createWindow(): TWindow;
   loadLogin(window: TWindow): Promise<void>;
   waitForCredential(window: TWindow): Promise<string>;
@@ -45,7 +44,6 @@ interface IntegrationLoginFlow<TWindow, TResult> {
 export async function runIntegrationLogin<TWindow, TResult>(
   flow: IntegrationLoginFlow<TWindow, TResult>,
 ): Promise<TResult> {
-  await flow.clearCookies();
   const window = flow.createWindow();
   let closed = false;
   const closeWindow = () => {

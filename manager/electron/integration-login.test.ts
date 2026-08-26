@@ -10,7 +10,6 @@ describe("Manager integration login flow", () => {
     const events: string[] = [];
     let persisted = "";
     const result = await runIntegrationLogin({
-      clearCookies: async () => void events.push("clear"),
       createWindow: () => (events.push("create"), {}),
       loadLogin: async () => void events.push("load"),
       waitForCredential: async () => {
@@ -28,7 +27,6 @@ describe("Manager integration login flow", () => {
     });
 
     expect(events).toEqual([
-      "clear",
       "create",
       "load",
       "fresh-cookies",

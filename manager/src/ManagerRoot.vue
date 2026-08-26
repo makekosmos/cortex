@@ -17,6 +17,7 @@ import {
 } from "@kosmos/visuals";
 import {
   PhArrowsClockwise,
+  PhBrowser,
   PhDatabase,
   PhEngine,
   PhGear,
@@ -37,6 +38,7 @@ import ConnectionsView from "./views/ConnectionsView.vue";
 import AboutView from "./views/AboutView.vue";
 import UpdatesView from "./views/UpdatesView.vue";
 import SecretsView from "./views/SecretsView.vue";
+import BrowserSettingsView from "./views/BrowserSettingsView.vue";
 
 type ViewId =
   | "data"
@@ -47,7 +49,8 @@ type ViewId =
   | "connections"
   | "about"
   | "updates"
-  | "secrets";
+  | "secrets"
+  | "browser";
 const client = useManagerClient();
 const { error } = client;
 const view = ref<ViewId>("data");
@@ -93,6 +96,11 @@ const views = {
     component: UpdatesView,
   },
   secrets: { label: "Ключи", hint: "API-ключи и провайдеры", component: SecretsView },
+  browser: {
+    label: "Браузер",
+    hint: "Сессии и данные сайтов",
+    component: BrowserSettingsView,
+  },
 };
 const icons = {
   data: PhDatabase,
@@ -104,14 +112,15 @@ const icons = {
   about: PhInfo,
   updates: PhPackage,
   secrets: PhKey,
+  browser: PhBrowser,
 } satisfies Record<
   ViewId,
   { label: string; hint: string; component: Component }
 >;
 const primaryViewIds: Exclude<
   ViewId,
-  "about" | "packages" | "updates" | "settings" | "secrets"
->[] = ["data", "sync", "engine", "connections", "secrets"];
+  "about" | "packages" | "updates" | "settings"
+>[] = ["data", "sync", "engine", "connections", "secrets", "browser"];
 const commerceViewIds: Extract<ViewId, "packages" | "updates">[] = [
   "packages",
   "updates",

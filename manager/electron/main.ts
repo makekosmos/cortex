@@ -69,7 +69,14 @@ import {
   listCrashReports,
   resolveManagerDataDir,
 } from "./diagnostics-files";
-import { registerIntegrationLoginHandlers } from "./integration-login";
+import {
+  clearIntegrationBrowserData,
+  registerIntegrationLoginHandlers,
+} from "./integration-login";
+import {
+  readBrowserDataPersistence,
+  writeBrowserDataPersistence,
+} from "./browser-settings";
 import { resolveInstance } from "../../desktop/electron/instance";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -126,6 +133,7 @@ function register(
 }
 
 function registerAll() {
+  const browserSettingsFile = path.join(app.getPath("userData"), "browser.json");
   ipcMain.handle("manager.getAppVersion", () => ({
     ok: true,
     data: desktopVersion(),
@@ -224,7 +232,29 @@ function registerAll() {
       ? { ok: true, data: normalizeIntegrationSnapshot(result.data) }
       : result;
   });
-  registerIntegrationLoginHandlers(() => managerWindow);
+  registerIntegrationLoginHandlers(
+    () => managerWindow,
+    () => readBrowserDataPersistence(browserSettingsFile),
+  );
+  ipcMain.handle("manager.getBrowserSettings", () => ({
+    ok: true,
+    data: { persistData: readBrowserDataPersistence(browserSettingsFile) },
+  }));
+  ipcMain.handle("manager.setBrowserSettings", async (_event, value) => {
+    if (
+      !isObject(value) ||
+      Object.keys(value).length !== 1 ||
+      !isBoolean(value.persistData)
+    )
+      return {
+        ok: false,
+        code: "validation",
+        message: "Недопустимая настройка браузера.",
+      };
+    writeBrowserDataPersistence(browserSettingsFile, value.persistData);
+    if (!value.persistData) await clearIntegrationBrowserData();
+    return { ok: true, data: { persistData: value.persistData } };
+  });
   ipcMain.handle("manager.updateIntegrationSettings", async (_event, value) => {
     if (!validIntegrationInput(value))
       return {

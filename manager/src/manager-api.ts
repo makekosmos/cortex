@@ -456,6 +456,10 @@ export interface ManagerApi {
   setAutostart(input: {
     enabled: boolean;
   }): Promise<ManagerResult<{ enabled: boolean; available: boolean }>>;
+  getBrowserSettings(): Promise<ManagerResult<{ persistData: boolean }>>;
+  setBrowserSettings(input: {
+    persistData: boolean;
+  }): Promise<ManagerResult<{ persistData: boolean }>>;
   getEngineSettings(): Promise<ManagerResult<EngineSettings>>;
   setWarmTimeout(input: {
     enabled: boolean;
