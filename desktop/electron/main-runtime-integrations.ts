@@ -1,6 +1,5 @@
 import { setDictationShortcutResolver } from "./commands";
 import {
-  setDictationCommandInvoker,
   setDictationRuntime,
   setupDictationHotkey,
 } from "./dictation-pill";
@@ -69,10 +68,8 @@ export function setupMainDictationRuntime(options: {
   awaitArkReady: AwaitArkReady;
   broadcastCommandsUpdated(): void;
   getArkClient(): DictationArkClient | null;
-  invokeDictationCommand(): Promise<void>;
 }): void {
   setDictationShortcutResolver(() => resolveLiveDictationShortcut(options.getArkClient));
-  setDictationCommandInvoker(options.invokeDictationCommand);
   setDictationRuntime({
     awaitArkReady: options.awaitArkReady,
     broadcastCommandsUpdated: options.broadcastCommandsUpdated,

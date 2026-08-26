@@ -20,3 +20,10 @@ test("dictation pill restores its topmost z-order before every show", async () =
   expect(showInactive).toBeGreaterThan(restoreTopmost);
   expect(moveTop).toBeGreaterThan(showInactive);
 });
+
+test("dictation hotkey toggles directly without re-entering the command bus", async () => {
+  const source = await readFile(path.join(import.meta.dir, "dictation-pill.ts"), "utf8");
+
+  expect(source.match(/void toggleDictation\(\)/g)).toHaveLength(2);
+  expect(source).not.toContain("dictationCommandInvoker");
+});

@@ -50,18 +50,12 @@ let isRecording = false;
  * `start_recording` пока первый ещё в полёте — backend отвечает
  * `state must be idle, got recording`. */
 let toggleInFlight = false;
-type DictationCommandInvoker = () => Promise<void> | void;
-let dictationCommandInvoker: DictationCommandInvoker | null = null;
 type DictationRuntime = {
   awaitArkReady: () => Promise<ArkClient>;
   broadcastCommandsUpdated: () => void;
   setDictationHotkeyCache: (hotkey?: string | null) => void;
 };
 let dictationRuntime: DictationRuntime | null = null;
-
-export function setDictationCommandInvoker(invoker: DictationCommandInvoker | null): void {
-  dictationCommandInvoker = invoker;
-}
 
 export function setDictationRuntime(runtime: DictationRuntime | null): void {
   dictationRuntime = runtime;
@@ -211,14 +205,6 @@ async function callBackend(
 ): Promise<JsonRecord> {
   const ark = await requireDictationRuntime().awaitArkReady();
   return ark.invokeOperation<JsonRecord>({ operation, ...params });
-}
-
-async function invokeDictationCommand(): Promise<void> {
-  if (dictationCommandInvoker) {
-    await dictationCommandInvoker();
-    return;
-  }
-  await toggleDictation();
 }
 
 /** Главный entry-point из hotkey'я и UI "Тест" кнопки. */
@@ -408,7 +394,7 @@ export async function setupDictationHotkey(): Promise<void> {
       // нажатие, семантика идентична globalShortcut callback'у.
       if (e.event === "dictation_toggle_trigger") {
         console.log("[dictation-pill] hook event: toggle");
-        void invokeDictationCommand();
+        void toggleDictation();
         return;
       }
       // 3. PTT trigger от Rust hook'а (PTT mode): эквивалент press/release.
@@ -419,7 +405,7 @@ export async function setupDictationHotkey(): Promise<void> {
       // поменять в Settings → Диктация → Режим триггера.
       if (e.event === "dictation_ptt_trigger") {
         console.log(`[dictation-pill] hook event: ptt ${e.phase}`);
-        void invokeDictationCommand();
+        void toggleDictation();
         return;
       }
       // 4. Capture events для Settings → Диктация → Горячая клавиша.

@@ -152,7 +152,7 @@ export function broadcastCommandsUpdated(): void {
   }
 }
 
-const commandsController = registerMainProcessIpc({
+registerMainProcessIpc({
   awaitArkReady,
   getArkClient: () => backendSupervisor.getArkClient(),
   hideLauncher,
@@ -164,7 +164,6 @@ setupMainDictationRuntime({
   awaitArkReady,
   broadcastCommandsUpdated,
   getArkClient: () => backendSupervisor.getArkClient(),
-  invokeDictationCommand: () => commandsController.invokeCommandById("kepler:dictation"),
 });
 
 export function awaitArkReady(timeoutMs?: number) {
