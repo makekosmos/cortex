@@ -7,13 +7,9 @@ import type {
   StoreListing,
 } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
-import { installTarget, packageAction } from "../store-helpers";
+import { installTarget, listingPackageId, packageAction } from "../store-helpers";
 import UpdatesRow from "./UpdatesRow.vue";
 import desktopIcon from "../../../desktop/build/icon.png";
-import shellIcon from "../../../desktop/build/icon.png";
-import memoriaIcon from "../../../desktop/build/app-icons/memoria.png";
-import agendaIcon from "../../../desktop/build/app-icons/agenda.png";
-import arcadiaIcon from "../../../desktop/build/app-icons/arcadia.png";
 import { createDesktopVersionCache } from "../updates-version-cache";
 
 const props = defineProps<{ client: ManagerClient }>();
@@ -25,25 +21,20 @@ const packagesAvailable = ref(false);
 const busy = ref<string | null>(null);
 let timer: ReturnType<typeof setInterval> | undefined;
 
-const apps = [
-  ["com.kosmos.shell", "Kosmos Shell", shellIcon],
-  ["com.kosmos.eden", "Memoria", memoriaIcon],
-  ["com.kosmos.delphi", "Agenda", agendaIcon],
-  ["com.kosmos.arcadia", "Arcadia", arcadiaIcon],
-] as const;
 const loadDesktopVersion = createDesktopVersionCache(() =>
   props.client.call<string>("getAppVersion", undefined, "updates-version"),
 );
 const rows = computed(() =>
-  apps.map(([id, fallbackName, icon]) => {
-    const installedItem = installed.value.find((item) => item.id === id);
-    const listing = listings.value.find((item) => item.id === id);
+  installed.value.map((installedItem) => {
+    const listing = listings.value.find(
+      (item) => listingPackageId(item) === installedItem.id,
+    );
     return {
-      id,
-      name: fallbackName,
-      // Catalog package icons can point to removed files.  The three built-in
-      // apps always use the bundled Kosmos mark and a per-app CSS tint.
-      icon,
+      id: installedItem.id,
+      name: installedItem.name ?? listing?.name ?? installedItem.id,
+      icon: installedItem.icon_path
+        ? `file:///${installedItem.icon_path.replace(/\\/g, "/")}`
+        : desktopIcon,
       listing,
       installedItem,
     };
