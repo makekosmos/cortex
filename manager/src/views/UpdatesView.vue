@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { SettingsList } from "@kosmos/visuals";
+import { SettingsList, Skeleton } from "@kosmos/visuals";
 import type {
   DesktopUpdateState,
   InstalledStoreItem,
@@ -16,6 +16,7 @@ import {
 import UpdatesRow from "./UpdatesRow.vue";
 import desktopIcon from "../../../desktop/build/icon.png";
 import { createDesktopVersionCache } from "../updates-version-cache";
+import { appIcon } from "../app-icons";
 
 const props = defineProps<{ client: ManagerClient }>();
 const desktopVersion = ref("—");
@@ -24,6 +25,7 @@ const listings = ref<StoreListing[]>([]);
 const installed = ref<InstalledStoreItem[]>([]);
 const packagesAvailable = ref(false);
 const busy = ref<string | null>(null);
+const loading = ref(true);
 let timer: ReturnType<typeof setInterval> | undefined;
 
 const loadDesktopVersion = createDesktopVersionCache(() =>
@@ -37,9 +39,7 @@ const rows = computed(() =>
     return {
       id: installedItem.id,
       name: installedItem.name ?? listing?.name ?? installedItem.id,
-      icon: installedItem.icon_path
-        ? `file:///${installedItem.icon_path.replace(/\\/g, "/")}`
-        : desktopIcon,
+      icon: appIcon(installedItem.id, listing?.icon_url, installedItem.icon_path) ?? desktopIcon,
       listing,
       installedItem,
     };
@@ -86,6 +86,7 @@ async function load() {
   if (catalog) listings.value = catalog.listings;
   if (packages) installed.value = packages.packages;
   packagesAvailable.value = catalog !== null && packages !== null;
+  loading.value = false;
 }
 function actionFor(item: (typeof rows.value)[number]) {
   return packageAction(
@@ -151,11 +152,27 @@ async function installDesktop() {
   await load();
 }
 onMounted(() => {
-  void Promise.all([
-    props.client.call("refreshPackageCatalog", undefined, "updates-initial-package-catalog"),
-    props.client.call("refreshStoreCatalog", undefined, "updates-initial-store-catalog"),
-    props.client.call<DesktopUpdateState>("checkDesktopUpdates", undefined, "desktop-update-check"),
-  ]).finally(() => void load());
+  void load()
+    .then(() =>
+      Promise.all([
+        props.client.call(
+          "refreshPackageCatalog",
+          undefined,
+          "updates-initial-package-catalog",
+        ),
+        props.client.call(
+          "refreshStoreCatalog",
+          undefined,
+          "updates-initial-store-catalog",
+        ),
+        props.client.call<DesktopUpdateState>(
+          "checkDesktopUpdates",
+          undefined,
+          "desktop-update-check",
+        ),
+      ]),
+    )
+    .finally(() => void load());
   timer = setInterval(() => void load(), 1500);
 });
 onBeforeUnmount(() => clearInterval(timer));
@@ -188,7 +205,10 @@ onBeforeUnmount(() => clearInterval(timer));
     </SettingsList>
     <hr />
     <h2 class="updates-heading">Приложения Kosmos</h2>
-    <SettingsList>
+    <div v-if="loading && !rows.length" class="flex flex-col gap-px" aria-label="Загрузка обновлений">
+      <Skeleton v-for="index in 5" :key="index" class="h-16 w-full first:rounded-t-lg last:rounded-b-lg" />
+    </div>
+    <SettingsList v-else>
       <UpdatesRow
         v-for="item in rows"
         :key="item.id"

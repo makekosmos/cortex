@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { Button } from "@kosmos/visuals";
 import { Package as PackageIcon } from "@lucide/vue";
 import type { InstalledStoreItem, StoreListing } from "../manager-api";
+import { appIcon } from "../app-icons";
 
 const props = defineProps<{
   listing: StoreListing;
@@ -22,12 +23,9 @@ const emit = defineEmits<{
 }>();
 
 const iconFailed = ref(false);
-const icon = computed(() => {
-  const remote = props.listing.icon_url?.trim();
-  if (remote && /^(https:|http:|file:|data:image\/|\/|\.\/assets\/)/.test(remote)) return remote;
-  const local = props.installed?.icon_path?.trim();
-  return local ? `file:///${local.replace(/\\/g, "/")}` : null;
-});
+const icon = computed(() =>
+  appIcon(props.listing.id, props.listing.icon_url, props.installed?.icon_path),
+);
 const canOpen = computed(
   () => props.development || props.listing.kind === "external-app" || props.installed?.kind === "app",
 );

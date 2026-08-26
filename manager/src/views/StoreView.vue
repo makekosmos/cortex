@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { Button, SettingsList, SettingsRow } from "@kosmos/visuals";
+import { Button, SettingsList, SettingsRow, Skeleton } from "@kosmos/visuals";
 import type { DevelopmentPackage, InstalledStoreItem, StoreListing } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
 import { useStoreCatalog } from "../composables/useStoreCatalog";
@@ -10,10 +10,11 @@ import {
   installedForListing,
 } from "../store-helpers";
 import StoreListingCard from "./StoreListingCard.vue";
+import { appIcon } from "../app-icons";
 
 const props = defineProps<{ client: ManagerClient }>();
 const emit = defineEmits<{ detailChange: [boolean] }>();
-const { snapshot, error, listings, installed, catalogPackages, load } = useStoreCatalog(
+const { snapshot, loading, error, listings, installed, catalogPackages, load } = useStoreCatalog(
   props.client,
 );
 const installing = ref(new Set<string>());
@@ -164,11 +165,11 @@ function backToCatalog() {
 }
 defineExpose({ backToCatalog });
 onMounted(async () => {
-  await Promise.all([
+  await load();
+  void Promise.all([
     props.client.call("refreshPackageCatalog", undefined, "store-initial-package-catalog"),
     props.client.call("refreshStoreCatalog", undefined, "store-initial-catalog"),
-  ]);
-  await load();
+  ]).then(() => load());
   development.value = await props.client.call<DevelopmentPackage[]>("getDevelopmentPackages") ?? [];
 });
 </script>
@@ -177,7 +178,7 @@ onMounted(async () => {
   <section class="stack store-view" aria-label="Маркетплейс">
     <template v-if="detail">
       <section class="store-detail-app-header">
-        <img v-if="detail.listing.icon_url" :src="detail.listing.icon_url" alt="" />
+        <img v-if="appIcon(detail.listing.id, detail.listing.icon_url)" :src="appIcon(detail.listing.id, detail.listing.icon_url)!" alt="" />
         <div class="store-detail-app-copy">
           <h1>{{ detail.listing.name }}</h1>
           <p>{{ detail.summary }}</p>
@@ -196,7 +197,7 @@ onMounted(async () => {
           :key="index"
           class="store-detail-shot"
         >
-          <img v-if="detail.listing.icon_url" :src="detail.listing.icon_url" alt="" />
+          <img v-if="appIcon(detail.listing.id, detail.listing.icon_url)" :src="appIcon(detail.listing.id, detail.listing.icon_url)!" alt="" />
         </div>
       </div>
       <dl class="store-detail-metadata">
@@ -220,7 +221,10 @@ onMounted(async () => {
     </template>
     <template v-else>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
-      <div v-if="rows.length" class="store-grid">
+      <div v-if="loading && !rows.length" class="store-grid" aria-label="Загрузка приложений">
+        <Skeleton v-for="index in 6" :key="index" class="h-24 w-full rounded-lg" />
+      </div>
+      <div v-else-if="rows.length" class="store-grid">
       <StoreListingCard
         v-for="listing in rows"
         :key="listing.id"
