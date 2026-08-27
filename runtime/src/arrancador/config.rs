@@ -220,8 +220,10 @@ mod tests {
             .insert("game-1".into(), "invalid-state".into());
         save_to(&path, &current).unwrap();
 
-        let mut stale = ArrancadorConfig::default();
-        stale.rawg_api_key = Some("updated".into());
+        let stale = ArrancadorConfig {
+            rawg_api_key: Some("updated".into()),
+            ..Default::default()
+        };
         save_with_quarantine_to(&path, &stale, &[]).unwrap();
 
         let loaded = load_from(&path);
