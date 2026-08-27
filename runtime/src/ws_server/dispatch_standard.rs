@@ -24,6 +24,7 @@ pub(super) async fn dispatch_standard(
 ) -> LocalResponse {
     let operation = request.operation.as_str().to_owned();
     let params = request.params;
+    let client = request.client;
     let connection_id = client_id;
     let response = if operation == "diagnostics.snapshot" {
         LocalResponse::ok(
@@ -48,7 +49,7 @@ pub(super) async fn dispatch_standard(
             .await
         {
             Ok(service) => service
-                .handle(rest, params)
+                .handle(rest, params, client)
                 .await
                 .map(LocalResponse::ok)
                 .unwrap_or_else(LocalResponse::err),

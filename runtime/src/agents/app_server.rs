@@ -394,6 +394,18 @@ fn codex_command() -> Command {
 fn now() -> String {
     Utc::now().to_rfc3339()
 }
+
+fn new_consent_token() -> String {
+    let mut bytes = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+fn canonical_project_path(project: &Project) -> Result<String, String> {
+    Path::new(&project.path)
+        .canonicalize()
+        .map(|path| path.to_string_lossy().into_owned())
+        .map_err(|error| format!("project path is unavailable: {error}"))
+}
 fn required_str(value: &Value, key: &str) -> Result<String, String> {
     value
         .get(key)
@@ -618,4 +630,3 @@ fn approval_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Approval> {
         resolved_at: row.get(8)?,
     })
 }
-

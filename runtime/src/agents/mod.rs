@@ -4,6 +4,7 @@
 //! module writes to ARK: durable state lives in the extension-scoped SQLite DB.
 
 use chrono::Utc;
+use rand::RngCore;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -21,6 +22,7 @@ use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
 
 const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
+const FULL_ACCESS_CONSENT_TTL: Duration = Duration::from_secs(60);
 
 include!("definitions.rs");
 include!("app_server.rs");

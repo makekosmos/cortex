@@ -46,6 +46,7 @@ interface ExtensionWindowEntry {
 
 interface ExtensionRendererContext {
   id: string;
+  version?: string;
   windowKey: string;
   source: ExtensionSource;
   manifestPermissions?: readonly string[];
@@ -267,6 +268,7 @@ export async function openExtensionBrowserWindow({
   const wcId = win.webContents.id;
   webContentsToExtensionContext.set(wcId, {
     id,
+    version: manifest.version,
     windowKey,
     source: location.source,
     manifestPermissions: manifest.permissions,

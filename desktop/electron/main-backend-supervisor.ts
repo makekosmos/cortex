@@ -1,4 +1,5 @@
 import type { ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import type { ArkClient } from "@kosmos/ark";
 import type { Instance } from "./instance";
 import { keplerLog } from "./logging";
@@ -41,12 +42,14 @@ export interface MainBackendSupervisor {
 export function createMainBackendSupervisor(
   options: MainBackendSupervisorOptions,
 ): MainBackendSupervisor {
+  const desktopAuthorityCredential = randomBytes(32).toString("hex");
   let backendProc: ChildProcess | null = null;
   let backendLockPath = "";
   let bootInitStarted = false;
   let recoveringBackend = false;
 
   const arkController = createMainArkClientController({
+    desktopAuthorityCredential,
     instance: options.instance,
     isBackendRunning,
     setupPomodoroNotifier: options.setupPomodoroNotifier,
@@ -65,6 +68,7 @@ export function createMainBackendSupervisor(
 
   function spawnBackend(): void {
     const spawned = spawnBackendProcess({
+      desktopAuthorityCredential,
       env: options.env,
       instanceSlot: options.instance.slot,
       log: keplerLog,

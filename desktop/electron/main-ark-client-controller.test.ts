@@ -17,6 +17,8 @@ type TestState =
   | { kind: "launch-failed"; error: { kind: "launch-failed"; message: string } };
 let nextState: TestState = { kind: "connected", lock: engineLock };
 let capturedOptions: JsonRecord | null = null;
+const invokedOperations: JsonRecord[] = [];
+let invokeError: Error | null = null;
 
 class FakeArkClient {
   commands = { list: async () => [] };
@@ -25,6 +27,11 @@ class FakeArkClient {
   }
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
+  async invokeOperation(request: JsonRecord): Promise<JsonRecord> {
+    invokedOperations.push(request);
+    if (invokeError) throw invokeError;
+    return { ok: true };
+  }
   onArkEvent(): () => void {
     return () => {};
   }
@@ -49,11 +56,13 @@ mock.module("./logging", () => ({
   keplerLog: { error: mock(), info: mock(), warn: mock(), setCorrelationId: mock() },
 }));
 mock.module("./main-protocols", () => ({ clearMainProtocolCaches: mock() }));
+mock.module("./extension-ark-ipc", () => ({ setExtensionArkBridge: mock() }));
 
 const { createMainArkClientController } = await import("./main-ark-client-controller");
 
 function createController() {
   return createMainArkClientController({
+    desktopAuthorityCredential: "private-credential",
     // SAFETY: The test supplies the minimal instance shape consumed by the controller.
     instance: { slot: "test" } as never,
     isBackendRunning: () => true,
@@ -71,6 +80,8 @@ function createController() {
 beforeEach(() => {
   nextState = { kind: "connected", lock: engineLock };
   capturedOptions = null;
+  invokedOperations.length = 0;
+  invokeError = null;
 });
 
 test("Desktop creates ArkClient with the Engine lock", async () => {
@@ -81,6 +92,9 @@ test("Desktop creates ArkClient with the Engine lock", async () => {
   expect(capturedOptions?.keplerLock).toBeUndefined();
   expect(capturedOptions?.engineClientClass).toBe("desktop");
   expect(capturedOptions?.engineClientVersion).toBe("9.8.7");
+  expect(invokedOperations).toEqual([
+    { operation: "desktop.authority.bind", params: { credential: "private-credential" } },
+  ]);
 });
 
 test("Desktop fails closed when Engine cannot launch", async () => {
@@ -93,4 +107,14 @@ test("Desktop fails closed when Engine cannot launch", async () => {
 
   expect(controller.getArkClient()).toBeNull();
   expect(capturedOptions).toBeNull();
+});
+
+test("Desktop is not ready when the private authority lease is rejected", async () => {
+  invokeError = new Error("desktop authority denied");
+  const controller = createController();
+  const ready = controller.awaitArkReady().catch((error: Error) => error);
+  await controller.initArkClient();
+
+  expect(controller.getArkClient()).toBeNull();
+  expect((await ready).message).toContain("desktop authority denied");
 });

@@ -14,6 +14,8 @@ const spawnedProcesses: FakeProcess[] = [];
 let resetCalls = 0;
 let restartCalls = 0;
 let lockProcessAlive = false;
+let controllerCredential = "";
+let spawnedCredential = "";
 const controller = {
   awaitArkReady: async () => ({}),
   backendHealthy: async () => false,
@@ -36,14 +38,18 @@ mock.module("./logging", () => ({
 }));
 mock.module("./main-ark-client-controller", () => ({
   ARK_READY_REQUEST_TIMEOUT_MS: 1,
-  createMainArkClientController: () => controller,
+  createMainArkClientController: (options: { desktopAuthorityCredential: string }) => {
+    controllerCredential = options.desktopAuthorityCredential;
+    return controller;
+  },
 }));
 mock.module("./main-backend-process", () => ({
   isBackendLockProcessAlive: () => lockProcessAlive,
   restartBackendProcess: async () => {
     restartCalls += 1;
   },
-  spawnBackendProcess: () => {
+  spawnBackendProcess: (options: { desktopAuthorityCredential: string }) => {
+    spawnedCredential = options.desktopAuthorityCredential;
     const proc = new FakeProcess();
     spawnedProcesses.push(proc);
     return { proc, lockPath: "C:\\Kosmos-test\\kepler.lock.json" };
@@ -57,12 +63,14 @@ beforeEach(() => {
   resetCalls = 0;
   restartCalls = 0;
   lockProcessAlive = false;
+  controllerCredential = "";
+  spawnedCredential = "";
 });
 
 function createTestSupervisor(getIsQuiting: () => boolean) {
   return createMainBackendSupervisor({
     env: {},
-// SAFETY: The surrounding boundary establishes this documented contract.
+    // SAFETY: The surrounding boundary establishes this documented contract.
     instance: { slot: "test" } as never,
     resolveBackendExe: () => "kepler-backend.exe",
     getIsQuiting,
@@ -87,6 +95,8 @@ test("recovery restarts the native core and ensures its supervisor", async () =>
   expect(restartCalls).toBe(1);
   expect(supervisor.isBackendRunning()).toBe(true);
   expect(resetCalls).toBe(1);
+  expect(spawnedCredential).toBe(controllerCredential);
+  expect(spawnedCredential).toMatch(/^[0-9a-f]{64}$/);
 });
 
 test("Electron shutdown does not kill the independent engine", () => {

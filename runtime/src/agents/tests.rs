@@ -58,6 +58,227 @@ mod tests {
             "dangerFullAccess"
         );
     }
+
+    #[test]
+    fn full_access_consent_rejects_every_changed_binding_and_expiry() {
+        let binding = FullAccessConsentBinding {
+            package_id: "daedalus".into(),
+            package_version: "1.2.3".into(),
+            project_id: "project".into(),
+            project_path: "C:\\project".into(),
+            mode: "full-access".into(),
+            model: Some("gpt-test".into()),
+            prompt_hash: "prompt-hash".into(),
+            connection_id: Some(7),
+        };
+        let now = Instant::now();
+        let changed = [
+            FullAccessConsentBinding {
+                package_id: "other-package".into(),
+                ..binding.clone()
+            },
+            FullAccessConsentBinding {
+                package_version: "other-version".into(),
+                ..binding.clone()
+            },
+            FullAccessConsentBinding {
+                project_id: "other-project".into(),
+                ..binding.clone()
+            },
+            FullAccessConsentBinding {
+                model: Some("other-model".into()),
+                ..binding.clone()
+            },
+            FullAccessConsentBinding {
+                prompt_hash: "other-prompt".into(),
+                ..binding.clone()
+            },
+            FullAccessConsentBinding {
+                connection_id: Some(8),
+                ..binding.clone()
+            },
+        ];
+        for changed_binding in changed {
+            let mut registry = FullAccessConsentRegistry::default();
+            let issued = registry.issue_at(binding.clone(), now);
+            let request_id = issued["request_id"].as_str().unwrap();
+            let token = registry
+                .approve_at(request_id, true, Some(7), now)
+                .unwrap()
+                .unwrap();
+            assert!(registry.consume_at(&token, &changed_binding, now).is_err());
+        }
+
+        let mut registry = FullAccessConsentRegistry::default();
+        let issued = registry.issue_at(binding.clone(), now);
+        let request_id = issued["request_id"].as_str().unwrap();
+        assert!(registry
+            .approve_at(request_id, true, Some(8), now)
+            .is_err());
+        let denied_token = registry.pending.get(request_id).unwrap().token.clone();
+        assert!(registry
+            .approve_at(request_id, false, Some(7), now)
+            .unwrap()
+            .is_none());
+        assert!(registry
+            .consume_at(&denied_token, &binding, now)
+            .is_err());
+
+        let mut registry = FullAccessConsentRegistry::default();
+        let issued = registry.issue_at(binding.clone(), now);
+        let request_id = issued["request_id"].as_str().unwrap();
+        let token = registry
+            .approve_at(request_id, true, Some(7), now)
+            .unwrap()
+            .unwrap();
+        assert!(registry
+            .consume_at(&token, &binding, now + FULL_ACCESS_CONSENT_TTL)
+            .unwrap_err()
+            .contains("expired"));
+    }
+
+    #[tokio::test]
+    async fn full_access_consent_is_desktop_bound_single_use_and_audited() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        assert!(StdCommand::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&repo)
+            .status()
+            .unwrap()
+            .success());
+        let service = AgentsService::new(dir.path()).unwrap();
+        let project = service.add_project(repo.to_str().unwrap()).await.unwrap();
+        let mut request = json!({
+            "package_id": "com.kosmos.daedalus",
+            "package_version": "1.2.3",
+            "project_id": project["id"],
+            "prompt": "do not store this prompt",
+            "mode": "full-access",
+            "model": "gpt-test"
+        });
+
+        assert!(service
+            .issue_full_access_consent(
+                request.clone(),
+                &crate::engine_dispatch::DispatchClient::default()
+            )
+            .is_err());
+        assert!(service
+            .create_session({
+                request["full_access_confirmed"] = json!(true);
+                request.clone()
+            })
+            .await
+            .is_err());
+
+        let issued = service
+            .issue_full_access_consent(
+                request.clone(),
+                &crate::engine_dispatch::DispatchClient {
+                    desktop_authorized: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert!(issued.get("consent_nonce").is_none());
+        let request_id = issued["request_id"].as_str().unwrap();
+        let approved = service
+            .approve_full_access_consent(
+                json!({"request_id": request_id, "approved": true}),
+                &crate::engine_dispatch::DispatchClient {
+                    desktop_authorized: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let nonce = approved["consent_nonce"].as_str().unwrap().to_string();
+        assert!(service
+            .approve_full_access_consent(
+                json!({"request_id": request_id, "approved": true}),
+                &crate::engine_dispatch::DispatchClient {
+                    desktop_authorized: true,
+                    ..Default::default()
+                },
+            )
+            .is_err());
+        request["consent_nonce"] = json!(nonce);
+        request["package_version"] = json!("forged");
+        assert!(service.create_session(request.clone()).await.is_err());
+        request["package_version"] = json!("1.2.3");
+        assert!(service.create_session(request).await.is_err());
+
+        let audit: Vec<(String, String)> = service
+            .db()
+            .prepare("SELECT event,result FROM security_audit ORDER BY id")
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            audit,
+            vec![
+                ("consent_issuance".into(), "denied".into()),
+                ("consent_consume".into(), "denied".into()),
+                ("consent_issuance".into(), "issued".into()),
+                ("consent_approval".into(), "accepted".into()),
+                ("consent_approval".into(), "denied".into()),
+                ("consent_mismatch".into(), "denied".into()),
+                ("consent_replay".into(), "denied".into()),
+            ]
+        );
+        let prompt_count: i64 = service
+            .db()
+            .query_row(
+                "SELECT COUNT(*) FROM security_audit WHERE prompt_sha256=?1",
+                ["do not store this prompt"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(prompt_count, 0);
+    }
+
+    #[tokio::test]
+    async fn full_access_consent_fails_closed_when_audit_storage_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        assert!(StdCommand::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&repo)
+            .status()
+            .unwrap()
+            .success());
+        let service = AgentsService::new(dir.path()).unwrap();
+        let project = service.add_project(repo.to_str().unwrap()).await.unwrap();
+        service.db().execute("DROP TABLE security_audit", []).unwrap();
+
+        let error = service
+            .issue_full_access_consent(
+                json!({
+                    "package_id": "com.kosmos.daedalus",
+                    "package_version": "1.2.3",
+                    "project_id": project["id"],
+                    "prompt": "test",
+                    "mode": "full-access"
+                }),
+                &crate::engine_dispatch::DispatchClient {
+                    desktop_authorized: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap_err();
+        assert!(error.contains("security audit failed"));
+        assert!(service
+            .full_access_consents
+            .lock()
+            .unwrap()
+            .pending
+            .is_empty());
+    }
+
     #[test]
     fn timeline_paginates() {
         let dir = tempfile::tempdir().unwrap();

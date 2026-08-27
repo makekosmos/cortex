@@ -146,19 +146,9 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                     == Some("desktop.authority.bind")
                 {
                     let params = request_value.get("params").unwrap_or(&Value::Null);
-                    let denied = params.get("root").is_some()
-                        || params.get("path").is_some()
-                        || params.get("sourceRoot").is_some();
-                    let bind_result = (!denied).then(|| {
-                        desktop_authority.bind(
-                            params.get("sessionId").and_then(Value::as_str).unwrap_or_default(),
-                            params.get("generation").and_then(Value::as_u64).unwrap_or_default(),
-                            hello.pid.unwrap_or_default(),
-                            params.get("credential").and_then(Value::as_str).unwrap_or_default(),
-                            client_id,
-                        )
-                    });
-                    let bound = bind_result.as_ref().is_some_and(Result::is_ok);
+                    let bound = desktop_authority
+                        .bind_request(params, hello.pid.unwrap_or_default(), client_id)
+                        .is_ok();
 
                     let response = serde_json::json!({
                         "id": request_value.get("id").cloned().unwrap_or(Value::Null),

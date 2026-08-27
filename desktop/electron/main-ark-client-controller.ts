@@ -5,9 +5,13 @@ import type { Instance } from "./instance";
 import { keplerDataDir } from "./data-dir";
 import { keplerLog } from "./logging";
 import { clearMainProtocolCaches } from "./main-protocols";
+import { setExtensionArkBridge } from "./extension-ark-ipc";
+import type { JsonValue } from "./extension-permissions";
 type ArkRendererEvent = Parameters<Parameters<ArkClient["onArkEvent"]>[0]>[0];
+type ArkRequest = Parameters<ArkClient["invokeOperation"]>[0];
 
 interface MainArkClientControllerOptions {
+  desktopAuthorityCredential: string;
   instance: Instance;
   isBackendRunning(): boolean;
   setupPomodoroNotifier(options: { arkClient: ArkClient }): void;
@@ -25,6 +29,7 @@ const ARK_INIT_RETRY_DELAYS_MS = [1000, 2000, 5000, 10_000];
 export const ARK_READY_REQUEST_TIMEOUT_MS =
   ARK_CLIENT_LOCK_WAIT_MS + (ARK_INIT_RETRY_DELAYS_MS[0] ?? 0) + ARK_CLIENT_LOCK_WAIT_MS + 5_000;
 const ARK_REQUEST_TIMEOUT_MS = 60 * 1000;
+const DESKTOP_AUTHORITY_BIND_RETRIES = 20;
 const KEPLER_SPACE_ID = "kepler-default";
 
 export interface MainArkClientController {
@@ -58,9 +63,7 @@ export function createMainArkClientController(
       if (w.isDestroyed()) continue;
       try {
         w.webContents.send(event);
-      } catch {
-        // окно может быть в процессе destroy; игнор.
-      }
+      } catch {}
     }
   }
 
@@ -69,9 +72,7 @@ export function createMainArkClientController(
       if (win.isDestroyed()) continue;
       try {
         win.webContents.send("kepler:ark:event", event);
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     }
   }
 
@@ -99,6 +100,7 @@ export function createMainArkClientController(
     arkClientReady = null;
     const prev = arkClient;
     arkClient = null;
+    setExtensionArkBridge({ request: null, subscribe: null });
     clearMainProtocolCaches();
     arkRendererEventsUnsubscribe?.();
     arkRendererEventsUnsubscribe = null;
@@ -179,7 +181,35 @@ export function createMainArkClientController(
         requestTimeoutMs: ARK_REQUEST_TIMEOUT_MS,
       });
       await client.start();
+      try {
+        for (let attempt = 0; ; attempt += 1) {
+          try {
+            await client.invokeOperation({
+              operation: "desktop.authority.bind",
+              params: { credential: options.desktopAuthorityCredential },
+            });
+            break;
+          } catch (error) {
+            if (attempt + 1 >= DESKTOP_AUTHORITY_BIND_RETRIES) throw error;
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+        }
+      } catch (error) {
+        await client.stop().catch(() => {});
+        throw error;
+      }
       arkClient = client;
+      setExtensionArkBridge({
+        // SAFETY: ExtensionArkPermission validates the JSON request before this host bridge call.
+        request: (request) => client.invokeOperation(request as ArkRequest) as Promise<JsonValue>,
+        subscribe: (event, handler) =>
+          client.onArkEvent((payload) => {
+            if (payload.event === event) {
+              // SAFETY: ARK transport events are JSON wire values checked before delivery.
+              handler(payload as JsonValue);
+            }
+          }),
+      });
       arkInitRetryAttempt = 0;
       arkClientReadyResolve?.(client);
       broadcastBackendEvent("kepler:backend:ready");
@@ -252,6 +282,7 @@ export function createMainArkClientController(
       }
       arkClient = null;
     }
+    setExtensionArkBridge({ request: null, subscribe: null });
   }
 
   return {

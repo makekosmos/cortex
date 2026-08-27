@@ -7,6 +7,7 @@ import { registerMainDataSettingsIpc } from "./main-data-ipc-settings";
 import { applyAuthoritativeFocusState } from "./focus-enforcement";
 import type { JsonValue } from "./extension-permissions";
 import { isString } from "../src/shared/runtimeGuards";
+import { assertMainRendererArkRequestAllowed } from "./full-access-consent";
 
 interface MainDataIpcOptions {
   awaitArkReady(): Promise<ArkClient>;
@@ -54,6 +55,10 @@ export function registerMainDataIpc(options: MainDataIpcOptions): void {
     if (!isNonEmptyString(operation)) {
       throw new Error("kepler:ark:request: operation must be a non-empty string");
     }
+    if (params && Object.prototype.hasOwnProperty.call(params, "operation")) {
+      throw new Error("kepler:ark:request: params must not include operation");
+    }
+    assertMainRendererArkRequestAllowed(operation, params?.mode === "full-access");
     const client = await awaitArkReady();
     if (operation === "focus.set_active_state") {
       const result = await applyAuthoritativeFocusState({
@@ -75,7 +80,7 @@ export function registerMainDataIpc(options: MainDataIpcOptions): void {
       });
       return result.result;
     }
-    const req: ArkRequest = params ? { operation, ...params } : { operation };
+    const req: ArkRequest = params ? { ...params, operation } : { operation };
     return client.invokeOperation(req);
   });
 

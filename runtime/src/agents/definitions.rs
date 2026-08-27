@@ -127,6 +127,153 @@ enum AppCommand {
     Shutdown(Option<tokio::sync::oneshot::Sender<()>>),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FullAccessConsentBinding {
+    package_id: String,
+    package_version: String,
+    project_id: String,
+    project_path: String,
+    mode: String,
+    model: Option<String>,
+    prompt_hash: String,
+    connection_id: Option<u64>,
+}
+
+#[derive(Debug, Clone)]
+struct FullAccessConsent {
+    token: String,
+    token_hash: [u8; 32],
+    binding: FullAccessConsentBinding,
+    expires_at: Instant,
+    approved: bool,
+}
+
+#[derive(Debug, Default)]
+struct FullAccessConsentRegistry {
+    pending: HashMap<String, FullAccessConsent>,
+}
+
+impl FullAccessConsentRegistry {
+    fn issue(&mut self, binding: FullAccessConsentBinding) -> Value {
+        self.issue_at(binding, Instant::now())
+    }
+
+    fn issue_at(&mut self, binding: FullAccessConsentBinding, now: Instant) -> Value {
+        self.purge_at(now);
+        let request_id = Uuid::new_v4().to_string();
+        let token = new_consent_token();
+        let expires_at = now + FULL_ACCESS_CONSENT_TTL;
+        let expires_at_rfc3339 = (Utc::now()
+            + chrono::Duration::seconds(FULL_ACCESS_CONSENT_TTL.as_secs() as i64))
+            .to_rfc3339();
+        self.pending.insert(
+            request_id.clone(),
+            FullAccessConsent {
+                token_hash: Sha256::digest(token.as_bytes()).into(),
+                token,
+                binding: binding.clone(),
+                expires_at,
+                approved: false,
+            },
+        );
+        json!({
+            "request_id": request_id,
+            "package_id": binding.package_id,
+            "package_version": binding.package_version,
+            "project_id": binding.project_id,
+            "project_path": binding.project_path,
+            "mode": binding.mode,
+            "model": binding.model,
+            "prompt_sha256": binding.prompt_hash,
+            "expires_at": expires_at_rfc3339,
+        })
+    }
+
+    fn binding(&self, request_id: &str) -> Option<FullAccessConsentBinding> {
+        self.pending.get(request_id).map(|consent| consent.binding.clone())
+    }
+
+    fn approve(
+        &mut self,
+        request_id: &str,
+        approved: bool,
+        connection_id: Option<u64>,
+    ) -> Result<Option<String>, String> {
+        self.approve_at(request_id, approved, connection_id, Instant::now())
+    }
+
+    fn approve_at(
+        &mut self,
+        request_id: &str,
+        approved: bool,
+        connection_id: Option<u64>,
+        now: Instant,
+    ) -> Result<Option<String>, String> {
+        self.purge_at(now);
+        let consent = self
+            .pending
+            .get_mut(request_id)
+            .ok_or_else(|| "full-access consent request expired or not found".to_string())?;
+        if consent.binding.connection_id != connection_id {
+            return Err("full-access consent belongs to another connection".into());
+        }
+        if !approved {
+            self.pending.remove(request_id);
+            return Ok(None);
+        }
+        if consent.approved {
+            return Err("full-access consent already approved".into());
+        }
+        consent.approved = true;
+        Ok(Some(consent.token.clone()))
+    }
+
+    fn consume(
+        &mut self,
+        token: &str,
+        binding: &FullAccessConsentBinding,
+    ) -> Result<(), String> {
+        self.consume_at(token, binding, Instant::now())
+    }
+
+    fn consume_at(
+        &mut self,
+        token: &str,
+        binding: &FullAccessConsentBinding,
+        now: Instant,
+    ) -> Result<(), String> {
+        let token_hash: [u8; 32] = Sha256::digest(token.as_bytes()).into();
+        let request_id = self.pending.iter().find_map(|(request_id, consent)| {
+            (constant_time_equal(&consent.token_hash, &token_hash)).then_some(request_id.clone())
+        });
+        let Some(request_id) = request_id else {
+            return Err("full-access consent token denied".into());
+        };
+        let consent = self
+            .pending
+            .remove(&request_id)
+            .expect("consent found before removal");
+        if consent.expires_at <= now {
+            return Err("full-access consent token expired".into());
+        }
+        if !consent.approved || consent.binding != *binding {
+            return Err("full-access consent token does not match this operation".into());
+        }
+        Ok(())
+    }
+
+    fn purge_at(&mut self, now: Instant) {
+        self.pending.retain(|_, consent| consent.expires_at > now);
+    }
+}
+
+fn constant_time_equal(left: &[u8; 32], right: &[u8; 32]) -> bool {
+    left.iter()
+        .zip(right)
+        .fold(0u8, |diff, (a, b)| diff | (a ^ b))
+        == 0
+}
+
 pub struct AgentsService {
     root: PathBuf,
     db: Mutex<Connection>,
@@ -137,6 +284,7 @@ pub struct AgentsService {
     recent_events: Mutex<VecDeque<Value>>,
     restored: AtomicBool,
     streams: Mutex<HashMap<(String, String), StreamBuffer>>,
+    full_access_consents: Mutex<FullAccessConsentRegistry>,
 }
 
 impl AgentsService {
@@ -180,6 +328,19 @@ impl AgentsService {
              CREATE TABLE IF NOT EXISTS runtime_meta (
                 key TEXT PRIMARY KEY, value INTEGER NOT NULL
              );
+             CREATE TABLE IF NOT EXISTS security_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event TEXT NOT NULL,
+                result TEXT NOT NULL,
+                package_id TEXT,
+                package_version TEXT,
+                project_id TEXT,
+                project_path TEXT,
+                mode TEXT,
+                model TEXT,
+                prompt_sha256 TEXT,
+                created_at TEXT NOT NULL
+             );
              INSERT OR IGNORE INTO runtime_meta(key,value) VALUES('event_seq',0);",
         )
         .map_err(|e| e.to_string())?;
@@ -200,6 +361,7 @@ impl AgentsService {
             recent_events: Mutex::new(VecDeque::with_capacity(512)),
             restored: AtomicBool::new(false),
             streams: Mutex::new(HashMap::new()),
+            full_access_consents: Mutex::new(FullAccessConsentRegistry::default()),
         }))
     }
 
@@ -271,7 +433,12 @@ impl AgentsService {
         }
     }
 
-    pub async fn handle(self: &Arc<Self>, op: &str, params: Value) -> Result<Value, String> {
+    pub async fn handle(
+        self: &Arc<Self>,
+        op: &str,
+        params: Value,
+        client: crate::engine_dispatch::DispatchClient,
+    ) -> Result<Value, String> {
         self.restore_active_sessions().await;
         match op {
             "projects.list" => Ok(json!(self.list_projects()?)),
@@ -286,7 +453,14 @@ impl AgentsService {
             "sessions.get" => Ok(json!(
                 self.get_session(&required_str(&params, "session_id")?)?
             )),
-            "sessions.create" => self.create_session(params).await,
+            "sessions.issue_full_access_consent" => {
+                self.issue_full_access_consent(params, &client)
+            }
+            "sessions.approve_full_access_consent"
+            | "sessions.respond_full_access_consent" => {
+                self.approve_full_access_consent(params, &client)
+            }
+            "sessions.create" => self.create_session_with_client(params, &client).await,
             "sessions.send" => {
                 self.send(
                     &required_str(&params, "session_id")?,
@@ -424,8 +598,19 @@ impl AgentsService {
     }
 
     async fn create_session(self: &Arc<Self>, input: Value) -> Result<Value, String> {
+        self.create_session_with_client(input, &crate::engine_dispatch::DispatchClient::default())
+            .await
+    }
+
+    async fn create_session_with_client(
+        self: &Arc<Self>,
+        input: Value,
+        client: &crate::engine_dispatch::DispatchClient,
+    ) -> Result<Value, String> {
         let project_id = required_str(&input, "project_id")?;
         let prompt = required_str(&input, "prompt")?;
+        let package_id = input.get("package_id").and_then(Value::as_str).map(str::to_string);
+        let package_version = input.get("package_version").and_then(Value::as_str).map(str::to_string);
         let mode = input
             .get("mode")
             .and_then(Value::as_str)
@@ -434,17 +619,62 @@ impl AgentsService {
         if !matches!(mode.as_str(), "default" | "auto-review" | "full-access") {
             return Err("Неизвестный режим".into());
         }
-        if mode == "full-access"
-            && input.get("full_access_confirmed").and_then(Value::as_bool) != Some(true)
-        {
-            return Err("Для full-access требуется явное подтверждение".into());
-        }
         let project = self
             .list_projects()?
             .into_iter()
             .find(|p| p.id == project_id)
             .ok_or("Проект не найден")?;
-        let repo = PathBuf::from(&project.path);
+        let project_path = canonical_project_path(&project)?;
+        if mode == "full-access" {
+            let nonce = match input
+                .get("consent_nonce")
+                .and_then(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+            {
+                Some(nonce) => nonce,
+                None => {
+                    let binding = FullAccessConsentBinding {
+                        package_id: package_id.clone().unwrap_or_default(),
+                        package_version: package_version.clone().unwrap_or_default(),
+                        project_id: project_id.clone(),
+                        project_path: project_path.clone(),
+                        mode: mode.clone(),
+                        model: input.get("model").and_then(Value::as_str).map(str::to_string),
+                        prompt_hash: hex_hash(&prompt),
+                        connection_id: client.connection_id,
+                    };
+                    self.audit_security("consent_consume", "denied", Some(&binding))?;
+                    return Err("full-access consent required".into());
+                }
+            };
+            let expected = FullAccessConsentBinding {
+                package_id: package_id.ok_or("full-access package_id required")?,
+                package_version: package_version.ok_or("full-access package_version required")?,
+                project_id: project_id.clone(),
+                project_path: project_path.clone(),
+                mode: mode.clone(),
+                model: input.get("model").and_then(Value::as_str).map(str::to_string),
+                prompt_hash: hex_hash(&prompt),
+                connection_id: client.connection_id,
+            };
+            let mut consents = self
+                .full_access_consents
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if let Err(error) = consents.consume(nonce, &expected) {
+                let event = if error.contains("expired") {
+                    "consent_expiry"
+                } else if error.contains("match") {
+                    "consent_mismatch"
+                } else {
+                    "consent_replay"
+                };
+                self.audit_security(event, "denied", Some(&expected))?;
+                return Err(error);
+            }
+            self.audit_security("consent_consume", "accepted", Some(&expected))?;
+        }
+        let repo = PathBuf::from(&project_path);
         let base_commit = git_output(&repo, &["rev-parse", "HEAD"])
             .await?
             .trim()
@@ -455,7 +685,7 @@ impl AgentsService {
         let worktree = self
             .root
             .join("worktrees")
-            .join(hex_hash(&project.path))
+            .join(hex_hash(&project_path))
             .join(&id);
         if let Some(parent) = worktree.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -499,6 +729,134 @@ impl AgentsService {
             return Err(error);
         }
         Ok(json!(self.get_session(&id)?))
+    }
+
+    fn issue_full_access_consent(
+        &self,
+        input: Value,
+        client: &crate::engine_dispatch::DispatchClient,
+    ) -> Result<Value, String> {
+        if !client.desktop_authorized {
+            self.audit_security("consent_issuance", "denied", None)?;
+            return Err("desktop authority denied".into());
+        }
+        let binding = self.full_access_consent_binding(&input, client)?;
+        let result = self
+            .full_access_consents
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .issue(binding.clone());
+        if let Err(error) = self.audit_security("consent_issuance", "issued", Some(&binding)) {
+            if let Some(request_id) = result.get("request_id").and_then(Value::as_str) {
+                self.full_access_consents
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .pending
+                    .remove(request_id);
+            }
+            return Err(error);
+        }
+        Ok(result)
+    }
+
+    fn approve_full_access_consent(
+        &self,
+        input: Value,
+        client: &crate::engine_dispatch::DispatchClient,
+    ) -> Result<Value, String> {
+        if !client.desktop_authorized {
+            self.audit_security("consent_approval", "denied", None)?;
+            return Err("desktop authority denied".into());
+        }
+        let request_id = required_str(&input, "request_id")?;
+        let approved = input
+            .get("approved")
+            .and_then(Value::as_bool)
+            .ok_or("missing 'approved'")?;
+        let mut consents = self
+            .full_access_consents
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let binding = consents.binding(&request_id);
+        let result = consents.approve(&request_id, approved, client.connection_id);
+        drop(consents);
+        match result {
+            Ok(token) => {
+                if let Err(error) = self.audit_security(
+                    "consent_approval",
+                    if approved { "accepted" } else { "declined" },
+                    binding.as_ref(),
+                ) {
+                    self.full_access_consents
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .pending
+                        .remove(&request_id);
+                    return Err(error);
+                }
+                Ok(json!({
+                    "consent_nonce": token,
+                    "approved": approved,
+                }))
+            }
+            Err(error) => {
+                self.audit_security("consent_approval", "denied", binding.as_ref())?;
+                Err(error)
+            }
+        }
+    }
+
+    fn full_access_consent_binding(
+        &self,
+        input: &Value,
+        client: &crate::engine_dispatch::DispatchClient,
+    ) -> Result<FullAccessConsentBinding, String> {
+        let mode = required_str(input, "mode")?;
+        if mode != "full-access" {
+            return Err("full-access consent requires mode full-access".into());
+        }
+        let project_id = required_str(input, "project_id")?;
+        let project = self
+            .list_projects()?
+            .into_iter()
+            .find(|project| project.id == project_id)
+            .ok_or("project not found")?;
+        Ok(FullAccessConsentBinding {
+            package_id: required_str(input, "package_id")?,
+            package_version: required_str(input, "package_version")?,
+            project_id,
+            project_path: canonical_project_path(&project)?,
+            mode,
+            model: input
+                .get("model")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            prompt_hash: hex_hash(&required_str(input, "prompt")?),
+            connection_id: client.connection_id,
+        })
+    }
+
+    fn audit_security(
+        &self,
+        event: &str,
+        result: &str,
+        binding: Option<&FullAccessConsentBinding>,
+    ) -> Result<(), String> {
+        self.db().execute(
+            "INSERT INTO security_audit(event,result,package_id,package_version,project_id,project_path,mode,model,prompt_sha256,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+            params![
+                event,
+                result,
+                binding.map(|value| value.package_id.as_str()),
+                binding.map(|value| value.package_version.as_str()),
+                binding.map(|value| value.project_id.as_str()),
+                binding.map(|value| value.project_path.as_str()),
+                binding.map(|value| value.mode.as_str()),
+                binding.and_then(|value| value.model.as_deref()),
+                binding.map(|value| value.prompt_hash.as_str()),
+                now(),
+            ],
+        ).map(|_| ()).map_err(|error| format!("security audit failed: {error}"))
     }
 
     async fn spawn_runtime(self: &Arc<Self>, session: Session) -> Result<(), String> {
@@ -1100,4 +1458,3 @@ impl Drop for AgentsService {
         }
     }
 }
-

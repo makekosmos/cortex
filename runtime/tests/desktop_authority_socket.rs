@@ -78,7 +78,7 @@ async fn connect(address: SocketAddr, pid: u32) -> (Socket, Value) {
     socket
         .send(Message::Text(
             json!({
-                "kind":"hello", "protocolVersion":"1.0.0", "token":GLOBAL_TOKEN,
+                "kind":"hello", "apiVersion":"1.0.0", "token":GLOBAL_TOKEN,
                 "pid":pid, "clientClass":"kosmos-desktop", "clientVersion":"test"
             })
             .to_string(),
@@ -136,7 +136,7 @@ async fn real_socket_desktop_authority_requires_exact_pid_credential_and_single_
             &mut socket,
             "bind",
             "desktop.authority.bind",
-            json!({"sessionId":SESSION,"generation":GENERATION,"credential":"private-credential"})
+            json!({"credential":"private-credential"})
         )
         .await["ok"],
         true
@@ -226,10 +226,7 @@ async fn real_socket_generation_replacement_revokes_old_owner_and_is_idempotent(
 async fn wait_for_empty(fixture: &Fixture) {
     tokio::time::timeout(std::time::Duration::from_secs(2), async {
         loop {
-            if fixture.authority.len() == 0
-                && fixture.grants.len() == 0
-                && fixture.snapshots.len() == 0
-            {
+            if fixture.grants.len() == 0 && fixture.snapshots.len() == 0 {
                 break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;
@@ -248,7 +245,13 @@ async fn real_socket_wrong_pid_is_denied_at_bind_and_has_no_authority() {
     let mut fixture = fixture().await;
     let server = fixture.server.take().unwrap();
     fixture.authority.revoke_generation(SESSION, GENERATION);
-    let child = Command::new("sleep").arg("5").spawn().unwrap();
+    #[cfg(windows)]
+    let mut child = Command::new("cmd")
+        .args(["/C", "ping -n 6 127.0.0.1 >NUL"])
+        .spawn()
+        .unwrap();
+    #[cfg(not(windows))]
+    let mut child = Command::new("sleep").arg("5").spawn().unwrap();
     fixture
         .authority
         .register(SESSION.into(), GENERATION, child.id(), "lease-credential");
@@ -266,7 +269,7 @@ async fn real_socket_wrong_pid_is_denied_at_bind_and_has_no_authority() {
     assert_eq!(denied["error"], "desktop authority denied");
     drop(socket);
     fixture.authority.revoke_generation(SESSION, GENERATION);
-    let _ = Command::new("kill").arg(child.id().to_string()).status();
+    let _ = child.kill();
     wait_for_empty(&fixture).await;
     task.abort();
 }

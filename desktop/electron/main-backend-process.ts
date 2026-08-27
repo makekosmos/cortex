@@ -10,6 +10,7 @@ interface BackendProcessLogger {
 }
 
 interface SpawnBackendProcessArgs {
+  desktopAuthorityCredential: string;
   env: NodeJS.ProcessEnv;
   instanceSlot: string;
   log: BackendProcessLogger;
@@ -22,6 +23,7 @@ export interface SpawnedBackendProcess {
 }
 
 export function spawnBackendProcess({
+  desktopAuthorityCredential,
   env,
   instanceSlot,
   log,
@@ -46,6 +48,8 @@ export function spawnBackendProcess({
     KOSMOS_TEST_MODE: testModeEnabled ? "1" : env.KOSMOS_TEST_MODE,
     KOSMOS_HEADLESS: headlessEnabled ? "1" : env.KOSMOS_HEADLESS,
     KEPLER_INSTANCE: instanceSlot,
+    KOSMOS_DESKTOP_ROLE_CREDENTIAL: desktopAuthorityCredential,
+    KOSMOS_DESKTOP_ROLE_PID: String(process.pid),
     RUST_BACKTRACE: "1",
   };
   if (testGroqApiKey) {

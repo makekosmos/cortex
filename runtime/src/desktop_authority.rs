@@ -76,6 +76,59 @@ impl DesktopAuthorityRegistry {
         Ok(())
     }
 
+    pub fn bind_credential(
+        &self,
+        electron_pid: u32,
+        credential: &str,
+        connection_id: u64,
+    ) -> Result<(), AuthorityError> {
+        let credential_hash = hash_credential(credential);
+        let mut leases = self.leases.lock().unwrap_or_else(|p| p.into_inner());
+        let lease = leases
+            .values_mut()
+            .find(|lease| {
+                lease.electron_pid == electron_pid
+                    && constant_time_equal(&lease.credential_hash, &credential_hash)
+            })
+            .ok_or(AuthorityError::InvalidCredential)?;
+        if lease.bound_connection.is_some() {
+            return Err(AuthorityError::AlreadyBound);
+        }
+        lease.bound_connection = Some(connection_id);
+        Ok(())
+    }
+
+    pub fn bind_request(
+        &self,
+        params: &serde_json::Value,
+        electron_pid: u32,
+        connection_id: u64,
+    ) -> Result<(), AuthorityError> {
+        if params.get("root").is_some()
+            || params.get("path").is_some()
+            || params.get("sourceRoot").is_some()
+        {
+            return Err(AuthorityError::InvalidCredential);
+        }
+        let credential = params
+            .get("credential")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default();
+        match (
+            params.get("sessionId").and_then(serde_json::Value::as_str),
+            params.get("generation").and_then(serde_json::Value::as_u64),
+        ) {
+            (Some(session_id), Some(generation)) => self.bind(
+                session_id,
+                generation,
+                electron_pid,
+                credential,
+                connection_id,
+            ),
+            _ => self.bind_credential(electron_pid, credential, connection_id),
+        }
+    }
+
     pub fn disconnect(&self, connection_id: u64) {
         let mut leases = self.leases.lock().unwrap_or_else(|p| p.into_inner());
         for lease in leases.values_mut() {
@@ -182,5 +235,21 @@ mod tests {
             registry.bind("session", 1, 123, "kosmos-desktop", 1),
             Err(AuthorityError::InvalidCredential)
         );
+    }
+
+    #[test]
+    fn private_credential_can_bind_without_exposing_supervisor_identity() {
+        let registry = DesktopAuthorityRegistry::new();
+        registry.register("session".into(), 3, 123, "private");
+        assert_eq!(
+            registry.bind_credential(999, "private", 1),
+            Err(AuthorityError::InvalidCredential)
+        );
+        assert_eq!(
+            registry.bind_credential(123, "wrong", 1),
+            Err(AuthorityError::InvalidCredential)
+        );
+        assert_eq!(registry.bind_credential(123, "private", 1), Ok(()));
+        assert!(registry.authorize(1));
     }
 }

@@ -1,4 +1,4 @@
-import { ipcMain, type WebContents } from "electron";
+import { BrowserWindow, ipcMain, type WebContents } from "electron";
 import {
   assertExtensionArkPermission,
   assertExtensionEventPermission,
@@ -7,12 +7,15 @@ import {
   type JsonValue,
 } from "./extension-permissions";
 import { applyAuthoritativeFocusState } from "./focus-enforcement";
+import { isFullAccessConsentOperation, withoutFullAccessConfirmation } from "./full-access-consent";
+import { createFullAccessSession } from "./full-access-consent-ipc";
 
 export type ArkRequestFn = (req: JsonRecord) => Promise<JsonValue>;
 export type ArkSubscribeFn = (event: string, handler: (payload: JsonValue) => void) => () => void;
 
 interface ExtensionArkContext {
   id: string;
+  version?: string;
   source: ExtensionSource;
   manifestPermissions?: readonly string[];
 }
@@ -109,6 +112,9 @@ export function registerExtensionArkIpc({ contextForSender }: ExtensionArkIpcOpt
       if (params && Object.prototype.hasOwnProperty.call(params, "operation")) {
         throw new Error("[kepler-shell] extension ARK params must not include operation");
       }
+      if (isFullAccessConsentOperation(operation)) {
+        throw new Error("[kepler-shell] full-access consent is host-only");
+      }
       await assertExtensionArkPermission({
         extensionId: context.id,
         source: context.source,
@@ -125,7 +131,23 @@ export function registerExtensionArkIpc({ contextForSender }: ExtensionArkIpcOpt
           return isString(typeId) ? typeId : null;
         },
       });
-      const req: JsonRecord = { ...params, operation };
+      if (operation === "agents.sessions.create" && params?.mode === "full-access") {
+        const requesterFrame = e.senderFrame;
+        if (!requesterFrame) {
+          throw new Error("FULL_ACCESS_DECLINED: requesting renderer is unavailable");
+        }
+        return createFullAccessSession(
+          context,
+          params,
+          request,
+          BrowserWindow.fromWebContents(e.sender),
+          requesterFrame,
+        );
+      }
+      const req: JsonRecord = {
+        ...withoutFullAccessConfirmation(params),
+        operation,
+      };
       if (operation === "focus.set_active_state") {
         return applyExtensionFocusState(params, request);
       }

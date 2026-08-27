@@ -78,6 +78,7 @@ app.on("before-quit", () => {
 });
 interface ExtensionRendererContext {
   id: string;
+  version?: string;
   windowKey: string;
   source: ExtensionPermissionSource;
   manifestPermissions?: readonly string[];
