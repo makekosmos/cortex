@@ -40,12 +40,14 @@ use serde_json::json;
 use tokio::sync::broadcast;
 use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS,
-    KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
+    GetAsyncKeyState, GetKeyboardLayout, SendInput, VkKeyScanExW, INPUT, INPUT_0, INPUT_KEYBOARD,
+    KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_CONTROL, VK_LWIN, VK_MENU,
+    VK_RWIN, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, GetMessageW, SetWindowsHookExW, UnhookWindowsHookEx, HC_ACTION, HHOOK,
-    KBDLLHOOKSTRUCT, MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
+    CallNextHookEx, GetForegroundWindow, GetMessageW, GetWindowThreadProcessId, SetWindowsHookExW,
+    UnhookWindowsHookEx, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, MSG, WH_KEYBOARD_LL, WM_KEYDOWN,
+    WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -286,7 +288,7 @@ fn handle_event(vk: u32, is_down: bool) -> bool {
         let Some(m) = guard.matcher else {
             return false;
         };
-        if vk != m.vk {
+        if !main_key_matches(m.vk, vk) {
             return false;
         }
         if is_down && guard.pressed {
@@ -336,6 +338,49 @@ fn handle_event(vk: u32, is_down: bool) -> bool {
         swallow_win_shortcut_if_active();
     }
     true
+}
+
+fn main_key_matches(expected_vk: u32, event_vk: u32) -> bool {
+    if expected_vk == event_vk {
+        return true;
+    }
+    layout_key_matches(
+        event_vk,
+        oem_symbol(expected_vk).and_then(foreground_layout_vk),
+    )
+}
+
+fn layout_key_matches(event_vk: u32, layout_vk: Option<u32>) -> bool {
+    layout_vk == Some(event_vk)
+}
+
+fn oem_symbol(vk: u32) -> Option<char> {
+    match vk {
+        0xBA => Some(';'),
+        0xBF => Some('/'),
+        0xC0 => Some('`'),
+        0xDB => Some('['),
+        0xDC => Some('\\'),
+        0xDD => Some(']'),
+        0xDE => Some('\''),
+        0xBC => Some(','),
+        0xBE => Some('.'),
+        0xBD => Some('-'),
+        0xBB => Some('='),
+        _ => None,
+    }
+}
+
+fn foreground_layout_vk(symbol: char) -> Option<u32> {
+    unsafe {
+        let foreground = GetForegroundWindow();
+        if foreground.0.is_null() {
+            return None;
+        }
+        let thread_id = GetWindowThreadProcessId(foreground, None);
+        let mapped = VkKeyScanExW(symbol as u16, GetKeyboardLayout(thread_id));
+        (mapped != -1).then_some((mapped as u16 & 0xff) as u32)
+    }
 }
 
 fn check_mod(required: bool, vk: u16) -> bool {
@@ -523,6 +568,17 @@ mod tests {
         assert!(m.ctrl);
         assert!(m.shift);
         assert!(!m.alt);
+    }
+
+    #[test]
+    fn oem_symbols_can_match_their_current_layout_virtual_key() {
+        assert_eq!(oem_symbol(0xBA), Some(';'));
+        assert!(main_key_matches(0xBA, 0xBA));
+    }
+
+    #[test]
+    fn layout_virtual_key_is_accepted_for_oem_symbol() {
+        assert!(layout_key_matches(0x34, Some(0x34)));
     }
 
     #[test]
