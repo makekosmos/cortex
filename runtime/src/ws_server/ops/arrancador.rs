@@ -56,6 +56,7 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
             let mut updated = 0u32;
             let mut skipped = 0u32;
             let mut errors: Vec<String> = Vec::new();
+            let mut cleared_quarantine_ids = Vec::new();
 
             for game in &discovered {
                 let existing_match = existing.iter().find(|obj| {
@@ -97,7 +98,7 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
                                 save_paths: Vec::new(),
                             },
                         );
-                        cfg.quarantined_local_games.remove(&id);
+                        cleared_quarantine_ids.push(id.clone());
                         if is_new {
                             added += 1;
                         } else {
@@ -110,7 +111,9 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
                     }
                 }
             }
-            if let Err(e) = crate::arrancador::config::save(&cfg) {
+            if let Err(e) =
+                crate::arrancador::config::save_with_quarantine(&cfg, &cleared_quarantine_ids)
+            {
                 return LocalResponse::err(format!(
                     "arrancador.scan: local state save failed: {e}"
                 ));
@@ -163,6 +166,7 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
                 }
             };
             let mut cfg = crate::arrancador::config::load();
+            let mut cleared_quarantine_ids = Vec::new();
             let source_app_id = exe_path.to_string_lossy().to_string();
             let existing_match = existing.iter().find(|obj| {
                 cfg.local_games
@@ -201,8 +205,11 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
                                 .collect(),
                         },
                     );
-                    cfg.quarantined_local_games.remove(&id);
-                    if let Err(e) = crate::arrancador::config::save(&cfg) {
+                    cleared_quarantine_ids.push(id.clone());
+                    if let Err(e) = crate::arrancador::config::save_with_quarantine(
+                        &cfg,
+                        &cleared_quarantine_ids,
+                    ) {
                         return LocalResponse::err(format!(
                             "arrancador.add_manual: local state save failed: {e}"
                         ));

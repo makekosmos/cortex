@@ -69,8 +69,15 @@ pub fn load_from(path: &Path) -> ArrancadorConfig {
 }
 
 pub fn save(cfg: &ArrancadorConfig) -> std::io::Result<()> {
+    save_with_quarantine(cfg, &[])
+}
+
+pub fn save_with_quarantine(
+    cfg: &ArrancadorConfig,
+    cleared_game_ids: &[String],
+) -> std::io::Result<()> {
     let _guard = CONFIG_WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    save_to(&config_path(), cfg)
+    save_with_quarantine_to(&config_path(), cfg, cleared_game_ids)
 }
 
 pub fn record_quarantine(game_id: &str, code: &str) -> std::io::Result<()> {
@@ -79,6 +86,25 @@ pub fn record_quarantine(game_id: &str, code: &str) -> std::io::Result<()> {
     cfg.quarantined_local_games
         .insert(game_id.to_string(), code.to_string());
     save_to(&config_path(), &cfg)
+}
+
+fn save_with_quarantine_to(
+    path: &Path,
+    cfg: &ArrancadorConfig,
+    cleared_game_ids: &[String],
+) -> std::io::Result<()> {
+    let latest = load_from(path);
+    let mut merged = cfg.clone();
+    for (game_id, code) in latest.quarantined_local_games {
+        merged
+            .quarantined_local_games
+            .entry(game_id)
+            .or_insert(code);
+    }
+    for game_id in cleared_game_ids {
+        merged.quarantined_local_games.remove(game_id);
+    }
+    save_to(path, &merged)
 }
 
 pub fn save_to(path: &Path, cfg: &ArrancadorConfig) -> std::io::Result<()> {
@@ -182,5 +208,30 @@ mod tests {
         std::fs::write(&path, "{not json").unwrap();
         let cfg = load_from(&path);
         assert!(cfg.rawg_api_key.is_none());
+    }
+
+    #[test]
+    fn save_preserves_quarantine_from_a_newer_snapshot() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("cfg.json");
+        let mut current = ArrancadorConfig::default();
+        current
+            .quarantined_local_games
+            .insert("game-1".into(), "invalid-state".into());
+        save_to(&path, &current).unwrap();
+
+        let mut stale = ArrancadorConfig::default();
+        stale.rawg_api_key = Some("updated".into());
+        save_with_quarantine_to(&path, &stale, &[]).unwrap();
+
+        let loaded = load_from(&path);
+        assert_eq!(loaded.rawg_api_key.as_deref(), Some("updated"));
+        assert_eq!(
+            loaded
+                .quarantined_local_games
+                .get("game-1")
+                .map(String::as_str),
+            Some("invalid-state")
+        );
     }
 }
