@@ -364,6 +364,7 @@ async fn setup() -> Result<SetupState, DynError> {
         correlation_id = %correlation_id,
         "kepler-backend starting"
     );
+    kepler_backend::arrancador::sqoba::recover_pending_at_startup();
 
     let singleton_path = lock_dir.join("kepler-singleton.lock.db");
 

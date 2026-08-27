@@ -74,7 +74,13 @@ impl<'a> GameFacade<'a> {
     }
 
     pub fn sqoba_metadata(game: &GameRecord) -> (String, Option<Vec<std::path::PathBuf>>) {
-        (game.title.clone(), None)
+        let paths = game
+            .local
+            .save_paths
+            .iter()
+            .map(std::path::PathBuf::from)
+            .collect::<Vec<_>>();
+        (game.title.clone(), (!paths.is_empty()).then_some(paths))
     }
 
     fn projection(game: GameRecord) -> ArrancadorGameProjection {

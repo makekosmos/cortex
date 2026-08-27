@@ -95,6 +95,18 @@ pub(super) async fn handle_arrancador_external_op(
             };
             let (game_name, manual_paths) =
                 crate::arrancador::game_facade::GameFacade::sqoba_metadata(&game);
+            let cfg = crate::arrancador::config::load();
+            let manual_paths = manual_paths.or_else(|| {
+                cfg.local_games.get(&game_id).and_then(|local| {
+                    (!local.save_paths.is_empty()).then(|| {
+                        local
+                            .save_paths
+                            .iter()
+                            .map(std::path::PathBuf::from)
+                            .collect::<Vec<_>>()
+                    })
+                })
+            });
             match crate::arrancador::sqoba::backup(&game_id, &game_name, manual_paths.as_deref()) {
                 Ok(b) => match serde_json::to_value(&b) {
                     Ok(v) => LocalResponse::ok(v),
@@ -125,6 +137,11 @@ pub(super) async fn handle_arrancador_external_op(
                 Some(s) => s,
                 None => return LocalResponse::err("arrancador.sqoba.restore: missing 'game_id'"),
             };
+            if let Err(error) = game_facade.object(game_id).await {
+                return LocalResponse::err(format!(
+                    "arrancador.sqoba.restore: game facade: {error}"
+                ));
+            }
             let path = match crate::arrancador::sqoba::resolve_backup_path(game_id, &backup_id) {
                 Some(p) => p,
                 None => {
@@ -134,14 +151,9 @@ pub(super) async fn handle_arrancador_external_op(
                     ));
                 }
             };
-            match crate::arrancador::sqoba::restore(&path) {
+            match crate::arrancador::sqoba::restore_for_game(&path, Some(game_id)) {
                 Ok(r) => match serde_json::to_value(&r) {
-                    Ok(mut v) => {
-                        if let Some(obj) = v.as_object_mut() {
-                            obj.insert("ok".into(), serde_json::Value::Bool(r.errors.is_empty()));
-                        }
-                        LocalResponse::ok(v)
-                    }
+                    Ok(v) => LocalResponse::ok(v),
                     Err(e) => {
                         LocalResponse::err(format!("arrancador.sqoba.restore: serialize: {e}"))
                     }
