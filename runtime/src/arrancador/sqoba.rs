@@ -870,9 +870,9 @@ fn validate_source_roots_with_options(
     let mut seen = HashSet::new();
     let mut canonical: Vec<PathBuf> = Vec::with_capacity(paths.len());
     for path in paths {
-        if (!require_existing && !path.is_absolute())
-            || (!require_existing
-                && path
+        if !require_existing
+            && (!path.is_absolute()
+                || path
                     .components()
                     .any(|component| matches!(component, Component::CurDir | Component::ParentDir)))
         {
@@ -1826,7 +1826,7 @@ mod tests {
         let backup = backup_with_root(
             "g-missing",
             "GameMissing",
-            Some(&[src.clone()]),
+            Some(std::slice::from_ref(&src)),
             &dest_root,
             10,
         )
