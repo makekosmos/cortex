@@ -70,9 +70,7 @@ const USAGE_WRITE_OPS = new Set([
   "delete_usage_event",
 ]);
 
-function isTrustedSource(source: ExtensionSource): boolean {
-  return TRUSTED_SOURCES.has(source);
-}
+const isTrustedSource = (source: ExtensionSource): boolean => TRUSTED_SOURCES.has(source);
 
 function hasCapability(granted: readonly string[] | undefined, required: string): boolean {
   if (!granted || granted.length === 0) return false;
@@ -104,10 +102,7 @@ function objectTypeFromParams(params: JsonRecord | undefined): string | null {
   return isString(raw) && raw.length > 0 ? raw : null;
 }
 
-function commandIdsFromParams(
-  operation: string,
-  params: JsonRecord | undefined,
-): string[] {
+function commandIdsFromParams(operation: string, params: JsonRecord | undefined): string[] {
   if (operation === "commands.invoke") {
     return isString(params?.id) ? [params.id] : [];
   }
@@ -158,9 +153,13 @@ function requiredCapabilities(operation: string, params?: JsonRecord): string[] 
   if (operation.startsWith("focus.")) return ["focus.control"];
   if (operation.startsWith("pomodoro.")) return ["pomodoro.control", "focus.control"];
   if (operation === "arrancador.add_manual") return ["objects.write:game_obj"];
-  if (operation === "arrancador.scan" || operation === "arrancador.rawg.search") {
+  if (
+    operation === "arrancador.list" ||
+    operation === "arrancador.read" ||
+    operation === "arrancador.scan" ||
+    operation === "arrancador.rawg.search"
+  )
     return ["arrancador.scan"];
-  }
   if (operation.startsWith("arrancador.rawg.")) return ["objects.write:game_obj"];
   if (operation.startsWith("arrancador.sqoba.")) return ["arrancador.launch"];
   if (operation.startsWith("arrancador.config.")) return ["arrancador.scan"];

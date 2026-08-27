@@ -2,6 +2,7 @@
 use super::game_facade::GameFacade;
 use ark_core::canonical_types::game::{GameProviderRef, GameRecord, GameUpsertCommand};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use thiserror::Error;
 
 const RAWG_BASE_URL: &str = "https://api.rawg.io/api";
@@ -161,6 +162,11 @@ async fn apply_to_game_with_base<F: GameMutationFacade>(
         .mutation_record(game_id)
         .await
         .map_err(RawgError::ArkHost)?;
+    let mut extensions = existing.extensions.as_object().cloned().unwrap_or_default();
+    extensions.insert("rawgId".into(), json!(rawg_id));
+    if let Some(background_image) = details.background_image.as_deref() {
+        extensions.insert("backgroundImage".into(), json!(background_image));
+    }
     let command = GameUpsertCommand {
         id: existing.id.clone(),
         title: existing.title.clone(),
@@ -178,7 +184,7 @@ async fn apply_to_game_with_base<F: GameMutationFacade>(
             .clone()
             .or(details.description.clone())
             .or(existing.description.clone()),
-        extensions: existing.extensions.clone(),
+        extensions: serde_json::Value::Object(extensions),
         created_at: existing.created_at.clone(),
         updated_at: chrono::Utc::now().to_rfc3339(),
         deleted_at: existing.deleted_at.clone(),
