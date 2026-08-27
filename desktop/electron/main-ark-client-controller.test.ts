@@ -3,17 +3,18 @@ import type { JsonRecord } from "./extension-permissions";
 
 const engineLock = {
   format_version: 1,
-  protocol_version: { major: 1, minor: 0, patch: 0 },
+  api_version: { major: 1, minor: 0, patch: 0 },
   pid: 42,
+  http_port: 4317,
   ws_port: 4318,
   auth_token: "a".repeat(64),
   started_at: "2026-07-29T00:00:00Z",
-  db_path: "C:\\Kosmos-test\\data.db",
+  correlation_id: "12345678-1234-4234-8234-123456789abc",
 };
 
 type TestState =
   | { kind: "connected"; lock: typeof engineLock }
-  | { kind: "launch-failed"; reason: string };
+  | { kind: "launch-failed"; error: { kind: "launch-failed"; message: string } };
 let nextState: TestState = { kind: "connected", lock: engineLock };
 let capturedOptions: JsonRecord | null = null;
 
@@ -41,7 +42,7 @@ mock.module("electron", () => ({
 }));
 mock.module("@kosmos/ark", () => ({
   ArkClient: FakeArkClient,
-  ensureKeplerRunning: async () => nextState,
+  ensureEngineRunning: async () => nextState,
 }));
 mock.module("./data-dir", () => ({ keplerDataDir: () => "C:\\Kosmos-test" }));
 mock.module("./logging", () => ({
@@ -72,20 +73,20 @@ beforeEach(() => {
   capturedOptions = null;
 });
 
-test("Desktop creates ArkClient with the Kepler lock", async () => {
+test("Desktop creates ArkClient with the Engine lock", async () => {
   const controller = createController();
   await controller.initArkClient();
 
-  expect(capturedOptions?.keplerLock).toEqual(engineLock);
-  expect(capturedOptions?.engineLock).toBeUndefined();
-  expect(capturedOptions?.engineClientClass).toBeUndefined();
-  expect(capturedOptions?.engineClientVersion).toBeUndefined();
+  expect(capturedOptions?.engineLock).toEqual(engineLock);
+  expect(capturedOptions?.keplerLock).toBeUndefined();
+  expect(capturedOptions?.engineClientClass).toBe("desktop");
+  expect(capturedOptions?.engineClientVersion).toBe("9.8.7");
 });
 
-test("Desktop fails closed when Kepler cannot launch", async () => {
+test("Desktop fails closed when Engine cannot launch", async () => {
   nextState = {
     kind: "launch-failed",
-    reason: "Kepler did not start",
+    error: { kind: "launch-failed", message: "Engine did not start" },
   };
   const controller = createController();
   await controller.initArkClient();

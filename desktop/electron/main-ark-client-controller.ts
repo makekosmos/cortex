@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from "electron";
-import { ArkClient, ensureKeplerRunning } from "@kosmos/ark";
-import type { KeplerLockInfo, KeplerState } from "@kosmos/ark";
+import { ArkClient, ensureEngineRunning } from "@kosmos/ark";
+import type { EngineLockInfo, EngineState } from "@kosmos/ark";
 import type { Instance } from "./instance";
 import { keplerDataDir } from "./data-dir";
 import { keplerLog } from "./logging";
@@ -49,7 +49,7 @@ export function createMainArkClientController(
   let arkClientReady: Promise<ArkClient> | null = null;
   let arkClientReadyResolve: ((c: ArkClient) => void) | null = null;
   let arkClientReadyReject: ((e: Error) => void) | null = null;
-  let lastEngineFailure: KeplerState["kind"] | null = null;
+  let lastEngineFailure: EngineState["kind"] | null = null;
 
   function broadcastBackendEvent(
     event: "kepler:backend:ready" | "kepler:backend:disconnected",
@@ -151,7 +151,7 @@ export function createMainArkClientController(
     arkInitInFlight = true;
     try {
       ensureArkReadyPromise();
-      const state = await ensureKeplerRunning({
+      const state = await ensureEngineRunning({
         appDataPath: app.getPath("appData"),
         dataDir: keplerDataDir(),
         waitMs: ARK_CLIENT_LOCK_WAIT_MS,
@@ -167,13 +167,15 @@ export function createMainArkClientController(
         scheduleArkClientInitRetry(state.kind);
         return;
       }
-      const engineLock: KeplerLockInfo = state.lock;
+      const engineLock: EngineLockInfo = state.lock;
       lastEngineFailure = null;
       const client = new ArkClient({
         spaceId: KEPLER_SPACE_ID,
         deviceId: `kepler-shell-${options.instance.slot}`,
         deviceName: "Kosmos Desktop",
-        keplerLock: engineLock,
+        engineLock,
+        engineClientClass: "desktop",
+        engineClientVersion: app.getVersion(),
         requestTimeoutMs: ARK_REQUEST_TIMEOUT_MS,
       });
       await client.start();
