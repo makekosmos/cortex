@@ -27,9 +27,14 @@ does not mean that a complete Windows installer can be built here yet.
 ## Local checks
 
 ```text
-bun run check:layout
+# Installed automatically by `bun install`; recover with:
+bun run prepare
+
+# Full local verification:
+bun run check
 ```
 
-After the shared packages are published, the first independent checks should
-be `bun run --cwd desktop typecheck`, `bun run --cwd manager typecheck`, and
-the focused Rust tests under `runtime/`.
+`bun run check` covers layout, source-size, lint, changed-file Oxfmt, all frontend
+typechecks, Rustfmt, workspace Clippy with warnings denied, backend tests, and
+runtime staging. `bun install --frozen-lockfile` installs Lefthook hooks on a
+clean checkout; run `bun run prepare` if hooks are missing.

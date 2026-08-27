@@ -8,17 +8,56 @@ permissions:
   contents: read
   packages: read
 
+concurrency:
+  group: shell-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  layout:
+  actionlint:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: raven-actions/actionlint@v2
+
+  portable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun run check:layout
+      - run: bun install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: bun install --cwd desktop --frozen-lockfile
+      - run: bun install --cwd host --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: bun install --cwd manager --frozen-lockfile
+      - run: bun run check:source-size
+      - run: bun run lint
+      - run: bun run format:check
+        env:
+          FORMAT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      - run: bun run typecheck
+      - run: bun run rustfmt
+      - run: bun run clippy
+      - run: bun run test
+      - run: bun test host/electron/host-api-reconnect.test.ts
+
+  windows-runtime:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
-      - run: bun run check:layout
-      - run: bun install --cwd host --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: bun run --cwd host typecheck
-      - run: bun test host/electron/host-api-reconnect.test.ts
+      - run: bun install --frozen-lockfile
+      - run: bun install --cwd desktop --frozen-lockfile
+      - run: bun run --cwd desktop test:runtime-staging

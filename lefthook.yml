@@ -1,3 +1,5 @@
+glob_matcher: doublestar
+
 pre-commit:
   parallel: true
   commands:
@@ -7,13 +9,20 @@ pre-commit:
       glob: "**/*.{ts,tsx,vue,mjs,cjs,js,jsx}"
       run: bunx oxlint {staged_files}
     rustfmt:
+      glob: "**/*.{rs,toml}"
       run: cargo fmt --all -- --check
     desktop-typecheck:
+      glob: "desktop/**/*.{ts,tsx,vue,mjs,cjs,js,jsx,json}"
       run: bun run --cwd desktop typecheck
     host-typecheck:
+      glob: "host/**/*.{ts,tsx,vue,mjs,cjs,js,jsx,json}"
       run: bun run --cwd host typecheck
     manager-typecheck:
+      glob: "manager/**/*.{ts,tsx,vue,mjs,cjs,js,jsx,json}"
       run: bun run --cwd manager typecheck
+    oxfmt:
+      glob: "**/*.{ts,tsx,vue,mjs,cjs,js,jsx,json,yml,yaml}"
+      run: bun run format:check
 
 pre-push:
   parallel: false
@@ -21,7 +30,7 @@ pre-push:
     source-size-tests:
       run: bun run test:source-size
     backend-clippy:
-      run: cargo clippy -p kepler-backend --all-targets -- -D warnings
+      run: bun run clippy
     backend-tests:
       run: bun run test:backend
     runtime-staging:
