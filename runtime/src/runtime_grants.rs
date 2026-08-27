@@ -14,7 +14,11 @@ use thiserror::Error;
 /// Dictation is an Engine-owned privileged service. Package manifests can only
 /// request these named operations; microphone capture itself never crosses the
 /// package boundary.
-pub const DICTATION_READ_OPERATIONS: &[&str] = &["dictation.get_state", "dictation.get_config"];
+pub const DICTATION_READ_OPERATIONS: &[&str] = &[
+    "dictation.get_state",
+    "dictation.get_config",
+    "dictation.list_local_models",
+];
 pub const DICTATION_WRITE_OPERATIONS: &[&str] = &[
     "dictation.update_config",
     "dictation.start_recording",
