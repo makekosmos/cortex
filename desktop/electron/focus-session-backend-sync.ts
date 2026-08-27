@@ -10,7 +10,9 @@ export function setupFocusSessionBackendSync(opts: {
   closeTimeEntry: (completed: boolean) => Promise<void>;
   applyFocusState: (active: boolean) => Promise<void>;
   enqueueSideEffect: (work: () => Promise<void>) => Promise<void>;
-  onWorkEnded: () => void;
+  onWorkEnded: (nextPhase: PomodoroPhase) => void;
+  onWorkStarted: () => void;
+  onFocusEnforcementError: (active: boolean, error: Error) => void;
   broadcastUpdated: () => void;
 }): void {
   teardownFocusSessionBackendSync();
@@ -20,20 +22,56 @@ export function setupFocusSessionBackendSync(opts: {
       return;
     }
     if (event.event !== "pomodoro_phase_changed") return;
-// SAFETY: The surrounding boundary establishes this documented contract.
+    // SAFETY: The surrounding boundary establishes this documented contract.
     const from = (event as { from?: PomodoroPhase }).from ?? "idle";
-// SAFETY: The surrounding boundary establishes this documented contract.
+    // SAFETY: The surrounding boundary establishes this documented contract.
     const to = (event as { to?: PomodoroPhase }).to ?? "idle";
     if (from === "work") {
       const completed = pendingWorkCompletion;
       pendingWorkCompletion = false;
       void opts.enqueueSideEffect(async () => {
-        await opts.closeTimeEntry(completed);
+        let enforcementError: Error | null = null;
+        let closeError: Error | null = null;
         if (to !== "work") {
-          opts.onWorkEnded();
-          await opts.applyFocusState(false);
+          try {
+            await opts.applyFocusState(false);
+          } catch (error) {
+            enforcementError = error instanceof Error ? error : new Error(String(error));
+          }
+        }
+        try {
+          await opts.closeTimeEntry(completed);
+        } catch (error) {
+          closeError = error instanceof Error ? error : new Error(String(error));
+        }
+        if (!enforcementError && to !== "work") opts.onWorkEnded(to);
+        if (enforcementError) {
+          opts.onFocusEnforcementError(false, enforcementError);
         }
         opts.broadcastUpdated();
+        if (enforcementError && closeError) {
+          throw new Error(
+            `${enforcementError.message}; time entry close failed: ${closeError.message}`,
+          );
+        }
+        if (enforcementError) throw enforcementError;
+        if (closeError) throw closeError;
+      });
+      return;
+    }
+    if (to === "work") {
+      void opts.enqueueSideEffect(async () => {
+        try {
+          await opts.applyFocusState(true);
+          opts.onWorkStarted();
+          opts.broadcastUpdated();
+        } catch (error) {
+          opts.onFocusEnforcementError(
+            true,
+            error instanceof Error ? error : new Error(String(error)),
+          );
+          throw error;
+        }
       });
     }
   });

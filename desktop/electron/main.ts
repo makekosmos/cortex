@@ -105,6 +105,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let isQuiting = false;
+let cleanupStarted = false;
 
 const backendSupervisor = createMainBackendSupervisor({
   env,
@@ -270,9 +271,14 @@ app.on("before-quit", () => {
   isQuiting = true;
 });
 
-app.on("will-quit", () => {
+app.on("will-quit", (event) => {
+  event.preventDefault();
+  if (cleanupStarted) return;
+  cleanupStarted = true;
   console.error("[kepler-shell] will-quit: starting cleanup");
   globalShortcut.unregisterAll();
-  backendSupervisor.shutdown();
-  console.error("[kepler-shell] will-quit: cleanup done");
+  void backendSupervisor.shutdown().finally(() => {
+    console.error("[kepler-shell] will-quit: cleanup done");
+    app.exit(0);
+  });
 });

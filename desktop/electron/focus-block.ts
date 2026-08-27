@@ -30,7 +30,7 @@ interface HelperRequest {
   domains?: string[];
 }
 
-interface HelperResponse {
+export interface HelperResponse {
   ok: boolean;
   active_domains?: string[];
   error?: string;
@@ -45,8 +45,7 @@ function isHelperResponse(value: JsonValue): value is JsonRecord & HelperRespons
     isRecord(value) &&
     typeof value.ok === "boolean" &&
     (value.active_domains === undefined ||
-      (Array.isArray(value.active_domains) &&
-        value.active_domains.every(isString))) &&
+      (Array.isArray(value.active_domains) && value.active_domains.every(isString))) &&
     (value.error === undefined || typeof value.error === "string")
   );
 }
@@ -261,4 +260,29 @@ export async function applyFocusBlock(args: {
   }
 
   return result;
+}
+
+export async function getFocusBlockStatus(): Promise<HelperResponse> {
+  return runHelper({ op: "status" });
+}
+
+export function assertFocusBlockResult(
+  result: HelperResponse,
+  expectedDomains: readonly string[] | null,
+): asserts result is HelperResponse & { active_domains: string[] } {
+  if (!result.ok) {
+    throw new Error(`focus native enforcement failed: ${result.error ?? "unknown helper error"}`);
+  }
+  if (!Array.isArray(result.active_domains)) {
+    throw new Error("focus native enforcement returned no active domain status");
+  }
+  if (expectedDomains === null) return;
+  const activeDomains = result.active_domains;
+  if (
+    expectedDomains.length === 0
+      ? activeDomains.length > 0
+      : expectedDomains.some((domain) => !activeDomains.includes(domain))
+  ) {
+    throw new Error("focus native enforcement verification failed");
+  }
 }

@@ -4,6 +4,9 @@ import type { SearchResult } from "../shared/ipc-types";
 import { safeHandle } from "./ipc-safe";
 import { keplerLog } from "./logging";
 import { registerMainDataSettingsIpc } from "./main-data-ipc-settings";
+import { applyAuthoritativeFocusState } from "./focus-enforcement";
+import type { JsonValue } from "./extension-permissions";
+import { isString } from "../src/shared/runtimeGuards";
 
 interface MainDataIpcOptions {
   awaitArkReady(): Promise<ArkClient>;
@@ -47,17 +50,34 @@ export function registerMainDataIpc(options: MainDataIpcOptions): void {
     }
   });
 
-  safeHandle(
-    "kepler:ark:request",
-    async (_e, operation: string, params?: ArkRequestParams) => {
-      if (!isNonEmptyString(operation)) {
-        throw new Error("kepler:ark:request: operation must be a non-empty string");
-      }
-      const client = await awaitArkReady();
-      const req: ArkRequest = params ? { operation, ...params } : { operation };
-      return client.invokeOperation(req);
-    },
-  );
+  safeHandle("kepler:ark:request", async (_e, operation: string, params?: ArkRequestParams) => {
+    if (!isNonEmptyString(operation)) {
+      throw new Error("kepler:ark:request: operation must be a non-empty string");
+    }
+    const client = await awaitArkReady();
+    if (operation === "focus.set_active_state") {
+      const result = await applyAuthoritativeFocusState({
+        // SAFETY: focus-enforcement emits only JSON-safe ARK requests.
+        request: (nextOperation, nextParams) =>
+          client.invokeOperation({
+            operation: nextOperation,
+            ...nextParams,
+          } as ArkRequest) as Promise<JsonValue>,
+        active: params?.active === true,
+        blocklistId: isString(params?.blocklist_id) ? params.blocklist_id : null,
+        blockedAppIds: Array.isArray(params?.blocked_app_ids)
+          ? params.blocked_app_ids.filter(isString)
+          : [],
+        // SAFETY: the renderer IPC boundary only accepts JSON values.
+        blockedApps: Array.isArray(params?.blocked_apps)
+          ? (params.blocked_apps as JsonValue[])
+          : [],
+      });
+      return result.result;
+    }
+    const req: ArkRequest = params ? { operation, ...params } : { operation };
+    return client.invokeOperation(req);
+  });
 
   safeHandle("kepler:export:list", async () => {
     const client = await awaitArkReady();
@@ -65,9 +85,7 @@ export function registerMainDataIpc(options: MainDataIpcOptions): void {
     // SAFETY: export.list returns either a converter array or an object containing one.
     const resp = (await client.invokeOperation({ operation: "export.list" })) as ExportResponse;
     if (Array.isArray(resp)) return resp;
-    if (
-      isExportResponse(resp) && Array.isArray(resp.converters)
-    ) {
+    if (isExportResponse(resp) && Array.isArray(resp.converters)) {
       return resp.converters;
     }
     return [];
@@ -153,6 +171,10 @@ function isPositiveNumber(value: number | undefined): value is number {
 }
 
 function isExportResponse(value: ExportResponse): value is { converters: unknown[] } {
-  return value !== null && typeof value === "object" && !Array.isArray(value) &&
-    Array.isArray(value.converters);
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Array.isArray(value.converters)
+  );
 }

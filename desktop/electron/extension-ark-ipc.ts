@@ -6,7 +6,7 @@ import {
   type JsonRecord,
   type JsonValue,
 } from "./extension-permissions";
-import { applyFocusBlock } from "./focus-block";
+import { applyAuthoritativeFocusState } from "./focus-enforcement";
 
 export type ArkRequestFn = (req: JsonRecord) => Promise<JsonValue>;
 export type ArkSubscribeFn = (event: string, handler: (payload: JsonValue) => void) => () => void;
@@ -19,14 +19,6 @@ interface ExtensionArkContext {
 
 interface ExtensionArkIpcOptions {
   contextForSender(sender: WebContents): ExtensionArkContext;
-}
-
-interface FocusResolution {
-  domains?: string[];
-}
-
-interface BlocklistResponse {
-  blocklists?: Array<{ id: string; domains: string[] }>;
 }
 
 interface ObjectTypeResponse {
@@ -80,45 +72,25 @@ export function setExtensionArkBridge(opts: {
   }
 }
 
-async function resolveFocusBlockDomains(
-  request: ArkRequestFn,
-  blocklistId: string,
-): Promise<string[]> {
-  try {
-    // SAFETY: the ARK focus operation returns the documented domain list shape.
-    const resolved = (await request({
-      operation: "focus.resolve_blocklist_domains",
-      id: blocklistId,
-    })) as FocusResolution | null;
-    return Array.isArray(resolved?.domains) ? resolved.domains : [];
-  } catch {
-    // SAFETY: the ARK list operation returns the documented blocklist shape.
-    const resp = (await request({ operation: "focus.list_blocklists" })) as BlocklistResponse | null;
-    const list = Array.isArray(resp?.blocklists) ? resp.blocklists : [];
-    const found = list.find((blocklist) => blocklist.id === blocklistId);
-    return Array.isArray(found?.domains) ? found.domains : [];
-  }
-}
-
-async function onFocusStateChanged(
+async function applyExtensionFocusState(
   params: JsonRecord | undefined,
   request: ArkRequestFn,
-): Promise<void> {
-  const active = !!params?.active;
-  const blocklistId = isString(params?.blocklist_id) ? params.blocklist_id : null;
-
-  if (!active || !blocklistId) {
-    await applyFocusBlock({ active: false, domains: [] });
-    return;
-  }
-
-  try {
-    const domains = await resolveFocusBlockDomains(request, blocklistId);
-    await applyFocusBlock({ active: true, domains });
-  } catch (error) {
-    console.warn("[extension-host] focus resolve failed:", error);
-    await applyFocusBlock({ active: false, domains: [] });
-  }
+): Promise<JsonValue> {
+  const result = await applyAuthoritativeFocusState({
+    request: (operation, nextParams) => {
+      // SAFETY: focus-enforcement only emits JSON-safe request parameters.
+      return request({ operation, ...(nextParams as JsonRecord) });
+    },
+    active: params?.active === true,
+    blocklistId: isString(params?.blocklist_id) ? params.blocklist_id : null,
+    blockedAppIds: Array.isArray(params?.blocked_app_ids)
+      ? params.blocked_app_ids.filter(isString)
+      : [],
+    // SAFETY: extension IPC parameters are validated JSON values.
+    blockedApps: Array.isArray(params?.blocked_apps) ? (params.blocked_apps as JsonValue[]) : [],
+  });
+  // SAFETY: applyAuthoritativeFocusState returns the JSON result of ArkRequestFn.
+  return result.result as JsonValue;
 }
 
 const extensionEventUnsubscribers = new Map<string, () => void>();
@@ -154,15 +126,10 @@ export function registerExtensionArkIpc({ contextForSender }: ExtensionArkIpcOpt
         },
       });
       const req: JsonRecord = { ...params, operation };
-      const result = await request(req);
-
       if (operation === "focus.set_active_state") {
-        void onFocusStateChanged(params, request).catch((error) => {
-          console.warn("[extension-host] focus block apply failed:", error);
-        });
+        return applyExtensionFocusState(params, request);
       }
-
-      return result;
+      return request(req);
     },
   );
 

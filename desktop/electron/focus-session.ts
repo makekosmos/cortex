@@ -1,6 +1,11 @@
 import { BrowserWindow } from "electron";
 import type { ArkClient } from "@kosmos/ark";
-import { applyFocusBlock } from "./focus-block";
+import type { JsonRecord, JsonValue } from "./extension-permissions";
+import {
+  applyAuthoritativeFocusState,
+  reconcileFocusState as reconcileNativeFocusState,
+  resetNativeFocusState,
+} from "./focus-enforcement";
 import { showFocusCompletionOverlay } from "./focus-overlay";
 import { setFocusState, setFocusWidgetSessionActions } from "./focus-widget";
 import {
@@ -51,6 +56,8 @@ let lastBlockedAppIds: string[] = [];
 let lastBlockedApps: FocusBlockedApp[] = [];
 let lastRawBlockedApps: FocusBlockedApp[] = [];
 let sideEffectQueue: Promise<void> = Promise.resolve();
+let focusOperationQueue: Promise<void> = Promise.resolve();
+let focusEnforcementError: string | null = null;
 type ArkRequest = Parameters<ArkClient["invokeOperation"]>[0];
 type ArkRequestParams = Omit<ArkRequest, "operation">;
 type ArkValue = ArkRequestParams[string];
@@ -72,6 +79,14 @@ function arkParams(params: Record<string, ArkValue>): ArkRequestParams {
     out[key] = value;
   }
   return out;
+}
+
+function focusAppsAsJson(apps: FocusBlockedApp[]): JsonValue[] {
+  return apps.map((app) => {
+    const value: JsonRecord = { id: app.id, name: app.name, icon: app.icon ?? null };
+    if (app.exec_path) value.exec_path = app.exec_path;
+    return value;
+  });
 }
 
 function broadcastFocusSessionUpdated(): void {
@@ -107,6 +122,15 @@ function enqueueSideEffect(work: () => Promise<void>): Promise<void> {
   return next;
 }
 
+function enqueueFocusOperation<T>(work: () => Promise<T>): Promise<T> {
+  const next = focusOperationQueue.then(work, work);
+  focusOperationQueue = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
+}
+
 function clearBlockingContext(): void {
   stopProcessWatcher();
   lastRawBlockedApps = [];
@@ -115,33 +139,82 @@ function clearBlockingContext(): void {
   lastBlockedApps = [];
 }
 
+async function restoreBlockingContextFromPersisted(focus: FocusActiveState): Promise<void> {
+  lastCategoryIds = focus.blocklist_id?.trim() ? [focus.blocklist_id.trim()] : [];
+  lastBlockedAppIds = compactStrings(focus.blocked_app_ids);
+  const persistedApps = normalizeBlockedAppsOrEmpty(focus.blocked_apps);
+  let indexedApps: FocusBlockedApp[] = [];
+  if (lastBlockedAppIds.length > 0) {
+    indexedApps = await invoke<{ apps?: FocusBlockedApp[] }>("app_index.list_all", { limit: 500 })
+      .then((result) => (Array.isArray(result.apps) ? result.apps : []))
+      .catch(() => []);
+  }
+  const appsById = new Map(indexedApps.map((app) => [app.id, app]));
+  lastRawBlockedApps = lastBlockedAppIds
+    .map((id) => appsById.get(id) ?? persistedApps.find((app) => app.id === id))
+    .filter((app): app is FocusBlockedApp => app !== undefined);
+  lastBlockedApps = normalizeBlockedAppsOrEmpty([...persistedApps, ...lastRawBlockedApps]);
+}
+
+async function applyFocusStateUnsafe(
+  active: boolean,
+  categoryIds?: string[],
+  blockedAppIds?: string[],
+  blockedApps?: FocusBlockedApp[],
+): Promise<void> {
+  if (
+    categoryIds === undefined &&
+    blockedAppIds === undefined &&
+    blockedApps === undefined &&
+    lastCategoryIds.length === 0 &&
+    lastBlockedAppIds.length === 0 &&
+    lastBlockedApps.length === 0
+  ) {
+    const persisted = await invoke<FocusActiveState>("focus.get_active_state").catch(() => null);
+    if (persisted?.active) await restoreBlockingContextFromPersisted(persisted);
+  }
+  const ids = categoryIds === undefined ? lastCategoryIds : compactStrings(categoryIds);
+  const appIds =
+    blockedAppIds === undefined
+      ? lastBlockedAppIds
+      : Array.from(new Set(compactStrings(blockedAppIds)));
+  const apps =
+    blockedApps === undefined ? lastBlockedApps : normalizeBlockedAppsOrEmpty(blockedApps);
+  if (active) {
+    lastCategoryIds = ids;
+    lastBlockedAppIds = appIds;
+    lastBlockedApps = apps;
+  }
+  try {
+    const transition = await applyAuthoritativeFocusState({
+      // SAFETY: all ARK operation results are JSON values from the ArkClient transport.
+      request: (operation, params) =>
+        invoke(operation, params as Record<string, ArkValue>) as Promise<JsonValue>,
+      active,
+      blocklistId: ids[0] ?? null,
+      blockedAppIds: appIds,
+      blockedApps: focusAppsAsJson(apps),
+      resolveDomains: (blocklistId) => resolveCategoryDomains([blocklistId]),
+    });
+    focusEnforcementError = null;
+    setFocusState({ blockingActive: transition.nativeActive });
+  } catch (error) {
+    focusEnforcementError = error instanceof Error ? error.message : String(error);
+    setFocusState({ blockingActive: !active });
+    broadcastFocusSessionUpdated();
+    throw error;
+  }
+}
+
 async function applyFocusState(
   active: boolean,
   categoryIds?: string[],
   blockedAppIds?: string[],
   blockedApps?: FocusBlockedApp[],
 ): Promise<void> {
-  const ids = compactStrings(categoryIds);
-  const appIds = Array.from(new Set(compactStrings(blockedAppIds)));
-  const apps = normalizeBlockedAppsOrEmpty(blockedApps);
-  if (active && (ids.length > 0 || appIds.length > 0 || apps.length > 0)) {
-    lastCategoryIds = ids;
-    lastBlockedAppIds = appIds;
-    lastBlockedApps = apps;
-    await invoke("focus.set_active_state", {
-      active: true,
-      blocklist_id: ids[0] ?? null,
-      blocked_app_ids: appIds,
-      blocked_apps: apps,
-    });
-    const domains = await resolveCategoryDomains(ids);
-    await applyFocusBlock({ active: true, domains });
-    setFocusState({ blockingActive: true });
-  } else {
-    await invoke("focus.set_active_state", { active: false });
-    await applyFocusBlock({ active: false, domains: [] });
-    setFocusState({ blockingActive: false });
-  }
+  return enqueueFocusOperation(() =>
+    applyFocusStateUnsafe(active, categoryIds, blockedAppIds, blockedApps),
+  );
 }
 
 async function snapshot(): Promise<FocusSessionSnapshot> {
@@ -156,10 +229,13 @@ async function snapshot(): Promise<FocusSessionSnapshot> {
     pomodoro,
     focus,
     runningEntryId: getCurrentEntryId(),
+    focusError: focusEnforcementError,
   };
 }
 
-async function startFocusSession(input: StartFocusSessionInput): Promise<FocusSessionSnapshot> {
+async function startFocusSessionUnsafe(
+  input: StartFocusSessionInput,
+): Promise<FocusSessionSnapshot> {
   const title = input.title.trim() || input.taskTitle?.trim() || "Фокус";
   const durationMin = Math.max(1, Math.min(24 * 60, Math.round(input.durationMin)));
   const categoryIds =
@@ -199,34 +275,61 @@ async function startFocusSession(input: StartFocusSessionInput): Promise<FocusSe
     workMinOverride: durationMin,
   };
 
-  const state = await invoke<PomodoroState>("pomodoro.start", { config });
-  await startTimeEntry({
-    title,
-    taskId: task?.id ?? null,
-    taskTitle: task?.title ?? null,
-  });
-  setFocusState(deriveFocusWidgetPatch(state));
-  await applyFocusState(
-    categoryIds.length > 0 || blockedAppIds.length > 0 || blockedApps.length > 0,
-    categoryIds,
-    blockedAppIds,
-    blockedApps,
-  );
-  if (rawBlockedApps.length > 0) {
-    await killRunningBlockedApps(lastRawBlockedApps, getBlockedAppNotifier());
+  let state: PomodoroState;
+  try {
+    state = await invoke<PomodoroState>("pomodoro.start", { config });
+  } catch (error) {
+    clearBlockingContext();
+    throw error;
   }
-  startProcessWatcher({ blockedApps: lastRawBlockedApps, notifier: getBlockedAppNotifier() });
+  try {
+    await startTimeEntry({
+      title,
+      taskId: task?.id ?? null,
+      taskTitle: task?.title ?? null,
+    });
+    await applyFocusStateUnsafe(
+      categoryIds.length > 0 || blockedAppIds.length > 0 || blockedApps.length > 0,
+      categoryIds,
+      blockedAppIds,
+      blockedApps,
+    );
+    setFocusState(deriveFocusWidgetPatch(state));
+    if (rawBlockedApps.length > 0) {
+      await killRunningBlockedApps(lastRawBlockedApps, getBlockedAppNotifier());
+    }
+    startProcessWatcher({ blockedApps: lastRawBlockedApps, notifier: getBlockedAppNotifier() });
+  } catch (error) {
+    await invoke<PomodoroState>("pomodoro.stop")
+      .then((stopped) => setFocusState(deriveFocusWidgetPatch(stopped)))
+      .catch(() => undefined);
+    await enqueueSideEffect(() => closeTimeEntry(false)).catch(() => undefined);
+    clearBlockingContext();
+    throw error;
+  }
   const next = await snapshot();
   broadcastFocusSessionUpdated();
   return next;
 }
 
-async function pauseFocusSession(): Promise<FocusSessionSnapshot> {
+async function pauseFocusSessionUnsafe(): Promise<FocusSessionSnapshot> {
+  const hadContext =
+    lastCategoryIds.length > 0 || lastBlockedAppIds.length > 0 || lastBlockedApps.length > 0;
+  await applyFocusStateUnsafe(false);
+  let state: PomodoroState;
+  try {
+    state = await invoke<PomodoroState>("pomodoro.pause");
+  } catch (error) {
+    if (hadContext) {
+      await applyFocusStateUnsafe(true, lastCategoryIds, lastBlockedAppIds, lastBlockedApps).catch(
+        () => undefined,
+      );
+    }
+    throw error;
+  }
   stopProcessWatcher();
-  const state = await invoke<PomodoroState>("pomodoro.pause");
   setFocusState(deriveFocusWidgetPatch(state));
   await enqueueSideEffect(() => closeTimeEntry(false));
-  await applyFocusState(false);
   const next = await snapshot();
   broadcastFocusSessionUpdated();
   return next;
@@ -236,25 +339,32 @@ export async function pauseFocusSessionCommand(): Promise<FocusSessionSnapshot> 
   return pauseFocusSession();
 }
 
-async function resumeFocusSession(): Promise<FocusSessionSnapshot> {
+async function resumeFocusSessionUnsafe(): Promise<FocusSessionSnapshot> {
   const state = await invoke<PomodoroState>("pomodoro.resume");
   const lastWorkContext = getLastWorkContext();
-  if (state.phase === "work" && state.isRunning && !state.isPaused) {
-    await startTimeEntry({
-      title: state.title || lastWorkContext?.title || "Фокус",
-      taskId: state.tasks?.[0]?.id ?? lastWorkContext?.taskId ?? null,
-      taskTitle: state.tasks?.[0]?.title ?? lastWorkContext?.taskTitle ?? null,
-    });
-  }
-  setFocusState(deriveFocusWidgetPatch(state));
-  if (
+  const shouldBlock =
     state.phase === "work" &&
     state.isRunning &&
     !state.isPaused &&
-    (lastCategoryIds.length > 0 || lastBlockedAppIds.length > 0 || lastBlockedApps.length > 0)
-  ) {
-    await applyFocusState(true, lastCategoryIds, lastBlockedAppIds, lastBlockedApps);
-    startProcessWatcher({ blockedApps: lastRawBlockedApps, notifier: getBlockedAppNotifier() });
+    (lastCategoryIds.length > 0 || lastBlockedAppIds.length > 0 || lastBlockedApps.length > 0);
+  try {
+    if (state.phase === "work" && state.isRunning && !state.isPaused) {
+      await startTimeEntry({
+        title: state.title || lastWorkContext?.title || "Фокус",
+        taskId: state.tasks?.[0]?.id ?? lastWorkContext?.taskId ?? null,
+        taskTitle: state.tasks?.[0]?.title ?? lastWorkContext?.taskTitle ?? null,
+      });
+    }
+    if (shouldBlock) {
+      await applyFocusStateUnsafe(true, lastCategoryIds, lastBlockedAppIds, lastBlockedApps);
+      startProcessWatcher({ blockedApps: lastRawBlockedApps, notifier: getBlockedAppNotifier() });
+    }
+    setFocusState(deriveFocusWidgetPatch(state));
+  } catch (error) {
+    await invoke<PomodoroState>("pomodoro.pause").catch(() => undefined);
+    await enqueueSideEffect(() => closeTimeEntry(false)).catch(() => undefined);
+    setFocusState({ blockingActive: false });
+    throw error;
   }
   const next = await snapshot();
   broadcastFocusSessionUpdated();
@@ -265,8 +375,45 @@ export async function resumeFocusSessionCommand(): Promise<FocusSessionSnapshot>
   return resumeFocusSession();
 }
 
-async function skipFocusSession(): Promise<FocusSessionSnapshot> {
-  const state = await invoke<PomodoroState>("pomodoro.skip");
+async function skipFocusSessionUnsafe(): Promise<FocusSessionSnapshot> {
+  const before = await snapshot();
+  const hasContext =
+    lastCategoryIds.length > 0 || lastBlockedAppIds.length > 0 || lastBlockedApps.length > 0;
+  const leavingWork = before.pomodoro.phase === "work";
+  const enteringWork = before.pomodoro.phase !== "work" && before.pomodoro.phase !== "idle";
+  if (leavingWork) await applyFocusStateUnsafe(false);
+  if (enteringWork && hasContext) await applyFocusStateUnsafe(true);
+
+  let state: PomodoroState;
+  try {
+    state = await invoke<PomodoroState>("pomodoro.skip");
+  } catch (error) {
+    if (leavingWork && hasContext) {
+      await applyFocusStateUnsafe(true, lastCategoryIds, lastBlockedAppIds, lastBlockedApps).catch(
+        () => undefined,
+      );
+    } else if (enteringWork && hasContext) {
+      await applyFocusStateUnsafe(false).catch(() => undefined);
+    }
+    throw error;
+  }
+
+  const shouldBlock =
+    state.phase === "work" &&
+    state.isRunning &&
+    !state.isPaused &&
+    (lastCategoryIds.length > 0 || lastBlockedAppIds.length > 0 || lastBlockedApps.length > 0);
+  if (shouldBlock) {
+    if (!enteringWork) {
+      await applyFocusStateUnsafe(true, lastCategoryIds, lastBlockedAppIds, lastBlockedApps);
+    }
+    startProcessWatcher({ blockedApps: lastRawBlockedApps, notifier: getBlockedAppNotifier() });
+  } else if (leavingWork || enteringWork) {
+    if (leavingWork ? state.phase !== "work" : enteringWork) {
+      await applyFocusStateUnsafe(false);
+    }
+    stopProcessWatcher();
+  }
   setFocusState(deriveFocusWidgetPatch(state));
   const next = await snapshot();
   broadcastFocusSessionUpdated();
@@ -277,12 +424,25 @@ export async function skipFocusSessionCommand(): Promise<FocusSessionSnapshot> {
   return skipFocusSession();
 }
 
-async function stopFocusSession(): Promise<FocusSessionSnapshot> {
-  clearBlockingContext();
-  const state = await invoke<PomodoroState>("pomodoro.stop");
+async function stopFocusSessionUnsafe(): Promise<FocusSessionSnapshot> {
+  const hadContext =
+    lastCategoryIds.length > 0 || lastBlockedAppIds.length > 0 || lastBlockedApps.length > 0;
+  await applyFocusStateUnsafe(false);
+  let state: PomodoroState;
+  try {
+    state = await invoke<PomodoroState>("pomodoro.stop");
+  } catch (error) {
+    if (hadContext) {
+      await applyFocusStateUnsafe(true, lastCategoryIds, lastBlockedAppIds, lastBlockedApps).catch(
+        () => undefined,
+      );
+    }
+    throw error;
+  }
+  stopProcessWatcher();
   setFocusState(deriveFocusWidgetPatch(state));
   await enqueueSideEffect(() => closeTimeEntry(false));
-  await applyFocusState(false);
+  clearBlockingContext();
   const next = await snapshot();
   broadcastFocusSessionUpdated();
   return next;
@@ -294,18 +454,31 @@ export async function stopFocusSessionCommand(): Promise<FocusSessionSnapshot> {
 
 // «Выполнена»: останавливает сессию (time_entry completed=true) и помечает
 // привязанную задачу выполненной. Без задачи — эквивалент stop.
-async function completeFocusSession(): Promise<FocusSessionSnapshot> {
+async function completeFocusSessionUnsafe(): Promise<FocusSessionSnapshot> {
   const current = await snapshot();
   const task = current.pomodoro.tasks?.[0] ?? null;
   const taskId = task?.id ?? null;
-  clearBlockingContext();
-  const state = await invoke<PomodoroState>("pomodoro.stop");
+  const hadContext =
+    lastCategoryIds.length > 0 || lastBlockedAppIds.length > 0 || lastBlockedApps.length > 0;
+  await applyFocusStateUnsafe(false);
+  let state: PomodoroState;
+  try {
+    state = await invoke<PomodoroState>("pomodoro.stop");
+  } catch (error) {
+    if (hadContext) {
+      await applyFocusStateUnsafe(true, lastCategoryIds, lastBlockedAppIds, lastBlockedApps).catch(
+        () => undefined,
+      );
+    }
+    throw error;
+  }
+  stopProcessWatcher();
   setFocusState(deriveFocusWidgetPatch(state));
   await enqueueSideEffect(() => closeTimeEntry(true));
   if (taskId) {
     await markTaskDone(taskId);
   }
-  await applyFocusState(false);
+  clearBlockingContext();
   showFocusCompletionOverlay(
     task?.title?.trim() || current.pomodoro.title?.trim() || "Фокус завершён",
   );
@@ -314,13 +487,39 @@ async function completeFocusSession(): Promise<FocusSessionSnapshot> {
   return next;
 }
 
+function startFocusSession(input: StartFocusSessionInput): Promise<FocusSessionSnapshot> {
+  return enqueueFocusOperation(() => startFocusSessionUnsafe(input));
+}
+
+function pauseFocusSession(): Promise<FocusSessionSnapshot> {
+  return enqueueFocusOperation(() => pauseFocusSessionUnsafe());
+}
+
+function resumeFocusSession(): Promise<FocusSessionSnapshot> {
+  return enqueueFocusOperation(() => resumeFocusSessionUnsafe());
+}
+
+function skipFocusSession(): Promise<FocusSessionSnapshot> {
+  return enqueueFocusOperation(() => skipFocusSessionUnsafe());
+}
+
+function stopFocusSession(): Promise<FocusSessionSnapshot> {
+  return enqueueFocusOperation(() => stopFocusSessionUnsafe());
+}
+
+function completeFocusSession(): Promise<FocusSessionSnapshot> {
+  return enqueueFocusOperation(() => completeFocusSessionUnsafe());
+}
+
 export async function toggleFocusSessionCommand(): Promise<void> {
-  const state = await snapshot();
-  if (state.pomodoro.phase === "idle") {
-    openFocusSessionShell();
-    return;
-  }
-  await stopFocusSession();
+  await enqueueFocusOperation(async () => {
+    const state = await snapshot();
+    if (state.pomodoro.phase === "idle") {
+      openFocusSessionShell();
+      return;
+    }
+    await stopFocusSessionUnsafe();
+  });
 }
 
 setFocusWidgetSessionActions({
@@ -351,12 +550,57 @@ export function setupFocusSessionBackendSync(opts: { arkClient: ArkClient }): vo
     closeTimeEntry,
     applyFocusState,
     enqueueSideEffect,
-    onWorkEnded: clearBlockingContext,
+    onWorkEnded: (nextPhase) => {
+      stopProcessWatcher();
+      if (nextPhase === "idle") clearBlockingContext();
+    },
+    onWorkStarted: () => {
+      startProcessWatcher({ blockedApps: lastRawBlockedApps, notifier: getBlockedAppNotifier() });
+    },
+    onFocusEnforcementError: (active, error) => {
+      console.warn("[focus-session] native focus phase transition failed:", error);
+      setFocusState({ blockingActive: !active });
+      broadcastFocusSessionUpdated();
+    },
     broadcastUpdated: broadcastFocusSessionUpdated,
+  });
+  void enqueueFocusOperation(async () => {
+    try {
+      const result = await reconcileNativeFocusState({
+        // SAFETY: all ARK operation results are JSON values from the ArkClient transport.
+        request: (operation, params) =>
+          invoke(operation, params as Record<string, ArkValue>) as Promise<JsonValue>,
+        resolveDomains: (blocklistId) => resolveCategoryDomains([blocklistId]),
+      });
+      if (result.state.active) {
+        await restoreBlockingContextFromPersisted({
+          active: true,
+          blocklist_id: result.state.blocklist_id,
+          blocked_app_ids: result.state.blocked_app_ids,
+          blocked_apps: [],
+        });
+        const pomodoro = await invoke<PomodoroState>("pomodoro.get_state");
+        if (pomodoro.phase === "work" && pomodoro.isRunning && !pomodoro.isPaused) {
+          startProcessWatcher({
+            blockedApps: lastRawBlockedApps,
+            notifier: getBlockedAppNotifier(),
+          });
+        }
+      }
+      setFocusState({ blockingActive: result.nativeActive });
+    } catch (error) {
+      setFocusState({ blockingActive: false });
+      console.warn("[focus-session] native focus reconciliation failed:", error);
+    }
   });
 }
 
-export function teardownFocusSessionBackendSync(): void {
+export async function teardownFocusSessionBackendSync(): Promise<void> {
   teardownFocusSessionBackendSyncSubscription();
   stopProcessWatcher();
+  try {
+    await resetNativeFocusState();
+  } catch (error) {
+    console.warn("[focus-session] native focus reset during teardown failed:", error);
+  }
 }

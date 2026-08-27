@@ -11,7 +11,13 @@ function normalizeBlockedApps(apps: FocusBlockedApp[]): FocusBlockedApp[] {
     const id = app.id.trim();
     const name = app.name.trim();
     if (!id || !name) continue;
-    byId.set(id, { id, name, icon: app.icon ?? null });
+    const normalized: FocusBlockedApp = {
+      id,
+      name,
+      icon: app.icon ?? null,
+    };
+    if (app.exec_path) normalized.exec_path = app.exec_path;
+    byId.set(id, normalized);
   }
   return Array.from(byId.values());
 }

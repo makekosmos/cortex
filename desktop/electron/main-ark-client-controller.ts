@@ -15,7 +15,7 @@ interface MainArkClientControllerOptions {
   setupFocusWidgetBackendSync(options: { arkClient: ArkClient }): void;
   teardownFocusWidgetBackendSync(): void;
   setupFocusSessionBackendSync(options: { arkClient: ArkClient }): void;
-  teardownFocusSessionBackendSync(): void;
+  teardownFocusSessionBackendSync(): void | Promise<void>;
   setupDictationHotkey(): Promise<void>;
   broadcastCommandsUpdated(): void;
 }
@@ -35,7 +35,7 @@ export interface MainArkClientController {
   initArkClient(): Promise<void>;
   isInitInFlight(): boolean;
   resetArkClient(reason: string): Promise<void>;
-  shutdown(): void;
+  shutdown(): Promise<void>;
 }
 
 export function createMainArkClientController(
@@ -105,7 +105,7 @@ export function createMainArkClientController(
     if (wasConnected) broadcastBackendEvent("kepler:backend:disconnected");
     options.teardownPomodoroNotifier();
     options.teardownFocusWidgetBackendSync();
-    options.teardownFocusSessionBackendSync();
+    await options.teardownFocusSessionBackendSync();
     if (prev) {
       try {
         await prev.stop();
@@ -241,12 +241,12 @@ export function createMainArkClientController(
     }
   }
 
-  function shutdown(): void {
-    options.teardownFocusSessionBackendSync();
+  async function shutdown(): Promise<void> {
+    await options.teardownFocusSessionBackendSync();
     options.teardownPomodoroNotifier();
     if (arkClient) {
       try {
-        void arkClient.stop();
+        await arkClient.stop();
       } catch (e) {
         console.error("[kepler-shell] arkClient stop error:", e);
       }

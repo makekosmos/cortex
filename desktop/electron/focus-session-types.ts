@@ -78,4 +78,5 @@ export interface FocusSessionSnapshot {
   pomodoro: PomodoroState;
   focus: FocusActiveState;
   runningEntryId: string | null;
+  focusError?: string | null;
 }

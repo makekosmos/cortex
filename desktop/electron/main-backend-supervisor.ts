@@ -21,7 +21,7 @@ interface MainBackendSupervisorOptions {
   setupFocusWidgetBackendSync(options: { arkClient: ArkClient }): void;
   teardownFocusWidgetBackendSync(): void;
   setupFocusSessionBackendSync(options: { arkClient: ArkClient }): void;
-  teardownFocusSessionBackendSync(): void;
+  teardownFocusSessionBackendSync(): void | Promise<void>;
   setupDictationHotkey(): Promise<void>;
   broadcastCommandsUpdated(): void;
 }
@@ -35,7 +35,7 @@ export interface MainBackendSupervisor {
   awaitArkReady(timeoutMs?: number): Promise<ArkClient>;
   recoverBackendIfDead(reason: string): Promise<void>;
   restartBackend(): Promise<void>;
-  shutdown(): void;
+  shutdown(): Promise<void>;
 }
 
 export function createMainBackendSupervisor(
@@ -109,8 +109,8 @@ export function createMainBackendSupervisor(
     void arkController.initArkClient();
   }
 
-  function shutdown(): void {
-    arkController.shutdown();
+  function shutdown(): Promise<void> {
+    return arkController.shutdown();
   }
 
   return {

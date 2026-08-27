@@ -86,11 +86,11 @@ function hasAnyCapability(
   return required.some((capability) => hasCapability(granted, capability));
 }
 
-function isRecord(value: JsonValue | undefined): value is JsonRecord {
+export function isRecord(value: JsonValue | undefined): value is JsonRecord {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function isString(value: JsonValue | undefined): value is string {
+export function isString(value: JsonValue | undefined): value is string {
   return typeof value === "string";
 }
 

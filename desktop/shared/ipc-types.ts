@@ -238,6 +238,7 @@ export interface FocusSessionSnapshot {
   pomodoro: FocusSessionPomodoroState;
   focus: FocusActiveState;
   runningEntryId: string | null;
+  focusError?: string | null;
 }
 
 export type { KeplerApi } from "./ipc-api-types";
