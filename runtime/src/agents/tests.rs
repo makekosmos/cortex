@@ -414,6 +414,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn lifecycle_lock_serializes_same_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let service = AgentsService::new(dir.path()).unwrap();
+        let first = service.lifecycle_lock("session");
+        let held = first.lock().await;
+        let second = service.lifecycle_lock("session");
+
+        assert!(tokio::time::timeout(Duration::from_millis(20), second.lock())
+            .await
+            .is_err());
+        drop(held);
+        let _released = tokio::time::timeout(Duration::from_millis(20), second.lock())
+            .await
+            .unwrap();
+    }
+
+    #[test]
+    fn stale_runtime_generation_cannot_remove_current_runtime() {
+        let dir = tempfile::tempdir().unwrap();
+        let service = AgentsService::new(dir.path()).unwrap();
+        let (tx, _rx) = mpsc::channel(1);
+        service.runtimes().insert(
+            "session".into(),
+            RuntimeHandle {
+                tx,
+                generation: 2,
+            },
+        );
+
+        assert!(!service.runtime_is_current("session", 1));
+        service.remove_runtime("session", 1);
+        assert!(service.runtime_is_current("session", 2));
+    }
+
+    #[tokio::test]
     async fn app_server_events_are_normalized_and_streams_are_coalesced() {
         let dir = tempfile::tempdir().unwrap();
         let service = AgentsService::new(dir.path()).unwrap();
@@ -422,6 +457,7 @@ mod tests {
             handle_app_message(
                 &service,
                 "session",
+                0,
                 &active_turn,
                 json!({"method":"item/agentMessage/delta","params":{"delta":delta}}),
             )
@@ -430,6 +466,7 @@ mod tests {
         handle_app_message(
             &service,
             "session",
+            0,
             &active_turn,
             json!({"method":"item/completed","params":{"item":{"id":"item-1"}}}),
         )
@@ -437,6 +474,7 @@ mod tests {
         handle_app_message(
             &service,
             "session",
+            0,
             &active_turn,
             json!({"id":9,"method":"item/fileChange/requestApproval","params":{"reason":"test"}}),
         )
@@ -688,6 +726,7 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(5), done_rx)
             .await
             .unwrap()
+            .unwrap()
             .unwrap();
         drop(service);
 
@@ -704,6 +743,67 @@ mod tests {
             assert!(tokio::time::Instant::now() < deadline);
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
+        reopened.interrupt(&session_id).await.unwrap();
+        assert_eq!(
+            reopened.get_session(&session_id).unwrap().status,
+            "interrupted"
+        );
+        assert!(reopened.pending_approvals().unwrap().is_empty());
+
+        let unresponsive = reopened
+            .create_session(json!({
+                "project_id":project["id"],
+                "prompt":"interrupt-unresponsive",
+                "mode":"default"
+            }))
+            .await
+            .unwrap();
+        let unresponsive_id = unresponsive["id"].as_str().unwrap();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        while reopened
+            .get_session(unresponsive_id)
+            .unwrap()
+            .active_turn_id
+            .is_none()
+        {
+            assert!(tokio::time::Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        reopened.interrupt(unresponsive_id).await.unwrap();
+        assert_eq!(
+            reopened.get_session(unresponsive_id).unwrap().status,
+            "interrupted"
+        );
+        assert!(!reopened.runtimes().contains_key(unresponsive_id));
+
+        let archived = reopened
+            .create_session(json!({
+                "project_id":project["id"],
+                "prompt":"archive while waiting approval",
+                "mode":"default"
+            }))
+            .await
+            .unwrap();
+        let archived_id = archived["id"].as_str().unwrap();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        while !reopened
+            .pending_approvals()
+            .unwrap()
+            .iter()
+            .any(|approval| approval.session_id == archived_id)
+        {
+            assert!(tokio::time::Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        reopened.archive(archived_id).await.unwrap();
+        let archived = reopened.get_session(archived_id).unwrap();
+        assert_eq!(archived.status, "archived");
+        assert!(archived.active_turn_id.is_none());
+        assert!(!reopened
+            .pending_approvals()
+            .unwrap()
+            .iter()
+            .any(|approval| approval.session_id == archived_id));
         reopened.shutdown().await;
         assert!(reopened.runtimes().is_empty());
 

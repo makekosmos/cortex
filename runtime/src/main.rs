@@ -274,6 +274,14 @@ async fn run_core_worker() -> ExitCode {
     };
     eprintln!("[kepler-backend] shutdown signal received, cleaning up");
 
+    // Stop new HTTP/WS work before draining runtime-owned processes.
+    api_shutdown.begin_shutdown().await;
+    ws_shutdown.begin_shutdown().await;
+    let _ = api_task.await;
+    let _ = ws_task.await;
+    let http_shutdown_result = api_shutdown.shutdown().await;
+    let ws_shutdown_result = ws_shutdown.shutdown().await;
+
     if let Some(agents) = agents_shutdown.get() {
         agents.shutdown().await;
     }
@@ -287,15 +295,6 @@ async fn run_core_worker() -> ExitCode {
     ) {
         let _ = engine_control::notify_from_env(ControlMessage::CoreStopping).await;
     }
-
-    // Close both admissions before joining either serving loop, then drain both
-    // registries before Ark/runtime teardown.
-    api_shutdown.begin_shutdown().await;
-    ws_shutdown.begin_shutdown().await;
-    let _ = api_task.await;
-    let _ = ws_task.await;
-    let http_shutdown_result = api_shutdown.shutdown().await;
-    let ws_shutdown_result = ws_shutdown.shutdown().await;
 
     if let Err(e) = std::fs::remove_file(&engine_lock_path) {
         observability::stderr(format!(

@@ -7,6 +7,7 @@ let approvalId = 900;
 let initialized = false;
 let activeTurnId = null;
 let expectedPolicy = null;
+let interruptMode = "ack";
 
 lines.on("line", (line) => {
   const message = JSON.parse(line);
@@ -69,6 +70,11 @@ lines.on("line", (line) => {
       });
       break;
     case "turn/start":
+      interruptMode = message.params.input?.[0]?.text?.includes("interrupt-unresponsive")
+        ? "unresponsive"
+        : message.params.input?.[0]?.text?.includes("interrupt-refused")
+          ? "refused"
+          : "ack";
       if (
         !message.params?.approvalPolicy ||
         !message.params?.sandboxPolicy?.type ||
@@ -147,6 +153,11 @@ lines.on("line", (line) => {
       });
       break;
     case "turn/interrupt":
+      if (interruptMode === "unresponsive") break;
+      if (interruptMode === "refused") {
+        send({ id: message.id, error: { code: -32000, message: "interrupt refused" } });
+        break;
+      }
       send({ id: message.id, result: {} });
       send({
         method: "turn/completed",

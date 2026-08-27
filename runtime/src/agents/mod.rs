@@ -17,12 +17,20 @@ use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
-use tokio::process::{Child, ChildStdout, Command};
+use tokio::process::{ChildStdout, Command};
 use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
 
+pub mod process_tree;
+#[cfg(test)]
+mod process_tree_tests;
+
 const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
 const FULL_ACCESS_CONSENT_TTL: Duration = Duration::from_secs(60);
+#[cfg(not(test))]
+const INTERRUPT_ACK_TIMEOUT: Duration = Duration::from_secs(10);
+#[cfg(test)]
+const INTERRUPT_ACK_TIMEOUT: Duration = Duration::from_millis(500);
 
 include!("definitions.rs");
 include!("app_server.rs");

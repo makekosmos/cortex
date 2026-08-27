@@ -1,11 +1,12 @@
 async fn run_app_server(
     service: Arc<AgentsService>,
     session: Session,
+    generation: u64,
     mut rx: mpsc::Receiver<AppCommand>,
     ready: tokio::sync::oneshot::Sender<Result<(), String>>,
 ) {
     let resumed = session.codex_thread_id.is_some();
-    let result = start_app_server(&service, &session).await;
+    let result = start_app_server(&session).await;
     let mut startup = match result {
         Ok(parts) => parts,
         Err(error) => {
@@ -13,8 +14,38 @@ async fn run_app_server(
             return;
         }
     };
+    if !service.runtime_is_current(&session.id, generation) {
+        let result = startup
+            .process_tree
+            .terminate_and_wait(Duration::from_secs(5))
+            .await
+            .map(|_| ())
+            .map_err(|error| error.to_string());
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(4);
+        loop {
+            match tokio::time::timeout_at(deadline, rx.recv()).await {
+                Ok(Some(AppCommand::Shutdown(done))) => {
+                    if let Some(done) = done {
+                        let _ = done.send(result);
+                    }
+                    break;
+                }
+                Ok(Some(AppCommand::Interrupt { done, .. })) => {
+                    let _ = done.send(Err("runtime was replaced during startup".into()));
+                }
+                Ok(Some(AppCommand::Approval { done, .. })) => {
+                    let _ = done.send(Err("runtime was replaced during startup".into()));
+                }
+                Ok(Some(AppCommand::Send { .. })) => {}
+                Ok(None) | Err(_) => break,
+            }
+        }
+        let _ = ready.send(Err("runtime was replaced during startup".into()));
+        return;
+    }
     let next_id = AtomicI64::new(100);
     let mut pending_turn_requests = HashSet::<i64>::new();
+    let mut pending_interrupt = None;
     let active_turn = Arc::new(tokio::sync::Mutex::new(startup.active_turn_id.take()));
     if resumed
         && matches!(
@@ -22,10 +53,10 @@ async fn run_app_server(
             SessionStatus::Completed | SessionStatus::Interrupted | SessionStatus::Failed
         )
     {
-        let _ = service.expire_pending_approvals(&session.id);
+        let _ = service.expire_pending_approvals(&session.id, "app_server_restarted");
     }
     for message in startup.buffered.drain(..) {
-        handle_app_message(&service, &session.id, &active_turn, message).await;
+        handle_app_message(&service, &session.id, generation, &active_turn, message).await;
     }
     if !resumed {
         let request_id = next_id.fetch_add(1, Ordering::Relaxed);
@@ -71,15 +102,37 @@ async fn run_app_server(
                         pending_turn_requests.insert(request_id);
                     }
                 }
-                Some(AppCommand::Interrupt) => {
-                    if let Some(turn_id)=active_turn.lock().await.clone() { let _=send_rpc(&mut startup.stdin,next_id.fetch_add(1,Ordering::Relaxed),"turn/interrupt",json!({"threadId":startup.thread_id,"turnId":turn_id})).await; }
+                Some(AppCommand::Interrupt{expected_turn_id,done}) => {
+                    let current=active_turn.lock().await.clone();
+                    if current.as_deref()!=Some(expected_turn_id.as_str()) {
+                        let _=done.send(Err("active turn changed before interrupt".into()));
+                    } else if pending_interrupt.is_some() {
+                        let _=done.send(Err("interrupt already pending".into()));
+                    } else {
+                        let request_id=next_id.fetch_add(1,Ordering::Relaxed);
+                        match send_rpc(&mut startup.stdin,request_id,"turn/interrupt",json!({"threadId":startup.thread_id,"turnId":expected_turn_id})).await {
+                            Ok(()) => pending_interrupt=Some((request_id,expected_turn_id,done)),
+                            Err(error) => { let _=done.send(Err(error)); }
+                        }
+                    }
                 }
                 Some(AppCommand::Approval{request_id,result,done}) => { let result=write_json(&mut startup.stdin,&json!({"id":request_id,"result":result})).await; let _=done.send(result); }
-                Some(AppCommand::Shutdown(done)) => { let _=startup.child.kill().await; if let Some(done)=done { let _=done.send(()); } break; }
-                None => { let _=startup.child.kill().await; break; }
+                Some(AppCommand::Shutdown(done)) => {
+                    if let Some((_,_,interrupt_done))=pending_interrupt.take() { let _=interrupt_done.send(Err("runtime stopped".into())); }
+                    let result=startup.process_tree.terminate_and_wait(Duration::from_secs(5)).await.map(|_|()).map_err(|error|error.to_string());
+                    if let Some(done)=done { let _=done.send(result); }
+                    break;
+                }
+                None => { let _=startup.process_tree.terminate_and_wait(Duration::from_secs(5)).await; break; }
             },
             line = startup.lines.next_line() => match line {
                 Ok(Some(line)) => if let Ok(message)=serde_json::from_str::<Value>(&line) {
+                    if !service.runtime_is_current(&session.id,generation) { continue; }
+                    if let Some((request_id,_,_))=pending_interrupt.as_ref() {
+                        if message.get("id").and_then(Value::as_i64)==Some(*request_id) && message.get("error").is_some() {
+                            if let Some((_,_,done))=pending_interrupt.take() { let _=done.send(Err(message["error"].to_string())); }
+                        }
+                    }
                     if let Some(id)=message.get("id").and_then(Value::as_i64).filter(|id| pending_turn_requests.remove(id)) {
                         if let Some(error)=message.get("error") {
                             let _=service.set_status(&session.id,SessionStatus::Failed);
@@ -90,34 +143,50 @@ async fn run_app_server(
                             let _=service.update_codex_ids(&session.id,None,Some(turn_id));
                         }
                     }
-                    handle_app_message(&service,&session.id,&active_turn,message).await;
+                    let completed=message.get("method").and_then(Value::as_str)==Some("turn/completed");
+                    let completed_id=message.pointer("/params/turn/id").and_then(Value::as_str).map(str::to_string);
+                    let completed_status=message.pointer("/params/turn/status").and_then(Value::as_str).map(str::to_string);
+                    handle_app_message(&service,&session.id,generation,&active_turn,message).await;
+                    if completed {
+                        if let Some((_,expected,done))=pending_interrupt.take() {
+                            let result=if completed_id.as_deref()==Some(expected.as_str()) && completed_status.as_deref()==Some("interrupted") { Ok(()) } else { Err("active turn did not acknowledge interrupt".into()) };
+                            let _=done.send(result);
+                        }
+                    }
                 },
                 Ok(None)|Err(_) => {
-                    let should_fail=service.get_session(&session.id).map(|current| matches!(current.status.as_str(),"starting"|"running"|"waiting_approval")).unwrap_or(true);
+                    if let Some((_,_,done))=pending_interrupt.take() { let _=done.send(Err("app-server pipe closed".into())); }
+                    let should_fail=service.runtime_is_current(&session.id,generation) && service.get_session(&session.id).map(|current| matches!(current.status.as_str(),"starting"|"running"|"waiting_approval"|"interrupting")).unwrap_or(true);
                     if should_fail { let _=service.set_status(&session.id,SessionStatus::Failed); service.emit("session_updated",&session.id,json!(service.get_session(&session.id).ok())); }
                     break;
                 }
             }
         }
     }
-    service.runtimes().remove(&session.id);
+    service.remove_runtime(&session.id, generation);
 }
 
-async fn start_app_server(
-    service: &AgentsService,
-    session: &Session,
-) -> Result<AppServerStartup, String> {
-    let mut child = codex_command()
+async fn start_app_server(session: &Session) -> Result<AppServerStartup, String> {
+    let mut command = codex_command();
+    command
         .args(["app-server", "--stdio"])
         .current_dir(&session.worktree_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true)
-        .spawn()
+        .stderr(Stdio::null());
+    let mut process_tree = process_tree::ProcessTree::spawn(&mut command)
+        .await
         .map_err(|e| format!("Не удалось запустить Codex CLI: {e}"))?;
-    let mut stdin = child.stdin.take().ok_or("Codex stdin недоступен")?;
-    let stdout = child.stdout.take().ok_or("Codex stdout недоступен")?;
+    let mut stdin = process_tree
+        .child_mut()
+        .stdin
+        .take()
+        .ok_or("Codex stdin недоступен")?;
+    let stdout = process_tree
+        .child_mut()
+        .stdout
+        .take()
+        .ok_or("Codex stdout недоступен")?;
     let mut lines = BufReader::new(stdout).lines();
     let (init, mut buffered)=rpc_call(&mut stdin,&mut lines,1,"initialize",json!({"clientInfo":{"name":"daedalus","title":"Kosmos Daedalus","version":"0.1.0"},"capabilities":{"experimentalApi":true}})).await?;
     if init.get("error").is_some() {
@@ -163,9 +232,8 @@ async fn start_app_server(
             _ => SessionStatus::Completed,
         }
     };
-    let _ = service.update_codex_ids(&session.id, Some(&thread_id), active_turn_id.as_deref());
     Ok(AppServerStartup {
-        child,
+        process_tree,
         stdin,
         lines,
         thread_id,
@@ -178,9 +246,13 @@ async fn start_app_server(
 async fn handle_app_message(
     service: &AgentsService,
     session_id: &str,
+    generation: u64,
     active_turn: &tokio::sync::Mutex<Option<String>>,
     message: Value,
 ) {
+    if generation != 0 && !service.runtime_is_current(session_id, generation) {
+        return;
+    }
     if let (Some(id), Some(method)) = (
         message.get("id"),
         message.get("method").and_then(Value::as_str),

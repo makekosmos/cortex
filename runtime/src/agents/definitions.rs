@@ -14,6 +14,8 @@ pub enum SessionStatus {
     Starting,
     Running,
     WaitingApproval,
+    Interrupting,
+    Stopping,
     Completed,
     Interrupted,
     Failed,
@@ -26,6 +28,8 @@ impl SessionStatus {
             Self::Starting => "starting",
             Self::Running => "running",
             Self::WaitingApproval => "waiting_approval",
+            Self::Interrupting => "interrupting",
+            Self::Stopping => "stopping",
             Self::Completed => "completed",
             Self::Interrupted => "interrupted",
             Self::Failed => "failed",
@@ -94,6 +98,7 @@ pub struct AgentsEvent {
 #[derive(Debug, Clone)]
 struct RuntimeHandle {
     tx: mpsc::Sender<AppCommand>,
+    generation: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -104,7 +109,7 @@ struct StreamBuffer {
 }
 
 struct AppServerStartup {
-    child: Child,
+    process_tree: process_tree::ProcessTree,
     stdin: tokio::process::ChildStdin,
     lines: Lines<BufReader<ChildStdout>>,
     thread_id: String,
@@ -118,13 +123,16 @@ enum AppCommand {
     Send {
         text: String,
     },
-    Interrupt,
+    Interrupt {
+        expected_turn_id: String,
+        done: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
     Approval {
         request_id: Value,
         result: Value,
         done: tokio::sync::oneshot::Sender<Result<(), String>>,
     },
-    Shutdown(Option<tokio::sync::oneshot::Sender<()>>),
+    Shutdown(Option<tokio::sync::oneshot::Sender<Result<(), String>>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -278,11 +286,14 @@ pub struct AgentsService {
     root: PathBuf,
     db: Mutex<Connection>,
     runtimes: Mutex<HashMap<String, RuntimeHandle>>,
+    lifecycle_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    next_runtime_generation: AtomicU64,
     events: broadcast::Sender<Value>,
     seq: AtomicU64,
     event_order: Mutex<()>,
     recent_events: Mutex<VecDeque<Value>>,
     restored: AtomicBool,
+    restore_lock: tokio::sync::Mutex<()>,
     streams: Mutex<HashMap<(String, String), StreamBuffer>>,
     full_access_consents: Mutex<FullAccessConsentRegistry>,
 }
@@ -355,11 +366,14 @@ impl AgentsService {
             root,
             db: Mutex::new(conn),
             runtimes: Mutex::new(HashMap::new()),
+            lifecycle_locks: Mutex::new(HashMap::new()),
+            next_runtime_generation: AtomicU64::new(1),
             events,
             seq: AtomicU64::new(initial_seq),
             event_order: Mutex::new(()),
             recent_events: Mutex::new(VecDeque::with_capacity(512)),
             restored: AtomicBool::new(false),
+            restore_lock: tokio::sync::Mutex::new(()),
             streams: Mutex::new(HashMap::new()),
             full_access_consents: Mutex::new(FullAccessConsentRegistry::default()),
         }))
@@ -403,6 +417,31 @@ impl AgentsService {
         self.runtimes
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn lifecycle_lock(&self, session_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+        self.lifecycle_locks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .entry(session_id.to_string())
+            .or_default()
+            .clone()
+    }
+
+    fn runtime_is_current(&self, session_id: &str, generation: u64) -> bool {
+        self.runtimes()
+            .get(session_id)
+            .is_some_and(|runtime| runtime.generation == generation)
+    }
+
+    fn remove_runtime(&self, session_id: &str, generation: u64) {
+        let mut runtimes = self.runtimes();
+        if runtimes
+            .get(session_id)
+            .is_some_and(|runtime| runtime.generation == generation)
+        {
+            runtimes.remove(session_id);
+        }
     }
 
     fn emit(&self, kind: &str, session_id: &str, payload: Value) {
@@ -469,7 +508,7 @@ impl AgentsService {
                 .await
             }
             "sessions.interrupt" => self.interrupt(&required_str(&params, "session_id")?).await,
-            "sessions.archive" => self.archive(&required_str(&params, "session_id")?),
+            "sessions.archive" => self.archive(&required_str(&params, "session_id")?).await,
             "sessions.remove_worktree" => {
                 self.remove_worktree(&required_str(&params, "session_id")?)
                     .await
@@ -486,7 +525,8 @@ impl AgentsService {
     }
 
     async fn restore_active_sessions(self: &Arc<Self>) {
-        if self.restored.swap(true, Ordering::AcqRel) {
+        let _guard = self.restore_lock.lock().await;
+        if self.restored.load(Ordering::Acquire) {
             return;
         }
         let sessions = match self.list_sessions(false) {
@@ -500,14 +540,41 @@ impl AgentsService {
         for session in sessions.into_iter().filter(|session| {
             matches!(
                 session.status.as_str(),
-                "starting" | "running" | "waiting_approval"
+                "starting" | "running" | "waiting_approval" | "interrupting" | "stopping"
             )
         }) {
+            let lifecycle = self.lifecycle_lock(&session.id);
+            let _session_guard = lifecycle.lock().await;
+            if matches!(session.status.as_str(), "interrupting" | "stopping") {
+                let _ = self.expire_pending_approvals(&session.id, "runtime_restarted");
+                if session.status == "stopping" {
+                    let _ = self.mark_archived(&session.id);
+                } else {
+                    let _ = self.set_status(&session.id, SessionStatus::Interrupted);
+                }
+                let _ = self.append_and_emit(
+                    &session.id,
+                    "lifecycle",
+                    json!({"action":"reconcile","origin":"runtime","outcome":"forced","reason":"runtime_restarted"}),
+                );
+                continue;
+            }
             if let Err(error) = self.spawn_runtime(session.clone()).await {
                 tracing::warn!(session_id = %session.id, %error, "failed to restore Daedalus session");
                 let _ = self.set_status(&session.id, SessionStatus::Failed);
+                let _ = self.append_and_emit(
+                    &session.id,
+                    "lifecycle",
+                    json!({"action":"restore","origin":"runtime","outcome":"failed","reason":"app_server_start_failed"}),
+                );
+                self.emit(
+                    "session_updated",
+                    &session.id,
+                    json!(self.get_session(&session.id).ok()),
+                );
             }
         }
+        self.restored.store(true, Ordering::Release);
     }
 
     fn list_projects(&self) -> Result<Vec<Project>, String> {
@@ -862,32 +929,54 @@ impl AgentsService {
     async fn spawn_runtime(self: &Arc<Self>, session: Session) -> Result<(), String> {
         let (tx, rx) = mpsc::channel(64);
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let generation = self
+            .next_runtime_generation
+            .fetch_add(1, Ordering::Relaxed);
         let service = self.clone();
         let id = session.id.clone();
+        {
+            let mut runtimes = self.runtimes();
+            if runtimes.contains_key(&id) {
+                return Ok(());
+            }
+            runtimes.insert(
+                id.clone(),
+                RuntimeHandle {
+                    tx,
+                    generation,
+                },
+            );
+        }
         tokio::spawn(async move {
-            run_app_server(service, session, rx, ready_tx).await;
+            run_app_server(service, session, generation, rx, ready_tx).await;
         });
-        ready_rx
+        let result = ready_rx
             .await
-            .map_err(|_| "Codex app-server завершился при запуске".to_string())??;
-        self.runtimes().insert(id, RuntimeHandle { tx });
-        Ok(())
+            .map_err(|_| "Codex app-server завершился при запуске".to_string())?;
+        if result.is_err() {
+            self.remove_runtime(&id, generation);
+        }
+        result
     }
 
     async fn send(self: &Arc<Self>, session_id: &str, text: &str) -> Result<Value, String> {
-        let event =
-            self.append_timeline(session_id, "user_message", json!({"text": text}), false)?;
-        self.emit("timeline_appended", session_id, json!(event));
+        let lifecycle = self.lifecycle_lock(session_id);
+        let _guard = lifecycle.lock().await;
+        let session = self.get_session(session_id)?;
+        if matches!(session.status.as_str(), "interrupting" | "stopping" | "archived")
+            || session.archived_at.is_some()
+        {
+            return Err("Сессия останавливается или уже архивирована".into());
+        }
         let mut tx = self.runtimes().get(session_id).map(|h| h.tx.clone());
         if tx.is_none() {
-            let session = self.get_session(session_id)?;
-            if session.archived_at.is_some() {
-                return Err("Архивная сессия недоступна для продолжения".into());
-            }
             self.spawn_runtime(session).await?;
             tx = self.runtimes().get(session_id).map(|h| h.tx.clone());
         }
         let tx = tx.ok_or("Сессия Codex не запущена")?;
+        let event =
+            self.append_timeline(session_id, "user_message", json!({"text": text}), false)?;
+        self.emit("timeline_appended", session_id, json!(event));
         tx.send(AppCommand::Send {
             text: text.to_string(),
         })
@@ -897,18 +986,63 @@ impl AgentsService {
     }
 
     async fn interrupt(&self, session_id: &str) -> Result<Value, String> {
-        if self.get_session(session_id)?.active_turn_id.is_none() {
+        let lifecycle = self.lifecycle_lock(session_id);
+        let _guard = lifecycle.lock().await;
+        let Some(turn_id) = self.get_session(session_id)?.active_turn_id else {
             return Err("У сессии нет активного хода".into());
-        }
+        };
         let tx = self
             .runtimes()
             .get(session_id)
             .map(|h| h.tx.clone())
             .ok_or("Сессия Codex не запущена")?;
-        tx.send(AppCommand::Interrupt)
+        self.set_status(session_id, SessionStatus::Interrupting)?;
+        self.emit("session_updated", session_id, json!(self.get_session(session_id)?));
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+        if tx
+            .send(AppCommand::Interrupt {
+                expected_turn_id: turn_id,
+                done: done_tx,
+            })
             .await
-            .map_err(|_| "Codex app-server недоступен".to_string())?;
-        self.set_status(session_id, SessionStatus::Interrupted)?;
+            .is_err()
+        {
+            self.set_status(session_id, SessionStatus::Failed)?;
+            self.append_and_emit(
+                session_id,
+                "lifecycle",
+                json!({"action":"interrupt","origin":"user","outcome":"failed","reason":"command_channel_closed"}),
+            )?;
+            self.emit("session_updated", session_id, json!(self.get_session(session_id)?));
+            return Err("Codex app-server недоступен".into());
+        }
+        let (acknowledged, reason) = match tokio::time::timeout(INTERRUPT_ACK_TIMEOUT, done_rx).await
+        {
+            Ok(Ok(Ok(()))) => (true, "app_server_acknowledged"),
+            Ok(Ok(Err(_))) => (false, "app_server_refused"),
+            Ok(Err(_)) => (false, "ack_channel_closed"),
+            Err(_) => (false, "ack_timeout"),
+        };
+        if !acknowledged {
+            if let Err(error) = self.stop_runtime(session_id).await {
+                self.set_status(session_id, SessionStatus::Failed)?;
+                self.append_and_emit(
+                    session_id,
+                    "lifecycle",
+                    json!({"action":"interrupt","origin":"user","outcome":"failed","reason":"force_stop_failed"}),
+                )?;
+                self.emit("session_updated", session_id, json!(self.get_session(session_id)?));
+                return Err(error);
+            }
+            self.set_status(session_id, SessionStatus::Interrupted)?;
+            self.update_codex_ids(session_id, None, None)?;
+        }
+        self.expire_pending_approvals(session_id, "session_interrupted")?;
+        self.append_and_emit(
+            session_id,
+            "lifecycle",
+            json!({"action":"interrupt","origin":"user","outcome":if acknowledged {"acknowledged"} else {"forced"},"reason":reason}),
+        )?;
         self.emit(
             "session_updated",
             session_id,
@@ -917,23 +1051,65 @@ impl AgentsService {
         Ok(json!(true))
     }
 
-    fn archive(&self, session_id: &str) -> Result<Value, String> {
+    async fn archive(&self, session_id: &str) -> Result<Value, String> {
+        let lifecycle = self.lifecycle_lock(session_id);
+        let _guard = lifecycle.lock().await;
+        if self.get_session(session_id)?.archived_at.is_some() {
+            return Ok(json!(true));
+        }
+        self.set_status(session_id, SessionStatus::Stopping)?;
+        self.emit("session_updated", session_id, json!(self.get_session(session_id)?));
+        if let Err(error) = self.stop_runtime(session_id).await {
+            self.set_status(session_id, SessionStatus::Failed)?;
+            self.append_and_emit(
+                session_id,
+                "lifecycle",
+                json!({"action":"archive","origin":"user","outcome":"failed","reason":"force_stop_failed"}),
+            )?;
+            self.emit("session_updated", session_id, json!(self.get_session(session_id)?));
+            return Err(error);
+        }
+        self.expire_pending_approvals(session_id, "session_archived")?;
+        self.mark_archived(session_id)?;
+        self.append_and_emit(
+            session_id,
+            "lifecycle",
+            json!({"action":"archive","origin":"user","outcome":"stopped"}),
+        )?;
+        self.emit("session_updated", session_id, json!(self.get_session(session_id)?));
+        Ok(json!(true))
+    }
+
+    fn mark_archived(&self, session_id: &str) -> Result<(), String> {
         let timestamp = now();
         self.db()
             .execute(
-                "UPDATE sessions SET status='archived',archived_at=?2,updated_at=?2 WHERE id=?1",
+                "UPDATE sessions SET status='archived',active_turn_id=NULL,archived_at=?2,updated_at=?2 WHERE id=?1",
                 params![session_id, timestamp],
             )
             .map_err(|e| e.to_string())?;
-        self.emit(
-            "session_updated",
-            session_id,
-            json!(self.get_session(session_id)?),
-        );
-        Ok(json!(true))
+        Ok(())
+    }
+
+    async fn stop_runtime(&self, session_id: &str) -> Result<(), String> {
+        let Some(handle) = self.runtimes().remove(session_id) else {
+            return Ok(());
+        };
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+        handle
+            .tx
+            .send(AppCommand::Shutdown(Some(done_tx)))
+            .await
+            .map_err(|_| "Codex app-server недоступен во время остановки".to_string())?;
+        tokio::time::timeout(Duration::from_secs(5), done_rx)
+            .await
+            .map_err(|_| "Codex app-server не подтвердил остановку".to_string())?
+            .map_err(|_| "Codex app-server закрыл канал остановки".to_string())?
     }
 
     async fn remove_worktree(&self, session_id: &str) -> Result<Value, String> {
+        let lifecycle = self.lifecycle_lock(session_id);
+        let _guard = lifecycle.lock().await;
         let session = self.get_session(session_id)?;
         if session.archived_at.is_none() {
             return Err("Сначала архивируйте сессию".into());
@@ -947,16 +1123,7 @@ impl AgentsService {
         if git_dirty(Path::new(&session.worktree_path)) {
             return Err("Worktree содержит незакоммиченные изменения".into());
         }
-        let runtime = { self.runtimes().remove(session_id) };
-        if let Some(handle) = runtime {
-            let (done_tx, done_rx) = tokio::sync::oneshot::channel();
-            handle
-                .tx
-                .send(AppCommand::Shutdown(Some(done_tx)))
-                .await
-                .map_err(|_| "Codex app-server недоступен".to_string())?;
-            let _ = tokio::time::timeout(Duration::from_secs(5), done_rx).await;
-        }
+        self.stop_runtime(session_id).await?;
         let project = self
             .list_projects()?
             .into_iter()
@@ -1008,8 +1175,17 @@ impl AgentsService {
             .cloned()
             .unwrap_or_else(|| json!("decline"));
         let approval = self.get_approval(&approval_id)?;
+        let lifecycle = self.lifecycle_lock(&approval.session_id);
+        let _guard = lifecycle.lock().await;
+        let approval = self.get_approval(&approval_id)?;
         if approval.status != "pending" {
             return Err("Approval уже обработан".into());
+        }
+        if matches!(
+            self.get_session(&approval.session_id)?.status.as_str(),
+            "interrupting" | "stopping" | "archived"
+        ) {
+            return Err("Сессия останавливается или уже архивирована".into());
         }
         let result = if approval.method == "item/tool/requestUserInput" {
             json!({"answers": input.get("answers").cloned().unwrap_or_else(|| json!({}))})
@@ -1411,14 +1587,45 @@ impl AgentsService {
             .map_err(|e| e.to_string())
     }
 
-    fn expire_pending_approvals(&self, session_id: &str) -> Result<(), String> {
+    fn expire_pending_approvals(&self, session_id: &str, reason: &str) -> Result<(), String> {
         let timestamp = now();
+        let approval_ids = {
+            let db = self.db();
+            let mut statement = db
+                .prepare("SELECT id FROM approvals WHERE session_id=?1 AND status='pending'")
+                .map_err(|error| error.to_string())?;
+            let ids = statement
+                .query_map([session_id], |row| row.get::<_, String>(0))
+                .map_err(|error| error.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| error.to_string())?;
+            ids
+        };
         self.db()
             .execute(
                 "UPDATE approvals SET status='resolved',response_json=?2,resolved_at=?3 WHERE session_id=?1 AND status='pending'",
-                params![session_id, json!({"stale":true,"reason":"app_server_restarted"}).to_string(), timestamp],
+                params![session_id, json!({"stale":true,"reason":reason}).to_string(), timestamp],
             )
             .map_err(|error| error.to_string())?;
+        if !approval_ids.is_empty() {
+            for approval_id in &approval_ids {
+                self.emit(
+                    "approval_resolved",
+                    session_id,
+                    json!({"approvalId":approval_id,"expired":true,"reason":reason}),
+                );
+            }
+            self.emit(
+                "approval_resolved",
+                session_id,
+                json!({"expired":approval_ids.len(),"reason":reason}),
+            );
+            self.append_and_emit(
+                session_id,
+                "approval_expired",
+                json!({"count":approval_ids.len(),"reason":reason}),
+            )?;
+        }
         Ok(())
     }
 
