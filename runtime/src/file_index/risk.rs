@@ -130,3 +130,17 @@ fn path_is_under_root(path: &str, root: &str) -> bool {
             || normalized_path.starts_with(&format!("{normalized_root}/"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::path_is_under_root;
+
+    #[test]
+    fn path_scope_does_not_accept_sibling_prefixes() {
+        assert!(path_is_under_root("/safe/root/file.txt", "/safe/root"));
+        assert!(!path_is_under_root(
+            "/safe/root-escape/file.txt",
+            "/safe/root"
+        ));
+    }
+}

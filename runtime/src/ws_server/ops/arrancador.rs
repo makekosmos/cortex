@@ -224,12 +224,21 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
                 }
             };
             let mut cfg = crate::arrancador::config::load();
+            let local = cfg.local_games.get(&game.id).cloned().unwrap_or_default();
             if cfg.quarantined_local_games.contains_key(&game.id) {
+                tracing::warn!(
+                    target: "arrancador.launch",
+                    game_id = %game.id,
+                    source = local.source.as_deref().unwrap_or("unknown"),
+                    method = "validation",
+                    result = "rejected",
+                    reason = "quarantined",
+                    "game launch"
+                );
                 return LocalResponse::err(
                     "arrancador.launch: launcher state quarantined; rescan or re-add the game",
                 );
             }
-            let local = cfg.local_games.get(&game.id).cloned().unwrap_or_default();
             let launch_game = crate::arrancador::game_facade::GameFacade::launch_dto(&game);
             match crate::arrancador::launcher::launch(&launch_game, &local) {
                 Ok(result) => match serde_json::to_value(&result) {
@@ -247,6 +256,9 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
                                 error = %save_error,
                                 "failed to persist launcher quarantine"
                             );
+                            return LocalResponse::err(format!(
+                                "arrancador.launch: {e}; quarantine save failed: {save_error}"
+                            ));
                         }
                     }
                     LocalResponse::err(format!("arrancador.launch: {e}"))

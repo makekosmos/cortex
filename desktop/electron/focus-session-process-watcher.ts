@@ -118,16 +118,14 @@ export function startProcessWatcher(options: {
   }
   if (exeNames.size === 0) return;
 
-  const allowedLiteral = Array.from(exeNames)
-    .map((n) => `'${n}'`)
-    .join(",");
   const snoozePathLiteral = SNOOZE_FILE.replace(/'/g, "''");
 
   const psScript = [
     `$ErrorActionPreference = 'SilentlyContinue'`,
     `$snoozeFile = '${snoozePathLiteral}'`,
     `$targets = @{}`,
-    `@(${allowedLiteral}) | ForEach-Object { $targets[$_] = $true }`,
+    `$targetNames = @($env:KOSMOS_FOCUS_TARGETS | ConvertFrom-Json)`,
+    `$targetNames | ForEach-Object { $targets[[string]$_] = $true }`,
     `function Get-Snoozed {`,
     `  $s = @{}`,
     `  if (Test-Path $snoozeFile) {`,
@@ -158,7 +156,10 @@ export function startProcessWatcher(options: {
   watcherProcess = spawn(
     "powershell.exe",
     ["-NonInteractive", "-NoProfile", "-Command", psScript],
-    { windowsHide: true },
+    {
+      windowsHide: true,
+      env: { ...process.env, KOSMOS_FOCUS_TARGETS: JSON.stringify(Array.from(exeNames)) },
+    },
   );
 
   let buf = "";

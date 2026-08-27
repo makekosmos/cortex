@@ -74,7 +74,49 @@ pub fn save_to(path: &Path, cfg: &ArrancadorConfig) -> std::io::Result<()> {
         std::fs::create_dir_all(parent)?;
     }
     let text = serde_json::to_string_pretty(cfg).map_err(std::io::Error::other)?;
-    std::fs::write(path, text)
+    let temp_path = path.with_file_name(format!(
+        ".{}.tmp.{}",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("config"),
+        uuid::Uuid::new_v4()
+    ));
+    {
+        use std::io::Write as _;
+        let mut file = std::fs::File::create(&temp_path)?;
+        file.write_all(text.as_bytes())?;
+        file.sync_all()?;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::core::PCWSTR;
+        use windows::Win32::Storage::FileSystem::{
+            MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+        };
+        let from = temp_path
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>();
+        let to = path
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>();
+        unsafe {
+            MoveFileExW(
+                PCWSTR(from.as_ptr()),
+                PCWSTR(to.as_ptr()),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            )
+            .map_err(std::io::Error::other)
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        std::fs::rename(&temp_path, path)
+    }
 }
 
 #[cfg(test)]

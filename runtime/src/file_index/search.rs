@@ -18,10 +18,21 @@ impl FileIndex {
     }
 
     pub fn open(&self, path: &str) -> Result<()> {
-        if !std::path::Path::new(path).is_file() {
+        let target = std::fs::canonicalize(path)
+            .map_err(|_| FileIndexError::MissingFile(path.to_string()))?;
+        if !target.is_file() {
             return Err(FileIndexError::MissingFile(path.to_string()));
         }
-        scanner::open_file(path)
+        let roots = self
+            .root_paths()?
+            .into_iter()
+            .filter_map(|root| std::fs::canonicalize(root).ok())
+            .map(|root| root.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        if !indexed_result_is_visible(&target.to_string_lossy(), &roots) {
+            return Err(FileIndexError::MissingFile(path.to_string()));
+        }
+        scanner::open_file(&target.to_string_lossy())
     }
 }
 

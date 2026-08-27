@@ -116,10 +116,10 @@ fn steam_adapter_receives_exact_native_url_without_spawning() {
     let mut received = None;
     let pid = launch_steam_url_with("570", |url| {
         received = Some(url.to_owned());
-        Ok(42)
+        Ok(Some(42))
     })
     .unwrap();
-    assert_eq!(pid, 42);
+    assert_eq!(pid, Some(42));
     assert_eq!(received.as_deref(), Some("steam://rungameid/570"));
 }
 

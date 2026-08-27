@@ -14,7 +14,7 @@
 //   стабильный, дедуплицирует одинаковые таргеты.
 // - Skip: uninstall*/deinstall*/удалить* (case-insensitive substring),
 //   `.url` и `.appref-ms` (только .lnk), broken targets (path не существует),
-//   non-.exe/.bat/.cmd таргеты, zero-byte файлы.
+//   non-.exe таргеты, zero-byte файлы.
 // - Дедуп по id — первый .lnk выигрывает.
 // - Errors per-file логируются в `tracing::debug` и пропускаются — never abort
 //   the whole scan.
@@ -64,7 +64,17 @@ impl AppSource for StartMenuSource {
 }
 
 pub fn launch_win32(exec_path: &str) -> Result<()> {
-    // ShellExecute accepts .exe, .bat, .url, .pdf, etc. without a shell command.
+    let is_exe = Path::new(exec_path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"));
+    if !is_exe {
+        return Err(crate::app_index::AppIndexError::Launch(
+            "Win32 app target must be an .exe".to_string(),
+        ));
+    }
+    // Discovery and launch both admit only .exe targets, so ShellExecute
+    // cannot delegate an App Index entry to a command interpreter.
     super::shell_execute_open(exec_path)
 }
 
@@ -142,7 +152,7 @@ fn scan_dir(root: &Path, by_id: &mut HashMap<String, App>) {
                     .and_then(|s| s.to_str())
                     .map(|s| s.to_ascii_lowercase());
                 match target_ext.as_deref() {
-                    Some("exe") | Some("bat") | Some("cmd") => {}
+                    Some("exe") => {}
                     _ => {
                         tracing::debug!(
                             target: "app_index",

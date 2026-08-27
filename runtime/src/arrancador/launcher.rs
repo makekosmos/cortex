@@ -25,7 +25,9 @@ pub struct LaunchGame {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchResult {
-    pub pid: u32,
+    /// ShellExecuteW launches through the Windows shell broker and does not
+    /// expose the child process PID.
+    pub pid: Option<u32>,
     pub started_at: String,
     pub method: String, // "steam_url" | "direct_exe"
 }
@@ -202,10 +204,12 @@ pub fn launch(game: &LaunchGame, local: &LocalGameState) -> Result<LaunchResult,
                 .ok_or(LaunchError::InvalidSteamAppId)?;
             launch_steam_url_with(app_id, invoke_steam_url)
         }
-        LaunchCommand::DirectExe { program, cwd } => Ok(std::process::Command::new(program)
-            .current_dir(cwd)
-            .spawn()?
-            .id()),
+        LaunchCommand::DirectExe { program, cwd } => Ok(Some(
+            std::process::Command::new(program)
+                .current_dir(cwd)
+                .spawn()?
+                .id(),
+        )),
     };
     match pid {
         Ok(pid) => {
@@ -215,7 +219,7 @@ pub fn launch(game: &LaunchGame, local: &LocalGameState) -> Result<LaunchResult,
                 source,
                 method,
                 result = "started",
-                pid,
+                pid = ?pid,
                 "game launch"
             );
             Ok(LaunchResult {
@@ -239,28 +243,30 @@ pub fn launch(game: &LaunchGame, local: &LocalGameState) -> Result<LaunchResult,
     }
 }
 
-fn launch_steam_url_with<F>(app_id: &str, invoke: F) -> Result<u32, LaunchError>
+fn launch_steam_url_with<F>(app_id: &str, invoke: F) -> Result<Option<u32>, LaunchError>
 where
-    F: FnOnce(&str) -> Result<u32, LaunchError>,
+    F: FnOnce(&str) -> Result<Option<u32>, LaunchError>,
 {
     validate_steam_app_id(app_id)?;
     invoke(&format!("steam://rungameid/{app_id}"))
 }
 
-fn invoke_steam_url(url: &str) -> Result<u32, LaunchError> {
+fn invoke_steam_url(url: &str) -> Result<Option<u32>, LaunchError> {
     #[cfg(windows)]
     {
         crate::app_index::platform::windows::shell_execute_open(url)
             .map_err(|error| LaunchError::ShellExecuteFailed(error.to_string()))?;
         // ShellExecuteW is an async broker and does not provide the child PID.
-        Ok(0)
+        Ok(None)
     }
     #[cfg(not(windows))]
     {
-        Ok(std::process::Command::new("xdg-open")
-            .arg(url)
-            .spawn()?
-            .id())
+        Ok(Some(
+            std::process::Command::new("xdg-open")
+                .arg(url)
+                .spawn()?
+                .id(),
+        ))
     }
 }
 
