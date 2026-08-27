@@ -25,6 +25,9 @@ pub struct ArrancadorConfig {
     /// Device-local launcher metadata. This is deliberately not part of the
     /// canonical Game object or any public Arrancador DTO.
     pub local_games: std::collections::HashMap<String, LocalGameState>,
+    /// Invalid launcher state is retained but blocked until a fresh scan or
+    /// manual registration replaces it.
+    pub quarantined_local_games: std::collections::HashMap<String, String>,
 }
 
 pub type LocalGameState = ark_core::canonical_types::game::GameLocalState;
@@ -99,12 +102,23 @@ mod tests {
             steam_library_override: None,
             keep_backups: Some(5),
             local_games: std::collections::HashMap::new(),
+            quarantined_local_games: std::collections::HashMap::from([(
+                "game-1".into(),
+                "invalid-steam-app-id".into(),
+            )]),
         };
         save_to(&path, &cfg).unwrap();
         let loaded = load_from(&path);
         assert_eq!(loaded.rawg_api_key.as_deref(), Some("secret-key"));
         assert_eq!(loaded.custom_scan_paths.len(), 1);
         assert_eq!(loaded.keep_backups, Some(5));
+        assert_eq!(
+            loaded
+                .quarantined_local_games
+                .get("game-1")
+                .map(String::as_str),
+            Some("invalid-steam-app-id")
+        );
     }
 
     #[test]

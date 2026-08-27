@@ -85,7 +85,7 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
                 match game_facade.upsert(upsert_obj).await {
                     Ok(_) => {
                         cfg.local_games.insert(
-                            id,
+                            id.clone(),
                             crate::arrancador::config::LocalGameState {
                                 source: Some(game.source.clone()),
                                 source_app_id: Some(game.source_app_id.clone()),
@@ -97,6 +97,7 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
                                 save_paths: Vec::new(),
                             },
                         );
+                        cfg.quarantined_local_games.remove(&id);
                         if is_new {
                             added += 1;
                         } else {
@@ -200,6 +201,7 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
                                 .collect(),
                         },
                     );
+                    cfg.quarantined_local_games.remove(&id);
                     if let Err(e) = crate::arrancador::config::save(&cfg) {
                         return LocalResponse::err(format!(
                             "arrancador.add_manual: local state save failed: {e}"
@@ -221,18 +223,34 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
                     return LocalResponse::err(format!("arrancador.launch: game facade: {error}"));
                 }
             };
-            let local = crate::arrancador::config::load()
-                .local_games
-                .get(&game.id)
-                .cloned()
-                .unwrap_or_default();
+            let mut cfg = crate::arrancador::config::load();
+            if cfg.quarantined_local_games.contains_key(&game.id) {
+                return LocalResponse::err(
+                    "arrancador.launch: launcher state quarantined; rescan or re-add the game",
+                );
+            }
+            let local = cfg.local_games.get(&game.id).cloned().unwrap_or_default();
             let launch_game = crate::arrancador::game_facade::GameFacade::launch_dto(&game);
             match crate::arrancador::launcher::launch(&launch_game, &local) {
                 Ok(result) => match serde_json::to_value(&result) {
                     Ok(v) => LocalResponse::ok(v),
                     Err(e) => LocalResponse::err(format!("arrancador.launch: serialize: {e}")),
                 },
-                Err(e) => LocalResponse::err(format!("arrancador.launch: {e}")),
+                Err(e) => {
+                    if let Some(code) = e.quarantine_code() {
+                        cfg.quarantined_local_games
+                            .insert(game.id.clone(), code.into());
+                        if let Err(save_error) = crate::arrancador::config::save(&cfg) {
+                            tracing::warn!(
+                                target: "arrancador.launch",
+                                game_id = %game.id,
+                                error = %save_error,
+                                "failed to persist launcher quarantine"
+                            );
+                        }
+                    }
+                    LocalResponse::err(format!("arrancador.launch: {e}"))
+                }
             }
         }
         _ if subop.contains('.') => {

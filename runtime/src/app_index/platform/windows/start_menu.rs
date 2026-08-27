@@ -64,17 +64,8 @@ impl AppSource for StartMenuSource {
 }
 
 pub fn launch_win32(exec_path: &str) -> Result<()> {
-    // `cmd /c start "" "<path>"` — отрабатывает .exe, .bat, .url, .pdf и т.д.
-    // через ShellExecute.
-    use std::os::windows::process::CommandExt;
-    use std::process::Command;
-    let mut command = Command::new("cmd");
-    command.args(["/c", "start", "", exec_path]);
-    command.creation_flags(0x08000000);
-    command
-        .spawn()
-        .map_err(|e| crate::app_index::AppIndexError::Launch(format!("{e}")))?;
-    Ok(())
+    // ShellExecute accepts .exe, .bat, .url, .pdf, etc. without a shell command.
+    super::shell_execute_open(exec_path)
 }
 
 // --- internals ---
