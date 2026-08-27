@@ -201,6 +201,7 @@ impl AppIndex {
             let background_mode = bg.is_active();
             let mut all_apps: Vec<App> = Vec::new();
             let mut errors: Vec<String> = Vec::new();
+            let mut failed_sources: Vec<&'static str> = Vec::new();
 
             for src in sources.iter() {
                 match src.discover() {
@@ -221,6 +222,7 @@ impl AppIndex {
                             "source discover failed"
                         );
                         errors.push(format!("{}: {e}", src.name()));
+                        failed_sources.push(src.name());
                     }
                 }
             }
@@ -228,11 +230,17 @@ impl AppIndex {
             let icon_stats = IconExtractionQueue::new(icon_cache_dir, icon_sleep)
                 .fill_missing_icons(&mut all_apps);
 
-            (all_apps, errors, background_mode, icon_stats)
+            (
+                all_apps,
+                errors,
+                failed_sources,
+                background_mode,
+                icon_stats,
+            )
         })
         .await;
         self.discover_active.store(false, Ordering::SeqCst);
-        let (all_apps, errors, background_mode, icon_stats) = scan_result
+        let (mut all_apps, errors, failed_sources, background_mode, icon_stats) = scan_result
             .map_err(|e| AppIndexError::Other(format!("rescan background join failed: {e}")))?;
         self.scan_background_mode
             .store(background_mode, Ordering::SeqCst);
@@ -245,6 +253,13 @@ impl AppIndex {
 
         // Diff против existing cache для stats.
         let existing = self.cache.read().await.clone();
+        for app in &existing {
+            if failed_sources.contains(&app.source.as_str())
+                && !all_apps.iter().any(|candidate| candidate.id == app.id)
+            {
+                all_apps.push(app.clone());
+            }
+        }
         let stats = compute_diff(&existing, &all_apps);
 
         // Запись в SQLite + cache (atomic enough — SQLite транзакцией, cache swap'ом).

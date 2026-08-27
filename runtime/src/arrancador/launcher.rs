@@ -204,12 +204,21 @@ pub fn launch(game: &LaunchGame, local: &LocalGameState) -> Result<LaunchResult,
                 .ok_or(LaunchError::InvalidSteamAppId)?;
             launch_steam_url_with(app_id, invoke_steam_url)
         }
-        LaunchCommand::DirectExe { program, cwd } => Ok(Some(
-            std::process::Command::new(program)
-                .current_dir(cwd)
-                .spawn()?
-                .id(),
-        )),
+        LaunchCommand::DirectExe { program, cwd } => {
+            let current_program = std::fs::canonicalize(&program)
+                .map_err(|_| LaunchError::InvalidLocalState("executable-changed-before-launch"))?;
+            if current_program != program || !current_program.is_file() {
+                return Err(LaunchError::InvalidLocalState(
+                    "executable-changed-before-launch",
+                ));
+            }
+            Ok(Some(
+                std::process::Command::new(current_program)
+                    .current_dir(cwd)
+                    .spawn()?
+                    .id(),
+            ))
+        }
     };
     match pid {
         Ok(pid) => {

@@ -7,12 +7,21 @@ impl FileIndex {
         }
         self.observe_search(query);
         let candidate_limit = limit.saturating_mul(64).max(512);
-        let roots = self.root_strings()?;
+        let roots = self
+            .root_paths()?
+            .into_iter()
+            .filter_map(|root| std::fs::canonicalize(root).ok())
+            .map(|root| root.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
         let candidates = self
             .store
             .search(query, candidate_limit)?
             .into_iter()
-            .filter(|file| indexed_result_is_visible(&file.path, &roots))
+            .filter_map(|file| {
+                let path = std::fs::canonicalize(&file.path).ok()?;
+                let path = path.to_string_lossy().into_owned();
+                indexed_result_is_visible(&path, &roots).then_some(file)
+            })
             .collect();
         Ok(rank(candidates, query, limit))
     }

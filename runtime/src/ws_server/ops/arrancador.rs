@@ -223,7 +223,7 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
                     return LocalResponse::err(format!("arrancador.launch: game facade: {error}"));
                 }
             };
-            let mut cfg = crate::arrancador::config::load();
+            let cfg = crate::arrancador::config::load();
             let local = cfg.local_games.get(&game.id).cloned().unwrap_or_default();
             if cfg.quarantined_local_games.contains_key(&game.id) {
                 tracing::warn!(
@@ -247,9 +247,9 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
                 },
                 Err(e) => {
                     if let Some(code) = e.quarantine_code() {
-                        cfg.quarantined_local_games
-                            .insert(game.id.clone(), code.into());
-                        if let Err(save_error) = crate::arrancador::config::save(&cfg) {
+                        if let Err(save_error) =
+                            crate::arrancador::config::record_quarantine(&game.id, code)
+                        {
                             tracing::warn!(
                                 target: "arrancador.launch",
                                 game_id = %game.id,

@@ -12,6 +12,9 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
+static CONFIG_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -66,7 +69,16 @@ pub fn load_from(path: &Path) -> ArrancadorConfig {
 }
 
 pub fn save(cfg: &ArrancadorConfig) -> std::io::Result<()> {
+    let _guard = CONFIG_WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     save_to(&config_path(), cfg)
+}
+
+pub fn record_quarantine(game_id: &str, code: &str) -> std::io::Result<()> {
+    let _guard = CONFIG_WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut cfg = load();
+    cfg.quarantined_local_games
+        .insert(game_id.to_string(), code.to_string());
+    save_to(&config_path(), &cfg)
 }
 
 pub fn save_to(path: &Path, cfg: &ArrancadorConfig) -> std::io::Result<()> {
