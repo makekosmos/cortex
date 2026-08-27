@@ -18,7 +18,7 @@ import {
   type DictationLocalModelsSnapshot,
   type DictationConfigData,
 } from "./dictation-model-selection";
-import type { JsonRecord } from "../shared/runtimeGuards";
+import { isString, type JsonRecord } from "../shared/runtimeGuards";
 import {
   drawWaveformCanvas,
   idleBars,
@@ -36,6 +36,10 @@ const elapsedSec = ref<number>(0);
 const DEFAULT_DICTATION_HOTKEY = "Ctrl+Shift+;";
 const dictationHotkey = ref<string>(DEFAULT_DICTATION_HOTKEY);
 const injectMode = ref<"auto_paste" | "clipboard_only">("auto_paste");
+type TranscriptDelivery = "pasted" | "clipboard_only" | "clipboard_fallback" | "failed";
+const delivery = ref<TranscriptDelivery | null>(null);
+const deliveryReason = ref<string>("");
+const backgroundDelivery = ref(false);
 const levelBars = ref<number[]>(Array.from({ length: WAVE_BAR_COUNT }, () => 0));
 
 // Audio capture lifecycle:
@@ -66,6 +70,9 @@ let captureGeneration = 0;
  *  stop не должен запустить второй submit того же аудио (double-submit). */
 let stopInFlight = false;
 let pcmSampleCount = 0;
+let queuedUuid: string | null = null;
+let expectedTranscriptUuid: string | null = null;
+let unsubscribeArkEvent: (() => void) | null = null;
 
 const TARGET_SAMPLE_RATE = 16000;
 /** После этого окна тишины stream закрывается полностью (track.stop),
@@ -162,9 +169,116 @@ function splitHotkey(value: string): string[] {
     .map((part) => part.trim())
     .filter(Boolean);
 }
+
+type DeliveryPayload = {
+  delivery?: unknown;
+  deliveryReason?: unknown;
+  injected?: unknown;
+  uuid?: unknown;
+};
+
+const bufferedDeliveryEvents = new Map<string, DeliveryPayload>();
+
+function deliveryFromPayload(
+  payload: DeliveryPayload,
+  isBackground = false,
+): TranscriptDelivery | null {
+  if (
+    payload.delivery === "pasted" ||
+    payload.delivery === "clipboard_only" ||
+    payload.delivery === "clipboard_fallback" ||
+    payload.delivery === "failed"
+  ) {
+    return payload.delivery;
+  }
+  if (payload.injected === true) return "pasted";
+  if (payload.injected === false) {
+    return isBackground || injectMode.value === "clipboard_only"
+      ? "clipboard_only"
+      : "clipboard_fallback";
+  }
+  return null;
+}
+
+function deliveryLabel(
+  nextDelivery: TranscriptDelivery,
+  isBackground = backgroundDelivery.value,
+): string {
+  switch (nextDelivery) {
+    case "pasted":
+      return "Вставлено";
+    case "clipboard_only":
+      return isBackground ? "Буфер обмена — фоновый повтор" : "Буфер обмена — вставьте вручную";
+    case "clipboard_fallback":
+      return "Вставка не удалась — текст в буфере";
+    case "failed":
+      return "Не доставлено";
+  }
+}
+
+function applyDelivery(payload: DeliveryPayload, isBackground = false): boolean {
+  const nextDelivery = deliveryFromPayload(payload, isBackground);
+  if (!nextDelivery) return false;
+
+  delivery.value = nextDelivery;
+  backgroundDelivery.value = isBackground;
+  deliveryReason.value = isString(payload.deliveryReason) ? payload.deliveryReason.trim() : "";
+  if (nextDelivery === "pasted" || nextDelivery === "clipboard_only") {
+    status.value = "idle";
+    errorText.value = "";
+    subText.value =
+      nextDelivery === "clipboard_only"
+        ? deliveryReason.value || "Текст в буфере обмена — вставьте вручную"
+        : "";
+  } else if (nextDelivery === "clipboard_fallback") {
+    status.value = "error";
+    errorText.value = deliveryReason.value
+      ? `Вставка не удалась: ${deliveryReason.value}. Текст в буфере обмена.`
+      : "Вставка не удалась — текст в буфере обмена.";
+    subText.value = "";
+  } else {
+    status.value = "error";
+    errorText.value = deliveryReason.value || "Не удалось доставить текст";
+    subText.value = "";
+  }
+  return true;
+}
+
+function handleTranscriptEvent(event: DeliveryPayload & { event?: unknown }): void {
+  if (event.event !== "dictation_transcript") return;
+  const uuid = isString(event.uuid) ? event.uuid : null;
+  if (!uuid) return;
+  if (!expectedTranscriptUuid && !queuedUuid) {
+    bufferedDeliveryEvents.set(uuid, event);
+    if (bufferedDeliveryEvents.size > 16) {
+      const oldest = bufferedDeliveryEvents.keys().next().value;
+      if (isString(oldest)) bufferedDeliveryEvents.delete(oldest);
+    }
+    return;
+  }
+  if (expectedTranscriptUuid && uuid !== expectedTranscriptUuid) return;
+  if (queuedUuid && uuid !== queuedUuid) return;
+  const isBackground = Boolean(queuedUuid && uuid === queuedUuid);
+  if (applyDelivery(event, isBackground)) expectedTranscriptUuid = uuid;
+}
+
+function deliveryFinishDelay(): number {
+  switch (delivery.value) {
+    case "pasted":
+      return 80;
+    case "clipboard_only":
+      return 2500;
+    case "clipboard_fallback":
+    case "failed":
+      return 4500;
+    default:
+      return status.value === "error" ? 4500 : 80;
+  }
+}
+
 async function loadDictationConfig(): Promise<void> {
   try {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+    // SAFETY: the surrounding domain validation preserves the asserted contract.
     const cfg = (await window.kepler.ark.request("dictation.get_config", {})) as {
       config?: { hotkey?: string | null; injectMode?: string | null };
     };
@@ -178,18 +292,20 @@ async function loadDictationConfig(): Promise<void> {
 }
 async function ensureReadyDictationModel(): Promise<boolean> {
   try {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+    // SAFETY: the surrounding domain validation preserves the asserted contract.
     const cfgResp = (await window.kepler.ark.request("dictation.get_config", {})) as {
       config?: JsonRecord;
       hasApiKey?: boolean;
     };
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+    // SAFETY: the surrounding domain validation preserves the asserted contract.
     const localModels = (await window.kepler.ark.request(
       "dictation.list_local_models",
       {},
     )) as DictationLocalModelsSnapshot;
-// SAFETY: the surrounding domain validation preserves the asserted contract.
-    const config = normalizeDictationConfig(cfgResp.config as Partial<DictationConfigData> | undefined);
+    // SAFETY: the surrounding domain validation preserves the asserted contract.
+    const config = normalizeDictationConfig(
+      cfgResp.config as Partial<DictationConfigData> | undefined,
+    );
     const current = buildDictationVoiceModelValue(config);
     const resolved = resolveAvailableDictationVoiceModelValue(config, {
       hasApiKey: cfgResp.hasApiKey ?? false,
@@ -277,6 +393,10 @@ function handleSubmitClick(event: Event): void {
 }
 
 function statusText(): string {
+  if (delivery.value) {
+    const label = deliveryLabel(delivery.value);
+    return deliveryReason.value ? `${label}: ${deliveryReason.value}` : label;
+  }
   switch (status.value) {
     case "recording":
       return "Слушаю…";
@@ -292,7 +412,11 @@ function statusText(): string {
   }
 }
 
-function footerLabel(nextStatus: PillStatus): string {
+function footerLabel(
+  nextStatus: PillStatus,
+  nextDelivery: TranscriptDelivery | null = null,
+): string {
+  if (nextDelivery) return deliveryLabel(nextDelivery);
   switch (nextStatus) {
     case "recording":
       return "Идёт запись";
@@ -332,7 +456,7 @@ async function ensureStream(): Promise<MediaStream> {
   // Cold start: запрашиваем нужное устройство из config'а.
   let preferredDeviceId: string | null = null;
   try {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+    // SAFETY: the surrounding domain validation preserves the asserted contract.
     const cfg = (await window.kepler.ark.request("dictation.get_config", {})) as {
       config?: { microphoneDeviceId?: string | null };
     };
@@ -355,10 +479,14 @@ async function ensureStream(): Promise<MediaStream> {
       });
     } catch (e) {
       console.warn("[dictation-pill] preferred mic not available, falling back to default:", e);
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: baseConstraints });
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: baseConstraints,
+      });
     }
   } else {
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: baseConstraints });
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: baseConstraints,
+    });
   }
   const track = mediaStream.getAudioTracks()[0];
   console.info("[dictation-pill] microphone stream ready", {
@@ -419,6 +547,13 @@ async function startCapture(): Promise<void> {
   pcmChunks = [];
   pcmSampleCount = 0;
   errorText.value = "";
+  subText.value = "";
+  delivery.value = null;
+  deliveryReason.value = "";
+  backgroundDelivery.value = false;
+  queuedUuid = null;
+  expectedTranscriptUuid = null;
+  bufferedDeliveryEvents.clear();
   elapsedSec.value = 0;
   await loadDictationConfig();
   if (!(await ensureReadyDictationModel())) {
@@ -676,9 +811,8 @@ async function stopAndSubmit(): Promise<void> {
       bytes: wav.byteLength,
     });
     const b64 = bytesToBase64(wav);
-    let queuedUuid: string | null = null;
     try {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+      // SAFETY: the surrounding domain validation preserves the asserted contract.
       const resp = (await window.kepler.ark.request("dictation.submit_audio", {
         audioB64: b64,
         durationSec,
@@ -687,13 +821,20 @@ async function stopAndSubmit(): Promise<void> {
         state?: PillStatus | "pending";
         queued?: boolean;
         injected?: boolean;
+        delivery?: TranscriptDelivery;
+        deliveryReason?: string | null;
         error?: string;
       };
       if (resp.state === "error") {
         // Fatal от backend (401/400/403/etc) — показываем user_msg, закроемся
         // с error mark. Pending всё ещё на диске — юзер увидит в Settings.
-        status.value = "error";
-        errorText.value = resp.error ?? "Не удалось распознать";
+        expectedTranscriptUuid = resp.uuid ?? expectedTranscriptUuid;
+        if (!resp.delivery || !applyDelivery(resp)) {
+          status.value = "error";
+          errorText.value = resp.error ?? "Не удалось распознать";
+        } else if (resp.error) {
+          errorText.value = resp.error;
+        }
         console.warn("[dictation-pill] submit_audio response", {
           state: resp.state,
           uuid: resp.uuid,
@@ -703,26 +844,33 @@ async function stopAndSubmit(): Promise<void> {
         // Первая попытка fail → backend запустил auto-retry в фоне.
         // Поллим очередь со спиннером "Жду сеть…".
         queuedUuid = resp.uuid;
-        console.info("[dictation-pill] submit_audio response", { state: "pending", queued: true });
+        expectedTranscriptUuid = resp.uuid;
+        const buffered = bufferedDeliveryEvents.get(resp.uuid);
+        bufferedDeliveryEvents.delete(resp.uuid);
+        if (buffered) applyDelivery(buffered, true);
+        console.info("[dictation-pill] submit_audio response", {
+          state: "pending",
+          queued: true,
+        });
       } else {
         console.info("[dictation-pill] submit_audio response", {
           state: resp.state ?? "unknown",
           injected: resp.injected ?? null,
+          delivery: resp.delivery ?? null,
         });
         // Clipboard-only is a valid success path: backend intentionally does
         // not report an OS paste in that mode.
-        if (resp.injected === false && injectMode.value === "auto_paste") {
-          status.value = "error";
-          errorText.value = "Текст распознан, но не вставлен. Он в буфере обмена.";
-        } else {
-          status.value = "idle";
-        }
+        expectedTranscriptUuid = resp.uuid ?? expectedTranscriptUuid;
+        if (resp.uuid) bufferedDeliveryEvents.delete(resp.uuid);
+        if (!applyDelivery(resp)) status.value = "idle";
       }
     } catch (e) {
       status.value = "error";
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+      // SAFETY: the surrounding domain validation preserves the asserted contract.
       errorText.value = (e as Error)?.message ?? "Ошибка распознавания";
-      console.error("[dictation-pill] submit_audio failed", { error: String(e) });
+      console.error("[dictation-pill] submit_audio failed", {
+        error: String(e),
+      });
     }
     scheduleStreamShutdown();
 
@@ -732,10 +880,7 @@ async function stopAndSubmit(): Promise<void> {
       // Даём 130s timeout — чуть больше чем полный цикл backend.
       await waitForQueueResolve(queuedUuid, 130_000);
     }
-    setTimeout(
-      () => void window.kepler.dictation.pillFinished(),
-      status.value === "error" ? 4500 : 80,
-    );
+    setTimeout(() => void window.kepler.dictation.pillFinished(), deliveryFinishDelay());
   } finally {
     stopInFlight = false;
   }
@@ -745,19 +890,21 @@ async function stopAndSubmit(): Promise<void> {
 /// timeoutMs. Меняет статус pill на 'waiting' (спиннер + subText). На исходе
 /// либо переходим в idle (success — item исчез), либо в error (timeout).
 async function waitForQueueResolve(uuid: string, timeoutMs: number): Promise<void> {
+  if (delivery.value) return;
   const startMs = Date.now();
   status.value = "waiting";
   subText.value = "Жду сеть…";
   while (Date.now() - startMs < timeoutMs) {
+    if (delivery.value) return;
     try {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+      // SAFETY: the surrounding domain validation preserves the asserted contract.
       const resp = (await window.kepler.ark.request("dictation.list_pending", {})) as {
         items?: { uuid: string; attempts: number }[];
       };
       const item = (resp.items ?? []).find((i) => i.uuid === uuid);
       if (!item) {
         // Item исчез → backend сделал success+drop. Закрываемся тихо.
-        status.value = "idle";
+        if (!delivery.value) status.value = "idle";
         return;
       }
       // Обновляем подпись с числом попыток для feedback'а.
@@ -811,6 +958,7 @@ onMounted(() => {
       void cancelCapture();
     }
   });
+  unsubscribeArkEvent = window.kepler.ark.onEvent((event) => handleTranscriptEvent(event));
 });
 
 const stopStatusWatch = watch(
@@ -832,6 +980,7 @@ const stopWaveformWatch = watch([levelBars, processingBars, status], () => reque
 
 onBeforeUnmount(() => {
   unsubscribeCommand?.();
+  unsubscribeArkEvent?.();
   stopStatusWatch();
   stopWaveformWatch();
   stopProcessingWave();
@@ -928,14 +1077,19 @@ const exposeStatusText = computed(() => statusText());
           aria-hidden="true"
         />
       </div>
-      <div class="pill-footer" :class="`pill-footer--${status}`">
+      <div
+        class="pill-footer"
+        :class="delivery ? `pill-footer--delivery-${delivery}` : `pill-footer--${status}`"
+      >
         <span class="pill-footer__status">
           <span
             class="pill-footer__dot"
-            :class="`pill-footer__dot--${status}`"
+            :class="
+              delivery ? `pill-footer__dot--delivery-${delivery}` : `pill-footer__dot--${status}`
+            "
             aria-hidden="true"
           />
-          {{ footerLabel(status) }}
+          {{ footerLabel(status, delivery) }}
         </span>
         <div v-if="canCancel(status) || canSubmit(status)" class="pill-footer__actions">
           <button
@@ -1169,6 +1323,35 @@ const exposeStatusText = computed(() => statusText());
 .pill-footer__dot--waiting {
   background: #f5a524;
   box-shadow: 0 0 0 2px color-mix(in srgb, #f5a524 14%, transparent);
+}
+
+.pill-footer--delivery-pasted {
+  color: #5eead4;
+}
+
+.pill-footer--delivery-clipboard_only {
+  color: #f5a524;
+}
+
+.pill-footer--delivery-clipboard_fallback,
+.pill-footer--delivery-failed {
+  color: #ff453a;
+}
+
+.pill-footer__dot--delivery-pasted {
+  background: #2dd4bf;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #2dd4bf 14%, transparent);
+}
+
+.pill-footer__dot--delivery-clipboard_only {
+  background: #f5a524;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #f5a524 14%, transparent);
+}
+
+.pill-footer__dot--delivery-clipboard_fallback,
+.pill-footer__dot--delivery-failed {
+  background: #ff453a;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #ff453a 14%, transparent);
 }
 
 .pill-footer__actions {

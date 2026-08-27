@@ -322,9 +322,18 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
     )
     .await;
     match outcome {
-        AttemptOutcome::Success { injected } => {
+        AttemptOutcome::Success {
+            injected,
+            delivery,
+        } => {
             // process_one_attempt уже перевёл state в Idle.
-            DictationResponse::ok(json!({ "uuid": uuid, "state": "idle", "injected": injected }))
+            DictationResponse::ok(json!({
+                "uuid": uuid,
+                "state": "idle",
+                "injected": injected,
+                "delivery": delivery.as_str(),
+                "deliveryReason": delivery.reason(),
+            }))
         }
         AttemptOutcome::Cancelled => DictationResponse::ok(json!({
             "uuid": uuid,
@@ -388,5 +397,14 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
                 "queued": true,
             }))
         }
+        AttemptOutcome::DeliveryFailed { reason } => DictationResponse::ok(json!({
+            "uuid": uuid,
+            "state": "error",
+            "error": "Не удалось доставить текст — диктовка осталась в очереди",
+            "queued": true,
+            "injected": false,
+            "delivery": "failed",
+            "deliveryReason": reason,
+        })),
     }
 }

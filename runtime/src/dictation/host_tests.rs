@@ -317,6 +317,22 @@
         cfg.local_command_path = Some(command_path.to_string_lossy().to_string());
     }
 
+    struct FailingInjector;
+
+    impl crate::dictation::inject::Injector for FailingInjector {
+        fn inject(
+            &self,
+            _text: &str,
+            _mode: InjectMode,
+            _prev_hwnd: Option<isize>,
+        ) -> Result<crate::dictation::inject::DeliveryResult, InjectError> {
+            Err(InjectError::SendInput {
+                injected: 0,
+                expected: 4,
+            })
+        }
+    }
+
     #[tokio::test]
     async fn process_pending_success_transitions_to_idle_and_drops_item() {
         use httpmock::prelude::*;
@@ -358,7 +374,13 @@
 
         let outcome =
             process_one_attempt(&host, &uuid, "fake-key", 1.0, AttemptDelivery::Active).await;
-        assert_eq!(outcome, AttemptOutcome::Success { injected: false });
+        assert!(matches!(
+            outcome,
+            AttemptOutcome::Success {
+                injected: false,
+                delivery: super::super::inject::Delivery::ClipboardOnly,
+            }
+        ));
 
         // pending удалён
         assert!(super::super::pending::list(&host.data_dir)
@@ -401,12 +423,76 @@
         let outcome =
             process_one_attempt(&host, &uuid, "fake-key", 1.0, AttemptDelivery::Background).await;
 
-        assert_eq!(outcome, AttemptOutcome::Success { injected: false });
+        assert!(matches!(
+            outcome,
+            AttemptOutcome::Success {
+                injected: false,
+                delivery: super::super::inject::Delivery::ClipboardOnly,
+            }
+        ));
         assert!(super::super::pending::list(&host.data_dir)
             .unwrap()
             .is_empty());
         let snap = host.current_state().await;
         assert_eq!(snap["state"], "idle");
+    }
+
+    #[tokio::test]
+    async fn delivery_failure_keeps_pending_and_reports_safe_reason() {
+        use httpmock::prelude::*;
+        let server = MockServer::start_async().await;
+        server
+            .mock_async(|when, then| {
+                when.method(POST).path("/openai/v1/audio/transcriptions");
+                then.status(200).body(
+                    r#"{"text":"delivery test","segments":[{"text":"delivery test","no_speech_prob":0.05,"avg_logprob":-0.3}]}"#,
+                );
+            })
+            .await;
+        let td = tempfile::TempDir::new().unwrap();
+        let endpoint = format!("{}/openai/v1/audio/transcriptions", server.base_url());
+        let host = DictationHost::new_for_test(td.path().into(), endpoint, test_cfg());
+        let uuid = super::super::pending::enqueue(
+            &host.data_dir,
+            &make_wav(),
+            1.0,
+            super::super::pending::EnqueueOpts {
+                language: "ru".into(),
+                prompt: String::new(),
+                inject_mode: "auto_paste".into(),
+                model: "whisper-large-v3".into(),
+                prev_hwnd: Some(7),
+            },
+        )
+        .unwrap();
+        {
+            let mut s = host.state.lock().await;
+            s.active_uuid = Some(uuid.clone());
+            s.name = DictationStateName::Transcribing;
+        }
+
+        let outcome = process_one_attempt_with_injector(
+            &host,
+            &uuid,
+            "fake-key",
+            1.0,
+            AttemptDelivery::Active,
+            std::sync::Arc::new(FailingInjector),
+        )
+        .await;
+
+        assert_eq!(
+            outcome,
+            AttemptOutcome::DeliveryFailed {
+                reason: "paste_failed"
+            }
+        );
+        let items = super::super::pending::list(&host.data_dir).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].attempts, 1);
+        let state = host.current_state().await;
+        assert_eq!(state["state"], "error");
+        assert_eq!(state["canRetry"], true);
     }
 
     #[tokio::test]

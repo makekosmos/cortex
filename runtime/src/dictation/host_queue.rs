@@ -36,7 +36,12 @@ fn resolve_attempt_inject_mode(raw_mode: &str, mock_transcript: Option<&str>) ->
 #[derive(Debug, PartialEq)]
 enum AttemptOutcome {
     /// Транскрибировано + inject выполнен (или fallback'нут в clipboard).
-    Success { injected: bool },
+    Success {
+        injected: bool,
+        delivery: inject::Delivery,
+    },
+    /// Транскрибировано, но clipboard не принял текст. Pending сохраняется.
+    DeliveryFailed { reason: &'static str },
     /// Пользователь отменил активную попытку; не inject'им и не удаляем pending.
     Cancelled,
     /// Retryable error — стоит повторить через delay.
@@ -61,6 +66,25 @@ async fn process_one_attempt(
     api_key: &str,
     record_seconds: f32,
     delivery: AttemptDelivery,
+) -> AttemptOutcome {
+    process_one_attempt_with_injector(
+        host,
+        uuid,
+        api_key,
+        record_seconds,
+        delivery,
+        std::sync::Arc::new(inject::SystemInjector),
+    )
+    .await
+}
+
+async fn process_one_attempt_with_injector(
+    host: &Arc<DictationHost>,
+    uuid: &str,
+    api_key: &str,
+    record_seconds: f32,
+    delivery: AttemptDelivery,
+    injector: std::sync::Arc<dyn inject::Injector>,
 ) -> AttemptOutcome {
     let start = std::time::Instant::now();
 
@@ -97,11 +121,15 @@ async fn process_one_attempt(
     if let Some(text) = mock_transcript {
         tracing::info!(%uuid, "dictation: using mock transcript override");
         let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
-        let _ = inject_mode;
-        let _ = prev_hwnd;
         tracing::info!(%uuid, "dictation: skipping OS inject for mock transcript");
 
-        let _ = super::pending::drop_item(&host.data_dir, uuid);
+        let delivery_result = inject::DeliveryResult {
+            delivery: inject::Delivery::ClipboardOnly,
+        };
+
+        if let Err(error) = super::pending::drop_item(&host.data_dir, uuid) {
+            tracing::error!(%uuid, %error, "dictation: cleanup after mock delivery failed");
+        }
 
         {
             let mut stats_guard = host.stats.lock().await;
@@ -118,6 +146,7 @@ async fn process_one_attempt(
             "durationMs": duration_ms,
             "uuid": uuid,
             "injected": false,
+            "delivery": delivery_result.delivery.as_str(),
         }));
         let _ = host
             .events_tx
@@ -131,7 +160,10 @@ async fn process_one_attempt(
             drop(s);
             host.emit_state(&snap).await;
         }
-        return AttemptOutcome::Success { injected: false };
+        return AttemptOutcome::Success {
+            injected: false,
+            delivery: delivery_result.delivery,
+        };
     }
 
     let result: Result<String, SubmitError> = if provider_uses_local_runtime(&cfg.provider) {
@@ -210,12 +242,69 @@ async fn process_one_attempt(
             // delivery path but must remain false in the API/event result.
             let os_inject_requested = matches!(inject_mode, InjectMode::AutoPaste);
             let text_for_inject = text.clone();
+            let injector = injector.clone();
             let inject_res = tokio::task::spawn_blocking(move || {
-                inject::inject_blocking(&text_for_inject, inject_mode, prev_hwnd)
+                injector.inject(&text_for_inject, inject_mode, prev_hwnd)
             })
             .await;
 
-            let _ = super::pending::drop_item(&host.data_dir, uuid);
+            let delivery_result = match inject_res {
+                Ok(Ok(result)) => result,
+                Ok(Err(error)) => {
+                    let reason = error.safe_reason();
+                    tracing::warn!(%uuid, error = %error, "dictation: transcript delivery failed");
+                    let _ = super::pending::bump_attempt(&host.data_dir, uuid, reason);
+                    host.emit_pending_changed();
+                    if matches!(delivery, AttemptDelivery::Active) {
+                        host.fail_session(
+                            uuid,
+                            "Не удалось доставить текст — диктовка осталась в очереди",
+                            true,
+                        )
+                        .await;
+                    }
+                    let _ = host.events_tx.send(json!({
+                        "event": "dictation_transcript",
+                        "text": text,
+                        "language": language,
+                        "durationMs": duration_ms,
+                        "uuid": uuid,
+                        "injected": false,
+                        "delivery": "failed",
+                        "deliveryReason": reason,
+                    }));
+                    return AttemptOutcome::DeliveryFailed { reason };
+                }
+                Err(error) => {
+                    let reason = "inject_task_failed";
+                    tracing::warn!(%uuid, error = %error, "dictation: transcript delivery task failed");
+                    let _ = super::pending::bump_attempt(&host.data_dir, uuid, reason);
+                    host.emit_pending_changed();
+                    if matches!(delivery, AttemptDelivery::Active) {
+                        host.fail_session(
+                            uuid,
+                            "Не удалось доставить текст — диктовка осталась в очереди",
+                            true,
+                        )
+                        .await;
+                    }
+                    let _ = host.events_tx.send(json!({
+                        "event": "dictation_transcript",
+                        "text": text,
+                        "language": language,
+                        "durationMs": duration_ms,
+                        "uuid": uuid,
+                        "injected": false,
+                        "delivery": "failed",
+                        "deliveryReason": reason,
+                    }));
+                    return AttemptOutcome::DeliveryFailed { reason };
+                }
+            };
+
+            if let Err(error) = super::pending::drop_item(&host.data_dir, uuid) {
+                tracing::error!(%uuid, %error, "dictation: cleanup after delivery failed");
+            }
 
             {
                 let mut stats_guard = host.stats.lock().await;
@@ -225,25 +314,7 @@ async fn process_one_attempt(
                 }
             }
 
-            let injected = match &inject_res {
-                Ok(Ok(())) => os_inject_requested,
-                Ok(Err(e)) => {
-                    tracing::warn!(
-                        %uuid,
-                        error = %e,
-                        "dictation: inject failed; transcript may be in clipboard"
-                    );
-                    false
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        %uuid,
-                        error = %e,
-                        "dictation: inject task failed; transcript delivery is unknown"
-                    );
-                    false
-                }
-            };
+            let injected = delivery_result.delivery.injected() && os_inject_requested;
             let _ = host.events_tx.send(json!({
                 "event": "dictation_transcript",
                 "text": text,
@@ -251,6 +322,8 @@ async fn process_one_attempt(
                 "durationMs": duration_ms,
                 "uuid": uuid,
                 "injected": injected,
+                "delivery": delivery_result.delivery.as_str(),
+                "deliveryReason": delivery_result.delivery.reason(),
             }));
             let _ = host
                 .events_tx
@@ -265,7 +338,10 @@ async fn process_one_attempt(
                 drop(s);
                 host.emit_state(&snap).await;
             }
-            AttemptOutcome::Success { injected }
+            AttemptOutcome::Success {
+                injected,
+                delivery: delivery_result.delivery,
+            }
         }
         Err(e) => {
             {
@@ -337,6 +413,7 @@ async fn auto_retry_loop(
         {
             AttemptOutcome::Success { .. } => return,
             AttemptOutcome::Cancelled => return,
+            AttemptOutcome::DeliveryFailed { .. } => return,
             AttemptOutcome::Fatal => return,
             AttemptOutcome::Retryable => continue,
         }
@@ -416,7 +493,10 @@ async fn op_retry(params: Value, host: &Arc<DictationHost>) -> DictationResponse
                 )
                 .await;
             }
-            AttemptOutcome::Success { .. } | AttemptOutcome::Cancelled | AttemptOutcome::Fatal => {}
+            AttemptOutcome::Success { .. }
+            | AttemptOutcome::Cancelled
+            | AttemptOutcome::DeliveryFailed { .. }
+            | AttemptOutcome::Fatal => {}
         }
     });
     DictationResponse::ok(json!({ "uuid": uuid, "started": true }))
@@ -915,4 +995,3 @@ async fn op_test_connectivity(host: &DictationHost) -> DictationResponse {
 // ---------------------------------------------------------------------------
 // Tests — state machine transitions + dispatch.
 // ---------------------------------------------------------------------------
-

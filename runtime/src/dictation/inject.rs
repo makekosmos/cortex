@@ -1,56 +1,19 @@
-// Inject — пишет transcript в clipboard, опционально симулирует Ctrl+V
-// в предыдущем активном окне (HWND, захваченный до показа pill).
-//
-// Поток AutoPaste (см. forbidden.md → Dictation, обязательные задержки):
-//   1. clipboard.set_text(transcript)
-//   3. SetForegroundWindow(prev_hwnd) если есть HWND
-//   4. sleep 80ms — даём ОС вернуть focus в целевое окно
-//   5. terminal-aware paste shortcut (Ctrl+V normally, Shift+Insert for terminals)
-//   6. оставить transcript в clipboard, чтобы его можно было вставить ещё раз
-//
-// Поток ClipboardOnly: только шаг 2. Юзер сам жмёт Ctrl+V.
-//
-// Все API calls в enigo/arboard синхронные + потенциально блокирующие
-// (особенно SendInput на медленных машинах). Вызываем через
-// `tokio::task::spawn_blocking` в host.
+// Inject — пишет transcript в clipboard и, если безопасно, вставляет его в
+// окно, которое было активно до показа pill.
 
 use thiserror::Error;
 
 use super::config::InjectMode;
 
-/// Минимальная задержка после Ctrl+V. 80ms даёт запас над типичными ~30-50ms
-/// которые Windows тратит на обработку paste (особенно когда target —
-/// Electron-based app типа VS Code).
-const POST_PASTE_DELAY_MS: u64 = 80;
+#[path = "inject_platform.rs"]
+mod platform;
 
-/// Задержка после SetForegroundWindow перед симуляцией клавиш. Без неё
-/// `Ctrl+V` может уйти в pill window (фокус ещё не вернулся).
-const REFOCUS_DELAY_MS: u64 = 80;
-
+pub use platform::capture_foreground_window;
+#[cfg(all(windows, test))]
+pub(crate) use platform::paste_shortcut_for_window_class;
 #[cfg(windows)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PasteShortcut {
-    CtrlV,
-    ShiftInsert,
-}
-
-#[cfg(windows)]
-fn paste_shortcut_for_window_class(class_name: &str) -> PasteShortcut {
-    let class = class_name.to_ascii_lowercase();
-    let terminal_classes = [
-        "cascadia_hosting_window_class",
-        "consolewindowclass",
-        "mintty",
-        "wezterm",
-        "alacritty",
-        "virtualconsoleclass",
-    ];
-    if terminal_classes.iter().any(|needle| class.contains(needle)) {
-        PasteShortcut::ShiftInsert
-    } else {
-        PasteShortcut::CtrlV
-    }
-}
+pub(crate) use platform::PasteShortcut;
+pub(crate) use platform::{inject_with_adapter, SystemOsAdapter};
 
 #[derive(Debug, Error)]
 pub enum InjectError {
@@ -58,150 +21,111 @@ pub enum InjectError {
     Clipboard(#[from] arboard::Error),
     #[error("SendInput failed: injected {injected} of {expected} events")]
     SendInput { injected: u32, expected: u32 },
+    #[error("foreground target is missing")]
+    MissingTarget,
+    #[error("foreground target is stale")]
+    StaleTarget,
+    #[error("foreground restore failed")]
+    ForegroundRestore,
+    #[error("foreground target changed")]
+    TargetChanged,
 }
 
-/// Захват активного окна на момент вызова. Должен вызываться ДО показа
-/// pill (иначе foreground = pill). Возвращаемое значение — opaque HWND
-/// для передачи в `inject`. None на не-Windows / при отсутствии foreground.
-#[cfg(windows)]
-pub fn capture_foreground_window() -> Option<isize> {
-    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
-    let hwnd = unsafe { GetForegroundWindow() };
-    let raw = hwnd.0 as isize;
-    if raw == 0 {
-        None
-    } else {
-        Some(raw)
+impl InjectError {
+    pub(crate) fn safe_reason(&self) -> &'static str {
+        match self {
+            Self::Clipboard(_) => "clipboard_write_failed",
+            Self::SendInput { .. } => "paste_failed",
+            Self::MissingTarget => "missing_target_window",
+            Self::StaleTarget => "stale_target_window",
+            Self::ForegroundRestore => "foreground_restore_failed",
+            Self::TargetChanged => "target_window_changed",
+        }
     }
 }
 
-#[cfg(not(windows))]
-pub fn capture_foreground_window() -> Option<isize> {
-    None
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Delivery {
+    Pasted,
+    ClipboardOnly,
+    ClipboardFallback { reason: &'static str },
 }
 
-#[cfg(windows)]
-fn restore_foreground_window(raw: isize) {
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
-    let hwnd = HWND(raw as *mut _);
-    unsafe {
-        let _ = SetForegroundWindow(hwnd);
-    }
-}
-
-#[cfg(not(windows))]
-fn restore_foreground_window(_raw: isize) {}
-
-#[cfg(windows)]
-fn window_class_name(raw: isize) -> Option<String> {
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::UI::WindowsAndMessaging::GetClassNameW;
-
-    let hwnd = HWND(raw as *mut _);
-    let mut buf = [0u16; 256];
-    let len = unsafe { GetClassNameW(hwnd, &mut buf) };
-    if len <= 0 {
-        return None;
-    }
-    Some(String::from_utf16_lossy(&buf[..len as usize]))
-}
-
-#[cfg(windows)]
-fn paste_shortcut_for_window(prev_hwnd: Option<isize>) -> PasteShortcut {
-    prev_hwnd
-        .and_then(window_class_name)
-        .map(|class_name| paste_shortcut_for_window_class(&class_name))
-        .unwrap_or(PasteShortcut::CtrlV)
-}
-
-/// Симулирует paste через Win32 SendInput. Используем VK_CONTROL + VK_V
-/// (0x56) — стандартный virtual-key канал. enigo путь через
-/// `Key::Unicode('v')` шлёт VK_PACKET (Unicode channel), на котором
-/// модификаторы (Ctrl) не работают как shortcut и сам enigo падал
-/// с `TryFromIntError` при попытке упаковать keystate в u32.
-#[cfg(windows)]
-fn send_paste_shortcut(shortcut: PasteShortcut) -> Result<(), InjectError> {
-    use windows::Win32::UI::Input::KeyboardAndMouse::{
-        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP,
-        VIRTUAL_KEY, VK_CONTROL, VK_INSERT, VK_SHIFT,
-    };
-
-    const VK_V: u16 = 0x56;
-
-    fn make_key(vk: u16, key_up: bool) -> INPUT {
-        let flags = if key_up {
-            KEYEVENTF_KEYUP
-        } else {
-            KEYBD_EVENT_FLAGS(0)
-        };
-        INPUT {
-            r#type: INPUT_KEYBOARD,
-            Anonymous: INPUT_0 {
-                ki: KEYBDINPUT {
-                    wVk: VIRTUAL_KEY(vk),
-                    wScan: 0,
-                    dwFlags: flags,
-                    time: 0,
-                    dwExtraInfo: 0,
-                },
-            },
+impl Delivery {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Pasted => "pasted",
+            Self::ClipboardOnly => "clipboard_only",
+            Self::ClipboardFallback { .. } => "clipboard_fallback",
         }
     }
 
-    let (modifier, key) = match shortcut {
-        PasteShortcut::CtrlV => (VK_CONTROL.0, VK_V),
-        PasteShortcut::ShiftInsert => (VK_SHIFT.0, VK_INSERT.0),
-    };
-
-    let inputs = [
-        make_key(modifier, false),
-        make_key(key, false),
-        make_key(key, true),
-        make_key(modifier, true),
-    ];
-
-    let cb = std::mem::size_of::<INPUT>() as i32;
-    let injected = unsafe { SendInput(&inputs, cb) };
-    if injected as usize != inputs.len() {
-        return Err(InjectError::SendInput {
-            injected,
-            expected: inputs.len() as u32,
-        });
+    pub(crate) fn reason(self) -> Option<&'static str> {
+        match self {
+            Self::ClipboardFallback { reason } => Some(reason),
+            Self::Pasted | Self::ClipboardOnly => None,
+        }
     }
-    Ok(())
-}
 
-#[cfg(windows)]
-fn send_paste(prev_hwnd: Option<isize>) -> Result<(), InjectError> {
-    // See postmortems.md 2026-07-03: terminals need Shift+Insert, not plain Ctrl+V.
-    send_paste_shortcut(paste_shortcut_for_window(prev_hwnd))
-}
-
-#[cfg(all(not(windows), not(target_os = "macos")))]
-fn send_paste(_prev_hwnd: Option<isize>) -> Result<(), InjectError> {
-    // Phase 1 Windows-only. На non-Windows автоинжект не реализован — пользователь
-    // получит транскрипт в clipboard и Ctrl+V руками.
-    Ok(())
-}
-
-#[cfg(target_os = "macos")]
-fn send_paste(_prev_hwnd: Option<isize>) -> Result<(), InjectError> {
-    let script = r#"tell application "System Events" to keystroke "v" using command down"#;
-    let status = std::process::Command::new("/usr/bin/osascript")
-        .args(["-e", script])
-        .status()
-        .map_err(|_| InjectError::SendInput {
-            injected: 0,
-            expected: 1,
-        })?;
-    if !status.success() {
-        return Err(InjectError::SendInput {
-            injected: 0,
-            expected: 1,
-        });
+    pub(crate) fn injected(self) -> bool {
+        matches!(self, Self::Pasted)
     }
-    Ok(())
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct DeliveryResult {
+    pub(crate) delivery: Delivery,
+}
+
+pub(crate) trait OsAdapter {
+    fn set_clipboard(&mut self, text: &str) -> Result<(), InjectError>;
+    fn foreground_window(&mut self) -> Option<isize>;
+    fn restore_foreground_window(&mut self, raw: isize) -> Result<(), InjectError>;
+    #[cfg(windows)]
+    fn window_class_name(&mut self, raw: isize) -> Option<String>;
+    #[cfg(windows)]
+    fn send_paste(&mut self, shortcut: PasteShortcut) -> Result<(), InjectError>;
+    #[cfg(target_os = "macos")]
+    fn send_paste(&mut self) -> Result<(), InjectError>;
+}
+
+pub(crate) trait Injector: Send + Sync {
+    fn inject(
+        &self,
+        text: &str,
+        mode: InjectMode,
+        prev_hwnd: Option<isize>,
+    ) -> Result<DeliveryResult, InjectError>;
+}
+
+pub(crate) struct SystemInjector;
+
+impl Injector for SystemInjector {
+    fn inject(
+        &self,
+        text: &str,
+        mode: InjectMode,
+        prev_hwnd: Option<isize>,
+    ) -> Result<DeliveryResult, InjectError> {
+        #[cfg(test)]
+        {
+            let _ = (text, prev_hwnd);
+            return Ok(DeliveryResult {
+                delivery: match mode {
+                    InjectMode::ClipboardOnly => Delivery::ClipboardOnly,
+                    InjectMode::AutoPaste => Delivery::ClipboardFallback {
+                        reason: "test_injector",
+                    },
+                },
+            });
+        }
+
+        #[cfg(not(test))]
+        {
+            let mut adapter = SystemOsAdapter;
+            inject_with_adapter(text, mode, prev_hwnd, &mut adapter)
+        }
+    }
 }
 
 /// Blocking impl. Вызывать из `spawn_blocking`. AutoPaste оставляет transcript
@@ -211,62 +135,10 @@ pub fn inject_blocking(
     mode: InjectMode,
     prev_hwnd: Option<isize>,
 ) -> Result<(), InjectError> {
-    // Host integration tests must never touch the user's clipboard or send
-    // input.  Keep the seam at the shared production entrypoint so every
-    // caller gets the same isolation without an environment-variable race.
-    #[cfg(test)]
-    {
-        let _ = (text, mode, prev_hwnd);
-        return Ok(());
-    }
-
-    #[cfg(not(test))]
-    {
-        let mut clipboard = arboard::Clipboard::new()?;
-        clipboard.set_text(text.to_owned())?;
-
-        if matches!(mode, InjectMode::ClipboardOnly) {
-            return Ok(());
-        }
-
-        if let Some(hwnd) = prev_hwnd {
-            restore_foreground_window(hwnd);
-        }
-        std::thread::sleep(std::time::Duration::from_millis(REFOCUS_DELAY_MS));
-
-        send_paste(prev_hwnd)?;
-
-        std::thread::sleep(std::time::Duration::from_millis(POST_PASTE_DELAY_MS));
-
-        Ok(())
-    }
+    let mut adapter = SystemOsAdapter;
+    inject_with_adapter(text, mode, prev_hwnd, &mut adapter).map(|_| ())
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn capture_returns_some_or_none_without_panic() {
-        // Не assert'им конкретное значение — зависит от среды (CI без UI = None).
-        let _ = capture_foreground_window();
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn windows_terminal_uses_terminal_paste_shortcut() {
-        // Regression: 2026-07-03. Windows Terminal does not reliably paste on plain Ctrl+V.
-        assert_eq!(
-            paste_shortcut_for_window_class("CASCADIA_HOSTING_WINDOW_CLASS"),
-            PasteShortcut::ShiftInsert
-        );
-        assert_eq!(
-            paste_shortcut_for_window_class("Chrome_WidgetWin_1"),
-            PasteShortcut::CtrlV
-        );
-    }
-
-    // Реальный inject_blocking требует interactive UI session + active window
-    // — не запускаем в `cargo test` (CI не имеет foreground). Покрыто manual
-    // visual verify per spec AC5.
-}
+#[path = "inject_tests.rs"]
+mod tests;

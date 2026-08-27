@@ -154,10 +154,24 @@ pub(crate) fn drop_item(data_dir: &Path, uuid: &str) -> Result<(), PendingError>
     if !wav.exists() && !meta.exists() {
         return Err(PendingError::NotFound(uuid.into()));
     }
-    // best-effort: оба удаляем, ошибка одного не блокирует другого.
-    let _ = fs::remove_file(&wav);
-    let _ = fs::remove_file(&meta);
-    Ok(())
+    let mut removed = false;
+    let mut first_error = None;
+    for path in [&wav, &meta] {
+        match fs::remove_file(path) {
+            Ok(()) => removed = true,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) if first_error.is_none() => first_error = Some(error),
+            Err(_) => {}
+        }
+    }
+    if let Some(error) = first_error {
+        return Err(PendingError::Io(error));
+    }
+    if removed {
+        Ok(())
+    } else {
+        Err(PendingError::NotFound(uuid.into()))
+    }
 }
 
 /// Инкрементит `attempts`, обновляет `last_error`, перезаписывает JSON.
