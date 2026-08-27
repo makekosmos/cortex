@@ -144,14 +144,14 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
                 Ok(path) => path,
                 Err(e) => return LocalResponse::err(format!("arrancador.add_manual: {e}")),
             };
-            let save_paths: Vec<std::path::PathBuf> = params
+            let save_paths: Vec<String> = params
                 .get("save_paths")
                 .and_then(|v| v.as_array())
                 .map(|arr| {
                     arr.iter()
                         .filter_map(|v| v.as_str().map(str::trim))
                         .filter(|s| !s.is_empty())
-                        .map(std::path::PathBuf::from)
+                        .map(str::to_owned)
                         .collect()
                 })
                 .unwrap_or_default();
@@ -183,13 +183,14 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
             let id = existing_match
                 .map(|obj| obj.id.clone())
                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-            let object = crate::arrancador::game_facade::GameFacade::upsert_payload(
+            let mut object = crate::arrancador::game_facade::GameFacade::upsert_payload(
                 existing_match,
                 &id,
                 &name,
                 &props,
                 &now,
             );
+            object.local.save_paths = save_paths.clone();
             match game_facade.upsert(object).await {
                 Ok(_) => {
                     cfg.local_games.insert(
@@ -199,10 +200,7 @@ pub(in crate::ws_server) async fn handle_arrancador_op(
                             source_app_id: Some(source_app_id),
                             install_dir: exe_path.parent().map(|p| p.to_string_lossy().to_string()),
                             exe_path: Some(exe_path.to_string_lossy().to_string()),
-                            save_paths: save_paths
-                                .into_iter()
-                                .map(|p| p.to_string_lossy().to_string())
-                                .collect(),
+                            save_paths,
                         },
                     );
                     cleared_quarantine_ids.push(id.clone());
