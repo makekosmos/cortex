@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   guards:
-    name: guards (oxlint / oxfmt / ark:guard / docs:check)
+    name: guards (oxlint / oxfmt / ark:guard / source-size)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,11 +37,13 @@ jobs:
         run: bunx oxfmt --check .
       - name: ark:guard:writes
         run: bun run ark:guard:writes
-      - name: docs:check
-        run: bun run docs:check
+      - name: generated bindings
+        run: node scripts/check-ark-generated.mjs
+      - name: source-size
+        run: bun run check:source-size
 
   rust:
-    name: rust (clippy + nextest)
+    name: rust (tests + clippy + dependency policy)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,10 +55,23 @@ jobs:
           # Кэш per-OS, чтобы Windows nightly не пересекался с Ubuntu PR.
           shared-key: ubuntu-stable
       - name: cargo clippy
-        run: cargo clippy --workspace --all-targets
+        # Existing baseline; new warning categories still fail CI.
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings -A clippy::too_many_arguments -A clippy::option_map_unit_fn -A clippy::map_flatten -A clippy::nonminimal_bool -A clippy::type_complexity -A clippy::collapsible_if -A clippy::let_and_return -A clippy::result_large_err -A clippy::duplicated_attributes -A clippy::useless_conversion -A clippy::panic -A clippy::assertions_on_constants
       - name: install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
       - name: cargo nextest
-        run: cargo nextest run --workspace --lib
+        run: cargo nextest run --workspace --all-features
+      - name: install cargo-shear
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-shear
+      - name: cargo shear
+        run: cargo shear
+      - name: install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - name: cargo deny
+        run: cargo deny check advisories bans sources

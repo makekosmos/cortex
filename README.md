@@ -100,6 +100,7 @@ SDK and visuals package are maintained in `arca-sdk` and `imago`.
 - stable [Rust](https://www.rust-lang.org/tools/install) toolchain
 - Node.js 20+
 - PowerShell 7+
+- `cargo-nextest`, `cargo-shear`, and `cargo-deny` for repository quality gates
 
 ```powershell
 git clone https://github.com/makekosmos/core.git
@@ -116,7 +117,17 @@ Useful repository checks:
 bun run ark:guard:writes
 bun run ark:smoke
 cargo test -p ark-core
+cargo fmt --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo deny check advisories bans sources
 ```
+
+The local/CI Clippy gate keeps `-D warnings`; eight existing noisy lint
+categories are explicitly baselined in `lefthook.yml` and CI until cleaned up.
+
+`bun install` installs Lefthook hooks. Pre-commit runs staged-file checks and
+fast Rust validation; pre-push runs the full Rust, dependency, and source-size
+checks. CI is the enforceable superset.
 
 Read the [getting-started guide](https://github.com/makekosmos/docs/blob/main/guide/getting-started.md) before
 changing ARK or sync. Desktop development happens in
