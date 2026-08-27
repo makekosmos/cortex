@@ -76,6 +76,8 @@ pub(super) async fn dispatch_standard(
         handle_export_op(rest, params, &ark_host).await
     } else if let Some(rest) = operation.strip_prefix("arrancador.") {
         handle_arrancador_op(rest, params, &ark_host).await
+    } else if let Some(rest) = operation.strip_prefix("games.") {
+        handle_arrancador_op(rest, params, &ark_host).await
     } else if let Some(rest) = operation.strip_prefix("focus.") {
         {
             let result = handle_focus_op(rest, params, &ark_host).await;

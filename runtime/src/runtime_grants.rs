@@ -35,6 +35,34 @@ pub fn dictation_operation_capability(operation: &str) -> Option<&'static str> {
     }
 }
 
+pub const GAMES_READ_OPERATIONS: &[&str] = &[
+    "games.list",
+    "games.read",
+    "games.config.get",
+    "games.config.get_rawg_key",
+    "games.rawg.search",
+    "games.sqoba.list",
+];
+pub const GAMES_WRITE_OPERATIONS: &[&str] = &[
+    "games.scan",
+    "games.add_manual",
+    "games.launch",
+    "games.config.set_rawg_key",
+    "games.rawg.apply",
+    "games.sqoba.backup",
+    "games.sqoba.restore",
+];
+
+pub fn games_operation_capability(operation: &str) -> Option<&'static str> {
+    if GAMES_READ_OPERATIONS.contains(&operation) {
+        Some("ark.read")
+    } else if GAMES_WRITE_OPERATIONS.contains(&operation) {
+        Some("ark.write")
+    } else {
+        None
+    }
+}
+
 /// Focus packages can manage only their own persisted block-lists and timer.
 /// Native blocking remains a Host concern and is never an ARK permission.
 pub const FOCUS_READ_OPERATIONS: &[&str] = &[
@@ -745,6 +773,28 @@ pub fn compile_manifest_v2(
             operations: focus_operations,
         });
     }
+    let games_operations: Vec<String> = manifest
+        .permissions
+        .iter()
+        .flat_map(|permission| {
+            permission.scopes.iter().filter_map(move |scope| {
+                if games_operation_capability(scope.as_str())
+                    == Some(permission.capability.as_str())
+                {
+                    Some(scope.clone())
+                } else {
+                    None
+                }
+            })
+        })
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    if !games_operations.is_empty() {
+        grant.capabilities.push(ScopedCapability::Games {
+            operations: games_operations,
+        });
+    }
     Ok(grant)
 }
 
@@ -812,6 +862,9 @@ pub enum ScopedCapability {
         operations: Vec<String>,
     },
     Focus {
+        operations: Vec<String>,
+    },
+    Games {
         operations: Vec<String>,
     },
 }
@@ -924,6 +977,12 @@ impl LaunchGrant {
     pub fn allows_focus_operation(&self, operation: &str) -> bool {
         self.capabilities.iter().any(|capability| {
             matches!(capability, ScopedCapability::Focus { operations } if operations.iter().any(|allowed| allowed == operation))
+        })
+    }
+
+    pub fn allows_games_operation(&self, operation: &str) -> bool {
+        self.capabilities.iter().any(|capability| {
+            matches!(capability, ScopedCapability::Games { operations } if operations.iter().any(|allowed| allowed == operation))
         })
     }
 
@@ -1304,6 +1363,32 @@ mod tests {
             dictation_operation_capability("dictation.submit_audio"),
             None
         );
+    }
+
+    #[test]
+    fn manifest_v2_grants_only_requested_games_operations() {
+        let raw = r#"{
+            "schema_version": 2, "id": "com.kosmos.arcadia", "name": "Arcadia",
+            "version": "0.1.0", "kind": "app", "engine_api": ">=1.0.0",
+            "entrypoint": "dist/index.html", "publisher": "kosmos",
+            "permissions": [
+                {"capability": "ark.read", "scopes": ["games.list"]},
+                {"capability": "ark.write", "scopes": ["games.scan"]}
+            ],
+            "targets": [{"runtime": "kosmos-host", "os": ["windows"]}],
+            "data": {"access": [], "defines": [], "mappings": []}
+        }"#;
+        let crate::package_manifest::VersionedManifest::V2(manifest) =
+            crate::package_manifest::PackageManifest::parse(raw).expect("valid manifest")
+        else {
+            unreachable!("expected v2 manifest");
+        };
+
+        let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "digest")
+            .expect("compiled grant");
+        assert!(grant.allows_games_operation("games.list"));
+        assert!(grant.allows_games_operation("games.scan"));
+        assert!(!grant.allows_games_operation("games.launch"));
     }
 
     #[test]

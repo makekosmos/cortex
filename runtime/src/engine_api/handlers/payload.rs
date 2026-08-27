@@ -62,6 +62,9 @@ fn launch_payload(
                         }
                     }
                 }
+                if grant.allows_games_operation("games.list") {
+                    ids.insert("com.kosmos.game".to_owned());
+                }
                 ids.into_iter().map(Value::String).collect::<Vec<_>>()
             })
             .unwrap_or_default();

@@ -19,6 +19,11 @@ async fn authorize_app_request(
                 return Err("focus grant denied");
             }
         }
+        operation if crate::runtime_grants::games_operation_capability(operation).is_some() => {
+            if !grant.allows_games_operation(operation) {
+                return Err("games grant denied");
+            }
+        }
         "list_objects_by_type" | "list_object_summaries_by_type" => {
             let raw_type = map
                 .get("type_id")
