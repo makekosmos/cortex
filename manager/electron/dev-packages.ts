@@ -46,24 +46,32 @@ export function developmentPackages(): DevPackage[] {
       if (!relativePath || !url) return [];
       const root = path.resolve(path.dirname(configPath), relativePath);
       // SAFETY: each manifest was validated before its dev package was built.
-      const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8")) as PackageManifest;
+      const manifestPath = path.join(root, "package.manifest.json");
+      const legacyManifestPath = path.join(root, "manifest.json");
+      // SAFETY: the canonical package manifest is preferred when present; legacy repos retain the fallback.
+      const manifest = JSON.parse(
+        fs.readFileSync(fs.existsSync(manifestPath) ? manifestPath : legacyManifestPath, "utf8"),
+      ) as PackageManifest;
       const { id, name, version, icon } = manifest;
       if (!safeId.test(id) || !name || !version || !icon) return [];
       const release = path.join(root, "release");
-      const archive = fs.readdirSync(release)
+      const archive = fs
+        .readdirSync(release)
         .filter((file) => file.endsWith(`-${version}.kspkg`))
         .map((file) => path.join(release, file))
         .find((file) => fs.statSync(file).isFile());
       if (!archive) return [];
-      return [{
-        id,
-        name,
-        version,
-        publisher: manifest.publisher?.trim() || "Kosmos",
-        iconPath: path.join(root, icon),
-        archivePath: archive,
-        url,
-      }];
+      return [
+        {
+          id,
+          name,
+          version,
+          publisher: manifest.publisher?.trim() || "Kosmos",
+          iconPath: path.join(root, icon),
+          archivePath: archive,
+          url,
+        },
+      ];
     });
   } catch {
     return [];

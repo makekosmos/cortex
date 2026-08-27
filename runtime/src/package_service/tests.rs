@@ -1037,7 +1037,7 @@ pub(crate) mod tests {
 
     #[test]
     fn dictation_package_manifest_has_only_the_required_engine_grants() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dictation/manifest.json");
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dictation/package.manifest.json");
         let raw = fs::read_to_string(path).expect("Dictation package manifest");
         let VersionedManifest::V2(manifest) = PackageManifest::parse(&raw).expect("valid Dictation manifest") else {
             panic!("Dictation must be a v2 package");
