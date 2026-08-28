@@ -1,5 +1,8 @@
 [advisories]
 version = 2
+# Transitive, unmaintained-only advisories pinned by UniFFI 0.28.3; neither has
+# a safe upgrade in the current UniFFI line. Re-evaluate with the UniFFI bump.
+ignore = ["RUSTSEC-2025-0141", "RUSTSEC-2024-0436"]
 
 [bans]
 multiple-versions = "warn"

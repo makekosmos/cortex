@@ -257,7 +257,7 @@ pub(super) async fn handle_message(
                 if let Some(peer) = peers_guard.get_mut(&peer_id) {
                     peer.sync_complete = true;
                     // Flush queued live changes
-                    let queued: Vec<SyncEntity> = peer.queued_live_changes.drain(..).collect();
+                    let queued = std::mem::take(&mut peer.queued_live_changes);
                     for entity in queued {
                         let change_id = generate_id();
                         send_msg(
