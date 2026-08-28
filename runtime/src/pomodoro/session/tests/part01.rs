@@ -240,3 +240,88 @@ fn persisted_restore_advances_through_expired_work_phase() {
     assert!(!st.is_running);
     assert_eq!(st.completed_pomodoros, 1);
 }
+
+
+fn cfg_with_threshold(pomodoros_until_long_break: u32) -> SessionConfig {
+    SessionConfig {
+        pomodoros_until_long_break,
+        ..cfg_default()
+    }
+}
+
+#[test]
+fn long_break_threshold_one_uses_first_completed_work_interval() {
+    let clock = Arc::new(MockClock::new(0));
+    let mut session = Session::new(clock);
+    session.start(cfg_with_threshold(1));
+
+    session.skip();
+
+    let state = session.snapshot();
+    assert_eq!(state.completed_pomodoros, 1);
+    assert_eq!(state.phase, Phase::LongBreak);
+}
+
+#[test]
+fn long_break_threshold_two_uses_second_completed_work_interval() {
+    let clock = Arc::new(MockClock::new(0));
+    let mut session = Session::new(clock);
+    session.start(cfg_with_threshold(2));
+
+    session.skip();
+    assert_eq!(session.snapshot().completed_pomodoros, 1);
+    assert_eq!(session.snapshot().phase, Phase::ShortBreak);
+
+    session.skip();
+    assert_eq!(session.snapshot().phase, Phase::Work);
+
+    session.skip();
+
+    let state = session.snapshot();
+    assert_eq!(state.completed_pomodoros, 2);
+    assert_eq!(state.phase, Phase::LongBreak);
+}
+
+#[test]
+fn long_break_threshold_four_keeps_first_three_intervals_short() {
+    let clock = Arc::new(MockClock::new(0));
+    let mut session = Session::new(clock);
+    session.start(cfg_with_threshold(4));
+
+    for completed in 1..=3 {
+        session.skip();
+        let state = session.snapshot();
+        assert_eq!(state.completed_pomodoros, completed);
+        assert_eq!(state.phase, Phase::ShortBreak);
+        session.skip();
+        assert_eq!(session.snapshot().phase, Phase::Work);
+    }
+
+    session.skip();
+
+    let state = session.snapshot();
+    assert_eq!(state.completed_pomodoros, 4);
+    assert_eq!(state.phase, Phase::LongBreak);
+}
+
+#[test]
+fn restored_overdue_work_uses_same_long_break_boundary() {
+    let clock = Arc::new(MockClock::new(0));
+    let persisted = PersistedSession {
+        version: PersistedSession::CURRENT_VERSION,
+        phase: Phase::Work,
+        remaining_ms: 0,
+        total_ms: 25 * 60_000,
+        completed_pomodoros: 3,
+        is_running: true,
+        is_paused: false,
+        phase_ends_at_ms: 0,
+        last_config: Some(cfg_with_threshold(4)),
+    };
+
+    let restored = Session::from_persisted(clock, persisted);
+
+    let state = restored.snapshot();
+    assert_eq!(state.completed_pomodoros, 4);
+    assert_eq!(state.phase, Phase::LongBreak);
+}
