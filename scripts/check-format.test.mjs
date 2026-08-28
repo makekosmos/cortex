@@ -41,6 +41,10 @@ test("format discovery ignores unstaged files and fails closed on an invalid bas
       env: { ...process.env, FORMAT_BASE: "not-a-commit" },
     });
     assert.notEqual(invalidBase.status, 0, "git discovery errors must fail the format gate");
+
+    rmSync(resolve(cwd, "sample.ts"));
+    const deleted = spawnSync(process.execPath, [script], { cwd });
+    assert.equal(deleted.status, 0, "deleted files must not enter the format gate");
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }

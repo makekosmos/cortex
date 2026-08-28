@@ -6,10 +6,10 @@ const staged = process.argv.includes("--staged");
 const args = base
   ? /^0+$/.test(base)
     ? ["ls-tree", "-r", "--name-only", "HEAD"]
-    : ["diff", "--name-only", `${base}...HEAD`]
+    : ["diff", "--name-only", "--diff-filter=ACMR", `${base}...HEAD`]
   : staged
     ? ["diff", "--cached", "--name-only", "--diff-filter=ACMR"]
-    : ["diff", "--name-only", "HEAD"];
+    : ["diff", "--name-only", "--diff-filter=ACMR", "HEAD"];
 const changed = spawnSync("git", args, { encoding: "utf8" });
 if (changed.error || changed.status !== 0) process.exit(changed.status ?? 1);
 
