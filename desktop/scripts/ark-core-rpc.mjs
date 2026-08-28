@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 export const ARK_CORE_REPOSITORY = "https://github.com/makekosmos/core.git";
 // Keep the Rust API and sidecar binary on the same immutable Core revision.
-export const ARK_CORE_REVISION = "eaaacf4cbbdf2808d74e556d7de346b60bd562e3";
+export const ARK_CORE_REVISION = "ee474a2709c9871cdef09e67290883fac22e9afd";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const cacheRoot = path.join(shellRoot, ".tmp", "ark-core-rpc");
@@ -57,7 +57,10 @@ export function ensureArkCoreRpc({ debug = false, features = [], targetDir } = {
   return installed;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+) {
   const debug = process.argv.includes("--debug");
   const targetIndex = process.argv.indexOf("--target-dir");
   const targetDir = targetIndex === -1 ? undefined : process.argv[targetIndex + 1];
