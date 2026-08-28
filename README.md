@@ -1,6 +1,6 @@
-# Kosmos Shell
+# CosCast
 
-This repository owns the desktop shell and its host-side services:
+This repository owns the CosCast desktop application and its host-side services:
 
 - `desktop/` — Electron host, preload/IPC, packaging and shell UI;
 - `manager/` — the standalone Kosmos Manager window;
