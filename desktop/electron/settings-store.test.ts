@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const root = mkdtempSync(path.join(tmpdir(), "kosmos-settings-"));
-const dataDir = path.join(root, "Kosmos");
+const dataDir = path.resolve(root, "Kosmos");
 mkdirSync(dataDir, { recursive: true });
 
 mock.module("./data-dir", () => ({ keplerDataDir: () => dataDir }));
