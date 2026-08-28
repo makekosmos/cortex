@@ -187,10 +187,7 @@ fn sync(client: &mut Client<'_>, username: &str) -> Result<(), WorkerError> {
         }) {
             continue;
         }
-        client.ark_write(
-            "upsert_object",
-            json!({"object": map_submission(item, username)?}),
-        )?;
+        client.ark_write("upsert_object", json!({"object": map_submission(item)?}))?;
     }
     client.ark_write("set_sync_kv", json!({"key":SYNC_KEY,"value":now}))?;
     Ok(())

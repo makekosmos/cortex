@@ -87,7 +87,7 @@ pub fn cutoff(last_success: Option<&str>) -> Option<DateTime<Utc>> {
         .map(|value| value.with_timezone(&Utc) - Duration::days(1))
 }
 
-pub fn map_submission(item: &Value, fallback_username: &str) -> Result<Value, DataError> {
+pub fn map_submission(item: &Value) -> Result<Value, DataError> {
     let external_id = value_id(&item["id"]).ok_or(DataError::Invalid)?;
     let target = item.get("target").ok_or(DataError::Invalid)?;
     let title = target
@@ -101,11 +101,7 @@ pub fn map_submission(item: &Value, fallback_username: &str) -> Result<Value, Da
         .filter(|slug| !slug.is_empty())
         .ok_or(DataError::Invalid)?;
     let completed_at = timestamp(&item["createdAt"]).ok_or(DataError::Invalid)?;
-    let username = item
-        .pointer("/user/username")
-        .and_then(Value::as_str)
-        .filter(|username| !username.is_empty())
-        .unwrap_or(fallback_username);
+    let username = item.pointer("/user/username").and_then(Value::as_str);
     Ok(json!({
         "id": format!("bigfrontend-completion:{external_id}"),
         "typeId": CODING_SUBMISSION_TYPE_ID,
@@ -121,7 +117,7 @@ pub fn map_submission(item: &Value, fallback_username: &str) -> Result<Value, Da
             "status": "Completed",
             "accepted": true,
             "submittedAt": completed_at,
-            "url": format!("{ORIGIN}/problem/{}", encode_path_segment(slug)),
+            "url": format!("{ORIGIN}/problem/{slug}"),
         },
         "createdAt": completed_at,
         "updatedAt": completed_at,
@@ -149,12 +145,11 @@ mod tests {
                 "createdAt": "2026-08-28T10:00:00Z",
                 "target": {"title":"Memoize", "permalink":"implement-memoizeOne", "targetType":"problem"}
             }),
-            "public-user",
         )
         .unwrap();
         assert_eq!(object["id"], "bigfrontend-completion:7");
         assert_eq!(object["typeId"], CODING_SUBMISSION_TYPE_ID);
-        assert_eq!(object["propsJson"]["username"], "public-user");
+        assert_eq!(object["propsJson"]["username"], Value::Null);
         assert_eq!(
             object["propsJson"]["url"],
             "https://bigfrontend.dev/problem/implement-memoizeOne"
