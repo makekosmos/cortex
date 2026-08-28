@@ -72,7 +72,13 @@ describe("standalone Manager boundary", () => {
     expect(connections).toContain("appIcon(provider.id, undefined, provider.iconPath)");
     expect(connections).toContain("provider.settingSchema");
     expect(connections).not.toContain("assets/integrations");
-    expect(operations).toContain("integrations.update_settings");
+    expect(operations).not.toContain("integrations.update_settings");
+    expect(preload).not.toContain("manager.updateIntegrationSettings");
+    expect(main).not.toContain("manager.updateIntegrationSettings");
+    expect(connections).toContain("canLogin(selected)) && canSave(selected)");
+    expect(helpers).toContain("enabled: entry.enabled === true");
+    expect(helpers).toContain("Number(settings.intervalMinutes) <= 7 * 24 * 60");
+    expect(main).toContain("credential).length > 4096");
     expect(helpers).toContain("--open-app=${id}");
     expect(api).toContain("openPackage");
     expect(preload).toContain('openPackage: (v) => invoke("manager.openPackage", v)');
@@ -105,9 +111,7 @@ describe("standalone Manager boundary", () => {
     const preload = source("preload.ts");
     const main = source("main.ts");
     const login = source("integration-login.ts");
-    expect(api).toContain(
-      "loginIntegration(input: {",
-    );
+    expect(api).toContain("loginIntegration(input: {");
     expect(preload).toContain('loginIntegration: (v) => invoke("manager.loginIntegration", v)');
     expect(login).toContain('process.env.KOSMOS_HEADLESS === "1"');
     expect(login).toContain("GENERIC_INTEGRATION_PARTITION");
@@ -124,6 +128,11 @@ describe("standalone Manager boundary", () => {
     expect(main).toContain("registerIntegrationLoginHandlers(");
     expect(api).toContain("getBrowserSettings");
     expect(preload).toContain("manager.getBrowserSettings");
+  });
+
+  test("keeps the integration operation surface aligned with Runtime", () => {
+    const handler = source("../../runtime/src/integrations/handler.rs");
+    expect(handler).not.toContain('"update_settings"');
   });
 
   test("normalizes Engine settings and accepts only a boolean Usage Tracker patch", () => {

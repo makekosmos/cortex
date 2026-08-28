@@ -7,54 +7,10 @@ pub(super) const HEARTBEAT_DEADLINE: Duration = Duration::from_secs(60);
 pub(super) const STOP_DEADLINE: Duration = Duration::from_secs(10);
 
 #[cfg(windows)]
-pub(super) async fn cleanup_owner_async(
-    owner: Arc<LaunchCleanupOwner>,
-    deadline: Instant,
-) -> Result<(), WorkerProcessError> {
-    owner.cleanup_until(deadline).await
-}
-
+#[path = "types/windows.rs"]
+mod windows;
 #[cfg(windows)]
-pub(super) async fn cleanup_process_holder_until(
-    holder: WorkerProcessHolder,
-    deadline: Instant,
-) -> bool {
-    let Some(mut process_guard) = lock_holder_until(&holder, deadline).await else {
-        return false;
-    };
-    let Some(process) = process_guard.as_mut() else {
-        return true;
-    };
-    if process.stop_until(deadline).await.is_ok() {
-        *process_guard = None;
-        true
-    } else {
-        false
-    }
-}
-
-#[cfg(windows)]
-pub(super) async fn lock_holder_until<'a>(
-    holder: &'a WorkerProcessHolder,
-    deadline: Instant,
-) -> Option<tokio::sync::MutexGuard<'a, Option<WorkerProcess>>> {
-    if deadline <= Instant::now() {
-        return None;
-    }
-    time::timeout(
-        deadline.saturating_duration_since(Instant::now()),
-        holder.lock(),
-    )
-    .await
-    .ok()
-}
-
-#[cfg(windows)]
-pub(super) async fn holder_empty_until(holder: WorkerProcessHolder, deadline: Instant) -> bool {
-    lock_holder_until(&holder, deadline)
-        .await
-        .is_some_and(|process| process.is_none())
-}
+pub(super) use windows::*;
 #[cfg(test)]
 pub(super) const STOP_DEADLINE: Duration = Duration::from_millis(25);
 pub(super) const PROCESS_LAUNCH_DEADLINE: Duration = Duration::from_secs(10);

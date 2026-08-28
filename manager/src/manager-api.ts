@@ -8,8 +8,7 @@ export type ManagerErrorCode =
 export type ManagerResult<T> =
   | { ok: true; data: T }
   | { ok: false; code: ManagerErrorCode; message: string };
-export type JsonValue =
-  string | number | boolean | null | JsonRecord | JsonValue[];
+export type JsonValue = string | number | boolean | null | JsonRecord | JsonValue[];
 export interface JsonRecord {
   [key: string]: JsonValue;
 }
@@ -202,6 +201,7 @@ export type IntegrationProvider = {
   credentialLabel: string;
   credentialUrl: string;
   hasCredential: boolean;
+  enabled: boolean;
   iconKey?: string;
   iconPath?: string;
   packageManaged?: boolean;
@@ -326,8 +326,7 @@ export type FocusServiceStatus = {
   healthy: boolean;
 };
 export type FocusServiceAction = { ok: boolean; error?: string };
-export type FileIndexNtfsStatus =
-  "active" | "fallback" | "unavailable" | "disabled" | "unknown";
+export type FileIndexNtfsStatus = "active" | "fallback" | "unavailable" | "disabled" | "unknown";
 export type FileIndexScanProgress = {
   phase: string;
   root: string | null;
@@ -351,11 +350,7 @@ export type FileIndexSettings = {
 };
 export type FileIndexSettingsPatch = Pick<
   FileIndexSettings,
-  | "enabled"
-  | "exclude_noisy_folders"
-  | "respect_gitignore"
-  | "include_hidden"
-  | "ntfs_accelerated"
+  "enabled" | "exclude_noisy_folders" | "respect_gitignore" | "include_hidden" | "ntfs_accelerated"
 >;
 export type FileIndexDiagnostics = {
   db_size_bytes: number;
@@ -389,17 +384,10 @@ export interface ManagerApi {
   searchObjects(input: { query: string }): Promise<ManagerResult<ObjectPage>>;
   getSyncSnapshot(): Promise<ManagerResult<SyncSnapshot>>;
   getPairingCode(): Promise<ManagerResult<PairingCode>>;
-  connectWithPairingCode(input: {
-    code: string;
-  }): Promise<ManagerResult<unknown>>;
+  connectWithPairingCode(input: { code: string }): Promise<ManagerResult<unknown>>;
   getIntegrations(): Promise<ManagerResult<IntegrationsSnapshot>>;
   loginIntegration(input: {
     provider: IntegrationProvider["id"];
-  }): Promise<ManagerResult<IntegrationsSnapshot>>;
-  updateIntegrationSettings(input: {
-    provider: IntegrationProvider["id"];
-    intervalMinutes?: 0 | 15 | 60 | 360 | 1440;
-    syncOnStartup?: boolean;
   }): Promise<ManagerResult<IntegrationsSnapshot>>;
   setIntegrationCredential(input: {
     provider: IntegrationProvider["id"];
@@ -418,29 +406,21 @@ export interface ManagerApi {
   }): Promise<ManagerResult<PackageSnapshot>>;
   getStoreCatalog(): Promise<ManagerResult<StoreCatalogSnapshot>>;
   refreshStoreCatalog(): Promise<ManagerResult<StoreCatalogSnapshot>>;
-  openStoreExternal(input: {
-    listing_id: string;
-  }): Promise<ManagerResult<{ opened: boolean }>>;
+  openStoreExternal(input: { listing_id: string }): Promise<ManagerResult<{ opened: boolean }>>;
   getPackageTrustStatus(): Promise<ManagerResult<unknown>>;
   refreshPackageCatalog(): Promise<ManagerResult<unknown>>;
-  installPackage(input: {
-    package_id: string;
-    version: string;
-  }): Promise<ManagerResult<unknown>>;
-  openPackage(input: {
+  installPackage(input: { package_id: string; version: string }): Promise<ManagerResult<unknown>>;
+  openPackage(input: { package_id: string }): Promise<ManagerResult<{ opened: boolean }>>;
+  getDevelopmentPackages(): Promise<ManagerResult<DevelopmentPackage[]>>;
+  openDevelopmentPackage(input: {
     package_id: string;
   }): Promise<ManagerResult<{ opened: boolean }>>;
-  getDevelopmentPackages(): Promise<ManagerResult<DevelopmentPackage[]>>;
-  openDevelopmentPackage(input: { package_id: string }): Promise<ManagerResult<{ opened: boolean }>>;
   setPackageEnabled(input: {
     package_id: string;
     version: string;
     enabled: boolean;
   }): Promise<ManagerResult<unknown>>;
-  uninstallPackage(input: {
-    package_id: string;
-    version: string;
-  }): Promise<ManagerResult<unknown>>;
+  uninstallPackage(input: { package_id: string; version: string }): Promise<ManagerResult<unknown>>;
   getBridgeConfig(input: {
     package_id: string;
     version: string;
@@ -460,9 +440,7 @@ export interface ManagerApi {
   openCrashReportsFolder(): Promise<ManagerResult<{ opened: boolean }>>;
   openLogsFolder(): Promise<ManagerResult<{ opened: boolean }>>;
   saveSupportBundle(): Promise<ManagerResult<{ saved: boolean }>>;
-  getAutostart(): Promise<
-    ManagerResult<{ enabled: boolean; available: boolean }>
-  >;
+  getAutostart(): Promise<ManagerResult<{ enabled: boolean; available: boolean }>>;
   setAutostart(input: {
     enabled: boolean;
   }): Promise<ManagerResult<{ enabled: boolean; available: boolean }>>;
@@ -471,12 +449,8 @@ export interface ManagerApi {
     persistData: boolean;
   }): Promise<ManagerResult<{ persistData: boolean }>>;
   getEngineSettings(): Promise<ManagerResult<EngineSettings>>;
-  setWarmTimeout(input: {
-    enabled: boolean;
-  }): Promise<ManagerResult<EngineSettings>>;
-  setUsageTracker(input: {
-    enabled: boolean;
-  }): Promise<ManagerResult<EngineSettings>>;
+  setWarmTimeout(input: { enabled: boolean }): Promise<ManagerResult<EngineSettings>>;
+  setUsageTracker(input: { enabled: boolean }): Promise<ManagerResult<EngineSettings>>;
   getDictationConfig(): Promise<ManagerResult<DictationConfigSnapshot>>;
   updateDictationConfig(
     input: DictationConfigPatch,
@@ -487,9 +461,7 @@ export interface ManagerApi {
   verifyDictationApiKey(input: {
     key: string;
   }): Promise<ManagerResult<{ valid: boolean; message: string }>>;
-  setDictationApiKey(input: {
-    key: string;
-  }): Promise<ManagerResult<{ saved: boolean }>>;
+  setDictationApiKey(input: { key: string }): Promise<ManagerResult<{ saved: boolean }>>;
   clearDictationApiKey(): Promise<ManagerResult<{ cleared: boolean }>>;
   testDictationConnectivity(): Promise<ManagerResult<DictationConnectivity>>;
   listDictationLocalModels(): Promise<ManagerResult<DictationLocalModels>>;
@@ -504,17 +476,11 @@ export interface ManagerApi {
     modelId: string;
   }): Promise<ManagerResult<DictationConfigSnapshot>>;
   listDictationPending(): Promise<ManagerResult<DictationPendingItem[]>>;
-  retryDictation(input: {
-    uuid: string;
-  }): Promise<ManagerResult<{ started: boolean }>>;
-  discardDictation(input: {
-    uuid: string;
-  }): Promise<ManagerResult<{ discarded: boolean }>>;
+  retryDictation(input: { uuid: string }): Promise<ManagerResult<{ started: boolean }>>;
+  discardDictation(input: { uuid: string }): Promise<ManagerResult<{ discarded: boolean }>>;
   retryAllDictation(): Promise<ManagerResult<{ started: number }>>;
   discardAllDictation(): Promise<ManagerResult<{ discarded: number }>>;
-  onDictationEvent(
-    listener: (event: DictationProgressEvent) => void,
-  ): () => void;
+  onDictationEvent(listener: (event: DictationProgressEvent) => void): () => void;
   getFocusBlocklists(): Promise<ManagerResult<FocusBlocklist[]>>;
   getFocusActiveState(): Promise<ManagerResult<FocusActiveState>>;
   upsertFocusBlocklist(input: {
@@ -524,9 +490,7 @@ export interface ManagerApi {
     icon?: string;
     preset?: boolean;
   }): Promise<ManagerResult<FocusBlocklist>>;
-  deleteFocusBlocklist(input: {
-    id: string;
-  }): Promise<ManagerResult<{ deleted: boolean }>>;
+  deleteFocusBlocklist(input: { id: string }): Promise<ManagerResult<{ deleted: boolean }>>;
   getFocusServiceStatus(): Promise<ManagerResult<FocusServiceStatus>>;
   pingFocusService(): Promise<ManagerResult<{ healthy: boolean }>>;
   installFocusService(): Promise<ManagerResult<FocusServiceAction>>;
@@ -534,22 +498,12 @@ export interface ManagerApi {
   startFocusService(): Promise<ManagerResult<FocusServiceAction>>;
   stopFocusService(): Promise<ManagerResult<FocusServiceAction>>;
   getFileIndexSettings(): Promise<ManagerResult<FileIndexSettings>>;
-  setFileIndexSettings(
-    input: FileIndexSettingsPatch,
-  ): Promise<ManagerResult<FileIndexSettings>>;
+  setFileIndexSettings(input: FileIndexSettingsPatch): Promise<ManagerResult<FileIndexSettings>>;
   getFileIndexDiagnostics(): Promise<ManagerResult<FileIndexDiagnostics>>;
-  addFileIndexRoot(input: {
-    path: string;
-  }): Promise<ManagerResult<FileIndexSettings>>;
-  removeFileIndexRoot(input: {
-    path: string;
-  }): Promise<ManagerResult<FileIndexSettings>>;
-  addFileIndexIgnore(input: {
-    pattern: string;
-  }): Promise<ManagerResult<FileIndexSettings>>;
-  removeFileIndexIgnore(input: {
-    pattern: string;
-  }): Promise<ManagerResult<FileIndexSettings>>;
+  addFileIndexRoot(input: { path: string }): Promise<ManagerResult<FileIndexSettings>>;
+  removeFileIndexRoot(input: { path: string }): Promise<ManagerResult<FileIndexSettings>>;
+  addFileIndexIgnore(input: { pattern: string }): Promise<ManagerResult<FileIndexSettings>>;
+  removeFileIndexIgnore(input: { pattern: string }): Promise<ManagerResult<FileIndexSettings>>;
   rescanFileIndex(): Promise<ManagerResult<FileIndexSettings>>;
   clearFileIndexCache(): Promise<ManagerResult<FileIndexSettings>>;
   pickFileIndexRoot(): Promise<ManagerResult<string | null>>;
@@ -565,7 +519,6 @@ export const managerOperations = {
   connectWithPairingCode: "connect_with_pairing_code",
   getIntegrations: "integrations.list",
   integrationLoginContract: "integrations.login_contract",
-  updateIntegrationSettings: "integrations.update_settings",
   setIntegrationCredential: "integrations.set_credential",
   clearIntegrationCredential: "integrations.clear_credential",
   syncIntegrationNow: "integrations.sync_now",

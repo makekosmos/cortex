@@ -12,17 +12,8 @@ import {
 import { statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  rpc,
-  status,
-  subscribeDictationEvents,
-  waitForEngineReady,
-} from "./engine-client";
-import {
-  managerOperations as op,
-  type ManagerResult,
-  type SyncSnapshot,
-} from "../src/manager-api";
+import { rpc, status, subscribeDictationEvents, waitForEngineReady } from "./engine-client";
+import { managerOperations as op, type ManagerResult, type SyncSnapshot } from "../src/manager-api";
 import {
   normalizeConnectivity,
   normalizeFocusActiveState,
@@ -69,21 +60,14 @@ import {
   listCrashReports,
   resolveManagerDataDir,
 } from "./diagnostics-files";
-import {
-  clearIntegrationBrowserData,
-  registerIntegrationLoginHandlers,
-} from "./integration-login";
-import {
-  readBrowserDataPersistence,
-  writeBrowserDataPersistence,
-} from "./browser-settings";
+import { clearIntegrationBrowserData, registerIntegrationLoginHandlers } from "./integration-login";
+import { readBrowserDataPersistence, writeBrowserDataPersistence } from "./browser-settings";
 import { resolveInstance } from "../../desktop/electron/instance";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import {
   AUTOSTART_ARGS,
   bounded,
-  integrationIntervals,
   isObject,
   normalizeIntegrationSnapshot,
   openHostedPackage,
@@ -100,9 +84,7 @@ let stopDictationEvents: (() => void) | null = null;
 function desktopVersion(): string {
   const launchedVersion = process.env.KOSMOS_DESKTOP_VERSION?.trim();
   if (launchedVersion) return launchedVersion;
-  return path.basename(process.execPath).toLowerCase() === "electron.exe"
-    ? "—"
-    : app.getVersion();
+  return path.basename(process.execPath).toLowerCase() === "electron.exe" ? "—" : app.getVersion();
 }
 
 function addDictationSubscriber(sender: WebContents) {
@@ -143,8 +125,7 @@ function registerAll() {
     return { ok: true, data: state ?? { kind: "idle" } };
   });
   ipcMain.handle("manager.checkDesktopUpdates", () => {
-    if (!requestDesktopUpdate("--kosmos-update-check"))
-      return { ok: true, data: { kind: "idle" } };
+    if (!requestDesktopUpdate("--kosmos-update-check")) return { ok: true, data: { kind: "idle" } };
     return { ok: true, data: readDesktopUpdateState() ?? { kind: "checking" } };
   });
   ipcMain.handle("manager.installDesktopUpdate", () => {
@@ -190,15 +171,10 @@ function registerAll() {
     // SAFETY: isObject establishes a record payload before reading query.
     validation(isObject(value) && bounded((value as InputRecord).query, 256)),
   );
-  ipcMain.handle(
-    "manager.getSyncSnapshot",
-    async (): Promise<ManagerResult<SyncSnapshot>> => {
-      const result = await rpc(op.getSyncSnapshot);
-      return result.ok
-        ? { ok: true, data: normalizeSyncSnapshot(result.data) }
-        : result;
-    },
-  );
+  ipcMain.handle("manager.getSyncSnapshot", async (): Promise<ManagerResult<SyncSnapshot>> => {
+    const result = await rpc(op.getSyncSnapshot);
+    return result.ok ? { ok: true, data: normalizeSyncSnapshot(result.data) } : result;
+  });
   ipcMain.handle("manager.getPairingCode", async () => {
     const result = await rpc(op.getPairingCode);
     if (!result.ok) return result;
@@ -220,17 +196,13 @@ function registerAll() {
     op.connectWithPairingCode,
     (value) =>
       // SAFETY: isObject narrows the payload before reading the pairing code.
-      validation(
-        isObject(value) && validPairingCode((value as InputRecord).code),
-      ),
+      validation(isObject(value) && validPairingCode((value as InputRecord).code)),
     // SAFETY: the validator requires a valid pairing code before transformation.
     (value) => toPairingParams(String((value as InputRecord).code)),
   );
   ipcMain.handle("manager.getIntegrations", async () => {
     const result = await rpc(op.getIntegrations);
-    return result.ok
-      ? { ok: true, data: normalizeIntegrationSnapshot(result.data) }
-      : result;
+    return result.ok ? { ok: true, data: normalizeIntegrationSnapshot(result.data) } : result;
   });
   registerIntegrationLoginHandlers(
     () => managerWindow,
@@ -241,11 +213,7 @@ function registerAll() {
     data: { persistData: readBrowserDataPersistence(browserSettingsFile) },
   }));
   ipcMain.handle("manager.setBrowserSettings", async (_event, value) => {
-    if (
-      !isObject(value) ||
-      Object.keys(value).length !== 1 ||
-      !isBoolean(value.persistData)
-    )
+    if (!isObject(value) || Object.keys(value).length !== 1 || !isBoolean(value.persistData))
       return {
         ok: false,
         code: "validation",
@@ -255,83 +223,41 @@ function registerAll() {
     if (!value.persistData) await clearIntegrationBrowserData();
     return { ok: true, data: { persistData: value.persistData } };
   });
-  ipcMain.handle("manager.updateIntegrationSettings", async (_event, value) => {
-    if (!validIntegrationInput(value))
-      return {
-        ok: false,
-        code: "validation",
-        message: "Недопустимая интеграция.",
-      };
-    // SAFETY: validIntegrationInput validates this integration payload before use.
-    const input = value as InputRecord;
-    // SAFETY: validIntegrationInput validates this integration payload before use.
-    if (
-      input.intervalMinutes !== undefined &&
-      (!Number.isInteger(input.intervalMinutes) ||
-        !integrationIntervals.includes(Number(input.intervalMinutes)))
-    )
-      return {
-        ok: false,
-        code: "validation",
-        message: "Недопустимая частота синхронизации.",
-      };
-    if (input.syncOnStartup !== undefined && !isBoolean(input.syncOnStartup))
-      return {
-        ok: false,
-        code: "validation",
-        message: "Недопустимое значение запуска.",
-      };
-    const result = await rpc(op.updateIntegrationSettings, input);
-    return result.ok
-      ? { ok: true, data: normalizeIntegrationSnapshot(result.data) }
-      : result;
-  });
   ipcMain.handle("manager.setIntegrationCredential", async (_event, value) => {
+    const credential = isObject(value) ? value.credential : undefined;
+    const setting = isObject(value) ? value.setting : undefined;
     if (
       !validIntegrationInput(value) ||
-      // SAFETY: validIntegrationInput validates this integration payload before use.
-      // SAFETY: validIntegrationInput validates this integration payload before use.
-      !isString((value as InputRecord).credential) ||
-      // SAFETY: validIntegrationInput validates this integration payload before use.
-      !(value as InputRecord).credential ||
-      // SAFETY: validIntegrationInput validates this integration payload before use.
-      String((value as InputRecord).credential).length > 2048 ||
-      ((value as InputRecord).setting !== undefined
-        && !bounded((value as InputRecord).setting, 128))
+      !isString(credential) ||
+      !credential ||
+      credential.length > 4096 ||
+      (setting !== undefined && !bounded(setting, 128))
     )
       return {
         ok: false,
         code: "validation",
         message: "Введите корректные данные подключения.",
       };
-    // SAFETY: validIntegrationInput validates this integration payload before use.
-    const input = value as InputRecord;
-    const result = await rpc(op.setIntegrationCredential, {
-      provider: input.provider,
-      ...(input.setting === undefined ? {} : { setting: input.setting }),
-      credential: String(input.credential).trim(),
-    });
-    return result.ok
-      ? { ok: true, data: normalizeIntegrationSnapshot(result.data) }
-      : result;
+    const input: InputRecord = {
+      provider: value.provider,
+      credential: credential.trim(),
+    };
+    if (setting !== undefined) input.setting = setting;
+    const result = await rpc(op.setIntegrationCredential, input);
+    return result.ok ? { ok: true, data: normalizeIntegrationSnapshot(result.data) } : result;
   });
-  ipcMain.handle(
-    "manager.clearIntegrationCredential",
-    async (_event, value) => {
-      if (!validIntegrationInput(value))
-        return {
-          ok: false,
-          code: "validation",
-          message: "Недопустимая интеграция.",
-        };
-      const result = await rpc(op.clearIntegrationCredential, {
-        provider: value.provider,
-      });
-      return result.ok
-        ? { ok: true, data: normalizeIntegrationSnapshot(result.data) }
-        : result;
-    },
-  );
+  ipcMain.handle("manager.clearIntegrationCredential", async (_event, value) => {
+    if (!validIntegrationInput(value))
+      return {
+        ok: false,
+        code: "validation",
+        message: "Недопустимая интеграция.",
+      };
+    const result = await rpc(op.clearIntegrationCredential, {
+      provider: value.provider,
+    });
+    return result.ok ? { ok: true, data: normalizeIntegrationSnapshot(result.data) } : result;
+  });
   ipcMain.handle("manager.syncIntegrationNow", async (_event, value) => {
     if (!validIntegrationInput(value))
       return {
@@ -351,9 +277,7 @@ function registerAll() {
 
   ipcMain.handle("manager.getDictationConfig", async () => {
     const result = await rpc(op.getDictationConfig);
-    return result.ok
-      ? { ok: true, data: normalizeDictationConfig(result.data) }
-      : result;
+    return result.ok ? { ok: true, data: normalizeDictationConfig(result.data) } : result;
   });
   ipcMain.handle("manager.subscribeDictationEvents", async (event) => {
     addDictationSubscriber(event.sender);
@@ -378,27 +302,15 @@ function registerAll() {
     const result = await rpc(op.updateDictationConfig, input);
     if (!result.ok) return result;
     const readback = await rpc(op.getDictationConfig);
-    return readback.ok
-      ? { ok: true, data: normalizeDictationConfig(readback.data) }
-      : readback;
+    return readback.ok ? { ok: true, data: normalizeDictationConfig(readback.data) } : readback;
   });
   ipcMain.handle("manager.getDictationStats", async () => {
     const result = await rpc(op.getDictationStats);
-    return result.ok
-      ? { ok: true, data: normalizeDictationStats(result.data) }
-      : result;
+    return result.ok ? { ok: true, data: normalizeDictationStats(result.data) } : result;
   });
   for (const [channel, operation, data] of [
-    [
-      "manager.beginDictationHotkeyCapture",
-      op.beginDictationHotkeyCapture,
-      { started: true },
-    ],
-    [
-      "manager.endDictationHotkeyCapture",
-      op.endDictationHotkeyCapture,
-      { ended: true },
-    ],
+    ["manager.beginDictationHotkeyCapture", op.beginDictationHotkeyCapture, { started: true }],
+    ["manager.endDictationHotkeyCapture", op.endDictationHotkeyCapture, { ended: true }],
   ] as const) {
     ipcMain.handle(channel, async () => {
       const result = await rpc(operation);
@@ -407,9 +319,7 @@ function registerAll() {
   }
   ipcMain.handle("manager.testDictationConnectivity", async () => {
     const result = await rpc(op.testDictationConnectivity);
-    return result.ok
-      ? { ok: true, data: normalizeConnectivity(result.data) }
-      : result;
+    return result.ok ? { ok: true, data: normalizeConnectivity(result.data) } : result;
   });
   ipcMain.handle("manager.clearDictationApiKey", async () => {
     const result = await rpc(op.clearDictationApiKey);
@@ -422,16 +332,13 @@ function registerAll() {
     ipcMain.handle(channel, async () => {
       const result = await rpc(operation);
       // SAFETY: isObject narrows the successful RPC payload to a record.
-      const raw =
-        result.ok && isObject(result.data) ? (result.data as InputRecord) : {};
+      const raw = result.ok && isObject(result.data) ? (result.data as InputRecord) : {};
       return result.ok
         ? {
             ok: true,
             data: {
               [field]:
-                Number.isInteger(raw[field]) && Number(raw[field]) >= 0
-                  ? Number(raw[field])
-                  : 0,
+                Number.isInteger(raw[field]) && Number(raw[field]) >= 0 ? Number(raw[field]) : 0,
             },
           }
         : result;
@@ -448,8 +355,7 @@ function registerAll() {
         return { ok: false, code: "validation", message: "Введите ключ." };
       const result = await rpc(operation, { key });
       // SAFETY: isObject narrows the successful RPC payload to a record.
-      const raw =
-        result.ok && isObject(result.data) ? (result.data as InputRecord) : {};
+      const raw = result.ok && isObject(result.data) ? (result.data as InputRecord) : {};
       return result.ok
         ? {
             ok: true,
@@ -466,11 +372,7 @@ function registerAll() {
         : result;
     });
   }
-  const dictationInput = (
-    channel: string,
-    operation: string,
-    field: "modelId" | "uuid",
-  ) =>
+  const dictationInput = (channel: string, operation: string, field: "modelId" | "uuid") =>
     ipcMain.handle(channel, async (_event, value) => {
       const input = isObject(value) ? value : {};
       const v = input[field];
@@ -483,9 +385,7 @@ function registerAll() {
       const params: InputRecord = { [field]: v };
       if (field === "modelId") {
         if (
-          Object.keys(input).some(
-            (key) => key !== "modelId" && key !== "select",
-          ) ||
+          Object.keys(input).some((key) => key !== "modelId" && key !== "select") ||
           ("select" in input && !isBoolean(input.select))
         )
           return {
@@ -504,73 +404,40 @@ function registerAll() {
       if (!result.ok) return result;
       if (operation === op.downloadDictationLocalModel)
         return { ok: true, data: { started: true, modelId: v } };
-      if (
-        operation === op.useDictationLocalModel ||
-        operation === op.deleteDictationLocalModel
-      ) {
+      if (operation === op.useDictationLocalModel || operation === op.deleteDictationLocalModel) {
         const readback = await rpc(op.getDictationConfig);
-        return readback.ok
-          ? { ok: true, data: normalizeDictationConfig(readback.data) }
-          : readback;
+        return readback.ok ? { ok: true, data: normalizeDictationConfig(readback.data) } : readback;
       }
       return {
         ok: true,
-        data:
-          operation === op.retryDictation
-            ? { started: true }
-            : { discarded: true },
+        data: operation === op.retryDictation ? { started: true } : { discarded: true },
       };
     });
-  dictationInput(
-    "manager.downloadDictationLocalModel",
-    op.downloadDictationLocalModel,
-    "modelId",
-  );
-  dictationInput(
-    "manager.useDictationLocalModel",
-    op.useDictationLocalModel,
-    "modelId",
-  );
-  dictationInput(
-    "manager.deleteDictationLocalModel",
-    op.deleteDictationLocalModel,
-    "modelId",
-  );
+  dictationInput("manager.downloadDictationLocalModel", op.downloadDictationLocalModel, "modelId");
+  dictationInput("manager.useDictationLocalModel", op.useDictationLocalModel, "modelId");
+  dictationInput("manager.deleteDictationLocalModel", op.deleteDictationLocalModel, "modelId");
   dictationInput("manager.retryDictation", op.retryDictation, "uuid");
   dictationInput("manager.discardDictation", op.discardDictation, "uuid");
   ipcMain.handle("manager.listDictationLocalModels", async () => {
     const result = await rpc(op.listDictationLocalModels);
-    return result.ok
-      ? { ok: true, data: normalizeDictationLocalModels(result.data) }
-      : result;
+    return result.ok ? { ok: true, data: normalizeDictationLocalModels(result.data) } : result;
   });
   ipcMain.handle("manager.listDictationPending", async () => {
     const result = await rpc(op.listDictationPending);
-    return result.ok
-      ? { ok: true, data: normalizeDictationPending(result.data) }
-      : result;
+    return result.ok ? { ok: true, data: normalizeDictationPending(result.data) } : result;
   });
   ipcMain.handle("manager.getFocusBlocklists", async () => {
     const result = await rpc(op.getFocusBlocklists);
-    return result.ok
-      ? { ok: true, data: normalizeFocusBlocklists(result.data) }
-      : result;
+    return result.ok ? { ok: true, data: normalizeFocusBlocklists(result.data) } : result;
   });
   ipcMain.handle("manager.getFocusActiveState", async () => {
     const result = await rpc(op.getFocusActiveState);
-    return result.ok
-      ? { ok: true, data: normalizeFocusActiveState(result.data) }
-      : result;
+    return result.ok ? { ok: true, data: normalizeFocusActiveState(result.data) } : result;
   });
   ipcMain.handle("manager.upsertFocusBlocklist", async (_event, value) => {
     const input = isObject(value) ? value : {};
     const domains = input.domains;
-    const kind =
-      input.kind === "raw"
-        ? "raw"
-        : input.kind === "domains"
-          ? "domains"
-          : null;
+    const kind = input.kind === "raw" ? "raw" : input.kind === "domains" ? "domains" : null;
     if (
       (input.id !== undefined && !validFocusId(input.id)) ||
       !bounded(input.name, 256) ||
@@ -578,11 +445,9 @@ function registerAll() {
       !Array.isArray(domains) ||
       domains.length > 512 ||
       domains.some(
-        (entry: Input) =>
-          !isString(entry) || entry.trim().length === 0 || entry.length > 512,
+        (entry: Input) => !isString(entry) || entry.trim().length === 0 || entry.length > 512,
       ) ||
-      (input.icon !== undefined &&
-        (!isString(input.icon) || input.icon.length > 16)) ||
+      (input.icon !== undefined && (!isString(input.icon) || input.icon.length > 16)) ||
       (input.preset !== undefined && !isBoolean(input.preset))
     )
       return {
@@ -685,19 +550,14 @@ function registerAll() {
     ["manager.stopFocusService", "stop"],
   ] as const) {
     ipcMain.handle(channel, async () => {
-      if (
-        process.env.KOSMOS_HEADLESS === "1" ||
-        process.env.KOSMOS_TEST_MODE === "1"
-      )
+      if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1")
         return process.env.KOSMOS_TEST_FOCUS_SERVICE_ACTION === "ok"
           ? { ok: true, data: { ok: true } }
           : { ok: true, data: { ok: false, error: "headless" } };
       const result = await runServiceCliElevated(subcommand);
       return {
         ok: true,
-        data: result.ok
-          ? { ok: true }
-          : { ok: false, error: "Служба не выполнила действие." },
+        data: result.ok ? { ok: true } : { ok: false, error: "Служба не выполнила действие." },
       };
     });
   }
@@ -722,9 +582,7 @@ function registerAll() {
       };
     // SAFETY: validation above restricts the optional package filter object.
     const result = await rpc(op.getPackages, value as InputRecord | undefined);
-    return result.ok
-      ? { ok: true, data: normalizePackageSnapshot(result.data) }
-      : result;
+    return result.ok ? { ok: true, data: normalizePackageSnapshot(result.data) } : result;
   });
   register("manager.getStoreCatalog", op.getStoreCatalog);
   register("manager.refreshStoreCatalog", op.refreshStoreCatalog);
@@ -740,11 +598,8 @@ function registerAll() {
     });
     if (!result.ok) return result;
     // SAFETY: successful RPC payload is validated as string or record before URL parsing.
-    const raw = isString(result.data)
-      ? result.data
-      : (result.data as InputRecord)?.official_url;
-    if (!isString(raw))
-      return { ok: false, code: "engine", message: "Движок не вернул ссылку." };
+    const raw = isString(result.data) ? result.data : (result.data as InputRecord)?.official_url;
+    if (!isString(raw)) return { ok: false, code: "engine", message: "Движок не вернул ссылку." };
     let url: URL;
     try {
       url = new URL(raw);
@@ -837,9 +692,7 @@ function registerAll() {
   );
   ipcMain.handle("manager.getPackageTrustStatus", async () => {
     const result = await rpc(op.getPackageTrustStatus);
-    return result.ok
-      ? { ok: true, data: normalizePackageTrustStatus(result.data) }
-      : result;
+    return result.ok ? { ok: true, data: normalizePackageTrustStatus(result.data) } : result;
   });
   ipcMain.handle("manager.refreshPackageCatalog", async (_event, value) => {
     if (value !== undefined)
@@ -880,9 +733,7 @@ function registerAll() {
     if (!result.ok) return result;
     const packages = await rpc(op.getPackages);
     const installed =
-      packages.ok &&
-      isObject(packages.data) &&
-      Array.isArray(packages.data.packages)
+      packages.ok && isObject(packages.data) && Array.isArray(packages.data.packages)
         ? packages.data.packages.find(
             (item: Input) => isObject(item) && item.id === input.package_id,
           )
@@ -894,10 +745,7 @@ function registerAll() {
         enabled: true,
       });
       if (!enabled.ok) return enabled;
-      if (
-        process.env.KOSMOS_HEADLESS === "1" ||
-        process.env.KOSMOS_TEST_MODE === "1"
-      )
+      if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1")
         return {
           ok: true,
           data: { installed: true, enabled: true, opened: false },
@@ -916,11 +764,7 @@ function registerAll() {
     return { ok: true, data: { installed: true } };
   });
   ipcMain.handle("manager.openPackage", async (_event, value) => {
-    if (
-      !isObject(value) ||
-      Object.keys(value).length !== 1 ||
-      !validPackageId(value.package_id)
-    )
+    if (!isObject(value) || Object.keys(value).length !== 1 || !validPackageId(value.package_id))
       return {
         ok: false,
         code: "validation",
@@ -963,9 +807,7 @@ function registerAll() {
         message: "Недопустимые данные пакета.",
       };
     const result = await rpc(op.setPackageEnabled, input);
-    return result.ok
-      ? { ok: true, data: { enabled: input.enabled === true } }
-      : result;
+    return result.ok ? { ok: true, data: { enabled: input.enabled === true } } : result;
   });
   ipcMain.handle("manager.uninstallPackage", async (_event, value) => {
     const input = packageInput(value);
@@ -1007,10 +849,7 @@ function registerAll() {
     }
   });
   async function openFolder(kind: "logs" | "crashes") {
-    if (
-      process.env.KOSMOS_HEADLESS === "1" ||
-      process.env.KOSMOS_TEST_MODE === "1"
-    )
+    if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1")
       return { ok: true, data: { opened: false } } as const;
     try {
       const dir = await ensureDiagnosticsDir(dataRoot(), kind);
@@ -1034,8 +873,7 @@ function registerAll() {
     Boolean(appExecutable) &&
     resolveInstance().autorunEnabled;
   ipcMain.handle("manager.getAutostart", () => {
-    if (!autostartAvailable())
-      return { ok: true, data: { enabled: false, available: false } };
+    if (!autostartAvailable()) return { ok: true, data: { enabled: false, available: false } };
     const settings = app.getLoginItemSettings(loginItemOptions);
     return {
       ok: true,
@@ -1049,8 +887,7 @@ function registerAll() {
         code: "validation",
         message: "Недопустимое значение автозапуска.",
       };
-    if (!autostartAvailable())
-      return { ok: true, data: { enabled: false, available: false } };
+    if (!autostartAvailable()) return { ok: true, data: { enabled: false, available: false } };
     app.setLoginItemSettings({
       ...loginItemOptions,
       openAtLogin: value.enabled,
@@ -1063,9 +900,7 @@ function registerAll() {
   });
   ipcMain.handle("manager.getEngineSettings", async () => {
     const result = await rpc(op.getEngineSettings);
-    return result.ok
-      ? { ok: true, data: normalizeEngineSettings(result.data) }
-      : result;
+    return result.ok ? { ok: true, data: normalizeEngineSettings(result.data) } : result;
   });
   register(
     "manager.setWarmTimeout",
@@ -1087,16 +922,12 @@ function registerAll() {
     const result = await rpc(op.setUsageTracker, {
       usage_tracker_enabled: value.enabled,
     });
-    return result.ok
-      ? { ok: true, data: normalizeEngineSettings(result.data) }
-      : result;
+    return result.ok ? { ok: true, data: normalizeEngineSettings(result.data) } : result;
   });
 
   const readFileIndexSettings = async (): Promise<ManagerResult<unknown>> => {
     const result = await rpc(op.getFileIndexSettings);
-    return result.ok
-      ? { ok: true, data: normalizeFileIndexSettings(result.data) }
-      : result;
+    return result.ok ? { ok: true, data: normalizeFileIndexSettings(result.data) } : result;
   };
   ipcMain.handle("manager.getFileIndexSettings", readFileIndexSettings);
   ipcMain.handle("manager.setFileIndexSettings", async (_event, value) => {
@@ -1113,26 +944,18 @@ function registerAll() {
   });
   ipcMain.handle("manager.getFileIndexDiagnostics", async () => {
     const result = await rpc(op.getFileIndexDiagnostics);
-    return result.ok
-      ? { ok: true, data: normalizeFileIndexDiagnostics(result.data) }
-      : result;
+    return result.ok ? { ok: true, data: normalizeFileIndexDiagnostics(result.data) } : result;
   });
   const fileIndexMutation = async (
     operation: string,
     value: Input,
     field: "path" | "pattern",
   ): Promise<ManagerResult<unknown>> => {
-    if (
-      !isObject(value) ||
-      !validateFileIndexPath(value[field], field === "path" ? 4096 : 512)
-    )
+    if (!isObject(value) || !validateFileIndexPath(value[field], field === "path" ? 4096 : 512))
       return {
         ok: false,
         code: "validation",
-        message:
-          field === "path"
-            ? "Выберите папку индексации."
-            : "Введите шаблон исключения.",
+        message: field === "path" ? "Выберите папку индексации." : "Введите шаблон исключения.",
       };
     const updated = await rpc(operation, {
       [field]: String(value[field]).trim(),
@@ -1169,10 +992,7 @@ function registerAll() {
         code: "validation",
         message: "Недопустимый источник выбора папки.",
       };
-    if (
-      process.env.KOSMOS_HEADLESS === "1" ||
-      process.env.KOSMOS_TEST_MODE === "1"
-    )
+    if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1")
       return { ok: true, data: null };
     try {
       const options: OpenDialogOptions = {
@@ -1205,10 +1025,7 @@ function registerAll() {
         message: "Engine вернул некорректный пакет поддержки.",
       };
     }
-    if (
-      process.env.KOSMOS_HEADLESS === "1" ||
-      process.env.KOSMOS_TEST_MODE === "1"
-    ) {
+    if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1") {
       await rpc(op.cancelSupportBundle, { handle });
       return { ok: true, data: { saved: false, cancelled: true } };
     }
@@ -1234,9 +1051,10 @@ let managerWindowReady = false;
 const styleSource = process.env.VITE_DEV_SERVER_URL
   ? "style-src 'self' 'unsafe-inline'"
   : "style-src 'self'";
-const imageSource = process.env.KOSMOS_DEV_PACKAGES === "1"
-  ? "img-src 'self' data: https: http://127.0.0.1:* http://localhost:*"
-  : "img-src 'self' data: https:";
+const imageSource =
+  process.env.KOSMOS_DEV_PACKAGES === "1"
+    ? "img-src 'self' data: https: http://127.0.0.1:* http://localhost:*"
+    : "img-src 'self' data: https:";
 
 function presentManagerWindow(win: BrowserWindow) {
   if (
@@ -1256,8 +1074,7 @@ async function createWindow() {
     presentManagerWindow(managerWindow);
     return managerWindow;
   }
-  const headless =
-    process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
+  const headless = process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
   const win = new BrowserWindow({
     width: 1180,
     height: 760,
@@ -1298,22 +1115,17 @@ async function createWindow() {
       managerWindowReady = false;
     }
   });
-  win.webContents.on(
-    "did-fail-load",
-    (_event, _code, _description, _url, isMainFrame) => {
-      if (!isMainFrame) return;
-      if (!win.isDestroyed()) win.destroy();
-      if (managerWindow === win) {
-        managerWindow = null;
-        managerWindowReady = false;
-      }
-    },
-  );
+  win.webContents.on("did-fail-load", (_event, _code, _description, _url, isMainFrame) => {
+    if (!isMainFrame) return;
+    if (!win.isDestroyed()) win.destroy();
+    if (managerWindow === win) {
+      managerWindow = null;
+      managerWindowReady = false;
+    }
+  });
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   try {
-    await (devUrl
-      ? win.loadURL(devUrl)
-      : win.loadFile(path.join(__dirname, "../dist/index.html")));
+    await (devUrl ? win.loadURL(devUrl) : win.loadFile(path.join(__dirname, "../dist/index.html")));
   } catch (error) {
     if (!win.isDestroyed()) win.destroy();
     if (managerWindow === win) {
@@ -1352,10 +1164,7 @@ if (!app.requestSingleInstanceLock()) {
       }),
     );
     registerAll();
-    if (
-      process.env.KOSMOS_HEADLESS !== "1" &&
-      process.env.KOSMOS_TEST_MODE !== "1"
-    ) {
+    if (process.env.KOSMOS_HEADLESS !== "1" && process.env.KOSMOS_TEST_MODE !== "1") {
       startPackagedRuntime();
       void waitForEngineReady();
     }

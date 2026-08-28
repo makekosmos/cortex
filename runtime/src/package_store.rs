@@ -572,8 +572,21 @@ impl PackageStore {
             {
                 return Err(StoreError::State("invalid package record".into()));
             }
+            self.verify_installed_manifest(package)?;
         }
         Ok(state)
+    }
+
+    fn verify_installed_manifest(&self, package: &InstalledPackage) -> Result<(), StoreError> {
+        let raw = self.read_blob_entry(package, "manifest.json")?;
+        let actual = PackageManifest::parse(
+            std::str::from_utf8(&raw)
+                .map_err(|_| StoreError::Archive("manifest is not UTF-8".into()))?,
+        )?;
+        if actual != package.manifest {
+            return Err(StoreError::ManifestMismatch);
+        }
+        Ok(())
     }
     fn write_state(&self, state: &StoreState) -> Result<(), StoreError> {
         #[cfg(test)]
@@ -801,6 +814,25 @@ mod tests {
                 .manifest,
             expected
         );
+    }
+
+    #[test]
+    fn rejects_state_manifest_tampering_against_immutable_archive() {
+        let d = tempdir().unwrap();
+        let p = d.path().join("v2.kspkg");
+        let expected = manifest_v2();
+        archive_versioned(&p, &expected, "index.html");
+        let bytes = fs::read(&p).unwrap();
+        let store = PackageStore::new(d.path().join("store")).unwrap();
+        store
+            .install_versioned(&p, bytes.len() as u64, &hex_hash(&bytes), &expected, 1)
+            .unwrap();
+        let state_path = store.state_path();
+        let tampered = fs::read_to_string(&state_path)
+            .unwrap()
+            .replace("V2 Demo", "Tampered");
+        fs::write(state_path, tampered).unwrap();
+        assert!(matches!(store.list(), Err(StoreError::ManifestMismatch)));
     }
 
     #[test]

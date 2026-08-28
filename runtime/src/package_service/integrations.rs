@@ -1,10 +1,14 @@
+#[path = "integrations/cleanup.rs"]
+mod cleanup;
 #[path = "integrations/secret_store.rs"]
 mod secret_store;
+#[path = "integrations/validation.rs"]
+mod validation;
 
 use secret_store::{
-    clear_package_integration_secret, read_package_integration_secret,
-    save_package_integration_secret,
+    read_package_integration_secret, save_package_integration_secret,
 };
+use validation::{has_integration_credential, valid_integration_value};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -149,7 +153,7 @@ impl PackageService {
                 .and_then(|icon| self.store.immutable_asset_path(&package, icon).ok())
                 .map(|path| {
                     let path = path.to_string_lossy();
-                    path.strip_prefix(r"\\?\\").unwrap_or(path.as_ref()).to_owned()
+                    path.strip_prefix(r"\\?\").unwrap_or(path.as_ref()).to_owned()
                 });
             providers.push(serde_json::json!({
                 "id": package.id,
@@ -245,22 +249,33 @@ impl PackageService {
     }
 
     pub async fn clear_integration_values(&self, id: &str) -> Result<(), PackageError> {
-        let package = self.integration_package(id)?;
-        let VersionedManifest::V2(manifest) = &package.manifest else {
+        let packages = self
+            .store
+            .list()?
+            .into_iter()
+            .filter(|package| {
+                package.id == id
+                    && !package.revoked
+                    && matches!(
+                        &package.manifest,
+                        VersionedManifest::V2(manifest)
+                            if manifest.kind == PackageKind::Source && manifest.integration.is_some()
+                    )
+            })
+            .collect::<Vec<_>>();
+        if packages.is_empty() {
             return Err(PackageError::Invalid);
-        };
-        let integration = manifest.integration.as_ref().ok_or(PackageError::Invalid)?;
-        let mut state = self.read_integration_settings();
-        state.values.remove(&Self::bridge_key(&package.id, &package.version));
-        write_owner_only_json(&self.integration_settings_path(), &state)
-            .map_err(|_| PackageError::Persistence)?;
-        for setting in &integration.settings {
-            if setting.kind == crate::package_manifest::IntegrationSettingKind::Secret {
-                clear_package_integration_secret(&package.id, &package.version, &setting.key)?;
+        }
+        for package in &packages {
+            if package.enabled {
+                self.set_enabled(&package.id, &package.version, false).await?;
             }
         }
-        if package.enabled {
-            self.set_enabled(&package.id, &package.version, false).await?;
+        if let Some(worker) = self.worker.as_ref() {
+            worker.supervisor.revoke_package_secrets(id);
+        }
+        for package in &packages {
+            self.clear_integration_package_data(package)?;
         }
         Ok(())
     }
@@ -274,38 +289,6 @@ impl PackageService {
             .run_now(&package.id, &package.version)
             .map_err(|_| PackageError::Invalid)
     }
-}
-
-fn valid_integration_value(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 4096
-        && value.trim() == value
-        && !value.chars().any(char::is_control)
-}
-
-fn has_integration_credential(
-    integration: &IntegrationManifest,
-    id: &str,
-    version: &str,
-    values: &HashMap<String, String>,
-) -> bool {
-    let configured = integration.settings.iter().any(|setting| match setting.kind {
-        crate::package_manifest::IntegrationSettingKind::Text => values.contains_key(&setting.key),
-        crate::package_manifest::IntegrationSettingKind::Secret => {
-            read_package_integration_secret(id, version, &setting.key).is_some()
-        }
-    });
-    configured
-        && integration.settings.iter().filter(|setting| setting.required).all(|setting| {
-            match setting.kind {
-                crate::package_manifest::IntegrationSettingKind::Text => {
-                    values.contains_key(&setting.key)
-                }
-                crate::package_manifest::IntegrationSettingKind::Secret => {
-                    read_package_integration_secret(id, version, &setting.key).is_some()
-                }
-            }
-        })
 }
 
 #[cfg(test)]

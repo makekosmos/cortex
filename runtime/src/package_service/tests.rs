@@ -183,7 +183,7 @@ pub(crate) mod tests {
             .expect("manifest entry");
         zip.write_all(&serde_json::to_vec(package_manifest).expect("manifest json"))
             .expect("manifest write");
-        zip.start_file("index.html", FileOptions::default())
+        zip.start_file(package_manifest.entrypoint(), FileOptions::default())
             .expect("entrypoint entry");
         zip.write_all(b"ok").expect("entrypoint write");
         if let Some(icon) = package_manifest.icon() {
@@ -790,13 +790,13 @@ pub(crate) mod tests {
             std::sync::Arc::new(move |request| {
                 let ark = ark.clone();
                 Box::pin(async move {
-                      let response = ark
-                          .request(request.operation.as_str(), request.params)
+                    let response = ark
+                        .request(request.operation.as_str(), request.params)
                         .await
                         .map_err(|error| {
                             crate::engine_dispatch::DispatchError::Failed(error.to_string())
-                          })?;
-                      Ok(serde_json::json!({
+                        })?;
+                    Ok(serde_json::json!({
                         "ok": response.ok,
                         "data": response.data,
                         "error": response.error,
@@ -1026,8 +1026,8 @@ pub(crate) mod tests {
         ];
         for (package, path) in candidates {
             let raw = fs::read_to_string(path).unwrap_or_else(|_| panic!("{package} manifest"));
-            let VersionedManifest::V2(manifest) = PackageManifest::parse(&raw)
-                .unwrap_or_else(|_| panic!("{package} manifest"))
+            let VersionedManifest::V2(manifest) =
+                PackageManifest::parse(&raw).unwrap_or_else(|_| panic!("{package} manifest"))
             else {
                 panic!("{package} must use a v2 manifest");
             };
@@ -1038,49 +1038,64 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn bigfrontend_manifest_compiles_against_canonical_registry() {
-        let mut registry = canonical_registry_snapshot().expect("canonical registry");
-        registry.types.push(RegisteredType::new(
-            "coding_submission_obj",
-            "1.0.0",
-            &[],
-            &[],
-        ));
-        let path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../packages/bigfrontend/manifest.json");
-        let raw = fs::read_to_string(path).expect("BigFrontend manifest");
-        let VersionedManifest::V2(manifest) =
-            PackageManifest::parse(&raw).expect("valid BigFrontend manifest")
-        else {
-            panic!("BigFrontend must use a v2 manifest");
+    fn six_provider_manifests_install_with_typed_grants() {
+        let dir = tempdir().expect("tempdir");
+        let mut packages = Vec::new();
+        let mut archives = Vec::new();
+        for package in [
+            "bigfrontend",
+            "greatfrontend",
+            "leetcode",
+            "codewars",
+            "hevy",
+            "toggl",
+        ] {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../packages")
+                .join(package)
+                .join("manifest.json");
+            let raw = fs::read_to_string(path).unwrap_or_else(|_| panic!("{package} manifest"));
+            let VersionedManifest::V2(manifest) =
+                PackageManifest::parse(&raw).unwrap_or_else(|_| panic!("valid {package} manifest"))
+            else {
+                panic!("{package} must use a v2 manifest");
+            };
+            let package_dir = dir.path().join(package);
+            fs::create_dir_all(&package_dir).expect("package tempdir");
+            let (archive, hash, size) = archive_with_versioned_manifest(
+                &package_dir,
+                &VersionedManifest::V2(manifest.clone()),
+            );
+            packages.push(CatalogEntry {
+                manifest: VersionedManifest::V2(manifest.clone()),
+                archive_url: format!("https://packages.kosmos.dev/{package}.kspkg"),
+                sha256: hash,
+                size,
+            });
+            archives.push((manifest.id, manifest.version, archive));
+        }
+
+        let (trust_store, _, release) = trust();
+        let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
+        let catalog = CatalogDocument {
+            schema_version: 1,
+            sequence: 1,
+            issued_at: "2029-01-01T00:00:00Z".into(),
+            expires_at: "2030-01-01T00:00:00Z".into(),
+            packages,
         };
-        assert_eq!(manifest.kind, PackageKind::Source);
-        assert!(manifest.targets.iter().any(|target| {
-            target.runtime == TargetRuntime::Worker && target.os.contains(&TargetOs::Windows)
-        }));
-        assert!(manifest.permissions.iter().any(|permission| {
-            permission.capability == "network" && permission.scopes == ["https://bigfrontend.dev/"]
-        }));
-        assert!(manifest.permissions.iter().any(|permission| {
-            permission.capability == "ark.write"
-                && permission.scopes
-                    == ["upsert_object_type", "upsert_object", "set_sync_kv"]
-        }));
-        let integration = manifest.integration.as_ref().expect("integration schema");
-        assert_eq!(integration.settings.len(), 1);
-        assert_eq!(integration.settings[0].key, "username");
-        assert_eq!(
-            integration.settings[0].kind,
-            crate::package_manifest::IntegrationSettingKind::Text
-        );
-        assert!(integration.settings[0].required);
-        assert_eq!(
-            integration.schedule.as_ref().map(|schedule| schedule.interval_seconds),
-            Some(86_400)
-        );
-        let grant = compile_manifest_v2(&manifest, &registry, "test-digest")
-            .expect("BigFrontend grant");
-        assert!(!grant.rules.is_empty());
+        let (bytes, signatures) = signed(&catalog, "release-1", &release);
+        service.apply_catalog(bytes, signatures).expect("catalog");
+        for (id, version, archive) in archives {
+            service
+                .install_from_path(&id, &version, archive)
+                .unwrap_or_else(|_| panic!("install {id}@{version}"));
+        }
+        let listings = service.store_installed_listings().expect("listings");
+        assert_eq!(listings.len(), 6);
+        assert!(listings
+            .iter()
+            .all(|listing| !listing.effective_grants.is_empty()));
     }
 
     #[test]
@@ -1098,8 +1113,8 @@ pub(crate) mod tests {
                 .join(package)
                 .join("manifest.json");
             let raw = fs::read_to_string(path).unwrap_or_else(|_| panic!("{package} manifest"));
-            let VersionedManifest::V2(manifest) = PackageManifest::parse(&raw)
-                .unwrap_or_else(|_| panic!("valid {package} manifest"))
+            let VersionedManifest::V2(manifest) =
+                PackageManifest::parse(&raw).unwrap_or_else(|_| panic!("valid {package} manifest"))
             else {
                 panic!("{package} must use a v2 manifest");
             };
@@ -1114,9 +1129,12 @@ pub(crate) mod tests {
 
     #[test]
     fn dictation_package_manifest_has_only_the_required_engine_grants() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dictation/package.manifest.json");
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dictation/package.manifest.json");
         let raw = fs::read_to_string(path).expect("Dictation package manifest");
-        let VersionedManifest::V2(manifest) = PackageManifest::parse(&raw).expect("valid Dictation manifest") else {
+        let VersionedManifest::V2(manifest) =
+            PackageManifest::parse(&raw).expect("valid Dictation manifest")
+        else {
             panic!("Dictation must be a v2 package");
         };
         let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "test-digest")
@@ -1311,12 +1329,21 @@ pub(crate) mod tests {
             .await
             .unwrap(),
         );
-        let note_registration = ark_core::canonical_types::definitions::canonical_type_registrations()
+        let note_registration =
+            ark_core::canonical_types::definitions::canonical_type_registrations()
+                .unwrap()
+                .into_iter()
+                .find(|registration| registration.type_id == "com.kosmos.note")
+                .unwrap();
+        assert!(
+            ark.request(
+                "types.registerPackageDefinitions",
+                serde_json::json!({"registrations":[note_registration]})
+            )
+            .await
             .unwrap()
-            .into_iter()
-            .find(|registration| registration.type_id == "com.kosmos.note")
-            .unwrap();
-        assert!(ark.request("types.registerPackageDefinitions", serde_json::json!({"registrations":[note_registration]})).await.unwrap().ok);
+            .ok
+        );
         assert!(ark.request("upsert_object", serde_json::json!({"object":{"id":"service-note","typeId":"com.kosmos.note","typeVersion":"1.0.0","title":"Service note","contentJson":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"from ark"}]}]},"propsJson":{"description":null,"extensions":{}},"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","deletedAt":null},"device_id":"bridge-service"})).await.unwrap().ok);
         let objects = ark
             .request("list_objects", serde_json::Value::Null)
@@ -1382,9 +1409,7 @@ pub(crate) mod tests {
                     .request("get_object", serde_json::json!({"id":"service-note"}))
                     .await
                     .unwrap();
-                if current.data["contentJson"]["content"][0]["content"][0]["text"]
-                    == "from vault"
-                {
+                if current.data["contentJson"]["content"][0]["content"][0]["text"] == "from vault" {
                     break;
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(50)).await;

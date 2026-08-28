@@ -1,18 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type {
-  DictationProgressEvent,
-  JsonValue,
-  ManagerApi,
-} from "../src/manager-api";
-const invoke = (channel: string, input?: JsonValue) =>
-  ipcRenderer.invoke(channel, input);
+import type { DictationProgressEvent, JsonValue, ManagerApi } from "../src/manager-api";
+const invoke = (channel: string, input?: JsonValue) => ipcRenderer.invoke(channel, input);
 let dictationListener: ((event: DictationProgressEvent) => void) | null = null;
-ipcRenderer.on(
-  "manager:dictation-event",
-  (_event, value: DictationProgressEvent) => {
-    dictationListener?.(value);
-  },
-);
+ipcRenderer.on("manager:dictation-event", (_event, value: DictationProgressEvent) => {
+  dictationListener?.(value);
+});
 const api: ManagerApi = {
   getAppVersion: () => invoke("manager.getAppVersion"),
   getDesktopUpdateState: () => invoke("manager.getDesktopUpdateState"),
@@ -29,12 +21,8 @@ const api: ManagerApi = {
   connectWithPairingCode: (v) => invoke("manager.connectWithPairingCode", v),
   getIntegrations: () => invoke("manager.getIntegrations"),
   loginIntegration: (v) => invoke("manager.loginIntegration", v),
-  updateIntegrationSettings: (v) =>
-    invoke("manager.updateIntegrationSettings", v),
-  setIntegrationCredential: (v) =>
-    invoke("manager.setIntegrationCredential", v),
-  clearIntegrationCredential: (v) =>
-    invoke("manager.clearIntegrationCredential", v),
+  setIntegrationCredential: (v) => invoke("manager.setIntegrationCredential", v),
+  clearIntegrationCredential: (v) => invoke("manager.clearIntegrationCredential", v),
   syncIntegrationNow: (v) => invoke("manager.syncIntegrationNow", v),
   disconnectPeer: (v) => invoke("manager.disconnectPeer", v),
   getPackages: (v) => invoke("manager.getPackages", v),
@@ -68,19 +56,16 @@ const api: ManagerApi = {
   getDictationConfig: () => invoke("manager.getDictationConfig"),
   updateDictationConfig: (v) => invoke("manager.updateDictationConfig", v),
   getDictationStats: () => invoke("manager.getDictationStats"),
-  beginDictationHotkeyCapture: () =>
-    invoke("manager.beginDictationHotkeyCapture"),
+  beginDictationHotkeyCapture: () => invoke("manager.beginDictationHotkeyCapture"),
   endDictationHotkeyCapture: () => invoke("manager.endDictationHotkeyCapture"),
   verifyDictationApiKey: (v) => invoke("manager.verifyDictationApiKey", v),
   setDictationApiKey: (v) => invoke("manager.setDictationApiKey", v),
   clearDictationApiKey: () => invoke("manager.clearDictationApiKey"),
   testDictationConnectivity: () => invoke("manager.testDictationConnectivity"),
   listDictationLocalModels: () => invoke("manager.listDictationLocalModels"),
-  downloadDictationLocalModel: (v) =>
-    invoke("manager.downloadDictationLocalModel", v),
+  downloadDictationLocalModel: (v) => invoke("manager.downloadDictationLocalModel", v),
   useDictationLocalModel: (v) => invoke("manager.useDictationLocalModel", v),
-  deleteDictationLocalModel: (v) =>
-    invoke("manager.deleteDictationLocalModel", v),
+  deleteDictationLocalModel: (v) => invoke("manager.deleteDictationLocalModel", v),
   listDictationPending: () => invoke("manager.listDictationPending"),
   retryDictation: (v) => invoke("manager.retryDictation", v),
   discardDictation: (v) => invoke("manager.discardDictation", v),

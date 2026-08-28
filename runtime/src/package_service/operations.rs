@@ -913,10 +913,13 @@ impl PackageService {
     }
 
     pub fn uninstall(&self, id: &str, version: &str) -> Result<(), PackageError> {
+        let package = self.store.installed(id, version)?;
         let _mutation = Self::lock(&self.mutation);
         if let Some(worker) = self.worker.as_ref() {
             worker.supervisor.revoke_typed_launch(id, version);
+            worker.supervisor.revoke_package_secrets(id);
         }
+        self.clear_integration_package_data(&package)?;
         self.store.uninstall(id, version)?;
         Self::lock(&self.typed_grants).remove(&(id.to_owned(), version.to_owned()));
         Ok(())

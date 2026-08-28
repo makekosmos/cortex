@@ -109,43 +109,56 @@ fn definition_documents_from_store(
 fn canonical_registry_snapshot() -> Result<RegistrySnapshot, PackageError> {
     let registrations = ark_core::canonical_types::definitions::canonical_type_registrations()
         .map_err(|_| PackageError::Invalid)?;
-    let types = registrations
-        .into_iter()
-        .map(|registration| {
-            let schema: Value = serde_json::from_str(&registration.schema_json)
-                .map_err(|_| PackageError::Invalid)?;
-            let properties = schema
-                .get("properties")
-                .and_then(Value::as_object)
-                .ok_or(PackageError::Invalid)?;
-            let mut fields = ["title", "content"]
-                .into_iter()
-                .map(str::to_owned)
-                .collect::<Vec<_>>();
-            fields.extend(properties.keys().map(|name| format!("props.{name}")));
+    let mut types = Vec::new();
+    for registration in registrations {
+        let schema: Value =
+            serde_json::from_str(&registration.schema_json).map_err(|_| PackageError::Invalid)?;
+        let properties = schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .ok_or(PackageError::Invalid)?;
+        let mut fields = ["title", "content"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        fields.extend(properties.keys().map(|name| format!("props.{name}")));
 
-            let relations: Value = serde_json::from_str(&registration.relations_json)
-                .map_err(|_| PackageError::Invalid)?;
-            let relations = relations
-                .as_array()
-                .ok_or(PackageError::Invalid)?
-                .iter()
-                .map(|relation| {
-                    relation
-                        .get("type")
-                        .and_then(Value::as_str)
-                        .map(str::to_owned)
-                        .ok_or(PackageError::Invalid)
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok(RegisteredType {
-                type_id: registration.type_id,
-                version: registration.version,
-                fields,
-                relations,
+        let relations: Value = serde_json::from_str(&registration.relations_json)
+            .map_err(|_| PackageError::Invalid)?;
+        let relations = relations
+            .as_array()
+            .ok_or(PackageError::Invalid)?
+            .iter()
+            .map(|relation| {
+                relation
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+                    .ok_or(PackageError::Invalid)
             })
-        })
-        .collect::<Result<Vec<_>, PackageError>>()?;
+            .collect::<Result<Vec<_>, _>>()?;
+        let registered = RegisteredType {
+            type_id: registration.type_id,
+            version: registration.version,
+            fields,
+            relations,
+        };
+        types.push(registered.clone());
+        types.extend(
+            registration
+                .aliases
+                .into_iter()
+                .map(|alias| RegisteredType {
+                    type_id: alias.alias,
+                    version: registered.version.clone(),
+                    fields: registered.fields.clone(),
+                    relations: registered.relations.clone(),
+                }),
+        );
+    }
+    for type_id in ["coding_submission_obj", "coding_profile_obj", "workout_obj"] {
+        types.push(RegisteredType::new(type_id, "1.0.0", &[], &[]));
+    }
     Ok(RegistrySnapshot::new(types))
 }
 

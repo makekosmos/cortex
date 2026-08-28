@@ -644,7 +644,9 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
                 || v.octets()[0] == 0
         }
         IpAddr::V6(v) => {
-            v.is_loopback()
+            v.to_ipv4_mapped()
+                .is_some_and(|v4| is_blocked_ip(v4.into()))
+                || v.is_loopback()
                 || v.is_unspecified()
                 || v.is_multicast()
                 || ((v.segments()[0] & 0xfe00) == 0xfc00)
@@ -1103,6 +1105,7 @@ mod tests {
     #[test]
     fn rejects_private_and_traversal() {
         assert!(is_blocked_ip("127.0.0.1".parse().unwrap()));
+        assert!(is_blocked_ip("::ffff:127.0.0.1".parse().unwrap()));
         assert!(is_blocked_ip("::1".parse().unwrap()));
         assert!(is_blocked_ip("fc00::1".parse().unwrap()));
         assert!(is_blocked_ip("fe80::1".parse().unwrap()));

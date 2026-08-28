@@ -20,5 +20,12 @@ export function appIcon(id: string, remote?: string | null, local?: string | nul
   const url = remote?.trim();
   if (url && /^(https:|http:|file:|data:image\/|\/|\.\/assets\/)/.test(url)) return url;
   const path = local?.trim();
-  return path ? `file:///${path.replace(/\\/g, "/")}` : null;
+  if (!path) return null;
+  const normalized = path.replace(/\\/g, "/");
+  const parts = normalized.split("/");
+  return `${normalized.startsWith("/") ? "file://" : "file:///"}${parts
+    .map((part, index) =>
+      index === 0 && /^[A-Za-z]:$/.test(part) ? part : encodeURIComponent(part),
+    )
+    .join("/")}`;
 }

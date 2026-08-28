@@ -390,7 +390,8 @@ fn is_private(ip: std::net::IpAddr) -> bool {
                 || v.is_unspecified()
         }
         std::net::IpAddr::V6(v) => {
-            v.is_loopback()
+            v.to_ipv4_mapped().is_some_and(|v4| is_private(v4.into()))
+                || v.is_loopback()
                 || v.is_unspecified()
                 || v.is_unicast_link_local()
                 || v.is_unique_local()
@@ -544,6 +545,7 @@ mod tests {
     fn network_and_path_scopes_fail_closed() {
         assert!(normalize_origin("http://example.com/").is_err());
         assert!(normalize_origin("https://127.0.0.1/").is_err());
+        assert!(normalize_origin("https://[::ffff:127.0.0.1]/").is_err());
         assert!(normalize_origin("https://[fc00::1]/").is_err());
         assert!(normalize_origin("https://user@example.com/").is_err());
         let root = std::env::temp_dir();

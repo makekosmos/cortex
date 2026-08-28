@@ -1,14 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import {
-  Button,
-  Dropdown,
-  Modal,
-  SettingsList,
-  SettingsRow,
-  SettingsToggleRow,
-  TextInput,
-} from "@kosmos/visuals";
+import { Button, Modal, SettingsList, SettingsRow, TextInput } from "@kosmos/visuals";
 import type { IntegrationProvider, IntegrationsSnapshot } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
 import { appIcon } from "../app-icons";
@@ -17,23 +9,10 @@ const props = defineProps<{ client: ManagerClient }>();
 const snapshot = ref<IntegrationsSnapshot | null>(null);
 type CredentialMap = Record<string, string>;
 type Setting = NonNullable<IntegrationProvider["settingSchema"]>[number];
-type SettingsPatch = { intervalMinutes?: number; syncOnStartup?: boolean };
 const credential = ref<CredentialMap>({});
 const settingDraft = ref<CredentialMap>({});
 const busy = ref<string | null>(null);
-const intervals = [0, 15, 60, 360, 1440] as const;
 const selectedProvider = ref<string | null>(null);
-const intervalLabels = {
-  0: "Вручную",
-  15: "15 минут",
-  60: "Час",
-  360: "6 часов",
-  1440: "Раз в день",
-} satisfies Record<number, string>;
-const intervalOptions = intervals.map((value) => ({
-  value,
-  label: intervalLabels[value],
-}));
 function authMode(provider: IntegrationProvider) {
   return provider.authMode === "browser_login" || provider.authMode === "none"
     ? provider.authMode
@@ -48,28 +27,20 @@ function icon(provider: IntegrationProvider) {
 function canLogin(provider: IntegrationProvider) {
   return authMode(provider) === "browser_login" && Boolean(provider.loginCapability);
 }
-function packageManaged(provider: IntegrationProvider) {
-  return provider.packageManaged === true;
-}
 const selected = computed(() => {
-  const provider = snapshot.value?.providers.find(
-    (item) => item.id === selectedProvider.value,
-  );
+  const provider = snapshot.value?.providers.find((item) => item.id === selectedProvider.value);
   return provider;
 });
 async function load() {
-  snapshot.value = await props.client.call(
-    "getIntegrations",
-    undefined,
-    "integrations",
-  );
+  snapshot.value = await props.client.call("getIntegrations", undefined, "integrations");
 }
 function settingKey(provider: IntegrationProvider, setting: Setting) {
   return `${provider.id}:${setting.key}`;
 }
 function settingValue(provider: IntegrationProvider, setting: Setting) {
-  return settingDraft.value[settingKey(provider, setting)] ??
-    provider.settingValues?.[setting.key] ?? "";
+  return (
+    settingDraft.value[settingKey(provider, setting)] ?? provider.settingValues?.[setting.key] ?? ""
+  );
 }
 function setSettingValue(provider: IntegrationProvider, setting: Setting, value: string) {
   settingDraft.value[settingKey(provider, setting)] = value;
@@ -133,14 +104,6 @@ async function login(provider: IntegrationProvider) {
   busy.value = null;
   await load();
 }
-async function update(provider: IntegrationProvider, patch: SettingsPatch) {
-  await props.client.call(
-    "updateIntegrationSettings",
-    { provider: provider.id, ...patch },
-    `integration:${provider.id}`,
-  );
-  await load();
-}
 function closePanel() {
   selectedProvider.value = null;
   void load();
@@ -157,7 +120,7 @@ onMounted(load);
         type="button"
         class="connection-card"
         :data-testid="`connection-card-${provider.id}`"
-        :aria-label="`${provider.label}: ${provider.hasCredential ? 'Подключено' : 'Не подключено'}`"
+        :aria-label="`${provider.label}: ${provider.hasCredential ? 'Подключено' : 'Не подключено'}${provider.enabled ? '' : ' (пакет отключён)'}`"
         @click="selectedProvider = provider.id"
       >
         <img
@@ -174,7 +137,7 @@ onMounted(load);
         <span
           class="connection-card-status"
           :class="{
-            'connection-card-status--connected': provider.hasCredential,
+            'connection-card-status--connected': provider.hasCredential && provider.enabled,
           }"
           aria-hidden="true"
         />
@@ -189,27 +152,6 @@ onMounted(load);
     >
       <article v-if="selected" class="stack connection-panel">
         <SettingsList class-name="!bg-transparent">
-          <SettingsRow v-if="!packageManaged(selected)" title="Синхронизация">
-            <template #control>
-              <Dropdown
-                :model-value="selected.settings.intervalMinutes"
-                :options="intervalOptions"
-                :searchable="false"
-                @update:model-value="
-                  (interval) =>
-                    update(selected, { intervalMinutes: Number(interval) })
-                "
-              />
-            </template>
-          </SettingsRow>
-          <SettingsToggleRow
-            v-if="!packageManaged(selected)"
-            title="Синхронизировать при запуске"
-            :model-value="selected.settings.syncOnStartup"
-            @update:model-value="
-              (syncOnStartup) => update(selected, { syncOnStartup })
-            "
-          />
           <SettingsRow
             v-for="setting in schema(selected)"
             :key="setting.key"
@@ -238,9 +180,7 @@ onMounted(load);
                 :type="credentialType(selected)"
                 autocomplete="off"
                 :placeholder="
-                  selected.hasCredential
-                    ? 'Оставьте пустым, чтобы не менять'
-                    : 'Введите значение'
+                  selected.hasCredential ? 'Оставьте пустым, чтобы не менять' : 'Введите значение'
                 "
               />
             </template>
@@ -258,7 +198,7 @@ onMounted(load);
             @click="login(selected)"
             >Войти в {{ selected.label }}</Button
           ><Button
-            v-else-if="authMode(selected) === 'credential' && canSave(selected)"
+            v-if="(authMode(selected) === 'credential' || canLogin(selected)) && canSave(selected)"
             variant="surface"
             size="sm"
             :disabled="busy !== null"
@@ -274,7 +214,7 @@ onMounted(load);
           ><Button
             variant="surface"
             size="sm"
-            :disabled="busy !== null || !selected.hasCredential"
+            :disabled="busy !== null || !selected.hasCredential || !selected.enabled"
             @click="act(selected, 'sync')"
             >Синхронизировать</Button
           >

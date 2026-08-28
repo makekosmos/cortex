@@ -12,10 +12,7 @@ test("prefers bundled Kosmos icons and preserves external fallbacks", () => {
   })) {
     expect(appIcon(`com.kosmos.${id}`, "https://old/icon.png")).toEndWith(file);
   }
-  expect(appIcon("external", "https://example.com/icon.png")).toBe(
-    "https://example.com/icon.png",
-  );
-  expect(appIcon("local", null, "C:\\Apps\\icon.png")).toBe(
-    "file:///C:/Apps/icon.png",
-  );
+  expect(appIcon("external", "https://example.com/icon.png")).toBe("https://example.com/icon.png");
+  expect(appIcon("local", null, "C:\\Apps\\icon.png")).toBe("file:///C:/Apps/icon.png");
+  expect(appIcon("local", null, "/tmp/My Icon#1.png")).toBe("file:///tmp/My%20Icon%231.png");
 });
