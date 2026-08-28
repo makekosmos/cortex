@@ -21,8 +21,27 @@ jobs:
 
   portable:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cortex
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: cortex
+      # Keep these refs immutable: desktop/tsconfig.json imports these exact
+      # sibling source trees while the release BOM is still being finalized.
+      - uses: actions/checkout@v4
+        with:
+          repository: makekosmos/arca-sdk
+          ref: e2c60732f21168febbaec4aac4cd85d7cdb540af
+          path: arca-sdk
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          repository: makekosmos/imago
+          ref: 9d39cdccde235b9367cb677f8107da7afd9e31fd
+          path: imago
+          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
