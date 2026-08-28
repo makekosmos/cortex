@@ -31,8 +31,15 @@ const MODIFIER_ALIASES = {
 const MODIFIER_ORDER = ["Command", "Control", "Alt", "Shift", "Super"];
 const DEFAULT_LAUNCHER_STATE_TTL_MIN = 5;
 
-function settingsFilePath(): string {
-  return path.join(keplerDataDir(), "kepler-shell-settings.json");
+export const SETTINGS_FILE_NAME = "kosmos-settings.json";
+export const LEGACY_SETTINGS_FILE_NAME = "kepler-shell-settings.json";
+
+function settingsFilePath(dataDir = keplerDataDir()): string {
+  return path.join(dataDir, SETTINGS_FILE_NAME);
+}
+
+function legacySettingsFilePath(dataDir = keplerDataDir()): string {
+  return path.join(dataDir, LEGACY_SETTINGS_FILE_NAME);
 }
 
 function normalizeHotkeyPart(part: string): string {
