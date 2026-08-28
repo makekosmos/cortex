@@ -50,6 +50,7 @@ jobs:
       - run: bun run clippy
       - run: bun run test
       - run: bun test host/electron/host-api-reconnect.test.ts
+      - run: bun test desktop/electron/settings-store.test.ts desktop/electron/instance.test.ts desktop/scripts/desktop-naming-contract.test.mjs
 
   windows-runtime:
     runs-on: windows-latest
