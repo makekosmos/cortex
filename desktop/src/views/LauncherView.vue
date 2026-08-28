@@ -427,7 +427,7 @@ const updateBanner = computed<null | {
   const s = updateState.value;
   if (s.kind === "downloaded") {
     return {
-      title: `Обновить Kepler до ${s.version}`,
+      title: `Обновить CosCast до ${s.version}`,
       description: "Установить новую версию и перезапустить",
       icon: ArrowUpCircle,
       spinning: false,
@@ -436,7 +436,7 @@ const updateBanner = computed<null | {
   }
   if (s.kind === "downloading") {
     return {
-      title: `Скачивается Kepler ${s.version}`,
+      title: `Скачивается CosCast ${s.version}`,
       description: `Загружено ${Math.round(s.percent)}%. После завершения можно установить.`,
       icon: Loader2,
       spinning: true,
@@ -446,7 +446,7 @@ const updateBanner = computed<null | {
   }
   if (s.kind === "available") {
     return {
-      title: `Доступно обновление Kepler ${s.version}`,
+      title: `Доступно обновление CosCast ${s.version}`,
       description: "Скачивается в фоне. Подожди немного.",
       icon: ArrowUpCircle,
       spinning: false,
