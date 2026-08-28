@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-
 type SignedApps = {
   archives: Record<string, string>;
   versions: Record<string, string>;
@@ -156,6 +155,49 @@ function agendaArchive(root: string, repositoryRoot: string): PackageArchive {
   return { file, manifest };
 }
 
+function memoriaArchive(root: string, repositoryRoot: string): PackageArchive {
+  const source = path.join(repositoryRoot, "memoria", "release", "memoria-0.6.3.kspkg");
+  if (!fs.existsSync(source)) throw new Error(`Memoria release archive not found: ${source}`);
+  const file = path.join(root, path.basename(source));
+  fs.copyFileSync(source, file);
+  const entries = command("tar", ["-tf", file], root)
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((entry) => entry.replaceAll("\\", "/"));
+  if (entries.filter((entry) => entry === "manifest.json").length !== 1) {
+    throw new Error("Memoria archive must contain exactly one manifest.json");
+  }
+  for (const entry of entries) {
+    if (entry.startsWith("/") || entry.split("/").includes("..")) {
+      throw new Error(`Memoria archive contains an unsafe path: ${entry}`);
+    }
+  }
+  for (const required of ["manifest.json", "icon.png", "dist/index.html"]) {
+    if (!entries.includes(required)) throw new Error(`Memoria archive is missing ${required}`);
+  }
+  let parsed: JsonValue;
+  try {
+    // SAFETY: isJsonObject and the required manifest fields are checked below.
+    parsed = JSON.parse(command("tar", ["-xOf", file, "manifest.json"], root)) as JsonValue;
+  } catch (error) {
+    throw new Error(`Memoria archive manifest is not valid JSON: ${String(error)}`);
+  }
+  if (!isJsonObject(parsed)) throw new Error("Memoria archive manifest must be a JSON object");
+  if (
+    createHash("sha256").update(JSON.stringify(parsed)).digest("hex") !==
+      "b5775049f563470170b5cde7bb2ff2bfc7b373a4d13365447252f995305b502a" ||
+    parsed.schema_version !== 2 ||
+    parsed.id !== "com.kosmos.memoria" ||
+    parsed.version !== "0.6.3" ||
+    parsed.kind !== "app" ||
+    parsed.icon !== "icon.png" ||
+    parsed.entrypoint !== "dist/index.html"
+  ) {
+    throw new Error("Memoria archive manifest has unexpected identity or entrypoint");
+  }
+  const manifest = { ...parsed, id: parsed.id, version: parsed.version } satisfies Manifest;
+  return { file, manifest };
+}
 const sign = (
   root: string,
   repositoryRoot: string,
@@ -236,6 +278,7 @@ export function createSignedApps(
   includeShell = false,
   closeFixture = false,
   includeAgenda = false,
+  includeMemoria = false,
 ): SignedApps {
   const apps: Array<{ file: string; manifest: Manifest }> = [
     archive(
@@ -252,5 +295,6 @@ export function createSignedApps(
   if (includeGraph) apps.push(graphArchive(root, repositoryRoot));
   if (includeShell) apps.push(shellArchive(root, repositoryRoot));
   if (includeAgenda) apps.push(agendaArchive(root, repositoryRoot));
+  if (includeMemoria) apps.push(memoriaArchive(root, repositoryRoot));
   return sign(root, repositoryRoot, apps);
 }
