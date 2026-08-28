@@ -2,7 +2,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { keplerDataDir } from "./data-dir";
 import { resolveInstance } from "./instance";
-import { isNumber } from "../src/shared/runtimeGuards";
+import { isNumber, isRecord } from "../src/shared/runtimeGuards";
 
 interface KeplerShellSettings {
   hotkey?: string;
@@ -31,8 +31,15 @@ const MODIFIER_ALIASES = {
 const MODIFIER_ORDER = ["Command", "Control", "Alt", "Shift", "Super"];
 const DEFAULT_LAUNCHER_STATE_TTL_MIN = 5;
 
-function settingsFilePath(): string {
-  return path.join(keplerDataDir(), "kepler-shell-settings.json");
+export const SETTINGS_FILE_NAME = "kosmos-settings.json";
+export const LEGACY_SETTINGS_FILE_NAME = "kepler-shell-settings.json";
+
+function settingsFilePath(dataDir = keplerDataDir()): string {
+  return path.join(dataDir, SETTINGS_FILE_NAME);
+}
+
+function legacySettingsFilePath(dataDir = keplerDataDir()): string {
+  return path.join(dataDir, LEGACY_SETTINGS_FILE_NAME);
 }
 
 function normalizeHotkeyPart(part: string): string {
@@ -40,9 +47,10 @@ function normalizeHotkeyPart(part: string): string {
   if (!trimmed) return "";
   const aliasKey = trimmed.toLowerCase();
   // SAFETY: membership is checked before indexing the literal alias map.
-  const alias = aliasKey in MODIFIER_ALIASES
-    ? MODIFIER_ALIASES[aliasKey as keyof typeof MODIFIER_ALIASES]
-    : undefined;
+  const alias =
+    aliasKey in MODIFIER_ALIASES
+      ? MODIFIER_ALIASES[aliasKey as keyof typeof MODIFIER_ALIASES]
+      : undefined;
   if (alias) return alias;
   if (trimmed.length === 1) return trimmed.toUpperCase();
   if (trimmed.toLowerCase() === "space") return "Space";
@@ -71,14 +79,18 @@ export function normalizeHotkeyAccelerator(value: string): string {
 }
 
 export function readSettings(): KeplerShellSettings {
-  try {
-    const file = settingsFilePath();
-    if (!existsSync(file)) return {};
-    // SAFETY: the settings file is written by this module using KeplerShellSettings.
-    return JSON.parse(readFileSync(file, "utf8")) as KeplerShellSettings;
-  } catch {
-    return {};
+  for (const file of [settingsFilePath(), legacySettingsFilePath()]) {
+    try {
+      if (!existsSync(file)) continue;
+      const value: unknown = JSON.parse(readFileSync(file, "utf8"));
+      if (!isRecord(value)) continue;
+      // SAFETY: isRecord establishes the persisted settings object boundary.
+      return value as KeplerShellSettings;
+    } catch {
+      // Try the legacy file if the preferred file is absent or invalid.
+    }
   }
+  return {};
 }
 
 export function writeSettings(patch: Partial<KeplerShellSettings>): void {

@@ -37,6 +37,10 @@ import {
   readdirSync,
   writeFileSync,
 } from "node:fs";
+import { isRecord } from "../src/shared/runtimeGuards";
+
+const SETTINGS_FILE_NAME = "kosmos-settings.json";
+const LEGACY_SETTINGS_FILE_NAME = "kepler-shell-settings.json";
 
 type InstanceKind = "prod" | "dev" | "test";
 
@@ -135,7 +139,7 @@ export function resolveInstance(): Instance {
     dataDir = dataDirOverride || path.join(appData, `Kosmos-dev-${suffix}`);
   }
 
-  // Electron userData (singleInstanceLock scope, kepler-shell-settings.json,
+  // Electron userData (singleInstanceLock scope, Kosmos settings,
   // post-update.flag, window state cache, GPU cache, Local Storage).
   //   - prod: %APPDATA%/Kosmos App (display product rename; ARK data remains
   //     %APPDATA%/Kosmos)
@@ -227,7 +231,7 @@ export function applyInstanceToApp(instance: Instance): void {
   }
 
   if (instance.slot === "dev") {
-    migrateLegacyDevSettings(instance.userDataDir);
+    migrateLegacyDevSettings(instance.dataDir);
   }
 }
 
@@ -266,15 +270,28 @@ function migrateLegacyProdUserData(newUserDataDir: string): void {
 
 export function migrateLegacyProdSettings(appData: string, dataDir: string): void {
   try {
-    const target = path.join(dataDir, "kepler-shell-settings.json");
-    if (existsSync(target)) return;
-    const legacy = path.join(appData, "Kepler", "kepler-shell-settings.json");
-    if (!existsSync(legacy)) return;
+    const target = path.join(dataDir, SETTINGS_FILE_NAME);
+    if (hasReadableSettings(target)) return;
+    const legacy = [
+      path.join(dataDir, LEGACY_SETTINGS_FILE_NAME),
+      path.join(appData, "Kepler", LEGACY_SETTINGS_FILE_NAME),
+    ].find(hasReadableSettings);
+    if (!legacy) return;
     mkdirSync(dataDir, { recursive: true });
     copyFileSync(legacy, target);
     console.error(`[kosmos] migrated shell settings: ${legacy} -> ${target}`);
   } catch (e) {
     console.error("[kosmos] shell settings migration skipped:", e);
+  }
+}
+
+function hasReadableSettings(file: string): boolean {
+  if (!existsSync(file)) return false;
+  try {
+    const value: unknown = JSON.parse(readFileSync(file, "utf8"));
+    return isRecord(value);
+  } catch {
+    return false;
   }
 }
 
@@ -301,21 +318,25 @@ export function verifyUserDataMatches(instance: Instance): UserDataMatch {
  * Local Storage / Cache (Chromium регенерирует), window state (под dataDir,
  * не userData).
  */
-function migrateLegacyDevSettings(newUserDataDir: string): void {
+export function migrateLegacyDevSettings(newDataDir: string): void {
   try {
-    const newSettings = path.join(newUserDataDir, "kepler-shell-settings.json");
-    if (existsSync(newSettings)) return; // уже мигрировано или dev user уже что-то писал
+    const newSettings = path.join(newDataDir, SETTINGS_FILE_NAME);
+    if (hasReadableSettings(newSettings)) return; // уже мигрировано или dev user уже что-то писал
     const candidates = [
-      path.join(app.getPath("appData"), "Kosmos App", "kepler-shell-settings.json"),
-      path.join(app.getPath("appData"), "Kepler-dev", "kepler-shell-settings.json"),
-      path.join(app.getPath("appData"), "Kepler", "kepler-shell-settings.json"),
+      path.join(newDataDir, LEGACY_SETTINGS_FILE_NAME),
+      path.join(app.getPath("appData"), "Kosmos App", SETTINGS_FILE_NAME),
+      path.join(app.getPath("appData"), "Kosmos App", LEGACY_SETTINGS_FILE_NAME),
+      path.join(app.getPath("appData"), "Kepler-dev", SETTINGS_FILE_NAME),
+      path.join(app.getPath("appData"), "Kepler-dev", LEGACY_SETTINGS_FILE_NAME),
+      path.join(app.getPath("appData"), "Kepler", SETTINGS_FILE_NAME),
+      path.join(app.getPath("appData"), "Kepler", LEGACY_SETTINGS_FILE_NAME),
     ];
-    const legacy = candidates.find((p) => existsSync(p));
+    const legacy = candidates.find(hasReadableSettings);
     if (!legacy) return; // нет источника — first-time dev user
     const content = readFileSync(legacy, "utf8");
-    mkdirSync(newUserDataDir, { recursive: true });
+    mkdirSync(newDataDir, { recursive: true });
     writeFileSync(newSettings, content, "utf8");
-    console.error(`[kosmos] migrated dev settings: ${legacy} -> ${newUserDataDir}`);
+    console.error(`[kosmos] migrated dev settings: ${legacy} -> ${newDataDir}`);
   } catch (e) {
     // Не критично — dev user заново выставит developer mode toggle.
     console.error("[kepler-shell] dev settings migration skipped:", e);

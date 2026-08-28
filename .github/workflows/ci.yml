@@ -40,6 +40,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: bun install --cwd manager --frozen-lockfile
+      - run: bun test desktop/electron/settings-store.test.ts
+      - run: bun test desktop/electron/instance.test.ts
+      - run: bun test desktop/scripts/desktop-naming-contract.test.mjs
       - run: bun run check:source-size
       - run: bun run lint
       - run: bun run format:check

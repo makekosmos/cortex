@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "kepler-shell",
+      "name": "kosmos-desktop",
       "dependencies": {
         "@lucide/vue": "^1.16.0",
         "@phosphor-icons/vue": "^2.2.1",

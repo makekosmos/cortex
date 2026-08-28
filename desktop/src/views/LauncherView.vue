@@ -317,7 +317,7 @@ const RECENTS_LIMIT = 5;
 // Сохраняем последние { mode, query, selectedIndex, scrollTop, savedAt } в
 // localStorage. При показе launcher'а — если прошло меньше TTL минут,
 // восстанавливаем. Иначе сбрасываем. TTL настраивается в Settings →
-// kepler-shell-settings.json::launcherStateTtlMinutes (default 5).
+// kosmos-settings.json::launcherStateTtlMinutes (default 5).
 const STATE_KEY = "kepler.launcher.state";
 interface PersistedLauncherState {
   mode?: LauncherMode;
