@@ -35,6 +35,8 @@ const TEST_ONLY_RELEASE = {
 
 const command = (file: string, args: string[], cwd: string) =>
   execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe" });
+const cortexRoot = (repositoryRoot: string) =>
+  path.basename(repositoryRoot) === "cortex" ? repositoryRoot : path.join(repositoryRoot, "cortex");
 
 const ps = (value: string) => `'${value.replaceAll("'", "''")}'`;
 const zipDirectory = (stage: string, file: string, cwd: string) =>
@@ -57,10 +59,7 @@ const archive = (
 ): PackageArchive => {
   const stage = path.join(root, id);
   const file = path.join(root, `${id}.kspkg`);
-  const typedArkData = permissions.some(
-    (permission) =>
-      permission.capability === "ark.write",
-  )
+  const typedArkData = permissions.some((permission) => permission.capability === "ark.write")
     ? {
         access: [
           {
@@ -117,7 +116,7 @@ const packageDirectory = (
     const productIcon = path.join(path.dirname(source), ...manifest.icon.split("/"));
     const icon = fs.existsSync(productIcon)
       ? productIcon
-      : path.join(repositoryRoot, "platform", "desktop", "build", "icon.ico");
+      : path.join(cortexRoot(repositoryRoot), "desktop", "build", "icon.ico");
     const target = path.join(stage, ...manifest.icon.split("/"));
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.copyFileSync(icon, target);
@@ -151,7 +150,7 @@ const sign = (
   command(
     process.execPath,
     [
-      path.join(repositoryRoot, "platform", "desktop", "scripts", "package-sign.mjs"),
+      path.join(cortexRoot(repositoryRoot), "desktop", "scripts", "package-sign.mjs"),
       "--input",
       catalogFile,
       "--output",
@@ -165,9 +164,7 @@ const sign = (
   );
   return {
     archives: Object.fromEntries(apps.map(({ file, manifest }) => [manifest.id, file])),
-    versions: Object.fromEntries(
-      apps.map(({ manifest }) => [manifest.id, manifest.version]),
-    ),
+    versions: Object.fromEntries(apps.map(({ manifest }) => [manifest.id, manifest.version])),
     catalog,
     signatures: JSON.parse(fs.readFileSync(signatureFile, "utf8")),
     trust: {

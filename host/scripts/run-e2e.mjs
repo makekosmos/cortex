@@ -5,33 +5,37 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
-const repositoryRoot = path.resolve(import.meta.dirname, "..", "..", "..");
+const hostRoot = path.resolve(import.meta.dirname, "..");
+const repositoryRoot = path.resolve(hostRoot, "..");
 const tempRoot = path.resolve(os.tmpdir());
 const manifestPath = path.join(repositoryRoot, ".tmp", `host-e2e-cleanup-${randomUUID()}.json`);
 fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
 fs.writeFileSync(manifestPath, JSON.stringify({ roots: [], pids: [] }));
 
-const exited = await new Promise((resolve, reject) => {
-  const child = spawn(
-    process.execPath,
-    [
-      "x",
-      "playwright",
-      "test",
-      "--config",
-      "platform/host/playwright.config.ts",
-      ...process.argv.slice(2),
-    ],
-    {
-      cwd: repositoryRoot,
-      env: { ...process.env, KOSMOS_HOST_E2E_CLEANUP_MANIFEST: manifestPath },
-      stdio: "inherit",
-      windowsHide: true,
-    },
+let exited = 1;
+try {
+  exited = await new Promise((resolve) => {
+    const child = spawn(
+      process.execPath,
+      ["x", "playwright", "test", "--config", "playwright.config.ts", ...process.argv.slice(2)],
+      {
+        cwd: hostRoot,
+        env: { ...process.env, KOSMOS_HOST_E2E_CLEANUP_MANIFEST: manifestPath },
+        stdio: "inherit",
+        windowsHide: true,
+      },
+    );
+    child.once("error", (error) => {
+      console.error(`[host-e2e] runner failed: ${error.message}`);
+      resolve(1);
+    });
+    child.once("exit", (code) => resolve(code ?? 1));
+  });
+} catch (error) {
+  console.error(
+    `[host-e2e] runner failed: ${error instanceof Error ? error.message : String(error)}`,
   );
-  child.once("error", reject);
-  child.once("exit", (code) => resolve(code ?? 1));
-});
+}
 
 let cleanupFailed = false;
 const isString = (value) => value?.constructor === String;

@@ -7,14 +7,16 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "vite build",
-    "e2e": "bunx playwright test --config playwright.config.ts"
+    "e2e": "bun scripts/run-e2e.mjs"
   },
   "dependencies": {
     "@makekosmos/ark": "0.1.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@types/node": "^24.9.2",
     "electron": "^42.2.0",
+    "playwright": "1.62.1",
     "typescript": "^6.0.3",
     "vite": "^8.0.3",
     "vite-plugin-electron": "1.0.0-beta.2"
