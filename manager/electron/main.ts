@@ -295,7 +295,9 @@ function registerAll() {
       // SAFETY: validIntegrationInput validates this integration payload before use.
       !(value as InputRecord).credential ||
       // SAFETY: validIntegrationInput validates this integration payload before use.
-      String((value as InputRecord).credential).length > 2048
+      String((value as InputRecord).credential).length > 2048 ||
+      ((value as InputRecord).setting !== undefined
+        && !bounded((value as InputRecord).setting, 128))
     )
       return {
         ok: false,
@@ -306,6 +308,7 @@ function registerAll() {
     const input = value as InputRecord;
     const result = await rpc(op.setIntegrationCredential, {
       provider: input.provider,
+      ...(input.setting === undefined ? {} : { setting: input.setting }),
       credential: String(input.credential).trim(),
     });
     return result.ok

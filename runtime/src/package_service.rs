@@ -17,7 +17,8 @@ use thiserror::Error;
 use zip::ZipArchive;
 
 pub use crate::package_manifest::{
-    DefinitionSnapshotReader, ManifestV2, PackageKind, PackageManifest, VersionedManifest,
+    DefinitionSnapshotReader, IntegrationManifest, ManifestV2, PackageKind, PackageManifest,
+    VersionedManifest,
 };
 use crate::{
     lock_file::{ensure_owner_only_directory, write_owner_only_json},
@@ -28,7 +29,9 @@ use crate::{
     },
     package_worker_broker::{read_snapshot_tree, BrokerConfig, PackageSnapshotFile},
     package_worker_protocol::{BridgeStatus, BridgeWorkerConfig},
-    package_worker_supervisor::{PackageWorkerSupervisor, WorkerDiagnostics, WorkerState},
+    package_worker_supervisor::{
+        IntegrationLaunchConfig, PackageWorkerSupervisor, WorkerDiagnostics, WorkerState,
+    },
     protocol_version::API_VERSION_CURRENT,
     runtime_grants::{compile_manifest_v2, LaunchGrant, RegisteredType, RegistrySnapshot},
     store_catalog::{EffectiveGrantProjection, InstalledListing, Role},
@@ -196,5 +199,6 @@ struct WorkerRuntime {
 include!("package_service/core.rs");
 include!("package_service/operations.rs");
 include!("package_service/helpers.rs");
+include!("package_service/integrations.rs");
 #[cfg(test)]
 include!("package_service/tests.rs");

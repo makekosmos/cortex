@@ -69,6 +69,7 @@ pub mod package_trust;
 pub mod package_worker_broker;
 pub mod package_worker_process;
 pub mod package_worker_protocol;
+pub mod package_worker_secrets;
 pub mod package_worker_supervisor;
 pub mod pomodoro;
 pub mod pomodoro_host;

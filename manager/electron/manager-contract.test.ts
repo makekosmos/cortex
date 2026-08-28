@@ -63,6 +63,15 @@ describe("standalone Manager boundary", () => {
     expect(api).toContain("getIntegrations");
     expect(preload).toContain("manager.getIntegrations");
     expect(main).toContain("normalizeIntegrationSnapshot");
+    expect(helpers).toContain("validIntegrationId(entry.id)");
+    expect(helpers).toContain("credentialInputType:");
+    expect(helpers).toContain("loginCapability:");
+    expect(helpers).toContain("iconPath:");
+    expect(helpers).not.toContain("integrationProviders.includes");
+    const connections = source("../src/views/ConnectionsView.vue");
+    expect(connections).toContain("appIcon(provider.id, undefined, provider.iconPath)");
+    expect(connections).toContain("provider.settingSchema");
+    expect(connections).not.toContain("assets/integrations");
     expect(operations).toContain("integrations.update_settings");
     expect(helpers).toContain("--open-app=${id}");
     expect(api).toContain("openPackage");
@@ -91,28 +100,27 @@ describe("standalone Manager boundary", () => {
     expect(helpers).toContain("windowsHide: true");
   });
 
-  test("keeps persistent browser login in the main process with a headless guard", () => {
+  test("keeps generic browser login behind a trusted runtime contract", () => {
     const api = source("../src/manager-api.ts");
     const preload = source("preload.ts");
     const main = source("main.ts");
     const login = source("integration-login.ts");
-    const credential = source("integration-login-credential.ts");
-    expect(api).toContain("loginLeetCode(): Promise<ManagerResult<IntegrationsSnapshot>>");
-    expect(api).toContain("loginGreatFrontend(): Promise<ManagerResult<IntegrationsSnapshot>>");
-    expect(preload).toContain('loginLeetCode: () => invoke("manager.loginLeetCode")');
-    expect(preload).toContain('loginGreatFrontend: () => invoke("manager.loginGreatFrontend")');
-    expect(preload).not.toContain("LEETCODE_SESSION");
-    expect(preload).not.toContain("csrftoken");
+    expect(api).toContain(
+      "loginIntegration(input: {",
+    );
+    expect(preload).toContain('loginIntegration: (v) => invoke("manager.loginIntegration", v)');
     expect(login).toContain('process.env.KOSMOS_HEADLESS === "1"');
-    expect(login).toContain("browserPartition(config.partition, persistent)");
+    expect(login).toContain("GENERIC_INTEGRATION_PARTITION");
+    expect(login).toContain("encodeTrustedCookieCredential(values, contract.allowedCookieNames)");
+    expect(login).toContain("op.integrationLoginContract");
+    expect(login).toContain("parseTrustedLoginContract");
+    expect(login).toContain("contract.provider !== provider");
+    expect(login).toContain("sameLoginPage");
+    const cleanup = login.slice(login.indexOf("clearIntegrationBrowserData"));
+    expect(cleanup).toContain("GENERIC_INTEGRATION_PARTITION");
     expect(login).not.toContain('clearStorageData({ storages: ["cookies"] })');
-    expect(login).toContain("https://leetcode.com/accounts/login/");
-    expect(login).toContain("https://www.greatfrontend.com/profile/progress");
-    expect(login).not.toContain("getURL().startsWith(GREATFRONTEND_PROGRESS)");
-    expect(login).toContain('url: "https://leetcode.com/"');
     expect(login).toContain("op.setIntegrationCredential");
     expect(login).not.toContain("console.");
-    expect(credential).toMatch(/closeWindow\(\);\r?\n\s+return await flow\.persistCredential\(credential\)/);
     expect(main).toContain("registerIntegrationLoginHandlers(");
     expect(api).toContain("getBrowserSettings");
     expect(preload).toContain("manager.getBrowserSettings");
@@ -219,10 +227,14 @@ describe("standalone Manager boundary", () => {
       truncated: false,
     });
     const main = source("main.ts");
+    const installHandler = main.slice(
+      main.indexOf('ipcMain.handle("manager.installPackage"'),
+      main.indexOf('ipcMain.handle("manager.openPackage"'),
+    );
     expect(main).toContain("validPackageVersion");
     expect(main).toContain("Object.keys(value).length === 2");
     expect(main).toContain("Object.keys(input.config ?? {}).length === 4");
-    expect(main).not.toContain("archive_path");
+    expect(installHandler).not.toContain("archive_path");
     expect(main).not.toContain("catalog_apply");
     expect(main).not.toContain("revocation_apply");
   });

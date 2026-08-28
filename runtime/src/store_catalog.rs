@@ -645,7 +645,7 @@ fn validate_document<I: PackageIndexLookup>(
                 Some(link),
             ) if link == connects_to
                 && external_ids.contains(connects_to.as_str())
-                && index.package_release(package_id, version, true) => {}
+                && index.package_release(package_id, version, false) => {}
             _ => return Err(TrustError::Invalid("kind distribution")),
         }
         for row in &listing.data_compatibility {

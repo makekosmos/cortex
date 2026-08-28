@@ -1,5 +1,24 @@
 use super::*;
 
+const WORKOUT_TYPE_ID: &str = "workout_obj";
+
+async fn ark_request(ark: &ArkHost, operation: &str, params: Value) -> Result<Value, String> {
+    let response = ark
+        .request(operation, params)
+        .await
+        .map_err(|error| format!("ARK {operation}: {error}"))?;
+    if response.ok {
+        Ok(response.data)
+    } else {
+        Err(format!(
+            "ARK {operation}: {}",
+            response
+                .error
+                .unwrap_or_else(|| "unknown error".to_string())
+        ))
+    }
+}
+
 pub(crate) fn muscle_slug(value: &str) -> Option<&'static str> {
     match value
         .trim()
@@ -68,9 +87,6 @@ pub(crate) fn body_metrics(
 
     for object in objects {
         let props = object.get("propsJson").unwrap_or(&Value::Null);
-        if props.get("source").and_then(Value::as_str) != Some("hevy") {
-            continue;
-        }
         let started = props
             .get("startedAt")
             .and_then(Value::as_str)
@@ -212,4 +228,25 @@ pub(crate) async fn body_snapshot(
         read_config(data_dir).body_weight_kg,
         range_days,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn body_metrics_accepts_package_workout_objects_without_provider_marker() {
+        let object = json!({
+            "propsJson": {
+                "startedAt": Utc::now().to_rfc3339(),
+                "exercises": [{
+                    "primaryMuscleGroup": "chest",
+                    "sets": [{ "reps": 5, "weight_kg": 50.0 }]
+                }]
+            }
+        });
+        let metrics = body_metrics(&[object], Some(80.0), 7);
+        assert_eq!(metrics["workoutCount"], 1);
+        assert!(!metrics["load"].as_array().unwrap().is_empty());
+    }
 }

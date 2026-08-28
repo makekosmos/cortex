@@ -7,13 +7,15 @@ use crate::package_worker_process::{LaunchCleanupOwner, WorkerProcessError};
 use crate::{
     ark_host::ArkHost,
     observability::{redact_text, BoundedTextTail},
-    package_manifest::{PackageKind, PackageManifest},
+    package_manifest::{IntegrationManifest, IntegrationSettingKind, PackageKind, PackageManifest},
     package_store::PackageStore,
     package_worker_broker::{self, BrokerConfig},
     package_worker_protocol::{
         BootstrapMessage, BridgeStatus, BridgeWorkerConfig, CallMessage, Grant, HeartbeatMessage,
-        HelloMessage, ResultMessage, WorkerMessage, WorkerMethod, MAX_LINE_BYTES,
+        HelloMessage, IntegrationBootstrapConfig, ResultMessage, RunMessage, WorkerMessage,
+        WorkerMethod, MAX_LINE_BYTES,
     },
+    package_worker_secrets::PackageWorkerSecretRegistry,
     runtime_grants::{DataRequest, LaunchGrant},
 };
 use async_trait::async_trait;
@@ -93,4 +95,4 @@ use authority::{dispatch_typed_inner, SupervisorInner};
 #[cfg(all(windows, feature = "package-worker-fixture"))]
 pub use authority::{AfterLaunchGate, HolderLockGate};
 pub use authority::{ArkRequestExecutor, PackageWorkerSupervisor};
-pub use types::{WorkerDiagnostics, WorkerHealth, WorkerState};
+pub use types::{IntegrationLaunchConfig, WorkerDiagnostics, WorkerHealth, WorkerState};

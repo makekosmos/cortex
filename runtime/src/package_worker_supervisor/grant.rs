@@ -12,6 +12,7 @@ impl PackageWorkerSupervisor {
         correlation_id: String,
         roots: &[PathBuf],
         bridge_config: &Option<BridgeWorkerConfig>,
+        integration: &Option<IntegrationLaunchConfig>,
     ) -> Result<(Grant, String, BrokerConfig, Vec<u8>), &'static str> {
         let (grant, token) = Grant::derive(
             manifest,
@@ -25,10 +26,13 @@ impl PackageWorkerSupervisor {
         let typed_launch_invalid = lock(&self.inner.typed_launches)
             .get(key)
             .is_some_and(|typed| {
-                typed.generation != generation || typed.session_id != correlation_id
+                typed.generation > generation || typed.session_id != correlation_id
             });
         if typed_launch_invalid {
             return Err("grant-failed");
+        }
+        if let Some(typed) = lock(&self.inner.typed_launches).get_mut(key) {
+            typed.generation = generation;
         }
         let broker = BrokerConfig::new(
             grant.scopes.get("network").into_iter().flatten(),
@@ -48,6 +52,63 @@ impl PackageWorkerSupervisor {
                 .map_err(|_| "grant-failed")?,
             None => broker,
         };
+        let integration = integration
+            .as_ref()
+            .map(|config| {
+                if config.secrets.keys().any(|key| {
+                    !config.manifest.settings.iter().any(|setting| {
+                        setting.key == *key && setting.kind == IntegrationSettingKind::Secret
+                    })
+                }) {
+                    return Err("grant-failed");
+                }
+                let mut handles = HashMap::new();
+                for setting in &config.manifest.settings {
+                    match setting.kind {
+                        IntegrationSettingKind::Text
+                            if config.secrets.contains_key(&setting.key) =>
+                        {
+                            return Err("grant-failed");
+                        }
+                        IntegrationSettingKind::Secret
+                            if config.values.contains_key(&setting.key) =>
+                        {
+                            return Err("grant-failed");
+                        }
+                        IntegrationSettingKind::Secret => {
+                            if let Some(secret) = config.secrets.get(&setting.key) {
+                                let handle = self
+                                    .inner
+                                    .secrets
+                                    .issue(
+                                        &manifest.id,
+                                        &manifest.version,
+                                        generation,
+                                        &setting.key,
+                                        secret.clone(),
+                                    )
+                                    .map_err(|_| "grant-failed")?;
+                                handles.insert(setting.key.clone(), handle.token());
+                            }
+                        }
+                        IntegrationSettingKind::Text => {}
+                    }
+                }
+                let bootstrap = IntegrationBootstrapConfig {
+                    settings: config.manifest.settings.clone(),
+                    values: config.values.clone(),
+                    secret_handles: handles,
+                    schedule: config.manifest.schedule.clone(),
+                };
+                bootstrap.validate()?;
+                Ok(bootstrap)
+            })
+            .transpose()
+            .inspect_err(|_| {
+                self.inner
+                    .secrets
+                    .revoke_generation(&manifest.id, generation);
+            })?;
         let bootstrap = BootstrapMessage {
             method: "worker.bootstrap".into(),
             package_id: manifest.id.clone(),
@@ -59,8 +120,14 @@ impl PackageWorkerSupervisor {
             correlation_id,
             token: token.clone(),
             bridge_config: bridge_config.clone(),
+            integration,
         };
-        let mut line = serde_json::to_vec(&bootstrap).map_err(|_| "bootstrap-serialize-failed")?;
+        let mut line = serde_json::to_vec(&bootstrap).map_err(|_| {
+            self.inner
+                .secrets
+                .revoke_generation(&manifest.id, generation);
+            "bootstrap-serialize-failed"
+        })?;
         line.push(b'\n');
         Ok((grant, token, broker, line))
     }

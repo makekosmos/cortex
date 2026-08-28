@@ -1,78 +1,80 @@
 use super::*;
 
+fn provider_id(params: &Value) -> Result<&str, String> {
+    params
+        .get("provider")
+        .and_then(Value::as_str)
+        .filter(|id| {
+            !id.is_empty()
+                && id.len() <= 128
+                && id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+        })
+        .ok_or_else(|| "Не указана интеграция".to_string())
+}
+
+fn snapshot(
+    data_dir: &Path,
+    packages: &crate::package_service::PackageService,
+) -> Result<Value, String> {
+    Ok(json!({
+        "providers": packages
+            .integration_provider_snapshots()
+            .map_err(|_| "Не удалось прочитать пакетные интеграции".to_string())?,
+        "bodyWeightKg": read_config(data_dir).body_weight_kg,
+    }))
+}
+
 pub async fn handle_operation(
     subop: &str,
     params: Value,
     ark: &ArkHost,
     data_dir: &Path,
+    packages: &crate::package_service::PackageService,
 ) -> Result<Value, String> {
     match subop {
-        "list" => Ok(snapshot(&read_config(data_dir))),
-        "update_settings" => {
-            let provider = provider_from_params(&params)?;
-            let interval = params
-                .get("intervalMinutes")
-                .and_then(Value::as_u64)
-                .map(validate_interval)
-                .transpose()?;
-            let startup = params.get("syncOnStartup").and_then(Value::as_bool);
-            let config = mutate_config(data_dir, |config| {
-                let settings = config.provider_mut(provider);
-                if let Some(value) = interval {
-                    settings.interval_minutes = value;
-                }
-                if let Some(value) = startup {
-                    settings.sync_on_startup = value;
-                }
-                Ok(())
-            })?;
-            Ok(snapshot(&config))
-        }
+        "list" => snapshot(data_dir, packages),
+        "login_contract" => packages
+            .integration_login_contract(provider_id(&params)?)
+            .map_err(|_| "Интеграция не содержит доверенного сценария входа".to_string()),
         "set_credential" => {
-            let provider = provider_from_params(&params)?;
-            let secret = params
+            let id = provider_id(&params)?;
+            let value = params
                 .get("credential")
                 .and_then(Value::as_str)
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| format!("Укажите: {}", provider.credential_label()))?;
-            let max_len = if provider == Provider::Greatfrontend {
-                1_280
-            } else {
-                2_048
-            };
-            if secret.len() > max_len {
-                return Err("Данные подключения слишком длинные".to_string());
-            }
-            verify_credential(provider, secret).await?;
-            save_credential(provider, secret)?;
-            let config = mutate_config(data_dir, |config| {
-                let settings = config.provider_mut(provider);
-                settings.last_attempt_at = None;
-                settings.last_success_at = None;
-                settings.last_error = None;
-                settings.imported_count = 0;
-                Ok(())
-            })?;
-            Ok(snapshot(&config))
+                .ok_or_else(|| "Укажите данные подключения".to_string())?;
+            packages
+                .set_integration_value(id, params.get("setting").and_then(Value::as_str), value)
+                .await
+                .map_err(|_| "Не удалось сохранить настройку интеграции".to_string())?;
+            snapshot(data_dir, packages)
         }
         "clear_credential" => {
-            delete_credential(provider_from_params(&params)?)?;
-            Ok(snapshot(&read_config(data_dir)))
+            packages
+                .clear_integration_values(provider_id(&params)?)
+                .await
+                .map_err(|_| "Не удалось очистить настройки интеграции".to_string())?;
+            snapshot(data_dir, packages)
         }
-        "sync_now" => sync_provider(ark, data_dir, provider_from_params(&params)?).await,
+        "sync_now" => {
+            packages
+                .sync_integration_now(provider_id(&params)?)
+                .map_err(|_| "Интеграция недоступна".to_string())?;
+            snapshot(data_dir, packages)
+        }
         "body_weight_set" => {
             let body_weight = params.get("bodyWeightKg").and_then(Value::as_f64);
             if body_weight.is_some_and(|value| !(20.0..=400.0).contains(&value)) {
-                return Err(
-                    "Р’РµСЃ С‚РµР»Р° РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РѕС‚ 20 РґРѕ 400 РєРі".to_string(),
-                );
+                return Err("Вес тела должен быть от 20 до 400 кг".to_string());
             }
-            let config = mutate_config(data_dir, |config| {
+            mutate_config(data_dir, |config| {
                 config.body_weight_kg = body_weight;
                 Ok(())
             })?;
-            Ok(snapshot(&config))
+            snapshot(data_dir, packages)
         }
         "body_snapshot" => {
             body_snapshot(
@@ -85,8 +87,6 @@ pub async fn handle_operation(
             )
             .await
         }
-        _ => Err(format!(
-            "РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕРїРµСЂР°С†РёСЏ integrations.{subop}"
-        )),
+        _ => Err(format!("Неизвестная операция integrations.{subop}")),
     }
 }

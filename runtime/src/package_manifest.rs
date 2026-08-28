@@ -1,5 +1,12 @@
 //! Strict, executable-free package manifest models.
 
+pub mod integration;
+
+pub use integration::{
+    BrowserLogin, CookieHeaderInjection, IntegrationManifest, IntegrationRequestMethod,
+    IntegrationSchedule, IntegrationSetting, IntegrationSettingKind, SecretInjection,
+};
+
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -193,9 +200,12 @@ pub struct ManifestV2 {
     pub permissions: Vec<PermissionRequest>,
     pub targets: Vec<ManifestTarget>,
     pub data: ManifestData,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub integration: Option<IntegrationManifest>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 pub enum VersionedManifest {
     V1(PackageManifest),
     V2(ManifestV2),
@@ -572,6 +582,9 @@ fn validate_v2(m: &ManifestV2) -> Result<(), ManifestError> {
         {
             return Err(ManifestError::InvalidField("data.mappings"));
         }
+    }
+    if let Some(integration) = &m.integration {
+        integration.validate(m)?;
     }
     Ok(())
 }

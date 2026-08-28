@@ -1,34 +1,16 @@
-type CredentialInput = string | null;
-type CookieInput = { name: string; value: string; httpOnly?: boolean };
-
-export function encodeLeetCodeCredential(
-  leetcodeSession: CredentialInput,
-  csrfToken: CredentialInput,
+export function encodeTrustedCookieCredential(
+  values: Record<string, string | undefined>,
+  requiredNames: string[],
 ): string | null {
   if (
-    !leetcodeSession ||
-    !csrfToken ||
-    leetcodeSession.length > 1024 ||
-    csrfToken.length > 1024
+    requiredNames.length === 0 ||
+    requiredNames.some((name) => !values[name])
   )
     return null;
-  const credential = JSON.stringify({ session: leetcodeSession, csrfToken });
+  const credential = JSON.stringify(
+    Object.fromEntries(requiredNames.map((name) => [name, values[name]])),
+  );
   return credential.length <= 2048 ? credential : null;
-}
-
-export function encodeGreatFrontendCredential(
-  input: CookieInput[],
-): string | null {
-  const token = input.find(
-    ({ name, value }) =>
-      name === "supabase-auth-token" &&
-      value.length > 0 &&
-      value.length <= 1_280 &&
-      !value.includes(";") &&
-      !value.includes("\r") &&
-      !value.includes("\n"),
-  )?.value;
-  return token ?? null;
 }
 
 interface IntegrationLoginFlow<TWindow, TResult> {

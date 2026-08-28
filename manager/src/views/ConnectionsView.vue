@@ -9,20 +9,17 @@ import {
   SettingsToggleRow,
   TextInput,
 } from "@kosmos/visuals";
-import codewarsIcon from "../../../desktop/src/integrations/assets/codewars.svg";
-import leetcodeIcon from "../../../desktop/src/integrations/assets/leetcode.svg";
-import hevyIcon from "../assets/integrations/hevy.svg";
-import togglTrackIcon from "../assets/integrations/toggl-track.svg";
-import bigfrontendIcon from "../assets/integrations/bigfrontend.svg";
-import greatfrontendIcon from "../assets/integrations/greatfrontend.svg";
 import type { IntegrationProvider, IntegrationsSnapshot } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
+import { appIcon } from "../app-icons";
 
 const props = defineProps<{ client: ManagerClient }>();
 const snapshot = ref<IntegrationsSnapshot | null>(null);
 type CredentialMap = Record<string, string>;
+type Setting = NonNullable<IntegrationProvider["settingSchema"]>[number];
 type SettingsPatch = { intervalMinutes?: number; syncOnStartup?: boolean };
 const credential = ref<CredentialMap>({});
+const settingDraft = ref<CredentialMap>({});
 const busy = ref<string | null>(null);
 const intervals = [0, 15, 60, 360, 1440] as const;
 const selectedProvider = ref<string | null>(null);
@@ -37,19 +34,29 @@ const intervalOptions = intervals.map((value) => ({
   value,
   label: intervalLabels[value],
 }));
-const providerIcons = {
-  hevy: hevyIcon,
-  toggl: togglTrackIcon,
-  leetcode: leetcodeIcon,
-  codewars: codewarsIcon,
-  greatfrontend: greatfrontendIcon,
-  bigfrontend: bigfrontendIcon,
-} satisfies Record<string, string>;
-const selected = computed(() =>
-  snapshot.value?.providers.find(
-    (provider) => provider.id === selectedProvider.value,
-  ),
-);
+function authMode(provider: IntegrationProvider) {
+  return provider.authMode === "browser_login" || provider.authMode === "none"
+    ? provider.authMode
+    : "credential";
+}
+function credentialType(provider: IntegrationProvider) {
+  return provider.credentialInputType === "text" ? "text" : "password";
+}
+function icon(provider: IntegrationProvider) {
+  return appIcon(provider.id, undefined, provider.iconPath);
+}
+function canLogin(provider: IntegrationProvider) {
+  return authMode(provider) === "browser_login" && Boolean(provider.loginCapability);
+}
+function packageManaged(provider: IntegrationProvider) {
+  return provider.packageManaged === true;
+}
+const selected = computed(() => {
+  const provider = snapshot.value?.providers.find(
+    (item) => item.id === selectedProvider.value,
+  );
+  return provider;
+});
 async function load() {
   snapshot.value = await props.client.call(
     "getIntegrations",
@@ -57,20 +64,49 @@ async function load() {
     "integrations",
   );
 }
-async function act(
-  provider: IntegrationProvider,
-  action: "save" | "clear" | "sync",
-) {
-  busy.value = `${provider.id}:${action}`;
-  if (action === "save")
+function settingKey(provider: IntegrationProvider, setting: Setting) {
+  return `${provider.id}:${setting.key}`;
+}
+function settingValue(provider: IntegrationProvider, setting: Setting) {
+  return settingDraft.value[settingKey(provider, setting)] ??
+    provider.settingValues?.[setting.key] ?? "";
+}
+function setSettingValue(provider: IntegrationProvider, setting: Setting, value: string) {
+  settingDraft.value[settingKey(provider, setting)] = value;
+}
+function schema(provider: IntegrationProvider) {
+  return provider.settingSchema ?? [];
+}
+function canSave(provider: IntegrationProvider) {
+  return schema(provider).length > 0
+    ? schema(provider).some((setting) => settingValue(provider, setting).trim())
+    : Boolean(credential.value[provider.id]?.trim());
+}
+async function save(provider: IntegrationProvider) {
+  busy.value = `${provider.id}:save`;
+  const values = schema(provider);
+  if (values.length > 0) {
+    for (const setting of values) {
+      const value = settingValue(provider, setting).trim();
+      if (value)
+        await props.client.call(
+          "setIntegrationCredential",
+          { provider: provider.id, setting: setting.key, credential: value },
+          `integration:${provider.id}`,
+        );
+    }
+  } else {
     await props.client.call(
       "setIntegrationCredential",
-      {
-        provider: provider.id,
-        credential: credential.value[provider.id] ?? "",
-      },
+      { provider: provider.id, credential: credential.value[provider.id] ?? "" },
       `integration:${provider.id}`,
     );
+  }
+  busy.value = null;
+  await load();
+}
+async function act(provider: IntegrationProvider, action: "clear" | "sync") {
+  busy.value = `${provider.id}:${action}`;
   if (action === "clear")
     await props.client.call(
       "clearIntegrationCredential",
@@ -86,12 +122,13 @@ async function act(
   busy.value = null;
   await load();
 }
-async function login(provider: "leetcode" | "greatfrontend") {
-  busy.value = `${provider}:login`;
+async function login(provider: IntegrationProvider) {
+  if (!provider.loginCapability) return;
+  busy.value = `${provider.id}:login`;
   await props.client.call(
-    provider === "leetcode" ? "loginLeetCode" : "loginGreatFrontend",
-    undefined,
-    `integration:${provider}`,
+    "loginIntegration",
+    { provider: provider.id },
+    `integration:${provider.id}`,
   );
   busy.value = null;
   await load();
@@ -124,9 +161,9 @@ onMounted(load);
         @click="selectedProvider = provider.id"
       >
         <img
-          v-if="providerIcons[provider.id]"
+          v-if="icon(provider)"
           class="connection-card-logo"
-          :src="providerIcons[provider.id]"
+          :src="icon(provider)"
           alt=""
           aria-hidden="true"
         />
@@ -152,7 +189,7 @@ onMounted(load);
     >
       <article v-if="selected" class="stack connection-panel">
         <SettingsList class-name="!bg-transparent">
-          <SettingsRow title="Синхронизация">
+          <SettingsRow v-if="!packageManaged(selected)" title="Синхронизация">
             <template #control>
               <Dropdown
                 :model-value="selected.settings.intervalMinutes"
@@ -166,6 +203,7 @@ onMounted(load);
             </template>
           </SettingsRow>
           <SettingsToggleRow
+            v-if="!packageManaged(selected)"
             title="Синхронизировать при запуске"
             :model-value="selected.settings.syncOnStartup"
             @update:model-value="
@@ -173,14 +211,31 @@ onMounted(load);
             "
           />
           <SettingsRow
-            v-if="selected.id !== 'leetcode' && selected.id !== 'greatfrontend'"
+            v-for="setting in schema(selected)"
+            :key="setting.key"
+            :title="setting.label"
+            :description="setting.description"
+          >
+            <template #control>
+              <TextInput
+                :model-value="settingValue(selected, setting)"
+                class="w-56"
+                :type="setting.kind === 'text' ? 'text' : 'password'"
+                autocomplete="off"
+                :placeholder="setting.required ? 'Обязательное значение' : 'Введите значение'"
+                @update:model-value="setSettingValue(selected, setting, String($event))"
+              />
+            </template>
+          </SettingsRow>
+          <SettingsRow
+            v-if="authMode(selected) === 'credential' && schema(selected).length === 0"
             :title="selected.credentialLabel"
           >
             <template #control>
               <TextInput
                 v-model="credential[selected.id]"
                 class="w-56"
-                type="password"
+                :type="credentialType(selected)"
                 autocomplete="off"
                 :placeholder="
                   selected.hasCredential
@@ -196,18 +251,18 @@ onMounted(load);
         </p>
         <div class="actions">
           <Button
-            v-if="selected.id === 'leetcode' || selected.id === 'greatfrontend'"
+            v-if="canLogin(selected)"
             variant="surface"
             size="sm"
             :disabled="busy !== null"
-            @click="login(selected.id)"
+            @click="login(selected)"
             >Войти в {{ selected.label }}</Button
           ><Button
-            v-else-if="credential[selected.id]"
+            v-else-if="authMode(selected) === 'credential' && canSave(selected)"
             variant="surface"
             size="sm"
             :disabled="busy !== null"
-            @click="act(selected, 'save')"
+            @click="save(selected)"
             >Сохранить</Button
           ><Button
             v-if="selected.hasCredential"

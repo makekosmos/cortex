@@ -5,7 +5,7 @@ pub(super) async fn handle_call(
     key: (String, String),
     call: CallMessage,
 ) {
-    let (grant, broker, stdin) = {
+    let (grant, broker, integration, stdin) = {
         let mut workers = lock(&inner.workers);
         let Some(worker) = workers.get_mut(&key) else {
             return;
@@ -21,13 +21,18 @@ pub(super) async fn handle_call(
         (
             worker.grant.clone(),
             worker.broker.clone(),
+            worker
+                .launch_spec
+                .as_ref()
+                .and_then(|spec| spec.integration.as_ref())
+                .map(|config| config.manifest.clone()),
             worker.stdin.clone(),
         )
     };
     let result = match grant {
         Some(grant) => time::timeout(
             PackageWorkerSupervisor::timeout(),
-            dispatch(&inner, &grant, &broker, &call),
+            dispatch(&inner, &grant, &broker, integration.as_ref(), &call),
         )
         .await
         .unwrap_or_else(|_| Err("timeout")),
@@ -67,6 +72,7 @@ pub(super) async fn dispatch(
     inner: &SupervisorInner,
     grant: &Grant,
     broker: &BrokerConfig,
+    integration: Option<&IntegrationManifest>,
     call: &CallMessage,
 ) -> Result<serde_json::Value, &'static str> {
     let store = lock(&inner.store).clone().ok_or("unavailable")?;
@@ -172,9 +178,56 @@ pub(super) async fn dispatch(
                 .get("url")
                 .and_then(serde_json::Value::as_str)
                 .ok_or("invalid-request")?;
-            let bytes = package_worker_broker::fetch(broker, url)
-                .await
-                .map_err(|_| "unavailable")?;
+            let secret_handle = call
+                .params
+                .get("secret_handle")
+                .and_then(serde_json::Value::as_str);
+            let bytes = match secret_handle {
+                Some(handle) => {
+                    let (setting_key, mut secret) = inner
+                        .secrets
+                        .resolve_token(handle, &grant.package_id, &grant.version, call.generation)
+                        .map_err(|_| "forbidden")?;
+                    let response = async {
+                        let denied =
+                            || package_worker_broker::BrokerError::Invalid("forbidden".into());
+                        let integration = integration.ok_or_else(denied)?;
+                        let setting = integration
+                            .settings
+                            .iter()
+                            .find(|setting| setting.key == setting_key)
+                            .ok_or_else(denied)?;
+                        let injection = setting.injection.as_ref().ok_or_else(denied)?;
+                        let cookie_names = integration
+                            .login
+                            .as_ref()
+                            .filter(|login| login.secret_setting == setting_key)
+                            .map(|login| login.allowed_cookie_names.as_slice())
+                            .unwrap_or_default();
+                        package_worker_broker::fetch_with_secret_json(
+                            broker,
+                            url,
+                            Some(package_worker_broker::SecretRequest {
+                                injection,
+                                secret: &secret,
+                                allowed_cookie_names: cookie_names,
+                            }),
+                            call.params.get("body"),
+                        )
+                        .await
+                    }
+                    .await;
+                    crate::package_worker_secrets::zeroize_secret(&mut secret);
+                    response
+                }
+                None if call.params.get("body").is_none() => {
+                    package_worker_broker::fetch(broker, url).await
+                }
+                None => Err(package_worker_broker::BrokerError::Invalid(
+                    "request body requires manifest policy".into(),
+                )),
+            }
+            .map_err(|_| "unavailable")?;
             if bytes.len() > 700 * 1024 {
                 return Err("unavailable");
             }

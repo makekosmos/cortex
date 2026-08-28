@@ -32,6 +32,7 @@ impl PackageWorkerSupervisor {
             roots,
             correlation_id,
             bridge_config,
+            integration,
             lifecycle_task_key,
             worker_io_keys,
             launch_transaction,
@@ -48,6 +49,7 @@ impl PackageWorkerSupervisor {
             correlation_id,
             &roots,
             &bridge_config,
+            &integration,
         ) {
             Ok(value) => value,
             Err(reason) => return launch_transaction.rollback_error(reason, deadline).await,
@@ -136,6 +138,7 @@ impl PackageWorkerSupervisor {
                     ],
                     lifecycle_tx: Some(lifecycle_tx.clone()),
                     heartbeat_task: None,
+                    schedule_task: None,
                     hello: Some(hello_tx),
                     bootstrap_complete: false,
                     cleanup_started: false,
@@ -234,6 +237,9 @@ impl PackageWorkerSupervisor {
                             deadline,
                         )
                         .await;
+                }
+                if restart_allowed {
+                    let _ = self.activate(&key.0, &key.1);
                 }
                 let startup_key = TaskKey::Startup {
                     package: key.0.clone(),

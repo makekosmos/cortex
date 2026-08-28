@@ -12,6 +12,7 @@ pub(super) struct SupervisorInner {
     pub(super) store: Mutex<Option<Arc<PackageStore>>>,
     pub(super) retry_tasks: Arc<TaskRegistry>,
     pub(super) worker_io: Arc<TaskRegistry>,
+    pub(super) secrets: PackageWorkerSecretRegistry,
 }
 
 #[async_trait]
@@ -142,6 +143,7 @@ impl PackageWorkerSupervisor {
                 store: Mutex::new(None),
                 retry_tasks: TaskRegistry::owned(256),
                 worker_io: TaskRegistry::owned(256 * 3),
+                secrets: PackageWorkerSecretRegistry::new(),
             }),
         }
     }
@@ -161,6 +163,7 @@ impl PackageWorkerSupervisor {
                 store: Mutex::new(None),
                 retry_tasks: TaskRegistry::owned(256),
                 worker_io: TaskRegistry::owned(256 * 3),
+                secrets: PackageWorkerSecretRegistry::new(),
             }),
         }
     }
@@ -179,6 +182,7 @@ impl PackageWorkerSupervisor {
                 store: Mutex::new(None),
                 retry_tasks: TaskRegistry::owned(256),
                 worker_io: TaskRegistry::owned(256 * 3),
+                secrets: PackageWorkerSecretRegistry::new(),
             }),
         }
     }
@@ -217,6 +221,10 @@ impl PackageWorkerSupervisor {
 
     pub fn revoke_typed_launch(&self, id: &str, version: &str) {
         lock(&self.inner.typed_launches).remove(&(id.to_owned(), version.to_owned()));
+    }
+
+    pub fn revoke_package_secrets(&self, id: &str) {
+        self.inner.secrets.revoke_package(id);
     }
 
     /// The cross-platform authority seam used by worker dispatch. It parses

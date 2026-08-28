@@ -2,7 +2,7 @@
 pub(crate) mod tests {
     use super::*;
     use crate::{
-        package_manifest::PermissionRequest,
+        package_manifest::{PermissionRequest, TargetOs, TargetRuntime},
         package_trust::{DetachedSignature, KeyTransitionDocument, PackageRevocation},
     };
     use ed25519_dalek::{Signer, SigningKey};
@@ -56,6 +56,7 @@ pub(crate) mod tests {
                 defines: vec![],
                 mappings: vec![],
             },
+            integration: None,
         }
     }
 
@@ -108,6 +109,7 @@ pub(crate) mod tests {
                 defines: vec![],
                 mappings: vec![],
             },
+            integration: None,
         }
     }
 
@@ -1036,6 +1038,81 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn bigfrontend_manifest_compiles_against_canonical_registry() {
+        let mut registry = canonical_registry_snapshot().expect("canonical registry");
+        registry.types.push(RegisteredType::new(
+            "coding_submission_obj",
+            "1.0.0",
+            &[],
+            &[],
+        ));
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../packages/bigfrontend/manifest.json");
+        let raw = fs::read_to_string(path).expect("BigFrontend manifest");
+        let VersionedManifest::V2(manifest) =
+            PackageManifest::parse(&raw).expect("valid BigFrontend manifest")
+        else {
+            panic!("BigFrontend must use a v2 manifest");
+        };
+        assert_eq!(manifest.kind, PackageKind::Source);
+        assert!(manifest.targets.iter().any(|target| {
+            target.runtime == TargetRuntime::Worker && target.os.contains(&TargetOs::Windows)
+        }));
+        assert!(manifest.permissions.iter().any(|permission| {
+            permission.capability == "network" && permission.scopes == ["https://bigfrontend.dev/"]
+        }));
+        assert!(manifest.permissions.iter().any(|permission| {
+            permission.capability == "ark.write"
+                && permission.scopes
+                    == ["upsert_object_type", "upsert_object", "set_sync_kv"]
+        }));
+        let integration = manifest.integration.as_ref().expect("integration schema");
+        assert_eq!(integration.settings.len(), 1);
+        assert_eq!(integration.settings[0].key, "username");
+        assert_eq!(
+            integration.settings[0].kind,
+            crate::package_manifest::IntegrationSettingKind::Text
+        );
+        assert!(integration.settings[0].required);
+        assert_eq!(
+            integration.schedule.as_ref().map(|schedule| schedule.interval_seconds),
+            Some(86_400)
+        );
+        let grant = compile_manifest_v2(&manifest, &registry, "test-digest")
+            .expect("BigFrontend grant");
+        assert!(!grant.rules.is_empty());
+    }
+
+    #[test]
+    fn provider_package_manifests_use_the_generic_integration_contract() {
+        for package in [
+            "bigfrontend",
+            "greatfrontend",
+            "leetcode",
+            "codewars",
+            "hevy",
+            "toggl",
+        ] {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../packages")
+                .join(package)
+                .join("manifest.json");
+            let raw = fs::read_to_string(path).unwrap_or_else(|_| panic!("{package} manifest"));
+            let VersionedManifest::V2(manifest) = PackageManifest::parse(&raw)
+                .unwrap_or_else(|_| panic!("valid {package} manifest"))
+            else {
+                panic!("{package} must use a v2 manifest");
+            };
+            assert_eq!(manifest.kind, PackageKind::Source);
+            assert!(manifest.icon.is_some(), "{package} icon");
+            assert!(manifest.targets.iter().any(|target| {
+                target.runtime == TargetRuntime::Worker && target.os.contains(&TargetOs::Windows)
+            }));
+            assert!(manifest.integration.is_some(), "{package} integration");
+        }
+    }
+
+    #[test]
     fn dictation_package_manifest_has_only_the_required_engine_grants() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dictation/package.manifest.json");
         let raw = fs::read_to_string(path).expect("Dictation package manifest");
@@ -1203,6 +1280,7 @@ pub(crate) mod tests {
                 defines: vec![],
                 mappings: vec![],
             },
+            integration: None,
         };
         let versioned = VersionedManifest::V2(manifest.clone());
         let (archive, hash, size) = archive_bridge_binary(dir.path(), &versioned);

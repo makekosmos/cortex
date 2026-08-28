@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  encodeGreatFrontendCredential,
-  encodeLeetCodeCredential,
+  encodeTrustedCookieCredential,
   runIntegrationLogin,
 } from "./integration-login-credential";
 
@@ -14,7 +13,10 @@ describe("Manager integration login flow", () => {
       loadLogin: async () => void events.push("load"),
       waitForCredential: async () => {
         events.push("fresh-cookies");
-        return encodeLeetCodeCredential("session", "csrf")!;
+        return encodeTrustedCookieCredential(
+          { session: "session", csrf: "csrf", foreign: "drop" },
+          ["session", "csrf"],
+        )!;
       },
       closeWindow: () => {
         if (events.at(-1) !== "close") events.push("close");
@@ -22,7 +24,7 @@ describe("Manager integration login flow", () => {
       persistCredential: async (credential) => {
         persisted = credential;
         events.push("persist");
-        return { provider: "leetcode", hasCredential: true };
+        return { provider: "com.example.demo", hasCredential: true };
       },
     });
 
@@ -33,29 +35,36 @@ describe("Manager integration login flow", () => {
       "persist",
       "close",
     ]);
-    expect(persisted).toBe('{"session":"session","csrfToken":"csrf"}');
+    expect(persisted).toBe('{"session":"session","csrf":"csrf"}');
     expect(JSON.stringify(result)).not.toContain("session");
   });
 
-  test("keeps only the GreatFrontEnd session token within the keyring bound", () => {
+  test("keeps only contract-approved cookies within the keyring bound", () => {
     expect(
-      encodeGreatFrontendCredential([
-        { name: "_ga", value: "analytics", httpOnly: false },
-        { name: "csrf-token", value: "csrf", httpOnly: true },
-        { name: "supabase-auth-token", value: "session", httpOnly: false },
-      ]),
-    ).toBe("session");
-    expect(encodeGreatFrontendCredential([])).toBeNull();
+      encodeTrustedCookieCredential(
+        { session: "session", csrf: "csrf", analytics: "drop" },
+        ["session", "csrf"],
+      ),
+    ).toBe('{"session":"session","csrf":"csrf"}');
+    expect(encodeTrustedCookieCredential({}, ["session"])).toBeNull();
+  });
+
+  test("rejects missing or oversized contract cookies", () => {
+    expect(encodeTrustedCookieCredential({ session: "" }, ["session"])).toBeNull();
     expect(
-      encodeGreatFrontendCredential([
-        { name: "supabase-auth-token", value: "x; y", httpOnly: true },
-      ]),
+      encodeTrustedCookieCredential({ session: "x".repeat(2048) }, ["session"]),
     ).toBeNull();
   });
 
-  test("rejects missing or oversized LeetCode cookies", () => {
-    expect(encodeLeetCodeCredential("", "csrf")).toBeNull();
-    expect(encodeLeetCodeCredential("session", "")).toBeNull();
-    expect(encodeLeetCodeCredential("x".repeat(1025), "csrf")).toBeNull();
+  test("requires every trusted cookie before persisting a generic session", () => {
+    expect(
+      encodeTrustedCookieCredential({ session: "ok" }, ["session", "csrf"]),
+    ).toBeNull();
+    expect(
+      encodeTrustedCookieCredential(
+        { session: "ok", csrf: "token", foreign: "drop" },
+        ["session", "csrf"],
+      ),
+    ).toBe('{"session":"ok","csrf":"token"}');
   });
 });

@@ -93,7 +93,7 @@ pub(super) async fn dispatch_standard(
     } else if let Some(rest) = operation.strip_prefix("calculator.") {
         handle_calculator_op(rest, params, &agents_data_dir).await
     } else if let Some(rest) = operation.strip_prefix("integrations.") {
-        integrations::handle_operation(rest, params, &ark_host, &agents_data_dir)
+        integrations::handle_operation(rest, params, &ark_host, &agents_data_dir, &package_service)
             .await
             .map(LocalResponse::ok)
             .unwrap_or_else(LocalResponse::err)

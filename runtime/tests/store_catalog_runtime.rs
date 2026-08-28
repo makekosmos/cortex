@@ -14,7 +14,9 @@ impl PackageIndexLookup for Index {
     fn package_release(&self, package_id: &str, version: &str, is_bridge: bool) -> bool {
         matches!(
             (package_id, version, is_bridge),
-            ("com.kosmos.eden", "1.0.0", false) | ("bridge", "1.0.0", true)
+            ("com.kosmos.eden", "1.0.0", false)
+                | ("source-worker", "1.0.0", false)
+                | ("bridge", "1.0.0", true)
         )
     }
 
@@ -151,6 +153,32 @@ fn integration_requires_existing_external_listing() {
         ),
         Err(TrustError::Invalid("kind distribution"))
     ));
+}
+
+#[test]
+fn integration_resolves_signed_source_worker() {
+    let key = SigningKey::from_bytes(&[14; 32]);
+    let trust = StoreCatalogTrust::new("store-key", key.verifying_key()).unwrap();
+    let mut doc = document(1);
+
+    let mut source =
+        StoreListing::external("integration.source", "Source", "https://source.example/");
+    source.kind = ListingKind::Integration;
+    source.distribution = Distribution::Integration {
+        package_id: "source-worker".into(),
+        version: "1.0.0".into(),
+        connects_to: "external.obsidian".into(),
+    };
+    source.connects_to = Some("external.obsidian".into());
+
+    doc.listings.push(source);
+    trust
+        .verify_at(
+            &signed(&doc, "store-key", &key),
+            Utc.with_ymd_and_hms(2026, 8, 12, 1, 0, 0).unwrap(),
+            &Index,
+        )
+        .expect("signed source integration");
 }
 
 #[test]

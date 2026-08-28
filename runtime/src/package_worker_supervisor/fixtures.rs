@@ -39,6 +39,7 @@ impl PackageWorkerSupervisor {
                 roots: roots.to_vec(),
                 correlation_id,
                 bridge_config: None,
+                integration: None,
             },
             1,
             0,

@@ -73,6 +73,33 @@ pub(super) struct LaunchSpec {
     pub(super) roots: Vec<PathBuf>,
     pub(super) correlation_id: String,
     pub(super) bridge_config: Option<BridgeWorkerConfig>,
+    pub(super) integration: Option<IntegrationLaunchConfig>,
+}
+
+#[derive(Clone)]
+pub struct IntegrationLaunchConfig {
+    pub manifest: IntegrationManifest,
+    pub values: HashMap<String, String>,
+    pub secrets: HashMap<String, String>,
+}
+
+impl std::fmt::Debug for IntegrationLaunchConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("IntegrationLaunchConfig")
+            .field("manifest", &self.manifest)
+            .field("values", &self.values)
+            .field("secret_keys", &self.secrets.keys().collect::<Vec<_>>())
+            .finish()
+    }
+}
+
+impl Drop for IntegrationLaunchConfig {
+    fn drop(&mut self) {
+        for secret in self.secrets.values_mut() {
+            crate::package_worker_secrets::zeroize_secret(secret);
+        }
+    }
 }
 
 pub(super) fn restart_delay(failures: u8) -> Option<Duration> {
@@ -125,6 +152,7 @@ pub(super) struct LiveWorker {
     pub(super) io_keys: [TaskKey; 3],
     pub(super) lifecycle_tx: Option<mpsc::UnboundedSender<WorkerLifecycleEvent>>,
     pub(super) heartbeat_task: Option<tokio::task::JoinHandle<()>>,
+    pub(super) schedule_task: Option<tokio::task::JoinHandle<()>>,
     pub(super) hello: Option<oneshot::Sender<Result<(), &'static str>>>,
     pub(super) bootstrap_complete: bool,
     pub(super) cleanup_started: bool,
@@ -188,6 +216,14 @@ impl LaunchTransaction {
     }
 
     pub(super) async fn rollback(self, deadline: Instant) -> bool {
+        if let TaskKey::Lifecycle {
+            package,
+            generation,
+            ..
+        } = &self.lifecycle_key
+        {
+            self.inner.secrets.revoke_generation(package, *generation);
+        }
         let mut ok = self
             .inner
             .worker_io

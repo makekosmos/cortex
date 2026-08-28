@@ -32,7 +32,6 @@ use kepler_backend::{
     engine_api::EngineApiServer,
     engine_control::{self, ControlMessage},
     engine_supervisor::{self, ProcessMode},
-    integrations,
     lock_file::{self, EngineLockFile, ENGINE_LOCK_FILE_FORMAT_VERSION},
     observability::{self, CORRELATION_ID_ENV},
     package_service::PackageService,
@@ -113,14 +112,6 @@ fn startup_delay_ms(env_key: &str, default_ms: u64) -> u64 {
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(default_ms)
-}
-
-/// Test-mode Engine instances must not start integrations that can reach
-/// external credentials or mutate ambient user data. The topology harness
-/// uses a fresh data directory, but scheduler providers may still resolve
-/// real credentials from the host unless this gate is fail-closed.
-fn should_spawn_scheduler(test_mode: Option<&str>) -> bool {
-    test_mode != Some("1")
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
@@ -489,12 +480,6 @@ async fn setup() -> Result<SetupState, DynError> {
     };
     lock_file::write_engine_atomic(&engine_lock_path, &engine_lock)?;
     tracing::info!(path = ?engine_lock_path, "Engine lock-file written");
-
-    if should_spawn_scheduler(std::env::var("KOSMOS_TEST_MODE").ok().as_deref()) {
-        integrations::spawn_scheduler(ark.clone(), lock_dir.clone());
-    } else {
-        tracing::info!("KOSMOS_TEST_MODE=1 — integrations scheduler skipped");
-    }
 
     // LAN sync must not gate local readiness. If its fixed discovery port is
     // busy or slow, Eden/launcher still need immediate local ARK access.
@@ -1106,17 +1091,6 @@ mod tests {
         ws_task.await.unwrap().unwrap();
         ws_shutdown.shutdown().await.unwrap();
         http_task.abort();
-    }
-
-    #[test]
-    fn test_mode_disables_integrations_scheduler() {
-        assert!(!should_spawn_scheduler(Some("1")));
-    }
-
-    #[test]
-    fn normal_mode_keeps_integrations_scheduler_enabled() {
-        assert!(should_spawn_scheduler(None));
-        assert!(should_spawn_scheduler(Some("0")));
     }
 
     #[test]

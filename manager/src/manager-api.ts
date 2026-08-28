@@ -197,17 +197,25 @@ export type EngineSettings = {
 export type PairingCode = { code: string; expires_at?: string };
 
 export type IntegrationProvider = {
-  id:
-    | "hevy"
-    | "toggl"
-    | "leetcode"
-    | "codewars"
-    | "greatfrontend"
-    | "bigfrontend";
+  id: string;
   label: string;
   credentialLabel: string;
   credentialUrl: string;
   hasCredential: boolean;
+  iconKey?: string;
+  iconPath?: string;
+  packageManaged?: boolean;
+  authMode?: "credential" | "browser_login" | "none";
+  credentialInputType?: "text" | "password";
+  loginCapability?: string;
+  settingSchema?: Array<{
+    key: string;
+    label: string;
+    kind: "text" | "secret";
+    description?: string;
+    required: boolean;
+  }>;
+  settingValues?: Record<string, string>;
   settings: {
     intervalMinutes: number;
     syncOnStartup: boolean;
@@ -385,8 +393,9 @@ export interface ManagerApi {
     code: string;
   }): Promise<ManagerResult<unknown>>;
   getIntegrations(): Promise<ManagerResult<IntegrationsSnapshot>>;
-  loginLeetCode(): Promise<ManagerResult<IntegrationsSnapshot>>;
-  loginGreatFrontend(): Promise<ManagerResult<IntegrationsSnapshot>>;
+  loginIntegration(input: {
+    provider: IntegrationProvider["id"];
+  }): Promise<ManagerResult<IntegrationsSnapshot>>;
   updateIntegrationSettings(input: {
     provider: IntegrationProvider["id"];
     intervalMinutes?: 0 | 15 | 60 | 360 | 1440;
@@ -394,6 +403,7 @@ export interface ManagerApi {
   }): Promise<ManagerResult<IntegrationsSnapshot>>;
   setIntegrationCredential(input: {
     provider: IntegrationProvider["id"];
+    setting?: string;
     credential: string;
   }): Promise<ManagerResult<IntegrationsSnapshot>>;
   clearIntegrationCredential(input: {
@@ -554,6 +564,7 @@ export const managerOperations = {
   getPairingCode: "get_own_iroh_ticket",
   connectWithPairingCode: "connect_with_pairing_code",
   getIntegrations: "integrations.list",
+  integrationLoginContract: "integrations.login_contract",
   updateIntegrationSettings: "integrations.update_settings",
   setIntegrationCredential: "integrations.set_credential",
   clearIntegrationCredential: "integrations.clear_credential",

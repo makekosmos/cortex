@@ -84,14 +84,8 @@ const validation = (
   condition: boolean,
   message = "Проверьте введённые данные.",
 ): string | null => (condition ? null : message);
-const integrationProviders = [
-  "hevy",
-  "toggl",
-  "leetcode",
-  "codewars",
-  "greatfrontend",
-  "bigfrontend",
-];
+const validIntegrationId = (value: Input): value is string =>
+  isString(value) && /^[a-z0-9][a-z0-9._-]{0,127}$/.test(value);
 const integrationIntervals = [0, 15, 60, 360, 1440];
 const AUTOSTART_ARGS = ["--autostart"];
 const desktopUpdateBridge = () =>
@@ -128,8 +122,7 @@ function requestDesktopUpdate(
 }
 const validIntegrationInput = (value: Input): value is { provider: string } =>
   isObject(value) &&
-  isString(value.provider) &&
-  integrationProviders.includes(value.provider);
+  validIntegrationId(value.provider);
 function normalizeIntegrationSnapshot(value: Input) {
   const raw = isObject(value) ? value : {};
   const providers = Array.isArray(raw.providers) ? raw.providers : [];
@@ -137,11 +130,38 @@ function normalizeIntegrationSnapshot(value: Input) {
     providers: providers.flatMap((entry: Input) => {
       if (
         !isObject(entry) ||
-        !isString(entry.id) ||
-        !integrationProviders.includes(entry.id)
+        !validIntegrationId(entry.id)
       )
         return [];
       const settings = isObject(entry.settings) ? entry.settings : {};
+      const settingSchema = Array.isArray(entry.settingSchema)
+        ? entry.settingSchema.flatMap((setting: Input) =>
+            isObject(setting) &&
+            validIntegrationId(setting.key) &&
+            isString(setting.label) &&
+            (setting.kind === "text" || setting.kind === "secret")
+              ? [
+                  {
+                    key: setting.key,
+                    label: setting.label.slice(0, 128),
+                    kind: setting.kind,
+                    description: isString(setting.description)
+                      ? setting.description.slice(0, 512)
+                      : undefined,
+                    required: setting.required === true,
+                  },
+                ]
+              : [],
+          )
+        : [];
+      const settingValues = isObject(entry.settingValues)
+        ? Object.fromEntries(
+            Object.entries(entry.settingValues).filter(
+              ([key, value]) =>
+                validIntegrationId(key) && isString(value) && value.length <= 4096,
+            ),
+          )
+        : {};
       return [
         {
           id: entry.id,
@@ -153,6 +173,25 @@ function normalizeIntegrationSnapshot(value: Input) {
             ? entry.credentialUrl.slice(0, 256)
             : "",
           hasCredential: entry.hasCredential === true,
+          iconPath:
+            isString(entry.iconPath) &&
+            entry.iconPath.length <= 2048 &&
+            (/^[A-Za-z]:[\\/]/.test(entry.iconPath) || entry.iconPath.startsWith("/"))
+              ? entry.iconPath
+              : undefined,
+          packageManaged: entry.packageManaged === true,
+          iconKey: validIntegrationId(entry.iconKey) ? entry.iconKey : entry.id,
+          authMode:
+            entry.authMode === "browser_login" || entry.authMode === "none"
+              ? entry.authMode
+              : "credential",
+          credentialInputType:
+            entry.credentialInputType === "text" ? "text" : "password",
+          loginCapability: validIntegrationId(entry.loginCapability)
+            ? entry.loginCapability
+            : undefined,
+          settingSchema,
+          settingValues,
           settings: {
             intervalMinutes:
               Number.isInteger(settings.intervalMinutes) &&
@@ -188,7 +227,6 @@ export {
   bounded,
   isObject,
   validation,
-  integrationProviders,
   integrationIntervals,
   AUTOSTART_ARGS,
   readDesktopUpdateState,

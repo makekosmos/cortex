@@ -7,6 +7,7 @@ pub(super) struct PreparedLaunch {
     pub(super) roots: Vec<PathBuf>,
     pub(super) correlation_id: String,
     pub(super) bridge_config: Option<BridgeWorkerConfig>,
+    pub(super) integration: Option<IntegrationLaunchConfig>,
     pub(super) lifecycle_task_key: TaskKey,
     pub(super) worker_io_keys: Vec<TaskKey>,
     pub(super) launch_transaction: LaunchTransaction,
@@ -36,6 +37,7 @@ impl PackageWorkerSupervisor {
             roots,
             correlation_id,
             bridge_config,
+            integration,
         } = spec.clone();
         if let Some(config) = bridge_config.as_ref() {
             crate::lock_file::ensure_owner_only_directory(std::path::Path::new(&config.state_root))
@@ -160,6 +162,7 @@ impl PackageWorkerSupervisor {
             roots,
             correlation_id,
             bridge_config,
+            integration,
             lifecycle_task_key,
             worker_io_keys,
             launch_transaction,

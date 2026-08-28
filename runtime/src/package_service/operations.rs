@@ -844,12 +844,14 @@ impl PackageService {
             } else {
                 worker.roots.clone()
             };
+            let integration = self.integration_launch_config(&installed)?;
             (
                 installed.manifest.common_manifest(),
                 installed.hash,
                 executable,
                 roots,
                 bridge_config,
+                integration,
             )
         };
         worker
@@ -868,6 +870,7 @@ impl PackageService {
                 &launch.3,
                 worker.correlation_id.clone(),
                 launch.4,
+                launch.5,
             )
             .await
             .map_err(|_| {

@@ -2,6 +2,8 @@
 //!
 //! This brokers the Engine API; it is not hostile native-code containment.
 
+use crate::package_manifest::{IntegrationRequestMethod, SecretInjection};
+
 use std::{
     collections::{HashMap, HashSet},
     fs::{self, File, OpenOptions},
@@ -18,6 +20,7 @@ use std::{
 
 use thiserror::Error;
 const MAX_BYTES: usize = 1024 * 1024;
+const MAX_JSON_BODY: usize = 64 * 1024;
 pub const MAX_DIRECTORY_ENTRIES: usize = 4096;
 const MAX_TEMPFILE_ATTEMPTS: usize = 128;
 static TEMPFILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -85,7 +88,35 @@ impl BrokerConfig {
     }
 }
 
+pub struct SecretRequest<'a> {
+    pub injection: &'a SecretInjection,
+    pub secret: &'a str,
+    pub allowed_cookie_names: &'a [String],
+}
+
 pub async fn fetch(config: &BrokerConfig, raw_url: &str) -> Result<Vec<u8>, BrokerError> {
+    fetch_with_secret(config, raw_url, None).await
+}
+
+pub async fn fetch_with_secret(
+    config: &BrokerConfig,
+    raw_url: &str,
+    secret: Option<SecretRequest<'_>>,
+) -> Result<Vec<u8>, BrokerError> {
+    fetch_with_secret_json(config, raw_url, secret, None).await
+}
+
+pub async fn fetch_with_secret_json(
+    config: &BrokerConfig,
+    raw_url: &str,
+    secret: Option<SecretRequest<'_>>,
+    body: Option<&serde_json::Value>,
+) -> Result<Vec<u8>, BrokerError> {
+    let method = secret
+        .as_ref()
+        .map(|request| request.injection.request_method())
+        .unwrap_or_default();
+    let body = request_body(method, body)?;
     let mut url = validate_url(config, raw_url)?;
     for redirect_count in 0..=3 {
         let host = url
@@ -104,7 +135,22 @@ pub async fn fetch(config: &BrokerConfig, raw_url: &str) -> Result<Vec<u8>, Brok
             .timeout(Duration::from_secs(30))
             .resolve(host, addr)
             .build()?;
-        let response = client.get(url.clone()).send().await?;
+        let mut request = match method {
+            IntegrationRequestMethod::Get => client.get(url.clone()),
+            IntegrationRequestMethod::PostJson => client
+                .post(url.clone())
+                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .body(body.clone().unwrap_or_default()),
+        };
+        if let Some(secret) = secret.as_ref() {
+            if !secret.injection.origins().iter().any(|origin| {
+                reqwest::Url::parse(origin).is_ok_and(|allowed| allowed.origin() == url.origin())
+            }) {
+                return Err(BrokerError::Invalid("secret origin denied".into()));
+            }
+            request = apply_secret(request, secret)?;
+        }
+        let response = request.send().await?;
         if response.status().is_redirection() {
             if redirect_count == 3 {
                 return Err(BrokerError::Invalid("too many redirects".into()));
@@ -145,6 +191,86 @@ pub async fn fetch(config: &BrokerConfig, raw_url: &str) -> Result<Vec<u8>, Brok
         return Ok(out);
     }
     unreachable!()
+}
+
+fn request_body(
+    method: IntegrationRequestMethod,
+    body: Option<&serde_json::Value>,
+) -> Result<Option<Vec<u8>>, BrokerError> {
+    Ok(match (method, body) {
+        (IntegrationRequestMethod::Get, None) => None,
+        (IntegrationRequestMethod::PostJson, Some(body)) => {
+            let bytes = serde_json::to_vec(body)
+                .map_err(|_| BrokerError::Invalid("invalid JSON body".into()))?;
+            if bytes.len() > MAX_JSON_BODY {
+                return Err(BrokerError::Invalid("JSON body exceeds 64 KiB".into()));
+            }
+            Some(bytes)
+        }
+        _ => return Err(BrokerError::Invalid("request method/body mismatch".into())),
+    })
+}
+
+fn apply_secret(
+    request: reqwest::RequestBuilder,
+    secret: &SecretRequest<'_>,
+) -> Result<reqwest::RequestBuilder, BrokerError> {
+    match secret.injection {
+        SecretInjection::Header { name, prefix, .. } => Ok(request.header(
+            reqwest::header::HeaderName::from_bytes(name.as_bytes())
+                .map_err(|_| BrokerError::Invalid("invalid secret header".into()))?,
+            reqwest::header::HeaderValue::from_str(&format!("{prefix}{}", secret.secret))
+                .map_err(|_| BrokerError::Invalid("invalid secret header".into()))?,
+        )),
+        SecretInjection::Basic { password, .. } => {
+            Ok(request.basic_auth(secret.secret, Some(password)))
+        }
+        SecretInjection::Cookies { .. } => {
+            let values: HashMap<String, String> = serde_json::from_str(secret.secret)
+                .map_err(|_| BrokerError::Invalid("invalid secret cookies".into()))?;
+            if values.is_empty()
+                || secret
+                    .allowed_cookie_names
+                    .iter()
+                    .any(|name| !values.contains_key(name))
+                || values.keys().any(|name| {
+                    !secret
+                        .allowed_cookie_names
+                        .iter()
+                        .any(|allowed| allowed == name)
+                })
+                || values.values().any(|value| {
+                    value.is_empty()
+                        || value.len() > 4096
+                        || value
+                            .chars()
+                            .any(|character| matches!(character, ';' | '\r' | '\n'))
+                })
+            {
+                return Err(BrokerError::Invalid("invalid secret cookies".into()));
+            }
+            let mut request = request;
+            if let Some(headers) = secret.injection.fixed_headers() {
+                for (name, value) in headers {
+                    request = request.header(name, value);
+                }
+            }
+            if let Some(mirror) = secret.injection.cookie_header() {
+                request = request.header(
+                    &mirror.header,
+                    values
+                        .get(&mirror.cookie)
+                        .ok_or_else(|| BrokerError::Invalid("missing mirrored cookie".into()))?,
+                );
+            }
+            let cookies = values
+                .into_iter()
+                .map(|(name, value)| format!("{name}={value}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            Ok(request.header(reqwest::header::COOKIE, cookies))
+        }
+    }
 }
 
 pub const MAX_SNAPSHOT_CHUNK: usize = 256 * 1024;
@@ -994,6 +1120,71 @@ mod tests {
         assert!(validate_url(&cfg, "https://user@example.com/a").is_err());
         assert!(validate_url(&cfg, "https://example.net/a").is_err());
         assert!(validate_url(&cfg, "https://localhost/a").is_err());
+    }
+    #[test]
+    fn secret_injection_is_manifest_bound_and_filters_cookies() {
+        let client = reqwest::Client::new();
+        let injection = SecretInjection::Header {
+            origins: vec!["https://example.com/".into()],
+            name: "Authorization".into(),
+            prefix: "Bearer ".into(),
+        };
+        let request = apply_secret(
+            client.get("https://example.com/data"),
+            &SecretRequest {
+                injection: &injection,
+                secret: "token",
+                allowed_cookie_names: &[],
+            },
+        )
+        .unwrap()
+        .build()
+        .unwrap();
+        assert_eq!(request.headers()["authorization"], "Bearer token");
+        assert!(reqwest::Url::parse(&injection.origins()[0])
+            .is_ok_and(|allowed| allowed.origin() == request.url().origin()));
+
+        let cookies = SecretInjection::Cookies {
+            origins: vec!["https://example.com/".into()],
+            method: IntegrationRequestMethod::PostJson,
+            headers: [("origin".into(), "https://example.com".into())].into(),
+            header_from_cookie: Some(crate::package_manifest::CookieHeaderInjection {
+                cookie: "csrf".into(),
+                header: "x-csrf-token".into(),
+            }),
+        };
+        assert!(apply_secret(
+            client.get("https://example.com/data"),
+            &SecretRequest {
+                injection: &cookies,
+                secret: r#"{"other":"leak"}"#,
+                allowed_cookie_names: &["session".into()],
+            },
+        )
+        .is_err());
+        let request = apply_secret(
+            client.post("https://example.com/data"),
+            &SecretRequest {
+                injection: &cookies,
+                secret: r#"{"session":"opaque","csrf":"mirror"}"#,
+                allowed_cookie_names: &["session".into(), "csrf".into()],
+            },
+        )
+        .unwrap()
+        .build()
+        .unwrap();
+        assert_eq!(request.headers()["origin"], "https://example.com");
+        assert_eq!(request.headers()["x-csrf-token"], "mirror");
+        assert!(request.headers()["cookie"]
+            .to_str()
+            .unwrap()
+            .contains("session=opaque"));
+        assert!(request_body(IntegrationRequestMethod::Get, Some(&serde_json::json!({}))).is_err());
+        assert!(request_body(
+            IntegrationRequestMethod::PostJson,
+            Some(&serde_json::json!({ "body": "x".repeat(MAX_JSON_BODY) }))
+        )
+        .is_err());
     }
     #[test]
     fn snapshot_lifecycle_returns_opaque_bounded_chunks_and_closes_by_owner() {

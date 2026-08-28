@@ -155,6 +155,50 @@ fn token_hash_does_not_accept_wrong_hello_token() {
     assert!(!token_matches(&hash_token("right"), "wrong"));
 }
 
+#[tokio::test]
+async fn typed_binding_rebinds_after_restart_and_revocation() {
+    let supervisor = PackageWorkerSupervisor::new(1);
+    let grant = LaunchGrant {
+        package_id: "pkg".into(),
+        package_version: "1.0.0".into(),
+        manifest_digest: "digest".into(),
+        rules: Vec::new(),
+        capabilities: Vec::new(),
+    };
+    supervisor
+        .bind_typed_launch("pkg", "1.0.0", "session", 1, grant.clone())
+        .unwrap();
+    assert_eq!(
+        supervisor.bind_typed_launch("pkg", "1.0.0", "session", 1, grant.clone()),
+        Err("stale-generation")
+    );
+    supervisor
+        .bind_typed_launch("pkg", "1.0.0", "session", 2, grant.clone())
+        .unwrap();
+    assert_eq!(
+        supervisor
+            .dispatch_typed_request("pkg", "1.0.0", "session", 1, serde_json::json!({}))
+            .await,
+        Err("stale-generation")
+    );
+    assert_eq!(
+        supervisor
+            .dispatch_typed_request("pkg", "1.0.0", "session", 2, serde_json::json!({}))
+            .await,
+        Err("invalid-request")
+    );
+    supervisor.revoke_typed_launch("pkg", "1.0.0");
+    assert_eq!(
+        supervisor
+            .dispatch_typed_request("pkg", "1.0.0", "session", 2, serde_json::json!({}))
+            .await,
+        Err("forbidden")
+    );
+    supervisor
+        .bind_typed_launch("pkg", "1.0.0", "session", 1, grant)
+        .unwrap();
+}
+
 #[test]
 fn restart_policy_uses_bounded_backoff() {
     assert_eq!(restart_delay(1), Some(Duration::from_secs(1)));

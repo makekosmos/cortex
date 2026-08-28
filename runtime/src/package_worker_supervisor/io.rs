@@ -41,6 +41,7 @@ pub(super) fn failed_worker() -> LiveWorker {
         ],
         lifecycle_tx: None,
         heartbeat_task: None,
+        schedule_task: None,
         hello: None,
         bootstrap_complete: false,
         cleanup_started: false,

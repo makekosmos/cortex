@@ -1,0 +1,318 @@
+use super::{ManifestError, ManifestV2, PackageKind};
+use reqwest::Url;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+
+mod secret_injection;
+pub use secret_injection::{CookieHeaderInjection, IntegrationRequestMethod, SecretInjection};
+
+const MAX_SETTINGS: usize = 64;
+const MAX_SETTING_KEY: usize = 64;
+const MAX_SETTING_LABEL: usize = 128;
+const MAX_SETTING_DESCRIPTION: usize = 512;
+const MAX_LOGIN_URL: usize = 2048;
+const MAX_COOKIE_NAMES: usize = 64;
+const MIN_INTERVAL_SECONDS: u64 = 60;
+const MAX_INTERVAL_SECONDS: u64 = 7 * 24 * 60 * 60;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct IntegrationManifest {
+    #[serde(default)]
+    pub settings: Vec<IntegrationSetting>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login: Option<BrowserLogin>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schedule: Option<IntegrationSchedule>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct IntegrationSetting {
+    pub key: String,
+    pub label: String,
+    #[serde(alias = "type")]
+    pub kind: IntegrationSettingKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub injection: Option<SecretInjection>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum IntegrationSettingKind {
+    Text,
+    Secret,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct BrowserLogin {
+    pub start_url: String,
+    pub completion_url: String,
+    pub allowed_cookie_names: Vec<String>,
+    pub secret_setting: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct IntegrationSchedule {
+    pub interval_seconds: u64,
+}
+
+impl IntegrationManifest {
+    pub(crate) fn validate(&self, manifest: &ManifestV2) -> Result<(), ManifestError> {
+        if manifest.kind != PackageKind::Source
+            || !manifest.entrypoint.to_ascii_lowercase().ends_with(".exe")
+        {
+            return Err(ManifestError::InvalidField("integration"));
+        }
+        if self.settings.len() > MAX_SETTINGS {
+            return Err(ManifestError::InvalidField("integration.settings"));
+        }
+        let mut keys = HashSet::new();
+        for setting in &self.settings {
+            if setting.key.is_empty()
+                || setting.key.len() > MAX_SETTING_KEY
+                || !setting
+                    .key
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+                || setting.label.is_empty()
+                || setting.label.len() > MAX_SETTING_LABEL
+                || setting.label.chars().any(char::is_control)
+                || setting.description.as_ref().is_some_and(|description| {
+                    description.len() > MAX_SETTING_DESCRIPTION
+                        || description.chars().any(char::is_control)
+                })
+                || !keys.insert(&setting.key)
+                || setting.injection.as_ref().is_some_and(|injection| {
+                    !matches!(setting.kind, IntegrationSettingKind::Secret)
+                        || injection.validate().is_err()
+                        || injection.origins().iter().any(|origin| {
+                            !manifest.permissions.iter().any(|permission| {
+                                permission.capability == "network"
+                                    && permission.scopes.iter().any(|scope| scope == origin)
+                            })
+                        })
+                })
+            {
+                return Err(ManifestError::InvalidField("integration.settings"));
+            }
+        }
+        if let Some(login) = &self.login {
+            validate_login(login, &self.settings, manifest)?;
+        }
+        if self.schedule.as_ref().is_some_and(|schedule| {
+            !(MIN_INTERVAL_SECONDS..=MAX_INTERVAL_SECONDS).contains(&schedule.interval_seconds)
+        }) {
+            return Err(ManifestError::InvalidField("integration.schedule"));
+        }
+        Ok(())
+    }
+}
+
+fn validate_login(
+    login: &BrowserLogin,
+    settings: &[IntegrationSetting],
+    manifest: &ManifestV2,
+) -> Result<(), ManifestError> {
+    let start_origin = https_origin(&login.start_url)
+        .filter(|_| login.start_url.len() <= MAX_LOGIN_URL)
+        .ok_or(ManifestError::InvalidField("integration.login.start_url"))?;
+    let completion_origin = https_origin(&login.completion_url)
+        .filter(|_| login.completion_url.len() <= MAX_LOGIN_URL)
+        .ok_or(ManifestError::InvalidField(
+            "integration.login.completion_url",
+        ))?;
+    if login.allowed_cookie_names.is_empty()
+        || login.allowed_cookie_names.len() > MAX_COOKIE_NAMES
+        || unique_len(&login.allowed_cookie_names) != login.allowed_cookie_names.len()
+        || login.allowed_cookie_names.iter().any(|name| {
+            name.is_empty()
+                || name.len() > 128
+                || name.chars().any(char::is_control)
+                || name.bytes().any(|byte| byte == b';' || byte == b'=')
+        })
+    {
+        return Err(ManifestError::InvalidField(
+            "integration.login.allowed_cookie_names",
+        ));
+    }
+    let Some(setting) = settings
+        .iter()
+        .find(|setting| setting.key == login.secret_setting)
+    else {
+        return Err(ManifestError::InvalidField(
+            "integration.login.secret_setting",
+        ));
+    };
+    if !matches!(setting.kind, IntegrationSettingKind::Secret) {
+        return Err(ManifestError::InvalidField(
+            "integration.login.secret_setting",
+        ));
+    }
+    if !matches!(setting.injection, Some(SecretInjection::Cookies { .. })) {
+        return Err(ManifestError::InvalidField(
+            "integration.login.secret_setting",
+        ));
+    }
+    if setting
+        .injection
+        .as_ref()
+        .and_then(SecretInjection::cookie_header)
+        .is_some_and(|mirror| {
+            !login
+                .allowed_cookie_names
+                .iter()
+                .any(|name| name == &mirror.cookie)
+        })
+    {
+        return Err(ManifestError::InvalidField(
+            "integration.login.secret_setting",
+        ));
+    }
+    let network_scopes = manifest
+        .permissions
+        .iter()
+        .filter(|permission| permission.capability == "network")
+        .flat_map(|permission| permission.scopes.iter());
+    for origin in [start_origin, completion_origin] {
+        if !network_scopes.clone().any(|scope| {
+            network_scope_origin(scope).is_some_and(|scope_origin| scope_origin == origin)
+        }) {
+            return Err(ManifestError::InvalidField("integration.login.network"));
+        }
+    }
+    Ok(())
+}
+
+fn https_origin(value: &str) -> Option<String> {
+    let url = Url::parse(value).ok()?;
+    if url.scheme() != "https"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.host_str().is_none()
+        || url.fragment().is_some()
+    {
+        return None;
+    }
+    Some(url.origin().ascii_serialization())
+}
+
+fn network_scope_origin(value: &str) -> Option<String> {
+    let url = Url::parse(value).ok()?;
+    if url.path() != "/" || url.query().is_some() {
+        return None;
+    }
+    https_origin(value)
+}
+
+fn unique_len<T: Eq + std::hash::Hash>(values: &[T]) -> usize {
+    values.iter().collect::<HashSet<_>>().len()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::package_manifest::{
+        ManifestData, ManifestTarget, PackageManifest, PermissionRequest, TargetOs, TargetRuntime,
+    };
+
+    fn manifest() -> ManifestV2 {
+        ManifestV2 {
+            schema_version: 2,
+            id: "com.kosmos.source".into(),
+            name: "Source".into(),
+            description: None,
+            version: "1.0.0".into(),
+            kind: PackageKind::Source,
+            engine_api: "*".into(),
+            entrypoint: "worker.exe".into(),
+            icon: None,
+            publisher: "kosmos".into(),
+            permissions: vec![PermissionRequest {
+                capability: "network".into(),
+                scopes: vec!["https://example.com/".into()],
+            }],
+            targets: vec![ManifestTarget {
+                runtime: TargetRuntime::Worker,
+                os: vec![TargetOs::Windows],
+                arch: None,
+            }],
+            data: ManifestData {
+                access: vec![],
+                defines: vec![],
+                mappings: vec![],
+            },
+            integration: Some(IntegrationManifest {
+                settings: vec![IntegrationSetting {
+                    key: "session".into(),
+                    label: "Session".into(),
+                    kind: IntegrationSettingKind::Secret,
+                    description: None,
+                    required: true,
+                    injection: Some(SecretInjection::Cookies {
+                        origins: vec!["https://example.com/".into()],
+                        method: IntegrationRequestMethod::Get,
+                        headers: Default::default(),
+                        header_from_cookie: None,
+                    }),
+                }],
+                login: Some(BrowserLogin {
+                    start_url: "https://example.com/login".into(),
+                    completion_url: "https://example.com/account".into(),
+                    allowed_cookie_names: vec!["session".into()],
+                    secret_setting: "session".into(),
+                }),
+                schedule: Some(IntegrationSchedule {
+                    interval_seconds: 3600,
+                }),
+            }),
+        }
+    }
+
+    #[test]
+    fn validates_login_and_schedule() {
+        assert!(manifest().validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_duplicate_cookies_and_unscoped_login() {
+        let mut invalid = manifest();
+        let login = invalid
+            .integration
+            .as_mut()
+            .unwrap()
+            .login
+            .as_mut()
+            .unwrap();
+        login.allowed_cookie_names.push("session".into());
+        assert!(invalid.validate().is_err());
+
+        let mut invalid = manifest();
+        invalid.permissions[0].scopes = vec!["https://other.example/".into()];
+        assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_provider_metadata() {
+        let value = serde_json::json!({
+            "schema_version": 2,
+            "id": "com.kosmos.source",
+            "name": "Source",
+            "version": "1.0.0",
+            "kind": "source",
+            "engine_api": "*",
+            "entrypoint": "worker.exe",
+            "publisher": "kosmos",
+            "targets": [{"runtime": "worker", "os": ["windows"]}],
+            "data": {"access": [], "defines": [], "mappings": []},
+            "integration": {"provider": {"id": "other"}}
+        });
+        assert!(PackageManifest::parse(&value.to_string()).is_err());
+    }
+}

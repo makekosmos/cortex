@@ -49,7 +49,7 @@ pub(super) async fn finish_inner_until(
         };
         worker.cleanup_started = false;
     }
-    let (hello, terminal_disable, retry, heartbeat_task, io_keys) = {
+    let (hello, terminal_disable, retry, heartbeat_task, schedule_task, io_keys) = {
         let mut workers = lock(&inner.workers);
         let Some(worker) = workers.get_mut(key) else {
             return;
@@ -100,6 +100,7 @@ pub(super) async fn finish_inner_until(
             terminal_disable,
             retry,
             worker.heartbeat_task.take(),
+            worker.schedule_task.take(),
             worker.io_keys.clone(),
         )
     };
@@ -141,6 +142,12 @@ pub(super) async fn finish_inner_until(
             cleanup_ok = false;
         }
     }
+    if let Some(task) = schedule_task {
+        task.abort();
+        if !join_task_until(task, deadline).await {
+            cleanup_ok = false;
+        }
+    }
     if !cleanup_ok {
         if let Some(worker) = lock(&inner.workers)
             .get_mut(key)
@@ -159,6 +166,7 @@ pub(super) async fn finish_inner_until(
     if !still_exact {
         return;
     }
+    inner.secrets.revoke_generation(&key.0, generation);
     tracing::info!(target: "package_worker", package_id = %key.0, version = %key.1, generation, state = ?state, "worker lifecycle transition");
     if terminal_disable {
         let still_exact = lock(&inner.workers)

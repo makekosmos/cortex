@@ -1,6 +1,8 @@
 //! Worker JSON-lines protocol and in-memory capability grants.
 
-use crate::package_manifest::PackageManifest;
+use crate::package_manifest::{
+    IntegrationSchedule, IntegrationSetting, IntegrationSettingKind, PackageManifest,
+};
 use rand::RngCore;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
@@ -12,6 +14,7 @@ pub const MAX_LINE_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 pub enum WorkerMessage {
     Bootstrap(BootstrapMessage),
     Hello(HelloMessage),
@@ -39,7 +42,99 @@ pub struct BridgeWorkerConfig {
     pub editable_fields: Vec<String>,
     pub readonly_fields: Vec<String>,
 }
-msg!(BootstrapMessage { pub method: String, pub package_id: String, pub version: String, pub hash: String, pub pid: u32, pub api_version: u32, pub generation: u64, pub correlation_id: String, pub token: String, #[serde(default)] pub bridge_config: Option<BridgeWorkerConfig> });
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct IntegrationBootstrapConfig {
+    pub settings: Vec<IntegrationSetting>,
+    pub values: HashMap<String, String>,
+    pub secret_handles: HashMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schedule: Option<IntegrationSchedule>,
+}
+impl IntegrationBootstrapConfig {
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.settings.len() > 64
+            || self.values.len() > self.settings.len()
+            || self.secret_handles.len() > self.settings.len()
+        {
+            return Err("invalid-request");
+        }
+        let mut keys = HashSet::new();
+        for setting in &self.settings {
+            if setting.key.is_empty()
+                || setting.key.len() > 64
+                || !setting
+                    .key
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+                || setting.label.is_empty()
+                || setting.label.len() > 128
+                || setting.label.chars().any(char::is_control)
+                || setting.description.as_ref().is_some_and(|description| {
+                    description.len() > 512 || description.chars().any(char::is_control)
+                })
+                || !keys.insert(&setting.key)
+            {
+                return Err("invalid-request");
+            }
+        }
+        for (key, value) in &self.values {
+            if !keys.contains(key)
+                || self.settings.iter().any(|setting| {
+                    setting.key == *key && setting.kind == IntegrationSettingKind::Secret
+                })
+                || value.is_empty()
+                || value.len() > 4096
+                || value.trim() != value
+                || value.chars().any(char::is_control)
+            {
+                return Err("invalid-request");
+            }
+        }
+        for (key, token) in &self.secret_handles {
+            if !keys.contains(key)
+                || self.settings.iter().any(|setting| {
+                    setting.key == *key && setting.kind != IntegrationSettingKind::Secret
+                })
+                || token.len() != 64
+                || !token.bytes().all(|byte| byte.is_ascii_hexdigit())
+            {
+                return Err("invalid-request");
+            }
+        }
+        for setting in &self.settings {
+            if !setting.required {
+                continue;
+            }
+            let present = match setting.kind {
+                IntegrationSettingKind::Text => self.values.contains_key(&setting.key),
+                IntegrationSettingKind::Secret => self.secret_handles.contains_key(&setting.key),
+            };
+            if !present {
+                return Err("invalid-request");
+            }
+        }
+        if self
+            .schedule
+            .as_ref()
+            .is_some_and(|schedule| !(60..=7 * 24 * 60 * 60).contains(&schedule.interval_seconds))
+        {
+            return Err("invalid-request");
+        }
+        Ok(())
+    }
+}
+msg!(BootstrapMessage { pub method: String, pub package_id: String, pub version: String, pub hash: String, pub pid: u32, pub api_version: u32, pub generation: u64, pub correlation_id: String, pub token: String, #[serde(default)] pub bridge_config: Option<BridgeWorkerConfig>, #[serde(default, skip_serializing_if = "Option::is_none")] pub integration: Option<IntegrationBootstrapConfig> });
+msg!(RunMessage { pub method: String, pub generation: u64, pub run_id: String });
+impl RunMessage {
+    fn validate(&self) -> Result<(), &'static str> {
+        (!self.run_id.is_empty()
+            && self.run_id.len() <= 128
+            && !self.run_id.chars().any(char::is_control))
+        .then_some(())
+        .ok_or("invalid-request")
+    }
+}
 msg!(HelloMessage { pub method: String, pub package_id: String, pub version: String, pub hash: String, pub pid: u32, pub api_version: u32, pub token: String });
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -80,7 +175,13 @@ pub fn parse_json_line(line: &[u8]) -> Result<WorkerMessage, &'static str> {
     }
     let message: WorkerMessage = serde_json::from_slice(line).map_err(|_| "invalid-request")?;
     let valid_method = match &message {
-        WorkerMessage::Bootstrap(message) => message.method == "worker.bootstrap",
+        WorkerMessage::Bootstrap(message) => {
+            message.method == "worker.bootstrap"
+                && message
+                    .integration
+                    .as_ref()
+                    .is_none_or(|config| config.validate().is_ok())
+        }
         WorkerMessage::Hello(message) => message.method == "worker.hello",
         WorkerMessage::Heartbeat(message) => message.method == "worker.heartbeat",
         WorkerMessage::Call(message) => message.method == "worker.call",
@@ -474,5 +575,89 @@ mod tests {
         )
         .is_err());
         assert!(parse_json_line(&vec![b'a'; MAX_LINE_BYTES + 1]).is_err());
+    }
+
+    #[test]
+    fn integration_bootstrap_config_is_metadata_and_handle_only() {
+        let value = serde_json::json!({
+            "settings": [
+                {"key": "username", "label": "Username", "kind": "text"},
+                {"key": "api_key", "label": "API key", "kind": "secret"}
+            ],
+            "values": {"username": "bigfrontend-user"},
+            "secret_handles": {"api_key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+            "schedule": {"interval_seconds": 3600}
+        });
+        let mut config: IntegrationBootstrapConfig = serde_json::from_value(value).unwrap();
+        config.settings[0].required = true;
+        config.settings[1].required = true;
+        assert!(config.validate().is_ok());
+        let wire = serde_json::to_string(&config).unwrap();
+        assert!(wire.contains("bigfrontend-user"));
+        assert!(wire.contains("0123456789abcdef"));
+        assert!(!wire.contains("secret-value"));
+        assert!(serde_json::from_str::<IntegrationBootstrapConfig>(
+            &wire.replace("secret_handles", "unexpected")
+        )
+        .is_err());
+
+        let invalid = |values, secret_handles| IntegrationBootstrapConfig {
+            settings: config.settings.clone(),
+            values,
+            secret_handles,
+            schedule: None,
+        };
+        assert!(invalid(
+            [("api_key".into(), "secret-value".into())].into(),
+            HashMap::new()
+        )
+        .validate()
+        .is_err());
+        assert!(invalid(
+            HashMap::new(),
+            [(
+                "username".into(),
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into()
+            )]
+            .into()
+        )
+        .validate()
+        .is_err());
+        assert!(IntegrationBootstrapConfig {
+            settings: config.settings.clone(),
+            values: HashMap::new(),
+            secret_handles: HashMap::new(),
+            schedule: None,
+        }
+        .validate()
+        .is_err());
+        assert!(IntegrationBootstrapConfig {
+            settings: config.settings.clone(),
+            values: [("username".into(), "user".into())].into(),
+            secret_handles: HashMap::new(),
+            schedule: None,
+        }
+        .validate()
+        .is_err());
+        assert!(
+            invalid([("other".into(), "value".into())].into(), HashMap::new())
+                .validate()
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn run_message_is_strict_and_method_bound() {
+        let run: RunMessage =
+            serde_json::from_slice(br#"{"method":"worker.run","generation":7,"run_id":"run-1"}"#)
+                .unwrap();
+        assert!(run.validate().is_ok());
+        assert!(serde_json::from_slice::<RunMessage>(
+            br#"{"method":"worker.run","generation":7,"run_id":"run-1","extra":true}"#
+        )
+        .is_err());
+        assert!(
+            parse_json_line(br#"{"method":"worker.run","generation":7,"run_id":"run-1"}"#).is_err()
+        );
     }
 }
