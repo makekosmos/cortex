@@ -30,7 +30,7 @@ export function validateExtensionManifest(value: unknown): ExtensionManifest {
   if (!isString(value.id) || !value.id) {
     throw new Error("manifest.id обязателен и должен быть строкой");
   }
-  if (!/^\\w[\\w.-]*$/.test(value.id)) {
+  if (!/^\w[\w.-]*$/.test(value.id)) {
     throw new Error(`manifest.id невалиден: ${value.id}`);
   }
   if (!isString(value.name) || !value.name.trim()) {
