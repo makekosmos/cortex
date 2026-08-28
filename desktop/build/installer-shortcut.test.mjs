@@ -7,7 +7,7 @@ const buildDir = path.dirname(fileURLToPath(import.meta.url));
 const installer = readFileSync(path.join(buildDir, "installer.nsh"), "utf8");
 const manager = "$INSTDIR\\resources\\components\\manager\\Kosmos Manager.exe";
 
-test("Kosmos shortcuts open the staged Manager instead of the Shell", () => {
-  expect(installer).toContain(`CreateShortCut "$SMPROGRAMS\\Kosmos.lnk" "${manager}"`);
-  expect(installer).toContain(`CreateShortCut "$DESKTOP\\Kosmos.lnk" "${manager}"`);
+test("CosCast shortcuts open the staged Manager instead of the Shell", () => {
+  expect(installer).toContain(`CreateShortCut "$SMPROGRAMS\\CosCast.lnk" "${manager}"`);
+  expect(installer).toContain(`CreateShortCut "$DESKTOP\\CosCast.lnk" "${manager}"`);
 });
