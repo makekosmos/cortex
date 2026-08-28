@@ -18,25 +18,8 @@ import {
 } from "./extension-installer-state";
 import type { InstalledExtensionInfo } from "./extension-installer-state";
 import { extractZipTo, readZipEntries } from "./extension-zip";
-import { isString } from "../src/shared/runtimeGuards";
-
-interface ExtensionManifest {
-  id: string;
-  appId?: string;
-  name: string;
-  kind?: "app" | "native" | string;
-  version?: string;
-  description?: string;
-  author?: string;
-  icon?: string;
-  entryHtml?: string;
-  keplerApiVersion?: string;
-  keepAliveInBackground?: boolean;
-  native?: {
-    executable?: string;
-    devExecutable?: string;
-  };
-}
+import type { JsonRecord } from "../src/shared/runtimeGuards";
+import { validateExtensionManifest, type ExtensionManifest } from "./extension-manifest-validation";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,22 +50,13 @@ async function previewKext(kextPath: string): Promise<KextManifestPreview> {
   }
   let manifest: ExtensionManifest;
   try {
-    // SAFETY: manifest.json is validated against ExtensionManifest fields immediately below.
-    manifest = JSON.parse(manifestEntry.data.toString("utf8")) as ExtensionManifest;
+    // SAFETY: validateExtensionManifest rejects every non-object JSON value at runtime.
+    const parsed = JSON.parse(manifestEntry.data.toString("utf8")) as JsonRecord | null;
+    manifest = validateExtensionManifest(parsed);
   } catch (e) {
     // SAFETY: JSON.parse errors are Error instances in the Node runtime.
     throw new Error(`manifest.json повреждён: ${(e as Error).message}`);
   }
-  if (!manifest.id || !isString(manifest.id)) {
-    throw new Error("manifest.id обязателен и должен быть строкой");
-  }
-  if (!/^[\w][\w.-]*$/.test(manifest.id)) {
-    throw new Error(`manifest.id невалиден: ${manifest.id}`);
-  }
-  if (!manifest.name || !isString(manifest.name)) {
-    throw new Error("manifest.name обязателен");
-  }
-
   let apiCompatError: string | null = null;
   if (
     manifest.keplerApiVersion &&
@@ -134,14 +108,12 @@ async function previewDir(extDir: string): Promise<KextManifestPreview> {
   }
   let manifest: ExtensionManifest;
   try {
-    // SAFETY: manifest.json is validated against ExtensionManifest fields immediately below.
-    manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as ExtensionManifest;
+    // SAFETY: validateExtensionManifest rejects every non-object JSON value at runtime.
+    const parsed = JSON.parse(await fs.readFile(manifestPath, "utf8")) as JsonRecord | null;
+    manifest = validateExtensionManifest(parsed);
   } catch (e) {
     // SAFETY: JSON.parse errors are Error instances in the Node runtime.
     throw new Error(`manifest.json повреждён: ${(e as Error).message}`);
-  }
-  if (!manifest.id || !manifest.name) {
-    throw new Error("manifest.id и manifest.name обязательны");
   }
   let apiCompatError: string | null = null;
   if (
@@ -156,6 +128,14 @@ async function previewDir(extDir: string): Promise<KextManifestPreview> {
   if (manifest.icon) {
     const iconPath = path.join(extDir, manifest.icon);
     if (existsSync(iconPath)) {
+      const [packageRoot, realIconPath] = await Promise.all([
+        fs.realpath(extDir),
+        fs.realpath(iconPath),
+      ]);
+      const relativeIconPath = path.relative(packageRoot, realIconPath);
+      if (relativeIconPath.startsWith(`..${path.sep}`) || path.isAbsolute(relativeIconPath)) {
+        throw new Error("manifest.icon выходит за пределы пакета");
+      }
       const ext = path.extname(manifest.icon).toLowerCase();
       const mime =
         ext === ".svg"
@@ -163,7 +143,7 @@ async function previewDir(extDir: string): Promise<KextManifestPreview> {
           : ext === ".jpg" || ext === ".jpeg"
             ? "image/jpeg"
             : "image/png";
-      iconDataUri = `data:${mime};base64,${(await fs.readFile(iconPath)).toString("base64")}`;
+      iconDataUri = `data:${mime};base64,${(await fs.readFile(realIconPath)).toString("base64")}`;
     }
   }
   const currentDir = path.join(userExtensionsRoot(), manifest.id);
