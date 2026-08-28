@@ -23,6 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
@@ -70,6 +72,7 @@ jobs:
       - run: bun run rustfmt
       - run: bun run clippy
       - run: bun run test
+      - run: bun run test:rust
       - run: bun test host/electron/host-api-reconnect.test.ts
 
   windows-runtime:
@@ -81,4 +84,6 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bun install --cwd desktop --frozen-lockfile
+      - run: cargo build --locked -p kepler-watcher -p kepler-focus-helper -p kepler-focus-svc --bins
+      - run: cargo test --locked -p kepler-focus-helper -p kepler-focus-svc --lib
       - run: bun run --cwd desktop test:runtime-staging

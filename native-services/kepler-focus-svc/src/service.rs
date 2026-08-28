@@ -16,8 +16,8 @@ use windows_service::service::{
 use windows_service::service_control_handler::{self, ServiceControlHandlerResult};
 use windows_service::service_dispatcher;
 
-use crate::cli::{LEGACY_SERVICE_NAME, SERVICE_NAME};
 use crate::pipe;
+use kepler_focus_svc::{LEGACY_SERVICE_NAME, SERVICE_NAME};
 
 define_windows_service!(ffi_service_main, service_main);
 

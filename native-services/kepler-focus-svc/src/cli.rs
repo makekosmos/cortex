@@ -11,9 +11,8 @@ use windows_service::service::{
 use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 
 use crate::CliResponse;
+use kepler_focus_svc::{uninstall_service_names, LEGACY_SERVICE_NAME, SERVICE_NAME};
 
-pub const SERVICE_NAME: &str = "KosmosSystemSvc";
-pub const LEGACY_SERVICE_NAME: &str = "KeplerFocusSvc";
 pub const SERVICE_DISPLAY_NAME: &str = "Kosmos System Service";
 pub const SERVICE_DESCRIPTION: &str =
     "Privileged local service для Kosmos: hosts blocking и fast NTFS file indexing. \
@@ -71,10 +70,6 @@ fn open_installed_service(
             Err(_) => Err(primary),
         },
     }
-}
-
-fn uninstall_service_names() -> [&'static str; 2] {
-    [SERVICE_NAME, LEGACY_SERVICE_NAME]
 }
 
 fn is_missing_service_error(e: &windows_service::Error) -> bool {
@@ -301,19 +296,5 @@ pub fn status() -> ! {
             };
             resp.print_and_exit();
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn uninstall_targets_new_and_legacy_service_names() {
-        // Regression: 2026-05-26. Uninstall must clean both sides of the rename.
-        assert_eq!(
-            uninstall_service_names(),
-            [SERVICE_NAME, LEGACY_SERVICE_NAME]
-        );
     }
 }

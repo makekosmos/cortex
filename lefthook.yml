@@ -22,16 +22,10 @@ pre-commit:
       run: bun run --cwd manager typecheck
     oxfmt:
       glob: "**/*.{ts,tsx,vue,mjs,cjs,js,jsx,json,yml,yaml}"
-      run: bun run format:check
+      run: bun run format:check --staged
 
 pre-push:
   parallel: false
   commands:
-    source-size-tests:
-      run: bun run test:source-size
-    backend-clippy:
-      run: bun run clippy
-    backend-tests:
-      run: bun run test:backend
-    runtime-staging:
-      run: bun run --cwd desktop test:runtime-staging
+    full-check:
+      run: bun run check

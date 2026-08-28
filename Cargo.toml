@@ -7,6 +7,9 @@ members = [
   "native-services/kepler-focus-svc",
 ]
 
+[profile.test]
+debug = 0
+
 [workspace.package]
 edition = "2021"
 

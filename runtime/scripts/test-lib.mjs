@@ -9,10 +9,12 @@ const target = process.env.CARGO_TARGET_DIR
   : resolve(cortex, "target");
 const executable = (name) =>
   resolve(target, "debug", `${name}${process.platform === "win32" ? ".exe" : ""}`);
-const coreRpc = process.env.ARK_CORE_RPC_PATH ?? ensureArkCoreRpc({
-  debug: true,
-  targetDir: resolve(target, "debug"),
-});
+const coreRpc =
+  process.env.ARK_CORE_RPC_PATH ??
+  ensureArkCoreRpc({
+    debug: true,
+    targetDir: resolve(target, "debug"),
+  });
 const bridge = executable("ark-markdown-bridge");
 const env = {
   ...process.env,
@@ -41,4 +43,11 @@ if (!existsSync(bridge)) {
   throw new Error(`ark-markdown-bridge fixture was not produced: ${bridge}`);
 }
 
-run(cortex, ["test", "-p", "kepler-backend", "--lib", ...process.argv.slice(2)]);
+const workspace = process.argv[2] === "--workspace";
+if (workspace) {
+  run(cortex, ["test", "--workspace", "--lib"]);
+  run(cortex, ["test", "--workspace", "--test", "*"]);
+  run(cortex, ["test", "-p", "kepler-backend", "--bins"]);
+} else {
+  run(cortex, ["test", "-p", "kepler-backend", "--lib", ...process.argv.slice(2)]);
+}
