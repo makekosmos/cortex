@@ -14,15 +14,15 @@ const SOURCE_LIMIT = 300;
 // Existing debt is explicit and finite. New files must meet the limit; removing
 // an entry is the only way to retire debt, so the check never quietly regresses.
 const GRANDFATHERED = new Set([
-  "core/ark/crates/ark-core/rust/src/ffi_start.rs",
-  "core/ark/crates/ark-core/rust/src/main/definitions.rs",
-  "core/ark/crates/ark-core/rust/src/main/runtime.rs",
-  "core/ark/crates/ark-core/rust/src/main/sync.rs",
-  "core/ark/crates/ark-core/rust/src/main/sync/start.rs",
-  "core/ark/crates/ark-core/rust/src/main/tests.rs",
-  "core/ark/crates/ark-core/rust/src/sync_client_start.rs",
-  "core/ark/crates/ark-core/rust/src/sync_server_core.rs",
-  "core/ark/crates/ark-core/rust/src/sync_server_messages.rs",
+  "crates/ark-core/src/ffi_start.rs",
+  "crates/ark-core/src/main/definitions.rs",
+  "crates/ark-core/src/main/runtime.rs",
+  "crates/ark-core/src/main/sync.rs",
+  "crates/ark-core/src/main/sync/start.rs",
+  "crates/ark-core/src/main/tests.rs",
+  "crates/ark-core/src/sync_client_start.rs",
+  "crates/ark-core/src/sync_server_core.rs",
+  "crates/ark-core/src/sync_server_messages.rs",
 ]);
 const SOURCE_EXTENSIONS = new Set([
   ".js",

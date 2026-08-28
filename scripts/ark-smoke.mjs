@@ -20,7 +20,7 @@ const steps = [
   {
     name: "ARK core Rust tests",
     command: "cargo",
-    args: ["test", "--manifest-path", "core/ark/crates/ark-core/rust/Cargo.toml"],
+    args: ["test", "--manifest-path", "crates/ark-core/Cargo.toml"],
   },
   {
     name: "@kosmos/ark typecheck",

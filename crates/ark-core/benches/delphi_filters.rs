@@ -3,7 +3,7 @@
 //! Bench для `delphi::filters::*` на той же synthetic data что TS-side
 //! `products/delphi/tests/filterService.bench.ts:makeSynthetic(n)`.
 //!
-//! Запуск: `cargo bench --manifest-path core/ark/crates/ark-core/rust/Cargo.toml \
+//! Запуск: `cargo bench --manifest-path crates/ark-core/Cargo.toml \
 //!   --bench delphi_filters --features bench-fixtures`.
 
 use ark_core::delphi::filters::fixtures::{make_synthetic, TODAY_ISO};

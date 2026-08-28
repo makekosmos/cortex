@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core/ark/crates/ark-core/rust"]
+members = ["crates/ark-core"]
 
 [workspace.package]
 edition = "2021"

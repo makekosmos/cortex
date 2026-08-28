@@ -147,8 +147,8 @@ The previous contents of this file described an older `core/ark/packages/ark/` P
 
 Current ARK runtime documentation:
 
-- [`core/ark/crates/ark-core/README.md`](./core/ark/crates/ark-core/README.md)
-- Rust runtime: `core/ark/crates/ark-core/rust`
+- [`crates/ark-core/README.md`](./crates/ark-core/README.md)
+- Rust runtime: `crates/ark-core`
 - Node/Electron SDK: `core/ark/packages/ark` (`@kosmos/ark`)
 - Compatibility SDK `@arksync/node` больше не поддерживается как workspace; current TS SDK — `core/ark/packages/ark` (`@kosmos/ark`).
 - Canonical desktop sidecar: `ark-core-rpc`

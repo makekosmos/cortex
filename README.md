@@ -16,7 +16,7 @@
 <p align="center">
   <a href="https://github.com/makekosmos/docs">Documentation</a> ·
   <a href="https://github.com/makekosmos/docs/blob/main/concepts/architecture.md">Architecture</a> ·
-  <a href="./core/ark/crates/ark-core/README.md">ARK</a> ·
+  <a href="./crates/ark-core/README.md">ARK</a> ·
   <a href="#development">Development</a>
 </p>
 

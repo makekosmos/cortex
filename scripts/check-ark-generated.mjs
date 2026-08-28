@@ -18,14 +18,7 @@ if (before) {
 
 execFileSync(
   "cargo",
-  [
-    "test",
-    "--manifest-path",
-    "core/ark/crates/ark-core/rust/Cargo.toml",
-    "--features",
-    "ts-rs",
-    "--quiet",
-  ],
+  ["test", "--manifest-path", "crates/ark-core/Cargo.toml", "--features", "ts-rs", "--quiet"],
   { cwd: root, stdio: "inherit" },
 );
 

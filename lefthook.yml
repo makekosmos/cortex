@@ -7,14 +7,14 @@ pre-commit:
   parallel: false
   commands:
     ark-core-rust:
-      glob: "{Cargo.toml,Cargo.lock,rust-toolchain*,.cargo/**/*,**/build.rs,core/ark/crates/ark-core/rust/**/*.rs}"
-      run: cd core/ark/crates/ark-core/rust && cargo check --quiet
+      glob: "{Cargo.toml,Cargo.lock,rust-toolchain*,.cargo/**/*,**/build.rs,crates/ark-core/**/*.rs}"
+      run: cd crates/ark-core && cargo check --quiet
     rustfmt:
       glob: "**/*.rs"
       run: cargo fmt --check
     # Keep generated TypeScript bindings in sync with Rust types.
     ts-rs-bindings-fresh:
-      glob: "{core/ark/crates/ark-core/rust/src/types/**/*.rs,core/ark/crates/ark-core/rust/src/type_registry/**/*.rs}"
+      glob: "{crates/ark-core/src/types/**/*.rs,crates/ark-core/src/type_registry/**/*.rs}"
       run: node scripts/check-ark-generated.mjs
     oxlint:
       glob: "*.{ts,tsx,vue,mjs,cjs,js,jsx}"
@@ -30,7 +30,7 @@ pre-push:
   parallel: false
   commands:
     test-ark-core:
-      glob: "{Cargo.toml,Cargo.lock,rust-toolchain*,.cargo/**/*,**/build.rs,core/ark/crates/ark-core/rust/**/*.rs}"
+      glob: "{Cargo.toml,Cargo.lock,rust-toolchain*,.cargo/**/*,**/build.rs,crates/ark-core/**/*.rs}"
       run: cargo nextest run --workspace --all-features
     # Hygiene: orphan deps в Cargo workspace. Fail если найдены unused —
     # автор должен либо удалить (cargo shear --fix), либо добавить в

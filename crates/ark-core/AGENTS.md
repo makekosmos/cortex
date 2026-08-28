@@ -15,7 +15,7 @@
 
 ## Scope
 
-- `core/ark/crates/ark-core/` is the shared Rust + SQLite runtime and `ark-core-rpc` sidecar.
+- `crates/ark-core/` is the shared Rust + SQLite runtime and `ark-core-rpc` sidecar.
 - Electron callers use newline-delimited JSON-RPC; Android/Swift integration goes through UniFFI surfaces.
 - Full RPC/entity reference lives in `https://github.com/makekosmos/docs/blob/main/packages/ark-core.md`; do not inline it here.
 
@@ -36,8 +36,8 @@
 
 ## Commands
 
-- `cargo test --manifest-path core/ark/crates/ark-core/rust/Cargo.toml` — core tests.
-- `cargo build --manifest-path core/ark/crates/ark-core/rust/Cargo.toml --bin ark-core-rpc` — sidecar build.
+- `cargo test --manifest-path crates/ark-core/Cargo.toml` — core tests.
+- `cargo build --manifest-path crates/ark-core/Cargo.toml --bin ark-core-rpc` — sidecar build.
 - `bun run ark:guard:writes` — after data-layer/write-boundary changes.
 - `bun run ark:smoke` — after substantial runtime changes.
 

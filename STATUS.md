@@ -296,7 +296,7 @@ Checks: `bun run --cwd platform/desktop typecheck`, ручной запуск ma
 
 ## 2026-06-18 — ARK write-RPC fail-closed release (Kepler 0.5.2 → 0.5.3)
 
-Patch-релиз публикует desktop/runtime hardening из `34efa3eb`: write-RPC пути ARK теперь валидируют payload до открытия транзакции, выполняют delete/upsert атомарно и закрываются ошибкой вместо частичного no-op при некорректном contract/data input. Изменения лежат только в Kepler runtime (`core/ark/crates/ark-core/rust/src/db.rs`, `core/ark/crates/ark-core/rust/src/main.rs`) и сопровождаются proof spec `.agent/tasks/2026-06-18-ark-write-contract/spec.md`; extension manifests не менялись.
+Patch-релиз публикует desktop/runtime hardening из `34efa3eb`: write-RPC пути ARK теперь валидируют payload до открытия транзакции, выполняют delete/upsert атомарно и закрываются ошибкой вместо частичного no-op при некорректном contract/data input. Изменения лежат только в Kepler runtime (`crates/ark-core/src/db.rs`, `crates/ark-core/src/main.rs`) и сопровождаются proof spec `.agent/tasks/2026-06-18-ark-write-contract/spec.md`; extension manifests не менялись.
 
 - **Fail-closed contract boundary**: `entity_upsert`, `entity_delete`, `object_upsert`, `object_delete` больше не проходят дальше с неполным или неверным payload. Ошибка возвращается вызывающему RPC слою до записи в sync-таблицы.
 - **Атомарные write transactions**: запись ARK entity/object и соответствующий sync change фиксируются одной транзакцией, чтобы crash/exception не оставлял локальную базу в промежуточном состоянии.

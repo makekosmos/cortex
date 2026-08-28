@@ -4,17 +4,17 @@ ARK Core is the canonical local-first data runtime for Kosmos. It is a Rust libr
 
 ## Source Layout
 
-- `core/ark/crates/ark-core/rust` - Rust crate `ark-core`
-- `core/ark/crates/ark-core/rust/src/main.rs` - `ark-core-rpc` stdin/stdout sidecar
-- `core/ark/crates/ark-core/rust/src/db.rs` - SQLite schema, CRUD, sync storage adapter
-- `core/ark/crates/ark-core/rust/src/sync_server.rs` and `sync_client.rs` - LAN sync runtime
+- `crates/ark-core` - Rust crate `ark-core`
+- `crates/ark-core/src/main.rs` - `ark-core-rpc` stdin/stdout sidecar
+- `crates/ark-core/src/db.rs` - SQLite schema, CRUD, sync storage adapter
+- `crates/ark-core/src/sync_server.rs` and `sync_client.rs` - LAN sync runtime
 - `../arca-sdk` - canonical TypeScript SDK for Electron main/Node callers (sibling repository)
 
 ## Build And Test
 
 ```powershell
-cargo build --manifest-path core/ark/crates/ark-core/rust/Cargo.toml --bin ark-core-rpc
-cargo test --manifest-path core/ark/crates/ark-core/rust/Cargo.toml
+cargo build --manifest-path crates/ark-core/Cargo.toml --bin ark-core-rpc
+cargo test --manifest-path crates/ark-core/Cargo.toml
 bun run --cwd ../arca-sdk typecheck
 bun run --cwd ../arca-sdk build
 ```
