@@ -16,7 +16,7 @@ test("migrates legacy shell settings into the current data directory once", () =
     writeFileSync(legacy, '{"hotkey":"Control+Space"}', "utf8");
 
     migrateLegacyProdSettings(root, targetDir);
-    const target = path.join(targetDir, "kepler-shell-settings.json");
+    const target = path.join(targetDir, "kosmos-settings.json");
     expect(existsSync(target)).toBe(true);
     expect(readFileSync(target, "utf8")).toBe('{"hotkey":"Control+Space"}');
 
