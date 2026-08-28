@@ -392,6 +392,129 @@
         assert_eq!(response["data"][0]["text"], "");
     }
 
+    #[tokio::test]
+    async fn launch_scoped_dictation_responses_expose_only_renderer_fields() {
+        let dispatcher = crate::engine_dispatch::EngineDispatcher::new(Arc::new(|_| {
+            Box::pin(async { Ok(json!(null)) })
+        }));
+        let client = DispatchClient::default();
+
+        let config = filter_app_response(
+            "dictation.get_config",
+            json!({"ok":true,"data":{
+                "config": {
+                    "hotkey":"Ctrl+Shift+;", "language":"ru", "injectMode":"auto_paste",
+                    "provider":"local", "model":"whisper", "localModelId":"small",
+                    "providerEnabled":true, "httpProxy":"http://proxy.invalid",
+                    "transcriptionPrompt":"secret prompt", "localModelPath":"C:\\secret",
+                    "localCommandPath":"C:\\secret\\whisper.exe", "microphoneDeviceId":"device",
+                    "networkProfile":{"kind":"custom_doh","url":"https://dns.invalid"}
+                },
+                "hasApiKey":true, "apiKey":"secret", "error":"internal",
+                "activeUuid":"00000000-0000-4000-8000-000000000001"
+            }}),
+            &app_test_grant(),
+            &dispatcher,
+            &client,
+        )
+        .await;
+        assert_eq!(
+            config,
+            json!({"ok":true,"data":{
+                "config": {
+                    "hotkey":"Ctrl+Shift+;", "language":"ru", "injectMode":"auto_paste",
+                    "provider":"local", "model":"whisper", "localModelId":"small",
+                    "providerEnabled":true
+                },
+                "hasApiKey":true
+            }})
+        );
+
+        let updated = filter_app_response(
+            "dictation.update_config",
+            json!({"ok":true,"data":{"config":{
+                "language":"en", "provider":"groq", "providerEnabled":true,
+                "httpProxy":"http://proxy.invalid", "localModelPath":"C:\\secret"
+            }}}),
+            &app_test_grant(),
+            &dispatcher,
+            &client,
+        )
+        .await;
+        assert_eq!(
+            updated,
+            json!({"ok":true,"data":{"config":{
+                "language":"en", "provider":"groq", "providerEnabled":true
+            }}})
+        );
+
+        let state = filter_app_response(
+            "dictation.get_state",
+            json!({"ok":true,"data":{
+                "state":"error", "microphonePermission":"denied", "hasApiKey":true,
+                "lastError":"C:\\private\\trace", "activeUuid":"uuid", "attempts":3,
+                "canRetry":true, "config":{"httpProxy":"secret"}
+            }}),
+            &app_test_grant(),
+            &dispatcher,
+            &client,
+        )
+        .await;
+        assert_eq!(
+            state,
+            json!({"ok":true,"data":{"state":"error","microphonePermission":"denied"}})
+        );
+
+        let models = filter_app_response(
+            "dictation.list_local_models",
+            json!({"ok":true,"data":{
+                "commandInstalled":true, "models":[
+                    {"id":"small", "name":"Whisper Small", "transcriptionSupported":true,
+                     "directory":false, "downloaded":true, "path":"C:\\models\\small",
+                     "url":"https://models.invalid/small", "filename":"small.bin",
+                     "description":"private", "selected":true},
+                    {"id":42, "name":"drop this hostile entry", "path":"C:\\secret"}
+                ],
+                "modelsDir":"C:\\models", "commandPath":"C:\\tools\\whisper.exe"
+            }}),
+            &app_test_grant(),
+            &dispatcher,
+            &client,
+        )
+        .await;
+        assert_eq!(
+            models,
+            json!({"ok":true,"data":{
+                "commandInstalled":true,
+                "models":[{"id":"small","name":"Whisper Small",
+                    "transcriptionSupported":true,"directory":false,"downloaded":true}]
+            }})
+        );
+    }
+
+    #[tokio::test]
+    async fn launch_scoped_dictation_filter_preserves_error_responses() {
+        let dispatcher = crate::engine_dispatch::EngineDispatcher::new(Arc::new(|_| {
+            Box::pin(async { Ok(json!(null)) })
+        }));
+        let response = json!({
+            "ok": false,
+            "error": {"message":"internal", "path":"C:\\private", "uuid":"secret"},
+            "data": {"config": {"httpProxy":"must remain unchanged"}}
+        });
+        assert_eq!(
+            filter_app_response(
+                "dictation.get_config",
+                response.clone(),
+                &app_test_grant(),
+                &dispatcher,
+                &DispatchClient::default(),
+            )
+            .await,
+            response
+        );
+    }
+
     #[test]
     fn launch_scoped_filter_removes_ungranted_fields_and_types() {
         let grant = app_test_grant();

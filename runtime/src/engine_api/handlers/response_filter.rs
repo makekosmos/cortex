@@ -134,6 +134,98 @@ async fn filter_link_array(
     *links = filtered;
 }
 
+fn sanitize_dictation_config(value: &Value) -> Value {
+    let Some(input) = value.as_object() else {
+        return Value::Object(serde_json::Map::new());
+    };
+    let mut output = json!({
+        "hotkey": input.get("hotkey").and_then(Value::as_str),
+        "language": input.get("language").and_then(Value::as_str),
+        "injectMode": input.get("injectMode").and_then(Value::as_str)
+            .filter(|value| matches!(*value, "auto_paste" | "clipboard_only")),
+        "provider": input.get("provider").and_then(Value::as_str)
+            .filter(|value| matches!(*value, "groq" | "local")),
+        "model": input.get("model").and_then(Value::as_str),
+        "localModelId": input.get("localModelId").and_then(Value::as_str),
+        "providerEnabled": input.get("providerEnabled").and_then(Value::as_bool),
+    });
+    output.as_object_mut().expect("object").retain(|_, value| !value.is_null());
+    output
+}
+
+fn sanitize_dictation_get_config(value: &Value) -> Value {
+    let Some(input) = value.as_object() else {
+        return Value::Object(serde_json::Map::new());
+    };
+    let mut output = serde_json::Map::new();
+    if let Some(config) = input.get("config") {
+        output.insert("config".into(), sanitize_dictation_config(config));
+    }
+    if let Some(value) = input.get("hasApiKey").and_then(Value::as_bool) {
+        output.insert("hasApiKey".into(), Value::Bool(value));
+    }
+    Value::Object(output)
+}
+
+fn sanitize_dictation_state(value: &Value) -> Value {
+    let Some(input) = value.as_object() else {
+        return Value::Object(serde_json::Map::new());
+    };
+    let mut output = serde_json::Map::new();
+    if let Some(value) = input.get("state").and_then(Value::as_str) {
+        output.insert("state".into(), Value::String(value.into()));
+    }
+    if let Some(value @ ("unknown" | "granted" | "denied" | "prompt")) = input
+        .get("microphonePermission")
+        .and_then(Value::as_str)
+    {
+        output.insert("microphonePermission".into(), Value::String(value.into()));
+    }
+    Value::Object(output)
+}
+
+fn sanitize_dictation_local_models(value: &Value) -> Value {
+    let Some(input) = value.as_object() else {
+        return Value::Object(serde_json::Map::new());
+    };
+    let mut output = serde_json::Map::new();
+    if let Some(value) = input.get("commandInstalled").and_then(Value::as_bool) {
+        output.insert("commandInstalled".into(), Value::Bool(value));
+    }
+    let models = input
+        .get("models")
+        .and_then(Value::as_array)
+        .map(|models| {
+            models
+                .iter()
+                .filter_map(|model| {
+                    let model = model.as_object()?;
+                    let id = model.get("id").and_then(Value::as_str)?;
+                    let name = model.get("name").and_then(Value::as_str)?;
+                    Some(json!({
+                        "id": id,
+                        "name": name,
+                        "transcriptionSupported": model
+                            .get("transcriptionSupported")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false),
+                        "directory": model
+                            .get("directory")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false),
+                        "downloaded": model
+                            .get("downloaded")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false),
+                    }))
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    output.insert("models".into(), Value::Array(models));
+    Value::Object(output)
+}
+
 async fn filter_app_response(
     operation: &str,
     response: Value,
@@ -151,6 +243,11 @@ async fn filter_app_response(
         &mut response
     };
     match operation {
+        "dictation.get_config" | "dictation.update_config" => {
+            *data = sanitize_dictation_get_config(data);
+        }
+        "dictation.get_state" => *data = sanitize_dictation_state(data),
+        "dictation.list_local_models" => *data = sanitize_dictation_local_models(data),
         "list_objects"
         | "list_objects_by_type"
         | "list_object_summaries"

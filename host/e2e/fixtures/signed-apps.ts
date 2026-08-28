@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { daedalusArchive } from "./daedalus-archive";
+import { dictationArchive } from "./dictation-archive";
 import { TEST_ONLY_RELEASE, TEST_ONLY_ROOT } from "./signing-keys";
 type SignedApps = {
   archives: Record<string, string>;
@@ -271,6 +272,7 @@ export function createSignedApps(
   includeAgenda = false,
   includeMemoria = false,
   includeDaedalus = false,
+  includeDictation = false,
 ): SignedApps {
   const apps: Array<{ file: string; manifest: Manifest }> = [
     archive(
@@ -289,5 +291,6 @@ export function createSignedApps(
   if (includeAgenda) apps.push(agendaArchive(root, repositoryRoot));
   if (includeMemoria) apps.push(memoriaArchive(root, repositoryRoot));
   if (includeDaedalus) apps.push(daedalusArchive(root, repositoryRoot));
+  if (includeDictation) apps.push(dictationArchive(root, repositoryRoot));
   return sign(root, repositoryRoot, apps);
 }
