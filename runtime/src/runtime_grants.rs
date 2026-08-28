@@ -64,6 +64,41 @@ pub fn focus_operation_capability(operation: &str) -> Option<&'static str> {
     }
 }
 
+/// Daedalus may use only these exact Engine-owned agent operations. The
+/// capability split is intentionally explicit; a package cannot turn a read
+/// grant into an agent mutation or use an unregistered `agents.*` operation.
+pub const AGENTS_READ_OPERATIONS: &[&str] = &[
+    "agents.projects.list",
+    "agents.sessions.list",
+    "agents.sessions.get",
+    "agents.sessions.timeline",
+    "agents.diff.get",
+    "agents.models.list",
+    "agents.editors.list",
+    "agents.snapshot",
+];
+pub const AGENTS_WRITE_OPERATIONS: &[&str] = &[
+    "agents.projects.add",
+    "agents.projects.remove",
+    "agents.sessions.create",
+    "agents.sessions.send",
+    "agents.sessions.interrupt",
+    "agents.sessions.archive",
+    "agents.sessions.remove_worktree",
+    "agents.approvals.respond",
+    "agents.editors.open",
+];
+
+pub fn agents_operation_capability(operation: &str) -> Option<&'static str> {
+    if AGENTS_READ_OPERATIONS.contains(&operation) {
+        Some("ark.read")
+    } else if AGENTS_WRITE_OPERATIONS.contains(&operation) {
+        Some("ark.write")
+    } else {
+        None
+    }
+}
+
 const MAX_RULES: usize = 64;
 const MAX_CAPABILITIES: usize = 64;
 const MAX_BATCH: usize = 100;
@@ -745,6 +780,28 @@ pub fn compile_manifest_v2(
             operations: focus_operations,
         });
     }
+    let agents_operations: Vec<String> = manifest
+        .permissions
+        .iter()
+        .flat_map(|permission| {
+            permission.scopes.iter().filter_map(move |scope| {
+                if agents_operation_capability(scope.as_str())
+                    == Some(permission.capability.as_str())
+                {
+                    Some(scope.clone())
+                } else {
+                    None
+                }
+            })
+        })
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    if !agents_operations.is_empty() {
+        grant.capabilities.push(ScopedCapability::Agents {
+            operations: agents_operations,
+        });
+    }
     let worker_operations: Vec<String> = manifest
         .permissions
         .iter()
@@ -825,6 +882,9 @@ pub enum ScopedCapability {
         operations: Vec<String>,
     },
     Focus {
+        operations: Vec<String>,
+    },
+    Agents {
         operations: Vec<String>,
     },
     WorkerInvoke {
@@ -940,6 +1000,12 @@ impl LaunchGrant {
     pub fn allows_focus_operation(&self, operation: &str) -> bool {
         self.capabilities.iter().any(|capability| {
             matches!(capability, ScopedCapability::Focus { operations } if operations.iter().any(|allowed| allowed == operation))
+        })
+    }
+
+    pub fn allows_agents_operation(&self, operation: &str) -> bool {
+        self.capabilities.iter().any(|capability| {
+            matches!(capability, ScopedCapability::Agents { operations } if operations.iter().any(|allowed| allowed == operation))
         })
     }
 
@@ -1379,5 +1445,41 @@ mod tests {
         assert!(grant.allows_focus_operation("focus.set_active_state"));
         assert!(!grant.allows_focus_operation("pomodoro.stop"));
         assert!(!grant.allows_focus_operation("focus.delete_blocklist"));
+    }
+
+    #[test]
+    fn manifest_v2_grants_only_exact_agents_operations_by_capability() {
+        let raw = r#"{
+            "schema_version": 2, "id": "com.kosmos.daedalus", "name": "Daedalus",
+            "version": "0.1.0", "kind": "app", "engine_api": ">=1.0.0",
+            "entrypoint": "dist/index.html", "publisher": "kosmos",
+            "permissions": [
+                {"capability": "ark.read", "scopes": ["agents.projects.list", "agents.models.list", "agents.sessions.create", "agents.unknown"]},
+                {"capability": "ark.write", "scopes": ["agents.sessions.create", "agents.editors.open", "agents.projects.list"]}
+            ],
+            "targets": [{"runtime": "kosmos-host", "os": ["windows"]}],
+            "data": {"access": [], "defines": [], "mappings": []}
+        }"#;
+        let crate::package_manifest::VersionedManifest::V2(manifest) =
+            crate::package_manifest::PackageManifest::parse(raw).expect("valid manifest")
+        else {
+            unreachable!("expected v2 manifest");
+        };
+
+        let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "digest")
+            .expect("compiled grant");
+        assert!(grant.allows_agents_operation("agents.projects.list"));
+        assert!(grant.allows_agents_operation("agents.sessions.create"));
+        assert!(grant.allows_agents_operation("agents.editors.open"));
+        assert!(!grant.allows_agents_operation("agents.unknown"));
+        assert_eq!(
+            agents_operation_capability("agents.projects.list"),
+            Some("ark.read")
+        );
+        assert_eq!(
+            agents_operation_capability("agents.sessions.create"),
+            Some("ark.write")
+        );
+        assert_eq!(agents_operation_capability("agents.unknown"), None);
     }
 }

@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { daedalusArchive } from "./daedalus-archive";
+import { TEST_ONLY_RELEASE, TEST_ONLY_ROOT } from "./signing-keys";
 type SignedApps = {
   archives: Record<string, string>;
   versions: Record<string, string>;
@@ -19,18 +21,6 @@ type JsonValue =
 type Manifest = { id: string; version: string; icon?: string; [key: string]: JsonValue };
 type Permission = { capability: string; scopes?: readonly string[] };
 type PackageArchive = { file: string; manifest: Manifest };
-
-// Test-only fixture keys. They are never accepted by a production build.
-const TEST_ONLY_ROOT = {
-  privateKey:
-    "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIJaqYBUS6pxYArjIJFIVFSBqYEckyyyneug7j00UAjye\n-----END PRIVATE KEY-----\n",
-  publicKey: "kO9VLTsXJ61nEokkkuDWvlh7iar3IChCTX1NITSlCLU=",
-};
-const TEST_ONLY_RELEASE = {
-  privateKey:
-    "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIOySB4fj+9fjjYqVGN0MUgvLCskThB42RZM33lFKNGId\n-----END PRIVATE KEY-----\n",
-  publicKey: "38NFuh0ZiMf4CFadsii2MYZhb3+nIZgqMelepE8Xjho=",
-};
 
 const command = (file: string, args: string[], cwd: string) =>
   execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe" });
@@ -198,6 +188,7 @@ function memoriaArchive(root: string, repositoryRoot: string): PackageArchive {
   const manifest = { ...parsed, id: parsed.id, version: parsed.version } satisfies Manifest;
   return { file, manifest };
 }
+
 const sign = (
   root: string,
   repositoryRoot: string,
@@ -279,6 +270,7 @@ export function createSignedApps(
   closeFixture = false,
   includeAgenda = false,
   includeMemoria = false,
+  includeDaedalus = false,
 ): SignedApps {
   const apps: Array<{ file: string; manifest: Manifest }> = [
     archive(
@@ -296,5 +288,6 @@ export function createSignedApps(
   if (includeShell) apps.push(shellArchive(root, repositoryRoot));
   if (includeAgenda) apps.push(agendaArchive(root, repositoryRoot));
   if (includeMemoria) apps.push(memoriaArchive(root, repositoryRoot));
+  if (includeDaedalus) apps.push(daedalusArchive(root, repositoryRoot));
   return sign(root, repositoryRoot, apps);
 }

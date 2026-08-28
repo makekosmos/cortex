@@ -37,7 +37,9 @@ fn parse_app_rpc(
             && grant.allows_dictation_operation(operation))
         || (crate::runtime_grants::focus_operation_capability(operation).is_some()
             && grant.allows_focus_operation(operation))
-        || grant.allows_worker_operation(operation))
+        || (crate::runtime_grants::agents_operation_capability(operation).is_some()
+            && grant.allows_agents_operation(operation))
+        || (!operation.starts_with("agents.") && grant.allows_worker_operation(operation)))
     {
         return Err("unsupported app operation");
     }

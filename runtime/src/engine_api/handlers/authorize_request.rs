@@ -19,11 +19,12 @@ async fn authorize_app_request(
                 return Err("focus grant denied");
             }
         }
-        operation if grant.allows_worker_operation(operation) => {
-            if !params.is_object() {
-                return Err("worker invocation params must be an object");
+        operation if crate::runtime_grants::agents_operation_capability(operation).is_some() => {
+            if !grant.allows_agents_operation(operation) {
+                return Err("agents grant denied");
             }
         }
+        operation if !operation.starts_with("agents.") && grant.allows_worker_operation(operation) => {}
         "list_objects_by_type" | "list_object_summaries_by_type" => {
             let raw_type = map
                 .get("type_id")

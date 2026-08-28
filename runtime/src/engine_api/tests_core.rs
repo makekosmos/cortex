@@ -90,6 +90,77 @@
         .is_err());
     }
 
+    fn agents_test_grant() -> LaunchGrant {
+        LaunchGrant {
+            package_id: "com.kosmos.daedalus".into(),
+            package_version: "0.1.0".into(),
+            manifest_digest: "digest".into(),
+            rules: vec![],
+            capabilities: vec![crate::runtime_grants::ScopedCapability::Agents {
+                operations: vec![
+                    "agents.projects.list".into(),
+                    "agents.sessions.send".into(),
+                    "agents.models.list".into(),
+                ],
+            }],
+        }
+    }
+
+    #[test]
+    fn launch_scoped_agents_rpc_requires_exact_declared_operation() {
+        let mut grant = agents_test_grant();
+        grant.capabilities.push(crate::runtime_grants::ScopedCapability::WorkerInvoke {
+            operations: vec!["agents.*".into()],
+        });
+        let parsed = parse_app_rpc(
+            json!({"operation":"agents.projects.list", "params":{"include_archived":true}}),
+            &grant,
+        )
+        .expect("declared read operation");
+        assert_eq!(parsed.1, "agents.projects.list");
+        assert_eq!(parsed.2["include_archived"], true);
+
+        for operation in [
+            "agents.sessions.create",
+            "agents.sessions.list",
+            "agents.unknown",
+            "agents.projects.list_all",
+            "focus.list_blocklists",
+        ] {
+            assert!(
+                parse_app_rpc(json!({"operation":operation, "params":{}}), &grant).is_err(),
+                "operation must be denied: {operation}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn launch_scoped_agents_authorization_forwards_exact_operation_and_params() {
+        let dispatcher = crate::engine_dispatch::EngineDispatcher::new(Arc::new(|_| {
+            Box::pin(async { Ok(json!({"ok": true, "data": null})) })
+        }));
+        let params = json!({"session_id":"session-1", "text":"hello"});
+        let forwarded = authorize_app_request(
+            "agents.sessions.send",
+            params.clone(),
+            &agents_test_grant(),
+            &dispatcher,
+            &DispatchClient::default(),
+        )
+        .await
+        .expect("declared write operation");
+        assert_eq!(forwarded, params);
+        assert!(authorize_app_request(
+            "agents.sessions.create",
+            json!({"project_id":"p", "prompt":"no"}),
+            &agents_test_grant(),
+            &dispatcher,
+            &DispatchClient::default(),
+        )
+        .await
+        .is_err());
+    }
+
     fn task_test_grant(version: &str) -> LaunchGrant {
         LaunchGrant {
             package_id: "com.kosmos.app".into(),
@@ -427,6 +498,62 @@
         for forbidden in ["bearer", "signature", "public_key", "\\\\blobs\\\\"] {
             assert!(!body.contains(forbidden), "leaked {forbidden}");
         }
+    }
+
+    #[test]
+    fn launch_payload_exposes_only_granted_agents_events() {
+        let package = crate::package_store::InstalledPackage {
+            id: "com.kosmos.daedalus".into(),
+            version: "0.1.0".into(),
+            hash: "a".repeat(64),
+            manifest: crate::package_manifest::VersionedManifest::V1(
+                crate::package_manifest::PackageManifest {
+                    schema_version: 1,
+                    id: "com.kosmos.daedalus".into(),
+                    name: "Daedalus".into(),
+                    version: "0.1.0".into(),
+                    kind: crate::package_manifest::PackageKind::App,
+                    engine_api: ">=1.0.0".into(),
+                    entrypoint: "index.html".into(),
+                    publisher: "kosmos".into(),
+                    permissions: vec![],
+                },
+            ),
+            enabled: true,
+            revoked: false,
+            installed_at: 1,
+            catalog_sequence: 1,
+        };
+        let lease = LaunchLeaseRegistry::default()
+            .create_with_typed_grant(
+                AssetGrant {
+                    id: package.id.clone(),
+                    version: package.version.clone(),
+                    hash: package.hash.clone(),
+                },
+                agents_test_grant(),
+            )
+            .expect("lease");
+        let body = launch_payload(1234, &lease, &package, LAUNCH_LEASE_TTL);
+        assert_eq!(body["data"]["effective_events"], json!(["agents_event"]));
+        assert_eq!(body["data"]["effective_read_types"], json!([]));
+
+        let mut write_only_grant = agents_test_grant();
+        write_only_grant.capabilities = vec![crate::runtime_grants::ScopedCapability::Agents {
+            operations: vec!["agents.sessions.send".into()],
+        }];
+        let lease = LaunchLeaseRegistry::default()
+            .create_with_typed_grant(
+                AssetGrant {
+                    id: package.id.clone(),
+                    version: package.version.clone(),
+                    hash: package.hash.clone(),
+                },
+                write_only_grant,
+            )
+            .expect("write-only lease");
+        let body = launch_payload(1234, &lease, &package, LAUNCH_LEASE_TTL);
+        assert_eq!(body["data"]["effective_events"], json!([]));
     }
 
     #[test]

@@ -23,6 +23,8 @@ export type AppLaunch = {
   manifest_schema_version?: number;
   /** Concrete ARK type ids allowed for v2 read/subscribe event fan-out. */
   effective_read_types?: string[];
+  /** Runtime-issued non-entity events allowed for v2 fan-out. */
+  effective_events?: string[];
 };
 export type LaunchRenewal = {
   launch_id: string;
@@ -61,8 +63,10 @@ export type EngineResult<T> = { ok: true; data: T } | { ok: false; message: stri
 const API_VERSION = "1.0.0";
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const SAFE_LAUNCH_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-export const isJsonString = (value: JsonValue | undefined): value is string => typeof value === "string";
-export const isJsonNumber = (value: JsonValue | undefined): value is number => typeof value === "number";
+export const isJsonString = (value: JsonValue | undefined): value is string =>
+  typeof value === "string";
+export const isJsonNumber = (value: JsonValue | undefined): value is number =>
+  typeof value === "number";
 export const isJsonRecord = (value: JsonValue | undefined): value is JsonRecord =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const isString = isJsonString;
@@ -133,16 +137,14 @@ export function isV2Launch(
   );
 }
 
-export function hasLaunchReadPermission(
-  launch: AppLaunch,
-  event?: JsonRecord,
-): boolean {
+export function hasLaunchReadPermission(launch: AppLaunch, event?: JsonRecord): boolean {
   if (isV2Launch(launch)) {
-    if (!Array.isArray(launch.effective_read_types) || launch.effective_read_types.length === 0)
-      return false;
-    if (!event) return true;
+    const readTypes = Array.isArray(launch.effective_read_types) ? launch.effective_read_types : [];
+    const events = Array.isArray(launch.effective_events) ? launch.effective_events : [];
+    if (!event) return readTypes.length > 0 || events.length > 0;
+    if (event.event === "agents_event") return events.includes("agents_event");
     const typeId = eventTypeId(event);
-    return typeId !== undefined && launch.effective_read_types.includes(typeId);
+    return typeId !== undefined && readTypes.includes(typeId);
   }
   return hasArkReadPermission(launch.permissions);
 }
@@ -239,8 +241,10 @@ export function redactedCrashMetadata(
 ) {
   const metadata: CrashMetadata = {
     component: "renderer",
-    reason: isString(details.reason) && CRASH_REASONS.has(details.reason) ? details.reason : "unknown",
-    exit_code: isNumber(details.exitCode) && Number.isInteger(details.exitCode) ? details.exitCode : null,
+    reason:
+      isString(details.reason) && CRASH_REASONS.has(details.reason) ? details.reason : "unknown",
+    exit_code:
+      isNumber(details.exitCode) && Number.isInteger(details.exitCode) ? details.exitCode : null,
   };
   if (appId) metadata.app_id = appId.slice(0, 128);
   if (version) metadata.version = version.slice(0, 64);
@@ -421,10 +425,7 @@ export class EngineClient {
         };
   }
 
-  async arkRequest(
-    operation: string,
-    params: JsonRecord,
-  ): Promise<EngineResult<JsonValue>> {
+  async arkRequest(operation: string, params: JsonRecord): Promise<EngineResult<JsonValue>> {
     try {
       const data = await this.reconnectingArk.invokeOperation(
         { ...params, operation },
@@ -475,10 +476,7 @@ export class EngineClient {
       return { ok: false, message: "Engine отклонил типизированный запрос ARK." };
     }
   }
-  async launcherRequest(
-    operation: string,
-    params: JsonRecord,
-  ): Promise<EngineResult<JsonValue>> {
+  async launcherRequest(operation: string, params: JsonRecord): Promise<EngineResult<JsonValue>> {
     return this.request<JsonValue>("/v1/rpc", {
       method: "POST",
       body: JSON.stringify({ operation, _req_id: randomUUID(), ...params }),

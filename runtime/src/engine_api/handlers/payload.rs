@@ -66,6 +66,18 @@ fn launch_payload(
             })
             .unwrap_or_default();
         data["effective_read_types"] = Value::Array(effective_read_types);
+        let effective_events = lease
+            .typed_grant
+            .as_ref()
+            .is_some_and(|grant| {
+                crate::runtime_grants::AGENTS_READ_OPERATIONS
+                    .iter()
+                    .any(|operation| grant.allows_agents_operation(operation))
+            })
+            .then(|| Value::String("agents_event".into()))
+            .into_iter()
+            .collect();
+        data["effective_events"] = Value::Array(effective_events);
     }
     json!({
         "ok": true,

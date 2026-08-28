@@ -149,6 +149,23 @@ describe("desktop-host validation", () => {
       ),
     ).toBe(false);
     expect(hasLaunchReadPermission({ ...launch, manifest_schema_version: 2 }, {})).toBe(false);
+    const agentsLaunch = {
+      ...launch,
+      manifest_schema_version: 2,
+      permissions: [],
+      effective_events: ["agents_event"],
+    };
+    expect(hasLaunchReadPermission(agentsLaunch)).toBe(true);
+    expect(hasLaunchReadPermission(agentsLaunch, { event: "agents_event", data: {} })).toBe(true);
+    expect(
+      hasLaunchReadPermission(agentsLaunch, { event: "entity_changed", type_id: "note" }),
+    ).toBe(false);
+    expect(
+      hasLaunchReadPermission(
+        { ...agentsLaunch, effective_events: [], effective_read_types: ["com.kosmos.note"] },
+        { event: "agents_event", data: { type_id: "com.kosmos.note" } },
+      ),
+    ).toBe(false);
     expect(hasLaunchReadPermission(launch)).toBe(true);
   });
 
