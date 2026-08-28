@@ -13,11 +13,12 @@
     "rustfmt": "cargo fmt --all -- --check",
     "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
     "test:rust": "cargo test --workspace --all-targets",
-    "test": "bun run test:source-size && bun run test:backend",
+    "test": "bun run test:source-size && bun run test:backend && bun run test:desktop-contracts",
     "check": "bun run check:layout && bun run check:source-size && bun run lint && bun run format:check && bun run typecheck && bun run rustfmt && bun run clippy && bun run test && bun run --cwd desktop test:runtime-staging",
     "lint": "oxlint .",
     "test:source-size": "node --test scripts/check-source-size.test.mjs",
-    "test:backend": "node runtime/scripts/test-lib.mjs"
+    "test:backend": "node runtime/scripts/test-lib.mjs",
+    "test:desktop-contracts": "bun test desktop/electron/instance.test.ts desktop/build/installer-shortcut.test.mjs"
   },
   "devDependencies": {
     "@oxlint/plugins": "1.80.0",
