@@ -94,7 +94,7 @@ export function openSettings(): void {
     backgroundColor: "#1d1d1f",
     ...backgroundMaterialOption(backgroundMaterial),
     roundedCorners: true,
-    title: "Kosmos — Настройки",
+    title: "CosCast — Настройки",
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,
@@ -147,22 +147,19 @@ ipcMain.handle("kepler:settings:storage-summary", () => buildStorageSummary());
 
 ipcMain.handle("kepler:settings:hotkey", () => getStoredHotkey());
 
-ipcMain.handle(
-  "kepler:settings:hotkey:set",
-  (_e, value: string) => {
-    const normalized = normalizeHotkeyAccelerator(String(value || "").trim());
-    if (!normalized) return { ok: false, error: "empty" };
-    try {
-      const success = reregisterHotkeyCallback?.(normalized) ?? false;
-      if (!success) return { ok: false, error: "register-failed" };
-      setStoredHotkey(normalized);
-      return { ok: true };
-    } catch (e) {
-      // SAFETY: Hotkey registration failures are Error instances from Electron.
-      return { ok: false, error: (e as Error).message };
-    }
-  },
-);
+ipcMain.handle("kepler:settings:hotkey:set", (_e, value: string) => {
+  const normalized = normalizeHotkeyAccelerator(String(value || "").trim());
+  if (!normalized) return { ok: false, error: "empty" };
+  try {
+    const success = reregisterHotkeyCallback?.(normalized) ?? false;
+    if (!success) return { ok: false, error: "register-failed" };
+    setStoredHotkey(normalized);
+    return { ok: true };
+  } catch (e) {
+    // SAFETY: Hotkey registration failures are Error instances from Electron.
+    return { ok: false, error: (e as Error).message };
+  }
+});
 
 ipcMain.handle("kepler:settings:hotkey:reset", () => {
   reregisterHotkeyCallback?.(DEFAULT_HOTKEY);

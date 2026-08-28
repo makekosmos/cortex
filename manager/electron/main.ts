@@ -867,6 +867,16 @@ function registerAll() {
   ipcMain.handle("manager.openLogsFolder", () => openFolder("logs"));
   const appExecutable = process.env.KOSMOS_APP_EXECUTABLE?.trim();
   const loginItemOptions = { path: appExecutable ?? "", args: AUTOSTART_ARGS };
+  const legacyLoginItemOptions = {
+    path: appExecutable ? path.join(path.dirname(appExecutable), "Kosmos.exe") : "",
+    args: AUTOSTART_ARGS,
+  };
+  const engineLoginItemOptions = {
+    path: appExecutable
+      ? path.join(path.dirname(appExecutable), "resources", "Kosmos Runtime.exe")
+      : "",
+    args: ["--start"],
+  };
   const autostartAvailable = () =>
     app.isPackaged &&
     process.platform === "win32" &&
@@ -875,9 +885,14 @@ function registerAll() {
   ipcMain.handle("manager.getAutostart", () => {
     if (!autostartAvailable()) return { ok: true, data: { enabled: false, available: false } };
     const settings = app.getLoginItemSettings(loginItemOptions);
+    const legacy = app.getLoginItemSettings(legacyLoginItemOptions);
+    const engine = app.getLoginItemSettings(engineLoginItemOptions);
     return {
       ok: true,
-      data: { enabled: settings.openAtLogin, available: true },
+      data: {
+        enabled: settings.openAtLogin || legacy.openAtLogin || engine.openAtLogin,
+        available: true,
+      },
     };
   });
   ipcMain.handle("manager.setAutostart", (_event, value) => {
@@ -891,6 +906,17 @@ function registerAll() {
     app.setLoginItemSettings({
       ...loginItemOptions,
       openAtLogin: value.enabled,
+      name: "CosCast",
+    });
+    app.setLoginItemSettings({
+      ...legacyLoginItemOptions,
+      openAtLogin: false,
+      name: "Kosmos",
+    });
+    app.setLoginItemSettings({
+      ...engineLoginItemOptions,
+      openAtLogin: false,
+      name: "Kosmos Engine",
     });
     const settings = app.getLoginItemSettings(loginItemOptions);
     return {

@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import path from "node:path";
 import { promisify } from "node:util";
 import { app } from "electron";
 import { resolveInstance } from "./instance";
@@ -14,7 +15,7 @@ const execFileAsync = promisify(execFile);
 
 function isLegacyAutostartEnabled(): boolean {
   if (process.platform !== "win32") return false;
-  return legacyAutostartPathCandidates().some((legacyPath) => {
+  const legacyShellEnabled = legacyAutostartPathCandidates().some((legacyPath) => {
     try {
       return app.getLoginItemSettings({
         path: legacyPath,
@@ -24,6 +25,15 @@ function isLegacyAutostartEnabled(): boolean {
       return false;
     }
   });
+  if (legacyShellEnabled) return true;
+  try {
+    return app.getLoginItemSettings({
+      path: path.join(path.dirname(process.execPath), "resources", "Kosmos Runtime.exe"),
+      args: ["--start"],
+    }).openAtLogin;
+  } catch {
+    return false;
+  }
 }
 
 async function removeLegacyAutostartEntries(): Promise<void> {
@@ -41,6 +51,17 @@ async function removeLegacyAutostartEntries(): Promise<void> {
         /* best-effort cleanup */
       }
     }
+  }
+
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: false,
+      name: "Kosmos Engine",
+      path: path.join(path.dirname(process.execPath), "resources", "Kosmos Runtime.exe"),
+      args: ["--start"],
+    });
+  } catch {
+    /* best-effort cleanup */
   }
 
   try {

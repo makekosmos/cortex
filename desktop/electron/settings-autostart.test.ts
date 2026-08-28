@@ -7,8 +7,8 @@ import {
 } from "./settings-autostart";
 
 test("launchItemMatchesAutostart matches path args and enabled state", () => {
-  const installDir = "Kosmos";
-  const execPath = path.join("C:", installDir, "Kosmos.exe");
+  const installDir = "CosCast";
+  const execPath = path.join("C:", installDir, "CosCast.exe");
   expect(launchItemMatchesAutostart({ path: execPath, args: AUTOSTART_ARGS }, execPath)).toBe(true);
   expect(launchItemMatchesAutostart({ path: execPath }, execPath)).toBe(false);
   expect(
@@ -21,12 +21,14 @@ test("launchItemMatchesAutostart matches path args and enabled state", () => {
 });
 
 test("legacyAutostartPathCandidates includes old install locations once", () => {
-  const installDir = "Kosmos";
-  const execPath = path.join("C:", "Users", "me", "Programs", installDir, "Kosmos.exe");
+  const installDir = "CosCast";
+  const execPath = path.join("C:", "Users", "me", "Programs", installDir, "CosCast.exe");
   const localAppData = path.join("C:", "Users", "me", "AppData", "Local");
   const candidates = legacyAutostartPathCandidates(execPath, localAppData);
 
+  expect(candidates).toContain(path.join(path.dirname(execPath), "Kosmos.exe"));
   expect(candidates).toContain(path.join(path.dirname(execPath), "Kepler.exe"));
+  expect(candidates).toContain(path.resolve(localAppData, "Programs", "Kosmos", "Kosmos.exe"));
   expect(candidates).toContain(path.resolve(localAppData, "Programs", "Kepler", "Kepler.exe"));
   expect(new Set(candidates).size).toBe(candidates.length);
 });

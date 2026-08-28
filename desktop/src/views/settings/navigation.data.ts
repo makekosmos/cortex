@@ -48,7 +48,7 @@ export const settingsNavigationItems: SettingsNavigationItem[] = [
     layout: "basic",
     icon: Info,
     introImage: kosmosIconPng,
-    description: "Kepler shell и обновления приложения.",
+    description: "CosCast и обновления приложения.",
     keywords: ["about", "о приложении", "версия", "kepler", "kosmos", "обновления", "update"],
   },
   {

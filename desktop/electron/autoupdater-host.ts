@@ -55,7 +55,7 @@ function scheduleNativeInstallFallback(version: string): void {
       void dialog
         .showMessageBox({
           type: "info",
-          title: "Kepler обновление готово",
+          title: "Обновление CosCast готово",
           message: `Версия ${version} скачана. Перезапустить сейчас?`,
           buttons: ["Перезапустить", "Позже"],
           defaultId: 0,
@@ -128,7 +128,7 @@ export async function check(): Promise<UpdateState> {
   try {
     await electronUpdater.autoUpdater.checkForUpdates();
   } catch (e) {
-// SAFETY: The surrounding boundary establishes this documented contract.
+    // SAFETY: The surrounding boundary establishes this documented contract.
     broadcast({ kind: "error", message: (e as Error).message });
   }
   return currentState;

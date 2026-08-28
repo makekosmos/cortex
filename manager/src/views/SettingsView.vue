@@ -15,9 +15,8 @@ type TraySettingsBridge = {
 
 function trayBridge() {
   // SAFETY: preload exposes the optional kepler settings bridge on window.
-  return (
-    window as typeof window & { kepler?: { settings?: TraySettingsBridge } }
-  ).kepler?.settings;
+  return (window as typeof window & { kepler?: { settings?: TraySettingsBridge } }).kepler
+    ?.settings;
 }
 
 async function load() {
@@ -70,16 +69,16 @@ onMounted(() => void load());
   <section class="stack settings-page">
     <SettingsList>
       <SettingsToggleRow
-        title="Запускать Kosmos при входе в систему"
-        description="Автоматически запускать приложение Kosmos после входа в Windows."
+        title="Запускать CosCast при входе в систему"
+        description="Автоматически запускать CosCast после входа в Windows."
         :model-value="enabled"
         :label="label"
         :disabled="!available"
         @update:model-value="setAutostart"
       />
       <SettingsToggleRow
-        title="Показывать Kosmos в системном трее"
-        description="Управляет значком Kosmos в области уведомлений Windows."
+        title="Показывать CosCast в системном трее"
+        description="Управляет значком CosCast в области уведомлений Windows."
         :model-value="trayIcon"
         :label="trayIcon ? 'Показывать' : 'Скрывать'"
         @update:model-value="setTrayIcon"

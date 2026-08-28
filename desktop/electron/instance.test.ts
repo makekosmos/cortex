@@ -5,7 +5,7 @@ import path from "node:path";
 
 mock.module("electron", () => ({ app: {} }));
 
-const { migrateLegacyProdSettings } = await import("./instance");
+const { migrateLegacyProdSettings, productNameForSlot } = await import("./instance");
 
 test("migrates legacy shell settings into the current data directory once", () => {
   const root = mkdtempSync(path.join(tmpdir(), "kosmos-instance-"));
@@ -26,4 +26,11 @@ test("migrates legacy shell settings into the current data directory once", () =
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("uses CosCast for user-facing instance names while preserving slot labels", () => {
+  expect(productNameForSlot("prod", "prod")).toBe("CosCast");
+  expect(productNameForSlot("dev", "dev")).toBe("CosCast [dev]");
+  expect(productNameForSlot("test-example", "test")).toBe("CosCast [test]");
+  expect(productNameForSlot("dev-review", "dev")).toBe("CosCast [dev-review]");
 });

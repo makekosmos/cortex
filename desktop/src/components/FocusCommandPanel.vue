@@ -211,7 +211,7 @@ async function hydrate(): Promise<void> {
     apps.value = nextApps;
     syncFormFromSnapshot(nextSnapshot);
   } catch (e) {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+    // SAFETY: the surrounding domain validation preserves the asserted contract.
     error.value = `Не удалось загрузить фокус: ${String((e as Error)?.message ?? e)}`;
   }
 }
@@ -339,7 +339,7 @@ async function start(): Promise<void> {
     );
     await window.kepler.window.hide();
   } catch (e) {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+    // SAFETY: the surrounding domain validation preserves the asserted contract.
     error.value = `Не удалось начать фокус: ${String((e as Error)?.message ?? e)}`;
   } finally {
     submitting.value = false;
@@ -363,7 +363,7 @@ async function runSessionCommand(id: string): Promise<void> {
       snapshot.value = await window.kepler.focusSession.stop();
     }
   } catch (e) {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+    // SAFETY: the surrounding domain validation preserves the asserted contract.
     error.value = `Не удалось выполнить команду: ${String((e as Error)?.message ?? e)}`;
   } finally {
     sessionActionBusy.value = "";
@@ -553,7 +553,7 @@ defineExpose({ start });
               <Info
                 class="focus-command__block-info"
                 :size="18"
-                aria-label="Блокируются приложения из лаунчера Kosmos"
+                aria-label="Блокируются приложения из лаунчера CosCast"
               />
             </div>
           </div>

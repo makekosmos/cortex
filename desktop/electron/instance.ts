@@ -81,11 +81,11 @@ function instanceKindForSlot(slot: string): InstanceKind {
   return "dev";
 }
 
-function productNameForSlot(slot: string, kind: InstanceKind): string {
-  if (slot === "prod") return "Kosmos";
-  if (slot === "dev") return "Kosmos [dev]";
-  if (kind === "test") return "Kosmos [test]";
-  return `Kosmos [${slot}]`;
+export function productNameForSlot(slot: string, kind: InstanceKind): string {
+  if (slot === "prod") return "CosCast";
+  if (slot === "dev") return "CosCast [dev]";
+  if (kind === "test") return "CosCast [test]";
+  return `CosCast [${slot}]`;
 }
 
 function hotkeyForSlot(slot: string): string | null {

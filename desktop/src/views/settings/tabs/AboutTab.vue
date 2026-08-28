@@ -37,7 +37,7 @@ async function loadStorageSummary() {
   try {
     storageSummary.value = await window.kepler.settings.storageSummary();
   } catch (e) {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+    // SAFETY: the surrounding domain validation preserves the asserted contract.
     storageError.value = (e as Error).message;
   }
 }
@@ -50,7 +50,7 @@ onMounted(() => {
 <template>
   <AdvancedPageLayout :intro="intro">
     <SettingsList>
-      <SettingsRow title="Версия Kosmos" description="Текущая версия приложения">
+      <SettingsRow title="Версия CosCast" description="Текущая версия приложения">
         <template #control>
           <code class="about-value">{{ version }}</code>
         </template>

@@ -5,8 +5,8 @@ import os from "node:os";
 import path from "node:path";
 
 const candidate = path.resolve(process.argv[2] ?? "release/win-unpacked");
-const executable = path.join(candidate, "Kosmos.exe");
-if (!fs.existsSync(executable)) throw new Error("candidate Kosmos.exe is missing");
+const executable = path.join(candidate, "CosCast.exe");
+if (!fs.existsSync(executable)) throw new Error("candidate CosCast.exe is missing");
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-launcher-smoke-"));
 const dataDir = path.join(root, "data");
@@ -79,6 +79,14 @@ const cleanup = async () => {
         stdio: "ignore",
         windowsHide: true,
         timeout: 10_000,
+      });
+    } catch {}
+  }
+  for (const pid of candidateProcesses()) {
+    try {
+      execFileSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
       });
     } catch {}
   }

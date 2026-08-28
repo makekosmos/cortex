@@ -150,7 +150,7 @@ export function openDashboardWindow(section: DashboardSection = "data"): void {
     x,
     y,
     show: !isHeadlessOrTest(),
-    title: "Kosmos",
+    title: "CosCast",
     backgroundColor: "#0d0d0d",
     frame: true,
     titleBarStyle: "hidden",

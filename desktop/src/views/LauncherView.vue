@@ -332,7 +332,7 @@ function loadPersistedState(): PersistedLauncherState | null {
   try {
     const raw = localStorage.getItem(STATE_KEY);
     if (!raw) return null;
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+    // SAFETY: the surrounding domain validation preserves the asserted contract.
     const parsed = JSON.parse(raw) as PersistedLauncherState;
     if (
       !isString(parsed.query) ||
@@ -427,7 +427,7 @@ const updateBanner = computed<null | {
   const s = updateState.value;
   if (s.kind === "downloaded") {
     return {
-      title: `Обновить Kepler до ${s.version}`,
+      title: `Обновить CosCast до ${s.version}`,
       description: "Установить новую версию и перезапустить",
       icon: ArrowUpCircle,
       spinning: false,
@@ -436,7 +436,7 @@ const updateBanner = computed<null | {
   }
   if (s.kind === "downloading") {
     return {
-      title: `Скачивается Kepler ${s.version}`,
+      title: `Скачивается CosCast ${s.version}`,
       description: `Загружено ${Math.round(s.percent)}%. После завершения можно установить.`,
       icon: Loader2,
       spinning: true,
@@ -446,7 +446,7 @@ const updateBanner = computed<null | {
   }
   if (s.kind === "available") {
     return {
-      title: `Доступно обновление Kepler ${s.version}`,
+      title: `Доступно обновление CosCast ${s.version}`,
       description: "Скачивается в фоне. Подожди немного.",
       icon: ArrowUpCircle,
       spinning: false,
@@ -570,7 +570,7 @@ function onListScroll() {
 // равно срабатывает). В focus-режиме (своя contenteditable-панель) — не вмешиваемся.
 function onListMouseDown(e: MouseEvent) {
   if (mode.value !== "commands") return;
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+  // SAFETY: the surrounding domain validation preserves the asserted contract.
   const target = e.target as HTMLElement | null;
   if (!target) return;
   if (target.closest('input, textarea, [contenteditable="true"]')) return;
@@ -766,7 +766,7 @@ function moveSelection(delta: number) {
     // секции (sibling <ul> → previousElementSibling = .section-label).
     const isFirstInUl = selectedEl.parentElement?.firstElementChild === selectedEl;
     if (isFirstInUl) {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+      // SAFETY: the surrounding domain validation preserves the asserted contract.
       const header = selectedEl.parentElement!.previousElementSibling as HTMLElement | null;
       if (header?.classList.contains("section-label")) {
         header.scrollIntoView({ block: "start" });
@@ -852,7 +852,7 @@ async function refreshCommands() {
   const prevApps = allCommandsCache.value.filter((c) => c.kind === "app");
   const cmds = await window.kepler.commands.list().catch((e) => {
     console.warn("commands.list failed", e);
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+    // SAFETY: the surrounding domain validation preserves the asserted contract.
     return [] as CommandRecord[];
   });
   if (run !== commandsRefreshRun) return; // более свежий refresh победил
