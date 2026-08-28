@@ -17,9 +17,7 @@
     "test:source-size": "node --test scripts/check-source-size.test.mjs",
     "test:backend": "node runtime/scripts/test-lib.mjs",
     "check": "bun run check:layout && bun run check:source-size && bun run lint && bun run format:check && bun run typecheck && bun run rustfmt && bun run clippy && bun run test && bun run test:rust && bun run --cwd desktop test:runtime-staging",
-    "lint": "oxlint .",
-    "test:source-size": "node --test scripts/check-source-size.test.mjs",
-    "test:backend": "node runtime/scripts/test-lib.mjs"
+    "lint": "oxlint ."
   },
   "devDependencies": {
     "@oxlint/plugins": "1.80.0",
