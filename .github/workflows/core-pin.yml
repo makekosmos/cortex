@@ -29,6 +29,10 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Validate exact Core revision and layout
         run: node scripts/check-core-pin.mjs
+      - name: Authenticate private Core dependency
+        run: git config --global url."https://x-access-token:$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Resolve workspace metadata
         run: cargo metadata --locked --format-version 1
       - name: Compile Cortex against pinned Core
