@@ -37,7 +37,6 @@ const command = (file: string, args: string[], cwd: string) =>
   execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe" });
 const cortexRoot = (repositoryRoot: string) =>
   path.basename(repositoryRoot) === "cortex" ? repositoryRoot : path.join(repositoryRoot, "cortex");
-
 const ps = (value: string) => `'${value.replaceAll("'", "''")}'`;
 const zipDirectory = (stage: string, file: string, cwd: string) =>
   command(
@@ -125,6 +124,38 @@ const packageDirectory = (
   return { file, manifest };
 };
 
+const isJsonObject = (value: JsonValue): value is { readonly [key: string]: JsonValue } =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+function agendaArchive(root: string, repositoryRoot: string): PackageArchive {
+  const source = path.join(repositoryRoot, "agenda", "release", "agenda-0.2.4.kspkg");
+  if (!fs.existsSync(source)) throw new Error(`Agenda release archive not found: ${source}`);
+
+  const file = path.join(root, path.basename(source));
+  fs.copyFileSync(source, file);
+  const entries = command("tar", ["-tf", file], root).split(/\r?\n/);
+  if (entries.filter((entry) => entry === "manifest.json").length !== 1) {
+    throw new Error("Agenda archive must contain exactly one manifest.json");
+  }
+  let parsed: JsonValue;
+  try {
+    // SAFETY: isJsonObject and the required manifest fields are checked below.
+    parsed = JSON.parse(command("tar", ["-xOf", file, "manifest.json"], root)) as JsonValue;
+  } catch (error) {
+    throw new Error(`Agenda archive manifest is not valid JSON: ${String(error)}`);
+  }
+  if (!isJsonObject(parsed)) throw new Error("Agenda archive manifest must be a JSON object");
+  if (
+    parsed.id !== "com.kosmos.agenda" ||
+    parsed.version !== "0.2.4" ||
+    parsed.entrypoint !== "dist/index.html"
+  ) {
+    throw new Error("Agenda archive manifest has unexpected id, version, or entrypoint");
+  }
+  const manifest = { ...parsed, id: parsed.id, version: parsed.version } satisfies Manifest;
+  return { file, manifest };
+}
+
 const sign = (
   root: string,
   repositoryRoot: string,
@@ -204,6 +235,7 @@ export function createSignedApps(
   includeGraph = false,
   includeShell = false,
   closeFixture = false,
+  includeAgenda = false,
 ): SignedApps {
   const apps: Array<{ file: string; manifest: Manifest }> = [
     archive(
@@ -219,5 +251,6 @@ export function createSignedApps(
   ];
   if (includeGraph) apps.push(graphArchive(root, repositoryRoot));
   if (includeShell) apps.push(shellArchive(root, repositoryRoot));
+  if (includeAgenda) apps.push(agendaArchive(root, repositoryRoot));
   return sign(root, repositoryRoot, apps);
 }

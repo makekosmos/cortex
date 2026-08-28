@@ -226,6 +226,21 @@ async fn internal_app_lookup(
     }
 }
 
+async fn object_write_snapshot(
+    dispatcher: &crate::engine_dispatch::EngineDispatcher,
+    client: &DispatchClient,
+    id: &str,
+) -> Result<Value, &'static str> {
+    internal_app_lookup(
+        dispatcher,
+        client,
+        "get_object_write_snapshot",
+        json!({ "id": id }),
+    )
+    .await
+    .ok_or("data grant denied")
+}
+
 fn launch_binding_current(
     package_service: &PackageService,
     asset: &AssetGrant,

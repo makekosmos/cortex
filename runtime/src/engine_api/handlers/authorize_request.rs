@@ -89,28 +89,46 @@ async fn authorize_app_request(
                 fields: fields.clone(),
                 links: vec![],
             };
-            let (create, update) = match object_id.as_deref() {
-                None => (data_request_allowed(grant, create_request()).is_ok(), false),
+            let (create, update, existing, snapshot) = match object_id.as_deref() {
+                None => (
+                    data_request_allowed(grant, create_request()).is_ok(),
+                    false,
+                    None,
+                    None,
+                ),
                 Some(object_id) => {
-                    let existing = internal_app_lookup(
-                        dispatcher,
-                        client,
-                        "get_object",
-                        json!({ "id": object_id }),
-                    )
-                    .await
-                    .ok_or("data grant denied")?;
-                    if existing.is_null() {
-                        (data_request_allowed(grant, create_request()).is_ok(), false)
+                    let snapshot = object_write_snapshot(dispatcher, client, object_id).await?;
+                    if snapshot.get("exists").and_then(Value::as_bool) == Some(false) {
+                        (
+                            data_request_allowed(grant, create_request()).is_ok(),
+                            false,
+                            None,
+                            Some(snapshot),
+                        )
                     } else {
-                        let (existing_type, existing_version) = object_type_and_version(&existing)?;
+                        let (existing_type, existing_version) = object_type_and_version(&snapshot)?;
                         if existing_type != type_id || existing_version != type_version {
+                            return Err("data grant denied");
+                        }
+                        let existing = internal_app_lookup(
+                            dispatcher,
+                            client,
+                            "get_object",
+                            json!({ "id": object_id }),
+                        )
+                        .await
+                        .ok_or("data grant denied")?;
+                        if object_type_and_version(&existing)?
+                            != (existing_type.clone(), existing_version.clone())
+                        {
                             return Err("data grant denied");
                         }
                         (
                             false,
                             data_request_allowed(grant, update_request(object_id.to_owned()))
                                 .is_ok(),
+                            Some(existing),
+                            Some(snapshot),
                         )
                     }
                 }
@@ -135,28 +153,49 @@ async fn authorize_app_request(
                 });
                 object.insert("typeId".into(), Value::String(type_id));
                 object.insert("typeVersion".into(), Value::String(type_version));
+                let now = Value::String(chrono::Utc::now().to_rfc3339());
+                object.insert(
+                    "createdAt".into(),
+                    existing
+                        .as_ref()
+                        .and_then(|value| value.get("createdAt"))
+                        .cloned()
+                        .unwrap_or_else(|| now.clone()),
+                );
+                object.insert("updatedAt".into(), now);
+                object.insert(
+                    "deletedAt".into(),
+                    existing
+                        .as_ref()
+                        .and_then(|value| value.get("deletedAt"))
+                        .cloned()
+                        .unwrap_or(Value::Null),
+                );
                 object.remove("type_id");
                 object.remove("type_version");
+            }
+            if let Some(snapshot) = snapshot {
+                map.insert("expectedSnapshot".into(), snapshot);
             }
         }
         "delete_object" => {
             let id = map
                 .get("id")
                 .and_then(Value::as_str)
-                .ok_or("object id is required")?;
-            let object = internal_app_lookup(dispatcher, client, "get_object", json!({ "id": id }))
-                .await
-                .ok_or("data grant denied")?;
-            let (type_id, version) = object_type_and_version(&object)?;
+                .ok_or("object id is required")?
+                .to_owned();
+            let snapshot = object_write_snapshot(dispatcher, client, &id).await?;
+            let (type_id, version) = object_type_and_version(&snapshot)?;
             data_request_allowed(
                 grant,
                 DataRequest::DeleteObject {
                     type_id,
                     type_version: version,
-                    object_id: id.to_owned(),
+                    object_id: id,
                     expected_hlc: None,
                 },
             )?;
+            map.insert("expectedSnapshot".into(), snapshot);
         }
         "upsert_object_link" => {
             let link = map

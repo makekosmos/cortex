@@ -87,15 +87,20 @@ export const startEngine = async (
     stdio: "ignore",
     windowsHide: true,
   });
-  const lock = await waitFor(() => {
-    try {
-      // SAFETY: waitFor only resolves after the Engine lock file is written.
-      return JSON.parse(fs.readFileSync(path.join(dataDir, "engine.lock.json"), "utf8")) as Lock;
-    } catch {
-      return undefined;
-    }
-  }, "Engine lock");
-  return { child, lock };
+  try {
+    const lock = await waitFor(() => {
+      try {
+        // SAFETY: each test uses a fresh data directory, so this lock belongs to this startup.
+        return JSON.parse(fs.readFileSync(path.join(dataDir, "engine.lock.json"), "utf8")) as Lock;
+      } catch {
+        return undefined;
+      }
+    }, "Engine lock");
+    return { child, lock };
+  } catch (error) {
+    if (child.pid && isPidAlive(child.pid)) await forceStop(child.pid, "failed Engine startup");
+    throw error;
+  }
 };
 
 export const rpc = async (

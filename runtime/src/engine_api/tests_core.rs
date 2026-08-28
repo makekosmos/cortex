@@ -209,7 +209,12 @@
             .remove("update");
         let dispatcher = crate::engine_dispatch::EngineDispatcher::new(Arc::new(|request| {
             Box::pin(async move {
-                if request.operation.as_str() == "get_object" {
+                if request.operation.as_str() == "get_object_write_snapshot" {
+                    Ok(json!({"ok": true, "data": {
+                        "exists":true, "typeId":"com.kosmos.note",
+                        "typeVersion":"1.0.0", "revision":"revision-1"
+                    }}))
+                } else if request.operation.as_str() == "get_object" {
                     Ok(json!({"ok": true, "data": {
                         "id":"n1", "typeId":"com.kosmos.note", "typeVersion":"1.0.0"
                     }}))
@@ -233,13 +238,21 @@
     }
 
     #[tokio::test]
-    async fn launch_scoped_write_strips_untrusted_integrity_fields() {
-        let dispatcher = crate::engine_dispatch::EngineDispatcher::new(Arc::new(|_| {
-            Box::pin(async { Ok(json!({"ok": true, "data": null})) })
+    async fn launch_scoped_write_replaces_untrusted_integrity_fields() {
+        let dispatcher = crate::engine_dispatch::EngineDispatcher::new(Arc::new(|request| {
+            Box::pin(async move {
+                if request.operation.as_str() == "get_object_write_snapshot" {
+                    Ok(json!({"ok": true, "data": {
+                        "exists":false, "typeId":null, "typeVersion":null, "revision":null
+                    }}))
+                } else {
+                    Ok(json!({"ok": true, "data": null}))
+                }
+            })
         }));
         let params = authorize_app_request(
             "upsert_object",
-            json!({"object": {
+            json!({"expectedSnapshot":{"exists":true,"revision":"forged"}, "object": {
                 "id":"n2", "typeId":"com.kosmos.note", "typeVersion":"1.0.0",
                 "title":"ok", "propsJson":{"description":"allowed"},
                 "createdAt":"forged", "deletedAt":"forged", "unexpected":"forged"
@@ -251,9 +264,40 @@
         .await
         .expect("authorized create");
         let object = params["object"].as_object().expect("object");
-        assert!(!object.contains_key("createdAt"));
-        assert!(!object.contains_key("deletedAt"));
+        for field in ["createdAt", "updatedAt"] {
+            let timestamp = object[field].as_str().expect("server timestamp");
+            assert_ne!(timestamp, "forged");
+            chrono::DateTime::parse_from_rfc3339(timestamp).expect("RFC 3339 timestamp");
+        }
+        assert!(object["deletedAt"].is_null());
         assert!(!object.contains_key("unexpected"));
+        assert_eq!(
+            params["expectedSnapshot"],
+            json!({"exists":false,"typeId":null,"typeVersion":null,"revision":null})
+        );
+    }
+
+    #[tokio::test]
+    async fn launch_scoped_delete_replaces_untrusted_snapshot() {
+        let dispatcher = crate::engine_dispatch::EngineDispatcher::new(Arc::new(|request| {
+            Box::pin(async move {
+                assert_eq!(request.operation.as_str(), "get_object_write_snapshot");
+                Ok(json!({"ok": true, "data": {
+                    "exists":true, "typeId":"com.kosmos.note",
+                    "typeVersion":"1.0.0", "revision":"trusted"
+                }}))
+            })
+        }));
+        let params = authorize_app_request(
+            "delete_object",
+            json!({"id":"n2", "expectedSnapshot":{"revision":"forged"}}),
+            &app_test_grant(),
+            &dispatcher,
+            &DispatchClient::default(),
+        )
+        .await
+        .expect("authorized delete");
+        assert_eq!(params["expectedSnapshot"]["revision"], "trusted");
     }
 
     #[tokio::test]
