@@ -53,10 +53,8 @@ impl Session {
         }
 
         let now = s.clock.now_ms();
-        let mut iterations = 0;
-        const MAX_ITER: u32 = 10;
-        while s.is_running && !s.is_paused && s.phase_ends_at_ms <= now && iterations < MAX_ITER {
-            iterations += 1;
+        while s.is_running && !s.is_paused && s.phase_ends_at_ms <= now {
+            let previous_deadline = s.phase_ends_at_ms;
             let cfg = s.last_config.clone().unwrap_or_default();
             let finished = s.phase;
             s.is_running = false;
@@ -73,12 +71,18 @@ impl Session {
             };
             if should_auto {
                 let total = s.duration_ms_for_phase(next, &cfg);
+                if total == 0 {
+                    s.phase = next;
+                    s.total_ms = 0;
+                    s.remaining_ms = 0;
+                    break;
+                }
                 s.phase = next;
                 s.total_ms = total;
                 s.remaining_ms = total;
                 s.is_running = true;
                 s.is_paused = false;
-                s.phase_ends_at_ms = now.saturating_add(total);
+                s.phase_ends_at_ms = previous_deadline.saturating_add(total);
                 s.last_config = Some(cfg);
             } else {
                 let total = s.duration_ms_for_phase(next, &cfg);
@@ -131,7 +135,10 @@ impl Session {
     fn next_phase_after(&self, p: Phase, cfg: &SessionConfig) -> Phase {
         match p {
             Phase::Work => {
-                if self.completed_pomodoros + 1 >= cfg.pomodoros_until_long_break {
+                if self.completed_pomodoros > 0
+                    && cfg.pomodoros_until_long_break > 0
+                    && self.completed_pomodoros % cfg.pomodoros_until_long_break == 0
+                {
                     Phase::LongBreak
                 } else {
                     Phase::ShortBreak

@@ -17,6 +17,16 @@ fn cfg_auto_all() -> SessionConfig {
     }
 }
 
+fn cfg_threshold(threshold: u32) -> SessionConfig {
+    SessionConfig {
+        pomodoros_until_long_break: threshold,
+        work_min_override: Some(1),
+        ..cfg_default()
+    }
+}
+
+fn expected_break(completed: u32, threshold: u32) -> Phase { if completed % threshold == 0 { Phase::LongBreak } else { Phase::ShortBreak } }
+
 #[test]
 fn start_from_idle_enters_work() {
     let clock = Arc::new(MockClock::new(1_000_000));
@@ -82,6 +92,42 @@ fn work_finishes_and_enters_short_break() {
     assert_eq!(st.completed_pomodoros, 1);
     assert_eq!(st.phase, Phase::ShortBreak);
     assert!(!st.is_running);
+}
+
+fn assert_thresholds(manual: bool) {
+    for threshold in [1, 2, 4] {
+        let clock = Arc::new(MockClock::new(0));
+        let mut s = Session::new(clock.clone());
+        let cfg = cfg_threshold(threshold);
+        s.start(cfg.clone());
+
+        for completed in 1..=threshold * 2 {
+            if manual {
+                s.skip();
+            } else {
+                clock.advance(60_000);
+                s.tick();
+            }
+            let st = s.snapshot();
+            assert_eq!(st.phase, expected_break(completed, threshold));
+            assert_eq!(st.completed_pomodoros, completed);
+
+            if completed < threshold * 2 {
+                s.skip();
+                s.start(cfg.clone());
+            }
+        }
+    }
+}
+
+#[test]
+fn live_timer_respects_long_break_thresholds_and_exact_counters() {
+    assert_thresholds(false);
+}
+
+#[test]
+fn manual_skip_respects_long_break_thresholds_and_exact_counters() {
+    assert_thresholds(true);
 }
 
 #[test]
