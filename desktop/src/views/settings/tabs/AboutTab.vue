@@ -50,7 +50,7 @@ onMounted(() => {
 <template>
   <AdvancedPageLayout :intro="intro">
     <SettingsList>
-      <SettingsRow title="Версия Kosmos" description="Текущая версия приложения">
+      <SettingsRow title="Версия CosCast" description="Текущая версия приложения">
         <template #control>
           <code class="about-value">{{ version }}</code>
         </template>
