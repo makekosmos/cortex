@@ -12,6 +12,7 @@ import {
   runIntegrationLogin,
 } from "./integration-login-credential";
 import { browserPartition } from "./browser-settings";
+import { isObject, isString, type Input } from "./manager-contract";
 
 const GENERIC_INTEGRATION_PARTITION = "kosmos-manager-generic";
 const VALID_PROVIDER = /^[a-z0-9][a-z0-9._-]{0,127}$/;
@@ -75,36 +76,39 @@ function createLoginWindow(
   });
 }
 
-function readLoginInput(value: unknown): { provider: string } | null {
-  if (!value || typeof value !== "object") return null;
-  const input = value as Record<string, unknown>;
-  if (Object.keys(input).length !== 1) return null;
-  const provider = input.provider;
-  return typeof provider === "string" && VALID_PROVIDER.test(provider)
+function readLoginInput(value: Input): { provider: string } | null {
+  if (!isObject(value) || Object.keys(value).length !== 1) return null;
+  const provider = value.provider;
+  return isString(provider) && VALID_PROVIDER.test(provider)
     ? { provider }
     : null;
 }
 
-function parseTrustedLoginContract(value: unknown): TrustedLoginContract | null {
-  if (!value || typeof value !== "object") return null;
-  const input = value as Record<string, unknown>;
-  const provider = typeof input.provider === "string" ? input.provider : "";
-  const login = input.login;
-  if (!login || typeof login !== "object") return null;
-  const raw = login as Record<string, unknown>;
-  const label = typeof input.label === "string" ? input.label.trim() : "";
-  const startUrl = typeof raw.startUrl === "string" ? raw.startUrl : "";
-  const completionUrl = typeof raw.completionUrl === "string" ? raw.completionUrl : "";
-  const allowedCookieNames = Array.isArray(raw.allowedCookieNames)
-    ? raw.allowedCookieNames.filter(
-        (name): name is string => typeof name === "string" && name.length > 0,
+function parseTrustedLoginContract(value: Input): TrustedLoginContract | null {
+  if (!isObject(value)) return null;
+  const provider = isString(value.provider) ? value.provider : "";
+  const login = value.login;
+  if (!isObject(login)) return null;
+  const label = isString(value.label) ? value.label.trim() : "";
+  const startUrl = isString(login.startUrl) ? login.startUrl : "";
+  const completionUrl = isString(login.completionUrl) ? login.completionUrl : "";
+  const allowedCookieNames = Array.isArray(login.allowedCookieNames)
+    ? login.allowedCookieNames.filter(
+        (name: Input): name is string => isString(name) && name.length > 0,
       )
     : [];
-  const secretSetting = typeof raw.secretSetting === "string" ? raw.secretSetting : "";
+  const secretSetting = isString(login.secretSetting) ? login.secretSetting : "";
   try {
     const start = new URL(startUrl);
     const completion = new URL(completionUrl);
-    if (!label || start.protocol !== "https:" || completion.protocol !== "https:" || !secretSetting || allowedCookieNames.length === 0) return null;
+    if (
+      !label ||
+      start.protocol !== "https:" ||
+      completion.protocol !== "https:" ||
+      !secretSetting ||
+      allowedCookieNames.length === 0
+    )
+      return null;
   } catch {
     return null;
   }
@@ -192,7 +196,7 @@ async function login(
       persistCredential: async (credential) => {
         const result = await rpc(op.setIntegrationCredential, {
           provider,
-          ...(contract ? { setting: contract.secretSetting } : {}),
+          setting: contract.secretSetting,
           credential,
         });
         return result.ok
