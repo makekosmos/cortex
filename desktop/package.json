@@ -2,7 +2,7 @@
   "name": "kepler-shell",
   "version": "0.5.4",
   "private": true,
-  "description": "Kosmos — desktop host for notes, tasks, games, focus, and activity",
+  "description": "CosCast — desktop host for notes, tasks, games, focus, and activity",
   "author": "Kazui",
   "type": "module",
   "main": "dist-electron/main.js",
@@ -51,8 +51,8 @@
   },
   "build": {
     "appId": "com.kazui.kosmos",
-    "productName": "Kosmos",
-    "artifactName": "Kosmos-Setup-${version}.${ext}",
+    "productName": "CosCast",
+    "artifactName": "CosCast-Setup-${version}.${ext}",
     "electronLanguages": [
       "en-US",
       "ru"
@@ -147,7 +147,7 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": false,
       "createStartMenuShortcut": false,
-      "shortcutName": "Kosmos",
+      "shortcutName": "CosCast",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "runAfterFinish": false,
