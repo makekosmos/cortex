@@ -131,7 +131,10 @@ impl Session {
     fn next_phase_after(&self, p: Phase, cfg: &SessionConfig) -> Phase {
         match p {
             Phase::Work => {
-                if self.completed_pomodoros + 1 >= cfg.pomodoros_until_long_break {
+                // Work completions are recorded before selecting the next phase.
+                // Compare the persisted count directly so the just-finished interval
+                // is not counted a second time.
+                if self.completed_pomodoros >= cfg.pomodoros_until_long_break {
                     Phase::LongBreak
                 } else {
                     Phase::ShortBreak
