@@ -18,12 +18,10 @@ import {
 } from "./extension-installer-state";
 import type { InstalledExtensionInfo } from "./extension-installer-state";
 import { extractZipTo, readZipEntries } from "./extension-zip";
-import { isString } from "../src/shared/runtimeGuards";
 import {
   validateExtensionManifest,
   type ExtensionManifest,
 } from "./extension-manifest-validation";
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
