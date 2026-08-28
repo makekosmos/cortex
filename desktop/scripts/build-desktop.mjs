@@ -1,34 +1,19 @@
 #!/usr/bin/env node
-// Build wrapper for per-platform desktop releases.
-//
-// Reads the platform version from release-versions.json, runs electron-builder
-// with the correct platform target and publish config, injects the version via
-// -c.extraMetadata.version, then runs the verify guard on success.
-//
-// Usage:
-//   node scripts/build-desktop.mjs --platform <win|mac>
-//
-// Environment:
-//   GH_TOKEN must be set for --publish always to succeed (electron-builder
-//   GitHubPublisher requires it). The script does NOT check for it — if it is
-//   absent, electron-builder will fail with a clear message.
-//
-// Do NOT execute this script directly (it would trigger a live publish).
-// It is invoked by: bun run build / bun run build:mac
 
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { getVersion } from "./release-version.mjs";
+import { loadReleaseBom } from "./release-bom.mjs";
+import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
+import { bytes, documentHash, writeAtomic } from "./package-release-utils.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SHELL_ROOT = path.resolve(__dirname, "..");
 
 const VALID_PLATFORMS = ["win", "mac"];
-
-// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function die(msg) {
   console.error(`[build-desktop] FATAL: ${msg}`);
@@ -61,16 +46,163 @@ function resolveElectronBuilder() {
   return isWin ? "electron-builder.cmd" : "electron-builder";
 }
 
-// ─── Main ──────────────────────────────────────────────────────────────────────
+function currentCommit() {
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], { cwd: SHELL_ROOT, encoding: "utf8" }).trim();
+  } catch {
+    die("unable to resolve the Cortex HEAD commit");
+  }
+}
 
-function main() {
-  // ── 1. Parse --platform flag ─────────────────────────────────────────────
+function ensureCleanSource() {
+  const tracked = execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], {
+    cwd: SHELL_ROOT,
+    encoding: "utf8",
+  }).trim();
+  const untracked = execFileSync(
+    "git",
+    [
+      "ls-files",
+      "--others",
+      "--exclude-standard",
+      "--",
+      "src",
+      "electron",
+      "scripts",
+      "build",
+      "shared",
+      "../host/src",
+      "../host/electron",
+      "../manager/src",
+      "../manager/electron",
+      "../runtime/src",
+      "../native-services",
+      "../packages",
+    ],
+    { cwd: SHELL_ROOT, encoding: "utf8" },
+  ).trim();
+  if (tracked || untracked) die("release builds require a clean tracked and source worktree");
+}
+
+function verifyEmbeddedBom(outputDir, platform, digest) {
+  const candidates = [path.join(outputDir, "win-unpacked", "resources", "release-bom.json")];
+  if (platform === "mac") {
+    for (const directory of readdirSync(outputDir, { withFileTypes: true })) {
+      if (!directory.isDirectory() || !directory.name.startsWith("mac")) continue;
+      const root = path.join(outputDir, directory.name);
+      for (const app of readdirSync(root, { withFileTypes: true })) {
+        if (app.isDirectory() && app.name.endsWith(".app"))
+          candidates.push(path.join(root, app.name, "Contents", "Resources", "release-bom.json"));
+      }
+    }
+  }
+  const embedded = candidates.find(existsSync);
+  if (!embedded) die(`embedded release BOM not found in ${outputDir}`);
+  if (documentHash(readFileSync(embedded)) !== digest)
+    die(`embedded release BOM digest mismatch: ${embedded}`);
+  return embedded;
+}
+
+function collectArtifacts(outputDir, platform, version) {
+  const channel = platform === "win" ? "latest.yml" : "latest-mac.yml";
+  const names = readdirSync(outputDir).filter((name) => {
+    if (name === channel) return true;
+    if (!name.includes(version)) return false;
+    return /\.(?:exe|dmg|zip|blockmap)$/i.test(name);
+  });
+  const artifacts = names.map((name) => {
+    const file = path.join(outputDir, name);
+    return { name, sha256: documentHash(readFileSync(file)), size: statSync(file).size };
+  });
+  if (!artifacts.some(({ name }) => /\.(?:exe|dmg)$/i.test(name)))
+    die(`no installer artifact found in ${outputDir}`);
+  if (!artifacts.some(({ name }) => name === channel)) die(`missing ${channel} in ${outputDir}`);
+  return artifacts;
+}
+
+function compareExpectedArtifacts(expected, actual) {
+  if (!expected?.length) return;
+  const actualByName = new Map(actual.map((artifact) => [artifact.name, artifact]));
+  for (const artifact of expected) {
+    const found = actualByName.get(artifact.name);
+    if (!found || found.sha256 !== artifact.sha256 || found.size !== artifact.size)
+      die(`final artifact does not match BOM: ${artifact.name}`);
+  }
+}
+
+function verifyArkArtifact(bom) {
+  const expected = bom.value.source.core.ark_artifact;
+  const file = path.join(SHELL_ROOT, ".tmp", "runtime", expected.name);
+  if (!existsSync(file) || statSync(file).size !== expected.size)
+    die(`ARK artifact is missing or has the wrong size: ${expected.name}`);
+  if (documentHash(readFileSync(file)) !== expected.sha256)
+    die(`ARK artifact hash does not match BOM: ${expected.name}`);
+}
+
+async function emitProvenance(outputDir, platform, version, bom) {
+  const embedded = verifyEmbeddedBom(outputDir, platform, bom.digest);
+  verifyLocalReleaseChannel(outputDir, platform, version);
+  const artifacts = collectArtifacts(outputDir, platform, version);
+  compareExpectedArtifacts(bom.value.artifacts, artifacts);
+  const provenance = {
+    schema_version: 1,
+    bom_id: bom.value.id,
+    bom_digest: bom.digest,
+    platform,
+    version,
+    embedded_bom: path.relative(outputDir, embedded),
+    artifacts,
+  };
+  const file = path.join(outputDir, "release-provenance.json");
+  const bomFile = path.join(outputDir, "release-bom.v1.json");
+  await writeAtomic(bomFile, bom.bytes);
+  await writeAtomic(file, bytes(provenance));
+  log(`Release provenance: ${file}`);
+  return {
+    metadataFiles: [bomFile, file],
+    artifactFiles: artifacts.map(({ name }) => path.join(outputDir, name)),
+  };
+}
+
+function publishRelease(platform, version, files) {
+  const repository = platform === "win" ? "makekosmos/desktop" : "makekosmos/desktop-mac";
+  if (!process.env.GH_TOKEN) die("GH_TOKEN is required to publish a verified release");
+  const existing = spawnSync("gh", ["release", "view", `v${version}`, "--repo", repository], {
+    cwd: SHELL_ROOT,
+    stdio: "ignore",
+    windowsHide: true,
+    env: process.env,
+  });
+  if (existing.status === 0) die(`immutable release already exists: ${repository} v${version}`);
+  const result = spawnSync(
+    "gh",
+    [
+      "release",
+      "create",
+      `v${version}`,
+      ...files,
+      "--repo",
+      repository,
+      "--title",
+      `CosCast ${version}`,
+      "--notes",
+      "Immutable release assembled from the attached release BOM.",
+    ],
+    { cwd: SHELL_ROOT, stdio: "inherit", windowsHide: true, env: process.env },
+  );
+  if (result.status !== 0) die(`failed to publish verified release to ${repository}`);
+}
+
+async function main() {
   const args = process.argv.slice(2);
   let platform = null;
+  let bomPath = process.env.KOSMOS_RELEASE_BOM ?? null;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--platform") {
       platform = args[++i];
+    } else if (args[i] === "--bom") {
+      bomPath = args[++i];
     }
   }
 
@@ -80,11 +212,19 @@ function main() {
   if (!VALID_PLATFORMS.includes(platform)) {
     die(`Unknown platform "${platform}". Valid: ${VALID_PLATFORMS.join(", ")}`);
   }
+  if (!bomPath) die("--bom <path> or KOSMOS_RELEASE_BOM is required for publish builds");
 
-  // ── 2. Read version from release-versions.json ───────────────────────────
   const version = getVersion(platform);
+  ensureCleanSource();
+  const bom = await loadReleaseBom(bomPath, {
+    root: SHELL_ROOT,
+    platform,
+    currentCommit: currentCommit(),
+  });
+  verifyArkArtifact(bom);
   log(`Platform: ${platform}`);
   log(`Version:  ${version}`);
+  log(`BOM:      ${bom.value.id} (${bom.digest})`);
   log("");
 
   // ── 3. Resolve electron-builder binary ───────────────────────────────────
@@ -94,9 +234,9 @@ function main() {
   // ── 4. Build the electron-builder command ────────────────────────────────
   let ebArgs;
   if (platform === "win") {
-    ebArgs = ["--win", "nsis", "--publish", "always", `-c.extraMetadata.version=${version}`];
+    ebArgs = ["--win", "nsis", "--publish", "never", `-c.extraMetadata.version=${version}`];
   } else {
-    ebArgs = ["--mac", "dmg", "--publish", "always", `-c.extraMetadata.version=${version}`];
+    ebArgs = ["--mac", "dmg", "--publish", "never", `-c.extraMetadata.version=${version}`];
   }
 
   log(`Running: ${eb} ${ebArgs.join(" ")}`);
@@ -108,6 +248,7 @@ function main() {
     stdio: "inherit",
     shell: true,
     windowsHide: true,
+    env: { ...process.env, KOSMOS_RELEASE_BOM_PATH: bom.path },
   });
 
   if (ebResult.status !== 0) {
@@ -119,7 +260,15 @@ function main() {
   }
 
   log("");
-  log("electron-builder succeeded. Running verify guard...");
+  log("electron-builder succeeded. Emitting release provenance...");
+  const releaseFiles = await emitProvenance(
+    path.join(SHELL_ROOT, "release"),
+    platform,
+    version,
+    bom,
+  );
+  publishRelease(platform, version, [...releaseFiles.artifactFiles, ...releaseFiles.metadataFiles]);
+  log("Running verify guard...");
   log("");
 
   // ── 6. Run verify guard ───────────────────────────────────────────────────
@@ -137,7 +286,9 @@ function main() {
   if (verifyResult.status !== 0) {
     console.error("");
     console.error(`[build-desktop] verify-release-channel FAILED for ${platform} v${version}.`);
-    console.error(`[build-desktop] The release was published but channel integrity check failed.`);
+    console.error(
+      `[build-desktop] The verified release was published but channel integrity failed.`,
+    );
     console.error(`[build-desktop] Review the output above and follow the fix instructions.`);
     process.exit(verifyResult.status ?? 1);
   }
@@ -146,4 +297,4 @@ function main() {
   log(`Build + verify complete for ${platform} v${version}. Release is consistent.`);
 }
 
-main();
+main().catch((error) => die(error instanceof Error ? error.message : String(error)));

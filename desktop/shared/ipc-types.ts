@@ -243,11 +243,16 @@ export interface FocusSessionSnapshot {
 
 export type { KeplerApi } from "./ipc-api-types";
 
+export interface ReleaseBomIdentity {
+  id: string;
+  digest: string;
+}
+
 export type UpdateState =
-  | { kind: "idle" }
-  | { kind: "checking" }
-  | { kind: "not-available"; checkedAt: number }
-  | { kind: "available"; version: string }
-  | { kind: "downloading"; version: string; percent: number }
-  | { kind: "downloaded"; version: string }
-  | { kind: "error"; message: string };
+  | { kind: "idle"; bom?: ReleaseBomIdentity }
+  | { kind: "checking"; bom?: ReleaseBomIdentity }
+  | { kind: "not-available"; checkedAt: number; bom?: ReleaseBomIdentity }
+  | { kind: "available"; version: string; bom?: ReleaseBomIdentity }
+  | { kind: "downloading"; version: string; percent: number; bom?: ReleaseBomIdentity }
+  | { kind: "downloaded"; version: string; bom?: ReleaseBomIdentity }
+  | { kind: "error"; message: string; bom?: ReleaseBomIdentity };

@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { test } from "node:test";
+
+const script = await readFile(path.join(import.meta.dirname, "build-desktop.mjs"), "utf8");
+
+test("release build validates before publishing immutable artifacts", () => {
+  assert.match(script, /"--publish", "never"/);
+  assert.ok(script.indexOf("emitProvenance(") < script.indexOf("publishRelease(platform"));
+  assert.ok(
+    script.indexOf("verifyLocalReleaseChannel(outputDir") <
+      script.indexOf("publishRelease(platform"),
+  );
+  assert.doesNotMatch(script, /--clobber/);
+  assert.match(script, /process\.env\.KOSMOS_RELEASE_BOM/);
+  assert.match(script, /release builds require a clean tracked and source worktree/);
+  assert.match(script, /ARK artifact hash does not match BOM/);
+  assert.match(script, /app\.name\.endsWith\("\.app"\)/);
+});

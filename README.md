@@ -23,6 +23,8 @@ The repository layout is portable, but the existing desktop build still
 expects external extension bundles, ARK, visuals, and release tooling. CI
 therefore validates ownership and local metadata only. A green layout check
 does not mean that a complete Windows installer can be built here yet.
+Publish builds additionally require a reviewed release BOM; signing secrets are not read by
+the BOM validator or provenance emitter.
 
 ## Local checks
 
@@ -36,7 +38,23 @@ bunx lefthook run pre-push
 
 # Full local verification:
 bun run check
+
+# Validate a release BOM without building or publishing:
+bun run test:release-bom
+
+# Publish a platform build with an explicit, reviewed BOM:
+node desktop/scripts/build-desktop.mjs --platform win --bom path/to/release-bom.json
 ```
+
+`bun run --cwd desktop build` and `build:mac` read the same path from
+`KOSMOS_RELEASE_BOM`, so the existing release commands cannot run without an
+explicit resolved BOM.
+
+The publish wrapper validates Cortex/Core commits, the pinned Bun/Node/Rust toolchain, and
+the shell/engine/package API contracts before electron-builder starts. It embeds the exact
+BOM at `resources/release-bom.json` and emits `release/release-provenance.json` with the
+final artifact hashes. A BOM may include expected `artifacts` entries to make a rebuild fail
+on a hash or size mismatch; omitted entries are recorded from the final build.
 
 `bun run check` covers layout, source-size, lint, changed-file Oxfmt, all frontend
 typechecks, Rustfmt, workspace Clippy with warnings denied, complete workspace

@@ -24,6 +24,7 @@ import { spawn } from "node:child_process";
 import { keplerDataDir } from "./data-dir";
 import { keplerLog } from "./logging";
 import { resolveInstance } from "./instance";
+import { readEmbeddedReleaseBomIdentity, type ReleaseBomIdentity } from "./release-bom-identity";
 import {
   runWindowMoveBenchmark,
   type WindowMoveBenchmarkInput,
@@ -54,6 +55,7 @@ interface VersionsSnapshot {
   osRelease: string;
   slot: string;
   capturedAt: string;
+  bom?: ReleaseBomIdentity;
 }
 
 async function copyRecentTextFilesRedacted(
@@ -105,6 +107,7 @@ export async function copyRedactedTextFileBounded(
 }
 
 function buildVersionsJson(): string {
+  const bom = readEmbeddedReleaseBomIdentity();
   const versions: VersionsSnapshot = {
     kepler: app.getVersion(),
     electron: process.versions.electron,
@@ -117,6 +120,7 @@ function buildVersionsJson(): string {
     slot: resolveInstance().slot,
     capturedAt: new Date().toISOString(),
   };
+  if (bom) versions.bom = bom;
   return JSON.stringify(versions, null, 2);
 }
 

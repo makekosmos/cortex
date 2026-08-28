@@ -15,21 +15,21 @@ import electronUpdater from "electron-updater";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { keplerDataDir } from "./data-dir";
+import { readEmbeddedReleaseBomIdentity } from "./release-bom-identity";
+import type { ReleaseBomIdentity, UpdateState as SharedUpdateState } from "../shared/ipc-types";
 
-export type UpdateState =
-  | { kind: "idle" }
-  | { kind: "checking" }
-  | { kind: "not-available"; checkedAt: number }
-  | { kind: "available"; version: string }
-  | { kind: "downloading"; version: string; percent: number }
-  | { kind: "downloaded"; version: string }
-  | { kind: "error"; message: string };
+export type UpdateState = SharedUpdateState;
 
 const STATE_CHANGED_CHANNEL = "kepler:settings:update:state";
 
-let currentState: UpdateState = { kind: "idle" };
+const embeddedBom = readEmbeddedReleaseBomIdentity();
+let currentState: UpdateState = embeddedBom ? { kind: "idle", bom: embeddedBom } : { kind: "idle" };
 let initialized = false;
 const stateFile = () => path.join(keplerDataDir(), "update-state.json");
+
+function bomState(): { bom?: ReleaseBomIdentity } {
+  return embeddedBom ? { bom: embeddedBom } : {};
+}
 
 function broadcast(state: UpdateState): void {
   currentState = state;
@@ -87,14 +87,14 @@ export function setupAutoUpdater(opts: { isDev: boolean }): void {
   autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater.on("checking-for-update", () => {
-    broadcast({ kind: "checking" });
+    broadcast({ kind: "checking", ...bomState() });
   });
   autoUpdater.on("update-available", (info) => {
     console.error("[autoUpdater] available:", info.version);
-    broadcast({ kind: "available", version: info.version });
+    broadcast({ kind: "available", version: info.version, ...bomState() });
   });
   autoUpdater.on("update-not-available", () => {
-    broadcast({ kind: "not-available", checkedAt: Date.now() });
+    broadcast({ kind: "not-available", checkedAt: Date.now(), ...bomState() });
   });
   autoUpdater.on("download-progress", (p) => {
     const version =
@@ -105,18 +105,19 @@ export function setupAutoUpdater(opts: { isDev: boolean }): void {
       kind: "downloading",
       version,
       percent: Math.round(p.percent),
+      ...bomState(),
     });
   });
   autoUpdater.on("update-downloaded", (info) => {
     console.error("[autoUpdater] downloaded:", info.version);
-    broadcast({ kind: "downloaded", version: info.version });
+    broadcast({ kind: "downloaded", version: info.version, ...bomState() });
     // Не показываем native dialog — UI banner драйвит click-to-install.
     // Native fallback оставляем для случая когда Settings window закрыт >5 min.
     scheduleNativeInstallFallback(info.version);
   });
   autoUpdater.on("error", (err) => {
     console.error("[autoUpdater] error:", err);
-    broadcast({ kind: "error", message: err.message });
+    broadcast({ kind: "error", message: err.message, ...bomState() });
   });
 
   void check();
@@ -129,7 +130,7 @@ export async function check(): Promise<UpdateState> {
     await electronUpdater.autoUpdater.checkForUpdates();
   } catch (e) {
     // SAFETY: The surrounding boundary establishes this documented contract.
-    broadcast({ kind: "error", message: (e as Error).message });
+    broadcast({ kind: "error", message: (e as Error).message, ...bomState() });
   }
   return currentState;
 }

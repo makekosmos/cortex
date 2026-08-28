@@ -56,6 +56,23 @@ async function ensureTrayIcoFromSvg(svgPath, icoPath) {
 }
 
 module.exports = async function afterPack(context) {
+  const bomPath = process.env.KOSMOS_RELEASE_BOM_PATH;
+  if (bomPath) {
+    if (!fs.existsSync(bomPath)) throw new Error(`[afterPack] release BOM not found: ${bomPath}`);
+    const resourceDir =
+      context.electronPlatformName === "darwin"
+        ? path.join(
+            context.appOutDir,
+            `${context.packager.appInfo.productFilename}.app`,
+            "Contents",
+            "Resources",
+          )
+        : path.join(context.appOutDir, "resources");
+    fs.mkdirSync(resourceDir, { recursive: true });
+    fs.copyFileSync(bomPath, path.join(resourceDir, "release-bom.json"));
+    console.log(`[afterPack] embedded release BOM: ${path.basename(bomPath)}`);
+  }
+
   if (context.electronPlatformName !== "win32") return;
 
   const appOutDir = context.appOutDir;
