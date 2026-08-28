@@ -30,4 +30,8 @@ jobs:
       - name: Validate exact Core revision and layout
         run: node scripts/check-core-pin.mjs
       - name: Resolve workspace metadata
-        run: cargo metadata --locked --no-deps --format-version 1
+        run: cargo metadata --locked --format-version 1
+      - name: Compile Cortex against pinned Core
+        run: cargo check --locked --package kepler-backend
+      - name: Run runtime staging contract test
+        run: node --test desktop/scripts/runtime-staging.test.mjs
