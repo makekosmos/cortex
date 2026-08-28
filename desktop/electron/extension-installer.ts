@@ -52,7 +52,7 @@ async function previewKext(kextPath: string): Promise<KextManifestPreview> {
   }
   let manifest: ExtensionManifest;
   try {
-    const parsed: unknown = JSON.parse(manifestEntry.data.toString("utf8"));
+    const parsed = JSON.parse(manifestEntry.data.toString("utf8"));
     manifest = validateExtensionManifest(parsed);
   } catch (e) {
     // SAFETY: JSON.parse/manifest validation errors are Error instances in Node.
