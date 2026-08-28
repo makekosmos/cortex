@@ -23,7 +23,9 @@ export interface ExtensionManifest {
  * This is deliberately shared by archive and directory installs so malformed
  * first-party artifacts fail closed with the same contract.
  */
-export function validateExtensionManifest(value: unknown): ExtensionManifest {
+type ExtensionManifestInput = Record<string, unknown> | null;
+
+export function validateExtensionManifest(value: ExtensionManifestInput): ExtensionManifest {
   if (!isRecord(value)) {
     throw new Error("manifest.json должен содержать объект");
   }
