@@ -1,3 +1,5 @@
+import { isRecord, isString } from "../src/shared/runtimeGuards";
+
 export interface ExtensionManifest {
   id: string;
   appId?: string;
