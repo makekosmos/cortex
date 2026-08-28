@@ -27,3 +27,11 @@ test("migrates legacy shell settings into the current data directory once", () =
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+  
+test("uses CosCast for user-facing instance names while preserving slot labels", () => {
+  expect(productNameForSlot("prod", "prod")).toBe("CosCast");
+  expect(productNameForSlot("dev", "dev")).toBe("CosCast [dev]");
+  expect(productNameForSlot("test-example", "test")).toBe("CosCast [test]");
+  expect(productNameForSlot("dev-review", "dev")).toBe("CosCast [dev-review]");
+});
