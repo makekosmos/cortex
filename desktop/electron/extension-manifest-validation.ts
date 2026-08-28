@@ -1,4 +1,5 @@
 import { isRecord, isString } from "../src/shared/runtimeGuards";
+import type { JsonRecord } from "../src/shared/runtimeGuards";
 
 export interface ExtensionManifest {
   id: string;
@@ -23,7 +24,7 @@ export interface ExtensionManifest {
  * This is deliberately shared by archive and directory installs so malformed
  * first-party artifacts fail closed with the same contract.
  */
-type ExtensionManifestInput = Record<string, unknown> | null;
+type ExtensionManifestInput = JsonRecord | null;
 
 export function validateExtensionManifest(value: ExtensionManifestInput): ExtensionManifest {
   if (!isRecord(value)) {
