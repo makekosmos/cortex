@@ -2,7 +2,7 @@
 //   https://github.com/mozilla/uniffi-rs
 //
 // Bindings for ark-core UniFFI interface.
-// Generated from: packages/ark-core/rust/src/ffi.rs
+// Generated from: crates/ark-core/src/ffi.rs
 //
 // NOTE: This is a scaffold generated from the proc-macro uniffi bindings.
 // Regenerate with:

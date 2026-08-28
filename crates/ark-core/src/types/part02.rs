@@ -37,7 +37,7 @@ impl ArkObjectWrite {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct ObjectType {
     pub id: String,
@@ -54,7 +54,7 @@ pub struct ObjectType {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct ObjectLink {
     pub id: String,
@@ -84,7 +84,7 @@ fn default_props_json() -> Value {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct LoadAllData {
     pub todos: Vec<TodoItem>,
@@ -108,7 +108,7 @@ pub struct LoadAllData {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct UsageSummary {
     pub tracked_app_count: i64,
@@ -126,7 +126,7 @@ pub struct UsageSummary {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct DailyTrendPoint {
     pub date: String,
@@ -140,7 +140,7 @@ pub struct DailyTrendPoint {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct HourlyHeatmapCell {
     pub weekday: i64,
@@ -153,7 +153,7 @@ pub struct HourlyHeatmapCell {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct TopAppEntry {
     pub id: String,
@@ -173,7 +173,7 @@ pub struct TopAppEntry {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct RecentSessionEntry {
     pub id: String,
@@ -195,7 +195,7 @@ pub struct RecentSessionEntry {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct UsageAnalyticsSnapshot {
     pub generated_at: String,
@@ -211,7 +211,7 @@ pub struct UsageAnalyticsSnapshot {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct UsageProcessCandidate {
     pub tracked_app_id: String,
@@ -230,7 +230,7 @@ pub struct UsageProcessCandidate {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct UsageGamePlaytimeBinding {
     pub game_id: String,
@@ -244,7 +244,7 @@ pub struct UsageGamePlaytimeBinding {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct UsageGamePlaytimeAggregate {
     pub game_id: String,
@@ -259,7 +259,7 @@ pub struct UsageGamePlaytimeAggregate {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct UsageGameDailyTotal {
     pub date: String,

@@ -158,16 +158,10 @@
           tags: [["canon", "canon"]],
         },
         {
-          title: "@kosmos/ark",
-          meta: 'TS SDK · <span class="mono">packages/kosmos-ark</span>',
-          desc: "Канонический клиент к sidecar для Electron main / Node.",
+          title: "TypeScript bindings",
+          meta: 'Generated · <span class="mono">core/ark/packages/ark/src/generated</span>',
+          desc: "Типы, сгенерированные из канонических Rust-контрактов.",
           tags: [["canon", "canon"]],
-        },
-        {
-          title: "@arksync/node",
-          meta: 'Compat re-export · <span class="mono">packages/arksync-node</span>',
-          desc: 'Только для совместимости. Новые интеграции идут через <span class="mono">@kosmos/ark</span>.',
-          tags: [["legacy", "legacy"]],
         },
         {
           title: "ark-relay-server",
@@ -238,10 +232,7 @@
       ];
 
       const docs = [
-        [
-          "packages/ark-core/README.md",
-          'RPC контракт, sync, <span class="mono">auth_secret</span>.',
-        ],
+        ["crates/ark-core/README.md", 'RPC контракт, sync, <span class="mono">auth_secret</span>.'],
         ["docs/ARK-SMOKE-MATRIX.md", "smoke-команды по компонентам."],
         ["docs/ARK-READONLY-SQL-BOUNDARY.md", "что dashboard'у можно/нельзя."],
         ["docs/DELPHI-LEGACY-DB-DECISION.md", "почему legacy sidecar удалён."],

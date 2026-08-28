@@ -13,7 +13,7 @@ use ts_rs::TS;
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct TodoItem {
     pub id: String,
@@ -48,7 +48,7 @@ pub struct TodoItem {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct Project {
     pub id: String,
@@ -68,7 +68,7 @@ pub struct Project {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct Area {
     pub id: String,
@@ -82,7 +82,7 @@ pub struct Area {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct Tag {
     pub id: String,
@@ -96,7 +96,7 @@ pub struct Tag {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct Heading {
     pub id: String,
@@ -110,7 +110,7 @@ pub struct Heading {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct TrackedApp {
     pub id: String,
@@ -130,7 +130,7 @@ pub struct TrackedApp {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct UsageSession {
     pub id: String,
@@ -159,7 +159,7 @@ pub struct UsageSession {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct UsageEvent {
     pub id: String,
@@ -221,7 +221,7 @@ fn default_usage_day_payload() -> Value {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct ArkObject {
     pub id: String,
@@ -244,7 +244,7 @@ pub struct ArkObject {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct ArkObjectSummary {
     pub id: String,

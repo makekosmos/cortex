@@ -20,9 +20,9 @@ New-Item -ItemType Directory -Force -Path $env:KOSMOS_SMOKE_ROOT | Out-Null
 ## Core
 
 ```powershell
-cargo test --manifest-path packages\ark-core\rust\Cargo.toml
-cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
-bun run --cwd packages/kosmos-ark typecheck
+cargo test --workspace
+cargo build --package ark-core --bin ark-core-rpc
+node scripts/check-ark-generated.mjs
 ```
 
 ## Usage Tracker

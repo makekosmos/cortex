@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const root = new URL("../", import.meta.url);
 const generated = "core/ark/packages/ark/src/generated";
@@ -9,6 +9,18 @@ if (!existsSync(new URL(`${generated}/`, root))) {
 }
 
 const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" });
+const expectedExportPath = "../../../core/ark/packages/ark/src/generated/";
+const exportSources = git("grep", "-l", "ts(export", "--", "crates/ark-core/src")
+  .trim()
+  .split(/\r?\n/)
+  .filter(Boolean);
+for (const sourcePath of exportSources) {
+  const source = readFileSync(new URL(sourcePath, root), "utf8");
+  const exportPaths = [...source.matchAll(/export_to\s*=\s*"([^"]+)"/g)];
+  if (!exportPaths.length || exportPaths.some((match) => match[1] !== expectedExportPath)) {
+    throw new Error(`${sourcePath} does not export into tracked bindings: ${generated}`);
+  }
+}
 const before = git("diff", "--", generated);
 if (before) {
   throw new Error(

@@ -13,7 +13,7 @@ pub const LEGACY_VERSION: &str = "0.0.0-legacy";
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -29,7 +29,7 @@ pub struct TypeSummary {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -48,7 +48,7 @@ pub struct TypeVersion {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

@@ -4,7 +4,7 @@
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct UsageGameRangeTotal {
     pub game_id: String,
@@ -17,7 +17,7 @@ pub struct UsageGameRangeTotal {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct UsageGamePlaytimeSummary {
     pub aggregates: Vec<UsageGamePlaytimeAggregate>,
@@ -33,7 +33,7 @@ pub struct UsageGamePlaytimeSummary {
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct SyncEntity {
     /// Entity type: "todo", "project", "area", "tag", "heading",
@@ -67,7 +67,7 @@ pub type VersionVector = std::collections::HashMap<String, String>;
 #[cfg_attr(feature = "ts-rs", derive(TS))]
 #[cfg_attr(
     feature = "ts-rs",
-    ts(export, export_to = "../../../../packages/ark/src/generated/")
+    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
 )]
 pub struct PeerRecord {
     pub device_id: String,
