@@ -33,5 +33,7 @@ pre-push:
       run: bun run clippy
     backend-tests:
       run: bun run test:backend
+    rust-tests:
+      run: bun run test:rust
     runtime-staging:
       run: bun run --cwd desktop test:runtime-staging
