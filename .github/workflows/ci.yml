@@ -48,6 +48,24 @@ jobs:
       - run: bun run format:check
         env:
           FORMAT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      - name: Checkout shared ARK SDK
+        uses: actions/checkout@v4
+        with:
+          repository: makekosmos/arca-sdk
+          path: _shared/arca-sdk
+          fetch-depth: 1
+          token: ${{ secrets.KOSMOS_READ_TOKEN }}
+      - name: Checkout shared visuals
+        uses: actions/checkout@v4
+        with:
+          repository: makekosmos/imago
+          path: _shared/imago
+          fetch-depth: 1
+          token: ${{ secrets.KOSMOS_READ_TOKEN }}
+      - name: Link shared workspaces
+        run: |
+          ln -s "$GITHUB_WORKSPACE/_shared/arca-sdk" "$GITHUB_WORKSPACE/../arca-sdk"
+          ln -s "$GITHUB_WORKSPACE/_shared/imago" "$GITHUB_WORKSPACE/../imago"
       - run: bun run typecheck
       - run: bun run rustfmt
       - run: bun run clippy
