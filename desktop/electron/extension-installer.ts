@@ -19,24 +19,11 @@ import {
 import type { InstalledExtensionInfo } from "./extension-installer-state";
 import { extractZipTo, readZipEntries } from "./extension-zip";
 import { isString } from "../src/shared/runtimeGuards";
+import {
+  validateExtensionManifest,
+  type ExtensionManifest,
+} from "./extension-manifest-validation";
 
-interface ExtensionManifest {
-  id: string;
-  appId?: string;
-  name: string;
-  kind?: "app" | "native" | string;
-  version?: string;
-  description?: string;
-  author?: string;
-  icon?: string;
-  entryHtml?: string;
-  keplerApiVersion?: string;
-  keepAliveInBackground?: boolean;
-  native?: {
-    executable?: string;
-    devExecutable?: string;
-  };
-}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,20 +54,11 @@ async function previewKext(kextPath: string): Promise<KextManifestPreview> {
   }
   let manifest: ExtensionManifest;
   try {
-    // SAFETY: manifest.json is validated against ExtensionManifest fields immediately below.
-    manifest = JSON.parse(manifestEntry.data.toString("utf8")) as ExtensionManifest;
+    const parsed: unknown = JSON.parse(manifestEntry.data.toString("utf8"));
+    manifest = validateExtensionManifest(parsed);
   } catch (e) {
-    // SAFETY: JSON.parse errors are Error instances in the Node runtime.
+    // SAFETY: JSON.parse/manifest validation errors are Error instances in Node.
     throw new Error(`manifest.json повреждён: ${(e as Error).message}`);
-  }
-  if (!manifest.id || !isString(manifest.id)) {
-    throw new Error("manifest.id обязателен и должен быть строкой");
-  }
-  if (!/^[\w][\w.-]*$/.test(manifest.id)) {
-    throw new Error(`manifest.id невалиден: ${manifest.id}`);
-  }
-  if (!manifest.name || !isString(manifest.name)) {
-    throw new Error("manifest.name обязателен");
   }
 
   let apiCompatError: string | null = null;
@@ -134,25 +112,12 @@ async function previewDir(extDir: string): Promise<KextManifestPreview> {
   }
   let manifest: ExtensionManifest;
   try {
-    // SAFETY: manifest.json is validated against ExtensionManifest fields immediately below.
-    manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as ExtensionManifest;
+    const parsed: unknown = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+    manifest = validateExtensionManifest(parsed);
   } catch (e) {
-    // SAFETY: JSON.parse errors are Error instances in the Node runtime.
+    // SAFETY: JSON.parse/manifest validation errors are Error instances in Node.
     throw new Error(`manifest.json повреждён: ${(e as Error).message}`);
   }
-  if (!manifest.id || !manifest.name) {
-    throw new Error("manifest.id и manifest.name обязательны");
-  }
-  let apiCompatError: string | null = null;
-  if (
-    manifest.keplerApiVersion &&
-    !satisfiesSemver(KEPLER_API_VERSION, manifest.keplerApiVersion)
-  ) {
-    apiCompatError =
-      `Расширение требует Kepler API ${manifest.keplerApiVersion}, ` +
-      `установлено ${KEPLER_API_VERSION}.`;
-  }
-  let iconDataUri: string | null = null;
   if (manifest.icon) {
     const iconPath = path.join(extDir, manifest.icon);
     if (existsSync(iconPath)) {
