@@ -27,7 +27,7 @@ Kosmos is a **local-first personal software system for Windows**. At its center 
 The UI is replaceable; the data contract is not. Applications do not own isolated databases and do not write directly to SQLite. They communicate with ARK through the same narrow SDK, so a note, task, game, or usage session can remain useful outside the interface that created it.
 
 <p align="center">
-  <img alt="Eden typed objects in Kosmos" src=".github/readme/eden.png" width="100%">
+  <img alt="Historical Eden interface, retained as a pre-Memoria UI reference" src=".github/readme/eden.png" width="100%">
 </p>
 
 ## Principles
@@ -42,28 +42,30 @@ The UI is replaceable; the data contract is not. Applications do not own isolate
 
 ```mermaid
 flowchart TB
-  Apps["Eden · Delphi · Arrancador · Akasha"] --> Shell["Kosmos Desktop Shell<br/>Electron · Vue"]
-  Dashboard["Dashboard · Focus · Launcher"] --> Shell
-  Shell --> SDK["@kosmos/ark"]
-  SDK --> Runtime["Kosmos Runtime<br/>Rust · WebSocket · command bus"]
-  Runtime --> ARK["ARK Data Engine<br/>objects · links · usage · sync"]
+  Apps["Agenda · Memoria · Arcadia · Ordo · Daedalus · Dictation"] --> Cortex["Cortex<br/>desktop host · package runtime"]
+  Cortex --> SDK["Arca SDK<br/>package and ARK contracts"]
+  Apps --> Imago["Imago<br/>shared design system"]
+  SDK --> ARK["ARK Core<br/>typed objects · links · usage · sync"]
   ARK --> DB[("Local SQLite")]
   ARK --> Sync["LAN / relay synchronization"]
 ```
 
-The Electron renderer never opens SQLite. Cortex talks to ARK through
-`@kosmos/ark`; ARK remains the canonical owner of data and sync state.
+Application renderers never open SQLite. [Cortex](https://github.com/makekosmos/cortex)
+hosts packages and mediates their declared capabilities; [Arca SDK](https://github.com/makekosmos/arca-sdk)
+provides the public package and ARK contracts. ARK remains the canonical owner of data and sync.
 
 ## Surfaces
 
-| Surface          | Role                                                         | State     |
-| ---------------- | ------------------------------------------------------------ | --------- |
-| **Kosmos Shell** | Launcher, extension host, settings, Dashboard, Focus Session | Active    |
-| **Eden**         | Notes, journal, and typed personal objects                   | Active    |
-| **Delphi**       | Tasks and inbox workflows                                    | Active    |
-| **Arrancador**   | Game library, playtime, backups, and `game_obj` integration  | Incubator |
-| **Akasha**       | Continuous EPUB reader                                       | Incubator |
-| **ARK**          | Shared typed-data runtime, local storage, usage, and sync    | Core      |
+| Surface       | Role                                                        | State  |
+| ------------- | ----------------------------------------------------------- | ------ |
+| **Cortex**    | Desktop host, package runtime, grants, and native services  | Active |
+| **Agenda**    | Tasks, projects, and inbox workflows                        | Active |
+| **Memoria**   | Notes, journal, and typed personal objects                  | Active |
+| **Arcadia**   | Game library, playtime, backups, and `game_obj` integration | Active |
+| **Ordo**      | Focus and time-management workflows                         | Active |
+| **Daedalus**  | Coding-agent sessions and worktree lifecycle                | Active |
+| **Dictation** | Local speech-to-text and output routing                     | Active |
+| **ARK Core**  | Shared typed-data runtime, local storage, usage, and sync   | Core   |
 
 ## Stack
 
@@ -71,32 +73,39 @@ The Electron renderer never opens SQLite. Cortex talks to ARK through
   <img alt="Local-first" src="https://shieldcn.dev/badge/local--first-by+design-8B5CF6.svg?variant=branded&size=sm&logo=sqlite">
   <img alt="Windows desktop" src="https://shieldcn.dev/badge/Windows-desktop-0078D4.svg?variant=branded&size=sm&logo=windows11">
   <img alt="Rust ARK" src="https://shieldcn.dev/badge/Rust-ARK-B7410E.svg?variant=branded&size=sm&logo=rust">
-  <img alt="Electron shell" src="https://shieldcn.dev/badge/Electron-shell-47848F.svg?variant=branded&size=sm&logo=electron">
-  <img alt="Vue extensions" src="https://shieldcn.dev/badge/Vue-extensions-42B883.svg?variant=branded&size=sm&logo=vuedotjs">
+  <img alt="Cortex host" src="https://shieldcn.dev/badge/Electron-shell-47848F.svg?variant=branded&size=sm&logo=electron">
+  <img alt="Vue package apps" src="https://shieldcn.dev/badge/Vue-extensions-42B883.svg?variant=branded&size=sm&logo=vuedotjs">
   <img alt="Bun workspace" src="https://shieldcn.dev/badge/Bun-1.3+-000000.svg?variant=branded&size=sm&logo=bun">
 </p>
 
 - **Data:** Rust, SQLite, FTS5, Hybrid Logical Clock, LAN/relay sync
-- **Desktop:** Electron, Vue, TypeScript, Vite
+- **Desktop host:** Electron, Vue, TypeScript, Vite
+- **Package UI:** [Imago](https://github.com/makekosmos/imago), Vue
 - **Design:** `@kosmos/visuals`, shared OKLCH tokens and desktop primitives
 - **Quality:** Playwright, Vitest, oxlint, oxfmt, proof-loop evidence
 
 ## Repository boundary
 
 ```text
-core/ark/              ARK storage engine, schema, sync and RPC sidecar
+crates/ark-core/        ARK storage engine, schema, sync and RPC sidecar
 ```
 
 Desktop, Manager, runtime supervisor and native Windows services live in
 [`makekosmos/cortex`](https://github.com/makekosmos/cortex). The TypeScript
-SDK and visuals package are maintained in `arca-sdk` and `imago`.
+SDK and visuals package are maintained in [`arca-sdk`](https://github.com/makekosmos/arca-sdk) and [`imago`](https://github.com/makekosmos/imago).
+
+First-party applications live in their own repositories: [`agenda`](https://github.com/makekosmos/agenda), [`memoria`](https://github.com/makekosmos/memoria), [`arcadia`](https://github.com/makekosmos/arcadia), [`ordo`](https://github.com/makekosmos/ordo), [`daedalus`](https://github.com/makekosmos/daedalus), and [`dictation`](https://github.com/makekosmos/dictation).
+
+### Compatibility names
+
+Persisted identifiers and protocol-facing aliases may still use historical names such as Eden, Delphi, Arrancador, Shell, or Kepler. They are compatibility contracts, not current product names, and are migrated only through explicit versioned changes.
 
 ## Development
 
 ### Requirements
 
 - Windows 10/11
-- [Bun](https://bun.sh/) 1.3.5+
+- [Bun](https://bun.sh/) 1.3.14
 - stable [Rust](https://www.rust-lang.org/tools/install) toolchain
 - Node.js 20+
 - PowerShell 7+
