@@ -71,14 +71,16 @@ export function normalizeHotkeyAccelerator(value: string): string {
 }
 
 export function readSettings(): KeplerShellSettings {
-  try {
-    const file = settingsFilePath();
-    if (!existsSync(file)) return {};
-    // SAFETY: the settings file is written by this module using KeplerShellSettings.
-    return JSON.parse(readFileSync(file, "utf8")) as KeplerShellSettings;
-  } catch {
-    return {};
+  for (const file of [settingsFilePath(), legacySettingsFilePath()]) {
+    try {
+      if (!existsSync(file)) continue;
+      // SAFETY: the settings file is written by this module using KeplerShellSettings.
+      return JSON.parse(readFileSync(file, "utf8")) as KeplerShellSettings;
+    } catch {
+      // Try the legacy file if the preferred file is absent or invalid.
+    }
   }
+  return {};
 }
 
 export function writeSettings(patch: Partial<KeplerShellSettings>): void {
