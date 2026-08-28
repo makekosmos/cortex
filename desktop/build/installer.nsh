@@ -10,10 +10,13 @@
   ; Kosmos is the Manager. Shell remains a separate background application.
   ; electron-builder does not create its own Shell shortcut; create both user
   ; entry points directly for the staged Manager component.
+  Delete "$DESKTOP\CosCast.lnk"
+  Delete "$SMPROGRAMS\CosCast.lnk"
+  ; Remove the previous user-facing shortcut name during upgrade.
   Delete "$DESKTOP\Kosmos.lnk"
   Delete "$SMPROGRAMS\Kosmos.lnk"
-  CreateShortCut "$DESKTOP\Kosmos.lnk" "$INSTDIR\resources\components\manager\Kosmos Manager.exe"
-  CreateShortCut "$SMPROGRAMS\Kosmos.lnk" "$INSTDIR\resources\components\manager\Kosmos Manager.exe"
+  CreateShortCut "$DESKTOP\CosCast.lnk" "$INSTDIR\resources\components\manager\Kosmos Manager.exe"
+  CreateShortCut "$SMPROGRAMS\CosCast.lnk" "$INSTDIR\resources\components\manager\Kosmos Manager.exe"
 
   ; Kepler → Kosmos product rename. Legacy shortcuts are removed best-effort;
   ; user data remains untouched.
@@ -57,6 +60,8 @@
 !macroend
 
 !macro customUnInstall
+  Delete "$DESKTOP\CosCast.lnk"
+  Delete "$SMPROGRAMS\CosCast.lnk"
   Delete "$DESKTOP\Kosmos.lnk"
   Delete "$SMPROGRAMS\Kosmos.lnk"
 
