@@ -38,6 +38,9 @@ import {
   writeFileSync,
 } from "node:fs";
 
+const SETTINGS_FILE_NAME = "kosmos-settings.json";
+const LEGACY_SETTINGS_FILE_NAME = "kepler-shell-settings.json";
+
 type InstanceKind = "prod" | "dev" | "test";
 
 export interface Instance {
@@ -135,7 +138,7 @@ export function resolveInstance(): Instance {
     dataDir = dataDirOverride || path.join(appData, `Kosmos-dev-${suffix}`);
   }
 
-  // Electron userData (singleInstanceLock scope, kepler-shell-settings.json,
+  // Electron userData (singleInstanceLock scope, Kosmos settings,
   // post-update.flag, window state cache, GPU cache, Local Storage).
   //   - prod: %APPDATA%/Kosmos App (display product rename; ARK data remains
   //     %APPDATA%/Kosmos)
@@ -266,9 +269,9 @@ function migrateLegacyProdUserData(newUserDataDir: string): void {
 
 export function migrateLegacyProdSettings(appData: string, dataDir: string): void {
   try {
-    const target = path.join(dataDir, "kepler-shell-settings.json");
+    const target = path.join(dataDir, SETTINGS_FILE_NAME);
     if (existsSync(target)) return;
-    const legacy = path.join(appData, "Kepler", "kepler-shell-settings.json");
+    const legacy = path.join(appData, "Kepler", LEGACY_SETTINGS_FILE_NAME);
     if (!existsSync(legacy)) return;
     mkdirSync(dataDir, { recursive: true });
     copyFileSync(legacy, target);
@@ -303,12 +306,15 @@ export function verifyUserDataMatches(instance: Instance): UserDataMatch {
  */
 function migrateLegacyDevSettings(newUserDataDir: string): void {
   try {
-    const newSettings = path.join(newUserDataDir, "kepler-shell-settings.json");
+    const newSettings = path.join(newUserDataDir, SETTINGS_FILE_NAME);
     if (existsSync(newSettings)) return; // уже мигрировано или dev user уже что-то писал
     const candidates = [
-      path.join(app.getPath("appData"), "Kosmos App", "kepler-shell-settings.json"),
-      path.join(app.getPath("appData"), "Kepler-dev", "kepler-shell-settings.json"),
-      path.join(app.getPath("appData"), "Kepler", "kepler-shell-settings.json"),
+      path.join(app.getPath("appData"), "Kosmos App", SETTINGS_FILE_NAME),
+      path.join(app.getPath("appData"), "Kosmos App", LEGACY_SETTINGS_FILE_NAME),
+      path.join(app.getPath("appData"), "Kepler-dev", SETTINGS_FILE_NAME),
+      path.join(app.getPath("appData"), "Kepler-dev", LEGACY_SETTINGS_FILE_NAME),
+      path.join(app.getPath("appData"), "Kepler", SETTINGS_FILE_NAME),
+      path.join(app.getPath("appData"), "Kepler", LEGACY_SETTINGS_FILE_NAME),
     ];
     const legacy = candidates.find((p) => existsSync(p));
     if (!legacy) return; // нет источника — first-time dev user
