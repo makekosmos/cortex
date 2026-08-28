@@ -55,6 +55,15 @@ static SYNC: TokioMutex<Option<Arc<SyncRuntime>>> = TokioMutex::const_new(None);
 // Request enum
 // ---------------------------------------------------------------------------
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ObjectWriteSnapshot {
+    exists: bool,
+    type_id: Option<String>,
+    type_version: Option<String>,
+    revision: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case")]
 enum Request {
@@ -190,6 +199,9 @@ enum Request {
     GetObject {
         id: String,
     },
+    GetObjectWriteSnapshot {
+        id: String,
+    },
     #[serde(rename = "canonical.game.list")]
     CanonicalGameList {
         #[serde(default)]
@@ -227,11 +239,15 @@ enum Request {
     },
     UpsertObject {
         object: ArkObjectWrite,
+        #[serde(default, rename = "expectedSnapshot")]
+        expected_snapshot: Option<ObjectWriteSnapshot>,
         #[serde(default)]
         device_id: Option<String>,
     },
     DeleteObject {
         id: String,
+        #[serde(default, rename = "expectedSnapshot")]
+        expected_snapshot: Option<ObjectWriteSnapshot>,
         #[serde(default)]
         device_id: Option<String>,
     },

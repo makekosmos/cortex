@@ -76,14 +76,7 @@ pub fn apply_legacy_compat_entity(conn: &Connection, entity: &SyncEntity) -> Res
 }
 
 pub fn apply_canonical_object_entity(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
-    let current: Option<String> = conn
-        .query_row(
-            "SELECT hlc FROM object_sync_versions WHERE object_id=?1",
-            params![entity.id],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|e| e.to_string())?;
+    let current = db::get_object_revision(conn, &entity.id)?;
     if current
         .as_deref()
         .is_some_and(|hlc| HLC::compare_str(&entity.hlc, hlc) != std::cmp::Ordering::Greater)

@@ -19,6 +19,10 @@ mod tests {
     mod request_config;
     #[path = "local_writes.rs"]
     mod local_writes;
+    #[path = "object_write_snapshot.rs"]
+    mod object_write_snapshot;
+    #[path = "object_revision_compat.rs"]
+    mod object_revision_compat;
 
     /// Regression for the legacy Todo/Project/Tag write handlers: local writes
     /// must record an HLC in the version vector and deletes must write a tombstone.
@@ -310,6 +314,7 @@ mod tests {
         .unwrap();
         handle_request(Request::UpsertObject {
             object: canonical_task_object(Some("1.0.0"), canonical_task_props()),
+            expected_snapshot: None,
             device_id: Some("device-canonical".to_string()),
         })
         .await
@@ -334,6 +339,7 @@ mod tests {
         .unwrap();
         let result = handle_request(Request::UpsertObject {
             object: canonical_task_object(None, canonical_task_props()),
+            expected_snapshot: None,
             device_id: Some("device-canonical".to_string()),
         })
         .await;
@@ -366,6 +372,7 @@ mod tests {
         props["unexpected"] = json!(true);
         let result = handle_request(Request::UpsertObject {
             object: canonical_task_object(Some("1.0.0"), props),
+            expected_snapshot: None,
             device_id: Some("device-canonical".to_string()),
         })
         .await;
@@ -406,6 +413,7 @@ mod tests {
         object.type_id = "task_obj".to_string();
         let result = handle_request(Request::UpsertObject {
             object,
+            expected_snapshot: None,
             device_id: None,
         })
         .await;

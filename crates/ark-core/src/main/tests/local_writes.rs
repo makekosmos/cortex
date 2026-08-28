@@ -32,6 +32,7 @@ use super::*;
         };
         handle_request(Request::UpsertObject {
             object,
+            expected_snapshot: None,
             device_id: Some("device-local".to_string()),
         })
         .await
@@ -107,6 +108,7 @@ use super::*;
 
         handle_request(Request::DeleteObject {
             id: "obj-local-write".to_string(),
+            expected_snapshot: None,
             device_id: Some("device-local".to_string()),
         })
         .await
@@ -209,12 +211,14 @@ use super::*;
         };
         handle_request(Request::UpsertObject {
             object: source,
+            expected_snapshot: None,
             device_id: Some("device-local".to_string()),
         })
         .await
         .unwrap();
         handle_request(Request::UpsertObject {
             object: target,
+            expected_snapshot: None,
             device_id: Some("device-local".to_string()),
         })
         .await

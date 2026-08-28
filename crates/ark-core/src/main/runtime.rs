@@ -400,6 +400,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         | Request::GetObjectsByIds { .. }
         | Request::SearchObjects { .. }
         | Request::GetObject { .. }
+        | Request::GetObjectWriteSnapshot { .. }
         | Request::CanonicalGameList { .. }
         | Request::CanonicalGameGet { .. }
         | Request::CanonicalGameUpsert { .. }

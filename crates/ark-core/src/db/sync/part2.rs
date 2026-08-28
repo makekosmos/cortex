@@ -129,6 +129,34 @@ fn finish_usage_entity_sync(conn: &Connection, entity: &SyncEntity) -> Result<()
     )
 }
 
+pub fn get_object_revision(conn: &Connection, entity_id: &str) -> Result<Option<String>, String> {
+    let vector_revision = get_sync_kv(conn, VERSION_VECTOR_KEY)?
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| serde_json::from_str::<VersionVector>(&value).map_err(|error| error.to_string()))
+        .transpose()?
+        .and_then(|vector| vector.get(entity_id).cloned());
+    let object_revision = conn
+        .query_row(
+            "SELECT hlc FROM object_sync_versions WHERE object_id = ?1",
+            [entity_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    let tombstone_revision = conn
+        .query_row(
+            "SELECT hlc FROM sync_tombstones WHERE id = ?1 AND entity_type = 'object'",
+            [entity_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    Ok([vector_revision, object_revision, tombstone_revision]
+        .into_iter()
+        .flatten()
+        .max_by(|left, right| HLC::compare(&HLC::from_string(left), &HLC::from_string(right))))
+}
+
 pub fn bump_sync_version_vector(
     conn: &Connection,
     entity_type: &str,
@@ -164,16 +192,26 @@ pub fn bump_sync_version_vector(
         .transpose()?
         .unwrap_or_default();
 
+    let mut previous = vector.get(entity_id).cloned();
+    if entity_type == "object" {
+        if let Some(candidate) = get_object_revision(conn, entity_id)? {
+            previous = Some(candidate);
+        }
+    }
+
     let now = HLC::now(device_id);
-    let next = match vector.get(entity_id) {
+    let next = match previous {
         Some(existing) => {
-            let previous = HLC::from_string(existing);
+            let previous = HLC::from_string(&existing);
             if HLC::compare(&now, &previous).is_gt() {
                 now
             } else {
+                if previous.counter == u64::MAX {
+                    return Err("hlc_counter_overflow".to_string());
+                }
                 HLC::new(
                     previous.wall_time,
-                    previous.counter.saturating_add(1),
+                    previous.counter + 1,
                     device_id.to_string(),
                 )
             }

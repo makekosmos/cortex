@@ -1,4 +1,25 @@
 use super::*;
+use rusqlite::OptionalExtension;
+
+fn object_write_snapshot(
+    conn: &rusqlite::Connection,
+    id: &str,
+) -> Result<ObjectWriteSnapshot, String> {
+    let identity = conn
+        .query_row(
+            "SELECT type_id, type_version FROM objects WHERE id = ?1",
+            [id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    Ok(ObjectWriteSnapshot {
+        exists: identity.is_some(),
+        type_id: identity.as_ref().map(|value| value.0.clone()),
+        type_version: identity.map(|value| value.1),
+        revision: db::get_object_revision(conn, id)?,
+    })
+}
 
 pub(super) async fn handle(request: Request) -> Result<Value, String> {
     match request {
@@ -33,6 +54,10 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
         Request::GetObject { id } => with_conn(|conn| {
             let object = db::get_object(conn, &id)?;
             serde_json::to_value(object).map_err(|e| e.to_string())
+        }),
+        Request::GetObjectWriteSnapshot { id } => with_conn(|conn| {
+            serde_json::to_value(object_write_snapshot(conn, &id)?)
+                .map_err(|error| error.to_string())
         }),
         Request::CanonicalGameList { device_id } => {
             let device = local_write_device_id(device_id);
@@ -125,14 +150,33 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             }
             Ok(json!(true))
         }
-        Request::UpsertObject { object, device_id } => {
+        Request::UpsertObject {
+            object,
+            expected_snapshot,
+            device_id,
+        } => {
             let object_id = object.id.clone();
             let object_type_id = object.type_id.clone();
             let entity = with_write_tx(|conn| {
+                if let Some(expected) = expected_snapshot {
+                    if object_write_snapshot(conn, &object.id)? != expected {
+                        return Err("object_conflict:stale_snapshot".to_string());
+                    }
+                }
                 let object = ark_core::canonical_types::ingress::prepare_object(conn, object)
                     .map_err(|error| error.to_string())?;
                 db::upsert_object(conn, &object)?;
                 let hlc = record_local_upsert(conn, "object", &object.id, device_id)?;
+                let version_rows = conn.execute(
+                    "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0)
+                     ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0
+                     WHERE excluded.hlc > object_sync_versions.hlc",
+                    rusqlite::params![object.id, hlc],
+                )
+                .map_err(|error| error.to_string())?;
+                if version_rows != 1 {
+                    return Err("object_conflict:stale_revision".to_string());
+                }
                 Ok(make_sync_entity(
                     "object",
                     &object.id,
@@ -153,11 +197,30 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             }));
             Ok(json!(true))
         }
-        Request::DeleteObject { id, device_id } => {
+        Request::DeleteObject {
+            id,
+            expected_snapshot,
+            device_id,
+        } => {
             let object_id = id.clone();
             let entity = with_write_tx(|conn| {
+                if let Some(expected) = expected_snapshot {
+                    if object_write_snapshot(conn, &id)? != expected {
+                        return Err("object_conflict:stale_snapshot".to_string());
+                    }
+                }
                 db::delete_object(conn, &id)?;
                 let hlc = record_local_delete(conn, "object", &id, device_id)?;
+                let version_rows = conn.execute(
+                    "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,1)
+                     ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=1
+                     WHERE excluded.hlc > object_sync_versions.hlc",
+                    rusqlite::params![id, hlc],
+                )
+                .map_err(|error| error.to_string())?;
+                if version_rows != 1 {
+                    return Err("object_conflict:stale_revision".to_string());
+                }
                 Ok(make_sync_entity("object", &id, json!({}), hlc, Some(true)))
             })?;
             let eid = object_id.clone();
@@ -173,4 +236,3 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
         _ => unreachable!("request routed to the wrong runtime handler"),
     }
 }
-

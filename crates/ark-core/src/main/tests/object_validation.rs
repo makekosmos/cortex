@@ -22,6 +22,7 @@ use super::*;
                 updated_at: "2026-06-18T00:00:00.000Z".into(),
                 deleted_at: None,
             },
+            expected_snapshot: None,
             device_id: None,
         })
         .await
@@ -73,6 +74,7 @@ use super::*;
 
         let result = handle_request(Request::UpsertObject {
             object,
+            expected_snapshot: None,
             device_id: None,
         })
         .await;
@@ -114,6 +116,7 @@ use super::*;
         // Ожидаем Err; после него проверяем что ничего не записалось
         let _ = handle_request(Request::UpsertObject {
             object,
+            expected_snapshot: None,
             device_id: Some("test-device".to_string()),
         })
         .await;
@@ -148,4 +151,3 @@ use super::*;
         }
         // Если vv_raw == None — version_vector ещё не создавался, тест проходит
     }
-

@@ -146,6 +146,7 @@ use super::*;
         };
         handle_request(Request::UpsertObject {
             object,
+            expected_snapshot: None,
             device_id: Some("test-device".to_string()),
         })
         .await
@@ -211,6 +212,7 @@ use super::*;
         };
         handle_request(Request::UpsertObject {
             object,
+            expected_snapshot: None,
             device_id: Some("test-device".to_string()),
         })
         .await
@@ -221,6 +223,7 @@ use super::*;
 
         handle_request(Request::DeleteObject {
             id: "live-obj-del".to_string(),
+            expected_snapshot: None,
             device_id: Some("test-device".to_string()),
         })
         .await
@@ -248,4 +251,3 @@ use super::*;
     // -----------------------------------------------------------------------
     // RED-тесты: fail-closed + атомарность entity/sync-meta (2026-06-18)
     // -----------------------------------------------------------------------
-

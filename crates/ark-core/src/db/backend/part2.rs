@@ -190,6 +190,9 @@ impl SqliteStorageBackend {
                 conn, &canonical,
             );
         }
+        if entity.entity_type == "object" && entity.deleted == Some(true) {
+            return crate::canonical_types::facades::apply_canonical_object_entity(conn, entity);
+        }
 
         if entity.deleted == Some(true) {
             match entity.entity_type.as_str() {
