@@ -124,6 +124,7 @@
                 runtime: crate::package_manifest::TargetRuntime::Worker,
                 os: vec![crate::package_manifest::TargetOs::Windows],
                 arch: None,
+                entrypoint: Some("worker.exe".into()),
             }],
             data: crate::package_manifest::ManifestData {
                 access: vec![],

@@ -50,6 +50,7 @@ pub(crate) mod tests {
                 runtime: crate::package_manifest::TargetRuntime::KosmosHost,
                 os: vec![crate::package_manifest::TargetOs::Windows],
                 arch: None,
+                entrypoint: None,
             }],
             data: crate::package_manifest::ManifestData {
                 access: vec![],
@@ -91,6 +92,7 @@ pub(crate) mod tests {
                 runtime: crate::package_manifest::TargetRuntime::KosmosHost,
                 os: vec![crate::package_manifest::TargetOs::Windows],
                 arch: None,
+                entrypoint: None,
             }],
             data: crate::package_manifest::ManifestData {
                 access: vec![crate::package_manifest::DataAccessRule {
@@ -1292,6 +1294,7 @@ pub(crate) mod tests {
                 runtime: crate::package_manifest::TargetRuntime::Worker,
                 os: vec![crate::package_manifest::TargetOs::Windows],
                 arch: None,
+                entrypoint: None,
             }],
             data: crate::package_manifest::ManifestData {
                 access: vec![],

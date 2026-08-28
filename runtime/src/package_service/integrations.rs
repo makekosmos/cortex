@@ -45,7 +45,7 @@ impl PackageService {
                 matches!(
                     &package.manifest,
                     VersionedManifest::V2(manifest)
-                        if manifest.kind == PackageKind::Source && manifest.integration.is_some()
+                        if manifest.worker_entrypoint().is_some() && manifest.integration.is_some()
                 )
             })
             .max_by(|left, right| {

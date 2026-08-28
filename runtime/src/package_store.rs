@@ -108,8 +108,11 @@ impl PackageStore {
     }
 
     pub fn immutable_entrypoint(&self, package: &InstalledPackage) -> Result<PathBuf, StoreError> {
-        let manifest = package.manifest.common_manifest();
-        let canonical = self.immutable_asset_path(package, &manifest.entrypoint)?;
+        let entrypoint = package
+            .manifest
+            .worker_entrypoint()
+            .ok_or(StoreError::WorkerRequired)?;
+        let canonical = self.immutable_asset_path(package, entrypoint)?;
         if !canonical
             .extension()
             .and_then(|e| e.to_str())
@@ -254,10 +257,7 @@ impl PackageStore {
         if package.revoked {
             return Err(StoreError::Revoked);
         }
-        if !matches!(
-            package.manifest.kind(),
-            PackageKind::Source | PackageKind::Bridge
-        ) {
+        if package.manifest.worker_entrypoint().is_none() {
             return Err(StoreError::WorkerRequired);
         }
         package.enabled = true;
@@ -388,6 +388,14 @@ impl PackageStore {
         let mut names = std::collections::HashSet::new();
         let mut found_manifest = None;
         let mut found_entry = false;
+        let mut missing_workers = match expected {
+            VersionedManifest::V2(manifest) => manifest
+                .declared_worker_entrypoints()
+                .into_iter()
+                .map(str::to_owned)
+                .collect::<std::collections::HashSet<_>>(),
+            VersionedManifest::V1(_) => std::collections::HashSet::new(),
+        };
         let mut found_icon = expected.icon().is_none();
         for i in 0..zip.len() {
             let mut entry = zip.by_index(i)?;
@@ -438,13 +446,11 @@ impl PackageStore {
             if normalized.eq_ignore_ascii_case("manifest.json") {
                 found_manifest = Some(fs::read(&out)?);
             }
-            if normalized.eq_ignore_ascii_case(expected.entrypoint()) {
+            if normalized == expected.entrypoint() {
                 found_entry = true;
             }
-            if expected
-                .icon()
-                .is_some_and(|icon| normalized.eq_ignore_ascii_case(icon))
-            {
+            missing_workers.remove(&normalized);
+            if expected.icon().is_some_and(|icon| normalized == icon) {
                 found_icon = true;
             }
         }
@@ -460,6 +466,9 @@ impl PackageStore {
         }
         if !found_entry {
             return Err(StoreError::Archive("entrypoint missing".into()));
+        }
+        if !missing_workers.is_empty() {
+            return Err(StoreError::Archive("worker entrypoint missing".into()));
         }
         if !found_icon {
             return Err(StoreError::Archive("icon missing".into()));
@@ -962,7 +971,10 @@ mod tests {
             unreachable!()
         };
         m.kind = PackageKind::Source;
-        archive(&p, &m, "index.html");
+        m.entrypoint = "worker.exe".into();
+        m.targets[0].runtime = crate::package_manifest::TargetRuntime::Worker;
+        m.targets[0].entrypoint = Some("worker.exe".into());
+        archive(&p, &m, "worker.exe");
         let bytes = fs::read(&p).unwrap();
         let hash = hex_hash(&bytes);
         let s = PackageStore::new(d.path().join("store")).unwrap();
@@ -995,6 +1007,8 @@ mod tests {
         };
         m.kind = PackageKind::Source;
         m.entrypoint = "worker.exe".into();
+        m.targets[0].runtime = crate::package_manifest::TargetRuntime::Worker;
+        m.targets[0].entrypoint = Some("worker.exe".into());
         archive(&p, &m, "worker.exe");
         let bytes = fs::read(&p).unwrap();
         let hash = hex_hash(&bytes);

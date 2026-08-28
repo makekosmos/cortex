@@ -65,8 +65,8 @@ pub struct IntegrationSchedule {
 
 impl IntegrationManifest {
     pub(crate) fn validate(&self, manifest: &ManifestV2) -> Result<(), ManifestError> {
-        if manifest.kind != PackageKind::Source
-            || !manifest.entrypoint.to_ascii_lowercase().ends_with(".exe")
+        if !matches!(manifest.kind, PackageKind::Source | PackageKind::App)
+            || manifest.declared_worker_entrypoints().is_empty()
         {
             return Err(ManifestError::InvalidField("integration"));
         }

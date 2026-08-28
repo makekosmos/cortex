@@ -2,7 +2,10 @@ use super::*;
 
 #[path = "calls_dispatch/handle.rs"]
 mod handle;
+#[path = "calls_dispatch/path_scope.rs"]
+mod path_scope;
 pub(super) use handle::handle_call;
+use path_scope::granted_path_scope;
 
 pub(super) async fn dispatch(
     inner: &SupervisorInner,
@@ -72,9 +75,15 @@ pub(super) async fn dispatch(
         | WorkerMethod::FilesystemWrite
         | WorkerMethod::FilesystemList
         | WorkerMethod::FilesystemPoll
-        | WorkerMethod::FilesystemDelete => call
+        | WorkerMethod::FilesystemDelete
+        | WorkerMethod::FilesystemCreateDir
+        | WorkerMethod::ProcessSpawn => call
             .params
-            .get("path")
+            .get(if matches!(call.operation, WorkerMethod::ProcessSpawn) {
+                "executable"
+            } else {
+                "path"
+            })
             .and_then(serde_json::Value::as_str)
             .and_then(|path| granted_path_scope(grant, &call.operation, Path::new(path))),
     };
@@ -180,6 +189,8 @@ pub(super) async fn dispatch(
             let bytes = package_worker_broker::read_file(broker, Path::new(path)).map_err(|error| {
                 let class = match error {
                     package_worker_broker::BrokerError::Invalid(_) => "invalid",
+                    package_worker_broker::BrokerError::Io(ref error)
+                        if error.kind() == std::io::ErrorKind::NotFound => return "not-found",
                     package_worker_broker::BrokerError::Io(_) => "io",
                     package_worker_broker::BrokerError::Http(_) => "http",
                 };
@@ -219,6 +230,16 @@ pub(super) async fn dispatch(
                 .map_err(|_| "unavailable")?;
             Ok(serde_json::Value::Null)
         }
+        WorkerMethod::FilesystemCreateDir => {
+            let path = call
+                .params
+                .get("path")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("invalid-request")?;
+            package_worker_broker::create_directory(broker, Path::new(path))
+                .map_err(|_| "unavailable")?;
+            Ok(serde_json::Value::Null)
+        }
         WorkerMethod::FilesystemList => {
             let path = call
                 .params
@@ -239,25 +260,37 @@ pub(super) async fn dispatch(
                 .map_err(|_| "unavailable")?;
             serde_json::to_value(entries).map_err(|_| "unavailable")
         }
+        WorkerMethod::ProcessSpawn => {
+            let executable = call
+                .params
+                .get("executable")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("invalid-request")?;
+            let args = call
+                .params
+                .get("args")
+                .and_then(serde_json::Value::as_array)
+                .map(|args| {
+                    args.iter()
+                        .map(|arg| arg.as_str().ok_or("invalid-request"))
+                        .collect::<Result<Vec<_>, _>>()
+                })
+                .transpose()?
+                .unwrap_or_default();
+            let cwd = call.params.get("cwd").and_then(serde_json::Value::as_str);
+            if cwd.is_some_and(|cwd| {
+                granted_path_scope(grant, &WorkerMethod::ProcessSpawn, Path::new(cwd)).is_none()
+            }) {
+                return Err("forbidden");
+            }
+            let pid = package_worker_broker::spawn_process(
+                broker,
+                Path::new(executable),
+                &args,
+                cwd.map(Path::new),
+            )
+            .map_err(|_| "unavailable")?;
+            Ok(serde_json::json!({ "pid": pid }))
+        }
     }
-}
-
-pub(super) fn granted_path_scope(
-    grant: &Grant,
-    method: &WorkerMethod,
-    path: &Path,
-) -> Option<String> {
-    let capability = match method {
-        WorkerMethod::FilesystemRead
-        | WorkerMethod::FilesystemList
-        | WorkerMethod::FilesystemPoll => "filesystem.read",
-        WorkerMethod::FilesystemWrite | WorkerMethod::FilesystemDelete => "filesystem.write",
-        _ => return None,
-    };
-    grant
-        .scopes
-        .get(capability)?
-        .iter()
-        .find(|root| path.starts_with(root))
-        .cloned()
 }

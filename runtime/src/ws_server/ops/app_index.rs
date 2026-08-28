@@ -79,46 +79,6 @@ pub(in crate::ws_server) async fn handle_app_index_op(
     }
 }
 
-pub(in crate::ws_server) fn resolve_arrancador_manual_exec_path(
-    input_path: &std::path::Path,
-) -> Result<std::path::PathBuf, String> {
-    if !input_path.is_file() {
-        return Err(format!("path is not a file: {}", input_path.display()));
-    }
-
-    let ext = input_path
-        .extension()
-        .and_then(|s| s.to_str())
-        .map(|s| s.to_ascii_lowercase());
-
-    #[cfg(target_os = "windows")]
-    if ext.as_deref() == Some("lnk") {
-        let target =
-            crate::app_index::platform::windows::start_menu::resolve_lnk_target_path(input_path)
-                .map_err(|e| format!("failed to read shortcut: {e}"))?
-                .ok_or_else(|| format!("shortcut has no target: {}", input_path.display()))?;
-        if !target.is_file() {
-            return Err(format!(
-                "shortcut target is not a file: {}",
-                target.display()
-            ));
-        }
-        return Ok(target);
-    }
-
-    match std::fs::canonicalize(input_path) {
-        Ok(path) => {
-            let value = path.to_string_lossy().to_string();
-            if let Some(stripped) = value.strip_prefix(r"\\?\") {
-                Ok(std::path::PathBuf::from(stripped))
-            } else {
-                Ok(path)
-            }
-        }
-        Err(_) => Ok(input_path.to_path_buf()),
-    }
-}
-
 pub(in crate::ws_server) fn app_icon_ref(app: &crate::app_index::App) -> Option<String> {
     app.icon_path
         .as_ref()

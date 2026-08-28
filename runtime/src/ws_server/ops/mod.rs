@@ -25,25 +25,24 @@ impl LocalResponse {
 }
 
 mod app_index;
-mod arrancador;
-mod arrancador_external;
 mod calculator;
 mod command;
 mod diagnostics;
 mod export;
 mod file_index;
+mod games;
 mod package;
 mod package_helpers;
 mod store;
 mod transport;
 
 pub(super) use app_index::*;
-pub(super) use arrancador::*;
 pub(super) use calculator::*;
 pub(super) use command::*;
 pub(super) use diagnostics::*;
 pub(super) use export::*;
 pub(super) use file_index::*;
+pub(super) use games::*;
 pub(super) use package::*;
 pub(super) use package_helpers::*;
 pub(super) use store::*;

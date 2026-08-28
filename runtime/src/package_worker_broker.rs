@@ -94,6 +94,131 @@ pub struct SecretRequest<'a> {
     pub allowed_cookie_names: &'a [String],
 }
 
+pub fn spawn_process(
+    config: &BrokerConfig,
+    executable: &Path,
+    args: &[&str],
+    cwd: Option<&Path>,
+) -> Result<u32, BrokerError> {
+    if args.len() > 64
+        || args
+            .iter()
+            .any(|arg| arg.len() > 4096 || arg.chars().any(char::is_control))
+    {
+        return Err(BrokerError::Invalid("invalid process arguments".into()));
+    }
+    reject_path(executable)?;
+    let executable = std::fs::canonicalize(executable)?;
+    if !is_under_configured_root(config, &executable) {
+        return Err(BrokerError::Invalid(
+            "executable escapes configured roots".into(),
+        ));
+    }
+    if !executable.is_file() {
+        return Err(BrokerError::Invalid("executable is not a file".into()));
+    }
+    let cwd = cwd
+        .map(|path| {
+            reject_path(path)?;
+            let path = std::fs::canonicalize(path)?;
+            is_under_configured_root(config, &path)
+                .then_some(path)
+                .ok_or_else(|| {
+                    BrokerError::Invalid("working directory escapes configured roots".into())
+                })
+        })
+        .transpose()?;
+    if cwd.as_ref().is_some_and(|path| !path.is_dir()) {
+        return Err(BrokerError::Invalid(
+            "working directory is not a directory".into(),
+        ));
+    }
+    let mut command = std::process::Command::new(executable);
+    command
+        .env_clear()
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    for key in [
+        "SystemRoot",
+        "WINDIR",
+        "TEMP",
+        "TMP",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "PROGRAMDATA",
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "PATH",
+    ] {
+        if let Some(value) = std::env::var_os(key) {
+            command.env(key, value);
+        }
+    }
+    if let Some(cwd) = cwd {
+        command.current_dir(cwd);
+    }
+    // ponytail: user-launched apps are detached and may outlive the package worker;
+    // add an explicit managed-process mode before using this broker for helpers.
+    Ok(command.spawn()?.id())
+}
+
+pub fn create_directory(config: &BrokerConfig, path: &Path) -> Result<(), BrokerError> {
+    reject_path(path)?;
+    let root = config
+        .filesystem_roots
+        .iter()
+        .find(|root| path_is_under(root, path))
+        .ok_or_else(|| BrokerError::Invalid("path escapes configured roots".into()))?;
+    let relative = relative_components(root, path)
+        .ok_or_else(|| BrokerError::Invalid("path escapes configured roots".into()))?;
+    let mut current = root.clone();
+    for component in relative {
+        let next = current.join(component);
+        match fs::create_dir(&next) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error.into()),
+        }
+        current = fs::canonicalize(next)?;
+        if !current.is_dir() || !path_is_under(root, &current) {
+            return Err(BrokerError::Invalid("path escapes configured roots".into()));
+        }
+    }
+    Ok(())
+}
+
+fn relative_components(root: &Path, path: &Path) -> Option<Vec<std::ffi::OsString>> {
+    let normalize = |component: std::path::Component<'_>| {
+        component
+            .as_os_str()
+            .to_string_lossy()
+            .trim_start_matches(r"\\?\")
+            .to_ascii_lowercase()
+    };
+    let root_components = root.components().map(normalize).collect::<Vec<_>>();
+    let path_components = path.components().collect::<Vec<_>>();
+    if path_components.len() < root_components.len()
+        || path_components
+            .iter()
+            .take(root_components.len())
+            .copied()
+            .map(normalize)
+            .ne(root_components.iter().cloned())
+    {
+        return None;
+    }
+    path_components[root_components.len()..]
+        .iter()
+        .map(|component| match component {
+            std::path::Component::Normal(value) => Some(value.to_os_string()),
+            _ => None,
+        })
+        .collect()
+}
+
 pub async fn fetch(config: &BrokerConfig, raw_url: &str) -> Result<Vec<u8>, BrokerError> {
     fetch_with_secret(config, raw_url, None).await
 }
@@ -135,10 +260,19 @@ pub async fn fetch_with_secret_json(
             .timeout(Duration::from_secs(30))
             .resolve(host, addr)
             .build()?;
+        let mut request_url = url.clone();
+        if let Some(SecretRequest {
+            injection: SecretInjection::Query { parameter, .. },
+            secret,
+            ..
+        }) = secret.as_ref()
+        {
+            request_url.query_pairs_mut().append_pair(parameter, secret);
+        }
         let mut request = match method {
-            IntegrationRequestMethod::Get => client.get(url.clone()),
+            IntegrationRequestMethod::Get => client.get(request_url.clone()),
             IntegrationRequestMethod::PostJson => client
-                .post(url.clone())
+                .post(request_url)
                 .header(reqwest::header::CONTENT_TYPE, "application/json")
                 .body(body.clone().unwrap_or_default()),
         };
@@ -225,6 +359,7 @@ fn apply_secret(
         SecretInjection::Basic { password, .. } => {
             Ok(request.basic_auth(secret.secret, Some(password)))
         }
+        SecretInjection::Query { .. } => Ok(request),
         SecretInjection::Cookies { .. } => {
             let values: HashMap<String, String> = serde_json::from_str(secret.secret)
                 .map_err(|_| BrokerError::Invalid("invalid secret cookies".into()))?;
@@ -1251,11 +1386,16 @@ mod tests {
         let td = tempfile::tempdir().unwrap();
         let cfg =
             BrokerConfig::new(std::iter::empty::<&str>(), vec![td.path().to_path_buf()]).unwrap();
-        let p = td.path().join("x");
+        let nested = td.path().join("nested/deep");
+        create_directory(&cfg, &nested).unwrap();
+        let p = nested.join("x");
         write_file(&cfg, &p, b"ok").unwrap();
         assert_eq!(read_file(&cfg, &p).unwrap(), b"ok");
         write_file(&cfg, &p, b"second").unwrap();
         assert_eq!(read_file(&cfg, &p).unwrap(), b"second");
+        assert!(
+            create_directory(&cfg, &tempfile::tempdir().unwrap().path().join("outside")).is_err()
+        );
     }
 
     #[test]

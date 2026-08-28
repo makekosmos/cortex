@@ -25,6 +25,7 @@ fn integration_manifest(version: &str) -> VersionedManifest {
             runtime: TargetRuntime::Worker,
             os: vec![TargetOs::Windows],
             arch: None,
+            entrypoint: Some("worker.exe".into()),
         }],
         data: ManifestData {
             access: vec![],

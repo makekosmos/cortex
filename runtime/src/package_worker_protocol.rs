@@ -20,6 +20,7 @@ pub enum WorkerMessage {
     Hello(HelloMessage),
     Heartbeat(HeartbeatMessage),
     Call(CallMessage),
+    Invoke(InvokeMessage),
     Stop(StopMessage),
     Result(ResultMessage),
 }
@@ -145,6 +146,7 @@ pub struct BridgeStatus {
 }
 msg!(HeartbeatMessage { pub method: String, pub generation: u64, pub token: String, #[serde(default)] pub bridge_status: Option<BridgeStatus> });
 msg!(CallMessage { pub method: String, pub id: String, pub generation: u64, pub token: String, pub operation: WorkerMethod, pub params: serde_json::Value });
+msg!(InvokeMessage { pub method: String, pub id: String, pub generation: u64, pub operation: String, pub params: serde_json::Value });
 msg!(StopMessage { pub method: String, pub generation: u64, pub reason: String });
 msg!(ResultMessage { pub method: String, pub id: String, pub ok: bool, pub result: Option<serde_json::Value>, pub error: Option<String> });
 
@@ -167,6 +169,10 @@ pub enum WorkerMethod {
     FilesystemPoll,
     #[serde(rename = "filesystem.delete")]
     FilesystemDelete,
+    #[serde(rename = "filesystem.mkdir")]
+    FilesystemCreateDir,
+    #[serde(rename = "process.spawn")]
+    ProcessSpawn,
 }
 
 pub fn parse_json_line(line: &[u8]) -> Result<WorkerMessage, &'static str> {
@@ -185,6 +191,18 @@ pub fn parse_json_line(line: &[u8]) -> Result<WorkerMessage, &'static str> {
         WorkerMessage::Hello(message) => message.method == "worker.hello",
         WorkerMessage::Heartbeat(message) => message.method == "worker.heartbeat",
         WorkerMessage::Call(message) => message.method == "worker.call",
+        WorkerMessage::Invoke(message) => {
+            message.method == "worker.invoke"
+                && !message.id.is_empty()
+                && message.id.len() <= 128
+                && !message.operation.is_empty()
+                && message.operation.len() <= 128
+                && message.operation.bytes().all(|byte| {
+                    byte.is_ascii_lowercase()
+                        || byte.is_ascii_digit()
+                        || matches!(byte, b'.' | b'_' | b'-')
+                })
+        }
         WorkerMessage::Stop(message) => message.method == "worker.stop",
         WorkerMessage::Result(message) => message.method == "worker.result",
     };
@@ -254,7 +272,7 @@ impl Grant {
                     .map(|s| normalize_origin(s))
                     .collect::<Result<_, _>>()?,
                 "filesystem.read" | "filesystem.write" => {
-                    if p.scopes.is_empty() && manifest.id == "ark-markdown-bridge" {
+                    if p.scopes.is_empty() {
                         roots
                             .iter()
                             .map(|root| normalize_path(&root.to_string_lossy(), roots))
@@ -266,9 +284,29 @@ impl Grant {
                             .collect::<Result<_, _>>()?
                     }
                 }
-                "clipboard" | "notifications" | "process.spawn" => {
-                    return Err(GrantError::UnsupportedCapability)
+                "process.spawn" => {
+                    let requested = if p.scopes.is_empty() {
+                        roots
+                            .iter()
+                            .map(|root| root.to_string_lossy().into_owned())
+                            .collect::<Vec<_>>()
+                    } else {
+                        p.scopes.clone()
+                    };
+                    requested
+                        .iter()
+                        .map(|scope| normalize_path(scope, roots))
+                        .collect::<Result<_, _>>()?
                 }
+                "worker.invoke"
+                    if p.scopes
+                        .iter()
+                        .all(|scope| valid_worker_operation_scope(scope)) =>
+                {
+                    p.scopes.clone()
+                }
+                "worker.invoke" => return Err(GrantError::InvalidScope),
+                "clipboard" | "notifications" => return Err(GrantError::UnsupportedCapability),
                 _ => return Err(GrantError::UnsupportedCapability),
             };
             if normalized.is_empty() {
@@ -315,8 +353,11 @@ impl Grant {
             WorkerMethod::ArkWrite => "ark.write",
             WorkerMethod::NetworkFetch => "network",
             WorkerMethod::FilesystemRead => "filesystem.read",
-            WorkerMethod::FilesystemWrite | WorkerMethod::FilesystemDelete => "filesystem.write",
+            WorkerMethod::FilesystemWrite
+            | WorkerMethod::FilesystemDelete
+            | WorkerMethod::FilesystemCreateDir => "filesystem.write",
             WorkerMethod::FilesystemList | WorkerMethod::FilesystemPoll => "filesystem.read",
+            WorkerMethod::ProcessSpawn => "process.spawn",
         };
         match (self.scopes.get(cap), scope) {
             (Some(xs), Some(s)) => xs.iter().any(|x| x == s),
@@ -348,6 +389,15 @@ fn validate_ops(scopes: &[String], allowed: &[&str]) -> Result<Vec<String>, Gran
         return Err(GrantError::InvalidScope);
     }
     Ok(scopes.to_vec())
+}
+
+fn valid_worker_operation_scope(scope: &str) -> bool {
+    let operation = scope.strip_suffix(".*").unwrap_or(scope);
+    !operation.is_empty()
+        && operation.len() <= 128
+        && operation.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b'-')
+        })
 }
 
 fn normalize_origin(value: &str) -> Result<String, GrantError> {

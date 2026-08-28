@@ -7,6 +7,10 @@ pub(super) async fn finish_inner_until(
     state: WorkerState,
     deadline: Instant,
 ) {
+    inner.secrets.revoke_generation(&key.0, generation);
+    lock(&inner.invocations).retain(|(id, version, pending_generation, _), _| {
+        id != &key.0 || version != &key.1 || *pending_generation != generation
+    });
     if deadline <= Instant::now() {
         return;
     }
@@ -166,7 +170,6 @@ pub(super) async fn finish_inner_until(
     if !still_exact {
         return;
     }
-    inner.secrets.revoke_generation(&key.0, generation);
     tracing::info!(target: "package_worker", package_id = %key.0, version = %key.1, generation, state = ?state, "worker lifecycle transition");
     if terminal_disable {
         let still_exact = lock(&inner.workers)

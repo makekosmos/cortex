@@ -99,6 +99,8 @@ pub struct ManifestTarget {
     pub os: Vec<TargetOs>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub arch: Option<Vec<TargetArch>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entrypoint: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
@@ -295,6 +297,29 @@ impl VersionedManifest {
         }
     }
 
+    pub fn worker_entrypoint(&self) -> Option<&str> {
+        match self {
+            Self::V1(manifest)
+                if matches!(manifest.kind, PackageKind::Source | PackageKind::Bridge) =>
+            {
+                Some(&manifest.entrypoint)
+            }
+            Self::V2(manifest) => manifest
+                .targets
+                .iter()
+                .find(|target| target.runtime == TargetRuntime::Worker && target.supports_current())
+                .and_then(|target| target.entrypoint.as_deref())
+                .or_else(|| {
+                    (matches!(manifest.kind, PackageKind::Source | PackageKind::Bridge)
+                        && manifest.targets.iter().any(|target| {
+                            target.runtime == TargetRuntime::Worker && target.supports_current()
+                        }))
+                    .then_some(manifest.entrypoint.as_str())
+                }),
+            _ => None,
+        }
+    }
+
     pub fn publisher(&self) -> &str {
         match self {
             Self::V1(manifest) => &manifest.publisher,
@@ -332,6 +357,33 @@ pub trait DefinitionSnapshotReader {
 }
 
 impl ManifestV2 {
+    pub fn worker_entrypoint(&self) -> Option<&str> {
+        self.targets
+            .iter()
+            .find(|target| target.runtime == TargetRuntime::Worker && target.supports_current())
+            .and_then(|target| target.entrypoint.as_deref())
+            .or_else(|| {
+                (matches!(self.kind, PackageKind::Source | PackageKind::Bridge)
+                    && self.targets.iter().any(|target| {
+                        target.runtime == TargetRuntime::Worker && target.supports_current()
+                    }))
+                .then_some(self.entrypoint.as_str())
+            })
+    }
+
+    pub fn declared_worker_entrypoints(&self) -> Vec<&str> {
+        self.targets
+            .iter()
+            .filter(|target| target.runtime == TargetRuntime::Worker)
+            .filter_map(|target| {
+                target.entrypoint.as_deref().or_else(|| {
+                    matches!(self.kind, PackageKind::Source | PackageKind::Bridge)
+                        .then_some(self.entrypoint.as_str())
+                })
+            })
+            .collect()
+    }
+
     pub fn validate_definition_documents<R: DefinitionSnapshotReader>(
         &self,
         reader: &R,
@@ -357,6 +409,28 @@ impl ManifestV2 {
             }
         }
         Ok(())
+    }
+}
+
+impl ManifestTarget {
+    fn supports_current(&self) -> bool {
+        let os = if cfg!(windows) {
+            TargetOs::Windows
+        } else if cfg!(target_os = "macos") {
+            TargetOs::Macos
+        } else {
+            TargetOs::Linux
+        };
+        let arch = if cfg!(target_arch = "aarch64") {
+            TargetArch::Arm64
+        } else {
+            TargetArch::X86_64
+        };
+        self.os.contains(&os)
+            && self
+                .arch
+                .as_ref()
+                .is_none_or(|arches| arches.contains(&arch))
     }
 }
 
@@ -473,6 +547,8 @@ fn validate_identity(
             || p.scopes
                 .iter()
                 .any(|s| s.is_empty() || s.len() > MAX_SCOPE || s.contains('\0'))
+            || (p.capability == "worker.invoke"
+                && p.scopes.iter().any(|scope| !safe_operation_scope(scope)))
         {
             return Err(ManifestError::InvalidField("permissions.scopes"));
         }
@@ -502,6 +578,32 @@ fn validate_v2(m: &ManifestV2) -> Result<(), ManifestError> {
         if let Some(a) = &t.arch {
             if a.is_empty() || a.len() > 8 || unique_len(a) != a.len() {
                 return Err(ManifestError::InvalidField("targets.arch"));
+            }
+        }
+        if t.runtime == TargetRuntime::Worker {
+            let entrypoint = t.entrypoint.as_deref().or_else(|| {
+                matches!(m.kind, PackageKind::Source | PackageKind::Bridge)
+                    .then_some(m.entrypoint.as_str())
+            });
+            if !entrypoint.is_some_and(|entrypoint| {
+                safe_relative_path(entrypoint, MAX_ENTRYPOINT)
+                    && entrypoint.to_ascii_lowercase().ends_with(".exe")
+            }) {
+                return Err(ManifestError::InvalidField("targets.entrypoint"));
+            }
+        } else if t.entrypoint.is_some() {
+            return Err(ManifestError::InvalidField("targets.entrypoint"));
+        }
+    }
+    for (index, left) in m.targets.iter().enumerate() {
+        for right in &m.targets[index + 1..] {
+            let os_overlap = left.os.iter().any(|os| right.os.contains(os));
+            let arch_overlap = match (&left.arch, &right.arch) {
+                (Some(left), Some(right)) => left.iter().any(|arch| right.contains(arch)),
+                _ => true,
+            };
+            if left.runtime == right.runtime && os_overlap && arch_overlap {
+                return Err(ManifestError::InvalidField("targets"));
             }
         }
     }
@@ -644,7 +746,16 @@ fn known_capability(value: &str) -> bool {
             | "clipboard"
             | "notifications"
             | "process.spawn"
+            | "worker.invoke"
     )
+}
+fn safe_operation_scope(scope: &str) -> bool {
+    let operation = scope.strip_suffix(".*").unwrap_or(scope);
+    !operation.is_empty()
+        && operation.len() <= 128
+        && operation.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b'-')
+        })
 }
 fn safe_package_id(value: &str) -> bool {
     value.len() <= MAX_ID
@@ -764,5 +875,16 @@ mod tests {
         let mut wrong = valid();
         wrong.schema_version = 2;
         assert!(wrong.validate().is_err());
+    }
+
+    #[test]
+    fn worker_entrypoint_selects_the_current_target_only() {
+        let input = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["windows"]},{"runtime":"worker","os":["windows"],"arch":["x86_64"],"entrypoint":"worker-windows.exe"},{"runtime":"worker","os":["linux"],"arch":["x86_64"],"entrypoint":"worker-linux.exe"}],"data":{"access":[],"defines":[],"mappings":[]}}"#;
+        let manifest = PackageManifest::parse(input).unwrap();
+        assert_eq!(manifest.worker_entrypoint(), Some("worker-windows.exe"));
+        let VersionedManifest::V2(manifest) = manifest else {
+            panic!()
+        };
+        assert_eq!(manifest.declared_worker_entrypoints().len(), 2);
     }
 }

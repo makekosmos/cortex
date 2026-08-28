@@ -1,8 +1,14 @@
 use super::*;
 
+#[path = "authority/data_request.rs"]
+mod data_request;
+use data_request::execute_data_request;
+
 pub(super) struct SupervisorInner {
     pub(super) workers: Mutex<HashMap<(String, String), LiveWorker>>,
     pub(super) calls: Arc<TaskRegistry>,
+    pub(super) invocations:
+        Mutex<HashMap<(String, String, u64, String), oneshot::Sender<ResultMessage>>>,
     pub(super) startups: Arc<TaskRegistry>,
     pub(super) lifecycles: Arc<TaskRegistry>,
     pub(super) api_major: u32,
@@ -31,6 +37,11 @@ impl ArkRequestExecutor for ArkHost {
         operation: &str,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, &'static str> {
+        if operation == "data.request" {
+            let request =
+                serde_json::from_value::<DataRequest>(params).map_err(|_| "invalid-request")?;
+            return execute_data_request(self, request).await;
+        }
         let response = ArkHost::request(self, operation, params)
             .await
             .map_err(|_| "unavailable")?;
@@ -62,19 +73,19 @@ pub(super) struct TypedLaunch {
 }
 
 #[cfg(all(windows, feature = "package-worker-fixture"))]
-static NEXT_AFTER_LAUNCH_GATE: std::sync::OnceLock<Mutex<Option<AfterLaunchGateParts>>> =
+pub(super) static NEXT_AFTER_LAUNCH_GATE: std::sync::OnceLock<Mutex<Option<AfterLaunchGateParts>>> =
     std::sync::OnceLock::new();
 
 #[cfg(all(windows, feature = "package-worker-fixture"))]
-struct AfterLaunchGateParts {
-    ready: oneshot::Sender<()>,
-    release: oneshot::Receiver<()>,
+pub(super) struct AfterLaunchGateParts {
+    pub(super) ready: oneshot::Sender<()>,
+    pub(super) release: oneshot::Receiver<()>,
 }
 
 #[cfg(all(windows, feature = "package-worker-fixture"))]
 pub struct AfterLaunchGate {
-    ready: oneshot::Receiver<()>,
-    release: Option<oneshot::Sender<()>>,
+    pub(super) ready: oneshot::Receiver<()>,
+    pub(super) release: Option<oneshot::Sender<()>>,
 }
 
 #[cfg(all(windows, feature = "package-worker-fixture"))]
@@ -99,8 +110,8 @@ impl Drop for AfterLaunchGate {
 
 #[cfg(all(windows, feature = "package-worker-fixture"))]
 pub struct HolderLockGate {
-    ready: oneshot::Receiver<()>,
-    release: Option<oneshot::Sender<()>>,
+    pub(super) ready: oneshot::Receiver<()>,
+    pub(super) release: Option<oneshot::Sender<()>>,
 }
 
 #[cfg(all(windows, feature = "package-worker-fixture"))]
@@ -134,6 +145,7 @@ impl PackageWorkerSupervisor {
             inner: Arc::new(SupervisorInner {
                 workers: Mutex::new(HashMap::new()),
                 calls: TaskRegistry::owned(MAX_IN_FLIGHT as usize * 256),
+                invocations: Mutex::new(HashMap::new()),
                 startups: TaskRegistry::owned(256),
                 lifecycles: TaskRegistry::owned(256),
                 api_major,
@@ -154,6 +166,7 @@ impl PackageWorkerSupervisor {
             inner: Arc::new(SupervisorInner {
                 workers: Mutex::new(HashMap::new()),
                 calls: TaskRegistry::owned(MAX_IN_FLIGHT as usize * 256),
+                invocations: Mutex::new(HashMap::new()),
                 startups: TaskRegistry::owned(256),
                 lifecycles: TaskRegistry::owned(256),
                 api_major,
@@ -173,6 +186,7 @@ impl PackageWorkerSupervisor {
             inner: Arc::new(SupervisorInner {
                 workers: Mutex::new(HashMap::new()),
                 calls: TaskRegistry::owned(MAX_IN_FLIGHT as usize * 256),
+                invocations: Mutex::new(HashMap::new()),
                 startups: TaskRegistry::owned(256),
                 lifecycles: TaskRegistry::owned(256),
                 api_major,

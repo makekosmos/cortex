@@ -91,6 +91,12 @@ pub(super) async fn schedule_retry(
                         return;
                     }
                 }
+                if lock(&inner.typed_launches)
+                    .get(&key)
+                    .is_some_and(|launch| launch.generation != generation)
+                {
+                    return;
+                }
                 {
                     let mut workers = lock(&inner.workers);
                     let Some(worker) = workers.get_mut(&key) else {
@@ -106,6 +112,9 @@ pub(super) async fn schedule_retry(
                     worker.health.restart_count = failures as u32;
                     worker.generation = next_generation;
                     worker.lifecycle_reason = Some("restarting".into());
+                }
+                if let Some(launch) = lock(&inner.typed_launches).get_mut(&key) {
+                    launch.generation = next_generation;
                 }
                 tracing::info!(target: "package_worker", package_id = %key.0, version = %key.1, generation = next_generation, "worker retry");
                 inner.startups.reap_completed().await;

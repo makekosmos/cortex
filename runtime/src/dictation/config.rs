@@ -2,7 +2,7 @@
 // через `keyring` (см. spec: enterprise standard, не хранится в plaintext).
 //
 // Layout: `<data_dir>/dictation-config.json` где data_dir = `KOSMOS_DATA_DIR`
-// если установлен, иначе `%APPDATA%\Kosmos`. Шаблон из arrancador/config.rs.
+// если установлен, иначе `%APPDATA%\Kosmos`.
 
 use serde::{Deserialize, Serialize};
 use std::io::Write as _;
@@ -132,7 +132,7 @@ impl Default for DictationConfig {
 }
 
 /// `%APPDATA%\Kosmos` или `KOSMOS_DATA_DIR` (тесты, dev-slot). Точно тот же
-/// resolver что в arrancador/config.rs — slot-based изоляция за счёт env
+/// slot-based изоляция за счёт env
 /// переменной, которую устанавливает shell через `resolveInstance`.
 pub fn data_dir() -> PathBuf {
     if let Ok(dir) = std::env::var("KOSMOS_DATA_DIR") {

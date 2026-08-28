@@ -1,0 +1,4 @@
+{"method":"worker.invoke","id":"invoke-a","generation":4,"operation":"arcadia.scan","params":{"root":"games"}}
+{"method":"worker.invoke","id":"invoke-b","generation":4,"operation":"rawg.lookup","params":{"title":"Portal 2"}}
+{"method":"worker.result","id":"invoke-b","ok":true,"result":{"source":"rawg","matched":true},"error":null}
+{"method":"worker.result","id":"invoke-a","ok":false,"result":null,"error":"denied"}

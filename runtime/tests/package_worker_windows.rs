@@ -20,7 +20,7 @@ use kepler_backend::{
     package_store::PackageStore,
     package_worker_process::{test_support, FailureStage},
     package_worker_protocol::BridgeWorkerConfig,
-    package_worker_supervisor::{PackageWorkerSupervisor, WorkerState},
+    package_worker_supervisor::{ArkRequestExecutor, PackageWorkerSupervisor, WorkerState},
     protocol_usage::ProtocolUsageStore,
     usage_tracker::UsageTrackerDiagnosticsState,
 };
@@ -123,6 +123,7 @@ fn versioned_manifest(manifest: &PackageManifest) -> VersionedManifest {
         schema_version: 2,
         id: manifest.id.clone(),
         name: manifest.name.clone(),
+        description: None,
         version: manifest.version.clone(),
         kind: manifest.kind.clone(),
         engine_api: manifest.engine_api.clone(),
@@ -134,6 +135,7 @@ fn versioned_manifest(manifest: &PackageManifest) -> VersionedManifest {
             runtime: TargetRuntime::Worker,
             os: vec![TargetOs::Windows],
             arch: None,
+            entrypoint: Some(manifest.entrypoint.clone()),
         }],
         data: ManifestData {
             access: (manifest.kind == PackageKind::Bridge)
@@ -152,6 +154,7 @@ fn versioned_manifest(manifest: &PackageManifest) -> VersionedManifest {
             defines: vec![],
             mappings: vec![],
         },
+        integration: None,
     })
 }
 
@@ -245,6 +248,7 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
                 &[std::env::temp_dir()],
                 "corr".into(),
                 None,
+                None,
             )
             .await
     });
@@ -282,6 +286,7 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
                 "hash".into(),
                 &roots,
                 "corr".into(),
+                None,
                 None
             )
             .await,
@@ -296,7 +301,15 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
     let started = Instant::now();
     let result = tokio::time::timeout(
         Duration::from_secs(45),
-        supervisor.start(&m, fixture(), "hash".into(), &roots, "corr".into(), None),
+        supervisor.start(
+            &m,
+            fixture(),
+            "hash".into(),
+            &roots,
+            "corr".into(),
+            None,
+            None,
+        ),
     )
     .await
     .expect("fixture timeout");
@@ -332,6 +345,7 @@ async fn stop_suppresses_initial_failure_retries() {
                 "hash".into(),
                 &[std::env::temp_dir()],
                 "corr".into(),
+                None,
                 None,
             )
             .await
@@ -380,6 +394,7 @@ async fn worker_ark_write_uses_host_and_advances_sync_state() {
             &[],
             "ark-write-test".into(),
             None,
+            None,
         )
         .await
         .expect("worker start");
@@ -413,6 +428,91 @@ async fn worker_ark_write_uses_host_and_advances_sync_state() {
         .stop(&worker_manifest.id, &worker_manifest.version)
         .await
         .expect("worker stop");
+}
+
+#[tokio::test]
+async fn typed_data_request_translates_to_canonical_ark_operations() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let db_path = directory.path().join("ark.db");
+    let ark_binary = resolve_ark_core_rpc_path().expect("ark-core-rpc binary");
+    let ark = ArkHost::spawn(&ark_binary, db_path.to_str().expect("db path"))
+        .await
+        .expect("ark host");
+    let note_registration = ark_core::canonical_types::definitions::canonical_type_registrations()
+        .expect("canonical registrations")
+        .into_iter()
+        .find(|registration| registration.type_id == "com.kosmos.note")
+        .expect("note registration");
+    assert!(
+        ark.request(
+            "types.registerPackageDefinitions",
+            serde_json::json!({"registrations":[note_registration]})
+        )
+        .await
+        .expect("register note type")
+        .ok
+    );
+    ArkRequestExecutor::request(
+        &ark,
+        "data.request",
+        serde_json::json!({
+            "kind":"create_object",
+            "type_id":"com.kosmos.note",
+            "type_version":"1.0.0",
+            "object_id":"typed-worker-note",
+            "fields":[
+                {"field_id":"title","value":"Typed worker note"},
+                {"field_id":"content","value":{"type":"doc","content":[]}},
+                {"field_id":"props.description","value":null},
+                {"field_id":"props.extensions","value":{}}
+            ],
+            "links":[]
+        }),
+    )
+    .await
+    .expect("typed create request");
+
+    let projected = ArkRequestExecutor::request(
+        &ark,
+        "data.request",
+        serde_json::json!({
+            "kind":"read_object","type_id":"com.kosmos.note","type_version":"1.0.0",
+            "object_id":"typed-worker-note","fields":["title"],"relations":[]
+        }),
+    )
+    .await
+    .expect("typed read request");
+    assert_eq!(projected["title"], "Typed worker note");
+    assert_eq!(projected["propsJson"], serde_json::json!({}));
+
+    let collision = ArkRequestExecutor::request(
+        &ark,
+        "data.request",
+        serde_json::json!({
+            "kind":"create_object","type_id":"com.kosmos.game","type_version":"1.0.0",
+            "object_id":"typed-worker-note","fields":[],"links":[]
+        }),
+    )
+    .await;
+    assert_eq!(collision, Err("conflict"));
+    let wrong_type_delete = ArkRequestExecutor::request(
+        &ark,
+        "data.request",
+        serde_json::json!({
+            "kind":"delete_object","type_id":"com.kosmos.game","type_version":"1.0.0",
+            "object_id":"typed-worker-note","expected_hlc":null
+        }),
+    )
+    .await;
+    assert_eq!(wrong_type_delete, Err("not-found"));
+
+    let object = ark
+        .request("get_object", serde_json::json!({"id":"typed-worker-note"}))
+        .await
+        .expect("get object");
+    assert!(object.ok);
+    assert_eq!(object.data["title"], "Typed worker note");
+    assert_eq!(object.data["typeId"], "com.kosmos.note");
 }
 
 #[tokio::test]
@@ -462,6 +562,7 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
             &roots,
             "bridge-e2e".into(),
             Some(config.clone()),
+            None,
         )
         .await
         .expect("bridge start");
@@ -529,6 +630,7 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
             &roots,
             "bridge-e2e-restart".into(),
             Some(config),
+            None,
         )
         .await
         .expect("bridge restart");
@@ -566,6 +668,7 @@ async fn activated_worker_restarts_once_and_stop_cancels_more_retries() {
             installed.hash,
             &[],
             "restart-test".into(),
+            None,
             None,
         )
         .await
@@ -628,6 +731,7 @@ async fn secret_bearing_worker_failure_is_redacted_end_to_end() {
             installed.hash,
             &[],
             "secret-redaction-e2e".into(),
+            None,
             None,
         )
         .await
@@ -885,6 +989,7 @@ async fn supervisor_cleanup_failure_retains_holder_and_disables_replacement() {
             &[],
             "cleanup-retained".into(),
             None,
+            None,
         )
         .await
         .expect("worker start");
@@ -912,6 +1017,7 @@ async fn supervisor_cleanup_failure_retains_holder_and_disables_replacement() {
                 &[],
                 "replacement".into(),
                 None,
+                None,
             )
             .await,
         Err("already-running")
@@ -931,6 +1037,7 @@ async fn supervisor_cleanup_failure_retains_holder_and_disables_replacement() {
             "hash".into(),
             &[],
             "replacement-after-stop".into(),
+            None,
             None,
         )
         .await

@@ -12,8 +12,8 @@ use crate::{
     package_worker_broker::{self, BrokerConfig},
     package_worker_protocol::{
         BootstrapMessage, BridgeStatus, BridgeWorkerConfig, CallMessage, Grant, HeartbeatMessage,
-        HelloMessage, IntegrationBootstrapConfig, ResultMessage, RunMessage, WorkerMessage,
-        WorkerMethod, MAX_LINE_BYTES,
+        HelloMessage, IntegrationBootstrapConfig, InvokeMessage, ResultMessage, RunMessage,
+        WorkerMessage, WorkerMethod, MAX_LINE_BYTES,
     },
     package_worker_secrets::PackageWorkerSecretRegistry,
     runtime_grants::{DataRequest, LaunchGrant},
@@ -94,5 +94,7 @@ use types::*;
 use authority::{dispatch_typed_inner, SupervisorInner};
 #[cfg(all(windows, feature = "package-worker-fixture"))]
 pub use authority::{AfterLaunchGate, HolderLockGate};
+#[cfg(all(windows, feature = "package-worker-fixture"))]
+use authority::{AfterLaunchGateParts, NEXT_AFTER_LAUNCH_GATE};
 pub use authority::{ArkRequestExecutor, PackageWorkerSupervisor};
 pub use types::{IntegrationLaunchConfig, WorkerDiagnostics, WorkerHealth, WorkerState};

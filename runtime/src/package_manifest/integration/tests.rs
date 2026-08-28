@@ -23,6 +23,7 @@ fn manifest() -> ManifestV2 {
             runtime: TargetRuntime::Worker,
             os: vec![TargetOs::Windows],
             arch: None,
+            entrypoint: Some("worker.exe".into()),
         }],
         data: ManifestData {
             access: vec![],

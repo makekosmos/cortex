@@ -42,6 +42,7 @@ impl PackageWorkerSupervisor {
                 .into_iter()
                 .flatten()
                 .chain(grant.scopes.get("filesystem.write").into_iter().flatten())
+                .chain(grant.scopes.get("process.spawn").into_iter().flatten())
                 .map(PathBuf::from)
                 .collect(),
         )

@@ -1,5 +1,16 @@
 use super::*;
 
+struct PendingInvocation {
+    inner: Arc<SupervisorInner>,
+    key: (String, String, u64, String),
+}
+
+impl Drop for PendingInvocation {
+    fn drop(&mut self) {
+        lock(&self.inner.invocations).remove(&self.key);
+    }
+}
+
 impl PackageWorkerSupervisor {
     pub fn validate_manifest(manifest: &PackageManifest) -> Result<(), &'static str> {
         if !matches!(manifest.kind, PackageKind::Source | PackageKind::Bridge)
@@ -114,6 +125,79 @@ impl PackageWorkerSupervisor {
         stdin
             .send(run_line(worker.generation).ok_or("unavailable")?)
             .map_err(|_| "unavailable")
+    }
+
+    pub async fn invoke(
+        &self,
+        id: &str,
+        version: &str,
+        operation: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, &'static str> {
+        let request_id = uuid::Uuid::new_v4().to_string();
+        let (generation, stdin) = {
+            let workers = lock(&self.inner.workers);
+            let worker = workers
+                .get(&(id.to_owned(), version.to_owned()))
+                .filter(|worker| worker.health.state == WorkerState::Running)
+                .ok_or("unavailable")?;
+            (
+                worker.generation,
+                worker.stdin.clone().ok_or("unavailable")?,
+            )
+        };
+        let message = InvokeMessage {
+            method: "worker.invoke".into(),
+            id: request_id.clone(),
+            generation,
+            operation: operation.to_owned(),
+            params,
+        };
+        let mut line = serde_json::to_vec(&message).map_err(|_| "invalid-request")?;
+        if line.len() >= MAX_LINE_BYTES
+            || crate::package_worker_protocol::parse_json_line(&line).is_err()
+        {
+            return Err("invalid-request");
+        }
+        line.push(b'\n');
+        let pending_key = (id.to_owned(), version.to_owned(), generation, request_id);
+        let (sender, receiver) = oneshot::channel();
+        {
+            let mut invocations = lock(&self.inner.invocations);
+            let active = invocations
+                .keys()
+                .filter(|(package, worker_version, worker_generation, _)| {
+                    package == id && worker_version == version && *worker_generation == generation
+                })
+                .count();
+            if active >= MAX_IN_FLIGHT as usize {
+                return Err("unavailable");
+            }
+            invocations.insert(pending_key.clone(), sender);
+        }
+        let _pending = PendingInvocation {
+            inner: self.inner.clone(),
+            key: pending_key.clone(),
+        };
+        if stdin.send(line).is_err() {
+            return Err("unavailable");
+        }
+        let response = time::timeout(Self::timeout(), receiver)
+            .await
+            .map_err(|_| "timeout")?
+            .map_err(|_| "unavailable");
+        let response = response?;
+        if response.ok {
+            response.result.ok_or("invalid-response")
+        } else {
+            Err(match response.error.as_deref() {
+                Some("forbidden") => "forbidden",
+                Some("invalid-request") => "invalid-request",
+                Some("not-found") => "not-found",
+                Some("conflict") => "conflict",
+                _ => "unavailable",
+            })
+        }
     }
 
     pub async fn start(

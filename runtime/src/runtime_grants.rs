@@ -35,34 +35,6 @@ pub fn dictation_operation_capability(operation: &str) -> Option<&'static str> {
     }
 }
 
-pub const GAMES_READ_OPERATIONS: &[&str] = &[
-    "games.list",
-    "games.read",
-    "games.config.get",
-    "games.config.get_rawg_key",
-    "games.rawg.search",
-    "games.sqoba.list",
-];
-pub const GAMES_WRITE_OPERATIONS: &[&str] = &[
-    "games.scan",
-    "games.add_manual",
-    "games.launch",
-    "games.config.set_rawg_key",
-    "games.rawg.apply",
-    "games.sqoba.backup",
-    "games.sqoba.restore",
-];
-
-pub fn games_operation_capability(operation: &str) -> Option<&'static str> {
-    if GAMES_READ_OPERATIONS.contains(&operation) {
-        Some("ark.read")
-    } else if GAMES_WRITE_OPERATIONS.contains(&operation) {
-        Some("ark.write")
-    } else {
-        None
-    }
-}
-
 /// Focus packages can manage only their own persisted block-lists and timer.
 /// Native blocking remains a Host concern and is never an ARK permission.
 pub const FOCUS_READ_OPERATIONS: &[&str] = &[
@@ -773,26 +745,17 @@ pub fn compile_manifest_v2(
             operations: focus_operations,
         });
     }
-    let games_operations: Vec<String> = manifest
+    let worker_operations: Vec<String> = manifest
         .permissions
         .iter()
-        .flat_map(|permission| {
-            permission.scopes.iter().filter_map(move |scope| {
-                if games_operation_capability(scope.as_str())
-                    == Some(permission.capability.as_str())
-                {
-                    Some(scope.clone())
-                } else {
-                    None
-                }
-            })
-        })
+        .filter(|permission| permission.capability == "worker.invoke")
+        .flat_map(|permission| permission.scopes.iter().cloned())
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
-    if !games_operations.is_empty() {
-        grant.capabilities.push(ScopedCapability::Games {
-            operations: games_operations,
+    if !worker_operations.is_empty() {
+        grant.capabilities.push(ScopedCapability::WorkerInvoke {
+            operations: worker_operations,
         });
     }
     Ok(grant)
@@ -864,7 +827,7 @@ pub enum ScopedCapability {
     Focus {
         operations: Vec<String>,
     },
-    Games {
+    WorkerInvoke {
         operations: Vec<String>,
     },
 }
@@ -980,9 +943,11 @@ impl LaunchGrant {
         })
     }
 
-    pub fn allows_games_operation(&self, operation: &str) -> bool {
+    pub fn allows_worker_operation(&self, operation: &str) -> bool {
         self.capabilities.iter().any(|capability| {
-            matches!(capability, ScopedCapability::Games { operations } if operations.iter().any(|allowed| allowed == operation))
+            matches!(capability, ScopedCapability::WorkerInvoke { operations } if operations.iter().any(|allowed| {
+                allowed == operation || allowed.strip_suffix(".*").is_some_and(|prefix| operation.starts_with(&format!("{prefix}.")))
+            }))
         })
     }
 
@@ -1366,15 +1331,12 @@ mod tests {
     }
 
     #[test]
-    fn manifest_v2_grants_only_requested_games_operations() {
+    fn manifest_v2_grants_only_requested_worker_operations() {
         let raw = r#"{
             "schema_version": 2, "id": "com.kosmos.arcadia", "name": "Arcadia",
             "version": "0.1.0", "kind": "app", "engine_api": ">=1.0.0",
             "entrypoint": "dist/index.html", "publisher": "kosmos",
-            "permissions": [
-                {"capability": "ark.read", "scopes": ["games.list"]},
-                {"capability": "ark.write", "scopes": ["games.scan"]}
-            ],
+            "permissions": [{"capability": "worker.invoke", "scopes": ["games.*"]}],
             "targets": [{"runtime": "kosmos-host", "os": ["windows"]}],
             "data": {"access": [], "defines": [], "mappings": []}
         }"#;
@@ -1386,9 +1348,9 @@ mod tests {
 
         let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "digest")
             .expect("compiled grant");
-        assert!(grant.allows_games_operation("games.list"));
-        assert!(grant.allows_games_operation("games.scan"));
-        assert!(!grant.allows_games_operation("games.launch"));
+        assert!(grant.allows_worker_operation("games.list"));
+        assert!(grant.allows_worker_operation("games.rawg.search"));
+        assert!(!grant.allows_worker_operation("dictation.get_config"));
     }
 
     #[test]

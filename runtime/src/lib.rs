@@ -38,7 +38,6 @@
 pub mod agents;
 pub mod app_index;
 pub mod ark_host;
-pub mod arrancador;
 pub mod auth;
 pub mod calculator;
 pub mod command_bus;

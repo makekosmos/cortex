@@ -86,6 +86,7 @@ fn main() {
     }
     let (stop_tx, stop_rx) = std::sync::mpsc::channel();
     let (result_tx, result_rx) = std::sync::mpsc::channel();
+    let (invoke_tx, invoke_rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let stdin = std::io::stdin();
         for line in stdin.lock().lines().map_while(Result::ok) {
@@ -97,6 +98,9 @@ fn main() {
                     }
                     Some("worker.result") => {
                         let _ = result_tx.send(value);
+                    }
+                    Some("worker.invoke") => {
+                        let _ = invoke_tx.send(value);
                     }
                     _ => {}
                 }
@@ -133,6 +137,16 @@ fn main() {
     loop {
         if stop_rx.try_recv().is_ok() {
             return;
+        }
+        if let Ok(invoke) = invoke_rx.try_recv() {
+            let result = json!({
+                "method": "worker.result",
+                "id": invoke["id"],
+                "ok": true,
+                "result": {"operation": invoke["operation"], "params": invoke["params"]}
+            });
+            writeln!(out, "{result}").ok();
+            out.flush().ok();
         }
         let heartbeat = json!({
             "method": "worker.heartbeat",

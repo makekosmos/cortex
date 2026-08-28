@@ -354,7 +354,6 @@ async fn setup() -> Result<SetupState, DynError> {
         correlation_id = %correlation_id,
         "kepler-backend starting"
     );
-    kepler_backend::arrancador::sqoba::recover_pending_at_startup();
 
     let singleton_path = lock_dir.join("kepler-singleton.lock.db");
 
@@ -396,13 +395,24 @@ async fn setup() -> Result<SetupState, DynError> {
     );
     let protocol_usage = Arc::new(ProtocolUsageStore::open(&lock_dir)?);
     let mut package_service = PackageService::open(&lock_dir)?;
-    let worker_roots = std::env::var_os("KOSMOS_WORKER_FILESYSTEM_ROOTS")
-        .map(|value| {
-            std::env::split_paths(&value)
-                .filter(|path| path.is_dir())
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut worker_roots = vec![lock_dir.clone()];
+    worker_roots.extend(
+        [
+            "USERPROFILE",
+            "ProgramFiles",
+            "ProgramFiles(x86)",
+            "PROGRAMDATA",
+        ]
+        .into_iter()
+        .filter_map(std::env::var_os)
+        .map(std::path::PathBuf::from)
+        .filter(|path| path.is_dir()),
+    );
+    if let Some(value) = std::env::var_os("KOSMOS_WORKER_FILESYSTEM_ROOTS") {
+        worker_roots.extend(std::env::split_paths(&value).filter(|path| path.is_dir()));
+    }
+    worker_roots.sort();
+    worker_roots.dedup();
     let package_workers =
         PackageWorkerSupervisor::with_ark(API_VERSION_CURRENT.major.into(), ark.clone());
     package_service.configure_workers(

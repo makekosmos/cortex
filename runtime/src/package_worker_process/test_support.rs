@@ -231,6 +231,40 @@ pub mod test_support {
         })
     }
 
+    pub fn process_handle_count() -> u32 {
+        let mut count = 0;
+        unsafe {
+            let _ = windows::Win32::System::Threading::GetProcessHandleCount(
+                windows::Win32::System::Threading::GetCurrentProcess(),
+                &mut count,
+            );
+        }
+        count
+    }
+
+    pub async fn handle_baseline(executable: impl AsRef<Path>) -> u32 {
+        reset();
+        fail_next(FailureStage::Assign);
+        assert!(matches!(
+            WorkerProcess::launch_with_owner(
+                executable.as_ref().to_path_buf(),
+                LaunchCleanupOwner::new(),
+            )
+            .await,
+            Err(WorkerProcessError::Setup)
+        ));
+        let mut worker = WorkerProcess::launch_with_owner(
+            executable.as_ref().to_path_buf(),
+            LaunchCleanupOwner::new(),
+        )
+        .await
+        .expect("worker handle warmup");
+        worker.stop().await.expect("worker handle warmup stop");
+        let baseline = process_handle_count();
+        reset_resume_count();
+        baseline
+    }
+
     pub fn take_all_pipes(process: &mut WorkerProcess) -> bool {
         process.take_all_pipes().is_some()
     }

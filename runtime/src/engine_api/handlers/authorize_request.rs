@@ -19,9 +19,9 @@ async fn authorize_app_request(
                 return Err("focus grant denied");
             }
         }
-        operation if crate::runtime_grants::games_operation_capability(operation).is_some() => {
-            if !grant.allows_games_operation(operation) {
-                return Err("games grant denied");
+        operation if grant.allows_worker_operation(operation) => {
+            if !params.is_object() {
+                return Err("worker invocation params must be an object");
             }
         }
         "list_objects_by_type" | "list_object_summaries_by_type" => {

@@ -186,6 +186,13 @@ pub(super) async fn read_stdout<R: AsyncRead + Unpin + Send + 'static>(
             WorkerMessage::Call(call) => {
                 spawn_call(inner.clone(), key.clone(), call).await;
             }
+            WorkerMessage::Result(result) => {
+                let pending_key = (key.0.clone(), key.1.clone(), generation, result.id.clone());
+                let Some(sender) = lock(&inner.invocations).remove(&pending_key) else {
+                    continue;
+                };
+                let _ = sender.send(result);
+            }
             _ => {
                 let _ = lifecycle_tx.send(WorkerLifecycleEvent::Finish {
                     generation,

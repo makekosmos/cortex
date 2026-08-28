@@ -1,4 +1,38 @@
 impl PackageService {
+    pub async fn invoke_worker_operation(
+        &self,
+        operation: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, PackageError> {
+        let worker = self.worker.as_ref().ok_or(PackageError::Invalid)?;
+        let _worker_mutation = worker.mutation.lock().await;
+        let mut packages = self
+            .store
+            .list()?
+            .into_iter()
+            .filter(|package| package.enabled && !package.revoked)
+            .filter(|package| {
+                package.manifest.permissions().iter().any(|permission| {
+                    permission.capability == "worker.invoke"
+                        && permission.scopes.iter().any(|scope| {
+                            scope == operation
+                                || scope.strip_suffix(".*").is_some_and(|prefix| {
+                                    operation.starts_with(&format!("{prefix}."))
+                                })
+                        })
+                })
+            });
+        let package = packages.next().ok_or(PackageError::Invalid)?;
+        if packages.next().is_some() {
+            return Err(PackageError::Invalid);
+        }
+        worker
+            .supervisor
+            .invoke(&package.id, &package.version, operation, params)
+            .await
+            .map_err(|_| PackageError::Invalid)
+    }
+
     /// Development-only app install. Production packages must continue through
     /// the signed catalog path above.
     pub fn install_development_app_from_path(
@@ -39,7 +73,9 @@ impl PackageService {
             0,
         )?;
         self.ensure_typed_grant(&package)?;
-        self.store.enable(id, version)?;
+        if package.manifest.worker_entrypoint().is_none() {
+            self.store.enable(id, version)?;
+        }
         Ok(summary(
             self.store.installed(id, version)?,
             self.worker.as_ref(),
@@ -773,6 +809,9 @@ impl PackageService {
         if !installed.hash.eq_ignore_ascii_case(&entry.sha256) {
             return Err(PackageError::Invalid);
         }
+        if installed.manifest.worker_entrypoint().is_some() {
+            return Err(PackageError::Invalid);
+        }
         self.ensure_typed_grant(&installed)?;
         self.store.enable(id, version)?;
         Ok(())
@@ -786,7 +825,9 @@ impl PackageService {
     ) -> Result<PackageSummary, PackageError> {
         let installed = self.store.installed(id, version)?;
         let typed_bound = self.ensure_typed_grant(&installed)?;
-        if matches!(installed.manifest.kind(), PackageKind::App) {
+        if matches!(installed.manifest.kind(), PackageKind::App)
+            && installed.manifest.worker_entrypoint().is_none()
+        {
             if enabled {
                 self.enable(id, version)?;
             } else {
@@ -800,6 +841,16 @@ impl PackageService {
         }
         let worker = self.worker.as_ref().ok_or(PackageError::Invalid)?;
         let _worker_mutation = worker.mutation.lock().await;
+        if enabled
+            && self.store.list()?.into_iter().any(|other| {
+                other.enabled
+                    && !other.revoked
+                    && other.id != installed.id
+                    && worker_scopes_overlap(&installed.manifest, &other.manifest)
+            })
+        {
+            return Err(PackageError::Invalid);
+        }
         if !enabled {
             worker
                 .supervisor
@@ -845,8 +896,17 @@ impl PackageService {
                 worker.roots.clone()
             };
             let integration = self.integration_launch_config(&installed)?;
+            let mut worker_manifest = installed.manifest.common_manifest();
+            if matches!(worker_manifest.kind, PackageKind::App) {
+                worker_manifest.kind = PackageKind::Source;
+            }
+            worker_manifest.entrypoint = installed
+                .manifest
+                .worker_entrypoint()
+                .ok_or(PackageError::Invalid)?
+                .to_owned();
             (
-                installed.manifest.common_manifest(),
+                worker_manifest,
                 installed.hash,
                 executable,
                 roots,
@@ -912,7 +972,7 @@ impl PackageService {
         Ok(())
     }
 
-    pub fn uninstall(&self, id: &str, version: &str) -> Result<(), PackageError> {
+    fn uninstall(&self, id: &str, version: &str) -> Result<(), PackageError> {
         let package = self.store.installed(id, version)?;
         let _mutation = Self::lock(&self.mutation);
         if let Some(worker) = self.worker.as_ref() {
@@ -939,5 +999,42 @@ impl PackageService {
                 .map_err(|_| PackageError::Persistence)?;
         }
         self.uninstall(id, version)
+    }
+}
+
+fn worker_scopes_overlap(left: &VersionedManifest, right: &VersionedManifest) -> bool {
+    let scopes = |manifest: &VersionedManifest| {
+        manifest
+            .permissions()
+            .iter()
+            .filter(|permission| permission.capability == "worker.invoke")
+            .flat_map(|permission| permission.scopes.iter().cloned())
+            .collect::<Vec<_>>()
+    };
+    let left = scopes(left);
+    let right = scopes(right);
+    left.iter().any(|left| {
+        right.iter().any(|right| {
+            scope_contains(left, right) || scope_contains(right, left)
+        })
+    })
+}
+
+fn scope_contains(scope: &str, operation: &str) -> bool {
+    scope == operation
+        || scope.strip_suffix(".*").is_some_and(|prefix| {
+            operation == prefix || operation.starts_with(&format!("{prefix}."))
+        })
+}
+
+#[cfg(test)]
+mod worker_scope_tests {
+    use super::scope_contains;
+
+    #[test]
+    fn wildcard_scope_owns_only_its_namespace() {
+        assert!(scope_contains("games.*", "games.list"));
+        assert!(scope_contains("games.*", "games"));
+        assert!(!scope_contains("games.*", "games2.list"));
     }
 }

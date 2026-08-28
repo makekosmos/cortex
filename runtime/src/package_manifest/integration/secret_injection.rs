@@ -35,6 +35,10 @@ pub enum SecretInjection {
         #[serde(default)]
         password: String,
     },
+    Query {
+        origins: Vec<String>,
+        parameter: String,
+    },
     Cookies {
         origins: Vec<String>,
         #[serde(default)]
@@ -70,6 +74,14 @@ impl SecretInjection {
             Self::Basic { origins, password } => (valid_origins(origins) && valid_affix(password))
                 .then_some(())
                 .ok_or(()),
+            Self::Query { origins, parameter } => (valid_origins(origins)
+                && !parameter.is_empty()
+                && parameter.len() <= MAX_HEADER_NAME
+                && parameter
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')))
+            .then_some(())
+            .ok_or(()),
             Self::Cookies {
                 origins,
                 headers,
@@ -92,6 +104,7 @@ impl SecretInjection {
         match self {
             Self::Header { origins, .. }
             | Self::Basic { origins, .. }
+            | Self::Query { origins, .. }
             | Self::Cookies { origins, .. } => origins,
         }
     }

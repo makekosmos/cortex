@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "id": "com.kosmos.arcadia",
+  "name": "Arcadia",
+  "version": "1.0.0",
+  "kind": "app",
+  "engine_api": ">=1.0.0",
+  "entrypoint": "index.html",
+  "publisher": "kosmos",
+  "permissions": [],
+  "targets": [
+    { "runtime": "kosmos-host", "os": ["windows"] },
+    { "runtime": "worker", "os": ["windows"], "entrypoint": "arcadia-worker.exe" }
+  ],
+  "data": { "access": [], "defines": [], "mappings": [] }
+}
