@@ -49,6 +49,7 @@ jobs:
       - run: bun run rustfmt
       - run: bun run clippy
       - run: bun run test
+      - run: bun run test:rust
       - run: bun test host/electron/host-api-reconnect.test.ts
 
   windows-runtime:
