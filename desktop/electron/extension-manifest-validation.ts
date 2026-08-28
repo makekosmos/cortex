@@ -24,18 +24,18 @@ export interface ExtensionManifest {
  * first-party artifacts fail closed with the same contract.
  */
 export function validateExtensionManifest(value: unknown): ExtensionManifest {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error("manifest.json должен содержать объект");
   }
-  const record = value as Record<string, unknown>;
-  if (typeof record.id !== "string" || !record.id) {
+  if (!isString(value.id) || !value.id) {
     throw new Error("manifest.id обязателен и должен быть строкой");
   }
-  if (!/^[\w][\w.-]*$/.test(record.id)) {
-    throw new Error(`manifest.id невалиден: ${record.id}`);
+  if (!/^\\w[\\w.-]*$/.test(value.id)) {
+    throw new Error(`manifest.id невалиден: ${value.id}`);
   }
-  if (typeof record.name !== "string" || !record.name.trim()) {
+  if (!isString(value.name) || !value.name.trim()) {
     throw new Error("manifest.name обязателен и должен быть строкой");
   }
+  // SAFETY: required id/name checks establish the ExtensionManifest boundary.
   return value as ExtensionManifest;
 }
