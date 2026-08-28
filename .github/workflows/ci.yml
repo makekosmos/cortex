@@ -29,14 +29,19 @@ jobs:
         with:
           repository: makekosmos/arca-sdk
           ref: e2c60732f21168febbaec4aac4cd85d7cdb540af
-          path: ../arca-sdk
-          token: ${{ secrets.GITHUB_TOKEN }}
+          path: arca-sdk
       - uses: actions/checkout@v4
         with:
           repository: makekosmos/imago
           ref: 9d39cdccde235b9367cb677f8107da7afd9e31fd
-          path: ../imago
-          token: ${{ secrets.GITHUB_TOKEN }}
+          path: imago
+      # TypeScript's legacy workspace aliases resolve two levels above desktop.
+      # Keep the checkouts inside GITHUB_WORKSPACE for checkout hardening, then
+      # expose them at the exact sibling paths expected by desktop/tsconfig.json.
+      - name: Link pinned sibling sources
+        run: |
+          ln -sfn "$GITHUB_WORKSPACE/arca-sdk" "$GITHUB_WORKSPACE/../arca-sdk"
+          ln -sfn "$GITHUB_WORKSPACE/imago" "$GITHUB_WORKSPACE/../imago"
       - uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
