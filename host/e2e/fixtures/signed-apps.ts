@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { daedalusArchive } from "./daedalus-archive";
 import { dictationArchive } from "./dictation-archive";
+import { ordoArchive } from "./ordo-archive";
 import { TEST_ONLY_RELEASE, TEST_ONLY_ROOT } from "./signing-keys";
 type SignedApps = {
   archives: Record<string, string>;
@@ -273,6 +274,7 @@ export function createSignedApps(
   includeMemoria = false,
   includeDaedalus = false,
   includeDictation = false,
+  includeOrdo = false,
 ): SignedApps {
   const apps: Array<{ file: string; manifest: Manifest }> = [
     archive(
@@ -292,5 +294,6 @@ export function createSignedApps(
   if (includeMemoria) apps.push(memoriaArchive(root, repositoryRoot));
   if (includeDaedalus) apps.push(daedalusArchive(root, repositoryRoot));
   if (includeDictation) apps.push(dictationArchive(root, repositoryRoot));
+  if (includeOrdo) apps.push(ordoArchive(root, repositoryRoot));
   return sign(root, repositoryRoot, apps);
 }
