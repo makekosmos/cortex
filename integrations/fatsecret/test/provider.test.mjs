@@ -54,7 +54,7 @@ function makeIntegration({ http, keyringValues = {} } = {}) {
     [FATSECRET_KEYRING_KEYS.accessTokenSecret, "access-secret"],
     ...Object.entries(keyringValues),
   ]);
-  const writes = [];
+  const writes = new Map();
   const syncMetadata = [];
   const keyring = {
     async get(key) {
@@ -69,7 +69,7 @@ function makeIntegration({ http, keyringValues = {} } = {}) {
   };
   const writer = {
     async upsertObject(object) {
-      writes.push(object);
+      writes.set(object.id, object);
     },
     async recordSync(metadata) {
       syncMetadata.push(metadata);
@@ -116,6 +116,8 @@ test("connect exchanges OAuth tokens while config contains no secrets", async ()
   assert.equal(values.get(FATSECRET_KEYRING_KEYS.accessToken), "access-token-new");
   assert.match(opened[0], /oauth_token=request-token/);
   assert.equal(requests.length, 2);
+  assert.equal(requests[0].body, "oauth_callback=http%3A%2F%2F127.0.0.1%2Fcallback");
+  assert.equal(requests[1].body, "oauth_verifier=callback-verifier");
   assert.doesNotMatch(
     JSON.stringify(integration.config),
     /consumer-secret|access-token|access-secret/i,
@@ -123,15 +125,20 @@ test("connect exchanges OAuth tokens while config contains no secrets", async ()
 });
 
 test("sync is an idempotent upsert, records metadata, and concurrent calls share one request", async () => {
-  let requests = 0;
+  const requests = [];
+  let calories = 320;
   const { integration, writes, syncMetadata } = makeIntegration({
     http: {
-      async request() {
-        requests += 1;
+      async request(request) {
+        requests.push(request);
         await new Promise((resolve) => setTimeout(resolve, 20));
         return {
           status: 200,
-          body: JSON.stringify({ diary_entries: { food_entry: fixture.diary_entries } }),
+          body: JSON.stringify({
+            diary_entries: {
+              food_entry: [{ ...fixture.diary_entries[0], calories: String(calories) }],
+            },
+          }),
         };
       },
     },
@@ -141,12 +148,15 @@ test("sync is an idempotent upsert, records metadata, and concurrent calls share
     integration.syncNow({ from: "2026-08-27", to: "2026-08-27" }),
   ]);
   assert.deepEqual(first, second);
-  assert.equal(requests, 1);
-  assert.equal(writes.length, 1);
+  assert.equal(requests.length, 1);
+  assert.equal(writes.size, 1);
+  assert.equal(new URL(requests[0].url).searchParams.get("from"), "2026-08-27");
+  assert.equal(new URL(requests[0].url).searchParams.get("to"), "2026-08-27");
+  calories = 321;
   const again = await integration.syncNow();
   assert.equal(again.imported, 1);
-  assert.equal(writes[0].id, "fatsecret-food-entry:entry-100");
-  assert.equal(writes[1].id, writes[0].id);
+  assert.equal(writes.size, 1);
+  assert.equal(writes.get("fatsecret-food-entry:entry-100").data.nutrients.calories, 321);
   assert.equal(syncMetadata.length, 2);
   assert.deepEqual(syncMetadata[0], {
     provider: "fatsecret",
@@ -170,6 +180,51 @@ test("safe API errors classify auth failures without exposing token values", asy
     assert.ok(error instanceof FatSecretError);
     assert.equal(error.kind, "auth");
     assert.doesNotMatch(error.message, /super-secret-token/);
+    assert.equal("cause" in error, false);
+    return true;
+  });
+});
+
+test("transport errors redact token values without retaining the cause", async () => {
+  const { integration } = makeIntegration({
+    http: {
+      async request() {
+        throw new Error("oauth_token=super-secret-token");
+      },
+    },
+  });
+  await assert.rejects(integration.syncNow(), (error) => {
+    assert.equal(error.kind, "api");
+    assert.doesNotMatch(error.message, /super-secret-token/);
+    assert.equal("cause" in error, false);
+    return true;
+  });
+});
+
+test("rate limits and malformed responses stay classified and cause-free", async () => {
+  const rateLimited = makeIntegration({
+    http: {
+      async request() {
+        return { status: 429, body: "retry later" };
+      },
+    },
+  }).integration;
+  await assert.rejects(rateLimited.syncNow(), (error) => {
+    assert.equal(error.kind, "rate_limit");
+    assert.equal("cause" in error, false);
+    return true;
+  });
+
+  const malformed = makeIntegration({
+    http: {
+      async request() {
+        return { status: 200, body: "not-json" };
+      },
+    },
+  }).integration;
+  await assert.rejects(malformed.syncNow(), (error) => {
+    assert.equal(error.kind, "api");
+    assert.equal("cause" in error, false);
     return true;
   });
 });
@@ -181,7 +236,7 @@ test("disconnect clears keyring connection state but not ARK history", async () 
   assert.equal(status.connected, false);
   assert.equal(values.has(FATSECRET_KEYRING_KEYS.accessToken), false);
   assert.equal(values.has(FATSECRET_KEYRING_KEYS.accessTokenSecret), false);
-  assert.equal(writes.length, 1);
+  assert.equal(writes.size, 1);
 });
 
 test("configuration rejects secret-bearing fields and requires keyring adapter", () => {

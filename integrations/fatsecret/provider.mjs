@@ -9,19 +9,18 @@ export const FATSECRET_KEYRING_KEYS = Object.freeze({
 });
 
 export class FatSecretError extends Error {
-  constructor(kind, message, cause) {
+  constructor(kind, message) {
     super(message);
     this.name = "FatSecretError";
     this.kind = kind;
-    this.cause = cause;
   }
 }
 
-function publicError(kind, message, cause) {
+function publicError(kind, message) {
   const safe = String(message ?? "request failed")
     .replace(/oauth_[a-z_]+=[^&\s]*/gi, "oauth credential redacted")
     .replace(/(token|secret|key)=?[^&\s]*/gi, "$1 redacted");
-  return new FatSecretError(kind, safe, cause);
+  return new FatSecretError(kind, safe);
 }
 
 function assertConfig(config) {
@@ -106,24 +105,24 @@ export class FatSecretIntegration {
   }
 
   async #oauthRequest(url, { token, tokenSecret, params = {} } = {}) {
-    const consumerSecret = await this.keyring.get(FATSECRET_KEYRING_KEYS.consumerSecret);
-    if (!consumerSecret)
-      throw new FatSecretError(
-        "keyring",
-        "FatSecret consumer secret is unavailable in the OS keyring",
-      );
-    const signed = signRequest({
-      method: "POST",
-      url,
-      params,
-      consumerKey: this.config.clientId,
-      consumerSecret,
-      token,
-      tokenSecret,
-      oauthNonce: this.random(),
-      oauthTimestamp: this.clock(),
-    });
     try {
+      const consumerSecret = await this.keyring.get(FATSECRET_KEYRING_KEYS.consumerSecret);
+      if (!consumerSecret)
+        throw new FatSecretError(
+          "keyring",
+          "FatSecret consumer secret is unavailable in the OS keyring",
+        );
+      const signed = signRequest({
+        method: "POST",
+        url,
+        params,
+        consumerKey: this.config.clientId,
+        consumerSecret,
+        token,
+        tokenSecret,
+        oauthNonce: this.random(),
+        oauthTimestamp: this.clock(),
+      });
       const response = await this.http.request({
         method: "POST",
         url,
@@ -131,11 +130,12 @@ export class FatSecretIntegration {
           Authorization: signed.authorization,
           "Content-Type": "application/x-www-form-urlencoded",
         },
+        body: new URLSearchParams(params).toString(),
       });
       return parseFormEncoded(parseResponse(response));
     } catch (error) {
       if (error instanceof FatSecretError) throw error;
-      throw publicError("transport", error.message, error);
+      throw publicError("transport", error?.message ?? error);
     }
   }
 
@@ -181,31 +181,31 @@ export class FatSecretIntegration {
   }
 
   async #sync({ from, to }) {
-    const token = await this.keyring.get(FATSECRET_KEYRING_KEYS.accessToken);
-    const tokenSecret = await this.keyring.get(FATSECRET_KEYRING_KEYS.accessTokenSecret);
-    const consumerSecret = await this.keyring.get(FATSECRET_KEYRING_KEYS.consumerSecret);
-    if (!token || !tokenSecret || !consumerSecret)
-      throw new FatSecretError("auth", "Connect FatSecret before syncing");
-    const params = {};
-    if (from) params.from = from;
-    if (to) params.to = to;
-    const url = `${this.config.baseUrl}/diary`;
-    const signed = signRequest({
-      method: "GET",
-      url,
-      params,
-      consumerKey: this.config.clientId,
-      consumerSecret,
-      token,
-      tokenSecret,
-      oauthNonce: this.random(),
-      oauthTimestamp: this.clock(),
-    });
     let response;
     try {
+      const token = await this.keyring.get(FATSECRET_KEYRING_KEYS.accessToken);
+      const tokenSecret = await this.keyring.get(FATSECRET_KEYRING_KEYS.accessTokenSecret);
+      const consumerSecret = await this.keyring.get(FATSECRET_KEYRING_KEYS.consumerSecret);
+      if (!token || !tokenSecret || !consumerSecret)
+        throw new FatSecretError("auth", "Connect FatSecret before syncing");
+      const params = {};
+      if (from) params.from = from;
+      if (to) params.to = to;
+      const requestUrl = new URL(`${this.config.baseUrl}/diary`);
+      for (const [key, value] of Object.entries(params)) requestUrl.searchParams.set(key, value);
+      const signed = signRequest({
+        method: "GET",
+        url: requestUrl.toString(),
+        consumerKey: this.config.clientId,
+        consumerSecret,
+        token,
+        tokenSecret,
+        oauthNonce: this.random(),
+        oauthTimestamp: this.clock(),
+      });
       response = await this.http.request({
         method: "GET",
-        url,
+        url: requestUrl.toString(),
         headers: { Authorization: signed.authorization },
       });
       const body = JSON.parse(parseResponse(response));
@@ -226,8 +226,7 @@ export class FatSecretIntegration {
       if (error instanceof FatSecretError) throw error;
       throw publicError(
         response?.status === 401 ? "auth" : response?.status === 429 ? "rate_limit" : "api",
-        error.message,
-        error,
+        error?.message ?? error,
       );
     }
   }
