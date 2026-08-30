@@ -18,6 +18,15 @@ export class FatSecretError extends Error {
 
 function publicError(kind, message) {
   const safe = String(message ?? "request failed")
+    .replace(
+      /(["']?authorization["']?\s*[:=]\s*)(?:["']?)(?:bearer|oauth)\b[^}\r\n]*/gi,
+      "$1redacted",
+    )
+    .replace(/\bbearer\s+[a-z0-9._~+/=-]+/gi, "Bearer redacted")
+    .replace(
+      /(["']?(?:oauth_)?(?:token|secret|key|password|credential|signature)["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^,}\s]+)/gi,
+      "$1redacted",
+    )
     .replace(/oauth_[a-z_]+=[^&\s]*/gi, "oauth credential redacted")
     .replace(/(token|secret|key)=?[^&\s]*/gi, "$1 redacted");
   return new FatSecretError(kind, safe);
@@ -120,6 +129,7 @@ export class FatSecretIntegration {
         consumerSecret,
         token,
         tokenSecret,
+        oauthVersion: "1.0",
         oauthNonce: this.random(),
         oauthTimestamp: this.clock(),
       });
@@ -200,6 +210,7 @@ export class FatSecretIntegration {
         consumerSecret,
         token,
         tokenSecret,
+        oauthVersion: "1.0",
         oauthNonce: this.random(),
         oauthTimestamp: this.clock(),
       });

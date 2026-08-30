@@ -118,6 +118,8 @@ test("connect exchanges OAuth tokens while config contains no secrets", async ()
   assert.equal(requests.length, 2);
   assert.equal(requests[0].body, "oauth_callback=http%3A%2F%2F127.0.0.1%2Fcallback");
   assert.equal(requests[1].body, "oauth_verifier=callback-verifier");
+  assert.equal(parseOAuthHeader(requests[0].headers.Authorization).oauth_version, "1.0");
+  assert.equal(parseOAuthHeader(requests[1].headers.Authorization).oauth_version, "1.0");
   assert.doesNotMatch(
     JSON.stringify(integration.config),
     /consumer-secret|access-token|access-secret/i,
@@ -152,6 +154,7 @@ test("sync is an idempotent upsert, records metadata, and concurrent calls share
   assert.equal(writes.size, 1);
   assert.equal(new URL(requests[0].url).searchParams.get("from"), "2026-08-27");
   assert.equal(new URL(requests[0].url).searchParams.get("to"), "2026-08-27");
+  assert.equal(parseOAuthHeader(requests[0].headers.Authorization).oauth_version, "1.0");
   calories = 321;
   const again = await integration.syncNow();
   assert.equal(again.imported, 1);
@@ -196,6 +199,28 @@ test("transport errors redact token values without retaining the cause", async (
   await assert.rejects(integration.syncNow(), (error) => {
     assert.equal(error.kind, "api");
     assert.doesNotMatch(error.message, /super-secret-token/);
+    assert.equal("cause" in error, false);
+    return true;
+  });
+});
+
+test("structured credential errors redact JSON, colon, Bearer, and Authorization values", async () => {
+  const { integration } = makeIntegration({
+    http: {
+      async request() {
+        throw new Error(
+          '{"oauth_token":"json-token","consumer_secret":"json-secret"} ' +
+            "oauth_token: colon-token Bearer bearer-token " +
+            'Authorization: OAuth oauth_token="header-token", oauth_signature="header-signature"',
+        );
+      },
+    },
+  });
+  await assert.rejects(integration.syncNow(), (error) => {
+    assert.doesNotMatch(
+      error.message,
+      /json-token|json-secret|colon-token|bearer-token|header-token|header-signature/,
+    );
     assert.equal("cause" in error, false);
     return true;
   });
