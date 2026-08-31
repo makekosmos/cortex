@@ -7,7 +7,6 @@ import type { ElectronApplication } from "playwright";
 import { hostE2eEnvironment } from "./host-environment";
 
 export { hostE2eEnvironment };
-
 export type JsonValue =
   | string
   | number
@@ -17,10 +16,8 @@ export type JsonValue =
   | { readonly [key: string]: JsonValue };
 type EngineBinaries = { engine: string; ark: string };
 export type Lock = { pid: number; http_port: number; auth_token: string };
-
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const isString = (value: JsonValue | undefined): value is string => typeof value === "string";
-
 export const waitFor = async <T>(read: () => T | undefined, label: string): Promise<T> => {
   const until = Date.now() + 30_000;
   while (Date.now() < until) {
@@ -196,6 +193,18 @@ export const waitForPidGone = async (pid: number, label: string): Promise<void> 
   if (isPidAlive(pid)) throw new Error(`${label} PID ${pid} is still alive`);
 };
 
+const engineLockPid = (dataDir: string): number | undefined => {
+  try {
+    // SAFETY: only the test-owned Engine writes this lock path.
+    const lock = JSON.parse(
+      fs.readFileSync(path.join(dataDir, "engine.lock.json"), "utf8"),
+    ) as Lock;
+    return Number.isInteger(lock.pid) ? lock.pid : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const forceStop = async (pid: number, label: string): Promise<void> => {
   try {
     execFileSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
@@ -229,8 +238,10 @@ export const terminate = async (
   label: string,
 ): Promise<void> => {
   const pid = child?.pid;
-  if (!pid || !isPidAlive(pid)) return;
-  const pids = processTreePids(pid);
+  if (!pid) return;
+  const rootPid = engineLockPid(dataDir) ?? pid;
+  const pids = processTreePids(rootPid);
+  pids.add(pid);
   console.log(
     `[host-e2e] teardown ${label}: pid=${pid} lock=${path.join(dataDir, "engine.lock.json")}`,
   );
@@ -245,7 +256,7 @@ export const terminate = async (
       timeout: 10_000,
     });
   } catch {}
-  for (const processId of processTreePids(pid)) pids.add(processId);
+  for (const processId of processTreePids(rootPid)) pids.add(processId);
   if (isPidAlive(pid)) await forceStop(pid, label);
   for (const processId of pids)
     if (isPidAlive(processId)) await forceStop(processId, `${label} descendant`);
