@@ -30,6 +30,13 @@ use super::network;
 use super::stats::{self, DictationStats};
 
 include!("host_state.rs");
+fn save_config_in(data_dir: &std::path::Path, cfg: &DictationConfig) -> std::io::Result<()> {
+    config::save_to(&data_dir.join("dictation-config.json"), cfg)
+}
+
+fn save_stats_in(data_dir: &std::path::Path, value: &DictationStats) -> std::io::Result<()> {
+    stats::save_to(&data_dir.join("dictation-stats.json"), value)
+}
 pub async fn handle_dictation_op(
     subop: &str,
     params: Value,

@@ -57,8 +57,7 @@ pub struct DictationHost {
 }
 
 impl DictationHost {
-    pub fn new() -> Arc<Self> {
-        let data_dir = config::data_dir();
+    pub fn new(data_dir: std::path::PathBuf) -> Arc<Self> {
         match local_models::migrate_legacy_assets(&data_dir) {
             Ok(true) => tracing::info!("migrated legacy dictation local STT assets"),
             Ok(false) => {}
@@ -72,7 +71,7 @@ impl DictationHost {
         }) {
             tracing::info!("removed obsolete local STT assets");
         }
-        let mut cfg = config::load();
+        let mut cfg = config::load_from(&data_dir.join("dictation-config.json"));
         let mut config_changed = normalize_platform_local_engine(&mut cfg);
         if local_models::cleanup_unused_backends(&data_dir).unwrap_or_else(|e| {
             tracing::warn!(error = %e, "failed to cleanup unused dictation local STT backends");
@@ -91,11 +90,11 @@ impl DictationHost {
             config_changed = true;
         }
         if config_changed {
-            if let Err(e) = config::save(&cfg) {
+            if let Err(e) = save_config_in(&data_dir, &cfg) {
                 tracing::warn!(error = %e, "failed to save refreshed dictation local command path");
             }
         }
-        let stats = stats::load();
+        let stats = stats::load_from(&data_dir.join("dictation-stats.json"));
         let (events_tx, _) = broadcast::channel::<Value>(64);
         let host = Arc::new(Self {
             state: Arc::new(Mutex::new(HostState::idle())),
@@ -375,7 +374,7 @@ async fn clear_unready_local_config(host: &DictationHost) -> bool {
         return false;
     }
     clear_local_selection(&mut cfg);
-    if let Err(e) = config::save(&cfg) {
+    if let Err(e) = save_config_in(&host.data_dir, &cfg) {
         tracing::warn!(error = %e, "failed to save cleared dictation local config");
     }
     drop(cfg);

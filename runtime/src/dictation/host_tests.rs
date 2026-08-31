@@ -289,6 +289,16 @@
         }
     }
 
+    fn isolated_host() -> (tempfile::TempDir, Arc<DictationHost>) {
+        let data = tempfile::TempDir::new().expect("tempdir");
+        let host = DictationHost::new_for_test(
+            data.path().into(),
+            groq::GROQ_ENDPOINT.into(),
+            test_cfg(),
+        );
+        (data, host)
+    }
+
     fn make_wav() -> Vec<u8> {
         // Minimal valid WAV header + 1 sample silence. Достаточно для теста
         // что pending::enqueue/read_wav круглим без потерь.
@@ -878,7 +888,7 @@
 
     #[tokio::test]
     async fn get_state_idle_initially() {
-        let host = DictationHost::new();
+        let (_data, host) = isolated_host();
         let resp = handle_dictation_op("get_state", Value::Null, &host).await;
         assert!(resp.ok);
         assert_eq!(resp.data["state"], "idle", "resp: {:?}", resp.data);
@@ -886,7 +896,7 @@
 
     #[tokio::test]
     async fn start_recording_transitions_to_recording() {
-        let host = DictationHost::new();
+        let (_data, host) = isolated_host();
         let resp = handle_dictation_op("start_recording", Value::Null, &host).await;
         assert!(resp.ok, "start_recording failed: {:?}", resp.error);
         let state = handle_dictation_op("get_state", Value::Null, &host).await;
@@ -963,7 +973,7 @@
 
     #[tokio::test]
     async fn start_recording_from_non_idle_errors() {
-        let host = DictationHost::new();
+        let (_data, host) = isolated_host();
         handle_dictation_op("start_recording", Value::Null, &host).await;
         let resp = handle_dictation_op("start_recording", Value::Null, &host).await;
         assert!(!resp.ok);
@@ -973,7 +983,7 @@
 
     #[tokio::test]
     async fn cancel_returns_to_idle() {
-        let host = DictationHost::new();
+        let (_data, host) = isolated_host();
         handle_dictation_op("start_recording", Value::Null, &host).await;
         {
             let mut state = host.state.lock().await;
@@ -992,7 +1002,7 @@
 
     #[tokio::test]
     async fn submit_audio_requires_recording_state() {
-        let host = DictationHost::new();
+        let (_data, host) = isolated_host();
         let resp =
             handle_dictation_op("submit_audio", json!({ "audioB64": "aGVsbG8=" }), &host).await;
         assert!(!resp.ok);
@@ -1450,17 +1460,11 @@
 
     #[tokio::test]
     async fn unknown_subop_errors() {
-        let host = DictationHost::new();
+        let (_data, host) = isolated_host();
         let resp = handle_dictation_op("nope", Value::Null, &host).await;
         assert!(!resp.ok);
         assert!(resp.error.unwrap_or_default().contains("unknown"));
     }
-
-    // Global mutex для тестов которые мутируют process-wide env var
-    // `KOSMOS_DATA_DIR`. `config::save` пишет по абсолютному пути из
-    // env, поэтому без guard'а параллельные тесты ломают друг друга
-    // ИЛИ затирают `%APPDATA%\Kosmos\dictation-config.json` пользователя.
-    static ENV_DATA_DIR_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     #[test]
     fn platform_engine_policy_maps_windows_to_whisper_cpp() {
@@ -1505,16 +1509,18 @@
 
     #[tokio::test]
     async fn update_config_persists_and_emits_event() {
-        let _guard = ENV_DATA_DIR_LOCK.lock().await;
         let _dictation_guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
         let tmp = tempfile::TempDir::new().expect("tempdir");
-        std::env::set_var("KOSMOS_DATA_DIR", tmp.path());
         let model_path = tmp.path().join("local-whisper.bin");
         let command_path = tmp.path().join("whisper-cli.exe");
         std::fs::write(&model_path, b"model").expect("model file");
         std::fs::write(&command_path, b"command").expect("command file");
 
-        let host = DictationHost::new();
+        let host = DictationHost::new_for_test(
+            tmp.path().into(),
+            groq::GROQ_ENDPOINT.into(),
+            DictationConfig::default(),
+        );
         let mut rx = host.subscribe();
         let resp = handle_dictation_op(
             "update_config",
@@ -1540,7 +1546,19 @@
         assert_eq!(evt["event"], "dictation_config_changed");
 
         // Re-load: новый host подхватит persisted config.
-        let host2 = DictationHost::new();
+        let config_path = tmp.path().join("dictation-config.json");
+        assert!(config_path.is_file());
+        let backup_path = tmp.path().join("dictation-config.json.bak");
+        for path in [&config_path, &backup_path] {
+            let bytes = std::fs::read(path).expect("persisted config");
+            serde_json::from_slice::<DictationConfig>(&bytes).expect("valid config JSON");
+        }
+        let persisted = config::load_from(&config_path);
+        let host2 = DictationHost::new_for_test(
+            tmp.path().into(),
+            groq::GROQ_ENDPOINT.into(),
+            persisted,
+        );
         let state = handle_dictation_op("get_state", Value::Null, &host2).await;
         assert_eq!(state.data["config"]["language"], "auto");
         assert_eq!(state.data["config"]["injectMode"], "clipboard_only");
@@ -1557,16 +1575,35 @@
         );
         assert_eq!(state.data["config"]["localModel"], "whisper-base");
         assert_eq!(state.data["config"]["localModelId"], "whisper-base");
+    }
 
-        std::env::remove_var("KOSMOS_DATA_DIR");
+    #[tokio::test]
+    async fn production_host_loads_config_and_stats_from_explicit_data_dir() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let cfg = DictationConfig {
+            hotkey: "Ctrl+Shift+9".into(),
+            ..Default::default()
+        };
+        config::save_to(&tmp.path().join("dictation-config.json"), &cfg).expect("save config");
+        stats::save_to(
+            &tmp.path().join("dictation-stats.json"),
+            &DictationStats {
+                total_words: 12,
+                total_record_seconds: 4,
+                total_sessions: 1,
+            },
+        )
+        .expect("save stats");
+
+        let host = DictationHost::new(tmp.path().into());
+        assert_eq!(host.config.lock().await.hotkey, "Ctrl+Shift+9");
+        assert_eq!(host.stats.lock().await.total_words, 12);
     }
 
     #[tokio::test]
     async fn update_config_unloads_local_sidecar_when_provider_switches_away() {
-        let _data_guard = ENV_DATA_DIR_LOCK.lock().await;
         let _dictation_guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
         let tmp = tempfile::TempDir::new().expect("tempdir");
-        std::env::set_var("KOSMOS_DATA_DIR", tmp.path());
 
         let mut cfg = test_cfg();
         cfg.provider = "local".into();
@@ -1591,18 +1628,19 @@
         }
 
         local::clear_test_sidecar_mock_for_host();
-        std::env::remove_var("KOSMOS_DATA_DIR");
         assert!(ops.iter().any(|op| op == "unload"), "ops: {ops:?}");
     }
 
     #[cfg(windows)]
     #[tokio::test]
     async fn local_models_list_and_use_downloaded_model_updates_config() {
-        let _guard = ENV_DATA_DIR_LOCK.lock().await;
         let tmp = tempfile::TempDir::new().expect("tempdir");
-        std::env::set_var("KOSMOS_DATA_DIR", tmp.path());
 
-        let host = DictationHost::new();
+        let host = DictationHost::new_for_test(
+            tmp.path().into(),
+            groq::GROQ_ENDPOINT.into(),
+            DictationConfig::default(),
+        );
         let list = handle_dictation_op("list_local_models", Value::Null, &host).await;
         assert!(list.ok, "list_local_models failed: {:?}", list.error);
         assert!(list.data["models"].as_array().unwrap().len() >= 4);
@@ -1643,16 +1681,17 @@
                 && model["downloaded"] == true
                 && model["selected"] == true));
 
-        std::env::remove_var("KOSMOS_DATA_DIR");
     }
 
     #[tokio::test]
     async fn local_models_use_parakeet_directory_without_whisper_command() {
-        let _guard = ENV_DATA_DIR_LOCK.lock().await;
         let tmp = tempfile::TempDir::new().expect("tempdir");
-        std::env::set_var("KOSMOS_DATA_DIR", tmp.path());
 
-        let host = DictationHost::new();
+        let host = DictationHost::new_for_test(
+            tmp.path().into(),
+            groq::GROQ_ENDPOINT.into(),
+            DictationConfig::default(),
+        );
         let parakeet = local_models::MODEL_CATALOG
             .iter()
             .find(|model| model.id == "parakeet-tdt-0.6b-v3")
@@ -1680,5 +1719,4 @@
                 && model["selected"] == true
                 && model["transcriptionSupported"] == true));
 
-        std::env::remove_var("KOSMOS_DATA_DIR");
     }

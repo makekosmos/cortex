@@ -7,6 +7,7 @@ async fn apply_local_model_selection(
     apply_local_model_selection_to_config(
         &host.config,
         &host.events_tx,
+        &host.data_dir,
         model_id,
         model_path,
         command_path,
@@ -17,6 +18,7 @@ async fn apply_local_model_selection(
 async fn apply_local_model_selection_to_config(
     config_state: &Arc<Mutex<DictationConfig>>,
     events_tx: &broadcast::Sender<Value>,
+    data_dir: &std::path::Path,
     model_id: &str,
     model_path: std::path::PathBuf,
     command_path: Option<std::path::PathBuf>,
@@ -24,6 +26,7 @@ async fn apply_local_model_selection_to_config(
     apply_local_model_selection_values_to_config(
         config_state,
         events_tx,
+        data_dir,
         model_id,
         model_path.to_string_lossy().to_string(),
         command_path.map(|path| path.to_string_lossy().to_string()),
@@ -34,6 +37,7 @@ async fn apply_local_model_selection_to_config(
 async fn apply_local_model_selection_values_to_config(
     config_state: &Arc<Mutex<DictationConfig>>,
     events_tx: &broadcast::Sender<Value>,
+    data_dir: &std::path::Path,
     model_id: &str,
     model_path: String,
     command_path: Option<String>,
@@ -45,7 +49,7 @@ async fn apply_local_model_selection_values_to_config(
     cfg.local_model = Some(model_id.to_owned());
     cfg.local_model_path = Some(model_path);
     cfg.local_command_path = command_path;
-    config::save(&cfg).map_err(|e| format!("save failed: {e}"))?;
+    save_config_in(data_dir, &cfg).map_err(|e| format!("save failed: {e}"))?;
     let snapshot = cfg.clone();
     drop(cfg);
     apply_ptt_hook(&snapshot, events_tx);
@@ -184,6 +188,7 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
             if let Err(e) = apply_local_model_selection_to_config(
                 &config_state,
                 &events_tx,
+                &data_dir,
                 &model_id,
                 model_path,
                 command_path,
@@ -285,7 +290,7 @@ async fn op_delete_local_model(params: Value, host: &DictationHost) -> Dictation
             if no_local_assets {
                 cfg.local_command_path = None;
             }
-            if let Err(e) = config::save(&cfg) {
+            if let Err(e) = save_config_in(&host.data_dir, &cfg) {
                 return DictationResponse::err(format!("delete_local_model: save failed: {e}"));
             }
             changed_config = true;
@@ -533,7 +538,7 @@ async fn op_update_config(params: Value, host: &DictationHost) -> DictationRespo
     if !local_config_is_ready(&host.data_dir, &cfg) {
         clear_local_selection(&mut cfg);
     }
-    if let Err(e) = config::save(&cfg) {
+    if let Err(e) = save_config_in(&host.data_dir, &cfg) {
         return DictationResponse::err(format!("update_config: save failed: {e}"));
     }
     let snapshot = cfg.clone();

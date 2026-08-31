@@ -43,7 +43,7 @@ async fn op_set_api_key(params: Value, host: &DictationHost) -> DictationRespons
         Ok(()) => {
             let mut cfg = host.config.lock().await;
             cfg.provider_enabled = true;
-            if let Err(e) = config::save(&cfg) {
+            if let Err(e) = save_config_in(&host.data_dir, &cfg) {
                 return DictationResponse::err(format!("set_api_key: save failed: {e}"));
             }
             drop(cfg);

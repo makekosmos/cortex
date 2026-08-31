@@ -134,7 +134,7 @@ async fn process_one_attempt_with_injector(
         {
             let mut stats_guard = host.stats.lock().await;
             stats_guard.record_session(&text, record_seconds.round() as u64);
-            if let Err(e) = stats::save(&stats_guard) {
+            if let Err(e) = save_stats_in(&host.data_dir, &stats_guard) {
                 tracing::warn!(error = %e, "dictation: stats save failed");
             }
         }
@@ -309,7 +309,7 @@ async fn process_one_attempt_with_injector(
             {
                 let mut stats_guard = host.stats.lock().await;
                 stats_guard.record_session(&text, record_seconds.round() as u64);
-                if let Err(e) = stats::save(&stats_guard) {
+                if let Err(e) = save_stats_in(&host.data_dir, &stats_guard) {
                     tracing::warn!(error = %e, "dictation: stats save failed");
                 }
             }
@@ -602,7 +602,7 @@ async fn op_get_stats(host: &DictationHost) -> DictationResponse {
 async fn op_reset_stats(host: &DictationHost) -> DictationResponse {
     let mut s = host.stats.lock().await;
     *s = DictationStats::default();
-    if let Err(e) = stats::save(&s) {
+    if let Err(e) = save_stats_in(&host.data_dir, &s) {
         return DictationResponse::err(format!("reset_stats: save failed: {e}"));
     }
     let snap = stats_to_value(&s);

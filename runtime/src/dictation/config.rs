@@ -287,47 +287,64 @@ fn backup_path(path: &Path) -> PathBuf {
     ))
 }
 
-fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+fn atomic_temp_path(path: &Path) -> PathBuf {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let temp_name = format!(
-        ".{}.tmp.{}",
+    parent.join(format!(
+        ".{}.tmp.{}.{}",
         path.file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("dictation-config.json"),
-        std::process::id()
-    );
-    let temp_path = parent.join(temp_name);
-    {
-        let mut f = std::fs::File::create(&temp_path)?;
-        f.write_all(bytes)?;
-        f.sync_all()?;
-    }
-    // `rename` cannot replace an existing file on Windows, so every save
-    // after the first used to leave the previous dictation settings intact.
-    #[cfg(windows)]
-    {
-        use std::os::windows::ffi::OsStrExt;
-        use windows::core::PCWSTR;
-        use windows::Win32::Storage::FileSystem::{
-            MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
-        };
+        std::process::id(),
+        uuid::Uuid::new_v4()
+    ))
+}
 
-        let from: Vec<u16> = temp_path.as_os_str().encode_wide().chain([0]).collect();
-        let to: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
-        // SAFETY: both buffers are NUL-terminated and live through the call.
-        unsafe {
-            MoveFileExW(
-                PCWSTR(from.as_ptr()),
-                PCWSTR(to.as_ptr()),
-                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-            )
-            .map_err(std::io::Error::other)
+// ponytail: config writes are rare; use per-path locks if write throughput ever matters.
+static ATOMIC_WRITE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let _guard = ATOMIC_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let temp_path = atomic_temp_path(path);
+    let result = (|| {
+        {
+            let mut f = std::fs::File::create(&temp_path)?;
+            f.write_all(bytes)?;
+            f.sync_all()?;
         }
+
+        // `rename` cannot replace an existing file on Windows, so every save
+        // after the first used to leave the previous dictation settings intact.
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStrExt;
+            use windows::core::PCWSTR;
+            use windows::Win32::Storage::FileSystem::{
+                MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+            };
+
+            let from: Vec<u16> = temp_path.as_os_str().encode_wide().chain([0]).collect();
+            let to: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+            // SAFETY: both buffers are NUL-terminated and live through the call.
+            unsafe {
+                MoveFileExW(
+                    PCWSTR(from.as_ptr()),
+                    PCWSTR(to.as_ptr()),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+                )
+                .map_err(std::io::Error::other)
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            std::fs::rename(&temp_path, path)
+        }
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(temp_path);
     }
-    #[cfg(not(windows))]
-    {
-        std::fs::rename(temp_path, path)
-    }
+    result
 }
 
 // ---------------------------------------------------------------------------
@@ -578,6 +595,61 @@ mod tests {
         let path = tmp.path().join("cfg.json");
         save_to(&path, &DictationConfig::default()).expect("save");
         assert!(backup_path(&path).exists());
+    }
+
+    #[test]
+    fn atomic_temp_paths_are_unique_per_write() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("cfg.json");
+        assert_ne!(atomic_temp_path(&path), atomic_temp_path(&path));
+    }
+
+    #[test]
+    fn concurrent_saves_leave_valid_files_and_no_temps() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("cfg.json");
+        let barrier = std::sync::Barrier::new(8);
+        std::thread::scope(|scope| {
+            for index in 0..8 {
+                let path = &path;
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    let cfg = DictationConfig {
+                        hotkey: format!("Ctrl+Shift+{index}"),
+                        ..Default::default()
+                    };
+                    barrier.wait();
+                    save_to(path, &cfg).expect("concurrent save");
+                });
+            }
+        });
+
+        for saved_path in [&path, &backup_path(&path)] {
+            let bytes = std::fs::read(saved_path).expect("saved config");
+            serde_json::from_slice::<DictationConfig>(&bytes).expect("valid config JSON");
+        }
+        assert!(std::fs::read_dir(tmp.path())
+            .expect("read tempdir")
+            .all(|entry| !entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .contains(".tmp.")));
+    }
+
+    #[test]
+    fn failed_atomic_replace_removes_temp_file() {
+        let tmp = TempDir::new().expect("tempdir");
+        let destination = tmp.path().join("destination");
+        std::fs::create_dir(&destination).expect("destination directory");
+        assert!(write_atomic(&destination, b"config").is_err());
+        assert!(std::fs::read_dir(tmp.path())
+            .expect("read tempdir")
+            .all(|entry| !entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .contains(".tmp.")));
     }
 
     #[test]

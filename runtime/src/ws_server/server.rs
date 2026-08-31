@@ -39,7 +39,7 @@ impl WsServer {
         let (agent_events, _) = tokio::sync::broadcast::channel(512);
         let command_bus = Arc::new(CommandBus::new());
         let pomodoro_host = PomodoroHost::new(data_dir.clone());
-        let dictation_host = DictationHost::new();
+        let dictation_host = DictationHost::new(data_dir.clone());
         let agents = Arc::new(tokio::sync::OnceCell::new());
         let agents_data_dir = Arc::new(data_dir.clone());
         let rpc_diagnostics: SharedRpcDiagnostics = Arc::new(RpcDiagnostics::new());
