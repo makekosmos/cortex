@@ -5,7 +5,13 @@ import { fileURLToPath } from "node:url";
 import { _electron as electron, type ElectronApplication } from "playwright";
 import { test, expect } from "@playwright/test";
 import electronBinary from "electron";
-import { initializeOrdo, responseMessage, responseNumber } from "./fixtures/ordo-runtime";
+import {
+  expectOverdueThirdWork,
+  initializeOrdo,
+  responseMessage,
+  responseNumber,
+  writeOverdueThirdWorkState,
+} from "./fixtures/ordo-runtime";
 import { createSignedApps } from "./fixtures/signed-apps";
 import {
   buildEngine,
@@ -232,6 +238,20 @@ test("signed Ordo enforces its v2 contract in Host", async () => {
       window.kosmosApp.ark.request("pomodoro.resume", {}),
     );
     expectPhase(resumed, "work", false);
+
+    await closeHost(host, pids);
+    host = undefined;
+    await terminate(restartedEngine, binaries.engine, dataDir, "second Engine");
+    restartedEngine = undefined;
+    writeOverdueThirdWorkState(dataDir);
+    const overdueRestart = await startEngine(binaries.engine, binaries.ark, dataDir);
+    restartedEngine = overdueRestart.child;
+    if (restartedEngine.pid) pids.add(restartedEngine.pid);
+    restartedPage = await openHost();
+    const overdue = await restartedPage.evaluate(() =>
+      window.kosmosApp.ark.request("pomodoro.get_state", {}),
+    );
+    expectOverdueThirdWork(overdue);
 
     const cleaned = await restartedPage.evaluate(
       async (id) => ({

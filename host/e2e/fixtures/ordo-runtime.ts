@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { expect, type Page } from "@playwright/test";
 import type { JsonValue } from "./host-runtime";
 
@@ -11,6 +13,46 @@ export function responseMessage(value: JsonValue) {
   expect(value).toMatchObject({ ok: false, message: expect.any(String) });
   // SAFETY: the assertion above established a denied response with a string message.
   return (value as { message: string }).message;
+}
+
+export function writeOverdueThirdWorkState(dataDir: string) {
+  fs.writeFileSync(
+    path.join(dataDir, "pomodoro-state.json"),
+    JSON.stringify({
+      version: 1,
+      phase: "work",
+      remainingMs: 0,
+      totalMs: 25 * 60_000,
+      completedPomodoros: 2,
+      isRunning: true,
+      isPaused: false,
+      phaseEndsAtMs: 0,
+      lastConfig: {
+        workMin: 25,
+        shortBreakMin: 5,
+        longBreakMin: 15,
+        pomodorosUntilLongBreak: 4,
+        autoStartWork: false,
+        autoStartBreak: false,
+        title: "Ordo Host E2E",
+        tasks: [],
+      },
+    }),
+  );
+}
+
+export function expectOverdueThirdWork(value: JsonValue) {
+  expect(value, JSON.stringify(value)).toMatchObject({
+    ok: true,
+    data: {
+      phase: "shortBreak",
+      completedPomodoros: 3,
+      isRunning: false,
+      isPaused: false,
+      totalMs: 5 * 60_000,
+      remainingMs: 5 * 60_000,
+    },
+  });
 }
 
 export async function initializeOrdo(page: Page) {
