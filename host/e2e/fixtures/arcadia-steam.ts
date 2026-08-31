@@ -12,7 +12,13 @@ export function createArcadiaFixtures(dataDir: string) {
     "com.kosmos.arcadia",
     "ArcadiaHostE2E.exe",
   );
-  const root = path.join(dataDir, "steam-hostile");
+  const root = path.join(
+    dataDir,
+    "packages",
+    "package-state",
+    "com.kosmos.arcadia",
+    "steam-hostile",
+  );
   const installDir = path.join(root, "steamapps", "common", "Hostile");
   const marker = path.join(installDir, "arcadia-steam-injected.txt");
   const appId = `123&echo owned>"${marker.replaceAll("\\", "/")}"`;
@@ -51,10 +57,16 @@ export async function expectHostileSteamRejected(
   );
   expect(result.scan, JSON.stringify(result.scan)).toMatchObject({
     ok: true,
-    data: { added: 0, discovered: 0, skipped: 0 },
+    data: { added: 1, discovered: 1, skipped: 0 },
   });
-  expect(result.game).toBeUndefined();
-  expect(result.launch).toEqual({ ok: false, message: "missing-hostile-game" });
-  expect(result.after).toMatchObject({ ok: true, data: [] });
+  expect(result.game).toMatchObject({
+    title: HOSTILE_GAME,
+    local: { source: "steam", sourceAppId: fixture.appId },
+  });
+  expect(result.launch).toEqual({
+    ok: false,
+    message: "Engine отклонил операцию: unavailable.",
+  });
+  expect(result.after).toMatchObject({ ok: true, data: expect.arrayContaining([result.game]) });
   expect(fs.existsSync(fixture.marker)).toBe(false);
 }
