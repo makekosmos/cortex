@@ -4,6 +4,26 @@ async fn launch_suspended(
     owner: Arc<LaunchCleanupOwner>,
     deadline: Instant,
 ) -> Result<WorkerProcess, WorkerProcessError> {
+    launch_suspended_inner(executable, owner, None, deadline).await
+}
+
+#[cfg(windows)]
+async fn launch_suspended_in_state_root(
+    executable: &Path,
+    owner: Arc<LaunchCleanupOwner>,
+    state_root: &Path,
+    deadline: Instant,
+) -> Result<WorkerProcess, WorkerProcessError> {
+    launch_suspended_inner(executable, owner, Some(state_root), deadline).await
+}
+
+#[cfg(windows)]
+async fn launch_suspended_inner(
+    executable: &Path,
+    owner: Arc<LaunchCleanupOwner>,
+    state_root: Option<&Path>,
+    deadline: Instant,
+) -> Result<WorkerProcess, WorkerProcessError> {
     owner.claim()?;
     let pipe_name = |suffix: &str| {
         format!(
@@ -84,7 +104,7 @@ async fn launch_suspended(
             .iter()
             .map(OwnedHandle::raw)
             .collect::<Vec<_>>();
-        match create_process_suspended(executable, &child_raw, &owner) {
+        match create_process_suspended(executable, &child_raw, &owner, state_root) {
             Ok(()) => (),
             Err(error) => {
                 owner.abandon_claim();

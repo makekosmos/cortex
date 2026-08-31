@@ -170,6 +170,7 @@ async fn worker_invocation_round_trips_through_the_process_boundary() {
 
     let _lock = test_support::serialized();
     let supervisor = PackageWorkerSupervisor::new(1);
+    let state = tempfile::tempdir().expect("worker state directory");
     let manifest = kepler_backend::package_manifest::PackageManifest {
         schema_version: 1,
         id: "fixture.invoke".into(),
@@ -187,6 +188,7 @@ async fn worker_invocation_round_trips_through_the_process_boundary() {
         .start(
             &manifest,
             fixture,
+            state.path().to_path_buf(),
             "hash".into(),
             &[],
             "cortex-2-invoke".into(),
@@ -223,6 +225,7 @@ async fn worker_crash_resolves_pending_invocation() {
 
     let _lock = test_support::serialized();
     let supervisor = PackageWorkerSupervisor::new(1);
+    let state = tempfile::tempdir().expect("worker state directory");
     let manifest = kepler_backend::package_manifest::PackageManifest {
         schema_version: 1,
         id: "fixture.crash".into(),
@@ -240,6 +243,7 @@ async fn worker_crash_resolves_pending_invocation() {
         .start(
             &manifest,
             fixture,
+            state.path().to_path_buf(),
             "hash".into(),
             &[],
             "cortex-2-crash".into(),

@@ -43,10 +43,33 @@ pub(in crate::ws_server) fn package_error_code(error: &PackageError) -> &'static
         PackageError::TrustUnavailable => "trust-unavailable",
         PackageError::Invalid => "invalid-request",
         PackageError::Persistence => "persistence-failed",
+        PackageError::Worker(code) => match *code {
+            "forbidden" | "invalid-request" | "not-found" | "conflict" | "timeout"
+            | "unavailable" => code,
+            _ => "unavailable",
+        },
         PackageError::Trust(TrustError::Expired) => "catalog-expired",
         PackageError::Trust(TrustError::Replay) => "replay-rejected",
         PackageError::Trust(TrustError::RevokedKey | TrustError::RevokedPackage) => "revoked",
         PackageError::Trust(_) => "trust-rejected",
         PackageError::Store(_) => "store-rejected",
+    }
+}
+
+#[cfg(test)]
+mod package_error_code_tests {
+    use super::package_error_code;
+    use crate::package_service::PackageError;
+
+    #[test]
+    fn worker_error_codes_are_allowlisted() {
+        assert_eq!(
+            package_error_code(&PackageError::Worker("forbidden")),
+            "forbidden"
+        );
+        assert_eq!(
+            package_error_code(&PackageError::Worker("secret")),
+            "unavailable"
+        );
     }
 }

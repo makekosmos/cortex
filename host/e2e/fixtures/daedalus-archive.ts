@@ -15,8 +15,14 @@ const isObject = (value: JsonValue): value is { readonly [key: string]: JsonValu
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 export function daedalusArchive(root: string, repositoryRoot: string) {
-  const source = path.join(repositoryRoot, "daedalus", "release", "daedalus-0.1.0.kspkg");
+  const repository = path.join(repositoryRoot, "daedalus");
+  const source = path.join(repository, "release", "daedalus-0.1.0.kspkg");
   if (!fs.existsSync(source)) throw new Error(`Daedalus release archive not found: ${source}`);
+  if (
+    execFileSync("git", ["rev-parse", "HEAD"], { cwd: repository, encoding: "utf8" }).trim() !==
+    "7c1f40878276d2d6a81dc847efabc41ec8f757b2"
+  )
+    throw new Error("Daedalus checkout does not match the reviewed package revision");
   const file = path.join(root, path.basename(source));
   fs.copyFileSync(source, file);
   if (
@@ -26,16 +32,29 @@ export function daedalusArchive(root: string, repositoryRoot: string) {
     throw new Error("Daedalus release archive digest does not match the reviewed artifact");
   const tar = (...args: string[]) =>
     execFileSync("tar", args, { cwd: root, encoding: "utf8", stdio: "pipe" });
-  const entries = tar("-tf", file)
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((entry) => entry.replaceAll("\\", "/"));
+  const entries = tar("-tf", file).split(/\r?\n/).filter(Boolean);
   if (entries.filter((entry) => entry === "manifest.json").length !== 1)
     throw new Error("Daedalus archive must contain exactly one manifest.json");
-  if (entries.some((entry) => entry.startsWith("/") || entry.split("/").includes("..")))
-    throw new Error("Daedalus archive contains an unsafe path");
+  for (const entry of entries) {
+    const pathWithoutDirectoryMarker = entry.replace(/\/$/, "");
+    const segments = pathWithoutDirectoryMarker.split("/");
+    if (
+      entry.includes("\\") ||
+      entry.startsWith("/") ||
+      /^[A-Za-z]:/.test(entry) ||
+      pathWithoutDirectoryMarker.includes("//") ||
+      segments.includes(".") ||
+      segments.includes("..")
+    )
+      throw new Error(`Daedalus archive contains an unsafe path: ${entry}`);
+  }
+  if (new Set(entries.map((entry) => entry.toLowerCase())).size !== entries.length)
+    throw new Error("Daedalus archive contains duplicate paths");
   for (const required of ["manifest.json", "dist/index.html"])
     if (!entries.includes(required)) throw new Error(`Daedalus archive is missing ${required}`);
+  for (const entry of entries)
+    if (entry !== "manifest.json" && entry !== "dist/" && !entry.startsWith("dist/"))
+      throw new Error(`Daedalus archive has unexpected entry: ${entry}`);
   let manifest: JsonValue;
   try {
     // SAFETY: isObject and every required manifest field are checked below.

@@ -11,6 +11,7 @@ import {
   buildEngine,
   cargoTarget,
   closeHost,
+  hostE2eEnvironment,
   recordCleanup,
   rpc,
   startEngine,
@@ -38,15 +39,15 @@ test("signed Ordo enforces its v2 contract in Host", async () => {
   if (!cleanupManifest) throw new Error("KOSMOS_HOST_E2E_CLEANUP_MANIFEST is required");
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-host-e2e-ordo-"));
+  recordCleanup(cleanupManifest, root, new Set());
   const dataDir = path.join(root, "engine");
   const userData = path.join(root, "host-user-data");
-  const environment = {
-    ...process.env,
+  const environment = hostE2eEnvironment({
     APPDATA: path.join(root, "appdata"),
     KOSMOS_DATA_DIR: dataDir,
     KOSMOS_HEADLESS: "1",
     KOSMOS_TEST_MODE: "1",
-  };
+  });
   let host: ElectronApplication | undefined;
   let engine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
   let restartedEngine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
@@ -149,10 +150,10 @@ test("signed Ordo enforces its v2 contract in Host", async () => {
     expectPhase(initial.paused, "work", true);
     expectPhase(initial.resumed, "work", false);
     for (const denied of initial.denied) {
-      expect(responseMessage(denied)).toBe("Engine отклонил операцию.");
+      expect(responseMessage(denied)).toBe("Engine отклонил операцию: invalid-request.");
     }
 
-    await closeHost(host);
+    await closeHost(host, pids);
     host = undefined;
     await terminate(
       engine,
@@ -211,7 +212,7 @@ test("signed Ordo enforces its v2 contract in Host", async () => {
       window.kosmosApp.ark.request("pomodoro.pause", {}),
     );
     expectPhase(paused, "work", true);
-    await closeHost(host);
+    await closeHost(host, pids);
     host = undefined;
 
     restartedPage = await openHost();
@@ -265,7 +266,7 @@ test("signed Ordo enforces its v2 contract in Host", async () => {
       }
     };
     if (host) pids.add(host.process().pid);
-    await attempt(() => closeHost(host));
+    await attempt(() => closeHost(host, pids));
     await attempt(() => terminate(restartedEngine, engineBinary, dataDir, "restarted Engine"));
     await attempt(() => terminate(engine, engineBinary, dataDir, "Engine"));
     for (const pid of pids) await attempt(() => waitForPidGone(pid, "recorded teardown process"));

@@ -33,12 +33,14 @@ impl PackageWorkerSupervisor {
         let LaunchSpec {
             manifest,
             executable,
+            state_root,
             hash,
             roots,
             correlation_id,
             bridge_config,
             integration,
         } = spec.clone();
+        crate::lock_file::ensure_owner_only_directory(&state_root).map_err(|_| "grant-failed")?;
         if let Some(config) = bridge_config.as_ref() {
             crate::lock_file::ensure_owner_only_directory(std::path::Path::new(&config.state_root))
                 .map_err(|_| "grant-failed")?;
@@ -105,7 +107,14 @@ impl PackageWorkerSupervisor {
         };
         // The guard is acquired before CreateProcessW and held through the
         // server-owned launch. Publication is synchronous while it is held.
-        match WorkerProcess::launch_with_owner_until(executable, owner.clone(), deadline).await {
+        match WorkerProcess::launch_with_owner_until_in_state_root(
+            executable,
+            owner.clone(),
+            state_root,
+            deadline,
+        )
+        .await
+        {
             Ok(process) => *process_guard = Some(process),
             Err(error) => {
                 drop(process_guard);

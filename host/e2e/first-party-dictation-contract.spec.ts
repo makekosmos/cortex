@@ -10,6 +10,7 @@ import {
   buildEngine,
   cargoTarget,
   closeHost,
+  hostE2eEnvironment,
   recordCleanup,
   rpc,
   startEngine,
@@ -30,17 +31,18 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
   if (!cleanupManifest) throw new Error("KOSMOS_HOST_E2E_CLEANUP_MANIFEST is required");
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-host-e2e-dictation-"));
+  recordCleanup(cleanupManifest, root, new Set());
   const dataDir = path.join(root, "engine");
   const userData = path.join(root, "host-user-data");
-  const environment = {
-    ...process.env,
+  const environment = hostE2eEnvironment({
     APPDATA: path.join(root, "appdata"),
     KOSMOS_DATA_DIR: dataDir,
     KOSMOS_HEADLESS: "1",
     KOSMOS_TEST_MODE: "1",
-  };
+  });
   let host: ElectronApplication | undefined;
   let engine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
+  let restartedEngine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
   const pids = new Set<number>();
 
   try {
@@ -75,14 +77,14 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
         version: "0.2.2",
         entrypoint: "dist/index.html",
       },
-      sha256: "8ed0d8b95c3c84f9a50b0efecb1005bdfb07d448dd23f9e83cdcc8625066aae5",
+      sha256: "2a1c001a2240275a4f8fa5307cce1faf1132442f8a51e98bbbbd7de1800ffac6",
     });
 
     const binaries = buildEngine(apps.trust);
     const started = await startEngine(binaries.engine, binaries.ark, dataDir);
     engine = started.child;
     if (engine.pid) pids.add(engine.pid);
-    const lock = started.lock;
+    let lock = started.lock;
 
     expect((await rpc(lock, "packages.trust_status")).ok).toBe(true);
     expect(
@@ -140,7 +142,10 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
     expect(responses.config, JSON.stringify(responses.config)).toMatchObject({ ok: true });
     expect(responses.models, JSON.stringify(responses.models)).toMatchObject({ ok: true });
     expect(responses.updated, JSON.stringify(responses.updated)).toMatchObject({ ok: true });
-    expect(responses.denied, JSON.stringify(responses.denied)).toMatchObject({ ok: false });
+    expect(responses.denied, JSON.stringify(responses.denied)).toEqual({
+      ok: false,
+      message: "Engine отклонил операцию: invalid-request.",
+    });
     for (const response of [responses.state, responses.config, responses.models, responses.updated])
       expect(JSON.stringify(response)).not.toMatch(forbiddenRendererKeys);
 
@@ -149,6 +154,40 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
     expect(visibleRendererText).not.toMatch(
       /api[_ -]?key|credential|secret|localModelPath|localCommandPath|microphoneDeviceId|hwnd/i,
     );
+
+    await closeHost(host, pids);
+    host = undefined;
+    await terminate(engine, binaries.engine, dataDir, "initial Engine");
+    engine = undefined;
+
+    const restarted = await startEngine(binaries.engine, binaries.ark, dataDir);
+    restartedEngine = restarted.child;
+    if (restartedEngine.pid) pids.add(restartedEngine.pid);
+    lock = restarted.lock;
+    expect(await rpc(lock, "packages.list", { kind: "app" })).toMatchObject({
+      ok: true,
+      data: {
+        packages: expect.arrayContaining([
+          expect.objectContaining({ id: "com.kosmos.dictation", enabled: true }),
+        ]),
+      },
+    });
+
+    host = await electron.launch({
+      executablePath: electronBinary,
+      args: [`--user-data-dir=${userData}`, hostMain, "--open-app", "com.kosmos.dictation"],
+      env: environment,
+      timeout: 30_000,
+    });
+    pids.add(host.process().pid);
+    const restartedPage = await host.firstWindow();
+    await expect.poll(() => host?.windows().length ?? 0).toBe(1);
+    expect(
+      await restartedPage.evaluate(() => window.kosmosApp.ark.request("dictation.get_config", {})),
+    ).toMatchObject({
+      ok: true,
+      data: { config: expect.objectContaining({ language: "en" }) },
+    });
   } finally {
     const cleanupErrors: unknown[] = [];
     const attempt = async (action: () => Promise<void>) => {
@@ -159,7 +198,15 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
       }
     };
     if (host) pids.add(host.process().pid);
-    await attempt(() => closeHost(host));
+    await attempt(() => closeHost(host, pids));
+    await attempt(() =>
+      terminate(
+        restartedEngine,
+        path.join(cargoTarget(), "debug", "kepler-backend.exe"),
+        dataDir,
+        "restarted Engine",
+      ),
+    );
     await attempt(() =>
       terminate(engine, path.join(cargoTarget(), "debug", "kepler-backend.exe"), dataDir, "Engine"),
     );

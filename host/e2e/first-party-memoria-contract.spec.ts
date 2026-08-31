@@ -10,6 +10,7 @@ import {
   buildEngine,
   cargoTarget,
   closeHost,
+  hostE2eEnvironment,
   recordCleanup,
   rpc,
   startEngine,
@@ -28,15 +29,15 @@ test("signed Memoria runs CRUD through Host and survives Engine restart", async 
   if (!cleanupManifest) throw new Error("KOSMOS_HOST_E2E_CLEANUP_MANIFEST is required");
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-host-e2e-memoria-"));
+  recordCleanup(cleanupManifest, root, new Set());
   const dataDir = path.join(root, "engine");
   const userData = path.join(root, "host-user-data");
-  const environment = {
-    ...process.env,
+  const environment = hostE2eEnvironment({
     APPDATA: path.join(root, "appdata"),
     KOSMOS_DATA_DIR: dataDir,
     KOSMOS_HEADLESS: "1",
     KOSMOS_TEST_MODE: "1",
-  };
+  });
   let host: ElectronApplication | undefined;
   let engine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
   let restartedEngine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
@@ -132,8 +133,17 @@ test("signed Memoria runs CRUD through Host and survives Engine restart", async 
       ok: true,
       data: expect.objectContaining({ id: "memoria-host-e2e-note", title: "Memoria Host E2E" }),
     });
-    expect(first.denied, JSON.stringify(first.denied)).toHaveLength(4);
-    for (const denied of first.denied) expect(denied).toMatchObject({ ok: false });
+    expect(first.denied, JSON.stringify(first.denied)).toEqual([
+      { ok: false, message: "Engine отклонил операцию: invalid-request." },
+      { ok: false, message: "Engine отклонил операцию: invalid-request." },
+      { ok: false, message: "Engine отклонил операцию: invalid-request." },
+      { ok: false, message: "Engine отклонил операцию: forbidden." },
+    ]);
+    expect(
+      await page.evaluate(() =>
+        window.kosmosApp.ark.request("get_object", { id: "memoria-host-e2e-foreign" }),
+      ),
+    ).toMatchObject({ ok: true, data: null });
 
     const updated = await page.evaluate(async () => ({
       update: await window.kosmosApp.ark.request("upsert_object", {
@@ -157,7 +167,7 @@ test("signed Memoria runs CRUD through Host and survives Engine restart", async 
       data: expect.objectContaining({ title: "Memoria Host E2E updated" }),
     });
 
-    await closeHost(host);
+    await closeHost(host, pids);
     host = undefined;
     await terminate(engine, binaries.engine, dataDir, "initial Engine");
     engine = undefined;
@@ -214,7 +224,7 @@ test("signed Memoria runs CRUD through Host and survives Engine restart", async 
       }
     };
     if (host) pids.add(host.process().pid);
-    await attempt(() => closeHost(host));
+    await attempt(() => closeHost(host, pids));
     await attempt(() =>
       terminate(
         restartedEngine,

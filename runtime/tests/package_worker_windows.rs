@@ -233,10 +233,12 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
     let directory = tempfile::tempdir().expect("fixture marker directory");
     let markers = fixture_env(&directory);
     let supervisor = PackageWorkerSupervisor::new(1);
+    let state = tempfile::tempdir().expect("worker state directory");
     let roots = [std::env::temp_dir()];
     let normal = manifest("fixture.normal");
     test_support::reset_resume_count();
     let mut barrier = test_support::pause_next_before_resume();
+    let state_root = state.path().to_path_buf();
     let start_supervisor = supervisor.clone();
     let start_manifest = normal.clone();
     let launch = tokio::spawn(async move {
@@ -244,6 +246,7 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
             .start(
                 &start_manifest,
                 fixture(),
+                state_root,
                 "hash".into(),
                 &[std::env::temp_dir()],
                 "corr".into(),
@@ -283,6 +286,7 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
             .start(
                 &normal,
                 fixture(),
+                state.path().to_path_buf(),
                 "hash".into(),
                 &roots,
                 "corr".into(),
@@ -304,6 +308,7 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
         supervisor.start(
             &m,
             fixture(),
+            state.path().to_path_buf(),
             "hash".into(),
             &roots,
             "corr".into(),
@@ -335,6 +340,7 @@ async fn stop_suppresses_initial_failure_retries() {
     let _lock = test_support::serialized();
     let supervisor = PackageWorkerSupervisor::new(1);
     let m = manifest("fixture.initial-fail");
+    let state = tempfile::tempdir().expect("worker state directory");
     let start_manifest = m.clone();
     let running = supervisor.clone();
     let start = tokio::spawn(async move {
@@ -342,6 +348,7 @@ async fn stop_suppresses_initial_failure_retries() {
             .start(
                 &start_manifest,
                 fixture(),
+                state.path().to_path_buf(),
                 "hash".into(),
                 &[std::env::temp_dir()],
                 "corr".into(),
@@ -385,11 +392,13 @@ async fn worker_ark_write_uses_host_and_advances_sync_state() {
             .expect("ark host"),
     );
     let supervisor = PackageWorkerSupervisor::with_ark(1, ark.clone());
+    let state = tempfile::tempdir().expect("worker state directory");
     supervisor.bind_store(store);
     supervisor
         .start(
             &worker_manifest,
             executable,
+            state.path().to_path_buf(),
             installed.hash,
             &[],
             "ark-write-test".into(),
@@ -520,7 +529,8 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
     let _lock = test_support::serialized();
     let directory = tempfile::tempdir().expect("temporary directory");
     let vault = directory.path().join("vault");
-    let state = directory.path().join("state");
+    let state_directory = tempfile::tempdir().expect("worker state directory");
+    let state = state_directory.path().join("state");
     std::fs::create_dir(&vault).expect("vault");
     std::fs::create_dir(&state).expect("state");
     let manifest = bridge_manifest();
@@ -558,6 +568,7 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
         .start(
             &manifest,
             executable.clone(),
+            state.clone(),
             installed.hash.clone(),
             &roots,
             "bridge-e2e".into(),
@@ -626,6 +637,7 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
         .start(
             &manifest,
             executable,
+            state.clone(),
             installed.hash,
             &roots,
             "bridge-e2e-restart".into(),
@@ -660,11 +672,13 @@ async fn activated_worker_restarts_once_and_stop_cancels_more_retries() {
         .immutable_entrypoint(&installed)
         .expect("immutable entrypoint");
     let supervisor = PackageWorkerSupervisor::new(1);
+    let state = tempfile::tempdir().expect("worker state directory");
     supervisor.bind_store(store);
     supervisor
         .start(
             &worker_manifest,
             executable,
+            state.path().to_path_buf(),
             installed.hash,
             &[],
             "restart-test".into(),
@@ -723,11 +737,13 @@ async fn secret_bearing_worker_failure_is_redacted_end_to_end() {
         .immutable_entrypoint(&installed)
         .expect("immutable entrypoint");
     let supervisor = PackageWorkerSupervisor::new(1);
+    let state = tempfile::tempdir().expect("worker state directory");
     supervisor.bind_store(store);
     supervisor
         .start(
             &worker_manifest,
             executable,
+            state.path().to_path_buf(),
             installed.hash,
             &[],
             "secret-redaction-e2e".into(),
@@ -895,6 +911,7 @@ async fn prepublication_wait_failures_quarantine_and_reap_exact_startup() {
         ("wait-timeout", FailureStage::WaitTimeout),
         ("wait-failed", FailureStage::WaitFailed),
     ] {
+        let state = tempfile::tempdir().expect("worker state directory");
         test_support::reset();
         let supervisor = PackageWorkerSupervisor::new(1);
         let worker = manifest(&format!("fixture.{suffix}"));
@@ -902,7 +919,14 @@ async fn prepublication_wait_failures_quarantine_and_reap_exact_startup() {
         test_support::fail_cleanup_next(cleanup_failure);
         assert_eq!(
             supervisor
-                .test_start_once(&worker, fixture(), "hash".into(), &[], suffix.into(),)
+                .test_start_once(
+                    &worker,
+                    fixture(),
+                    state.path().to_path_buf(),
+                    "hash".into(),
+                    &[],
+                    suffix.into(),
+                )
                 .await,
             Err("process-cleanup-failed")
         );
@@ -916,6 +940,7 @@ async fn prepublication_wait_failures_quarantine_and_reap_exact_startup() {
                 .test_start_once(
                     &worker,
                     fixture(),
+                    state.path().to_path_buf(),
                     "hash".into(),
                     &[],
                     "replacement-before-reap".into(),
@@ -934,6 +959,7 @@ async fn prepublication_wait_failures_quarantine_and_reap_exact_startup() {
                 .test_start_once(
                     &worker,
                     fixture(),
+                    state.path().to_path_buf(),
                     "hash".into(),
                     &[],
                     "replacement-after-reap".into(),
@@ -959,6 +985,7 @@ async fn supervisor_pid_unavailable_rolls_back_all_worker_reservations() {
     let _lock = test_support::serialized();
     let supervisor = PackageWorkerSupervisor::new(1);
     let worker = manifest("fixture.pid-unavailable");
+    let state = tempfile::tempdir().expect("worker state directory");
     test_support::fail_next(kepler_backend::package_worker_process::FailureStage::PidUnavailable);
 
     assert_eq!(
@@ -966,6 +993,7 @@ async fn supervisor_pid_unavailable_rolls_back_all_worker_reservations() {
             .test_start_once(
                 &worker,
                 fixture(),
+                state.path().to_path_buf(),
                 "hash".into(),
                 &[],
                 "pid-unavailable".into(),
@@ -981,10 +1009,12 @@ async fn supervisor_cleanup_failure_retains_holder_and_disables_replacement() {
     let _lock = test_support::serialized();
     let supervisor = PackageWorkerSupervisor::new(1);
     let worker = manifest("fixture.cleanup-retained");
+    let state = tempfile::tempdir().expect("worker state directory");
     supervisor
         .start(
             &worker,
             fixture(),
+            state.path().to_path_buf(),
             "hash".into(),
             &[],
             "cleanup-retained".into(),
@@ -1013,6 +1043,7 @@ async fn supervisor_cleanup_failure_retains_holder_and_disables_replacement() {
             .start(
                 &worker,
                 fixture(),
+                state.path().to_path_buf(),
                 "hash".into(),
                 &[],
                 "replacement".into(),
@@ -1034,6 +1065,7 @@ async fn supervisor_cleanup_failure_retains_holder_and_disables_replacement() {
         .start(
             &worker,
             fixture(),
+            state.path().to_path_buf(),
             "hash".into(),
             &[],
             "replacement-after-stop".into(),
@@ -1077,8 +1109,16 @@ async fn cancellation_after_process_publication_reaps_without_losing_holder() {
     let supervisor = PackageWorkerSupervisor::new(1);
     let worker = manifest("fixture.cancel-after-launch");
     let warmup = manifest("fixture.handle-warmup");
+    let state = tempfile::tempdir().expect("worker state directory");
     supervisor
-        .test_start_once(&warmup, fixture(), "hash".into(), &[], "warmup".into())
+        .test_start_once(
+            &warmup,
+            fixture(),
+            state.path().to_path_buf(),
+            "hash".into(),
+            &[],
+            "warmup".into(),
+        )
         .await
         .expect("worker handle accounting warmup");
     supervisor
@@ -1090,11 +1130,13 @@ async fn cancellation_after_process_publication_reaps_without_losing_holder() {
     let mut gate = supervisor.test_pause_after_launch();
     let task_supervisor = supervisor.clone();
     let task_worker = worker.clone();
+    let task_state = state.path().to_path_buf();
     let launch = tokio::spawn(async move {
         task_supervisor
             .test_start_once(
                 &task_worker,
                 fixture(),
+                task_state,
                 "hash".into(),
                 &[],
                 "cancel-after-launch".into(),
@@ -1116,6 +1158,7 @@ async fn cancellation_after_process_publication_reaps_without_losing_holder() {
             .test_start_once(
                 &worker,
                 fixture(),
+                state.path().to_path_buf(),
                 "replacement".into(),
                 &[],
                 "replacement-while-starting".into(),

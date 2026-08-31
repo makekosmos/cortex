@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -39,6 +39,24 @@ try {
 
 let cleanupFailed = false;
 const isString = (value) => value?.constructor === String;
+const ownedPids = (root) => {
+  const literal = root.replaceAll("'", "''");
+  const output = execFileSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${literal}') } | Select-Object -ExpandProperty ProcessId | ConvertTo-Json -Compress`,
+    ],
+    { encoding: "utf8", windowsHide: true },
+  ).trim();
+  if (!output) return [];
+  const parsed = JSON.parse(output);
+  return (Array.isArray(parsed) ? parsed : [parsed]).filter(
+    (pid) => Number.isInteger(pid) && pid > 0 && pid !== process.pid,
+  );
+};
 try {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   if (!Array.isArray(manifest.roots) || !Array.isArray(manifest.pids))
@@ -50,6 +68,15 @@ try {
       !path.basename(resolved).startsWith("kosmos-host-e2e-")
     )
       throw new Error(`unsafe cleanup root: ${root}`);
+    for (const pid of ownedPids(resolved)) {
+      manifest.pids.push(pid);
+      try {
+        execFileSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+          stdio: "ignore",
+          windowsHide: true,
+        });
+      } catch {}
+    }
     fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
     if (fs.existsSync(resolved)) throw new Error(`cleanup root remains: ${resolved}`);
     console.log(`[host-e2e] cleaned ${resolved}`);

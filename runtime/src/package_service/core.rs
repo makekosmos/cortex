@@ -303,6 +303,36 @@ impl PackageService {
         }
     }
 
+    pub async fn restore_enabled_workers(&self) -> Result<(), PackageError> {
+        let packages = self.store.list()?;
+        for package in packages.into_iter().filter(|package| {
+            package.enabled && !package.revoked && package.manifest.worker_entrypoint().is_some()
+        }) {
+            if let Err(error) = self.set_enabled(&package.id, &package.version, true).await {
+                tracing::warn!(
+                    target: "package_worker",
+                    package_id = %package.id,
+                    version = %package.version,
+                    %error,
+                    "enabled worker restore failed"
+                );
+                if let Some(worker) = self.worker.as_ref() {
+                    if worker.supervisor.health(&package.id, &package.version).state
+                        != WorkerState::Stopped
+                    {
+                        worker
+                            .supervisor
+                            .stop(&package.id, &package.version)
+                            .await
+                            .map_err(|_| PackageError::Persistence)?;
+                    }
+                }
+                self.disable(&package.id, &package.version)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Install the host-compiled v2 grant that will be bound to the next
     /// authenticated worker launch. This is intentionally private to the
     /// Engine: the registry snapshot is canonical ARK data, never renderer

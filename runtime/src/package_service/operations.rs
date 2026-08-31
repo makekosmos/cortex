@@ -30,7 +30,17 @@ impl PackageService {
             .supervisor
             .invoke(&package.id, &package.version, operation, params)
             .await
-            .map_err(|_| PackageError::Invalid)
+            .inspect_err(|error| {
+                tracing::warn!(
+                    target: "package_worker",
+                    package_id = %package.id,
+                    version = %package.version,
+                    operation,
+                    error,
+                    "worker invocation failed"
+                );
+            })
+            .map_err(PackageError::Worker)
     }
 
     /// Development-only app install. Production packages must continue through
@@ -873,6 +883,8 @@ impl PackageService {
                 return Err(PackageError::Invalid);
             }
             let executable = self.store.immutable_entrypoint(&installed)?;
+            let state_root = self.root.join("package-state").join(id);
+            ensure_owner_only_directory(&state_root).map_err(|_| PackageError::Persistence)?;
             let bridge_config = if matches!(installed.manifest.kind(), PackageKind::Bridge) {
                 let config = Self::lock(&self.bridge_configs)
                     .configs
@@ -909,6 +921,7 @@ impl PackageService {
                 worker_manifest,
                 installed.hash,
                 executable,
+                state_root,
                 roots,
                 bridge_config,
                 integration,
@@ -919,23 +932,29 @@ impl PackageService {
             .bind_typed_launch(id, version, &worker.correlation_id, 1, typed_bound)
             .map_err(|_| {
                 worker.supervisor.revoke_typed_launch(id, version);
-                PackageError::Invalid
+                PackageError::Worker("unavailable")
             })?;
         worker
             .supervisor
             .start(
                 &launch.0,
                 launch.2,
+                launch.3,
                 launch.1,
-                &launch.3,
+                &launch.4,
                 worker.correlation_id.clone(),
-                launch.4,
                 launch.5,
+                launch.6,
             )
             .await
-            .map_err(|_| {
+            .map_err(|error| {
                 worker.supervisor.revoke_typed_launch(id, version);
-                PackageError::Invalid
+                PackageError::Worker(match error {
+                    "worker-required" | "unsupported-platform" | "already-running" => {
+                        "invalid-request"
+                    }
+                    _ => "unavailable",
+                })
             })?;
         if self.store.enable_worker(id, version).is_err() {
             worker
@@ -954,7 +973,7 @@ impl PackageService {
                 .map_err(|_| PackageError::Persistence)?;
             worker.supervisor.revoke_typed_launch(id, version);
             let _ = self.store.disable(id, version);
-            return Err(PackageError::Invalid);
+            return Err(PackageError::Worker("unavailable"));
         }
         Ok(summary(
             self.store.installed(id, version)?,

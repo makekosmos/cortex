@@ -10,6 +10,7 @@ import {
   buildEngine,
   cargoTarget,
   closeHost,
+  hostE2eEnvironment,
   recordCleanup,
   rpc,
   startEngine,
@@ -28,17 +29,18 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
   if (!cleanupManifest) throw new Error("KOSMOS_HOST_E2E_CLEANUP_MANIFEST is required");
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-host-e2e-daedalus-"));
+  recordCleanup(cleanupManifest, root, new Set());
   const dataDir = path.join(root, "engine");
   const userData = path.join(root, "host-user-data");
-  const environment = {
-    ...process.env,
+  const environment = hostE2eEnvironment({
     APPDATA: path.join(root, "appdata"),
     KOSMOS_DATA_DIR: dataDir,
     KOSMOS_HEADLESS: "1",
     KOSMOS_TEST_MODE: "1",
-  };
+  });
   let host: ElectronApplication | undefined;
   let engine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
+  let restartedEngine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
   const pids = new Set<number>();
 
   try {
@@ -137,7 +139,38 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
         expect.objectContaining({ path: expect.stringContaining(projectPath) }),
       ]),
     });
-    expect(result.undeclared, JSON.stringify(result.undeclared)).toMatchObject({ ok: false });
+    expect(result.undeclared, JSON.stringify(result.undeclared)).toEqual({
+      ok: false,
+      message: "Engine отклонил операцию: invalid-request.",
+    });
+
+    await closeHost(host, pids);
+    host = undefined;
+    await terminate(engine, binaries.engine, dataDir, "initial Engine");
+    engine = undefined;
+
+    const restarted = await startEngine(binaries.engine, binaries.ark, dataDir);
+    restartedEngine = restarted.child;
+    if (restartedEngine.pid) pids.add(restartedEngine.pid);
+    host = await electron.launch({
+      executablePath: electronBinary,
+      args: [`--user-data-dir=${userData}`, hostMain, "--open-app", "com.kosmos.daedalus"],
+      env: environment,
+      timeout: 30_000,
+    });
+    pids.add(host.process().pid);
+    const restartedPage = await host.firstWindow();
+    await expect.poll(() => host?.windows().length ?? 0).toBe(1);
+    expect(
+      await restartedPage.evaluate(() =>
+        window.kosmosApp.ark.request("agents.projects.list", { include_archived: true }),
+      ),
+    ).toMatchObject({
+      ok: true,
+      data: expect.arrayContaining([
+        expect.objectContaining({ path: expect.stringContaining(projectPath) }),
+      ]),
+    });
   } finally {
     const cleanupErrors: unknown[] = [];
     const attempt = async (action: () => Promise<void>) => {
@@ -148,7 +181,15 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
       }
     };
     if (host) pids.add(host.process().pid);
-    await attempt(() => closeHost(host));
+    await attempt(() => closeHost(host, pids));
+    await attempt(() =>
+      terminate(
+        restartedEngine,
+        path.join(cargoTarget(), "debug", "kepler-backend.exe"),
+        dataDir,
+        "restarted Engine",
+      ),
+    );
     await attempt(() =>
       terminate(engine, path.join(cargoTarget(), "debug", "kepler-backend.exe"), dataDir, "Engine"),
     );

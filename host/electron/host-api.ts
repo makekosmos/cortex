@@ -284,10 +284,10 @@ export class EngineClient {
     try {
       await this.reconnectingArk.getTransport();
       return { ok: true, data: undefined };
-    } catch (error) {
+    } catch {
       return {
         ok: false,
-        message: error instanceof Error ? error.message : "Engine API v1 недоступен.",
+        message: "Engine API v1 недоступен.",
       };
     }
   }
@@ -347,20 +347,25 @@ export class EngineClient {
       },
       signal: AbortSignal.timeout(12_000),
     });
-    if ([401, 403, 426].includes(response.status))
+    if ([401, 426].includes(response.status))
       throw Object.assign(new Error(`HTTP ${response.status}`), {
         status: response.status,
       });
     // SAFETY: Engine responses are checked below before their generic payload is returned.
-    const value = (await response.json()) as {
-      ok?: boolean;
-      data?: T;
-      error?: string;
-    };
-    if (!response.ok || value.ok === false || value.data === undefined) {
-      return { ok: false, message: "Engine отклонил операцию." };
+    const value = (await response.json()) as { ok?: boolean; data?: T; error?: string } | null;
+    if (response.status === 403 && value?.error !== "forbidden")
+      throw Object.assign(new Error("HTTP 403"), { status: 403 });
+    if (!response.ok || !value || value.ok !== true || !("data" in value)) {
+      const code = value?.error?.match(
+        /(?:^|: )(forbidden|invalid-request|not-found|conflict|timeout|unavailable)$/,
+      )?.[1];
+      return {
+        ok: false,
+        message: code ? `Engine отклонил операцию: ${code}.` : "Engine отклонил операцию.",
+      };
     }
-    return { ok: true, data: value.data };
+    // SAFETY: the property check above rejects a missing data key; JSON cannot encode undefined.
+    return { ok: true, data: value.data as T };
   }
 
   async resolveApp(id: string, version?: string): Promise<EngineResult<AppResolve>> {

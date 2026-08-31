@@ -190,13 +190,16 @@ impl PackageWorkerSupervisor {
         if response.ok {
             response.result.ok_or("invalid-response")
         } else {
-            Err(match response.error.as_deref() {
-                Some("forbidden") => "forbidden",
-                Some("invalid-request") => "invalid-request",
-                Some("not-found") => "not-found",
-                Some("conflict") => "conflict",
-                _ => "unavailable",
-            })
+            let error_class = worker_error_class(response.error.as_deref());
+            tracing::warn!(
+                target: "package_worker",
+                package_id = %id,
+                version,
+                operation,
+                error = error_class,
+                "worker invocation rejected"
+            );
+            Err(error_class)
         }
     }
 
@@ -204,6 +207,7 @@ impl PackageWorkerSupervisor {
         &self,
         manifest: &PackageManifest,
         executable: PathBuf,
+        state_root: PathBuf,
         hash: String,
         roots: &[PathBuf],
         correlation_id: String,
@@ -248,6 +252,7 @@ impl PackageWorkerSupervisor {
         {
             let _ = (
                 executable,
+                state_root,
                 hash,
                 roots,
                 correlation_id,
@@ -264,6 +269,7 @@ impl PackageWorkerSupervisor {
                 LaunchSpec {
                     manifest: manifest.clone(),
                     executable,
+                    state_root,
                     hash,
                     roots: roots.to_vec(),
                     correlation_id,

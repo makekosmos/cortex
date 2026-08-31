@@ -226,6 +226,7 @@ async fn start_is_unsupported_on_non_windows_and_records_failure() {
         .start(
             &manifest,
             PathBuf::from("/tmp/worker.exe"),
+            PathBuf::from("/tmp/package-state"),
             "hash".into(),
             &[],
             "correlation".into(),

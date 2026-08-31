@@ -206,7 +206,7 @@ test("real signed Apps use one headless Host and preserve the Engine across rest
     console.log(
       `[host-e2e] cleanup root=${root} lock=${path.join(dataDir, "engine.lock.json")} host=${host?.process().pid ?? "none"} restarted-engine=${restarted?.pid ?? "none"} engine=${engine?.pid ?? "none"}`,
     );
-    await closeHost(host);
+    await closeHost(host, teardownPids);
     await terminate(
       restarted,
       path.join(cargoTarget(), "debug", "kepler-backend.exe"),

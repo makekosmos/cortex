@@ -69,6 +69,8 @@ pub enum PackageError {
     Store(#[from] StoreError),
     #[error("package persistence failed")]
     Persistence,
+    #[error("package worker: {0}")]
+    Worker(&'static str),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

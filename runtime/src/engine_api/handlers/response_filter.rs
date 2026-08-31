@@ -233,8 +233,8 @@ async fn filter_app_response(
     dispatcher: &crate::engine_dispatch::EngineDispatcher,
     client: &DispatchClient,
 ) -> Value {
-    if response.get("ok").and_then(Value::as_bool) == Some(false) {
-        return response;
+    if let Some(error) = public_app_error_response(&response) {
+        return error;
     }
     let mut response = response;
     let data = if response.get("data").is_some() {

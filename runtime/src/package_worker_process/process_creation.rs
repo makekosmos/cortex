@@ -3,6 +3,7 @@ fn create_process_suspended(
     executable: &Path,
     child_raw: &[windows::Win32::Foundation::HANDLE],
     owner: &LaunchCleanupOwner,
+    state_root: Option<&Path>,
 ) -> Result<(), WorkerProcessError> {
     use std::os::windows::ffi::OsStrExt;
     use windows::core::PCWSTR;
@@ -103,6 +104,12 @@ fn create_process_suspended(
                 .entry(name.to_ascii_lowercase())
                 .or_insert_with(|| (name.into(), value));
         }
+    }
+    if let Some(state_root) = state_root {
+        environment.insert(
+            "kosmos_data_dir".into(),
+            ("KOSMOS_DATA_DIR".into(), state_root.as_os_str().to_owned()),
+        );
     }
     let mut env = Vec::<u16>::new();
     for (_, (name, value)) in environment {

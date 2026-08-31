@@ -420,6 +420,7 @@ async fn setup() -> Result<SetupState, DynError> {
         worker_roots,
         correlation_id.clone(),
     );
+    package_service.restore_enabled_workers().await?;
     let package_service = Arc::new(package_service);
 
     // App Index: индексирует Start Menu + UWP. SQLite в lock_dir (рядом с ark.db),

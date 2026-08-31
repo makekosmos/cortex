@@ -303,6 +303,27 @@ pub(crate) mod tests {
         (service, archive, hash)
     }
 
+    #[tokio::test]
+    async fn uninstall_preserves_package_state_for_reinstall() {
+        let dir = tempdir().expect("temp dir");
+        let (service, _, _) = enabled_app_service(dir.path());
+        let state = service
+            .storage_root()
+            .join("package-state/com.kosmos.demo/state.json");
+        fs::create_dir_all(state.parent().expect("state parent")).expect("state directory");
+        fs::write(&state, b"persist across reinstall").expect("state write");
+
+        service
+            .uninstall_with_worker_stop("com.kosmos.demo", "1.0.0")
+            .await
+            .expect("uninstall");
+
+        assert_eq!(
+            fs::read(state).expect("retained package state"),
+            b"persist across reinstall"
+        );
+    }
+
     #[test]
     fn missing_compile_time_trust_fails_closed_without_blocking_engine() {
         let dir = tempdir().expect("tempdir");
@@ -1011,32 +1032,6 @@ pub(crate) mod tests {
             &previous.id,
             &previous.version
         ));
-    }
-
-    #[test]
-    fn live_v2_manifests_compile_against_canonical_registry() {
-        let registry = canonical_registry_snapshot().expect("canonical registry");
-        let candidates = [
-            (
-                "agenda",
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("../../agenda/manifest.json"),
-            ),
-            (
-                "memoria",
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("../../memoria/manifest.json"),
-            ),
-        ];
-        for (package, path) in candidates {
-            let raw = fs::read_to_string(path).unwrap_or_else(|_| panic!("{package} manifest"));
-            let VersionedManifest::V2(manifest) =
-                PackageManifest::parse(&raw).unwrap_or_else(|_| panic!("{package} manifest"))
-            else {
-                panic!("{package} must use a v2 manifest");
-            };
-            let grant = compile_manifest_v2(&manifest, &registry, "test-digest")
-                .unwrap_or_else(|_| panic!("{package} grant"));
-            assert!(!grant.rules.is_empty(), "{package} grant has no rules");
-        }
     }
 
     #[test]

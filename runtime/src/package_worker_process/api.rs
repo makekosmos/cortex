@@ -91,6 +91,19 @@ impl WorkerProcess {
         launch_suspended(&executable, owner, deadline).await
     }
 
+    #[cfg(windows)]
+    pub(crate) async fn launch_with_owner_until_in_state_root(
+        executable: impl Into<PathBuf>,
+        owner: Arc<LaunchCleanupOwner>,
+        state_root: PathBuf,
+        deadline: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        let executable = executable.into();
+        let _executable_guard = hold_executable(&executable)?;
+        validate_executable(&executable)?;
+        launch_suspended_in_state_root(&executable, owner, &state_root, deadline).await
+    }
+
     pub fn id(&self) -> Option<u32> {
         #[cfg(windows)]
         {

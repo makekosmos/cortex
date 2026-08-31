@@ -86,4 +86,103 @@ jobs:
       - run: bun install --cwd desktop --frozen-lockfile
       - run: cargo build --locked -p kepler-watcher -p kepler-focus-helper -p kepler-focus-svc --bins
       - run: cargo test --locked -p kepler-focus-helper -p kepler-focus-svc --lib
+      - run: cargo test --locked --package kepler-backend --test package_worker_windows --features package-worker-fixture
+      - run: cargo clippy --locked --package kepler-backend --all-targets --features package-worker-fixture -- -D warnings
       - run: bun run --cwd desktop test:runtime-staging
+
+  first-party-contracts:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Checkout first-party package revisions
+        uses: actions/checkout@v4
+        with:
+          repository: makekosmos/agenda
+          ref: 48d3ca5a6d97d7f796b17febea102fcc1ebb7649
+          path: _first-party/agenda
+          token: ${{ secrets.KOSMOS_READ_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          repository: makekosmos/arcadia
+          ref: 573f40313bcc3a75eb01d6b763f28a1a0dc1de7f
+          path: _first-party/arcadia
+          token: ${{ secrets.KOSMOS_READ_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          repository: makekosmos/imago
+          ref: b1852cab9f8f08ae0b236b7759138d3117f720b8
+          path: _first-party/imago
+          token: ${{ secrets.KOSMOS_READ_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          repository: makekosmos/arca-sdk
+          ref: 21c2f5e157944e3444d3c0604da5a0e041116077
+          path: _first-party/arca-sdk
+          token: ${{ secrets.KOSMOS_READ_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          repository: makekosmos/daedalus
+          ref: 7c1f40878276d2d6a81dc847efabc41ec8f757b2
+          path: _first-party/daedalus
+          token: ${{ secrets.KOSMOS_READ_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          repository: makekosmos/dictation
+          ref: 57aae83d4bc80c5d0342a6b92072c59840d54dd4
+          path: _first-party/dictation
+          token: ${{ secrets.KOSMOS_READ_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          repository: makekosmos/memoria
+          ref: e098694ab5fb205ba9be230b9ac3ec10fade44cc
+          path: _first-party/memoria
+          token: ${{ secrets.KOSMOS_READ_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          repository: makekosmos/ordo
+          ref: 20790f6ba3f64a24e9ed5162d48f53e409b4e884
+          path: _first-party/ordo
+          token: ${{ secrets.KOSMOS_READ_TOKEN }}
+      - name: Link first-party package workspaces
+        shell: pwsh
+        run: |
+          $parent = Split-Path $env:GITHUB_WORKSPACE
+          $links = @{ agenda = 'agenda'; arcadia = 'arcadia'; daedalus = 'daedalus'; dictation = 'dictation'; memoria = 'memoria'; focus = 'ordo'; imago = 'imago'; 'arca-sdk' = 'arca-sdk' }
+          foreach ($name in $links.Keys) {
+            New-Item -ItemType Junction -Path (Join-Path $parent $name) -Target (Join-Path $env:GITHUB_WORKSPACE "_first-party/$($links[$name])") | Out-Null
+          }
+      - run: bun install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: bun install --cwd host --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: bun install --cwd _first-party/arcadia --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: bun install --cwd _first-party/daedalus --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: bun install --cwd _first-party/ordo --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: bun run --cwd _first-party/arcadia package:kspkg
+      - run: bun run --cwd _first-party/daedalus package:kspkg
+      - run: bun run --cwd _first-party/ordo package:kspkg
+      - run: bun run --cwd host build
+      - name: Run first-party package contracts
+        run: >-
+          bun run --cwd host e2e
+          first-party-agenda-contract.spec.ts
+          first-party-arcadia-contract.spec.ts
+          first-party-daedalus-contract.spec.ts
+          first-party-dictation-contract.spec.ts
+          first-party-memoria-contract.spec.ts
+          first-party-ordo-contract.spec.ts
+          --workers=1

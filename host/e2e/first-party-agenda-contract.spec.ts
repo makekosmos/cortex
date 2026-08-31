@@ -10,6 +10,7 @@ import {
   buildEngine,
   cargoTarget,
   closeHost,
+  hostE2eEnvironment,
   recordCleanup,
   rpc,
   rpcError,
@@ -28,15 +29,15 @@ test("signed Agenda installs, runs in Host, and survives Engine restart", async 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-host-e2e-agenda-"));
   const dataDir = path.join(root, "engine");
   const userData = path.join(root, "host-user-data");
-  const environment = {
-    ...process.env,
+  const environment = hostE2eEnvironment({
     APPDATA: path.join(root, "appdata"),
     KOSMOS_DATA_DIR: dataDir,
     KOSMOS_HEADLESS: "1",
     KOSMOS_TEST_MODE: "1",
-  };
+  });
   const cleanupManifest = process.env.KOSMOS_HOST_E2E_CLEANUP_MANIFEST;
   if (!cleanupManifest) throw new Error("KOSMOS_HOST_E2E_CLEANUP_MANIFEST is required");
+  recordCleanup(cleanupManifest, root, new Set());
 
   let host: ElectronApplication | undefined;
   let engine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
@@ -130,7 +131,10 @@ test("signed Agenda installs, runs in Host, and survives Engine restart", async 
       ok: true,
       data: expect.objectContaining({ id: "agenda-host-e2e-task" }),
     });
-    expect(result.denied, JSON.stringify(result.denied)).toMatchObject({ ok: false });
+    expect(result.denied, JSON.stringify(result.denied)).toEqual({
+      ok: false,
+      message: "Engine отклонил операцию: invalid-request.",
+    });
 
     const staleSnapshot = await rpc(lock, "get_object_write_snapshot", {
       id: "agenda-host-e2e-task",
@@ -161,7 +165,7 @@ test("signed Agenda installs, runs in Host, and survives Engine restart", async 
     }, staleSnapshot.data);
     expect(updated, JSON.stringify(updated)).toMatchObject({ ok: true });
 
-    await closeHost(host);
+    await closeHost(host, pids);
     host = undefined;
     await terminate(engine, binaries.engine, dataDir, "initial Engine");
     engine = undefined;
@@ -218,7 +222,7 @@ test("signed Agenda installs, runs in Host, and survives Engine restart", async 
       }
     };
     if (host) pids.add(host.process().pid);
-    await attempt(() => closeHost(host));
+    await attempt(() => closeHost(host, pids));
     await attempt(() =>
       terminate(
         restartedEngine,

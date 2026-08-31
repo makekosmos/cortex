@@ -493,7 +493,7 @@
     }
 
     #[tokio::test]
-    async fn launch_scoped_dictation_filter_preserves_error_responses() {
+    async fn launch_scoped_dictation_filter_redacts_error_responses() {
         let dispatcher = crate::engine_dispatch::EngineDispatcher::new(Arc::new(|_| {
             Box::pin(async { Ok(json!(null)) })
         }));
@@ -511,7 +511,7 @@
                 &DispatchClient::default(),
             )
             .await,
-            response
+            json!({"ok":false,"error":"unavailable"})
         );
     }
 

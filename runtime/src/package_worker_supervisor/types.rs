@@ -21,10 +21,31 @@ pub(super) const RESTART_DELAYS: [Duration; 3] = [
     Duration::from_secs(30),
 ];
 
+pub(super) fn worker_error_class(error: Option<&str>) -> &'static str {
+    let Some(value) = error.filter(|value| {
+        !value.is_empty()
+            && value.len() <= 64
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    }) else {
+        return "unavailable";
+    };
+    match value {
+        "forbidden" => "forbidden",
+        "invalid-request" => "invalid-request",
+        "not-found" => "not-found",
+        "conflict" => "conflict",
+        "timeout" => "timeout",
+        _ => "unavailable",
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct LaunchSpec {
     pub(super) manifest: PackageManifest,
     pub(super) executable: PathBuf,
+    pub(super) state_root: PathBuf,
     pub(super) hash: String,
     pub(super) roots: Vec<PathBuf>,
     pub(super) correlation_id: String,

@@ -11,6 +11,7 @@ impl PackageWorkerSupervisor {
         &self,
         manifest: &PackageManifest,
         executable: PathBuf,
+        state_root: PathBuf,
         hash: String,
         roots: &[PathBuf],
         correlation_id: String,
@@ -34,6 +35,7 @@ impl PackageWorkerSupervisor {
             key,
             LaunchSpec {
                 manifest: manifest.clone(),
+                state_root,
                 executable,
                 hash,
                 roots: roots.to_vec(),

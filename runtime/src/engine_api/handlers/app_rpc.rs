@@ -1,3 +1,52 @@
+fn public_app_error(error: &str) -> &'static str {
+    let code = error.strip_prefix("package worker: ").unwrap_or(error);
+    match code {
+        "forbidden" => "forbidden",
+        "invalid-request" => "invalid-request",
+        "not-found" => "not-found",
+        "conflict" => "conflict",
+        "timeout" => "timeout",
+        "unavailable" => "unavailable",
+        _ => "unavailable",
+    }
+}
+
+fn public_app_error_response(response: &Value) -> Option<Value> {
+    (response.get("ok").and_then(Value::as_bool) == Some(false)).then(|| {
+        let error = response
+            .get("error")
+            .and_then(Value::as_str)
+            .map(public_app_error)
+            .unwrap_or("unavailable");
+        json!({ "ok": false, "error": error })
+    })
+}
+
+#[cfg(test)]
+mod app_rpc_error_tests {
+    use super::{public_app_error, public_app_error_response};
+    use serde_json::json;
+
+    #[test]
+    fn exposes_only_fixed_app_error_classes() {
+        assert_eq!(public_app_error("package worker: forbidden"), "forbidden");
+        assert_eq!(public_app_error("timeout"), "timeout");
+        assert_eq!(public_app_error("C:\\private\\path"), "unavailable");
+    }
+
+    #[test]
+    fn redacts_dispatch_error_envelopes() {
+        assert_eq!(
+            public_app_error_response(&json!({
+                "ok": false,
+                "error": "C:\\private\\secret",
+                "details": "must not cross the boundary"
+            })),
+            Some(json!({ "ok": false, "error": "unavailable" }))
+        );
+    }
+}
+
 async fn handle_app_rpc(
     request: Request<Incoming>,
     client: AuthenticatedClient,
@@ -65,10 +114,10 @@ async fn handle_app_rpc(
         &typed_grant,
     ) {
         Ok(value) => value,
-        Err(error) => {
+        Err(_) => {
             return json_response(
                 StatusCode::BAD_REQUEST,
-                json!({ "ok": false, "error": error }),
+                json!({ "ok": false, "error": "invalid-request" }),
             )
         }
     };
@@ -90,19 +139,19 @@ async fn handle_app_rpc(
     .await
     {
         Ok(params) => params,
-        Err(error) => {
+        Err(_) => {
             return json_response(
                 StatusCode::FORBIDDEN,
-                json!({ "ok": false, "error": error }),
+                json!({ "ok": false, "error": "forbidden" }),
             )
         }
     };
     let owner = match dispatcher.allocate_owner() {
         Ok(owner) => owner,
-        Err(error) => {
+        Err(_) => {
             return json_response(
                 StatusCode::SERVICE_UNAVAILABLE,
-                json!({ "ok": false, "error": error.to_string() }),
+                json!({ "ok": false, "error": "unavailable" }),
             )
         }
     };
@@ -130,13 +179,13 @@ async fn handle_app_rpc(
         }
         Ok(Ok(Err(error))) => {
             response_guard.disarm();
-            json!({ "ok": false, "error": error.to_string() })
+            json!({ "ok": false, "error": public_app_error(&error.to_string()) })
         }
         Ok(Err(_)) => {
             response_guard.disarm();
-            json!({ "ok": false, "error": "Engine RPC task failed" })
+            json!({ "ok": false, "error": "unavailable" })
         }
-        Err(_) => json!({ "ok": false, "error": "Engine RPC timed out" }),
+        Err(_) => json!({ "ok": false, "error": "timeout" }),
     };
     if let Err(error) = protocol_usage.record(
         crate::protocol_usage::TransportKind::ApiV1,

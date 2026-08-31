@@ -4,6 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ElectronApplication } from "playwright";
+import { hostE2eEnvironment } from "./host-environment";
+
+export { hostE2eEnvironment };
 
 export type JsonValue =
   | string
@@ -16,7 +19,6 @@ type EngineBinaries = { engine: string; ark: string };
 export type Lock = { pid: number; http_port: number; auth_token: string };
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-
 const isString = (value: JsonValue | undefined): value is string => typeof value === "string";
 
 export const waitFor = async <T>(read: () => T | undefined, label: string): Promise<T> => {
@@ -30,19 +32,20 @@ export const waitFor = async <T>(read: () => T | undefined, label: string): Prom
 };
 
 export const cargoTarget = (): string =>
+  // SAFETY: cargo metadata --format-version=1 guarantees target_directory.
   JSON.parse(
     execFileSync("cargo", ["metadata", "--no-deps", "--format-version=1"], {
       cwd: repositoryRoot,
       encoding: "utf8",
+      env: hostE2eEnvironment(),
     }),
   ).target_directory;
 
 export const buildEngine = (trust: { root: string; releases: string }): EngineBinaries => {
-  const env = {
-    ...process.env,
+  const env = hostE2eEnvironment({
     KOSMOS_PACKAGE_ROOT_KEY_JSON: trust.root,
     KOSMOS_PACKAGE_RELEASE_KEYS_JSON: trust.releases,
-  };
+  });
   const target = cargoTarget();
   execFileSync(
     "node",
@@ -75,23 +78,34 @@ export const startEngine = async (
   ark: string,
   dataDir: string,
 ): Promise<{ child: ChildProcess; lock: Lock }> => {
+  const lockPath = path.join(dataDir, "engine.lock.json");
+  try {
+    // SAFETY: only an Engine-created lock can exist in this test-owned data directory.
+    const stale = JSON.parse(fs.readFileSync(lockPath, "utf8")) as Lock;
+    if (Number.isInteger(stale.pid) && isPidAlive(stale.pid))
+      throw new Error(`Engine PID ${stale.pid} is still running`);
+    fs.rmSync(lockPath, { force: true });
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Engine PID ")) throw error;
+    fs.rmSync(lockPath, { force: true });
+  }
   const child = spawn(engine, [], {
-    env: {
-      ...process.env,
+    env: hostE2eEnvironment({
       KOSMOS_DATA_DIR: dataDir,
       ARK_CORE_RPC_PATH: ark,
       KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
       KEPLER_SKIP_SYNC: "1",
       KEPLER_USAGE_TRACKER: "0",
-    },
+    }),
     stdio: "ignore",
     windowsHide: true,
   });
   try {
     const lock = await waitFor(() => {
       try {
-        // SAFETY: each test uses a fresh data directory, so this lock belongs to this startup.
-        return JSON.parse(fs.readFileSync(path.join(dataDir, "engine.lock.json"), "utf8")) as Lock;
+        // SAFETY: this test-owned path is written only by the Engine lock serializer.
+        const candidate = JSON.parse(fs.readFileSync(lockPath, "utf8")) as Lock;
+        return Number.isInteger(candidate.pid) && isPidAlive(candidate.pid) ? candidate : undefined;
       } catch {
         return undefined;
       }
@@ -143,6 +157,38 @@ const isPidAlive = (pid: number): boolean => {
   }
 };
 
+export const processTreePids = (rootPid: number): Set<number> => {
+  const output = execFileSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId | ConvertTo-Json -Compress",
+    ],
+    { encoding: "utf8", windowsHide: true },
+  ).trim();
+  // SAFETY: the PowerShell projection emits only numeric process IDs and parent IDs.
+  const parsed = output
+    ? (JSON.parse(output) as
+        | { ProcessId: number; ParentProcessId: number }
+        | Array<{ ProcessId: number; ParentProcessId: number }>)
+    : [];
+  const processes = Array.isArray(parsed) ? parsed : [parsed];
+  const result = new Set([rootPid]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const process of processes) {
+      if (result.has(process.ParentProcessId) && !result.has(process.ProcessId)) {
+        result.add(process.ProcessId);
+        changed = true;
+      }
+    }
+  }
+  return result;
+};
+
 export const waitForPidGone = async (pid: number, label: string): Promise<void> => {
   const deadline = Date.now() + 10_000;
   while (isPidAlive(pid) && Date.now() < deadline)
@@ -161,6 +207,21 @@ const forceStop = async (pid: number, label: string): Promise<void> => {
   await waitForPidGone(pid, label);
 };
 
+export const crashProcessTree = async (
+  child: ChildProcess | undefined,
+  label: string,
+): Promise<Set<number>> => {
+  const pid = child?.pid;
+  if (!pid || !isPidAlive(pid)) throw new Error(`${label} is not running`);
+  const pids = processTreePids(pid);
+  await forceStop(pid, label);
+  for (const processId of processTreePids(pid)) pids.add(processId);
+  for (const processId of pids)
+    if (isPidAlive(processId)) await forceStop(processId, `${label} descendant`);
+  for (const processId of pids) await waitForPidGone(processId, `${label} descendant`);
+  return pids;
+};
+
 export const terminate = async (
   child: ChildProcess | undefined,
   engine: string,
@@ -169,31 +230,49 @@ export const terminate = async (
 ): Promise<void> => {
   const pid = child?.pid;
   if (!pid || !isPidAlive(pid)) return;
+  const pids = processTreePids(pid);
   console.log(
     `[host-e2e] teardown ${label}: pid=${pid} lock=${path.join(dataDir, "engine.lock.json")}`,
   );
   try {
     execFileSync(engine, ["--shutdown"], {
-      env: { ...process.env, KOSMOS_DATA_DIR: dataDir, KOSMOS_LOCK_PERMISSIONS_DISABLED: "1" },
+      env: hostE2eEnvironment({
+        KOSMOS_DATA_DIR: dataDir,
+        KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
+      }),
       windowsHide: true,
       stdio: "ignore",
       timeout: 10_000,
     });
   } catch {}
+  for (const processId of processTreePids(pid)) pids.add(processId);
   if (isPidAlive(pid)) await forceStop(pid, label);
-  await waitForPidGone(pid, label);
+  for (const processId of pids)
+    if (isPidAlive(processId)) await forceStop(processId, `${label} descendant`);
+  for (const processId of pids) await waitForPidGone(processId, `${label} descendant`);
 };
 
-export const closeHost = async (host: ElectronApplication | undefined): Promise<void> => {
+export const closeHost = async (
+  host: ElectronApplication | undefined,
+  trackedPids: Set<number>,
+): Promise<void> => {
   if (!host) return;
   const pid = host.process().pid;
+  const pids = processTreePids(pid);
+  for (const processId of pids) trackedPids.add(processId);
   console.log(`[host-e2e] teardown Host: pid=${pid}`);
   await Promise.race([
     host.close().catch(() => undefined),
     new Promise((resolve) => setTimeout(resolve, 5_000)),
   ]);
+  for (const processId of processTreePids(pid)) {
+    pids.add(processId);
+    trackedPids.add(processId);
+  }
   if (isPidAlive(pid)) await forceStop(pid, "Host");
-  await waitForPidGone(pid, "Host");
+  for (const processId of pids)
+    if (isPidAlive(processId)) await forceStop(processId, "Host descendant");
+  for (const processId of pids) await waitForPidGone(processId, "Host descendant");
 };
 
 export const recordCleanup = (manifestPath: string, root: string, pids: Set<number>): void => {
@@ -204,7 +283,7 @@ export const recordCleanup = (manifestPath: string, root: string, pids: Set<numb
   };
   if (!Array.isArray(manifest.roots) || !Array.isArray(manifest.pids))
     throw new Error("invalid Host E2E cleanup manifest");
-  manifest.roots.push(root);
+  if (!manifest.roots.includes(root)) manifest.roots.push(root);
   manifest.pids.push(...pids);
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
 };

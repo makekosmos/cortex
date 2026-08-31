@@ -11,6 +11,6 @@ pub(in crate::ws_server) async fn handle_games_op(
         .await
     {
         Ok(value) => LocalResponse::ok(value),
-        Err(error) => LocalResponse::err(format!("games.{subop}: {error}")),
+        Err(error) => LocalResponse::err(format!("games.{subop}: {}", package_error_code(&error))),
     }
 }

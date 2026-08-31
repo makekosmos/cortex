@@ -2,10 +2,14 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { daedalusArchive } from "./daedalus-archive";
 import { dictationArchive } from "./dictation-archive";
+import { arcadiaArchive } from "./arcadia-archive";
+import { memoriaArchive } from "./memoria-archive";
 import { ordoArchive } from "./ordo-archive";
 import { TEST_ONLY_RELEASE, TEST_ONLY_ROOT } from "./signing-keys";
+import type { JsonValue, Manifest, PackageArchive, Permission } from "./signed-app-types";
 type SignedApps = {
   archives: Record<string, string>;
   versions: Record<string, string>;
@@ -13,17 +17,6 @@ type SignedApps = {
   signatures: JsonValue;
   trust: { root: string; releases: string };
 };
-type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | readonly JsonValue[]
-  | { readonly [key: string]: JsonValue };
-type Manifest = { id: string; version: string; icon?: string; [key: string]: JsonValue };
-type Permission = { capability: string; scopes?: readonly string[] };
-type PackageArchive = { file: string; manifest: Manifest };
-
 const command = (file: string, args: string[], cwd: string) =>
   execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe" });
 const cortexRoot = (repositoryRoot: string) =>
@@ -119,15 +112,50 @@ const isJsonObject = (value: JsonValue): value is { readonly [key: string]: Json
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 function agendaArchive(root: string, repositoryRoot: string): PackageArchive {
-  const source = path.join(repositoryRoot, "agenda", "release", "agenda-0.2.4.kspkg");
-  if (!fs.existsSync(source)) throw new Error(`Agenda release archive not found: ${source}`);
-
-  const file = path.join(root, path.basename(source));
-  fs.copyFileSync(source, file);
-  const entries = command("tar", ["-tf", file], root).split(/\r?\n/);
+  const agendaRoot = path.join(repositoryRoot, "agenda");
+  const archivePath = "release/agenda-0.2.4.kspkg";
+  const file = path.join(root, path.basename(archivePath));
+  const archive = execFileSync(
+    "git",
+    ["show", `48d3ca5a6d97d7f796b17febea102fcc1ebb7649:${archivePath}`],
+    { cwd: agendaRoot, maxBuffer: 128 * 1024 * 1024, stdio: "pipe" },
+  );
+  if (
+    createHash("sha256").update(archive).digest("hex") !==
+    "39437a5d0c59347e107a964e3fd43b088df84afafb8abb2f17f69cef0ddea04c"
+  ) {
+    throw new Error("Agenda package fixture digest mismatch");
+  }
+  fs.writeFileSync(file, archive);
+  const entries = command("tar", ["-tf", file], root).split(/\r?\n/).filter(Boolean);
   if (entries.filter((entry) => entry === "manifest.json").length !== 1) {
     throw new Error("Agenda archive must contain exactly one manifest.json");
   }
+  for (const entry of entries) {
+    const normalized = entry.replace(/\/$/, "");
+    const segments = normalized.split("/");
+    if (
+      entry.includes("\\") ||
+      entry.startsWith("/") ||
+      /^[A-Za-z]:/.test(entry) ||
+      normalized.includes("//") ||
+      segments.includes(".") ||
+      segments.includes("..")
+    )
+      throw new Error(`Agenda archive contains an unsafe path: ${entry}`);
+  }
+  if (new Set(entries.map((entry) => entry.toLowerCase())).size !== entries.length)
+    throw new Error("Agenda archive contains duplicate paths");
+  for (const required of ["manifest.json", "icon.png", "dist/index.html"])
+    if (!entries.includes(required)) throw new Error(`Agenda archive is missing ${required}`);
+  for (const entry of entries)
+    if (
+      entry !== "manifest.json" &&
+      entry !== "icon.png" &&
+      entry !== "dist/" &&
+      !entry.startsWith("dist/")
+    )
+      throw new Error(`Agenda archive has unexpected entry: ${entry}`);
   let parsed: JsonValue;
   try {
     // SAFETY: isJsonObject and the required manifest fields are checked below.
@@ -136,56 +164,17 @@ function agendaArchive(root: string, repositoryRoot: string): PackageArchive {
     throw new Error(`Agenda archive manifest is not valid JSON: ${String(error)}`);
   }
   if (!isJsonObject(parsed)) throw new Error("Agenda archive manifest must be a JSON object");
+  // SAFETY: the pinned repository manifest is compared deeply with the validated archive object.
+  const reviewed = JSON.parse(
+    command("git", ["show", "48d3ca5a6d97d7f796b17febea102fcc1ebb7649:manifest.json"], agendaRoot),
+  ) as JsonValue;
   if (
+    !isDeepStrictEqual(parsed, reviewed) ||
     parsed.id !== "com.kosmos.agenda" ||
     parsed.version !== "0.2.4" ||
     parsed.entrypoint !== "dist/index.html"
   ) {
     throw new Error("Agenda archive manifest has unexpected id, version, or entrypoint");
-  }
-  const manifest = { ...parsed, id: parsed.id, version: parsed.version } satisfies Manifest;
-  return { file, manifest };
-}
-
-function memoriaArchive(root: string, repositoryRoot: string): PackageArchive {
-  const source = path.join(repositoryRoot, "memoria", "release", "memoria-0.6.3.kspkg");
-  if (!fs.existsSync(source)) throw new Error(`Memoria release archive not found: ${source}`);
-  const file = path.join(root, path.basename(source));
-  fs.copyFileSync(source, file);
-  const entries = command("tar", ["-tf", file], root)
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((entry) => entry.replaceAll("\\", "/"));
-  if (entries.filter((entry) => entry === "manifest.json").length !== 1) {
-    throw new Error("Memoria archive must contain exactly one manifest.json");
-  }
-  for (const entry of entries) {
-    if (entry.startsWith("/") || entry.split("/").includes("..")) {
-      throw new Error(`Memoria archive contains an unsafe path: ${entry}`);
-    }
-  }
-  for (const required of ["manifest.json", "icon.png", "dist/index.html"]) {
-    if (!entries.includes(required)) throw new Error(`Memoria archive is missing ${required}`);
-  }
-  let parsed: JsonValue;
-  try {
-    // SAFETY: isJsonObject and the required manifest fields are checked below.
-    parsed = JSON.parse(command("tar", ["-xOf", file, "manifest.json"], root)) as JsonValue;
-  } catch (error) {
-    throw new Error(`Memoria archive manifest is not valid JSON: ${String(error)}`);
-  }
-  if (!isJsonObject(parsed)) throw new Error("Memoria archive manifest must be a JSON object");
-  if (
-    createHash("sha256").update(JSON.stringify(parsed)).digest("hex") !==
-      "b5775049f563470170b5cde7bb2ff2bfc7b373a4d13365447252f995305b502a" ||
-    parsed.schema_version !== 2 ||
-    parsed.id !== "com.kosmos.memoria" ||
-    parsed.version !== "0.6.3" ||
-    parsed.kind !== "app" ||
-    parsed.icon !== "icon.png" ||
-    parsed.entrypoint !== "dist/index.html"
-  ) {
-    throw new Error("Memoria archive manifest has unexpected identity or entrypoint");
   }
   const manifest = { ...parsed, id: parsed.id, version: parsed.version } satisfies Manifest;
   return { file, manifest };
@@ -275,6 +264,7 @@ export function createSignedApps(
   includeDaedalus = false,
   includeDictation = false,
   includeOrdo = false,
+  includeArcadia = false,
 ): SignedApps {
   const apps: Array<{ file: string; manifest: Manifest }> = [
     archive(
@@ -295,5 +285,6 @@ export function createSignedApps(
   if (includeDaedalus) apps.push(daedalusArchive(root, repositoryRoot));
   if (includeDictation) apps.push(dictationArchive(root, repositoryRoot));
   if (includeOrdo) apps.push(ordoArchive(root, repositoryRoot));
+  if (includeArcadia) apps.push(arcadiaArchive(root, repositoryRoot));
   return sign(root, repositoryRoot, apps);
 }
