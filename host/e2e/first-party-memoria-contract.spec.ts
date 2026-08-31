@@ -19,12 +19,16 @@ import {
   terminate,
   waitForPidGone,
 } from "./fixtures/host-runtime";
+import {
+  installPartialImportFailure,
+  readPartialImportState,
+} from "./fixtures/memoria-partial-import";
 
 const hostRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceRoot = path.resolve(hostRoot, "..", "..");
 const hostMain = path.join(hostRoot, "dist-electron", "main.js");
 
-test("signed Memoria runs CRUD through Host and survives Engine restart", async () => {
+test("signed Memoria rolls back a partial import, runs CRUD, and survives Engine restart", async () => {
   test.setTimeout(180_000);
   test.skip(!fs.existsSync(hostMain), `build Host first: ${hostMain}`);
   const cleanupManifest = process.env.KOSMOS_HOST_E2E_CLEANUP_MANIFEST;
@@ -102,6 +106,35 @@ test("signed Memoria runs CRUD through Host and survives Engine restart", async 
       id: "com.kosmos.memoria",
       version,
     });
+    await expect.poll(() => page.evaluate(() => Boolean(window.api))).toBe(true);
+
+    const importRoot = path.join(root, "partial-import-vault");
+    await page.evaluate(() => {
+      window.location.hash = "#/settings";
+    });
+    await expect(page.getByTestId("eden-settings-export")).toBeVisible();
+    await page.getByTestId("eden-settings-export").click();
+    await expect(page.getByTestId("eden-import-obsidian-vault")).toBeVisible();
+    await expect.poll(() => page.evaluate(() => Boolean(window.api))).toBe(true);
+    await installPartialImportFailure(page, importRoot);
+    const importButton = page.getByTestId("eden-import-obsidian-vault").getByRole("button");
+    await importButton.click();
+    await expect
+      .poll(() => page.evaluate(() => Boolean(window.__memoriaPartialImportOpened)))
+      .toBe(true);
+    await expect(importButton).toBeEnabled({ timeout: 30_000 });
+    const importStatus = await readPartialImportState(page);
+    expect(importStatus, JSON.stringify(importStatus)).toMatchObject({
+      opened: true,
+      injected: true,
+      writes: 2,
+    });
+    expect(importStatus.status).toContain("failed=1");
+    expect(importStatus.status).toMatch(/rolled-back=[1-9]\d*/);
+    const partialImport = await readPartialImportState(page);
+    expect(partialImport.writes).toBe(2);
+    expect(partialImport.ids).toHaveLength(2);
+    expect(partialImport.entries.filter(({ id }) => partialImport.ids.includes(id))).toEqual([]);
 
     const first = await page.evaluate(async () => {
       const object = {
@@ -210,6 +243,14 @@ test("signed Memoria runs CRUD through Host and survives Engine restart", async 
         title: "Memoria Host E2E updated",
       }),
     });
+    for (const id of partialImport.ids) {
+      expect(
+        await restartedPage.evaluate(
+          (objectId) => window.kosmosApp.ark.request("get_object", { id: objectId }),
+          id,
+        ),
+      ).toMatchObject({ ok: true, data: null });
+    }
 
     const deleted = await restartedPage.evaluate(async () => ({
       remove: await window.kosmosApp.ark.request("delete_object", {

@@ -18,10 +18,23 @@ import {
   terminate,
   waitForPidGone,
 } from "./fixtures/host-runtime";
+import {
+  createGitProject,
+  fakeAppServerEnvironment,
+  runSessionLifecycle,
+} from "./fixtures/daedalus-contract";
 
 const hostRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceRoot = path.resolve(hostRoot, "..", "..");
 const hostMain = path.join(hostRoot, "dist-electron", "main.js");
+const repositoryPath = path.join(workspaceRoot, "cortex");
+const fakeAppServer = path.join(
+  repositoryPath,
+  "runtime",
+  "tests",
+  "fixtures",
+  "daedalus-fake-app-server.mjs",
+);
 
 test("signed Daedalus enforces its agents contract in Host", async () => {
   test.setTimeout(180_000);
@@ -31,6 +44,7 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-host-e2e-daedalus-"));
   recordCleanup(cleanupManifest, root, new Set());
+  const projectPath = createGitProject(root);
   const dataDir = path.join(root, "engine");
   const userData = path.join(root, "host-user-data");
   const environment = hostE2eEnvironment({
@@ -39,6 +53,8 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
     KOSMOS_HEADLESS: "1",
     KOSMOS_TEST_MODE: "1",
   });
+  const appServerPidFile = path.join(root, "daedalus-app-server-pids.jsonl");
+  const appServerEnvironment = fakeAppServerEnvironment(fakeAppServer, appServerPidFile);
   let host: ElectronApplication | undefined;
   let engine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
   let restartedEngine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
@@ -67,7 +83,7 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
     );
 
     const binaries = buildEngine(apps.trust);
-    const started = await startEngine(binaries.engine, binaries.ark, dataDir);
+    const started = await startEngine(binaries.engine, binaries.ark, dataDir, appServerEnvironment);
     engine = started.child;
     if (engine.pid) pids.add(engine.pid);
     const lock = started.lock;
@@ -114,7 +130,6 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
       version: "0.1.0",
     });
 
-    const projectPath = path.join(workspaceRoot, "cortex");
     const result = await page.evaluate(async (projectPath) => {
       const read = await window.kosmosApp.ark.request("agents.projects.list", {
         include_archived: true,
@@ -208,12 +223,21 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
       ]),
     });
 
+    if (!engine?.pid || result.added.data?.id?.constructor !== String)
+      throw new Error("Engine PID or project id is missing");
+    await runSessionLifecycle(page, result.added.data.id, appServerPidFile, pids);
+
     await closeHost(host, pids);
     host = undefined;
     await terminate(engine, binaries.engine, dataDir, "initial Engine");
     engine = undefined;
 
-    const restarted = await startEngine(binaries.engine, binaries.ark, dataDir);
+    const restarted = await startEngine(
+      binaries.engine,
+      binaries.ark,
+      dataDir,
+      appServerEnvironment,
+    );
     restartedEngine = restarted.child;
     if (restartedEngine.pid) pids.add(restartedEngine.pid);
     host = await electron.launch({

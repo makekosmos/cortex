@@ -4,8 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
-const DIGEST = "af17257376177e5a1ca234ac1d35eba27deeaf73ccd4a15b9bbfc8f60192a61a";
-const SOURCE_COMMIT = "573f40313bcc3a75eb01d6b763f28a1a0dc1de7f";
+const DIGEST = "652ae3a5f191da26caa88cebd368a72353e075cb7072971b316c9832835fa37d";
+const SOURCE_COMMIT = "b7bb542ad33fcb3d83a9dd62b08e412bf3ef144d";
 const IMAGO_COMMIT = "b1852cab9f8f08ae0b236b7759138d3117f720b8";
 const ARCA_SDK_COMMIT = "21c2f5e157944e3444d3c0604da5a0e041116077";
 export const ARCADIA_EFFECTIVE_GRANTS = [
@@ -80,7 +80,7 @@ const isUnsafeEntry = (entry: string) => {
 };
 
 export function arcadiaArchive(root: string, repositoryRoot: string) {
-  // Reviewed source: Arcadia commit 573f40313bcc3a75eb01d6b763f28a1a0dc1de7f.
+  // Reviewed source: Arcadia commit b7bb542ad33fcb3d83a9dd62b08e412bf3ef144d.
   const sourceRoot = path.join(repositoryRoot, "arcadia");
   const source = path.join(sourceRoot, "release", "arcadia-0.1.8.kspkg");
   if (!fs.existsSync(source)) throw new Error(`Arcadia release archive not found: ${source}`);

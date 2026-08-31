@@ -86,7 +86,7 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
       expect.arrayContaining([
         expect.objectContaining({
           manifest: expect.objectContaining({ id: "com.kosmos.arcadia", version: "0.1.8" }),
-          sha256: "af17257376177e5a1ca234ac1d35eba27deeaf73ccd4a15b9bbfc8f60192a61a",
+          sha256: "652ae3a5f191da26caa88cebd368a72353e075cb7072971b316c9832835fa37d",
         }),
       ]),
     );

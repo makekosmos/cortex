@@ -74,6 +74,7 @@ export const startEngine = async (
   engine: string,
   ark: string,
   dataDir: string,
+  environment: NodeJS.ProcessEnv = {},
 ): Promise<{ child: ChildProcess; lock: Lock }> => {
   const lockPath = path.join(dataDir, "engine.lock.json");
   try {
@@ -93,6 +94,7 @@ export const startEngine = async (
       KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
       KEPLER_SKIP_SYNC: "1",
       KEPLER_USAGE_TRACKER: "0",
+      ...environment,
     }),
     stdio: "ignore",
     windowsHide: true,

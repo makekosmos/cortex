@@ -4,9 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import type { JsonValue, Manifest, PackageArchive } from "./signed-app-types";
 
-const SOURCE_COMMIT = "08cd70e1d374b53897bdb66b87174beee8c8016b";
+const SOURCE_COMMIT = "32cb4cafe3a8362a4d1539d0e75c6364797da914";
 const ARCHIVE_PATH = "tests/fixtures/memoria-0.6.3.kspkg";
-const ARCHIVE_SHA256 = "beb263abadbb0d194825ca50716ce64a573ce882b66b48b43cdf92ba5682f21a";
+const ARCHIVE_SHA256 = "14865b47b8f6a21c2b6f909723304dae43ca9213dd78e43fcd8a73bbc4599a0e";
 
 const command = (file: string, args: string[], cwd: string) =>
   execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe" });

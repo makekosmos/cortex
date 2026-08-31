@@ -5,12 +5,19 @@ import { expect, type Page } from "@playwright/test";
 const HOSTILE_GAME = "Arcadia hostile Steam E2E";
 
 export function createArcadiaFixtures(dataDir: string) {
-  const fakeExe = path.join(dataDir, "ArcadiaHostE2E.exe");
+  const fakeExe = path.join(
+    dataDir,
+    "packages",
+    "package-state",
+    "com.kosmos.arcadia",
+    "ArcadiaHostE2E.exe",
+  );
   const root = path.join(dataDir, "steam-hostile");
   const installDir = path.join(root, "steamapps", "common", "Hostile");
   const marker = path.join(installDir, "arcadia-steam-injected.txt");
   const appId = `123&echo owned>"${marker.replaceAll("\\", "/")}"`;
   const manifestAppId = appId.replaceAll('"', '\\"');
+  fs.mkdirSync(path.dirname(fakeExe), { recursive: true });
   fs.mkdirSync(installDir, { recursive: true });
   fs.writeFileSync(fakeExe, Buffer.from("MZ ArcadiaHostE2E"));
   fs.writeFileSync(path.join(root, "steam.exe"), Buffer.from("MZ ArcadiaSteamHostE2E"));
@@ -44,17 +51,10 @@ export async function expectHostileSteamRejected(
   );
   expect(result.scan, JSON.stringify(result.scan)).toMatchObject({
     ok: true,
-    data: { added: 1, discovered: 1, skipped: 0 },
+    data: { added: 0, discovered: 0, skipped: 0 },
   });
-  expect(result.game).toMatchObject({
-    title: HOSTILE_GAME,
-    local: { source: "steam", sourceAppId: fixture.appId },
-  });
-  // The pinned worker rejects this before process.spawn; Host redacts that fixed worker error.
-  expect(result.launch).toEqual({
-    ok: false,
-    message: "Engine отклонил операцию: unavailable.",
-  });
-  expect(result.after).toMatchObject({ ok: true, data: expect.arrayContaining([result.game]) });
+  expect(result.game).toBeUndefined();
+  expect(result.launch).toEqual({ ok: false, message: "missing-hostile-game" });
+  expect(result.after).toMatchObject({ ok: true, data: [] });
   expect(fs.existsSync(fixture.marker)).toBe(false);
 }

@@ -110,7 +110,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: makekosmos/arcadia
-          ref: 573f40313bcc3a75eb01d6b763f28a1a0dc1de7f
+          ref: b7bb542ad33fcb3d83a9dd62b08e412bf3ef144d
           path: _first-party/arcadia
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
       - uses: actions/checkout@v4
@@ -140,7 +140,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: makekosmos/memoria
-          ref: 08cd70e1d374b53897bdb66b87174beee8c8016b
+          ref: 32cb4cafe3a8362a4d1539d0e75c6364797da914
           path: _first-party/memoria
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
       - uses: actions/checkout@v4

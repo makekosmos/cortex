@@ -1,5 +1,18 @@
 import fs from "node:fs";
 import readline from "node:readline";
+import { spawn } from "node:child_process";
+
+const descendant = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+  stdio: "ignore",
+  windowsHide: true,
+});
+const recordProcessTree = (mode) => {
+  if (!process.env.DAEDALUS_FAKE_APP_SERVER_PID_FILE) return;
+  fs.appendFileSync(
+    process.env.DAEDALUS_FAKE_APP_SERVER_PID_FILE,
+    `${JSON.stringify({ root: process.pid, child: descendant.pid, mode })}\n`,
+  );
+};
 
 const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
 const send = (value) => process.stdout.write(`${JSON.stringify(value)}\n`);
@@ -75,6 +88,13 @@ lines.on("line", (line) => {
         : message.params.input?.[0]?.text?.includes("interrupt-refused")
           ? "refused"
           : "ack";
+      recordProcessTree(
+        interruptMode === "unresponsive"
+          ? "interrupt"
+          : message.params.input?.[0]?.text?.includes("archive")
+            ? "archive"
+            : "other",
+      );
       if (
         !message.params?.approvalPolicy ||
         !message.params?.sandboxPolicy?.type ||
