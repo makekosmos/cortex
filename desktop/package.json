@@ -22,7 +22,7 @@
     "typecheck": "tsc --noEmit",
     "package:dir": "bun run build:backend && bun run build:package-components && bun run build:js && electron-builder --dir",
     "build:package-components": "node scripts/build-package-components.mjs",
-    "package:mac": "bun run build:backend && bun run build:native:macos && bun run build:js && electron-builder --mac dmg",
+    "package:mac": "bun run build:mac",
     "test:e2e": "bun run build:js && playwright test --config playwright.config.ts",
     "test:e2e:headed": "bun run build:js && playwright test --config playwright.config.ts --headed"
   },
