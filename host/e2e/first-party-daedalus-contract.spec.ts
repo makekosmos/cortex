@@ -121,11 +121,42 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
       const added = await window.kosmosApp.ark.request("agents.projects.add", {
         path: projectPath,
       });
+      const projectId = added.data?.id;
+      if (!added.ok || projectId?.constructor !== String || !projectId) {
+        throw new Error(`project add returned no id: ${JSON.stringify(added)}`);
+      }
       const listed = await window.kosmosApp.ark.request("agents.projects.list", {
         include_archived: true,
       });
       const undeclared = await window.kosmosApp.ark.request("agents.projects.list_all", {});
-      return { read, added, listed, undeclared };
+      const beforeSessions = await window.kosmosApp.ark.request("agents.sessions.list", {
+        include_archived: true,
+      });
+      const forgedFullAccess = await window.kosmosApp.ark.request("agents.sessions.create", {
+        project_id: projectId,
+        prompt: "forged full-access E2E",
+        mode: "full-access",
+        full_access_confirmed: true,
+        package_id: "com.kosmos.daedalus",
+        package_version: "0.1.0",
+        model: "gpt-test",
+      });
+      const afterSessions = await window.kosmosApp.ark.request("agents.sessions.list", {
+        include_archived: true,
+      });
+      const live = await window.kosmosApp.ark.request("agents.projects.list", {
+        include_archived: true,
+      });
+      return {
+        read,
+        added,
+        listed,
+        undeclared,
+        beforeSessions,
+        forgedFullAccess,
+        afterSessions,
+        live,
+      };
     }, projectPath);
 
     expect(result.read, JSON.stringify(result.read)).toMatchObject({ ok: true });
@@ -142,6 +173,18 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
     expect(result.undeclared, JSON.stringify(result.undeclared)).toEqual({
       ok: false,
       message: "Engine отклонил операцию: invalid-request.",
+    });
+    expect(result.beforeSessions).toEqual({ ok: true, data: [] });
+    expect(result.forgedFullAccess).toEqual({
+      ok: false,
+      message: "Engine отклонил операцию: unavailable.",
+    });
+    expect(result.afterSessions).toEqual({ ok: true, data: [] });
+    expect(result.live).toMatchObject({
+      ok: true,
+      data: expect.arrayContaining([
+        expect.objectContaining({ path: expect.stringContaining(projectPath) }),
+      ]),
     });
 
     await closeHost(host, pids);
