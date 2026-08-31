@@ -71,19 +71,18 @@ test("signed Agenda installs, runs in Host, and survives Engine restart", async 
       signatures: apps.signatures,
     });
     expect(catalog.ok, rpcError(catalog)).toBe(true);
-    expect(
-      (
-        await rpc(lock, "packages.install", {
-          id: "com.kosmos.agenda",
-          version,
-          archive_path: archive,
-        })
-      ).ok,
-    ).toBe(true);
-    expect(
-      (await rpc(lock, "packages.set_enabled", { id: "com.kosmos.agenda", version, enabled: true }))
-        .ok,
-    ).toBe(true);
+    const install = await rpc(lock, "packages.install", {
+      id: "com.kosmos.agenda",
+      version,
+      archive_path: archive,
+    });
+    expect(install.ok, rpcError(install)).toBe(true);
+    const enable = await rpc(lock, "packages.set_enabled", {
+      id: "com.kosmos.agenda",
+      version,
+      enabled: true,
+    });
+    expect(enable.ok, rpcError(enable)).toBe(true);
 
     host = await launchHost();
     pids.add(host.process().pid);
@@ -118,9 +117,46 @@ test("signed Agenda installs, runs in Host, and survives Engine restart", async 
         updatedAt: "2026-07-01T00:00:00.000Z",
         deletedAt: null,
       };
+      const references = {
+        id: "agenda:references",
+        typeId: "com.kosmos.agenda.references",
+        typeVersion: "1.0.0",
+        title: "Agenda reference entities",
+        propsJson: {
+          model_version: 1,
+          projects: [
+            {
+              id: "agenda-e2e-project",
+              title: "Agenda E2E project",
+              status: 0,
+              sortOrder: 1,
+              createdAt: object.createdAt,
+              billable: false,
+            },
+          ],
+          areas: [{ id: "agenda-e2e-area", title: "Area", sortOrder: 1, isVisible: true }],
+          tags: [{ id: "agenda-e2e-tag", title: "Tag", color: "#ffffff" }],
+          headings: [
+            {
+              id: "agenda-e2e-heading",
+              title: "Agenda E2E heading",
+              sortOrder: 1,
+              projectId: "agenda-e2e-project",
+            },
+          ],
+          extensions: { source_app: "agenda" },
+        },
+        createdAt: object.createdAt,
+        updatedAt: object.updatedAt,
+        deletedAt: null,
+      };
       return {
         upsert: await window.kosmosApp.ark.request("upsert_object", { object }),
         get: await window.kosmosApp.ark.request("get_object", { id: object.id }),
+        references: await window.kosmosApp.ark.request("upsert_object", { object: references }),
+        deniedDelete: await window.kosmosApp.ark.request("delete_object", { id: references.id }),
+        afterDenied: await window.kosmosApp.ark.request("get_object", { id: references.id }),
+        referenceObject: references,
         denied: await window.kosmosApp.ark.request("upsert_object_type", {
           object_type: { id: "agenda-host-e2e-type", name: "Denied" },
         }),
@@ -130,6 +166,19 @@ test("signed Agenda installs, runs in Host, and survives Engine restart", async 
     expect(result.get, JSON.stringify(result.get)).toMatchObject({
       ok: true,
       data: expect.objectContaining({ id: "agenda-host-e2e-task" }),
+    });
+    expect(result.references, JSON.stringify(result.references)).toMatchObject({ ok: true });
+    expect(result.deniedDelete, JSON.stringify(result.deniedDelete)).toEqual({
+      ok: false,
+      message: "Engine отклонил операцию: forbidden.",
+    });
+    expect(result.afterDenied).toMatchObject({
+      ok: true,
+      data: {
+        ...result.referenceObject,
+        createdAt: expect.any(String),
+        updatedAt: expect.any(String),
+      },
     });
     expect(result.denied, JSON.stringify(result.denied)).toEqual({
       ok: false,
@@ -176,14 +225,10 @@ test("signed Agenda installs, runs in Host, and survives Engine restart", async 
     lock = restarted.lock;
     expect(lock.pid).not.toBe(initialEnginePid);
     const packages = await rpc(lock, "packages.list", { kind: "app" });
-    expect(packages).toMatchObject({
-      ok: true,
-      data: {
-        packages: expect.arrayContaining([
-          expect.objectContaining({ id: "com.kosmos.agenda", version, enabled: true }),
-        ]),
-      },
-    });
+    expect(packages.ok, rpcError(packages)).toBe(true);
+    expect(packages.data.packages).toContainEqual(
+      expect.objectContaining({ id: "com.kosmos.agenda", version, enabled: true }),
+    );
 
     host = await launchHost();
     pids.add(host.process().pid);
@@ -201,6 +246,10 @@ test("signed Agenda installs, runs in Host, and survives Engine restart", async 
       ok: true,
       data: expect.objectContaining({ id: "agenda-host-e2e-task", title: "Agenda app update" }),
     });
+    const persistedReferences = await restartedPage.evaluate(() =>
+      window.kosmosApp.ark.request("get_object", { id: "agenda:references" }),
+    );
+    expect(persistedReferences).toEqual({ ok: true, data: result.afterDenied.data });
     const deleted = await restartedPage.evaluate(async () => {
       const remove = await window.kosmosApp.ark.request("delete_object", {
         id: "agenda-host-e2e-task",

@@ -117,12 +117,12 @@ function agendaArchive(root: string, repositoryRoot: string): PackageArchive {
   const file = path.join(root, path.basename(archivePath));
   const archive = execFileSync(
     "git",
-    ["show", `48d3ca5a6d97d7f796b17febea102fcc1ebb7649:${archivePath}`],
+    ["show", `a0d5f5296f2cdc7930f7c575f65ede04eda37b12:${archivePath}`],
     { cwd: agendaRoot, maxBuffer: 128 * 1024 * 1024, stdio: "pipe" },
   );
   if (
     createHash("sha256").update(archive).digest("hex") !==
-    "39437a5d0c59347e107a964e3fd43b088df84afafb8abb2f17f69cef0ddea04c"
+    "00167e71b8c42d1a4cabda36ddde87b97e2573f8b3ce134120ad5cc40b15bf58"
   ) {
     throw new Error("Agenda package fixture digest mismatch");
   }
@@ -152,6 +152,8 @@ function agendaArchive(root: string, repositoryRoot: string): PackageArchive {
     if (
       entry !== "manifest.json" &&
       entry !== "icon.png" &&
+      entry !== "schemas/" &&
+      entry !== "schemas/agenda-references.schema.json" &&
       entry !== "dist/" &&
       !entry.startsWith("dist/")
     )
@@ -166,7 +168,7 @@ function agendaArchive(root: string, repositoryRoot: string): PackageArchive {
   if (!isJsonObject(parsed)) throw new Error("Agenda archive manifest must be a JSON object");
   // SAFETY: the pinned repository manifest is compared deeply with the validated archive object.
   const reviewed = JSON.parse(
-    command("git", ["show", "48d3ca5a6d97d7f796b17febea102fcc1ebb7649:manifest.json"], agendaRoot),
+    command("git", ["show", "a0d5f5296f2cdc7930f7c575f65ede04eda37b12:manifest.json"], agendaRoot),
   ) as JsonValue;
   if (
     !isDeepStrictEqual(parsed, reviewed) ||
