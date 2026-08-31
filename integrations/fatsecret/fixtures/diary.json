@@ -1,8 +1,8 @@
 {
-  "diary_entries": [
-    {
+  "food_entries": {
+    "food_entry": {
       "food_entry_id": "entry-100",
-      "date": "2026-08-27",
+      "date_int": 20692,
       "meal": "Breakfast",
       "food_id": "food-42",
       "serving_id": "serving-1",
@@ -14,5 +14,5 @@
       "protein": "12",
       "fat": "6.5"
     }
-  ]
+  }
 }
