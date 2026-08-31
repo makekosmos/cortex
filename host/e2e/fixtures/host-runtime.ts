@@ -211,12 +211,13 @@ export const crashProcessTree = async (
   const pid = child?.pid;
   if (!pid || !isPidAlive(pid)) throw new Error(`${label} is not running`);
   const pids = processTreePids(pid);
+  const alivePids = new Set([...pids].filter(isPidAlive));
   await forceStop(pid, label);
   for (const processId of processTreePids(pid)) pids.add(processId);
   for (const processId of pids)
     if (isPidAlive(processId)) await forceStop(processId, `${label} descendant`);
   for (const processId of pids) await waitForPidGone(processId, `${label} descendant`);
-  return pids;
+  return alivePids;
 };
 
 export const terminate = async (
