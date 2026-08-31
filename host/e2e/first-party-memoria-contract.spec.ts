@@ -10,7 +10,9 @@ import {
   buildEngine,
   cargoTarget,
   closeHost,
+  crashProcessTree,
   hostE2eEnvironment,
+  processTreePids,
   recordCleanup,
   rpc,
   startEngine,
@@ -169,7 +171,10 @@ test("signed Memoria runs CRUD through Host and survives Engine restart", async 
 
     await closeHost(host, pids);
     host = undefined;
-    await terminate(engine, binaries.engine, dataDir, "initial Engine");
+    if (engine?.pid) for (const pid of processTreePids(engine.pid)) pids.add(pid);
+    const crashed = await crashProcessTree(engine, "Memoria Engine crash injection");
+    expect(crashed.size).toBeGreaterThan(1);
+    for (const pid of crashed) pids.add(pid);
     engine = undefined;
 
     const restarted = await startEngine(binaries.engine, binaries.ark, dataDir);
