@@ -48,7 +48,7 @@ impl WsServer {
             .ok()
             .map(Arc::new);
         let snapshots = Arc::new(crate::package_worker_broker::SnapshotRegistry::new());
-        let grants = Arc::new(GrantAuthorityRegistry::with_data_dir(data_dir.clone()));
+        let grants = package_service.grant_authority();
         let desktop_authority = Arc::new(crate::desktop_authority::DesktopAuthorityRegistry::new());
         let dispatcher = make_dispatcher(
             ark_host.clone(),

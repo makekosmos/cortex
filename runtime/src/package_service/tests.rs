@@ -303,6 +303,27 @@ pub(crate) mod tests {
         (service, archive, hash)
     }
 
+    pub(crate) fn enabled_filesystem_app_service(dir: &Path) -> PackageService {
+        let mut package_manifest = manifest();
+        package_manifest.permissions.push(PermissionRequest {
+            capability: "filesystem.write".into(),
+            scopes: vec![],
+        });
+        let versioned = VersionedManifest::V2(package_manifest);
+        let (archive, hash, size) = archive_with_versioned_manifest(dir, &versioned);
+        let (trust, _, release) = trust();
+        let service = PackageService::open_with_trust(dir, trust).expect("service");
+        let mut doc = catalog(1, hash, size, "2030-01-01T00:00:00Z");
+        doc.packages[0].manifest = versioned;
+        let (bytes, signatures) = signed(&doc, "release-1", &release);
+        service.apply_catalog(bytes, signatures).expect("catalog");
+        service
+            .install_from_path("com.kosmos.demo", "1.0.0", &archive)
+            .expect("install");
+        service.enable("com.kosmos.demo", "1.0.0").expect("enable");
+        service
+    }
+
     #[tokio::test]
     async fn uninstall_preserves_package_state_for_reinstall() {
         let dir = tempdir().expect("temp dir");

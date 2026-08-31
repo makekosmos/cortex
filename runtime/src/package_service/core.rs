@@ -27,6 +27,10 @@ impl PackageService {
 
     fn from_parts(root: PathBuf, trust: Option<TrustStore>) -> Result<Self, PackageError> {
         let unavailable = trust.is_none();
+        let data_dir = root
+            .parent()
+            .ok_or(PackageError::Persistence)?
+            .to_path_buf();
         let bridge_configs = read_bridge_configs(&root);
         let store = std::sync::Arc::new(PackageStore::new(&root)?);
         let package_registrations = PackageRegistrationRegistry::open(root.join("definitions"))
@@ -74,6 +78,7 @@ impl PackageService {
             package_registrations,
             package_definition_dispatcher: Mutex::new(None),
             typed_registry: Mutex::new(typed_registry),
+            grants: std::sync::Arc::new(GrantAuthorityRegistry::with_data_dir(data_dir)),
         };
         // A stale installed v2 contract must not brick Engine startup. Invalid
         // packages stay installed but disabled and cannot be enabled/launched.
@@ -292,6 +297,7 @@ impl PackageService {
         roots: Vec<PathBuf>,
         correlation_id: String,
     ) {
+        supervisor.bind_grant_authority(self.grants.clone());
         self.worker = Some(WorkerRuntime {
             supervisor,
             roots,
@@ -301,6 +307,10 @@ impl PackageService {
         if let Some(worker) = self.worker.as_ref() {
             worker.supervisor.bind_store(self.store.clone());
         }
+    }
+
+    pub fn grant_authority(&self) -> std::sync::Arc<GrantAuthorityRegistry> {
+        self.grants.clone()
     }
 
     pub async fn restore_enabled_workers(&self) -> Result<(), PackageError> {

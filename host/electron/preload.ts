@@ -13,6 +13,7 @@ type ApiParams = Readonly<{ [key: string]: ApiValue }>;
 type ExposedApi = {
   identity: ApiValue | undefined;
   window: { minimize(): void; close(): void };
+  dialogs: { pickDirectoryGrant(): Promise<{ persistentGrantId: string; label: string } | null> };
   launcher: { request(operation: string, params?: ApiParams): Promise<ApiValue> };
   ark?: {
     request(operation: string, params?: ApiParams): Promise<ApiValue>;
@@ -31,6 +32,14 @@ const api: ExposedApi = {
   window: {
     minimize: () => ipcRenderer.send("host:window", "minimize"),
     close: () => ipcRenderer.send("host:window", "close"),
+  },
+  dialogs: {
+    // SAFETY: main owns this IPC handler and validates the exact opaque response shape.
+    pickDirectoryGrant: () =>
+      ipcRenderer.invoke("host:dialogs:pick-directory-grant") as Promise<{
+        persistentGrantId: string;
+        label: string;
+      } | null>,
   },
   launcher: {
     request: (operation: string, params: ApiParams = {}) =>

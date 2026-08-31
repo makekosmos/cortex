@@ -153,6 +153,8 @@ msg!(ResultMessage { pub method: String, pub id: String, pub ok: bool, pub resul
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkerMethod {
+    #[serde(rename = "filesystem.root.open")]
+    FilesystemRootOpen,
     #[serde(rename = "ark.read")]
     ArkRead,
     #[serde(rename = "ark.write")]
@@ -327,6 +329,7 @@ impl Grant {
             return false;
         }
         let cap = match method {
+            WorkerMethod::FilesystemRootOpen => "filesystem.read",
             WorkerMethod::ArkRead => "ark.read",
             WorkerMethod::ArkWrite => "ark.write",
             WorkerMethod::NetworkFetch => "network",
@@ -707,5 +710,20 @@ mod tests {
         assert!(
             parse_json_line(br#"{"method":"worker.run","generation":7,"run_id":"run-1"}"#).is_err()
         );
+    }
+
+    #[test]
+    fn opaque_root_open_is_a_strict_worker_call() {
+        let message = parse_json_line(
+            br#"{"method":"worker.call","id":"1","generation":7,"token":"token","operation":"filesystem.root.open","params":{"persistent_grant_id":"00000000-0000-4000-8000-000000000001"}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            message,
+            WorkerMessage::Call(CallMessage {
+                operation: WorkerMethod::FilesystemRootOpen,
+                ..
+            })
+        ));
     }
 }

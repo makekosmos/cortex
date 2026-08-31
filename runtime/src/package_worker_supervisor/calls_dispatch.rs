@@ -1,12 +1,12 @@
 use super::*;
-
 #[path = "calls_dispatch/handle.rs"]
 mod handle;
+#[path = "calls_dispatch/handle_relative.rs"]
+mod handle_relative;
 #[path = "calls_dispatch/path_scope.rs"]
 mod path_scope;
 pub(super) use handle::handle_call;
-use path_scope::granted_path_scope;
-
+use {handle_relative::try_dispatch_handle, path_scope::granted_path_scope};
 pub(super) async fn dispatch(
     inner: &SupervisorInner,
     grant: &Grant,
@@ -22,10 +22,10 @@ pub(super) async fn dispatch(
     {
         return Err("forbidden");
     }
-    if matches!(
-        call.operation,
-        WorkerMethod::ArkRead | WorkerMethod::ArkWrite
-    ) {
+    if let Some(result) = try_dispatch_handle(inner, grant, call) {
+        return result;
+    }
+    if call.operation == WorkerMethod::ArkRead || call.operation == WorkerMethod::ArkWrite {
         let typed_key = (grant.package_id.clone(), grant.version.clone());
         let typed_bound = lock(&inner.typed_launches).contains_key(&typed_key);
         let typed_envelope = call
@@ -60,6 +60,7 @@ pub(super) async fn dispatch(
         }
     }
     let scope = match call.operation {
+        WorkerMethod::FilesystemRootOpen => None,
         WorkerMethod::ArkRead | WorkerMethod::ArkWrite => call
             .params
             .get("operation")
@@ -99,6 +100,7 @@ pub(super) async fn dispatch(
         return Err("forbidden");
     }
     match call.operation {
+        WorkerMethod::FilesystemRootOpen => unreachable!("handled above"),
         WorkerMethod::ArkRead | WorkerMethod::ArkWrite => {
             let operation = scope.ok_or("invalid-request")?;
             let params = call

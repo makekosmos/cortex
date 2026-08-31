@@ -12,6 +12,9 @@ declare global {
     kosmosApp: {
       identity: HostJsonValue;
       window: { minimize(): void; close(): void };
+      dialogs: {
+        pickDirectoryGrant(): Promise<{ persistentGrantId: string; label: string } | null>;
+      };
       ark: {
         request(operation: string, params?: HostApiParams): Promise<HostJsonValue>;
         subscribe(callback: (event: HostJsonValue) => void): () => void;

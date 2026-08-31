@@ -6,6 +6,7 @@ pub(super) fn granted_path_scope(
     path: &Path,
 ) -> Option<String> {
     let capability = match method {
+        WorkerMethod::FilesystemRootOpen => return None,
         WorkerMethod::FilesystemRead
         | WorkerMethod::FilesystemList
         | WorkerMethod::FilesystemPoll => "filesystem.read",

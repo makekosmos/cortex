@@ -69,7 +69,7 @@ describe("Host window safety contracts", () => {
   });
 
   test("a user close during pending navigation is not fatal", () => {
-    expect(source).toContain("await win.loadURL(manifest.launch_url);");
+    expect(source).toContain("await win.loadURL(developmentUrl ?? manifest.launch_url);");
     expect(source).toContain("if (win.isDestroyed()) return;");
     expect(source).toContain('reportFailure("Ресурс приложения недоступен.", initial);');
   });
@@ -85,7 +85,9 @@ describe("Host window safety contracts", () => {
     expect(source).toMatch(/SAFE_ID\.test\(id\)\s*\?\s*id\s*:\s*undefined/);
     expect(source).toMatch(/app\.requestSingleInstanceLock\(\)/);
     expect(source).toMatch(/const\s+id\s*=\s*requested\(argv\)/);
-    expect(source).toMatch(/await\s+app\.whenReady\(\);\s*await\s+openApp\(id\)/);
+    expect(source).toMatch(
+      /await\s+app\.whenReady\(\);\s*await\s+openApp\(id,\s*false,\s*requestedDevelopmentUrl\(argv\)\)/,
+    );
   });
 
   test("only the single-instance owner keeps the warm Host alive without windows", () => {
@@ -166,8 +168,30 @@ describe("Host window safety contracts", () => {
     expect(source).toContain('win.webContents.on("will-navigate"');
     expect(source).toContain('win.webContents.on("did-start-navigation"');
     expect(source).toContain("event.preventDefault();");
-    expect(source).toContain("new URL(manifest.launch_url).origin");
+    expect(source).toContain("new URL(developmentUrl ?? manifest.launch_url).origin");
     expect(source).toContain("revokeOnNavigation(url);");
+  });
+
+  test("directory picker returns only a launch-scoped opaque grant", () => {
+    expect(preloadSource).toContain("pickDirectoryGrant");
+    expect(preloadSource).toContain("host:dialogs:pick-directory-grant");
+    expect(preloadSource).not.toContain("absoluteRoot");
+    expect(preloadSource).not.toContain("filePaths");
+    expect(preloadSource).not.toContain("broker_token");
+
+    const picker = source.slice(
+      source.indexOf('ipcMain.handle("host:dialogs:pick-directory-grant"'),
+    );
+    expect(picker).toContain("BrowserWindow.fromWebContents(event.sender)");
+    expect(picker).toContain("const appId = [...windows.entries()]");
+    expect(picker).toContain(
+      "if (!manifest || !isV2Launch(manifest) || !manifest.broker_token) return null;",
+    );
+    expect(picker).toContain("KOSMOS_TEST_SELECTED_DIRECTORY");
+    expect(picker).toContain('properties: ["openDirectory"]');
+    expect(picker).toContain("engine.registerDirectoryGrant(");
+    expect(picker).toContain("return result.ok ? result.data : null;");
+    expect(picker).not.toContain("return selectedDirectory;");
   });
 
   test("warm-timeout exit enters the bounded before-quit drain", () => {

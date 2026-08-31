@@ -8,6 +8,14 @@ pub(super) async fn finish_inner_until(
     deadline: Instant,
 ) {
     inner.secrets.revoke_generation(&key.0, generation);
+    let session_id = lock(&inner.workers)
+        .get(key)
+        .filter(|worker| worker.generation == generation)
+        .and_then(|worker| worker.launch_spec.as_ref())
+        .map(|spec| format!("{}:{}", spec.correlation_id, key.0));
+    if let (Some(grants), Some(session_id)) = (lock(&inner.grants).clone(), session_id) {
+        grants.close_generation(&session_id, generation);
+    }
     lock(&inner.invocations).retain(|(id, version, pending_generation, _), _| {
         id != &key.0 || version != &key.1 || *pending_generation != generation
     });

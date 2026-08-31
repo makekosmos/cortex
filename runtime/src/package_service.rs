@@ -21,6 +21,7 @@ pub use crate::package_manifest::{
     VersionedManifest,
 };
 use crate::{
+    grant_authority::GrantAuthorityRegistry,
     lock_file::{ensure_owner_only_directory, write_owner_only_json},
     package_registration::PackageRegistrationRegistry,
     package_store::{InstalledPackage, PackageStore, StoreError},
@@ -189,6 +190,7 @@ pub struct PackageService {
     package_definition_dispatcher:
         Mutex<Option<std::sync::Arc<crate::engine_dispatch::EngineDispatcher>>>,
     typed_registry: Mutex<RegistrySnapshot>,
+    grants: std::sync::Arc<GrantAuthorityRegistry>,
 }
 
 struct WorkerRuntime {

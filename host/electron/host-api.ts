@@ -5,6 +5,7 @@ import {
   type EngineLockInfo,
 } from "@makekosmos/ark";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 
 export type AppLaunch = {
   id: string;
@@ -39,6 +40,10 @@ export type AppResolve = {
   enabled: true;
   revoked: false;
 };
+export type DirectoryGrant = Readonly<{
+  persistentGrantId: string;
+  label: string;
+}>;
 export type PermissionGrant = { capability: string; scopes?: string[] };
 type JsonValue =
   | string
@@ -406,6 +411,32 @@ export class EngineClient {
     });
   }
 
+  async registerDirectoryGrant(
+    launchId: string,
+    brokerToken: string,
+    absoluteRoot: string,
+  ): Promise<EngineResult<DirectoryGrant>> {
+    if (
+      !SAFE_LAUNCH_ID.test(launchId) ||
+      !isSafeBrokerToken(brokerToken) ||
+      !isAbsolutePath(absoluteRoot)
+    ) {
+      return { ok: false, message: "Некорректный выбранный каталог." };
+    }
+    const result = await this.request<JsonRecord>(`/v1/apps/launch/${launchId}/grants/directory`, {
+      method: "POST",
+      headers: { "X-Kosmos-Launch-Token": brokerToken },
+      body: JSON.stringify({ selected_root: absoluteRoot }),
+    });
+    if (!result.ok) return result;
+    const persistentGrantId = result.data.persistentGrantId;
+    const label = result.data.label;
+    if (!isSafeText(persistentGrantId) || !isSafeText(label)) {
+      return { ok: false, message: "Engine вернул некорректный grant каталога." };
+    }
+    return { ok: true, data: { persistentGrantId, label } };
+  }
+
   async getWarmTimeout(): Promise<EngineResult<0 | 300>> {
     const result = await this.request<{
       desktop_host?: { warm_timeout_seconds?: number };
@@ -499,5 +530,27 @@ function isSafeBrokerToken(value: string): boolean {
       const code = character.charCodeAt(0);
       return code <= 0x20 || code === 0x7f;
     })
+  );
+}
+
+function isAbsolutePath(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= 32_768 &&
+    ![...value].some(
+      (character) => character.charCodeAt(0) <= 0x1f || character.charCodeAt(0) === 0x7f,
+    ) &&
+    (path.isAbsolute(value) || /^[A-Za-z]:[\\/]/.test(value) || value.startsWith("\\\\"))
+  );
+}
+
+function isSafeText(value: JsonValue | undefined): value is string {
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= 512 &&
+    ![...value].some(
+      (character) => character.charCodeAt(0) <= 0x1f || character.charCodeAt(0) === 0x7f,
+    )
   );
 }

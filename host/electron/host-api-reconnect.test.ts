@@ -93,3 +93,52 @@ test("Host does not replay revoke after a closed transport and uses the replacem
     "http://127.0.0.1:4318/v1/rpc",
   ]);
 });
+
+test("Host registers a directory grant without returning the selected path", async () => {
+  const fetchMock = mock(async (input: string, init?: RequestInit) => {
+    expect(input).toBe(
+      "http://127.0.0.1:4317/v1/apps/launch/123e4567-e89b-12d3-a456-426614174000/grants/directory",
+    );
+    expect(init?.method).toBe("POST");
+    expect(init?.headers).toMatchObject({
+      "X-Kosmos-Launch-Token": "token",
+    });
+    expect(JSON.parse(String(init?.body))).toEqual({ selected_root: "C:\\Kosmos\\Selected" });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        data: { persistentGrantId: "persistent-grant", label: "Selected" },
+      }),
+    );
+  });
+  // SAFETY: Bun's mock function has the same call signature as global fetch in this test.
+  globalThis.fetch = fetchMock as typeof fetch;
+
+  const client = new EngineClient("C:\\Kosmos-test");
+  await expect(
+    client.registerDirectoryGrant(
+      "123e4567-e89b-12d3-a456-426614174000",
+      "token",
+      "C:\\Kosmos\\Selected",
+    ),
+  ).resolves.toEqual({
+    ok: true,
+    data: { persistentGrantId: "persistent-grant", label: "Selected" },
+  });
+});
+
+test("Host rejects a relative directory before contacting Engine", async () => {
+  const fetchMock = mock(async () => new Response("unexpected", { status: 500 }));
+  // SAFETY: Bun's mock function has the same call signature as global fetch in this test.
+  globalThis.fetch = fetchMock as typeof fetch;
+
+  const client = new EngineClient("C:\\Kosmos-test");
+  await expect(
+    client.registerDirectoryGrant(
+      "123e4567-e89b-12d3-a456-426614174000",
+      "token",
+      "relative\\selected",
+    ),
+  ).resolves.toEqual({ ok: false, message: "Некорректный выбранный каталог." });
+  expect(fetchMock).not.toHaveBeenCalled();
+});

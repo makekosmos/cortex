@@ -105,6 +105,11 @@ async fn handle_authenticated_request(
         {
             handle_renew(request, package_service, launch_leases, route).await
         }
+        (&Method::POST, route)
+            if route.starts_with("/v1/apps/launch/") && route.ends_with("/grants/directory") =>
+        {
+            handle_directory_grant(request, client, package_service, launch_leases, route).await
+        }
         (&Method::DELETE, route) if route.starts_with("/v1/apps/launch/") => {
             handle_revoke(launch_leases, route)
         }

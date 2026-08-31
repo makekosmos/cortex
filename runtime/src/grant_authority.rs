@@ -72,6 +72,8 @@ pub enum GrantError {
     IdentityChanged,
     Persistence,
 }
+const MAX_GRANT_FILE_BYTES: usize = 1024 * 1024;
+const MAX_GRANT_DIRECTORY_ENTRIES: usize = 4096;
 pub struct GrantAuthorityRegistry {
     grants: Mutex<HashMap<String, Grant>>,
     data_dir: Option<PathBuf>,
@@ -307,6 +309,20 @@ impl GrantAuthorityRegistry {
         requested: &[&str],
         max_bytes: usize,
     ) -> Result<Vec<u8>, GrantError> {
+        self.with_authorized_grant(grant_id, owner, extension_id, requested, true, |grant| {
+            handle_relative_fs::read_relative(&grant.root, requested, max_bytes)
+                .map_err(|_| GrantError::ScopeMismatch)
+        })
+    }
+    fn with_authorized_grant<T>(
+        &self,
+        grant_id: &str,
+        owner: &GrantOwner,
+        extension_id: &str,
+        requested: &[&str],
+        exact_file_allowed: bool,
+        operation: impl FnOnce(&Grant) -> Result<T, GrantError>,
+    ) -> Result<T, GrantError> {
         let grants = self.grants.lock().unwrap_or_else(|p| p.into_inner());
         let grant = grants.get(grant_id).ok_or(GrantError::NotFound)?;
         if &grant.owner != owner {
@@ -320,6 +336,9 @@ impl GrantAuthorityRegistry {
             != grant.identity
         {
             return Err(GrantError::IdentityChanged);
+        }
+        if grant.exact_file && !exact_file_allowed {
+            return Err(GrantError::ScopeMismatch);
         }
         if grant.exact_file
             && (requested.len() != 1
@@ -341,8 +360,64 @@ impl GrantAuthorityRegistry {
                 return Err(GrantError::IdentityChanged);
             }
         }
-        handle_relative_fs::read_relative(&grant.root, requested, max_bytes)
+        operation(grant)
+    }
+    pub fn write(
+        &self,
+        grant_id: &str,
+        owner: &GrantOwner,
+        extension_id: &str,
+        requested: &[&str],
+        payload: &[u8],
+    ) -> Result<(), GrantError> {
+        if payload.len() > MAX_GRANT_FILE_BYTES {
+            return Err(GrantError::Invalid);
+        }
+        self.with_authorized_grant(grant_id, owner, extension_id, requested, false, |grant| {
+            handle_relative_fs::write_relative(
+                &grant.root,
+                requested,
+                payload,
+                MAX_GRANT_FILE_BYTES,
+            )
             .map_err(|_| GrantError::ScopeMismatch)
+        })
+    }
+    pub fn list(
+        &self,
+        grant_id: &str,
+        owner: &GrantOwner,
+        extension_id: &str,
+        requested: &[&str],
+    ) -> Result<Vec<handle_relative_fs::RelativeEntry>, GrantError> {
+        self.with_authorized_grant(grant_id, owner, extension_id, requested, false, |grant| {
+            handle_relative_fs::list_relative(&grant.root, requested, MAX_GRANT_DIRECTORY_ENTRIES)
+                .map_err(|_| GrantError::ScopeMismatch)
+        })
+    }
+    pub fn delete(
+        &self,
+        grant_id: &str,
+        owner: &GrantOwner,
+        extension_id: &str,
+        requested: &[&str],
+    ) -> Result<(), GrantError> {
+        self.with_authorized_grant(grant_id, owner, extension_id, requested, false, |grant| {
+            handle_relative_fs::delete_relative(&grant.root, requested)
+                .map_err(|_| GrantError::ScopeMismatch)
+        })
+    }
+    pub fn mkdir(
+        &self,
+        grant_id: &str,
+        owner: &GrantOwner,
+        extension_id: &str,
+        requested: &[&str],
+    ) -> Result<(), GrantError> {
+        self.with_authorized_grant(grant_id, owner, extension_id, requested, false, |grant| {
+            handle_relative_fs::mkdir_relative(&grant.root, requested)
+                .map_err(|_| GrantError::ScopeMismatch)
+        })
     }
     pub fn close_owner(&self, owner: GrantOwner) -> usize {
         let mut grants = self.grants.lock().unwrap_or_else(|p| p.into_inner());
@@ -447,6 +522,73 @@ mod tests {
             reg.read(&id, &o, "ext", &["a.txt"], 64),
             Err(GrantError::IdentityChanged)
         );
+    }
+    #[test]
+    fn directory_grant_supports_bounded_write_list_delete_and_mkdir() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("root");
+        fs::create_dir(&root).unwrap();
+        let reg = GrantAuthorityRegistry::new();
+        let o = owner(1);
+        let (id, _, _) = reg
+            .register(&o, "ext", &root, false, GrantProvenance::NativeDialog, None)
+            .unwrap();
+
+        reg.mkdir(&id, &o, "ext", &["nested"]).unwrap();
+        reg.write(&id, &o, "ext", &["nested", "note.txt"], b"hello")
+            .unwrap();
+        let entries = reg.list(&id, &o, "ext", &["nested"]).unwrap();
+        assert_eq!(
+            entries,
+            vec![handle_relative_fs::RelativeEntry {
+                name: "note.txt".into(),
+                directory: false,
+            }]
+        );
+        assert_eq!(
+            reg.read(&id, &o, "ext", &["nested", "note.txt"], 64)
+                .unwrap(),
+            b"hello"
+        );
+        reg.delete(&id, &o, "ext", &["nested", "note.txt"]).unwrap();
+        assert!(reg.list(&id, &o, "ext", &["nested"]).unwrap().is_empty());
+    }
+    #[test]
+    fn directory_grant_rejects_traversal_and_root_replacement() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("root");
+        fs::create_dir(&root).unwrap();
+        let reg = GrantAuthorityRegistry::new();
+        let o = owner(1);
+        let (id, _, _) = reg
+            .register(&o, "ext", &root, false, GrantProvenance::NativeDialog, None)
+            .unwrap();
+        assert!(reg.write(&id, &o, "ext", &["..", "escape"], b"x").is_err());
+        assert!(reg.list(&id, &o, "ext", &["a/b"]).is_err());
+
+        let old_root = dir.path().join("root.old");
+        fs::rename(&root, &old_root).unwrap();
+        fs::create_dir(&root).unwrap();
+        reg.write(&id, &o, "ext", &["safe"], b"pinned").unwrap();
+        assert_eq!(fs::read(old_root.join("safe")).unwrap(), b"pinned");
+        assert!(!root.join("safe").exists());
+    }
+    #[test]
+    fn exact_file_grant_keeps_directory_operations_out_of_scope() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("only.txt");
+        fs::write(&file, b"old").unwrap();
+        let reg = GrantAuthorityRegistry::new();
+        let o = owner(1);
+        let (id, _, _) = reg
+            .register(&o, "ext", &file, true, GrantProvenance::NativeDialog, None)
+            .unwrap();
+        assert!(reg.list(&id, &o, "ext", &[]).is_err());
+        assert!(reg.mkdir(&id, &o, "ext", &["nested"]).is_err());
+        assert!(reg.write(&id, &o, "ext", &["other.txt"], b"no").is_err());
+        assert!(reg.write(&id, &o, "ext", &["only.txt"], b"new").is_err());
+        assert!(reg.delete(&id, &o, "ext", &["only.txt"]).is_err());
+        assert_eq!(fs::read(file).unwrap(), b"old");
     }
     #[cfg(unix)]
     #[test]

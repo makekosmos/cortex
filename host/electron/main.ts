@@ -35,20 +35,23 @@ const requested = (argv: string[]) => {
 };
 const requestedDevelopmentUrl = (argv: string[]): string | undefined => {
   if (process.env.KOSMOS_DEV_MODE !== "1") return undefined;
-  const value = argv.find((argument) => argument.startsWith("--dev-url="))?.slice("--dev-url=".length);
+  const value = argv
+    .find((argument) => argument.startsWith("--dev-url="))
+    ?.slice("--dev-url=".length);
   try {
     if (!value) return undefined;
     const url = new URL(value);
-    return url?.protocol === "http:" && ["127.0.0.1", "localhost"].includes(url.hostname) && url.port
+    return url?.protocol === "http:" &&
+      ["127.0.0.1", "localhost"].includes(url.hostname) &&
+      url.port
       ? url.toString()
       : undefined;
   } catch {
     return undefined;
   }
 };
-const isOperationRequest = (
-  value: JsonRecord,
-): value is JsonRecord & { operation: string } => isJsonString(value.operation);
+const isOperationRequest = (value: JsonRecord): value is JsonRecord & { operation: string } =>
+  isJsonString(value.operation);
 const hasOpenApp = (argv: string[]) =>
   argv.some((argument) => argument === "--open-app" || argument.startsWith("--open-app="));
 const windows = new Map<string, BrowserWindow>();
@@ -326,10 +329,7 @@ if (!singleInstance) {
       const request = input;
       if (isOperationRequest(request)) {
         const operation = request.operation;
-        const params =
-          isJsonRecord(request.params)
-            ? request.params
-            : {};
+        const params = isJsonRecord(request.params) ? request.params : {};
         if (isV2Launch(manifest)) {
           if (!manifest.broker_token)
             return {
@@ -354,37 +354,56 @@ if (!singleInstance) {
       }
       return { ok: false, message: "Некорректный запрос ARK." };
     });
-    ipcMain.handle(
-      "host:launcher-request",
-      async (event, input: JsonRecord | undefined) => {
-        const win = BrowserWindow.fromWebContents(event.sender);
-        const appId = win
-          ? [...windows.entries()].find(([, candidate]) => candidate === win)?.[0]
-          : undefined;
-        const operation = isJsonString(input?.operation) ? input.operation : "";
-        const params =
-          isJsonRecord(input?.params)
-            ? input.params
-            : {};
-        const manifest = appId ? manifests.get(appId) : undefined;
-        const allowed = new Set([
-          "app_index.list_all",
-          "app_index.search",
-          "app_index.launch",
-          "file_index.search",
-          "file_index.open",
-          "commands.list",
-          "commands.invoke",
-        ]);
-        if (
-          !manifest ||
-          !allowed.has(operation) ||
-          !hasLauncherGrant(manifest.permissions, operation)
-        )
-          return { ok: false, message: "Операция лаунчера не разрешена приложению." };
-        return engine.launcherRequest(operation, params);
-      },
-    );
+    ipcMain.handle("host:dialogs:pick-directory-grant", async (event) => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (!win || win.isDestroyed()) return null;
+      const appId = [...windows.entries()].find(([, candidate]) => candidate === win)?.[0];
+      const manifest = appId ? manifests.get(appId) : undefined;
+      if (!manifest || !isV2Launch(manifest) || !manifest.broker_token) return null;
+
+      let selectedDirectory: string | undefined;
+      if (process.env.KOSMOS_TEST_MODE === "1") {
+        selectedDirectory = process.env.KOSMOS_TEST_SELECTED_DIRECTORY;
+      } else {
+        const result = await dialog.showOpenDialog(win, {
+          properties: ["openDirectory"],
+        });
+        selectedDirectory = result.canceled ? undefined : result.filePaths[0];
+      }
+      if (!selectedDirectory) return null;
+
+      const result = await engine.registerDirectoryGrant(
+        manifest.launch_id,
+        manifest.broker_token,
+        selectedDirectory,
+      );
+      return result.ok ? result.data : null;
+    });
+    ipcMain.handle("host:launcher-request", async (event, input: JsonRecord | undefined) => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const appId = win
+        ? [...windows.entries()].find(([, candidate]) => candidate === win)?.[0]
+        : undefined;
+      const operation = isJsonString(input?.operation) ? input.operation : "";
+      const params = isJsonRecord(input?.params) ? input.params : {};
+      const manifest = appId ? manifests.get(appId) : undefined;
+      const allowed = new Set([
+        "app_index.list_all",
+        "app_index.search",
+        "app_index.launch",
+        "file_index.search",
+        "file_index.open",
+        "commands.list",
+        "commands.invoke",
+      ]);
+      if (
+        !manifest ||
+        !allowed.has(operation) ||
+        !hasLauncherGrant(manifest.permissions, operation)
+      )
+        return { ok: false, message: "Операция лаунчера не разрешена приложению." };
+      return engine.launcherRequest(operation, params);
+    });
     const id = initialOpenAppId;
     if (id) await openApp(id, true);
     else if (hasOpenApp(process.argv))
@@ -409,14 +428,14 @@ if (!singleInstance) {
       if (packageList.length > 0) {
         reconcileShortcuts(
           packageList.map((item) => ({
-              id: item.id,
-              name: kosmosAppName(item.id, isJsonString(item.name) ? item.name : item.id),
-              enabled: true,
-              revoked: false,
-              iconPath:
-                kosmosAppShortcutIcon(process.resourcesPath, item.id) ??
-                (isJsonString(item.icon_path) ? item.icon_path : undefined),
-            })),
+            id: item.id,
+            name: kosmosAppName(item.id, isJsonString(item.name) ? item.name : item.id),
+            enabled: true,
+            revoked: false,
+            iconPath:
+              kosmosAppShortcutIcon(process.resourcesPath, item.id) ??
+              (isJsonString(item.icon_path) ? item.icon_path : undefined),
+          })),
         );
       }
     }

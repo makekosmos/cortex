@@ -1053,6 +1053,77 @@
     }
 
     #[tokio::test]
+    async fn native_directory_grant_returns_only_an_opaque_package_bound_handle() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let selected = dir.path().join("Selected Games");
+        std::fs::create_dir(&selected).expect("selected directory");
+        std::fs::write(selected.join("save.dat"), b"save").expect("save file");
+        let token = "a".repeat(64);
+        let service =
+            Arc::new(crate::package_service::tests::enabled_filesystem_app_service(dir.path()));
+        let grants = service.grant_authority();
+        let server = EngineApiServer::bind(
+            token.clone(),
+            9,
+            Arc::new(ProtocolUsageStore::open(dir.path()).expect("usage")),
+            "00000000-0000-4000-8000-000000000001".into(),
+            service,
+            test_dispatcher(),
+        )
+        .await
+        .expect("server");
+        let port = server.port();
+        let task = tokio::spawn(server.run());
+        let launch = response_json(
+            &raw_http(
+                port,
+                &request(
+                    &token,
+                    "POST",
+                    "/v1/apps/launch",
+                    r#"{"id":"com.kosmos.demo"}"#,
+                ),
+            )
+            .await,
+        );
+        let launch_id = launch["data"]["launch_id"].as_str().unwrap();
+        let launch_token = launch["data"]["broker_token"].as_str().unwrap();
+        let body = serde_json::json!({"selected_root": selected}).to_string();
+        let base = request_with_client(
+            &token,
+            "POST",
+            &format!("/v1/apps/launch/{launch_id}/grants/directory"),
+            &body,
+            "desktop-host",
+            API_VERSION,
+        );
+        let request = base.replace(
+            "Content-Length:",
+            &format!("X-Kosmos-Launch-Token: {launch_token}\r\nContent-Length:"),
+        );
+        let response = raw_http(port, &request).await;
+        let value = response_json(&response);
+        assert_eq!(value["data"]["label"], "Selected Games");
+        assert!(!response.contains(&selected.to_string_lossy().to_string()));
+        let persistent = value["data"]["persistentGrantId"].as_str().unwrap();
+        let owner = crate::grant_authority::GrantOwner {
+            session_id: "worker".into(),
+            generation: 2,
+            connection_id: 1,
+        };
+        let (grant_id, _) = grants
+            .reopen(&owner, persistent, "com.kosmos.demo")
+            .expect("persistent grant reopens for package");
+        assert_eq!(
+            grants
+                .read(&grant_id, &owner, "com.kosmos.demo", &["save.dat"], 16,)
+                .unwrap(),
+            b"save"
+        );
+        task.abort();
+    }
+
+    #[tokio::test]
     async fn lifecycle_cleanup_purges_an_idle_lease_without_a_registry_request() {
         let dir = tempfile::tempdir().expect("tempdir");
         let token = "a".repeat(64);

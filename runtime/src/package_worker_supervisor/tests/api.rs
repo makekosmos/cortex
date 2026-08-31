@@ -240,5 +240,8 @@ async fn start_is_unsupported_on_non_windows_and_records_failure() {
     );
 }
 
+#[path = "api/opaque_roots.rs"]
+mod opaque_roots;
+
 #[path = "api/diagnostics.rs"]
 mod diagnostics;

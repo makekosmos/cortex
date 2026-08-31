@@ -1,5 +1,11 @@
 //! Handle-relative filesystem access for package snapshots and grants.
-use std::{io, path::Path};
+use std::{
+    io,
+    path::Path,
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Debug)]
 pub struct Limits {
@@ -13,6 +19,12 @@ pub struct Limits {
 pub struct RelativeFile {
     pub components: Vec<String>,
     pub bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelativeEntry {
+    pub name: String,
+    pub directory: bool,
 }
 
 #[cfg_attr(
@@ -189,6 +201,74 @@ pub fn read_relative(
     }
 }
 
+pub fn list_relative(
+    root: &RootHandle,
+    components: &[&str],
+    max_entries: usize,
+) -> io::Result<Vec<RelativeEntry>> {
+    if max_entries == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "entry limit exceeded",
+        ));
+    }
+    #[cfg(unix)]
+    {
+        list_relative_unix(root, components, max_entries)
+    }
+    #[cfg(windows)]
+    {
+        windows::list_relative(root, components, max_entries)
+    }
+}
+
+pub fn write_relative(
+    root: &RootHandle,
+    components: &[&str],
+    bytes: &[u8],
+    max_bytes: usize,
+) -> io::Result<()> {
+    validate_components(components)?;
+    if bytes.len() > max_bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::FileTooLarge,
+            "file exceeds limit",
+        ));
+    }
+    #[cfg(unix)]
+    {
+        write_relative_unix(root, components, bytes)
+    }
+    #[cfg(windows)]
+    {
+        windows::write_relative(root, components, bytes, max_bytes)
+    }
+}
+
+pub fn delete_relative(root: &RootHandle, components: &[&str]) -> io::Result<()> {
+    validate_components(components)?;
+    #[cfg(unix)]
+    {
+        delete_relative_unix(root, components)
+    }
+    #[cfg(windows)]
+    {
+        windows::delete_relative(root, components)
+    }
+}
+
+pub fn mkdir_relative(root: &RootHandle, components: &[&str]) -> io::Result<()> {
+    validate_components(components)?;
+    #[cfg(unix)]
+    {
+        mkdir_relative_unix(root, components)
+    }
+    #[cfg(windows)]
+    {
+        windows::mkdir_relative(root, components)
+    }
+}
+
 /// Return the stable identity of a regular file directly below `root`.
 ///
 /// The file is opened relative to the already validated root handle so a
@@ -279,6 +359,238 @@ fn openat(parent: libc::c_int, name: &str, directory: bool) -> io::Result<libc::
     } else {
         Ok(fd)
     }
+}
+
+#[cfg(unix)]
+fn openat_create(parent: libc::c_int, name: &str) -> io::Result<libc::c_int> {
+    use std::ffi::CString;
+    let name = CString::new(name)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "nul component"))?;
+    let fd = unsafe {
+        libc::openat(
+            parent,
+            name.as_ptr(),
+            libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+            0o600,
+        )
+    };
+    if fd < 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(fd)
+    }
+}
+
+#[cfg(unix)]
+fn open_directory_relative(root: &RootHandle, components: &[&str]) -> io::Result<std::fs::File> {
+    use std::os::unix::io::{AsRawFd, FromRawFd};
+    let mut fd = unsafe { libc::dup(root.file.as_raw_fd()) };
+    if fd < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    for component in components {
+        let child = match openat(fd, component, true) {
+            Ok(child) => child,
+            Err(error) => {
+                unsafe { libc::close(fd) };
+                return Err(error);
+            }
+        };
+        unsafe { libc::close(fd) };
+        fd = child;
+    }
+    Ok(unsafe { std::fs::File::from_raw_fd(fd) })
+}
+
+#[cfg(unix)]
+fn unix_file_identity(file: &std::fs::File) -> io::Result<RootIdentity> {
+    use std::os::unix::fs::MetadataExt;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "not a regular file",
+        ));
+    }
+    Ok(RootIdentity {
+        primary: metadata.dev(),
+        secondary: metadata.ino(),
+    })
+}
+
+#[cfg(unix)]
+fn existing_file_identity(parent: libc::c_int, name: &str) -> io::Result<Option<RootIdentity>> {
+    use std::os::unix::io::FromRawFd;
+    match openat(parent, name, false) {
+        Ok(fd) => {
+            let file = unsafe { std::fs::File::from_raw_fd(fd) };
+            unix_file_identity(&file).map(Some)
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+#[cfg(unix)]
+fn unlinkat(parent: libc::c_int, name: &str) -> io::Result<()> {
+    use std::ffi::CString;
+    let name = CString::new(name)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "nul component"))?;
+    let result = unsafe { libc::unlinkat(parent, name.as_ptr(), 0) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+#[cfg(unix)]
+fn list_relative_unix(
+    root: &RootHandle,
+    components: &[&str],
+    max_entries: usize,
+) -> io::Result<Vec<RelativeEntry>> {
+    use std::{ffi::CStr, os::unix::io::AsRawFd};
+    if !components.is_empty() {
+        validate_components(components)?;
+    }
+    let directory = open_directory_relative(root, components)?;
+    let scan_fd = unsafe { libc::dup(directory.as_raw_fd()) };
+    if scan_fd < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let dir = unsafe { libc::fdopendir(scan_fd) };
+    if dir.is_null() {
+        unsafe { libc::close(scan_fd) };
+        return Err(io::Error::last_os_error());
+    }
+    let result = (|| {
+        let mut entries = Vec::new();
+        loop {
+            let entry = unsafe { libc::readdir(dir) };
+            if entry.is_null() {
+                break;
+            }
+            let raw = unsafe { CStr::from_ptr((*entry).d_name.as_ptr()) }.to_bytes();
+            if raw == b"." || raw == b".." {
+                continue;
+            }
+            let name = std::str::from_utf8(raw).map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidInput, "filename is not UTF-8")
+            })?;
+            validate_components(&[name])?;
+            if entries.len() >= max_entries {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "directory entry limit exceeded",
+                ));
+            }
+            let fd = openat(directory.as_raw_fd(), name, false)?;
+            let child = unsafe { std::fs::File::from_raw_fd(fd) };
+            let metadata = child.metadata()?;
+            if metadata.file_type().is_symlink() || (!metadata.is_dir() && !metadata.is_file()) {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "unsupported or symlink entry",
+                ));
+            }
+            entries.push(RelativeEntry {
+                name: name.to_owned(),
+                directory: metadata.is_dir(),
+            });
+        }
+        entries.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(entries)
+    })();
+    unsafe { libc::closedir(dir) };
+    result
+}
+
+#[cfg(unix)]
+fn write_relative_unix(root: &RootHandle, components: &[&str], bytes: &[u8]) -> io::Result<()> {
+    use std::{
+        io::Write,
+        os::unix::io::{AsRawFd, FromRawFd},
+    };
+    let parent = open_directory_relative(root, &components[..components.len() - 1])?;
+    let parent_fd = parent.as_raw_fd();
+    let target = components[components.len() - 1];
+    let before = existing_file_identity(parent_fd, target)?;
+    let mut temp_name = None;
+    let mut temp = None;
+    for _ in 0..128 {
+        let candidate = format!(
+            ".kosmos-grant-{}-{}.tmp",
+            std::process::id(),
+            TEMP_FILE_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        );
+        match openat_create(parent_fd, &candidate) {
+            Ok(fd) => {
+                temp_name = Some(candidate);
+                temp = Some(unsafe { std::fs::File::from_raw_fd(fd) });
+                break;
+            }
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error),
+        }
+    }
+    let temp_name = temp_name
+        .ok_or_else(|| io::Error::new(io::ErrorKind::AlreadyExists, "temporary file collision"))?;
+    let mut temp = temp.expect("temporary file is set with its name");
+    let result = (|| {
+        temp.write_all(bytes)?;
+        temp.sync_all()?;
+        let after = existing_file_identity(parent_fd, target)?;
+        if after != before {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "target identity changed",
+            ));
+        }
+        use std::ffi::CString;
+        let source = CString::new(temp_name.as_str()).expect("generated name has no nul");
+        let target = CString::new(target)
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "nul component"))?;
+        if unsafe { libc::renameat(parent_fd, source.as_ptr(), parent_fd, target.as_ptr()) } != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        parent.sync_all()
+    })();
+    drop(temp);
+    if result.is_err() {
+        let _ = unlinkat(parent_fd, &temp_name);
+    }
+    result
+}
+
+#[cfg(unix)]
+fn delete_relative_unix(root: &RootHandle, components: &[&str]) -> io::Result<()> {
+    use std::os::unix::io::AsRawFd;
+    let parent = open_directory_relative(root, &components[..components.len() - 1])?;
+    let target = components[components.len() - 1];
+    let _ = existing_file_identity(parent.as_raw_fd(), target)?
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "file not found"))?;
+    unlinkat(parent.as_raw_fd(), target)
+}
+
+#[cfg(unix)]
+fn mkdir_relative_unix(root: &RootHandle, components: &[&str]) -> io::Result<()> {
+    use std::{ffi::CString, os::unix::io::AsRawFd};
+    let mut parent = open_directory_relative(root, &[])?;
+    for component in components {
+        let name = CString::new(*component)
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "nul component"))?;
+        let result = unsafe { libc::mkdirat(parent.as_raw_fd(), name.as_ptr(), 0o700) };
+        if result != 0 {
+            let error = io::Error::last_os_error();
+            if error.kind() != io::ErrorKind::AlreadyExists {
+                return Err(error);
+            }
+        }
+        let fd = openat(parent.as_raw_fd(), component, true)?;
+        parent = unsafe { std::fs::File::from_raw_fd(fd) };
+    }
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -539,6 +851,11 @@ mod windows {
     const OBJ_CASE_INSENSITIVE: u32 = 0x40;
     const FILE_READ_ATTRIBUTES: u32 = 0x0000_0080;
     const SYNCHRONIZE: u32 = 0x0010_0000;
+    const DELETE: u32 = 0x0001_0000;
+    const FILE_ADD_FILE: u32 = 0x0002;
+    const FILE_ADD_SUBDIRECTORY: u32 = 0x0004;
+    const FILE_CREATE: u32 = 2;
+    const FILE_OPEN_REPARSE_POINT_OPTIONS: u32 = 0x0020_0060;
     const FILE_ID_EXTD_DIR_INFORMATION_CLASS: u32 = 60;
     const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
@@ -829,7 +1146,13 @@ mod windows {
             identity: id,
         })
     }
-    fn relative(parent: Handle, name: &str, directory: bool) -> io::Result<OwnedHandle> {
+    fn relative_with(
+        parent: Handle,
+        name: &str,
+        directory: bool,
+        access: u32,
+        disposition: u32,
+    ) -> io::Result<OwnedHandle> {
         let mut w: Vec<u16> = OsStr::new(name).encode_wide().collect();
         let bytes = u16::try_from(
             w.len()
@@ -858,17 +1181,13 @@ mod windows {
         let status = unsafe {
             NtCreateFile(
                 &mut h,
-                if directory {
-                    FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE
-                } else {
-                    FILE_READ_DATA | FILE_READ_ATTRIBUTES | SYNCHRONIZE
-                },
+                access,
                 &mut oa,
                 &mut iosb,
                 std::ptr::null_mut(),
                 0,
                 FILE_SHARE_ALL,
-                FILE_OPEN,
+                disposition,
                 FILE_OPEN_REPARSE_POINT
                     | FILE_SYNCHRONOUS_IO_NONALERT
                     | if directory {
@@ -881,11 +1200,33 @@ mod windows {
             )
         };
         let owned = OwnedHandle(h);
+        if status == 0xC0000035u32 as i32 {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "name already exists",
+            ));
+        }
+        if status == 0xC0000034u32 as i32 || status == 0xC000003Au32 as i32 {
+            return Err(io::Error::new(io::ErrorKind::NotFound, "name not found"));
+        }
         nt(status)?;
         if owned.raw().is_null() {
             return Err(io::Error::other("null handle"));
         }
         Ok(owned)
+    }
+    fn relative(parent: Handle, name: &str, directory: bool) -> io::Result<OwnedHandle> {
+        relative_with(
+            parent,
+            name,
+            directory,
+            if directory {
+                FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE
+            } else {
+                FILE_READ_DATA | FILE_READ_ATTRIBUTES | SYNCHRONIZE
+            },
+            FILE_OPEN,
+        )
     }
     fn enumerate(dir: Handle, max_entries: usize) -> io::Result<Vec<Entry>> {
         let mut buffer = vec![0u8; 64 * 1024];
@@ -1123,6 +1464,234 @@ mod windows {
         validate_opened(file.raw(), None, false)?;
         read_handle(file.raw(), max)
     }
+
+    pub fn list_relative(
+        root: &RootHandle,
+        components: &[&str],
+        max_entries: usize,
+    ) -> io::Result<Vec<RelativeEntry>> {
+        if !components.is_empty() {
+            validate_components(components)?;
+        }
+        let mut directory = relative_duplicate(root.handle.raw())?;
+        for component in components {
+            let child = relative(directory.raw(), component, true)?;
+            validate_opened(child.raw(), None, true)?;
+            directory = child;
+        }
+        let entries = enumerate(directory.raw(), max_entries)?;
+        Ok(entries
+            .into_iter()
+            .map(|entry| RelativeEntry {
+                name: entry.name,
+                directory: entry.directory,
+            })
+            .collect())
+    }
+
+    fn existing_identity(parent: Handle, name: &str) -> io::Result<Option<Identity>> {
+        match relative_with(
+            parent,
+            name,
+            false,
+            FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            FILE_OPEN,
+        ) {
+            Ok(file) => validate_opened(file.raw(), None, false).map(Some),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
+    fn create_temp(parent: Handle, name: &str) -> io::Result<std::fs::File> {
+        use std::os::windows::io::FromRawHandle;
+        let temp = relative_with(parent, name, false, 0x0013_0116, FILE_CREATE)?;
+        let raw = temp.0;
+        std::mem::forget(temp);
+        Ok(unsafe { std::fs::File::from_raw_handle(raw) })
+    }
+
+    fn delete_handle(handle: Handle) -> io::Result<()> {
+        #[repr(C)]
+        struct FileDispositionInformation {
+            delete_file: u8,
+        }
+        unsafe extern "system" {
+            fn NtSetInformationFile(
+                file_handle: Handle,
+                io_status_block: *mut IoStatusBlock,
+                file_information: *mut c_void,
+                length: u32,
+                file_information_class: u32,
+            ) -> i32;
+        }
+        let mut disposition = FileDispositionInformation { delete_file: 1 };
+        let mut iosb = IoStatusBlock {
+            status: 0,
+            information: 0,
+        };
+        nt(unsafe {
+            NtSetInformationFile(
+                handle,
+                &mut iosb,
+                (&mut disposition as *mut FileDispositionInformation).cast(),
+                std::mem::size_of::<FileDispositionInformation>() as u32,
+                13,
+            )
+        })
+    }
+
+    fn atomic_replace(temp: Handle, parent: Handle, name: &str) -> io::Result<()> {
+        use std::{os::windows::ffi::OsStrExt, ptr};
+        #[repr(C)]
+        struct RenameInformation {
+            replace_if_exists: u8,
+            root_directory: Handle,
+            file_name_length: u32,
+            file_name: [u16; 1],
+        }
+        unsafe extern "system" {
+            fn NtSetInformationFile(
+                file_handle: Handle,
+                io_status_block: *mut IoStatusBlock,
+                file_information: *mut c_void,
+                length: u32,
+                file_information_class: u32,
+            ) -> i32;
+        }
+        let wide: Vec<u16> = OsStr::new(name).encode_wide().collect();
+        if wide.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "empty filename",
+            ));
+        }
+        let size =
+            std::mem::size_of::<RenameInformation>()
+                .checked_add(wide.len().checked_mul(2).ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "filename too long")
+                })?)
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "filename too long"))?;
+        let mut buffer = vec![0u8; size];
+        let rename = buffer.as_mut_ptr().cast::<RenameInformation>();
+        unsafe {
+            (*rename).replace_if_exists = 1;
+            (*rename).root_directory = parent;
+            (*rename).file_name_length = (wide.len() * 2) as u32;
+            ptr::copy_nonoverlapping(wide.as_ptr(), (*rename).file_name.as_mut_ptr(), wide.len());
+            let mut iosb = IoStatusBlock {
+                status: 0,
+                information: 0,
+            };
+            nt(NtSetInformationFile(
+                temp,
+                &mut iosb,
+                buffer.as_mut_ptr().cast(),
+                buffer.len() as u32,
+                10,
+            ))
+        }
+    }
+
+    pub fn write_relative(
+        root: &RootHandle,
+        components: &[&str],
+        bytes: &[u8],
+        max_bytes: usize,
+    ) -> io::Result<()> {
+        use std::{io::Write, os::windows::io::AsRawHandle};
+        if bytes.len() > max_bytes {
+            return Err(io::Error::new(
+                io::ErrorKind::FileTooLarge,
+                "file exceeds limit",
+            ));
+        }
+        let mut parent = relative_duplicate(root.handle.raw())?;
+        for component in &components[..components.len() - 1] {
+            let child = relative(parent.raw(), component, true)?;
+            validate_opened(child.raw(), None, true)?;
+            parent = child;
+        }
+        let target = components[components.len() - 1];
+        let before = existing_identity(parent.raw(), target)?;
+        let mut temp = None;
+        for _ in 0..128 {
+            let name = format!(
+                ".kosmos-grant-{}-{}.tmp",
+                std::process::id(),
+                TEMP_FILE_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+            );
+            match create_temp(parent.raw(), &name) {
+                Ok(file) => {
+                    temp = Some((name, file));
+                    break;
+                }
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(error),
+            }
+        }
+        let (_temp_name, mut temp) = temp.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::AlreadyExists, "temporary file collision")
+        })?;
+        let result = (|| {
+            temp.write_all(bytes)?;
+            temp.sync_all()?;
+            let after = existing_identity(parent.raw(), target)?;
+            if after != before {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "target identity changed",
+                ));
+            }
+            atomic_replace(temp.as_raw_handle() as Handle, parent.raw(), target)
+        })();
+        if result.is_err() {
+            let _ = delete_handle(temp.as_raw_handle() as Handle);
+        }
+        result
+    }
+
+    pub fn delete_relative(root: &RootHandle, components: &[&str]) -> io::Result<()> {
+        let mut parent = relative_duplicate(root.handle.raw())?;
+        for component in &components[..components.len() - 1] {
+            let child = relative(parent.raw(), component, true)?;
+            validate_opened(child.raw(), None, true)?;
+            parent = child;
+        }
+        let target = components[components.len() - 1];
+        let file = relative_with(
+            parent.raw(),
+            target,
+            false,
+            FILE_READ_ATTRIBUTES | DELETE | SYNCHRONIZE,
+            FILE_OPEN,
+        )?;
+        validate_opened(file.raw(), None, false)?;
+        delete_handle(file.raw())
+    }
+
+    pub fn mkdir_relative(root: &RootHandle, components: &[&str]) -> io::Result<()> {
+        let mut parent = relative_duplicate(root.handle.raw())?;
+        for component in components {
+            let child = match relative_with(
+                parent.raw(),
+                component,
+                true,
+                FILE_ADD_SUBDIRECTORY | FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+                FILE_CREATE,
+            ) {
+                Ok(child) => child,
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                    relative(parent.raw(), component, true)?
+                }
+                Err(error) => return Err(error),
+            };
+            validate_opened(child.raw(), None, true)?;
+            parent = child;
+        }
+        Ok(())
+    }
+
     pub fn file_identity(root: &RootHandle, component: &str) -> io::Result<RootIdentity> {
         let file = relative(root.handle.raw(), component, false)?;
         let identity = validate_opened(file.raw(), None, false)?;

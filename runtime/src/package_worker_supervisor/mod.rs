@@ -6,6 +6,7 @@ use crate::package_worker_process::WorkerProcess;
 use crate::package_worker_process::{LaunchCleanupOwner, WorkerProcessError};
 use crate::{
     ark_host::ArkHost,
+    grant_authority::{GrantAuthorityRegistry, GrantOwner},
     observability::{redact_text, BoundedTextTail},
     package_manifest::{IntegrationManifest, IntegrationSettingKind, PackageKind, PackageManifest},
     package_store::PackageStore,
@@ -53,6 +54,7 @@ mod cleanup;
 mod fixtures;
 #[cfg(windows)]
 mod grant;
+mod grant_authority;
 mod io;
 #[cfg(windows)]
 mod launch_prepare;
