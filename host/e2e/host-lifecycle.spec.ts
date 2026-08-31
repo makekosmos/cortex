@@ -25,27 +25,28 @@ const hostRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const repositoryRoot = path.resolve(hostRoot, "..", "..");
 const hostMain = path.join(hostRoot, "dist-electron", "main.js");
 
-test("terminate reaps the lock-owned process after its supervisor exits", async () => {
+test("terminate reaps an orphaned child after its supervisor exits", async () => {
   const cleanupManifest = process.env.KOSMOS_HOST_E2E_CLEANUP_MANIFEST;
   if (!cleanupManifest) throw new Error("KOSMOS_HOST_E2E_CLEANUP_MANIFEST is required");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-host-e2e-terminate-"));
-  const supervisor = spawn(process.execPath, ["-e", "process.exit(0)"], { windowsHide: true });
-  await new Promise<void>((resolve) => supervisor.once("exit", () => resolve()));
-  const owned = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", root], {
-    windowsHide: true,
-    stdio: "ignore",
-  });
-  if (!owned.pid) throw new Error("lock-owned process has no PID");
-  recordCleanup(cleanupManifest, root, new Set([owned.pid]));
-  fs.writeFileSync(
-    path.join(root, "engine.lock.json"),
-    JSON.stringify({ pid: owned.pid, http_port: 1, auth_token: "test" }),
-  );
+  const pidFile = path.join(root, "child.pid");
+  const script = `const {spawn}=require("node:child_process");const fs=require("node:fs");const child=spawn("powershell.exe",["-NoProfile","-NonInteractive","-Command","Start-Sleep -Seconds 60 # "+process.argv[2]],{stdio:"ignore"});fs.writeFileSync(process.argv[1],String(child.pid));setInterval(()=>{},1000)`;
+  const supervisor = spawn(process.execPath, ["-e", script, pidFile, root], { windowsHide: true });
+  await expect.poll(() => fs.existsSync(pidFile)).toBe(true);
+  const ownedPid = Number(fs.readFileSync(pidFile, "utf8"));
+  expect(() => process.kill(ownedPid, 0)).not.toThrow();
+  recordCleanup(cleanupManifest, root, new Set([ownedPid]));
   try {
+    supervisor.kill("SIGKILL");
+    if (supervisor.pid) await waitForPidGone(supervisor.pid, "dead supervisor");
+    expect(() => process.kill(ownedPid, 0)).not.toThrow();
     await terminate(supervisor, process.execPath, root, "dead-parent regression");
-    await waitForPidGone(owned.pid, "lock-owned process");
+    await waitForPidGone(ownedPid, "orphaned child");
   } finally {
-    owned.kill("SIGKILL");
+    try {
+      process.kill(ownedPid, "SIGKILL");
+    } catch {}
+    await waitForPidGone(ownedPid, "orphaned child fallback");
   }
 });
 

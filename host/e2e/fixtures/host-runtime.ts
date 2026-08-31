@@ -193,18 +193,6 @@ export const waitForPidGone = async (pid: number, label: string): Promise<void> 
   if (isPidAlive(pid)) throw new Error(`${label} PID ${pid} is still alive`);
 };
 
-const engineLockPid = (dataDir: string): number | undefined => {
-  try {
-    // SAFETY: only the test-owned Engine writes this lock path.
-    const lock = JSON.parse(
-      fs.readFileSync(path.join(dataDir, "engine.lock.json"), "utf8"),
-    ) as Lock;
-    return Number.isInteger(lock.pid) ? lock.pid : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
 const forceStop = async (pid: number, label: string): Promise<void> => {
   try {
     execFileSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
@@ -239,25 +227,25 @@ export const terminate = async (
 ): Promise<void> => {
   const pid = child?.pid;
   if (!pid) return;
-  const rootPid = engineLockPid(dataDir) ?? pid;
-  const pids = processTreePids(rootPid);
-  pids.add(pid);
-  console.log(
-    `[host-e2e] teardown ${label}: pid=${pid} lock=${path.join(dataDir, "engine.lock.json")}`,
-  );
-  try {
-    execFileSync(engine, ["--shutdown"], {
-      env: hostE2eEnvironment({
-        KOSMOS_DATA_DIR: dataDir,
-        KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
-      }),
-      windowsHide: true,
-      stdio: "ignore",
-      timeout: 10_000,
-    });
-  } catch {}
-  for (const processId of processTreePids(rootPid)) pids.add(processId);
-  if (isPidAlive(pid)) await forceStop(pid, label);
+  const pids = processTreePids(pid);
+  if (isPidAlive(pid)) {
+    console.log(
+      `[host-e2e] teardown ${label}: pid=${pid} lock=${path.join(dataDir, "engine.lock.json")}`,
+    );
+    try {
+      execFileSync(engine, ["--shutdown"], {
+        env: hostE2eEnvironment({
+          KOSMOS_DATA_DIR: dataDir,
+          KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
+        }),
+        windowsHide: true,
+        stdio: "ignore",
+        timeout: 10_000,
+      });
+    } catch {}
+    for (const processId of processTreePids(pid)) pids.add(processId);
+    if (isPidAlive(pid)) await forceStop(pid, label);
+  }
   for (const processId of pids)
     if (isPidAlive(processId)) await forceStop(processId, `${label} descendant`);
   for (const processId of pids) await waitForPidGone(processId, `${label} descendant`);
