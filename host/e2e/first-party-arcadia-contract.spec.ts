@@ -8,6 +8,7 @@ import electronBinary from "electron";
 import { createSignedApps } from "./fixtures/signed-apps";
 import { cleanupArcadiaE2e } from "./fixtures/arcadia-cleanup";
 import { ARCADIA_EFFECTIVE_GRANTS, type ArcadiaInstalledPackage } from "./fixtures/arcadia-archive";
+import { createArcadiaFixtures, expectHostileSteamRejected } from "./fixtures/arcadia-steam";
 import {
   buildEngine,
   closeHost,
@@ -38,9 +39,7 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
     KOSMOS_HEADLESS: "1",
     KOSMOS_TEST_MODE: "1",
   });
-  const fakeExe = path.join(dataDir, "ArcadiaHostE2E.exe");
-  fs.mkdirSync(dataDir, { recursive: true });
-  fs.writeFileSync(fakeExe, Buffer.from("MZ ArcadiaHostE2E"));
+  const { fakeExe, hostileSteam } = createArcadiaFixtures(dataDir);
 
   let host: ElectronApplication | undefined;
   let engine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
@@ -161,6 +160,7 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
     });
     const initialGames = await page.evaluate(() => window.kosmosApp.ark!.request("games.list", {}));
     expect(initialGames, JSON.stringify(initialGames)).toMatchObject({ ok: true, data: [] });
+    await expectHostileSteamRejected(page, hostileSteam);
 
     const first = await page.evaluate(async (exePath) => {
       const added = await window.kosmosApp.ark!.request("games.add_manual", {

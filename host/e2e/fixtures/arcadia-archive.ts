@@ -95,15 +95,11 @@ export function arcadiaArchive(root: string, repositoryRoot: string) {
     ["imago", IMAGO_COMMIT],
     ["arca-sdk", ARCA_SDK_COMMIT],
   ] as const) {
-    const sharedCheckout = execFileSync("git", ["rev-parse", "HEAD"], {
+    // The digest-bound archive is the build input; sibling HEADs may advance independently.
+    execFileSync("git", ["cat-file", "-e", `${commit}^{commit}`], {
       cwd: path.join(repositoryRoot, name),
-      encoding: "utf8",
       stdio: "pipe",
-    }).trim();
-    if (sharedCheckout !== commit)
-      throw new Error(
-        `${name} checkout ${sharedCheckout} does not match reviewed commit ${commit}`,
-      );
+    });
   }
 
   const file = path.join(root, path.basename(source));
