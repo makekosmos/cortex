@@ -30,6 +30,7 @@ impl PackageWorkerSupervisor {
             manifest,
             hash,
             roots,
+            state_root,
             correlation_id,
             bridge_config,
             integration,
@@ -48,6 +49,7 @@ impl PackageWorkerSupervisor {
             generation,
             correlation_id,
             &roots,
+            &state_root,
             &bridge_config,
             &integration,
         ) {

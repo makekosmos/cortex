@@ -5,6 +5,7 @@ pub(super) struct PreparedLaunch {
     pub(super) manifest: PackageManifest,
     pub(super) hash: String,
     pub(super) roots: Vec<PathBuf>,
+    pub(super) state_root: PathBuf,
     pub(super) correlation_id: String,
     pub(super) bridge_config: Option<BridgeWorkerConfig>,
     pub(super) integration: Option<IntegrationLaunchConfig>,
@@ -110,7 +111,7 @@ impl PackageWorkerSupervisor {
         match WorkerProcess::launch_with_owner_until_in_state_root(
             executable,
             owner.clone(),
-            state_root,
+            state_root.clone(),
             deadline,
         )
         .await
@@ -169,6 +170,7 @@ impl PackageWorkerSupervisor {
             manifest,
             hash,
             roots,
+            state_root,
             correlation_id,
             bridge_config,
             integration,

@@ -271,33 +271,11 @@ impl Grant {
                     .iter()
                     .map(|s| normalize_origin(s))
                     .collect::<Result<_, _>>()?,
-                "filesystem.read" | "filesystem.write" => {
-                    if p.scopes.is_empty() {
-                        roots
-                            .iter()
-                            .map(|root| normalize_path(&root.to_string_lossy(), roots))
-                            .collect::<Result<_, _>>()?
-                    } else {
-                        p.scopes
-                            .iter()
-                            .map(|s| normalize_path(s, roots))
-                            .collect::<Result<_, _>>()?
-                    }
-                }
-                "process.spawn" => {
-                    let requested = if p.scopes.is_empty() {
-                        roots
-                            .iter()
-                            .map(|root| root.to_string_lossy().into_owned())
-                            .collect::<Vec<_>>()
-                    } else {
-                        p.scopes.clone()
-                    };
-                    requested
-                        .iter()
-                        .map(|scope| normalize_path(scope, roots))
-                        .collect::<Result<_, _>>()?
-                }
+                "filesystem.read" | "filesystem.write" | "process.spawn" => p
+                    .scopes
+                    .iter()
+                    .map(|scope| normalize_path(scope, roots))
+                    .collect::<Result<_, _>>()?,
                 "worker.invoke"
                     if p.scopes
                         .iter()
@@ -611,6 +589,24 @@ mod tests {
             std::slice::from_ref(&root)
         )
         .is_err());
+    }
+
+    #[test]
+    fn empty_path_capabilities_fail_closed() {
+        let root = std::env::temp_dir();
+        for capability in ["filesystem.read", "filesystem.write", "process.spawn"] {
+            assert!(matches!(
+                Grant::derive(
+                    &manifest(capability, vec![]),
+                    "h".into(),
+                    1,
+                    1,
+                    "c".into(),
+                    std::slice::from_ref(&root),
+                ),
+                Err(GrantError::InvalidScope)
+            ));
+        }
     }
 
     #[test]

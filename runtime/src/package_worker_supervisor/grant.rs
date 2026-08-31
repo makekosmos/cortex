@@ -11,16 +11,39 @@ impl PackageWorkerSupervisor {
         generation: u64,
         correlation_id: String,
         roots: &[PathBuf],
+        state_root: &std::path::Path,
         bridge_config: &Option<BridgeWorkerConfig>,
         integration: &Option<IntegrationLaunchConfig>,
     ) -> Result<(Grant, String, BrokerConfig, Vec<u8>), &'static str> {
+        let mut grant_manifest = manifest.clone();
+        let private_roots = if bridge_config.is_some() {
+            roots.to_vec()
+        } else {
+            vec![state_root.to_path_buf()]
+        };
+        for permission in &mut grant_manifest.permissions {
+            if matches!(
+                permission.capability.as_str(),
+                "filesystem.read" | "filesystem.write"
+            ) && permission.scopes.is_empty()
+            {
+                permission.scopes = private_roots
+                    .iter()
+                    .map(|root| root.to_string_lossy().into_owned())
+                    .collect();
+            }
+        }
+        let mut allowed_roots = roots.to_vec();
+        allowed_roots.extend(private_roots);
+        allowed_roots.sort();
+        allowed_roots.dedup();
         let (grant, token) = Grant::derive(
-            manifest,
+            &grant_manifest,
             hash.clone(),
             pid,
             generation,
             correlation_id.clone(),
-            roots,
+            &allowed_roots,
         )
         .map_err(|_| "grant-failed")?;
         let typed_launch_invalid = lock(&self.inner.typed_launches)
