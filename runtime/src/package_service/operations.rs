@@ -560,7 +560,15 @@ impl PackageService {
         path: impl AsRef<Path>,
     ) -> Result<PackageSummary, PackageError> {
         let _mutation = Self::lock(&self.mutation);
-        let path = path.as_ref();
+        self.install_from_path_locked(id, version, path.as_ref())
+    }
+
+    fn install_from_path_locked(
+        &self,
+        id: &str,
+        version: &str,
+        path: &Path,
+    ) -> Result<PackageSummary, PackageError> {
         if id.len() > 64
             || version.len() > 64
             || !path.is_absolute()
@@ -679,8 +687,7 @@ impl PackageService {
         version: &str,
         path: impl AsRef<Path>,
     ) -> Result<PackageSummary, PackageError> {
-        let previous = self.store.installed(id, version).ok();
-        let worker_guard = if let Some(worker) = self.worker.as_ref() {
+        let _worker_guard = if let Some(worker) = self.worker.as_ref() {
             Some(worker.mutation.lock().await)
         } else {
             None
@@ -691,14 +698,6 @@ impl PackageService {
                 WorkerState::Stopped
             )
         });
-        let should_restart = worker_was_live
-            && previous
-                .as_ref()
-                .is_some_and(|package| package.enabled && !package.revoked);
-        let definition_snapshot = should_restart
-            .then(|| self.package_registrations.snapshot())
-            .transpose()
-            .map_err(|_| PackageError::Persistence)?;
         if worker_was_live {
             let worker = self.worker.as_ref().ok_or(PackageError::Persistence)?;
             if worker.supervisor.stop(id, version).await.is_err() {
@@ -706,31 +705,90 @@ impl PackageService {
             }
         }
 
-        let result = self.install_from_path(id, version, path);
-        drop(worker_guard);
+        let (previous, should_restart, definition_snapshot, result, replacement) = {
+            let _mutation = Self::lock(&self.mutation);
+            let previous = self.store.installed(id, version).ok();
+            let should_restart = worker_was_live
+                && previous
+                    .as_ref()
+                    .is_some_and(|package| package.enabled && !package.revoked);
+            let definition_snapshot = should_restart
+                .then(|| self.package_registrations.snapshot())
+                .transpose()
+                .map_err(|_| PackageError::Persistence)?;
+            let result = self.install_from_path_locked(id, version, path.as_ref());
+            let replacement = self.store.installed(id, version).ok();
+            (
+                previous,
+                should_restart,
+                definition_snapshot,
+                result,
+                replacement,
+            )
+        };
         match result {
             Ok(summary) if !should_restart => Ok(summary),
-            Ok(_) => match self.set_enabled(id, version, true).await {
-                Ok(summary) => Ok(summary),
-                Err(error) => {
-                    if let Some(worker) = self.worker.as_ref() {
-                        let _ = worker.supervisor.stop(id, version).await;
+            Ok(_) => {
+                let Some(replacement) = replacement.as_ref() else {
+                    return Err(PackageError::Persistence);
+                };
+                match self
+                    .set_worker_enabled_locked(id, version, true, true, Some(replacement))
+                    .await
+                {
+                    Ok(summary) => Ok(summary),
+                    Err(error) => {
+                        let _stop_result = if let Some(worker) = self.worker.as_ref() {
+                            Some(worker.supervisor.stop(id, version).await)
+                        } else {
+                            None
+                        };
+                        let Some(previous) = previous.as_ref() else {
+                            return Err(PackageError::Persistence);
+                        };
+                        let restored = {
+                            let _mutation = Self::lock(&self.mutation);
+                            if Some(replacement)
+                                != self.store.installed(id, version).ok().as_ref()
+                            {
+                                return Err(PackageError::Persistence);
+                            }
+                            let restored = self
+                                .restore_install_after_failure(
+                                    definition_snapshot.as_deref(),
+                                    Some(previous),
+                                    id,
+                                    version,
+                                )
+                                .is_ok()
+                                && self.store.installed(id, version).ok().as_ref()
+                                    == Some(previous);
+                            if !restored {
+                                if let Some(worker) = self.worker.as_ref() {
+                                    worker.supervisor.revoke_typed_launch(id, version);
+                                }
+                                let _disable_failed = self.store.disable(id, version).is_err();
+                            }
+                            restored
+                        };
+                        if !restored {
+                            return Err(PackageError::Persistence);
+                        }
+                        if self
+                            .set_worker_enabled_locked(id, version, true, false, Some(previous))
+                            .await
+                            .is_err()
+                        {
+                            let _stop_failed = if let Some(worker) = self.worker.as_ref() {
+                                worker.supervisor.stop(id, version).await.is_err()
+                            } else {
+                                false
+                            };
+                            let _disable_failed = self.disable_if_exact(previous).is_err();
+                            return Err(PackageError::Persistence);
+                        }
+                        Err(error)
                     }
-                    let Some(previous) = previous.as_ref() else {
-                        return Err(PackageError::Persistence);
-                    };
-                    let restored = self.restore_install_after_failure(
-                        definition_snapshot.as_deref(),
-                        Some(previous),
-                        id,
-                        version,
-                    );
-                    if restored.is_err()
-                        || self.store.installed(id, version).ok().as_ref() != Some(previous)
-                    {
-                        return Err(PackageError::Persistence);
-                    }
-                    Err(error)
                 }
             },
             Err(error) => {
@@ -741,16 +799,29 @@ impl PackageService {
                     return Err(PackageError::Persistence);
                 };
                 if !restored_package_record_matches(&self.store, previous, id, version) {
-                    if let Some(worker) = self.worker.as_ref() {
-                        let _ = worker.supervisor.stop(id, version).await;
+                    let _mutation = Self::lock(&self.mutation);
+                    if replacement.as_ref()
+                        != self.store.installed(id, version).ok().as_ref()
+                    {
+                        return Err(PackageError::Persistence);
                     }
-                    let _ = self.disable(id, version);
+                    if let Some(worker) = self.worker.as_ref() {
+                        worker.supervisor.revoke_typed_launch(id, version);
+                    }
+                    let _disable_failed = self.store.disable(id, version).is_err();
                     return Err(PackageError::Persistence);
                 }
-                if self.set_enabled(id, version, true).await.is_err() {
-                    if let Some(worker) = self.worker.as_ref() {
-                        let _ = worker.supervisor.stop(id, version).await;
-                    }
+                if self
+                    .set_worker_enabled_locked(id, version, true, false, Some(previous))
+                    .await
+                    .is_err()
+                {
+                    let _stop_failed = if let Some(worker) = self.worker.as_ref() {
+                        worker.supervisor.stop(id, version).await.is_err()
+                    } else {
+                        false
+                    };
+                    let _disable_failed = self.disable_if_exact(previous).is_err();
                     return Err(PackageError::Persistence);
                 }
                 Err(error)
@@ -808,6 +879,10 @@ impl PackageService {
 
     pub fn enable(&self, id: &str, version: &str) -> Result<(), PackageError> {
         let _mutation = Self::lock(&self.mutation);
+        self.enable_locked(id, version)
+    }
+
+    fn enable_locked(&self, id: &str, version: &str) -> Result<(), PackageError> {
         let mut state = Self::lock(&self.state);
         let entry = Self::current_entry(&mut state, id, version)?;
         let installed = self
@@ -834,14 +909,17 @@ impl PackageService {
         enabled: bool,
     ) -> Result<PackageSummary, PackageError> {
         let installed = self.store.installed(id, version)?;
-        let typed_bound = self.ensure_typed_grant(&installed)?;
         if matches!(installed.manifest.kind(), PackageKind::App)
             && installed.manifest.worker_entrypoint().is_none()
         {
+            let _mutation = Self::lock(&self.mutation);
+            if self.store.installed(id, version)? != installed {
+                return Err(PackageError::Persistence);
+            }
             if enabled {
-                self.enable(id, version)?;
+                self.enable_locked(id, version)?;
             } else {
-                self.disable(id, version)?;
+                self.disable_locked(id, version)?;
             }
             return Ok(summary(
                 self.store.installed(id, version)?,
@@ -851,23 +929,38 @@ impl PackageService {
         }
         let worker = self.worker.as_ref().ok_or(PackageError::Invalid)?;
         let _worker_mutation = worker.mutation.lock().await;
-        if enabled
-            && self.store.list()?.into_iter().any(|other| {
-                other.enabled
-                    && !other.revoked
-                    && other.id != installed.id
-                    && worker_scopes_overlap(&installed.manifest, &other.manifest)
-            })
-        {
-            return Err(PackageError::Invalid);
-        }
+        self.set_worker_enabled_locked(id, version, enabled, true, Some(&installed))
+            .await
+    }
+
+    async fn set_worker_enabled_locked(
+        &self,
+        id: &str,
+        version: &str,
+        enabled: bool,
+        require_current_catalog: bool,
+        expected: Option<&InstalledPackage>,
+    ) -> Result<PackageSummary, PackageError> {
+        let worker = self.worker.as_ref().ok_or(PackageError::Invalid)?;
         if !enabled {
+            if expected.is_some_and(|expected| {
+                let _mutation = Self::lock(&self.mutation);
+                self.store.installed(id, version).ok().as_ref() != Some(expected)
+            }) {
+                return Err(PackageError::Persistence);
+            }
             worker
                 .supervisor
                 .stop(id, version)
                 .await
                 .map_err(|_| PackageError::Persistence)?;
-            self.disable(id, version)?;
+            if let Some(expected) = expected {
+                if !self.disable_if_exact(expected)? {
+                    return Err(PackageError::Persistence);
+                }
+            } else {
+                self.disable(id, version)?;
+            }
             return Ok(summary(
                 self.store.installed(id, version)?,
                 self.worker.as_ref(),
@@ -877,10 +970,26 @@ impl PackageService {
         let launch = {
             let _mutation = Self::lock(&self.mutation);
             let mut state = Self::lock(&self.state);
-            let entry = Self::current_entry(&mut state, id, version)?;
             let installed = self.store.installed(id, version)?;
-            if installed.revoked || !installed.hash.eq_ignore_ascii_case(&entry.sha256) {
+            if expected.is_some_and(|expected| expected != &installed) {
+                return Err(PackageError::Persistence);
+            }
+            if installed.revoked {
                 return Err(PackageError::Invalid);
+            }
+            if self.store.list()?.into_iter().any(|other| {
+                other.enabled
+                    && !other.revoked
+                    && other.id != installed.id
+                    && worker_scopes_overlap(&installed.manifest, &other.manifest)
+            }) {
+                return Err(PackageError::Invalid);
+            }
+            if require_current_catalog {
+                let entry = Self::current_entry(&mut state, id, version)?;
+                if !installed.hash.eq_ignore_ascii_case(&entry.sha256) {
+                    return Err(PackageError::Invalid);
+                }
             }
             let executable = self.store.immutable_entrypoint(&installed)?;
             let state_root = self.root.join("package-state").join(id);
@@ -908,6 +1017,7 @@ impl PackageService {
                 worker.roots.clone()
             };
             let integration = self.integration_launch_config(&installed)?;
+            let typed_bound = self.ensure_typed_grant(&installed)?;
             let mut worker_manifest = installed.manifest.common_manifest();
             if matches!(worker_manifest.kind, PackageKind::App) {
                 worker_manifest.kind = PackageKind::Source;
@@ -917,6 +1027,7 @@ impl PackageService {
                 .worker_entrypoint()
                 .ok_or(PackageError::Invalid)?
                 .to_owned();
+            let expected = installed.clone();
             (
                 worker_manifest,
                 installed.hash,
@@ -925,11 +1036,13 @@ impl PackageService {
                 roots,
                 bridge_config,
                 integration,
+                typed_bound,
+                expected,
             )
         };
         worker
             .supervisor
-            .bind_typed_launch(id, version, &worker.correlation_id, 1, typed_bound)
+            .bind_typed_launch(id, version, &worker.correlation_id, 1, launch.7)
             .map_err(|_| {
                 worker.supervisor.revoke_typed_launch(id, version);
                 PackageError::Worker("unavailable")
@@ -956,24 +1069,37 @@ impl PackageService {
                     _ => "unavailable",
                 })
             })?;
-        if self.store.enable_worker(id, version).is_err() {
-            worker
-                .supervisor
-                .stop(id, version)
-                .await
-                .map_err(|_| PackageError::Persistence)?;
+        let activation_error = {
+            let _mutation = Self::lock(&self.mutation);
+            let catalog_matches = !require_current_catalog || {
+                let mut state = Self::lock(&self.state);
+                Self::current_entry(&mut state, id, version)
+                    .is_ok_and(|entry| launch.8.hash.eq_ignore_ascii_case(&entry.sha256))
+            };
+            let exact_record = self.store.installed(id, version).ok().as_ref() == Some(&launch.8);
+            if !exact_record {
+                Some(PackageError::Persistence)
+            } else if !catalog_matches || self.store.enable_worker(id, version).is_err() {
+                let _disable_failed = self.store.disable(id, version).is_err();
+                Some(PackageError::Persistence)
+            } else if !worker.supervisor.activate(id, version) {
+                Some(if self.store.disable(id, version).is_ok() {
+                    PackageError::Worker("unavailable")
+                } else {
+                    PackageError::Persistence
+                })
+            } else {
+                None
+            }
+        };
+        if let Some(error) = activation_error {
+            let stop_failed = worker.supervisor.stop(id, version).await.is_err();
             worker.supervisor.revoke_typed_launch(id, version);
-            return Err(PackageError::Persistence);
-        }
-        if !worker.supervisor.activate(id, version) {
-            worker
-                .supervisor
-                .stop(id, version)
-                .await
-                .map_err(|_| PackageError::Persistence)?;
-            worker.supervisor.revoke_typed_launch(id, version);
-            let _ = self.store.disable(id, version);
-            return Err(PackageError::Worker("unavailable"));
+            return Err(if stop_failed {
+                PackageError::Persistence
+            } else {
+                error
+            });
         }
         Ok(summary(
             self.store.installed(id, version)?,
@@ -984,11 +1110,24 @@ impl PackageService {
 
     pub fn disable(&self, id: &str, version: &str) -> Result<(), PackageError> {
         let _mutation = Self::lock(&self.mutation);
+        self.disable_locked(id, version)
+    }
+
+    fn disable_locked(&self, id: &str, version: &str) -> Result<(), PackageError> {
         if let Some(worker) = self.worker.as_ref() {
             worker.supervisor.revoke_typed_launch(id, version);
         }
         self.store.disable(id, version)?;
         Ok(())
+    }
+
+    fn disable_if_exact(&self, expected: &InstalledPackage) -> Result<bool, PackageError> {
+        let _mutation = Self::lock(&self.mutation);
+        if self.store.installed(&expected.id, &expected.version)? != *expected {
+            return Ok(false);
+        }
+        self.disable_locked(&expected.id, &expected.version)?;
+        Ok(true)
     }
 
     fn uninstall(&self, id: &str, version: &str) -> Result<(), PackageError> {

@@ -19,6 +19,8 @@ pub(super) struct SupervisorInner {
     pub(super) retry_tasks: Arc<TaskRegistry>,
     pub(super) worker_io: Arc<TaskRegistry>,
     pub(super) secrets: PackageWorkerSecretRegistry,
+    #[cfg(test)]
+    pub(super) fail_next_start: std::sync::atomic::AtomicBool,
 }
 
 #[async_trait]
@@ -140,6 +142,13 @@ pub struct PackageWorkerSupervisor {
 }
 
 impl PackageWorkerSupervisor {
+    #[cfg(test)]
+    pub fn test_fail_next_start(&self) {
+        self.inner
+            .fail_next_start
+            .store(true, std::sync::atomic::Ordering::Release);
+    }
+
     pub fn new(api_major: u32) -> Self {
         Self {
             inner: Arc::new(SupervisorInner {
@@ -156,6 +165,8 @@ impl PackageWorkerSupervisor {
                 retry_tasks: TaskRegistry::owned(256),
                 worker_io: TaskRegistry::owned(256 * 3),
                 secrets: PackageWorkerSecretRegistry::new(),
+                #[cfg(test)]
+                fail_next_start: std::sync::atomic::AtomicBool::new(false),
             }),
         }
     }
@@ -177,6 +188,8 @@ impl PackageWorkerSupervisor {
                 retry_tasks: TaskRegistry::owned(256),
                 worker_io: TaskRegistry::owned(256 * 3),
                 secrets: PackageWorkerSecretRegistry::new(),
+                #[cfg(test)]
+                fail_next_start: std::sync::atomic::AtomicBool::new(false),
             }),
         }
     }
@@ -197,6 +210,8 @@ impl PackageWorkerSupervisor {
                 retry_tasks: TaskRegistry::owned(256),
                 worker_io: TaskRegistry::owned(256 * 3),
                 secrets: PackageWorkerSecretRegistry::new(),
+                #[cfg(test)]
+                fail_next_start: std::sync::atomic::AtomicBool::new(false),
             }),
         }
     }

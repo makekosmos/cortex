@@ -215,6 +215,10 @@ impl PackageWorkerSupervisor {
         integration: Option<IntegrationLaunchConfig>,
     ) -> Result<(), &'static str> {
         Self::validate_manifest(manifest)?;
+        #[cfg(test)]
+        if self.inner.fail_next_start.swap(false, Ordering::AcqRel) {
+            return Err("unavailable");
+        }
         self.inner.calls.reap_completed().await;
         self.inner.startups.reap_completed().await;
         self.inner.lifecycles.reap_completed().await;

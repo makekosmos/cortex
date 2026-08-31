@@ -1460,6 +1460,57 @@ pub(crate) mod tests {
             replacement.name
         );
 
+        let previous = service
+            .store
+            .installed(&replacement.id, &replacement.version)
+            .unwrap();
+        let mut broken = replacement.clone();
+        broken.name = "ARK Markdown Bridge Broken Update".into();
+        let (broken_archive, broken_hash, broken_size) =
+            archive_bridge_binary(dir.path(), &VersionedManifest::V2(broken.clone()));
+        let broken_update = CatalogDocument {
+            schema_version: 1,
+            sequence: 3,
+            issued_at: "2029-01-01T00:00:00Z".into(),
+            expires_at: "2030-01-01T00:00:00Z".into(),
+            packages: vec![CatalogEntry {
+                manifest: VersionedManifest::V2(broken.clone()),
+                archive_url: "https://packages.kosmos.dev/bridge-broken.kspkg".into(),
+                sha256: broken_hash,
+                size: broken_size,
+            }],
+        };
+        let (bytes, signatures) = signed(&broken_update, "release-1", &release);
+        service.apply_catalog(bytes, signatures).unwrap();
+        supervisor.test_fail_next_start();
+        let failed_update = service
+            .install_from_path_with_worker_stop(&broken.id, &broken.version, broken_archive)
+            .await;
+        assert!(
+            matches!(failed_update, Err(PackageError::Worker("unavailable"))),
+            "unexpected failed update result: {failed_update:?}"
+        );
+        assert_eq!(
+            service
+                .store
+                .installed(&replacement.id, &replacement.version)
+                .unwrap(),
+            previous
+        );
+        assert_eq!(
+            supervisor
+                .health(&replacement.id, &replacement.version)
+                .state,
+            WorkerState::Running
+        );
+        assert_eq!(
+            supervisor
+                .diagnostics()
+                .into_iter()
+                .find(|worker| worker.id == replacement.id && worker.version == replacement.version)
+                .and_then(|worker| worker.hash),
+            Some(previous.hash.clone())
+        );
         service
             .set_enabled(&manifest.id, &manifest.version, false)
             .await
