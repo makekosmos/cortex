@@ -12,6 +12,14 @@ test("release build validates before publishing immutable artifacts", () => {
     script.indexOf("verifyLocalReleaseChannel(outputDir") <
       script.indexOf("publishRelease(platform"),
   );
+  assert.ok(
+    script.indexOf("emitProvenance(", script.indexOf("async function main")) <
+      script.indexOf("runFirstPartyContracts(platform)"),
+  );
+  assert.ok(
+    script.indexOf("runFirstPartyContracts(platform)") <
+      script.indexOf("publishRelease(platform", script.indexOf("async function main")),
+  );
   assert.doesNotMatch(script, /--clobber/);
   assert.match(script, /process\.env\.KOSMOS_RELEASE_BOM/);
   assert.match(script, /release builds require a clean tracked and source worktree/);

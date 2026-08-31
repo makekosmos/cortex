@@ -175,14 +175,5 @@ jobs:
       - run: bun run --cwd _first-party/arcadia package:kspkg
       - run: bun run --cwd _first-party/daedalus package:kspkg
       - run: bun run --cwd _first-party/ordo package:kspkg
-      - run: bun run --cwd host build
       - name: Run first-party package contracts
-        run: >-
-          bun run --cwd host e2e
-          first-party-agenda-contract.spec.ts
-          first-party-arcadia-contract.spec.ts
-          first-party-daedalus-contract.spec.ts
-          first-party-dictation-contract.spec.ts
-          first-party-memoria-contract.spec.ts
-          first-party-ordo-contract.spec.ts
-          --workers=1
+        run: bun run test:first-party-contracts

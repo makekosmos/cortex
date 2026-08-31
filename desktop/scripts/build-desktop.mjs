@@ -8,6 +8,7 @@ import { getVersion } from "./release-version.mjs";
 import { loadReleaseBom } from "./release-bom.mjs";
 import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
 import { bytes, documentHash, writeAtomic } from "./package-release-utils.mjs";
+import { runFirstPartyContracts } from "./first-party-release-contracts.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -267,11 +268,11 @@ async function main() {
     version,
     bom,
   );
+  runFirstPartyContracts(platform);
   publishRelease(platform, version, [...releaseFiles.artifactFiles, ...releaseFiles.metadataFiles]);
   log("Running verify guard...");
   log("");
 
-  // ── 6. Run verify guard ───────────────────────────────────────────────────
   const verifyScript = path.join(__dirname, "verify-release-channel.mjs");
   const verifyResult = spawnSync(
     process.execPath, // node
@@ -293,7 +294,6 @@ async function main() {
     process.exit(verifyResult.status ?? 1);
   }
 
-  log("");
   log(`Build + verify complete for ${platform} v${version}. Release is consistent.`);
 }
 
