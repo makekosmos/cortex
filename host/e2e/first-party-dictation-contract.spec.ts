@@ -136,6 +136,10 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
         models: await request("dictation.list_local_models", {}),
         updated: await request("dictation.update_config", { language: "en" }),
         denied: await request("dictation.submit_audio", { audioB64: "" }),
+        started: await request("dictation.start_recording", {}),
+        duplicate: await request("dictation.start_recording", {}),
+        cancelled: await request("dictation.cancel", {}),
+        afterCancel: await request("dictation.get_state", {}),
       };
     });
     expect(responses.state, JSON.stringify(responses.state)).toMatchObject({ ok: true });
@@ -146,6 +150,13 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
       ok: false,
       message: "Engine отклонил операцию: invalid-request.",
     });
+    expect(responses.started).toMatchObject({ ok: true, data: { state: "recording" } });
+    expect(responses.duplicate).toEqual({
+      ok: false,
+      message: "Engine отклонил операцию: unavailable.",
+    });
+    expect(responses.cancelled).toMatchObject({ ok: true, data: { state: "idle" } });
+    expect(responses.afterCancel).toMatchObject({ ok: true, data: { state: "idle" } });
     for (const response of [responses.state, responses.config, responses.models, responses.updated])
       expect(JSON.stringify(response)).not.toMatch(forbiddenRendererKeys);
 
