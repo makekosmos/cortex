@@ -4,8 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
-const DIGEST = "652ae3a5f191da26caa88cebd368a72353e075cb7072971b316c9832835fa37d";
-const SOURCE_COMMIT = "b7bb542ad33fcb3d83a9dd62b08e412bf3ef144d";
+const DIGEST = "a8b6454bb48518122609fa80f3378fd37fd219160fee525b823f5e624da58332";
+const SOURCE_COMMIT = "8774c25d99818fec702bfd513697639b84e7c2c8";
 const IMAGO_COMMIT = "b1852cab9f8f08ae0b236b7759138d3117f720b8";
 const ARCA_SDK_COMMIT = "21c2f5e157944e3444d3c0604da5a0e041116077";
 export const ARCADIA_EFFECTIVE_GRANTS = [
@@ -80,9 +80,9 @@ const isUnsafeEntry = (entry: string) => {
 };
 
 export function arcadiaArchive(root: string, repositoryRoot: string) {
-  // Reviewed source: Arcadia commit b7bb542ad33fcb3d83a9dd62b08e412bf3ef144d.
+  // Reviewed source: Arcadia commit 8774c25d99818fec702bfd513697639b84e7c2c8.
   const sourceRoot = path.join(repositoryRoot, "arcadia");
-  const source = path.join(sourceRoot, "release", "arcadia-0.1.8.kspkg");
+  const source = path.join(sourceRoot, "release", "arcadia-0.1.9.kspkg");
   if (!fs.existsSync(source)) throw new Error(`Arcadia release archive not found: ${source}`);
   const checkout = execFileSync("git", ["rev-parse", "HEAD"], {
     cwd: sourceRoot,

@@ -390,10 +390,17 @@ impl GrantAuthorityRegistry {
         extension_id: &str,
         requested: &[&str],
     ) -> Result<Vec<handle_relative_fs::RelativeEntry>, GrantError> {
-        self.with_authorized_grant(grant_id, owner, extension_id, requested, false, |grant| {
-            handle_relative_fs::list_relative(&grant.root, requested, MAX_GRANT_DIRECTORY_ENTRIES)
+        let mut entries =
+            self.with_authorized_grant(grant_id, owner, extension_id, requested, false, |grant| {
+                handle_relative_fs::list_relative(
+                    &grant.root,
+                    requested,
+                    MAX_GRANT_DIRECTORY_ENTRIES,
+                )
                 .map_err(|_| GrantError::ScopeMismatch)
-        })
+            })?;
+        entries.sort_by(|left, right| left.name.cmp(&right.name));
+        Ok(entries)
     }
     pub fn delete(
         &self,

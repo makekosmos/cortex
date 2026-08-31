@@ -147,9 +147,12 @@ fn dispatch(
                 .list(root_id, &owner, &grant.package_id, &components)
                 .map_err(|_| "unavailable")?
                 .into_iter()
-                .map(
-                    |entry| serde_json::json!({ "name": entry.name, "directory": entry.directory }),
-                )
+                .map(|entry| {
+                    serde_json::json!({
+                        "name": entry.name,
+                        "kind": if entry.directory { "directory" } else { "file" }
+                    })
+                })
                 .collect(),
         )),
         WorkerMethod::FilesystemDelete => {

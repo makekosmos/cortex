@@ -22,6 +22,25 @@ async fn opaque_worker_root_binds_package_session_and_generation() {
         .expect("opaque root id")
         .to_owned();
 
+    std::fs::write(fixture.selected_root.join("first.txt"), "selected").expect("selected file");
+    assert_eq!(
+        dispatch(
+            &fixture.supervisor.inner,
+            &fixture.grant_a,
+            &fixture.broker,
+            None,
+            &worker_call(
+                &fixture.token_a,
+                7,
+                WorkerMethod::FilesystemList,
+                serde_json::json!({"root_id": root_id.as_str(), "relative_path": ""}),
+            ),
+        )
+        .await
+        .expect("list selected root"),
+        serde_json::json!([{"name":"first.txt","kind":"file"}])
+    );
+
     dispatch(
         &fixture.supervisor.inner,
         &fixture.grant_a,

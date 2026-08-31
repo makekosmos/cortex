@@ -9,6 +9,7 @@ import { createSignedApps } from "./fixtures/signed-apps";
 import { cleanupArcadiaE2e } from "./fixtures/arcadia-cleanup";
 import { ARCADIA_EFFECTIVE_GRANTS, type ArcadiaInstalledPackage } from "./fixtures/arcadia-archive";
 import { createArcadiaFixtures, expectHostileSteamRejected } from "./fixtures/arcadia-steam";
+import { createSqobaRoot, exerciseSqoba, expectSqobaRecovered } from "./fixtures/arcadia-sqoba";
 import {
   buildEngine,
   closeHost,
@@ -28,22 +29,23 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
   if (!fs.existsSync(hostMain)) throw new Error(`build Host first: ${hostMain}`);
   const cleanupManifest = process.env.KOSMOS_HOST_E2E_CLEANUP_MANIFEST;
   if (!cleanupManifest) throw new Error("KOSMOS_HOST_E2E_CLEANUP_MANIFEST is required");
-
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-host-e2e-arcadia-"));
   recordCleanup(cleanupManifest, root, new Set());
   const dataDir = path.join(root, "engine");
   const userData = path.join(root, "host-user-data");
+  const saveRoot = createSqobaRoot(root);
   const environment = hostE2eEnvironment({
     APPDATA: path.join(root, "appdata"),
     KOSMOS_DATA_DIR: dataDir,
     KOSMOS_HEADLESS: "1",
     KOSMOS_TEST_MODE: "1",
+    KOSMOS_TEST_SELECTED_DIRECTORY: saveRoot,
   });
   const { fakeExe, hostileSteam } = createArcadiaFixtures(dataDir);
-
   let host: ElectronApplication | undefined;
   let engine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
   let restartedEngine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
+  let sqobaRecovery: Awaited<ReturnType<typeof exerciseSqoba>> | undefined;
   const pids = new Set<number>();
   const launchHost = () =>
     electron.launch({
@@ -76,21 +78,19 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
     );
     const version = apps.versions["com.kosmos.arcadia"];
     const archive = apps.archives["com.kosmos.arcadia"];
-    expect(version).toBe("0.1.8");
+    expect(version).toBe("0.1.9");
     expect(archive).toBeTruthy();
-
     const catalog: {
       packages: Array<{ manifest: { id: string; version: string }; sha256: string }>;
     } = JSON.parse(apps.catalog);
     expect(catalog.packages).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          manifest: expect.objectContaining({ id: "com.kosmos.arcadia", version: "0.1.8" }),
-          sha256: "652ae3a5f191da26caa88cebd368a72353e075cb7072971b316c9832835fa37d",
+          manifest: expect.objectContaining({ id: "com.kosmos.arcadia", version: "0.1.9" }),
+          sha256: "a8b6454bb48518122609fa80f3378fd37fd219160fee525b823f5e624da58332",
         }),
       ]),
     );
-
     const binaries = buildEngine(apps.trust);
     const started = await startEngine(binaries.engine, binaries.ark, dataDir);
     engine = started.child;
@@ -161,12 +161,12 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
     const initialGames = await page.evaluate(() => window.kosmosApp.ark!.request("games.list", {}));
     expect(initialGames, JSON.stringify(initialGames)).toMatchObject({ ok: true, data: [] });
     await expectHostileSteamRejected(page, hostileSteam);
-
+    sqobaRecovery = await exerciseSqoba(page, dataDir, fakeExe, saveRoot);
     const first = await page.evaluate(async (exePath) => {
       const added = await window.kosmosApp.ark!.request("games.add_manual", {
         name: "Arcadia Host E2E",
         exe_path: exePath,
-        save_paths: [],
+        save_roots: [],
       });
       // SAFETY: games.add_manual returns the installed Arcadia worker's documented result envelope.
       const id = (added as { data?: { id?: string } } | null)?.data?.id;
@@ -224,7 +224,6 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
     });
     await page.reload();
     await expect(page.getByText("Arcadia Host E2E").first()).toBeVisible();
-
     const initialHostPid = host?.process().pid;
     await closeHost(host, pids);
     host = undefined;
@@ -233,7 +232,6 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
     expect(crashed.size).toBeGreaterThan(1);
     for (const pid of crashed) pids.add(pid);
     engine = undefined;
-
     const restarted = await startEngine(binaries.engine, binaries.ark, dataDir);
     restartedEngine = restarted.child;
     if (restartedEngine.pid) pids.add(restartedEngine.pid);
@@ -265,6 +263,8 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
       id: "com.kosmos.arcadia",
       version,
     });
+    if (!sqobaRecovery) throw new Error("SQOBA recovery fixture was not prepared");
+    await expectSqobaRecovered(restartedPage, sqobaRecovery);
     const persisted = await restartedPage.evaluate(
       async (id) => ({
         listed: await window.kosmosApp.ark!.request("games.list", {}),

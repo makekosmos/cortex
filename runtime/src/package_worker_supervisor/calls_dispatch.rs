@@ -249,7 +249,7 @@ pub(super) async fn dispatch(
                 .and_then(serde_json::Value::as_str)
                 .ok_or("invalid-request")?;
             let entries = package_worker_broker::list_directory(broker, Path::new(path))
-                .map_err(|_| "unavailable")?;
+                .map_err(path_scope::filesystem_error)?;
             serde_json::to_value(entries).map_err(|_| "unavailable")
         }
         WorkerMethod::FilesystemPoll => {
