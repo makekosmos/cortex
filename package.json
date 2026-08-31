@@ -21,7 +21,7 @@
     "test:release-bom": "node --test desktop/scripts/release-bom.test.mjs desktop/scripts/release-build-contract.test.mjs desktop/scripts/release-channel-local.test.mjs desktop/scripts/package-release.test.mjs",
     "test:package-contract": "bun test desktop/electron/extension-manifest-validation.test.ts",
     "test:backend": "node runtime/scripts/test-lib.mjs",
-    "test:desktop-contracts": "bun test desktop/electron/instance.test.ts desktop/build/installer-shortcut.test.mjs"
+    "test:desktop-contracts": "bun test desktop/electron/instance.test.ts desktop/electron/focus-enforcement.test.ts desktop/build/installer-shortcut.test.mjs"
   },
   "devDependencies": {
     "@oxlint/plugins": "1.80.0",

@@ -277,11 +277,11 @@ export function assertFocusBlockResult(
     throw new Error("focus native enforcement returned no active domain status");
   }
   if (expectedDomains === null) return;
-  const activeDomains = result.active_domains;
+  const activeDomains = [...result.active_domains].sort();
+  const expected = [...expectedDomains].sort();
   if (
-    expectedDomains.length === 0
-      ? activeDomains.length > 0
-      : expectedDomains.some((domain) => !activeDomains.includes(domain))
+    activeDomains.length !== expected.length ||
+    expected.some((domain, index) => activeDomains[index] !== domain)
   ) {
     throw new Error("focus native enforcement verification failed");
   }

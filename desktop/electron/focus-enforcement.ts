@@ -1,4 +1,9 @@
-import { applyFocusBlock, assertFocusBlockResult, getFocusBlockStatus } from "./focus-block";
+import {
+  applyFocusBlock,
+  assertFocusBlockResult,
+  getFocusBlockStatus,
+  type HelperResponse,
+} from "./focus-block";
 import { isRecord, isString, type JsonRecord, type JsonValue } from "./extension-permissions";
 
 export type FocusRequest = (operation: string, params?: JsonRecord) => Promise<JsonValue>;
@@ -9,6 +14,16 @@ type ActiveState = {
   blocklist_id?: string | null;
   blocked_app_ids: string[];
   blocked_apps: JsonValue[];
+};
+
+export type FocusNativeAdapter = {
+  apply(args: { active: boolean; domains: string[] }): Promise<HelperResponse>;
+  status(): Promise<HelperResponse>;
+};
+
+const defaultNative: FocusNativeAdapter = {
+  apply: applyFocusBlock,
+  status: getFocusBlockStatus,
 };
 
 let focusTransitionQueue: Promise<void> = Promise.resolve();
@@ -96,18 +111,18 @@ async function resolveDomains(request: FocusRequest, blocklistId: string): Promi
   return resolveDomainsFromRequest(request, blocklistId);
 }
 
-async function nativeState(domains: string[]): Promise<void> {
+async function nativeState(domains: string[], native: FocusNativeAdapter): Promise<void> {
   if (domains.length > 0) {
-    const reset = await applyFocusBlock({ active: false, domains: [] });
+    const reset = await native.apply({ active: false, domains: [] });
     assertFocusBlockResult(reset, []);
   }
-  const result = await applyFocusBlock({ active: domains.length > 0, domains });
+  const result = await native.apply({ active: domains.length > 0, domains });
   assertFocusBlockResult(result, domains);
 }
 
-async function restoreNativeState(domains: string[]): Promise<void> {
+async function restoreNativeState(domains: string[], native: FocusNativeAdapter): Promise<void> {
   try {
-    await nativeState(domains);
+    await nativeState(domains, native);
   } catch (error) {
     throw new Error(`native focus rollback failed: ${String(error)}`);
   }
@@ -120,9 +135,11 @@ async function applyAuthoritativeFocusStateUnsafe(options: {
   blockedAppIds?: string[];
   blockedApps?: JsonValue[];
   resolveDomains?: (blocklistId: string) => Promise<string[]>;
+  native?: FocusNativeAdapter;
 }): Promise<{ result: JsonValue; nativeActive: boolean }> {
   readActiveState(await options.request("focus.get_active_state"));
-  const before = await getFocusBlockStatus();
+  const native = options.native ?? defaultNative;
+  const before = await native.status();
   assertFocusBlockResult(before, before.active_domains ?? null);
 
   const blocklistId = options.blocklistId?.trim() || null;
@@ -141,9 +158,9 @@ async function applyAuthoritativeFocusStateUnsafe(options: {
   }
 
   try {
-    await nativeState(domains);
+    await nativeState(domains, native);
   } catch (error) {
-    await restoreNativeState(before.active_domains ?? []);
+    await restoreNativeState(before.active_domains ?? [], native);
     throw error;
   }
   try {
@@ -157,9 +174,12 @@ async function applyAuthoritativeFocusStateUnsafe(options: {
   } catch (error) {
     try {
       const persisted = readActiveState(await options.request("focus.get_active_state"));
-      await nativeState(await domainsForState(options.request, persisted, options.resolveDomains));
+      await nativeState(
+        await domainsForState(options.request, persisted, options.resolveDomains),
+        native,
+      );
     } catch (readbackError) {
-      await restoreNativeState(before.active_domains ?? []);
+      await restoreNativeState(before.active_domains ?? [], native);
       throw new Error(
         `focus state write failed: ${String(error)}; read-back failed: ${String(readbackError)}`,
       );
@@ -175,6 +195,7 @@ export function applyAuthoritativeFocusState(options: {
   blockedAppIds?: string[];
   blockedApps?: JsonValue[];
   resolveDomains?: (blocklistId: string) => Promise<string[]>;
+  native?: FocusNativeAdapter;
 }): Promise<{ result: JsonValue; nativeActive: boolean }> {
   return enqueueFocusTransition(() => applyAuthoritativeFocusStateUnsafe(options));
 }
@@ -182,9 +203,11 @@ export function applyAuthoritativeFocusState(options: {
 async function reconcileFocusStateUnsafe(options: {
   request: FocusRequest;
   resolveDomains?: (blocklistId: string) => Promise<string[]>;
+  native?: FocusNativeAdapter;
 }): Promise<{ nativeActive: boolean; state: ActiveState }> {
+  const native = options.native ?? defaultNative;
   const persisted = readActiveState(await options.request("focus.get_active_state"));
-  const status = await getFocusBlockStatus();
+  const status = await native.status();
   assertFocusBlockResult(status, status.active_domains ?? null);
   const blocklistId = persisted.blocklist_id?.trim() || null;
   if (
@@ -200,7 +223,7 @@ async function reconcileFocusStateUnsafe(options: {
     domains = await domainsForState(options.request, persisted, options.resolveDomains);
   } catch (error) {
     try {
-      await nativeState([]);
+      await nativeState([], native);
     } catch (resetError) {
       throw new Error(
         `focus reconciliation failed: ${String(error)}; native reset failed: ${String(resetError)}`,
@@ -212,9 +235,9 @@ async function reconcileFocusStateUnsafe(options: {
     throw new Error(`focus blocklist is empty: ${blocklistId}`);
   }
   try {
-    await nativeState(domains);
+    await nativeState(domains, native);
   } catch (error) {
-    await restoreNativeState(status.active_domains ?? []);
+    await restoreNativeState(status.active_domains ?? [], native);
     throw error;
   }
   return { nativeActive: domains.length > 0, state: persisted };
@@ -223,10 +246,11 @@ async function reconcileFocusStateUnsafe(options: {
 export function reconcileFocusState(options: {
   request: FocusRequest;
   resolveDomains?: (blocklistId: string) => Promise<string[]>;
+  native?: FocusNativeAdapter;
 }): Promise<{ nativeActive: boolean; state: ActiveState }> {
   return enqueueFocusTransition(() => reconcileFocusStateUnsafe(options));
 }
 
-export function resetNativeFocusState(): Promise<void> {
-  return enqueueFocusTransition(() => nativeState([]));
+export function resetNativeFocusState(native: FocusNativeAdapter = defaultNative): Promise<void> {
+  return enqueueFocusTransition(() => nativeState([], native));
 }
