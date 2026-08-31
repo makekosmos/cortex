@@ -151,6 +151,7 @@ async fn run_core_worker() -> ExitCode {
     let api_shutdown = api.shutdown_handle();
     let ws_shutdown = ws.shutdown_handle();
     let desktop_authority = ws.desktop_authority();
+    let grant_authority = ws.grant_authority();
 
     let supervised = std::env::var("KOSMOS_ENGINE_SUPERVISED").as_deref() == Ok("1");
     let agents_shutdown = ws.agents_handle();
@@ -253,6 +254,7 @@ async fn run_core_worker() -> ExitCode {
                         }
                     }
                     Some(ControlMessage::DesktopLeaseRevoked { generation }) => {
+                        grant_authority.close_generation(receiver.session_id(), generation);
                         desktop_authority.revoke_generation(receiver.session_id(), generation);
                     }
                     other => break other,

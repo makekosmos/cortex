@@ -126,6 +126,10 @@ impl WsServer {
         self.desktop_authority.clone()
     }
 
+    pub fn grant_authority(&self) -> Arc<GrantAuthorityRegistry> {
+        self.grants.clone()
+    }
+
     pub fn snapshot_count(&self) -> usize {
         self.snapshots.len()
     }

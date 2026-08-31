@@ -57,6 +57,7 @@ struct Grant {
     extension_id: String,
     exact_file: bool,
     selected_name: Option<String>,
+    exact_file_identity: Option<RootIdentity>,
     root: RootHandle,
     identity: RootIdentity,
     persistent_id: Option<String>,
@@ -251,6 +252,7 @@ impl GrantAuthorityRegistry {
                     extension_id: extension_id.to_owned(),
                     exact_file,
                     selected_name,
+                    exact_file_identity: file_identity,
                     root,
                     identity,
                     persistent_id: persistent_id.clone(),
@@ -289,6 +291,7 @@ impl GrantAuthorityRegistry {
                     extension_id: extension_id.to_owned(),
                     exact_file: record.exact_file,
                     selected_name,
+                    exact_file_identity: file_identity,
                     root,
                     identity,
                     persistent_id: Some(persistent_id.to_owned()),
@@ -323,6 +326,20 @@ impl GrantAuthorityRegistry {
                 || grant.selected_name.as_deref() != requested.first().copied())
         {
             return Err(GrantError::ScopeMismatch);
+        }
+        if grant.exact_file {
+            let selected_name = grant
+                .selected_name
+                .as_deref()
+                .ok_or(GrantError::IdentityChanged)?;
+            let expected = grant
+                .exact_file_identity
+                .ok_or(GrantError::IdentityChanged)?;
+            let current = handle_relative_fs::file_identity(&grant.root, selected_name)
+                .map_err(|_| GrantError::IdentityChanged)?;
+            if current != expected {
+                return Err(GrantError::IdentityChanged);
+            }
         }
         handle_relative_fs::read_relative(&grant.root, requested, max_bytes)
             .map_err(|_| GrantError::ScopeMismatch)
@@ -413,6 +430,24 @@ mod tests {
         fs::write(&f, b"b").unwrap();
         assert_eq!(reg.reopen(&o, &p2, "ext"), Err(GrantError::IdentityChanged));
     }
+    #[test]
+    fn registered_exact_file_denies_replacement_before_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.txt");
+        fs::write(&file, b"old").unwrap();
+        let reg = GrantAuthorityRegistry::new();
+        let o = owner(1);
+        let (id, _, _) = reg
+            .register(&o, "ext", &file, true, GrantProvenance::NativeDialog, None)
+            .unwrap();
+        fs::remove_file(&file).unwrap();
+        fs::write(&file, b"replacement").unwrap();
+
+        assert_eq!(
+            reg.read(&id, &o, "ext", &["a.txt"], 64),
+            Err(GrantError::IdentityChanged)
+        );
+    }
     #[cfg(unix)]
     #[test]
     fn root_symlink_and_child_symlink_are_denied() {
@@ -457,6 +492,28 @@ mod tests {
         assert_eq!(reg.len(), 1);
         assert_eq!(reg.close_owner(o), 1);
         assert_eq!(reg.len(), 0);
+    }
+
+    #[test]
+    fn generation_close_releases_only_matching_handles() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a");
+        fs::write(&file, b"a").unwrap();
+        let reg = GrantAuthorityRegistry::new();
+        for generation in [1, 2] {
+            reg.register(
+                &owner(generation),
+                "ext",
+                &file,
+                true,
+                GrantProvenance::NativeDialog,
+                None,
+            )
+            .unwrap();
+        }
+
+        assert_eq!(reg.close_generation("s", 1), 1);
+        assert_eq!(reg.len(), 1);
     }
 
     #[test]
