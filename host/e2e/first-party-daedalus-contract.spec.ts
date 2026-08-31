@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
 import { _electron as electron, type ElectronApplication } from "playwright";
@@ -180,6 +181,26 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
       message: "Engine отклонил операцию: unavailable.",
     });
     expect(result.afterSessions).toEqual({ ok: true, data: [] });
+    const audit = JSON.parse(
+      execFileSync(
+        "bun",
+        [
+          "--eval",
+          'import {Database} from "bun:sqlite"; const db=new Database(process.argv[1],{readonly:true}); process.stdout.write(JSON.stringify(db.query("SELECT event,result,package_id,package_version,project_id,mode,model FROM security_audit ORDER BY id DESC LIMIT 1").get()))',
+          path.join(dataDir, "extensions-data", "daedalus", "daedalus.db"),
+        ],
+        { encoding: "utf8", windowsHide: true },
+      ),
+    );
+    expect(audit).toEqual({
+      event: "consent_consume",
+      result: "denied",
+      package_id: "com.kosmos.daedalus",
+      package_version: "0.1.0",
+      project_id: result.added.data?.id,
+      mode: "full-access",
+      model: "gpt-test",
+    });
     expect(result.live).toMatchObject({
       ok: true,
       data: expect.arrayContaining([

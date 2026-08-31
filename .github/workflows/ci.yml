@@ -140,7 +140,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: makekosmos/memoria
-          ref: e098694ab5fb205ba9be230b9ac3ec10fade44cc
+          ref: 08cd70e1d374b53897bdb66b87174beee8c8016b
           path: _first-party/memoria
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
       - uses: actions/checkout@v4
