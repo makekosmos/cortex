@@ -178,7 +178,6 @@ jobs:
       - run: bun install --cwd _first-party/imago --frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: bun run --cwd _first-party/imago build
       - run: bun install --cwd _first-party/arcadia --frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -188,6 +187,10 @@ jobs:
       - run: bun install --cwd _first-party/ordo --frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: bun run --cwd _first-party/imago build
+      - name: Verify Imago package entrypoint
+        shell: pwsh
+        run: if (!(Test-Path _first-party/imago/dist/index.js)) { throw "Imago package entrypoint is missing" }
       - run: bun run --cwd _first-party/arcadia package:kspkg
       - run: bun run --cwd _first-party/daedalus package:kspkg
       - run: bun run --cwd _first-party/ordo package:kspkg
