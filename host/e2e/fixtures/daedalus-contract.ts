@@ -8,6 +8,7 @@ import type { JsonValue } from "./signed-app-types";
 
 type Session = {
   id?: string;
+  prompt?: string;
   status?: string;
   activeTurnId?: string | null;
 };
@@ -75,6 +76,28 @@ const createSession = (page: Page, projectId: string, prompt: string) =>
     mode: "default",
   });
 
+const recoverTimedOutSession = async (page: Page, projectId: string, prompt: string) => {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const listed = await requestSessionApi(page, "agents.sessions.list", {
+      include_archived: true,
+    });
+    const sessions = listed?.ok && Array.isArray(listed.data) ? listed.data : [];
+    const session = sessions.find(
+      (value): value is JsonValue & Session =>
+        isJsonRecord(value) &&
+        value.project_id === projectId &&
+        value.prompt === prompt &&
+        isJsonString(value.id),
+    );
+    if (session && session.status !== "starting") {
+      return { ok: true as const, data: session };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return undefined;
+};
+
 export const createAndSend = async (
   page: Page,
   projectId: string,
@@ -82,7 +105,10 @@ export const createAndSend = async (
   text: string,
 ) => {
   await waitForEngineSessionApi(page);
-  const created = await createSession(page, projectId, prompt);
+  const initial = await createSession(page, projectId, prompt);
+  const created = isEngineUnavailable(initial)
+    ? ((await recoverTimedOutSession(page, projectId, prompt)) ?? initial)
+    : initial;
   // SAFETY: the id is validated as a String before it is used below.
   const sessionId =
     created?.ok && isJsonRecord(created.data) && isJsonString(created.data.id)
