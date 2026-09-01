@@ -80,6 +80,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Configure private Core dependency access
+        shell: pwsh
+        env:
+          KOSMOS_READ_TOKEN: ${{ secrets.KOSMOS_READ_TOKEN }}
+        run: git config --global url."https://x-access-token:$env:KOSMOS_READ_TOKEN@github.com/makekosmos/core.git".insteadOf "https://github.com/makekosmos/core.git"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
