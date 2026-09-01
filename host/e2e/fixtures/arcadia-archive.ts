@@ -4,8 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
-const DIGEST = "a8b6454bb48518122609fa80f3378fd37fd219160fee525b823f5e624da58332";
-const SOURCE_COMMIT = "8774c25d99818fec702bfd513697639b84e7c2c8";
+const DIGEST = "c2b820511c97caf26696cbeb5db15f31c98617fac7cadc976162b5357f0f9f5c";
+const SOURCE_COMMIT = "7b68da25e5dd2a4433a764eb89c7ca4a2001f253";
 const IMAGO_COMMIT = "b1852cab9f8f08ae0b236b7759138d3117f720b8";
 const ARCA_SDK_COMMIT = "21c2f5e157944e3444d3c0604da5a0e041116077";
 export const ARCADIA_EFFECTIVE_GRANTS = [
@@ -80,9 +80,9 @@ const isUnsafeEntry = (entry: string) => {
 };
 
 export function arcadiaArchive(root: string, repositoryRoot: string) {
-  // Reviewed source: Arcadia commit 8774c25d99818fec702bfd513697639b84e7c2c8.
+  // Reviewed source: Arcadia commit 7b68da25e5dd2a4433a764eb89c7ca4a2001f253.
   const sourceRoot = path.join(repositoryRoot, "arcadia");
-  const source = path.join(sourceRoot, "release", "arcadia-0.1.9.kspkg");
+  const source = path.join(sourceRoot, "release", "arcadia-0.1.11.kspkg");
   if (!fs.existsSync(source)) throw new Error(`Arcadia release archive not found: ${source}`);
   const checkout = execFileSync("git", ["rev-parse", "HEAD"], {
     cwd: sourceRoot,
@@ -130,6 +130,15 @@ export function arcadiaArchive(root: string, repositoryRoot: string) {
   ) as Manifest;
   if (!isDeepStrictEqual(archived, reviewed))
     throw new Error(`Arcadia archive manifest does not match source commit ${SOURCE_COMMIT}`);
+  // SAFETY: archive manifest already deep-equals the pinned source manifest above.
+  const permissions = archived.permissions as Array<{
+    capability?: string;
+    scopes?: readonly JsonValue[];
+  }>;
+  const processSpawn = permissions.find(
+    (permission) => permission.capability === "process.spawn" && permission.scopes?.length === 0,
+  );
+  if (!processSpawn) throw new Error("Arcadia archive must declare host-root process.spawn");
   // SAFETY: provenance is compared field-for-field with the archive-derived BOM below.
   const provenance = JSON.parse(tar("-xOf", file, "provenance.json")) as Provenance;
   const files = entries
