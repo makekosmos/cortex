@@ -1,16 +1,28 @@
+#[cfg(windows)]
+use std::collections::BTreeSet;
 use std::fs::{self, OpenOptions};
-use std::io::{self, Cursor, Read, Write};
+use std::io::{self, Read, Write};
+#[cfg(windows)]
+use std::io::{Cursor, Seek, SeekFrom};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
+#[cfg(windows)]
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+#[cfg(windows)]
+use chrono::{DateTime, Duration as ChronoDuration, Utc};
+#[cfg(windows)]
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use flate2::read::GzDecoder;
 use reqwest::header::{
     ACCEPT_ENCODING, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE,
 };
 use reqwest::Client;
+#[cfg(windows)]
+use serde::Deserialize;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tar::Archive;
@@ -29,21 +41,33 @@ const OLD_FASTER_WHISPER_RUNTIME_DIR: &str = "runtimes/faster-whisper";
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 const OLD_FASTER_WHISPER_CUDA_LIBS_DIR: &str = "runtimes/cuda-libs";
 const DOWNLOAD_MAX_ATTEMPTS: usize = 8;
+#[cfg(windows)]
+const WHISPER_RUNTIME_VERSION: &str = "1.9.3";
+#[cfg(windows)]
+const RUNTIME_MANIFEST_URL: &str = "https://github.com/makekosmos/local-ai-runtimes/releases/download/runtime-v1.9.3/runtimes.manifest.json";
+#[cfg(windows)]
+const RUNTIME_ENVELOPE_URL: &str = "https://github.com/makekosmos/local-ai-runtimes/releases/download/runtime-v1.9.3/runtimes.manifest.envelope.json";
+#[cfg(windows)]
+const RUNTIME_KEY_ID: &str = "runtime-prod-2026-1";
+#[cfg(windows)]
+const RUNTIME_PUBLIC_KEY_B64: &str = "ukKkVVFmhQ7wzR4ZvM3Iea83x2ptrE/+2HxHBKOk6Cc=";
 
 #[cfg(windows)]
 const WHISPER_CPP_CPU_ZIP_URL: &str =
-    "https://makekosmos.github.io/local-ai-runtimes/whisper-cpu-bin-x64-v1.9.1.zip";
+    "https://github.com/makekosmos/local-ai-runtimes/releases/download/runtime-v1.9.3/whisper-cpu-bin-x64-v1.9.3.zip";
 #[cfg(windows)]
 const WHISPER_CPP_CPU_ZIP_SHA256: &str =
-    "7a17d804ab6e0fc992d356b4d3c434764f9191c13f0da6b8c219e7bc19e8ffcf";
+    "2464c8ecdc070ccdba079b363943e979708443180fd6dda12d7d0801beeb5954";
+#[cfg(windows)]
+const WHISPER_CPP_CPU_ZIP_SIZE: u64 = 1_436_012;
 #[cfg(windows)]
 const WHISPER_CPP_VULKAN_ZIP_URL: &str =
-    "https://makekosmos.github.io/local-ai-runtimes/whisper-vulkan-bin-x64-v1.9.1-r2.zip";
-// r2: добавлен whisper-server.exe (тёплый GPU-путь). Без него whisper-cli
-// грузил модель заново на каждую диктовку — резкая просадка скорости.
+    "https://github.com/makekosmos/local-ai-runtimes/releases/download/runtime-v1.9.3/whisper-vulkan-bin-x64-v1.9.3.zip";
 #[cfg(windows)]
 const WHISPER_CPP_VULKAN_ZIP_SHA256: &str =
-    "c26060f8fe02dce053d73a6806be517c3f06f2ff54fe0f86b69e58225b11fa1e";
+    "520ab6225f6b0afd2e8dcbc67e196a934df44bc7932f86cc2c29796a996c48f4";
+#[cfg(windows)]
+const WHISPER_CPP_VULKAN_ZIP_SIZE: u64 = 17_403_912;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ModelSpec {
@@ -440,6 +464,12 @@ fn vulkan_server_path(data_dir: &Path) -> PathBuf {
         .join("whisper-server.exe")
 }
 
+#[cfg(windows)]
+fn runtime_is_current(dir: &Path) -> bool {
+    fs::read_to_string(dir.join(".runtime-version"))
+        .is_ok_and(|version| version.trim() == WHISPER_RUNTIME_VERSION)
+}
+
 /// `true`, если установлен Vulkan whisper-cli, но рядом нет whisper-server.exe.
 /// Такой рантайм работает только в «холодном» режиме (перезагрузка модели на
 /// каждую диктовку); требуется перекачать обновлённый архив с server'ом.
@@ -496,48 +526,6 @@ fn vulkan_runtime_available() -> bool {
     }
     .map(|output| output.status.success())
     .unwrap_or(false)
-}
-
-#[cfg(windows)]
-fn cpu_zip_url() -> String {
-    std::env::var("KOSMOS_WHISPER_CPP_CPU_ZIP_URL")
-        .ok()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| WHISPER_CPP_CPU_ZIP_URL.to_owned())
-}
-
-#[cfg(windows)]
-fn cpu_zip_sha256() -> Option<String> {
-    std::env::var("KOSMOS_WHISPER_CPP_CPU_ZIP_SHA256")
-        .ok()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .or_else(|| {
-            (cpu_zip_url() == WHISPER_CPP_CPU_ZIP_URL)
-                .then(|| WHISPER_CPP_CPU_ZIP_SHA256.to_owned())
-        })
-}
-
-#[cfg(windows)]
-fn vulkan_zip_url() -> String {
-    std::env::var("KOSMOS_WHISPER_CPP_VULKAN_ZIP_URL")
-        .ok()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| WHISPER_CPP_VULKAN_ZIP_URL.to_owned())
-}
-
-#[cfg(windows)]
-fn vulkan_zip_sha256() -> Option<String> {
-    std::env::var("KOSMOS_WHISPER_CPP_VULKAN_ZIP_SHA256")
-        .ok()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .or_else(|| {
-            (vulkan_zip_url() == WHISPER_CPP_VULKAN_ZIP_URL)
-                .then(|| WHISPER_CPP_VULKAN_ZIP_SHA256.to_owned())
-        })
 }
 
 #[cfg(windows)]
@@ -682,6 +670,7 @@ async fn download_file(
     url: &str,
     destination: &Path,
     phase: &'static str,
+    max_bytes: Option<u64>,
     progress: &mut ProgressCallback<'_>,
 ) -> Result<(), LocalModelsError> {
     if let Some(parent) = destination.parent() {
@@ -693,6 +682,10 @@ async fn download_file(
 
     for attempt in 1..=DOWNLOAD_MAX_ATTEMPTS {
         let mut downloaded_bytes = part_path.metadata().map(|m| m.len()).unwrap_or(0);
+        if max_bytes.is_some_and(|limit| downloaded_bytes > limit) {
+            fs::remove_file(&part_path)?;
+            downloaded_bytes = 0;
+        }
         let mut request = client.get(url).header(ACCEPT_ENCODING, "identity");
         if downloaded_bytes > 0 {
             request = request.header(RANGE, format!("bytes={downloaded_bytes}-"));
@@ -708,6 +701,12 @@ async fn download_file(
         };
         let status = response.status();
         let final_url = response.url().to_string();
+        #[cfg(windows)]
+        if phase == "tool" && !trusted_runtime_response(response.url()) {
+            return Err(LocalModelsError::Download(format!(
+                "{request_url}: untrusted runtime redirect"
+            )));
+        }
         let content_type = response
             .headers()
             .get(CONTENT_TYPE)
@@ -813,6 +812,13 @@ async fn download_file(
                 fs::rename(&part_path, destination)?;
                 return Ok(());
             };
+            if max_bytes.is_some_and(|limit| downloaded_bytes + chunk.len() as u64 > limit) {
+                drop(file);
+                let _ = fs::remove_file(&part_path);
+                return Err(LocalModelsError::Download(format!(
+                    "{request_url}: download exceeds verified size limit"
+                )));
+            }
             file.write_all(&chunk)?;
             advanced = true;
             downloaded_bytes += chunk.len() as u64;
@@ -927,7 +933,7 @@ pub async fn ensure_model_with_progress(
     }
     if spec.directory {
         let archive_path = path.with_extension("tar.gz");
-        download_file(client, spec.url, &archive_path, "model", progress).await?;
+        download_file(client, spec.url, &archive_path, "model", None, progress).await?;
         if let Some(expected) = spec.sha256 {
             verify_sha256(&archive_path, expected)?;
         }
@@ -940,7 +946,7 @@ pub async fn ensure_model_with_progress(
         extract_tar_gz(&archive_path, &path)?;
         let _ = fs::remove_file(&archive_path);
     } else {
-        download_file(client, spec.url, &path, "model", progress).await?;
+        download_file(client, spec.url, &path, "model", None, progress).await?;
         if let Some(expected) = spec.sha256 {
             verify_sha256(&path, expected)?;
         }
@@ -991,17 +997,20 @@ pub async fn ensure_whisper_cpp_with_progress(
         // И whisper-server.exe: без server тёплый путь (warm GPU) не работает и
         // модель грузится заново на каждую диктовку. Отсутствие server.exe →
         // перекачиваем обновлённый архив (r2), который его содержит.
-        if vulkan.is_file() && vulkan_server_path(data_dir).is_file() {
+        if vulkan.is_file()
+            && vulkan_server_path(data_dir).is_file()
+            && runtime_is_current(&vulkan_tools_dir(data_dir))
+        {
             return Ok(vulkan);
         }
-        let url = vulkan_zip_url();
-        let sha256 = vulkan_zip_sha256();
         match install_whisper_cpp_zip(
             client,
             &vulkan_tools_dir(data_dir),
             "whisper-vulkan-bin-x64.zip",
-            &url,
-            sha256.as_deref(),
+            WHISPER_CPP_VULKAN_ZIP_URL,
+            WHISPER_CPP_VULKAN_ZIP_SHA256,
+            WHISPER_CPP_VULKAN_ZIP_SIZE,
+            true,
             progress,
         )
         .await
@@ -1019,18 +1028,18 @@ pub async fn ensure_whisper_cpp_with_progress(
     }
     let dir = tools_dir(data_dir);
     let archive_name = "whisper-cpu-bin-x64.zip";
-    let url = cpu_zip_url();
-    let sha256 = cpu_zip_sha256();
     let cpu_command = cpu_command_path(data_dir);
-    if cpu_command.is_file() {
+    if cpu_command.is_file() && runtime_is_current(&dir) {
         return Ok(cpu_command);
     }
     install_whisper_cpp_zip(
         client,
         &dir,
         archive_name,
-        &url,
-        sha256.as_deref(),
+        WHISPER_CPP_CPU_ZIP_URL,
+        WHISPER_CPP_CPU_ZIP_SHA256,
+        WHISPER_CPP_CPU_ZIP_SIZE,
+        false,
         progress,
     )
     .await?;
@@ -1046,19 +1055,277 @@ pub async fn ensure_whisper_cpp_with_progress(
 }
 
 #[cfg(windows)]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RuntimeEnvelope {
+    schema_version: u32,
+    payload_type: String,
+    payload_sha256: String,
+    payload_size: u64,
+    key_id: String,
+    signature: String,
+}
+
+#[cfg(windows)]
+#[derive(Deserialize)]
+struct SignedRuntimeManifest {
+    schema_version: u32,
+    sequence: u64,
+    generated_at: String,
+    status: String,
+    signing_key_id: String,
+    runtimes: Vec<SignedRuntime>,
+}
+
+#[cfg(windows)]
+#[derive(Deserialize)]
+struct SignedRuntime {
+    id: String,
+    version: String,
+    platform: String,
+    architecture: String,
+    backend: String,
+    entrypoints: Vec<String>,
+    archive: SignedRuntimeArchive,
+    source: serde_json::Value,
+    build: serde_json::Value,
+    licences: Vec<serde_json::Value>,
+}
+
+#[cfg(windows)]
+#[derive(Deserialize)]
+struct SignedRuntimeArchive {
+    name: String,
+    url: String,
+    sha256: String,
+    size: u64,
+    format: String,
+    files: Vec<String>,
+}
+
+#[cfg(windows)]
+async fn verify_published_runtime(
+    client: &Client,
+    runtime_id: &str,
+    expected_url: &str,
+    expected_sha256: &str,
+    expected_size: u64,
+) -> Result<(), LocalModelsError> {
+    let manifest = download_runtime_metadata(client, RUNTIME_MANIFEST_URL).await?;
+    let envelope = download_runtime_metadata(client, RUNTIME_ENVELOPE_URL).await?;
+    verify_runtime_metadata(
+        &manifest,
+        &envelope,
+        runtime_id,
+        expected_url,
+        expected_sha256,
+        expected_size,
+    )
+}
+
+#[cfg(windows)]
+async fn download_runtime_metadata(
+    client: &Client,
+    url: &str,
+) -> Result<Vec<u8>, LocalModelsError> {
+    const MAX_METADATA_BYTES: usize = 1024 * 1024;
+    let mut response = client
+        .get(url)
+        .header(ACCEPT_ENCODING, "identity")
+        .send()
+        .await
+        .map_err(|error| LocalModelsError::Download(format!("runtime metadata: {error}")))?;
+    if !response.status().is_success() || !trusted_runtime_response(response.url()) {
+        return Err(LocalModelsError::Download(
+            "untrusted runtime metadata response".into(),
+        ));
+    }
+    if response
+        .content_length()
+        .is_some_and(|size| size > MAX_METADATA_BYTES as u64)
+    {
+        return Err(LocalModelsError::Download(
+            "runtime metadata exceeds size limit".into(),
+        ));
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| LocalModelsError::Download(format!("runtime metadata: {error}")))?
+    {
+        if bytes.len() + chunk.len() > MAX_METADATA_BYTES {
+            return Err(LocalModelsError::Download(
+                "runtime metadata exceeds size limit".into(),
+            ));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
+}
+
+#[cfg(windows)]
+fn trusted_runtime_response(url: &reqwest::Url) -> bool {
+    url.scheme() == "https"
+        && matches!(
+            url.host_str(),
+            Some("github.com" | "release-assets.githubusercontent.com")
+        )
+}
+
+#[cfg(windows)]
+fn verify_runtime_metadata(
+    manifest_bytes: &[u8],
+    envelope_bytes: &[u8],
+    runtime_id: &str,
+    expected_url: &str,
+    expected_sha256: &str,
+    expected_size: u64,
+) -> Result<(), LocalModelsError> {
+    let envelope: RuntimeEnvelope = serde_json::from_slice(envelope_bytes)
+        .map_err(|_| LocalModelsError::Download("invalid runtime envelope".into()))?;
+    let manifest_hash = format!("{:x}", Sha256::digest(manifest_bytes));
+    if envelope.schema_version != 1
+        || envelope.payload_type != "application/vnd.makekosmos.runtime-manifest+json"
+        || envelope.payload_sha256 != manifest_hash
+        || envelope.payload_size != manifest_bytes.len() as u64
+        || envelope.key_id != RUNTIME_KEY_ID
+    {
+        return Err(LocalModelsError::Download(
+            "runtime manifest envelope verification failed".into(),
+        ));
+    }
+    let key = STANDARD
+        .decode(RUNTIME_PUBLIC_KEY_B64)
+        .ok()
+        .and_then(|bytes| <[u8; 32]>::try_from(bytes).ok())
+        .and_then(|bytes| VerifyingKey::from_bytes(&bytes).ok())
+        .ok_or_else(|| LocalModelsError::Download("invalid runtime trust root".into()))?;
+    let signature = STANDARD
+        .decode(&envelope.signature)
+        .ok()
+        .and_then(|bytes| Signature::from_slice(&bytes).ok())
+        .ok_or_else(|| LocalModelsError::Download("invalid runtime signature".into()))?;
+    key.verify(manifest_bytes, &signature)
+        .map_err(|_| LocalModelsError::Download("invalid runtime signature".into()))?;
+
+    let manifest: SignedRuntimeManifest = serde_json::from_slice(manifest_bytes)
+        .map_err(|_| LocalModelsError::Download("invalid signed runtime manifest".into()))?;
+    let generated_at = DateTime::parse_from_rfc3339(&manifest.generated_at)
+        .map_err(|_| LocalModelsError::Download("invalid runtime manifest timestamp".into()))?
+        .with_timezone(&Utc);
+    let unique_ids: BTreeSet<&str> = manifest
+        .runtimes
+        .iter()
+        .map(|runtime| runtime.id.as_str())
+        .collect();
+    if manifest.schema_version != 1
+        || manifest.sequence != 2
+        || manifest.status != "release"
+        || manifest.signing_key_id != RUNTIME_KEY_ID
+        || generated_at > Utc::now() + ChronoDuration::minutes(5)
+        || unique_ids.len() != manifest.runtimes.len()
+    {
+        return Err(LocalModelsError::Download(
+            "invalid signed runtime manifest".into(),
+        ));
+    }
+    let runtime = manifest
+        .runtimes
+        .iter()
+        .find(|runtime| runtime.id == runtime_id)
+        .ok_or_else(|| {
+            LocalModelsError::Download("runtime is absent from signed manifest".into())
+        })?;
+    let expected_backend = if runtime_id == "whisper-vulkan" {
+        "vulkan"
+    } else {
+        "cpu"
+    };
+    if runtime.version != WHISPER_RUNTIME_VERSION
+        || runtime.platform != "windows"
+        || runtime.architecture != "x64"
+        || runtime.backend != expected_backend
+        || runtime.archive.url != expected_url
+        || runtime.archive.sha256 != expected_sha256
+        || runtime.archive.size != expected_size
+        || runtime.archive.format != "zip"
+        || runtime.archive.name.is_empty()
+        || !runtime.source.is_object()
+        || !runtime.build.is_object()
+        || runtime.licences.is_empty()
+        || !runtime
+            .entrypoints
+            .iter()
+            .any(|path| path == "Release/whisper-cli.exe")
+        || !runtime
+            .archive
+            .files
+            .iter()
+            .any(|path| path == "LICENSE.whisper.cpp.txt")
+    {
+        return Err(LocalModelsError::Download(
+            "signed runtime coordinate mismatch".into(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
 async fn install_whisper_cpp_zip(
     client: &Client,
     dir: &Path,
     archive_name: &str,
     url: &str,
-    expected_sha256: Option<&str>,
+    expected_sha256: &str,
+    expected_size: u64,
+    vulkan: bool,
     progress: &mut ProgressCallback<'_>,
 ) -> Result<(), LocalModelsError> {
-    fs::create_dir_all(dir)?;
-    let archive_path = dir.join(archive_name);
-    download_file(client, url, &archive_path, "tool", progress).await?;
-    if let Some(expected) = expected_sha256 {
-        verify_sha256(&archive_path, expected)?;
+    let runtime_id = if vulkan {
+        "whisper-vulkan"
+    } else {
+        "whisper-cpu"
+    };
+    verify_published_runtime(client, runtime_id, url, expected_sha256, expected_size).await?;
+    let parent = dir
+        .parent()
+        .ok_or_else(|| LocalModelsError::Download("invalid runtime path".into()))?;
+    fs::create_dir_all(parent)?;
+    let stem = dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| LocalModelsError::Download("invalid runtime path".into()))?;
+    let archive_path = parent.join(format!(".{stem}.{archive_name}.download"));
+    let quarantine_archive = parent.join(format!(".{stem}.quarantine.zip"));
+    if let Err(error) = download_file(
+        client,
+        url,
+        &archive_path,
+        "tool",
+        Some(expected_size),
+        progress,
+    )
+    .await
+    {
+        let partial = archive_path.with_extension("part");
+        let _ = fs::remove_file(&quarantine_archive);
+        if partial.exists() {
+            fs::rename(partial, &quarantine_archive)?;
+        }
+        return Err(error);
+    }
+    let integrity = if archive_path.metadata()?.len() != expected_size {
+        Err(LocalModelsError::Download(
+            "runtime archive size mismatch".into(),
+        ))
+    } else {
+        verify_sha256(&archive_path, expected_sha256)
+    };
+    if let Err(error) = integrity {
+        let _ = fs::remove_file(&quarantine_archive);
+        fs::rename(&archive_path, &quarantine_archive)?;
+        return Err(error);
     }
     progress(DownloadProgress {
         phase: "extract",
@@ -1066,11 +1333,137 @@ async fn install_whisper_cpp_zip(
         total_bytes: None,
         percent: None,
     });
-    let bytes = fs::read(&archive_path)?;
-    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
-    archive.extract(dir)?;
+    let staging = parent.join(format!(".{stem}.staging"));
+    let previous = parent.join(format!(".{stem}.previous"));
+    let quarantine = parent.join(format!(".{stem}.quarantine"));
+    if staging.exists() {
+        fs::remove_dir_all(&staging)?;
+    }
+    fs::create_dir(&staging)?;
+    let result = (|| {
+        extract_whisper_runtime(&archive_path, &staging, vulkan)?;
+        fs::write(
+            staging.join(".runtime-version"),
+            format!("{WHISPER_RUNTIME_VERSION}\n"),
+        )?;
+        let command = staging.join("Release").join("whisper-cli.exe");
+        let status = Command::new(&command).arg("--version").status()?;
+        if !status.success() {
+            return Err(LocalModelsError::Download(
+                "runtime --version smoke test failed".into(),
+            ));
+        }
+        if previous.exists() {
+            fs::remove_dir_all(&previous)?;
+        }
+        if dir.exists() {
+            fs::rename(dir, &previous)?;
+        }
+        if let Err(error) = fs::rename(&staging, dir) {
+            if previous.exists() {
+                let _ = fs::rename(&previous, dir);
+            }
+            return Err(error.into());
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        if quarantine.exists() {
+            fs::remove_dir_all(&quarantine)?;
+        }
+        if staging.exists() {
+            fs::rename(&staging, &quarantine)?;
+        }
+    }
     let _ = fs::remove_file(&archive_path);
+    result
+}
+
+#[cfg(windows)]
+fn extract_whisper_runtime(
+    archive_path: &Path,
+    destination: &Path,
+    vulkan: bool,
+) -> Result<(), LocalModelsError> {
+    let mut allowed = BTreeSet::from([
+        "LICENSE.whisper.cpp.txt",
+        "Release/ggml-base.dll",
+        "Release/ggml-cpu.dll",
+        "Release/ggml.dll",
+        "Release/whisper-cli.exe",
+        "Release/whisper-server.exe",
+        "Release/whisper.dll",
+    ]);
+    if vulkan {
+        allowed.insert("Release/ggml-vulkan.dll");
+    }
+    let bytes = fs::read(archive_path)?;
+    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
+    if archive.len() != allowed.len() {
+        return Err(LocalModelsError::Download(
+            "runtime archive contains unexpected entries".into(),
+        ));
+    }
+    let mut seen = BTreeSet::new();
+    let mut unpacked = 0_u64;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)?;
+        let name = entry.name().to_owned();
+        let folded = name.to_ascii_lowercase();
+        let file_type = entry.unix_mode().unwrap_or(0) & 0o170000;
+        unpacked = unpacked.saturating_add(entry.size());
+        if !allowed.contains(name.as_str())
+            || !seen.insert(folded)
+            || name.contains(['\\', ':', '\0'])
+            || entry.enclosed_name().is_none()
+            || !entry.is_file()
+            || !matches!(file_type, 0 | 0o100000)
+            || entry.size() > 256 * 1024 * 1024
+            || unpacked > 512 * 1024 * 1024
+            || (entry.compressed_size() == 0 && entry.size() > 0)
+            || (entry.compressed_size() > 0 && entry.size() / entry.compressed_size() > 100)
+        {
+            return Err(LocalModelsError::Download("unsafe runtime archive".into()));
+        }
+        let target = destination.join(entry.enclosed_name().expect("checked enclosed path"));
+        fs::create_dir_all(target.parent().expect("archive file parent"))?;
+        let mut output = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&target)?;
+        io::copy(&mut entry, &mut output)?;
+        output.sync_all()?;
+        if matches!(
+            target.extension().and_then(|value| value.to_str()),
+            Some("exe" | "dll")
+        ) && !is_x64_pe(&target)?
+        {
+            return Err(LocalModelsError::Download(
+                "runtime archive contains non-x64 executable".into(),
+            ));
+        }
+    }
+    if seen.len() != allowed.len() {
+        return Err(LocalModelsError::Download(
+            "runtime archive is incomplete".into(),
+        ));
+    }
     Ok(())
+}
+
+#[cfg(windows)]
+fn is_x64_pe(path: &Path) -> io::Result<bool> {
+    let mut file = fs::File::open(path)?;
+    let mut header = [0_u8; 64];
+    file.read_exact(&mut header)?;
+    if &header[..2] != b"MZ" {
+        return Ok(false);
+    }
+    let offset = u32::from_le_bytes(header[60..64].try_into().expect("four bytes")) as u64;
+    file.seek(SeekFrom::Start(offset))?;
+    let mut pe = [0_u8; 6];
+    file.read_exact(&mut pe)?;
+    Ok(&pe[..4] == b"PE\0\0" && u16::from_le_bytes([pe[4], pe[5]]) == 0x8664)
 }
 
 #[cfg(not(windows))]
@@ -1118,12 +1511,78 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn whisper_cpp_runtime_sources_are_pinned() {
-        assert!(WHISPER_CPP_CPU_ZIP_URL.contains("makekosmos.github.io/local-ai-runtimes"));
-        assert!(WHISPER_CPP_CPU_ZIP_URL.contains("whisper-cpu-bin-x64-v1.9.1"));
+        assert!(WHISPER_CPP_CPU_ZIP_URL
+            .contains("github.com/makekosmos/local-ai-runtimes/releases/download/runtime-v1.9.3"));
+        assert!(WHISPER_CPP_CPU_ZIP_URL.contains("whisper-cpu-bin-x64-v1.9.3"));
         assert_eq!(WHISPER_CPP_CPU_ZIP_SHA256.len(), 64);
-        assert!(WHISPER_CPP_VULKAN_ZIP_URL.contains("makekosmos.github.io/local-ai-runtimes"));
-        assert!(WHISPER_CPP_VULKAN_ZIP_URL.contains("whisper-vulkan-bin-x64-v1.9.1"));
+        assert_eq!(WHISPER_CPP_CPU_ZIP_SIZE, 1_436_012);
+        assert!(WHISPER_CPP_VULKAN_ZIP_URL
+            .contains("github.com/makekosmos/local-ai-runtimes/releases/download/runtime-v1.9.3"));
+        assert!(WHISPER_CPP_VULKAN_ZIP_URL.contains("whisper-vulkan-bin-x64-v1.9.3"));
         assert_eq!(WHISPER_CPP_VULKAN_ZIP_SHA256.len(), 64);
+        assert_eq!(WHISPER_CPP_VULKAN_ZIP_SIZE, 17_403_912);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    #[ignore = "requires the immutable production runtime release"]
+    async fn signed_runtime_release_installs_atomically() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let client = Client::new();
+        install_whisper_cpp_zip(
+            &client,
+            &tools_dir(tmp.path()),
+            "whisper-cpu-bin-x64.zip",
+            WHISPER_CPP_CPU_ZIP_URL,
+            WHISPER_CPP_CPU_ZIP_SHA256,
+            WHISPER_CPP_CPU_ZIP_SIZE,
+            false,
+            &mut |_| {},
+        )
+        .await
+        .expect("signed CPU runtime install");
+        assert!(cpu_command_path(tmp.path()).is_file());
+        assert!(runtime_is_current(&tools_dir(tmp.path())));
+
+        let command = ensure_whisper_cpp(&client, tmp.path())
+            .await
+            .expect("signed Vulkan runtime install");
+
+        assert!(command.is_file());
+        assert!(vulkan_server_path(tmp.path()).is_file());
+        assert!(runtime_is_current(&vulkan_tools_dir(tmp.path())));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn runtime_extractor_rejects_traversal_before_writing() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let archive_path = tmp.path().join("runtime.zip");
+        let file = fs::File::create(&archive_path).expect("archive");
+        let mut archive = zip::ZipWriter::new(file);
+        for name in [
+            "../LICENSE.whisper.cpp.txt",
+            "Release/ggml-base.dll",
+            "Release/ggml-cpu.dll",
+            "Release/ggml.dll",
+            "Release/whisper-cli.exe",
+            "Release/whisper-server.exe",
+            "Release/whisper.dll",
+        ] {
+            archive
+                .start_file(name, zip::write::FileOptions::default())
+                .expect("entry");
+            archive.write_all(b"x").expect("body");
+        }
+        archive.finish().expect("finish");
+        let destination = tmp.path().join("staging");
+        fs::create_dir(&destination).expect("staging");
+
+        let error = extract_whisper_runtime(&archive_path, &destination, false)
+            .expect_err("traversal must fail");
+
+        assert!(error.to_string().contains("unsafe runtime archive"));
+        assert!(!tmp.path().join("LICENSE.whisper.cpp.txt").exists());
     }
 
     #[cfg(windows)]
@@ -1213,6 +1672,7 @@ mod tests {
             &server.url("/model.bin"),
             &path,
             "model",
+            None,
             &mut |progress| events.push(progress),
         )
         .await
@@ -1259,6 +1719,7 @@ mod tests {
             &server.url("/model.bin"),
             &path,
             "model",
+            None,
             &mut |_| {},
         )
         .await
@@ -1269,6 +1730,36 @@ mod tests {
             "unexpected error: {err}"
         );
         assert!(!path.exists(), "html response must not be stored as model");
+    }
+
+    #[tokio::test]
+    async fn download_file_enforces_hard_size_limit() {
+        let server = MockServer::start_async().await;
+        server
+            .mock_async(|when, then| {
+                when.method(GET).path("/oversized.bin");
+                then.status(200)
+                    .header("content-type", "application/octet-stream")
+                    .body(vec![7_u8; 17]);
+            })
+            .await;
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let path = tmp.path().join("oversized.bin");
+
+        let error = download_file(
+            &Client::new(),
+            &server.url("/oversized.bin"),
+            &path,
+            "model",
+            Some(16),
+            &mut |_| {},
+        )
+        .await
+        .expect_err("oversized body must fail");
+
+        assert!(error.to_string().contains("size limit"));
+        assert!(!path.exists());
+        assert!(!path.with_extension("part").exists());
     }
 
     #[tokio::test]
@@ -1298,6 +1789,7 @@ mod tests {
             &server.url("/model.bin"),
             &path,
             "model",
+            None,
             &mut |progress| events.push(progress),
         )
         .await
