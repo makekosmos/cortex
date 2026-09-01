@@ -2,7 +2,9 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { expect, type Page } from "@playwright/test";
+import { isJsonRecord, isJsonString } from "../../electron/host-api";
 import { waitForPidGone } from "./host-runtime";
+import type { JsonValue } from "./signed-app-types";
 
 type Session = {
   id?: string;
@@ -11,6 +13,16 @@ type Session = {
 };
 
 type RpcResult = { ok: boolean; data?: unknown };
+type EngineResult = { ok: true; data?: JsonValue } | { ok: false; message?: JsonValue };
+const ENGINE_NOT_READY = "Не удалось связаться с Engine. Повторите попытку.";
+
+const parseEngineResult = (value: JsonValue): EngineResult | undefined => {
+  if (!isJsonRecord(value) || (value.ok !== true && value.ok !== false)) return undefined;
+  return value.ok ? { ok: true, data: value.data } : { ok: false, message: value.message };
+};
+
+const isEngineUnavailable = (value: EngineResult | undefined): boolean =>
+  value?.ok === false && value.message === ENGINE_NOT_READY;
 
 export const fakeAppServerEnvironment = (script: string, pidFile: string): NodeJS.ProcessEnv => ({
   KOSMOS_TEST_MODE: "1",
@@ -33,26 +45,58 @@ export const createGitProject = (root: string): string => {
   return project;
 };
 
-export const createAndSend = async (page: Page, projectId: string, prompt: string, text: string) =>
-  page.evaluate(
-    async ({ projectId, prompt, text }) => {
-      const created = await window.kosmosApp.ark.request("agents.sessions.create", {
-        project_id: projectId,
-        prompt,
-        mode: "default",
-      });
-      // SAFETY: the id is validated as a String before it is used below.
-      const session = created.data as { id?: unknown } | undefined;
-      if (!created.ok || session?.id?.constructor !== String)
-        throw new Error(`session create failed: ${JSON.stringify(created)}`);
-      const sent = await window.kosmosApp.ark.request("agents.sessions.send", {
-        session_id: session.id,
-        text,
-      });
-      return { created, sent, sessionId: session.id };
-    },
-    { projectId, prompt, text },
+const waitForEngineSessionApi = async (page: Page) => {
+  const deadline = Date.now() + 30_000;
+  let ready = await requestSessionApi(page, "agents.sessions.list", { include_archived: true });
+  while (isEngineUnavailable(ready) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    ready = await requestSessionApi(page, "agents.sessions.list", { include_archived: true });
+  }
+  if (!ready?.ok) throw new Error(`session API readiness failed: ${JSON.stringify(ready)}`);
+};
+
+const requestSessionApi = async (
+  page: Page,
+  operation: string,
+  params: Record<string, JsonValue>,
+): Promise<EngineResult | undefined> => {
+  const response = await page.evaluate(
+    ({ operation, params }) => window.kosmosApp.ark.request(operation, params),
+    { operation, params },
   );
+  // SAFETY: Electron IPC bridge serializes its response as JSON; parseEngineResult validates the envelope.
+  return parseEngineResult(response as JsonValue);
+};
+
+const createSession = (page: Page, projectId: string, prompt: string) =>
+  requestSessionApi(page, "agents.sessions.create", {
+    project_id: projectId,
+    prompt,
+    mode: "default",
+  });
+
+export const createAndSend = async (
+  page: Page,
+  projectId: string,
+  prompt: string,
+  text: string,
+) => {
+  await waitForEngineSessionApi(page);
+  const created = await createSession(page, projectId, prompt);
+  // SAFETY: the id is validated as a String before it is used below.
+  const sessionId =
+    created?.ok && isJsonRecord(created.data) && isJsonString(created.data.id)
+      ? created.data.id
+      : undefined;
+  if (!created?.ok || !sessionId)
+    throw new Error(`session create failed: ${JSON.stringify(created)}`);
+  const sent = await page.evaluate(
+    ({ sessionId, text }) =>
+      window.kosmosApp.ark.request("agents.sessions.send", { session_id: sessionId, text }),
+    { sessionId, text },
+  );
+  return { created, sent, sessionId };
+};
 
 const getSession = async (page: Page, sessionId: string): Promise<Session | null> =>
   page.evaluate(async (sessionId) => {

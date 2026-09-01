@@ -136,7 +136,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: makekosmos/arcadia
-          ref: 2689da940071ed5068226a19b28a09490b059dae
+          ref: 1fcd46274bfd1c9dbfcf1dc40978b1c9e8d09520
           path: _first-party/arcadia
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
           persist-credentials: false

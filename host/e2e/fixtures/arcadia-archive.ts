@@ -6,6 +6,7 @@ import { isDeepStrictEqual } from "node:util";
 
 const DIGEST = "a05ae74be8c7bafa86f4ef91d11445ec7e256b9bd27ececd35996b4f5f83be6c";
 const SOURCE_COMMIT = "2689da940071ed5068226a19b28a09490b059dae";
+const ARCHIVE_COMMIT = "1fcd46274bfd1c9dbfcf1dc40978b1c9e8d09520";
 const IMAGO_COMMIT = "b1852cab9f8f08ae0b236b7759138d3117f720b8";
 const ARCA_SDK_COMMIT = "21c2f5e157944e3444d3c0604da5a0e041116077";
 export const ARCADIA_EFFECTIVE_GRANTS = [
@@ -82,14 +83,16 @@ const isUnsafeEntry = (entry: string) => {
 export function arcadiaArchive(root: string, repositoryRoot: string) {
   // Reviewed source: Arcadia commit 2689da940071ed5068226a19b28a09490b059dae.
   const sourceRoot = path.join(repositoryRoot, "arcadia");
-  const archivePath = "release/arcadia-0.1.11.kspkg";
+  const archivePath = "tests/arcadia-0.1.11.kspkg";
   const checkout = execFileSync("git", ["rev-parse", "HEAD"], {
     cwd: sourceRoot,
     encoding: "utf8",
     stdio: "pipe",
   }).trim();
-  if (checkout !== SOURCE_COMMIT)
-    throw new Error(`Arcadia checkout ${checkout} does not match reviewed commit ${SOURCE_COMMIT}`);
+  if (checkout !== ARCHIVE_COMMIT)
+    throw new Error(
+      `Arcadia checkout ${checkout} does not match reviewed archive ${ARCHIVE_COMMIT}`,
+    );
   for (const [name, commit] of [
     ["imago", IMAGO_COMMIT],
     ["arca-sdk", ARCA_SDK_COMMIT],
