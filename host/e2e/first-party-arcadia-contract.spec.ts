@@ -227,9 +227,11 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
     const initialHostPid = host?.process().pid;
     await closeHost(host, pids);
     host = undefined;
-    if (engine?.pid) for (const pid of processTreePids(engine.pid)) pids.add(pid);
+    const enginePid = engine?.pid;
+    if (!enginePid) throw new Error("initial Engine PID is unavailable");
+    for (const pid of processTreePids(enginePid)) pids.add(pid);
     const crashed = await crashProcessTree(engine, "initial Engine crash injection");
-    expect(crashed.size).toBeGreaterThan(1);
+    expect(crashed).toContain(enginePid);
     for (const pid of crashed) pids.add(pid);
     // Windows can reuse numeric PIDs; these processes have been reaped before the restart.
     pids.clear();

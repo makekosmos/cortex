@@ -107,7 +107,8 @@ export const startEngine = async (
   });
   if (child.pid) {
     const createdAt = processCreatedAt(child.pid);
-    if (createdAt) trackedPidCreatedAt.set(child.pid, createdAt);
+    if (!createdAt) throw new Error(`Engine PID ${child.pid} identity is unavailable`);
+    trackedPidCreatedAt.set(child.pid, createdAt);
   }
   try {
     const lock = await waitFor(() => {
@@ -121,7 +122,8 @@ export const startEngine = async (
     }, "Engine lock");
     return { child, lock };
   } catch (error) {
-    if (child.pid && isPidAlive(child.pid)) await forceStop(child.pid, "failed Engine startup");
+    if (child.pid)
+      await forceStop(child.pid, "failed Engine startup", trackedPidCreatedAt.get(child.pid));
     throw error;
   }
 };
@@ -186,7 +188,7 @@ const processCreatedAt = (pid: number): string | undefined => {
 };
 
 const isSameProcess = (pid: number, createdAt?: string): boolean =>
-  isPidAlive(pid) && (createdAt === undefined || processCreatedAt(pid) === createdAt);
+  createdAt !== undefined && isPidAlive(pid) && processCreatedAt(pid) === createdAt;
 
 export const processTreePids = (rootPid: number): Set<number> => {
   const output = execFileSync(
@@ -206,6 +208,14 @@ export const processTreePids = (rootPid: number): Set<number> => {
         | Array<{ ProcessId: number; ParentProcessId: number; CreationDate?: string }>)
     : [];
   const processes = Array.isArray(parsed) ? parsed : [parsed];
+  const rootCreatedAt = trackedPidCreatedAt.get(rootPid);
+  if (
+    rootCreatedAt &&
+    !processes.some(
+      (process) => process.ProcessId === rootPid && process.CreationDate === rootCreatedAt,
+    )
+  )
+    return new Set([rootPid]);
   const result = new Set([rootPid]);
   let changed = true;
   while (changed) {
@@ -251,14 +261,20 @@ export const crashProcessTree = async (
   label: string,
 ): Promise<Set<number>> => {
   const pid = child?.pid;
-  if (!pid || !isPidAlive(pid)) throw new Error(`${label} is not running`);
+  const createdAt = pid ? trackedPidCreatedAt.get(pid) : undefined;
+  if (!pid || !createdAt || !isSameProcess(pid, createdAt))
+    throw new Error(`${label} is not running`);
   const pids = processTreePids(pid);
   const alivePids = new Set([...pids].filter(isPidAlive));
-  await forceStop(pid, label);
+  await forceStop(pid, label, createdAt);
   for (const processId of processTreePids(pid)) pids.add(processId);
+  for (const processId of pids) {
+    const descendantCreatedAt = trackedPidCreatedAt.get(processId);
+    if (isSameProcess(processId, descendantCreatedAt))
+      await forceStop(processId, `${label} descendant`, descendantCreatedAt);
+  }
   for (const processId of pids)
-    if (isPidAlive(processId)) await forceStop(processId, `${label} descendant`);
-  for (const processId of pids) await waitForPidGone(processId, `${label} descendant`);
+    await waitForPidGone(processId, `${label} descendant`, trackedPidCreatedAt.get(processId));
   return alivePids;
 };
 
@@ -270,8 +286,10 @@ export const terminate = async (
 ): Promise<void> => {
   const pid = child?.pid;
   if (!pid) return;
+  const createdAt = trackedPidCreatedAt.get(pid);
+  if (!createdAt) throw new Error(`${label} PID ${pid} identity is unavailable`);
   const pids = processTreePids(pid);
-  if (isPidAlive(pid)) {
+  if (isSameProcess(pid, createdAt)) {
     console.log(
       `[host-e2e] teardown ${label}: pid=${pid} lock=${path.join(dataDir, "engine.lock.json")}`,
     );
@@ -287,11 +305,15 @@ export const terminate = async (
       });
     } catch {}
     for (const processId of processTreePids(pid)) pids.add(processId);
-    if (isPidAlive(pid)) await forceStop(pid, label);
+    if (isSameProcess(pid, createdAt)) await forceStop(pid, label, createdAt);
+  }
+  for (const processId of pids) {
+    const descendantCreatedAt = trackedPidCreatedAt.get(processId);
+    if (isSameProcess(processId, descendantCreatedAt))
+      await forceStop(processId, `${label} descendant`, descendantCreatedAt);
   }
   for (const processId of pids)
-    if (isPidAlive(processId)) await forceStop(processId, `${label} descendant`);
-  for (const processId of pids) await waitForPidGone(processId, `${label} descendant`);
+    await waitForPidGone(processId, `${label} descendant`, trackedPidCreatedAt.get(processId));
 };
 
 export const closeHost = async (
@@ -310,10 +332,11 @@ export const closeHost = async (
     closePromise.then(() => true),
     new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5_000)),
   ]));
-  for (const processId of processTreePids(pid)) {
-    pids.add(processId);
-    trackedPids.add(processId);
-  }
+  if (isSameProcess(pid, createdAt))
+    for (const processId of processTreePids(pid)) {
+      pids.add(processId);
+      trackedPids.add(processId);
+    }
   try {
     if (isSameProcess(pid, createdAt)) await forceStop(pid, "Host", createdAt);
     for (const processId of pids) {

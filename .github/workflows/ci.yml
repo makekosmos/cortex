@@ -16,29 +16,25 @@ jobs:
   actionlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: raven-actions/actionlint@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2
 
   portable:
     runs-on: ubuntu-latest
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cargo/registry
           key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: cargo-${{ runner.os }}-
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.14
-      - name: Configure private Core dependency access
-        env:
-          KOSMOS_READ_TOKEN: ${{ secrets.KOSMOS_READ_TOKEN }}
-        run: git config --global url."https://x-access-token:${KOSMOS_READ_TOKEN}@github.com/makekosmos/core.git".insteadOf "https://github.com/makekosmos/core.git"
       - run: bun run check:layout
       - run: bun install --frozen-lockfile
         env:
@@ -57,19 +53,21 @@ jobs:
         env:
           FORMAT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
       - name: Checkout shared ARK SDK
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: makekosmos/arca-sdk
           path: _shared/arca-sdk
           fetch-depth: 1
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
+          persist-credentials: false
       - name: Checkout shared visuals
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: makekosmos/imago
           path: _shared/imago
           fetch-depth: 1
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
+          persist-credentials: false
       - name: Link shared workspaces
         run: |
           ln -s "$GITHUB_WORKSPACE/_shared/arca-sdk" "$GITHUB_WORKSPACE/../arca-sdk"
@@ -77,91 +75,107 @@ jobs:
       - run: bun install --cwd _shared/imago --frozen-lockfile
       - run: bun run typecheck
       - run: bun run rustfmt
-      - run: bun run clippy
-      - run: bun run test
-      - run: bun run test:rust
+      - name: Run Rust checks with private Core access
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.KOSMOS_READ_TOKEN }}@github.com/makekosmos/core.git.insteadOf
+          GIT_CONFIG_VALUE_0: https://github.com/makekosmos/core.git
+        run: |
+          bun run clippy
+          bun run test
+          bun run test:rust
       - run: bun test host/electron/host-api-reconnect.test.ts
 
   windows-runtime:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Configure private Core dependency access
-        shell: pwsh
-        env:
-          KOSMOS_READ_TOKEN: ${{ secrets.KOSMOS_READ_TOKEN }}
-        run: git config --global url."https://x-access-token:$env:KOSMOS_READ_TOKEN@github.com/makekosmos/core.git".insteadOf "https://github.com/makekosmos/core.git"
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bun install --cwd desktop --frozen-lockfile
-      - run: cargo build --locked -p kepler-watcher -p kepler-focus-helper -p kepler-focus-svc --bins
-      - run: cargo test --locked -p kepler-focus-helper -p kepler-focus-svc --lib
-      - run: node desktop/scripts/ark-core-rpc.mjs --debug --target-dir target/debug
-      - run: cargo test --locked --package kepler-backend --test package_worker_windows --features package-worker-fixture
-      - run: cargo clippy --locked --package kepler-backend --all-targets --features package-worker-fixture -- -D warnings
-      - run: bun run --cwd desktop test:runtime-staging
+      - name: Run Windows runtime checks with private Core access
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.KOSMOS_READ_TOKEN }}@github.com/makekosmos/core.git.insteadOf
+          GIT_CONFIG_VALUE_0: https://github.com/makekosmos/core.git
+        run: |
+          cargo build --locked -p kepler-watcher -p kepler-focus-helper -p kepler-focus-svc --bins
+          cargo test --locked -p kepler-focus-helper -p kepler-focus-svc --lib
+          node desktop/scripts/ark-core-rpc.mjs --debug --target-dir target/debug
+          cargo test --locked --package kepler-backend --test package_worker_windows --features package-worker-fixture
+          cargo clippy --locked --package kepler-backend --all-targets --features package-worker-fixture -- -D warnings
+          bun run --cwd desktop test:runtime-staging
 
   first-party-contracts:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.14
       - name: Checkout first-party package revisions
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: makekosmos/agenda
           ref: a0d5f5296f2cdc7930f7c575f65ede04eda37b12
           path: _first-party/agenda
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
-      - uses: actions/checkout@v4
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: makekosmos/arcadia
           ref: 2689da940071ed5068226a19b28a09490b059dae
           path: _first-party/arcadia
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
-      - uses: actions/checkout@v4
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: makekosmos/imago
           ref: b1852cab9f8f08ae0b236b7759138d3117f720b8
           path: _first-party/imago
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
-      - uses: actions/checkout@v4
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: makekosmos/arca-sdk
           ref: 21c2f5e157944e3444d3c0604da5a0e041116077
           path: _first-party/arca-sdk
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
-      - uses: actions/checkout@v4
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: makekosmos/daedalus
           ref: 7c1f40878276d2d6a81dc847efabc41ec8f757b2
           path: _first-party/daedalus
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
-      - uses: actions/checkout@v4
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: makekosmos/dictation
           ref: 57aae83d4bc80c5d0342a6b92072c59840d54dd4
           path: _first-party/dictation
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
-      - uses: actions/checkout@v4
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: makekosmos/memoria
           ref: 32cb4cafe3a8362a4d1539d0e75c6364797da914
           path: _first-party/memoria
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
-      - uses: actions/checkout@v4
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: makekosmos/ordo
           ref: 20790f6ba3f64a24e9ed5162d48f53e409b4e884
           path: _first-party/ordo
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
+          persist-credentials: false
       - name: Link first-party package workspaces
         shell: pwsh
         run: |
@@ -176,6 +190,13 @@ jobs:
       - run: bun install --cwd host --frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Fetch private Core before third-party package builds
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.KOSMOS_READ_TOKEN }}@github.com/makekosmos/core.git.insteadOf
+          GIT_CONFIG_VALUE_0: https://github.com/makekosmos/core.git
+        run: cargo fetch --locked
       - run: bun install --cwd _first-party/imago --frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -196,4 +217,6 @@ jobs:
       - run: bun run --cwd _first-party/daedalus package:kspkg
       - run: bun run --cwd _first-party/ordo package:kspkg
       - name: Run first-party package contracts
+        env:
+          CARGO_NET_OFFLINE: "true"
         run: bun run test:first-party-contracts

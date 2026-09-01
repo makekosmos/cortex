@@ -47,14 +47,18 @@ const ownedPids = (root) => {
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${literal}') } | Select-Object -ExpandProperty ProcessId | ConvertTo-Json -Compress`,
+      `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${literal}') } | Select-Object ProcessId,CreationDate | ConvertTo-Json -Compress`,
     ],
     { encoding: "utf8", windowsHide: true },
   ).trim();
   if (!output) return [];
   const parsed = JSON.parse(output);
   return (Array.isArray(parsed) ? parsed : [parsed]).filter(
-    (pid) => Number.isInteger(pid) && pid > 0 && pid !== process.pid,
+    (entry) =>
+      Number.isInteger(entry.ProcessId) &&
+      entry.ProcessId > 0 &&
+      entry.ProcessId !== process.pid &&
+      isString(entry.CreationDate),
   );
 };
 const processCreatedAt = (pid) => {
@@ -81,7 +85,8 @@ try {
       !path.basename(resolved).startsWith("kosmos-host-e2e-")
     )
       throw new Error(`unsafe cleanup root: ${root}`);
-    for (const pid of ownedPids(resolved)) {
+    for (const { ProcessId: pid, CreationDate: createdAt } of ownedPids(resolved)) {
+      if (processCreatedAt(pid) !== createdAt) continue;
       try {
         execFileSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
           stdio: "ignore",
