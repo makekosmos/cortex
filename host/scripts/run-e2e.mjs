@@ -57,6 +57,19 @@ const ownedPids = (root) => {
     (pid) => Number.isInteger(pid) && pid > 0 && pid !== process.pid,
   );
 };
+const processCreatedAt = (pid) => {
+  const output = execFileSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      `Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}' | Select-Object -ExpandProperty CreationDate`,
+    ],
+    { encoding: "utf8", windowsHide: true },
+  ).trim();
+  return output || undefined;
+};
 try {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   if (!Array.isArray(manifest.roots) || !Array.isArray(manifest.pids))
@@ -69,7 +82,6 @@ try {
     )
       throw new Error(`unsafe cleanup root: ${root}`);
     for (const pid of ownedPids(resolved)) {
-      manifest.pids.push(pid);
       try {
         execFileSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
           stdio: "ignore",
@@ -81,8 +93,11 @@ try {
     if (fs.existsSync(resolved)) throw new Error(`cleanup root remains: ${resolved}`);
     console.log(`[host-e2e] cleaned ${resolved}`);
   }
-  for (const pid of manifest.pids) {
+  for (const entry of manifest.pids) {
+    const pid = Number.isInteger(entry) ? entry : entry?.pid;
+    const createdAt = Number.isInteger(entry) ? undefined : entry?.createdAt;
     if (!Number.isInteger(pid) || pid <= 0) throw new Error(`invalid cleanup PID: ${pid}`);
+    if (createdAt && processCreatedAt(pid) !== createdAt) continue;
     try {
       process.kill(pid, 0);
       throw new Error(`cleanup PID remains alive: ${pid}`);

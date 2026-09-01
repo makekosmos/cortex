@@ -43,8 +43,23 @@ export async function cleanupArcadiaE2e(options: {
     errors.push(error);
   }
   try {
-    fs.rmSync(root, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
-    if (fs.existsSync(root)) throw new Error(`Arcadia E2E cleanup root remains: ${root}`);
+    const deadline = Date.now() + 30_000;
+    while (true) {
+      try {
+        await fs.promises.rm(root, {
+          recursive: true,
+          force: true,
+          maxRetries: 50,
+          retryDelay: 100,
+        });
+      } catch (error) {
+        if (Date.now() >= deadline) throw error;
+      }
+      if (!fs.existsSync(root)) break;
+      if (Date.now() >= deadline) throw new Error(`Arcadia E2E cleanup root remains: ${root}`);
+      // ponytail: bounded retry for Windows handle races; replace with ownership tracking if this persists.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   } catch (error) {
     errors.push(error);
   }

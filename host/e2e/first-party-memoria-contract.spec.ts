@@ -208,6 +208,8 @@ test("signed Memoria rolls back a partial import, runs CRUD, and survives Engine
     const crashed = await crashProcessTree(engine, "Memoria Engine crash injection");
     expect(crashed.size).toBeGreaterThan(1);
     for (const pid of crashed) pids.add(pid);
+    // Windows can reuse numeric PIDs; these processes have been reaped before the restart.
+    pids.clear();
     engine = undefined;
 
     const restarted = await startEngine(binaries.engine, binaries.ark, dataDir);
