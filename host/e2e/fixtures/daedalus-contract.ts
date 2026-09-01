@@ -77,7 +77,7 @@ const createSession = (page: Page, projectId: string, prompt: string) =>
   });
 
 const recoverTimedOutSession = async (page: Page, projectId: string, prompt: string) => {
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     const listed = await requestSessionApi(page, "agents.sessions.list", {
       include_archived: true,
@@ -90,8 +90,11 @@ const recoverTimedOutSession = async (page: Page, projectId: string, prompt: str
         value.prompt === prompt &&
         isJsonString(value.id),
     );
-    if (session && session.status !== "starting") {
+    if (session?.status === "running") {
       return { ok: true as const, data: session };
+    }
+    if (session && ["failed", "archived"].includes(session.status ?? "")) {
+      throw new Error(`recovered session is not usable: ${session.status}`);
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
