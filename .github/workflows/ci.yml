@@ -68,6 +68,7 @@ jobs:
         run: |
           ln -s "$GITHUB_WORKSPACE/_shared/arca-sdk" "$GITHUB_WORKSPACE/../arca-sdk"
           ln -s "$GITHUB_WORKSPACE/_shared/imago" "$GITHUB_WORKSPACE/../imago"
+      - run: bun install --cwd _shared/imago --frozen-lockfile
       - run: bun run typecheck
       - run: bun run rustfmt
       - run: bun run clippy
