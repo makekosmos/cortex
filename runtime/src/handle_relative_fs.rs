@@ -770,8 +770,10 @@ fn parse_directory_record(
     let name_bytes = &p[HEADER..name_end];
     let name = String::from_utf16(
         name_bytes
-            .chunks_exact(2)
-            .map(|pair| u16::from_ne_bytes([pair[0], pair[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| u16::from_ne_bytes(*pair))
             .collect::<Vec<_>>()
             .as_slice(),
     )

@@ -86,7 +86,7 @@ use calls_spawn::*;
 use io::*;
 #[cfg(windows)]
 use launch_prepare::*;
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 use lifecycle_finish::*;
 use lifecycle_watch::*;
 use registry::*;
