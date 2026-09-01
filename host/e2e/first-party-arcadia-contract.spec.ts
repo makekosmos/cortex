@@ -20,7 +20,6 @@ import {
   rpc,
   startEngine,
 } from "./fixtures/host-runtime";
-
 const hostRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceRoot = path.resolve(hostRoot, "..", "..");
 const hostMain = path.join(hostRoot, "dist-electron", "main.js");
@@ -78,7 +77,7 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
     );
     const version = apps.versions["com.kosmos.arcadia"];
     const archive = apps.archives["com.kosmos.arcadia"];
-    expect(version).toBe("0.1.9");
+    expect(version).toBe("0.1.11");
     expect(archive).toBeTruthy();
     const catalog: {
       packages: Array<{ manifest: { id: string; version: string }; sha256: string }>;
@@ -86,8 +85,8 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
     expect(catalog.packages).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          manifest: expect.objectContaining({ id: "com.kosmos.arcadia", version: "0.1.9" }),
-          sha256: "a8b6454bb48518122609fa80f3378fd37fd219160fee525b823f5e624da58332",
+          manifest: expect.objectContaining({ id: "com.kosmos.arcadia", version: "0.1.11" }),
+          sha256: "c2b820511c97caf26696cbeb5db15f31c98617fac7cadc976162b5357f0f9f5c",
         }),
       ]),
     );
@@ -177,6 +176,7 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
         read: id
           ? await window.kosmosApp.ark!.request("games.read", { id })
           : { ok: false, message: "missing-game-id" },
+        launch: await window.kosmosApp.ark!.request("games.launch", { game_id: id ?? "" }),
         undeclaredType: await window.kosmosApp.ark!.request("upsert_object_type", {
           object_type: { id: "arcadia-host-e2e-undeclared", name: "Denied" },
         }),
@@ -214,6 +214,7 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
         local: expect.objectContaining({ exePath: fakeExe }),
       },
     });
+    expect(first.launch).toEqual({ ok: false, message: "Engine отклонил операцию: unavailable." });
     expect(first.undeclaredType).toEqual({
       ok: false,
       message: "Engine отклонил операцию: invalid-request.",
@@ -256,7 +257,6 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
       })
       .toBe("running");
     if (restartedEngine.pid) for (const pid of processTreePids(restartedEngine.pid)) pids.add(pid);
-
     const restartedPage = await openHost();
     expect(host?.process().pid).not.toBe(initialHostPid);
     expect(await restartedPage.evaluate(() => window.kosmosApp.identity)).toMatchObject({

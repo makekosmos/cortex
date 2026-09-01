@@ -32,6 +32,14 @@ impl PackageWorkerSupervisor {
                     .map(|root| root.to_string_lossy().into_owned())
                     .collect();
             }
+            if permission.capability == "process.spawn" && permission.scopes.is_empty() {
+                // Empty is a request for the host's pre-approved application roots,
+                // never an unrestricted process-spawn grant.
+                permission.scopes = roots
+                    .iter()
+                    .map(|root| root.to_string_lossy().into_owned())
+                    .collect();
+            }
         }
         let mut allowed_roots = roots.to_vec();
         allowed_roots.extend(private_roots);
