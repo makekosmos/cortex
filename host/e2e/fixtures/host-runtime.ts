@@ -121,7 +121,8 @@ export const rpc = async (
   operation: string,
   params: Record<string, JsonValue> = {},
 ) => {
-  console.log(`[host-e2e] rpc start operation=${operation}`);
+  const requestId = randomUUID();
+  console.log(`[host-e2e] rpc start request_id=${requestId} operation=${operation}`);
   const response = await fetch(`http://127.0.0.1:${lock.http_port}/v1/rpc`, {
     method: "POST",
     headers: {
@@ -133,13 +134,13 @@ export const rpc = async (
       "X-Kosmos-Client-Version": "1.0.0",
       "X-Kosmos-Client-Pid": String(process.pid),
     },
-    body: JSON.stringify({ operation, _req_id: randomUUID(), ...params }),
+    body: JSON.stringify({ operation, _req_id: requestId, ...params }),
     signal: AbortSignal.timeout(20_000),
   });
   // SAFETY: the test Engine endpoint returns the documented JSON RPC envelope.
   const result = (await response.json()) as { ok: boolean; data?: JsonValue; error?: JsonValue };
   console.log(
-    `[host-e2e] rpc result operation=${operation} ok=${result.ok} error=${rpcError(result)}`,
+    `[host-e2e] rpc result request_id=${requestId} operation=${operation} ok=${result.ok}`,
   );
   return result;
 };
