@@ -4,11 +4,12 @@
 
 use crate::package_manifest::{IntegrationRequestMethod, SecretInjection};
 
+#[cfg(windows)]
+use std::io::Read;
 use std::{
     collections::{HashMap, HashSet},
     fs::{self, File, OpenOptions},
     io,
-    io::Read,
     net::{IpAddr, SocketAddr},
     path::{Path, PathBuf},
     sync::{
@@ -861,7 +862,7 @@ fn open_parent_dir(
 fn validate_open_file(
     config: &BrokerConfig,
     _requested: &Path,
-    file: &File,
+    _file: &File,
     metadata: &fs::Metadata,
 ) -> Result<(), BrokerError> {
     if is_reparse_point(metadata) {
@@ -871,7 +872,7 @@ fn validate_open_file(
     }
     #[cfg(windows)]
     {
-        let actual = final_path_by_handle(file)?;
+        let actual = final_path_by_handle(_file)?;
         if !is_under_configured_root(config, &actual) {
             return Err(BrokerError::Invalid("path escapes configured roots".into()));
         }
@@ -964,7 +965,7 @@ fn canonical_under_root(config: &BrokerConfig, path: &Path) -> Result<PathBuf, B
 }
 fn create_temp_file(
     parent: &Path,
-    parent_handle: Option<&File>,
+    _parent_handle: Option<&File>,
 ) -> Result<(PathBuf, File), BrokerError> {
     for _ in 0..MAX_TEMPFILE_ATTEMPTS {
         let suffix = TEMPFILE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
@@ -973,7 +974,7 @@ fn create_temp_file(
         #[cfg(windows)]
         let result = {
             let parent_handle =
-                parent_handle.ok_or_else(|| io::Error::other("missing parent handle"))?;
+                _parent_handle.ok_or_else(|| io::Error::other("missing parent handle"))?;
             create_relative_temp_file(parent_handle, std::ffi::OsStr::new(&name))
                 .map(|file| (path.clone(), file))
         };

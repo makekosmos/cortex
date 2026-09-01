@@ -1,8 +1,11 @@
 use std::fs::{self, OpenOptions};
-use std::io::{self, Cursor, Read, Write};
+#[cfg(windows)]
+use std::io::Cursor;
+use std::io::{self, Read, Write};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
+#[cfg(windows)]
 use std::process::Command;
 use std::time::Duration;
 

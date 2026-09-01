@@ -98,6 +98,7 @@ jobs:
       - run: bun install --cwd desktop --frozen-lockfile
       - run: cargo build --locked -p kepler-watcher -p kepler-focus-helper -p kepler-focus-svc --bins
       - run: cargo test --locked -p kepler-focus-helper -p kepler-focus-svc --lib
+      - run: node desktop/scripts/ark-core-rpc.mjs --debug --target-dir target/debug
       - run: cargo test --locked --package kepler-backend --test package_worker_windows --features package-worker-fixture
       - run: cargo clippy --locked --package kepler-backend --all-targets --features package-worker-fixture -- -D warnings
       - run: bun run --cwd desktop test:runtime-staging

@@ -120,7 +120,7 @@ impl PackageService {
     pub fn engine_snapshot_identity(
         &self,
         package_id: &str,
-        source: &str,
+        _source: &str,
     ) -> Result<(String, u64, u64), PackageError> {
         let package = self
             .store
@@ -148,7 +148,7 @@ impl PackageService {
         }
         #[cfg(not(unix))]
         {
-            let _ = (source, metadata);
+            let _ = (_source, metadata);
             Err(PackageError::Invalid)
         }
     }
