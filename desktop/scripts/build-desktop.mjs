@@ -218,7 +218,7 @@ async function main() {
   const version = getVersion(platform);
   ensureCleanSource();
   const bom = await loadReleaseBom(bomPath, {
-    root: SHELL_ROOT,
+    root: path.resolve(SHELL_ROOT, ".."),
     platform,
     currentCommit: currentCommit(),
   });
