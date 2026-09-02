@@ -83,9 +83,9 @@ test("migrates dev settings into the data directory used by settings-store", () 
   }
 });
 
-test("uses CosCast for user-facing instance names while preserving slot labels", () => {
-  expect(productNameForSlot("prod", "prod")).toBe("CosCast");
-  expect(productNameForSlot("dev", "dev")).toBe("CosCast [dev]");
-  expect(productNameForSlot("test-example", "test")).toBe("CosCast [test]");
-  expect(productNameForSlot("dev-review", "dev")).toBe("CosCast [dev-review]");
+test("uses Kosmos for user-facing instance names while preserving slot labels", () => {
+  expect(productNameForSlot("prod", "prod")).toBe("Kosmos");
+  expect(productNameForSlot("dev", "dev")).toBe("Kosmos [dev]");
+  expect(productNameForSlot("test-example", "test")).toBe("Kosmos [test]");
+  expect(productNameForSlot("dev-review", "dev")).toBe("Kosmos [dev-review]");
 });

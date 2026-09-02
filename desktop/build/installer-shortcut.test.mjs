@@ -10,11 +10,12 @@ const electronMain = readFileSync(
   path.join(buildDir, "..", "electron", "main-launcher.ts"),
   "utf8",
 );
-const shell = "$INSTDIR\\CosCast.exe";
+const shell = "$INSTDIR\\Kosmos.exe";
 
-test("CosCast shortcuts open the packaged Shell", () => {
-  expect(installer).toContain(`CreateShortCut "$SMPROGRAMS\\CosCast.lnk" "${shell}"`);
-  expect(installer).toContain(`CreateShortCut "$DESKTOP\\CosCast.lnk" "${shell}"`);
+test("Kosmos shortcuts open the packaged Shell", () => {
+  expect(installer).toContain('Delete "$SMPROGRAMS\\CosCast.lnk"');
+  expect(installer).toContain(`CreateShortCut "$SMPROGRAMS\\Kosmos.lnk" "${shell}"`);
+  expect(installer).toContain(`CreateShortCut "$DESKTOP\\Kosmos.lnk" "${shell}"`);
 });
 
 test("rename keeps the legacy app identity and shell IPC namespace", () => {

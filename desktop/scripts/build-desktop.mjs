@@ -185,7 +185,7 @@ function publishRelease(platform, version, files) {
       "--repo",
       repository,
       "--title",
-      `CosCast ${version}`,
+      `Kosmos ${version}`,
       "--notes",
       "Immutable release assembled from the attached release BOM.",
     ],
