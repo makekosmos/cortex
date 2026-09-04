@@ -608,13 +608,17 @@ try {
   if (dictationNativeNegative) {
     const missingModelPath = path.join(root, "missing-dictation-model.bin");
     const missingCommandPath = path.join(root, "missing-dictation-runtime.exe");
+    const availableModelPath = path.join(root, "available-dictation-model.bin");
+    const availableCommandPath = path.join(root, "available-dictation-runtime.exe");
+    fs.writeFileSync(availableModelPath, "candidate smoke model placeholder");
+    fs.writeFileSync(availableCommandPath, "candidate smoke command placeholder");
     const configured = await rpc("dictation.update_config", {
       provider: "local",
       providerEnabled: true,
       localEngine: "whisper.cpp",
       localModelId: "packaged-negative-missing-model",
       localModelPath: missingModelPath,
-      localCommandPath: missingCommandPath,
+      localCommandPath: availableCommandPath,
       injectMode: "clipboard_only",
     });
     expect(
@@ -668,6 +672,44 @@ try {
         stateAfterDiscard.data?.state === "idle" &&
         stateAfterDiscard.data?.activeUuid == null,
       "pending Dictation cleanup did not return Runtime to idle",
+    );
+    const missingCommandConfigured = await rpc("dictation.update_config", {
+      provider: "local",
+      providerEnabled: true,
+      localEngine: "whisper.cpp",
+      localModelId: "packaged-negative-missing-command",
+      localModelPath: availableModelPath,
+      localCommandPath: missingCommandPath,
+      injectMode: "clipboard_only",
+    });
+    expect(
+      missingCommandConfigured.ok &&
+        missingCommandConfigured.data?.config?.provider === "local" &&
+        missingCommandConfigured.data?.config?.providerEnabled === false &&
+        missingCommandConfigured.data?.config?.localModel == null,
+      "missing local Dictation command was not cleared fail-closed",
+    );
+    const commandNegativeStarted = await rpc("dictation.start_recording");
+    expect(
+      commandNegativeStarted.ok && commandNegativeStarted.data?.state === "recording",
+      "missing-command Dictation recording did not start",
+    );
+    const commandNegativeSubmitted = await rpc("dictation.submit_audio", {
+      audioB64: "ZmFrZS1wYWNrYWdlZC1kaWN0YXRpb24tY29tbWFuZA==",
+      durationSec: 1,
+    });
+    expect(
+      commandNegativeSubmitted.ok &&
+        commandNegativeSubmitted.data?.state === "error" &&
+        String(commandNegativeSubmitted.data?.error ?? "").includes("Локальная модель"),
+      `missing Dictation command did not fail closed: ${JSON.stringify(commandNegativeSubmitted)}`,
+    );
+    const commandDiscarded = await rpc("dictation.discard", {
+      uuid: commandNegativeSubmitted.data.uuid,
+    });
+    expect(
+      commandDiscarded.ok && commandDiscarded.data?.discarded === true,
+      "missing-command Dictation cleanup failed",
     );
   }
   summary = {
