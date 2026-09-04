@@ -7,7 +7,10 @@ import path from "node:path";
 import { createServer } from "node:net";
 
 const normalMode = process.argv.includes("--normal");
-const candidateArg = process.argv.slice(2).find((arg) => arg !== "--normal");
+const dictationNativeNegative = process.argv.includes("--dictation-native-negative");
+const candidateArg = process.argv
+  .slice(2)
+  .find((arg) => !["--normal", "--dictation-native-negative"].includes(arg));
 if (normalMode && !candidateArg) throw new Error("--normal requires an installed root path");
 const candidate = path.resolve(candidateArg ?? "release/win-unpacked");
 const resources = path.join(candidate, "resources");
@@ -602,6 +605,71 @@ try {
     10_000,
   );
   expect(idle.data.state === "idle", "Runtime dictation did not return to idle");
+  if (dictationNativeNegative) {
+    const missingModelPath = path.join(root, "missing-dictation-model.bin");
+    const missingCommandPath = path.join(root, "missing-dictation-runtime.exe");
+    const configured = await rpc("dictation.update_config", {
+      provider: "local",
+      providerEnabled: true,
+      localEngine: "whisper.cpp",
+      localModelId: "packaged-negative-missing-model",
+      localModelPath: missingModelPath,
+      localCommandPath: missingCommandPath,
+      injectMode: "clipboard_only",
+    });
+    expect(
+      configured.ok &&
+        configured.data?.config?.provider === "local" &&
+        configured.data?.config?.providerEnabled === false &&
+        configured.data?.config?.localModel == null,
+      "missing local Dictation assets were not cleared fail-closed",
+    );
+    const negativeStarted = await rpc("dictation.start_recording");
+    expect(
+      negativeStarted.ok && negativeStarted.data?.state === "recording",
+      "native-negative Dictation recording did not start",
+    );
+    const negativeSubmitted = await rpc("dictation.submit_audio", {
+      audioB64: "ZmFrZS1wYWNrYWdlZC1kaWN0YXRpb24tYXVkaW8=",
+      durationSec: 1,
+    });
+    expect(
+      negativeSubmitted.ok &&
+        negativeSubmitted.data?.state === "error" &&
+        String(negativeSubmitted.data?.error ?? "").includes("Локальная модель"),
+      `missing local Dictation assets did not fail closed: ${JSON.stringify(negativeSubmitted)}`,
+    );
+    const negativeState = await rpc("dictation.get_state");
+    expect(
+      negativeState.ok &&
+        negativeState.data?.state === "error" &&
+        negativeState.data?.activeUuid === negativeSubmitted.data?.uuid &&
+        String(negativeState.data?.lastError ?? "").includes("Локальная модель"),
+      `native-negative Dictation error was not visible: ${JSON.stringify(negativeState)}`,
+    );
+    const pending = await rpc("dictation.list_pending");
+    const pendingItems = pending.data?.items;
+    expect(
+      pending.ok &&
+        Array.isArray(pendingItems) &&
+        pendingItems.length === 1 &&
+        pendingItems[0]?.uuid === negativeSubmitted.data?.uuid,
+      `native-negative Dictation pending item was not visible: ${JSON.stringify(pending)}`,
+    );
+    const discarded = await rpc("dictation.discard", { uuid: negativeSubmitted.data.uuid });
+    expect(discarded.ok && discarded.data?.discarded === true, "pending Dictation cleanup failed");
+    const pendingAfterDiscard = await rpc("dictation.list_pending");
+    const stateAfterDiscard = await rpc("dictation.get_state");
+    expect(
+      pendingAfterDiscard.ok &&
+        Array.isArray(pendingAfterDiscard.data?.items) &&
+        pendingAfterDiscard.data.items.length === 0 &&
+        stateAfterDiscard.ok &&
+        stateAfterDiscard.data?.state === "idle" &&
+        stateAfterDiscard.data?.activeUuid == null,
+      "pending Dictation cleanup did not return Runtime to idle",
+    );
+  }
   summary = {
     result: "pass",
     publicCatalog: "default",
@@ -609,6 +677,7 @@ try {
     catalogSequence: trust.data.catalog.sequence,
     hostWarmTimeoutSeconds: normalMode ? hostWarmTimeoutSeconds : null,
     hostWarmReuse,
+    dictationNativeNegative,
     before,
     ownedDuring: {
       runtimePid: engine.pid,
