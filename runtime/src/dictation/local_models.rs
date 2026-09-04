@@ -466,9 +466,153 @@ fn vulkan_server_path(data_dir: &Path) -> PathBuf {
 }
 
 #[cfg(windows)]
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct RuntimeIntegrityRecord {
+    version: String,
+    files: std::collections::BTreeMap<String, String>,
+}
+
+#[cfg(windows)]
+fn runtime_file_names(vulkan: bool) -> Vec<&'static str> {
+    let mut files = vec![
+        "LICENSE.whisper.cpp.txt",
+        "Release/ggml-base.dll",
+        "Release/ggml-cpu.dll",
+        "Release/ggml.dll",
+        "Release/whisper-cli.exe",
+        "Release/whisper-server.exe",
+        "Release/whisper.dll",
+    ];
+    if vulkan {
+        files.push("Release/ggml-vulkan.dll");
+    }
+    files
+}
+
+#[cfg(windows)]
+fn runtime_integrity_path(dir: &Path) -> PathBuf {
+    dir.join(".runtime-integrity.json")
+}
+
+#[cfg(windows)]
+fn runtime_transaction_path(dir: &Path) -> PathBuf {
+    dir.parent().unwrap_or_else(|| Path::new(".")).join(format!(
+        ".{}.transaction",
+        dir.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("runtime")
+    ))
+}
+
+#[cfg(windows)]
+fn sha256_file(path: &Path) -> Result<String, LocalModelsError> {
+    let mut file = fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0; 1024 * 1024];
+    loop {
+        let read = file.read(&mut buf)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buf[..read]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+#[cfg(windows)]
+fn write_runtime_integrity(dir: &Path, vulkan: bool) -> Result<(), LocalModelsError> {
+    let mut files = std::collections::BTreeMap::new();
+    for name in runtime_file_names(vulkan) {
+        let path = dir.join(name);
+        files.insert(name.to_owned(), sha256_file(&path)?);
+    }
+    let bytes = serde_json::to_vec(&RuntimeIntegrityRecord {
+        version: WHISPER_RUNTIME_VERSION.to_owned(),
+        files,
+    })
+    .map_err(|error| LocalModelsError::Download(format!("runtime integrity: {error}")))?;
+    fs::write(runtime_integrity_path(dir), bytes)?;
+    Ok(())
+}
+
+#[cfg(windows)]
 fn runtime_is_current(dir: &Path) -> bool {
-    fs::read_to_string(dir.join(".runtime-version"))
+    if !fs::read_to_string(dir.join(".runtime-version"))
         .is_ok_and(|version| version.trim() == WHISPER_RUNTIME_VERSION)
+    {
+        return false;
+    }
+    let vulkan = dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "whisper.cpp-vulkan");
+    let Ok(bytes) = fs::read(runtime_integrity_path(dir)) else {
+        return false;
+    };
+    let Ok(record) = serde_json::from_slice::<RuntimeIntegrityRecord>(&bytes) else {
+        return false;
+    };
+    if record.version != WHISPER_RUNTIME_VERSION {
+        return false;
+    }
+    let expected = runtime_file_names(vulkan);
+    record.files.len() == expected.len()
+        && expected.iter().all(|name| {
+            let path = dir.join(name);
+            path.is_file()
+                && record
+                    .files
+                    .get(*name)
+                    .is_some_and(|hash| sha256_file(&path).is_ok_and(|actual| actual == *hash))
+        })
+}
+
+#[cfg(windows)]
+fn write_runtime_transaction(dir: &Path) -> Result<(), LocalModelsError> {
+    let marker = runtime_transaction_path(dir);
+    let mut file = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(marker)?;
+    file.write_all(b"1")?;
+    file.sync_all()?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn recover_runtime_transaction(dir: &Path) -> Result<(), LocalModelsError> {
+    let marker = runtime_transaction_path(dir);
+    if !marker.is_file() {
+        return Ok(());
+    }
+    let parent = dir
+        .parent()
+        .ok_or_else(|| LocalModelsError::Download("invalid runtime path".into()))?;
+    let stem = dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| LocalModelsError::Download("invalid runtime path".into()))?;
+    let staging = parent.join(format!(".{stem}.staging"));
+    let previous = parent.join(format!(".{stem}.previous"));
+    if dir.exists() {
+        if staging.exists() {
+            fs::remove_dir_all(&staging)?;
+        }
+        if previous.exists() {
+            fs::remove_dir_all(&previous)?;
+        }
+    } else if previous.exists() {
+        if staging.exists() {
+            fs::remove_dir_all(&staging)?;
+        }
+        fs::rename(&previous, dir)?;
+    } else if staging.exists() {
+        fs::rename(&staging, dir)?;
+    }
+    let _ = fs::remove_file(marker);
+    Ok(())
 }
 
 /// `true`, если установлен Vulkan whisper-cli, но рядом нет whisper-server.exe.
@@ -992,6 +1136,8 @@ pub async fn ensure_whisper_cpp_with_progress(
     data_dir: &Path,
     progress: &mut ProgressCallback<'_>,
 ) -> Result<PathBuf, LocalModelsError> {
+    recover_runtime_transaction(&vulkan_tools_dir(data_dir))?;
+    recover_runtime_transaction(&tools_dir(data_dir))?;
     if vulkan_tools_enabled() {
         let vulkan = vulkan_command_path(data_dir);
         // Vulkan-рантайм считается установленным только если есть И whisper-cli,
@@ -1347,6 +1493,7 @@ async fn install_whisper_cpp_zip(
             staging.join(".runtime-version"),
             format!("{WHISPER_RUNTIME_VERSION}\n"),
         )?;
+        write_runtime_integrity(&staging, vulkan)?;
         let command = staging.join("Release").join("whisper-cli.exe");
         let status = Command::new(&command).arg("--version").status()?;
         if !status.success() {
@@ -1357,6 +1504,7 @@ async fn install_whisper_cpp_zip(
         if previous.exists() {
             fs::remove_dir_all(&previous)?;
         }
+        write_runtime_transaction(dir)?;
         if dir.exists() {
             fs::rename(dir, &previous)?;
         }
@@ -1366,6 +1514,7 @@ async fn install_whisper_cpp_zip(
             }
             return Err(error.into());
         }
+        fs::remove_file(runtime_transaction_path(dir))?;
         Ok(())
     })();
     if result.is_err() {
@@ -1522,6 +1671,44 @@ mod tests {
         assert!(WHISPER_CPP_VULKAN_ZIP_URL.contains("whisper-vulkan-bin-x64-v1.9.3"));
         assert_eq!(WHISPER_CPP_VULKAN_ZIP_SHA256.len(), 64);
         assert_eq!(WHISPER_CPP_VULKAN_ZIP_SIZE, 17_403_912);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn runtime_reuse_rejects_tampered_files() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let dir = tools_dir(tmp.path());
+        for name in runtime_file_names(false) {
+            touch(&dir.join(name));
+        }
+        fs::write(
+            dir.join(".runtime-version"),
+            format!("{WHISPER_RUNTIME_VERSION}\n"),
+        )
+        .expect("version");
+        write_runtime_integrity(&dir, false).expect("integrity");
+        assert!(runtime_is_current(&dir));
+        fs::write(dir.join("Release/whisper-cli.exe"), b"tampered").expect("tamper");
+        assert!(!runtime_is_current(&dir));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn interrupted_runtime_swap_recovers_previous_install() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let dir = tools_dir(tmp.path());
+        let parent = dir.parent().expect("parent");
+        let stem = dir.file_name().expect("stem").to_str().expect("stem");
+        let previous = parent.join(format!(".{stem}.previous"));
+        let staging = parent.join(format!(".{stem}.staging"));
+        fs::create_dir_all(previous.join("Release")).expect("previous");
+        fs::create_dir_all(&staging).expect("staging");
+        write_runtime_transaction(&dir).expect("transaction");
+        recover_runtime_transaction(&dir).expect("recovery");
+        assert!(dir.join("Release").is_dir());
+        assert!(!previous.exists());
+        assert!(!staging.exists());
+        assert!(!runtime_transaction_path(&dir).exists());
     }
 
     #[cfg(windows)]
