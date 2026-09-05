@@ -219,8 +219,11 @@ export async function installFromPath(sourcePath: string): Promise<KextManifestP
     return install();
   }
   return withLegacyMigrationLock(keplerDataDir(), target, async () => {
-    assertLegacyLaunchAllowed(keplerDataDir(), preview.manifest.id);
-    return install();
+    const authoritativePreview = await previewSource(sourcePath);
+    if (authoritativePreview.manifest.id !== preview.manifest.id)
+      throw new Error("extension manifest changed while waiting for migration lock");
+    assertLegacyLaunchAllowed(keplerDataDir(), authoritativePreview.manifest.id);
+    return installFromPathUnlocked(sourcePath, authoritativePreview);
   });
 }
 
