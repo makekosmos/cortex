@@ -18,6 +18,9 @@ export async function launchKeplerWithDataDir(dataDir: string): Promise<Electron
     env: {
       ...process.env,
       NODE_ENV: "test",
+      KEPLER_BACKEND_EXE:
+        process.env.KEPLER_BACKEND_EXE ??
+        path.resolve(appRoot, "../target/debug/kepler-backend.exe"),
       KOSMOS_DATA_DIR: dataDir,
       KOSMOS_TEST_MODE: "1",
       KOSMOS_HEADLESS: "1",
