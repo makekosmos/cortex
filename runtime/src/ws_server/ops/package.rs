@@ -93,6 +93,12 @@ pub(in crate::ws_server) async fn handle_package_op(
                     .map(|()| serde_json::json!({ "applied": true })),
             )
         }
+        "revoke_legacy_grants" => package_response(
+            subop,
+            service
+                .revoke_legacy_grants()
+                .map(|revoked| serde_json::json!({ "revoked": revoked })),
+        ),
         "install" => {
             let Some(id) = params
                 .get("id")
