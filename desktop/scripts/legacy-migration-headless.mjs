@@ -9,6 +9,8 @@ const dataDir = path.join(root, "data");
 const executable = process.env.KOSMOS_HEADLESS_BACKEND
   ? path.resolve(process.env.KOSMOS_HEADLESS_BACKEND)
   : path.resolve(import.meta.dirname, "../../target/debug/kepler-backend.exe");
+const fixtureDir = process.env.KOSMOS_HEADLESS_CATALOG_FIXTURE;
+const replacementArchive = process.env.KOSMOS_HEADLESS_REPLACEMENT_ARCHIVE;
 
 async function startBackend() {
   const env = {
@@ -69,6 +71,23 @@ try {
     '{"fixture":true}\n',
   );
   running = await startBackend();
+  if (fixtureDir && replacementArchive) {
+    const fixture = JSON.parse(
+      await readFile(path.join(path.resolve(fixtureDir), "catalog-apply-request.json"), "utf8"),
+    );
+    await running.client.invokeOperation({
+      operation: "packages.catalog_apply",
+      params: { document: fixture.document, signatures: fixture.signatures },
+    });
+    await running.client.invokeOperation({
+      operation: "packages.install_development",
+      params: {
+        id: "com.kosmos.arcadia",
+        version: "0.1.8",
+        archive_path: path.resolve(replacementArchive),
+      },
+    });
+  }
   const runner = createLegacyMigrationRunner(dataDir, running.client, async () => {});
   const first = await runner.run();
   if (first !== undefined) throw new Error("runner unexpectedly returned a value");
