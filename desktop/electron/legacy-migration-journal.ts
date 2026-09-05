@@ -254,17 +254,26 @@ export async function runLegacyMigration(
   }
   if (!(await host.verifyReplacement())) return "pending";
 
-  await host.stopAffected();
-  await host.snapshotBefore();
-  await host.stageDestination();
-  await writeMigrationJournal(host.dataDir, { ...host.journal, phase: "prepared" });
+  let recoveryRequired = false;
   try {
+    recoveryRequired = true;
+    await host.stopAffected();
+    await host.snapshotBefore();
+    await host.stageDestination();
+    await writeMigrationJournal(host.dataDir, { ...host.journal, phase: "prepared" });
     await host.revokeLegacyGrants();
     await host.activateCanonical();
     await writeMigrationJournal(host.dataDir, { ...host.journal, phase: "committed" });
     return "committed";
   } catch (error) {
-    await recoverPreparedMigration(host.dataDir, host.journal.target_id, host.restoreBefore);
+    if (recoveryRequired) {
+      const prepared = await readMigrationJournal(host.dataDir, host.journal.target_id);
+      if (prepared?.phase === "prepared") {
+        await recoverPreparedMigration(host.dataDir, host.journal.target_id, host.restoreBefore);
+      } else {
+        await host.restoreBefore();
+      }
+    }
     throw error;
   }
 }

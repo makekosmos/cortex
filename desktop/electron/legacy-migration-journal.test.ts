@@ -112,3 +112,30 @@ test("writes prepared before cutover and restores it on activation failure", asy
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("restores the snapshot when staging fails before the prepared marker", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "cortex-journal-"));
+  try {
+    const events: string[] = [];
+    await expect(
+      runLegacyMigration({
+        dataDir: root,
+        journal,
+        verifyReplacement: async () => true,
+        stopAffected: async () => events.push("stopped"),
+        snapshotBefore: async () => events.push("snapshotted"),
+        stageDestination: async () => {
+          events.push("stage-failed");
+          throw new Error("stage failed");
+        },
+        revokeLegacyGrants: async () => events.push("revoked"),
+        activateCanonical: async () => events.push("activated"),
+        restoreBefore: async () => events.push("restored"),
+      }),
+    ).rejects.toThrow("stage failed");
+    expect(events).toEqual(["stopped", "snapshotted", "stage-failed", "restored"]);
+    expect(await readMigrationJournal(root, journal.target_id)).toBeNull();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

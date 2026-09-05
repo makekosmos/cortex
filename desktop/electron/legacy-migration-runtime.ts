@@ -17,18 +17,20 @@ import {
   runLegacyMigration,
   withLegacyMigrationLock,
 } from "./legacy-migration-journal";
+import {
+  isBoolean,
+  packageRows,
+  restorePackageState,
+  snapshotPackageState,
+  type MigrationRequest,
+} from "./legacy-migration-state";
 
-interface PackageList {
-  packages?: JsonValue;
-  truncated?: boolean;
-}
 interface ReplacementInfo {
   version: string;
   sha256: string;
   catalog_sequence: number;
   wasEnabled: boolean;
 }
-
 const LEGACY_IDS = Object.keys(LEGACY_TO_CANONICAL);
 
 function canonicalIds(target: CanonicalId): string[] {
@@ -39,10 +41,17 @@ function canonicalIds(target: CanonicalId): string[] {
 }
 
 function packageRow(value: JsonValue, target: CanonicalId): ReplacementInfo | null {
-  if (!isRecord(value) || value.id !== target || !isString(value.version) || !value.version)
+  if (
+    !isRecord(value) ||
+    value.id !== target ||
+    value.kind !== "app" ||
+    value.revoked !== false ||
+    !isString(value.version) ||
+    !value.version ||
+    !isBoolean(value.enabled)
+  )
     return null;
   if (!isString(value.hash) || !/^[0-9a-f]{64}$/.test(value.hash)) return null;
-  if (value.revoked === true || value.compatible === false) return null;
   const sequence = value.catalog_sequence ?? value.catalogSequence;
   // SAFETY: catalog_sequence is a numeric package-summary field at this boundary.
   const numericSequence = sequence as number;
@@ -162,19 +171,12 @@ export function createLegacyMigrationRunner(
   dataDir: string,
   client: ArkClient,
 ): LegacyMigrationRunner {
-  const request = client.invokeOperation.bind(client);
+  const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
   // SAFETY: Object.values is sourced exclusively from the canonical allowlist.
   const targets = [...new Set(Object.values(LEGACY_TO_CANONICAL))] as CanonicalId[];
 
   async function replacement(target: CanonicalId): Promise<ReturnType<typeof packageRow>> {
-    const result = await request({ operation: "packages.list", params: { kind: "app" } });
-    // SAFETY: invokeOperation returns a JSON-compatible operation payload.
-    if (!isRecord(result as JsonValue)) return null;
-    // SAFETY: the operation response is the package-list wire object after the record check.
-    // SAFETY: the operation response is the package-list wire object after the record check.
-    const packageList = result as PackageList;
-    if (packageList.truncated === true) return null;
-    const rows = Array.isArray(packageList.packages) ? packageList.packages : [];
+    const rows = await packageRows(request);
     return packageRow(rows.find((row) => isRecord(row) && row.id === target) ?? null, target);
   }
 
@@ -200,29 +202,19 @@ export function createLegacyMigrationRunner(
       },
       verifyReplacement: async () => (await replacement(target)) !== null,
       stopAffected: async () => {
-        const result = await request({ operation: "packages.list", params: { kind: "app" } });
-        // SAFETY: invokeOperation returns a JSON-compatible operation payload.
-        if (isRecord(result as JsonValue)) {
-          // SAFETY: the operation response is the package-list wire object after the record check.
-          const packageList = result as PackageList;
-          if (packageList.truncated === true) {
-            throw new Error(`package list truncated while stopping '${target}'`);
-          }
-          if (Array.isArray(packageList.packages)) {
-            for (const row of packageList.packages) {
-              if (
-                isRecord(row) &&
-                row.id === target &&
-                isString(row.version) &&
-                row.version !== replacementInfo.version &&
-                row.enabled === true
-              ) {
-                await request({
-                  operation: "packages.set_enabled",
-                  params: { id: target, version: row.version, enabled: false },
-                });
-              }
-            }
+        await snapshotPackageState(dataDir, target, request);
+        for (const row of await packageRows(request)) {
+          if (
+            isRecord(row) &&
+            row.id === target &&
+            isString(row.version) &&
+            row.version !== replacementInfo.version &&
+            row.enabled === true
+          ) {
+            await request({
+              operation: "packages.set_enabled",
+              params: { id: target, version: row.version, enabled: false },
+            });
           }
         }
         await request({
@@ -244,20 +236,13 @@ export function createLegacyMigrationRunner(
       },
       restoreBefore: async () => {
         await restoreNamespace(dataDir, target);
-        await request({
-          operation: "packages.set_enabled",
-          params: {
-            id: target,
-            version: replacementInfo.version,
-            enabled: replacementInfo.wasEnabled,
-          },
-        });
+        await restorePackageState(dataDir, target, request);
       },
     };
   }
 
   async function recoverBeforeLaunch(): Promise<void> {
-    await recoverLegacyMigrationsBeforeLaunch(dataDir);
+    await recoverLegacyMigrationsBeforeLaunch(dataDir, client);
   }
 
   async function run(): Promise<void> {
@@ -282,13 +267,24 @@ export function createLegacyMigrationRunner(
   return { recoverBeforeLaunch, run };
 }
 
-export async function recoverLegacyMigrationsBeforeLaunch(dataDir: string): Promise<void> {
+export async function recoverLegacyMigrationsBeforeLaunch(
+  dataDir: string,
+  client?: ArkClient,
+): Promise<void> {
   // SAFETY: Object.values is sourced exclusively from the canonical allowlist above.
   const targets = [...new Set(Object.values(LEGACY_TO_CANONICAL))] as CanonicalId[];
   for (const target of targets) {
     const journal = await readMigrationJournal(dataDir, target);
     if (journal?.phase === "prepared") {
-      await recoverPreparedMigration(dataDir, target, () => restoreNamespace(dataDir, target));
+      if (!client) {
+        await restoreNamespace(dataDir, target);
+        continue;
+      }
+      const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
+      await recoverPreparedMigration(dataDir, target, async () => {
+        await restoreNamespace(dataDir, target);
+        await restorePackageState(dataDir, target, request);
+      });
     }
   }
 }
