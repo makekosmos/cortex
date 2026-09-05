@@ -145,3 +145,41 @@ export async function migrationJournalExists(dataDir: string, canonicalId: Canon
     throw error;
   }
 }
+
+export interface LegacyMigrationHost {
+  dataDir: string;
+  journal: MigrationJournal;
+  verifyReplacement: () => Promise<boolean>;
+  stopAffected: () => Promise<void>;
+  snapshotBefore: () => Promise<void>;
+  stageDestination: () => Promise<void>;
+  revokeLegacyGrants: () => Promise<void>;
+  activateCanonical: () => Promise<void>;
+  restoreBefore: () => Promise<void>;
+}
+
+export async function runLegacyMigration(
+  host: LegacyMigrationHost,
+): Promise<"committed" | "pending" | "recovered"> {
+  const current = await readMigrationJournal(host.dataDir, host.journal.target_id);
+  if (current?.phase === "committed") return "committed";
+  if (current?.phase === "prepared") {
+    await recoverPreparedMigration(host.dataDir, host.journal.target_id, host.restoreBefore);
+    return "recovered";
+  }
+  if (!(await host.verifyReplacement())) return "pending";
+
+  await host.stopAffected();
+  await host.snapshotBefore();
+  await host.stageDestination();
+  await writeMigrationJournal(host.dataDir, { ...host.journal, phase: "prepared" });
+  try {
+    await host.revokeLegacyGrants();
+    await host.activateCanonical();
+    await writeMigrationJournal(host.dataDir, { ...host.journal, phase: "committed" });
+    return "committed";
+  } catch (error) {
+    await recoverPreparedMigration(host.dataDir, host.journal.target_id, host.restoreBefore);
+    throw error;
+  }
+}

@@ -6,6 +6,7 @@ import {
   migrationJournalPath,
   readMigrationJournal,
   recoverPreparedMigration,
+  runLegacyMigration,
   validateMigrationJournal,
   writeMigrationJournal,
 } from "./legacy-migration-journal";
@@ -41,6 +42,33 @@ test("prepared recovery restores before-state before removing visibility marker"
     const events: string[] = [];
     expect(await recoverPreparedMigration(root, journal.target_id, async () => events.push("restored"))).toBe(true);
     expect(events).toEqual(["restored"]);
+    expect(await readMigrationJournal(root, journal.target_id)).toBeNull();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("writes prepared before cutover and restores it on activation failure", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "cortex-journal-"));
+  try {
+    const events: string[] = [];
+    await expect(
+      runLegacyMigration({
+        dataDir: root,
+        journal: { ...journal, phase: "prepared" },
+        verifyReplacement: async () => true,
+        stopAffected: async () => events.push("stopped"),
+        snapshotBefore: async () => events.push("snapshotted"),
+        stageDestination: async () => events.push("staged"),
+        revokeLegacyGrants: async () => events.push("revoked"),
+        activateCanonical: async () => {
+          events.push("activation-failed");
+          throw new Error("activation failed");
+        },
+        restoreBefore: async () => events.push("restored"),
+      }),
+    ).rejects.toThrow("activation failed");
+    expect(events).toEqual(["stopped", "snapshotted", "staged", "revoked", "activation-failed", "restored"]);
     expect(await readMigrationJournal(root, journal.target_id)).toBeNull();
   } finally {
     await rm(root, { recursive: true, force: true });
