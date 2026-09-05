@@ -96,13 +96,34 @@ try {
   const runner = createLegacyMigrationRunner(dataDir, running.client, async () => {});
   const first = await runner.run();
   if (first !== undefined) throw new Error("runner unexpectedly returned a value");
+  const journal = JSON.parse(
+    await readFile(
+      path.join(dataDir, "legacy-migrations", "v1", "com.kosmos.arcadia", "journal.json"),
+      "utf8",
+    ),
+  );
+  if (journal.phase !== "committed") throw new Error("migration did not commit");
+  const packages = await running.client.invokeOperation({
+    operation: "packages.list",
+    params: { kind: "app" },
+  });
+  const active = packages.packages?.filter(
+    (row) => row.id === "com.kosmos.arcadia" && row.enabled === true,
+  );
+  if (active?.length !== 1 || active[0].version !== "0.1.8")
+    throw new Error("migration did not leave exactly one active replacement");
+  const migrated = JSON.parse(
+    await readFile(
+      path.join(dataDir, "extensions-data", "com.kosmos.arcadia", "state.json"),
+      "utf8",
+    ),
+  );
+  if (migrated.fixture !== true) throw new Error("canonical user data was not migrated");
   await stopBackend();
   running = await startBackend();
   const second = await createLegacyMigrationRunner(dataDir, running.client, async () => {}).run();
   if (second !== undefined) throw new Error("restart runner unexpectedly returned a value");
-  console.log(
-    "headless migration coordinator executed against real RPC; replacement preflight stayed pending before mutation",
-  );
+  console.log("headless production migration committed and recovered across restart");
 } finally {
   await stopBackend();
   await rm(root, { recursive: true, force: true });
