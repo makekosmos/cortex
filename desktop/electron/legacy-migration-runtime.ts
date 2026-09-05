@@ -231,7 +231,7 @@ export function createLegacyMigrationRunner(
       restoreBefore: async () => {
         if (grantRollbackNeeded) {
           await request({
-            operation: "packages.restore_legacy_grants",
+            operation: "packages.rollback_legacy_grants",
             params: grantTransactionToken
               ? { transaction_token: grantTransactionToken }
               : { source_ids: ids },
@@ -277,7 +277,7 @@ export async function recoverLegacyMigrationsBeforeLaunch(
   const targets = [...new Set(Object.values(LEGACY_TO_CANONICAL))] as CanonicalId[];
   for (const target of targets) {
     const journal = await readMigrationJournal(dataDir, target);
-    if (journal?.phase === "prepared") {
+    if (journal?.phase === "prepared" || journal?.phase === "finalizing") {
       if (!client) {
         await restoreNamespace(dataDir, target);
         continue;
@@ -285,7 +285,7 @@ export async function recoverLegacyMigrationsBeforeLaunch(
       const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
       await recoverPreparedMigration(dataDir, target, async () => {
         await request({
-          operation: "packages.restore_legacy_grants",
+          operation: "packages.rollback_legacy_grants",
           params: { source_ids: journal.source_ids },
         });
         await restoreNamespace(dataDir, target);

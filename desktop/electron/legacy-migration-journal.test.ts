@@ -167,3 +167,40 @@ test("stop precedes snapshot and failure restores before the journal", async () 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("finalizing journal makes a post-commit-marker failure recoverable", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "cortex-journal-"));
+  try {
+    const events: string[] = [];
+    await expect(
+      runLegacyMigration({
+        dataDir: root,
+        journal,
+        verifyReplacement: async () => true,
+        stopAffected: async () => events.push("stopped"),
+        snapshotBefore: async () => events.push("snapshotted"),
+        stageDestination: async () => events.push("staged"),
+        revokeLegacyGrants: async () => events.push("revoked"),
+        activateCanonical: async () => events.push("activated"),
+        commitLegacyGrants: async () => events.push("committed-grants"),
+        writeJournal: async (value) => {
+          if (value.phase === "committed") throw new Error("journal fsync failed");
+          await writeMigrationJournal(root, value);
+        },
+        restoreBefore: async () => events.push("restored"),
+      }),
+    ).rejects.toThrow("journal fsync failed");
+    expect(events).toEqual([
+      "stopped",
+      "snapshotted",
+      "staged",
+      "revoked",
+      "activated",
+      "committed-grants",
+      "restored",
+    ]);
+    expect(await readMigrationJournal(root, journal.target_id)).toBeNull();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

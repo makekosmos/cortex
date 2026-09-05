@@ -584,6 +584,20 @@ impl GrantAuthorityRegistry {
     /// the snapshot except for `revoked: true`; missing or otherwise changed
     /// records fail closed instead of overwriting unrelated state.
     pub fn restore_legacy_records(&self, token: &str) -> Result<usize, GrantError> {
+        self.restore_legacy_records_with_committed(token, false)
+    }
+
+    /// Roll back a migration that reached its durable finalization marker.
+    /// This is only used by crash recovery before the committed marker exists.
+    pub fn rollback_legacy_records(&self, token: &str) -> Result<usize, GrantError> {
+        self.restore_legacy_records_with_committed(token, true)
+    }
+
+    fn restore_legacy_records_with_committed(
+        &self,
+        token: &str,
+        allow_committed: bool,
+    ) -> Result<usize, GrantError> {
         Self::validate_transaction_token(token)?;
         let _transaction_lock = self
             .legacy_transactions
@@ -596,7 +610,10 @@ impl GrantAuthorityRegistry {
             .ok_or(GrantError::NotFound)?;
         match transaction.state {
             LegacyGrantTransactionState::Restored => return Ok(0),
-            LegacyGrantTransactionState::Committed => return Err(GrantError::Invalid),
+            LegacyGrantTransactionState::Committed if !allow_committed => {
+                return Err(GrantError::Invalid)
+            }
+            LegacyGrantTransactionState::Committed => {}
             LegacyGrantTransactionState::Active => {}
         }
 
@@ -650,6 +667,31 @@ impl GrantAuthorityRegistry {
             return Ok(0);
         }
         self.restore_legacy_records(&token)
+    }
+
+    pub fn rollback_legacy_records_for_sources(
+        &self,
+        source_ids: &[&str],
+    ) -> Result<usize, GrantError> {
+        self.validate_legacy_records(source_ids)?;
+        let token = self
+            .load_transactions()?
+            .into_iter()
+            .find(|transaction| {
+                (transaction.state == LegacyGrantTransactionState::Active
+                    || transaction.state == LegacyGrantTransactionState::Committed)
+                    && transaction
+                        .source_ids
+                        .iter()
+                        .map(String::as_str)
+                        .eq(source_ids.iter().copied())
+            })
+            .map(|transaction| transaction.token)
+            .unwrap_or_default();
+        if token.is_empty() {
+            return Ok(0);
+        }
+        self.rollback_legacy_records(&token)
     }
 
     /// Mark a transaction successful. Committed transactions cannot be
@@ -1239,9 +1281,15 @@ mod tests {
                 .restore_legacy_records(&committed_token),
             Err(GrantError::Invalid)
         );
+        assert_eq!(
+            GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
+                .rollback_legacy_records(&committed_token)
+                .unwrap(),
+            1
+        );
         let final_records: serde_json::Value =
             serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        assert_eq!(final_records[0]["revoked"], true);
+        assert_eq!(final_records[0]["revoked"], false);
         assert_eq!(final_records[0]["opaque"]["keep"], true);
     }
 }

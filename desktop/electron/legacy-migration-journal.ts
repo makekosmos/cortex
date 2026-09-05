@@ -11,7 +11,7 @@ export const LEGACY_TO_CANONICAL = {
 } as const;
 
 export type CanonicalId = (typeof LEGACY_TO_CANONICAL)[keyof typeof LEGACY_TO_CANONICAL];
-export type MigrationPhase = "prepared" | "committed";
+export type MigrationPhase = "prepared" | "finalizing" | "committed";
 
 export interface MigrationJournal extends JsonRecord {
   schema_version: 1;
@@ -89,7 +89,8 @@ export function validateMigrationJournal(value: JsonValue): MigrationJournal {
   // SAFETY: the journal schema requires catalog_sequence to be a number.
   if (!Number.isSafeInteger(catalogSequence as number) || (catalogSequence as number) < 0)
     fail("replacement is invalid");
-  if (value.phase !== "prepared" && value.phase !== "committed") fail("phase is invalid");
+  if (value.phase !== "prepared" && value.phase !== "finalizing" && value.phase !== "committed")
+    fail("phase is invalid");
   if (value.grant_policy !== "reconsent") fail("grant_policy is invalid");
   if (
     value.records_policy !== "opaque-preserve" &&
@@ -131,7 +132,9 @@ export function isLegacyLaunchBlocked(dataDir: string, id: string): boolean {
     ) as JsonValue;
     const journal = validateMigrationJournal(value);
     return (
-      (journal.phase === "prepared" || journal.phase === "committed") &&
+      (journal.phase === "prepared" ||
+        journal.phase === "finalizing" ||
+        journal.phase === "committed") &&
       journal.target_id === target
     );
   } catch (error) {
@@ -217,7 +220,7 @@ export async function recoverPreparedMigration(
   restoreBefore: () => Promise<void>,
 ): Promise<boolean> {
   const journal = await readMigrationJournal(dataDir, canonicalId);
-  if (!journal || journal.phase !== "prepared") return false;
+  if (!journal || (journal.phase !== "prepared" && journal.phase !== "finalizing")) return false;
   await restoreBefore();
   const journalPath = migrationJournalPath(dataDir, canonicalId);
   await rm(journalPath, { force: true });
@@ -248,6 +251,7 @@ export interface LegacyMigrationHost {
   commitLegacyGrants?: () => Promise<void>;
   activateCanonical: () => Promise<void>;
   restoreBefore: () => Promise<void>;
+  writeJournal?: (journal: MigrationJournal) => Promise<void>;
 }
 
 export async function runLegacyMigration(
@@ -255,28 +259,32 @@ export async function runLegacyMigration(
 ): Promise<"committed" | "pending" | "recovered"> {
   const current = await readMigrationJournal(host.dataDir, host.journal.target_id);
   if (current?.phase === "committed") return "committed";
-  if (current?.phase === "prepared") {
+  if (current?.phase === "prepared" || current?.phase === "finalizing") {
     await recoverPreparedMigration(host.dataDir, host.journal.target_id, host.restoreBefore);
     return "recovered";
   }
   if (!(await host.verifyReplacement())) return "pending";
 
   let recoveryRequired = false;
+  const write =
+    host.writeJournal ??
+    ((journal: MigrationJournal) => writeMigrationJournal(host.dataDir, journal));
   try {
     recoveryRequired = true;
     await host.stopAffected();
     await host.snapshotBefore();
     await host.stageDestination();
-    await writeMigrationJournal(host.dataDir, { ...host.journal, phase: "prepared" });
+    await write({ ...host.journal, phase: "prepared" });
     await host.revokeLegacyGrants();
     await host.activateCanonical();
+    await write({ ...host.journal, phase: "finalizing" });
     await host.commitLegacyGrants?.();
-    await writeMigrationJournal(host.dataDir, { ...host.journal, phase: "committed" });
+    await write({ ...host.journal, phase: "committed" });
     return "committed";
   } catch (error) {
     if (recoveryRequired) {
       const prepared = await readMigrationJournal(host.dataDir, host.journal.target_id);
-      if (prepared?.phase === "prepared") {
+      if (prepared?.phase === "prepared" || prepared?.phase === "finalizing") {
         await recoverPreparedMigration(host.dataDir, host.journal.target_id, host.restoreBefore);
       } else if (!prepared) {
         await host.restoreBefore();

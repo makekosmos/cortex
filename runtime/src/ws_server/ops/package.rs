@@ -13,17 +13,14 @@ pub(in crate::ws_server) async fn handle_package_op(
                 Some("bridge") => Some(crate::package_service::PackageKind::Bridge),
                 Some(_) => return LocalResponse::err("packages.list: invalid-kind"),
             };
-            let catalog_kind = kind.clone();
             let installed = package_blocking({
                 let service = service.clone();
-                move || service.list_filtered(kind)
+                move || service.list_filtered(kind.clone())
             })
             .await;
             match installed {
                 Ok(list) => {
-                    let catalog = service
-                        .catalog_packages(catalog_kind.as_ref())
-                        .unwrap_or_default();
+                    let catalog = service.catalog_packages(kind.as_ref()).unwrap_or_default();
                     let mut value =
                         serde_json::to_value(&list).unwrap_or_else(|_| serde_json::json!({}));
                     value["catalog"] = serde_json::json!(catalog);
@@ -144,6 +141,7 @@ pub(in crate::ws_server) async fn handle_package_op(
             )
         }
         "restore_legacy_grants" => restore_legacy_grants(subop, params, service),
+        "rollback_legacy_grants" => rollback_legacy_grants(subop, params, service),
         "commit_legacy_grants" => {
             let Some(token) = params.get("transaction_token").and_then(Value::as_str) else {
                 return LocalResponse::err("packages.commit_legacy_grants: invalid-request");
