@@ -7,6 +7,13 @@ import type { CanonicalId } from "./legacy-migration-journal";
 export type ArkRequest = Parameters<ArkClient["invokeOperation"]>[0];
 export type MigrationRequest = (input: ArkRequest) => Promise<JsonValue>;
 
+export interface ReplacementInfo {
+  version: string;
+  sha256: string;
+  catalog_sequence: number;
+  wasEnabled: boolean;
+}
+
 export function isBoolean(value: JsonValue): value is boolean {
   return value === true || value === false;
 }
@@ -42,6 +49,44 @@ export async function packageRows(request: MigrationRequest): Promise<JsonValue[
   if (!isRecord(result) || result.truncated === true || !Array.isArray(result.packages))
     throw new Error("package list is invalid or truncated");
   return result.packages;
+}
+
+export async function verifiedReplacement(
+  request: MigrationRequest,
+  rows: readonly JsonValue[],
+  target: CanonicalId,
+): Promise<ReplacementInfo | null> {
+  const value = rows.find((row) => isRecord(row) && row.id === target);
+  if (!isRecord(value) || value.kind !== "app" || value.revoked !== false) return null;
+  if (!isString(value.version) || !value.version || !isString(value.hash)) return null;
+  if (!/^[0-9a-f]{64}$/.test(value.hash) || !isBoolean(value.enabled)) return null;
+  const sequence = value.catalog_sequence ?? value.catalogSequence;
+  // SAFETY: Number.isSafeInteger rejects non-number JSON values at this boundary.
+  const numericSequence = sequence as number;
+  if (!Number.isSafeInteger(numericSequence) || numericSequence < 0) return null;
+  const verified = await request({
+    operation: "packages.verify_replacement",
+    params: {
+      id: target,
+      version: value.version,
+      hash: value.hash,
+      catalog_sequence: numericSequence,
+    },
+  });
+  if (
+    !isRecord(verified) ||
+    verified.id !== target ||
+    verified.version !== value.version ||
+    verified.hash !== value.hash ||
+    verified.catalog_sequence !== numericSequence
+  )
+    return null;
+  return {
+    version: value.version,
+    sha256: value.hash,
+    catalog_sequence: numericSequence,
+    wasEnabled: value.enabled,
+  };
 }
 
 function packageState(value: JsonValue, target: CanonicalId): PackageState | null {

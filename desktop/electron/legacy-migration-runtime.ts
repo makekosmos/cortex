@@ -18,19 +18,13 @@ import {
   withLegacyMigrationLock,
 } from "./legacy-migration-journal";
 import {
-  isBoolean,
   packageRows,
   restorePackageState,
   snapshotPackageState,
+  verifiedReplacement,
+  type ReplacementInfo,
   type MigrationRequest,
 } from "./legacy-migration-state";
-
-interface ReplacementInfo {
-  version: string;
-  sha256: string;
-  catalog_sequence: number;
-  wasEnabled: boolean;
-}
 const LEGACY_IDS = Object.keys(LEGACY_TO_CANONICAL);
 
 function canonicalIds(target: CanonicalId): string[] {
@@ -38,30 +32,6 @@ function canonicalIds(target: CanonicalId): string[] {
   return LEGACY_IDS.filter(
     (id) => LEGACY_TO_CANONICAL[id as keyof typeof LEGACY_TO_CANONICAL] === target,
   );
-}
-
-function packageRow(value: JsonValue, target: CanonicalId): ReplacementInfo | null {
-  if (
-    !isRecord(value) ||
-    value.id !== target ||
-    value.kind !== "app" ||
-    value.revoked !== false ||
-    !isString(value.version) ||
-    !value.version ||
-    !isBoolean(value.enabled)
-  )
-    return null;
-  if (!isString(value.hash) || !/^[0-9a-f]{64}$/.test(value.hash)) return null;
-  const sequence = value.catalog_sequence ?? value.catalogSequence;
-  // SAFETY: catalog_sequence is a numeric package-summary field at this boundary.
-  const numericSequence = sequence as number;
-  if (!Number.isSafeInteger(numericSequence) || numericSequence < 0) return null;
-  return {
-    version: value.version,
-    sha256: value.hash,
-    catalog_sequence: numericSequence,
-    wasEnabled: value.enabled === true,
-  };
 }
 
 async function existsDirectory(root: string): Promise<boolean> {
@@ -175,9 +145,8 @@ export function createLegacyMigrationRunner(
   // SAFETY: Object.values is sourced exclusively from the canonical allowlist.
   const targets = [...new Set(Object.values(LEGACY_TO_CANONICAL))] as CanonicalId[];
 
-  async function replacement(target: CanonicalId): Promise<ReturnType<typeof packageRow>> {
-    const rows = await packageRows(request);
-    return packageRow(rows.find((row) => isRecord(row) && row.id === target) ?? null, target);
+  async function replacement(target: CanonicalId): Promise<ReplacementInfo | null> {
+    return verifiedReplacement(request, await packageRows(request), target);
   }
 
   async function host(
