@@ -4,12 +4,13 @@ pub struct IrohTransport {
     endpoint: Mutex<Option<Endpoint>>,
     /// Broadcast-канал исходящих сообщений — `send()` кладёт сюда, каждая
     /// активная connection-задача подписывается и пишет в свой QUIC bi-стрим.
-    out_tx: broadcast::Sender<LanSyncMessage>,
+    out_tx: broadcast::Sender<OutgoingMessage>,
     /// Shutdown watch channel. `true` = нужно остановиться.
     stop_tx: watch::Sender<bool>,
     stop_rx: watch::Receiver<bool>,
     /// Шаг 3: device_id ↔ EndpointId реестр, заполняется по входящим Hello.
     registry: std::sync::Arc<DeviceRegistry>,
+    outbound_storage: Arc<tokio::sync::RwLock<Option<OutboundStorage>>>,
 }
 
 impl IrohTransport {
@@ -23,6 +24,7 @@ impl IrohTransport {
             stop_tx,
             stop_rx,
             registry: std::sync::Arc::new(DeviceRegistry::new()),
+            outbound_storage: Arc::new(tokio::sync::RwLock::new(None)),
         }
     }
 

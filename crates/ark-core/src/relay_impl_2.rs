@@ -1,4 +1,32 @@
+use crate::integration_replication::SignedSyncEnvelope;
+
 impl RelaySync {
+    async fn handle_signed_integration_frame(
+        &self,
+        from_device_id: String,
+        frame: SignedSyncEnvelope,
+        transport_public_key: Option<String>,
+    ) {
+        let accepted = frame.space_id == self.config.space_id
+            && frame.origin_node_id == from_device_id
+            && frame.recipient_node_id == self.config.device_id
+            && self.is_authenticated_peer(&from_device_id).await
+            && self.storage.apply_signed_integration_frame_with_transport(
+                &frame,
+                &self.config.space_id,
+                &from_device_id,
+                &self.config.device_id,
+                transport_public_key.as_deref(),
+            ).await.is_ok();
+        let _ = self.transport.send_to(
+            &from_device_id,
+            LanSyncMessage::SignedIntegrationAck {
+                message_id: frame.message_id,
+                accepted,
+            },
+        ).await;
+    }
+
     fn make_hello(&self) -> LanSyncMessage {
         let (auth_nonce, auth_hmac) = match self.auth_secret.as_ref() {
             Some(secret) => {

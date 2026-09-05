@@ -155,6 +155,29 @@ mod tests {
     }
 
     #[test]
+    fn signed_integration_messages_roundtrip() {
+        let frame = crate::integration_replication::SignedSyncEnvelope::new(
+            "space",
+            "origin",
+            "recipient",
+            1,
+            "message",
+            Vec::new(),
+            "signature",
+        );
+        for message in [
+            LanSyncMessage::SignedIntegrationFrame { frame },
+            LanSyncMessage::SignedIntegrationAck {
+                message_id: "message".into(),
+                accepted: true,
+            },
+        ] {
+            let serialized = serialize_message(&message);
+            assert_eq!(deserialize_message(&serialized), Some(message));
+        }
+    }
+
+    #[test]
     fn test_generate_id_format() {
         let id = generate_id();
         assert!(id.contains('-'));
@@ -201,4 +224,3 @@ mod tests {
         assert!(entity.deleted.is_none());
     }
 }
-

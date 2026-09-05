@@ -92,3 +92,17 @@ pub const ARK_SYNC_ALPN: &[u8] = b"ark-sync/1";
 /// просто пропускает старые кадры — они будут компенсированы VV-обменом
 /// при следующем (ре)коннекте (см. модульный doc).
 const OUTGOING_BROADCAST_CAPACITY: usize = 256;
+
+#[derive(Clone)]
+struct OutgoingMessage {
+    target: Option<EndpointId>,
+    msg: LanSyncMessage,
+    completion: Option<Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<Result<(), String>>>>>>,
+}
+
+#[derive(Clone)]
+struct OutboundStorage {
+    storage: Arc<dyn crate::sync_server::StorageBackend>,
+    space_id: String,
+    origin_node_id: String,
+}

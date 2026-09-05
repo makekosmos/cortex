@@ -1,6 +1,146 @@
 ﻿
 #[async_trait::async_trait]
 impl StorageBackend for SqliteStorageBackend {
+    async fn authorized_transport_public_key(&self, device_id: &str) -> Option<String> {
+        let conn = self.conn.clone();
+        let device_id = device_id.to_string();
+        tokio::task::spawn_blocking(move || {
+            let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
+            crate::db::load_authorized_node(&guard, &device_id)
+                .ok()
+                .flatten()
+                .and_then(|node| node.transport_public_key)
+        })
+        .await
+        .unwrap_or(None)
+    }
+
+    async fn validate_outbound_signed_integration_frame(
+        &self,
+        frame: &crate::integration_replication::SignedSyncEnvelope,
+        expected_space_id: &str,
+        expected_origin_node_id: &str,
+    ) -> Result<(), String> {
+        let conn = self.conn.clone();
+        let frame = frame.clone();
+        let space_id = expected_space_id.to_string();
+        let origin_id = expected_origin_node_id.to_string();
+        tokio::task::spawn_blocking(move || {
+            let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
+            crate::integration_replication::validate_outbound_signed_sync(
+                &guard, &space_id, &origin_id, &frame,
+            )
+        })
+        .await
+        .map_err(|error| error.to_string())?
+    }
+
+    async fn validate_outbound_signed_integration_frame_with_transport(
+        &self,
+        frame: &crate::integration_replication::SignedSyncEnvelope,
+        expected_space_id: &str,
+        expected_origin_node_id: &str,
+        transport_public_key: &str,
+    ) -> Result<(), String> {
+        let conn = self.conn.clone();
+        let frame = frame.clone();
+        let space_id = expected_space_id.to_string();
+        let origin_id = expected_origin_node_id.to_string();
+        let transport_key = transport_public_key.to_string();
+        tokio::task::spawn_blocking(move || {
+            let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
+            crate::integration_replication::validate_outbound_signed_sync_with_transport(
+                &guard, &space_id, &origin_id, &frame, &transport_key,
+            )
+        })
+        .await
+        .map_err(|error| error.to_string())?
+    }
+
+    async fn apply_signed_integration_frame(
+        &self,
+        frame: &crate::integration_replication::SignedSyncEnvelope,
+        expected_space_id: &str,
+        authenticated_peer_id: &str,
+        expected_recipient_node_id: &str,
+    ) -> Result<(), String> {
+        if frame.space_id != expected_space_id {
+            return Err("signed integration frame has the wrong space".into());
+        }
+        if frame.origin_node_id != authenticated_peer_id {
+            return Err("signed integration frame origin is not the authenticated peer".into());
+        }
+        if frame.recipient_node_id != expected_recipient_node_id {
+            return Err("signed integration frame is addressed to another node".into());
+        }
+
+        let conn = self.conn.clone();
+        let frame = frame.clone();
+        let expected_space_id = expected_space_id.to_string();
+        let expected_recipient_node_id = expected_recipient_node_id.to_string();
+        tokio::task::spawn_blocking(move || {
+            let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
+            let reserved_at_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+                .try_into()
+                .unwrap_or(u64::MAX);
+            apply_signed_integration_changes(
+                &guard,
+                &frame,
+                &expected_space_id,
+                &expected_recipient_node_id,
+                None,
+                reserved_at_ms,
+            )
+            .map_err(|error| error.to_string())
+        })
+        .await
+        .map_err(|e| e.to_string())?
+    }
+
+    async fn apply_signed_integration_frame_with_transport(
+        &self,
+        frame: &crate::integration_replication::SignedSyncEnvelope,
+        expected_space_id: &str,
+        authenticated_peer_id: &str,
+        expected_recipient_node_id: &str,
+        authenticated_transport_public_key: Option<&str>,
+    ) -> Result<(), String> {
+        if frame.space_id != expected_space_id
+            || frame.origin_node_id != authenticated_peer_id
+            || frame.recipient_node_id != expected_recipient_node_id
+        {
+            return Err("signed integration frame identity mismatch".into());
+        }
+        let conn = self.conn.clone();
+        let frame = frame.clone();
+        let expected_space_id = expected_space_id.to_string();
+        let expected_recipient_node_id = expected_recipient_node_id.to_string();
+        let transport_key = authenticated_transport_public_key.map(str::to_owned);
+        tokio::task::spawn_blocking(move || {
+            let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
+            let reserved_at_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+                .try_into()
+                .unwrap_or(u64::MAX);
+            apply_signed_integration_changes(
+                &guard,
+                &frame,
+                &expected_space_id,
+                &expected_recipient_node_id,
+                transport_key.as_deref(),
+                reserved_at_ms,
+            )
+            .map_err(|error| error.to_string())
+        })
+        .await
+        .map_err(|e| e.to_string())?
+    }
+
     async fn load_entities(&self, vector: &VersionVector) -> Vec<SyncEntity> {
         let conn = self.conn.clone();
         let vector = vector.clone();

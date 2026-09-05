@@ -388,4 +388,32 @@ enum Request {
     /// selected the iroh transport. `null`/error otherwise (e.g. relay
     /// selected, sync not running, or build without `iroh-spike`).
     GetOwnIrohTicket,
+
+    #[serde(rename = "integration.persist_node_authorization")]
+    IntegrationPersistNodeAuthorization {
+        authorization_operation: String,
+        node: AuthorizedNode,
+        #[serde(default)]
+        grant: Option<IntegrationNodeGrant>,
+        device_id: String,
+    },
+    #[serde(rename = "integration.persist_integration_grant")]
+    IntegrationPersistIntegrationGrant {
+        grant: IntegrationNodeGrant,
+        device_id: String,
+    },
+    #[serde(rename = "integration.prepare_signed_sync")]
+    IntegrationPrepareSignedSync {
+        space_id: String,
+        origin_node_id: String,
+        integration_id: String,
+        recipient_node_id: String,
+        message_id: String,
+    },
+    #[serde(rename = "integration.validate_outbound_signed_sync")]
+    IntegrationValidateOutboundSignedSync {
+        space_id: String,
+        origin_node_id: String,
+        frame: SignedSyncEnvelope,
+    },
 }

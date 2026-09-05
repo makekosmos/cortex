@@ -45,9 +45,9 @@ pub struct RelaySync {
     config: RelaySyncConfig,
     auth_secret: Option<String>,
     peers: Arc<Mutex<HashMap<String, RelayPeerState>>>,
+    transport_keys: Arc<Mutex<HashMap<String, String>>>,
     incoming_sync: Arc<Mutex<Option<IncomingSyncState>>>,
     on_change: Arc<Mutex<Option<OnChangeCallback>>>,
     on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
     on_peer_disconnect: Arc<Mutex<Option<OnPeerDisconnectCallback>>>,
 }
-

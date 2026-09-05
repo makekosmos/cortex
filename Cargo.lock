@@ -151,6 +151,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "criterion",
+ "ed25519-dalek",
  "futures-util",
  "hostname",
  "if-addrs",

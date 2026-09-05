@@ -77,6 +77,14 @@ pub enum LanSyncMessage {
     #[serde(rename = "live_ack")]
     LiveAck { change_id: String },
 
+    #[serde(rename = "signed_integration_frame")]
+    SignedIntegrationFrame {
+        frame: crate::integration_replication::SignedSyncEnvelope,
+    },
+
+    #[serde(rename = "signed_integration_ack")]
+    SignedIntegrationAck { message_id: String, accepted: bool },
+
     #[serde(rename = "peer_list")]
     PeerList { peers: Vec<PeerRecord> },
 
@@ -148,4 +156,3 @@ pub fn generate_id() -> String {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-

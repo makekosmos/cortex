@@ -89,10 +89,16 @@ async fn collect_change_ids(
             break;
         }
         match tokio::time::timeout(remaining, rx.recv()).await {
-            Ok(Some(TransportEvent::MessageReceived {
-                msg: LanSyncMessage::LiveChange { change_id, .. },
-                ..
-            })) => {
+            Ok(Some(
+                TransportEvent::MessageReceived {
+                    msg: LanSyncMessage::LiveChange { change_id, .. },
+                    ..
+                }
+                | TransportEvent::MessageReceivedFromTransport {
+                    msg: LanSyncMessage::LiveChange { change_id, .. },
+                    ..
+                },
+            )) => {
                 found.insert(change_id);
             }
             Ok(Some(_)) => {} // Hello / Connected / Disconnected — skip
@@ -163,10 +169,16 @@ async fn iroh_bidirectional_burst_no_desync() {
                 break;
             }
             match tokio::time::timeout(remaining, b_events_rx.recv()).await {
-                Ok(Some(TransportEvent::MessageReceived {
-                    msg: LanSyncMessage::Hello { .. },
-                    ..
-                })) => {
+                Ok(Some(
+                    TransportEvent::MessageReceived {
+                        msg: LanSyncMessage::Hello { .. },
+                        ..
+                    }
+                    | TransportEvent::MessageReceivedFromTransport {
+                        msg: LanSyncMessage::Hello { .. },
+                        ..
+                    },
+                )) => {
                     found = true;
                     break;
                 }
@@ -191,10 +203,16 @@ async fn iroh_bidirectional_burst_no_desync() {
                 break;
             }
             match tokio::time::timeout(remaining, a_events_rx.recv()).await {
-                Ok(Some(TransportEvent::MessageReceived {
-                    msg: LanSyncMessage::Hello { .. },
-                    ..
-                })) => {
+                Ok(Some(
+                    TransportEvent::MessageReceived {
+                        msg: LanSyncMessage::Hello { .. },
+                        ..
+                    }
+                    | TransportEvent::MessageReceivedFromTransport {
+                        msg: LanSyncMessage::Hello { .. },
+                        ..
+                    },
+                )) => {
                     found = true;
                     break;
                 }

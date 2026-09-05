@@ -219,6 +219,13 @@ impl SyncTransport for RelayTransport {
     /// Enqueue a message. If the transport is connected, it goes immediately;
     /// if disconnected, it is stored in the offline outbox (capped at 500 entries).
     fn send(&self, msg: LanSyncMessage) -> Result<(), String> {
+        if matches!(
+            &msg,
+            LanSyncMessage::SignedIntegrationFrame { .. }
+                | LanSyncMessage::SignedIntegrationAck { .. }
+        ) {
+            return Err("relay broadcast cannot carry addressed integration messages".into());
+        }
         let tx = self.send_tx.lock().unwrap_or_else(|e| e.into_inner());
         if tx.send(msg.clone()).is_err() {
             // Channel closed (not yet started or stopped) — use offline outbox.

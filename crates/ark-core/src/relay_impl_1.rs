@@ -23,6 +23,11 @@ impl RelaySync {
         transport: Arc<dyn SyncTransport>,
     ) -> Arc<Self> {
         let auth_secret = normalize_auth_secret(config.auth_secret.clone());
+        let _ = transport.set_outbound_storage(
+            storage.clone(),
+            &config.space_id,
+            &config.device_id,
+        );
 
         Arc::new(Self {
             storage,
@@ -30,6 +35,7 @@ impl RelaySync {
             config,
             auth_secret,
             peers: Arc::new(Mutex::new(HashMap::new())),
+            transport_keys: Arc::new(Mutex::new(HashMap::new())),
             incoming_sync: Arc::new(Mutex::new(None)),
             on_change: Arc::new(Mutex::new(None)),
             on_peer_connect: Arc::new(Mutex::new(None)),
@@ -119,11 +125,46 @@ impl RelaySync {
                 if from == self.config.device_id {
                     return;
                 }
-                self.handle_message(from, msg).await;
+                self.handle_message(from, msg, None).await;
+            }
+            TransportEvent::MessageReceivedFromTransport {
+                from_device_id,
+                transport_public_key,
+                msg,
+            } => {
+                if matches!(&msg, LanSyncMessage::Hello { .. }) {
+                    let trusted = self
+                        .storage
+                        .authorized_transport_public_key(&from_device_id)
+                        .await
+                        .is_some_and(|key| key == transport_public_key);
+                    if trusted {
+                        self.handle_message(from_device_id.clone(), msg, None).await;
+                        if self.is_authenticated_peer(&from_device_id).await {
+                            let _ = self
+                                .transport
+                                .bind_authenticated_peer(&from_device_id, &transport_public_key);
+                            self.transport_keys
+                                .lock()
+                                .await
+                                .insert(from_device_id, transport_public_key);
+                        }
+                    }
+                } else if self
+                    .transport_keys
+                    .lock()
+                    .await
+                    .get(&from_device_id)
+                    .is_some_and(|key| key == &transport_public_key)
+                {
+                    self.handle_message(from_device_id, msg, Some(transport_public_key))
+                        .await;
+                }
             }
             TransportEvent::Connected { .. } => {}
             TransportEvent::Disconnected { device_id } => {
                 self.peers.lock().await.remove(&device_id);
+                self.transport_keys.lock().await.remove(&device_id);
                 if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
                     handler(device_id, self.peers.lock().await.len());
                 }
@@ -132,7 +173,12 @@ impl RelaySync {
         trim_process_heap();
     }
 
-    async fn handle_message(&self, from_device_id: String, msg: LanSyncMessage) {
+    async fn handle_message(
+        &self,
+        from_device_id: String,
+        msg: LanSyncMessage,
+        transport_public_key: Option<String>,
+    ) {
         match msg {
             LanSyncMessage::Hello {
                 protocol_version,
@@ -224,6 +270,11 @@ impl RelaySync {
                     return;
                 }
                 self.apply_entities(&[entity], true).await;
+            }
+
+            LanSyncMessage::SignedIntegrationFrame { frame } => {
+                self.handle_signed_integration_frame(from_device_id, frame, transport_public_key)
+                    .await;
             }
 
             _ => {}

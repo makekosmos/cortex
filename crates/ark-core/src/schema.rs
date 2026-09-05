@@ -198,6 +198,95 @@ CREATE INDEX IF NOT EXISTS idx_objects_deleted_at ON objects(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_object_links_source ON object_links(source_object_id);
 CREATE INDEX IF NOT EXISTS idx_object_links_target ON object_links(target_object_id);
 CREATE INDEX IF NOT EXISTS idx_sync_tombstones_hlc ON sync_tombstones(hlc);
+
+CREATE TABLE IF NOT EXISTS integration_configurations (
+    integration_id TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    account_subject TEXT NOT NULL,
+    public_scopes_json TEXT NOT NULL DEFAULT '[]',
+    public_settings_json TEXT NOT NULL DEFAULT '{}',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    sync_cursor TEXT,
+    revision INTEGER NOT NULL DEFAULT 0,
+    hlc TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_integration_configurations_provider
+ON integration_configurations(provider, account_subject);
+
+CREATE TABLE IF NOT EXISTS authorized_nodes (
+    node_id TEXT PRIMARY KEY,
+    key_fingerprint TEXT NOT NULL,
+    signing_public_key TEXT NOT NULL,
+    encryption_public_key TEXT NOT NULL,
+    transport_public_key TEXT,
+    grant_epoch INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    authorized_at TEXT NOT NULL,
+    revoked_at TEXT,
+    revocation_epoch INTEGER,
+    revision INTEGER NOT NULL DEFAULT 0,
+    hlc TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_authorized_nodes_status
+ON authorized_nodes(status, grant_epoch);
+
+CREATE TABLE IF NOT EXISTS integration_node_grants (
+    integration_id TEXT NOT NULL,
+    node_id TEXT NOT NULL,
+    node_encryption_key TEXT NOT NULL,
+    grant_epoch INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    authorized_at TEXT NOT NULL,
+    revoked_at TEXT,
+    revision INTEGER NOT NULL DEFAULT 0,
+    hlc TEXT NOT NULL,
+    PRIMARY KEY(integration_id, node_id)
+);
+CREATE INDEX IF NOT EXISTS idx_integration_node_grants_node
+ON integration_node_grants(node_id, status, grant_epoch);
+
+CREATE TABLE IF NOT EXISTS integration_credential_envelopes (
+    envelope_id TEXT PRIMARY KEY,
+    integration_id TEXT NOT NULL,
+    recipient_node_id TEXT NOT NULL,
+    grant_epoch INTEGER NOT NULL,
+    credential_generation INTEGER NOT NULL,
+    refresh_fencing_token INTEGER NOT NULL,
+    key_id TEXT NOT NULL,
+    algorithm TEXT NOT NULL,
+    nonce TEXT NOT NULL,
+    ciphertext TEXT NOT NULL,
+    authenticated_metadata_json TEXT,
+    issuer_node_id TEXT NOT NULL,
+    issued_at TEXT NOT NULL,
+    revision INTEGER NOT NULL DEFAULT 0,
+    hlc TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_integration_envelopes_recipient
+ON integration_credential_envelopes(integration_id, recipient_node_id, credential_generation);
+
+CREATE TABLE IF NOT EXISTS integration_refresh_leases (
+    integration_id TEXT PRIMARY KEY,
+    credential_generation INTEGER NOT NULL,
+    holder_node_id TEXT NOT NULL,
+    fencing_token INTEGER NOT NULL,
+    issued_at_ms INTEGER NOT NULL,
+    expires_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_integration_refresh_leases_holder
+ON integration_refresh_leases(holder_node_id, expires_at_ms);
+
+CREATE TABLE IF NOT EXISTS sync_signed_replay_reservations (
+    space_id TEXT NOT NULL,
+    origin_node_id TEXT NOT NULL,
+    key_epoch INTEGER NOT NULL,
+    message_id TEXT NOT NULL,
+    reserved_at_ms INTEGER NOT NULL,
+    PRIMARY KEY(space_id, origin_node_id, key_epoch, message_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_signed_replay_origin
+ON sync_signed_replay_reservations(origin_node_id, key_epoch);
 ";
 
 pub const CREATE_OBJECT_SEARCH_FTS: &str = "

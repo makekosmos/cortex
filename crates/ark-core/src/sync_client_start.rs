@@ -115,6 +115,14 @@ impl SyncClient {
                                                 auth_hmac,
                                                 ..
                                             } => {
+                                                if authenticated {
+                                                    eprintln!("{TAG} Rejecting repeated hello on an authenticated connection");
+                                                    break;
+                                                }
+                                                if server_space_id != space_id {
+                                                    eprintln!("{TAG} Rejecting peer hello from a different space");
+                                                    break;
+                                                }
                                                 if let Some(secret) = auth_secret.as_ref() {
                                                     let valid = match (
                                                         auth_nonce.as_deref(),
@@ -156,7 +164,8 @@ impl SyncClient {
 
                                                 authenticated = true;
                                                 peer_device_id_actual = server_device_id.clone();
-                                                *authenticated_tx.lock().await = Some(tx.clone());
+                                                *authenticated_tx.lock().await =
+                                                    Some((server_device_id.clone(), tx.clone()));
                                                 eprintln!("{TAG} Authenticated with {server_device_name} ({server_device_id})");
                                                 if let Some(handler) =
                                                     on_connected.lock().await.as_ref()
@@ -323,6 +332,37 @@ impl SyncClient {
                                             }
 
                                             LanSyncMessage::SyncAck { .. } => {}
+
+                                            LanSyncMessage::SignedIntegrationFrame { frame } => {
+                                                if !authenticated {
+                                                    continue;
+                                                }
+                                                let accepted = if frame.space_id != space_id
+                                                    || frame.origin_node_id != peer_device_id_actual
+                                                    || frame.recipient_node_id != device_id
+                                                {
+                                                    false
+                                                } else {
+                                                    storage
+                                                        .apply_signed_integration_frame(
+                                                            &frame,
+                                                            &space_id,
+                                                            &peer_device_id_actual,
+                                                            &device_id,
+                                                        )
+                                                        .await
+                                                        .is_ok()
+                                                };
+                                                send_msg(
+                                                    &tx,
+                                                    &LanSyncMessage::SignedIntegrationAck {
+                                                        message_id: frame.message_id,
+                                                        accepted,
+                                                    },
+                                                );
+                                            }
+
+                                            LanSyncMessage::SignedIntegrationAck { .. } => {}
 
                                             LanSyncMessage::LiveChange {
                                                 change_id,

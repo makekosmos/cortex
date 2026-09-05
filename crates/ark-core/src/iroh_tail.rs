@@ -115,6 +115,17 @@ mod registry_tests {
     }
 
     #[test]
+    fn replacing_endpoint_clears_old_trust() {
+        let registry = DeviceRegistry::new();
+        let old = SecretKey::generate().public();
+        let new = SecretKey::generate().public();
+        registry.insert(old, "device-A".to_string());
+        assert!(registry.bind_authenticated("device-A", &old.to_string()));
+        registry.insert(new, "device-A".to_string());
+        assert!(registry.authenticated_endpoint("device-A").is_none());
+    }
+
+    #[test]
     fn unknown_endpoint_id_resolves_to_none() {
         let registry = DeviceRegistry::new();
         let endpoint_id = SecretKey::generate().public();
@@ -134,6 +145,47 @@ mod registry_tests {
             registry.device_id_for(&endpoint_id),
             Some("device-A-renamed".to_string())
         );
+        assert_eq!(registry.endpoint_id_for("device-A"), None);
+    }
+
+    #[test]
+    fn untrusted_hello_cannot_replace_trusted_endpoint_mapping() {
+        let registry = DeviceRegistry::new();
+        let endpoint_id = SecretKey::generate().public();
+
+        registry.insert(endpoint_id, "device-A".to_string());
+        assert!(registry.bind_authenticated("device-A", &endpoint_id.to_string()));
+
+        assert!(!registry.insert_untrusted(endpoint_id, "device-attacker".to_string()));
+        assert_eq!(registry.device_id_for(&endpoint_id).as_deref(), Some("device-A"));
+        assert_eq!(registry.authenticated_endpoint("device-A"), Some(endpoint_id));
+    }
+
+    #[test]
+    fn untrusted_hello_cannot_move_trusted_device_to_new_endpoint() {
+        let registry = DeviceRegistry::new();
+        let old_endpoint = SecretKey::generate().public();
+        let new_endpoint = SecretKey::generate().public();
+
+        registry.insert(old_endpoint, "device-A".to_string());
+        assert!(registry.bind_authenticated("device-A", &old_endpoint.to_string()));
+
+        assert!(!registry.insert_untrusted(new_endpoint, "device-A".to_string()));
+        assert_eq!(registry.endpoint_id_for("device-A"), Some(old_endpoint));
+        assert_eq!(registry.authenticated_endpoint("device-A"), Some(old_endpoint));
+    }
+
+    #[test]
+    fn inserting_existing_device_removes_its_old_endpoint_mapping() {
+        let registry = DeviceRegistry::new();
+        let old_endpoint = SecretKey::generate().public();
+        let new_endpoint = SecretKey::generate().public();
+
+        registry.insert(old_endpoint, "device-A".to_string());
+        registry.insert(new_endpoint, "device-A".to_string());
+
+        assert_eq!(registry.device_id_for(&old_endpoint), None);
+        assert_eq!(registry.endpoint_id_for("device-A"), Some(new_endpoint));
     }
 }
 

@@ -36,6 +36,7 @@ use ark_core::db::{self, SqliteStorageBackend};
 use ark_core::events::{emit_event, set_event_sender};
 use ark_core::hlc::HLC;
 use ark_core::host::{get_host_device_name, get_own_addresses};
+use ark_core::integration_replication::{AuthorizedNode, IntegrationNodeGrant, SignedSyncEnvelope};
 use ark_core::net::is_address_routable;
 use ark_core::protocol::LAN_SYNC_PORT;
 use ark_core::relay_sync::{RelaySync, RelaySyncConfig};

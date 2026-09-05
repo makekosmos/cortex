@@ -422,4 +422,39 @@ mod tests {
             "canonical_ingress:invalid_request:legacy_alias_new_write"
         );
     }
+
+    #[tokio::test]
+    async fn integration_rpc_rejects_revocation_without_local_authorization() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+
+        let request: Request = serde_json::from_value(json!({
+            "operation": "integration.persist_node_authorization",
+            "authorization_operation": "revoke",
+            "node": {
+                "node_id": "recipient",
+                "key_fingerprint": "fingerprint",
+                "signing_public_key": "signing",
+                "encryption_public_key": "encryption",
+                "grant_epoch": 2,
+                "status": "revoked",
+                "authorized_at": "2026-09-05T00:00:00Z",
+                "revoked_at": "2026-09-05T00:01:00Z",
+                "revocation_epoch": 2,
+                "revision": 2,
+                "hlc": "2026-09-05T00:00:00.000Z:000001:recipient"
+            },
+            "device_id": "rpc"
+        }))
+        .unwrap();
+
+        let error = handle_request(request).await.unwrap_err();
+        assert_eq!(error, "node is not authorized");
+    }
 }

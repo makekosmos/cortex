@@ -20,11 +20,24 @@ pub(super) async fn handle_message(
             protocol_version,
             device_id: peer_device_id,
             device_name: peer_device_name,
-            space_id: _peer_space_id,
+            space_id: peer_space_id,
             addresses,
             auth_nonce,
             auth_hmac,
         } => {
+            {
+                let mut peers_guard = peers.lock().await;
+                if peers_guard
+                    .get(&peer_id)
+                    .is_some_and(|peer| peer.authenticated)
+                {
+                    eprintln!("{TAG} Rejecting repeated hello on an authenticated connection");
+                    if let Some(peer) = peers_guard.remove(&peer_id) {
+                        let _ = peer.tx.send(Message::Close(None));
+                    }
+                    return;
+                }
+            }
             if protocol_version != PROTOCOL_VERSION {
                 eprintln!(
                     "{TAG} Protocol version mismatch: {protocol_version} vs {PROTOCOL_VERSION}"
@@ -36,6 +49,15 @@ pub(super) async fn handle_message(
             let my_device_name = device_name.read().await.clone();
             let my_space_id = space_id.read().await.clone();
             let my_addresses = own_addresses.read().await.clone();
+
+            if peer_space_id != my_space_id {
+                eprintln!("{TAG} Rejecting peer hello from a different space");
+                let mut peers_guard = peers.lock().await;
+                if let Some(peer) = peers_guard.remove(&peer_id) {
+                    let _ = peer.tx.send(Message::Close(None));
+                }
+                return;
+            }
 
             if let Some(secret) = auth_secret.read().await.clone() {
                 let valid = match (auth_nonce.as_deref(), auth_hmac.as_deref()) {
@@ -346,6 +368,44 @@ pub(super) async fn handle_message(
         LanSyncMessage::SyncAck { .. } => {
             // ACK received -- in a full implementation, resolve pending ACK timers
         }
+
+        LanSyncMessage::SignedIntegrationFrame { frame } => {
+            let (tx, authenticated_peer_id) = {
+                let peers_guard = peers.lock().await;
+                match peers_guard.get(&peer_id) {
+                    Some(peer) if peer.authenticated => (peer.tx.clone(), peer.device_id.clone()),
+                    _ => return,
+                }
+            };
+            let expected_space_id = space_id.read().await.clone();
+            let expected_recipient_node_id = device_id.read().await.clone();
+            if frame.space_id != expected_space_id
+                || frame.origin_node_id != authenticated_peer_id
+                || frame.recipient_node_id != expected_recipient_node_id
+            {
+                return;
+            }
+            if storage
+                .apply_signed_integration_frame(
+                    &frame,
+                    &expected_space_id,
+                    &authenticated_peer_id,
+                    &expected_recipient_node_id,
+                )
+                .await
+                .is_ok()
+            {
+                send_msg(
+                    &tx,
+                    &LanSyncMessage::SignedIntegrationAck {
+                        message_id: frame.message_id,
+                        accepted: true,
+                    },
+                );
+            }
+        }
+
+        LanSyncMessage::SignedIntegrationAck { .. } => {}
 
         LanSyncMessage::LiveChange {
             change_id, entity, ..

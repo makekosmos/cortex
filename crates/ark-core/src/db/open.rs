@@ -86,6 +86,8 @@ pub fn init_schema_prerequisites_for_phase3(conn: &Connection) -> Result<(), Str
         .map_err(|e| e.to_string())?;
     conn.execute_batch(CREATE_TABLES)
         .map_err(|e| e.to_string())?;
+    ensure_integration_credential_fence_column(conn)?;
+    ensure_authorized_node_transport_key(conn)?;
     ensure_usage_runtime_ms(conn)?;
     conn.execute_batch("SAVEPOINT ark_phase2_init")
         .map_err(|e| e.to_string())?;
@@ -108,6 +110,45 @@ pub fn init_schema_prerequisites_for_phase3(conn: &Connection) -> Result<(), Str
             );
             return Err(error);
         }
+    }
+    Ok(())
+}
+
+fn ensure_authorized_node_transport_key(conn: &Connection) -> Result<(), String> {
+    let exists: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('authorized_nodes')
+             WHERE name = 'transport_public_key')",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    if !exists {
+        conn.execute(
+            "ALTER TABLE authorized_nodes ADD COLUMN transport_public_key TEXT",
+            [],
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+fn ensure_integration_credential_fence_column(conn: &Connection) -> Result<(), String> {
+    let has_column = conn
+        .prepare("PRAGMA table_info(integration_credential_envelopes)")
+        .map_err(|e| e.to_string())?
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?
+        .iter()
+        .any(|name| name == "refresh_fencing_token");
+    if !has_column {
+        conn.execute_batch(
+            "ALTER TABLE integration_credential_envelopes
+             ADD COLUMN refresh_fencing_token INTEGER NOT NULL DEFAULT 0",
+        )
+        .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -185,4 +226,3 @@ pub fn backup_to_file_chunked(
 
 // Legacy registry definitions are owned by canonical_types::definitions.
 // Historical rows remain readable through the Phase 3 migration/archive path.
-

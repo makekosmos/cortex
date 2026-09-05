@@ -33,6 +33,7 @@ impl SyncTransport for IrohTransport {
             let accept_endpoint = endpoint.clone();
             let accept_event_tx = event_tx.clone();
             let accept_registry = self.registry.clone();
+            let accept_outbound_storage = self.outbound_storage.clone();
             let mut accept_stop = self.stop_rx.clone();
             let out_tx = self.out_tx.clone();
             let hello = self.make_hello();
@@ -50,6 +51,7 @@ impl SyncTransport for IrohTransport {
                             };
                             let event_tx = accept_event_tx.clone();
                             let registry = accept_registry.clone();
+                            let outbound_storage = accept_outbound_storage.clone();
                             let out_rx = out_tx.subscribe();
                             let stop_rx = accept_stop.clone();
                             let hello = hello.clone();
@@ -71,6 +73,7 @@ impl SyncTransport for IrohTransport {
                                     stop_rx,
                                     event_tx,
                                     registry,
+                                    outbound_storage,
                                 )
                                 .await;
                             });
@@ -92,6 +95,7 @@ impl SyncTransport for IrohTransport {
             let dial_endpoint = endpoint.clone();
             let dial_event_tx = event_tx.clone();
             let dial_registry = self.registry.clone();
+            let dial_outbound_storage = self.outbound_storage.clone();
             let mut dial_stop = self.stop_rx.clone();
             let out_tx = self.out_tx.clone();
             let hello = self.make_hello();
@@ -139,6 +143,7 @@ impl SyncTransport for IrohTransport {
                                 stop_rx,
                                 dial_event_tx.clone(),
                                 dial_registry.clone(),
+                                dial_outbound_storage.clone(),
                             )
                             .await;
 
@@ -168,10 +173,82 @@ impl SyncTransport for IrohTransport {
     /// не установлено), сообщение молча дропается: pre-connect live-changes
     /// будут скомпенсированы VersionVector обменом при (ре)коннекте.
     fn send(&self, msg: LanSyncMessage) -> Result<(), String> {
-        // send() возвращает Err только если нет подписчиков — это нормально
-        // (нет активного соединения). Не возвращаем ошибку вызывающему.
-        let _ = self.out_tx.send(msg);
+        if matches!(
+            &msg,
+            LanSyncMessage::SignedIntegrationFrame { .. }
+                | LanSyncMessage::SignedIntegrationAck { .. }
+        ) {
+            return Err("iroh broadcast cannot carry addressed integration messages".into());
+        }
+        let _ = self.out_tx.send(OutgoingMessage { target: None, msg, completion: None });
         Ok(())
+    }
+
+    async fn send_to(&self, device_id: &str, msg: LanSyncMessage) -> Result<(), String> {
+        let target = self
+            .registry
+            .authenticated_endpoint(device_id)
+            .ok_or_else(|| "iroh addressed peer is not authenticated".to_string())?;
+        if let LanSyncMessage::SignedIntegrationFrame { frame } = &msg {
+            if frame.recipient_node_id != device_id {
+                return Err("iroh frame recipient does not match addressed peer".into());
+            }
+        }
+        if !matches!(
+            &msg,
+            LanSyncMessage::SignedIntegrationFrame { .. }
+                | LanSyncMessage::SignedIntegrationAck { .. }
+        ) {
+            return Err("iroh send_to only supports addressed integration messages".into());
+        }
+        if let LanSyncMessage::SignedIntegrationFrame { frame } = &msg {
+            let context = self.outbound_storage.read().await.clone().ok_or_else(|| {
+                "iroh outbound integration authorization is unavailable".to_string()
+            })?;
+            context.storage
+                .validate_outbound_signed_integration_frame_with_transport(
+                    frame, &context.space_id, &context.origin_node_id, &target.to_string(),
+                )
+                .await?;
+        }
+        let (completion_tx, completion_rx) = tokio::sync::oneshot::channel();
+        self.out_tx
+            .send(OutgoingMessage {
+                target: Some(target),
+                msg,
+                completion: Some(Arc::new(std::sync::Mutex::new(Some(completion_tx)))),
+            })
+            .map_err(|_| "iroh addressed peer is not connected".to_string())?;
+        tokio::time::timeout(Duration::from_secs(5), completion_rx)
+            .await
+            .map_err(|_| "iroh addressed writer timed out".to_string())?
+            .map_err(|_| "iroh addressed writer stopped".to_string())?
+    }
+
+    fn set_outbound_storage(
+        &self,
+        storage: Arc<dyn crate::sync_server::StorageBackend>,
+        space_id: &str,
+        origin_node_id: &str,
+    ) -> Result<(), String> {
+        if let Ok(mut guard) = self.outbound_storage.try_write() {
+            *guard = Some(OutboundStorage {
+                storage,
+                space_id: space_id.to_string(),
+                origin_node_id: origin_node_id.to_string(),
+            });
+        } else {
+            return Err("iroh outbound authorization context is busy".into());
+        }
+        Ok(())
+    }
+
+    fn bind_authenticated_peer(&self, device_id: &str, transport_public_key: &str) -> Result<(), String> {
+        if self.registry.bind_authenticated(device_id, transport_public_key) {
+            Ok(())
+        } else {
+            Err("iroh transport identity does not match peer endpoint".into())
+        }
     }
 
     /// Сигнализирует всем фоновым задачам остановиться и закрывает `Endpoint`.

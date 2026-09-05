@@ -212,6 +212,8 @@ mod ffi_callbacks;
 mod ffi_control;
 #[path = "ffi_database.rs"]
 mod ffi_database;
+#[path = "ffi_integration.rs"]
+mod ffi_integration;
 #[path = "ffi_legacy.rs"]
 mod ffi_legacy;
 #[path = "ffi_live.rs"]

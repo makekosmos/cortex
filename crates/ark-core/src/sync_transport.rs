@@ -7,9 +7,11 @@
 //! `iroh_transport::IrohTransport` implement, so `RelaySync` can drive either
 //! one via `Arc<dyn SyncTransport>`.
 
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use crate::protocol::LanSyncMessage;
+use crate::sync_server::StorageBackend;
 
 /// Lifecycle/message events emitted by a sync transport into the orchestration
 /// layer. Structurally identical across transports.
@@ -23,6 +25,11 @@ pub enum TransportEvent {
     },
     MessageReceived {
         from_device_id: String,
+        msg: LanSyncMessage,
+    },
+    MessageReceivedFromTransport {
+        from_device_id: String,
+        transport_public_key: String,
         msg: LanSyncMessage,
     },
 }
@@ -40,6 +47,35 @@ pub trait SyncTransport: Send + Sync {
 
     /// Enqueue a message for sending.
     fn send(&self, msg: LanSyncMessage) -> Result<(), String>;
+
+    async fn send_to(&self, _device_id: &str, _msg: LanSyncMessage) -> Result<(), String> {
+        Err("addressed transport is not supported".into())
+    }
+
+    fn set_outbound_storage(
+        &self,
+        _storage: Arc<dyn StorageBackend>,
+        _space_id: &str,
+        _origin_node_id: &str,
+    ) -> Result<(), String> {
+        Err("outbound authorization is not supported".into())
+    }
+
+    fn bind_authenticated_peer(
+        &self,
+        _device_id: &str,
+        _transport_public_key: &str,
+    ) -> Result<(), String> {
+        Err("authenticated transport binding is not supported".into())
+    }
+
+    fn disconnect_peer(&self, _device_id: &str) -> Result<(), String> {
+        Err("addressed peer disconnect is not supported".into())
+    }
+
+    fn disconnect_transport_peer(&self, _transport_public_key: &str) -> Result<(), String> {
+        Err("transport peer disconnect is not supported".into())
+    }
 
     /// Signal the transport to stop.
     fn stop(&self);

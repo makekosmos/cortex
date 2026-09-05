@@ -47,10 +47,17 @@ where
             return None;
         }
         match tokio::time::timeout(remaining, rx.recv()).await {
-            Ok(Some(TransportEvent::MessageReceived {
-                from_device_id,
-                msg,
-            })) => {
+            Ok(Some(
+                TransportEvent::MessageReceived {
+                    from_device_id,
+                    msg,
+                }
+                | TransportEvent::MessageReceivedFromTransport {
+                    from_device_id,
+                    msg,
+                    ..
+                },
+            )) => {
                 if predicate(&from_device_id, &msg) {
                     return Some((from_device_id, msg));
                 }

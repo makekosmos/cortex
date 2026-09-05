@@ -7,6 +7,7 @@ use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::hlc::HLC;
+use crate::integration_replication::SignedSyncEnvelope;
 use crate::protocol::*;
 use crate::sync_server::StorageBackend;
 
@@ -43,7 +44,7 @@ pub struct SyncClient {
     own_addresses: Vec<String>,
     auth_secret: Option<String>,
     stopped: Arc<std::sync::atomic::AtomicBool>,
-    authenticated_tx: Arc<Mutex<Option<mpsc::UnboundedSender<Message>>>>,
+    authenticated_tx: Arc<Mutex<Option<(String, mpsc::UnboundedSender<Message>)>>>,
     on_change: Arc<Mutex<Option<ClientOnChangeCallback>>>,
     on_connected: Arc<Mutex<Option<ClientOnConnectedCallback>>>,
     on_disconnected: Arc<Mutex<Option<ClientOnDisconnectedCallback>>>,
@@ -83,7 +84,7 @@ impl SyncClient {
     /// state.
     pub async fn broadcast_live_change(&self, entity: SyncEntity) {
         let guard = self.authenticated_tx.lock().await;
-        if let Some(tx) = guard.as_ref() {
+        if let Some((_, tx)) = guard.as_ref() {
             let change_id = generate_id();
             let msg = LanSyncMessage::LiveChange {
                 change_id,
@@ -92,6 +93,32 @@ impl SyncClient {
             };
             let _ = tx.send(Message::Text(serialize_message(&msg)));
         }
+    }
+
+    pub async fn send_signed_integration_frame(
+        &self,
+        frame: SignedSyncEnvelope,
+    ) -> Result<(), String> {
+        if frame.space_id != self.space_id {
+            return Err("signed integration frame has the wrong space".into());
+        }
+        if frame.origin_node_id != self.device_id {
+            return Err("signed integration frame origin is not this node".into());
+        }
+        let guard = self.authenticated_tx.lock().await;
+        let Some((authenticated_peer_id, tx)) = guard.as_ref() else {
+            return Err("LAN peer is not authenticated".into());
+        };
+        if frame.recipient_node_id != *authenticated_peer_id {
+            return Err("signed integration frame is addressed to another peer".into());
+        }
+        self.storage
+            .validate_outbound_signed_integration_frame(&frame, &self.space_id, &self.device_id)
+            .await?;
+        tx.send(Message::Text(serialize_message(
+            &LanSyncMessage::SignedIntegrationFrame { frame },
+        )))
+        .map_err(|_| "LAN peer connection is closed".into())
     }
 
     pub async fn set_on_change(&self, handler: ClientOnChangeCallback) {
@@ -126,7 +153,7 @@ impl SyncClient {
     pub async fn disconnect(&self) {
         self.stopped
             .store(true, std::sync::atomic::Ordering::Relaxed);
-        if let Some(tx) = self.authenticated_tx.lock().await.take() {
+        if let Some((_, tx)) = self.authenticated_tx.lock().await.take() {
             let _ = tx.send(Message::Close(None));
         }
     }

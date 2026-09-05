@@ -364,6 +364,8 @@ mod runtime_system;
 mod runtime_types;
 #[path = "runtime/usage.rs"]
 mod runtime_usage;
+#[path = "runtime/integration.rs"]
+mod runtime_integration;
 
 async fn handle_request(request: Request) -> Result<Value, String> {
     match request {
@@ -440,5 +442,12 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         | Request::GetOwnAddresses { .. }
         | Request::GetHostDeviceName
         | Request::GetOwnIrohTicket) => runtime_system::handle(request).await,
+
+        request @ (Request::IntegrationPersistNodeAuthorization { .. }
+        | Request::IntegrationPersistIntegrationGrant { .. }
+        | Request::IntegrationPrepareSignedSync { .. }
+        | Request::IntegrationValidateOutboundSignedSync { .. }) => {
+            runtime_integration::handle(request).await
+        }
     }
 }

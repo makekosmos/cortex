@@ -1,6 +1,42 @@
 use super::*;
 
 impl SyncServer {
+    pub async fn send_signed_integration_frame(
+        &self,
+        recipient_device_id: &str,
+        frame: crate::integration_replication::SignedSyncEnvelope,
+    ) -> Result<(), String> {
+        let expected_space_id = self.space_id.read().await.clone();
+        let expected_origin_node_id = self.device_id.read().await.clone();
+        if frame.space_id != expected_space_id {
+            return Err("signed integration frame has the wrong space".into());
+        }
+        if frame.origin_node_id != expected_origin_node_id {
+            return Err("signed integration frame origin is not this node".into());
+        }
+        if frame.recipient_node_id != recipient_device_id {
+            return Err("signed integration frame is addressed to another peer".into());
+        }
+        self.storage
+            .validate_outbound_signed_integration_frame(
+                &frame,
+                &expected_space_id,
+                &expected_origin_node_id,
+            )
+            .await?;
+        let peers = self.peers.lock().await;
+        let Some(peer) = peers
+            .values()
+            .find(|peer| peer.authenticated && peer.device_id == recipient_device_id)
+        else {
+            return Err("target LAN peer is not authenticated".into());
+        };
+        peer.tx
+            .send(Message::Text(serialize_message(
+                &LanSyncMessage::SignedIntegrationFrame { frame },
+            )))
+            .map_err(|_| "LAN peer connection is closed".into())
+    }
     pub fn new(storage: Arc<dyn StorageBackend>) -> Self {
         Self {
             storage,
