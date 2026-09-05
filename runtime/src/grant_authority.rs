@@ -115,13 +115,16 @@ impl GrantAuthorityRegistry {
         };
         let records: Vec<PersistedRecord> =
             serde_json::from_slice(&bytes).map_err(|_| GrantError::Persistence)?;
-        if records.iter().any(|record| {
-            record.version != 1
+        let mut ids = std::collections::HashSet::with_capacity(records.len());
+        for record in &records {
+            if record.version != 1
                 || !Path::new(&record.selected_path).is_absolute()
                 || record.persistent_grant_id.is_empty()
                 || record.extension_id.is_empty()
-        }) {
-            return Err(GrantError::Persistence);
+                || !ids.insert(&record.persistent_grant_id)
+            {
+                return Err(GrantError::Persistence);
+            }
         }
         Ok(records)
     }
@@ -443,13 +446,24 @@ impl GrantAuthorityRegistry {
             .retain(|_, g| !(g.owner.session_id == session_id && g.owner.generation == generation));
         before - grants.len()
     }
-    /// Revoke the persisted grants owned by the v1 legacy extension allowlist
-    /// and invalidate matching live handles only after persistence succeeds.
-    pub fn revoke_legacy_records(&self) -> Result<usize, GrantError> {
+    /// Revoke persisted grants for the selected v1 legacy identities and
+    /// invalidate matching live handles only after persistence succeeds.
+    pub fn revoke_legacy_records(&self, source_ids: &[&str]) -> Result<usize, GrantError> {
+        if source_ids.is_empty()
+            || source_ids
+                .iter()
+                .any(|id| !LEGACY_EXTENSION_IDS.contains(id))
+            || source_ids
+                .iter()
+                .enumerate()
+                .any(|(index, id)| source_ids[..index].contains(id))
+        {
+            return Err(GrantError::Invalid);
+        }
         let mut records = self.load_records()?;
         let mut revoked = 0;
         for record in &mut records {
-            if LEGACY_EXTENSION_IDS.contains(&record.extension_id.as_str()) && !record.revoked {
+            if source_ids.contains(&record.extension_id.as_str()) && !record.revoked {
                 record.revoked = true;
                 revoked += 1;
             }
@@ -458,10 +472,8 @@ impl GrantAuthorityRegistry {
             self.save_records(&records)?;
         }
 
-        if revoked > 0 {
-            let mut grants = self.grants.lock().unwrap_or_else(|p| p.into_inner());
-            grants.retain(|_, grant| !LEGACY_EXTENSION_IDS.contains(&grant.extension_id.as_str()));
-        }
+        let mut grants = self.grants.lock().unwrap_or_else(|p| p.into_inner());
+        grants.retain(|_, grant| !source_ids.contains(&grant.extension_id.as_str()));
         Ok(revoked)
     }
     pub fn len(&self) -> usize {
@@ -758,7 +770,7 @@ mod tests {
         fs::write(&path, serde_json::to_vec(&records).unwrap()).unwrap();
 
         let revoked = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
-            .revoke_legacy_records()
+            .revoke_legacy_records(&["eden"])
             .unwrap();
         assert_eq!(revoked, 1);
 
@@ -780,7 +792,7 @@ mod tests {
 
         let registry = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf());
         assert_eq!(
-            registry.revoke_legacy_records(),
+            registry.revoke_legacy_records(&["eden"]),
             Err(GrantError::Persistence)
         );
         assert_eq!(fs::read(&path).unwrap(), before);
@@ -816,9 +828,76 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(registry.revoke_legacy_records().unwrap(), 1);
+        assert_eq!(registry.revoke_legacy_records(&["eden"]).unwrap(), 1);
         assert_eq!(registry.len(), 1);
         assert_eq!(registry.close_owner(owner(2)), 1);
         assert_eq!(registry.len(), 0);
+    }
+
+    #[test]
+    fn scoped_legacy_revoke_leaves_other_legacy_identity_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("grant-authority.json");
+        let records = serde_json::json!([
+            {
+                "version": 1,
+                "persistent_grant_id": "eden-grant",
+                "extension_id": "eden",
+                "provenance": "NativeDialog",
+                "exact_file": false,
+                "selected_path": dir.path().to_string_lossy(),
+                "root_identity": {"primary": 1, "secondary": 2},
+                "exact_file_identity": null,
+                "revoked": false,
+                "unknown": "keep"
+            },
+            {
+                "version": 1,
+                "persistent_grant_id": "delphi-grant",
+                "extension_id": "delphi",
+                "provenance": "NativeDialog",
+                "exact_file": false,
+                "selected_path": dir.path().to_string_lossy(),
+                "root_identity": {"primary": 1, "secondary": 2},
+                "exact_file_identity": null,
+                "revoked": false,
+                "unknown": "untouched"
+            }
+        ]);
+        fs::write(&path, serde_json::to_vec(&records).unwrap()).unwrap();
+
+        assert_eq!(
+            GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
+                .revoke_legacy_records(&["eden"])
+                .unwrap(),
+            1
+        );
+        let persisted: serde_json::Value =
+            serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        assert_eq!(persisted[0]["persistent_grant_id"], "eden-grant");
+        assert_eq!(persisted[0]["revoked"], true);
+        assert_eq!(persisted[0]["unknown"], "keep");
+        assert_eq!(persisted[1]["persistent_grant_id"], "delphi-grant");
+        assert_eq!(persisted[1]["revoked"], false);
+        assert_eq!(persisted[1]["unknown"], "untouched");
+    }
+
+    #[test]
+    fn invalid_scope_is_rejected_without_touching_persisted_records() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("grant-authority.json");
+        let before = br#"[{"version":1,"persistent_grant_id":"legacy","extension_id":"eden","provenance":"native-dialog","exact_file":false,"selected_path":"/tmp","root_identity":{"dev":1,"ino":2},"exact_file_identity":null,"revoked":false}]"#;
+        fs::write(&path, before).unwrap();
+
+        let registry = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf());
+        assert_eq!(
+            registry.revoke_legacy_records(&["eden", "eden"]),
+            Err(GrantError::Invalid)
+        );
+        assert_eq!(
+            registry.revoke_legacy_records(&["not-a-legacy-id"]),
+            Err(GrantError::Invalid)
+        );
+        assert_eq!(fs::read(path).unwrap(), before);
     }
 }

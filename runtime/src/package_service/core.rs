@@ -313,10 +313,14 @@ impl PackageService {
         self.grants.clone()
     }
 
-    pub fn revoke_legacy_grants(&self) -> Result<usize, PackageError> {
+    pub fn revoke_legacy_grants(&self, source_ids: &[String]) -> Result<usize, PackageError> {
+        let source_ids = source_ids.iter().map(String::as_str).collect::<Vec<_>>();
         self.grants
-            .revoke_legacy_records()
-            .map_err(|_| PackageError::Persistence)
+            .revoke_legacy_records(&source_ids)
+            .map_err(|error| match error {
+                crate::grant_authority::GrantError::Invalid => PackageError::Invalid,
+                _ => PackageError::Persistence,
+            })
     }
 
     pub async fn restore_enabled_workers(&self) -> Result<(), PackageError> {
