@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn restore_legacy_grants(
+pub(crate) fn restore_legacy_grants(
     subop: &str,
     params: serde_json::Value,
     service: &Arc<PackageService>,
