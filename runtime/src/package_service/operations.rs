@@ -365,6 +365,10 @@ pub async fn invoke_worker_operation(
             || package.revoked
             || package.catalog_sequence != catalog_sequence
             || !package.hash.eq_ignore_ascii_case(hash)
+            || !matches!(
+                &package.manifest,
+                VersionedManifest::V2(manifest) if manifest.supports_current_platform()
+            )
         {
             return Err(PackageError::Invalid);
         }
