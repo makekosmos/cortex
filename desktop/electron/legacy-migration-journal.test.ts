@@ -100,9 +100,9 @@ test("writes prepared before cutover and restores it on activation failure", asy
       }),
     ).rejects.toThrow("activation failed");
     expect(events).toEqual([
+      "stopped",
       "snapshotted",
       "staged",
-      "stopped",
       "revoked",
       "activation-failed",
       "restored",
@@ -133,14 +133,14 @@ test("restores the snapshot when staging fails before the prepared marker", asyn
         restoreBefore: async () => events.push("restored"),
       }),
     ).rejects.toThrow("stage failed");
-    expect(events).toEqual(["snapshotted", "stage-failed", "restored"]);
+    expect(events).toEqual(["stopped", "snapshotted", "stage-failed", "restored"]);
     expect(await readMigrationJournal(root, journal.target_id)).toBeNull();
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("durable prepared marker precedes the first cutover mutation", async () => {
+test("stop precedes snapshot and failure restores before the journal", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "cortex-journal-"));
   try {
     const events: string[] = [];
@@ -152,7 +152,7 @@ test("durable prepared marker precedes the first cutover mutation", async () => 
         snapshotBefore: async () => events.push("snapshotted"),
         stopAffected: async () => {
           events.push("stopped");
-          expect((await readMigrationJournal(root, journal.target_id))?.phase).toBe("prepared");
+          expect(await readMigrationJournal(root, journal.target_id)).toBeNull();
           throw new Error("crash during stop");
         },
         stageDestination: async () => events.push("staged"),
@@ -161,7 +161,7 @@ test("durable prepared marker precedes the first cutover mutation", async () => 
         restoreBefore: async () => events.push("restored"),
       }),
     ).rejects.toThrow("crash during stop");
-    expect(events).toEqual(["snapshotted", "staged", "stopped", "restored"]);
+    expect(events).toEqual(["stopped", "restored"]);
     expect(await readMigrationJournal(root, journal.target_id)).toBeNull();
   } finally {
     await rm(root, { recursive: true, force: true });

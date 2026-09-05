@@ -1,4 +1,4 @@
-import { mkdir, open, readFile, rename } from "node:fs/promises";
+import { mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { ArkClient } from "@kosmos/ark";
 import { isRecord, isString, type JsonValue } from "./extension-permissions";
@@ -29,6 +29,10 @@ function migrationRoot(dataDir: string, target: CanonicalId): string {
 
 function packageStatePath(dataDir: string, target: CanonicalId): string {
   return path.join(migrationRoot(dataDir, target), "before", "package-state.json");
+}
+
+function packageStatePendingPath(dataDir: string, target: CanonicalId): string {
+  return path.join(migrationRoot(dataDir, target), "before", "package-state.pending");
 }
 
 async function writeDurableJson(filePath: string, value: JsonValue): Promise<void> {
@@ -123,6 +127,27 @@ export async function snapshotPackageState(
     packageStatePath(dataDir, target),
     states.map((state) => ({ version: state.version, enabled: state.enabled })),
   );
+  await writeDurableJson(packageStatePendingPath(dataDir, target), true);
+}
+
+export async function packageStateSnapshotPending(
+  dataDir: string,
+  target: CanonicalId,
+): Promise<boolean> {
+  try {
+    await stat(packageStatePendingPath(dataDir, target));
+    return true;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+export async function clearPackageStateSnapshotPending(
+  dataDir: string,
+  target: CanonicalId,
+): Promise<void> {
+  await rm(packageStatePendingPath(dataDir, target), { force: true });
 }
 
 async function readPackageState(dataDir: string, target: CanonicalId): Promise<PackageState[]> {
@@ -166,4 +191,5 @@ export async function restorePackageState(
     restored.some((version) => !expected.includes(version))
   )
     throw new Error(`package worker state recovery failed for '${target}'`);
+  await clearPackageStateSnapshotPending(dataDir, target);
 }

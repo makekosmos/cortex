@@ -258,14 +258,14 @@ export async function runLegacyMigration(
   let recoveryRequired = false;
   try {
     recoveryRequired = true;
-    await host.snapshotBefore();
-    await writeMigrationJournal(host.dataDir, { ...host.journal, phase: "prepared" });
-    await host.stageDestination();
     await host.stopAffected();
+    await host.snapshotBefore();
+    await host.stageDestination();
+    await writeMigrationJournal(host.dataDir, { ...host.journal, phase: "prepared" });
     await host.revokeLegacyGrants();
     await host.activateCanonical();
-    await writeMigrationJournal(host.dataDir, { ...host.journal, phase: "committed" });
     await host.commitLegacyGrants?.();
+    await writeMigrationJournal(host.dataDir, { ...host.journal, phase: "committed" });
     return "committed";
   } catch (error) {
     if (recoveryRequired) {

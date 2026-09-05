@@ -19,6 +19,7 @@ import {
 } from "./legacy-migration-journal";
 import {
   packageRows,
+  packageStateSnapshotPending,
   restorePackageState,
   snapshotPackageState,
   verifiedReplacement,
@@ -73,13 +74,14 @@ async function snapshotNamespaces(
   sourceIds: readonly string[],
 ): Promise<void> {
   const root = migrationRoot(dataDir, target);
-  await rm(path.join(root, "before"), { recursive: true, force: true });
   await mkdir(path.join(root, "before"), { recursive: true });
   const destination = extensionUserDataDir(target);
+  await rm(path.join(root, "before", "destination"), { recursive: true, force: true });
   if (await existsDirectory(destination))
     await copyNamespace(destination, path.join(root, "before", "destination"));
   for (const id of sourceIds) {
     const source = extensionUserDataDir(id);
+    await rm(path.join(root, "before", id), { recursive: true, force: true });
     if (await existsDirectory(source)) {
       await validateLegacyExtensionDataRoot(source);
       await copyNamespace(source, path.join(root, "before", id));
@@ -173,6 +175,7 @@ export function createLegacyMigrationRunner(
       },
       verifyReplacement: async () => (await replacement(target)) !== null,
       stopAffected: async () => {
+        await snapshotPackageState(dataDir, target, request);
         for (const row of await packageRows(request)) {
           if (
             isRecord(row) &&
@@ -194,7 +197,6 @@ export function createLegacyMigrationRunner(
       },
       snapshotBefore: async () => {
         await snapshotNamespaces(dataDir, target, ids);
-        await snapshotPackageState(dataDir, target, request);
       },
       stageDestination: () => stageNamespace(dataDir, target, ids),
       revokeLegacyGrants: async () => {
@@ -289,6 +291,10 @@ export async function recoverLegacyMigrationsBeforeLaunch(
         await restoreNamespace(dataDir, target);
         await restorePackageState(dataDir, target, request);
       });
+    } else if (await packageStateSnapshotPending(dataDir, target)) {
+      if (!client) throw new Error("package state recovery requires PackageService");
+      const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
+      await restorePackageState(dataDir, target, request);
     }
   }
 }
