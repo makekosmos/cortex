@@ -55,7 +55,7 @@ test("prepared recovery restores before-state before removing visibility marker"
   }
 });
 
-test("committed journal blocks legacy launch while pending does not", async () => {
+test("prepared and committed journals block legacy launch", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "cortex-journal-"));
   try {
     expect(isLegacyLaunchBlocked(root, "eden")).toBe(false);
@@ -65,7 +65,7 @@ test("committed journal blocks legacy launch while pending does not", async () =
       source_ids: ["eden"],
       phase: "prepared",
     });
-    expect(isLegacyLaunchBlocked(root, "eden")).toBe(false);
+    expect(isLegacyLaunchBlocked(root, "eden")).toBe(true);
     await writeMigrationJournal(root, {
       ...journal,
       target_id: "com.kosmos.memoria",

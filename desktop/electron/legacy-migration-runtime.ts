@@ -21,6 +21,12 @@ import {
 interface PackageList {
   packages?: JsonValue;
 }
+interface ReplacementInfo {
+  version: string;
+  sha256: string;
+  catalog_sequence: number;
+  wasEnabled: boolean;
+}
 
 const LEGACY_IDS = Object.keys(LEGACY_TO_CANONICAL);
 
@@ -31,10 +37,7 @@ function canonicalIds(target: CanonicalId): string[] {
   );
 }
 
-function packageRow(
-  value: JsonValue,
-  target: CanonicalId,
-): { version: string; sha256: string; catalog_sequence: number } | null {
+function packageRow(value: JsonValue, target: CanonicalId): ReplacementInfo | null {
   if (!isRecord(value) || value.id !== target || !isString(value.version) || !value.version)
     return null;
   if (!isString(value.hash) || !/^[0-9a-f]{64}$/.test(value.hash)) return null;
@@ -43,7 +46,12 @@ function packageRow(
   // SAFETY: catalog_sequence is a numeric package-summary field at this boundary.
   const numericSequence = sequence as number;
   if (!Number.isSafeInteger(numericSequence) || numericSequence < 0) return null;
-  return { version: value.version, sha256: value.hash, catalog_sequence: numericSequence };
+  return {
+    version: value.version,
+    sha256: value.hash,
+    catalog_sequence: numericSequence,
+    wasEnabled: value.enabled === true,
+  };
 }
 
 async function existsDirectory(root: string): Promise<boolean> {
@@ -171,7 +179,7 @@ export function createLegacyMigrationRunner(
   async function host(
     target: CanonicalId,
     ids: string[],
-    replacementInfo: NonNullable<ReturnType<typeof packageRow>>,
+    replacementInfo: ReplacementInfo,
   ): Promise<LegacyMigrationHost> {
     return {
       dataDir,
@@ -179,13 +187,39 @@ export function createLegacyMigrationRunner(
         schema_version: 1,
         target_id: target,
         source_ids: ids,
-        replacement: replacementInfo,
+        replacement: {
+          version: replacementInfo.version,
+          sha256: replacementInfo.sha256,
+          catalog_sequence: replacementInfo.catalog_sequence,
+        },
         phase: "prepared",
         grant_policy: "reconsent",
         records_policy: "opaque-preserve",
       },
       verifyReplacement: async () => (await replacement(target)) !== null,
       stopAffected: async () => {
+        const result = await request({ operation: "packages.list", params: { kind: "app" } });
+        // SAFETY: invokeOperation returns a JSON-compatible operation payload.
+        if (isRecord(result as JsonValue)) {
+          // SAFETY: the operation response is the package-list wire object after the record check.
+          const packageList = result as PackageList;
+          if (Array.isArray(packageList.packages)) {
+            for (const row of packageList.packages) {
+              if (
+                isRecord(row) &&
+                row.id === target &&
+                isString(row.version) &&
+                row.version !== replacementInfo.version &&
+                row.enabled === true
+              ) {
+                await request({
+                  operation: "packages.set_enabled",
+                  params: { id: target, version: row.version, enabled: false },
+                });
+              }
+            }
+          }
+        }
         await request({
           operation: "packages.set_enabled",
           params: { id: target, version: replacementInfo.version, enabled: false },
@@ -203,7 +237,17 @@ export function createLegacyMigrationRunner(
           params: { id: target, version: replacementInfo.version, enabled: true },
         });
       },
-      restoreBefore: () => restoreNamespace(dataDir, target),
+      restoreBefore: async () => {
+        await restoreNamespace(dataDir, target);
+        await request({
+          operation: "packages.set_enabled",
+          params: {
+            id: target,
+            version: replacementInfo.version,
+            enabled: replacementInfo.wasEnabled,
+          },
+        });
+      },
     };
   }
 

@@ -130,7 +130,10 @@ export function isLegacyLaunchBlocked(dataDir: string, id: string): boolean {
       readFileSync(migrationJournalPath(dataDir, target), "utf8"),
     ) as JsonValue;
     const journal = validateMigrationJournal(value);
-    return journal.phase === "committed" && journal.target_id === target;
+    return (
+      (journal.phase === "prepared" || journal.phase === "committed") &&
+      journal.target_id === target
+    );
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
     return true;
