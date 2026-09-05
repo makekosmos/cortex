@@ -85,5 +85,10 @@ name = "delphi_filters"
 harness = false
 required-features = ["bench-fixtures"]
 
+[[test]]
+name = "iroh_bidirectional_network"
+path = "tests/iroh_bidirectional_network/main.rs"
+required-features = ["iroh-spike"]
+
 [lints]
 workspace = true
