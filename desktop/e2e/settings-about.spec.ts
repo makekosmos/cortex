@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { freshDataDir, launchKeplerWithDataDir } from "../../../tests/e2e/helpers/launch";
+import { freshDataDir, launchKeplerWithDataDir } from "./helpers/launch";
 
 test.describe("settings about", () => {
   test("shows storage summary in About page", { timeout: 60_000 }, async () => {
