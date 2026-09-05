@@ -2,6 +2,7 @@ import { mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord, isString, type JsonRecord, type JsonValue } from "./extension-permissions";
+import { testMigrationBarrier } from "./test-migration-barrier";
 
 export const LEGACY_TO_CANONICAL = {
   arcadia: "com.kosmos.arcadia",
@@ -35,7 +36,6 @@ const REPLACEMENT_KEYS = new Set(["version", "sha256", "catalog_sequence"]);
 const IDS = new Set(Object.keys(LEGACY_TO_CANONICAL));
 const TARGETS = new Set(Object.values(LEGACY_TO_CANONICAL));
 const ACTIVE_MIGRATIONS = new Set<string>();
-
 function fail(message: string): never {
   throw new Error(`[kepler-shell] invalid legacy migration journal: ${message}`);
 }
@@ -118,7 +118,6 @@ export function migrationJournalPath(dataDir: string, canonicalId: CanonicalId):
   if (!path.isAbsolute(dataDir) || !TARGETS.has(canonicalId)) fail("journal path is invalid");
   return path.join(path.resolve(dataDir), "legacy-migrations", "v1", canonicalId, "journal.json");
 }
-
 export function isLegacyLaunchBlocked(dataDir: string, id: string): boolean {
   // SAFETY: the lookup is constrained to the literal legacy allowlist.
   const target = LEGACY_TO_CANONICAL[id as keyof typeof LEGACY_TO_CANONICAL];
@@ -138,7 +137,6 @@ export function isLegacyLaunchBlocked(dataDir: string, id: string): boolean {
     return true;
   }
 }
-
 export function assertLegacyLaunchAllowed(dataDir: string, id: string): void {
   if (isLegacyMigrationActive(dataDir, id))
     throw new Error("[kepler-shell] legacy package is being migrated");
@@ -276,6 +274,7 @@ export async function runLegacyMigration(
     await host.snapshotBefore();
     await host.stageDestination();
     await write({ ...host.journal, phase: "prepared" });
+    await testMigrationBarrier("prepared", host.journal.target_id);
     await host.revokeLegacyGrants();
     await host.activateCanonical();
     await durableWrite(
@@ -284,6 +283,7 @@ export async function runLegacyMigration(
     );
     await host.commitLegacyGrants?.();
     await write({ ...host.journal, phase: "committed" });
+    await testMigrationBarrier("committed", host.journal.target_id);
     await rm(migrationFinalizationPath(host.dataDir, host.journal.target_id), { force: true });
     return "committed";
   } catch (error) {

@@ -4,8 +4,10 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { createLegacyMigrationRunner } from "../electron/legacy-migration-runtime.ts";
 
-const root = await mkdtemp(path.join(os.tmpdir(), "kosmos-migration-headless-"));
-const dataDir = path.join(root, "data");
+const ownedRoot = process.env.KOSMOS_HEADLESS_DATA_DIR
+  ? undefined
+  : await mkdtemp(path.join(os.tmpdir(), "kosmos-migration-headless-"));
+const dataDir = path.resolve(process.env.KOSMOS_HEADLESS_DATA_DIR ?? path.join(ownedRoot, "data"));
 const executable = process.env.KOSMOS_HEADLESS_BACKEND
   ? path.resolve(process.env.KOSMOS_HEADLESS_BACKEND)
   : path.resolve(import.meta.dirname, "../../target/debug/kepler-backend.exe");
@@ -13,6 +15,10 @@ const fixtureDir = process.env.KOSMOS_HEADLESS_CATALOG_FIXTURE;
 const replacementArchive = process.env.KOSMOS_HEADLESS_REPLACEMENT_ARCHIVE;
 
 async function startBackend() {
+  if (process.env.KOSMOS_HEADLESS_EXTERNAL_BACKEND === "1") {
+    const lock = JSON.parse(await readFile(path.join(dataDir, "engine.lock.json"), "utf8"));
+    return { child: undefined, client: clientForLock(lock), env: undefined };
+  }
   const env = {
     ...process.env,
     KOSMOS_DATA_DIR: dataDir,
@@ -24,6 +30,10 @@ async function startBackend() {
   for (let i = 0; i < 100 && !(await fileExists(lockPath)); i++)
     await new Promise((resolve) => setTimeout(resolve, 100));
   const lock = JSON.parse(await readFile(lockPath, "utf8"));
+  return { child, client: clientForLock(lock), env };
+}
+
+function clientForLock(lock) {
   const client = {
     async invokeOperation({ operation, params = {}, ...requestFields }) {
       const response = await fetch(`http://127.0.0.1:${lock.http_port}/v1/rpc`, {
@@ -48,7 +58,7 @@ async function startBackend() {
       return value.data;
     },
   };
-  return { child, client, env };
+  return client;
 }
 
 async function fileExists(filePath) {
@@ -62,6 +72,10 @@ async function fileExists(filePath) {
 
 async function stopBackend() {
   if (!running) return;
+  if (!running.child) {
+    running = undefined;
+    return;
+  }
   spawnSync(executable, ["--shutdown"], { env: running.env, windowsHide: true });
   running.child.kill();
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -70,13 +84,20 @@ async function stopBackend() {
 
 let running;
 try {
-  await mkdir(path.join(dataDir, "extensions-data", "arcadia"), { recursive: true });
-  await writeFile(
-    path.join(dataDir, "extensions-data", "arcadia", "state.json"),
-    '{"fixture":true}\n',
-  );
+  if (process.env.KOSMOS_HEADLESS_SKIP_SETUP !== "1") {
+    await mkdir(path.join(dataDir, "extensions-data", "arcadia"), { recursive: true });
+    await writeFile(
+      path.join(dataDir, "extensions-data", "arcadia", "state.json"),
+      '{"fixture":true,"unknownSettingsField":{"preserve":"yes"}}\n',
+    );
+  }
   running = await startBackend();
-  if (fixtureDir && replacementArchive) {
+  if (
+    fixtureDir &&
+    replacementArchive &&
+    process.env.KOSMOS_HEADLESS_RECOVERY_ONLY !== "1" &&
+    process.env.KOSMOS_HEADLESS_SKIP_SETUP !== "1"
+  ) {
     const fixture = JSON.parse(
       await readFile(path.join(path.resolve(fixtureDir), "catalog-apply-request.json"), "utf8"),
     );
@@ -94,6 +115,11 @@ try {
     });
   }
   const runner = createLegacyMigrationRunner(dataDir, running.client, async () => {});
+  if (process.env.KOSMOS_HEADLESS_RECOVERY_ONLY === "1") {
+    await runner.recoverBeforeLaunch();
+    console.log("headless migration recovery completed");
+    process.exit(0);
+  }
   const first = await runner.run();
   if (first !== undefined) throw new Error("runner unexpectedly returned a value");
   const journal = JSON.parse(
@@ -119,12 +145,23 @@ try {
     ),
   );
   if (migrated.fixture !== true) throw new Error("canonical user data was not migrated");
+  if (migrated.unknownSettingsField?.preserve !== "yes")
+    throw new Error("unknown settings field was not preserved");
   await stopBackend();
   running = await startBackend();
   const second = await createLegacyMigrationRunner(dataDir, running.client, async () => {}).run();
   if (second !== undefined) throw new Error("restart runner unexpectedly returned a value");
+  const restartedPackages = await running.client.invokeOperation({
+    operation: "packages.list",
+    params: { kind: "app" },
+  });
+  const restartedActive = restartedPackages.packages?.filter(
+    (row) => row.id === "com.kosmos.arcadia" && row.enabled === true,
+  );
+  if (restartedActive?.length !== 1 || restartedActive[0].version !== "0.1.8")
+    throw new Error("restart resurrected or duplicated the replacement");
   console.log("headless production migration committed and recovered across restart");
 } finally {
   await stopBackend();
-  await rm(root, { recursive: true, force: true });
+  if (ownedRoot) await rm(ownedRoot, { recursive: true, force: true });
 }
