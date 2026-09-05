@@ -29,6 +29,8 @@ fn summary(
         id: package.id,
         name: package.manifest.name().to_owned(),
         version: package.version,
+        hash: package.hash,
+        catalog_sequence: package.catalog_sequence,
         kind: package.manifest.kind().clone(),
         enabled: package.enabled,
         revoked: package.revoked,

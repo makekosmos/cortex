@@ -20,6 +20,7 @@ import type { InstalledExtensionInfo } from "./extension-installer-state";
 import { extractZipTo, readZipEntries } from "./extension-zip";
 import type { JsonRecord } from "../src/shared/runtimeGuards";
 import { validateExtensionManifest, type ExtensionManifest } from "./extension-manifest-validation";
+import { assertLegacyLaunchAllowed } from "./legacy-migration-journal";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -184,6 +185,7 @@ export async function listBackups(id: string): Promise<string[]> {
 }
 
 export async function revertExtension(id: string, timestamp?: string): Promise<boolean> {
+  assertLegacyLaunchAllowed(keplerDataDir(), id);
   return revertExtensionState(id, timestamp);
 }
 
@@ -192,11 +194,13 @@ export async function listInstalledUserExtensions(): Promise<InstalledExtensionI
 }
 
 export async function uninstallExtension(id: string): Promise<boolean> {
+  assertLegacyLaunchAllowed(keplerDataDir(), id);
   return uninstallExtensionState(userExtensionsRoot(), id);
 }
 
 export async function installFromPath(sourcePath: string): Promise<KextManifestPreview> {
   const preview = await previewSource(sourcePath);
+  assertLegacyLaunchAllowed(keplerDataDir(), preview.manifest.id);
   if (preview.apiCompatError) {
     throw new Error(`API compat: ${preview.apiCompatError}`);
   }

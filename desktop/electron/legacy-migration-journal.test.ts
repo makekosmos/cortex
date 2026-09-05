@@ -9,6 +9,7 @@ import {
   runLegacyMigration,
   validateMigrationJournal,
   writeMigrationJournal,
+  isLegacyLaunchBlocked,
 } from "./legacy-migration-journal";
 
 const journal = {
@@ -26,9 +27,13 @@ test("validates and durably writes the strict journal schema", async () => {
   try {
     validateMigrationJournal(journal);
     await writeMigrationJournal(root, journal);
-    expect(JSON.parse(await readFile(migrationJournalPath(root, journal.target_id), "utf8"))).toEqual(journal);
+    expect(
+      JSON.parse(await readFile(migrationJournalPath(root, journal.target_id), "utf8")),
+    ).toEqual(journal);
     await expect(
-      Promise.resolve().then(() => validateMigrationJournal({ ...journal, secret: "must-not-persist" })),
+      Promise.resolve().then(() =>
+        validateMigrationJournal({ ...journal, secret: "must-not-persist" }),
+      ),
     ).rejects.toThrow();
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -40,9 +45,35 @@ test("prepared recovery restores before-state before removing visibility marker"
   try {
     await writeMigrationJournal(root, journal);
     const events: string[] = [];
-    expect(await recoverPreparedMigration(root, journal.target_id, async () => events.push("restored"))).toBe(true);
+    expect(
+      await recoverPreparedMigration(root, journal.target_id, async () => events.push("restored")),
+    ).toBe(true);
     expect(events).toEqual(["restored"]);
     expect(await readMigrationJournal(root, journal.target_id)).toBeNull();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("committed journal blocks legacy launch while pending does not", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "cortex-journal-"));
+  try {
+    expect(isLegacyLaunchBlocked(root, "eden")).toBe(false);
+    await writeMigrationJournal(root, {
+      ...journal,
+      target_id: "com.kosmos.memoria",
+      source_ids: ["eden"],
+      phase: "prepared",
+    });
+    expect(isLegacyLaunchBlocked(root, "eden")).toBe(false);
+    await writeMigrationJournal(root, {
+      ...journal,
+      target_id: "com.kosmos.memoria",
+      source_ids: ["eden"],
+      phase: "committed",
+    });
+    expect(isLegacyLaunchBlocked(root, "eden")).toBe(true);
+    expect(isLegacyLaunchBlocked(root, "delphi")).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -68,7 +99,14 @@ test("writes prepared before cutover and restores it on activation failure", asy
         restoreBefore: async () => events.push("restored"),
       }),
     ).rejects.toThrow("activation failed");
-    expect(events).toEqual(["stopped", "snapshotted", "staged", "revoked", "activation-failed", "restored"]);
+    expect(events).toEqual([
+      "stopped",
+      "snapshotted",
+      "staged",
+      "revoked",
+      "activation-failed",
+      "restored",
+    ]);
     expect(await readMigrationJournal(root, journal.target_id)).toBeNull();
   } finally {
     await rm(root, { recursive: true, force: true });

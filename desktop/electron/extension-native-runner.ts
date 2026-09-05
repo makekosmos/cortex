@@ -10,6 +10,8 @@ import {
   resolveExtensionDir,
   type ExtensionManifest,
 } from "./extension-manifest";
+import { keplerDataDir } from "./data-dir";
+import { assertLegacyLaunchAllowed } from "./legacy-migration-journal";
 
 interface NativeExtensionEntry {
   child: ChildProcess;
@@ -101,6 +103,7 @@ export async function openNativeExtension(
   manifest: ExtensionManifest,
   route: string | undefined,
 ): Promise<void> {
+  assertLegacyLaunchAllowed(keplerDataDir(), id);
   const singleInstance = manifest.native?.singleInstance !== false;
   const existing = nativeExtensions.get(id);
   if (existing && existing.child.exitCode === null && !existing.child.killed) return;

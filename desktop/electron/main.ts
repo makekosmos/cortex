@@ -67,6 +67,10 @@ import {
   createMainBackendSupervisor,
   runAppReady,
 } from "./main-backend-entry";
+import {
+  createLegacyMigrationRunner,
+  recoverLegacyMigrationsBeforeLaunch,
+} from "./legacy-migration-runtime";
 
 // См. postmortems.md § 2026-05-30: focus-block dynamic chunk imports from
 // main.js after Vite/Rolldown code-splitting, so these helper APIs must remain
@@ -257,6 +261,11 @@ void app.whenReady().then(() =>
     instance: KEPLER_INSTANCE,
     launcher: launcherController,
     runBootSelfCheck,
+    recoverLegacyMigration: () => recoverLegacyMigrationsBeforeLaunch(KEPLER_INSTANCE.dataDir),
+    runLegacyMigration: async () => {
+      const client = await backendSupervisor.awaitArkReady();
+      await createLegacyMigrationRunner(KEPLER_INSTANCE.dataDir, client).run();
+    },
   }),
 );
 

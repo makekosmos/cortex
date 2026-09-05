@@ -1,5 +1,7 @@
-import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import path from "node:path";
+import { isRecord, isString, type JsonRecord, type JsonValue } from "./extension-permissions";
 
 export const LEGACY_TO_CANONICAL = {
   arcadia: "com.kosmos.arcadia",
@@ -11,7 +13,7 @@ export const LEGACY_TO_CANONICAL = {
 export type CanonicalId = (typeof LEGACY_TO_CANONICAL)[keyof typeof LEGACY_TO_CANONICAL];
 export type MigrationPhase = "prepared" | "committed";
 
-export interface MigrationJournal {
+export interface MigrationJournal extends JsonRecord {
   schema_version: 1;
   target_id: CanonicalId;
   source_ids: string[];
@@ -38,57 +40,104 @@ function fail(message: string): never {
   throw new Error(`[kepler-shell] invalid legacy migration journal: ${message}`);
 }
 
-function exactKeys(value: Record<string, unknown>, allowed: Set<string>, label: string): void {
-  for (const key of Object.keys(value)) if (!allowed.has(key)) fail(`${label} contains unknown field`);
+function exactKeys(value: JsonRecord, allowed: Set<string>, label: string): void {
+  for (const key of Object.keys(value))
+    if (!allowed.has(key)) fail(`${label} contains unknown field`);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
+function assertCanonical(value: JsonValue): asserts value is CanonicalId {
+  // SAFETY: isString narrows the value before the allowlist lookup.
+  if (!isString(value) || !TARGETS.has(value as CanonicalId)) fail("target_id is not allowlisted");
 }
 
-function assertCanonical(value: unknown): asserts value is CanonicalId {
-  if (typeof value !== "string" || !TARGETS.has(value)) fail("target_id is not allowlisted");
-}
-
-export function validateMigrationJournal(value: unknown): MigrationJournal {
+export function validateMigrationJournal(value: JsonValue): MigrationJournal {
   if (!isRecord(value)) fail("journal must be an object");
   exactKeys(value, JOURNAL_KEYS, "journal");
   if (value.schema_version !== 1) fail("unsupported schema_version");
   assertCanonical(value.target_id);
+  const targetId = value.target_id;
   if (
     !Array.isArray(value.source_ids) ||
     value.source_ids.length === 0 ||
-    value.source_ids.some((id) => typeof id !== "string" || !IDS.has(id))
+    value.source_ids.some((id) => !isString(id) || !IDS.has(id))
   ) {
     fail("source_ids is invalid");
   }
-  const sourceIds = value.source_ids as string[];
+  const sourceIds = value.source_ids.filter(isString);
+  if (sourceIds.length !== value.source_ids.length) fail("source_ids is invalid");
   if (new Set(sourceIds).size !== sourceIds.length) fail("source_ids contains duplicates");
-  if (sourceIds.some((id) => LEGACY_TO_CANONICAL[id as keyof typeof LEGACY_TO_CANONICAL] !== value.target_id)) {
+  if (
+    sourceIds.some((id) => {
+      // SAFETY: source_ids was checked against the legacy allowlist immediately above.
+      return LEGACY_TO_CANONICAL[id as keyof typeof LEGACY_TO_CANONICAL] !== targetId;
+    })
+  ) {
     fail("source_ids do not match target_id");
   }
   if (!isRecord(value.replacement)) fail("replacement is invalid");
   exactKeys(value.replacement, REPLACEMENT_KEYS, "replacement");
+  const version = value.replacement.version;
+  const catalogSequence = value.replacement.catalog_sequence;
   if (
-    typeof value.replacement.version !== "string" ||
-    value.replacement.version.length === 0 ||
-    !/^[0-9a-f]{64}$/.test(String(value.replacement.sha256)) ||
-    !Number.isSafeInteger(value.replacement.catalog_sequence) ||
-    value.replacement.catalog_sequence < 0
+    !isString(version) ||
+    version.length === 0 ||
+    !/^[0-9a-f]{64}$/.test(String(value.replacement.sha256))
   ) {
     fail("replacement is invalid");
   }
+  // SAFETY: the journal schema requires catalog_sequence to be a number.
+  if (!Number.isSafeInteger(catalogSequence as number) || (catalogSequence as number) < 0)
+    fail("replacement is invalid");
   if (value.phase !== "prepared" && value.phase !== "committed") fail("phase is invalid");
   if (value.grant_policy !== "reconsent") fail("grant_policy is invalid");
-  if (value.records_policy !== "opaque-preserve" && value.records_policy !== "explicit-adapter-v1") {
+  if (
+    value.records_policy !== "opaque-preserve" &&
+    value.records_policy !== "explicit-adapter-v1"
+  ) {
     fail("records_policy is invalid");
   }
-  return value as MigrationJournal;
+  const phase = value.phase;
+  const recordsPolicy = value.records_policy;
+  // SAFETY: the literal checks above establish the domain values used below.
+  return {
+    schema_version: 1,
+    target_id: targetId,
+    source_ids: sourceIds,
+    replacement: {
+      version,
+      sha256: String(value.replacement.sha256),
+      catalog_sequence: catalogSequence as number,
+    },
+    phase,
+    grant_policy: "reconsent",
+    records_policy: recordsPolicy,
+  };
 }
 
 export function migrationJournalPath(dataDir: string, canonicalId: CanonicalId): string {
   if (!path.isAbsolute(dataDir) || !TARGETS.has(canonicalId)) fail("journal path is invalid");
   return path.join(path.resolve(dataDir), "legacy-migrations", "v1", canonicalId, "journal.json");
+}
+
+export function isLegacyLaunchBlocked(dataDir: string, id: string): boolean {
+  // SAFETY: the lookup is constrained to the literal legacy allowlist.
+  const target = LEGACY_TO_CANONICAL[id as keyof typeof LEGACY_TO_CANONICAL];
+  if (!target) return false;
+  try {
+    // SAFETY: JSON.parse is validated by the committed-phase checks below before it affects launch policy.
+    const value = JSON.parse(
+      readFileSync(migrationJournalPath(dataDir, target), "utf8"),
+    ) as JsonValue;
+    return isRecord(value) && value.phase === "committed" && value.target_id === target;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+    return true;
+  }
+}
+
+export function assertLegacyLaunchAllowed(dataDir: string, id: string): void {
+  if (isLegacyLaunchBlocked(dataDir, id))
+    throw new Error(`[kepler-shell] legacy package is disabled after migration: ${id}`);
 }
 
 async function durableWrite(filePath: string, bytes: Buffer): Promise<void> {
@@ -104,7 +153,10 @@ async function durableWrite(filePath: string, bytes: Buffer): Promise<void> {
   await rename(temp, filePath);
 }
 
-export async function writeMigrationJournal(dataDir: string, journal: MigrationJournal): Promise<void> {
+export async function writeMigrationJournal(
+  dataDir: string,
+  journal: MigrationJournal,
+): Promise<void> {
   const valid = validateMigrationJournal(journal);
   const filePath = migrationJournalPath(dataDir, valid.target_id);
   await durableWrite(filePath, Buffer.from(`${JSON.stringify(valid, null, 2)}\n`, "utf8"));
@@ -116,9 +168,10 @@ export async function readMigrationJournal(
 ): Promise<MigrationJournal | null> {
   const filePath = migrationJournalPath(dataDir, canonicalId);
   try {
-    return validateMigrationJournal(JSON.parse(await readFile(filePath, "utf8")) as unknown);
+    // SAFETY: validateMigrationJournal performs the complete journal schema validation.
+    return validateMigrationJournal(JSON.parse(await readFile(filePath, "utf8")) as JsonValue);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
     throw error;
   }
 }
@@ -136,12 +189,15 @@ export async function recoverPreparedMigration(
   return true;
 }
 
-export async function migrationJournalExists(dataDir: string, canonicalId: CanonicalId): Promise<boolean> {
+export async function migrationJournalExists(
+  dataDir: string,
+  canonicalId: CanonicalId,
+): Promise<boolean> {
   try {
     await stat(migrationJournalPath(dataDir, canonicalId));
     return true;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
     throw error;
   }
 }

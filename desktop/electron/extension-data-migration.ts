@@ -9,6 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
+import { isRecord, isString, type JsonRecord, type JsonValue } from "./extension-permissions";
 
 export interface LegacyExtensionDataSource {
   id: string;
@@ -46,11 +47,14 @@ function fail(message: string): never {
 
 function isWithin(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate);
-  return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+  return (
+    relative === "" ||
+    (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
+  );
 }
 
 function assertAbsoluteRoot(root: string, label: string): string {
-  if (typeof root !== "string" || !path.isAbsolute(root) || root.includes("\0")) {
+  if (!path.isAbsolute(root) || root.includes("\0")) {
     fail(`${label} must be an absolute path`);
   }
   return path.resolve(root);
@@ -60,7 +64,7 @@ async function lstatIfPresent(filePath: string): Promise<FileStats | null> {
   try {
     return await lstat(filePath);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
     throw error;
   }
 }
@@ -107,6 +111,12 @@ async function validateTree(root: string): Promise<void> {
   }
 }
 
+export async function validateLegacyExtensionDataRoot(root: string): Promise<void> {
+  const absolute = assertAbsoluteRoot(root, "extension data root");
+  await assertSafeRootPath(absolute, "extension data root");
+  await validateTree(absolute);
+}
+
 async function ensureDirectory(root: string, relative: string): Promise<void> {
   const directory = path.resolve(root, relative);
   if (!isWithin(root, directory)) fail(`path escapes namespace: ${directory}`);
@@ -125,14 +135,11 @@ async function ensureDirectory(root: string, relative: string): Promise<void> {
   }
 }
 
-function isJsonObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function cloneJson(value: unknown): unknown {
+function cloneJson(value: JsonValue): JsonValue {
   if (Array.isArray(value)) return value.map(cloneJson);
-  if (!isJsonObject(value)) return value;
-  const clone: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  if (!isRecord(value)) return value;
+  // SAFETY: Object.create(null) is used as a JSON object with no inherited keys.
+  const clone = Object.create(null) as JsonRecord;
   for (const [key, child] of Object.entries(value)) {
     Object.defineProperty(clone, key, {
       configurable: true,
@@ -144,7 +151,7 @@ function cloneJson(value: unknown): unknown {
   return clone;
 }
 
-function fillMissingObjectKeys(destination: Record<string, unknown>, source: Record<string, unknown>): boolean {
+function fillMissingObjectKeys(destination: JsonRecord, source: JsonRecord): boolean {
   let changed = false;
   for (const [key, sourceValue] of Object.entries(source)) {
     if (!Object.prototype.hasOwnProperty.call(destination, key)) {
@@ -159,23 +166,29 @@ function fillMissingObjectKeys(destination: Record<string, unknown>, source: Rec
     }
 
     const destinationValue = destination[key];
-    if (isJsonObject(destinationValue) && isJsonObject(sourceValue)) {
+    if (isRecord(destinationValue) && isRecord(sourceValue)) {
       changed = fillMissingObjectKeys(destinationValue, sourceValue) || changed;
     }
   }
   return changed;
 }
 
-async function mergeJsonFile(sourcePath: string, destinationPath: string, result: ExtensionDataMergeResult): Promise<void> {
-  let source: unknown;
-  let destination: unknown;
+async function mergeJsonFile(
+  sourcePath: string,
+  destinationPath: string,
+  result: ExtensionDataMergeResult,
+): Promise<void> {
+  let source: JsonValue;
+  let destination: JsonValue;
   try {
-    source = JSON.parse(await readFile(sourcePath, "utf8")) as unknown;
-    destination = JSON.parse(await readFile(destinationPath, "utf8")) as unknown;
+    // SAFETY: JSON.parse values are narrowed immediately by isRecord before use.
+    source = JSON.parse(await readFile(sourcePath, "utf8")) as JsonValue;
+    // SAFETY: JSON.parse values are narrowed immediately by isRecord before use.
+    destination = JSON.parse(await readFile(destinationPath, "utf8")) as JsonValue;
   } catch {
     return;
   }
-  if (!isJsonObject(source) || !isJsonObject(destination)) return;
+  if (!isRecord(source) || !isRecord(destination)) return;
   if (!fillMissingObjectKeys(destination, source)) return;
   await writeFile(destinationPath, `${JSON.stringify(destination, null, 2)}\n`, "utf8");
   result.mergedJsonFiles += 1;
@@ -198,13 +211,18 @@ async function mergeTree(
     const destinationStats = await lstatIfPresent(destinationPath);
 
     if (sourceStats.isDirectory()) {
-      if (destinationStats && (!destinationStats.isDirectory() || destinationStats.isSymbolicLink())) continue;
+      if (
+        destinationStats &&
+        (!destinationStats.isDirectory() || destinationStats.isSymbolicLink())
+      )
+        continue;
       await mergeTree(sourceRoot, destinationRoot, path.join(relative, entry), result);
       continue;
     }
 
     if (destinationStats) {
-      if (destinationStats.isSymbolicLink()) fail(`destination contains a symlink or junction: ${destinationPath}`);
+      if (destinationStats.isSymbolicLink())
+        fail(`destination contains a symlink or junction: ${destinationPath}`);
       if (!destinationStats.isFile()) continue;
       if (path.extname(entry).toLowerCase() === ".json") {
         await mergeJsonFile(sourcePath, destinationPath, result);
@@ -226,7 +244,7 @@ function validateSources(canonicalId: string, sources: readonly LegacyExtensionD
   if (!sources.length) fail("at least one legacy source is required");
   const seen = new Set<string>();
   for (const source of sources) {
-    if (!source || typeof source.id !== "string" || typeof source.root !== "string") {
+    if (!source || !isString(source.id) || !isString(source.root)) {
       fail("source must contain an id and root");
     }
     if (seen.has(source.id)) fail(`duplicate source id: ${source.id}`);
@@ -243,7 +261,10 @@ export async function mergeLegacyExtensionData(
   validateSources(options.canonicalId, options.sources);
   const destinationRoot = assertAbsoluteRoot(options.destinationRoot, "destination root");
   const sources = options.sources
-    .map((source) => ({ ...source, root: assertAbsoluteRoot(source.root, `source root ${source.id}`) }))
+    .map((source) => ({
+      ...source,
+      root: assertAbsoluteRoot(source.root, `source root ${source.id}`),
+    }))
     .sort((left, right) => {
       if (options.canonicalId !== "com.kosmos.arcadia") return 0;
       return (ARCADIA_SOURCE_ORDER.get(left.id) ?? 0) - (ARCADIA_SOURCE_ORDER.get(right.id) ?? 0);
@@ -263,7 +284,8 @@ export async function mergeLegacyExtensionData(
   if (!(await lstatIfPresent(destinationRoot))) await ensureDirectory(destinationRoot, "");
   const result: ExtensionDataMergeResult = { copiedFiles: 0, mergedJsonFiles: 0 };
   for (const source of sources) {
-    if (await lstatIfPresent(source.root)) await mergeTree(source.root, destinationRoot, "", result);
+    if (await lstatIfPresent(source.root))
+      await mergeTree(source.root, destinationRoot, "", result);
   }
   return result;
 }

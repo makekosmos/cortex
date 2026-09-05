@@ -86,6 +86,8 @@ pub struct PackageSummary {
     pub id: String,
     pub name: String,
     pub version: String,
+    pub hash: String,
+    pub catalog_sequence: u64,
     pub kind: PackageKind,
     pub enabled: bool,
     pub revoked: bool,

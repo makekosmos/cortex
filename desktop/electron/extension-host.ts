@@ -53,6 +53,8 @@ import { registerExtensionBookMetadataIpc } from "./extension-book-metadata-ipc"
 import { isNativeExtensionRunning, openNativeExtension } from "./extension-native-runner";
 import { openExtensionBrowserWindow } from "./extension-browser-window";
 import type { JsonValue } from "./extension-permissions";
+import { assertLegacyLaunchAllowed } from "./legacy-migration-journal";
+import { keplerDataDir } from "./data-dir";
 
 export { setExtensionArkBridge, setExtensionArkBridgeReadyTimeoutMs } from "./extension-ark-ipc";
 
@@ -173,6 +175,7 @@ async function openExtensionImpl(
   windowKey = id,
   profile: ExtensionWindowProfile = "default",
 ): Promise<void> {
+  assertLegacyLaunchAllowed(keplerDataDir(), id);
   const manifest = loadExtensionManifest(id);
   if (!manifest) {
     console.warn(`[kepler-shell] extension not found: ${id}`);
