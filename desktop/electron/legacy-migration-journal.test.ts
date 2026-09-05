@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   migrationJournalPath,
+  migrationFinalizationPath,
   readMigrationJournal,
   recoverPreparedMigration,
   runLegacyMigration,
@@ -168,7 +169,7 @@ test("stop precedes snapshot and failure restores before the journal", async () 
   }
 });
 
-test("finalizing journal makes a post-commit-marker failure recoverable", async () => {
+test("private finalization marker makes post-commit-journal failure recoverable", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "cortex-journal-"));
   try {
     const events: string[] = [];
@@ -182,7 +183,12 @@ test("finalizing journal makes a post-commit-marker failure recoverable", async 
         stageDestination: async () => events.push("staged"),
         revokeLegacyGrants: async () => events.push("revoked"),
         activateCanonical: async () => events.push("activated"),
-        commitLegacyGrants: async () => events.push("committed-grants"),
+        commitLegacyGrants: async () => {
+          expect(await readFile(migrationFinalizationPath(root, journal.target_id), "utf8")).toBe(
+            "finalizing\n",
+          );
+          events.push("committed-grants");
+        },
         writeJournal: async (value) => {
           if (value.phase === "committed") throw new Error("journal fsync failed");
           await writeMigrationJournal(root, value);

@@ -277,7 +277,7 @@ export async function recoverLegacyMigrationsBeforeLaunch(
   const targets = [...new Set(Object.values(LEGACY_TO_CANONICAL))] as CanonicalId[];
   for (const target of targets) {
     const journal = await readMigrationJournal(dataDir, target);
-    if (journal?.phase === "prepared" || journal?.phase === "finalizing") {
+    if (journal?.phase === "prepared") {
       if (!client) {
         await restoreNamespace(dataDir, target);
         continue;
