@@ -65,4 +65,65 @@ impl<'a> ReplicationConsumer<'a> {
         }
         serde_json::from_value(response.data).map_err(crate::ark_host::ArkHostError::Json)
     }
+
+    pub(crate) async fn prepare_signed_sync(
+        &self,
+        space_id: &str,
+        origin_node_id: &str,
+        integration_id: &str,
+        recipient_node_id: &str,
+        message_id: &str,
+    ) -> ArkResult<Value> {
+        let response = self
+            .ark
+            .request(
+                "prepare_signed_sync_json",
+                serde_json::json!({
+                    "spaceId": space_id,
+                    "originNodeId": origin_node_id,
+                    "integrationId": integration_id,
+                    "recipientNodeId": recipient_node_id,
+                    "messageId": message_id,
+                }),
+            )
+            .await?;
+        if !response.ok {
+            return Err(crate::ark_host::ArkHostError::RpcError(
+                response
+                    .error
+                    .unwrap_or_else(|| "Core sync preparation failed".into()),
+            ));
+        }
+        let json = response.data.as_str().ok_or_else(|| {
+            crate::ark_host::ArkHostError::RpcError("Core sync preparation was not JSON".into())
+        })?;
+        serde_json::from_str(json).map_err(crate::ark_host::ArkHostError::Json)
+    }
+
+    pub(crate) async fn validate_outbound_signed_sync(
+        &self,
+        space_id: &str,
+        origin_node_id: &str,
+        frame: &Value,
+    ) -> ArkResult<bool> {
+        let response = self
+            .ark
+            .request(
+                "validate_outbound_signed_sync_json",
+                serde_json::json!({
+                    "spaceId": space_id,
+                    "originNodeId": origin_node_id,
+                    "frameJson": serde_json::to_string(frame)?,
+                }),
+            )
+            .await?;
+        if !response.ok {
+            return Err(crate::ark_host::ArkHostError::RpcError(
+                response
+                    .error
+                    .unwrap_or_else(|| "Core outbound sync validation failed".into()),
+            ));
+        }
+        serde_json::from_value(response.data).map_err(crate::ark_host::ArkHostError::Json)
+    }
 }
