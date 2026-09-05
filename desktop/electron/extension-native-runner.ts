@@ -102,9 +102,15 @@ export async function stopNativeExtension(id: string): Promise<void> {
   const entry = nativeExtensions.get(id);
   if (!entry || entry.child.exitCode !== null || entry.child.killed) return;
   entry.child.kill();
-  await new Promise<void>((resolve) => {
-    entry.child.once("exit", () => resolve());
-    setTimeout(resolve, 1000);
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`native extension '${id}' did not stop`)),
+      1000,
+    );
+    entry.child.once("exit", () => {
+      clearTimeout(timer);
+      resolve();
+    });
   });
 }
 

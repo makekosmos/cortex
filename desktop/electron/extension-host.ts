@@ -107,7 +107,17 @@ export async function stopExtension(id: string): Promise<void> {
   await stopNativeExtension(id);
   for (const [windowKey, entry] of extensionWindows) {
     if (entry.id !== id || entry.win.isDestroyed()) continue;
-    entry.win.destroy();
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error(`extension window '${id}' did not close`)),
+        1000,
+      );
+      entry.win.once("closed", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      entry.win.destroy();
+    });
     extensionWindows.delete(windowKey);
   }
 }
