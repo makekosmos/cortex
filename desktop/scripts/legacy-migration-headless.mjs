@@ -6,7 +6,9 @@ import { createLegacyMigrationRunner } from "../electron/legacy-migration-runtim
 
 const root = await mkdtemp(path.join(os.tmpdir(), "kosmos-migration-headless-"));
 const dataDir = path.join(root, "data");
-const executable = path.resolve(import.meta.dirname, "../../target/debug/kepler-backend.exe");
+const executable = process.env.KOSMOS_HEADLESS_BACKEND
+  ? path.resolve(process.env.KOSMOS_HEADLESS_BACKEND)
+  : path.resolve(import.meta.dirname, "../../target/debug/kepler-backend.exe");
 
 async function startBackend() {
   const env = {
