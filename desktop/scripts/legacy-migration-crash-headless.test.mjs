@@ -199,11 +199,9 @@ try {
   console.log("headless migration crash cases passed: prepared rollback and committed restart");
   await stopBackend(running);
 } finally {
-  try {
-    if (!(await removeOwnedRoot()))
-      console.warn(`temporary crash-harness data retained while locked: ${root}`);
-  } catch (error) {
-    if (!(error instanceof Error) || error.code !== "EBUSY") throw error;
-    console.warn(`temporary crash-harness data retained while locked: ${root}`);
-  }
+  await removeOwnedRoot()
+    .then((removed) => {
+      if (!removed) console.warn(`temporary crash-harness data retained while locked: ${root}`);
+    })
+    .catch(() => console.warn(`temporary crash-harness data retained while locked: ${root}`));
 }
