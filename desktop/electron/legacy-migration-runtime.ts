@@ -173,7 +173,6 @@ export function createLegacyMigrationRunner(
       },
       verifyReplacement: async () => (await replacement(target)) !== null,
       stopAffected: async () => {
-        await snapshotPackageState(dataDir, target, request);
         for (const row of await packageRows(request)) {
           if (
             isRecord(row) &&
@@ -193,7 +192,10 @@ export function createLegacyMigrationRunner(
           params: { id: target, version: replacementInfo.version, enabled: false },
         });
       },
-      snapshotBefore: () => snapshotNamespaces(dataDir, target, ids),
+      snapshotBefore: async () => {
+        await snapshotNamespaces(dataDir, target, ids);
+        await snapshotPackageState(dataDir, target, request);
+      },
       stageDestination: () => stageNamespace(dataDir, target, ids),
       revokeLegacyGrants: async () => {
         grantRollbackNeeded = true;
