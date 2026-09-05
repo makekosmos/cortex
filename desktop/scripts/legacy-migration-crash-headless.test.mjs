@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -49,8 +50,7 @@ async function startBackend(dataDir) {
   return { child, env };
 }
 
-function runCoordinator(dataDir, barrierPhase, recoveryOnly = false, skipSetup = false) {
-  const barrier = path.join(dataDir, "crash-barrier");
+function runCoordinator(dataDir, barrier, barrierPhase, recoveryOnly = false, skipSetup = false) {
   const env = {
     ...process.env,
     KOSMOS_HEADLESS: "1",
@@ -72,8 +72,9 @@ async function waitForExit(child, allowKilled = false) {
     child.once("error", reject);
     child.once("exit", resolve);
   });
-  if (code !== 0 && !(allowKilled && code === null))
+  if (allowKilled ? code !== null : code !== 0)
     throw new Error(`coordinator exited with code ${code}`);
+  return code;
 }
 
 async function stopBackend(running) {
@@ -84,13 +85,14 @@ async function stopBackend(running) {
 }
 
 async function runCase(dataDir, phase, recoveryOnly, skipSetup) {
-  const coordinator = runCoordinator(dataDir, phase, false, skipSetup);
+  const barrier = path.join(dataDir, `crash-barrier-${phase}-${randomUUID()}`);
+  const coordinator = runCoordinator(dataDir, barrier, phase, false, skipSetup);
   await waitFor(coordinator.barrier);
   coordinator.child.kill();
   await waitForExit(coordinator.child, true);
   if (phase === "prepared" && !isLegacyLaunchBlocked(dataDir, "arcadia"))
     throw new Error("prepared crash did not block legacy launch before recovery");
-  const recovery = runCoordinator(dataDir, "", recoveryOnly, true);
+  const recovery = runCoordinator(dataDir, `${barrier}.unused`, "", recoveryOnly, true);
   await waitForExit(recovery.child);
   return dataDir;
 }
@@ -98,6 +100,25 @@ async function runCase(dataDir, phase, recoveryOnly, skipSetup) {
 async function packageState(dataDir) {
   const value = JSON.parse(await readFile(path.join(dataDir, "packages", "state.json"), "utf8"));
   return value.packages.filter((row) => row.id === "com.kosmos.arcadia");
+}
+
+async function packageStatePending(dataDir) {
+  return exists(
+    path.join(
+      dataDir,
+      "legacy-migrations",
+      "v1",
+      "com.kosmos.arcadia",
+      "before",
+      "package-state.pending",
+    ),
+  );
+}
+
+async function grantState(dataDir) {
+  return JSON.stringify(
+    JSON.parse(await readFile(path.join(dataDir, "grant-authority.json"), "utf8")),
+  );
 }
 
 async function removeOwnedRoot() {
@@ -116,7 +137,23 @@ async function removeOwnedRoot() {
 try {
   const dataDir = path.join(root, "data");
   await mkdir(dataDir, { recursive: true });
+  const grantFixture = [
+    {
+      version: 1,
+      persistent_grant_id: "arcadia-crash-grant",
+      extension_id: "arcadia",
+      provenance: "NativeDialog",
+      exact_file: false,
+      selected_path: dataDir,
+      root_identity: { primary: 1, secondary: 2 },
+      exact_file_identity: null,
+      revoked: false,
+      unknown_scope: { read: ["preserve"], write: ["deny"] },
+    },
+  ];
+  await writeFile(path.join(dataDir, "grant-authority.json"), `${JSON.stringify(grantFixture)}\n`);
   const running = await startBackend(dataDir);
+  const grantsBefore = await grantState(dataDir);
   const preparedDir = await runCase(dataDir, "prepared", true, false);
   if (
     await exists(
@@ -126,6 +163,15 @@ try {
     throw new Error("prepared crash recovery left a journal");
   if (!(await exists(path.join(preparedDir, "extensions-data", "arcadia", "state.json"))))
     throw new Error("prepared crash recovery lost legacy data");
+  const legacyState = JSON.parse(
+    await readFile(path.join(preparedDir, "extensions-data", "arcadia", "state.json"), "utf8"),
+  );
+  if (legacyState.unknownSettingsField?.preserve !== "yes")
+    throw new Error("prepared crash recovery lost unknown settings");
+  if ((await grantState(preparedDir)) !== grantsBefore)
+    throw new Error("prepared crash recovery did not restore grants");
+  if (await packageStatePending(preparedDir))
+    throw new Error("prepared crash recovery left package-state.pending");
   const preparedActive = (await packageState(preparedDir)).filter((row) => row.enabled === true);
   if (preparedActive.length !== 1 || preparedActive[0].version !== "0.1.8")
     throw new Error("prepared crash recovery did not restore worker state");
@@ -142,6 +188,8 @@ try {
     (row) => row.enabled === true && row.version === "0.1.8",
   );
   if (active.length !== 1) throw new Error("committed recovery did not leave one active worker");
+  if (await packageStatePending(committedDir))
+    throw new Error("committed recovery left package-state.pending");
   if (
     await exists(
       `${path.join(committedDir, "legacy-migrations", "v1", "com.kosmos.arcadia", "journal.json")}.finalizing`,
