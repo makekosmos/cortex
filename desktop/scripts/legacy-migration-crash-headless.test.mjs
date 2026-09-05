@@ -95,6 +95,19 @@ async function runCase(dataDir, phase, recoveryOnly, skipSetup) {
   return dataDir;
 }
 
+async function removeOwnedRoot() {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    try {
+      await rm(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (!(error instanceof Error) || error.code !== "EBUSY") throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+  throw new Error(`temporary crash-harness data remained locked: ${root}`);
+}
+
 try {
   const dataDir = path.join(root, "data");
   await mkdir(dataDir, { recursive: true });
@@ -120,10 +133,5 @@ try {
   console.log("headless migration crash cases passed: prepared rollback and committed restart");
   await stopBackend(running);
 } finally {
-  try {
-    await rm(root, { recursive: true, force: true });
-  } catch (error) {
-    if (!(error instanceof Error) || !(error.code === "EBUSY")) throw error;
-    console.warn(`temporary crash-harness data retained while locked: ${root}`);
-  }
+  await removeOwnedRoot();
 }

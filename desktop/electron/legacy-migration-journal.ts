@@ -274,9 +274,9 @@ export async function runLegacyMigration(
     await host.snapshotBefore();
     await host.stageDestination();
     await write({ ...host.journal, phase: "prepared" });
-    await testMigrationBarrier("prepared", host.journal.target_id);
     await host.revokeLegacyGrants();
     await host.activateCanonical();
+    await testMigrationBarrier("prepared", host.journal.target_id);
     await durableWrite(
       migrationFinalizationPath(host.dataDir, host.journal.target_id),
       Buffer.from("finalizing\n", "utf8"),
