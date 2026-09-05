@@ -261,7 +261,10 @@ void app.whenReady().then(() =>
     instance: KEPLER_INSTANCE,
     launcher: launcherController,
     runBootSelfCheck,
-    recoverLegacyMigration: () => recoverLegacyMigrationsBeforeLaunch(KEPLER_INSTANCE.dataDir),
+    recoverLegacyMigration: async () => {
+      const client = await backendSupervisor.awaitArkReady();
+      await recoverLegacyMigrationsBeforeLaunch(KEPLER_INSTANCE.dataDir, client);
+    },
     runLegacyMigration: async () => {
       const client = await backendSupervisor.awaitArkReady();
       await createLegacyMigrationRunner(KEPLER_INSTANCE.dataDir, client).run();
