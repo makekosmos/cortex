@@ -68,7 +68,6 @@ export async function runAppReady({
   runLegacyMigration,
 }: RunAppReadyOptions): Promise<void> {
   runBootSelfCheck();
-  if (recoverLegacyMigration) await recoverLegacyMigration();
   nativeTheme.themeSource = "dark";
 
   if (process.argv.includes("--autostart")) {
@@ -83,6 +82,7 @@ export async function runAppReady({
   const boot = backendSupervisor.initArkClient();
   if (runLegacyMigration) {
     await backendSupervisor.awaitArkReady();
+    if (recoverLegacyMigration) await recoverLegacyMigration();
     await runLegacyMigration();
   }
   if (!process.argv.includes("--autostart")) {

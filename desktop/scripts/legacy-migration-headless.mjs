@@ -25,7 +25,7 @@ async function startBackend() {
     await new Promise((resolve) => setTimeout(resolve, 100));
   const lock = JSON.parse(await readFile(lockPath, "utf8"));
   const client = {
-    async invokeOperation({ operation, ...params }) {
+    async invokeOperation({ operation, params = {}, ...requestFields }) {
       const response = await fetch(`http://127.0.0.1:${lock.http_port}/v1/rpc`, {
         method: "POST",
         headers: {
@@ -36,7 +36,12 @@ async function startBackend() {
           "X-Kosmos-Client-Version": "1.0.0",
           "X-Kosmos-Client-Pid": String(lock.pid),
         },
-        body: JSON.stringify({ operation, _req_id: `${operation}-${Date.now()}`, ...params }),
+        body: JSON.stringify({
+          operation,
+          _req_id: `${operation}-${Date.now()}`,
+          ...params,
+          ...requestFields,
+        }),
       });
       const value = await response.json();
       if (!response.ok || value.ok === false) throw new Error(JSON.stringify(value));
