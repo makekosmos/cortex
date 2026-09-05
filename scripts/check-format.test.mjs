@@ -8,7 +8,11 @@ import test from "node:test";
 const script = resolve(import.meta.dirname, "check-format.mjs");
 
 function git(cwd, ...args) {
-  const result = spawnSync("git", args, { cwd, encoding: "utf8" });
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1" },
+  });
   assert.equal(result.status, 0, result.stderr);
 }
 
