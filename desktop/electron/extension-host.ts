@@ -50,7 +50,11 @@ import { clearExtensionWindowIpcState, registerExtensionWindowIpc } from "./exte
 import { registerExtensionArkIpc } from "./extension-ark-ipc";
 import { registerExtensionImageColorIpc } from "./extension-image-color-ipc";
 import { registerExtensionBookMetadataIpc } from "./extension-book-metadata-ipc";
-import { isNativeExtensionRunning, openNativeExtension } from "./extension-native-runner";
+import {
+  isNativeExtensionRunning,
+  openNativeExtension,
+  stopNativeExtension,
+} from "./extension-native-runner";
 import { openExtensionBrowserWindow } from "./extension-browser-window";
 import type { JsonValue } from "./extension-permissions";
 import { assertLegacyLaunchAllowed } from "./legacy-migration-journal";
@@ -97,6 +101,15 @@ export function isExtensionRunning(id: string): boolean {
   return Array.from(extensionWindows.values()).some(
     (entry) => entry.id === id && !entry.win.isDestroyed(),
   );
+}
+
+export async function stopExtension(id: string): Promise<void> {
+  await stopNativeExtension(id);
+  for (const [windowKey, entry] of extensionWindows) {
+    if (entry.id !== id || entry.win.isDestroyed()) continue;
+    entry.win.destroy();
+    extensionWindows.delete(windowKey);
+  }
 }
 
 /**

@@ -115,6 +115,28 @@ pub(in crate::ws_server) async fn handle_package_op(
                     .map(|revoked| serde_json::json!({ "revoked": revoked })),
             )
         }
+        "validate_legacy_grants" => {
+            let Some(source_ids) = params.get("source_ids").and_then(Value::as_array) else {
+                return LocalResponse::err("packages.validate_legacy_grants: invalid-request");
+            };
+            let Some(source_ids) = source_ids
+                .iter()
+                .map(Value::as_str)
+                .collect::<Option<Vec<_>>>()
+            else {
+                return LocalResponse::err("packages.validate_legacy_grants: invalid-request");
+            };
+            let source_ids = source_ids
+                .into_iter()
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            package_response(
+                subop,
+                service
+                    .validate_legacy_grants(&source_ids)
+                    .map(|()| serde_json::json!({ "valid": true })),
+            )
+        }
         "install" => {
             let Some(id) = params
                 .get("id")

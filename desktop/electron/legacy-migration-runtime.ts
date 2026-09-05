@@ -3,6 +3,7 @@ import path from "node:path";
 import type { ArkClient } from "@kosmos/ark";
 import { isRecord, isString, type JsonValue } from "./extension-permissions";
 import { extensionUserDataDir } from "./extension-roots";
+import { stopExtension } from "./extension-host";
 import {
   mergeLegacyExtensionData,
   validateLegacyExtensionDataRoot,
@@ -14,6 +15,7 @@ import {
   readMigrationJournal,
   recoverPreparedMigration,
   runLegacyMigration,
+  withLegacyMigrationLock,
 } from "./legacy-migration-journal";
 
 interface PackageList {
@@ -192,7 +194,7 @@ export function createLegacyMigrationRunner(
       snapshotBefore: () => snapshotNamespaces(dataDir, target, ids),
       stageDestination: () => stageNamespace(dataDir, target, ids),
       revokeLegacyGrants: async () => {
-        await request({ operation: "packages.revoke_legacy_grants", params: {} });
+        await request({ operation: "packages.revoke_legacy_grants", params: { source_ids: ids } });
       },
       activateCanonical: async () => {
         await activateNamespace(dataDir, target);
@@ -216,7 +218,14 @@ export function createLegacyMigrationRunner(
       if (!ids.length) continue;
       const info = await replacement(target);
       if (!info) continue;
-      const outcome = await runLegacyMigration(await host(target, ids, info));
+      await request({
+        operation: "packages.validate_legacy_grants",
+        params: { source_ids: ids },
+      });
+      const outcome = await withLegacyMigrationLock(dataDir, target, async () => {
+        for (const id of ids) await stopExtension(id);
+        return runLegacyMigration(await host(target, ids, info));
+      });
       if (outcome === "pending") continue;
     }
   }

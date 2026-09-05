@@ -98,6 +98,16 @@ export function isNativeExtensionRunning(id: string): boolean {
   return !!native && !native.child.killed && native.child.exitCode === null;
 }
 
+export async function stopNativeExtension(id: string): Promise<void> {
+  const entry = nativeExtensions.get(id);
+  if (!entry || entry.child.exitCode !== null || entry.child.killed) return;
+  entry.child.kill();
+  await new Promise<void>((resolve) => {
+    entry.child.once("exit", () => resolve());
+    setTimeout(resolve, 1000);
+  });
+}
+
 export async function openNativeExtension(
   id: string,
   manifest: ExtensionManifest,

@@ -35,6 +35,7 @@ const JOURNAL_KEYS = new Set([
 const REPLACEMENT_KEYS = new Set(["version", "sha256", "catalog_sequence"]);
 const IDS = new Set(Object.keys(LEGACY_TO_CANONICAL));
 const TARGETS = new Set(Object.values(LEGACY_TO_CANONICAL));
+const ACTIVE_MIGRATIONS = new Set<string>();
 
 function fail(message: string): never {
   throw new Error(`[kepler-shell] invalid legacy migration journal: ${message}`);
@@ -128,7 +129,8 @@ export function isLegacyLaunchBlocked(dataDir: string, id: string): boolean {
     const value = JSON.parse(
       readFileSync(migrationJournalPath(dataDir, target), "utf8"),
     ) as JsonValue;
-    return isRecord(value) && value.phase === "committed" && value.target_id === target;
+    const journal = validateMigrationJournal(value);
+    return journal.phase === "committed" && journal.target_id === target;
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
     return true;
@@ -136,8 +138,32 @@ export function isLegacyLaunchBlocked(dataDir: string, id: string): boolean {
 }
 
 export function assertLegacyLaunchAllowed(dataDir: string, id: string): void {
+  if (isLegacyMigrationActive(dataDir, id))
+    throw new Error("[kepler-shell] legacy package is being migrated");
   if (isLegacyLaunchBlocked(dataDir, id))
     throw new Error(`[kepler-shell] legacy package is disabled after migration: ${id}`);
+}
+
+export function isLegacyMigrationActive(dataDir: string, id: string): boolean {
+  // SAFETY: the lookup is constrained to the literal legacy allowlist.
+  const target = LEGACY_TO_CANONICAL[id as keyof typeof LEGACY_TO_CANONICAL];
+  if (!target) return false;
+  return ACTIVE_MIGRATIONS.has(migrationJournalPath(dataDir, target));
+}
+
+export async function withLegacyMigrationLock<T>(
+  dataDir: string,
+  canonicalId: CanonicalId,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const key = migrationJournalPath(dataDir, canonicalId);
+  if (ACTIVE_MIGRATIONS.has(key)) throw new Error("[kepler-shell] legacy migration already active");
+  ACTIVE_MIGRATIONS.add(key);
+  try {
+    return await operation();
+  } finally {
+    ACTIVE_MIGRATIONS.delete(key);
+  }
 }
 
 async function durableWrite(filePath: string, bytes: Buffer): Promise<void> {

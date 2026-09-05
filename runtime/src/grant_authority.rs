@@ -449,6 +449,7 @@ impl GrantAuthorityRegistry {
     /// Revoke persisted grants for the selected v1 legacy identities and
     /// invalidate matching live handles only after persistence succeeds.
     pub fn revoke_legacy_records(&self, source_ids: &[&str]) -> Result<usize, GrantError> {
+        self.validate_legacy_records(source_ids)?;
         if source_ids.is_empty()
             || source_ids
                 .iter()
@@ -475,6 +476,20 @@ impl GrantAuthorityRegistry {
         let mut grants = self.grants.lock().unwrap_or_else(|p| p.into_inner());
         grants.retain(|_, grant| !source_ids.contains(&grant.extension_id.as_str()));
         Ok(revoked)
+    }
+    pub fn validate_legacy_records(&self, source_ids: &[&str]) -> Result<(), GrantError> {
+        if source_ids.is_empty()
+            || source_ids
+                .iter()
+                .any(|id| !LEGACY_EXTENSION_IDS.contains(id))
+            || source_ids
+                .iter()
+                .enumerate()
+                .any(|(index, id)| source_ids[..index].contains(id))
+        {
+            return Err(GrantError::Invalid);
+        }
+        self.load_records().map(|_| ())
     }
     pub fn len(&self) -> usize {
         self.grants.lock().unwrap_or_else(|p| p.into_inner()).len()

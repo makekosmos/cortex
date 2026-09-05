@@ -82,12 +82,8 @@ export async function runAppReady({
   backendSupervisor.markBootInitStarted();
   const boot = backendSupervisor.initArkClient();
   if (runLegacyMigration) {
-    try {
-      await backendSupervisor.awaitArkReady();
-      await runLegacyMigration();
-    } catch (error) {
-      console.error("[kepler-shell] legacy migration deferred:", error);
-    }
+    await backendSupervisor.awaitArkReady();
+    await runLegacyMigration();
   }
   if (!process.argv.includes("--autostart")) {
     const openManager =
