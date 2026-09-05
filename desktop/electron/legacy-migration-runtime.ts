@@ -10,6 +10,7 @@ import {
   LEGACY_TO_CANONICAL,
   type CanonicalId,
   type LegacyMigrationHost,
+  migrationFinalizationPath,
   readMigrationJournal,
   recoverPreparedMigration,
   runLegacyMigration,
@@ -244,7 +245,6 @@ export function createLegacyMigrationRunner(
   async function recoverBeforeLaunch(): Promise<void> {
     await recoverLegacyMigrationsBeforeLaunch(dataDir, client);
   }
-
   async function run(): Promise<void> {
     await recoverBeforeLaunch();
     for (const target of targets) {
@@ -293,6 +293,8 @@ export async function recoverLegacyMigrationsBeforeLaunch(
       if (!client) throw new Error("package state recovery requires PackageService");
       const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
       await restorePackageState(dataDir, target, request);
+    } else if (journal?.phase === "committed") {
+      await rm(migrationFinalizationPath(dataDir, target), { force: true });
     }
   }
 }

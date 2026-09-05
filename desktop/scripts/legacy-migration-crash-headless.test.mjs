@@ -95,6 +95,11 @@ async function runCase(dataDir, phase, recoveryOnly, skipSetup) {
   return dataDir;
 }
 
+async function packageState(dataDir) {
+  const value = JSON.parse(await readFile(path.join(dataDir, "packages", "state.json"), "utf8"));
+  return value.packages.filter((row) => row.id === "com.kosmos.arcadia");
+}
+
 async function removeOwnedRoot() {
   for (let attempt = 0; attempt < 40; attempt++) {
     try {
@@ -121,6 +126,8 @@ try {
     throw new Error("prepared crash recovery left a journal");
   if (!(await exists(path.join(preparedDir, "extensions-data", "arcadia", "state.json"))))
     throw new Error("prepared crash recovery lost legacy data");
+  if ((await packageState(preparedDir)).some((row) => row.enabled === true))
+    throw new Error("prepared crash recovery left a worker enabled");
 
   const committedDir = await runCase(dataDir, "committed", false, true);
   const journal = JSON.parse(
@@ -130,6 +137,16 @@ try {
     ),
   );
   if (journal.phase !== "committed") throw new Error("committed crash lost committed journal");
+  const active = (await packageState(committedDir)).filter(
+    (row) => row.enabled === true && row.version === "0.1.8",
+  );
+  if (active.length !== 1) throw new Error("committed recovery did not leave one active worker");
+  if (
+    await exists(
+      `${path.join(committedDir, "legacy-migrations", "v1", "com.kosmos.arcadia", "journal.json")}.finalizing`,
+    )
+  )
+    throw new Error("committed recovery left finalizing marker");
   console.log("headless migration crash cases passed: prepared rollback and committed restart");
   await stopBackend(running);
 } finally {
