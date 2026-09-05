@@ -19,6 +19,7 @@ import {
 import {
   packageRows,
   packageStateSnapshotPending,
+  clearPackageStateSnapshotPending,
   restorePackageState,
   snapshotPackageState,
   verifiedReplacement,
@@ -128,12 +129,10 @@ async function restoreNamespace(dataDir: string, target: CanonicalId): Promise<v
   if (await existsDirectory(before)) await copyNamespace(before, destination);
   await rm(path.join(migrationRoot(dataDir, target), "staged"), { recursive: true, force: true });
 }
-
 interface LegacyMigrationRunner {
   recoverBeforeLaunch(): Promise<void>;
   run(): Promise<void>;
 }
-
 export function createLegacyMigrationRunner(
   dataDir: string,
   client: ArkClient,
@@ -289,12 +288,13 @@ export async function recoverLegacyMigrationsBeforeLaunch(
         await restoreNamespace(dataDir, target);
         await restorePackageState(dataDir, target, request);
       });
+    } else if (journal?.phase === "committed") {
+      await rm(migrationFinalizationPath(dataDir, target), { force: true });
+      await clearPackageStateSnapshotPending(dataDir, target);
     } else if (await packageStateSnapshotPending(dataDir, target)) {
       if (!client) throw new Error("package state recovery requires PackageService");
       const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
       await restorePackageState(dataDir, target, request);
-    } else if (journal?.phase === "committed") {
-      await rm(migrationFinalizationPath(dataDir, target), { force: true });
     }
   }
 }
