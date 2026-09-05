@@ -20,6 +20,7 @@ import {
 
 interface PackageList {
   packages?: JsonValue;
+  truncated?: boolean;
 }
 interface ReplacementInfo {
   version: string;
@@ -172,6 +173,7 @@ export function createLegacyMigrationRunner(
     // SAFETY: the operation response is the package-list wire object after the record check.
     // SAFETY: the operation response is the package-list wire object after the record check.
     const packageList = result as PackageList;
+    if (packageList.truncated === true) return null;
     const rows = Array.isArray(packageList.packages) ? packageList.packages : [];
     return packageRow(rows.find((row) => isRecord(row) && row.id === target) ?? null, target);
   }
@@ -203,6 +205,9 @@ export function createLegacyMigrationRunner(
         if (isRecord(result as JsonValue)) {
           // SAFETY: the operation response is the package-list wire object after the record check.
           const packageList = result as PackageList;
+          if (packageList.truncated === true) {
+            throw new Error(`package list truncated while stopping '${target}'`);
+          }
           if (Array.isArray(packageList.packages)) {
             for (const row of packageList.packages) {
               if (
