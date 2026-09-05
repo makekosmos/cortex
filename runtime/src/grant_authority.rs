@@ -199,7 +199,7 @@ impl GrantAuthorityRegistry {
             let _ = fs::remove_file(&tmp);
             return Err(GrantError::Persistence);
         }
-        fs::rename(&tmp, &path).map_err(|_| {
+        fs::rename(&tmp, path).map_err(|_| {
             let _ = fs::remove_file(&tmp);
             GrantError::Persistence
         })?;
