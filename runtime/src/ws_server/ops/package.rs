@@ -13,12 +13,13 @@ pub(in crate::ws_server) async fn handle_package_op(
                 Some("bridge") => Some(crate::package_service::PackageKind::Bridge),
                 Some(_) => return LocalResponse::err("packages.list: invalid-kind"),
             };
-            let installed = package_blocking({
+            match package_blocking({
                 let service = service.clone();
-                move || service.list_filtered(kind.clone())
+                let query_kind = kind.clone();
+                move || service.list_filtered(query_kind)
             })
-            .await;
-            match installed {
+            .await
+            {
                 Ok(list) => {
                     let catalog = service.catalog_packages(kind.as_ref()).unwrap_or_default();
                     let mut value =
