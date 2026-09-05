@@ -313,6 +313,12 @@ impl PackageService {
         self.grants.clone()
     }
 
+    pub fn revoke_legacy_grants(&self) -> Result<usize, PackageError> {
+        self.grants
+            .revoke_legacy_records()
+            .map_err(|_| PackageError::Persistence)
+    }
+
     pub async fn restore_enabled_workers(&self) -> Result<(), PackageError> {
         let packages = self.store.list()?;
         for package in packages.into_iter().filter(|package| {
