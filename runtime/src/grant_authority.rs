@@ -645,7 +645,10 @@ impl GrantAuthorityRegistry {
                         .eq(source_ids.iter().copied())
             })
             .map(|transaction| transaction.token)
-            .ok_or(GrantError::NotFound)?;
+            .unwrap_or_default();
+        if token.is_empty() {
+            return Ok(0);
+        }
         self.restore_legacy_records(&token)
     }
 
