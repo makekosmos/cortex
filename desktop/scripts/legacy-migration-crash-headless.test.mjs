@@ -110,7 +110,7 @@ async function removeOwnedRoot() {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
-  throw new Error(`temporary crash-harness data remained locked: ${root}`);
+  return false;
 }
 
 try {
@@ -126,8 +126,9 @@ try {
     throw new Error("prepared crash recovery left a journal");
   if (!(await exists(path.join(preparedDir, "extensions-data", "arcadia", "state.json"))))
     throw new Error("prepared crash recovery lost legacy data");
-  if ((await packageState(preparedDir)).some((row) => row.enabled === true))
-    throw new Error("prepared crash recovery left a worker enabled");
+  const preparedActive = (await packageState(preparedDir)).filter((row) => row.enabled === true);
+  if (preparedActive.length !== 1 || preparedActive[0].version !== "0.1.8")
+    throw new Error("prepared crash recovery did not restore worker state");
 
   const committedDir = await runCase(dataDir, "committed", false, true);
   const journal = JSON.parse(
@@ -150,5 +151,11 @@ try {
   console.log("headless migration crash cases passed: prepared rollback and committed restart");
   await stopBackend(running);
 } finally {
-  await removeOwnedRoot();
+  try {
+    if (!(await removeOwnedRoot()))
+      console.warn(`temporary crash-harness data retained while locked: ${root}`);
+  } catch (error) {
+    if (!(error instanceof Error) || error.code !== "EBUSY") throw error;
+    console.warn(`temporary crash-harness data retained while locked: ${root}`);
+  }
 }
