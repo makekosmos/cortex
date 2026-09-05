@@ -2,7 +2,7 @@ use crate::ark_host::{ArkHost, ArkResult};
 use serde_json::Value;
 
 /// Core#53 boundary: integration replication stays behind the existing ArkHost RPC.
-/// Payloads are JSON strings because Core's FFI contract owns their schemas.
+/// Payloads stay opaque at this boundary; Core's RPC dispatcher owns schemas.
 pub(crate) struct ReplicationConsumer<'a> {
     ark: &'a ArkHost,
 }
@@ -22,12 +22,12 @@ impl<'a> ReplicationConsumer<'a> {
         let response = self
             .ark
             .request(
-                "persist_node_authorization_json",
+                "integration.persist_node_authorization",
                 serde_json::json!({
-                    "authorizationOperation": operation,
-                    "nodeJson": serde_json::to_string(node)?,
-                    "grantJson": grant.map(serde_json::to_string).transpose()?,
-                    "deviceId": device_id,
+                    "authorization_operation": operation,
+                    "node": node,
+                    "grant": grant,
+                    "device_id": device_id,
                 }),
             )
             .await?;
@@ -49,10 +49,10 @@ impl<'a> ReplicationConsumer<'a> {
         let response = self
             .ark
             .request(
-                "persist_integration_grant_json",
+                "integration.persist_integration_grant",
                 serde_json::json!({
-                    "grantJson": serde_json::to_string(grant)?,
-                    "deviceId": device_id,
+                    "grant": grant,
+                    "device_id": device_id,
                 }),
             )
             .await?;
@@ -77,13 +77,13 @@ impl<'a> ReplicationConsumer<'a> {
         let response = self
             .ark
             .request(
-                "prepare_signed_sync_json",
+                "integration.prepare_signed_sync",
                 serde_json::json!({
-                    "spaceId": space_id,
-                    "originNodeId": origin_node_id,
-                    "integrationId": integration_id,
-                    "recipientNodeId": recipient_node_id,
-                    "messageId": message_id,
+                    "space_id": space_id,
+                    "origin_node_id": origin_node_id,
+                    "integration_id": integration_id,
+                    "recipient_node_id": recipient_node_id,
+                    "message_id": message_id,
                 }),
             )
             .await?;
@@ -94,10 +94,7 @@ impl<'a> ReplicationConsumer<'a> {
                     .unwrap_or_else(|| "Core sync preparation failed".into()),
             ));
         }
-        let json = response.data.as_str().ok_or_else(|| {
-            crate::ark_host::ArkHostError::RpcError("Core sync preparation was not JSON".into())
-        })?;
-        serde_json::from_str(json).map_err(crate::ark_host::ArkHostError::Json)
+        Ok(response.data)
     }
 
     pub(crate) async fn validate_outbound_signed_sync(
@@ -109,11 +106,11 @@ impl<'a> ReplicationConsumer<'a> {
         let response = self
             .ark
             .request(
-                "validate_outbound_signed_sync_json",
+                "integration.validate_outbound_signed_sync",
                 serde_json::json!({
-                    "spaceId": space_id,
-                    "originNodeId": origin_node_id,
-                    "frameJson": serde_json::to_string(frame)?,
+                    "space_id": space_id,
+                    "origin_node_id": origin_node_id,
+                    "frame": frame,
                 }),
             )
             .await?;
