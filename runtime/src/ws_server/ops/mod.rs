@@ -33,6 +33,7 @@ mod file_index;
 mod games;
 mod package;
 mod package_helpers;
+mod package_legacy;
 mod store;
 mod transport;
 
@@ -45,5 +46,6 @@ pub(super) use file_index::*;
 pub(super) use games::*;
 pub(super) use package::*;
 pub(super) use package_helpers::*;
+pub(super) use package_legacy::restore_legacy_grants;
 pub(super) use store::*;
 pub(super) use transport::*;

@@ -39,8 +39,6 @@ pub(in crate::ws_server) async fn handle_package_op(
             "trust": service.trust_summary(),
             "catalog": service.catalog_summary(),
         })),
-        // Wire contract: {id, version, hash, catalog_sequence} -> exact
-        // identity evidence; read-only and fail-closed on any mismatch.
         "verify_replacement" => {
             let Some(id) = params
                 .get("id")
@@ -145,17 +143,7 @@ pub(in crate::ws_server) async fn handle_package_op(
                     }),
             )
         }
-        "restore_legacy_grants" => {
-            let Some(token) = params.get("transaction_token").and_then(Value::as_str) else {
-                return LocalResponse::err("packages.restore_legacy_grants: invalid-request");
-            };
-            package_response(
-                subop,
-                service
-                    .restore_legacy_grants(token)
-                    .map(|restored| serde_json::json!({ "restored": restored })),
-            )
-        }
+        "restore_legacy_grants" => restore_legacy_grants(subop, params, service),
         "commit_legacy_grants" => {
             let Some(token) = params.get("transaction_token").and_then(Value::as_str) else {
                 return LocalResponse::err("packages.commit_legacy_grants: invalid-request");

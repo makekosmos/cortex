@@ -154,6 +154,8 @@ export function createLegacyMigrationRunner(
     ids: string[],
     replacementInfo: ReplacementInfo,
   ): Promise<LegacyMigrationHost> {
+    let grantTransactionToken: string | null = null;
+    let grantRollbackNeeded = false;
     return {
       dataDir,
       journal: {
@@ -194,7 +196,26 @@ export function createLegacyMigrationRunner(
       snapshotBefore: () => snapshotNamespaces(dataDir, target, ids),
       stageDestination: () => stageNamespace(dataDir, target, ids),
       revokeLegacyGrants: async () => {
-        await request({ operation: "packages.revoke_legacy_grants", params: { source_ids: ids } });
+        grantRollbackNeeded = true;
+        const result = await request({
+          operation: "packages.revoke_legacy_grants",
+          params: { source_ids: ids },
+        });
+        if (
+          !isRecord(result) ||
+          (result.transaction_token !== null && !isString(result.transaction_token))
+        )
+          throw new Error("legacy grant transaction response is invalid");
+        grantTransactionToken = isString(result.transaction_token)
+          ? result.transaction_token
+          : null;
+      },
+      commitLegacyGrants: async () => {
+        if (!grantTransactionToken) return;
+        await request({
+          operation: "packages.commit_legacy_grants",
+          params: { transaction_token: grantTransactionToken },
+        });
       },
       activateCanonical: async () => {
         await activateNamespace(dataDir, target);
@@ -204,6 +225,14 @@ export function createLegacyMigrationRunner(
         });
       },
       restoreBefore: async () => {
+        if (grantRollbackNeeded) {
+          await request({
+            operation: "packages.restore_legacy_grants",
+            params: grantTransactionToken
+              ? { transaction_token: grantTransactionToken }
+              : { source_ids: ids },
+          });
+        }
         await restoreNamespace(dataDir, target);
         await restorePackageState(dataDir, target, request);
       },
@@ -251,6 +280,10 @@ export async function recoverLegacyMigrationsBeforeLaunch(
       }
       const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
       await recoverPreparedMigration(dataDir, target, async () => {
+        await request({
+          operation: "packages.restore_legacy_grants",
+          params: { source_ids: journal.source_ids },
+        });
         await restoreNamespace(dataDir, target);
         await restorePackageState(dataDir, target, request);
       });

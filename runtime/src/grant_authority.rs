@@ -626,6 +626,29 @@ impl GrantAuthorityRegistry {
         Ok(restored)
     }
 
+    /// Resolve the active transaction by its exact allowlisted source set for
+    /// restart recovery; the opaque token never leaves the runtime.
+    pub fn restore_legacy_records_for_sources(
+        &self,
+        source_ids: &[&str],
+    ) -> Result<usize, GrantError> {
+        self.validate_legacy_records(source_ids)?;
+        let token = self
+            .load_transactions()?
+            .into_iter()
+            .find(|transaction| {
+                transaction.state == LegacyGrantTransactionState::Active
+                    && transaction
+                        .source_ids
+                        .iter()
+                        .map(String::as_str)
+                        .eq(source_ids.iter().copied())
+            })
+            .map(|transaction| transaction.token)
+            .ok_or(GrantError::NotFound)?;
+        self.restore_legacy_records(&token)
+    }
+
     /// Mark a transaction successful. Committed transactions cannot be
     /// restored, preventing a later restart from resurrecting legacy grants.
     pub fn commit_legacy_records(&self, token: &str) -> Result<(), GrantError> {

@@ -239,6 +239,7 @@ export interface LegacyMigrationHost {
   snapshotBefore: () => Promise<void>;
   stageDestination: () => Promise<void>;
   revokeLegacyGrants: () => Promise<void>;
+  commitLegacyGrants?: () => Promise<void>;
   activateCanonical: () => Promise<void>;
   restoreBefore: () => Promise<void>;
 }
@@ -264,13 +265,14 @@ export async function runLegacyMigration(
     await host.revokeLegacyGrants();
     await host.activateCanonical();
     await writeMigrationJournal(host.dataDir, { ...host.journal, phase: "committed" });
+    await host.commitLegacyGrants?.();
     return "committed";
   } catch (error) {
     if (recoveryRequired) {
       const prepared = await readMigrationJournal(host.dataDir, host.journal.target_id);
       if (prepared?.phase === "prepared") {
         await recoverPreparedMigration(host.dataDir, host.journal.target_id, host.restoreBefore);
-      } else {
+      } else if (!prepared) {
         await host.restoreBefore();
       }
     }

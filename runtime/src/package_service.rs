@@ -237,6 +237,16 @@ impl PackageService {
             .map_err(map_legacy_grant_error)
     }
 
+    pub fn restore_legacy_grants_for_sources(
+        &self,
+        source_ids: &[String],
+    ) -> Result<usize, PackageError> {
+        let source_ids = source_ids.iter().map(String::as_str).collect::<Vec<_>>();
+        self.grants
+            .restore_legacy_records_for_sources(&source_ids)
+            .map_err(map_legacy_grant_error)
+    }
+
     pub fn commit_legacy_grants(&self, token: &str) -> Result<(), PackageError> {
         self.grants
             .commit_legacy_records(token)
