@@ -250,15 +250,15 @@ export function createLegacyMigrationRunner(
   async function run(): Promise<void> {
     await recoverBeforeLaunch();
     for (const target of targets) {
-      const ids = await sourceIdsWithData(target);
-      if (!ids.length) continue;
-      const info = await replacement(target);
-      if (!info) continue;
-      await request({
-        operation: "packages.validate_legacy_grants",
-        params: { source_ids: ids },
-      });
       const outcome = await withLegacyMigrationLock(dataDir, target, async () => {
+        const ids = await sourceIdsWithData(target);
+        if (!ids.length) return "committed" as const;
+        const info = await replacement(target);
+        if (!info) return "pending" as const;
+        await request({
+          operation: "packages.validate_legacy_grants",
+          params: { source_ids: ids },
+        });
         for (const id of ids) await stopExtension(id);
         return runLegacyMigration(await host(target, ids, info));
       });

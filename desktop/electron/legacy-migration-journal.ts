@@ -154,6 +154,12 @@ export function isLegacyMigrationActive(dataDir: string, id: string): boolean {
   return ACTIVE_MIGRATIONS.has(migrationJournalPath(dataDir, target));
 }
 
+export function legacyMigrationTarget(id: string): CanonicalId | null {
+  // SAFETY: the lookup is constrained to the literal legacy allowlist.
+  const target = LEGACY_TO_CANONICAL[id as keyof typeof LEGACY_TO_CANONICAL];
+  return target ?? null;
+}
+
 export async function withLegacyMigrationLock<T>(
   dataDir: string,
   canonicalId: CanonicalId,
