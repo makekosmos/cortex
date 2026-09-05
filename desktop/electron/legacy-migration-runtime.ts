@@ -2,8 +2,6 @@ import { cp, lstat, mkdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import type { ArkClient } from "@kosmos/ark";
 import { isRecord, isString, type JsonValue } from "./extension-permissions";
-import { extensionUserDataDir } from "./extension-roots";
-import { stopExtension } from "./extension-host";
 import {
   mergeLegacyExtensionData,
   validateLegacyExtensionDataRoot,
@@ -28,13 +26,15 @@ import {
 } from "./legacy-migration-state";
 const LEGACY_IDS = Object.keys(LEGACY_TO_CANONICAL);
 
+function extensionUserDataDir(dataDir: string, id: string): string {
+  return path.join(dataDir, "extensions-data", id);
+}
 function canonicalIds(target: CanonicalId): string[] {
   // SAFETY: Object.keys is sourced exclusively from the literal legacy allowlist.
   return LEGACY_IDS.filter(
     (id) => LEGACY_TO_CANONICAL[id as keyof typeof LEGACY_TO_CANONICAL] === target,
   );
 }
-
 async function existsDirectory(root: string): Promise<boolean> {
   try {
     return (await lstat(root)).isDirectory();
@@ -43,7 +43,6 @@ async function existsDirectory(root: string): Promise<boolean> {
     throw error;
   }
 }
-
 async function copyNamespace(source: string, destination: string): Promise<void> {
   await mkdir(path.dirname(destination), { recursive: true });
   await cp(source, destination, {
@@ -53,21 +52,18 @@ async function copyNamespace(source: string, destination: string): Promise<void>
     preserveTimestamps: true,
   });
 }
-
 function migrationRoot(dataDir: string, target: CanonicalId): string {
   return path.join(dataDir, "legacy-migrations", "v1", target);
 }
-
-async function sourceIdsWithData(target: CanonicalId): Promise<string[]> {
+async function sourceIdsWithData(dataDir: string, target: CanonicalId): Promise<string[]> {
   const ids: string[] = [];
   for (const id of canonicalIds(target)) {
-    const dataRoot = extensionUserDataDir(id);
-    const extensionRoot = path.join(path.dirname(path.dirname(dataRoot)), "extensions", id);
+    const dataRoot = extensionUserDataDir(dataDir, id);
+    const extensionRoot = path.join(dataDir, "extensions", id);
     if ((await existsDirectory(dataRoot)) || (await existsDirectory(extensionRoot))) ids.push(id);
   }
   return ids;
 }
-
 async function snapshotNamespaces(
   dataDir: string,
   target: CanonicalId,
@@ -75,12 +71,12 @@ async function snapshotNamespaces(
 ): Promise<void> {
   const root = migrationRoot(dataDir, target);
   await mkdir(path.join(root, "before"), { recursive: true });
-  const destination = extensionUserDataDir(target);
+  const destination = extensionUserDataDir(dataDir, target);
   await rm(path.join(root, "before", "destination"), { recursive: true, force: true });
   if (await existsDirectory(destination))
     await copyNamespace(destination, path.join(root, "before", "destination"));
   for (const id of sourceIds) {
-    const source = extensionUserDataDir(id);
+    const source = extensionUserDataDir(dataDir, id);
     await rm(path.join(root, "before", id), { recursive: true, force: true });
     if (await existsDirectory(source)) {
       await validateLegacyExtensionDataRoot(source);
@@ -88,7 +84,6 @@ async function snapshotNamespaces(
     }
   }
 }
-
 async function stageNamespace(
   dataDir: string,
   target: CanonicalId,
@@ -98,20 +93,19 @@ async function stageNamespace(
   const staged = path.join(root, "staged", "destination");
   await rm(path.join(root, "staged"), { recursive: true, force: true });
   await mkdir(path.dirname(staged), { recursive: true });
-  const destination = extensionUserDataDir(target);
+  const destination = extensionUserDataDir(dataDir, target);
   await validateLegacyExtensionDataRoot(destination);
   if (await existsDirectory(destination)) await copyNamespace(destination, staged);
   else await mkdir(staged, { recursive: true });
   await mergeLegacyExtensionData({
     canonicalId: target,
     destinationRoot: staged,
-    sources: sourceIds.map((id) => ({ id, root: extensionUserDataDir(id) })),
+    sources: sourceIds.map((id) => ({ id, root: extensionUserDataDir(dataDir, id) })),
   });
 }
-
 async function activateNamespace(dataDir: string, target: CanonicalId): Promise<void> {
   const staged = path.join(migrationRoot(dataDir, target), "staged", "destination");
-  const destination = extensionUserDataDir(target);
+  const destination = extensionUserDataDir(dataDir, target);
   const old = `${destination}.migration-old-${process.pid}`;
   await rm(old, { recursive: true, force: true });
   if (await existsDirectory(destination)) await rename(destination, old);
@@ -128,7 +122,7 @@ async function activateNamespace(dataDir: string, target: CanonicalId): Promise<
 
 async function restoreNamespace(dataDir: string, target: CanonicalId): Promise<void> {
   const before = path.join(migrationRoot(dataDir, target), "before", "destination");
-  const destination = extensionUserDataDir(target);
+  const destination = extensionUserDataDir(dataDir, target);
   await rm(destination, { recursive: true, force: true });
   if (await existsDirectory(before)) await copyNamespace(before, destination);
   await rm(path.join(migrationRoot(dataDir, target), "staged"), { recursive: true, force: true });
@@ -142,6 +136,10 @@ interface LegacyMigrationRunner {
 export function createLegacyMigrationRunner(
   dataDir: string,
   client: ArkClient,
+  stopLegacyExtension: (id: string) => Promise<void> = async (id) => {
+    const { stopExtension } = await import("./extension-host");
+    await stopExtension(id);
+  },
 ): LegacyMigrationRunner {
   const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
   // SAFETY: Object.values is sourced exclusively from the canonical allowlist.
@@ -251,7 +249,7 @@ export function createLegacyMigrationRunner(
     await recoverBeforeLaunch();
     for (const target of targets) {
       const outcome = await withLegacyMigrationLock(dataDir, target, async () => {
-        const ids = await sourceIdsWithData(target);
+        const ids = await sourceIdsWithData(dataDir, target);
         if (!ids.length) return "committed" as const;
         const info = await replacement(target);
         if (!info) return "pending" as const;
@@ -259,7 +257,7 @@ export function createLegacyMigrationRunner(
           operation: "packages.validate_legacy_grants",
           params: { source_ids: ids },
         });
-        for (const id of ids) await stopExtension(id);
+        for (const id of ids) await stopLegacyExtension(id);
         return runLegacyMigration(await host(target, ids, info));
       });
       if (outcome === "pending") continue;
