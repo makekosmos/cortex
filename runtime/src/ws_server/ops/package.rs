@@ -136,8 +136,35 @@ pub(in crate::ws_server) async fn handle_package_op(
             package_response(
                 subop,
                 service
-                    .revoke_legacy_grants(&source_ids)
-                    .map(|revoked| serde_json::json!({ "revoked": revoked })),
+                    .revoke_legacy_grants_transaction(&source_ids)
+                    .map(|result| {
+                        serde_json::json!({
+                            "revoked": result.revoked,
+                            "transaction_token": result.transaction_token,
+                        })
+                    }),
+            )
+        }
+        "restore_legacy_grants" => {
+            let Some(token) = params.get("transaction_token").and_then(Value::as_str) else {
+                return LocalResponse::err("packages.restore_legacy_grants: invalid-request");
+            };
+            package_response(
+                subop,
+                service
+                    .restore_legacy_grants(token)
+                    .map(|restored| serde_json::json!({ "restored": restored })),
+            )
+        }
+        "commit_legacy_grants" => {
+            let Some(token) = params.get("transaction_token").and_then(Value::as_str) else {
+                return LocalResponse::err("packages.commit_legacy_grants: invalid-request");
+            };
+            package_response(
+                subop,
+                service
+                    .commit_legacy_grants(token)
+                    .map(|()| serde_json::json!({ "committed": true })),
             )
         }
         "validate_legacy_grants" => {
