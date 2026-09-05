@@ -105,6 +105,15 @@ pub struct PackageListSummary {
     pub truncated: bool,
 }
 
+/// Exact evidence returned by the read-only replacement verification boundary.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VerifiedReplacement {
+    pub id: String,
+    pub version: String,
+    pub hash: String,
+    pub catalog_sequence: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AppLaunch {
     pub package: InstalledPackage,

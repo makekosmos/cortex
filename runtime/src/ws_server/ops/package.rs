@@ -39,6 +39,31 @@ pub(in crate::ws_server) async fn handle_package_op(
             "trust": service.trust_summary(),
             "catalog": service.catalog_summary(),
         })),
+        // Wire contract: {id, version, hash, catalog_sequence} -> exact
+        // identity evidence; read-only and fail-closed on any mismatch.
+        "verify_replacement" => {
+            let Some(id) = params
+                .get("id")
+                .or_else(|| params.get("package_id"))
+                .and_then(Value::as_str)
+            else {
+                return LocalResponse::err("packages.verify_replacement: invalid-request");
+            };
+            let Some(version) = params.get("version").and_then(Value::as_str) else {
+                return LocalResponse::err("packages.verify_replacement: invalid-request");
+            };
+            let Some(hash) = params.get("hash").and_then(Value::as_str) else {
+                return LocalResponse::err("packages.verify_replacement: invalid-request");
+            };
+            let Some(catalog_sequence) = params.get("catalog_sequence").and_then(Value::as_u64)
+            else {
+                return LocalResponse::err("packages.verify_replacement: invalid-request");
+            };
+            package_response(
+                subop,
+                service.verify_installed_app(id, version, hash, catalog_sequence),
+            )
+        }
         "refresh_catalog" => package_response(subop, service.refresh_catalog().await),
         "catalog_apply" => {
             let Some(document) = params.get("document").and_then(serde_json::Value::as_str) else {
