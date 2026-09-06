@@ -1171,8 +1171,11 @@ pub(crate) mod tests {
 
     #[test]
     fn dictation_package_manifest_has_only_the_required_engine_grants() {
+        // Pinned from Dictation source 3225cea and artifact SHA256
+        // a7eaf9c84ee63fc01799df531ba0469390a20c4a4df6e37f1c9901af8a4c5fd5.
         let path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dictation/package.manifest.json");
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/dictation-0.2.4.package.manifest.json");
         let raw = fs::read_to_string(path).expect("Dictation package manifest");
         let VersionedManifest::V2(manifest) =
             PackageManifest::parse(&raw).expect("valid Dictation manifest")
@@ -1181,9 +1184,19 @@ pub(crate) mod tests {
         };
         let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "test-digest")
             .expect("compiled Dictation grant");
-        assert!(grant.allows_dictation_operation("dictation.get_config"));
-        assert!(grant.allows_dictation_operation("dictation.update_config"));
-        assert!(!grant.allows_dictation_operation("dictation.submit_audio"));
+        for operation in [
+            "dictation.get_state",
+            "dictation.get_config",
+            "dictation.list_local_models",
+            "dictation.update_config",
+            "dictation.start_recording",
+            "dictation.cancel",
+        ] {
+            assert!(grant.allows_dictation_operation(operation), "{operation}");
+        }
+        for operation in ["dictation.submit_audio", "dictation.delete_config"] {
+            assert!(!grant.allows_dictation_operation(operation), "{operation}");
+        }
     }
 
     #[test]
