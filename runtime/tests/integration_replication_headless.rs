@@ -101,6 +101,26 @@ async fn core_pair_setup_and_drop_reaps_children() {
 }
 
 #[tokio::test]
+async fn core_rejects_malformed_authorization_before_persisting() {
+    let fixture = fixture();
+    let (origin, _recipient) = spawn_core_pair(&fixture).await;
+    let response = origin
+        .request(
+            "integration.persist_node_authorization",
+            json!({
+                "authorization_operation": "authorize",
+                "node": { "node_id": "origin-node" },
+                "grant": null,
+                "device_id": "origin-node"
+            }),
+        )
+        .await
+        .unwrap();
+    assert!(!response.ok, "malformed node must fail closed");
+    assert_no_plaintext(&response.error.map(Value::String).unwrap_or(Value::Null));
+}
+
+#[tokio::test]
 #[ignore = "awaits Cortex source-offline transport and refresh wiring"]
 async fn source_offline_recipient_flow_is_not_run_until_cortex_wiring_exists() {
     let fixture = fixture();
