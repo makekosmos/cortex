@@ -101,6 +101,64 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             }
             Err("target peer has no authenticated addressed route".into())
         }
+        Request::IntegrationAcquireRefreshLease {
+            integration_id,
+            holder_node_id,
+            credential_generation,
+            now_ms,
+            ttl_ms,
+            expected_fencing_token,
+            device_id,
+        } => with_conn(|conn| {
+            let lease = ark_core::db::try_acquire_integration_refresh_lease(
+                conn,
+                &integration_id,
+                &holder_node_id,
+                credential_generation,
+                now_ms,
+                ttl_ms,
+                expected_fencing_token,
+                &device_id,
+            )?;
+            serde_json::to_value(lease).map_err(|error| error.to_string())
+        }),
+        Request::IntegrationPublishCredentialEnvelope {
+            envelope,
+            device_id,
+            now_ms,
+        } => with_conn(|conn| {
+            ark_core::db::publish_integration_credential_envelope(
+                conn,
+                &envelope,
+                &device_id,
+                now_ms,
+            )?;
+            Ok(json!(true))
+        }),
+        Request::IntegrationLoadLatestCredentialEnvelope {
+            integration_id,
+            recipient_node_id,
+        } => with_conn(|conn| {
+            let envelope = ark_core::db::load_latest_integration_credential_envelope(
+                conn,
+                &integration_id,
+                &recipient_node_id,
+            )?;
+            serde_json::to_value(envelope).map_err(|error| error.to_string())
+        }),
+        Request::IntegrationVerificationStatus {
+            integration_id,
+            local_node_id,
+            now_ms,
+        } => with_conn(|conn| {
+            let status = ark_core::db::integration_verification_status(
+                conn,
+                &integration_id,
+                &local_node_id,
+                now_ms,
+            )?;
+            serde_json::to_value(status).map_err(|error| error.to_string())
+        }),
         _ => Err("request is not an integration replication operation".into()),
     }
 }

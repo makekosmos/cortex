@@ -447,7 +447,11 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         | Request::IntegrationPersistIntegrationGrant { .. }
         | Request::IntegrationPrepareSignedSync { .. }
         | Request::IntegrationValidateOutboundSignedSync { .. }
-        | Request::IntegrationSendSignedSync { .. }) => {
+        | Request::IntegrationSendSignedSync { .. }
+        | Request::IntegrationAcquireRefreshLease { .. }
+        | Request::IntegrationPublishCredentialEnvelope { .. }
+        | Request::IntegrationLoadLatestCredentialEnvelope { .. }
+        | Request::IntegrationVerificationStatus { .. }) => {
             runtime_integration::handle(request).await
         }
     }

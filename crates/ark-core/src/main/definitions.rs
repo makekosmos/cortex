@@ -420,4 +420,31 @@ enum Request {
     IntegrationSendSignedSync {
         frame: SignedSyncEnvelope,
     },
+    #[serde(rename = "integration.acquire_refresh_lease")]
+    IntegrationAcquireRefreshLease {
+        integration_id: String,
+        holder_node_id: String,
+        credential_generation: u64,
+        now_ms: u64,
+        ttl_ms: u64,
+        expected_fencing_token: u64,
+        device_id: String,
+    },
+    #[serde(rename = "integration.publish_credential_envelope")]
+    IntegrationPublishCredentialEnvelope {
+        envelope: IntegrationCredentialEnvelope,
+        device_id: String,
+        now_ms: u64,
+    },
+    #[serde(rename = "integration.load_latest_credential_envelope")]
+    IntegrationLoadLatestCredentialEnvelope {
+        integration_id: String,
+        recipient_node_id: String,
+    },
+    #[serde(rename = "integration.verification_status")]
+    IntegrationVerificationStatus {
+        integration_id: String,
+        local_node_id: String,
+        now_ms: u64,
+    },
 }
