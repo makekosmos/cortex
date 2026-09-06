@@ -95,6 +95,12 @@ fn synthetic_two_node_fixture_is_plaintext_free_and_deterministic() {
 }
 
 #[tokio::test]
+async fn core_pair_setup_and_drop_reaps_children() {
+    let fixture = fixture();
+    let (_origin, _recipient) = spawn_core_pair(&fixture).await;
+}
+
+#[tokio::test]
 #[ignore = "awaits Cortex source-offline transport and refresh wiring"]
 async fn source_offline_recipient_flow_is_not_run_until_cortex_wiring_exists() {
     let fixture = fixture();
