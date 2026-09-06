@@ -1,5 +1,5 @@
 use crate::integration_replication::{
-    validate_envelope_recipient, GrantStatus, IntegrationCredentialEnvelope,
+    encryption_key_id, validate_envelope_recipient, GrantStatus, IntegrationCredentialEnvelope,
 };
 
 fn upsert_integration_credential_envelope_record(

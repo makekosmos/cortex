@@ -146,6 +146,36 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             )?;
             serde_json::to_value(envelope).map_err(|error| error.to_string())
         }),
+        Request::IntegrationLookupIssuerEncryptionKey {
+            space_id,
+            integration_id,
+            recipient_node_id,
+            issuer_node_id,
+            credential_generation,
+            expected_issuer_key_id,
+        } => {
+            let runtime_space_id = SYNC
+                .lock()
+                .await
+                .as_ref()
+                .map(|runtime| runtime.space_id.clone())
+                .ok_or_else(|| "sync not running".to_string())?;
+            if runtime_space_id != space_id {
+                return Err("integration lookup requested for the wrong space".into());
+            }
+            with_conn(|conn| {
+                let key = ark_core::db::load_issuer_encryption_key(
+                    conn,
+                    &space_id,
+                    &integration_id,
+                    &recipient_node_id,
+                    &issuer_node_id,
+                    credential_generation,
+                    &expected_issuer_key_id,
+                )?;
+                serde_json::to_value(key).map_err(|error| error.to_string())
+            })
+        }
         Request::IntegrationVerificationStatus {
             integration_id,
             local_node_id,

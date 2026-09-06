@@ -22,7 +22,7 @@ pub use api::{
 pub use contracts::{
     AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationContractError,
     IntegrationCredentialEnvelope, IntegrationNodeGrant, IntegrationRefreshLease,
-    IntegrationVerificationStatus, NodeStatus,
+    IntegrationVerificationStatus, IssuerEncryptionKey, NodeStatus,
 };
 pub(crate) use entities::{envelope_entity_id, integration_node_id};
 pub use entities::{IntegrationReplicationChange, IntegrationReplicationEntity};
