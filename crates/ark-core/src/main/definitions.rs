@@ -416,4 +416,8 @@ enum Request {
         origin_node_id: String,
         frame: SignedSyncEnvelope,
     },
+    #[serde(rename = "integration.send_signed_sync")]
+    IntegrationSendSignedSync {
+        frame: SignedSyncEnvelope,
+    },
 }

@@ -52,6 +52,41 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             )?;
             Ok(json!(true))
         }),
+        Request::IntegrationSendSignedSync { frame } => {
+            let runtime = SYNC
+                .lock()
+                .await
+                .as_ref()
+                .cloned()
+                .ok_or_else(|| "sync not running".to_string())?;
+            with_conn(|conn| {
+                ark_core::integration_replication::validate_outbound_signed_sync(
+                    conn,
+                    &runtime.space_id,
+                    &runtime.device_id,
+                    &frame,
+                )
+            })?;
+            if runtime
+                .server
+                .send_signed_integration_frame(&frame.recipient_node_id, frame.clone())
+                .await
+                .is_ok()
+            {
+                return Ok(json!(true));
+            }
+            let clients: Vec<_> = runtime.clients.lock().await.values().cloned().collect();
+            for client in clients {
+                if client
+                    .send_signed_integration_frame(frame.clone())
+                    .await
+                    .is_ok()
+                {
+                    return Ok(json!(true));
+                }
+            }
+            Err("target peer has no authenticated addressed route".into())
+        }
         _ => Err("request is not an integration replication operation".into()),
     }
 }

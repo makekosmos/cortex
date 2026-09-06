@@ -98,6 +98,50 @@ impl ArkCore {
             .map_err(ArkCoreError::from)
         })
     }
+
+    /// Validate and route a host-signed frame only to its addressed
+    /// authenticated peer. Core never accepts arbitrary inbound apply calls.
+    pub fn send_signed_integration_frame_json(&self, frame_json: String) -> Result<bool> {
+        let frame: crate::integration_replication::SignedSyncEnvelope =
+            serde_json::from_str(&frame_json).map_err(|_| malformed_json_error("/frame"))?;
+        self.runtime.block_on(async {
+            let runtime = {
+                let guard = self.sync.lock().await;
+                guard
+                    .as_ref()
+                    .ok_or_else(|| err("sync not running"))?
+                    .clone_refs()
+            };
+            self.with_conn(|conn| {
+                crate::integration_replication::validate_outbound_signed_sync(
+                    conn,
+                    &runtime.space_id,
+                    &runtime.device_id,
+                    &frame,
+                )
+                .map_err(ArkCoreError::from)
+            })?;
+            if runtime
+                .server
+                .send_signed_integration_frame(&frame.recipient_node_id, frame.clone())
+                .await
+                .is_ok()
+            {
+                return Ok(true);
+            }
+            let clients: Vec<_> = runtime.clients.lock().await.values().cloned().collect();
+            for client in clients {
+                if client
+                    .send_signed_integration_frame(frame.clone())
+                    .await
+                    .is_ok()
+                {
+                    return Ok(true);
+                }
+            }
+            Err(err("target peer has no authenticated addressed route"))
+        })
+    }
 }
 
 #[cfg(test)]

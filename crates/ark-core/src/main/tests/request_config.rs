@@ -71,6 +71,25 @@ use super::*;
     }
 
     #[test]
+    fn request_deserialization_accepts_signed_sync_send() {
+        let request = serde_json::from_value::<Request>(json!({
+            "operation": "integration.send_signed_sync",
+            "frame": {
+                "space_id": "space-a",
+                "origin_node_id": "node-a",
+                "recipient_node_id": "node-b",
+                "key_epoch": 1,
+                "message_id": "message-1",
+                "payload": [],
+                "signature": "00"
+            }
+        }))
+        .expect("signed sync send should deserialize");
+
+        assert!(matches!(request, Request::IntegrationSendSignedSync { .. }));
+    }
+
+    #[test]
     fn pairing_restart_params_force_iroh_and_replace_ticket() {
         let storage = Arc::new(ark_core::db::SqliteStorageBackend::new(Arc::new(
             StdMutex::new(rusqlite::Connection::open_in_memory().unwrap()),
@@ -266,4 +285,3 @@ use super::*;
         assert_eq!(relay_api_key.as_deref(), Some("key"));
         assert_eq!(auth_secret.as_deref(), Some("secret"));
     }
-
