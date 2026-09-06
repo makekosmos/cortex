@@ -539,6 +539,16 @@ mod tests {
         .await
         .unwrap_err();
         assert_eq!(error, "integration lookup requested for the wrong space");
+        let prepublish_error = handle_request(Request::IntegrationLookupIssuerEncryptionKeyForPublish {
+            space_id: "wrong-space".into(),
+            integration_id: "integration-a".into(),
+            recipient_node_id: "recipient".into(),
+            issuer_node_id: "issuer".into(),
+            expected_issuer_key_id: "sha256:issuer".into(),
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(prepublish_error, "integration lookup requested for the wrong space");
         *SYNC.lock().await = None;
     }
 
@@ -566,5 +576,22 @@ mod tests {
             "spaceId": "space-a"
         }))
         .is_err());
+    }
+
+    #[test]
+    fn integration_issuer_key_lookup_for_publish_uses_the_exact_wire_shape() {
+        let request: Request = serde_json::from_value(json!({
+            "operation": "integration.lookup_issuer_encryption_key_for_publish",
+            "space_id": "space-a",
+            "integration_id": "integration-a",
+            "recipient_node_id": "node-a",
+            "issuer_node_id": "node-b",
+            "expected_issuer_key_id": "sha256:issuer"
+        }))
+        .unwrap();
+        assert!(matches!(
+            request,
+            Request::IntegrationLookupIssuerEncryptionKeyForPublish { .. }
+        ));
     }
 }

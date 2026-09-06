@@ -25,6 +25,7 @@ mod tests {
     include!("db/tests_sync.rs");
     include!("db/tests_integration_replication.rs");
     include!("db/tests_integration_replication_issuer_lookup.rs");
+    include!("db/tests_integration_replication_issuer_publish_lookup.rs");
     include!("db/tests_integration_replication_export.rs");
     include!("db/tests_integration_replication_apply.rs");
     include!("db/tests_integration_replication_security.rs");
