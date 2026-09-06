@@ -65,6 +65,52 @@ pub async fn handle_operation(
                 .map_err(|_| "Интеграция недоступна".to_string())?;
             snapshot(data_dir, packages)
         }
+        "replication_prepare_signed_sync" => {
+            let consumer = super::replication_consumer::ReplicationConsumer::new(ark);
+            consumer
+                .prepare_signed_sync(
+                    params
+                        .get("space_id")
+                        .and_then(Value::as_str)
+                        .ok_or("space_id is required")?,
+                    params
+                        .get("origin_node_id")
+                        .and_then(Value::as_str)
+                        .ok_or("origin_node_id is required")?,
+                    params
+                        .get("integration_id")
+                        .and_then(Value::as_str)
+                        .ok_or("integration_id is required")?,
+                    params
+                        .get("recipient_node_id")
+                        .and_then(Value::as_str)
+                        .ok_or("recipient_node_id is required")?,
+                    params
+                        .get("message_id")
+                        .and_then(Value::as_str)
+                        .ok_or("message_id is required")?,
+                )
+                .await
+                .map_err(|_| "Не удалось подготовить репликацию".to_string())
+        }
+        "replication_validate_outbound_signed_sync" => {
+            let consumer = super::replication_consumer::ReplicationConsumer::new(ark);
+            consumer
+                .validate_outbound_signed_sync(
+                    params
+                        .get("space_id")
+                        .and_then(Value::as_str)
+                        .ok_or("space_id is required")?,
+                    params
+                        .get("origin_node_id")
+                        .and_then(Value::as_str)
+                        .ok_or("origin_node_id is required")?,
+                    params.get("frame").ok_or("frame is required")?,
+                )
+                .await
+                .map(|accepted| json!({ "accepted": accepted }))
+                .map_err(|_| "Исходящий кадр репликации отклонён".to_string())
+        }
         "body_weight_set" => {
             let body_weight = params.get("bodyWeightKg").and_then(Value::as_f64);
             if body_weight.is_some_and(|value| !(20.0..=400.0).contains(&value)) {
