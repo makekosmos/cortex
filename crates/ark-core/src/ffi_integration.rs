@@ -121,6 +121,15 @@ impl ArkCore {
                 )
                 .map_err(ArkCoreError::from)
             })?;
+            if let Some(relay) = runtime.relay.as_ref() {
+                if relay
+                    .send_signed_integration_frame(frame.clone())
+                    .await
+                    .is_ok()
+                {
+                    return Ok(true);
+                }
+            }
             if runtime
                 .server
                 .send_signed_integration_frame(&frame.recipient_node_id, frame.clone())
@@ -136,6 +145,11 @@ impl ArkCore {
                     .await
                     .is_ok()
                 {
+                    return Ok(true);
+                }
+            }
+            if let Some(relay) = runtime.relay.as_ref() {
+                if relay.send_signed_integration_frame(frame).await.is_ok() {
                     return Ok(true);
                 }
             }

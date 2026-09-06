@@ -1,4 +1,24 @@
 impl RelaySync {
+    /// Route an addressed integration frame through the configured transport.
+    /// Broadcast transports reject this message class; addressed transports
+    /// such as Iroh enforce authenticated recipient and writer-time authority.
+    pub async fn send_signed_integration_frame(
+        &self,
+        frame: crate::integration_replication::SignedSyncEnvelope,
+    ) -> Result<(), String> {
+        self.storage
+            .validate_outbound_signed_integration_frame(
+                &frame,
+                &self.config.space_id,
+                &self.config.device_id,
+            )
+            .await?;
+        let recipient = frame.recipient_node_id.clone();
+        self.transport
+            .send_to(&recipient, LanSyncMessage::SignedIntegrationFrame { frame })
+            .await
+    }
+
     pub fn new(storage: Arc<dyn StorageBackend>, config: RelaySyncConfig) -> Arc<Self> {
         let auth_secret = normalize_auth_secret(config.auth_secret.clone());
         let transport: Arc<dyn SyncTransport> = Arc::new(RelayTransport::new(RelayConfig {

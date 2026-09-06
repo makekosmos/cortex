@@ -67,6 +67,15 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
                     &frame,
                 )
             })?;
+            if let Some(relay) = runtime.relay.as_ref() {
+                if relay
+                    .send_signed_integration_frame(frame.clone())
+                    .await
+                    .is_ok()
+                {
+                    return Ok(json!(true));
+                }
+            }
             if runtime
                 .server
                 .send_signed_integration_frame(&frame.recipient_node_id, frame.clone())
@@ -82,6 +91,11 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
                     .await
                     .is_ok()
                 {
+                    return Ok(json!(true));
+                }
+            }
+            if let Some(relay) = runtime.relay.as_ref() {
+                if relay.send_signed_integration_frame(frame).await.is_ok() {
                     return Ok(json!(true));
                 }
             }
