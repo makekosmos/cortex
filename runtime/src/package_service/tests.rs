@@ -324,6 +324,30 @@ pub(crate) mod tests {
         service
     }
 
+    #[test]
+    fn replacement_verification_is_read_only_and_checks_exact_archive_identity() {
+        let dir = tempdir().expect("temp dir");
+        let (service, _, hash) = enabled_app_service(dir.path());
+        let verified = service
+            .verify_installed_app("com.kosmos.demo", "1.0.0", &hash, 1)
+            .expect("verified replacement");
+        assert_eq!(verified.hash, hash);
+        assert!(service
+            .verify_installed_app("com.kosmos.demo", "1.0.0", "00", 1)
+            .is_err());
+        assert!(service
+            .verify_installed_app("com.kosmos.demo", "1.0.0", &hash, 2)
+            .is_err());
+        let blob = dir
+            .path()
+            .join("packages/blobs")
+            .join(format!("{hash}.kspkg"));
+        fs::write(blob, b"tampered").expect("tamper immutable blob");
+        assert!(service
+            .verify_installed_app("com.kosmos.demo", "1.0.0", &hash, 1)
+            .is_err());
+    }
+
     #[tokio::test]
     async fn uninstall_preserves_package_state_for_reinstall() {
         let dir = tempdir().expect("temp dir");

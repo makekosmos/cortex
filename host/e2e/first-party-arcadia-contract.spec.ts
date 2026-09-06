@@ -78,7 +78,7 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
     );
     const version = apps.versions["com.kosmos.arcadia"];
     const archive = apps.archives["com.kosmos.arcadia"];
-    expect(version).toBe("0.1.9");
+    expect(version).toBe("0.1.11");
     expect(archive).toBeTruthy();
     const catalog: {
       packages: Array<{ manifest: { id: string; version: string }; sha256: string }>;
@@ -86,8 +86,8 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
     expect(catalog.packages).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          manifest: expect.objectContaining({ id: "com.kosmos.arcadia", version: "0.1.9" }),
-          sha256: "a8b6454bb48518122609fa80f3378fd37fd219160fee525b823f5e624da58332",
+          manifest: expect.objectContaining({ id: "com.kosmos.arcadia", version: "0.1.11" }),
+          sha256: "a05ae74be8c7bafa86f4ef91d11445ec7e256b9bd27ececd35996b4f5f83be6c",
         }),
       ]),
     );
@@ -227,10 +227,14 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
     const initialHostPid = host?.process().pid;
     await closeHost(host, pids);
     host = undefined;
-    if (engine?.pid) for (const pid of processTreePids(engine.pid)) pids.add(pid);
+    const enginePid = engine?.pid;
+    if (!enginePid) throw new Error("initial Engine PID is unavailable");
+    for (const pid of processTreePids(enginePid)) pids.add(pid);
     const crashed = await crashProcessTree(engine, "initial Engine crash injection");
-    expect(crashed.size).toBeGreaterThan(1);
+    expect(crashed).toContain(enginePid);
     for (const pid of crashed) pids.add(pid);
+    // Windows can reuse numeric PIDs; these processes have been reaped before the restart.
+    pids.clear();
     engine = undefined;
     const restarted = await startEngine(binaries.engine, binaries.ark, dataDir);
     restartedEngine = restarted.child;

@@ -231,6 +231,7 @@ async fn start_is_unsupported_on_non_windows_and_records_failure() {
             &[],
             "correlation".into(),
             None,
+            None,
         )
         .await;
     assert_eq!(result, Err("unsupported-platform"));

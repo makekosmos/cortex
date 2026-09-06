@@ -100,9 +100,6 @@ test("real signed Apps use one headless Host and preserve the Engine across rest
       document: apps.catalog,
       signatures: apps.signatures,
     });
-    console.log(
-      `[host-e2e] catalog_apply ok=${catalogApplied.ok} error=${rpcError(catalogApplied)}`,
-    );
     expect(catalogApplied.ok, `packages.catalog_apply: ${rpcError(catalogApplied)}`).toBe(true);
     for (const id of ["host-e2e-app-a", "host-e2e-app-b"]) {
       expect(

@@ -16,7 +16,9 @@ export type JsonValue =
   | { readonly [key: string]: JsonValue };
 type EngineBinaries = { engine: string; ark: string };
 export type Lock = { pid: number; http_port: number; auth_token: string };
+type CleanupPid = { pid: number; createdAt?: string };
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const trackedPidCreatedAt = new Map<number, string>();
 const isString = (value: JsonValue | undefined): value is string => typeof value === "string";
 export const waitFor = async <T>(read: () => T | undefined, label: string): Promise<T> => {
   const until = Date.now() + 30_000;
@@ -38,12 +40,20 @@ export const cargoTarget = (): string =>
     }),
   ).target_directory;
 
-export const buildEngine = (trust: { root: string; releases: string }): EngineBinaries => {
+export const buildEngine = (
+  trust: { root: string; releases: string },
+  force = false,
+): EngineBinaries => {
   const env = hostE2eEnvironment({
     KOSMOS_PACKAGE_ROOT_KEY_JSON: trust.root,
     KOSMOS_PACKAGE_RELEASE_KEYS_JSON: trust.releases,
   });
   const target = cargoTarget();
+  const binaries: EngineBinaries = {
+    engine: path.join(target, "debug", "kepler-backend.exe"),
+    ark: path.join(target, "debug", "ark-core-rpc.exe"),
+  };
+  if (!force && fs.existsSync(binaries.engine) && fs.existsSync(binaries.ark)) return binaries;
   execFileSync(
     "node",
     [
@@ -63,10 +73,6 @@ export const buildEngine = (trust: { root: string; releases: string }): EngineBi
     env,
     stdio: "inherit",
   });
-  const binaries: EngineBinaries = {
-    engine: path.join(target, "debug", "kepler-backend.exe"),
-    ark: path.join(target, "debug", "ark-core-rpc.exe"),
-  };
   return binaries;
 };
 
@@ -99,6 +105,11 @@ export const startEngine = async (
     stdio: "ignore",
     windowsHide: true,
   });
+  if (child.pid) {
+    const createdAt = processCreatedAt(child.pid);
+    if (!createdAt) throw new Error(`Engine PID ${child.pid} identity is unavailable`);
+    trackedPidCreatedAt.set(child.pid, createdAt);
+  }
   try {
     const lock = await waitFor(() => {
       try {
@@ -111,7 +122,8 @@ export const startEngine = async (
     }, "Engine lock");
     return { child, lock };
   } catch (error) {
-    if (child.pid && isPidAlive(child.pid)) await forceStop(child.pid, "failed Engine startup");
+    if (child.pid)
+      await forceStop(child.pid, "failed Engine startup", trackedPidCreatedAt.get(child.pid));
     throw error;
   }
 };
@@ -121,7 +133,8 @@ export const rpc = async (
   operation: string,
   params: Record<string, JsonValue> = {},
 ) => {
-  console.log(`[host-e2e] rpc start operation=${operation}`);
+  const requestId = randomUUID();
+  console.log(`[host-e2e] rpc start request_id=${requestId} operation=${operation}`);
   const response = await fetch(`http://127.0.0.1:${lock.http_port}/v1/rpc`, {
     method: "POST",
     headers: {
@@ -133,13 +146,13 @@ export const rpc = async (
       "X-Kosmos-Client-Version": "1.0.0",
       "X-Kosmos-Client-Pid": String(process.pid),
     },
-    body: JSON.stringify({ operation, _req_id: randomUUID(), ...params }),
+    body: JSON.stringify({ operation, _req_id: requestId, ...params }),
     signal: AbortSignal.timeout(20_000),
   });
   // SAFETY: the test Engine endpoint returns the documented JSON RPC envelope.
   const result = (await response.json()) as { ok: boolean; data?: JsonValue; error?: JsonValue };
   console.log(
-    `[host-e2e] rpc result operation=${operation} ok=${result.ok} error=${rpcError(result)}`,
+    `[host-e2e] rpc result request_id=${requestId} operation=${operation} ok=${result.ok}`,
   );
   return result;
 };
@@ -156,6 +169,27 @@ const isPidAlive = (pid: number): boolean => {
   }
 };
 
+const processCreatedAt = (pid: number): string | undefined => {
+  try {
+    const createdAt = execFileSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}' | Select-Object -ExpandProperty CreationDate`,
+      ],
+      { encoding: "utf8", windowsHide: true },
+    ).trim();
+    return createdAt || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const isSameProcess = (pid: number, createdAt?: string): boolean =>
+  createdAt !== undefined && isPidAlive(pid) && processCreatedAt(pid) === createdAt;
+
 export const processTreePids = (rootPid: number): Set<number> => {
   const output = execFileSync(
     "powershell.exe",
@@ -163,17 +197,25 @@ export const processTreePids = (rootPid: number): Set<number> => {
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId | ConvertTo-Json -Compress",
+      "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CreationDate | ConvertTo-Json -Compress",
     ],
     { encoding: "utf8", windowsHide: true },
   ).trim();
-  // SAFETY: the PowerShell projection emits only numeric process IDs and parent IDs.
+  // SAFETY: the PowerShell projection emits process IDs, parent IDs, and creation timestamps.
   const parsed = output
     ? (JSON.parse(output) as
-        | { ProcessId: number; ParentProcessId: number }
-        | Array<{ ProcessId: number; ParentProcessId: number }>)
+        | { ProcessId: number; ParentProcessId: number; CreationDate?: string }
+        | Array<{ ProcessId: number; ParentProcessId: number; CreationDate?: string }>)
     : [];
   const processes = Array.isArray(parsed) ? parsed : [parsed];
+  const rootCreatedAt = trackedPidCreatedAt.get(rootPid);
+  if (
+    rootCreatedAt &&
+    !processes.some(
+      (process) => process.ProcessId === rootPid && process.CreationDate === rootCreatedAt,
+    )
+  )
+    return new Set([rootPid]);
   const result = new Set([rootPid]);
   let changed = true;
   while (changed) {
@@ -185,17 +227,25 @@ export const processTreePids = (rootPid: number): Set<number> => {
       }
     }
   }
+  for (const process of processes)
+    if (result.has(process.ProcessId) && process.CreationDate)
+      trackedPidCreatedAt.set(process.ProcessId, process.CreationDate);
   return result;
 };
 
-export const waitForPidGone = async (pid: number, label: string): Promise<void> => {
+export const waitForPidGone = async (
+  pid: number,
+  label: string,
+  createdAt?: string,
+): Promise<void> => {
   const deadline = Date.now() + 10_000;
-  while (isPidAlive(pid) && Date.now() < deadline)
+  while (isSameProcess(pid, createdAt) && Date.now() < deadline)
     await new Promise((resolve) => setTimeout(resolve, 100));
-  if (isPidAlive(pid)) throw new Error(`${label} PID ${pid} is still alive`);
+  if (isSameProcess(pid, createdAt)) throw new Error(`${label} PID ${pid} is still alive`);
 };
 
-const forceStop = async (pid: number, label: string): Promise<void> => {
+const forceStop = async (pid: number, label: string, createdAt?: string): Promise<void> => {
+  if (!isSameProcess(pid, createdAt)) return;
   try {
     execFileSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
       windowsHide: true,
@@ -203,7 +253,7 @@ const forceStop = async (pid: number, label: string): Promise<void> => {
       timeout: 5_000,
     });
   } catch {}
-  await waitForPidGone(pid, label);
+  await waitForPidGone(pid, label, createdAt);
 };
 
 export const crashProcessTree = async (
@@ -211,14 +261,20 @@ export const crashProcessTree = async (
   label: string,
 ): Promise<Set<number>> => {
   const pid = child?.pid;
-  if (!pid || !isPidAlive(pid)) throw new Error(`${label} is not running`);
+  const createdAt = pid ? trackedPidCreatedAt.get(pid) : undefined;
+  if (!pid || !createdAt || !isSameProcess(pid, createdAt))
+    throw new Error(`${label} is not running`);
   const pids = processTreePids(pid);
   const alivePids = new Set([...pids].filter(isPidAlive));
-  await forceStop(pid, label);
+  await forceStop(pid, label, createdAt);
   for (const processId of processTreePids(pid)) pids.add(processId);
+  for (const processId of pids) {
+    const descendantCreatedAt = trackedPidCreatedAt.get(processId);
+    if (isSameProcess(processId, descendantCreatedAt))
+      await forceStop(processId, `${label} descendant`, descendantCreatedAt);
+  }
   for (const processId of pids)
-    if (isPidAlive(processId)) await forceStop(processId, `${label} descendant`);
-  for (const processId of pids) await waitForPidGone(processId, `${label} descendant`);
+    await waitForPidGone(processId, `${label} descendant`, trackedPidCreatedAt.get(processId));
   return alivePids;
 };
 
@@ -230,8 +286,10 @@ export const terminate = async (
 ): Promise<void> => {
   const pid = child?.pid;
   if (!pid) return;
+  const createdAt = trackedPidCreatedAt.get(pid);
+  if (!createdAt) throw new Error(`${label} PID ${pid} identity is unavailable`);
   const pids = processTreePids(pid);
-  if (isPidAlive(pid)) {
+  if (isSameProcess(pid, createdAt)) {
     console.log(
       `[host-e2e] teardown ${label}: pid=${pid} lock=${path.join(dataDir, "engine.lock.json")}`,
     );
@@ -247,11 +305,15 @@ export const terminate = async (
       });
     } catch {}
     for (const processId of processTreePids(pid)) pids.add(processId);
-    if (isPidAlive(pid)) await forceStop(pid, label);
+    if (isSameProcess(pid, createdAt)) await forceStop(pid, label, createdAt);
+  }
+  for (const processId of pids) {
+    const descendantCreatedAt = trackedPidCreatedAt.get(processId);
+    if (isSameProcess(processId, descendantCreatedAt))
+      await forceStop(processId, `${label} descendant`, descendantCreatedAt);
   }
   for (const processId of pids)
-    if (isPidAlive(processId)) await forceStop(processId, `${label} descendant`);
-  for (const processId of pids) await waitForPidGone(processId, `${label} descendant`);
+    await waitForPidGone(processId, `${label} descendant`, trackedPidCreatedAt.get(processId));
 };
 
 export const closeHost = async (
@@ -260,21 +322,45 @@ export const closeHost = async (
 ): Promise<void> => {
   if (!host) return;
   const pid = host.process().pid;
+  const createdAt = processCreatedAt(pid);
+  if (!createdAt) throw new Error(`Host PID ${pid} identity is unavailable`);
   const pids = processTreePids(pid);
   for (const processId of pids) trackedPids.add(processId);
   console.log(`[host-e2e] teardown Host: pid=${pid}`);
-  await Promise.race([
-    host.close().catch(() => undefined),
-    new Promise((resolve) => setTimeout(resolve, 5_000)),
-  ]);
-  for (const processId of processTreePids(pid)) {
-    pids.add(processId);
-    trackedPids.add(processId);
+  const closePromise = host.close().catch(() => undefined);
+  const closeTimedOut = !(await Promise.race([
+    closePromise.then(() => true),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5_000)),
+  ]));
+  if (isSameProcess(pid, createdAt))
+    for (const processId of processTreePids(pid)) {
+      pids.add(processId);
+      trackedPids.add(processId);
+    }
+  try {
+    if (isSameProcess(pid, createdAt)) await forceStop(pid, "Host", createdAt);
+    for (const processId of pids) {
+      if (processId === pid || !isPidAlive(processId)) continue;
+      const descendantCreatedAt = trackedPidCreatedAt.get(processId);
+      if (!descendantCreatedAt)
+        throw new Error(`Host descendant PID ${processId} identity is unavailable`);
+      await forceStop(processId, "Host descendant", descendantCreatedAt);
+    }
+    await waitForPidGone(pid, "Host", createdAt);
+    for (const processId of pids) {
+      if (processId === pid) continue;
+      const descendantCreatedAt = trackedPidCreatedAt.get(processId);
+      if (descendantCreatedAt)
+        await waitForPidGone(processId, "Host descendant", descendantCreatedAt);
+    }
+    for (const processId of pids) trackedPids.delete(processId);
+  } finally {
+    if (closeTimedOut)
+      await Promise.race([
+        closePromise,
+        new Promise<void>((resolve) => setTimeout(resolve, 5_000)),
+      ]);
   }
-  if (isPidAlive(pid)) await forceStop(pid, "Host");
-  for (const processId of pids)
-    if (isPidAlive(processId)) await forceStop(processId, "Host descendant");
-  for (const processId of pids) await waitForPidGone(processId, "Host descendant");
 };
 
 export const recordCleanup = (manifestPath: string, root: string, pids: Set<number>): void => {
@@ -286,6 +372,10 @@ export const recordCleanup = (manifestPath: string, root: string, pids: Set<numb
   if (!Array.isArray(manifest.roots) || !Array.isArray(manifest.pids))
     throw new Error("invalid Host E2E cleanup manifest");
   if (!manifest.roots.includes(root)) manifest.roots.push(root);
-  manifest.pids.push(...pids);
+  for (const pid of pids) {
+    const createdAt = trackedPidCreatedAt.get(pid);
+    if (createdAt) manifest.pids.push({ pid, createdAt } satisfies CleanupPid);
+    else if (isPidAlive(pid)) throw new Error(`cleanup PID ${pid} identity is unavailable`);
+  }
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
 };

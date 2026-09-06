@@ -16,6 +16,7 @@ type JsonValue =
   | { readonly [key: string]: JsonValue };
 type RpcResponse = { ok: boolean; data?: JsonValue };
 import electronBinary from "electron";
+import { buildEngine } from "./fixtures/host-runtime";
 import { createSignedApps } from "./fixtures/signed-apps";
 
 const hostRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -54,33 +55,6 @@ const target = () =>
       encoding: "utf8",
     }),
   ).target_directory as string;
-const buildEngine = (trust: { root: string; releases: string }) => {
-  const env = {
-    ...process.env,
-    KOSMOS_PACKAGE_ROOT_KEY_JSON: trust.root,
-    KOSMOS_PACKAGE_RELEASE_KEYS_JSON: trust.releases,
-  };
-  const targetRoot = target();
-  execFileSync("node", [
-    path.join(repositoryRoot, "desktop", "scripts", "ark-core-rpc.mjs"),
-    "--debug",
-    "--target-dir",
-    path.join(targetRoot, "debug"),
-  ], {
-    cwd: repositoryRoot,
-    env,
-    stdio: "inherit",
-  });
-  execFileSync("cargo", ["build", "-p", "kepler-backend", "--bin", "kepler-backend"], {
-    cwd: repositoryRoot,
-    env,
-    stdio: "inherit",
-  });
-  return {
-    engine: path.join(targetRoot, "debug", "kepler-backend.exe"),
-    ark: path.join(targetRoot, "debug", "ark-core-rpc.exe"),
-  };
-};
 const startEngine = async (engine: string, ark: string, dataDir: string) => {
   const child = spawn(engine, [], {
     env: {
@@ -217,7 +191,9 @@ test("signed Shell is capability-scoped, warm-reopens, and leaves Graph availabl
         async () => {
           const response = await rpc(lock, "file_index.search", { query: "shell-fixture" });
           // SAFETY: file_index.search returns a results array in its RPC data payload.
-          return (response.data as { results?: readonly JsonValue[] } | undefined)?.results?.length ?? 0;
+          return (
+            (response.data as { results?: readonly JsonValue[] } | undefined)?.results?.length ?? 0
+          );
         },
         { timeout: 30_000 },
       )

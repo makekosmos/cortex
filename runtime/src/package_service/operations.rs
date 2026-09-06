@@ -1,5 +1,5 @@
 impl PackageService {
-    pub async fn invoke_worker_operation(
+pub async fn invoke_worker_operation(
         &self,
         operation: &str,
         params: serde_json::Value,
@@ -344,6 +344,49 @@ impl PackageService {
             return Err(PackageError::Invalid);
         }
         Ok(self.store.read_blob_entry(&package, path)?)
+    }
+
+    /// Verify an installed App without changing package, worker, grant, or
+    /// catalog state. This is the migration preflight boundary.
+    pub fn verify_installed_app(
+        &self,
+        id: &str,
+        version: &str,
+        hash: &str,
+        catalog_sequence: u64,
+    ) -> Result<VerifiedReplacement, PackageError> {
+        if id.is_empty() || version.is_empty() || hash.is_empty() {
+            return Err(PackageError::Invalid);
+        }
+        let _mutation = Self::lock(&self.mutation);
+        let mut state = Self::lock(&self.state);
+        let package = self.store.installed(id, version)?;
+        if !matches!(package.manifest.kind(), PackageKind::App)
+            || package.revoked
+            || package.catalog_sequence != catalog_sequence
+            || !package.hash.eq_ignore_ascii_case(hash)
+            || !matches!(
+                &package.manifest,
+                VersionedManifest::V2(manifest) if manifest.supports_current_platform()
+            )
+        {
+            return Err(PackageError::Invalid);
+        }
+        let entry = Self::current_entry(&mut state, id, version)?;
+        if entry.manifest != package.manifest || !entry.sha256.eq_ignore_ascii_case(&package.hash) {
+            return Err(PackageError::Invalid);
+        }
+        // `installed` verifies manifest.json; these explicit reads also prove
+        // the immutable archive and the selected entrypoint before migration.
+        self.store.read_blob_entry(&package, "manifest.json")?;
+        self.store
+            .immutable_asset_path(&package, package.manifest.entrypoint())?;
+        Ok(VerifiedReplacement {
+            id: package.id,
+            version: package.version,
+            hash: package.hash,
+            catalog_sequence: package.catalog_sequence,
+        })
     }
 
     pub fn catalog_packages(
@@ -967,145 +1010,231 @@ impl PackageService {
                 &self.store,
             ));
         }
-        let launch = {
-            let _mutation = Self::lock(&self.mutation);
-            let mut state = Self::lock(&self.state);
-            let installed = self.store.installed(id, version)?;
-            if expected.is_some_and(|expected| expected != &installed) {
+        let launch = self.prepare_worker_launch(id, version, require_current_catalog, expected)?;
+        let previous = self
+            .store
+            .list()?
+            .into_iter()
+            .filter(|package| {
+                package.id == id
+                    && package.version != version
+                    && package.enabled
+                    && package.manifest.worker_entrypoint().is_some()
+            })
+            .map(|package| {
+                let was_running = !matches!(
+                    worker.supervisor.health(&package.id, &package.version).state,
+                    WorkerState::Stopped
+                );
+                self.prepare_worker_launch(&package.id, &package.version, false, Some(&package))
+                    .map(|launch| (launch, was_running))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        // A pre-existing double-enabled state cannot be rolled back safely.
+        if previous.len() > 1 {
+            return Err(PackageError::Persistence);
+        }
+        let mut stopped = Vec::new();
+        for (old, was_running) in &previous {
+            if *was_running {
+                if worker.supervisor.stop(&old.expected.id, &old.expected.version).await.is_err() {
+                    self.restore_stopped_workers(&stopped).await?;
+                    return Err(PackageError::Persistence);
+                }
+                stopped.push(old.clone());
+            }
+        }
+        if !previous.is_empty() {
+            let versions = previous
+                .iter()
+                .map(|(old, _)| old.expected.version.clone())
+                .collect::<Vec<_>>();
+            if self.store.disable_worker_versions(id, &versions).is_err() {
+                self.restore_stopped_workers(&stopped).await?;
                 return Err(PackageError::Persistence);
             }
-            if installed.revoked {
-                return Err(PackageError::Invalid);
-            }
-            if self.store.list()?.into_iter().any(|other| {
-                other.enabled
-                    && !other.revoked
-                    && other.id != installed.id
-                    && worker_scopes_overlap(&installed.manifest, &other.manifest)
-            }) {
-                return Err(PackageError::Invalid);
-            }
-            if require_current_catalog {
-                let entry = Self::current_entry(&mut state, id, version)?;
-                if !installed.hash.eq_ignore_ascii_case(&entry.sha256) {
-                    return Err(PackageError::Invalid);
-                }
-            }
-            let executable = self.store.immutable_entrypoint(&installed)?;
-            let state_root = self.root.join("package-state").join(id);
-            ensure_owner_only_directory(&state_root).map_err(|_| PackageError::Persistence)?;
-            let bridge_config = if matches!(installed.manifest.kind(), PackageKind::Bridge) {
-                let config = Self::lock(&self.bridge_configs)
-                    .configs
-                    .get(&Self::bridge_key(id, version))
-                    .cloned()
-                    .ok_or(PackageError::Invalid)?;
-                let state_root = self.root.join("bridge-state").join(id).join(version);
-                Some(BridgeWorkerConfig {
-                    vault_root: config.vault_root,
-                    state_root: state_root.to_string_lossy().into_owned(),
-                    selected_types: config.selected_types,
-                    editable_fields: config.editable_fields,
-                    readonly_fields: config.readonly_fields,
-                })
-            } else {
-                None
-            };
-            let roots = if matches!(installed.manifest.kind(), PackageKind::Bridge) {
-                self.bridge_roots(id, version)?
-            } else {
-                worker.roots.clone()
-            };
-            let integration = self.integration_launch_config(&installed)?;
-            let typed_bound = self.ensure_typed_grant(&installed)?;
-            let mut worker_manifest = installed.manifest.common_manifest();
-            if matches!(worker_manifest.kind, PackageKind::App) {
-                worker_manifest.kind = PackageKind::Source;
-            }
-            worker_manifest.entrypoint = installed
-                .manifest
-                .worker_entrypoint()
-                .ok_or(PackageError::Invalid)?
-                .to_owned();
-            let expected = installed.clone();
-            (
-                worker_manifest,
-                installed.hash,
-                executable,
-                state_root,
-                roots,
-                bridge_config,
-                integration,
-                typed_bound,
-                expected,
-            )
-        };
-        worker
-            .supervisor
-            .bind_typed_launch(id, version, &worker.correlation_id, 1, launch.7)
-            .map_err(|_| {
-                worker.supervisor.revoke_typed_launch(id, version);
-                PackageError::Worker("unavailable")
-            })?;
-        worker
-            .supervisor
-            .start(
-                &launch.0,
-                launch.2,
-                launch.3,
-                launch.1,
-                &launch.4,
-                worker.correlation_id.clone(),
-                launch.5,
-                launch.6,
-            )
-            .await
-            .map_err(|error| {
-                worker.supervisor.revoke_typed_launch(id, version);
-                PackageError::Worker(match error {
-                    "worker-required" | "unsupported-platform" | "already-running" => {
-                        "invalid-request"
-                    }
-                    _ => "unavailable",
-                })
-            })?;
-        let activation_error = {
-            let _mutation = Self::lock(&self.mutation);
-            let catalog_matches = !require_current_catalog || {
-                let mut state = Self::lock(&self.state);
-                Self::current_entry(&mut state, id, version)
-                    .is_ok_and(|entry| launch.8.hash.eq_ignore_ascii_case(&entry.sha256))
-            };
-            let exact_record = self.store.installed(id, version).ok().as_ref() == Some(&launch.8);
-            if !exact_record {
-                Some(PackageError::Persistence)
-            } else if !catalog_matches || self.store.enable_worker(id, version).is_err() {
-                let _disable_failed = self.store.disable(id, version).is_err();
-                Some(PackageError::Persistence)
-            } else if !worker.supervisor.activate(id, version) {
-                Some(if self.store.disable(id, version).is_ok() {
-                    PackageError::Worker("unavailable")
-                } else {
-                    PackageError::Persistence
-                })
-            } else {
-                None
-            }
-        };
-        if let Some(error) = activation_error {
-            let stop_failed = worker.supervisor.stop(id, version).await.is_err();
+        }
+        if let Err(error) = self.start_prepared_worker(&launch, require_current_catalog).await {
+            let _ = worker.supervisor.stop(id, version).await;
+            self.restore_worker_cutover(&launch, &previous).await?;
+            return Err(error);
+        }
+        if self.store.enable_worker(id, version).is_err() {
+            let _ = worker.supervisor.stop(id, version).await;
             worker.supervisor.revoke_typed_launch(id, version);
-            return Err(if stop_failed {
-                PackageError::Persistence
-            } else {
-                error
-            });
+            self.restore_worker_cutover(&launch, &previous).await?;
+            return Err(PackageError::Persistence);
         }
         Ok(summary(
             self.store.installed(id, version)?,
             self.worker.as_ref(),
             &self.store,
         ))
+    }
+
+    fn prepare_worker_launch(
+        &self,
+        id: &str,
+        version: &str,
+        require_current_catalog: bool,
+        expected: Option<&InstalledPackage>,
+    ) -> Result<PreparedWorkerLaunch, PackageError> {
+        let _mutation = Self::lock(&self.mutation);
+        let mut state = Self::lock(&self.state);
+        let installed = self.store.installed(id, version)?;
+        if expected.is_some_and(|expected| expected != &installed) {
+            return Err(PackageError::Persistence);
+        }
+        if installed.revoked {
+            return Err(PackageError::Invalid);
+        }
+        if self.store.list()?.into_iter().any(|other| {
+            other.enabled
+                && !other.revoked
+                && other.id != installed.id
+                && worker_scopes_overlap(&installed.manifest, &other.manifest)
+        }) {
+            return Err(PackageError::Invalid);
+        }
+        if require_current_catalog {
+            let entry = Self::current_entry(&mut state, id, version)?;
+            if !installed.hash.eq_ignore_ascii_case(&entry.sha256) {
+                return Err(PackageError::Invalid);
+            }
+        }
+        let executable = self.store.immutable_entrypoint(&installed)?;
+        let state_root = self.root.join("package-state").join(id);
+        ensure_owner_only_directory(&state_root).map_err(|_| PackageError::Persistence)?;
+        let bridge_config = if matches!(installed.manifest.kind(), PackageKind::Bridge) {
+            let config = Self::lock(&self.bridge_configs)
+                .configs
+                .get(&Self::bridge_key(id, version))
+                .cloned()
+                .ok_or(PackageError::Invalid)?;
+            let state_root = self.root.join("bridge-state").join(id).join(version);
+            Some(BridgeWorkerConfig {
+                vault_root: config.vault_root,
+                state_root: state_root.to_string_lossy().into_owned(),
+                selected_types: config.selected_types,
+                editable_fields: config.editable_fields,
+                readonly_fields: config.readonly_fields,
+            })
+        } else {
+            None
+        };
+        let worker = self.worker.as_ref().ok_or(PackageError::Invalid)?;
+        let roots = if matches!(installed.manifest.kind(), PackageKind::Bridge) {
+            self.bridge_roots(id, version)?
+        } else {
+            worker.roots.clone()
+        };
+        let integration = self.integration_launch_config(&installed)?;
+        let typed_grant = self.ensure_typed_grant(&installed)?;
+        let mut manifest = installed.manifest.common_manifest();
+        if matches!(manifest.kind, PackageKind::App) {
+            manifest.kind = PackageKind::Source;
+        }
+        manifest.entrypoint = installed
+            .manifest
+            .worker_entrypoint()
+            .ok_or(PackageError::Invalid)?
+            .to_owned();
+        Ok(PreparedWorkerLaunch {
+            manifest,
+            hash: installed.hash.clone(),
+            executable,
+            state_root,
+            roots,
+            bridge_config,
+            integration,
+            typed_grant,
+            expected: installed,
+        })
+    }
+
+    async fn start_prepared_worker(
+        &self,
+        launch: &PreparedWorkerLaunch,
+        require_current_catalog: bool,
+    ) -> Result<(), PackageError> {
+        let worker = self.worker.as_ref().ok_or(PackageError::Invalid)?;
+        let id = &launch.expected.id;
+        let version = &launch.expected.version;
+        worker
+            .supervisor
+            .bind_typed_launch(id, version, &worker.correlation_id, 1, launch.typed_grant.clone())
+            .map_err(|_| {
+                worker.supervisor.revoke_typed_launch(id, version);
+                PackageError::Worker("unavailable")
+            })?;
+        if let Err(error) = worker
+            .supervisor
+            .start(
+                &launch.manifest,
+                launch.executable.clone(),
+                launch.state_root.clone(),
+                launch.hash.clone(),
+                &launch.roots,
+                worker.correlation_id.clone(),
+                launch.bridge_config.clone(),
+                launch.integration.clone(),
+            )
+            .await
+        {
+            worker.supervisor.revoke_typed_launch(id, version);
+            return Err(PackageError::Worker(match error {
+                "worker-required" | "unsupported-platform" | "already-running" => {
+                    "invalid-request"
+                }
+                _ => "unavailable",
+            }));
+        }
+        let catalog_matches = if require_current_catalog {
+            let mut state = Self::lock(&self.state);
+            Self::current_entry(&mut state, id, version)
+                .is_ok_and(|entry| launch.expected.hash.eq_ignore_ascii_case(&entry.sha256))
+        } else {
+            true
+        };
+        let exact_record = self.store.installed(id, version).ok().as_ref() == Some(&launch.expected);
+        if !exact_record || !catalog_matches || !worker.supervisor.activate(id, version) {
+            let _ = worker.supervisor.stop(id, version).await;
+            worker.supervisor.revoke_typed_launch(id, version);
+            return Err(PackageError::Persistence);
+        }
+        Ok(())
+    }
+
+    async fn restore_stopped_workers(
+        &self,
+        workers: &[PreparedWorkerLaunch],
+    ) -> Result<(), PackageError> {
+        for worker in workers {
+            self.start_prepared_worker(worker, false).await?;
+            self.store.enable_worker(&worker.expected.id, &worker.expected.version)?;
+        }
+        Ok(())
+    }
+
+    async fn restore_worker_cutover(
+        &self,
+        selected: &PreparedWorkerLaunch,
+        previous: &[(PreparedWorkerLaunch, bool)],
+    ) -> Result<(), PackageError> {
+        let _mutation = Self::lock(&self.mutation);
+        self.store.disable(&selected.expected.id, &selected.expected.version)?;
+        if let Some((old, _)) = previous.first() {
+            self.store.enable_worker(&old.expected.id, &old.expected.version)?;
+        }
+        drop(_mutation);
+        self.restore_stopped_workers(
+            &previous
+                .iter()
+                .filter(|(_, was_running)| *was_running)
+                .map(|(old, _)| old.clone())
+                .collect::<Vec<_>>(),
+        )
+        .await
     }
 
     pub fn disable(&self, id: &str, version: &str) -> Result<(), PackageError> {
@@ -1158,6 +1287,19 @@ impl PackageService {
         }
         self.uninstall(id, version)
     }
+}
+
+#[derive(Debug, Clone)]
+struct PreparedWorkerLaunch {
+    manifest: PackageManifest,
+    hash: String,
+    executable: PathBuf,
+    state_root: PathBuf,
+    roots: Vec<PathBuf>,
+    bridge_config: Option<BridgeWorkerConfig>,
+    integration: Option<IntegrationLaunchConfig>,
+    typed_grant: LaunchGrant,
+    expected: InstalledPackage,
 }
 
 fn worker_scopes_overlap(left: &VersionedManifest, right: &VersionedManifest) -> bool {

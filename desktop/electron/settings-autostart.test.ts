@@ -7,8 +7,8 @@ import {
 } from "./settings-autostart";
 
 test("launchItemMatchesAutostart matches path args and enabled state", () => {
-  const installDir = "CosCast";
-  const execPath = path.join("C:", installDir, "CosCast.exe");
+  const installDir = "Kosmos";
+  const execPath = path.join("C:", installDir, "Kosmos.exe");
   expect(launchItemMatchesAutostart({ path: execPath, args: AUTOSTART_ARGS }, execPath)).toBe(true);
   expect(launchItemMatchesAutostart({ path: execPath }, execPath)).toBe(false);
   expect(
@@ -21,8 +21,8 @@ test("launchItemMatchesAutostart matches path args and enabled state", () => {
 });
 
 test("legacyAutostartPathCandidates includes old install locations once", () => {
-  const installDir = "CosCast";
-  const execPath = path.join("C:", "Users", "me", "Programs", installDir, "CosCast.exe");
+  const installDir = "Kosmos";
+  const execPath = path.join("C:", "Users", "me", "Programs", installDir, "Kosmos.exe");
   const localAppData = path.join("C:", "Users", "me", "AppData", "Local");
   const candidates = legacyAutostartPathCandidates(execPath, localAppData);
 

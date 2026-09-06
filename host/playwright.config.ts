@@ -7,6 +7,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   testDir: path.join(root, "e2e"),
   testMatch: "**/*.spec.ts",
+  globalSetup: path.join(root, "e2e", "global-setup.ts"),
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,

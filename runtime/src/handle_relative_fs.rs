@@ -292,7 +292,7 @@ pub fn file_identity(root: &RootHandle, component: &str) -> io::Result<RootIdent
         Ok(RootIdentity {
             primary: metadata.dev(),
             secondary: metadata.ino(),
-        });
+        })
     }
     #[cfg(windows)]
     {
@@ -450,7 +450,10 @@ fn list_relative_unix(
     components: &[&str],
     max_entries: usize,
 ) -> io::Result<Vec<RelativeEntry>> {
-    use std::{ffi::CStr, os::unix::io::AsRawFd};
+    use std::{
+        ffi::CStr,
+        os::unix::io::{AsRawFd, FromRawFd},
+    };
     if !components.is_empty() {
         validate_components(components)?;
     }
@@ -575,7 +578,10 @@ fn delete_relative_unix(root: &RootHandle, components: &[&str]) -> io::Result<()
 
 #[cfg(unix)]
 fn mkdir_relative_unix(root: &RootHandle, components: &[&str]) -> io::Result<()> {
-    use std::{ffi::CString, os::unix::io::AsRawFd};
+    use std::{
+        ffi::CString,
+        os::unix::io::{AsRawFd, FromRawFd},
+    };
     let mut parent = open_directory_relative(root, &[])?;
     for component in components {
         let name = CString::new(*component)
@@ -764,8 +770,10 @@ fn parse_directory_record(
     let name_bytes = &p[HEADER..name_end];
     let name = String::from_utf16(
         name_bytes
-            .chunks_exact(2)
-            .map(|pair| u16::from_ne_bytes([pair[0], pair[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| u16::from_ne_bytes(*pair))
             .collect::<Vec<_>>()
             .as_slice(),
     )

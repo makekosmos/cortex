@@ -47,15 +47,32 @@ const ownedPids = (root) => {
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${literal}') } | Select-Object -ExpandProperty ProcessId | ConvertTo-Json -Compress`,
+      `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${literal}') } | Select-Object ProcessId,CreationDate | ConvertTo-Json -Compress`,
     ],
     { encoding: "utf8", windowsHide: true },
   ).trim();
   if (!output) return [];
   const parsed = JSON.parse(output);
   return (Array.isArray(parsed) ? parsed : [parsed]).filter(
-    (pid) => Number.isInteger(pid) && pid > 0 && pid !== process.pid,
+    (entry) =>
+      Number.isInteger(entry.ProcessId) &&
+      entry.ProcessId > 0 &&
+      entry.ProcessId !== process.pid &&
+      isString(entry.CreationDate),
   );
+};
+const processCreatedAt = (pid) => {
+  const output = execFileSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      `Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}' | Select-Object -ExpandProperty CreationDate`,
+    ],
+    { encoding: "utf8", windowsHide: true },
+  ).trim();
+  return output || undefined;
 };
 try {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
@@ -68,8 +85,8 @@ try {
       !path.basename(resolved).startsWith("kosmos-host-e2e-")
     )
       throw new Error(`unsafe cleanup root: ${root}`);
-    for (const pid of ownedPids(resolved)) {
-      manifest.pids.push(pid);
+    for (const { ProcessId: pid, CreationDate: createdAt } of ownedPids(resolved)) {
+      if (processCreatedAt(pid) !== createdAt) continue;
       try {
         execFileSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
           stdio: "ignore",
@@ -81,8 +98,11 @@ try {
     if (fs.existsSync(resolved)) throw new Error(`cleanup root remains: ${resolved}`);
     console.log(`[host-e2e] cleaned ${resolved}`);
   }
-  for (const pid of manifest.pids) {
+  for (const entry of manifest.pids) {
+    const pid = Number.isInteger(entry) ? entry : entry?.pid;
+    const createdAt = Number.isInteger(entry) ? undefined : entry?.createdAt;
     if (!Number.isInteger(pid) || pid <= 0) throw new Error(`invalid cleanup PID: ${pid}`);
+    if (createdAt && processCreatedAt(pid) !== createdAt) continue;
     try {
       process.kill(pid, 0);
       throw new Error(`cleanup PID remains alive: ${pid}`);

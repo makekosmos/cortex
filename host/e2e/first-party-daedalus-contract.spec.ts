@@ -35,6 +35,7 @@ const fakeAppServer = path.join(
   "fixtures",
   "daedalus-fake-app-server.mjs",
 );
+const canonicalPath = (value: string) => fs.realpathSync.native(value).toLowerCase();
 
 test("signed Daedalus enforces its agents contract in Host", async () => {
   test.setTimeout(180_000);
@@ -176,16 +177,14 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
     }, projectPath);
 
     expect(result.read, JSON.stringify(result.read)).toMatchObject({ ok: true });
-    expect(result.added, JSON.stringify(result.added)).toMatchObject({
-      ok: true,
-      data: expect.objectContaining({ path: expect.stringContaining(projectPath) }),
-    });
-    expect(result.listed, JSON.stringify(result.listed)).toMatchObject({
-      ok: true,
-      data: expect.arrayContaining([
-        expect.objectContaining({ path: expect.stringContaining(projectPath) }),
-      ]),
-    });
+    expect(result.added, JSON.stringify(result.added)).toMatchObject({ ok: true });
+    expect(canonicalPath(String(result.added.data?.path))).toBe(canonicalPath(projectPath));
+    expect(result.listed, JSON.stringify(result.listed)).toMatchObject({ ok: true });
+    expect(
+      result.listed.data?.some(
+        (project) => canonicalPath(project.path) === canonicalPath(projectPath),
+      ),
+    ).toBe(true);
     expect(result.undeclared, JSON.stringify(result.undeclared)).toEqual({
       ok: false,
       message: "Engine отклонил операцию: invalid-request.",
@@ -216,12 +215,12 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
       mode: "full-access",
       model: "gpt-test",
     });
-    expect(result.live).toMatchObject({
-      ok: true,
-      data: expect.arrayContaining([
-        expect.objectContaining({ path: expect.stringContaining(projectPath) }),
-      ]),
-    });
+    expect(result.live).toMatchObject({ ok: true });
+    expect(
+      result.live.data?.some(
+        (project) => canonicalPath(project.path) === canonicalPath(projectPath),
+      ),
+    ).toBe(true);
 
     if (!engine?.pid || result.added.data?.id?.constructor !== String)
       throw new Error("Engine PID or project id is missing");
@@ -249,16 +248,15 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
     pids.add(host.process().pid);
     const restartedPage = await host.firstWindow();
     await expect.poll(() => host?.windows().length ?? 0).toBe(1);
+    const restartedProjects = await restartedPage.evaluate(() =>
+      window.kosmosApp.ark.request("agents.projects.list", { include_archived: true }),
+    );
+    expect(restartedProjects).toMatchObject({ ok: true });
     expect(
-      await restartedPage.evaluate(() =>
-        window.kosmosApp.ark.request("agents.projects.list", { include_archived: true }),
+      restartedProjects.data?.some(
+        (project) => canonicalPath(project.path) === canonicalPath(projectPath),
       ),
-    ).toMatchObject({
-      ok: true,
-      data: expect.arrayContaining([
-        expect.objectContaining({ path: expect.stringContaining(projectPath) }),
-      ]),
-    });
+    ).toBe(true);
   } finally {
     const cleanupErrors: unknown[] = [];
     const attempt = async (action: () => Promise<void>) => {

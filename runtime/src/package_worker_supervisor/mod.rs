@@ -8,13 +8,12 @@ use crate::{
     ark_host::ArkHost,
     grant_authority::{GrantAuthorityRegistry, GrantOwner},
     observability::{redact_text, BoundedTextTail},
-    package_manifest::{IntegrationManifest, IntegrationSettingKind, PackageKind, PackageManifest},
+    package_manifest::{IntegrationManifest, PackageKind, PackageManifest},
     package_store::PackageStore,
     package_worker_broker::{self, BrokerConfig},
     package_worker_protocol::{
-        BootstrapMessage, BridgeStatus, BridgeWorkerConfig, CallMessage, Grant, HeartbeatMessage,
-        HelloMessage, IntegrationBootstrapConfig, InvokeMessage, ResultMessage, RunMessage,
-        WorkerMessage, WorkerMethod, MAX_LINE_BYTES,
+        BridgeStatus, BridgeWorkerConfig, CallMessage, Grant, HeartbeatMessage, HelloMessage,
+        InvokeMessage, ResultMessage, RunMessage, WorkerMessage, WorkerMethod, MAX_LINE_BYTES,
     },
     package_worker_secrets::PackageWorkerSecretRegistry,
     runtime_grants::{DataRequest, LaunchGrant},
@@ -36,9 +35,11 @@ use std::{
     time::{Duration, Instant},
 };
 #[cfg(windows)]
+use tokio::io::{AsyncWrite, AsyncWriteExt};
+#[cfg(windows)]
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader},
+    io::{AsyncRead, AsyncReadExt, BufReader},
     sync::{mpsc, oneshot},
     time,
 };
@@ -85,10 +86,16 @@ use calls_spawn::*;
 use io::*;
 #[cfg(windows)]
 use launch_prepare::*;
+#[cfg(any(windows, test))]
 use lifecycle_finish::*;
 use lifecycle_watch::*;
 use registry::*;
 use retry::*;
+
+#[cfg(windows)]
+use crate::package_manifest::IntegrationSettingKind;
+#[cfg(windows)]
+use crate::package_worker_protocol::{BootstrapMessage, IntegrationBootstrapConfig};
 #[cfg(windows)]
 use tasks::*;
 use types::*;

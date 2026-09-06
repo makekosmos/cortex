@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use std::cell::Cell;
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     fs, io,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -40,7 +40,7 @@ pub struct GrantOwner {
     pub generation: u64,
     pub connection_id: u64,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 struct PersistedRecord {
     version: u32,
     persistent_grant_id: String,
@@ -51,6 +51,8 @@ struct PersistedRecord {
     root_identity: RootIdentity,
     exact_file_identity: Option<RootIdentity>,
     revoked: bool,
+    #[serde(flatten)]
+    extra: BTreeMap<String, serde_json::Value>,
 }
 struct Grant {
     owner: GrantOwner,
@@ -74,14 +76,43 @@ pub enum GrantError {
 }
 const MAX_GRANT_FILE_BYTES: usize = 1024 * 1024;
 const MAX_GRANT_DIRECTORY_ENTRIES: usize = 4096;
+const MAX_GRANT_TRANSACTION_BYTES: usize = 16 * 1024 * 1024;
+const LEGACY_EXTENSION_IDS: &[&str] = &["arcadia", "arrancador", "eden", "delphi"];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LegacyGrantRevocation {
+    pub transaction_token: Option<String>,
+    pub revoked: usize,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum LegacyGrantTransactionState {
+    Active,
+    Restored,
+    Committed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyGrantTransaction {
+    version: u32,
+    token: String,
+    source_ids: Vec<String>,
+    records: Vec<PersistedRecord>,
+    state: LegacyGrantTransactionState,
+}
+
 pub struct GrantAuthorityRegistry {
     grants: Mutex<HashMap<String, Grant>>,
+    legacy_transactions: Mutex<()>,
     data_dir: Option<PathBuf>,
 }
 impl Default for GrantAuthorityRegistry {
     fn default() -> Self {
         Self {
             grants: Mutex::new(HashMap::new()),
+            legacy_transactions: Mutex::new(()),
             data_dir: None,
         }
     }
@@ -93,6 +124,7 @@ impl GrantAuthorityRegistry {
     pub fn with_data_dir(data_dir: PathBuf) -> Self {
         Self {
             grants: Mutex::new(HashMap::new()),
+            legacy_transactions: Mutex::new(()),
             data_dir: Some(data_dir),
         }
     }
@@ -100,6 +132,11 @@ impl GrantAuthorityRegistry {
         self.data_dir
             .as_ref()
             .map(|d| d.join("grant-authority.json"))
+    }
+    fn transaction_path(&self) -> Option<PathBuf> {
+        self.data_dir
+            .as_ref()
+            .map(|d| d.join("legacy-grant-transactions.json"))
     }
     fn load_records(&self) -> Result<Vec<PersistedRecord>, GrantError> {
         let Some(path) = self.record_path() else {
@@ -112,13 +149,16 @@ impl GrantAuthorityRegistry {
         };
         let records: Vec<PersistedRecord> =
             serde_json::from_slice(&bytes).map_err(|_| GrantError::Persistence)?;
-        if records.iter().any(|record| {
-            record.version != 1
+        let mut ids = std::collections::HashSet::with_capacity(records.len());
+        for record in &records {
+            if record.version != 1
                 || !Path::new(&record.selected_path).is_absolute()
                 || record.persistent_grant_id.is_empty()
                 || record.extension_id.is_empty()
-        }) {
-            return Err(GrantError::Persistence);
+                || !ids.insert(&record.persistent_grant_id)
+            {
+                return Err(GrantError::Persistence);
+            }
         }
         Ok(records)
     }
@@ -126,10 +166,13 @@ impl GrantAuthorityRegistry {
         let Some(path) = self.record_path() else {
             return Ok(());
         };
+        self.save_json(&path, records)
+    }
+    fn save_json<T: Serialize + ?Sized>(&self, path: &Path, value: &T) -> Result<(), GrantError> {
         let dir = path.parent().ok_or(GrantError::Persistence)?;
         fs::create_dir_all(dir).map_err(|_| GrantError::Persistence)?;
         let tmp = path.with_extension("json.tmp");
-        let bytes = serde_json::to_vec(records).map_err(|_| GrantError::Persistence)?;
+        let bytes = serde_json::to_vec(value).map_err(|_| GrantError::Persistence)?;
         {
             use std::io::Write;
             let mut f = fs::OpenOptions::new()
@@ -156,7 +199,7 @@ impl GrantAuthorityRegistry {
             let _ = fs::remove_file(&tmp);
             return Err(GrantError::Persistence);
         }
-        fs::rename(&tmp, &path).map_err(|_| {
+        fs::rename(&tmp, path).map_err(|_| {
             let _ = fs::remove_file(&tmp);
             GrantError::Persistence
         })?;
@@ -167,6 +210,36 @@ impl GrantAuthorityRegistry {
                 .map_err(|_| GrantError::Persistence)?;
         }
         Ok(())
+    }
+    fn load_transactions(&self) -> Result<Vec<LegacyGrantTransaction>, GrantError> {
+        let path = self.transaction_path().ok_or(GrantError::Persistence)?;
+        let bytes = match fs::read(path) {
+            Ok(v) => v,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(_) => return Err(GrantError::Persistence),
+        };
+        if bytes.len() > MAX_GRANT_TRANSACTION_BYTES {
+            return Err(GrantError::Persistence);
+        }
+        let transactions: Vec<LegacyGrantTransaction> =
+            serde_json::from_slice(&bytes).map_err(|_| GrantError::Persistence)?;
+        let mut tokens = std::collections::HashSet::with_capacity(transactions.len());
+        for transaction in &transactions {
+            if transaction.version != 1
+                || transaction.token.is_empty()
+                || transaction.token.len() > 128
+                || !tokens.insert(&transaction.token)
+                || transaction.source_ids.is_empty()
+                || transaction.records.iter().any(|record| record.revoked)
+            {
+                return Err(GrantError::Persistence);
+            }
+        }
+        Ok(transactions)
+    }
+    fn save_transactions(&self, transactions: &[LegacyGrantTransaction]) -> Result<(), GrantError> {
+        let path = self.transaction_path().ok_or(GrantError::Persistence)?;
+        self.save_json(&path, transactions)
     }
     fn open_selected(
         path: &Path,
@@ -240,6 +313,7 @@ impl GrantAuthorityRegistry {
                 root_identity: identity,
                 exact_file_identity: file_identity,
                 revoked: false,
+                extra: BTreeMap::new(),
             });
             self.save_records(&records)?;
         }
@@ -438,6 +512,231 @@ impl GrantAuthorityRegistry {
         grants
             .retain(|_, g| !(g.owner.session_id == session_id && g.owner.generation == generation));
         before - grants.len()
+    }
+    /// Revoke persisted grants and durably retain only the records changed by
+    /// this operation. The token is opaque; snapshots never leave the runtime.
+    pub fn revoke_legacy_records_transaction(
+        &self,
+        source_ids: &[&str],
+    ) -> Result<LegacyGrantRevocation, GrantError> {
+        self.validate_legacy_records(source_ids)?;
+        let _transaction_lock = self
+            .legacy_transactions
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let mut records = self.load_records()?;
+        let changed = records
+            .iter()
+            .filter(|record| source_ids.contains(&record.extension_id.as_str()) && !record.revoked)
+            .cloned()
+            .collect::<Vec<_>>();
+        if changed.is_empty() {
+            return Ok(LegacyGrantRevocation {
+                transaction_token: None,
+                revoked: 0,
+            });
+        }
+
+        let token = uuid::Uuid::new_v4().to_string();
+        let mut transactions = self.load_transactions()?;
+        transactions.push(LegacyGrantTransaction {
+            version: 1,
+            token: token.clone(),
+            source_ids: source_ids.iter().map(|id| (*id).to_owned()).collect(),
+            records: changed,
+            state: LegacyGrantTransactionState::Active,
+        });
+        // Snapshot first: a crash before the grant file write leaves a
+        // recoverable transaction whose records are still unchanged.
+        self.save_transactions(&transactions)?;
+
+        let mut revoked = 0;
+        for record in &mut records {
+            if source_ids.contains(&record.extension_id.as_str()) && !record.revoked {
+                record.revoked = true;
+                revoked += 1;
+            }
+        }
+        if let Err(error) = self.save_records(&records) {
+            // Leave the active transaction durable; restore is idempotent and
+            // will observe the original records after a restart.
+            return Err(error);
+        }
+
+        let mut grants = self.grants.lock().unwrap_or_else(|p| p.into_inner());
+        grants.retain(|_, grant| !source_ids.contains(&grant.extension_id.as_str()));
+        Ok(LegacyGrantRevocation {
+            transaction_token: Some(token),
+            revoked,
+        })
+    }
+
+    /// Compatibility wrapper for callers that only need the count. The
+    /// durable transaction remains available to the migration API.
+    pub fn revoke_legacy_records(&self, source_ids: &[&str]) -> Result<usize, GrantError> {
+        self.revoke_legacy_records_transaction(source_ids)
+            .map(|result| result.revoked)
+    }
+
+    /// Restore exactly the unrevoked records captured by `token`.
+    ///
+    /// A current record is changed only when it is byte-for-byte identical to
+    /// the snapshot except for `revoked: true`; missing or otherwise changed
+    /// records fail closed instead of overwriting unrelated state.
+    pub fn restore_legacy_records(&self, token: &str) -> Result<usize, GrantError> {
+        self.restore_legacy_records_with_committed(token, false)
+    }
+
+    /// Roll back a migration that reached its durable finalization marker.
+    /// This is only used by crash recovery before the committed marker exists.
+    pub fn rollback_legacy_records(&self, token: &str) -> Result<usize, GrantError> {
+        self.restore_legacy_records_with_committed(token, true)
+    }
+
+    fn restore_legacy_records_with_committed(
+        &self,
+        token: &str,
+        allow_committed: bool,
+    ) -> Result<usize, GrantError> {
+        Self::validate_transaction_token(token)?;
+        let _transaction_lock = self
+            .legacy_transactions
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let mut transactions = self.load_transactions()?;
+        let transaction = transactions
+            .iter_mut()
+            .find(|transaction| transaction.token == token)
+            .ok_or(GrantError::NotFound)?;
+        match transaction.state {
+            LegacyGrantTransactionState::Restored => return Ok(0),
+            LegacyGrantTransactionState::Committed if !allow_committed => {
+                return Err(GrantError::Invalid)
+            }
+            LegacyGrantTransactionState::Committed => {}
+            LegacyGrantTransactionState::Active => {}
+        }
+
+        let mut records = self.load_records()?;
+        let mut restored = 0;
+        for snapshot in &transaction.records {
+            let current = records
+                .iter_mut()
+                .find(|record| record.persistent_grant_id == snapshot.persistent_grant_id)
+                .ok_or(GrantError::Persistence)?;
+            if *current == *snapshot {
+                continue;
+            }
+            let mut expected = snapshot.clone();
+            expected.revoked = true;
+            if *current != expected {
+                return Err(GrantError::Persistence);
+            }
+            *current = snapshot.clone();
+            restored += 1;
+        }
+        if restored > 0 {
+            self.save_records(&records)?;
+        }
+        transaction.state = LegacyGrantTransactionState::Restored;
+        self.save_transactions(&transactions)?;
+        Ok(restored)
+    }
+
+    /// Resolve the active transaction by its exact allowlisted source set for
+    /// restart recovery; the opaque token never leaves the runtime.
+    pub fn restore_legacy_records_for_sources(
+        &self,
+        source_ids: &[&str],
+    ) -> Result<usize, GrantError> {
+        self.validate_legacy_records(source_ids)?;
+        let token = self
+            .load_transactions()?
+            .into_iter()
+            .find(|transaction| {
+                transaction.state == LegacyGrantTransactionState::Active
+                    && transaction
+                        .source_ids
+                        .iter()
+                        .map(String::as_str)
+                        .eq(source_ids.iter().copied())
+            })
+            .map(|transaction| transaction.token)
+            .unwrap_or_default();
+        if token.is_empty() {
+            return Ok(0);
+        }
+        self.restore_legacy_records(&token)
+    }
+
+    pub fn rollback_legacy_records_for_sources(
+        &self,
+        source_ids: &[&str],
+    ) -> Result<usize, GrantError> {
+        self.validate_legacy_records(source_ids)?;
+        let token = self
+            .load_transactions()?
+            .into_iter()
+            .find(|transaction| {
+                (transaction.state == LegacyGrantTransactionState::Active
+                    || transaction.state == LegacyGrantTransactionState::Committed)
+                    && transaction
+                        .source_ids
+                        .iter()
+                        .map(String::as_str)
+                        .eq(source_ids.iter().copied())
+            })
+            .map(|transaction| transaction.token)
+            .unwrap_or_default();
+        if token.is_empty() {
+            return Ok(0);
+        }
+        self.rollback_legacy_records(&token)
+    }
+
+    /// Mark a transaction successful. Committed transactions cannot be
+    /// restored, preventing a later restart from resurrecting legacy grants.
+    pub fn commit_legacy_records(&self, token: &str) -> Result<(), GrantError> {
+        Self::validate_transaction_token(token)?;
+        let _transaction_lock = self
+            .legacy_transactions
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let mut transactions = self.load_transactions()?;
+        let transaction = transactions
+            .iter_mut()
+            .find(|transaction| transaction.token == token)
+            .ok_or(GrantError::NotFound)?;
+        match transaction.state {
+            LegacyGrantTransactionState::Active => {
+                transaction.state = LegacyGrantTransactionState::Committed;
+                self.save_transactions(&transactions)
+            }
+            LegacyGrantTransactionState::Committed => Ok(()),
+            LegacyGrantTransactionState::Restored => Err(GrantError::Invalid),
+        }
+    }
+
+    fn validate_transaction_token(token: &str) -> Result<(), GrantError> {
+        if token.is_empty() || token.len() > 128 {
+            Err(GrantError::Invalid)
+        } else {
+            Ok(())
+        }
+    }
+    pub fn validate_legacy_records(&self, source_ids: &[&str]) -> Result<(), GrantError> {
+        if source_ids.is_empty()
+            || source_ids
+                .iter()
+                .any(|id| !LEGACY_EXTENSION_IDS.contains(id))
+            || source_ids
+                .iter()
+                .enumerate()
+                .any(|(index, id)| source_ids[..index].contains(id))
+        {
+            return Err(GrantError::Invalid);
+        }
+        self.load_records().map(|_| ())
     }
     pub fn len(&self) -> usize {
         self.grants.lock().unwrap_or_else(|p| p.into_inner()).len()
@@ -697,5 +996,300 @@ mod tests {
         let text = format!("{error:?}");
         assert!(!text.contains("/secret"));
         assert!(!text.contains("ext"));
+    }
+
+    #[test]
+    fn legacy_revoke_preserves_unknown_fields_and_unrelated_records() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("grant-authority.json");
+        let records = serde_json::json!([
+            {
+                "version": 1,
+                "persistent_grant_id": "legacy",
+                "extension_id": "eden",
+                "provenance": "NativeDialog",
+                "exact_file": false,
+                "selected_path": dir.path().to_string_lossy(),
+                "root_identity": {"primary": 1, "secondary": 2},
+                "exact_file_identity": null,
+                "revoked": false,
+                "future_scope": {"read": ["a"], "write": null},
+                "future_marker": "preserve-me"
+            },
+            {
+                "version": 1,
+                "persistent_grant_id": "unrelated",
+                "extension_id": "other",
+                "provenance": "NativeDialog",
+                "exact_file": false,
+                "selected_path": dir.path().to_string_lossy(),
+                "root_identity": {"primary": 1, "secondary": 2},
+                "exact_file_identity": null,
+                "revoked": false,
+                "future_marker": "untouched"
+            }
+        ]);
+        fs::write(&path, serde_json::to_vec(&records).unwrap()).unwrap();
+
+        let revoked = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
+            .revoke_legacy_records(&["eden"])
+            .unwrap();
+        assert_eq!(revoked, 1);
+
+        let persisted: serde_json::Value =
+            serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        assert_eq!(persisted[0]["revoked"], true);
+        assert_eq!(persisted[0]["future_scope"]["read"][0], "a");
+        assert_eq!(persisted[0]["future_marker"], "preserve-me");
+        assert_eq!(persisted[1]["revoked"], false);
+        assert_eq!(persisted[1]["future_marker"], "untouched");
+    }
+
+    #[test]
+    fn malformed_records_abort_legacy_revoke_before_write_or_handle_clear() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("grant-authority.json");
+        let before = br#"[{"version":1,"persistent_grant_id":"legacy","extension_id":"eden","provenance":"native-dialog","exact_file":false,"selected_path":"/tmp","root_identity":{"dev":1,"ino":2},"exact_file_identity":null,"revoked":false},{"version":99}]"#;
+        fs::write(&path, before).unwrap();
+
+        let registry = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf());
+        assert_eq!(
+            registry.revoke_legacy_records(&["eden"]),
+            Err(GrantError::Persistence)
+        );
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert_eq!(registry.len(), 0);
+    }
+
+    #[test]
+    fn legacy_revoke_clears_only_live_handles_for_allowlisted_owners() {
+        let dir = tempfile::tempdir().unwrap();
+        let legacy_root = dir.path().join("legacy");
+        let unrelated_root = dir.path().join("unrelated");
+        fs::create_dir(&legacy_root).unwrap();
+        fs::create_dir(&unrelated_root).unwrap();
+        let registry = GrantAuthorityRegistry::with_data_dir(dir.path().join("engine"));
+        registry
+            .register(
+                &owner(1),
+                "eden",
+                &legacy_root,
+                false,
+                GrantProvenance::NativeDialog,
+                None,
+            )
+            .unwrap();
+        registry
+            .register(
+                &owner(2),
+                "other",
+                &unrelated_root,
+                false,
+                GrantProvenance::NativeDialog,
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(registry.revoke_legacy_records(&["eden"]).unwrap(), 1);
+        assert_eq!(registry.len(), 1);
+        assert_eq!(registry.close_owner(owner(2)), 1);
+        assert_eq!(registry.len(), 0);
+    }
+
+    #[test]
+    fn scoped_legacy_revoke_leaves_other_legacy_identity_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("grant-authority.json");
+        let records = serde_json::json!([
+            {
+                "version": 1,
+                "persistent_grant_id": "eden-grant",
+                "extension_id": "eden",
+                "provenance": "NativeDialog",
+                "exact_file": false,
+                "selected_path": dir.path().to_string_lossy(),
+                "root_identity": {"primary": 1, "secondary": 2},
+                "exact_file_identity": null,
+                "revoked": false,
+                "unknown": "keep"
+            },
+            {
+                "version": 1,
+                "persistent_grant_id": "delphi-grant",
+                "extension_id": "delphi",
+                "provenance": "NativeDialog",
+                "exact_file": false,
+                "selected_path": dir.path().to_string_lossy(),
+                "root_identity": {"primary": 1, "secondary": 2},
+                "exact_file_identity": null,
+                "revoked": false,
+                "unknown": "untouched"
+            }
+        ]);
+        fs::write(&path, serde_json::to_vec(&records).unwrap()).unwrap();
+
+        assert_eq!(
+            GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
+                .revoke_legacy_records(&["eden"])
+                .unwrap(),
+            1
+        );
+        let persisted: serde_json::Value =
+            serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        assert_eq!(persisted[0]["persistent_grant_id"], "eden-grant");
+        assert_eq!(persisted[0]["revoked"], true);
+        assert_eq!(persisted[0]["unknown"], "keep");
+        assert_eq!(persisted[1]["persistent_grant_id"], "delphi-grant");
+        assert_eq!(persisted[1]["revoked"], false);
+        assert_eq!(persisted[1]["unknown"], "untouched");
+    }
+
+    #[test]
+    fn invalid_scope_is_rejected_without_touching_persisted_records() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("grant-authority.json");
+        let before = br#"[{"version":1,"persistent_grant_id":"legacy","extension_id":"eden","provenance":"native-dialog","exact_file":false,"selected_path":"/tmp","root_identity":{"dev":1,"ino":2},"exact_file_identity":null,"revoked":false}]"#;
+        fs::write(&path, before).unwrap();
+
+        let registry = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf());
+        assert_eq!(
+            registry.revoke_legacy_records(&["eden", "eden"]),
+            Err(GrantError::Invalid)
+        );
+        assert_eq!(
+            registry.revoke_legacy_records(&["not-a-legacy-id"]),
+            Err(GrantError::Invalid)
+        );
+        assert_eq!(fs::read(path).unwrap(), before);
+    }
+
+    #[test]
+    fn legacy_grant_transaction_restores_only_changed_records_after_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("grant-authority.json");
+        let records = serde_json::json!([
+            {
+                "version": 1,
+                "persistent_grant_id": "eden-live",
+                "extension_id": "eden",
+                "provenance": "NativeDialog",
+                "exact_file": false,
+                "selected_path": dir.path().to_string_lossy(),
+                "root_identity": {"primary": 1, "secondary": 2},
+                "exact_file_identity": null,
+                "revoked": false,
+                "future_scope": {"read": ["vault"]}
+            },
+            {
+                "version": 1,
+                "persistent_grant_id": "eden-already-revoked",
+                "extension_id": "eden",
+                "provenance": "NativeDialog",
+                "exact_file": false,
+                "selected_path": dir.path().to_string_lossy(),
+                "root_identity": {"primary": 3, "secondary": 4},
+                "exact_file_identity": null,
+                "revoked": true,
+                "future_marker": "do-not-resurrect"
+            },
+            {
+                "version": 1,
+                "persistent_grant_id": "delphi-untouched",
+                "extension_id": "delphi",
+                "provenance": "NativeDialog",
+                "exact_file": false,
+                "selected_path": dir.path().to_string_lossy(),
+                "root_identity": {"primary": 5, "secondary": 6},
+                "exact_file_identity": null,
+                "revoked": false,
+                "future_marker": "unrelated"
+            }
+        ]);
+        fs::write(&path, serde_json::to_vec(&records).unwrap()).unwrap();
+
+        let result = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
+            .revoke_legacy_records_transaction(&["eden"])
+            .unwrap();
+        assert_eq!(result.revoked, 1);
+        let token = result.transaction_token.unwrap();
+        let revoked: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(revoked[0]["revoked"], true);
+        assert_eq!(revoked[0]["future_scope"]["read"][0], "vault");
+        assert_eq!(revoked[1]["revoked"], true);
+        assert_eq!(revoked[2]["revoked"], false);
+
+        let restarted = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf());
+        assert_eq!(restarted.restore_legacy_records(&token).unwrap(), 1);
+        let restored: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(restored[0]["revoked"], false);
+        assert_eq!(restored[0]["future_scope"]["read"][0], "vault");
+        assert_eq!(restored[1]["revoked"], true);
+        assert_eq!(restored[1]["future_marker"], "do-not-resurrect");
+        assert_eq!(restored[2]["revoked"], false);
+        assert_eq!(restarted.restore_legacy_records(&token).unwrap(), 0);
+    }
+
+    #[test]
+    fn legacy_grant_restore_failure_is_retryable_after_restart_and_commit_is_terminal() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("grant-authority.json");
+        let records = serde_json::json!([{
+            "version": 1,
+            "persistent_grant_id": "eden-grant",
+            "extension_id": "eden",
+            "provenance": "NativeDialog",
+            "exact_file": false,
+            "selected_path": dir.path().to_string_lossy(),
+            "root_identity": {"primary": 1, "secondary": 2},
+            "exact_file_identity": null,
+            "revoked": false,
+            "opaque": {"keep": true}
+        }]);
+        fs::write(&path, serde_json::to_vec(&records).unwrap()).unwrap();
+
+        let result = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
+            .revoke_legacy_records_transaction(&["eden"])
+            .unwrap();
+        let token = result.transaction_token.unwrap();
+
+        FAIL_PERSIST_AFTER_FSYNC.with(|fail| fail.set(true));
+        assert_eq!(
+            GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
+                .restore_legacy_records(&token),
+            Err(GrantError::Persistence)
+        );
+        FAIL_PERSIST_AFTER_FSYNC.with(|fail| fail.set(false));
+
+        let restarted = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf());
+        assert_eq!(restarted.restore_legacy_records(&token).unwrap(), 1);
+        assert_eq!(
+            restarted.commit_legacy_records(&token),
+            Err(GrantError::Invalid)
+        );
+
+        fs::write(&path, serde_json::to_vec(&records).unwrap()).unwrap();
+        let committed = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
+            .revoke_legacy_records_transaction(&["eden"])
+            .unwrap();
+        let committed_token = committed.transaction_token.unwrap();
+        GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
+            .commit_legacy_records(&committed_token)
+            .unwrap();
+        assert_eq!(
+            GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
+                .restore_legacy_records(&committed_token),
+            Err(GrantError::Invalid)
+        );
+        assert_eq!(
+            GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
+                .rollback_legacy_records(&committed_token)
+                .unwrap(),
+            1
+        );
+        let final_records: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(final_records[0]["revoked"], false);
+        assert_eq!(final_records[0]["opaque"]["keep"], true);
     }
 }

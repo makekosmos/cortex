@@ -113,6 +113,7 @@ impl PackageWorkerSupervisor {
             version: version.to_owned(),
             generation,
         };
+        #[cfg(windows)]
         let monitor_present = self.inner.lifecycles.contains(&monitor_key);
         let monitor_joined = self
             .inner

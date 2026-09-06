@@ -11,7 +11,7 @@ pub(super) async fn schedule_retry(
     {
         // Package workers are intentionally unsupported on Unix; leave the
         // failed state recorded rather than attempting a Windows launch.
-        let _ = (spec, generation, failures);
+        let _ = (inner, key, spec, generation, failures);
         return;
     }
     #[cfg(windows)]

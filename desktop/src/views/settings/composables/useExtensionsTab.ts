@@ -1,131 +1,114 @@
-// useExtensionsTab — installed + marketplace catalog + install/update/revert/uninstall.
+// useExtensionsTab — Runtime .kspkg applications shown in Settings.
 
 import { computed, ref } from "vue";
-import type {
-  InstalledExtensionInfo,
-  MarketplaceCatalog,
-  MarketplaceExtension,
-} from "@shared/ipc-types";
+import { isRecord, isString } from "../../../shared/runtimeGuards";
+import type { IpcJsonObject, IpcJsonValue } from "@shared/ipc-json";
+
+type RuntimePackage = {
+  id: string;
+  name: string;
+  version: string;
+  kind: string;
+  publisher: string;
+  enabled?: boolean;
+  revoked?: boolean;
+  update_version?: string | null;
+};
+
+function unwrap(value: IpcJsonValue): IpcJsonValue {
+  if (isRecord(value) && value.ok === false) {
+    throw new Error(isString(value.error) ? value.error : "Операция Runtime не выполнена.");
+  }
+  return isRecord(value) && "data" in value ? value.data : value;
+}
+
+function isRuntimePackage(value: IpcJsonValue): value is IpcJsonObject & RuntimePackage {
+  return (
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.name) &&
+    isString(value.version) &&
+    isString(value.kind) &&
+    isString(value.publisher)
+  );
+}
+
+function runtimePackages(value: IpcJsonValue | undefined): RuntimePackage[] {
+  if (!Array.isArray(value)) return [];
+  const packages: RuntimePackage[] = [];
+  for (const item of value) if (isRuntimePackage(item)) packages.push(item);
+  return packages;
+}
+
+function message(cause: unknown): string {
+  return cause instanceof Error ? cause.message : "Не удалось выполнить операцию с приложением.";
+}
 
 export function useExtensionsTab() {
-  const installed = ref<InstalledExtensionInfo[]>([]);
-  const extensionsLoading = ref<boolean>(false);
-  const extensionsError = ref<string>("");
-  const busyExt = ref<string>("");
+  const installed = ref<RuntimePackage[]>([]);
+  const catalog = ref<RuntimePackage[]>([]);
+  const extensionsLoading = ref(false);
+  const extensionsError = ref("");
+  const busyExt = ref("");
 
-  const catalog = ref<MarketplaceCatalog | null>(null);
-  const marketLoading = ref<boolean>(false);
-  const marketError = ref<string>("");
-  const installingId = ref<string>("");
+  async function request(operation: string, params: IpcJsonObject = {}): Promise<IpcJsonValue> {
+    return unwrap(await window.kepler.ark.request<IpcJsonValue>(operation, params));
+  }
 
-  async function loadExtensions() {
+  async function loadCatalog(refresh = false) {
     extensionsLoading.value = true;
     extensionsError.value = "";
     try {
-      installed.value = await window.kepler.extension.installedList();
-    } catch (e) {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
-      extensionsError.value = (e as Error).message;
+      if (refresh) await request("packages.refresh_catalog");
+      const next = await request("packages.list", { kind: "app" });
+      if (!isRecord(next)) throw new Error("Runtime вернул некорректный каталог приложений.");
+      installed.value = runtimePackages(next.packages);
+      catalog.value = runtimePackages(next.catalog);
+    } catch (cause) {
+      extensionsError.value = message(cause);
     } finally {
       extensionsLoading.value = false;
     }
   }
 
-  async function loadCatalog(force = false) {
-    marketLoading.value = true;
-    marketError.value = "";
-    try {
-      catalog.value = await window.kepler.extension.catalogFetch(force);
-    } catch (e) {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
-      marketError.value = (e as Error).message;
-    } finally {
-      marketLoading.value = false;
-    }
-  }
+  const catalogById = (id: string) => catalog.value.find((item) => item.id === id);
+  const hasUpdate = (item: RuntimePackage) => !!item.update_version;
 
-  function catalogByAppId(appId: string | null): MarketplaceExtension | undefined {
-    if (!appId) return undefined;
-    return catalog.value?.extensions.find((e) => e.appId === appId);
-  }
-
-  function hasUpdate(i: InstalledExtensionInfo): boolean {
-    const c = catalogByAppId(i.appId);
-    return !!(c && i.version && c.version !== i.version);
-  }
-
-  async function onUpdate(i: InstalledExtensionInfo) {
-    const c = catalogByAppId(i.appId);
-    if (!c || installingId.value) return;
-    installingId.value = i.id;
-    marketError.value = "";
-    try {
-      await window.kepler.extension.installFromUrl(c.downloadUrl, c.sha256);
-      await loadExtensions();
-    } catch (e) {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
-      marketError.value = `${i.id}: ${(e as Error).message}`;
-    } finally {
-      installingId.value = "";
-    }
-  }
-
-  async function onInstallNew(c: MarketplaceExtension) {
-    if (installingId.value) return;
-    installingId.value = c.id;
-    marketError.value = "";
-    try {
-      await window.kepler.extension.installFromUrl(c.downloadUrl, c.sha256);
-      await loadExtensions();
-    } catch (e) {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
-      marketError.value = `${c.id}: ${(e as Error).message}`;
-    } finally {
-      installingId.value = "";
-    }
-  }
-
-  async function onRevert(id: string) {
+  async function install(item: RuntimePackage) {
     if (busyExt.value) return;
-    busyExt.value = id;
+    busyExt.value = item.id;
     extensionsError.value = "";
     try {
-      const ok = await window.kepler.extension.revert(id);
-      if (!ok) {
-        extensionsError.value = `${id}: нет доступных backup'ов для отката`;
-      }
-      await loadExtensions();
-    } catch (e) {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
-      extensionsError.value = `${id}: ${(e as Error).message}`;
+      await request("packages.install", { id: item.id, version: item.version });
+      await loadCatalog();
+    } catch (cause) {
+      extensionsError.value = `${item.name}: ${message(cause)}`;
     } finally {
       busyExt.value = "";
     }
   }
 
-  async function onUninstall(id: string) {
+  async function onToggle(item: RuntimePackage) {
     if (busyExt.value) return;
-    busyExt.value = id;
+    busyExt.value = item.id;
     extensionsError.value = "";
     try {
-      await window.kepler.extension.uninstall(id);
-      await loadExtensions();
-    } catch (e) {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
-      extensionsError.value = `${id}: ${(e as Error).message}`;
+      await request("packages.set_enabled", {
+        id: item.id,
+        version: item.version,
+        enabled: !item.enabled,
+      });
+      await loadCatalog();
+    } catch (cause) {
+      extensionsError.value = `${item.name}: ${message(cause)}`;
     } finally {
       busyExt.value = "";
     }
   }
 
-  const availableInCatalog = computed<MarketplaceExtension[]>(() => {
-    if (!catalog.value) return [];
-    const installedAppIds = new Set(
-      installed.value.map((i) => i.appId).filter((appId): appId is string => !!appId),
-    );
-    return catalog.value.extensions.filter(
-      (c) => !c.appId || !installedAppIds.has(c.appId),
-    );
+  const availableInCatalog = computed(() => {
+    const installedIds = new Set(installed.value.map((item) => item.id));
+    return catalog.value.filter((item) => !installedIds.has(item.id) && !item.revoked);
   });
 
   return {
@@ -133,18 +116,11 @@ export function useExtensionsTab() {
     extensionsLoading,
     extensionsError,
     busyExt,
-    catalog,
-    marketLoading,
-    marketError,
-    installingId,
     availableInCatalog,
-    loadExtensions,
     loadCatalog,
-    catalogByAppId,
+    catalogById,
     hasUpdate,
-    onUpdate,
-    onInstallNew,
-    onRevert,
-    onUninstall,
+    install,
+    onToggle,
   };
 }

@@ -55,7 +55,7 @@ function scheduleNativeInstallFallback(version: string): void {
       void dialog
         .showMessageBox({
           type: "info",
-          title: "Обновление CosCast готово",
+          title: "Обновление Kosmos готово",
           message: `Версия ${version} скачана. Перезапустить сейчас?`,
           buttons: ["Перезапустить", "Позже"],
           defaultId: 0,

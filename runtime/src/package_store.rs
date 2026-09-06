@@ -251,7 +251,7 @@ impl PackageStore {
         let mut state = self.read_state()?;
         let package = state
             .packages
-            .iter_mut()
+            .iter()
             .find(|p| p.id == id && p.version == version)
             .ok_or_else(|| StoreError::State("package not found".into()))?;
         if package.revoked {
@@ -260,7 +260,34 @@ impl PackageStore {
         if package.manifest.worker_entrypoint().is_none() {
             return Err(StoreError::WorkerRequired);
         }
-        package.enabled = true;
+        for package in &mut state.packages {
+            if package.id == id {
+                package.enabled = package.version == version;
+            }
+        }
+        self.write_state(&state)
+    }
+
+    /// Atomically clear the enabled bit for a set of worker versions.
+    /// Callers stop those workers before invoking this method.
+    pub fn disable_worker_versions(&self, id: &str, versions: &[String]) -> Result<(), StoreError> {
+        let _guard = self.mutation.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self.read_state()?;
+        for version in versions {
+            let package = state
+                .packages
+                .iter()
+                .find(|package| package.id == id && package.version == *version)
+                .ok_or_else(|| StoreError::State("package not found".into()))?;
+            if package.manifest.worker_entrypoint().is_none() {
+                return Err(StoreError::WorkerRequired);
+            }
+        }
+        for package in &mut state.packages {
+            if package.id == id && versions.iter().any(|version| version == &package.version) {
+                package.enabled = false;
+            }
+        }
         self.write_state(&state)
     }
     pub fn list(&self) -> Result<Vec<InstalledPackage>, StoreError> {
@@ -996,6 +1023,55 @@ mod tests {
             .join("store/blobs")
             .join(format!("{hash}.kspkg"))
             .exists());
+    }
+
+    #[test]
+    fn enabling_a_worker_replaces_its_active_version_atomically() {
+        let d = tempdir().unwrap();
+        let store = PackageStore::new(d.path().join("store")).unwrap();
+        for version in ["1.0.0", "2.0.0"] {
+            let VersionedManifest::V2(mut manifest) = manifest_v2() else {
+                unreachable!();
+            };
+            manifest.kind = PackageKind::Source;
+            manifest.version = version.into();
+            manifest.entrypoint = "worker.exe".into();
+            manifest.targets[0].runtime = crate::package_manifest::TargetRuntime::Worker;
+            manifest.targets[0].entrypoint = Some("worker.exe".into());
+            let expected = VersionedManifest::V2(manifest);
+            let archive_path = d.path().join(format!("{version}.kspkg"));
+            archive_versioned(&archive_path, &expected, "worker.exe");
+            let bytes = fs::read(&archive_path).unwrap();
+            store
+                .install_versioned(
+                    &archive_path,
+                    bytes.len() as u64,
+                    &hex_hash(&bytes),
+                    &expected,
+                    1,
+                )
+                .unwrap();
+            if version == "2.0.0" {
+                store.fail_next_state_write.store(true, Ordering::Relaxed);
+                assert!(store.enable_worker(expected.id(), version).is_err());
+                assert!(store.installed(expected.id(), "1.0.0").unwrap().enabled);
+                assert!(!store.installed(expected.id(), version).unwrap().enabled);
+            } else {
+                store.enable_worker(expected.id(), version).unwrap();
+            }
+        }
+        let store_root = d.path().join("store");
+        drop(store);
+        let store = PackageStore::new(store_root).unwrap();
+        store.enable_worker("com.kosmos.v2-demo", "2.0.0").unwrap();
+        let enabled = store
+            .list()
+            .unwrap()
+            .into_iter()
+            .filter(|package| package.id == "com.kosmos.v2-demo" && package.enabled)
+            .map(|package| package.version)
+            .collect::<Vec<_>>();
+        assert_eq!(enabled, ["2.0.0"]);
     }
 
     #[test]

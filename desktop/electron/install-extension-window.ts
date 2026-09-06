@@ -49,7 +49,7 @@ export function openInstallExtensionWindow(sourcePath: string): void {
     backgroundColor: "#1a1a1a",
     ...backgroundMaterialOption(backgroundMaterial),
     roundedCorners: true,
-    title: "CosCast — Установка расширения",
+    title: "Kosmos — Установка расширения",
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,

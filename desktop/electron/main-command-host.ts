@@ -9,6 +9,8 @@ import {
 } from "./extension-host";
 import { runCommandNoView, type CommandLaunchProps } from "./command-host/command-runner";
 import { openCommandViewCommand } from "./command-host/view-host";
+import { assertLegacyLaunchAllowed } from "./legacy-migration-journal";
+import { keplerDataDir } from "./data-dir";
 
 interface CommandSystemAdapter {
   open(target: string): Promise<void>;
@@ -79,6 +81,8 @@ export async function launchCommandDeclaredCommand(
   declared: DeclaredCommand,
   launch?: CommandLaunchProps,
 ): Promise<boolean> {
+  assertLegacyLaunchAllowed(keplerDataDir(), declared.extensionId);
+
   if (declared.mode === "open") {
     await openExtension(declared.extensionId, declared.route);
     return true;

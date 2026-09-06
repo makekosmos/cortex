@@ -7,15 +7,14 @@
 ;   - customRemoveFiles — финальная очистка
 
 !macro customInstall
-  ; CosCast is the Shell application. Keep Manager as a separate Kosmos
+  ; Kosmos is the Shell application. Keep Manager as a separate Kosmos
   ; component and make Windows entry points launch the packaged Shell.
   Delete "$DESKTOP\CosCast.lnk"
   Delete "$SMPROGRAMS\CosCast.lnk"
-  ; Remove the previous user-facing shortcut name during upgrade.
   Delete "$DESKTOP\Kosmos.lnk"
   Delete "$SMPROGRAMS\Kosmos.lnk"
-  CreateShortCut "$DESKTOP\CosCast.lnk" "$INSTDIR\CosCast.exe"
-  CreateShortCut "$SMPROGRAMS\CosCast.lnk" "$INSTDIR\CosCast.exe"
+  CreateShortCut "$DESKTOP\Kosmos.lnk" "$INSTDIR\Kosmos.exe"
+  CreateShortCut "$SMPROGRAMS\Kosmos.lnk" "$INSTDIR\Kosmos.exe"
 
   ; Kepler → Kosmos product rename. Legacy shortcuts are removed best-effort;
   ; user data remains untouched.
