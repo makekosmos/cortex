@@ -10,7 +10,19 @@ const args = base
   : staged
     ? ["diff", "--cached", "--name-only", "--diff-filter=ACMR"]
     : ["diff", "--name-only", "--diff-filter=ACMR", "HEAD"];
-const changed = spawnSync("git", args, { encoding: "utf8" });
+const gitEnv = { ...process.env };
+for (const key of [
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_COMMON_DIR",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_CEILING_DIRECTORIES",
+  "GIT_PREFIX",
+])
+  delete gitEnv[key];
+const changed = spawnSync("git", args, { encoding: "utf8", env: gitEnv });
 if (changed.error || changed.status !== 0) process.exit(changed.status ?? 1);
 
 const files = changed.stdout.split(/\r?\n/).filter((file) => extensions.test(file));

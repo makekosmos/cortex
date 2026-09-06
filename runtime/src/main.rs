@@ -325,6 +325,34 @@ where
     startup_orchestration(timeout, http_probe, ws_probe, control_start).await
 }
 
+fn legacy_migration_recovery_pending(data_dir: &std::path::Path) -> bool {
+    [
+        "com.kosmos.arcadia",
+        "com.kosmos.memoria",
+        "com.kosmos.agenda",
+    ]
+    .into_iter()
+    .any(|target| {
+        let root = data_dir.join("legacy-migrations").join("v1").join(target);
+        if root.join("before").join("package-state.pending").is_file() {
+            return true;
+        }
+        let journal = root.join("journal.json");
+        let Ok(bytes) = std::fs::read(journal) else {
+            return false;
+        };
+        serde_json::from_slice::<serde_json::Value>(&bytes)
+            .ok()
+            .and_then(|value| {
+                value
+                    .get("phase")
+                    .and_then(serde_json::Value::as_str)
+                    .map(|phase| phase == "prepared")
+            })
+            .unwrap_or(false)
+    })
+}
+
 async fn setup() -> Result<SetupState, DynError> {
     // NB: до init_tracing нельзя зваать tracing::info!. Banner печатается
     // в stderr через eprintln; tracing включается ниже после crash_reporter.
@@ -422,7 +450,11 @@ async fn setup() -> Result<SetupState, DynError> {
         worker_roots,
         correlation_id.clone(),
     );
-    package_service.restore_enabled_workers().await?;
+    if legacy_migration_recovery_pending(&lock_dir) {
+        tracing::warn!("deferring package worker restore until legacy migration recovery");
+    } else {
+        package_service.restore_enabled_workers().await?;
+    }
     let package_service = Arc::new(package_service);
 
     // App Index: индексирует Start Menu + UWP. SQLite в lock_dir (рядом с ark.db),

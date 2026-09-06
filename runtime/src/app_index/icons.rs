@@ -12,7 +12,9 @@
 // Discovery не пишет PNG. Sources сохраняют `App.icon_source`, а `AppIndex::rescan`
 // вызывает `ensure_icon` последовательным throttled loop'ом.
 
-use crate::app_index::app::{App, AppKind, IconSource};
+#[cfg(windows)]
+use crate::app_index::app::IconSource;
+use crate::app_index::app::{App, AppKind};
 use crate::app_index::Result;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};

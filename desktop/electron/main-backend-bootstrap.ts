@@ -63,19 +63,19 @@ export function runBootSelfCheck({
   const verify = verifyUserDataMatches(instance);
   if (!verify.ok) {
     const msg =
-      `CosCast boot self-check failed: userData mismatch.\n` +
+      `Kosmos boot self-check failed: userData mismatch.\n` +
       `Expected: ${verify.expected}\n` +
       `Actual:   ${verify.actual}\n` +
       `Slot:     ${instance.slot}\n\n` +
       `Это означает что applyInstanceToApp не успел отработать до первого ` +
-      `чтения userData path. Запустите CosCast заново; если повторяется — ` +
+      `чтения userData path. Запустите Kosmos заново; если повторяется — ` +
       `см. platform/desktop/electron/instance.ts.`;
     log.error("boot", "userData mismatch", {
       expected: verify.expected,
       actual: verify.actual,
       slot: instance.slot,
     });
-    showErrorBox("CosCast — ошибка запуска", msg);
+    showErrorBox("Kosmos — ошибка запуска", msg);
     exit(1);
     return;
   }
@@ -83,22 +83,22 @@ export function runBootSelfCheck({
   if (!existsSync(backendExe)) {
     const msg =
       `Kosmos Runtime не найден по ожидаемому пути:\n${backendExe}\n\n` +
-      `Возможно установка повреждена. Переустановите CosCast.`;
+      `Возможно установка повреждена. Переустановите Kosmos.`;
     log.error("boot", "backend exe missing", { backendExe });
-    showErrorBox("CosCast — ошибка запуска", msg);
+    showErrorBox("Kosmos — ошибка запуска", msg);
     exit(1);
     return;
   }
 
   if (instance.kind === "test" && env.KOSMOS_TEST_MODE !== "1") {
     const msg =
-      `CosCast запущен в test slot (${instance.slot}) без KOSMOS_TEST_MODE=1.\n` +
+      `Kosmos запущен в test slot (${instance.slot}) без KOSMOS_TEST_MODE=1.\n` +
       `Это обычно означает что KOSMOS_DATA_DIR / KEPLER_INSTANCE прокинут случайно.\n` +
       `Очистите env и запустите снова.`;
     log.error("boot", "test slot without KOSMOS_TEST_MODE", {
       slot: instance.slot,
     });
-    showErrorBox("CosCast — ошибка запуска", msg);
+    showErrorBox("Kosmos — ошибка запуска", msg);
     exit(1);
     return;
   }

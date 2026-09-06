@@ -1,9 +1,9 @@
 import path from "node:path";
 
 export const AUTOSTART_ARGS: string[] = ["--autostart"];
-export const AUTOSTART_NAME = "CosCast";
+export const AUTOSTART_NAME = "Kosmos";
 export const LEGACY_AUTOSTART_NAMES = [
-  "Kosmos",
+  "CosCast",
   "com.kazui.kepler",
   "Kepler",
   "KeplerKosmos",
@@ -42,8 +42,13 @@ export function legacyAutostartPathCandidates(
   localAppData = process.env.LOCALAPPDATA,
 ): string[] {
   const dir = path.dirname(execPath);
-  const paths = [path.join(dir, "Kosmos.exe"), path.join(dir, "Kepler.exe")];
+  const paths = [
+    path.join(dir, "CosCast.exe"),
+    path.join(dir, "Kosmos.exe"),
+    path.join(dir, "Kepler.exe"),
+  ];
   if (localAppData) {
+    paths.push(path.resolve(localAppData, "Programs", "Kosmos", "CosCast.exe"));
     paths.push(path.resolve(localAppData, "Programs", "Kosmos", "Kosmos.exe"));
     paths.push(path.resolve(localAppData, "Programs", "Kepler", "Kepler.exe"));
   }

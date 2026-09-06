@@ -86,6 +86,8 @@ pub struct PackageSummary {
     pub id: String,
     pub name: String,
     pub version: String,
+    pub hash: String,
+    pub catalog_sequence: u64,
     pub kind: PackageKind,
     pub enabled: bool,
     pub revoked: bool,
@@ -101,6 +103,15 @@ pub struct PackageListSummary {
     pub packages: Vec<PackageSummary>,
     pub total: usize,
     pub truncated: bool,
+}
+
+/// Exact evidence returned by the read-only replacement verification boundary.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VerifiedReplacement {
+    pub id: String,
+    pub version: String,
+    pub hash: String,
+    pub catalog_sequence: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -206,3 +217,63 @@ include!("package_service/helpers.rs");
 include!("package_service/integrations.rs");
 #[cfg(test)]
 include!("package_service/tests.rs");
+
+impl PackageService {
+    /// Start the migration-owned grant transaction. Only the opaque token and
+    /// count cross the package RPC boundary; record snapshots stay in runtime.
+    pub fn revoke_legacy_grants_transaction(
+        &self,
+        source_ids: &[String],
+    ) -> Result<crate::grant_authority::LegacyGrantRevocation, PackageError> {
+        let source_ids = source_ids.iter().map(String::as_str).collect::<Vec<_>>();
+        self.grants
+            .revoke_legacy_records_transaction(&source_ids)
+            .map_err(map_legacy_grant_error)
+    }
+
+    pub fn restore_legacy_grants(&self, token: &str) -> Result<usize, PackageError> {
+        self.grants
+            .restore_legacy_records(token)
+            .map_err(map_legacy_grant_error)
+    }
+
+    pub fn rollback_legacy_grants(&self, token: &str) -> Result<usize, PackageError> {
+        self.grants
+            .rollback_legacy_records(token)
+            .map_err(map_legacy_grant_error)
+    }
+
+    pub fn rollback_legacy_grants_for_sources(
+        &self,
+        source_ids: &[String],
+    ) -> Result<usize, PackageError> {
+        let source_ids = source_ids.iter().map(String::as_str).collect::<Vec<_>>();
+        self.grants
+            .rollback_legacy_records_for_sources(&source_ids)
+            .map_err(map_legacy_grant_error)
+    }
+
+    pub fn restore_legacy_grants_for_sources(
+        &self,
+        source_ids: &[String],
+    ) -> Result<usize, PackageError> {
+        let source_ids = source_ids.iter().map(String::as_str).collect::<Vec<_>>();
+        self.grants
+            .restore_legacy_records_for_sources(&source_ids)
+            .map_err(map_legacy_grant_error)
+    }
+
+    pub fn commit_legacy_grants(&self, token: &str) -> Result<(), PackageError> {
+        self.grants
+            .commit_legacy_records(token)
+            .map_err(map_legacy_grant_error)
+    }
+}
+
+fn map_legacy_grant_error(error: crate::grant_authority::GrantError) -> PackageError {
+    match error {
+        crate::grant_authority::GrantError::Invalid
+        | crate::grant_authority::GrantError::NotFound => PackageError::Invalid,
+        _ => PackageError::Persistence,
+    }
+}

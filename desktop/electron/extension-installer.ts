@@ -20,6 +20,11 @@ import type { InstalledExtensionInfo } from "./extension-installer-state";
 import { extractZipTo, readZipEntries } from "./extension-zip";
 import type { JsonRecord } from "../src/shared/runtimeGuards";
 import { validateExtensionManifest, type ExtensionManifest } from "./extension-manifest-validation";
+import {
+  assertLegacyLaunchAllowed,
+  legacyMigrationTarget,
+  withLegacyMigrationLock,
+} from "./legacy-migration-journal";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -184,7 +189,12 @@ export async function listBackups(id: string): Promise<string[]> {
 }
 
 export async function revertExtension(id: string, timestamp?: string): Promise<boolean> {
-  return revertExtensionState(id, timestamp);
+  const target = legacyMigrationTarget(id);
+  const revert = () => {
+    assertLegacyLaunchAllowed(keplerDataDir(), id);
+    return revertExtensionState(id, timestamp);
+  };
+  return target ? withLegacyMigrationLock(keplerDataDir(), target, revert) : revert();
 }
 
 export async function listInstalledUserExtensions(): Promise<InstalledExtensionInfo[]> {
@@ -192,11 +202,35 @@ export async function listInstalledUserExtensions(): Promise<InstalledExtensionI
 }
 
 export async function uninstallExtension(id: string): Promise<boolean> {
-  return uninstallExtensionState(userExtensionsRoot(), id);
+  const target = legacyMigrationTarget(id);
+  const uninstall = () => {
+    assertLegacyLaunchAllowed(keplerDataDir(), id);
+    return uninstallExtensionState(userExtensionsRoot(), id);
+  };
+  return target ? withLegacyMigrationLock(keplerDataDir(), target, uninstall) : uninstall();
 }
 
 export async function installFromPath(sourcePath: string): Promise<KextManifestPreview> {
   const preview = await previewSource(sourcePath);
+  const target = legacyMigrationTarget(preview.manifest.id);
+  const install = () => installFromPathUnlocked(sourcePath, preview);
+  if (!target) {
+    assertLegacyLaunchAllowed(keplerDataDir(), preview.manifest.id);
+    return install();
+  }
+  return withLegacyMigrationLock(keplerDataDir(), target, async () => {
+    const authoritativePreview = await previewSource(sourcePath);
+    if (authoritativePreview.manifest.id !== preview.manifest.id)
+      throw new Error("extension manifest changed while waiting for migration lock");
+    assertLegacyLaunchAllowed(keplerDataDir(), authoritativePreview.manifest.id);
+    return installFromPathUnlocked(sourcePath, authoritativePreview);
+  });
+}
+
+async function installFromPathUnlocked(
+  sourcePath: string,
+  preview: KextManifestPreview,
+): Promise<KextManifestPreview> {
   if (preview.apiCompatError) {
     throw new Error(`API compat: ${preview.apiCompatError}`);
   }

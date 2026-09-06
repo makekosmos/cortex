@@ -14,6 +14,7 @@ type RpcValue =
   | readonly RpcValue[]
   | { readonly [key: string]: RpcValue };
 import electronBinary from "electron";
+import { buildEngine } from "./fixtures/host-runtime";
 import { createSignedApps } from "./fixtures/signed-apps";
 
 const hostRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -39,33 +40,6 @@ const cargoTarget = () =>
       encoding: "utf8",
     }),
   ).target_directory as string;
-const buildEngine = (trust: { root: string; releases: string }) => {
-  const env = {
-    ...process.env,
-    KOSMOS_PACKAGE_ROOT_KEY_JSON: trust.root,
-    KOSMOS_PACKAGE_RELEASE_KEYS_JSON: trust.releases,
-  };
-  const target = cargoTarget();
-  execFileSync("node", [
-    path.join(repositoryRoot, "desktop", "scripts", "ark-core-rpc.mjs"),
-    "--debug",
-    "--target-dir",
-    path.join(target, "debug"),
-  ], {
-    cwd: repositoryRoot,
-    env,
-    stdio: "inherit",
-  });
-  execFileSync("cargo", ["build", "-p", "kepler-backend", "--bin", "kepler-backend"], {
-    cwd: repositoryRoot,
-    env,
-    stdio: "inherit",
-  });
-  return {
-    engine: path.join(target, "debug", "kepler-backend.exe"),
-    ark: path.join(target, "debug", "ark-core-rpc.exe"),
-  };
-};
 const startEngine = async (engine: string, ark: string, dataDir: string) => {
   const child = spawn(engine, [], {
     env: {

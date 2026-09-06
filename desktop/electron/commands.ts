@@ -80,7 +80,7 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Просмотр объектов ARK",
     category: "open",
     kind: "command",
-    appName: "CosCast",
+    appName: "Kosmos",
     exec: () => openDashboardWindow(),
   },
   {
@@ -89,7 +89,7 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Развитие и нагрузка на мышцы",
     category: "open",
     kind: "command",
-    appName: "CosCast",
+    appName: "Kosmos",
     exec: () => openDashboardWindow("body"),
   },
   {
@@ -98,7 +98,7 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Граф объектов ARK",
     category: "open",
     kind: "command",
-    appName: "CosCast",
+    appName: "Kosmos",
     exec: () => openHostedApp("com.kosmos.graph"),
   },
   {
@@ -107,7 +107,7 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Таймер, задача и блокировка отвлечений",
     category: "open",
     kind: "command",
-    appName: "CosCast",
+    appName: "Kosmos",
     keepsLauncherOpen: true,
     exec: () => openFocusSessionShell(),
   },
@@ -117,7 +117,7 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Начать новую сессию или завершить текущую",
     category: "action",
     kind: "command",
-    appName: "CosCast",
+    appName: "Kosmos",
     exec: () => toggleFocusSessionCommand(),
   },
   {
@@ -126,7 +126,7 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Временно остановить текущую фокус-сессию",
     category: "action",
     kind: "command",
-    appName: "CosCast",
+    appName: "Kosmos",
     exec: async () => {
       await pauseFocusSessionCommand();
     },
@@ -137,7 +137,7 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Вернуться к текущей фокус-сессии",
     category: "action",
     kind: "command",
-    appName: "CosCast",
+    appName: "Kosmos",
     exec: async () => {
       await resumeFocusSessionCommand();
     },
@@ -148,7 +148,7 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Перейти к следующей фазе pomodoro",
     category: "action",
     kind: "command",
-    appName: "CosCast",
+    appName: "Kosmos",
     exec: async () => {
       await skipFocusSessionCommand();
     },
@@ -159,7 +159,7 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Остановить текущую фокус-сессию",
     category: "action",
     kind: "command",
-    appName: "CosCast",
+    appName: "Kosmos",
     exec: async () => {
       await stopFocusSessionCommand();
     },
@@ -170,26 +170,26 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Начать или остановить голосовой ввод",
     category: "action",
     kind: "command",
-    appName: "CosCast",
+    appName: "Kosmos",
     shortcut: () => resolveDictationShortcut(),
     exec: () => toggleDictation(),
   },
   {
     id: "settings:open",
     title: "Открыть настройки",
-    subtitle: "CosCast",
+    subtitle: "Kosmos",
     category: "open",
     kind: "command",
-    appName: "CosCast",
+    appName: "Kosmos",
     exec: () => openSettings(),
   },
   {
     id: "kepler:check-updates",
     title: "Проверить обновления",
-    subtitle: "CosCast и расширения",
+    subtitle: "Kosmos и расширения",
     category: "open",
     kind: "command",
-    appName: "CosCast",
+    appName: "Kosmos",
     exec: () => runCheckUpdates(),
   },
 ];

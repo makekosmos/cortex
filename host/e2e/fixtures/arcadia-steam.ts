@@ -34,10 +34,24 @@ export function createArcadiaFixtures(dataDir: string) {
   return { fakeExe, hostileSteam: { root, marker, appId } };
 }
 
+const waitForArcadiaReady = async (page: Page): Promise<void> => {
+  await expect
+    .poll(
+      async () => {
+        const result = await page.evaluate(() => window.kosmosApp.ark.request("games.list", {}));
+        // SAFETY: readiness reads only the optional boolean `ok` field from the IPC envelope.
+        return (result as { ok?: unknown } | null)?.ok === true;
+      },
+      { timeout: 30_000, intervals: [250, 500, 1_000] },
+    )
+    .toBe(true);
+};
+
 export async function expectHostileSteamRejected(
   page: Page,
   fixture: ReturnType<typeof createArcadiaFixtures>["hostileSteam"],
 ) {
+  await waitForArcadiaReady(page);
   const result = await page.evaluate(
     async ({ root, title }) => {
       const scan = await window.kosmosApp.ark.request("games.scan", {

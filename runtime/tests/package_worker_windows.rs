@@ -28,6 +28,9 @@ use sha2::{Digest, Sha256};
 use zip::{write::FileOptions, ZipWriter};
 
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+// The crash reporter installs a process-global hook, so its test directory
+// must outlive the test that installs it.
+static CRASH_TEST_ROOT: OnceLock<tempfile::TempDir> = OnceLock::new();
 
 struct FixtureEnv<'a> {
     _lock: MutexGuard<'a, ()>,
@@ -871,7 +874,10 @@ async fn secret_bearing_worker_failure_is_redacted_end_to_end() {
 
     // A real crash artifact must preserve only bounded metadata, never the
     // worker's panic payload or user data.
-    let crash_root = directory.path().join("crash-data");
+    let crash_root = CRASH_TEST_ROOT
+        .get_or_init(|| tempfile::tempdir().expect("crash data directory"))
+        .path()
+        .to_path_buf();
     kepler_backend::crash_reporter::install(
         crash_root.clone(),
         "00000000-0000-4000-8000-000000000001".into(),

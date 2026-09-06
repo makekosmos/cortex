@@ -50,9 +50,15 @@ import { clearExtensionWindowIpcState, registerExtensionWindowIpc } from "./exte
 import { registerExtensionArkIpc } from "./extension-ark-ipc";
 import { registerExtensionImageColorIpc } from "./extension-image-color-ipc";
 import { registerExtensionBookMetadataIpc } from "./extension-book-metadata-ipc";
-import { isNativeExtensionRunning, openNativeExtension } from "./extension-native-runner";
+import {
+  isNativeExtensionRunning,
+  openNativeExtension,
+  stopNativeExtension,
+} from "./extension-native-runner";
 import { openExtensionBrowserWindow } from "./extension-browser-window";
 import type { JsonValue } from "./extension-permissions";
+import { assertLegacyLaunchAllowed } from "./legacy-migration-journal";
+import { keplerDataDir } from "./data-dir";
 
 export { setExtensionArkBridge, setExtensionArkBridgeReadyTimeoutMs } from "./extension-ark-ipc";
 
@@ -95,6 +101,25 @@ export function isExtensionRunning(id: string): boolean {
   return Array.from(extensionWindows.values()).some(
     (entry) => entry.id === id && !entry.win.isDestroyed(),
   );
+}
+
+export async function stopExtension(id: string): Promise<void> {
+  await stopNativeExtension(id);
+  for (const [windowKey, entry] of extensionWindows) {
+    if (entry.id !== id || entry.win.isDestroyed()) continue;
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error(`extension window '${id}' did not close`)),
+        1000,
+      );
+      entry.win.once("closed", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      entry.win.destroy();
+    });
+    extensionWindows.delete(windowKey);
+  }
 }
 
 /**
@@ -173,6 +198,7 @@ async function openExtensionImpl(
   windowKey = id,
   profile: ExtensionWindowProfile = "default",
 ): Promise<void> {
+  assertLegacyLaunchAllowed(keplerDataDir(), id);
   const manifest = loadExtensionManifest(id);
   if (!manifest) {
     console.warn(`[kepler-shell] extension not found: ${id}`);

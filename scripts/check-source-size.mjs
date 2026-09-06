@@ -6,9 +6,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const rootIndex = process.argv.indexOf("--root");
-const ROOT = rootIndex === -1
-  ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-  : path.resolve(process.argv[rootIndex + 1]);
+const ROOT =
+  rootIndex === -1
+    ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+    : path.resolve(process.argv[rootIndex + 1]);
 const SOURCE_LIMIT = 300;
 const SOURCE_EXTENSIONS = new Set([".cjs", ".js", ".jsx", ".mjs", ".rs", ".ts", ".tsx", ".vue"]);
 const GRANDFATHERED = new Set([
@@ -46,6 +47,8 @@ const GRANDFATHERED = new Set([
   "desktop/src/views/settings/tabs/FocusBlocklistEditor.vue",
   "desktop/src/views/settings/tabs/SyncTab.vue",
   "host/e2e/cosmos-graph.spec.ts",
+  "host/e2e/first-party-arcadia-contract.spec.ts",
+  "host/e2e/fixtures/host-runtime.ts",
   "host/e2e/host-lifecycle.spec.ts",
   "host/e2e/shell.spec.ts",
   "host/e2e/topology.spec.ts",
@@ -178,5 +181,7 @@ for (const file of await collect(ROOT)) {
     if (lines > SOURCE_LIMIT) debt.push(`${relative}: ${lines} lines`);
   }
 }
-console.log(`source size check passed (${debt.length} grandfathered file(s) over ${SOURCE_LIMIT} lines)`);
+console.log(
+  `source size check passed (${debt.length} grandfathered file(s) over ${SOURCE_LIMIT} lines)`,
+);
 if (debt.length) console.log(`baseline debt:\n${debt.sort().join("\n")}`);

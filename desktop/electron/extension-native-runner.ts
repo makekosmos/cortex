@@ -10,6 +10,8 @@ import {
   resolveExtensionDir,
   type ExtensionManifest,
 } from "./extension-manifest";
+import { keplerDataDir } from "./data-dir";
+import { assertLegacyLaunchAllowed } from "./legacy-migration-journal";
 
 interface NativeExtensionEntry {
   child: ChildProcess;
@@ -96,11 +98,28 @@ export function isNativeExtensionRunning(id: string): boolean {
   return !!native && !native.child.killed && native.child.exitCode === null;
 }
 
+export async function stopNativeExtension(id: string): Promise<void> {
+  const entry = nativeExtensions.get(id);
+  if (!entry || entry.child.exitCode !== null || entry.child.killed) return;
+  entry.child.kill();
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`native extension '${id}' did not stop`)),
+      1000,
+    );
+    entry.child.once("exit", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
 export async function openNativeExtension(
   id: string,
   manifest: ExtensionManifest,
   route: string | undefined,
 ): Promise<void> {
+  assertLegacyLaunchAllowed(keplerDataDir(), id);
   const singleInstance = manifest.native?.singleInstance !== false;
   const existing = nativeExtensions.get(id);
   if (existing && existing.child.exitCode === null && !existing.child.killed) return;

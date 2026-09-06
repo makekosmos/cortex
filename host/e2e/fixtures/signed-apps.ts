@@ -19,8 +19,15 @@ type SignedApps = {
 };
 const command = (file: string, args: string[], cwd: string) =>
   execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe" });
-const cortexRoot = (repositoryRoot: string) =>
-  path.basename(repositoryRoot) === "cortex" ? repositoryRoot : path.join(repositoryRoot, "cortex");
+const cortexRoot = (repositoryRoot: string) => {
+  const roots = [repositoryRoot, path.join(repositoryRoot, "cortex")];
+  const root = roots.find((candidate) =>
+    fs.existsSync(path.join(candidate, "desktop", "scripts", "package-sign.mjs")),
+  );
+  if (root === undefined)
+    throw new Error("Could not locate Cortex desktop/scripts/package-sign.mjs");
+  return root;
+};
 const ps = (value: string) => `'${value.replaceAll("'", "''")}'`;
 const zipDirectory = (stage: string, file: string, cwd: string) =>
   command(
