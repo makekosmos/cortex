@@ -11,6 +11,7 @@ pub(super) async fn handle_start_sync(
     auth_secret: Option<String>,
     use_iroh: bool,
     iroh_peer_ticket: Option<String>,
+    discovery_enabled: bool,
 ) -> Result<Value, String> {
     // Idempotency: tear down any running runtime first.
     handle_stop_sync().await;
@@ -97,6 +98,7 @@ pub(super) async fn handle_start_sync(
         auth_secret: auth_secret.clone(),
         use_iroh,
         iroh_peer_ticket: iroh_peer_ticket.clone(),
+        discovery_enabled,
     };
     let relay = if transport_choice == TransportChoice::Relay {
         let relay_url = relay_url.clone().expect("Relay choice implies relay_url");
@@ -246,9 +248,11 @@ pub(super) async fn handle_start_sync(
         }
     }
 
-    // Start beacon discovery.
+    // Start beacon discovery unless explicitly disabled for a ticket-paired
+    // transport that must not bind the shared LAN beacon port.
     let beacon = Arc::new(BroadcastDiscovery::new());
-    let beacon_clone = beacon.clone();
+    if discovery_enabled {
+        let beacon_clone = beacon.clone();
     let server_for_beacon = server.clone();
     let clients_for_beacon = clients.clone();
     let storage_for_beacon = storage.clone();
@@ -344,14 +348,15 @@ pub(super) async fn handle_start_sync(
         }))
         .await;
 
-    beacon_clone
+        beacon_clone
         .start(BroadcastDiscoveryOptions {
             space_id: space_id.clone(),
             device_id: device_id.clone(),
             device_name: device_name.clone(),
             ws_port,
         })
-        .await?;
+            .await?;
+    }
 
     let runtime = SyncRuntime {
         server,
@@ -361,7 +366,7 @@ pub(super) async fn handle_start_sync(
         transport_choice: transport_state,
         start_params,
         iroh_our_ticket,
-        beacon: beacon_clone,
+        beacon,
         space_id,
         device_id,
         device_name,
