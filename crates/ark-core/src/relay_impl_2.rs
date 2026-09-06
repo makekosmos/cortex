@@ -1,6 +1,26 @@
 use crate::integration_replication::SignedSyncEnvelope;
 
 impl RelaySync {
+    /// Route an addressed integration frame through the configured transport.
+    /// Broadcast transports reject this message class; addressed transports
+    /// such as Iroh enforce authenticated recipient and writer-time authority.
+    pub async fn send_signed_integration_frame(
+        &self,
+        frame: SignedSyncEnvelope,
+    ) -> Result<(), String> {
+        self.storage
+            .validate_outbound_signed_integration_frame(
+                &frame,
+                &self.config.space_id,
+                &self.config.device_id,
+            )
+            .await?;
+        let recipient = frame.recipient_node_id.clone();
+        self.transport
+            .send_to(&recipient, LanSyncMessage::SignedIntegrationFrame { frame })
+            .await
+    }
+
     async fn handle_signed_integration_frame(
         &self,
         from_device_id: String,
