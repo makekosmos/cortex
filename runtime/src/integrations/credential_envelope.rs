@@ -78,6 +78,24 @@ pub(crate) async fn receive(
             expected_issuer_key_id,
         )
         .map_err(|_| "Core credential envelope is not V2 HPKE".to_string())?;
+    let current = consumer
+        .lookup_issuer_encryption_key(&json!({
+            "space_id": space_id,
+            "integration_id": integration_id,
+            "recipient_node_id": recipient_node_id,
+            "issuer_node_id": issuer_node_id,
+            "credential_generation": credential_generation,
+            "expected_issuer_key_id": expected_issuer_key_id,
+        }))
+        .await
+        .map_err(|_| "Core issuer key revalidation rejected".to_string())?;
+    if current.get("grant_epoch").and_then(Value::as_u64) != Some(grant_epoch)
+        || current.get("key_id").and_then(Value::as_str) != Some(expected_issuer_key_id)
+        || current.get("status").and_then(Value::as_str) != Some("active")
+        || current.get("grant_status").and_then(Value::as_str) != Some("active")
+    {
+        return Err("Core issuer key changed before credential store".to_string());
+    }
     crate::package_service::credential_envelope::decrypt_and_store(
         &envelope,
         &expected,
@@ -98,6 +116,7 @@ pub(crate) async fn receive(
 }
 
 pub(crate) async fn publish(params: &Value, ark: &ArkHost) -> Result<Value, String> {
+    let space_id = required(params, "space_id")?;
     let integration_id = required(params, "integration_id")?;
     let package_version = required(params, "package_version")?;
     let setting = required(params, "setting")?;
@@ -116,6 +135,25 @@ pub(crate) async fn publish(params: &Value, ark: &ArkHost) -> Result<Value, Stri
         setting,
     )
     .ok_or("credential is not stored locally")?;
+    let lookup = super::replication_consumer::ReplicationConsumer::new(ark)
+        .lookup_issuer_encryption_key(&json!({
+            "space_id": space_id,
+            "integration_id": integration_id,
+            "recipient_node_id": recipient_node_id,
+            "issuer_node_id": issuer_node_id,
+            "credential_generation": credential_generation,
+            "expected_issuer_key_id": issuer.key_id,
+        }))
+        .await
+        .map_err(|_| "Core issuer key lookup rejected".to_string())?;
+    if lookup.get("key_id").and_then(Value::as_str) != Some(issuer.key_id.as_str())
+        || lookup.get("encryption_public_key").and_then(Value::as_str)
+            != Some(issuer.public_key.as_str())
+        || lookup.get("status").and_then(Value::as_str) != Some("active")
+        || lookup.get("grant_status").and_then(Value::as_str) != Some("active")
+    {
+        return Err("local issuer key is not the authorized Core key".to_string());
+    }
     let context = crate::package_service::credential_envelope::CredentialContext {
         integration_id: integration_id.to_owned(),
         recipient_node_id: recipient_node_id.to_owned(),
