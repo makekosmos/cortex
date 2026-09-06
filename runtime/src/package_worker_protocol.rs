@@ -383,7 +383,12 @@ fn valid_worker_operation_scope(scope: &str) -> bool {
 
 fn normalize_origin(value: &str) -> Result<String, GrantError> {
     let u = Url::parse(value).map_err(|_| GrantError::InvalidScope)?;
-    if u.scheme() != "https"
+    if (u.scheme() != "https"
+        && !(cfg!(feature = "package-worker-fixture")
+            && u.scheme() == "http"
+            && u.host_str()
+                .and_then(|host| host.parse::<std::net::IpAddr>().ok())
+                .is_some_and(|ip| ip.is_loopback())))
         || u.username() != ""
         || u.password().is_some()
         || u.fragment().is_some()
@@ -396,14 +401,20 @@ fn normalize_origin(value: &str) -> Result<String, GrantError> {
         .host_str()
         .ok_or(GrantError::InvalidScope)?
         .to_ascii_lowercase();
+    let local_test_origin = cfg!(feature = "package-worker-fixture")
+        && u.scheme() == "http"
+        && host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback());
     if host == "localhost"
         || host.ends_with(".localhost")
-        || host
-            .trim_start_matches('[')
-            .trim_end_matches(']')
-            .parse::<std::net::IpAddr>()
-            .map(|ip| is_private(ip))
-            .unwrap_or(false)
+        || (!local_test_origin
+            && host
+                .trim_start_matches('[')
+                .trim_end_matches(']')
+                .parse::<std::net::IpAddr>()
+                .map(is_private)
+                .unwrap_or(false))
     {
         return Err(GrantError::InvalidScope);
     }
