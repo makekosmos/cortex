@@ -136,12 +136,11 @@ pub(crate) async fn publish(params: &Value, ark: &ArkHost) -> Result<Value, Stri
     )
     .ok_or("credential is not stored locally")?;
     let lookup = super::replication_consumer::ReplicationConsumer::new(ark)
-        .lookup_issuer_encryption_key(&json!({
+        .lookup_issuer_encryption_key_for_publish(&json!({
             "space_id": space_id,
             "integration_id": integration_id,
             "recipient_node_id": recipient_node_id,
             "issuer_node_id": issuer_node_id,
-            "credential_generation": credential_generation,
             "expected_issuer_key_id": issuer.key_id,
         }))
         .await
