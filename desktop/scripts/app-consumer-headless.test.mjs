@@ -113,6 +113,7 @@ try {
         legacy_id: app.legacyId,
         settings: { theme: "dark", preserve: app.legacyId },
         unknownSettingsField: { preserve: app.legacyId },
+        records: [{ id: `${app.legacyId}-record`, value: "preserve" }],
       }) + "\n",
     );
   }
@@ -142,6 +143,7 @@ try {
 
   const packages = await requestPackages(running);
   const installedBeforeRestart = await requestStoreInstalled(running);
+  const canonicalStateBeforeRestart = new Map();
   for (const app of upgradeApps.items) {
     const active = packages.filter((row) => row.id === app.id && row.enabled === true);
     if (active.length !== 1 || active[0].version !== app.version)
@@ -153,6 +155,9 @@ try {
       throw new Error(`${app.id}: user settings were not preserved`);
     if (migrated.unknownSettingsField?.preserve !== app.legacyId)
       throw new Error(`${app.id}: unknown settings were not preserved`);
+    if (migrated.records?.[0]?.id !== `${app.legacyId}-record`)
+      throw new Error(`${app.id}: opaque record identity was not preserved`);
+    canonicalStateBeforeRestart.set(app.id, JSON.stringify(migrated));
     const journal = JSON.parse(
       await readFile(
         path.join(upgradeDataDir, "legacy-migrations", "v1", app.id, "journal.json"),
@@ -184,6 +189,14 @@ try {
   }
   if (JSON.stringify(installedAfterRestart) !== JSON.stringify(installedBeforeRestart))
     throw new Error("restart changed canonical package grants or registry records");
+  for (const app of upgradeApps.items) {
+    const restartedState = await readFile(
+      path.join(upgradeDataDir, "extensions-data", app.id, "state.json"),
+      "utf8",
+    );
+    if (JSON.stringify(JSON.parse(restartedState)) !== canonicalStateBeforeRestart.get(app.id))
+      throw new Error(`${app.id}: restart changed canonical data records or identities`);
+  }
   console.log("existing-user Agenda/Memoria/Arcadia upgrade passed across restart");
 } finally {
   if (running) await stopBackend(running);
