@@ -34,6 +34,45 @@ pub async fn handle_operation(
     packages: &crate::package_service::PackageService,
 ) -> Result<Value, String> {
     match subop {
+        "replication_authorize_node" | "replication_revoke_node" | "replication_rotate_node" => {
+            let operation = subop
+                .strip_prefix("replication_")
+                .ok_or("invalid replication operation")?;
+            let node = params.get("node").ok_or("node is required")?;
+            if !node.is_object() {
+                return Err("node must be an object".into());
+            }
+            let grant = params.get("grant");
+            if grant.is_some_and(|value| !value.is_object()) {
+                return Err("grant must be an object".into());
+            }
+            let device_id = params
+                .get("device_id")
+                .and_then(Value::as_str)
+                .filter(|id| !id.is_empty())
+                .ok_or("device_id is required")?;
+            super::replication_consumer::ReplicationConsumer::new(ark)
+                .persist_node_authorization(operation, node, grant, device_id)
+                .await
+                .map(|_| json!({ "accepted": true }))
+                .map_err(|_| "Core node authorization rejected".to_string())
+        }
+        "replication_persist_grant" => {
+            let grant = params.get("grant").ok_or("grant is required")?;
+            if !grant.is_object() {
+                return Err("grant must be an object".into());
+            }
+            let device_id = params
+                .get("device_id")
+                .and_then(Value::as_str)
+                .filter(|id| !id.is_empty())
+                .ok_or("device_id is required")?;
+            super::replication_consumer::ReplicationConsumer::new(ark)
+                .persist_integration_grant(grant, device_id)
+                .await
+                .map(|_| json!({ "accepted": true }))
+                .map_err(|_| "Core integration grant rejected".to_string())
+        }
         "list" => snapshot(data_dir, packages),
         "login_contract" => packages
             .integration_login_contract(provider_id(&params)?)
