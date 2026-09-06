@@ -7,6 +7,7 @@ use std::path::Path;
 mod body;
 mod config;
 mod handler;
+mod replication_consumer;
 
 pub(crate) use body::body_snapshot;
 pub(crate) use config::{mutate_config, read_config};
