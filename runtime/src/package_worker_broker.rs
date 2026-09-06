@@ -268,7 +268,11 @@ pub async fn fetch_with_secret_json(
         let addr = addrs
             .into_iter()
             .find(|a| {
-                (config.allow_local_test_origin && a.ip().is_loopback()) || !is_blocked_ip(a.ip())
+                #[cfg(feature = "package-worker-fixture")]
+                if config.allow_local_test_origin && a.ip().is_loopback() {
+                    return true;
+                }
+                !is_blocked_ip(a.ip())
             })
             .ok_or_else(|| BrokerError::Invalid("host resolves to blocked address".into()))?;
         let client = reqwest::Client::builder()
@@ -764,10 +768,18 @@ pub fn poll_metadata(
 fn validate_url(config: &BrokerConfig, raw: &str) -> Result<reqwest::Url, BrokerError> {
     let url = reqwest::Url::parse(raw).map_err(|e| BrokerError::Invalid(e.to_string()))?;
     if (url.scheme() != "https"
-        && !(cfg!(feature = "package-worker-fixture")
-            && config.allow_local_test_origin
-            && url.scheme() == "http"
-            && url.host_str().is_some_and(is_loopback_host)))
+        && !(cfg!(feature = "package-worker-fixture") && {
+            #[cfg(feature = "package-worker-fixture")]
+            {
+                config.allow_local_test_origin
+                    && url.scheme() == "http"
+                    && url.host_str().is_some_and(is_loopback_host)
+            }
+            #[cfg(not(feature = "package-worker-fixture"))]
+            {
+                false
+            }
+        }))
         || url.username() != ""
         || url.password().is_some()
         || url.fragment().is_some()

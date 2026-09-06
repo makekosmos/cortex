@@ -88,6 +88,7 @@ fn main() {
     let (stop_tx, stop_rx) = std::sync::mpsc::channel();
     let (result_tx, result_rx) = std::sync::mpsc::channel();
     let (invoke_tx, invoke_rx) = std::sync::mpsc::channel();
+    let (run_tx, run_rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let stdin = std::io::stdin();
         for line in stdin.lock().lines().map_while(Result::ok) {
@@ -102,6 +103,9 @@ fn main() {
                     }
                     Some("worker.invoke") => {
                         let _ = invoke_tx.send(value);
+                    }
+                    Some("worker.run") => {
+                        let _ = run_tx.send(value);
                     }
                     _ => {}
                 }
@@ -144,22 +148,7 @@ fn main() {
         .as_str()
         .unwrap_or_default()
         .to_owned();
-    let mut provider_call_id = if fake_provider {
-        let id = "fake-provider-fetch-1";
-        let call = json!({
-            "method": "worker.call",
-            "id": id,
-            "generation": bootstrap["generation"],
-            "token": bootstrap["token"],
-            "operation": "network.fetch",
-            "params": {"url": provider_url, "secret_handle": secret_handle}
-        });
-        writeln!(out, "{call}").ok();
-        out.flush().ok();
-        Some(id)
-    } else {
-        None
-    };
+    let mut provider_call_id = None;
     loop {
         if stop_rx.try_recv().is_ok() {
             return;
@@ -173,6 +162,20 @@ fn main() {
             });
             writeln!(out, "{result}").ok();
             out.flush().ok();
+        }
+        if fake_provider && provider_call_id.is_none() && run_rx.try_recv().is_ok() {
+            let id = "fake-provider-fetch-1";
+            let call = json!({
+                "method": "worker.call",
+                "id": id,
+                "generation": bootstrap["generation"],
+                "token": bootstrap["token"],
+                "operation": "network.fetch",
+                "params": {"url": provider_url, "secret_handle": secret_handle}
+            });
+            writeln!(out, "{call}").ok();
+            out.flush().ok();
+            provider_call_id = Some(id);
         }
         if let Some(id) = provider_call_id {
             if let Ok(result) = result_rx.try_recv() {
