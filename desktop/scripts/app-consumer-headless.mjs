@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
+import { createLegacyMigrationRunner } from "../electron/legacy-migration-runtime.ts";
 
 const catalogFixture = path.resolve(
   process.env.KOSMOS_HEADLESS_CATALOG_FIXTURE ??
@@ -112,6 +113,55 @@ export async function runConsumer(app, running) {
   return request;
 }
 
+export async function runExistingUserUpgrade(apps, running, { install = true } = {}) {
+  const request = client(
+    JSON.parse(await readFile(path.join(running.dataDir, "engine.lock.json"), "utf8")),
+  );
+  const fixtureRoot = path.resolve(apps.catalogFixture);
+  const fixture = JSON.parse(
+    await readFile(path.join(fixtureRoot, "catalog-apply-request.json"), "utf8"),
+  );
+  const catalog = JSON.parse(fixture.document);
+  if (catalog.schema_version !== 1 || catalog.sequence !== apps.catalogSequence)
+    throw new Error(`upgrade: unexpected signed catalog sequence`);
+  if (install) {
+    const applied = await request("packages.catalog_apply", {
+      document: fixture.document,
+      signatures: fixture.signatures,
+    });
+    assertEnvelope(applied, "upgrade catalog_apply");
+    if (!applied.ok && !String(applied.error ?? "").includes("replay-rejected"))
+      throw new Error(`upgrade: catalog rejected ${JSON.stringify(applied)}`);
+
+    for (const app of apps.items) {
+      const entry = catalog.packages.find((item) => item.manifest.id === app.id);
+      if (!entry || entry.manifest.version !== app.version || entry.sha256 !== app.sha256)
+        throw new Error(`${app.id}: signed catalog mismatch`);
+      const installed = await request("packages.install", {
+        id: app.id,
+        version: app.version,
+        archive_path: app.archive,
+      });
+      assertEnvelope(installed, `${app.id} replacement install`);
+      if (!installed.ok) throw new Error(`${app.id}: replacement rejected`);
+    }
+  }
+
+  const runner = createLegacyMigrationRunner(
+    running.dataDir,
+    {
+      invokeOperation: async ({ operation, params = {} }) => {
+        const response = await request(operation, params);
+        if (!response.ok) throw new Error(`${operation}: ${response.message ?? response.error}`);
+        return response.data;
+      },
+    },
+    async () => {},
+  );
+  await runner.run();
+  return request;
+}
+
 export async function runDictation(request) {
   const config = {
     hotkey: "Ctrl+Shift:;",
@@ -140,8 +190,8 @@ export async function runDictation(request) {
   console.log("dictation consumer boundary cases passed");
 }
 
-export async function startBackend(app) {
-  const dataDir = path.join(root, app.id);
+export async function startBackend(app, requestedDataDir) {
+  const dataDir = requestedDataDir ?? path.join(root, app.id);
   await mkdir(dataDir, { recursive: true });
   const env = {
     ...process.env,
