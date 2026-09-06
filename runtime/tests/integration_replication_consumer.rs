@@ -148,22 +148,22 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
     let space_id = "integration-replication-headless";
     let auth_secret = "headless-two-node-auth-secret";
     start_iroh_sync(
-        &recipient,
-        space_id,
-        &setup.recipient.node_id,
-        free_loopback_port(),
-        auth_secret,
-        None,
-    )
-    .await;
-    let recipient_ticket = own_iroh_ticket(&recipient).await;
-    start_iroh_sync(
         &origin,
         space_id,
         &setup.origin.node_id,
         free_loopback_port(),
         auth_secret,
-        Some(&recipient_ticket),
+        None,
+    )
+    .await;
+    let origin_ticket = own_iroh_ticket(&origin).await;
+    start_iroh_sync(
+        &recipient,
+        space_id,
+        &setup.recipient.node_id,
+        free_loopback_port(),
+        auth_secret,
+        Some(&origin_ticket),
     )
     .await;
     wait_for_peer(&recipient, &setup.origin.node_id).await;
