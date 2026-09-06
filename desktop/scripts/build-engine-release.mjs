@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { copyEngineManifest, copyEngineRelease } from "./engine-distribution.mjs";
+import { cleanBuildIntermediates } from "./runtime-staging.mjs";
 
 const shellRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const version = process.env.KOSMOS_ENGINE_VERSION;
@@ -21,3 +22,4 @@ const result = spawnSync(process.execPath, [path.join(shellRoot, "scripts", "bui
 if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1);
 copyEngineRelease(shellRoot, version);
 copyEngineManifest(shellRoot, version);
+cleanBuildIntermediates(shellRoot);
