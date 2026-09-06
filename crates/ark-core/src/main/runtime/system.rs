@@ -97,6 +97,7 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             auth_secret,
             use_iroh,
             iroh_peer_ticket,
+            discovery_enabled,
         } => {
             handle_start_sync(
                 space_id,
@@ -109,6 +110,7 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
                 auth_secret,
                 use_iroh,
                 iroh_peer_ticket,
+                discovery_enabled,
             )
             .await
         }
@@ -152,4 +154,3 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
         _ => unreachable!("request routed to the wrong runtime handler"),
     }
 }
-

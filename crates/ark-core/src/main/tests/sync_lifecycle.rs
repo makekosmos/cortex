@@ -55,6 +55,7 @@ use super::*;
                 auth_secret: None,
                 use_iroh: false,
                 iroh_peer_ticket: None,
+                discovery_enabled: true,
             },
             iroh_our_ticket: None,
             beacon: Arc::new(ark_core::beacon::BroadcastDiscovery::new()),

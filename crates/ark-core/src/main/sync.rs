@@ -159,6 +159,7 @@ async fn handle_start_sync_with_params(params: SyncStartParams) -> Result<Value,
         params.auth_secret,
         params.use_iroh,
         params.iroh_peer_ticket,
+        params.discovery_enabled,
     )
     .await
 }

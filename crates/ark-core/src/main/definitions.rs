@@ -20,6 +20,11 @@ struct SyncStartParams {
     auth_secret: Option<String>,
     use_iroh: bool,
     iroh_peer_ticket: Option<String>,
+    discovery_enabled: bool,
+}
+
+fn default_discovery_enabled() -> bool {
+    true
 }
 
 struct SyncRuntime {
@@ -361,6 +366,9 @@ enum Request {
         /// `iroh_transport::IrohTransport::our_ticket`/`from_ticket`).
         #[serde(default)]
         iroh_peer_ticket: Option<String>,
+        /// Whether to start LAN beacon discovery. Defaults to true for compatibility.
+        #[serde(default = "default_discovery_enabled")]
+        discovery_enabled: bool,
     },
     StopSync,
     BroadcastChange {
