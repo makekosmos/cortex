@@ -11,19 +11,23 @@ function Get-EngineSha256([string]$Path) {
   try { return ([BitConverter]::ToString($sha.ComputeHash([IO.File]::ReadAllBytes($Path))) -replace '-', '').ToLowerInvariant() }
   finally { $sha.Dispose() }
 }
+function Test-TrustedReleaseUrl([string]$Value) {
+  return $Value -match '^https://github\.com/makekosmos/desktop/releases/(latest/download/|download/v[^/]+/)'
+}
 $expected = Get-Content -Raw -LiteralPath $Manifest | ConvertFrom-Json
 if ($expected.schema_version -ne 1 -or $expected.product -ne 'kosmos-engine') { throw 'invalid engine manifest' }
+if (-not (Test-TrustedReleaseUrl $expected.url)) { throw 'engine archive URL is not the trusted release publisher' }
 $metadataTemp = Join-Path ([IO.Path]::GetTempPath()) ("kosmos-engine-manifest.$PID.json")
 trap { Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $metadataTemp; throw }
 if ($expected.channel_url -and -not (Test-Path -LiteralPath $Archive)) {
-  if ($expected.channel_url -notmatch '^https://') { throw 'engine metadata URL must use HTTPS' }
+  if (-not (Test-TrustedReleaseUrl $expected.channel_url) -or $expected.channel_url -notmatch '/latest/download/Kosmos-Engine-manifest\.json$') { throw 'engine metadata URL is not the trusted release channel' }
   Invoke-WebRequest -Uri $expected.channel_url -OutFile $metadataTemp -UseBasicParsing
   $expected = Get-Content -Raw -LiteralPath $metadataTemp | ConvertFrom-Json
-  if ($expected.schema_version -ne 1 -or $expected.product -ne 'kosmos-engine' -or $expected.url -notmatch '^https://') { throw 'invalid latest engine manifest' }
+  if ($expected.schema_version -ne 1 -or $expected.product -ne 'kosmos-engine' -or -not (Test-TrustedReleaseUrl $expected.url)) { throw 'invalid latest engine manifest' }
 }
 if (-not (Test-Path -LiteralPath $Archive)) {
   if ([string]::IsNullOrWhiteSpace($Url)) { $Url = $expected.url }
-  if ($Url -notmatch '^https://') { throw 'engine download URL must use HTTPS' }
+  if (-not (Test-TrustedReleaseUrl $Url)) { throw 'engine download URL is not the trusted release publisher' }
   New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Archive) | Out-Null
   Invoke-WebRequest -Uri $Url -OutFile $Archive -UseBasicParsing
 }

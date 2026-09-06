@@ -23,7 +23,7 @@ function fixture() {
   const archive = path.join(root, "engine.zip");
   const manifest = buildEngineArchive(release, archive, {
     version: "1.2.3",
-    url: "https://example.invalid/engine.zip",
+    url: "https://github.com/makekosmos/desktop/releases/download/v1.2.3/engine.zip",
   });
   const manifestPath = path.join(root, "manifest.json");
   writeFileSync(manifestPath, JSON.stringify(manifest));
@@ -83,6 +83,17 @@ test("GUI dependency installs absent engine and reuses present engine", () => {
 test("untrusted engine archive blocks GUI dependency install", () => {
   const f = fixture();
   writeFileSync(f.archive, "tampered");
+  const result = runInstall(f);
+  assert.notEqual(result.status, 0);
+  assert.equal(existsSync(path.join(f.root, "installed")), false);
+});
+
+test("untrusted engine publisher metadata blocks GUI dependency install", () => {
+  const f = fixture();
+  writeFileSync(
+    f.manifestPath,
+    JSON.stringify({ ...f.manifest, url: "https://evil.example/engine.zip" }),
+  );
   const result = runInstall(f);
   assert.notEqual(result.status, 0);
   assert.equal(existsSync(path.join(f.root, "installed")), false);
