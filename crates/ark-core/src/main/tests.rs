@@ -516,4 +516,55 @@ mod tests {
         let error = handle_request(acquire(0)).await.unwrap_err();
         assert!(error.contains("expected_fencing_token"));
     }
+
+    #[tokio::test]
+    async fn integration_issuer_key_lookup_rejects_wrong_space() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        handle_request(Request::Init {
+            db_path: dir.path().join("ark.db").to_string_lossy().into_owned(),
+        })
+        .await
+        .unwrap();
+        setup_sync_with_capturing_transport(get_shared_conn().unwrap()).await;
+
+        let error = handle_request(Request::IntegrationLookupIssuerEncryptionKey {
+            space_id: "wrong-space".into(),
+            integration_id: "integration-a".into(),
+            recipient_node_id: "recipient".into(),
+            issuer_node_id: "issuer".into(),
+            credential_generation: 1,
+            expected_issuer_key_id: "sha256:issuer".into(),
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(error, "integration lookup requested for the wrong space");
+        *SYNC.lock().await = None;
+    }
+
+    #[test]
+    fn integration_issuer_key_lookup_uses_the_versioned_wire_shape() {
+        let request: Request = serde_json::from_value(json!({
+            "operation": "integration.lookup_issuer_encryption_key",
+            "space_id": "space-a",
+            "integration_id": "integration-a",
+            "recipient_node_id": "node-a",
+            "issuer_node_id": "node-b",
+            "credential_generation": 3,
+            "expected_issuer_key_id": "sha256:issuer"
+        }))
+        .unwrap();
+        assert!(matches!(
+            request,
+            Request::IntegrationLookupIssuerEncryptionKey {
+                credential_generation: 3,
+                ..
+            }
+        ));
+        assert!(serde_json::from_value::<Request>(json!({
+            "operation": "integration.lookup_issuer_encryption_key",
+            "spaceId": "space-a"
+        }))
+        .is_err());
+    }
 }

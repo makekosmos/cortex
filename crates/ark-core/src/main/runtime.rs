@@ -451,6 +451,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         | Request::IntegrationAcquireRefreshLease { .. }
         | Request::IntegrationPublishCredentialEnvelope { .. }
         | Request::IntegrationLoadLatestCredentialEnvelope { .. }
+        | Request::IntegrationLookupIssuerEncryptionKey { .. }
         | Request::IntegrationVerificationStatus { .. }) => {
             runtime_integration::handle(request).await
         }

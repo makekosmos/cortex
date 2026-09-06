@@ -32,6 +32,24 @@ pub struct IntegrationVerificationStatus {
     pub ready_for_refresh: bool,
 }
 
+/// Trusted issuer key material for decrypting one addressed credential
+/// envelope. No ciphertext or credential data crosses this read contract.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct IssuerEncryptionKey {
+    pub schema_version: u8,
+    pub space_id: String,
+    pub integration_id: String,
+    pub recipient_node_id: String,
+    pub issuer_node_id: String,
+    pub encryption_public_key: String,
+    pub key_id: String,
+    pub status: NodeStatus,
+    pub grant_status: GrantStatus,
+    pub grant_epoch: u64,
+    pub credential_generation: u64,
+}
+
 impl IntegrationRefreshLease {
     pub fn validate(&self) -> Result<(), IntegrationContractError> {
         require_text(&self.integration_id, "integration_id")?;

@@ -449,6 +449,15 @@ enum Request {
         integration_id: String,
         recipient_node_id: String,
     },
+    #[serde(rename = "integration.lookup_issuer_encryption_key")]
+    IntegrationLookupIssuerEncryptionKey {
+        space_id: String,
+        integration_id: String,
+        recipient_node_id: String,
+        issuer_node_id: String,
+        credential_generation: u64,
+        expected_issuer_key_id: String,
+    },
     #[serde(rename = "integration.verification_status")]
     IntegrationVerificationStatus {
         integration_id: String,
