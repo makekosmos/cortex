@@ -1,4 +1,13 @@
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import {
+  closeSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 export const RUNTIME_BINARIES = [
@@ -7,6 +16,38 @@ export const RUNTIME_BINARIES = [
   "kepler-focus-helper",
   "kepler-focus-svc",
 ];
+
+export function acquireBuildLock(root) {
+  const lock = path.join(root, ".tmp", "build.active.lock");
+  mkdirSync(path.dirname(lock), { recursive: true });
+  if (existsSync(lock)) {
+    let pid = 0;
+    try {
+      pid = Number(readFileSync(lock, "utf8"));
+    } catch {}
+    let active = false;
+    if (pid > 0) {
+      try {
+        process.kill(pid, 0);
+        active = true;
+      } catch {}
+    }
+    if (active) throw new Error(`build already active (pid ${pid})`);
+    rmSync(lock, { force: true });
+  }
+  const fd = openSync(lock, "wx");
+  writeFileSync(fd, String(process.pid));
+  closeSync(fd);
+  return () => rmSync(lock, { force: true });
+}
+
+export function cleanBuildIntermediates(root) {
+  for (const relative of [".tmp/runtime.next", ".tmp/engine.next"]) {
+    const target = path.resolve(root, relative);
+    if (target.startsWith(path.resolve(root) + path.sep))
+      rmSync(target, { recursive: true, force: true });
+  }
+}
 
 export function effectiveCargoTargetDir(shellRoot, repoRoot, configuredTargetDir) {
   return configuredTargetDir

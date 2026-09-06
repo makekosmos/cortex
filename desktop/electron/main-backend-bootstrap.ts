@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { Instance } from "./instance";
 import type { JsonRecord } from "./extension-permissions";
@@ -8,6 +8,27 @@ interface ResolveBackendExeArgs {
   env: NodeJS.ProcessEnv;
   resourcesPath: string;
   platform?: NodeJS.Platform;
+}
+
+function installedEngineBackend(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string | null {
+  const root =
+    env.KOSMOS_ENGINE_ROOT ??
+    (platform === "win32" && env.LOCALAPPDATA
+      ? path.join(env.LOCALAPPDATA, "Kosmos", "Engine")
+      : null);
+  if (!root) return null;
+  try {
+    const pointer = JSON.parse(readFileSync(path.join(root, "current.json"), "utf8"));
+    const backend = path.join(
+      root,
+      "versions",
+      pointer.version,
+      platform === "win32" ? "kepler-backend.exe" : "kepler-backend",
+    );
+    return pointer.schema_version === 1 && existsSync(backend) ? backend : null;
+  } catch {
+    return null;
+  }
 }
 
 export function resolveBackendExe({
@@ -29,6 +50,8 @@ export function resolveBackendExe({
 
   const packaged = path.join(resourcesPath, packagedRuntime);
   if (existsSync(packaged)) return packaged;
+  const installed = installedEngineBackend(env, platform);
+  if (installed) return installed;
   return path.join(resourcesPath, backendBin);
 }
 

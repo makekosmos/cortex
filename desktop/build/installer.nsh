@@ -7,6 +7,15 @@
 ;   - customRemoveFiles — финальная очистка
 
 !macro customInstall
+  ; The GUI package carries the signed standalone engine archive. Install it
+  ; into the shared engine root only when no valid engine is already present.
+  ; The helper exits nonzero on missing, unavailable, or untrusted artifacts;
+  ; aborting here prevents a successful-looking GUI install without its engine.
+  nsExec::ExecToStack '"$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\install-engine.ps1" -Archive "$INSTDIR\resources\Kosmos Engine.zip" -Manifest "$INSTDIR\resources\engine-manifest.json" -TargetRoot "$LOCALAPPDATA\Kosmos\Engine"'
+  Pop $0
+  StrCmp $0 "0" engine_ready
+  Abort "Kosmos Engine installation failed. Kosmos was not installed."
+  engine_ready:
   ; Kosmos is the Shell application. Keep Manager as a separate Kosmos
   ; component and make Windows entry points launch the packaged Shell.
   Delete "$DESKTOP\CosCast.lnk"
@@ -21,10 +30,9 @@
   Delete "$DESKTOP\Kepler.lnk"
   Delete "$SMPROGRAMS\Kepler.lnk"
 
-  ; Engine включён вместе с Windows по умолчанию только на новой установке.
-  ; На update мигрируем только реально включённый legacy Run entry.
+  ; Remove legacy autostart entries. The GUI resolves the shared engine at boot;
+  ; the engine remains independently installed and is never removed here.
   ${ifNot} ${isUpdated}
-    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Kosmos Engine" '"$INSTDIR\resources\Kosmos Runtime.exe" --start'
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Kosmos"
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "com.kazui.kepler"
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Kepler"
@@ -47,7 +55,6 @@
       ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "KosmosKepler"
       StrCmp $0 "" legacy_autostart_cleanup legacy_autostart_present
     legacy_autostart_present:
-      WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Kosmos Engine" '"$INSTDIR\resources\Kosmos Runtime.exe" --start'
     legacy_autostart_cleanup:
       DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Kosmos"
       DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "com.kazui.kepler"
@@ -62,13 +69,6 @@
   Delete "$SMPROGRAMS\CosCast.lnk"
   Delete "$DESKTOP\Kosmos.lnk"
   Delete "$SMPROGRAMS\Kosmos.lnk"
-
-  ; Runtime держится независимо от Electron, поэтому освобождаем executable
-  ; перед update/uninstall.
-  IfFileExists "$INSTDIR\resources\Kosmos Runtime.exe" 0 runtime_stopped
-  nsExec::ExecToLog '"$INSTDIR\resources\Kosmos Runtime.exe" --shutdown'
-  Pop $1
-  runtime_stopped:
 
   ${ifNot} ${isUpdated}
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Kosmos Engine"

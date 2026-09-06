@@ -9,9 +9,9 @@ import { loadReleaseBom } from "./release-bom.mjs";
 import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
 import { bytes, documentHash, writeAtomic } from "./package-release-utils.mjs";
 import { runFirstPartyContracts } from "./first-party-release-contracts.mjs";
+import { copyEngineManifest, copyEngineRelease } from "./engine-distribution.mjs";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SHELL_ROOT = path.resolve(__dirname, "..");
 
 const VALID_PLATFORMS = ["win", "mac"];
@@ -108,8 +108,8 @@ function collectArtifacts(outputDir, platform, version) {
   const channel = platform === "win" ? "latest.yml" : "latest-mac.yml";
   const names = readdirSync(outputDir).filter((name) => {
     if (name === channel) return true;
-    if (!name.includes(version)) return false;
-    return /\.(?:exe|dmg|zip|blockmap)$/i.test(name);
+    if (name !== "Kosmos-Engine-manifest.json" && !name.includes(version)) return false;
+    return /\.(?:exe|dmg|zip|blockmap|json)$/i.test(name);
   });
   const artifacts = names.map((name) => {
     const file = path.join(outputDir, name);
@@ -133,7 +133,7 @@ function compareExpectedArtifacts(expected, actual) {
 
 function verifyArkArtifact(bom) {
   const expected = bom.value.source.core.ark_artifact;
-  const file = path.join(SHELL_ROOT, ".tmp", "runtime", expected.name);
+  const file = path.join(SHELL_ROOT, ".tmp", "runtime.next", expected.name);
   if (!existsSync(file) || statSync(file).size !== expected.size)
     die(`ARK artifact is missing or has the wrong size: ${expected.name}`);
   if (documentHash(readFileSync(file)) !== expected.sha256)
@@ -251,7 +251,6 @@ async function main() {
     windowsHide: true,
     env: { ...process.env, KOSMOS_RELEASE_BOM_PATH: bom.path },
   });
-
   if (ebResult.status !== 0) {
     console.error("");
     console.error(
@@ -260,6 +259,8 @@ async function main() {
     process.exit(ebResult.status ?? 1);
   }
 
+  if (platform === "win") copyEngineRelease(SHELL_ROOT, version);
+  if (platform === "win") copyEngineManifest(SHELL_ROOT, version);
   log("");
   log("electron-builder succeeded. Emitting release provenance...");
   const releaseFiles = await emitProvenance(
@@ -283,7 +284,6 @@ async function main() {
       windowsHide: true,
     },
   );
-
   if (verifyResult.status !== 0) {
     console.error("");
     console.error(`[build-desktop] verify-release-channel FAILED for ${platform} v${version}.`);
