@@ -39,6 +39,7 @@ async fn start_iroh_sync(
                 "auth_secret": auth_secret,
                 "use_iroh": true,
                 "iroh_peer_ticket": peer_ticket,
+                "discovery_enabled": false,
             }),
         )
         .await
