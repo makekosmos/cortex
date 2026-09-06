@@ -1,5 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
+#[path = "support/integration_replication_offline.rs"]
+mod offline;
 #[path = "support/integration_replication_setup.rs"]
 mod support;
 
@@ -10,7 +12,6 @@ use kepler_backend::package_service::PackageService;
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use std::net::TcpListener;
-use std::time::Duration;
 
 use support::IntegrationReplicationSetup;
 
@@ -67,53 +68,10 @@ async fn own_iroh_ticket(host: &ArkHost) -> String {
     ticket
 }
 
-async fn wait_for_peer(host: &ArkHost, device_id: &str) {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
-    loop {
-        let response = host
-            .request("get_connected_peers", json!({}))
-            .await
-            .unwrap();
-        assert!(response.ok, "Core peer status failed: {:?}", response.error);
-        if response.data.as_array().is_some_and(|peers| {
-            peers
-                .iter()
-                .any(|peer| peer.get("device_id") == Some(&json!(device_id)))
-        }) {
-            return;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "Core did not authenticate peer {device_id} within 10s"
-        );
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-}
-
-fn decode_hex(value: &str) -> Vec<u8> {
-    assert_eq!(value.len() % 2, 0);
-    value
-        .as_bytes()
-        .chunks_exact(2)
-        .map(|pair| {
-            let digit = |byte: u8| match byte {
-                b'0'..=b'9' => byte - b'0',
-                b'a'..=b'f' => byte - b'a' + 10,
-                _ => panic!("canonical bytes must be lowercase hexadecimal"),
-            };
-            (digit(pair[0]) << 4) | digit(pair[1])
-        })
-        .collect()
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
 fn sign_prepared(prepared: &Value, signing_key: &SigningKey) -> Value {
     let mut frame = prepared["envelope"].clone();
-    let canonical = decode_hex(prepared["canonical_signing_bytes_hex"].as_str().unwrap());
-    frame["signature"] = json!(hex(&signing_key.sign(&canonical).to_bytes()));
+    let canonical = support::decode_hex(prepared["canonical_signing_bytes_hex"].as_str().unwrap());
+    frame["signature"] = json!(support::hex(&signing_key.sign(&canonical).to_bytes()));
     frame
 }
 
@@ -167,7 +125,7 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
         Some(&origin_ticket),
     )
     .await;
-    wait_for_peer(&recipient, &setup.origin.node_id).await;
+    offline::wait_for_peer(&recipient, &setup.origin.node_id).await;
 
     let packages_dir = tempfile::tempdir().unwrap();
     let data_dir = tempfile::tempdir().unwrap();
@@ -179,6 +137,41 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
     .unwrap()
     .unwrap();
     assert_eq!(origin_config.public_settings, json!({}));
+    let published_at = support::now_ms();
+    let origin_envelope = json!({
+        "integration_id": support::INTEGRATION_ID,
+        "recipient_node_id": setup.recipient.node_id,
+        "grant_epoch": 2,
+        "credential_generation": 1,
+        "refresh_fencing_token": 1,
+        "key_id": ark_core::integration_replication::encryption_key_id(
+            &setup.recipient.encryption_public_key
+        ),
+        "algorithm": "opaque-test",
+        "nonce": "origin-nonce-1",
+        "ciphertext": "opaque-origin-ciphertext-1",
+        "authenticated_metadata": {"content_type": "oauth"},
+        "issuer_node_id": setup.origin.node_id,
+        "issued_at": "2026-09-06T00:00:00Z",
+        "revision": 1,
+        "hlc": "2026-09-06T00:00:00.000Z:000003:origin-node"
+    });
+    assert_eq!(
+        handle_operation(
+            "replication_publish_credential_envelope",
+            json!({
+                "envelope": origin_envelope,
+                "device_id": setup.origin.node_id,
+                "now_ms": published_at,
+            }),
+            &origin,
+            data_dir.path(),
+            &packages,
+        )
+        .await
+        .unwrap()["published"],
+        true
+    );
     let prepared = handle_operation(
         "replication_prepare_signed_sync",
         json!({
@@ -289,4 +282,7 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
         .is_err(),
         "valid frame for an authorized but disconnected foreign recipient must fail before wire"
     );
+
+    drop(origin);
+    offline::verify_source_offline_refresh(&setup, &recipient, data_dir.path(), &packages).await;
 }

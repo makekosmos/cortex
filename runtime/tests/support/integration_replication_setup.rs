@@ -80,6 +80,29 @@ pub fn new_setup() -> Result<IntegrationReplicationSetup, String> {
     })
 }
 
+pub fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+}
+
+pub fn decode_hex(value: &str) -> Vec<u8> {
+    assert_eq!(value.len() % 2, 0);
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let digit = |byte: u8| match byte {
+                b'0'..=b'9' => byte - b'0',
+                b'a'..=b'f' => byte - b'a' + 10,
+                _ => panic!("canonical bytes must be lowercase hexadecimal"),
+            };
+            (digit(pair[0]) << 4) | digit(pair[1])
+        })
+        .collect()
+}
+
 pub fn seed_database(
     path: &Path,
     origin: &NodeIdentity,
@@ -201,7 +224,7 @@ fn authorized_node(identity: &NodeIdentity) -> AuthorizedNode {
     }
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
