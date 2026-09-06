@@ -457,4 +457,62 @@ mod tests {
         let error = handle_request(request).await.unwrap_err();
         assert_eq!(error, "node is not authorized");
     }
+
+    #[tokio::test]
+    async fn integration_rpc_rejects_stale_refresh_lease_fence() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        handle_request(Request::Init {
+            db_path: dir.path().join("ark.db").to_string_lossy().into_owned(),
+        })
+        .await
+        .unwrap();
+
+        let node = serde_json::from_value(json!({
+            "operation": "integration.persist_node_authorization",
+            "authorization_operation": "authorize",
+            "node": {
+                "node_id": "refresh-node",
+                "key_fingerprint": "fingerprint-refresh-node",
+                "signing_public_key": "signing-refresh-node",
+                "encryption_public_key": "encryption-refresh-node",
+                "transport_public_key": null,
+                "grant_epoch": 1,
+                "status": "active",
+                "authorized_at": "2026-09-06T00:00:00Z",
+                "revoked_at": null,
+                "revocation_epoch": null,
+                "revision": 1,
+                "hlc": "2026-09-06T00:00:00.000Z:000001:refresh-node"
+            },
+            "grant": {
+                "integration_id": "refresh-integration",
+                "node_id": "refresh-node",
+                "node_encryption_key": "encryption-refresh-node",
+                "grant_epoch": 1,
+                "status": "active",
+                "authorized_at": "2026-09-06T00:00:00Z",
+                "revoked_at": null,
+                "revision": 1,
+                "hlc": "2026-09-06T00:00:00.000Z:000002:refresh-node"
+            },
+            "device_id": "refresh-node"
+        }))
+        .unwrap();
+        handle_request(node).await.unwrap();
+
+        let acquire = |expected_fencing_token| Request::IntegrationAcquireRefreshLease {
+            integration_id: "refresh-integration".into(),
+            holder_node_id: "refresh-node".into(),
+            credential_generation: 1,
+            now_ms: 1_000,
+            ttl_ms: 100,
+            expected_fencing_token,
+            device_id: "refresh-node".into(),
+        };
+        let lease = handle_request(acquire(0)).await.unwrap();
+        assert_eq!(lease["fencing_token"], 1);
+        let error = handle_request(acquire(0)).await.unwrap_err();
+        assert!(error.contains("expected_fencing_token"));
+    }
 }
