@@ -41,6 +41,14 @@ async fn local_state_is_not_exported_or_applied_to_a_remote_database() {
             ],
         )
         .unwrap();
+        let local_rows: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM object_local_state WHERE object_id=?1 AND device_id=?2",
+                rusqlite::params!["local-only-note", "device-a"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(local_rows, 1, "source fixture must contain local-only state");
     }
 
     let exported = backend_a.load_entities(&HashMap::new()).await;
