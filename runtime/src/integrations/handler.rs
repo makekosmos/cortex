@@ -150,6 +150,17 @@ pub async fn handle_operation(
                 .map(|accepted| json!({ "accepted": accepted }))
                 .map_err(|_| "Исходящий кадр репликации отклонён".to_string())
         }
+        "replication_send_signed_sync" => {
+            let frame = params.get("frame").ok_or("frame is required")?;
+            if !frame.is_object() {
+                return Err("frame must be an object".into());
+            }
+            super::replication_consumer::ReplicationConsumer::new(ark)
+                .send_signed_sync(frame)
+                .await
+                .map(|sent| json!({ "sent": sent }))
+                .map_err(|_| "Адресная отправка репликации отклонена".to_string())
+        }
         "body_weight_set" => {
             let body_weight = params.get("bodyWeightKg").and_then(Value::as_f64);
             if body_weight.is_some_and(|value| !(20.0..=400.0).contains(&value)) {

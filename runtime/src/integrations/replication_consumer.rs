@@ -123,4 +123,22 @@ impl<'a> ReplicationConsumer<'a> {
         }
         serde_json::from_value(response.data).map_err(crate::ark_host::ArkHostError::Json)
     }
+
+    pub(crate) async fn send_signed_sync(&self, frame: &Value) -> ArkResult<bool> {
+        let response = self
+            .ark
+            .request(
+                "integration.send_signed_sync",
+                serde_json::json!({ "frame": frame }),
+            )
+            .await?;
+        if !response.ok {
+            return Err(crate::ark_host::ArkHostError::RpcError(
+                response
+                    .error
+                    .unwrap_or_else(|| "Core addressed sync send failed".into()),
+            ));
+        }
+        serde_json::from_value(response.data).map_err(crate::ark_host::ArkHostError::Json)
+    }
 }
