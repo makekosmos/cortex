@@ -8,13 +8,15 @@ use std::{
     time::{Duration, Instant},
 };
 
+use httpmock::MockServer;
 use kepler_backend::{
     ark_host::{resolve_ark_core_rpc_path, ArkHost},
     diagnostics::RpcDiagnostics,
     manager_api::ManagerState,
     package_manifest::{
-        DataAction, FieldAccess, ManifestData, ManifestTarget, ManifestV2, PackageKind,
-        PackageManifest, TargetOs, TargetRuntime, VersionedManifest,
+        DataAction, FieldAccess, IntegrationManifest, IntegrationSetting, IntegrationSettingKind,
+        ManifestData, ManifestTarget, ManifestV2, PackageKind, PackageManifest, SecretInjection,
+        TargetOs, TargetRuntime, VersionedManifest,
     },
     package_service::PackageService,
     package_store::PackageStore,
@@ -36,6 +38,7 @@ struct FixtureEnv<'a> {
     _lock: MutexGuard<'a, ()>,
     entry: PathBuf,
     bootstrap: PathBuf,
+    result: Option<PathBuf>,
 }
 
 impl Drop for FixtureEnv<'_> {
@@ -43,6 +46,9 @@ impl Drop for FixtureEnv<'_> {
         unsafe {
             std::env::remove_var("KOSMOS_FIXTURE_ENTRY_MARKER");
             std::env::remove_var("KOSMOS_FIXTURE_BOOTSTRAP_MARKER");
+            if self.result.is_some() {
+                std::env::remove_var("KOSMOS_FAKE_PROVIDER_RESULT_MARKER");
+            }
         }
     }
 }
@@ -59,6 +65,7 @@ fn fixture_env(directory: &tempfile::TempDir) -> FixtureEnv<'static> {
         _lock: lock,
         entry,
         bootstrap,
+        result: None,
     }
 }
 
@@ -76,6 +83,11 @@ fn manifest(id: &str) -> PackageManifest {
             vec![kepler_backend::package_manifest::PermissionRequest {
                 capability: "ark.write".into(),
                 scopes: vec!["upsert_object_type".into()],
+            }]
+        } else if id.ends_with(".fake-provider") {
+            vec![kepler_backend::package_manifest::PermissionRequest {
+                capability: "network".into(),
+                scopes: vec!["http://127.0.0.1/".into()],
             }]
         } else {
             vec![]
@@ -440,6 +452,152 @@ async fn worker_ark_write_uses_host_and_advances_sync_state() {
         .stop(&worker_manifest.id, &worker_manifest.version)
         .await
         .expect("worker stop");
+}
+
+#[tokio::test]
+async fn fake_provider_collection_uses_keyring_secret_and_broker_injection() {
+    let _lock = test_support::serialized();
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let mut markers = fixture_env(&directory);
+    let result_marker = directory.path().join("fake-provider-result.json");
+    unsafe {
+        std::env::set_var("KOSMOS_FAKE_PROVIDER_RESULT_MARKER", &result_marker);
+    }
+    markers.result = Some(result_marker.clone());
+
+    let server = MockServer::start_async().await;
+    let credential = "local-fake-provider-credential";
+    let provider = server
+        .mock_async(|when, then| {
+            when.method("GET")
+                .path("/collect")
+                .header("authorization", format!("Bearer {credential}"));
+            then.status(200).json_body(serde_json::json!({
+                "provider": "fake",
+                "items": [{"id": "local-item"}]
+            }));
+        })
+        .await;
+    let endpoint = server.url("/collect");
+    let origin = server.url("/");
+
+    let keyring_entry = keyring::Entry::new(
+        "kosmos-kepler",
+        "package-integration:fixture.fake-provider:1.0.0:session",
+    )
+    .expect("keyring entry");
+    keyring_entry
+        .set_password(credential)
+        .expect("write local fake credential");
+    let credential_from_keyring = keyring_entry
+        .get_password()
+        .expect("read local fake credential");
+    struct CredentialCleanup(keyring::Entry);
+    impl Drop for CredentialCleanup {
+        fn drop(&mut self) {
+            let _ = self.0.delete_credential();
+        }
+    }
+    let _credential_cleanup = CredentialCleanup(keyring_entry);
+
+    let mut worker_manifest = manifest("fixture.fake-provider");
+    worker_manifest.permissions[0].scopes = vec![origin.clone()];
+    let (store, installed) = install_fixture(&directory, &worker_manifest);
+    let executable = store
+        .immutable_entrypoint(&installed)
+        .expect("immutable entrypoint");
+    let supervisor = PackageWorkerSupervisor::new(1);
+    supervisor.bind_store(store);
+    let state = tempfile::tempdir().expect("worker state");
+    let start_result = supervisor
+        .start(
+            &worker_manifest,
+            executable,
+            state.path().to_path_buf(),
+            installed.hash.clone(),
+            &[],
+            "fake-provider-test".into(),
+            None,
+            Some(
+                kepler_backend::package_worker_supervisor::IntegrationLaunchConfig {
+                    manifest: IntegrationManifest {
+                        settings: vec![
+                            IntegrationSetting {
+                                key: "endpoint".into(),
+                                label: "Provider endpoint".into(),
+                                kind: IntegrationSettingKind::Text,
+                                description: None,
+                                required: true,
+                                injection: None,
+                            },
+                            IntegrationSetting {
+                                key: "session".into(),
+                                label: "Session".into(),
+                                kind: IntegrationSettingKind::Secret,
+                                description: None,
+                                required: true,
+                                injection: Some(SecretInjection::Header {
+                                    origins: vec![origin],
+                                    name: "Authorization".into(),
+                                    prefix: "Bearer ".into(),
+                                }),
+                            },
+                        ],
+                        login: None,
+                        schedule: None,
+                    },
+                    values: [("endpoint".into(), endpoint)].into_iter().collect(),
+                    secrets: [("session".into(), credential_from_keyring)]
+                        .into_iter()
+                        .collect(),
+                },
+            ),
+        )
+        .await;
+    assert_eq!(
+        start_result,
+        Ok(()),
+        "fake provider worker start: {start_result:?}; diagnostics: {:?}",
+        supervisor.diagnostics()
+    );
+    supervisor
+        .run_now("fixture.fake-provider", "1.0.0")
+        .expect("sync now");
+
+    let collection = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if result_marker.is_file() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await;
+    assert!(
+        collection.is_ok(),
+        "fake provider collection timeout; diagnostics: {:?}",
+        supervisor.diagnostics()
+    );
+    let result: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&result_marker).expect("provider result"))
+            .expect("provider JSON");
+    assert_eq!(
+        result,
+        serde_json::json!({
+            "provider": "fake",
+            "items": [{"id": "local-item"}]
+        }),
+        "provider collection failed"
+    );
+    assert!(!result.to_string().contains(credential));
+    assert!(!std::fs::read_to_string(&markers.bootstrap)
+        .expect("bootstrap marker")
+        .contains(credential));
+    provider.assert_async().await;
+    supervisor
+        .stop("fixture.fake-provider", "1.0.0")
+        .await
+        .expect("fake provider worker stop");
 }
 
 #[tokio::test]

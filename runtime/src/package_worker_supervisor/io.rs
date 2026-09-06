@@ -49,6 +49,8 @@ pub(super) fn failed_worker() -> LiveWorker {
             allowed_origins: Default::default(),
             filesystem_roots: vec![],
             private_state_roots: vec![],
+            #[cfg(feature = "package-worker-fixture")]
+            allow_local_test_origin: false,
         },
         stdout_tail: Arc::new(Mutex::new(BoundedTextTail::new(200, 64 * 1024))),
         stderr_tail: Arc::new(Mutex::new(BoundedTextTail::new(200, 64 * 1024))),

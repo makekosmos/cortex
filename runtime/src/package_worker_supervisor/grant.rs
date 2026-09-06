@@ -84,6 +84,8 @@ impl PackageWorkerSupervisor {
                 .collect(),
         )
         .map_err(|_| "grant-failed")?;
+        #[cfg(feature = "package-worker-fixture")]
+        let broker = broker.enable_local_test_origin();
         let broker = match bridge_config.as_ref() {
             Some(config) => broker
                 .with_private_state_root(std::path::Path::new(&config.state_root))

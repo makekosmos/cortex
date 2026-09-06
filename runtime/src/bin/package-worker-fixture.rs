@@ -1,5 +1,6 @@
 use std::io::{BufRead, Write};
 
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
 
 fn main() {
@@ -18,6 +19,7 @@ fn main() {
     let Ok(bootstrap) = serde_json::from_str::<Value>(&line) else {
         return;
     };
+    let package_id = bootstrap["package_id"].as_str().unwrap_or_default();
     if let Some(path) = std::env::var_os("KOSMOS_FIXTURE_BOOTSTRAP_MARKER") {
         use std::fs::OpenOptions;
         if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
@@ -25,7 +27,6 @@ fn main() {
             let _ = file.sync_all();
         }
     }
-    let package_id = bootstrap["package_id"].as_str().unwrap_or_default();
     if package_id.ends_with(".initial-fail") {
         return;
     }
@@ -134,6 +135,31 @@ fn main() {
         out.flush().ok();
         let _ = result_rx.recv_timeout(std::time::Duration::from_secs(5));
     }
+    let fake_provider = package_id.ends_with(".fake-provider");
+    let provider_url = bootstrap["integration"]["values"]["endpoint"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    let secret_handle = bootstrap["integration"]["secret_handles"]["session"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    let mut provider_call_id = if fake_provider {
+        let id = "fake-provider-fetch-1";
+        let call = json!({
+            "method": "worker.call",
+            "id": id,
+            "generation": bootstrap["generation"],
+            "token": bootstrap["token"],
+            "operation": "network.fetch",
+            "params": {"url": provider_url, "secret_handle": secret_handle}
+        });
+        writeln!(out, "{call}").ok();
+        out.flush().ok();
+        Some(id)
+    } else {
+        None
+    };
     loop {
         if stop_rx.try_recv().is_ok() {
             return;
@@ -147,6 +173,27 @@ fn main() {
             });
             writeln!(out, "{result}").ok();
             out.flush().ok();
+        }
+        if let Some(id) = provider_call_id {
+            if let Ok(result) = result_rx.try_recv() {
+                if result["id"].as_str() == Some(id) {
+                    if let Some(marker) = std::env::var_os("KOSMOS_FAKE_PROVIDER_RESULT_MARKER") {
+                        let bytes = if result["ok"] == true {
+                            result["result"]["bytes"]
+                                .as_str()
+                                .and_then(|encoded| STANDARD.decode(encoded).ok())
+                                .unwrap_or_default()
+                        } else {
+                            format!("provider-error:{}", result["error"]).into_bytes()
+                        };
+                        if let Ok(mut file) = std::fs::File::create(marker) {
+                            let _ = file.write_all(&bytes);
+                            let _ = file.sync_all();
+                        }
+                    }
+                    provider_call_id = None;
+                }
+            }
         }
         let heartbeat = json!({
             "method": "worker.heartbeat",
