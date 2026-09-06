@@ -452,6 +452,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         | Request::IntegrationPublishCredentialEnvelope { .. }
         | Request::IntegrationLoadLatestCredentialEnvelope { .. }
         | Request::IntegrationLookupIssuerEncryptionKey { .. }
+        | Request::IntegrationLookupIssuerEncryptionKeyForPublish { .. }
         | Request::IntegrationVerificationStatus { .. }) => {
             runtime_integration::handle(request).await
         }

@@ -50,6 +50,23 @@ pub struct IssuerEncryptionKey {
     pub credential_generation: u64,
 }
 
+/// Trusted issuer key material for an addressed credential before its first
+/// envelope exists. Core returns public authorization state only.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct IssuerEncryptionKeyForPublish {
+    pub schema_version: u8,
+    pub space_id: String,
+    pub integration_id: String,
+    pub recipient_node_id: String,
+    pub issuer_node_id: String,
+    pub encryption_public_key: String,
+    pub key_id: String,
+    pub status: NodeStatus,
+    pub grant_status: GrantStatus,
+    pub grant_epoch: u64,
+}
+
 impl IntegrationRefreshLease {
     pub fn validate(&self) -> Result<(), IntegrationContractError> {
         require_text(&self.integration_id, "integration_id")?;
