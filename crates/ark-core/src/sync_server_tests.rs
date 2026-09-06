@@ -1,18 +1,18 @@
 use super::*;
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use std::sync::Mutex as StdMutex;
 
     // Minimal in-memory backend for unit tests.
-    struct MemBackend {
+    pub(crate) struct MemBackend {
         kv: StdMutex<HashMap<String, String>>,
         entities: StdMutex<HashMap<String, SyncEntity>>,
     }
 
     impl MemBackend {
-        fn new() -> Self {
+        pub(crate) fn new() -> Self {
             Self {
                 kv: StdMutex::new(HashMap::new()),
                 entities: StdMutex::new(HashMap::new()),
@@ -22,6 +22,15 @@ mod tests {
 
     #[async_trait::async_trait]
     impl StorageBackend for MemBackend {
+        async fn validate_outbound_signed_integration_frame(
+            &self,
+            _frame: &SignedSyncEnvelope,
+            _expected_space_id: &str,
+            _expected_origin_node_id: &str,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+
         async fn load_entities(&self, _vector: &VersionVector) -> Vec<SyncEntity> {
             self.entities.lock().unwrap().values().cloned().collect()
         }

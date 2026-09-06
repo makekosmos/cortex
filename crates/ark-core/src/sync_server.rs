@@ -19,6 +19,9 @@ mod sync_server_core;
 #[path = "sync_server_messages.rs"]
 mod sync_server_messages;
 #[cfg(test)]
+#[path = "sync_server_route_tests.rs"]
+mod sync_server_route_tests;
+#[cfg(test)]
 #[path = "sync_server_tests.rs"]
 mod sync_server_tests;
 

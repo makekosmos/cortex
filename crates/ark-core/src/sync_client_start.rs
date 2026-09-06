@@ -87,9 +87,30 @@ impl SyncClient {
 
                         let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
 
-                        // Writer task
+                        // Writer task. Re-check signed integration authority at the
+                        // actual socket write boundary after queued revocation races.
+                        let storage_writer = storage.clone();
+                        let space_id_writer = space_id.clone();
+                        let device_id_writer = device_id.clone();
                         let writer = tokio::spawn(async move {
                             while let Some(msg) = rx.recv().await {
+                                if let Message::Text(text) = &msg {
+                                    if let Some(LanSyncMessage::SignedIntegrationFrame { frame }) =
+                                        deserialize_message(text)
+                                    {
+                                        if storage_writer
+                                            .validate_outbound_signed_integration_frame(
+                                                &frame,
+                                                &space_id_writer,
+                                                &device_id_writer,
+                                            )
+                                            .await
+                                            .is_err()
+                                        {
+                                            continue;
+                                        }
+                                    }
+                                }
                                 if ws_sink.send(msg).await.is_err() {
                                     break;
                                 }

@@ -446,7 +446,8 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         request @ (Request::IntegrationPersistNodeAuthorization { .. }
         | Request::IntegrationPersistIntegrationGrant { .. }
         | Request::IntegrationPrepareSignedSync { .. }
-        | Request::IntegrationValidateOutboundSignedSync { .. }) => {
+        | Request::IntegrationValidateOutboundSignedSync { .. }
+        | Request::IntegrationSendSignedSync { .. }) => {
             runtime_integration::handle(request).await
         }
     }
