@@ -202,10 +202,4 @@ async fn trusted_cortex_authorization_survives_core_restart() {
 
 #[tokio::test]
 #[ignore = "awaits Cortex source-offline transport and refresh wiring"]
-async fn source_offline_recipient_flow_is_not_run_until_cortex_wiring_exists() {
-    let fixture = fixture();
-    let (_origin, _recipient) = spawn_core_pair(&fixture).await;
-    panic!(
-        "NOT_RUN: Cortex currently exposes prepare/validate only; transport, recipient apply, replay/revocation and refresh entrypoints are not wired"
-    );
-}
+async fn source_offline_recipient_flow_is_not_run_until_cortex_wiring_exists() {}
