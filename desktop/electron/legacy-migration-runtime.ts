@@ -27,12 +27,10 @@ import {
   type MigrationRequest,
 } from "./legacy-migration-state";
 const LEGACY_IDS = Object.keys(LEGACY_TO_CANONICAL);
-
 function extensionUserDataDir(dataDir: string, id: string): string {
   return path.join(dataDir, "extensions-data", id);
 }
 function canonicalIds(target: CanonicalId): string[] {
-  // SAFETY: Object.keys is sourced exclusively from the literal legacy allowlist.
   return LEGACY_IDS.filter(
     (id) => LEGACY_TO_CANONICAL[id as keyof typeof LEGACY_TO_CANONICAL] === target,
   );
@@ -47,12 +45,7 @@ async function existsDirectory(root: string): Promise<boolean> {
 }
 async function copyNamespace(source: string, destination: string): Promise<void> {
   await mkdir(path.dirname(destination), { recursive: true });
-  await cp(source, destination, {
-    recursive: true,
-    force: true,
-    errorOnExist: false,
-    preserveTimestamps: true,
-  });
+  await cp(source, destination, { recursive: true, force: true, preserveTimestamps: true });
 }
 function migrationRoot(dataDir: string, target: CanonicalId): string {
   return path.join(dataDir, "legacy-migrations", "v1", target);
@@ -75,8 +68,7 @@ async function snapshotNamespaces(
   await mkdir(path.join(root, "before"), { recursive: true });
   const destination = extensionUserDataDir(dataDir, target);
   await rm(path.join(root, "before", "destination"), { recursive: true, force: true });
-  if (await existsDirectory(destination))
-    await copyNamespace(destination, path.join(root, "before", "destination"));
+  if (await existsDirectory(destination)) await copyNamespace(destination, path.join(root, "before", "destination"));
   for (const id of sourceIds) {
     const source = extensionUserDataDir(dataDir, id);
     await rm(path.join(root, "before", id), { recursive: true, force: true });
@@ -85,6 +77,7 @@ async function snapshotNamespaces(
       await copyNamespace(source, path.join(root, "before", id));
     }
   }
+  await mkdir(path.join(root, "before", "snapshot.complete"));
 }
 async function stageNamespace(
   dataDir: string,
@@ -122,11 +115,13 @@ async function activateNamespace(dataDir: string, target: CanonicalId): Promise<
   await rm(old, { recursive: true, force: true });
 }
 
-async function restoreNamespace(dataDir: string, target: CanonicalId): Promise<void> {
+export async function restoreNamespace(dataDir: string, target: CanonicalId): Promise<void> {
   const before = path.join(migrationRoot(dataDir, target), "before", "destination");
   const destination = extensionUserDataDir(dataDir, target);
-  await rm(destination, { recursive: true, force: true });
-  if (await existsDirectory(before)) await copyNamespace(before, destination);
+  if (await existsDirectory(path.join(migrationRoot(dataDir, target), "before", "snapshot.complete"))) {
+    await rm(destination, { recursive: true, force: true });
+    if (await existsDirectory(before)) await copyNamespace(before, destination);
+  }
   await rm(path.join(migrationRoot(dataDir, target), "staged"), { recursive: true, force: true });
 }
 interface LegacyMigrationRunner {
@@ -142,7 +137,6 @@ export function createLegacyMigrationRunner(
   },
 ): LegacyMigrationRunner {
   const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
-  // SAFETY: Object.values is sourced exclusively from the canonical allowlist.
   const targets = [...new Set(Object.values(LEGACY_TO_CANONICAL))] as CanonicalId[];
 
   async function replacement(target: CanonicalId): Promise<ReplacementInfo | null> {
@@ -173,6 +167,10 @@ export function createLegacyMigrationRunner(
       },
       verifyReplacement: async () => (await replacement(target)) !== null,
       stopAffected: async () => {
+        await rm(path.join(migrationRoot(dataDir, target), "before", "snapshot.complete"), {
+          recursive: true,
+          force: true,
+        });
         await snapshotPackageState(dataDir, target, request);
         for (const row of await packageRows(request)) {
           if (
@@ -236,7 +234,7 @@ export function createLegacyMigrationRunner(
           });
         }
         await restoreNamespace(dataDir, target);
-        await restorePackageState(dataDir, target, request);
+        if (await packageStateSnapshotPending(dataDir, target)) await restorePackageState(dataDir, target, request);
       },
     };
   }
@@ -270,7 +268,6 @@ export async function recoverLegacyMigrationsBeforeLaunch(
   dataDir: string,
   client?: ArkClient,
 ): Promise<void> {
-  // SAFETY: Object.values is sourced exclusively from the canonical allowlist above.
   const targets = [...new Set(Object.values(LEGACY_TO_CANONICAL))] as CanonicalId[];
   for (const target of targets) {
     const journal = await readMigrationJournal(dataDir, target);
