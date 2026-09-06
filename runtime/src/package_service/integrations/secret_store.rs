@@ -10,7 +10,7 @@ fn package_integration_entry(id: &str, version: &str, setting: &str) -> Option<k
 }
 
 #[cfg(not(test))]
-pub(super) fn read_package_integration_secret(
+pub(crate) fn read_package_integration_secret(
     id: &str,
     version: &str,
     setting: &str,
@@ -19,7 +19,7 @@ pub(super) fn read_package_integration_secret(
 }
 
 #[cfg(not(test))]
-pub(super) fn save_package_integration_secret(
+pub(crate) fn save_package_integration_secret(
     id: &str,
     version: &str,
     setting: &str,
@@ -32,7 +32,7 @@ pub(super) fn save_package_integration_secret(
 }
 
 #[cfg(not(test))]
-pub(super) fn clear_package_integration_secret(
+pub(crate) fn clear_package_integration_secret(
     id: &str,
     version: &str,
     setting: &str,
@@ -88,7 +88,7 @@ mod test_store {
 }
 
 #[cfg(test)]
-pub(super) fn read_package_integration_secret(
+pub(crate) fn read_package_integration_secret(
     id: &str,
     version: &str,
     setting: &str,
@@ -97,7 +97,7 @@ pub(super) fn read_package_integration_secret(
 }
 
 #[cfg(test)]
-pub(super) fn save_package_integration_secret(
+pub(crate) fn save_package_integration_secret(
     id: &str,
     version: &str,
     setting: &str,
@@ -107,7 +107,7 @@ pub(super) fn save_package_integration_secret(
 }
 
 #[cfg(test)]
-pub(super) fn clear_package_integration_secret(
+pub(crate) fn clear_package_integration_secret(
     id: &str,
     version: &str,
     setting: &str,

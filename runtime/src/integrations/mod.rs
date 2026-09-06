@@ -6,6 +6,7 @@ use std::path::Path;
 
 mod body;
 mod config;
+mod credential_envelope;
 mod handler;
 mod replication_consumer;
 

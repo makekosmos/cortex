@@ -99,6 +99,7 @@ keyring = { version = "3", features = ["windows-native", "apple-native"] }
 hickory-resolver = { version = "0.24", features = ["dns-over-https-rustls"] }
 base64 = "0.22"
 ed25519-dalek = "2"
+hpke = { version = "=0.14.1", default-features = false, features = ["alloc", "getrandom", "x25519", "hkdfsha2", "chacha"] }
 libloading = "0.8"
 semver = "1"
 # Phase 4 bug-detection: structured logging.

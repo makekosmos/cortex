@@ -167,6 +167,11 @@ impl<'a> ReplicationConsumer<'a> {
             .await
     }
 
+    pub(crate) async fn lookup_issuer_encryption_key(&self, params: &Value) -> ArkResult<Value> {
+        self.request("integration.lookup_issuer_encryption_key", params)
+            .await
+    }
+
     pub(crate) async fn verification_status(&self, params: &Value) -> ArkResult<Value> {
         self.request("integration.verification_status", params)
             .await
