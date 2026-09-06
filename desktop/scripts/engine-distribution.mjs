@@ -105,6 +105,7 @@ export function copyStandaloneEngineArtifact(source, target) {
 }
 
 export function copyEngineRelease(shellRoot, version) {
+  fs.mkdirSync(path.join(shellRoot, "release"), { recursive: true });
   copyStandaloneEngineArtifact(
     path.join(shellRoot, ".tmp", "engine.next", "Kosmos-Engine.zip"),
     path.join(shellRoot, "release", `Kosmos-Engine-${version}.zip`),
@@ -115,6 +116,7 @@ export function copyEngineManifest(shellRoot, version) {
   const source = path.join(shellRoot, ".tmp", "engine.next", "engine-manifest.json");
   const target = path.join(shellRoot, "release", `Kosmos-Engine-${version}.json`);
   if (!fs.existsSync(source)) throw new Error(`standalone engine manifest missing: ${source}`);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.copyFileSync(source, target);
   fs.copyFileSync(source, path.join(shellRoot, "release", "Kosmos-Engine-manifest.json"));
 }
