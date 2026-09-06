@@ -141,6 +141,7 @@ try {
   await runExistingUserUpgrade(upgradeApps, running);
 
   const packages = await requestPackages(running);
+  const installedBeforeRestart = await requestStoreInstalled(running);
   for (const app of upgradeApps.items) {
     const active = packages.filter((row) => row.id === app.id && row.enabled === true);
     if (active.length !== 1 || active[0].version !== app.version)
@@ -175,11 +176,14 @@ try {
   );
   await runExistingUserUpgrade(upgradeApps, running, { install: false });
   const restartedPackages = await requestPackages(running);
+  const installedAfterRestart = await requestStoreInstalled(running);
   for (const app of upgradeApps.items) {
     const active = restartedPackages.filter((row) => row.id === app.id && row.enabled === true);
     if (active.length !== 1 || active[0].version !== app.version)
       throw new Error(`${app.id}: restart duplicated or resurrected a package`);
   }
+  if (JSON.stringify(installedAfterRestart) !== JSON.stringify(installedBeforeRestart))
+    throw new Error("restart changed canonical package grants or registry records");
   console.log("existing-user Agenda/Memoria/Arcadia upgrade passed across restart");
 } finally {
   if (running) await stopBackend(running);
@@ -211,4 +215,35 @@ async function requestPackages(running) {
   const value = await response.json();
   if (!response.ok || value.ok !== true) throw new Error("packages.list failed during upgrade");
   return value.data.packages ?? [];
+}
+
+async function requestStoreInstalled(running) {
+  const lock = JSON.parse(await readFile(path.join(running.dataDir, "engine.lock.json"), "utf8"));
+  const response = await fetch(`http://127.0.0.1:${lock.http_port}/v1/rpc`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${lock.auth_token}`,
+      "Content-Type": "application/json",
+      "X-Kosmos-Api-Version": "1.0.0",
+      "X-Kosmos-Client-Class": "app-consumer-headless",
+      "X-Kosmos-Client-Version": "1.0.0",
+      "X-Kosmos-Client-Pid": String(lock.pid),
+    },
+    body: JSON.stringify({ operation: "store.catalog" }),
+  });
+  const value = await response.json();
+  if (!response.ok || value.ok !== true || !Array.isArray(value.data?.installed))
+    throw new Error("store.catalog failed during upgrade");
+  return value.data.installed
+    .filter((row) => upgradeApps.items.some((app) => app.id === row.id))
+    .map((row) => ({
+      id: row.id,
+      version: row.version,
+      enabled: row.enabled,
+      revoked: row.revoked,
+      effective_grants: row.effective_grants,
+    }))
+    .sort((left, right) =>
+      `${left.id}:${left.version}`.localeCompare(`${right.id}:${right.version}`),
+    );
 }

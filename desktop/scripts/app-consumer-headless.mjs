@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -137,6 +138,11 @@ export async function runExistingUserUpgrade(apps, running, { install = true } =
       const entry = catalog.packages.find((item) => item.manifest.id === app.id);
       if (!entry || entry.manifest.version !== app.version || entry.sha256 !== app.sha256)
         throw new Error(`${app.id}: signed catalog mismatch`);
+      const archiveSha256 = createHash("sha256")
+        .update(await readFile(app.archive))
+        .digest("hex");
+      if (archiveSha256 !== app.sha256)
+        throw new Error(`${app.id}: archive bytes do not match signed catalog`);
       const installed = await request("packages.install", {
         id: app.id,
         version: app.version,
