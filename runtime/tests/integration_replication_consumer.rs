@@ -209,9 +209,11 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
     .await
     .unwrap();
     assert_eq!(sent["sent"], true);
-    if let Err(error) = support::wait_for_recipient_state(&recipient_db).await {
-        panic!("{error}");
-    }
+    let recipient_state = support::wait_for_recipient_state(&recipient_db).await;
+    assert!(
+        recipient_state.is_ok(),
+        "recipient state failed: {recipient_state:?}"
+    );
 
     let prepared_tamper = handle_operation(
         "replication_prepare_signed_sync",

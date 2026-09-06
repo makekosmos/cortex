@@ -96,7 +96,7 @@ pub fn decode_hex(value: &str) -> Vec<u8> {
             let digit = |byte: u8| match byte {
                 b'0'..=b'9' => byte - b'0',
                 b'a'..=b'f' => byte - b'a' + 10,
-                _ => panic!("canonical bytes must be lowercase hexadecimal"),
+                _ => unreachable!("canonical bytes must be lowercase hexadecimal"),
             };
             (digit(pair[0]) << 4) | digit(pair[1])
         })
