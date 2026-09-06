@@ -35,9 +35,12 @@ pub async fn handle_operation(
 ) -> Result<Value, String> {
     match subop {
         "replication_authorize_node" | "replication_revoke_node" | "replication_rotate_node" => {
-            let operation = subop
-                .strip_prefix("replication_")
-                .ok_or("invalid replication operation")?;
+            let operation = match subop {
+                "replication_authorize_node" => "authorize",
+                "replication_revoke_node" => "revoke",
+                "replication_rotate_node" => "rotate",
+                _ => return Err("invalid replication operation".into()),
+            };
             let node = params.get("node").ok_or("node is required")?;
             if !node.is_object() {
                 return Err("node must be an object".into());
@@ -160,6 +163,64 @@ pub async fn handle_operation(
                 .await
                 .map(|sent| json!({ "sent": sent }))
                 .map_err(|_| "Адресная отправка репликации отклонена".to_string())
+        }
+        "replication_acquire_refresh_lease"
+        | "replication_load_latest_credential_envelope"
+        | "replication_verification_status" => {
+            for field in match subop {
+                "replication_acquire_refresh_lease" => [
+                    "integration_id",
+                    "holder_node_id",
+                    "credential_generation",
+                    "now_ms",
+                    "ttl_ms",
+                    "expected_fencing_token",
+                    "device_id",
+                ]
+                .as_slice(),
+                "replication_load_latest_credential_envelope" => {
+                    ["integration_id", "recipient_node_id"].as_slice()
+                }
+                _ => ["integration_id", "local_node_id", "now_ms"].as_slice(),
+            } {
+                if params.get(field).is_none() {
+                    return Err(format!("{field} is required"));
+                }
+            }
+            let consumer = super::replication_consumer::ReplicationConsumer::new(ark);
+            let operation = match subop {
+                "replication_acquire_refresh_lease" => {
+                    consumer.acquire_refresh_lease(&params).await
+                }
+                "replication_load_latest_credential_envelope" => {
+                    consumer.load_latest_credential_envelope(&params).await
+                }
+                _ => consumer.verification_status(&params).await,
+            };
+            operation.map_err(|_| "Core refresh operation rejected".to_string())
+        }
+        "replication_publish_credential_envelope" => {
+            let envelope = params.get("envelope").ok_or("envelope is required")?;
+            if !envelope.is_object() {
+                return Err("envelope must be an object".into());
+            }
+            if params
+                .get("device_id")
+                .and_then(Value::as_str)
+                .filter(|id| !id.is_empty())
+                .is_none()
+            {
+                return Err("device_id is required".into());
+            }
+            params
+                .get("now_ms")
+                .and_then(Value::as_u64)
+                .ok_or("now_ms is required")?;
+            super::replication_consumer::ReplicationConsumer::new(ark)
+                .publish_credential_envelope(&params)
+                .await
+                .map(|published| json!({ "published": published }))
+                .map_err(|_| "Core credential publication rejected".to_string())
         }
         "body_weight_set" => {
             let body_weight = params.get("bodyWeightKg").and_then(Value::as_f64);

@@ -141,4 +141,46 @@ impl<'a> ReplicationConsumer<'a> {
         }
         serde_json::from_value(response.data).map_err(crate::ark_host::ArkHostError::Json)
     }
+
+    pub(crate) async fn acquire_refresh_lease(&self, params: &Value) -> ArkResult<Value> {
+        self.request("integration.acquire_refresh_lease", params)
+            .await
+    }
+
+    pub(crate) async fn publish_credential_envelope(&self, params: &Value) -> ArkResult<bool> {
+        let response = self
+            .ark
+            .request("integration.publish_credential_envelope", params.clone())
+            .await?;
+        if !response.ok {
+            return Err(crate::ark_host::ArkHostError::RpcError(
+                response
+                    .error
+                    .unwrap_or_else(|| "Core credential publication failed".into()),
+            ));
+        }
+        serde_json::from_value(response.data).map_err(crate::ark_host::ArkHostError::Json)
+    }
+
+    pub(crate) async fn load_latest_credential_envelope(&self, params: &Value) -> ArkResult<Value> {
+        self.request("integration.load_latest_credential_envelope", params)
+            .await
+    }
+
+    pub(crate) async fn verification_status(&self, params: &Value) -> ArkResult<Value> {
+        self.request("integration.verification_status", params)
+            .await
+    }
+
+    async fn request(&self, operation: &str, params: &Value) -> ArkResult<Value> {
+        let response = self.ark.request(operation, params.clone()).await?;
+        if !response.ok {
+            return Err(crate::ark_host::ArkHostError::RpcError(
+                response
+                    .error
+                    .unwrap_or_else(|| "Core integration operation failed".into()),
+            ));
+        }
+        Ok(response.data)
+    }
 }
