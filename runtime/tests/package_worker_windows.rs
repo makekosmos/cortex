@@ -590,9 +590,9 @@ async fn fake_provider_collection_uses_keyring_secret_and_broker_injection() {
         "provider collection failed"
     );
     assert!(!result.to_string().contains(credential));
-    assert!(!std::fs::read_to_string(&markers.bootstrap)
-        .expect("bootstrap marker")
-        .contains(credential));
+    let bootstrap = std::fs::read_to_string(&markers.bootstrap).expect("bootstrap marker");
+    assert!(bootstrap.contains("secret_handles"));
+    assert!(!bootstrap.contains(credential));
     provider.assert_async().await;
     supervisor
         .stop("fixture.fake-provider", "1.0.0")

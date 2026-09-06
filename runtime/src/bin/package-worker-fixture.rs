@@ -23,7 +23,11 @@ fn main() {
     if let Some(path) = std::env::var_os("KOSMOS_FIXTURE_BOOTSTRAP_MARKER") {
         use std::fs::OpenOptions;
         if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
-            let _ = writeln!(file, "bootstrap:1");
+            if package_id.ends_with(".fake-provider") {
+                let _ = writeln!(file, "bootstrap:{bootstrap}");
+            } else {
+                let _ = writeln!(file, "bootstrap:1");
+            }
             let _ = file.sync_all();
         }
     }
