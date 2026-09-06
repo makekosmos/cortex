@@ -5,8 +5,8 @@
 //! `ArkHost::spawn` is called.
 
 use ark_core::db::{
-    init_schema, upsert_authorized_node, upsert_integration_configuration,
-    upsert_integration_node_grant,
+    init_schema, try_acquire_integration_refresh_lease, upsert_authorized_node,
+    upsert_integration_configuration, upsert_integration_node_grant,
 };
 use ark_core::integration_replication::{
     AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationNodeGrant, NodeStatus,
@@ -16,6 +16,7 @@ use rusqlite::Connection;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tempfile::TempDir;
 
 pub const INTEGRATION_ID: &str = "synthetic-provider";
@@ -40,6 +41,10 @@ pub struct IntegrationReplicationSetup {
     pub foreign: NodeIdentity,
 }
 
+#[path = "integration_replication_transport.rs"]
+mod transport;
+pub use transport::refresh_transport_public_keys;
+
 pub fn new_setup() -> Result<IntegrationReplicationSetup, String> {
     let dir = tempfile::tempdir().map_err(|error| error.to_string())?;
     let origin = identity("origin-node", 21);
@@ -50,6 +55,21 @@ pub fn new_setup() -> Result<IntegrationReplicationSetup, String> {
     seed_database(&origin_db, &origin, &[&origin, &recipient, &foreign], true)?;
     seed_database(&recipient_db, &origin, &[&origin, &recipient], false)?;
     seed_recipient_baseline(&recipient_db, &origin)?;
+    let conn = Connection::open(&origin_db).map_err(|error| error.to_string())?;
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_millis() as u64;
+    try_acquire_integration_refresh_lease(
+        &conn,
+        INTEGRATION_ID,
+        &origin.node_id,
+        1,
+        now_ms,
+        60_000,
+        0,
+        &origin.node_id,
+    )?;
     Ok(IntegrationReplicationSetup {
         _dir: dir,
         origin_db,
@@ -101,12 +121,41 @@ pub fn seed_database(
     Ok(())
 }
 
+pub async fn wait_for_recipient_state(path: &str) -> Result<(), String> {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    let mut last_seen = None;
+    loop {
+        if let Ok(conn) = Connection::open(path) {
+            if let Ok(Some(lease)) =
+                ark_core::db::load_integration_refresh_lease(&conn, INTEGRATION_ID)
+            {
+                last_seen = Some(format!(
+                    "holder={}, generation={}, fence={}",
+                    lease.holder_node_id, lease.credential_generation, lease.fencing_token
+                ));
+                if lease.holder_node_id == "origin-node"
+                    && lease.credential_generation == 1
+                    && lease.fencing_token == 1
+                {
+                    return Ok(());
+                }
+            }
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(format!(
+                "recipient did not persist the signed integration state; last={last_seen:?}"
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
 fn seed_recipient_baseline(path: &Path, origin: &NodeIdentity) -> Result<(), String> {
     let conn = Connection::open(path).map_err(|error| error.to_string())?;
     let config = IntegrationConfiguration {
         integration_id: INTEGRATION_ID.into(),
-        provider: "recipient-baseline".into(),
-        account_subject: "recipient-before-send".into(),
+        provider: "synthetic".into(),
+        account_subject: "test-account".into(),
         public_scopes: Vec::new(),
         public_settings: json!({"before_send": true}),
         enabled: true,

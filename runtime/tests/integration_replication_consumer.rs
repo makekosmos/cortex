@@ -117,26 +117,6 @@ fn sign_prepared(prepared: &Value, signing_key: &SigningKey) -> Value {
     frame
 }
 
-async fn wait_for_recipient_configuration(path: &str, expected_provider: &str) {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
-    loop {
-        if let Ok(conn) = Connection::open(path) {
-            if let Ok(Some(config)) =
-                ark_core::db::load_integration_configuration(&conn, support::INTEGRATION_ID)
-            {
-                if config.provider == expected_provider {
-                    return;
-                }
-            }
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "recipient did not persist the signed integration state"
-        );
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-}
-
 #[tokio::test]
 async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
     let setup: IntegrationReplicationSetup = support::new_setup().unwrap();
@@ -147,16 +127,37 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
     let recipient = ArkHost::spawn(&binary, &recipient_db).await.unwrap();
     let space_id = "integration-replication-headless";
     let auth_secret = "headless-two-node-auth-secret";
+    let bootstrap_ticket = std::env::var("KOSMOS_BOOTSTRAP_TICKET").ok();
     start_iroh_sync(
         &origin,
         space_id,
         &setup.origin.node_id,
         free_loopback_port(),
         auth_secret,
-        None,
+        bootstrap_ticket.as_deref(),
     )
     .await;
     let origin_ticket = own_iroh_ticket(&origin).await;
+    start_iroh_sync(
+        &recipient,
+        space_id,
+        &setup.recipient.node_id,
+        free_loopback_port(),
+        auth_secret,
+        Some(&origin_ticket),
+    )
+    .await;
+    let recipient_ticket = own_iroh_ticket(&recipient).await;
+    support::refresh_transport_public_keys(&setup, &origin_ticket, &recipient_ticket).unwrap();
+    start_iroh_sync(
+        &origin,
+        space_id,
+        &setup.origin.node_id,
+        free_loopback_port(),
+        auth_secret,
+        Some(&recipient_ticket),
+    )
+    .await;
     start_iroh_sync(
         &recipient,
         space_id,
@@ -171,6 +172,13 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
     let packages_dir = tempfile::tempdir().unwrap();
     let data_dir = tempfile::tempdir().unwrap();
     let packages = PackageService::open(packages_dir.path()).unwrap();
+    let origin_config = ark_core::db::load_integration_configuration(
+        &Connection::open(&origin_db).unwrap(),
+        support::INTEGRATION_ID,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(origin_config.public_settings, json!({}));
     let prepared = handle_operation(
         "replication_prepare_signed_sync",
         json!({
@@ -207,7 +215,9 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
     .await
     .unwrap();
     assert_eq!(sent["sent"], true);
-    wait_for_recipient_configuration(&recipient_db, "synthetic").await;
+    if let Err(error) = support::wait_for_recipient_state(&recipient_db).await {
+        panic!("{error}");
+    }
 
     let prepared_tamper = handle_operation(
         "replication_prepare_signed_sync",
