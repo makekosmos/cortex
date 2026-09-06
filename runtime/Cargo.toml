@@ -29,7 +29,7 @@ name = "ark-markdown-bridge"
 path = "src/bin/ark-markdown-bridge.rs"
 
 [dependencies]
-ark-core = { git = "https://github.com/makekosmos/core.git", rev = "80d74cdc711d7601db8a351ee1d26d5c1bdfe34f", package = "ark-core" }
+ark-core = { git = "https://github.com/makekosmos/core.git", rev = "72798db13808459aff50d3723bf3412fb32c3e38", package = "ark-core" }
 rusqlite.workspace = true
 tokio = { version = "1", features = [
   "rt-multi-thread",

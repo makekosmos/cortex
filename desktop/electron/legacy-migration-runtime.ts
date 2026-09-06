@@ -27,7 +27,6 @@ import {
   type MigrationRequest,
 } from "./legacy-migration-state";
 const LEGACY_IDS = Object.keys(LEGACY_TO_CANONICAL);
-
 function extensionUserDataDir(dataDir: string, id: string): string {
   return path.join(dataDir, "extensions-data", id);
 }
@@ -47,12 +46,7 @@ async function existsDirectory(root: string): Promise<boolean> {
 }
 async function copyNamespace(source: string, destination: string): Promise<void> {
   await mkdir(path.dirname(destination), { recursive: true });
-  await cp(source, destination, {
-    recursive: true,
-    force: true,
-    errorOnExist: false,
-    preserveTimestamps: true,
-  });
+  await cp(source, destination, { recursive: true, force: true, preserveTimestamps: true });
 }
 function migrationRoot(dataDir: string, target: CanonicalId): string {
   return path.join(dataDir, "legacy-migrations", "v1", target);
@@ -80,11 +74,11 @@ async function snapshotNamespaces(
   for (const id of sourceIds) {
     const source = extensionUserDataDir(dataDir, id);
     await rm(path.join(root, "before", id), { recursive: true, force: true });
-    if (await existsDirectory(source)) {
-      await validateLegacyExtensionDataRoot(source);
-      await copyNamespace(source, path.join(root, "before", id));
-    }
+    if (!(await existsDirectory(source))) continue;
+    await validateLegacyExtensionDataRoot(source);
+    await copyNamespace(source, path.join(root, "before", id));
   }
+  await mkdir(path.join(root, "before", "snapshot.complete"));
 }
 async function stageNamespace(
   dataDir: string,
@@ -121,12 +115,15 @@ async function activateNamespace(dataDir: string, target: CanonicalId): Promise<
   }
   await rm(old, { recursive: true, force: true });
 }
-
-async function restoreNamespace(dataDir: string, target: CanonicalId): Promise<void> {
+export async function restoreNamespace(dataDir: string, target: CanonicalId): Promise<void> {
   const before = path.join(migrationRoot(dataDir, target), "before", "destination");
   const destination = extensionUserDataDir(dataDir, target);
-  await rm(destination, { recursive: true, force: true });
-  if (await existsDirectory(before)) await copyNamespace(before, destination);
+  if (
+    await existsDirectory(path.join(migrationRoot(dataDir, target), "before", "snapshot.complete"))
+  ) {
+    await rm(destination, { recursive: true, force: true });
+    if (await existsDirectory(before)) await copyNamespace(before, destination);
+  }
   await rm(path.join(migrationRoot(dataDir, target), "staged"), { recursive: true, force: true });
 }
 interface LegacyMigrationRunner {
@@ -173,6 +170,8 @@ export function createLegacyMigrationRunner(
       },
       verifyReplacement: async () => (await replacement(target)) !== null,
       stopAffected: async () => {
+        const marker = path.join(migrationRoot(dataDir, target), "before", "snapshot.complete");
+        await rm(marker, { recursive: true, force: true });
         await snapshotPackageState(dataDir, target, request);
         for (const row of await packageRows(request)) {
           if (
@@ -236,7 +235,8 @@ export function createLegacyMigrationRunner(
           });
         }
         await restoreNamespace(dataDir, target);
-        await restorePackageState(dataDir, target, request);
+        if (await packageStateSnapshotPending(dataDir, target))
+          await restorePackageState(dataDir, target, request);
       },
     };
   }
