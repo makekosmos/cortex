@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -59,6 +59,21 @@ test("GUI dependency installs absent engine and reuses present engine", () => {
   const second = runInstall(f);
   assert.equal(second.status, 0, second.stderr);
   assert.equal(readFileSync(backend, "utf8"), "fixture:kepler-backend.exe");
+  cpSync(
+    path.join(f.root, "installed", "versions", current.version),
+    path.join(f.root, "installed", "versions", "0.0.1"),
+    { recursive: true },
+  );
+  writeFileSync(
+    path.join(f.root, "installed", "current.json"),
+    JSON.stringify({ schema_version: 1, version: "0.0.1" }),
+  );
+  const versionRepaired = runInstall(f);
+  assert.equal(versionRepaired.status, 0, versionRepaired.stderr);
+  assert.equal(
+    JSON.parse(readFileSync(path.join(f.root, "installed", "current.json"), "utf8")).version,
+    "1.2.3",
+  );
   writeFileSync(backend, "corrupt");
   const repaired = runInstall(f);
   assert.equal(repaired.status, 0, repaired.stderr);

@@ -34,7 +34,7 @@ if (Test-Path -LiteralPath $currentFile) {
   try {
     $current = Get-Content -Raw -LiteralPath $currentFile | ConvertFrom-Json
     $currentRoot = Join-Path (Join-Path $TargetRoot 'versions') $current.version
-    $valid = $current.schema_version -eq 1
+    $valid = $current.schema_version -eq 1 -and $current.version -eq $expected.version
     foreach ($file in $expected.files) {
       $candidate = Join-Path $currentRoot $file.name
       if (-not (Test-Path -LiteralPath $candidate) -or (Get-Item -LiteralPath $candidate).Length -ne $file.size -or (Get-EngineSha256 $candidate) -ne $file.sha256.ToLowerInvariant()) { $valid = $false; break }
