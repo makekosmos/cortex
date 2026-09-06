@@ -4,19 +4,19 @@ use chrono::{TimeZone, Utc};
 use ed25519_dalek::{Signer, SigningKey};
 use kepler_backend::store_catalog::{
     CacheState, CatalogCache, CatalogDocument, Distribution, EffectiveGrantProjection,
-    InstalledListing, ListingKind, PackageIndexLookup, Role, StoreCatalogEnvelope,
-    StoreCatalogService, StoreCatalogTrust, StoreListing, TrustError,
+    InstalledListing, ListingKind, PackageIndexLookup, PackageReleaseKind, Role,
+    StoreCatalogEnvelope, StoreCatalogService, StoreCatalogTrust, StoreListing, TrustError,
 };
 use std::collections::BTreeSet;
 
 struct Index;
 impl PackageIndexLookup for Index {
-    fn package_release(&self, package_id: &str, version: &str, is_bridge: bool) -> bool {
+    fn package_release(&self, package_id: &str, version: &str, kind: PackageReleaseKind) -> bool {
         matches!(
-            (package_id, version, is_bridge),
-            ("com.kosmos.eden", "1.0.0", false)
-                | ("source-worker", "1.0.0", false)
-                | ("bridge", "1.0.0", true)
+            (package_id, version, kind),
+            ("com.kosmos.eden", "1.0.0", PackageReleaseKind::App)
+                | ("source-worker", "1.0.0", PackageReleaseKind::Source)
+                | ("bridge", "1.0.0", PackageReleaseKind::Bridge)
         )
     }
 
@@ -179,6 +179,59 @@ fn integration_resolves_signed_source_worker() {
             &Index,
         )
         .expect("signed source integration");
+}
+
+#[test]
+fn integration_resolves_bridge_and_rejects_wrong_or_missing_kind() {
+    let key = SigningKey::from_bytes(&[15; 32]);
+    let trust = StoreCatalogTrust::new("store-key", key.verifying_key()).unwrap();
+    let mut doc = document(1);
+
+    let mut bridge =
+        StoreListing::external("integration.bridge", "Bridge", "https://bridge.example/");
+    bridge.kind = ListingKind::Integration;
+    bridge.distribution = Distribution::Integration {
+        package_id: "bridge".into(),
+        version: "1.0.0".into(),
+        connects_to: "external.obsidian".into(),
+    };
+    bridge.connects_to = Some("external.obsidian".into());
+    doc.listings.push(bridge);
+    trust
+        .verify_at(
+            &signed(&doc, "store-key", &key),
+            Utc.with_ymd_and_hms(2026, 8, 12, 1, 0, 0).unwrap(),
+            &Index,
+        )
+        .expect("signed bridge integration");
+
+    let mut wrong_kind = doc.clone();
+    wrong_kind.listings[1].distribution = Distribution::Integration {
+        package_id: "com.kosmos.eden".into(),
+        version: "1.0.0".into(),
+        connects_to: "external.obsidian".into(),
+    };
+    assert!(matches!(
+        trust.verify_at(
+            &signed(&wrong_kind, "store-key", &key),
+            Utc.with_ymd_and_hms(2026, 8, 12, 1, 0, 0).unwrap(),
+            &Index,
+        ),
+        Err(TrustError::Invalid("kind distribution"))
+    ));
+
+    let mut missing = doc;
+    if let Distribution::Integration { package_id, .. } = &mut missing.listings[1].distribution {
+        *package_id = "missing".into();
+    }
+    assert!(matches!(
+        trust.verify_at(
+            &signed(&missing, "store-key", &key),
+            Utc.with_ymd_and_hms(2026, 8, 12, 1, 0, 0).unwrap(),
+            &Index,
+        ),
+        Err(TrustError::Invalid("kind distribution"))
+    ));
 }
 
 #[test]

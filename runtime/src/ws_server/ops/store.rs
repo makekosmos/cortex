@@ -1,12 +1,21 @@
 use super::*;
+use crate::package_manifest::PackageKind;
+use crate::store_catalog::PackageReleaseKind;
 struct StoreCatalogIndex<'a> {
     packages: &'a PackageService,
 }
 
 impl PackageIndexLookup for StoreCatalogIndex<'_> {
-    fn package_release(&self, package_id: &str, version: &str, is_bridge: bool) -> bool {
-        self.packages
-            .has_catalog_release(package_id, version, is_bridge)
+    fn package_release(&self, package_id: &str, version: &str, kind: PackageReleaseKind) -> bool {
+        self.packages.has_catalog_release(
+            package_id,
+            version,
+            match kind {
+                PackageReleaseKind::App => &PackageKind::App,
+                PackageReleaseKind::Source => &PackageKind::Source,
+                PackageReleaseKind::Bridge => &PackageKind::Bridge,
+            },
+        )
     }
 
     fn canonical_type_version(&self, type_id: &str, versions: &str) -> bool {

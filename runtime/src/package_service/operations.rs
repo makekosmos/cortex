@@ -132,7 +132,12 @@ pub async fn invoke_worker_operation(
 
     /// Store listings may only reference a currently trusted Package Index
     /// release. Catalog metadata never becomes package authority.
-    pub fn has_catalog_release(&self, id: &str, version: &str, is_bridge: bool) -> bool {
+    pub fn has_catalog_release(
+        &self,
+        id: &str,
+        version: &str,
+        expected_kind: &crate::package_manifest::PackageKind,
+    ) -> bool {
         let state = Self::lock(&self.state);
         let (Some(trust), Some(catalog)) = (state.trust.as_ref(), state.catalog.as_ref()) else {
             return false;
@@ -140,7 +145,7 @@ pub async fn invoke_worker_operation(
         let Some(entry) = trust.catalog_entry(&catalog.document, id, version) else {
             return false;
         };
-        matches!(entry.manifest.kind(), PackageKind::Bridge) == is_bridge
+        entry.manifest.kind() == expected_kind
             && trust.ensure_package_allowed(entry).is_ok()
     }
 

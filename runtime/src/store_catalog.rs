@@ -193,8 +193,15 @@ pub enum Distribution {
 }
 
 pub trait PackageIndexLookup {
-    fn package_release(&self, package_id: &str, version: &str, is_bridge: bool) -> bool;
+    fn package_release(&self, package_id: &str, version: &str, kind: PackageReleaseKind) -> bool;
     fn canonical_type_version(&self, type_id: &str, versions: &str) -> bool;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PackageReleaseKind {
+    App,
+    Source,
+    Bridge,
 }
 
 #[derive(Debug, Clone)]
@@ -574,7 +581,12 @@ impl StoreCatalogService {
 
 struct NoopLookup;
 impl PackageIndexLookup for NoopLookup {
-    fn package_release(&self, _package_id: &str, _version: &str, _is_bridge: bool) -> bool {
+    fn package_release(
+        &self,
+        _package_id: &str,
+        _version: &str,
+        _kind: PackageReleaseKind,
+    ) -> bool {
         true
     }
     fn canonical_type_version(&self, _type_id: &str, _versions: &str) -> bool {
@@ -632,7 +644,7 @@ fn validate_document<I: PackageIndexLookup>(
                     version,
                 },
                 None,
-            ) if index.package_release(package_id, version, false) => {}
+            ) if index.package_release(package_id, version, PackageReleaseKind::App) => {}
             (ListingKind::ExternalApp, Distribution::External { official_url }, None)
                 if https(official_url) => {}
             (
@@ -645,7 +657,8 @@ fn validate_document<I: PackageIndexLookup>(
                 Some(link),
             ) if link == connects_to
                 && external_ids.contains(connects_to.as_str())
-                && index.package_release(package_id, version, false) => {}
+                && (index.package_release(package_id, version, PackageReleaseKind::Source)
+                    || index.package_release(package_id, version, PackageReleaseKind::Bridge)) => {}
             _ => return Err(TrustError::Invalid("kind distribution")),
         }
         for row in &listing.data_compatibility {
