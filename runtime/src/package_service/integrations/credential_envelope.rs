@@ -24,11 +24,11 @@ pub(crate) struct CredentialContext {
     pub(crate) issuer_auth_key_id: String,
 }
 #[derive(Debug, Clone)]
-pub(crate) struct HpkeIdentity {
-    pub(crate) node_id: String,
-    pub(crate) private_key: String,
-    pub(crate) public_key: String,
-    pub(crate) key_id: String,
+pub struct HpkeIdentity {
+    pub node_id: String,
+    pub private_key: String,
+    pub public_key: String,
+    pub key_id: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -48,7 +48,7 @@ pub(crate) struct CredentialEnvelopeV2 {
 #[path = "credential_envelope_types.rs"]
 mod types;
 pub(crate) use types::CredentialEnvelopeError;
-pub(crate) fn load_or_create_identity(node_id: &str) -> Result<HpkeIdentity, CredentialEnvelopeError> {
+pub fn load_or_create_identity(node_id: &str) -> Result<HpkeIdentity, CredentialEnvelopeError> {
     validate_id(node_id)?;
     let setting = identity_setting(node_id);
     if let Some(private_key) = read_package_integration_secret(

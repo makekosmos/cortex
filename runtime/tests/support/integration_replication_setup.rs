@@ -12,6 +12,7 @@ use ark_core::integration_replication::{
     AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationNodeGrant, NodeStatus,
 };
 use ed25519_dalek::{Signer, SigningKey};
+use kepler_backend::package_service::credential_envelope::load_or_create_identity;
 use rusqlite::Connection;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -193,12 +194,13 @@ fn identity(node_id: &str, seed: u8) -> NodeIdentity {
     let signing_key = SigningKey::from_bytes(&[seed; 32]);
     let public = signing_key.verifying_key().to_bytes();
     let public_hex = hex(&public);
+    let hpke = load_or_create_identity(node_id).expect("test-owned host HPKE identity");
     NodeIdentity {
         node_id: node_id.into(),
         signing_key,
         signing_public_key: public_hex.clone(),
         transport_public_key: public_hex.clone(),
-        encryption_public_key: public_hex,
+        encryption_public_key: hpke.public_key,
     }
 }
 

@@ -47,7 +47,7 @@ impl CredentialEnvelopeV2 {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum CredentialEnvelopeError {
+pub enum CredentialEnvelopeError {
     #[error("invalid credential envelope")]
     InvalidEnvelope,
     #[error("invalid credential envelope encoding")]
