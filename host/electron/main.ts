@@ -1,5 +1,7 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import {
   EngineClient,
   hasArkGrant,
@@ -265,7 +267,10 @@ async function openApp(
   });
   win.on("closed", () => {
     releaseLaunch(id, win, claim, webContentsId);
-    console.warn("[host-lifecycle] window closed", { app_id: id, remaining: windows.size });
+    console.warn("[host-lifecycle] window closed", {
+      app_id: id,
+      remaining: windows.size,
+    });
   });
   win.webContents.on("render-process-gone", (_event, details) => {
     releaseLaunch(id, win, claim, webContentsId);
@@ -313,6 +318,28 @@ if (!singleInstance) {
       if (action === "minimize") win.minimize();
       else win.close();
     });
+    ipcMain.handle("host:user-data", (_event, input: JsonRecord | undefined) => {
+      const operation = input?.operation;
+      const name = input?.name;
+      if (operation === "path") return path.join(app.getPath("userData"), "extension-data");
+      if (!isJsonString(name) || !/^[\w][\w.-]*$/.test(name))
+        throw new Error("Invalid user data file name");
+      const dir = path.join(app.getPath("userData"), "extension-data");
+      mkdirSync(dir, { recursive: true });
+      const file = path.join(dir, name);
+      if (operation === "readJson")
+        return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null;
+      if (operation === "writeJson") {
+        writeFileSync(file, JSON.stringify(input?.value, null, 2), "utf8");
+        return undefined;
+      }
+      if (operation === "deleteFile") {
+        if (!existsSync(file)) return false;
+        rmSync(file, { force: true });
+        return true;
+      }
+      throw new Error("Unknown user data operation");
+    });
     ipcMain.on("host:ark-subscribe", (event) => {
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win) return;
@@ -325,7 +352,10 @@ if (!singleInstance) {
       const appId = [...windows.entries()].find(([, candidate]) => candidate === win)?.[0];
       const manifest = appId ? manifests.get(appId) : undefined;
       if (!manifest || !isJsonRecord(input))
-        return { ok: false, message: "Некорректный типизированный запрос ARK." };
+        return {
+          ok: false,
+          message: "Некорректный типизированный запрос ARK.",
+        };
       const request = input;
       if (isOperationRequest(request)) {
         const operation = request.operation;
@@ -349,7 +379,11 @@ if (!singleInstance) {
             Array.isArray(grant.scopes) &&
             grant.scopes.includes(operation),
         );
-        if (!granted) return { ok: false, message: "Операция ARK не разрешена приложению." };
+        if (!granted)
+          return {
+            ok: false,
+            message: "Операция ARK не разрешена приложению.",
+          };
         return engine.arkRequest(request.operation, params);
       }
       return { ok: false, message: "Некорректный запрос ARK." };
@@ -401,7 +435,10 @@ if (!singleInstance) {
         !allowed.has(operation) ||
         !hasLauncherGrant(manifest.permissions, operation)
       )
-        return { ok: false, message: "Операция лаунчера не разрешена приложению." };
+        return {
+          ok: false,
+          message: "Операция лаунчера не разрешена приложению.",
+        };
       return engine.launcherRequest(operation, params);
     });
     const id = initialOpenAppId;

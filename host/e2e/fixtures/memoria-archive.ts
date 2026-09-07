@@ -4,9 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import type { JsonValue, Manifest, PackageArchive } from "./signed-app-types";
 
-const SOURCE_COMMIT = "1d72b61";
+const SOURCE_COMMIT = "ffb0c88";
 const ARCHIVE_PATH = "release/memoria-0.6.6.kspkg";
-const ARCHIVE_SHA256 = "9aa76cd10cfb1d8be9f5ca9770407496c9aa9e7691ec3dc0a3bb32b7af88bbaf";
+const ARCHIVE_SHA256 = "618a8b9ce61a280afe6729b5ccb01f0282ba934bb914f21bcdef101ac1d82916";
 
 const command = (file: string, args: string[], cwd: string) =>
   execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe" });
@@ -103,6 +103,10 @@ export function memoriaArchive(root: string, repositoryRoot: string): PackageArc
   ) {
     throw new Error("Memoria archive has unexpected compatibility metadata");
   }
-  const manifest = { ...parsed, id: parsed.id, version: parsed.version } satisfies Manifest;
+  const manifest = {
+    ...parsed,
+    id: parsed.id,
+    version: parsed.version,
+  } satisfies Manifest;
   return { file, manifest };
 }
