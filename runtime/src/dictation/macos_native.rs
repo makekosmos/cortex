@@ -173,12 +173,18 @@ fn watch_hotkey_once(
             match mode {
                 TriggerMode::Toggle => {
                     let _ = tx.send(json!({ "event": "dictation_toggle_trigger" }));
+                    let _ = tx.send(
+                        json!({ "event": "dictation.trigger", "kind": "toggle", "phase": "down" }),
+                    );
                 }
                 TriggerMode::PushToTalk => {
                     let _ = tx.send(json!({
                         "event": "dictation_ptt_trigger",
                         "phase": "down",
                     }));
+                    let _ = tx.send(
+                        json!({ "event": "dictation.trigger", "kind": "ptt", "phase": "down" }),
+                    );
                 }
             }
         }
@@ -188,6 +194,8 @@ fn watch_hotkey_once(
                     "event": "dictation_ptt_trigger",
                     "phase": "up",
                 }));
+                let _ =
+                    tx.send(json!({ "event": "dictation.trigger", "kind": "ptt", "phase": "up" }));
             }
             break;
         }

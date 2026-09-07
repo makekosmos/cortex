@@ -54,6 +54,7 @@ async fn apply_local_model_selection_values_to_config(
     drop(cfg);
     apply_ptt_hook(&snapshot, events_tx);
     let _ = events_tx.send(json!({ "event": "dictation_config_changed" }));
+    let _ = events_tx.send(json!({ "event": "dictation.models_changed" }));
     Ok(snapshot)
 }
 
@@ -211,6 +212,7 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
             "config": select.then(|| config_to_value(&cfg)),
             "localModels": local_models::snapshot(&data_dir, &cfg),
         }));
+        let _ = events_tx.send(json!({ "event": "dictation.models_changed" }));
     });
     DictationResponse::ok(json!({
         "started": true,

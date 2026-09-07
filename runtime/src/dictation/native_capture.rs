@@ -11,17 +11,18 @@ pub struct CapturedAudio {
 }
 
 pub struct Session {
+    pub(crate) capture_id: String,
     stop: mpsc::Sender<()>,
     join: std::thread::JoinHandle<Result<CapturedAudio, String>>,
 }
 
-pub fn start(device_id: Option<&str>) -> Result<(Session, u32, u16), String> {
+pub fn start(device_id: Option<&str>, capture_id: String) -> Result<(Session, u32, u16), String> {
     if device_id.is_some_and(|id| !id.is_empty()) {
         return Err("device_unavailable".into());
     }
     #[cfg(windows)]
     {
-        return start_windows();
+        return start_windows(capture_id);
     }
     #[cfg(not(windows))]
     {
@@ -38,7 +39,7 @@ pub fn stop(session: Session) -> Result<CapturedAudio, String> {
 }
 
 #[cfg(windows)]
-fn start_windows() -> Result<(Session, u32, u16), String> {
+fn start_windows(capture_id: String) -> Result<(Session, u32, u16), String> {
     let (stop_tx, stop_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::channel();
     let join = std::thread::Builder::new()
@@ -56,6 +57,7 @@ fn start_windows() -> Result<(Session, u32, u16), String> {
         .map_err(|_| "device_unavailable".to_string())??;
     Ok((
         Session {
+            capture_id,
             stop: stop_tx,
             join,
         },

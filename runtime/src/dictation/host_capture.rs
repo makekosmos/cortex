@@ -71,6 +71,21 @@ async fn op_capture_foreground(host: &DictationHost) -> DictationResponse {
     DictationResponse::ok(json!({ "captured": hwnd.is_some() }))
 }
 
+async fn op_contract_foreground(host: &DictationHost) -> DictationResponse {
+    let hwnd = inject::capture_foreground_window();
+    if hwnd.is_none() {
+        return DictationResponse::err("device_unavailable");
+    }
+    let window_id = uuid::Uuid::new_v4().to_string();
+    let mut state = host.state.lock().await;
+    state.prev_hwnd = hwnd;
+    *host
+        .contract_window_id
+        .lock()
+        .expect("window mutex poisoned") = Some(window_id.clone());
+    DictationResponse::ok(json!({ "windowId": window_id }))
+}
+
 async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
     host.contract_events
         .store(true, std::sync::atomic::Ordering::Release);
@@ -78,19 +93,21 @@ async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> Dictation
         return DictationResponse::err("busy");
     }
     let device_id = params.get("deviceId").and_then(Value::as_str).map(str::to_owned);
+    let capture_id = uuid::Uuid::new_v4().to_string();
     let started = op_start_recording(host).await;
     if !started.ok {
         return started;
     }
+    let native_capture_id = capture_id.clone();
     let result = tokio::task::spawn_blocking(move || {
-        super::native_capture::start(device_id.as_deref())
+        super::native_capture::start(device_id.as_deref(), native_capture_id)
     })
     .await;
     match result {
         Ok(Ok((session, sample_rate, channels))) => {
             *host.capture.lock().expect("capture mutex poisoned") = Some(session);
             DictationResponse::ok(json!({
-                "captureId": uuid::Uuid::new_v4().to_string(),
+                "captureId": capture_id,
                 "sampleRate": sample_rate,
                 "channels": channels,
                 "format": "wav"
@@ -122,6 +139,10 @@ async fn op_capture_stop(params: Value, host: &Arc<DictationHost>) -> DictationR
     let Some(session) = session else {
         return DictationResponse::err("capture.stop: capture not active");
     };
+    if session.capture_id != capture_id {
+        *host.capture.lock().expect("capture mutex poisoned") = Some(session);
+        return DictationResponse::err("capture.stop: captureId does not match active capture");
+    }
     let result = tokio::task::spawn_blocking(move || super::native_capture::stop(session)).await;
     let _ = op_cancel(host).await;
     match result {
@@ -151,10 +172,21 @@ async fn op_speech_transcribe(params: Value, host: &Arc<DictationHost>) -> Dicta
     op_submit_audio(params, host).await
 }
 
-async fn op_insert_text(params: Value) -> DictationResponse {
+async fn op_insert_text(params: Value, host: &DictationHost) -> DictationResponse {
     let Some(text) = params.get("text").and_then(Value::as_str).map(str::to_owned) else {
         return DictationResponse::err("input.insert_text: missing text");
     };
+    if let Some(target) = params.get("targetWindow").and_then(Value::as_str) {
+        let matches = host
+            .contract_window_id
+            .lock()
+            .expect("window mutex poisoned")
+            .as_deref()
+            == Some(target);
+        if !matches {
+            return DictationResponse::err("window_unavailable");
+        }
+    }
     match tokio::task::spawn_blocking(move || {
         inject::inject_blocking(&text, InjectMode::AutoPaste, None)
     })
