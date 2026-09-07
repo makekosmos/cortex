@@ -59,6 +59,31 @@ describe("marketplace behavior", () => {
     expect(result.map((item) => item.id)).toEqual(["com.example.app"]);
   });
 
+  test("keeps integrations and external apps in their marketplace tabs", () => {
+    const integration = listing({ id: "com.integration", kind: "integration" });
+    const external = listing({ id: "com.external", kind: "external-app", distribution: undefined });
+    expect(
+      filterListings([integration, external], () => undefined, "integrations", {
+        platform: "all",
+        kind: "all",
+        category: "all",
+        data: "all",
+        fidelity: "all",
+        install: "all",
+      }).map((item) => item.id),
+    ).toEqual(["com.integration"]);
+    expect(
+      filterListings([integration, external], () => undefined, "external-apps", {
+        platform: "all",
+        kind: "all",
+        category: "all",
+        data: "all",
+        fidelity: "all",
+        install: "all",
+      }).map((item) => item.id),
+    ).toEqual(["com.external"]);
+  });
+
   test("recommends listings matching local ARK data types", () => {
     const summary: DataSummary = {
       types: [

@@ -24,6 +24,7 @@ const emit = defineEmits<{
   tab: [MarketplaceTab];
   install: [StoreListing];
   open: [InstalledStoreItem];
+  external: [StoreListing];
   details: [StoreListing];
 }>();
 </script>
@@ -104,6 +105,7 @@ const emit = defineEmits<{
         :feedback="feedback(listing)"
         @install="emit('install', $event)"
         @open="emit('open', $event)"
+        @external="emit('external', $event)"
         @details="emit('details', $event)"
       />
     </div>

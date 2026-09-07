@@ -43,9 +43,7 @@ const filters = ref<MarketplaceFilters>({
   install: "all",
 });
 const rowsBase = computed(() => {
-  const apps = listings.value.filter(
-    (item) => item.kind === "kosmos-package" && !retiredListingIds.has(item.id),
-  );
+  const apps = listings.value.filter((item) => !retiredListingIds.has(item.id));
   const local = development.value.map((item) => ({
     id: item.id,
     kind: "kosmos-package" as const,
@@ -156,9 +154,13 @@ function showDetails(listing: StoreListing) {
   selectedListing.value = listing;
   emit("detailChange", true);
 }
+function openExternal(listing: StoreListing) {
+  void props.client.call("openStoreExternal", { listing_id: listing.id }, `store-external:${listing.id}`);
+}
 function runDetailAction() {
   if (!detail.value) return;
-  if (development.value.some((item) => item.id === detail.value!.listing.id))
+  if (detail.value.listing.kind === "external-app") openExternal(detail.value.listing);
+  else if (development.value.some((item) => item.id === detail.value!.listing.id))
     void props.client.call(
       "openDevelopmentPackage",
       { package_id: detail.value.listing.id },
@@ -195,7 +197,12 @@ onMounted(async () => {
       v-if="detail"
       v-bind="{
         ...detail,
-        actionLabel: installedFor(detail.listing) ? 'Открыть' : 'Установить',
+        actionLabel:
+          detail.listing.kind === 'external-app'
+            ? 'Открыть сайт'
+            : installedFor(detail.listing)
+              ? 'Открыть'
+              : 'Установить',
         busy: isInstalling(detail.listing),
       }"
       @action="runDetailAction"
@@ -214,6 +221,7 @@ onMounted(async () => {
         @tab="activeTab = $event"
         @install="install"
         @open="openPackage"
+        @external="openExternal"
         @details="showDetails"
       />
       <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -232,6 +240,7 @@ onMounted(async () => {
           :development="development.some((entry) => entry.id === listing.id)"
           @install="install"
           @open="openPackage"
+          @external="openExternal"
           @details="showDetails"
         />
       </div>
