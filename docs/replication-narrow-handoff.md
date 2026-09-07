@@ -73,16 +73,31 @@ field and validate its mapped payload before writing it. These consumer and
 ingress gaps remain part of #33; importing unrelated generic ingress changes
 from PR #55 is not implied by this slice.
 
-## Acceptance remaining for the full feature
+## Current #53 acceptance status
 
-- Authenticated two-node transport and reconnect/revocation tests.
-- Collection and refresh on an authorized recipient after the original node stops.
-- Black-box evidence that credentials do not reach renderer, worker or log output.
-- Real provider OAuth and provider-specific concurrent-refresh limitations.
-- Windows acceptance against the pinned release candidate.
+The delivered slice satisfies the literal #53 contract for canonical types,
+authorization/pairing/revocation/key rotation, encrypted envelope replication,
+independent authorized-recipient use and refresh, controlled refresh conflict
+handling, and source-offline collection. The evidence is split between the Core
+replication DB/security/publication tests and Cortex's consumer/HPKE integration
+tests; the latter drops the origin host before exercising the recipient's local
+provider flow.
 
-None of these is implied by contract/persistence tests. Final local evidence for
-the delivered slice is recorded separately from full-feature acceptance.
+The provider evidence uses a controlled fixture. It proves the generic
+production-path collection and refresh contract, but it does not claim
+provider-specific OAuth or token-endpoint behavior, nor does it generalize
+provider-specific concurrent-refresh semantics. No external provider/account
+smoke was run (`NOT_RUN`); #53 names no external provider, so that is optional
+evidence rather than a failed literal acceptance item.
+
+Security and recovery model: Core stores only public configuration and opaque
+addressed envelopes; trusted-host decryption and provider credentials remain in
+Cortex. Key/grant rotation, revocation, and refresh fencing reject stale
+envelopes or queued writes. If local key material is lost, recovery requires
+re-pairing or re-authorization; the protocol does not recover plaintext secrets
+from Core or sync data. Renderer-isolation black-box evidence and Windows
+release-candidate acceptance remain separate app/distribution gates, not claims
+made by this Core/runtime contract.
 
 ## Next bounded Core assignment
 
