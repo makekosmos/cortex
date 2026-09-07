@@ -1136,6 +1136,7 @@ pub async fn invoke_worker_operation(
         let integration = self.integration_launch_config(&installed)?;
         let typed_grant = self.ensure_typed_grant(&installed)?;
         let mut manifest = installed.manifest.common_manifest();
+        manifest.permissions = worker_permissions(&installed.manifest);
         if matches!(manifest.kind, PackageKind::App) {
             manifest.kind = PackageKind::Source;
         }
@@ -1325,6 +1326,32 @@ fn worker_scopes_overlap(left: &VersionedManifest, right: &VersionedManifest) ->
     })
 }
 
+fn worker_permissions(manifest: &VersionedManifest) -> Vec<PermissionRequest> {
+    let v2_worker = matches!(manifest, VersionedManifest::V2(_));
+    manifest
+        .permissions()
+        .iter()
+        .filter_map(|permission| {
+            if v2_worker && matches!(permission.capability.as_str(), "ark.read" | "ark.write") {
+                // ponytail: v2 UI ARK scopes stay in the Host principal; the worker gets only
+                // its explicit dictation.control and worker.invoke authority.
+                let scopes = permission
+                    .scopes
+                    .iter()
+                    .filter(|scope| !scope.starts_with("dictation."))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                (!scopes.is_empty()).then(|| PermissionRequest {
+                    capability: permission.capability.clone(),
+                    scopes,
+                })
+            } else {
+                Some(permission.clone())
+            }
+        })
+        .collect()
+}
+
 fn scope_contains(scope: &str, operation: &str) -> bool {
     scope == operation
         || scope.strip_suffix(".*").is_some_and(|prefix| {
@@ -1334,12 +1361,36 @@ fn scope_contains(scope: &str, operation: &str) -> bool {
 
 #[cfg(test)]
 mod worker_scope_tests {
-    use super::scope_contains;
+    use super::{scope_contains, worker_permissions};
+    use crate::package_manifest::PackageManifest;
 
     #[test]
     fn wildcard_scope_owns_only_its_namespace() {
         assert!(scope_contains("games.*", "games.list"));
         assert!(scope_contains("games.*", "games"));
         assert!(!scope_contains("games.*", "games2.list"));
+    }
+
+    #[test]
+    fn v2_worker_projection_keeps_worker_grants_out_of_ui_ark_scopes() {
+        let raw = r#"{
+            "schema_version": 2, "id": "com.kosmos.dictation", "name": "Dictation",
+            "version": "0.2.5", "kind": "app", "engine_api": ">=1.0.0",
+            "entrypoint": "dist/index.html", "publisher": "kosmos",
+            "permissions": [
+                {"capability": "dictation.control", "scopes": ["dictation.capture.start"]},
+                {"capability": "worker.invoke", "scopes": ["dictation.trigger"]},
+                {"capability": "ark.read", "scopes": ["dictation.get_state"]},
+                {"capability": "ark.write", "scopes": ["dictation.cancel"]}
+            ],
+            "targets": [{"runtime": "worker", "os": ["windows"], "entrypoint": "worker.exe"}],
+            "data": {"access": [], "defines": [], "mappings": []}
+        }"#;
+        let manifest = PackageManifest::parse(raw).expect("valid v2 worker manifest");
+        let projected = worker_permissions(&manifest);
+        assert_eq!(projected.len(), 2);
+        assert!(projected.iter().any(|p| p.capability == "dictation.control"));
+        assert!(projected.iter().any(|p| p.capability == "worker.invoke"));
+        assert!(!projected.iter().any(|p| p.scopes.iter().any(|s| s == "dictation.get_state")));
     }
 }
