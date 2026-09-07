@@ -79,7 +79,29 @@ pub(crate) async fn receive(
             expected_issuer_key_id,
         )
         .map_err(|_| "Core credential envelope is not V2 HPKE".to_string())?;
-    let mut plaintext = crate::package_service::credential_envelope::decrypt(
+    let confirmed = consumer
+        .lookup_issuer_encryption_key(&json!({
+            "space_id": space_id,
+            "integration_id": integration_id,
+            "recipient_node_id": recipient_node_id,
+            "issuer_node_id": issuer_node_id,
+            "credential_generation": credential_generation,
+            "expected_issuer_key_id": expected_issuer_key_id,
+        }))
+        .await
+        .map_err(|_| "Core issuer key revalidation rejected".to_string())?;
+    if confirmed.get("status").and_then(Value::as_str) != Some("active")
+        || confirmed.get("grant_status").and_then(Value::as_str) != Some("active")
+        || confirmed.get("key_id").and_then(Value::as_str) != Some(expected_issuer_key_id)
+        || confirmed.get("grant_epoch").and_then(Value::as_u64) != Some(grant_epoch)
+        || confirmed
+            .get("credential_generation")
+            .and_then(Value::as_u64)
+            != Some(credential_generation)
+    {
+        return Err("Core issuer key changed during credential load".to_string());
+    }
+    let plaintext = crate::package_service::credential_envelope::decrypt(
         &envelope,
         &expected,
         &recipient,
@@ -95,7 +117,6 @@ pub(crate) async fn receive(
         )
         .await
         .map_err(|_| "stored credential could not start provider sync".to_string());
-    crate::package_worker_secrets::zeroize_secret(&mut plaintext);
     stored?;
     Ok(json!({
         "stored": true,
@@ -103,24 +124,29 @@ pub(crate) async fn receive(
     }))
 }
 
-pub(crate) async fn publish(params: &Value, ark: &ArkHost) -> Result<Value, String> {
+pub(crate) async fn publish(
+    params: &Value,
+    ark: &ArkHost,
+    packages: &crate::package_service::PackageService,
+) -> Result<Value, String> {
     let space_id = required(params, "space_id")?;
     let integration_id = required(params, "integration_id")?;
-    let package_version = required(params, "package_version")?;
-    let setting = required(params, "setting")?;
     let issuer_node_id = required(params, "issuer_node_id")?;
     let recipient_node_id = required(params, "recipient_node_id")?;
     let recipient_public_key = required(params, "recipient_public_key")?;
     let grant_epoch = nonzero(params, "grant_epoch")?;
     let credential_generation = nonzero(params, "credential_generation")?;
     let refresh_fencing_token = nonzero(params, "refresh_fencing_token")?;
+    let (package_version, setting) = packages
+        .integration_credential_target(integration_id)
+        .map_err(|_| "installed integration manifest unavailable".to_string())?;
     let issuer =
         crate::package_service::credential_envelope::load_or_create_identity(issuer_node_id)
             .map_err(|_| "local credential envelope identity unavailable".to_string())?;
     let secret = crate::package_service::secret_store::read_package_integration_secret(
         integration_id,
-        package_version,
-        setting,
+        &package_version,
+        &setting,
     )
     .ok_or("credential is not stored locally")?;
     let lookup = super::replication_consumer::ReplicationConsumer::new(ark)

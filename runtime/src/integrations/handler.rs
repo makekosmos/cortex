@@ -226,7 +226,7 @@ pub async fn handle_operation(
             super::credential_envelope::receive(&params, ark, packages).await
         }
         "replication_publish_credential_envelope_v2" => {
-            super::credential_envelope::publish(&params, ark).await
+            super::credential_envelope::publish(&params, ark, packages).await
         }
         "body_weight_set" => {
             let body_weight = params.get("bodyWeightKg").and_then(Value::as_f64);

@@ -22,7 +22,9 @@ fn auth_round_trip_and_keyring_store() {
     let encoded = serde_json::to_string(&envelope).unwrap();
     assert!(!encoded.contains("oauth-secret"));
     assert_eq!(
-        decrypt(&envelope, &context, &recipient, &issuer.public_key).unwrap(),
+        decrypt(&envelope, &context, &recipient, &issuer.public_key)
+            .unwrap()
+            .as_str(),
         "oauth-secret"
     );
     decrypt_and_store(
@@ -116,7 +118,9 @@ fn core_opaque_shape_is_admitted_only_for_v2_algorithm() {
     });
     let parsed = CredentialEnvelopeV2::from_core_value(&core_value, &issuer.key_id).unwrap();
     assert_eq!(
-        decrypt(&parsed, &context, &recipient, &issuer.public_key).unwrap(),
+        decrypt(&parsed, &context, &recipient, &issuer.public_key)
+            .unwrap()
+            .as_str(),
         "secret"
     );
     let mut legacy = core_value;

@@ -18,7 +18,7 @@ const IDENTITY_VERSION: &str = "credential-envelope-v2";
 
 #[path = "credential_envelope_models.rs"]
 mod models;
-pub(crate) use models::{CredentialContext, CredentialEnvelopeV2};
+pub(crate) use models::{CredentialContext, CredentialEnvelopeV2, DecryptedSecret};
 pub use models::HpkeIdentity;
 
 #[path = "credential_envelope_types.rs"]
@@ -27,6 +27,7 @@ pub(crate) use types::CredentialEnvelopeError;
 #[path = "credential_identity_cleanup.rs"]
 mod identity_cleanup;
 pub use identity_cleanup::clear_identity;
+
 
 pub fn load_or_create_identity(node_id: &str) -> Result<HpkeIdentity, CredentialEnvelopeError> {
     validate_id(node_id)?;
@@ -107,7 +108,7 @@ pub(crate) fn decrypt(
     expected: &CredentialContext,
     recipient: &HpkeIdentity,
     issuer_public_key: &str,
-) -> Result<String, CredentialEnvelopeError> {
+) -> Result<DecryptedSecret, CredentialEnvelopeError> {
     validate_envelope(envelope, expected, recipient)?;
     let sender_public_key = decode_key(issuer_public_key)?;
     if encryption_key_id(&encode(sender_public_key.to_bytes().as_ref()))
@@ -129,7 +130,13 @@ pub(crate) fn decrypt(
     let plaintext = context_hpke
         .open(&ciphertext, &aad(envelope)?)
         .map_err(|_| CredentialEnvelopeError::Authentication)?;
-    String::from_utf8(plaintext).map_err(|_| CredentialEnvelopeError::InvalidPlaintext)
+    String::from_utf8(plaintext)
+        .map(DecryptedSecret)
+        .map_err(|error| {
+            let mut bytes = error.into_bytes();
+            for byte in &mut bytes { unsafe { std::ptr::write_volatile(byte, 0) }; }
+            CredentialEnvelopeError::InvalidPlaintext
+        })
 }
 
 pub(crate) fn decrypt_and_store(
@@ -145,7 +152,7 @@ pub(crate) fn decrypt_and_store(
         return Err(CredentialEnvelopeError::InvalidEnvelope);
     }
     let plaintext = decrypt(envelope, expected, recipient, issuer_public_key)?;
-    save_package_integration_secret(package_id, package_version, setting, &plaintext)?;
+    save_package_integration_secret(package_id, package_version, setting, plaintext.as_str())?;
     Ok(())
 }
 

@@ -1,4 +1,23 @@
 use serde::{Deserialize, Serialize};
+use std::ops::Deref;
+
+pub(crate) struct DecryptedSecret(pub(crate) String);
+
+impl DecryptedSecret {
+    pub(crate) fn as_str(&self) -> &str { &self.0 }
+}
+
+impl Deref for DecryptedSecret {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target { self.as_str() }
+}
+
+impl Drop for DecryptedSecret {
+    fn drop(&mut self) {
+        crate::package_worker_secrets::zeroize_secret(&mut self.0);
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CredentialContext {
