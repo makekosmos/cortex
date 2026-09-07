@@ -33,13 +33,11 @@ test("installer migration tracks every authoritative legacy name and is idempote
   const deletes = [...updateBranch.matchAll(/DeleteRegValue .*?Run" "([^"]+)"/g)].map((m) => m[1]);
   expect(reads).toEqual(LEGACY_AUTOSTART_NAMES);
   expect(deletes).toEqual(LEGACY_AUTOSTART_NAMES);
-  expect(
-    installBody.split(
-      `WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Run" "${runKey}"`,
-    ).length - 1,
-  ).toBe(2);
+  // The engine is installed independently; GUI setup must not create an
+  // autostart owner that points into the GUI install directory.
+  expect(installBody).not.toContain("WriteRegStr HKCU");
   expect(freshBranch).toContain("${ifNot} ${isUpdated}");
-  expect(freshBranch).toContain(runCommand);
+  expect(freshBranch).not.toContain(runCommand);
   for (const name of LEGACY_AUTOSTART_NAMES) {
     expect(freshBranch).toContain(
       `DeleteRegValue HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Run" "${name}"`,
