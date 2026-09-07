@@ -30,6 +30,8 @@ test("release build validates before publishing immutable artifacts", () => {
 
 test("GUI and Engine versions remain independent", () => {
   assert.match(backend, /process\.env\.KOSMOS_ENGINE_VERSION \?\? getVersion\("win"\)/);
+  assert.match(backend, /KOSMOS_ENGINE_REUSE_ARCHIVE/);
+  assert.match(backend, /verifyEngineArchive\(engineArchive, engineManifest\)/);
   assert.match(
     backend,
     /releases\/download\/v\$\{engineVersion\}\/Kosmos-Engine-\$\{engineVersion\}\.zip/,
@@ -37,4 +39,5 @@ test("GUI and Engine versions remain independent", () => {
   assert.match(script, /copyEngineRelease\(SHELL_ROOT, engineVersion\)/);
   assert.match(script, /copyEngineManifest\(SHELL_ROOT, engineVersion\)/);
   assert.match(script, /collectArtifacts\(outputDir, platform, version, engineVersion\)/);
+  assert.match(script, /rmSync\(path\.join\(SHELL_ROOT, "release", name\)\)/);
 });

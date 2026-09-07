@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   effectiveCargoTargetDir,
@@ -11,7 +11,7 @@ import {
   cleanBuildIntermediates,
 } from "./runtime-staging.mjs";
 import { ensureArkCoreRpc } from "./ark-core-rpc.mjs";
-import { buildEngineArchive } from "./engine-distribution.mjs";
+import { buildEngineArchive, verifyEngineArchive } from "./engine-distribution.mjs";
 import { getVersion } from "./release-version.mjs";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -73,10 +73,24 @@ if (process.platform === "win32") {
   const engineUrl =
     process.env.KOSMOS_ENGINE_RELEASE_URL ??
     `https://github.com/makekosmos/desktop/releases/download/v${engineVersion}/Kosmos-Engine-${engineVersion}.zip`;
-  const engineManifest = buildEngineArchive(stageDir, engineArchive, {
-    version: engineVersion,
-    url: engineUrl,
-  });
+  let engineManifest;
+  if (process.env.KOSMOS_ENGINE_REUSE_ARCHIVE) {
+    const sourceArchive = process.env.KOSMOS_ENGINE_REUSE_ARCHIVE;
+    const sourceManifest = process.env.KOSMOS_ENGINE_REUSE_MANIFEST;
+    if (!sourceManifest) throw new Error("KOSMOS_ENGINE_REUSE_MANIFEST is required");
+    copyFileSync(sourceArchive, engineArchive);
+    engineManifest = JSON.parse(readFileSync(sourceManifest, "utf8"));
+    if (
+      engineManifest.version !== engineVersion ||
+      !verifyEngineArchive(engineArchive, engineManifest)
+    )
+      throw new Error(`reused Engine does not match ${engineVersion}`);
+  } else {
+    engineManifest = buildEngineArchive(stageDir, engineArchive, {
+      version: engineVersion,
+      url: engineUrl,
+    });
+  }
   engineManifest.channel_url =
     "https://github.com/makekosmos/desktop/releases/latest/download/Kosmos-Engine-manifest.json";
   mkdirSync(engineDir, { recursive: true });
