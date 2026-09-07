@@ -318,13 +318,21 @@ if (!singleInstance) {
       if (action === "minimize") win.minimize();
       else win.close();
     });
-    ipcMain.handle("host:user-data", (_event, input: JsonRecord | undefined) => {
+    ipcMain.handle("host:user-data", (event, input: JsonRecord | undefined) => {
       const operation = input?.operation;
       const name = input?.name;
-      if (operation === "path") return path.join(app.getPath("userData"), "extension-data");
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const appId = [...windows.entries()].find(([, candidate]) => candidate === win)?.[0];
+      const manifest = appId ? manifests.get(appId) : undefined;
+      if (!appId || !manifest) throw new Error("Unknown app sender");
+      const write = operation === "writeJson" || operation === "deleteFile";
+      const required = write ? "filesystem.write" : "filesystem.read";
+      if (!manifest.permissions.some((grant) => grant.capability === required))
+        throw new Error("User data permission denied");
+      const dir = path.join(app.getPath("userData"), "extension-data", appId);
+      if (operation === "path") return dir;
       if (!isJsonString(name) || !/^[\w][\w.-]*$/.test(name))
         throw new Error("Invalid user data file name");
-      const dir = path.join(app.getPath("userData"), "extension-data");
       mkdirSync(dir, { recursive: true });
       const file = path.join(dir, name);
       if (operation === "readJson")
