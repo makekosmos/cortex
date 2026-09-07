@@ -37,4 +37,5 @@ test("GUI and Engine versions remain independent", () => {
   assert.match(script, /copyEngineRelease\(SHELL_ROOT, engineVersion\)/);
   assert.match(script, /copyEngineManifest\(SHELL_ROOT, engineVersion\)/);
   assert.match(script, /collectArtifacts\(outputDir, platform, version, engineVersion\)/);
+  assert.match(script, /rmSync\(path\.join\(SHELL_ROOT, "release", name\)\)/);
 });

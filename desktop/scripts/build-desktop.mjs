@@ -3,7 +3,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { getVersion } from "./release-version.mjs";
 import { loadReleaseBom } from "./release-bom.mjs";
 import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
@@ -230,10 +230,12 @@ async function main() {
   log(`Version:  ${version}`);
   log(`BOM:      ${bom.value.id} (${bom.digest})`);
   log("");
-  // ── 3. Resolve electron-builder binary ───────────────────────────────────
+  if (platform === "win")
+    readdirSync(path.join(SHELL_ROOT, "release"))
+      .filter((name) => /^Kosmos-Engine-\d+\.\d+\.\d+\.(?:zip|json)$/.test(name))
+      .forEach((name) => rmSync(path.join(SHELL_ROOT, "release", name)));
   const eb = resolveElectronBuilder();
   log(`electron-builder: ${eb}`);
-  // ── 4. Build the electron-builder command ────────────────────────────────
   let ebArgs;
   if (platform === "win") {
     ebArgs = ["--win", "nsis", "--publish", "never", `-c.extraMetadata.version=${version}`];
@@ -243,7 +245,6 @@ async function main() {
   log(`Running: ${eb} ${ebArgs.join(" ")}`);
   log("");
 
-  // ── 5. Spawn electron-builder ─────────────────────────────────────────────
   const ebResult = spawnSync(eb, ebArgs, {
     cwd: SHELL_ROOT,
     stdio: "inherit",
@@ -273,7 +274,6 @@ async function main() {
   publishRelease(platform, version, [...releaseFiles.artifactFiles, ...releaseFiles.metadataFiles]);
   log("Running verify guard...");
   log("");
-
   const verifyScript = path.join(__dirname, "verify-release-channel.mjs");
   const verifyResult = spawnSync(
     process.execPath, // node
