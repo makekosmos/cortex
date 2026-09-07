@@ -9,7 +9,10 @@ test("repoDevExtensionsRoot ignores packaged builds and resolves from repo root"
 });
 
 test("resolveExtensionRootEntries keeps bundled extensions out of dev source", async () => {
-  const source = await readFile(path.join(import.meta.dir, "extension-roots.ts"), "utf8");
+  const source = await readFile(
+    path.join(import.meta.dir, "extension-package-registry.ts"),
+    "utf8",
+  );
   expect(source).toContain("if (!app.isPackaged) {");
   expect(source).toContain('const bundled = path.join(process.resourcesPath, "extensions");');
 });

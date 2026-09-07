@@ -3,25 +3,19 @@ import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
-import type { ExtensionSource as ExtensionPermissionSource } from "./extension-permissions";
+import type { ExtensionSource } from "./extension-permissions";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 interface ExtensionRootEntry {
   dir: string;
-  source: ExtensionPermissionSource;
+  source: ExtensionSource;
 }
 
-// Per-id lookup (`resolveExtensionLocation`) обходит цепочку и возвращает первый
-// корень, где есть `manifest.json`. Это позволяет смешивать user-installed
-// и bundled extensions.
+// Canonical registry for installed/bundled package extensions. Package
+// manifests are still validated by extension-manifest.ts after this lookup.
 function resolveExtensionRootEntries(): ExtensionRootEntry[] {
   const roots: ExtensionRootEntry[] = [];
-  // Repo dev tree: __dirname is platform/desktop/electron/ (or dist-electron/).
-  // Source packages can live under products/* or the deprecated extensions/*
-  // compatibility root. In packaged builds we skip this branch:
-  // otherwise bundled first-party extensions can be misclassified as dev.
   if (!app.isPackaged) {
     const repoRoot = path.resolve(__dirname, "..", "..", "..");
     for (const rootName of ["products", "extensions"]) {
@@ -67,7 +61,6 @@ export function resolveSafeUserDataPath(dir: string, name: string): string {
   ) {
     throw new Error(`[kepler-shell] invalid user data path: ${name}`);
   }
-
   const resolvedDir = path.resolve(dir);
   const resolvedPath = path.resolve(resolvedDir, ...parts);
   const relative = path.relative(resolvedDir, resolvedPath);
@@ -85,7 +78,7 @@ export function ensureUserDataDir(extId: string): string {
 
 export function resolveExtensionLocation(
   id: string,
-): { dir: string; source: ExtensionPermissionSource } | null {
+): { dir: string; source: ExtensionSource } | null {
   for (const root of resolveExtensionRootEntries()) {
     const dir = path.join(root.dir, id);
     if (existsSync(path.join(dir, "manifest.json")) || existsSync(path.join(dir, "package.json"))) {
