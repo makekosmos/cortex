@@ -13,6 +13,7 @@ const coreRpc =
   process.env.ARK_CORE_RPC_PATH ??
   ensureArkCoreRpc({
     debug: true,
+    features: ["iroh-spike"],
     targetDir: resolve(target, "debug"),
   });
 const bridge = executable("ark-markdown-bridge");

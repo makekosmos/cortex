@@ -24,6 +24,7 @@ import {
 const hostRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceRoot = path.resolve(hostRoot, "..", "..");
 const hostMain = path.join(hostRoot, "dist-electron", "main.js");
+const packedHost = process.env.KOSMOS_PACKED_HOST;
 
 test("signed Memoria rolls back an import interrupted after a durable entry write", async () => {
   test.setTimeout(180_000);
@@ -40,6 +41,9 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     KOSMOS_HEADLESS: "1",
     KOSMOS_TEST_MODE: "1",
   });
+  if (process.env.KEPLER_BACKEND_EXE) {
+    environment.KEPLER_BACKEND_EXE = process.env.KEPLER_BACKEND_EXE;
+  }
   recordCleanup(cleanupManifest, root, new Set());
   let host: ElectronApplication | undefined;
   let engine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
@@ -47,8 +51,10 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
   const pids = new Set<number>();
   const launchHost = () =>
     electron.launch({
-      executablePath: electronBinary,
-      args: [`--user-data-dir=${userData}`, hostMain, "--open-app", "com.kosmos.memoria"],
+      executablePath: packedHost ?? electronBinary,
+      args: packedHost
+        ? [`--user-data-dir=${userData}`, "--open-app", "com.kosmos.memoria"]
+        : [`--user-data-dir=${userData}`, hostMain, "--open-app", "com.kosmos.memoria"],
       env: environment,
       timeout: 30_000,
     });
