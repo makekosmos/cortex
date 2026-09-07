@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 export const ARK_CORE_REPOSITORY = "https://github.com/makekosmos/core.git";
 // Keep the Rust API and sidecar binary on the same immutable Core revision.
-export const ARK_CORE_REVISION = "78f1f5dfa8bfa502d8207afec57948990e4dfa72";
+export const ARK_CORE_REVISION = "0b06342014238244749946bbe3db92d94dfa0868";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const cacheRoot = path.join(shellRoot, ".tmp", "ark-core-rpc");

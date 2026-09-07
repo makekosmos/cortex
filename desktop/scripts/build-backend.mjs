@@ -1,17 +1,32 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   effectiveCargoTargetDir,
   RUNTIME_BINARIES,
   stageRuntimeBinary,
+  acquireBuildLock,
+  cleanBuildIntermediates,
 } from "./runtime-staging.mjs";
 import { ensureArkCoreRpc } from "./ark-core-rpc.mjs";
+import { buildEngineArchive } from "./engine-distribution.mjs";
+import { getVersion } from "./release-version.mjs";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
+const releaseBuildLock = acquireBuildLock(shellRoot);
+cleanBuildIntermediates(shellRoot);
+process.on("exit", releaseBuildLock);
+process.on("exit", (code) => {
+  if (code !== 0) cleanBuildIntermediates(shellRoot);
+});
 const cortexRoot = path.resolve(shellRoot, "..");
-const cortexTargetDir = effectiveCargoTargetDir(shellRoot, cortexRoot, process.env.CARGO_TARGET_DIR);
+const cortexTargetDir = effectiveCargoTargetDir(
+  shellRoot,
+  cortexRoot,
+  process.env.CARGO_TARGET_DIR,
+);
 
 const cortexBuildArgs = ["build", "--release", "--manifest-path", "../Cargo.toml"];
 const buildKepler = spawnSync(
@@ -40,7 +55,7 @@ for (const bin of RUNTIME_BINARIES.slice(2)) {
 // Package only binaries produced by this build. In particular, release builds use an
 // alternate CARGO_TARGET_DIR to avoid locks from installed services; package.json used to
 // ignore it and silently ship stale binaries from repoRoot/target/release.
-const stageDir = path.join(shellRoot, ".tmp", "runtime");
+const stageDir = path.join(shellRoot, ".tmp", "runtime.next");
 try {
   for (const bin of [RUNTIME_BINARIES[0], ...RUNTIME_BINARIES.slice(2)]) {
     stageRuntimeBinary(bin, path.join(cortexTargetDir, "release"), stageDir);
@@ -50,4 +65,25 @@ try {
   console.error(`[build-backend] ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
 }
+let engineVersion = null;
+if (process.platform === "win32") {
+  engineVersion = process.env.KOSMOS_ENGINE_VERSION ?? getVersion("win");
+  const engineDir = path.join(shellRoot, ".tmp", "engine.next");
+  const engineArchive = path.join(engineDir, "Kosmos-Engine.zip");
+  const engineUrl =
+    process.env.KOSMOS_ENGINE_RELEASE_URL ??
+    `https://github.com/makekosmos/desktop/releases/download/v${engineVersion}/Kosmos-Engine-${engineVersion}.zip`;
+  const engineManifest = buildEngineArchive(stageDir, engineArchive, {
+    version: engineVersion,
+    url: engineUrl,
+  });
+  engineManifest.channel_url =
+    "https://github.com/makekosmos/desktop/releases/latest/download/Kosmos-Engine-manifest.json";
+  mkdirSync(engineDir, { recursive: true });
+  writeFileSync(
+    path.join(engineDir, "engine-manifest.json"),
+    JSON.stringify(engineManifest, null, 2) + "\n",
+  );
+}
 console.log(`[build-backend] staged Cortex and ARK runtime binaries`);
+if (engineVersion) console.log(`[build-backend] staged standalone engine ${engineVersion}`);

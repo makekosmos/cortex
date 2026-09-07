@@ -8,6 +8,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "build:backend": "node scripts/build-backend.mjs",
+    "build:engine": "node scripts/build-engine-release.mjs",
     "build:native:macos": "node scripts/build-macos-native.mjs",
     "build:backend:dev": "node scripts/build-backend-dev.mjs",
     "test:runtime-staging": "node --test scripts/runtime-staging.test.mjs",
@@ -90,20 +91,12 @@
       ],
       "extraResources": [
         {
-          "from": ".tmp/runtime/kepler-backend.exe",
-          "to": "Kosmos Runtime.exe"
+          "from": ".tmp/engine.next/engine-manifest.json",
+          "to": "engine-manifest.json"
         },
         {
-          "from": ".tmp/runtime/ark-core-rpc.exe",
-          "to": "Kosmos Data Engine.exe"
-        },
-        {
-          "from": ".tmp/runtime/kepler-focus-helper.exe",
-          "to": "Kosmos Helper.exe"
-        },
-        {
-          "from": ".tmp/runtime/kepler-focus-svc.exe",
-          "to": "Kosmos System Service.exe"
+          "from": "build/install-engine.ps1",
+          "to": "install-engine.ps1"
         },
         {
           "from": ".tmp/components/manager/win-unpacked",
@@ -128,11 +121,11 @@
       ],
       "extraResources": [
         {
-          "from": ".tmp/runtime/kepler-backend",
+          "from": ".tmp/runtime.next/kepler-backend",
           "to": "Kosmos Runtime"
         },
         {
-          "from": ".tmp/runtime/ark-core-rpc",
+          "from": ".tmp/runtime.next/ark-core-rpc",
           "to": "Kosmos Data Engine"
         },
         {
