@@ -50,6 +50,11 @@ pub(crate) async fn receive(
         .and_then(Value::as_u64)
         .filter(|value| *value != 0)
         .ok_or("Core issuer key lookup returned no grant epoch")?;
+    let refresh_fencing_token = issuer
+        .get("refresh_fencing_token")
+        .and_then(Value::as_u64)
+        .filter(|value| *value != 0)
+        .ok_or("Core issuer key lookup returned no refresh fence")?;
     let loaded = consumer
         .load_latest_credential_envelope(&json!({
             "integration_id": integration_id,
@@ -130,6 +135,18 @@ pub(crate) async fn receive(
     {
         return Err("Core issuer key changed before credential storage".to_string());
     }
+    consumer
+        .check_credential_fence(&json!({
+            "space_id": space_id,
+            "integration_id": integration_id,
+            "recipient_node_id": recipient_node_id,
+            "issuer_node_id": issuer_node_id,
+            "credential_generation": credential_generation,
+            "refresh_fencing_token": refresh_fencing_token,
+            "expected_issuer_key_id": expected_issuer_key_id,
+        }))
+        .await
+        .map_err(|_| "Core credential fence rejected".to_string())?;
     let stored = packages
         .store_integration_credential_and_sync(
             integration_id,

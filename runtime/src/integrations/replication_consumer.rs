@@ -172,6 +172,14 @@ impl<'a> ReplicationConsumer<'a> {
             .await
     }
 
+    pub(crate) async fn check_credential_fence(&self, params: &Value) -> ArkResult<bool> {
+        self.request("integration.check_credential_fence", params)
+            .await
+            .and_then(|value| {
+                serde_json::from_value(value).map_err(crate::ark_host::ArkHostError::Json)
+            })
+    }
+
     pub(crate) async fn lookup_issuer_encryption_key_for_publish(
         &self,
         params: &Value,
