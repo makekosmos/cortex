@@ -23,15 +23,17 @@ pub fn set_sync_kv(conn: &Connection, key: &str, value: &str) -> Result<(), Stri
 }
 
 pub(crate) fn upsert_sync_tombstone(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
+    let type_id = entity.data.get("typeId").and_then(|value| value.as_str());
     conn.execute(
-        "INSERT INTO sync_tombstones (id, entity_type, hlc, deleted_at)
-         VALUES (?1, ?2, ?3, ?4)
+        "INSERT INTO sync_tombstones (id, entity_type, hlc, deleted_at, type_id)
+         VALUES (?1, ?2, ?3, ?4, ?5)
          ON CONFLICT(id) DO UPDATE SET
             entity_type = excluded.entity_type,
             hlc = excluded.hlc,
-            deleted_at = excluded.deleted_at
+            deleted_at = excluded.deleted_at,
+            type_id = COALESCE(excluded.type_id, sync_tombstones.type_id)
          WHERE excluded.hlc >= sync_tombstones.hlc",
-        params![entity.id, entity.entity_type, entity.hlc, entity.hlc],
+        params![entity.id, entity.entity_type, entity.hlc, entity.hlc, type_id],
     )
     .map_err(|e| e.to_string())?;
     Ok(())

@@ -489,6 +489,9 @@ impl SyncServer {
 
     /// Broadcast a live change to all authenticated peers.
     pub async fn broadcast_live_change(&self, entity: SyncEntity, exclude_device_id: Option<&str>) {
+        let Some(entity) = self.storage.filter_outgoing_entity(&entity) else {
+            return;
+        };
         let change_id = generate_id();
         let msg = LanSyncMessage::LiveChange {
             change_id,

@@ -1,0 +1,23 @@
+{
+  "manifest": "historical-phase3-8-proof-pins",
+  "sourceRepository": "makekosmos/core",
+  "frozenSpec": "056c71d585a1af4e3cc7c47eb05dae98f61ef5c8",
+  "entries": [
+    {"phase": "3", "implementation": "ef34dd6336d189d925447acf46edd1831a6a14c4", "evidence": "ca110af99448e4562be3632625c1f8132ac39283", "result": "accepted focused canonical/migration suites"},
+    {"phase": "4", "implementation": "48a0ef27b5125e15ff0411bdc4fb4a8252a220dc", "evidence": "ca110af99448e4562be3632625c1f8132ac39283", "result": "accepted manifest and broker checks"},
+    {"phase": "5", "implementation": "f401482deed9490cf0cd8f46cebf3e24d3aaf268", "evidence": "ca110af99448e4562be3632625c1f8132ac39283", "result": "accepted runtime grants; duplicate-field fix pinned at 71aad386fd12956f2e512c72846f173c001a97f2"},
+    {"phase": "6", "implementation": "80d678554cde494ee2c7c2615212b4de1f515420", "evidence": "ca110af99448e4562be3632625c1f8132ac39283", "result": "accepted signed catalog; deterministic cache fix pinned at 4dd2f78e7737dfa431929a80ea76fb39fbd4db27"},
+    {"phase": "7", "implementation": "f87d5ae2879e0b3d09970c6597610f3fdda77277", "evidence": "ca110af99448e4562be3632625c1f8132ac39283", "result": "boundary validation pass; full broker round-trip pending"},
+    {"phase": "8", "implementation": "1d36d5a2c59ab2ae570828cee07e375e685ac8d3", "evidence": "ca110af99448e4562be3632625c1f8132ac39283", "result": "profile export/filter pass; transport proof pinned at 5ad21dc70b305511b621d0b68279e65d398bb3e6"}
+  ],
+  "phase9Proof": {
+    "commit": "de9642fda19aa9d4284fb873b05e8024feab3203",
+    "test": "phase9_backup_restore_and_idempotence_bundle_is_stable",
+    "result": "PASS 1/1",
+    "objectCount": 1,
+    "foreignKeyViolations": 0,
+    "canonicalDigest": "c012d55bea98bfebf0dd7e8e56d56f3a900a4afb008a10d5bfe9c4af3696d5f5",
+    "rerunDigest": "stable",
+    "cleanupAuthorized": false
+  }
+}

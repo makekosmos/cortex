@@ -189,9 +189,9 @@ CREATE TABLE IF NOT EXISTS sync_tombstones (
     id TEXT PRIMARY KEY,
     entity_type TEXT NOT NULL,
     hlc TEXT NOT NULL,
-    deleted_at TEXT NOT NULL
+    deleted_at TEXT NOT NULL,
+    type_id TEXT
 );
-
 CREATE INDEX IF NOT EXISTS idx_objects_type_id ON objects(type_id);
 CREATE INDEX IF NOT EXISTS idx_objects_updated_at ON objects(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_objects_deleted_at ON objects(deleted_at);

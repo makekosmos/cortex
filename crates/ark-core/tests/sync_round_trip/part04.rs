@@ -1,94 +1,164 @@
+use ark_core::data_platform;
+
+fn selective_object_entity(id: &str, type_id: &str, title: &str, counter: u64) -> SyncEntity {
+    SyncEntity {
+        entity_type: "object".into(),
+        id: id.into(),
+        data: serde_json::from_value(json!({
+            "typeId": type_id,
+            "typeVersion": "1.0.0",
+            "title": title,
+            "contentJson": {"type":"doc","content":[{"type":"paragraph"}]},
+            "propsJson": if type_id == "com.kosmos.game" {
+                json!({"playStatus":null,"userRating":null,"genres":[],"platforms":[],"released":null,"description":null,"extensions":{"localState":{"path":"C:/device-only"}}})
+            } else if type_id == "com.kosmos.task" {
+                json!({"status":"todo","priority":"medium","scheduledAt":null,"dueAt":null,"reminderAt":null,"completedAt":null,"canceledAt":null,"recurrence":null,"checklist":[],"extensions":{"vendor":{"opaque":true},"localState":{"path":"C:/device-only"}}})
+            } else {
+                json!({"description":null,"extensions":{"localState":{"path":"C:/device-only"}}})
+            },
+            "createdAt": "2026-09-08T00:00:00Z",
+            "updatedAt": "2026-09-08T00:00:00Z",
+            "deletedAt": null
+        }))
+        .unwrap(),
+        hlc: format!("2026-09-08T00:00:00.000Z:{counter:06}:device-a"),
+        deleted: None,
+        origin_device_id: None,
+        origin_seq: None,
+    }
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn local_state_is_not_exported_or_applied_to_a_remote_database() {
-    let connection_a = Connection::open_in_memory().unwrap();
-    ark_core::db::init_schema(&connection_a).unwrap();
-    let shared_a = Arc::new(StdMutex::new(connection_a));
-    let backend_a = Arc::new(SqliteStorageBackend::new(shared_a.clone()));
-    backend_a.set_device_id("device-a").unwrap();
-
-    let object_type = ark_core::types::ObjectType {
-        id: "com.kosmos.note".into(),
-        name: "Note".into(),
-        schema_json: "{}".into(),
-        ui_schema_json: "{}".into(),
-        created_at: "2026-09-06T00:00:00Z".into(),
-        updated_at: "2026-09-06T00:00:00Z".into(),
-        system_locked: false,
-    };
-    let object = ark_core::types::ArkObject {
-        id: "local-only-note".into(),
-        type_id: object_type.id.clone(),
-        type_version: "1.0.0".into(),
-        title: "Export boundary".into(),
-        content_json: serde_json::json!({"type":"doc","content":[]}),
-        props_json: serde_json::json!({"description":null,"extensions":{}}),
-        created_at: "2026-09-06T00:00:00Z".into(),
-        updated_at: "2026-09-06T00:00:00Z".into(),
-        deleted_at: None,
-    };
-    {
-        let conn = shared_a.lock().unwrap();
-        ark_core::db::upsert_object_type(&conn, &object_type).unwrap();
-        ark_core::db::upsert_object(&conn, &object).unwrap();
-        conn.execute(
-            "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) VALUES(?1,?2,?3,?4)",
-            rusqlite::params![
-                object.id,
-                "device-a",
-                r#"{"sourcePath":"C:\\private\\note.md","windowState":{"x":7},"processId":42}"#,
-                "2026-09-06T00:00:00Z"
-            ],
-        )
-        .unwrap();
-        let local_rows: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM object_local_state WHERE object_id=?1 AND device_id=?2",
-                rusqlite::params!["local-only-note", "device-a"],
-                |row| row.get(0),
-            )
+async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_destructive() {
+    let storage_a = make_storage("device-a");
+    let storage_b = make_storage("device-b");
+    let note = selective_object_entity("sync-note", "com.kosmos.note", "Sync note", 1);
+    let task = selective_object_entity("sync-task", "com.kosmos.task", "Sync task", 2);
+    let game = selective_object_entity("sync-game", "com.kosmos.game", "Sync game", 3);
+    for (type_id, name, counter) in [
+        ("com.kosmos.note", "Note", 10),
+        ("com.kosmos.task", "Task", 11),
+        ("com.kosmos.game", "Game", 12),
+    ] {
+        storage_a
+            .apply_entity(&SyncEntity {
+                entity_type: "object_type".into(),
+                id: type_id.into(),
+                data: serde_json::from_value(json!({
+                    "name": name,
+                    "schemaJson": "{}",
+                    "uiSchemaJson": "{}",
+                    "createdAt": "2026-09-08T00:00:00Z",
+                    "updatedAt": "2026-09-08T00:00:00Z",
+                    "systemLocked": false
+                }))
+                .unwrap(),
+                hlc: format!("2026-09-08T00:00:00.000Z:{counter:06}:device-a"),
+                deleted: None,
+                origin_device_id: None,
+                origin_seq: None,
+            })
+            .await
             .unwrap();
-        assert_eq!(local_rows, 1, "source fixture must contain local-only state");
     }
-
-    let exported = backend_a.load_entities(&HashMap::new()).await;
-    let exported_object = exported
-        .into_iter()
-        .find(|entity| entity.entity_type == "object" && entity.id == "local-only-note")
-        .expect("canonical object should be exported");
-    let exported_json = serde_json::to_string(&exported_object.data).unwrap();
-    assert!(!exported_json.contains("sourcePath"));
-    assert!(!exported_json.contains("windowState"));
-    assert!(!exported_json.contains("processId"));
-
-    let connection_b = Connection::open_in_memory().unwrap();
-    ark_core::db::init_schema(&connection_b).unwrap();
-    let shared_b = Arc::new(StdMutex::new(connection_b));
-    let backend_b = Arc::new(SqliteStorageBackend::new(shared_b.clone()));
-    backend_b.set_device_id("device-b").unwrap();
-    {
-        let conn = shared_b.lock().unwrap();
-        ark_core::db::upsert_object_type(&conn, &object_type).unwrap();
-    }
-    backend_b.apply_entity(&exported_object).await.unwrap();
-
-    let conn = shared_b.lock().unwrap();
-    let local_rows: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM object_local_state WHERE object_id=?1",
-            rusqlite::params!["local-only-note"],
-            |row| row.get(0),
-        )
+    storage_a.apply_entity(&note).await.unwrap();
+    storage_a.apply_entity(&task).await.unwrap();
+    storage_a.apply_entity(&game).await.unwrap();
+    storage_a
+        .apply_entity(&SyncEntity {
+            entity_type: "object_link".into(),
+            id: "sync-link".into(),
+            data: serde_json::from_value(json!({
+                "sourceObjectId": "sync-note",
+                "targetObjectId": "sync-game",
+                "linkType": "related",
+                "createdAt": "2026-09-08T00:00:00Z"
+            }))
+            .unwrap(),
+            hlc: "2026-09-08T00:00:00.000Z:000003:device-a".into(),
+            deleted: None,
+            origin_device_id: None,
+            origin_seq: None,
+        })
+        .await
         .unwrap();
-    assert_eq!(local_rows, 0, "local-only state must not cross the sync boundary");
-    let stored_props: String = conn
-        .query_row(
-            "SELECT props_json FROM objects WHERE id=?1",
-            rusqlite::params!["local-only-note"],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert!(!stored_props.contains("sourcePath"));
-    assert!(!stored_props.contains("windowState"));
-    assert!(!stored_props.contains("processId"));
+    storage_a.apply_entity(&tracked_app_entity("tracked-app-a", "device-a", 3)).await.unwrap();
+    storage_a.apply_entity(&usage_session_entity("usage-session-a", "tracked-app-a", "device-a", 4)).await.unwrap();
+    storage_a.apply_entity(&usage_event_entity("sync-usage", "tracked-app-a", "usage-session-a", "device-a", 5)).await.unwrap();
+
+    let mut profile = data_platform::SelectiveSyncProfile::default();
+    profile.set_rule("type", "com.kosmos.note", data_platform::SyncMode::Full);
+    profile.set_rule("type", "com.kosmos.task", data_platform::SyncMode::Full);
+    profile.set_rule("type", "com.kosmos.game", data_platform::SyncMode::Metadata);
+    profile.set_rule("dataset", "usage", data_platform::SyncMode::None);
+    storage_a.set_selective_sync_profile(Some(profile.clone()));
+    storage_b.set_selective_sync_profile(Some(profile));
+
+    let server_a = Arc::new(SyncServer::new(storage_a.clone() as Arc<dyn StorageBackend>));
+    let server_b = Arc::new(SyncServer::new(storage_b.clone() as Arc<dyn StorageBackend>));
+    let port_a = pick_port().await;
+    let port_b = pick_port().await;
+    server_a.start_with_addr("space-selective", "device-a", Some("Alpha"), Some(vec![format!("127.0.0.1:{port_a}")]), &format!("127.0.0.1:{port_a}")).await.unwrap();
+    server_b.start_with_addr("space-selective", "device-b", Some("Beta"), Some(vec![format!("127.0.0.1:{port_b}")]), &format!("127.0.0.1:{port_b}")).await.unwrap();
+
+    let peer = PeerRecord { device_id: "device-a".into(), device_name: "Alpha".into(), addresses: vec![format!("127.0.0.1:{port_a}")], last_seen: chrono::Utc::now().to_rfc3339(), last_address: None };
+    let client = Arc::new(SyncClient::new(storage_b.clone() as Arc<dyn StorageBackend>, peer.clone(), "device-b".into(), "Beta".into(), "space-selective".into(), vec![format!("127.0.0.1:{port_b}")], None));
+    client.start();
+    tokio::time::sleep(Duration::from_millis(700)).await;
+
+    let loaded = storage_b.load_entities(&HashMap::new()).await;
+    assert!(loaded.iter().any(|entity| entity.id == note.id));
+    let task_copy = loaded.iter().find(|entity| entity.id == task.id).unwrap();
+    assert!(task_copy.data.contains_key("contentJson"));
+    let game_copy = loaded.iter().find(|entity| entity.id == game.id).unwrap();
+    assert!(!game_copy.data.contains_key("contentJson"));
+    assert!(!loaded.iter().any(|entity| entity.id == "sync-usage"));
+    assert!(loaded.iter().any(|entity| entity.entity_type == "object_link" && entity.id == "sync-link"));
+    let type_pos = loaded
+        .iter()
+        .position(|entity| entity.entity_type == "object_type" && entity.id == "com.kosmos.game")
+        .expect("selected type definition should be received");
+    let object_pos = loaded
+        .iter()
+        .position(|entity| entity.entity_type == "object" && entity.id == "sync-game")
+        .expect("selected object should be received");
+    assert!(type_pos < object_pos, "type definitions must precede objects in transport");
+
+    client.stop();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let reconnect = Arc::new(SyncClient::new(storage_b.clone() as Arc<dyn StorageBackend>, peer, "device-b".into(), "Beta".into(), "space-selective".into(), vec![format!("127.0.0.1:{port_b}")], None));
+    reconnect.start();
+    tokio::time::sleep(Duration::from_millis(700)).await;
+    let replayed = storage_b.load_entities(&HashMap::new()).await;
+    assert_eq!(replayed.iter().filter(|entity| entity.id == note.id).count(), 1);
+
+    storage_a.set_selective_sync_profile(Some(data_platform::SelectiveSyncProfile::default()));
+    server_a.broadcast_live_change(game.clone(), None).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(storage_b.load_entities(&HashMap::new()).await.iter().any(|entity| entity.id == "sync-game"));
+    storage_a.set_selective_sync_profile(Some(data_platform::SelectiveSyncProfile {
+        rules: [(("type".into(), "com.kosmos.note".into()), data_platform::SyncMode::Full), (("type".into(), "com.kosmos.game".into()), data_platform::SyncMode::Metadata)].into_iter().collect(),
+    }));
+    assert!(storage_a.load_entities(&HashMap::new()).await.iter().any(|entity| entity.id == "sync-game"));
+
+    // Deletes use the same live transport and retain type metadata for
+    // profile filtering at the receiver.
+    let mut deleted_game = selective_object_entity("sync-game", "com.kosmos.game", "Sync game", 6);
+    deleted_game.deleted = Some(true);
+    storage_a.apply_entity(&deleted_game).await.unwrap();
+    server_a.broadcast_live_change(deleted_game, None).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let tombstones_b = storage_b.load_entities(&HashMap::new()).await;
+    let game_tombstone = tombstones_b
+        .iter()
+        .find(|entity| entity.deleted == Some(true) && entity.id == "sync-game")
+        .expect("selected object tombstone should cross the live transport");
+    assert_eq!(
+        game_tombstone.data.get("typeId").and_then(|value| value.as_str()),
+        Some("com.kosmos.game")
+    );
+
+    reconnect.stop();
+    server_a.stop().await;
+    server_b.stop().await;
 }

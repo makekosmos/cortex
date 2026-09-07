@@ -215,11 +215,11 @@ pub fn delete_legacy_object(
         params![id, hlc],
     )
     .map_err(|e| e.to_string())?;
-    db::record_sync_tombstone(conn, "object", id, &hlc)?;
+    db::record_sync_tombstone_with_type(conn, "object", id, Some(&object.type_id), &hlc)?;
     Ok(SyncEntity {
         entity_type: "object".into(),
         id: id.into(),
-        data: Default::default(),
+        data: [("typeId".into(), object.type_id.into())].into_iter().collect(),
         hlc,
         deleted: Some(true),
         origin_device_id: None,

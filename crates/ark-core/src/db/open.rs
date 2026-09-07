@@ -88,6 +88,7 @@ pub fn init_schema_prerequisites_for_phase3(conn: &Connection) -> Result<(), Str
         .map_err(|e| e.to_string())?;
     ensure_integration_credential_fence_column(conn)?;
     ensure_authorized_node_transport_key(conn)?;
+    ensure_sync_tombstone_type_id(conn)?;
     ensure_usage_runtime_ms(conn)?;
     conn.execute_batch("SAVEPOINT ark_phase2_init")
         .map_err(|e| e.to_string())?;
@@ -185,6 +186,23 @@ fn ensure_usage_runtime_ms(conn: &Connection) -> Result<(), String> {
         [],
     )
     .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn ensure_sync_tombstone_type_id(conn: &Connection) -> Result<(), String> {
+    let has_type_id = conn
+        .prepare("PRAGMA table_info(sync_tombstones)")
+        .map_err(|e| e.to_string())?
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?
+        .iter()
+        .any(|name| name == "type_id");
+    if !has_type_id {
+        conn.execute_batch("ALTER TABLE sync_tombstones ADD COLUMN type_id TEXT;")
+            .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 

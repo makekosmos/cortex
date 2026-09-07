@@ -245,9 +245,19 @@ fn record_local_delete(
     entity_id: &str,
     device_id: Option<String>,
 ) -> Result<String, String> {
+    record_local_delete_with_type(conn, entity_type, entity_id, device_id, None)
+}
+
+fn record_local_delete_with_type(
+    conn: &rusqlite::Connection,
+    entity_type: &str,
+    entity_id: &str,
+    device_id: Option<String>,
+    type_id: Option<&str>,
+) -> Result<String, String> {
     let device_id = local_write_device_id(device_id);
     let hlc = db::bump_sync_version_vector(conn, entity_type, entity_id, &device_id, true)?;
-    db::record_sync_tombstone(conn, entity_type, entity_id, &hlc)?;
+    db::record_sync_tombstone_with_type(conn, entity_type, entity_id, type_id, &hlc)?;
     Ok(hlc)
 }
 

@@ -2,6 +2,7 @@
 pub struct SqliteStorageBackend {
     conn: Arc<Mutex<rusqlite::Connection>>,
     device_id: Arc<Mutex<String>>,
+    selective_profile: Arc<Mutex<Option<crate::data_platform::SelectiveSyncProfile>>>,
 }
 
 impl SqliteStorageBackend {
@@ -9,6 +10,7 @@ impl SqliteStorageBackend {
         Self {
             conn,
             device_id: Arc::new(Mutex::new(String::new())),
+            selective_profile: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -126,11 +128,7 @@ impl SqliteStorageBackend {
             if let Ok(tombstones) = load_sync_tombstones(conn) {
                 fixed.extend(tombstones);
             }
-            fixed.sort_by(|a, b| {
-                a.entity_type
-                    .cmp(&b.entity_type)
-                    .then_with(|| a.id.cmp(&b.id))
-            });
+            fixed.sort_by_key(|entity| (entity.entity_type.clone(), entity.id.clone()));
         }
 
         let mut entities: Vec<_> = fixed.iter().skip(offset).take(limit).cloned().collect();

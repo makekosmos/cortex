@@ -109,6 +109,69 @@
     }
 
     #[test]
+    fn ac8_local_state_is_device_scoped_and_never_exported_or_synced() {
+        let source = setup_db();
+        let mut object = make_object("ac8-object", "note_obj", "AC8 object");
+        object.props_json = json!({"description": "SHARED_MARKER", "extensions": {}});
+        upsert_object(&source, &object).unwrap();
+        source
+            .execute(
+                "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) VALUES
+                 ('ac8-object','device-a','{\"localMarker\":\"LOCAL_A\"}','now'),
+                 ('ac8-object','device-b','{\"localMarker\":\"LOCAL_B\"}','now')",
+                [],
+            )
+            .unwrap();
+
+        assert_eq!(
+            source
+                .query_row(
+                    "SELECT COUNT(*) FROM object_local_state WHERE object_id='ac8-object'",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap(),
+            2
+        );
+        let exported = serde_json::to_string(&load_all(&source).unwrap()).unwrap();
+        assert!(exported.contains("SHARED_MARKER"));
+        assert!(!exported.contains("LOCAL_A"));
+        assert!(!exported.contains("LOCAL_B"));
+
+        let entity = SqliteStorageBackend::collect_entities_blocking(
+            &source,
+            &VersionVector::new(),
+            "source-device",
+        )
+        .into_iter()
+        .find(|entity| entity.entity_type == "object" && entity.id == "ac8-object")
+        .expect("canonical object should be exported for sync");
+        let sync_payload = serde_json::to_string(&entity).unwrap();
+        assert!(sync_payload.contains("SHARED_MARKER"));
+        assert!(!sync_payload.contains("LOCAL_A"));
+        assert!(!sync_payload.contains("LOCAL_B"));
+
+        let peer = setup_db();
+        SqliteStorageBackend::apply_entity_blocking(&peer, &entity).unwrap();
+        assert_eq!(
+            peer.query_row("SELECT COUNT(*) FROM object_local_state", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        let peer_props: String = peer
+            .query_row(
+                "SELECT props_json FROM objects WHERE id='ac8-object'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(peer_props.contains("SHARED_MARKER"));
+        assert!(!peer_props.contains("LOCAL_A"));
+        assert!(!peer_props.contains("LOCAL_B"));
+    }
+
+    #[test]
     fn usage_sequence_cursor_waits_for_missing_entries() {
         let conn = setup_db();
 

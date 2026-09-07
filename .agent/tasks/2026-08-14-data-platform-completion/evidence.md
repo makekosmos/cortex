@@ -2,19 +2,53 @@
 
 Status: `BLOCKED` — evidence-only; no cleanup or legacy removal is authorized.
 
-Captured 2026-09-07 against Core `origin/main`
-`251995135f1b16f34fcc26f18e15978635930b9b`.
+Captured 2026-09-08 against delivered Core PR #73 code head
+`dfae4a86`.
+
+## Exact evidence links
+
+- Frozen spec: https://github.com/makekosmos/core/blob/056c71d585a1af4e3cc7c47eb05dae98f61ef5c8/.agent/tasks/2026-08-14-data-platform-completion/spec.md
+- Delivery PR: https://github.com/makekosmos/core/pull/73
+- Current evidence files: `evidence.md`, `evidence.json`, `problems.md`,
+  `phase3-8-manifest.json`, `ac10-legacy-path-matrix.md`, and
+  `raw-ac1-agenda-host-restart-20260907.md` in this PR. The independent Docs
+  verdict is recorded in `docs-independent-review-20260907.md`.
+- Historical Phase 9 proof source: https://github.com/makekosmos/core/commit/de9642fda19aa9d4284fb873b05e8024feab3203
+- Final merged Core commit link will be added to the issue after PR #73 merges;
+  the current candidate is the PR head, not a self-referential final merge.
 
 ## Current delivered references
 
-- Core: `251995135f1b16f34fcc26f18e15978635930b9b`.
-- Cortex runtime release merge: `d85cf0c8e759b43b778fc2ce3fe43fdf02030eee`.
-- Cortex current main: `f80650ab88cf2e9d99e9ba45f33c3dacc953b645`.
+- Core: `3546d301` (Windows integration head); AC9 transport/tombstone closure: `dfae4a86`.
+- AC8 fixture commit: `f1e53e486c4b7e18941058f094f28d5cf775e505` (`db/tests_sync/part4.rs`).
+- AC9 profile-contract commits: `3546d301`, loopback test `320772d2`, owner/revision persistence `5e348a01`, typed tombstones `377dd748`, and transport matrix `8d5db812`; focused profile suite `6 passed`, tombstone suite `1 passed`, transport matrix `1 passed`, and full local suite `439 passed`.
+- Evidence bundle commit: `213d99cb679da511ff81788981ae6ab86ed12095`.
+- Delivered PR code head: `dfae4a86`.
+- Cortex current main: `c630b4c77a41e7d47f8db514995455143b93ee16` (Apps resolver merge).
+- Cortex permission contract: PR39 merge `56ba941162bb15ae80644911f323811b4e133c5a`;
+  implementation `4540de750d849fe83a25454da003aaa5551d6489`.
+- Published Desktop `0.9.21` (`win`) BOM asset SHA-256:
+  `a1b0c75f4f42fcf429ec1927db62f3fe67bbc9cc3d6b97cd1c35e1e2ab5fe46c`.
+- Cortex packaged-host acceptance source: `90a58d6d8474717ab0c7f33b75a9576d448fd54e`.
+- Core RPC fixture source: `0b06342014238244749946bbe3db92d94dfa0868` (Core repository).
 - Arca SDK reconnect path: `18008cc` (`quality/portable-hooks`).
 - Windows Core RPC fixture: SHA-256
   `0224e0bda0bb03ad0bf66848321432a404636e8584b71c96f6c42d29e548e479`.
 
 ## Phase 1–2 reconciliation map
+
+The immutable Phase 3–8 historical pin manifest is
+`phase3-8-manifest.json`. It records repository, frozen spec, implementation
+and evidence SHAs; Phase 7/8 entries explicitly retain their pending limits.
+
+The actual AC10 path/guard matrix is `ac10-legacy-path-matrix.md`. It records
+the failing obsolete-resolver guard and the passing v1 rejection, discovery,
+and migration-recovery guards; AC10 remains open because tracked compatibility
+paths still have live consumers.
+
+AC2–AC9 are itemized in `ac2-9-gap-matrix.md`. Core-specific Windows checks
+  pass for AC2; AC3–AC9 remain explicitly partial with concrete missing
+artifact/action each, rather than being hidden under an umbrella status.
 
 The existing phase proofs provide accepted Linux slices; they are not silently
 promoted to a whole-program PASS:
@@ -35,6 +69,20 @@ Core RPC fixture. These cover process/job containment, worker crash and
 cleanup, PID/credential/generation fencing, and disconnect cleanup. They do not
 replace the full Engine v1 reconnect contract or any visual GUI gate.
 
+Signed Memoria crash/restart acceptance on the Desktop `0.9.21` packaged
+candidate: `PASS`, 1/1, 34.7s. This is packaged Windows evidence and does not
+close the visual GUI row.
+
+Additional AC1 Windows cross-consumer proof on Cortex
+tested HEAD `f4d972cd176f03338fe98ea77c4603db63e1594e`, based on canonical
+`20fd15a90c3d429dd0f9fef025583f2992ed4862`:
+`bun run --cwd host e2e first-party-agenda-contract.spec.ts --workers=1` —
+signed Agenda install, typed ARK upsert, Engine restart, package listing and
+Host restart: `PASS`, 1/1, 3.1m.
+Sanitized raw evidence is committed at
+`raw-ac1-agenda-host-restart-20260907.md` (SHA-256
+`bdb32ef24e41c8cc62d93bdf9855ae8729c5f08e4b1e0a789977c760aa09daee`).
+
 ## Checks actually run
 
 | Check | Result |
@@ -44,29 +92,79 @@ replace the full Engine v1 reconnect contract or any visual GUI gate.
 | `cargo fmt --check` | PASS |
 | `node scripts/check-source-size.mjs` | PASS; 9 grandfathered files |
 | `node scripts/check-ark-write-boundaries.mjs` | PASS |
-| `node scripts/check-ark-generated.mjs` | PASS; existing ts-rs warnings only |
-| `cargo clippy --workspace --all-targets` | PASS with 31 existing warnings |
+| `node scripts/check-ark-generated.mjs` | PASS on Windows; generated bindings clean after the delivery hook; 30 files, existing ts-rs warnings only |
+| `cargo clippy --workspace --all-targets` | PASS with 8 existing warnings under the repository hook command |
 | `cargo clippy --workspace --all-targets -- -D warnings` | FAIL: 22 existing baseline lint errors |
+| GitHub CI run `34155827949` | NOT_RUN: both jobs were not started because the account billing/spending limit failed |
 | Cortex `package_worker_windows` with `ARK_CORE_RPC_PATH` | PASS: 11/11 |
 | Cortex `package_worker_process_windows` with `ARK_CORE_RPC_PATH` | PASS: 20/20 |
 | Cortex `cortex_2_acceptance` with `ARK_CORE_RPC_PATH` | PASS: 7/7 |
 | Cortex `desktop_authority_socket` with `ARK_CORE_RPC_PATH` | PASS: 6/6 |
 | Arca SDK `bun test tests/engine-v1-contract.test.ts` | PASS: 3/3; strict discovery, coalesced reconnect and bounded idempotent replay |
+| Core `phase3_migration` integration test | PASS: 13/13 |
+| Core `data_platform_phase7` | PASS: 6/6 on `dfae4a86`; profile modes/schema constraints, FilterV1 canonical digest, owner persistence and revision CAS |
+| Core typed tombstone suite | PASS: 1/1; delete persistence, collection, type filtering and apply |
+| Core selective-sync transport matrix | PASS: 1/1; full/metadata/none, ordering/references, exclusion, reconnect/replay, narrowing and delete |
+| Core AC8 local-state regression | PASS: 1 passed, 199 filtered; device-keyed local state absent from export/sync/apply |
+| Historical Phase 9 immutable proof bundle at `de9642fda19aa9d4284fb873b05e8024feab3203` | PASS: 1/1; backup/reopen/integrity/FK/restore, object count 1, digest stable, idempotent rerun |
 
 ## Frozen acceptance status
 
-- AC1: `PARTIAL` — the reconciliation map above pins the existing accepted
-  phase slices and their ownership. The Arca SDK reconnect production path is
-  now `PASS` on its 3-test contract target; full cross-consumer Engine/Host
-  acceptance is still `NOT_RUN` for remaining adapter and Windows/package
-  lifecycle gates. Current Core ownership does not imply those implementation
-  files must be in Core.
-- AC2–AC9: partial evidence exists in the accepted phase/runtime references,
-  but this bundle does not claim the full umbrella criteria without their exact
-  phase-specific artifacts and command matrix.
-- AC10: `NOT_RUN` as a full frozen matrix. The Core-supported rows above pass;
-  full app/Host/desktop rows and their exact-head evidence are not present in
-  this Core checkout. Windows/Darwin-only rows remain platform-specific.
+- AC1: `PASS_WINDOWS_ONLY`. Frozen requirement (spec frozen at `056c71d5`): “Accepted
+  Phase 1 hardening and Phase 2 Versioned Type Registry changes are ported onto
+  the current Lego baseline with no duplicate implementation. Their original
+  focused tests, Engine v1 guards, and Package Host isolation/reconnect/lease
+  behavior pass from the integrated tree. A commit map records source SHA,
+  destination SHA, conflicts and explicit omissions.” Existing proof covers
+  the pinned slices, Windows Host/process/authority targets, Arca SDK reconnect
+  `3/3`, and signed Agenda Host↔Engine restart `1/1` with committed raw
+  evidence. Visual GUI and
+  non-Windows rows remain explicitly deferred/not run.
+- AC2: `PASS_WINDOWS_ONLY` for the tested Core scope; cross-app fixture closure
+  remains required for umbrella PASS.
+- AC3–AC7: `PARTIAL`; exact current owner gaps remain in `ac2-9-gap-matrix.md`.
+- AC8: `PASS_WINDOWS_ONLY`; the integrated per-object/per-device and
+  no-export/no-sync regression passes on Windows (`1/1`, 199 filtered).
+- AC9: `PASS_WINDOWS_ONLY`; profile projection is integrated into backend
+  load/page and live broadcast paths. The actual loopback two-DB matrix covers
+  note/task full, game metadata without local paths, definitions before
+  objects, required object references, usage omission, reconnect/replay
+  idempotence, non-destructive narrowing, and delete→typed tombstone→filter→
+  apply. Owner-bound persistence and monotonic revision CAS pass in
+  `data_platform_phase7` (`6/6`); full local nextest is `439/439`.
+- AC10: `NOT_RUN`/`OPEN`. Frozen requirement (spec frozen at
+  `056c71d5`): “Only after AC1–AC9 pass and first-party consumers have migrated,
+  remove Manifest v1 broad grants, app-owned canonical registration, legacy
+  planning writes/tables (after preserved backup/migration evidence),
+  HTTP-to-legacy-WS proxy, hardcoded Host access policy and obsolete Engine
+  discovery paths. Canonical aliases remain. Source guards demonstrate the
+  removed paths cannot return.” Existing packaged Windows, migration, local-AI
+  and reconnect proof is recorded in the immutable Phase 3–8 manifest and
+  historical Phase 9 proof bundle. The listed production guards are now
+  PASS/guarded except for retained Core planning tables/readers and migration
+  rollback handlers, which still have live recovery consumers. AC10 remains
+  the listed production guards and 30-day condition pass, but Core planning
+  tables/readers and Cortex rollback recovery remain live. Docs review confirms
+  AC1/AC2 explain why they are currently needed but do not override AC10's
+  explicit removal requirement. Close with a reviewed replacement
+  migration/recovery contract, consumer/source-guard changes, and deletion
+  proof; no cleanup is authorized here.
+
+- AC16: `PARTIAL`. Frozen requirement (spec frozen at `056c71d5`): “Every
+  implementation slice has frozen spec, evidence/evidence.json with exact
+  commit and per-AC result, and independent verification against the final
+  integration commit. Any failed or unavailable criterion has `problems.md`;
+  the umbrella task is complete only after all delivery criteria pass or an
+  explicitly user-approved follow-up replaces a non-PASS scope.” This update
+  pins current Core/Cortex/Desktop references, Windows results, and the AC1/AC10
+  artifacts. The independent Docs review passes against final candidate `ede4e8c3` and is
+recorded in `docs-independent-review-20260907.md`; final merged Core commit
+and the post-merge issue comment remain pending. The latest GitHub CI attempt was
+  not started because the account billing/spending limit failed.
+
+Cross-platform Debian/Linux/macOS rows and visible GUI verification are
+`DEFERRED_BY_USER` / `NOT_RUN`; this Windows-only delivery must not promote
+those rows to PASS.
 
 ## Phase 9 gate semantics
 
@@ -78,6 +176,13 @@ cleanup. The separate cleanup proof bundle is still incomplete: no accepted
 immutable Phase 3–8 implementation manifest, final backup/reopen/restore and
 count/ID/digest bundle, or exact idempotent rerun proof has been delivered on
 this Core main.
+
+The literal protocol-retention condition itself is already `PASS`: historical
+post-window audit at Core `07eb1eb5` recorded
+`tracking_started_at=2026-07-31T16:02:09.107277400Z`, zero legacy connections,
+no legacy client buckets and `legacy_zero_for_30_days=true` after 31 complete
+days at `2026-08-31T21:29:24.7197843Z`. This removes a timing blocker only; it
+does not authorize deletion of the still-consumed WS compatibility path.
 
 No destructive cleanup is permitted from this bundle. The next actions are to
 attach the remaining exact phase artifacts and cross-consumer Engine/Host

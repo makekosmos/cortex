@@ -209,8 +209,15 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
                         return Err("object_conflict:stale_snapshot".to_string());
                     }
                 }
+                let type_id = db::get_object(conn, &id)?.map(|object| object.type_id);
                 db::delete_object(conn, &id)?;
-                let hlc = record_local_delete(conn, "object", &id, device_id)?;
+                let hlc = record_local_delete_with_type(
+                    conn,
+                    "object",
+                    &id,
+                    device_id,
+                    type_id.as_deref(),
+                )?;
                 let version_rows = conn.execute(
                     "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,1)
                      ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=1
@@ -221,7 +228,15 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
                 if version_rows != 1 {
                     return Err("object_conflict:stale_revision".to_string());
                 }
-                Ok(make_sync_entity("object", &id, json!({}), hlc, Some(true)))
+                Ok(make_sync_entity(
+                    "object",
+                    &id,
+                    type_id
+                        .map(|type_id| json!({"typeId": type_id}))
+                        .unwrap_or_else(|| json!({})),
+                    hlc,
+                    Some(true),
+                ))
             })?;
             let eid = object_id.clone();
             tokio::spawn(async move {

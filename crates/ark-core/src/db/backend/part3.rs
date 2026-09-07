@@ -1,4 +1,25 @@
 ﻿
+impl SqliteStorageBackend {
+    pub fn set_selective_sync_profile(
+        &self,
+        profile: Option<crate::data_platform::SelectiveSyncProfile>,
+    ) {
+        *self
+            .selective_profile
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = profile;
+    }
+
+    fn selective_sync_profile(
+        &self,
+    ) -> Option<crate::data_platform::SelectiveSyncProfile> {
+        self.selective_profile
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone()
+    }
+}
+
 #[async_trait::async_trait]
 impl StorageBackend for SqliteStorageBackend {
     async fn authorized_transport_public_key(&self, device_id: &str) -> Option<String> {
@@ -145,6 +166,7 @@ impl StorageBackend for SqliteStorageBackend {
         let conn = self.conn.clone();
         let vector = vector.clone();
         let device_id = self.device_id();
+        let profile = self.selective_sync_profile();
         tokio::task::spawn_blocking(move || {
             // Poison recovery: РµСЃР»Рё earlier panic Р·Р°РїРѕР»СѓС‡РёР» lock, РјС‹ РІСЃС‘
             // СЂР°РІРЅРѕ РјРѕР¶РµРј С‡РёС‚Р°С‚СЊ. Р­С‚Рѕ backend РґР»СЏ load (read-only path),
@@ -152,7 +174,10 @@ impl StorageBackend for SqliteStorageBackend {
             // sync round РІРѕР·РІСЂР°С‰Р°РµС‚ empty list в†’ multi-device sync silent
             // С„РµР№Р»РёС‚СЃСЏ РЅР°РІСЃРµРіРґР° РїРѕСЃР»Рµ РїРµСЂРІРѕРіРѕ panic'Р° РІ СЌС‚РѕРј РїСЂРѕС†РµСЃСЃРµ.
             let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
-            Self::collect_entities_blocking(&guard, &vector, &device_id)
+            let entities = Self::collect_entities_blocking(&guard, &vector, &device_id);
+            profile.as_ref().map_or(entities.clone(), |profile| {
+                crate::data_platform::filter_entities_for_profile(profile, &entities)
+            })
         })
         .await
         .unwrap_or_default()
@@ -167,9 +192,19 @@ impl StorageBackend for SqliteStorageBackend {
         let conn = self.conn.clone();
         let vector = vector.clone();
         let device_id = self.device_id();
+        let profile = self.selective_sync_profile();
         tokio::task::spawn_blocking(move || {
             let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
-            Self::collect_entities_page_blocking(&guard, &vector, &device_id, offset, limit)
+            if let Some(profile) = profile {
+                let all = Self::collect_entities_blocking(&guard, &vector, &device_id);
+                crate::data_platform::filter_entities_for_profile(&profile, &all)
+                    .into_iter()
+                    .skip(offset)
+                    .take(limit)
+                    .collect()
+            } else {
+                Self::collect_entities_page_blocking(&guard, &vector, &device_id, offset, limit)
+            }
         })
         .await
         .unwrap_or_default()
@@ -210,6 +245,15 @@ impl StorageBackend for SqliteStorageBackend {
             let _ = set_sync_kv(&guard, &key, &value);
         })
         .await;
+    }
+
+    fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
+        let Some(profile) = self.selective_sync_profile() else {
+            return Some(entity.clone());
+        };
+        crate::data_platform::filter_entities_for_profile(&profile, std::slice::from_ref(entity))
+            .into_iter()
+            .next()
     }
 }
 

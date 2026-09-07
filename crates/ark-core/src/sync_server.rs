@@ -108,6 +108,10 @@ pub trait StorageBackend: Send + Sync {
     }
     async fn get_kv(&self, key: &str) -> Option<String>;
     async fn set_kv(&self, key: &str, value: &str);
+
+    fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
+        Some(entity.clone())
+    }
 }
 
 // ---------------------------------------------------------------------------
