@@ -4,6 +4,7 @@
   "coreCommit": "251995135f1b16f34fcc26f18e15978635930b9b",
   "runtimeReleaseMerge": "d85cf0c8e759b43b778fc2ce3fe43fdf02030eee",
   "runtimeMain": "f80650ab88cf2e9d99e9ba45f33c3dacc953b645",
+  "arcaSdkReconnect": "18008cc",
   "checks": {
     "focusedCoreSuites": "PASS: 140/140 across 18 suites",
     "coreWorkspaceTests": "PASS: 385 tests across 30 suites",
@@ -16,7 +17,8 @@
     "windowsPackageWorker": "PASS: 11/11",
     "windowsPackageProcess": "PASS: 20/20",
     "cortex2Acceptance": "PASS: 7/7",
-    "desktopAuthoritySocket": "PASS: 6/6"
+    "desktopAuthoritySocket": "PASS: 6/6",
+    "arcaSdkReconnectContract": "PASS: 3/3"
   },
   "phase1_2_map": {
     "directDispatcher": {"commit": "316e36d61860458412db0e3ed048076d5c542520", "status": "ACCEPTED_LINUX"},
