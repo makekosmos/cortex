@@ -3,7 +3,10 @@
 This work targets Core issue #53 and the type-registration dependency of #33.
 It does not close either issue or authorize the source moves in #36.
 
-## Pinned inputs
+## Historical handoff inputs
+
+These were the inputs when this handoff was authored; they are retained for
+traceability and are not the current delivery pins.
 
 - Target baseline: `f8c4f4be3d9c5c86ddef2221c69581e84dd6578a` (`origin/main`).
 - Reference: PR #55, commit `9fe45d35c51781b6f5af99dae4c4d8a01f82b610`
@@ -32,11 +35,9 @@ remove that dependency.
 The delivered foundation exposes Rust library functions, including
 `persist_node_authorization`, `persist_integration_grant`, `prepare_signed_sync`,
 `validate_outbound_signed_sync` and the integration-specific `db` operations.
-The contract pin requested for consumers is Core commit
-`86ce336dde64589cd91019692ae8a9186ee33db4`. The current implementation,
-including Iroh addressed routing, is available at
-`a440f7e392d33d38393810a82ffbe73f01614afe` on
-`origin/codex/core-replication-narrow`.
+The current contract pin for consumers is Core commit
+`0b06342014238244749946bbe3db92d94dfa0868`, including the Iroh addressed
+routing implementation.
 
 It exposes sidecar RPC variants and FFI exports for the four operations above,
 plus the addressed `SignedIntegrationFrame`/`SignedIntegrationAck` protocol
@@ -62,7 +63,7 @@ Register `integrations/fatsecret/type-registration.json` through the existing
 `nutrition_entry_obj` records. Preserve the literal persisted type identifier.
 The schema artifact alone does not install a Cortex provider adapter.
 
-On the pinned baseline, `prepare_object` validates canonical registrations and
+On the historical baseline, `prepare_object` validates canonical registrations and
 retains a compatibility path for package registrations. The registration test
 proves registry compatibility and idempotency, not package ingress enforcement.
 The canonical validator itself requires a built-in canonical content contract,
@@ -73,35 +74,42 @@ field and validate its mapped payload before writing it. These consumer and
 ingress gaps remain part of #33; importing unrelated generic ingress changes
 from PR #55 is not implied by this slice.
 
-## Acceptance remaining for the full feature
+## Current #53 acceptance status
 
-- Authenticated two-node transport and reconnect/revocation tests.
-- Collection and refresh on an authorized recipient after the original node stops.
-- Black-box evidence that credentials do not reach renderer, worker or log output.
-- Real provider OAuth and provider-specific concurrent-refresh limitations.
-- Windows acceptance against the pinned release candidate.
+The delivered slice satisfies the literal #53 contract for canonical types,
+authorization/pairing/revocation/key rotation, encrypted envelope replication,
+independent authorized-recipient use and refresh, controlled refresh conflict
+handling, and source-offline collection. The evidence is split between the Core
+replication DB/security/publication tests and Cortex's consumer/HPKE integration
+tests; the latter drops the origin host before exercising the recipient's local
+provider flow.
 
-None of these is implied by contract/persistence tests. Final local evidence for
-the delivered slice is recorded separately from full-feature acceptance.
+The provider evidence uses a controlled fixture. It proves the generic
+production-path collection and refresh contract, but it does not claim
+provider-specific OAuth or token-endpoint behavior, nor does it generalize
+provider-specific concurrent-refresh semantics. No external provider/account
+smoke was run (`NOT_RUN`); #53 names no external provider, so that is optional
+evidence rather than a failed literal acceptance item.
 
-## Next bounded Core assignment
+Security and recovery model: Core stores only public configuration and opaque
+addressed envelopes; trusted-host decryption and provider credentials remain in
+Cortex. Key/grant rotation, revocation, and refresh fencing reject stale
+envelopes or queued writes. If local key material is lost, recovery requires
+re-pairing or re-authorization; the protocol does not recover plaintext secrets
+from Core or sync data. Renderer-isolation black-box evidence and Windows
+release-candidate acceptance remain separate app/distribution gates, not claims
+made by this Core/runtime contract.
 
-Expose the existing validated Rust operations through the sidecar request/handler
-and FFI surfaces. Keep one writer for shared request enums and manifests. Verify
-serialization and negative authorization cases through those actual entry points.
-Do not report successful network transmission while only preparing signing bytes.
+## Current delivery references
 
-The current candidate completes authenticated addressed routing through Iroh
-and revalidates outbound grants before sending. Network negative coverage and
-independent review remain required before this revision is accepted.
-Preserve the transport identity binding on receipt and revalidate grants
-immediately before send. The existing broadcast-only relay implementation
-must fail closed. An in-process two-database apply test is insufficient.
+- Core runtime/API delivery: `0b06342014238244749946bbe3db92d94dfa0868`.
+- Cortex runtime delivery: `d85cf0c8e759b43b778fc2ce3fe43fdf02030eee`.
+- Independent runtime review: PASS; no P0/P1/P2 findings on the delivered
+  production diff. The later runtime changes are test/portability-only.
+- Core #36 source moves and app/distribution release-candidate gates remain
+  outside this Core/runtime contract.
 
-Cortex can work on its trusted-host adapter against the resulting pinned API
-contract in a separate checkout. Shared source moves remain a later assignment.
-
-## Local verification
+## Historical local verification
 
 Checked on Windows on 2026-09-05 against Core commit
 `86ce336dde64589cd91019692ae8a9186ee33db4`:
@@ -121,6 +129,12 @@ Checked on Windows on 2026-09-05 against Core commit
 | `rtk git diff --check 8b3b67e4b9622d8f2730b2900804d4ab89212ade..HEAD` | PASS |
 | `rtk node scripts/ark-smoke.mjs` | FAIL at SDK step: expected sibling `../arca-sdk` absent in isolated worktree; guard and Rust tests passed |
 
-The final relay guard was checked by the repository clippy gate and focused
-tests above. Independent review of the final Iroh/network diff remains required;
-these checks do not prove Iroh routing or source-offline provider collection.
+At that historical point, the final relay guard was checked by the repository
+clippy gate and focused tests above; those checks did not prove Iroh routing or
+source-offline provider collection.
+
+## Current documentation verification
+
+The current acceptance wording was checked on 2026-09-07 against the delivery
+references above. `rtk git diff --check` passes for this documentation-only
+change; no Rust rebuild is required.
