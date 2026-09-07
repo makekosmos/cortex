@@ -905,7 +905,7 @@ fn sync(client: &mut Client, config: &Config) -> Result<BridgeStatus, ()> {
     })
 }
 
-fn main() {
+pub(crate) fn main() {
     let stdin = std::io::stdin();
     let mut first = String::new();
     if stdin
