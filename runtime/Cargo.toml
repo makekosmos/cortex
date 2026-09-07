@@ -29,7 +29,7 @@ name = "ark-markdown-bridge"
 path = "src/bin/ark-markdown-bridge.rs"
 
 [dependencies]
-ark-core = { git = "https://github.com/makekosmos/core.git", rev = "78f1f5dfa8bfa502d8207afec57948990e4dfa72", package = "ark-core" }
+ark-core = { git = "https://github.com/makekosmos/core.git", rev = "0b06342014238244749946bbe3db92d94dfa0868", package = "ark-core" }
 rusqlite.workspace = true
 tokio = { version = "1", features = [
   "rt-multi-thread",
@@ -99,6 +99,7 @@ keyring = { version = "3", features = ["windows-native", "apple-native"] }
 hickory-resolver = { version = "0.24", features = ["dns-over-https-rustls"] }
 base64 = "0.22"
 ed25519-dalek = "2"
+hpke = { version = "=0.14.1", default-features = false, features = ["alloc", "getrandom", "x25519", "hkdfsha2", "chacha"] }
 libloading = "0.8"
 semver = "1"
 # Phase 4 bug-detection: structured logging.

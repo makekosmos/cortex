@@ -1,9 +1,10 @@
 use super::*;
 
-pub fn refresh_transport_public_keys(
+pub fn refresh_transport_public_keys_named(
     setup: &IntegrationReplicationSetup,
     origin_ticket: &str,
     recipient_ticket: &str,
+    integration_id: &str,
 ) -> Result<(), String> {
     let origin_transport_key = endpoint_id_from_ticket(origin_ticket)?;
     let recipient_transport_key = endpoint_id_from_ticket(recipient_ticket)?;
@@ -13,12 +14,14 @@ pub fn refresh_transport_public_keys(
         &setup.origin,
         &origin_transport_key,
         &setup.origin.node_id,
+        integration_id,
     )?;
     rotate_node(
         &origin_conn,
         &setup.recipient,
         &recipient_transport_key,
         &setup.origin.node_id,
+        integration_id,
     )?;
     let recipient_conn =
         Connection::open(&setup.recipient_db).map_err(|error| error.to_string())?;
@@ -27,12 +30,14 @@ pub fn refresh_transport_public_keys(
         &setup.origin,
         &origin_transport_key,
         &setup.recipient.node_id,
+        integration_id,
     )?;
     rotate_node(
         &recipient_conn,
         &setup.recipient,
         &recipient_transport_key,
         &setup.recipient.node_id,
+        integration_id,
     )?;
     Ok(())
 }
@@ -42,6 +47,7 @@ fn rotate_node(
     node: &NodeIdentity,
     transport_key: &str,
     writer: &str,
+    integration_id: &str,
 ) -> Result<(), String> {
     let mut authorized = authorized_node(node);
     authorized.transport_public_key = Some(transport_key.to_owned());
@@ -49,12 +55,12 @@ fn rotate_node(
     authorized.revision = 2;
     authorized.hlc = format!("{HLC_WALL}:000003:{}", node.node_id);
     upsert_authorized_node(conn, &authorized, writer)?;
-    upsert_integration_node_grant(conn, &transport_grant(node), writer)
+    upsert_integration_node_grant(conn, &transport_grant(node, integration_id), writer)
 }
 
-fn transport_grant(node: &NodeIdentity) -> IntegrationNodeGrant {
+fn transport_grant(node: &NodeIdentity, integration_id: &str) -> IntegrationNodeGrant {
     IntegrationNodeGrant {
-        integration_id: INTEGRATION_ID.into(),
+        integration_id: integration_id.into(),
         node_id: node.node_id.clone(),
         node_encryption_key: node.encryption_public_key.clone(),
         grant_epoch: 2,

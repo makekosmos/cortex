@@ -78,7 +78,8 @@ fn sign_prepared(prepared: &Value, signing_key: &SigningKey) -> Value {
 
 #[tokio::test]
 async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
-    let setup: IntegrationReplicationSetup = support::new_setup().unwrap();
+    let setup: IntegrationReplicationSetup =
+        support::new_setup_named(support::INTEGRATION_ID).unwrap();
     let binary = resolve_ark_core_rpc_path().unwrap();
     let origin_db = setup.origin_db.to_string_lossy().into_owned();
     let recipient_db = setup.recipient_db.to_string_lossy().into_owned();
@@ -107,7 +108,13 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
     )
     .await;
     let recipient_ticket = own_iroh_ticket(&recipient).await;
-    support::refresh_transport_public_keys(&setup, &origin_ticket, &recipient_ticket).unwrap();
+    support::refresh_transport_public_keys_named(
+        &setup,
+        &origin_ticket,
+        &recipient_ticket,
+        support::INTEGRATION_ID,
+    )
+    .unwrap();
     start_iroh_sync(
         &origin,
         space_id,
@@ -209,7 +216,8 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
     .await
     .unwrap();
     assert_eq!(sent["sent"], true);
-    let recipient_state = support::wait_for_recipient_state(&recipient_db).await;
+    let recipient_state =
+        support::wait_for_recipient_state_named(&recipient_db, support::INTEGRATION_ID).await;
     assert!(
         recipient_state.is_ok(),
         "recipient state failed: {recipient_state:?}"
