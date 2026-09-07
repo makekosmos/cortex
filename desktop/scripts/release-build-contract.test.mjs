@@ -4,6 +4,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 const script = await readFile(path.join(import.meta.dirname, "build-desktop.mjs"), "utf8");
+const backend = await readFile(path.join(import.meta.dirname, "build-backend.mjs"), "utf8");
 
 test("release build validates before publishing immutable artifacts", () => {
   assert.match(script, /"--publish", "never"/);
@@ -25,4 +26,15 @@ test("release build validates before publishing immutable artifacts", () => {
   assert.match(script, /release builds require a clean tracked and source worktree/);
   assert.match(script, /ARK artifact hash does not match BOM/);
   assert.match(script, /app\.name\.endsWith\("\.app"\)/);
+});
+
+test("GUI and Engine versions remain independent", () => {
+  assert.match(backend, /process\.env\.KOSMOS_ENGINE_VERSION \?\? getVersion\("win"\)/);
+  assert.match(
+    backend,
+    /releases\/download\/v\$\{engineVersion\}\/Kosmos-Engine-\$\{engineVersion\}\.zip/,
+  );
+  assert.match(script, /copyEngineRelease\(SHELL_ROOT, engineVersion\)/);
+  assert.match(script, /copyEngineManifest\(SHELL_ROOT, engineVersion\)/);
+  assert.match(script, /collectArtifacts\(outputDir, platform, version, engineVersion\)/);
 });

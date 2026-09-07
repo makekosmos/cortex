@@ -34,6 +34,26 @@ test("engine archive is independently verifiable and installable", () => {
   );
 });
 
+test("independent engine versions accept a lower release line", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-engine-version-"));
+  const release = path.join(root, "release");
+  const archive = path.join(root, "Kosmos-Engine-0.1.0.zip");
+  mkdirSync(release, { recursive: true });
+  for (const name of [
+    "kepler-backend.exe",
+    "ark-core-rpc.exe",
+    "kepler-focus-helper.exe",
+    "kepler-focus-svc.exe",
+  ])
+    writeFileSync(path.join(release, name), name);
+  const manifest = buildEngineArchive(release, archive, {
+    version: "0.1.0",
+    url: "https://github.com/makekosmos/desktop/releases/download/v0.1.0/Kosmos-Engine-0.1.0.zip",
+  });
+  assert.equal(manifest.version, "0.1.0");
+  assert.equal(verifyEngineArchive(archive, manifest), true);
+});
+
 test("engine archive rejects tampering", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-engine-distribution-"));
   const release = path.join(root, "release");
