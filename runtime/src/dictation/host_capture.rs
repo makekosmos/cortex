@@ -176,19 +176,26 @@ async fn op_insert_text(params: Value, host: &DictationHost) -> DictationRespons
     let Some(text) = params.get("text").and_then(Value::as_str).map(str::to_owned) else {
         return DictationResponse::err("input.insert_text: missing text");
     };
-    if let Some(target) = params.get("targetWindow").and_then(Value::as_str) {
-        let matches = host
+    let Some(target) = params.get("targetWindow").and_then(Value::as_str) else {
+        return DictationResponse::err("input.insert_text: missing targetWindow");
+    };
+    let matches = {
+        let mut token = host
             .contract_window_id
             .lock()
-            .expect("window mutex poisoned")
-            .as_deref()
-            == Some(target);
-        if !matches {
-            return DictationResponse::err("window_unavailable");
+            .expect("window mutex poisoned");
+        let matches = token.as_deref() == Some(target);
+        if matches {
+            *token = None;
         }
+        matches
+    };
+    if !matches {
+        return DictationResponse::err("window_unavailable");
     }
+    let prev_hwnd = host.state.lock().await.prev_hwnd;
     match tokio::task::spawn_blocking(move || {
-        inject::inject_blocking(&text, InjectMode::AutoPaste, None)
+        inject::inject_blocking(&text, InjectMode::AutoPaste, prev_hwnd)
     })
     .await
     {
@@ -286,6 +293,14 @@ async fn op_start_recording(host: &DictationHost) -> DictationResponse {
 
 async fn op_cancel(host: &DictationHost) -> DictationResponse {
     super::audio_duck::restore();
+    *host
+        .contract_window_id
+        .lock()
+        .expect("window mutex poisoned") = None;
+    *host
+        .contract_window_id
+        .lock()
+        .expect("window mutex poisoned") = None;
     let mut s = host.state.lock().await;
     let should_cancel_sidecar = matches!(
         s.name,

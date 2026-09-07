@@ -30,14 +30,17 @@ pub const DICTATION_WRITE_OPERATIONS: &[&str] = &[
     "dictation.cancel",
     "dictation.lifecycle.set_autostart",
 ];
+const DICTATION_CONTROL_OPERATIONS: &[&str] = &[
+    "dictation.capture.start",
+    "dictation.capture.stop",
+    "dictation.speech.transcribe",
+    "dictation.input.insert_text",
+    "dictation.window.foreground",
+    "dictation.lifecycle.set_autostart",
+];
 
 pub fn dictation_operation_capability(operation: &str) -> Option<&'static str> {
-    if operation.starts_with("dictation.capture.")
-        || operation.starts_with("dictation.speech.")
-        || operation.starts_with("dictation.input.")
-        || operation == "dictation.window.foreground"
-        || operation == "dictation.lifecycle.set_autostart"
-    {
+    if DICTATION_CONTROL_OPERATIONS.contains(&operation) {
         Some("dictation.control")
     } else if DICTATION_READ_OPERATIONS.contains(&operation) {
         Some("ark.read")
@@ -1405,6 +1408,10 @@ mod tests {
         );
         assert_eq!(
             dictation_operation_capability("dictation.submit_audio"),
+            None
+        );
+        assert_eq!(
+            dictation_operation_capability("dictation.capture.future"),
             None
         );
     }
