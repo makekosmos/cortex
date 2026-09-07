@@ -1,0 +1,28 @@
+{
+  "status": "BLOCKED",
+  "capturedAt": "2026-09-07",
+  "coreCommit": "251995135f1b16f34fcc26f18e15978635930b9b",
+  "runtimeReleaseMerge": "d85cf0c8e759b43b778fc2ce3fe43fdf02030eee",
+  "runtimeMain": "f80650ab88cf2e9d99e9ba45f33c3dacc953b645",
+  "checks": {
+    "focusedCoreSuites": "PASS: 140/140 across 18 suites",
+    "coreWorkspaceTests": "PASS: 385 tests across 30 suites",
+    "fmt": "PASS",
+    "sourceSize": "PASS",
+    "writeBoundary": "PASS",
+    "generatedBindings": "PASS",
+    "clippy": "PASS with 31 existing warnings",
+    "strictClippy": "FAIL: 22 existing baseline lint errors",
+    "windowsPackageWorker": "PASS: 11/11"
+  },
+  "acceptance": {
+    "AC1": "NOT_RUN",
+    "AC2_AC9": "PARTIAL_EVIDENCE_ONLY",
+    "AC10": "NOT_RUN"
+  },
+  "phase9": {
+    "cleanupAuthorized": false,
+    "thirtyDayWindow": "Gate 5 protocol-removal telemetry only",
+    "proofBundle": "INCOMPLETE"
+  }
+}
