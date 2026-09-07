@@ -15,8 +15,16 @@
     "strictClippy": "FAIL: 22 existing baseline lint errors",
     "windowsPackageWorker": "PASS: 11/11"
   },
+  "phase1_2_map": {
+    "directDispatcher": {"commit": "316e36d61860458412db0e3ed048076d5c542520", "status": "ACCEPTED_LINUX"},
+    "reconnectingEngineClient": {"commit": "79adbbb6cacbcae5e61b2a6be3ef7b090cff3529", "status": "ACCEPTED_LINUX"},
+    "supervisorControl": {"commit": "6c40b3e05859404dd1fafb7e1d0cce09f4682851", "status": "ACCEPTED_LINUX"},
+    "workerContainment": {"commit": "6d8011fcf4d7f5a2ca91beaf062cd04dec7cb382", "status": "ACCEPTED_LINUX"},
+    "packageWebIsolation": {"commit": "61b5b74e04f898bfd6935649cbf00ff78697e6e7", "status": "ACCEPTED_LINUX"},
+    "versionedTypeRegistry": {"commit": "25f7837c1e09871e4c50aeaba257b49802c430c9", "status": "ACCEPTED_LINUX"}
+  },
   "acceptance": {
-    "AC1": "NOT_RUN",
+    "AC1": "PARTIAL",
     "AC2_AC9": "PARTIAL_EVIDENCE_ONLY",
     "AC10": "NOT_RUN"
   },

@@ -13,6 +13,25 @@ Captured 2026-09-07 against Core `origin/main`
 - Windows Core RPC fixture: SHA-256
   `0224e0bda0bb03ad0bf66848321432a404636e8584b71c96f6c42d29e548e479`.
 
+## Phase 1–2 reconciliation map
+
+The existing phase proofs provide accepted Linux slices; they are not silently
+promoted to a whole-program PASS:
+
+| Frozen slice | Exact implementation | Current owner / result |
+| --- | --- | --- |
+| Direct Engine dispatcher | `316e36d61860458412db0e3ed048076d5c542520` | Cortex/Engine; `ACCEPTED_LINUX`, Windows/Electron `NOT_RUN_UBUNTU` |
+| Reconnecting EngineClient | `79adbbb6cacbcae5e61b2a6be3ef7b090cff3529` | SDK/Host/Manager/Desktop; `ACCEPTED_LINUX`, Windows GUI/process `NOT_RUN_UBUNTU` |
+| Supervisor control | `6c40b3e05859404dd1fafb7e1d0cce09f4682851` | Cortex/Engine; `ACCEPTED_LINUX`, Windows packaged lifecycle `NOT_RUN_UBUNTU` |
+| Worker containment | `6d8011fcf4d7f5a2ca91beaf062cd04dec7cb382` | Cortex/Engine; Linux accepted, Windows execution was `NOT_RUN_UBUNTU` in the source proof |
+| Package web isolation | `61b5b74e04f898bfd6935649cbf00ff78697e6e7` | Desktop/Host; `ACCEPTED_LINUX`, packaged Windows/Darwin `NOT_RUN_UBUNTU` |
+| Versioned Type Registry | `25f7837c1e09871e4c50aeaba257b49802c430c9` | Core; `ACCEPTED_LINUX`, Windows/Darwin `NOT_RUN_UBUNTU` |
+
+The current Cortex release line additionally has a real Windows
+`package_worker_windows` run at `11/11` with the pinned Core RPC fixture. That
+is stronger than the old Ubuntu-only worker proof, but it does not replace the
+full Engine v1 Windows GUI/process, reconnect, or packaged lifecycle gates.
+
 ## Checks actually run
 
 | Check | Result |
@@ -29,10 +48,10 @@ Captured 2026-09-07 against Core `origin/main`
 
 ## Frozen acceptance status
 
-- AC1: `NOT_RUN` for the complete Phase 1–2 reconciliation map and cross-repo
-  Engine/Host acceptance. Current ownership is split: Core owns the typed/data
-  plane; Cortex owns Engine/Host runtime. The absence of those files in Core is
-  not evidence that the implementation is absent.
+- AC1: `PARTIAL` — the reconciliation map above pins the existing accepted
+  phase slices and their ownership. Full cross-repo Engine/Host acceptance is
+  still `NOT_RUN` for the remaining Windows/package lifecycle gates; current
+  Core ownership does not imply those implementation files must be in Core.
 - AC2–AC9: partial evidence exists in the accepted phase/runtime references,
   but this bundle does not claim the full umbrella criteria without their exact
   phase-specific artifacts and command matrix.
