@@ -10,6 +10,10 @@ const ARCHIVE_SHA256 = "14865b47b8f6a21c2b6f909723304dae43ca9213dd78e43fcd8a73bb
 
 const command = (file: string, args: string[], cwd: string) =>
   execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe" });
+const gitExecutable =
+  process.platform === "win32"
+    ? path.join(process.env.ProgramFiles ?? "C:\\Program Files", "Git", "cmd", "git.exe")
+    : "git";
 const digest = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 const isJsonObject = (value: JsonValue): value is { readonly [key: string]: JsonValue } =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -19,12 +23,16 @@ export function memoriaArchive(root: string, repositoryRoot: string): PackageArc
   const file = path.join(root, path.basename(ARCHIVE_PATH));
   let archive: Buffer;
   try {
-    archive = execFileSync("git", ["show", `${SOURCE_COMMIT}:${ARCHIVE_PATH}`], {
-      cwd: memoriaRoot,
-      encoding: null,
-      maxBuffer: 128 * 1024 * 1024,
-      stdio: "pipe",
-    });
+    archive = execFileSync(
+      gitExecutable,
+      ["-C", fs.realpathSync.native(memoriaRoot), "show", `${SOURCE_COMMIT}:${ARCHIVE_PATH}`],
+      {
+        cwd: repositoryRoot,
+        encoding: null,
+        maxBuffer: 128 * 1024 * 1024,
+        stdio: "pipe",
+      },
+    );
   } catch (error) {
     throw new Error(`Cannot read the pinned Memoria package fixture: ${String(error)}`);
   }
