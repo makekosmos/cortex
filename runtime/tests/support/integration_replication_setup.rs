@@ -3,6 +3,7 @@
 //! The caller owns the Core child lifecycle. This module only creates isolated
 //! databases and seeds them through `ark-core`'s public database API before
 //! `ArkHost::spawn` is called.
+#![allow(dead_code, unused_imports)]
 
 use ark_core::db::{
     init_schema, try_acquire_integration_refresh_lease, upsert_authorized_node,
@@ -44,18 +45,30 @@ pub struct IntegrationReplicationSetup {
 
 #[path = "integration_replication_transport.rs"]
 mod transport;
-pub use transport::refresh_transport_public_keys;
+pub use transport::refresh_transport_public_keys_named;
 
-pub fn new_setup() -> Result<IntegrationReplicationSetup, String> {
+pub fn new_setup_named(integration_id: &str) -> Result<IntegrationReplicationSetup, String> {
     let dir = tempfile::tempdir().map_err(|error| error.to_string())?;
     let origin = identity("origin-node", 21);
     let recipient = identity("recipient-node", 22);
     let foreign = identity("foreign-node", 23);
     let origin_db = dir.path().join("origin.sqlite");
     let recipient_db = dir.path().join("recipient.sqlite");
-    seed_database(&origin_db, &origin, &[&origin, &recipient, &foreign], true)?;
-    seed_database(&recipient_db, &origin, &[&origin, &recipient], false)?;
-    seed_recipient_baseline(&recipient_db, &origin)?;
+    seed_database_named(
+        &origin_db,
+        &origin,
+        &[&origin, &recipient, &foreign],
+        true,
+        integration_id,
+    )?;
+    seed_database_named(
+        &recipient_db,
+        &origin,
+        &[&origin, &recipient],
+        false,
+        integration_id,
+    )?;
+    seed_recipient_baseline_named(&recipient_db, &origin, integration_id)?;
     let conn = Connection::open(&origin_db).map_err(|error| error.to_string())?;
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -63,7 +76,7 @@ pub fn new_setup() -> Result<IntegrationReplicationSetup, String> {
         .as_millis() as u64;
     try_acquire_integration_refresh_lease(
         &conn,
-        INTEGRATION_ID,
+        integration_id,
         &origin.node_id,
         1,
         now_ms,
@@ -104,17 +117,18 @@ pub fn decode_hex(value: &str) -> Vec<u8> {
         .collect()
 }
 
-pub fn seed_database(
+pub fn seed_database_named(
     path: &Path,
     origin: &NodeIdentity,
     nodes: &[&NodeIdentity],
     seed_configuration: bool,
+    integration_id: &str,
 ) -> Result<(), String> {
     let conn = Connection::open(path).map_err(|error| error.to_string())?;
     init_schema(&conn)?;
     if seed_configuration {
         let config = IntegrationConfiguration {
-            integration_id: INTEGRATION_ID.into(),
+            integration_id: integration_id.into(),
             provider: "synthetic".into(),
             account_subject: "test-account".into(),
             public_scopes: Vec::new(),
@@ -129,7 +143,7 @@ pub fn seed_database(
     for node in nodes {
         let authorized = authorized_node(node);
         let grant = IntegrationNodeGrant {
-            integration_id: INTEGRATION_ID.into(),
+            integration_id: integration_id.into(),
             node_id: node.node_id.clone(),
             node_encryption_key: node.encryption_public_key.clone(),
             grant_epoch: 1,
@@ -145,13 +159,16 @@ pub fn seed_database(
     Ok(())
 }
 
-pub async fn wait_for_recipient_state(path: &str) -> Result<(), String> {
+pub async fn wait_for_recipient_state_named(
+    path: &str,
+    integration_id: &str,
+) -> Result<(), String> {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
     let mut last_seen = None;
     loop {
         if let Ok(conn) = Connection::open(path) {
             if let Ok(Some(lease)) =
-                ark_core::db::load_integration_refresh_lease(&conn, INTEGRATION_ID)
+                ark_core::db::load_integration_refresh_lease(&conn, integration_id)
             {
                 last_seen = Some(format!(
                     "holder={}, generation={}, fence={}",
@@ -174,10 +191,14 @@ pub async fn wait_for_recipient_state(path: &str) -> Result<(), String> {
     }
 }
 
-fn seed_recipient_baseline(path: &Path, origin: &NodeIdentity) -> Result<(), String> {
+fn seed_recipient_baseline_named(
+    path: &Path,
+    origin: &NodeIdentity,
+    integration_id: &str,
+) -> Result<(), String> {
     let conn = Connection::open(path).map_err(|error| error.to_string())?;
     let config = IntegrationConfiguration {
-        integration_id: INTEGRATION_ID.into(),
+        integration_id: integration_id.into(),
         provider: "synthetic".into(),
         account_subject: "test-account".into(),
         public_scopes: Vec::new(),
@@ -231,55 +252,5 @@ pub fn hex(bytes: &[u8]) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn fixture_seeds_both_isolated_databases() {
-        let setup = new_setup().unwrap();
-        for path in [&setup.origin_db, &setup.recipient_db] {
-            let conn = Connection::open(path).unwrap();
-            assert!(
-                ark_core::db::load_integration_configuration(&conn, INTEGRATION_ID)
-                    .unwrap()
-                    .is_some()
-            );
-            assert!(
-                ark_core::db::load_authorized_node(&conn, &setup.origin.node_id)
-                    .unwrap()
-                    .is_some()
-            );
-            assert!(ark_core::db::load_integration_node_grant(
-                &conn,
-                INTEGRATION_ID,
-                &setup.recipient.node_id,
-            )
-            .unwrap()
-            .is_some());
-        }
-        let conn = Connection::open(&setup.origin_db).unwrap();
-        assert!(
-            ark_core::db::load_authorized_node(&conn, &setup.foreign.node_id)
-                .unwrap()
-                .is_some()
-        );
-        let signature = setup.origin.signing_key.sign(b"integration-replication");
-        setup
-            .origin
-            .signing_key
-            .verifying_key()
-            .verify_strict(b"integration-replication", &signature)
-            .unwrap();
-        let conn = Connection::open(&setup.origin_db).unwrap();
-        let prepared = ark_core::integration_replication::prepare_signed_sync(
-            &conn,
-            "synthetic-space",
-            &setup.origin.node_id,
-            INTEGRATION_ID,
-            &setup.recipient.node_id,
-            "synthetic-message",
-        )
-        .unwrap();
-        assert!(!prepared.envelope.payload.is_empty());
-    }
-}
+#[path = "integration_replication_setup_tests.rs"]
+mod tests;

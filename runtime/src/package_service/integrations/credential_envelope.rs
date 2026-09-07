@@ -1,4 +1,6 @@
-use super::secret_store::{read_package_integration_secret, save_package_integration_secret};
+use super::secret_store::{
+    clear_package_integration_secret, read_package_integration_secret, save_package_integration_secret,
+};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use hpke::{
     aead::ChaCha20Poly1305,
@@ -6,48 +8,26 @@ use hpke::{
     kem::{Kem, X25519HkdfSha256},
     setup_receiver, setup_sender, Deserializable, OpModeR, OpModeS, Serializable,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 pub(crate) const ENVELOPE_VERSION: u8 = 2;
 const ALGORITHM: &str = "HPKE-Auth-X25519-HKDF-SHA256-ChaCha20Poly1305";
 const HPKE_INFO: &[u8] = b"makekosmos/cortex/credential-envelope/v2";
 const IDENTITY_PACKAGE: &str = "__cortex__";
 const IDENTITY_VERSION: &str = "credential-envelope-v2";
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct CredentialContext {
-    pub(crate) integration_id: String,
-    pub(crate) recipient_node_id: String,
-    pub(crate) grant_epoch: u64,
-    pub(crate) credential_generation: u64,
-    pub(crate) key_id: String,
-    pub(crate) issuer_node_id: String,
-    pub(crate) issuer_auth_key_id: String,
-}
-#[derive(Debug, Clone)]
-pub struct HpkeIdentity {
-    pub node_id: String,
-    pub private_key: String,
-    pub public_key: String,
-    pub key_id: String,
-}
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct CredentialEnvelopeV2 {
-    pub(crate) version: u8,
-    pub(crate) algorithm: String,
-    pub(crate) integration_id: String,
-    pub(crate) recipient_node_id: String,
-    pub(crate) grant_epoch: u64,
-    pub(crate) credential_generation: u64,
-    pub(crate) key_id: String,
-    pub(crate) issuer_node_id: String,
-    pub(crate) issuer_auth_key_id: String,
-    pub(crate) enc: String,
-    pub(crate) ciphertext: String,
-}
+
+#[path = "credential_envelope_models.rs"]
+mod models;
+pub(crate) use models::{CredentialContext, CredentialEnvelopeV2};
+pub use models::HpkeIdentity;
+
 #[path = "credential_envelope_types.rs"]
 mod types;
 pub(crate) use types::CredentialEnvelopeError;
+#[path = "credential_identity_cleanup.rs"]
+mod identity_cleanup;
+pub use identity_cleanup::clear_identity;
+
 pub fn load_or_create_identity(node_id: &str) -> Result<HpkeIdentity, CredentialEnvelopeError> {
     validate_id(node_id)?;
     let setting = identity_setting(node_id);
@@ -70,6 +50,7 @@ pub fn load_or_create_identity(node_id: &str) -> Result<HpkeIdentity, Credential
         public_key,
     })
 }
+
 pub(crate) fn encrypt(
     context: &CredentialContext,
     recipient_public_key: &str,

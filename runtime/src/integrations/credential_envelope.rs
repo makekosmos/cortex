@@ -58,8 +58,9 @@ pub(crate) async fn receive(
         }))
         .await
         .map_err(|_| "Core credential envelope load rejected".to_string())?;
-    let package_version = required(params, "package_version")?;
-    let setting = required(params, "setting")?;
+    let (package_version, setting) = packages
+        .integration_credential_target(integration_id)
+        .map_err(|_| "installed integration manifest unavailable".to_string())?;
     let recipient =
         crate::package_service::credential_envelope::load_or_create_identity(recipient_node_id)
             .map_err(|_| "local credential envelope identity unavailable".to_string())?;
@@ -78,37 +79,24 @@ pub(crate) async fn receive(
             expected_issuer_key_id,
         )
         .map_err(|_| "Core credential envelope is not V2 HPKE".to_string())?;
-    let current = consumer
-        .lookup_issuer_encryption_key(&json!({
-            "space_id": space_id,
-            "integration_id": integration_id,
-            "recipient_node_id": recipient_node_id,
-            "issuer_node_id": issuer_node_id,
-            "credential_generation": credential_generation,
-            "expected_issuer_key_id": expected_issuer_key_id,
-        }))
-        .await
-        .map_err(|_| "Core issuer key revalidation rejected".to_string())?;
-    if current.get("grant_epoch").and_then(Value::as_u64) != Some(grant_epoch)
-        || current.get("key_id").and_then(Value::as_str) != Some(expected_issuer_key_id)
-        || current.get("status").and_then(Value::as_str) != Some("active")
-        || current.get("grant_status").and_then(Value::as_str) != Some("active")
-    {
-        return Err("Core issuer key changed before credential store".to_string());
-    }
-    crate::package_service::credential_envelope::decrypt_and_store(
+    let mut plaintext = crate::package_service::credential_envelope::decrypt(
         &envelope,
         &expected,
         &recipient,
         issuer_public_key,
-        integration_id,
-        package_version,
-        setting,
     )
     .map_err(|_| "credential envelope verification failed".to_string())?;
-    packages
-        .sync_integration_now(integration_id)
-        .map_err(|_| "stored credential could not start provider sync".to_string())?;
+    let stored = packages
+        .store_integration_credential_and_sync(
+            integration_id,
+            &package_version,
+            &setting,
+            &plaintext,
+        )
+        .await
+        .map_err(|_| "stored credential could not start provider sync".to_string());
+    crate::package_worker_secrets::zeroize_secret(&mut plaintext);
+    stored?;
     Ok(json!({
         "stored": true,
         "version": crate::package_service::credential_envelope::ENVELOPE_VERSION

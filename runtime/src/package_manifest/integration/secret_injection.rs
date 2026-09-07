@@ -170,7 +170,13 @@ fn valid_origins(origins: &[String]) -> bool {
         && origins.len() <= 8
         && origins.iter().all(|origin| {
             Url::parse(origin).is_ok_and(|url| {
-                url.scheme() == "https"
+                (url.scheme() == "https"
+                    || (cfg!(feature = "package-worker-fixture")
+                        && url.scheme() == "http"
+                        && url
+                            .host_str()
+                            .and_then(|host| host.parse::<std::net::IpAddr>().ok())
+                            .is_some_and(|ip| ip.is_loopback())))
                     && url.username().is_empty()
                     && url.password().is_none()
                     && url.path() == "/"

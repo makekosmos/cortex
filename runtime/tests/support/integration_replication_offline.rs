@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use super::support::IntegrationReplicationSetup;
 use ark_core::integration_replication::encryption_key_id;
 use kepler_backend::ark_host::ArkHost;
