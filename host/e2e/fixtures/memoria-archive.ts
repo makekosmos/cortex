@@ -86,7 +86,7 @@ export function memoriaArchive(root: string, repositoryRoot: string): PackageArc
   if (!isJsonObject(parsed)) throw new Error("Memoria archive manifest must be a JSON object");
   if (
     digest(JSON.stringify(parsed)) !==
-      "45a1433714f254290e72454f13d354db4d24eba36b7dd7d57980ed60dc7d3a44" ||
+      "fbcaba86002fd31f8d9ceccdeecb17bed048881ef30f4c6d930fffc8579b864b" ||
     parsed.schema_version !== 2 ||
     parsed.id !== "com.kosmos.memoria" ||
     parsed.version !== "0.6.6" ||

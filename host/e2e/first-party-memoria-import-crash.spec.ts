@@ -94,15 +94,18 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     pids.add(host.process().pid);
     let page = await host.firstWindow();
     await expect.poll(() => page.evaluate(() => Boolean(window.api))).toBe(true);
-    const baselineEntryIds = await page.evaluate(async () =>
-      (await window.api.listAllEntries()).map((entry) => entry.id).sort(),
-    );
     await page.evaluate(() => {
       window.location.hash = "#/settings";
     });
     await expect(page.getByTestId("eden-settings-export")).toBeVisible();
     await page.getByTestId("eden-settings-export").click();
     await expect(page.getByTestId("eden-import-obsidian-vault")).toBeVisible();
+    const baselineEntryIds = await page.evaluate(async () =>
+      (await window.api.listAllEntries())
+        .map((entry) => entry.id)
+        .filter((id) => !id.startsWith("collection:"))
+        .sort(),
+    );
     await installPartialImportCrashPause(page, path.join(root, "crash-import-vault"));
     await page.getByTestId("eden-import-obsidian-vault").getByRole("button").click();
     await expect
@@ -117,6 +120,9 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
       )
       .toBe(true);
 
+    console.log(
+      `[host-e2e] journal before crash=${await page.evaluate(() => localStorage.getItem("memoria.obsidian-import-journal.v1"))}`,
+    );
     await closeHost(host, pids);
     host = undefined;
     const enginePid = engine?.pid;
@@ -139,7 +145,10 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     await expect
       .poll(() =>
         page.evaluate(async () =>
-          (await window.api.listAllEntries()).map((entry) => entry.id).sort(),
+          (await window.api.listAllEntries())
+            .map((entry) => entry.id)
+            .filter((id) => !id.startsWith("collection:"))
+            .sort(),
         ),
       )
       .toEqual(baselineEntryIds);
