@@ -93,17 +93,7 @@ pub(super) async fn dispatch_standard(
     } else if let Some(rest) = operation.strip_prefix("calculator.") {
         handle_calculator_op(rest, params, &agents_data_dir).await
     } else if let Some(rest) = operation.strip_prefix("integrations.") {
-        if matches!(
-            rest,
-            "replication_authorize_node"
-                | "replication_revoke_node"
-                | "replication_rotate_node"
-                | "replication_persist_grant"
-                | "replication_publish_credential_envelope"
-                | "replication_receive_credential_envelope_v2"
-                | "replication_publish_credential_envelope_v2"
-        ) && !client.desktop_authorized
-        {
+        if rest.starts_with("replication_") && !client.desktop_authorized {
             return LocalResponse::err("integration replication authority denied");
         }
         integrations::handle_operation(rest, params, &ark_host, &agents_data_dir, &package_service)
