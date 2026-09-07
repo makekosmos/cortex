@@ -10,6 +10,7 @@ Captured 2026-09-07 against Core `origin/main`
 - Core: `251995135f1b16f34fcc26f18e15978635930b9b`.
 - Cortex runtime release merge: `d85cf0c8e759b43b778fc2ce3fe43fdf02030eee`.
 - Cortex current main: `f80650ab88cf2e9d99e9ba45f33c3dacc953b645`.
+- Arca SDK reconnect path: `18008cc` (`quality/portable-hooks`).
 - Windows Core RPC fixture: SHA-256
   `0224e0bda0bb03ad0bf66848321432a404636e8584b71c96f6c42d29e548e479`.
 
@@ -50,13 +51,16 @@ replace the full Engine v1 reconnect contract or any visual GUI gate.
 | Cortex `package_worker_process_windows` with `ARK_CORE_RPC_PATH` | PASS: 20/20 |
 | Cortex `cortex_2_acceptance` with `ARK_CORE_RPC_PATH` | PASS: 7/7 |
 | Cortex `desktop_authority_socket` with `ARK_CORE_RPC_PATH` | PASS: 6/6 |
+| Arca SDK `bun test tests/engine-v1-contract.test.ts` | PASS: 3/3; strict discovery, coalesced reconnect and bounded idempotent replay |
 
 ## Frozen acceptance status
 
 - AC1: `PARTIAL` — the reconciliation map above pins the existing accepted
-  phase slices and their ownership. Full cross-repo Engine/Host acceptance is
-  still `NOT_RUN` for the remaining Windows/package lifecycle gates; current
-  Core ownership does not imply those implementation files must be in Core.
+  phase slices and their ownership. The Arca SDK reconnect production path is
+  now `PASS` on its 3-test contract target; full cross-consumer Engine/Host
+  acceptance is still `NOT_RUN` for remaining adapter and Windows/package
+  lifecycle gates. Current Core ownership does not imply those implementation
+  files must be in Core.
 - AC2–AC9: partial evidence exists in the accepted phase/runtime references,
   but this bundle does not claim the full umbrella criteria without their exact
   phase-specific artifacts and command matrix.
@@ -76,5 +80,6 @@ count/ID/digest bundle, or exact idempotent rerun proof has been delivered on
 this Core main.
 
 No destructive cleanup is permitted from this bundle. The next actions are to
-attach the exact phase artifacts and cross-repository Engine/Host evidence, then
-re-run the frozen supported matrix against one final candidate.
+attach the remaining exact phase artifacts and cross-consumer Engine/Host
+evidence, then re-run the frozen supported matrix against one final candidate.
+The reconnect client contract itself is no longer an untested residual.
