@@ -13,17 +13,15 @@ pub(in crate::ws_server) async fn handle_package_op(
                 Some("bridge") => Some(crate::package_service::PackageKind::Bridge),
                 Some(_) => return LocalResponse::err("packages.list: invalid-kind"),
             };
-            let catalog_kind = kind.clone();
-            let installed = package_blocking({
+            match package_blocking({
                 let service = service.clone();
-                move || service.list_filtered(kind)
+                let query_kind = kind.clone();
+                move || service.list_filtered(query_kind)
             })
-            .await;
-            match installed {
+            .await
+            {
                 Ok(list) => {
-                    let catalog = service
-                        .catalog_packages(catalog_kind.as_ref())
-                        .unwrap_or_default();
+                    let catalog = service.catalog_packages(kind.as_ref()).unwrap_or_default();
                     let mut value =
                         serde_json::to_value(&list).unwrap_or_else(|_| serde_json::json!({}));
                     value["catalog"] = serde_json::json!(catalog);
@@ -39,6 +37,29 @@ pub(in crate::ws_server) async fn handle_package_op(
             "trust": service.trust_summary(),
             "catalog": service.catalog_summary(),
         })),
+        "verify_replacement" => {
+            let Some(id) = params
+                .get("id")
+                .or_else(|| params.get("package_id"))
+                .and_then(Value::as_str)
+            else {
+                return LocalResponse::err("packages.verify_replacement: invalid-request");
+            };
+            let Some(version) = params.get("version").and_then(Value::as_str) else {
+                return LocalResponse::err("packages.verify_replacement: invalid-request");
+            };
+            let Some(hash) = params.get("hash").and_then(Value::as_str) else {
+                return LocalResponse::err("packages.verify_replacement: invalid-request");
+            };
+            let Some(catalog_sequence) = params.get("catalog_sequence").and_then(Value::as_u64)
+            else {
+                return LocalResponse::err("packages.verify_replacement: invalid-request");
+            };
+            package_response(
+                subop,
+                service.verify_installed_app(id, version, hash, catalog_sequence),
+            )
+        }
         "refresh_catalog" => package_response(subop, service.refresh_catalog().await),
         "catalog_apply" => {
             let Some(document) = params.get("document").and_then(serde_json::Value::as_str) else {
@@ -91,6 +112,68 @@ pub(in crate::ws_server) async fn handle_package_op(
                     .apply_revocations_with_worker_stop(document.as_bytes(), signatures)
                     .await
                     .map(|()| serde_json::json!({ "applied": true })),
+            )
+        }
+        "revoke_legacy_grants" => {
+            let Some(source_ids) = params.get("source_ids").and_then(Value::as_array) else {
+                return LocalResponse::err("packages.revoke_legacy_grants: invalid-request");
+            };
+            let Some(source_ids) = source_ids
+                .iter()
+                .map(Value::as_str)
+                .collect::<Option<Vec<_>>>()
+            else {
+                return LocalResponse::err("packages.revoke_legacy_grants: invalid-request");
+            };
+            let source_ids = source_ids
+                .into_iter()
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            package_response(
+                subop,
+                service
+                    .revoke_legacy_grants_transaction(&source_ids)
+                    .map(|result| {
+                        serde_json::json!({
+                            "revoked": result.revoked,
+                            "transaction_token": result.transaction_token,
+                        })
+                    }),
+            )
+        }
+        "restore_legacy_grants" => restore_legacy_grants(subop, params, service),
+        "rollback_legacy_grants" => rollback_legacy_grants(subop, params, service),
+        "commit_legacy_grants" => {
+            let Some(token) = params.get("transaction_token").and_then(Value::as_str) else {
+                return LocalResponse::err("packages.commit_legacy_grants: invalid-request");
+            };
+            package_response(
+                subop,
+                service
+                    .commit_legacy_grants(token)
+                    .map(|()| serde_json::json!({ "committed": true })),
+            )
+        }
+        "validate_legacy_grants" => {
+            let Some(source_ids) = params.get("source_ids").and_then(Value::as_array) else {
+                return LocalResponse::err("packages.validate_legacy_grants: invalid-request");
+            };
+            let Some(source_ids) = source_ids
+                .iter()
+                .map(Value::as_str)
+                .collect::<Option<Vec<_>>>()
+            else {
+                return LocalResponse::err("packages.validate_legacy_grants: invalid-request");
+            };
+            let source_ids = source_ids
+                .into_iter()
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            package_response(
+                subop,
+                service
+                    .validate_legacy_grants(&source_ids)
+                    .map(|()| serde_json::json!({ "valid": true })),
             )
         }
         "install" => {

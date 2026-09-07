@@ -553,7 +553,7 @@ defineExpose({ start });
               <Info
                 class="focus-command__block-info"
                 :size="18"
-                aria-label="Блокируются приложения из лаунчера CosCast"
+                aria-label="Блокируются приложения из лаунчера Kosmos"
               />
             </div>
           </div>

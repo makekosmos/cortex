@@ -357,6 +357,10 @@ pub trait DefinitionSnapshotReader {
 }
 
 impl ManifestV2 {
+    pub fn supports_current_platform(&self) -> bool {
+        self.targets.iter().any(ManifestTarget::supports_current)
+    }
+
     pub fn worker_entrypoint(&self) -> Option<&str> {
         self.targets
             .iter()
@@ -885,6 +889,7 @@ mod tests {
         let VersionedManifest::V2(manifest) = manifest else {
             panic!()
         };
+        assert!(manifest.supports_current_platform());
         assert_eq!(manifest.declared_worker_entrypoints().len(), 2);
     }
 }

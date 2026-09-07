@@ -1,4 +1,5 @@
 import { nativeTheme, powerMonitor } from "electron";
+import type { ArkClient } from "@kosmos/ark";
 import { showFocusBlockOverlay } from "./focus-overlay";
 import {
   setBlockedAppNotifier,
@@ -21,6 +22,7 @@ interface AppReadyBackendSupervisor {
   markBootInitStarted(): void;
   recoverBackendIfDead(reason: string): Promise<void>;
   spawnBackend(): void;
+  awaitArkReady(): Promise<ArkClient>;
 }
 
 interface AppReadyInstance {
@@ -52,6 +54,8 @@ interface RunAppReadyOptions {
   instance: AppReadyInstance;
   launcher: AppReadyLauncher;
   runBootSelfCheck(): void;
+  recoverLegacyMigration?(): Promise<void>;
+  runLegacyMigration?(): Promise<void>;
 }
 
 export async function runAppReady({
@@ -60,6 +64,8 @@ export async function runAppReady({
   instance,
   launcher,
   runBootSelfCheck,
+  recoverLegacyMigration,
+  runLegacyMigration,
 }: RunAppReadyOptions): Promise<void> {
   runBootSelfCheck();
   nativeTheme.themeSource = "dark";
@@ -74,6 +80,11 @@ export async function runAppReady({
   registerMainProtocols({ awaitArkReady });
   backendSupervisor.markBootInitStarted();
   const boot = backendSupervisor.initArkClient();
+  if (runLegacyMigration) {
+    await backendSupervisor.awaitArkReady();
+    if (recoverLegacyMigration) await recoverLegacyMigration();
+    await runLegacyMigration();
+  }
   if (!process.argv.includes("--autostart")) {
     const openManager =
       process.env.KOSMOS_TEST_MODE === "1" ? launcher.showLauncher : launcher.openManager;

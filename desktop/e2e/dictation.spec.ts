@@ -19,12 +19,8 @@ import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
 import electronBinary from "electron";
 import { _electron as electron, type ElectronApplication, type Page } from "playwright";
-import { waitForBackendReady } from "../../../tests/e2e/helpers/wait";
-import {
-  freshDataDir,
-  launchKeplerWithDataDir,
-  shutdownKeplerEngine,
-} from "../../../tests/e2e/helpers/launch";
+import { waitForBackendReady } from "./helpers/wait";
+import { freshDataDir, launchKeplerWithDataDir, shutdownKeplerEngine } from "./helpers/launch";
 import type { JsonRecord } from "../src/shared/runtimeGuards";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -84,14 +80,11 @@ async function dictationRequest<T = JsonRecord>(
 ): Promise<T> {
   return page.evaluate(
     async ({ operation, params }) => {
-// SAFETY: the test fixture or assertion setup establishes the expected contract.
+      // SAFETY: the test fixture or assertion setup establishes the expected contract.
       const api = window as {
         kepler?: {
           ark?: {
-            request?: <R = unknown>(
-              op: string,
-              requestParams?: JsonRecord,
-            ) => Promise<R>;
+            request?: <R = unknown>(op: string, requestParams?: JsonRecord) => Promise<R>;
           };
         };
       };
@@ -139,7 +132,7 @@ async function setDictationHotkey(page: Page, hotkey: string): Promise<void> {
 
 async function listKeplerCommands(page: Page): Promise<KeplerCommand[]> {
   return page.evaluate(async () => {
-// SAFETY: the test fixture or assertion setup establishes the expected contract.
+    // SAFETY: the test fixture or assertion setup establishes the expected contract.
     const api = window as {
       kepler?: {
         commands?: {
@@ -155,7 +148,7 @@ async function listKeplerCommands(page: Page): Promise<KeplerCommand[]> {
 
 async function invokeKeplerCommand(page: Page, id: string): Promise<void> {
   await page.evaluate(async (commandId) => {
-// SAFETY: the test fixture or assertion setup establishes the expected contract.
+    // SAFETY: the test fixture or assertion setup establishes the expected contract.
     const api = window as {
       kepler?: {
         commands?: {
@@ -320,7 +313,7 @@ test.describe("dictation Phase 1", () => {
       // Map, не в Node EventEmitter `_events` (там оседают только
       // `ipcMain.on()` listeners). Probe'ить нужно через `_invokeHandlers`.
       const resp = await app.evaluate(async ({ ipcMain }) => {
-// SAFETY: the test fixture or assertion setup establishes the expected contract.
+        // SAFETY: the test fixture or assertion setup establishes the expected contract.
         const internal = ipcMain as {
           _invokeHandlers?: Map<string, unknown>;
         };
@@ -523,7 +516,7 @@ test.describe("dictation mock STT", () => {
 
       const submitResp = await launcher.evaluate(async () => {
         try {
-// SAFETY: the test fixture or assertion setup establishes the expected contract.
+          // SAFETY: the test fixture or assertion setup establishes the expected contract.
           const api = window as {
             kepler?: {
               ark?: {
@@ -712,7 +705,7 @@ test.describe("AI settings", () => {
       await expect(settings.getByText("Путь к whisper.cpp", { exact: true })).toBeVisible();
       const inputValues = await settings
         .locator("input")
-// SAFETY: the test fixture or assertion setup establishes the expected contract.
+        // SAFETY: the test fixture or assertion setup establishes the expected contract.
         .evaluateAll((inputs) =>
           inputs.map((input) => {
             // SAFETY: Playwright locates HTML input elements in this test fixture.

@@ -95,6 +95,7 @@ fn create_process_suspended(
         // never copy these names from the parent environment.
         "KOSMOS_FIXTURE_ENTRY_MARKER",
         "KOSMOS_FIXTURE_BOOTSTRAP_MARKER",
+        "KOSMOS_FAKE_PROVIDER_RESULT_MARKER",
     ];
     #[cfg(not(any(test, feature = "package-worker-fixture")))]
     let environment_names = ["SystemRoot", "WINDIR", "TEMP", "TMP"];

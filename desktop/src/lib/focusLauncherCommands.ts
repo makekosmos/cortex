@@ -44,7 +44,7 @@ export function activeFocusCommands(state: FocusCommandState): CommandRecord[] {
         : "Пауза таймера — можно вернуться позже",
       category: "action",
       kind: "command",
-      appName: "CosCast",
+      appName: "Kosmos",
     },
     {
       id: FOCUS_SKIP_ID,
@@ -52,7 +52,7 @@ export function activeFocusCommands(state: FocusCommandState): CommandRecord[] {
       subtitle: "Перейти к следующей фазе таймера",
       category: "action",
       kind: "command",
-      appName: "CosCast",
+      appName: "Kosmos",
     },
     {
       id: FOCUS_DONE_ID,
@@ -60,7 +60,7 @@ export function activeFocusCommands(state: FocusCommandState): CommandRecord[] {
       subtitle: "Остановить сессию и отметить задачу выполненной",
       category: "action",
       kind: "command",
-      appName: "CosCast",
+      appName: "Kosmos",
     },
     {
       id: FOCUS_STOP_ID,
@@ -68,7 +68,7 @@ export function activeFocusCommands(state: FocusCommandState): CommandRecord[] {
       subtitle: "Остановить сессию, не трогая задачу",
       category: "action",
       kind: "command",
-      appName: "CosCast",
+      appName: "Kosmos",
     },
     {
       id: FOCUS_EDIT_ID,
@@ -76,7 +76,7 @@ export function activeFocusCommands(state: FocusCommandState): CommandRecord[] {
       subtitle: "Изменить цель, длительность и блокировку",
       category: "action",
       kind: "command",
-      appName: "CosCast",
+      appName: "Kosmos",
     },
   ];
 }

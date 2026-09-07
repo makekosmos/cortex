@@ -1,5 +1,30 @@
 use super::*;
 
+fn hydrate_empty_scopes(
+    manifest: &mut PackageManifest,
+    private_roots: &[PathBuf],
+    worker_roots: &[PathBuf],
+) {
+    for permission in &mut manifest.permissions {
+        if matches!(
+            permission.capability.as_str(),
+            "filesystem.read" | "filesystem.write"
+        ) && permission.scopes.is_empty()
+        {
+            permission.scopes = private_roots
+                .iter()
+                .map(|root| root.to_string_lossy().into_owned())
+                .collect();
+        }
+        if permission.capability == "process.spawn" && permission.scopes.is_empty() {
+            permission.scopes = worker_roots
+                .iter()
+                .map(|root| root.to_string_lossy().into_owned())
+                .collect();
+        }
+    }
+}
+
 impl PackageWorkerSupervisor {
     #[cfg(windows)]
     pub(super) fn prepare_grant(
@@ -21,18 +46,7 @@ impl PackageWorkerSupervisor {
         } else {
             vec![state_root.to_path_buf()]
         };
-        for permission in &mut grant_manifest.permissions {
-            if matches!(
-                permission.capability.as_str(),
-                "filesystem.read" | "filesystem.write"
-            ) && permission.scopes.is_empty()
-            {
-                permission.scopes = private_roots
-                    .iter()
-                    .map(|root| root.to_string_lossy().into_owned())
-                    .collect();
-            }
-        }
+        hydrate_empty_scopes(&mut grant_manifest, &private_roots, roots);
         let mut allowed_roots = roots.to_vec();
         allowed_roots.extend(private_roots);
         allowed_roots.sort();
@@ -70,6 +84,8 @@ impl PackageWorkerSupervisor {
                 .collect(),
         )
         .map_err(|_| "grant-failed")?;
+        #[cfg(feature = "package-worker-fixture")]
+        let broker = broker.enable_local_test_origin();
         let broker = match bridge_config.as_ref() {
             Some(config) => broker
                 .with_private_state_root(std::path::Path::new(&config.state_root))
@@ -154,5 +170,61 @@ impl PackageWorkerSupervisor {
         })?;
         line.push(b'\n');
         Ok((grant, token, broker, line))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::package_manifest::{PackageKind, PermissionRequest};
+
+    fn process_spawn_manifest() -> PackageManifest {
+        PackageManifest {
+            schema_version: 1,
+            id: "pkg".into(),
+            name: "Pkg".into(),
+            version: "1.0.0".into(),
+            kind: PackageKind::Source,
+            engine_api: ">=1".into(),
+            entrypoint: "worker.exe".into(),
+            publisher: "kosmos".into(),
+            permissions: vec![PermissionRequest {
+                capability: "process.spawn".into(),
+                scopes: vec![],
+            }],
+        }
+    }
+
+    #[test]
+    fn empty_process_spawn_scopes_use_only_worker_roots() {
+        let approved = std::env::temp_dir().join("kosmos-approved-root");
+        let outside = std::env::temp_dir().join("kosmos-outside-root");
+        let mut manifest = process_spawn_manifest();
+        hydrate_empty_scopes(&mut manifest, &[], std::slice::from_ref(&approved));
+        let (grant, _) = Grant::derive(
+            &manifest,
+            "hash".into(),
+            1,
+            1,
+            "correlation".into(),
+            std::slice::from_ref(&approved),
+        )
+        .expect("approved worker roots hydrate process.spawn");
+        assert_eq!(
+            grant.scopes["process.spawn"],
+            vec![approved.to_string_lossy()]
+        );
+
+        let mut denied = process_spawn_manifest();
+        denied.permissions[0].scopes = vec![outside.to_string_lossy().into_owned()];
+        assert!(Grant::derive(
+            &denied,
+            "hash".into(),
+            1,
+            1,
+            "correlation".into(),
+            std::slice::from_ref(&approved),
+        )
+        .is_err());
     }
 }

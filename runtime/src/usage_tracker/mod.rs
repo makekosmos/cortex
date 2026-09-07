@@ -12,6 +12,7 @@
 #[cfg(target_os = "windows")]
 mod windows_capture;
 
+#[cfg(windows)]
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -21,6 +22,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 use tokio::task::JoinHandle;
 
+#[cfg(windows)]
 use crate::app_index::{
     app::{App, AppKind},
     icons,

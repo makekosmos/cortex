@@ -94,7 +94,7 @@ export function openSettings(): void {
     backgroundColor: "#1d1d1f",
     ...backgroundMaterialOption(backgroundMaterial),
     roundedCorners: true,
-    title: "CosCast — Настройки",
+    title: "Kosmos — Настройки",
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,

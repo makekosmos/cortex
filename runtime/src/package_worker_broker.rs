@@ -4,11 +4,12 @@
 
 use crate::package_manifest::{IntegrationRequestMethod, SecretInjection};
 
+#[cfg(windows)]
+use std::io::Read;
 use std::{
     collections::{HashMap, HashSet},
     fs::{self, File, OpenOptions},
     io,
-    io::Read,
     net::{IpAddr, SocketAddr},
     path::{Path, PathBuf},
     sync::{
@@ -48,6 +49,8 @@ pub struct BrokerConfig {
     pub allowed_origins: HashSet<String>,
     pub filesystem_roots: Vec<PathBuf>,
     pub private_state_roots: Vec<PathBuf>,
+    #[cfg(feature = "package-worker-fixture")]
+    pub(crate) allow_local_test_origin: bool,
 }
 
 impl BrokerConfig {
@@ -60,7 +63,10 @@ impl BrokerConfig {
         for origin in origins {
             let url = reqwest::Url::parse(origin.as_ref())
                 .map_err(|e| BrokerError::Invalid(e.to_string()))?;
-            if url.scheme() != "https"
+            if (url.scheme() != "https"
+                && !(cfg!(feature = "package-worker-fixture")
+                    && url.scheme() == "http"
+                    && url.host_str().is_some_and(is_loopback_host)))
                 || url.username() != ""
                 || url.password().is_some()
                 || !(url.path().is_empty() || url.path() == "/")
@@ -79,7 +85,15 @@ impl BrokerConfig {
             allowed_origins,
             filesystem_roots,
             private_state_roots: Vec::new(),
+            #[cfg(feature = "package-worker-fixture")]
+            allow_local_test_origin: false,
         })
+    }
+
+    #[cfg(feature = "package-worker-fixture")]
+    pub(crate) fn enable_local_test_origin(mut self) -> Self {
+        self.allow_local_test_origin = true;
+        self
     }
 
     pub fn with_private_state_root(mut self, root: &Path) -> Result<Self, BrokerError> {
@@ -253,7 +267,13 @@ pub async fn fetch_with_secret_json(
         let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, port)).await?.collect();
         let addr = addrs
             .into_iter()
-            .find(|a| !is_blocked_ip(a.ip()))
+            .find(|a| {
+                #[cfg(feature = "package-worker-fixture")]
+                if config.allow_local_test_origin && a.ip().is_loopback() {
+                    return true;
+                }
+                !is_blocked_ip(a.ip())
+            })
             .ok_or_else(|| BrokerError::Invalid("host resolves to blocked address".into()))?;
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -747,7 +767,19 @@ pub fn poll_metadata(
 
 fn validate_url(config: &BrokerConfig, raw: &str) -> Result<reqwest::Url, BrokerError> {
     let url = reqwest::Url::parse(raw).map_err(|e| BrokerError::Invalid(e.to_string()))?;
-    if url.scheme() != "https"
+    if (url.scheme() != "https"
+        && !(cfg!(feature = "package-worker-fixture") && {
+            #[cfg(feature = "package-worker-fixture")]
+            {
+                config.allow_local_test_origin
+                    && url.scheme() == "http"
+                    && url.host_str().is_some_and(is_loopback_host)
+            }
+            #[cfg(not(feature = "package-worker-fixture"))]
+            {
+                false
+            }
+        }))
         || url.username() != ""
         || url.password().is_some()
         || url.fragment().is_some()
@@ -788,6 +820,10 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
                 || ((v.segments()[0] & 0xffc0) == 0xfe80)
         }
     }
+}
+
+fn is_loopback_host(host: &str) -> bool {
+    host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
 }
 
 fn reject_path(path: &Path) -> Result<(), BrokerError> {
@@ -861,7 +897,7 @@ fn open_parent_dir(
 fn validate_open_file(
     config: &BrokerConfig,
     _requested: &Path,
-    file: &File,
+    _file: &File,
     metadata: &fs::Metadata,
 ) -> Result<(), BrokerError> {
     if is_reparse_point(metadata) {
@@ -871,7 +907,7 @@ fn validate_open_file(
     }
     #[cfg(windows)]
     {
-        let actual = final_path_by_handle(file)?;
+        let actual = final_path_by_handle(_file)?;
         if !is_under_configured_root(config, &actual) {
             return Err(BrokerError::Invalid("path escapes configured roots".into()));
         }
@@ -964,7 +1000,7 @@ fn canonical_under_root(config: &BrokerConfig, path: &Path) -> Result<PathBuf, B
 }
 fn create_temp_file(
     parent: &Path,
-    parent_handle: Option<&File>,
+    _parent_handle: Option<&File>,
 ) -> Result<(PathBuf, File), BrokerError> {
     for _ in 0..MAX_TEMPFILE_ATTEMPTS {
         let suffix = TEMPFILE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
@@ -973,7 +1009,7 @@ fn create_temp_file(
         #[cfg(windows)]
         let result = {
             let parent_handle =
-                parent_handle.ok_or_else(|| io::Error::other("missing parent handle"))?;
+                _parent_handle.ok_or_else(|| io::Error::other("missing parent handle"))?;
             create_relative_temp_file(parent_handle, std::ffi::OsStr::new(&name))
                 .map(|file| (path.clone(), file))
         };

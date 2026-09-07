@@ -4,8 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
-const DIGEST = "a8b6454bb48518122609fa80f3378fd37fd219160fee525b823f5e624da58332";
-const SOURCE_COMMIT = "8774c25d99818fec702bfd513697639b84e7c2c8";
+const DIGEST = "a05ae74be8c7bafa86f4ef91d11445ec7e256b9bd27ececd35996b4f5f83be6c";
+const SOURCE_COMMIT = "2689da940071ed5068226a19b28a09490b059dae";
+const ARCHIVE_COMMIT = "1fcd46274bfd1c9dbfcf1dc40978b1c9e8d09520";
 const IMAGO_COMMIT = "b1852cab9f8f08ae0b236b7759138d3117f720b8";
 const ARCA_SDK_COMMIT = "21c2f5e157944e3444d3c0604da5a0e041116077";
 export const ARCADIA_EFFECTIVE_GRANTS = [
@@ -80,17 +81,18 @@ const isUnsafeEntry = (entry: string) => {
 };
 
 export function arcadiaArchive(root: string, repositoryRoot: string) {
-  // Reviewed source: Arcadia commit 8774c25d99818fec702bfd513697639b84e7c2c8.
+  // Reviewed source: Arcadia commit 2689da940071ed5068226a19b28a09490b059dae.
   const sourceRoot = path.join(repositoryRoot, "arcadia");
-  const source = path.join(sourceRoot, "release", "arcadia-0.1.9.kspkg");
-  if (!fs.existsSync(source)) throw new Error(`Arcadia release archive not found: ${source}`);
+  const archivePath = "tests/arcadia-0.1.11.kspkg";
   const checkout = execFileSync("git", ["rev-parse", "HEAD"], {
     cwd: sourceRoot,
     encoding: "utf8",
     stdio: "pipe",
   }).trim();
-  if (checkout !== SOURCE_COMMIT)
-    throw new Error(`Arcadia checkout ${checkout} does not match reviewed commit ${SOURCE_COMMIT}`);
+  if (checkout !== ARCHIVE_COMMIT)
+    throw new Error(
+      `Arcadia checkout ${checkout} does not match reviewed archive ${ARCHIVE_COMMIT}`,
+    );
   for (const [name, commit] of [
     ["imago", IMAGO_COMMIT],
     ["arca-sdk", ARCA_SDK_COMMIT],
@@ -102,7 +104,9 @@ export function arcadiaArchive(root: string, repositoryRoot: string) {
     });
   }
 
-  const file = path.join(root, path.basename(source));
+  const file = path.join(root, path.basename(archivePath));
+  const source = path.join(sourceRoot, archivePath);
+  if (!fs.existsSync(source)) throw new Error(`Arcadia release archive not found: ${source}`);
   fs.copyFileSync(source, file);
   if (createHash("sha256").update(fs.readFileSync(file)).digest("hex") !== DIGEST)
     throw new Error("Arcadia release archive digest does not match the reviewed artifact");

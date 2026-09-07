@@ -1,4 +1,17 @@
 impl PackageService {
+    /// Test-only constructor for signed fixture catalogs. Production builds
+    /// cannot select writable trust roots; the fixture feature is compiled
+    /// only for the local worker acceptance harness.
+    #[cfg(feature = "package-worker-fixture")]
+    pub fn open_with_test_trust(
+        data_dir: impl AsRef<Path>,
+        root_key: TrustedKey,
+        release_keys: Vec<TrustedKey>,
+    ) -> Result<Self, PackageError> {
+        let trust = TrustStore::new(root_key, release_keys).map_err(PackageError::Trust)?;
+        Self::from_parts(data_dir.as_ref().join("packages"), Some(trust))
+    }
+
     pub fn open(data_dir: impl AsRef<Path>) -> Result<Self, PackageError> {
         let root = data_dir.as_ref().join("packages");
         fs::create_dir_all(&root).map_err(|_| PackageError::Persistence)?;
@@ -120,7 +133,7 @@ impl PackageService {
     pub fn engine_snapshot_identity(
         &self,
         package_id: &str,
-        source: &str,
+        _source: &str,
     ) -> Result<(String, u64, u64), PackageError> {
         let package = self
             .store
@@ -148,7 +161,7 @@ impl PackageService {
         }
         #[cfg(not(unix))]
         {
-            let _ = (source, metadata);
+            let _ = (_source, metadata);
             Err(PackageError::Invalid)
         }
     }
@@ -311,6 +324,20 @@ impl PackageService {
 
     pub fn grant_authority(&self) -> std::sync::Arc<GrantAuthorityRegistry> {
         self.grants.clone()
+    }
+
+    pub fn revoke_legacy_grants(&self, source_ids: &[String]) -> Result<usize, PackageError> {
+        let source_ids = source_ids.iter().map(String::as_str).collect::<Vec<_>>();
+        self.grants
+            .revoke_legacy_records(&source_ids)
+            .map_err(|error| match error {
+                crate::grant_authority::GrantError::Invalid => PackageError::Invalid,
+                _ => PackageError::Persistence,
+            })
+    }
+    pub fn validate_legacy_grants(&self, source_ids: &[String]) -> Result<(), PackageError> {
+        let source_ids = source_ids.iter().map(String::as_str).collect::<Vec<_>>();
+        self.grants.validate_legacy_records(&source_ids).map_err(|_| PackageError::Persistence)
     }
 
     pub async fn restore_enabled_workers(&self) -> Result<(), PackageError> {

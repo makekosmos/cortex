@@ -185,7 +185,7 @@ function publishRelease(platform, version, files) {
       "--repo",
       repository,
       "--title",
-      `CosCast ${version}`,
+      `Kosmos ${version}`,
       "--notes",
       "Immutable release assembled from the attached release BOM.",
     ],
@@ -218,7 +218,7 @@ async function main() {
   const version = getVersion(platform);
   ensureCleanSource();
   const bom = await loadReleaseBom(bomPath, {
-    root: SHELL_ROOT,
+    root: path.resolve(SHELL_ROOT, ".."),
     platform,
     currentCommit: currentCommit(),
   });

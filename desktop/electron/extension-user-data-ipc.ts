@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import path from "node:path";
 import { assertSafeUserDataName, resolveSafeUserDataPath } from "./extension-manifest";
 import type { JsonValue } from "./extension-permissions";
+import { assertLegacyLaunchAllowed } from "./legacy-migration-journal";
+import { keplerDataDir } from "./data-dir";
 
 type UserDataCapability = "userData.read" | "userData.write";
 
@@ -35,13 +37,20 @@ export function registerExtensionUserDataIpc({
     }
   });
 
-  ipcMain.handle("kepler:extension:userData:writeJson", (e, name: string, value: JsonValue): void => {
-    assertHostPermission(e.sender, "userData.write");
-    assertSafeUserDataName(name);
-    const dir = userDataDirForSender(e.sender);
-    const filePath = path.join(dir, name);
-    writeFileSync(filePath, JSON.stringify(value, null, 2), "utf8");
-  });
+  ipcMain.handle(
+    "kepler:extension:userData:writeJson",
+    (e, name: string, value: JsonValue): void => {
+      assertHostPermission(e.sender, "userData.write");
+      assertLegacyLaunchAllowed(
+        keplerDataDir(),
+        userDataDirForSender(e.sender).split(/[\\/]/).at(-1) ?? "",
+      );
+      assertSafeUserDataName(name);
+      const dir = userDataDirForSender(e.sender);
+      const filePath = path.join(dir, name);
+      writeFileSync(filePath, JSON.stringify(value, null, 2), "utf8");
+    },
+  );
 
   ipcMain.handle("kepler:extension:userData:readFile", (e, name: string): string | null => {
     assertHostPermission(e.sender, "userData.read");
@@ -61,6 +70,10 @@ export function registerExtensionUserDataIpc({
     "kepler:extension:userData:writeFile",
     (e, name: string, content: string): void => {
       assertHostPermission(e.sender, "userData.write");
+      assertLegacyLaunchAllowed(
+        keplerDataDir(),
+        userDataDirForSender(e.sender).split(/[\\/]/).at(-1) ?? "",
+      );
       assertSafeUserDataName(name);
       const dir = userDataDirForSender(e.sender);
       const filePath = path.join(dir, name);
@@ -85,6 +98,10 @@ export function registerExtensionUserDataIpc({
     "kepler:extension:userData:writeBinary",
     (e, name: string, base64: string): void => {
       assertHostPermission(e.sender, "userData.write");
+      assertLegacyLaunchAllowed(
+        keplerDataDir(),
+        userDataDirForSender(e.sender).split(/[\\/]/).at(-1) ?? "",
+      );
       const dir = userDataDirForSender(e.sender);
       const filePath = resolveSafeUserDataPath(dir, name);
       mkdirSync(path.dirname(filePath), { recursive: true });
@@ -94,6 +111,10 @@ export function registerExtensionUserDataIpc({
 
   ipcMain.handle("kepler:extension:userData:deleteFile", (e, name: string): boolean => {
     assertHostPermission(e.sender, "userData.write");
+    assertLegacyLaunchAllowed(
+      keplerDataDir(),
+      userDataDirForSender(e.sender).split(/[\\/]/).at(-1) ?? "",
+    );
     const dir = userDataDirForSender(e.sender);
     const filePath = resolveSafeUserDataPath(dir, name);
     if (!existsSync(filePath)) return false;

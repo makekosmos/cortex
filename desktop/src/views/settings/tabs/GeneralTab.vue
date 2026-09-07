@@ -34,7 +34,7 @@ defineEmits<{
       </div>
     </LegacyRow>
 
-    <LegacyRow title="Показывать в трее" hint="Оставлять значок CosCast в системном трее">
+    <LegacyRow title="Показывать в трее" hint="Оставлять значок Kosmos в системном трее">
       <LegacyToggle :checked="trayIcon" @change="(e: Event) => $emit('toggleTrayIcon', e)" />
     </LegacyRow>
   </div>

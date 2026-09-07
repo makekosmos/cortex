@@ -1,7 +1,11 @@
 #[path = "integrations/cleanup.rs"]
 mod cleanup;
 #[path = "integrations/secret_store.rs"]
-mod secret_store;
+pub(crate) mod secret_store;
+#[path = "integrations/credential_envelope.rs"]
+pub mod credential_envelope;
+#[path = "integrations/credential_target.rs"]
+mod credential_target;
 #[path = "integrations/validation.rs"]
 mod validation;
 

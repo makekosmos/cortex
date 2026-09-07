@@ -8,6 +8,6 @@ const packageJson = JSON.parse(readFileSync(path.join(scriptsDir, "..", "package
 
 test("Desktop uses the Kosmos package and build identity", () => {
   expect(packageJson.name).toBe("kosmos-desktop");
-  expect(packageJson.build.productName).toBe("CosCast");
+  expect(packageJson.build.productName).toBe("Kosmos");
   expect(packageJson.build.artifactName).not.toContain("kepler-shell");
 });
