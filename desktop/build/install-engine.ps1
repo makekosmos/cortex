@@ -19,7 +19,7 @@ if ($expected.schema_version -ne 1 -or $expected.product -ne 'kosmos-engine') { 
 if ($expected.version -notmatch '^\d+\.\d+\.\d+$') { throw 'invalid engine version' }
 if (-not $expected.files -or @($expected.files).Count -eq 0) { throw 'engine manifest files are required' }
 foreach ($file in @($expected.files)) {
-  if ($file.name -notmatch '^[A-Za-z0-9._-]+$' -or $file.sha256 -notmatch '^[0-9a-fA-F]{64}$' -or $file.size -lt 0) { throw 'invalid engine manifest file' }
+  if ($file.name -notmatch '^[A-Za-z0-9._-]+$' -or $file.name -in @('.', '..') -or $file.sha256 -notmatch '^[0-9a-fA-F]{64}$' -or (($file.size -isnot [int]) -and ($file.size -isnot [long])) -or $file.size -lt 0) { throw 'invalid engine manifest file' }
 }
 if (-not (Test-TrustedReleaseUrl $expected.url)) { throw 'engine archive URL is not the trusted release publisher' }
 $metadataTemp = Join-Path ([IO.Path]::GetTempPath()) ("kosmos-engine-manifest.$PID.json")
@@ -31,7 +31,7 @@ if ($expected.channel_url -and -not (Test-Path -LiteralPath $Archive)) {
   if ($expected.schema_version -ne 1 -or $expected.product -ne 'kosmos-engine' -or -not (Test-TrustedReleaseUrl $expected.url)) { throw 'invalid latest engine manifest' }
   if ($expected.version -notmatch '^\d+\.\d+\.\d+$' -or -not $expected.files -or @($expected.files).Count -eq 0) { throw 'invalid latest engine manifest' }
   foreach ($file in @($expected.files)) {
-    if ($file.name -notmatch '^[A-Za-z0-9._-]+$' -or $file.sha256 -notmatch '^[0-9a-fA-F]{64}$' -or $file.size -lt 0) { throw 'invalid latest engine manifest' }
+    if ($file.name -notmatch '^[A-Za-z0-9._-]+$' -or $file.name -in @('.', '..') -or $file.sha256 -notmatch '^[0-9a-fA-F]{64}$' -or (($file.size -isnot [int]) -and ($file.size -isnot [long])) -or $file.size -lt 0) { throw 'invalid latest engine manifest' }
   }
 }
 if (-not (Test-Path -LiteralPath $Archive)) {

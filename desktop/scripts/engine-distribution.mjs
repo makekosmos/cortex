@@ -28,6 +28,8 @@ function validateEngineManifest(manifest) {
     if (
       !file ||
       Object.prototype.toString.call(file.name) !== "[object String]" ||
+      file.name === "." ||
+      file.name === ".." ||
       !ENGINE_FILE.test(file.name) ||
       !Number.isSafeInteger(file.size) ||
       file.size < 0 ||

@@ -99,7 +99,7 @@ test("untrusted engine publisher metadata blocks GUI dependency install", () => 
   assert.equal(existsSync(path.join(f.root, "installed")), false);
 });
 
-test("unsafe manifest paths are rejected before installation", () => {
+test("unsafe manifest paths and sizes are rejected before installation", () => {
   const f = fixture();
   writeFileSync(
     f.manifestPath,
@@ -108,4 +108,14 @@ test("unsafe manifest paths are rejected before installation", () => {
   const result = runInstall(f);
   assert.notEqual(result.status, 0);
   assert.equal(existsSync(path.join(f.root, "escape.exe")), false);
+  writeFileSync(
+    f.manifestPath,
+    JSON.stringify({ ...f.manifest, files: [{ ...f.manifest.files[0], name: ".." }] }),
+  );
+  assert.notEqual(runInstall(f).status, 0);
+  writeFileSync(
+    f.manifestPath,
+    JSON.stringify({ ...f.manifest, files: [{ ...f.manifest.files[0], size: 1.5 }] }),
+  );
+  assert.notEqual(runInstall(f).status, 0);
 });
