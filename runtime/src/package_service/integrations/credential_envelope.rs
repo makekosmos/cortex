@@ -1,6 +1,4 @@
-use super::secret_store::{
-    clear_package_integration_secret, read_package_integration_secret, save_package_integration_secret,
-};
+use super::secret_store::{read_package_integration_secret, save_package_integration_secret};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use hpke::{
     aead::ChaCha20Poly1305,
