@@ -230,7 +230,7 @@ async function main() {
   log(`Version:  ${version}`);
   log(`BOM:      ${bom.value.id} (${bom.digest})`);
   log("");
-  if (platform === "win")
+  if (platform === "win" && existsSync(path.join(SHELL_ROOT, "release")))
     readdirSync(path.join(SHELL_ROOT, "release"))
       .filter((name) => /^Kosmos-Engine-\d+\.\d+\.\d+\.(?:zip|json)$/.test(name))
       .forEach((name) => rmSync(path.join(SHELL_ROOT, "release", name)));
