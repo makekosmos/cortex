@@ -94,6 +94,9 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     pids.add(host.process().pid);
     let page = await host.firstWindow();
     await expect.poll(() => page.evaluate(() => Boolean(window.api))).toBe(true);
+    const baselineEntryIds = await page.evaluate(async () =>
+      (await window.api.listAllEntries()).map((entry) => entry.id).sort(),
+    );
     await page.evaluate(() => {
       window.location.hash = "#/settings";
     });
@@ -133,7 +136,13 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     pids.add(host.process().pid);
     page = await host.firstWindow();
     await expect.poll(() => page.evaluate(() => Boolean(window.api))).toBe(true);
-    await expect.poll(() => page.evaluate(() => window.api?.listAllEntries() ?? [])).toEqual([]);
+    await expect
+      .poll(() =>
+        page.evaluate(async () =>
+          (await window.api.listAllEntries()).map((entry) => entry.id).sort(),
+        ),
+      )
+      .toEqual(baselineEntryIds);
   } finally {
     const cleanupErrors: unknown[] = [];
     const attempt = async (action: () => Promise<void>) => {

@@ -4,9 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import type { JsonValue, Manifest, PackageArchive } from "./signed-app-types";
 
-const SOURCE_COMMIT = "32cb4cafe3a8362a4d1539d0e75c6364797da914";
-const ARCHIVE_PATH = "tests/fixtures/memoria-0.6.3.kspkg";
-const ARCHIVE_SHA256 = "14865b47b8f6a21c2b6f909723304dae43ca9213dd78e43fcd8a73bbc4599a0e";
+const SOURCE_COMMIT = "1d72b61";
+const ARCHIVE_PATH = "release/memoria-0.6.6.kspkg";
+const ARCHIVE_SHA256 = "728e729a682c85b8167b23f645415bca1434cd9c30f62c448c48de59434b810e";
 
 const command = (file: string, args: string[], cwd: string) =>
   execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe" });
@@ -86,10 +86,10 @@ export function memoriaArchive(root: string, repositoryRoot: string): PackageArc
   if (!isJsonObject(parsed)) throw new Error("Memoria archive manifest must be a JSON object");
   if (
     digest(JSON.stringify(parsed)) !==
-      "72c7d437d56c7a766789e443fd0d48c7d0886541fd6547c6b54e8de0a95b78ea" ||
+      "45a1433714f254290e72454f13d354db4d24eba36b7dd7d57980ed60dc7d3a44" ||
     parsed.schema_version !== 2 ||
     parsed.id !== "com.kosmos.memoria" ||
-    parsed.version !== "0.6.3" ||
+    parsed.version !== "0.6.6" ||
     parsed.kind !== "app" ||
     parsed.icon !== "icon.png" ||
     parsed.entrypoint !== "dist/index.html"
