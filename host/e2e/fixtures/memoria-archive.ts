@@ -6,7 +6,7 @@ import type { JsonValue, Manifest, PackageArchive } from "./signed-app-types";
 
 const SOURCE_COMMIT = "1d72b61";
 const ARCHIVE_PATH = "release/memoria-0.6.6.kspkg";
-const ARCHIVE_SHA256 = "728e729a682c85b8167b23f645415bca1434cd9c30f62c448c48de59434b810e";
+const ARCHIVE_SHA256 = "9aa76cd10cfb1d8be9f5ca9770407496c9aa9e7691ec3dc0a3bb32b7af88bbaf";
 
 const command = (file: string, args: string[], cwd: string) =>
   execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe" });
