@@ -20,6 +20,9 @@ const result = spawnSync(process.execPath, [path.join(shellRoot, "scripts", "bui
   env: { ...process.env, KOSMOS_ENGINE_VERSION: version },
 });
 if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1);
-copyEngineRelease(shellRoot, version);
-copyEngineManifest(shellRoot, version);
-cleanBuildIntermediates(shellRoot);
+try {
+  copyEngineRelease(shellRoot, version);
+  copyEngineManifest(shellRoot, version);
+} finally {
+  cleanBuildIntermediates(shellRoot);
+}

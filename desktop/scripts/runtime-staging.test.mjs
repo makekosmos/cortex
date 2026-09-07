@@ -41,8 +41,13 @@ test("non-default Cargo runtime is the one mapped into the Windows package", () 
 
     const packageJson = JSON.parse(readFileSync(path.join(shellRoot, "package.json"), "utf8"));
     const backendBuild = readFileSync(path.join(shellRoot, "scripts", "build-backend.mjs"), "utf8");
+    const engineReleaseBuild = readFileSync(
+      path.join(shellRoot, "scripts", "build-engine-release.mjs"),
+      "utf8",
+    );
     assert.match(backendBuild, /let engineVersion = null/);
     assert.match(backendBuild, /if \(engineVersion\) console\.log/);
+    assert.match(engineReleaseBuild, /finally \{\s*cleanBuildIntermediates\(shellRoot\);/s);
     const runtimeMapping = packageJson.build.win.extraResources.find(
       (entry) => entry.to === "engine-manifest.json",
     );
