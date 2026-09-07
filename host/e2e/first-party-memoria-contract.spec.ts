@@ -61,7 +61,7 @@ test("signed Memoria rolls back a partial import, runs CRUD, and survives Engine
     const binaries = buildEngine(apps.trust);
     const version = apps.versions["com.kosmos.memoria"];
     const archive = apps.archives["com.kosmos.memoria"];
-    expect(version).toBe("0.6.3");
+    expect(version).toBe("0.6.6");
     expect(archive).toBeTruthy();
 
     const started = await startEngine(binaries.engine, binaries.ark, dataDir);
