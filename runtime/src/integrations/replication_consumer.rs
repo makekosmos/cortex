@@ -167,6 +167,30 @@ impl<'a> ReplicationConsumer<'a> {
             .await
     }
 
+    pub(crate) async fn lookup_issuer_encryption_key(&self, params: &Value) -> ArkResult<Value> {
+        self.request("integration.lookup_issuer_encryption_key", params)
+            .await
+    }
+
+    pub(crate) async fn check_credential_fence(&self, params: &Value) -> ArkResult<bool> {
+        self.request("integration.check_credential_fence", params)
+            .await
+            .and_then(|value| {
+                serde_json::from_value(value).map_err(crate::ark_host::ArkHostError::Json)
+            })
+    }
+
+    pub(crate) async fn lookup_issuer_encryption_key_for_publish(
+        &self,
+        params: &Value,
+    ) -> ArkResult<Value> {
+        self.request(
+            "integration.lookup_issuer_encryption_key_for_publish",
+            params,
+        )
+        .await
+    }
+
     pub(crate) async fn verification_status(&self, params: &Value) -> ArkResult<Value> {
         self.request("integration.verification_status", params)
             .await

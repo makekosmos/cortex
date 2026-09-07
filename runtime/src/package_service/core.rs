@@ -1,4 +1,17 @@
 impl PackageService {
+    /// Test-only constructor for signed fixture catalogs. Production builds
+    /// cannot select writable trust roots; the fixture feature is compiled
+    /// only for the local worker acceptance harness.
+    #[cfg(feature = "package-worker-fixture")]
+    pub fn open_with_test_trust(
+        data_dir: impl AsRef<Path>,
+        root_key: TrustedKey,
+        release_keys: Vec<TrustedKey>,
+    ) -> Result<Self, PackageError> {
+        let trust = TrustStore::new(root_key, release_keys).map_err(PackageError::Trust)?;
+        Self::from_parts(data_dir.as_ref().join("packages"), Some(trust))
+    }
+
     pub fn open(data_dir: impl AsRef<Path>) -> Result<Self, PackageError> {
         let root = data_dir.as_ref().join("packages");
         fs::create_dir_all(&root).map_err(|_| PackageError::Persistence)?;

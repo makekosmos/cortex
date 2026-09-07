@@ -143,7 +143,8 @@ fn main() {
         out.flush().ok();
         let _ = result_rx.recv_timeout(std::time::Duration::from_secs(5));
     }
-    let fake_provider = package_id.ends_with(".fake-provider");
+    let fake_provider =
+        package_id.ends_with(".fake-provider") || package_id == "com.kosmos.test.hpke-replication";
     let provider_url = bootstrap["integration"]["values"]["endpoint"]
         .as_str()
         .unwrap_or_default()

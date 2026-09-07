@@ -1,4 +1,25 @@
 use super::*;
+
+fn replication_requires_authority(rest: &str) -> bool {
+    rest.starts_with("replication_")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::replication_requires_authority;
+
+    #[test]
+    fn every_replication_operation_requires_desktop_authority() {
+        for operation in [
+            "replication_acquire_refresh_lease",
+            "replication_send_signed_sync",
+            "replication_publish_credential_envelope_v2",
+        ] {
+            assert!(replication_requires_authority(operation));
+        }
+        assert!(!replication_requires_authority("list"));
+    }
+}
 pub(super) async fn dispatch_standard(
     request: crate::engine_dispatch::DispatchRequest,
     ark_host: Arc<ArkHost>,
@@ -93,6 +114,9 @@ pub(super) async fn dispatch_standard(
     } else if let Some(rest) = operation.strip_prefix("calculator.") {
         handle_calculator_op(rest, params, &agents_data_dir).await
     } else if let Some(rest) = operation.strip_prefix("integrations.") {
+        if replication_requires_authority(rest) && !client.desktop_authorized {
+            return LocalResponse::err("integration replication authority denied");
+        }
         integrations::handle_operation(rest, params, &ark_host, &agents_data_dir, &package_service)
             .await
             .map(LocalResponse::ok)

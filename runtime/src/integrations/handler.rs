@@ -222,6 +222,12 @@ pub async fn handle_operation(
                 .map(|published| json!({ "published": published }))
                 .map_err(|_| "Core credential publication rejected".to_string())
         }
+        "replication_receive_credential_envelope_v2" => {
+            super::credential_envelope::receive(&params, ark, packages).await
+        }
+        "replication_publish_credential_envelope_v2" => {
+            super::credential_envelope::publish(&params, ark, packages).await
+        }
         "body_weight_set" => {
             let body_weight = params.get("bodyWeightKg").and_then(Value::as_f64);
             if body_weight.is_some_and(|value| !(20.0..=400.0).contains(&value)) {
