@@ -41,7 +41,6 @@ pub(crate) async fn receive(
     {
         return Err("Core issuer key lookup binding mismatch".to_string());
     }
-    let issuer_public_key = required(&issuer, "encryption_public_key")?;
     let issuer_key_id = required(&issuer, "key_id")?;
     if issuer_key_id != expected_issuer_key_id {
         return Err("Core issuer key lookup key id mismatch".to_string());
@@ -101,6 +100,7 @@ pub(crate) async fn receive(
     {
         return Err("Core issuer key changed during credential load".to_string());
     }
+    let issuer_public_key = required(&confirmed, "encryption_public_key")?;
     let plaintext = crate::package_service::credential_envelope::decrypt(
         &envelope,
         &expected,
@@ -108,6 +108,28 @@ pub(crate) async fn receive(
         issuer_public_key,
     )
     .map_err(|_| "credential envelope verification failed".to_string())?;
+    let final_state = consumer
+        .lookup_issuer_encryption_key(&json!({
+            "space_id": space_id,
+            "integration_id": integration_id,
+            "recipient_node_id": recipient_node_id,
+            "issuer_node_id": issuer_node_id,
+            "credential_generation": credential_generation,
+            "expected_issuer_key_id": expected_issuer_key_id,
+        }))
+        .await
+        .map_err(|_| "Core issuer key finalization rejected".to_string())?;
+    if final_state.get("status").and_then(Value::as_str) != Some("active")
+        || final_state.get("grant_status").and_then(Value::as_str) != Some("active")
+        || final_state.get("key_id").and_then(Value::as_str) != Some(expected_issuer_key_id)
+        || final_state.get("grant_epoch").and_then(Value::as_u64) != Some(grant_epoch)
+        || final_state
+            .get("credential_generation")
+            .and_then(Value::as_u64)
+            != Some(credential_generation)
+    {
+        return Err("Core issuer key changed before credential storage".to_string());
+    }
     let stored = packages
         .store_integration_credential_and_sync(
             integration_id,
