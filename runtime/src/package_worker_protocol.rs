@@ -285,6 +285,15 @@ impl Grant {
                 {
                     p.scopes.clone()
                 }
+                "dictation.control" => {
+                    if p.scopes.iter().any(|scope| {
+                        crate::runtime_grants::dictation_operation_capability(scope)
+                            != Some("dictation.control")
+                    }) {
+                        return Err(GrantError::InvalidScope);
+                    }
+                    p.scopes.clone()
+                }
                 "worker.invoke" => return Err(GrantError::InvalidScope),
                 "clipboard" | "notifications" => return Err(GrantError::UnsupportedCapability),
                 _ => return Err(GrantError::UnsupportedCapability),
@@ -340,7 +349,14 @@ impl Grant {
             WorkerMethod::FilesystemList | WorkerMethod::FilesystemPoll => "filesystem.read",
             WorkerMethod::ProcessSpawn => "process.spawn",
         };
-        match (self.scopes.get(cap), scope) {
+        let scopes = scope
+            .filter(|operation| {
+                crate::runtime_grants::dictation_operation_capability(operation)
+                    == Some("dictation.control")
+            })
+            .and_then(|_| self.scopes.get("dictation.control"))
+            .or_else(|| self.scopes.get(cap));
+        match (scopes, scope) {
             (Some(xs), Some(s)) => xs.iter().any(|x| x == s),
             _ => false,
         }
@@ -574,6 +590,46 @@ mod tests {
         assert!(!grant.authorize(&token, 7, 2, 1, 1, &WorkerMethod::ArkRead, None));
         assert!(Grant::derive(
             &manifest("clipboard", vec![]),
+            "h".into(),
+            1,
+            1,
+            "c".into(),
+            &[]
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn dictation_control_authorizes_only_registered_engine_operations() {
+        let (grant, token) = Grant::derive(
+            &manifest("dictation.control", vec!["dictation.capture.start"]),
+            "h".into(),
+            7,
+            2,
+            "c".into(),
+            &[],
+        )
+        .unwrap();
+        assert!(grant.authorize(
+            &token,
+            7,
+            2,
+            1,
+            1,
+            &WorkerMethod::ArkRead,
+            Some("dictation.capture.start")
+        ));
+        assert!(!grant.authorize(
+            &token,
+            7,
+            2,
+            1,
+            1,
+            &WorkerMethod::ArkRead,
+            Some("dictation.submit_audio")
+        ));
+        assert!(Grant::derive(
+            &manifest("dictation.control", vec!["dictation.submit_audio"]),
             "h".into(),
             1,
             1,

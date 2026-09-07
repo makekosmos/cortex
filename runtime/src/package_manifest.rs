@@ -751,6 +751,7 @@ fn known_capability(value: &str) -> bool {
             | "notifications"
             | "process.spawn"
             | "worker.invoke"
+            | "dictation.control"
     )
 }
 fn safe_operation_scope(scope: &str) -> bool {

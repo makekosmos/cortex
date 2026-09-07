@@ -71,6 +71,101 @@ async fn op_capture_foreground(host: &DictationHost) -> DictationResponse {
     DictationResponse::ok(json!({ "captured": hwnd.is_some() }))
 }
 
+async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
+    host.contract_events
+        .store(true, std::sync::atomic::Ordering::Release);
+    if host.capture.lock().is_ok_and(|capture| capture.is_some()) {
+        return DictationResponse::err("busy");
+    }
+    let device_id = params.get("deviceId").and_then(Value::as_str).map(str::to_owned);
+    let started = op_start_recording(host).await;
+    if !started.ok {
+        return started;
+    }
+    let result = tokio::task::spawn_blocking(move || {
+        super::native_capture::start(device_id.as_deref())
+    })
+    .await;
+    match result {
+        Ok(Ok((session, sample_rate, channels))) => {
+            *host.capture.lock().expect("capture mutex poisoned") = Some(session);
+            DictationResponse::ok(json!({
+                "captureId": uuid::Uuid::new_v4().to_string(),
+                "sampleRate": sample_rate,
+                "channels": channels,
+                "format": "wav"
+            }))
+        }
+        Ok(Err(error)) => {
+            let _ = op_cancel(host).await;
+            DictationResponse::err(error)
+        }
+        Err(error) => {
+            let _ = op_cancel(host).await;
+            DictationResponse::err(format!("capture.start: {error}"))
+        }
+    }
+}
+
+async fn op_capture_stop(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
+    let Some(capture_id) = params.get("captureId").and_then(Value::as_str) else {
+        return DictationResponse::err("capture.stop: missing captureId");
+    };
+    if capture_id.is_empty() {
+        return DictationResponse::err("capture.stop: invalid captureId");
+    }
+    let session = host
+        .capture
+        .lock()
+        .expect("capture mutex poisoned")
+        .take();
+    let Some(session) = session else {
+        return DictationResponse::err("capture.stop: capture not active");
+    };
+    let result = tokio::task::spawn_blocking(move || super::native_capture::stop(session)).await;
+    let _ = op_cancel(host).await;
+    match result {
+        Ok(Ok(audio)) => DictationResponse::ok(json!({
+            "audioB64": base64::engine::general_purpose::STANDARD.encode(audio.wav),
+            "format": audio.format,
+            "durationMs": audio.duration_ms
+        })),
+        Ok(Err(error)) => DictationResponse::err(error),
+        Err(error) => DictationResponse::err(format!("capture.stop: {error}")),
+    }
+}
+
+async fn op_speech_transcribe(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
+    host.contract_events
+        .store(true, std::sync::atomic::Ordering::Release);
+    if params.get("audioB64").and_then(Value::as_str).is_none() {
+        return DictationResponse::err("speech.transcribe: missing audioB64");
+    }
+    let state = host.current_state().await;
+    if state.get("state").and_then(Value::as_str) == Some("idle") {
+        let started = op_start_recording(host).await;
+        if !started.ok {
+            return started;
+        }
+    }
+    op_submit_audio(params, host).await
+}
+
+async fn op_insert_text(params: Value) -> DictationResponse {
+    let Some(text) = params.get("text").and_then(Value::as_str).map(str::to_owned) else {
+        return DictationResponse::err("input.insert_text: missing text");
+    };
+    match tokio::task::spawn_blocking(move || {
+        inject::inject_blocking(&text, InjectMode::AutoPaste, None)
+    })
+    .await
+    {
+        Ok(Ok(())) => DictationResponse::ok(json!({ "inserted": true, "method": "paste" })),
+        Ok(Err(error)) => DictationResponse::err(format!("input.insert_text: {error}")),
+        Err(error) => DictationResponse::err(format!("input.insert_text: {error}")),
+    }
+}
+
 async fn preload_local_runtime_for_recording(host: &DictationHost) {
     #[cfg(test)]
     {
@@ -323,12 +418,14 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
     .await;
     match outcome {
         AttemptOutcome::Success {
+            text,
             injected,
             delivery,
         } => {
             // process_one_attempt уже перевёл state в Idle.
             DictationResponse::ok(json!({
                 "uuid": uuid,
+                "text": text,
                 "state": "idle",
                 "injected": injected,
                 "delivery": delivery.as_str(),

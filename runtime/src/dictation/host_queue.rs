@@ -32,11 +32,26 @@ fn resolve_attempt_inject_mode(raw_mode: &str, mock_transcript: Option<&str>) ->
     }
 }
 
+fn emit_contract_transcription(host: &DictationHost, request_id: &str, text: &str) {
+    if !host
+        .contract_events
+        .load(std::sync::atomic::Ordering::Acquire)
+    {
+        return;
+    }
+    let _ = host.events_tx.send(json!({
+        "event": "dictation.transcription_ready",
+        "requestId": request_id,
+        "text": text,
+    }));
+}
+
 /// Результат одной попытки `process_one_attempt`.
 #[derive(Debug, PartialEq)]
 enum AttemptOutcome {
     /// Транскрибировано + inject выполнен (или fallback'нут в clipboard).
     Success {
+        text: String,
         injected: bool,
         delivery: inject::Delivery,
     },
@@ -148,6 +163,7 @@ async fn process_one_attempt_with_injector(
             "injected": false,
             "delivery": delivery_result.delivery.as_str(),
         }));
+        emit_contract_transcription(host, uuid, &text);
         let _ = host
             .events_tx
             .send(json!({ "event": "dictation_stats_changed" }));
@@ -161,6 +177,7 @@ async fn process_one_attempt_with_injector(
             host.emit_state(&snap).await;
         }
         return AttemptOutcome::Success {
+            text,
             injected: false,
             delivery: delivery_result.delivery,
         };
@@ -325,6 +342,7 @@ async fn process_one_attempt_with_injector(
                 "delivery": delivery_result.delivery.as_str(),
                 "deliveryReason": delivery_result.delivery.reason(),
             }));
+            emit_contract_transcription(host, uuid, &text);
             let _ = host
                 .events_tx
                 .send(json!({ "event": "dictation_stats_changed" }));
@@ -339,6 +357,7 @@ async fn process_one_attempt_with_injector(
                 host.emit_state(&snap).await;
             }
             AttemptOutcome::Success {
+                text,
                 injected,
                 delivery: delivery_result.delivery,
             }

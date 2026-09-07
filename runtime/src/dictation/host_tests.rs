@@ -389,6 +389,7 @@
             AttemptOutcome::Success {
                 injected: false,
                 delivery: super::super::inject::Delivery::ClipboardOnly,
+                ..
             }
         ));
 
@@ -438,6 +439,7 @@
             AttemptOutcome::Success {
                 injected: false,
                 delivery: super::super::inject::Delivery::ClipboardOnly,
+                ..
             }
         ));
         assert!(super::super::pending::list(&host.data_dir)
