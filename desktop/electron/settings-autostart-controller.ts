@@ -1,5 +1,4 @@
 import { execFile } from "node:child_process";
-import path from "node:path";
 import { promisify } from "node:util";
 import { app } from "electron";
 import { resolveInstance } from "./instance";
@@ -7,6 +6,7 @@ import {
   AUTOSTART_ARGS,
   AUTOSTART_NAME,
   LEGACY_AUTOSTART_NAMES,
+  engineAutostartPath,
   launchItemMatchesAutostart,
   legacyAutostartPathCandidates,
 } from "./settings-autostart";
@@ -28,7 +28,7 @@ function isLegacyAutostartEnabled(): boolean {
   if (legacyShellEnabled) return true;
   try {
     return app.getLoginItemSettings({
-      path: path.join(path.dirname(process.execPath), "resources", "Kosmos Runtime.exe"),
+      path: engineAutostartPath(),
       args: ["--start"],
     }).openAtLogin;
   } catch {
@@ -54,17 +54,6 @@ async function removeLegacyAutostartEntries(): Promise<void> {
   }
 
   try {
-    app.setLoginItemSettings({
-      openAtLogin: false,
-      name: "Kosmos Engine",
-      path: path.join(path.dirname(process.execPath), "resources", "Kosmos Runtime.exe"),
-      args: ["--start"],
-    });
-  } catch {
-    /* best-effort cleanup */
-  }
-
-  try {
     await execFileAsync(
       "reg.exe",
       ["delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "Kepler", "/f"],
@@ -77,13 +66,13 @@ async function removeLegacyAutostartEntries(): Promise<void> {
 
 export function isAutostartEnabled(): boolean {
   const settings = app.getLoginItemSettings({
-    path: process.execPath,
+    path: engineAutostartPath(),
     args: AUTOSTART_ARGS,
   });
   const launchItems = Array.isArray(settings.launchItems) ? settings.launchItems : [];
   return (
     settings.openAtLogin ||
-    launchItems.some((item) => launchItemMatchesAutostart(item)) ||
+    launchItems.some((item) => launchItemMatchesAutostart(item, engineAutostartPath())) ||
     isLegacyAutostartEnabled()
   );
 }
@@ -98,17 +87,19 @@ export async function setAutostartEnabled(enabled: boolean): Promise<void> {
   app.setLoginItemSettings({
     openAtLogin: enabled,
     name: AUTOSTART_NAME,
-    path: process.execPath,
+    path: engineAutostartPath(),
     args: AUTOSTART_ARGS,
   });
   await removeLegacyAutostartEntries();
   try {
     const verify = app.getLoginItemSettings({
-      path: process.execPath,
+      path: engineAutostartPath(),
       args: AUTOSTART_ARGS,
     });
     const launchItems = Array.isArray(verify.launchItems) ? verify.launchItems : [];
-    const launchItemVerified = launchItems.some((item) => launchItemMatchesAutostart(item));
+    const launchItemVerified = launchItems.some((item) =>
+      launchItemMatchesAutostart(item, engineAutostartPath()),
+    );
     console.log(
       `[kepler-shell] autostart set → enabled=${enabled}, verified openAtLogin=${verify.openAtLogin}, launchItem=${launchItemVerified}, execPath=${process.execPath}`,
     );

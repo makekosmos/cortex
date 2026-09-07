@@ -1,14 +1,19 @@
 import path from "node:path";
 
-export const AUTOSTART_ARGS: string[] = ["--autostart"];
-export const AUTOSTART_NAME = "Kosmos";
+export const AUTOSTART_ARGS: string[] = ["--start"];
+export const AUTOSTART_NAME = "Kosmos Engine";
 export const LEGACY_AUTOSTART_NAMES = [
   "CosCast",
   "com.kazui.kepler",
   "Kepler",
   "KeplerKosmos",
   "KosmosKepler",
+  "Kosmos",
 ];
+
+export function engineAutostartPath(execPath = process.execPath): string {
+  return path.join(path.dirname(execPath), "resources", "Kosmos Runtime.exe");
+}
 
 export type WindowsLaunchItem = {
   name?: string;
