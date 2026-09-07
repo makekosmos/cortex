@@ -5,7 +5,6 @@ export interface JsonRecord {
   [key: string]: JsonValue;
 }
 export type JsonValue = JsonPrimitive | JsonValue[] | JsonRecord;
-
 export interface ExtensionPermissionCheck {
   extensionId: string;
   source: ExtensionSource;
@@ -14,7 +13,6 @@ export interface ExtensionPermissionCheck {
   params?: JsonRecord;
   resolveObjectType?: (id: string) => Promise<string | null>;
 }
-
 export interface ExtensionHostPermissionCheck {
   extensionId: string;
   source: ExtensionSource;
@@ -28,9 +26,7 @@ export interface ExtensionHostPermissionCheck {
     | "markdownFiles.open"
     | "markdownFiles.save";
 }
-
 const TRUSTED_SOURCES = new Set<ExtensionSource>(["dev", "bundled"]);
-
 const OBJECT_READ_OPS = new Set([
   "load_all",
   "list_objects",
@@ -45,7 +41,6 @@ const OBJECT_READ_OPS = new Set([
   "get_object_type",
   "list_object_links",
 ]);
-
 const OBJECT_WRITE_OPS = new Set([
   "upsert_object_type",
   "delete_object_type",
@@ -53,14 +48,12 @@ const OBJECT_WRITE_OPS = new Set([
   "delete_object_link",
   "delete_trashed",
 ]);
-
 const USAGE_READ_OPS = new Set([
   "get_usage_analytics",
   "list_recent_usage_processes",
   "search_usage_processes",
   "get_usage_game_playtime_summary",
 ]);
-
 const USAGE_WRITE_OPS = new Set([
   "upsert_tracked_app",
   "delete_tracked_app",
@@ -69,12 +62,16 @@ const USAGE_WRITE_OPS = new Set([
   "upsert_usage_event",
   "delete_usage_event",
 ]);
-
 const isTrustedSource = (source: ExtensionSource): boolean => TRUSTED_SOURCES.has(source);
 
 function hasCapability(granted: readonly string[] | undefined, required: string): boolean {
   if (!granted || granted.length === 0) return false;
   if (granted.includes("*") || granted.includes(required)) return true;
+  if (
+    (required === "userData.read" && granted.includes("filesystem.read")) ||
+    (required === "userData.write" && granted.includes("filesystem.write"))
+  )
+    return true;
   if (required.startsWith("objects.write:") && granted.includes("objects.write")) return true;
   return false;
 }
@@ -85,7 +82,6 @@ function hasAnyCapability(
 ): boolean {
   return required.some((capability) => hasCapability(granted, capability));
 }
-
 export function isRecord(value: JsonValue | undefined): value is JsonRecord {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -93,7 +89,6 @@ export function isRecord(value: JsonValue | undefined): value is JsonRecord {
 export function isString(value: JsonValue | undefined): value is string {
   return typeof value === "string";
 }
-
 function objectTypeFromParams(params: JsonRecord | undefined): string | null {
   const object = params?.object;
   if (!isRecord(object)) return null;
@@ -101,7 +96,6 @@ function objectTypeFromParams(params: JsonRecord | undefined): string | null {
   const raw = record.type_id ?? record.typeId;
   return isString(raw) && raw.length > 0 ? raw : null;
 }
-
 function commandIdsFromParams(operation: string, params: JsonRecord | undefined): string[] {
   if (operation === "commands.invoke") {
     return isString(params?.id) ? [params.id] : [];
@@ -251,8 +245,14 @@ export async function assertExtensionArkPermission(check: ExtensionPermissionChe
 
 export function assertExtensionHostPermission(check: ExtensionHostPermissionCheck): void {
   if (isTrustedSource(check.source)) return;
-  if (!hasCapability(check.manifestPermissions, check.capability)) {
-    throwPermissionError(check.extensionId, check.capability, [check.capability]);
+  const declared =
+    check.capability === "userData.read"
+      ? ["userData.read", "filesystem.read"]
+      : check.capability === "userData.write"
+        ? ["userData.write", "filesystem.write"]
+        : [check.capability];
+  if (!hasAnyCapability(check.manifestPermissions, declared)) {
+    throwPermissionError(check.extensionId, check.capability, declared);
   }
 }
 
