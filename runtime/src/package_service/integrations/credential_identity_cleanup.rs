@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(feature = "package-worker-fixture")]
 use super::super::secret_store::clear_package_integration_secret;
 
 /// Remove a test-owned host identity from the OS keyring after an isolated
