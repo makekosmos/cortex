@@ -11,6 +11,32 @@ export const ENGINE_FILES = [
 ];
 
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
+const ENGINE_VERSION = /^\d+\.\d+\.\d+$/;
+const ENGINE_FILE = /^[A-Za-z0-9._-]+$/;
+
+function validateEngineManifest(manifest) {
+  if (!manifest || manifest.schema_version !== 1 || manifest.product !== "kosmos-engine")
+    throw new Error("invalid engine manifest");
+  if (
+    Object.prototype.toString.call(manifest.version) !== "[object String]" ||
+    !ENGINE_VERSION.test(manifest.version)
+  )
+    throw new Error("engine version must be semver");
+  if (!Array.isArray(manifest.files) || manifest.files.length === 0)
+    throw new Error("engine manifest files are required");
+  for (const file of manifest.files) {
+    if (
+      !file ||
+      Object.prototype.toString.call(file.name) !== "[object String]" ||
+      !ENGINE_FILE.test(file.name) ||
+      !Number.isSafeInteger(file.size) ||
+      file.size < 0 ||
+      Object.prototype.toString.call(file.sha256) !== "[object String]" ||
+      !/^[a-f0-9]{64}$/i.test(file.sha256)
+    )
+      throw new Error("invalid engine manifest file");
+  }
+}
 
 export function buildEngineArchive(releaseDir, archive, { version, url }) {
   if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error("engine version must be semver");
@@ -39,6 +65,7 @@ export function buildEngineArchive(releaseDir, archive, { version, url }) {
 }
 
 export function verifyEngineArchive(archive, manifest) {
+  validateEngineManifest(manifest);
   const entries = new Map(readZip(archive).map((entry) => [safeEntryName(entry.name), entry]));
   if (!entries.has("engine-manifest.json")) throw new Error("engine manifest missing");
   for (const file of manifest.files ?? []) {
@@ -55,6 +82,7 @@ export function verifyEngineArchive(archive, manifest) {
 }
 
 export function installEngineArchive(archive, manifest, engineRoot) {
+  validateEngineManifest(manifest);
   if (manifest.archive_sha256 && sha256(fs.readFileSync(archive)) !== manifest.archive_sha256)
     throw new Error("engine archive hash mismatch");
   verifyEngineArchive(archive, manifest);
