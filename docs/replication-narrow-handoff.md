@@ -3,7 +3,10 @@
 This work targets Core issue #53 and the type-registration dependency of #33.
 It does not close either issue or authorize the source moves in #36.
 
-## Pinned inputs
+## Historical handoff inputs
+
+These were the inputs when this handoff was authored; they are retained for
+traceability and are not the current delivery pins.
 
 - Target baseline: `f8c4f4be3d9c5c86ddef2221c69581e84dd6578a` (`origin/main`).
 - Reference: PR #55, commit `9fe45d35c51781b6f5af99dae4c4d8a01f82b610`
@@ -99,24 +102,16 @@ from Core or sync data. Renderer-isolation black-box evidence and Windows
 release-candidate acceptance remain separate app/distribution gates, not claims
 made by this Core/runtime contract.
 
-## Next bounded Core assignment
+## Current delivery references
 
-Expose the existing validated Rust operations through the sidecar request/handler
-and FFI surfaces. Keep one writer for shared request enums and manifests. Verify
-serialization and negative authorization cases through those actual entry points.
-Do not report successful network transmission while only preparing signing bytes.
+- Core runtime/API delivery: `0b06342014238244749946bbe3db92d94dfa0868`.
+- Cortex runtime delivery: `d85cf0c8e759b43b778fc2ce3fe43fdf02030eee`.
+- Independent runtime review: PASS; no P0/P1/P2 findings on the delivered
+  production diff. The later runtime changes are test/portability-only.
+- Core #36 source moves and app/distribution release-candidate gates remain
+  outside this Core/runtime contract.
 
-The current candidate completes authenticated addressed routing through Iroh
-and revalidates outbound grants before sending. Network negative coverage and
-independent review remain required before this revision is accepted.
-Preserve the transport identity binding on receipt and revalidate grants
-immediately before send. The existing broadcast-only relay implementation
-must fail closed. An in-process two-database apply test is insufficient.
-
-Cortex can work on its trusted-host adapter against the resulting pinned API
-contract in a separate checkout. Shared source moves remain a later assignment.
-
-## Local verification
+## Historical local verification
 
 Checked on Windows on 2026-09-05 against Core commit
 `86ce336dde64589cd91019692ae8a9186ee33db4`:
@@ -139,3 +134,9 @@ Checked on Windows on 2026-09-05 against Core commit
 The final relay guard was checked by the repository clippy gate and focused
 tests above. Independent review of the final Iroh/network diff remains required;
 these checks do not prove Iroh routing or source-offline provider collection.
+
+## Current documentation verification
+
+The current acceptance wording was checked on 2026-09-07 against the delivery
+references above. `rtk git diff --check` passes for this documentation-only
+change; no Rust rebuild is required.
