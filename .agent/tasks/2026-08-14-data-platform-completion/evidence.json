@@ -13,7 +13,10 @@
     "generatedBindings": "PASS",
     "clippy": "PASS with 31 existing warnings",
     "strictClippy": "FAIL: 22 existing baseline lint errors",
-    "windowsPackageWorker": "PASS: 11/11"
+    "windowsPackageWorker": "PASS: 11/11",
+    "windowsPackageProcess": "PASS: 20/20",
+    "cortex2Acceptance": "PASS: 7/7",
+    "desktopAuthoritySocket": "PASS: 6/6"
   },
   "phase1_2_map": {
     "directDispatcher": {"commit": "316e36d61860458412db0e3ed048076d5c542520", "status": "ACCEPTED_LINUX"},

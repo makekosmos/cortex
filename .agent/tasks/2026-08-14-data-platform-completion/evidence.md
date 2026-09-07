@@ -27,10 +27,12 @@ promoted to a whole-program PASS:
 | Package web isolation | `61b5b74e04f898bfd6935649cbf00ff78697e6e7` | Desktop/Host; `ACCEPTED_LINUX`, packaged Windows/Darwin `NOT_RUN_UBUNTU` |
 | Versioned Type Registry | `25f7837c1e09871e4c50aeaba257b49802c430c9` | Core; `ACCEPTED_LINUX`, Windows/Darwin `NOT_RUN_UBUNTU` |
 
-The current Cortex release line additionally has a real Windows
-`package_worker_windows` run at `11/11` with the pinned Core RPC fixture. That
-is stronger than the old Ubuntu-only worker proof, but it does not replace the
-full Engine v1 Windows GUI/process, reconnect, or packaged lifecycle gates.
+The current Cortex release line additionally has real Windows headless runs:
+`package_worker_windows` 11/11, `package_worker_process_windows` 20/20,
+`cortex_2_acceptance` 7/7, and `desktop_authority_socket` 6/6 with the pinned
+Core RPC fixture. These cover process/job containment, worker crash and
+cleanup, PID/credential/generation fencing, and disconnect cleanup. They do not
+replace the full Engine v1 reconnect contract or any visual GUI gate.
 
 ## Checks actually run
 
@@ -45,6 +47,9 @@ full Engine v1 Windows GUI/process, reconnect, or packaged lifecycle gates.
 | `cargo clippy --workspace --all-targets` | PASS with 31 existing warnings |
 | `cargo clippy --workspace --all-targets -- -D warnings` | FAIL: 22 existing baseline lint errors |
 | Cortex `package_worker_windows` with `ARK_CORE_RPC_PATH` | PASS: 11/11 |
+| Cortex `package_worker_process_windows` with `ARK_CORE_RPC_PATH` | PASS: 20/20 |
+| Cortex `cortex_2_acceptance` with `ARK_CORE_RPC_PATH` | PASS: 7/7 |
+| Cortex `desktop_authority_socket` with `ARK_CORE_RPC_PATH` | PASS: 6/6 |
 
 ## Frozen acceptance status
 
