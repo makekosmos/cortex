@@ -4,7 +4,7 @@ import net from "node:net";
 import { fileURLToPath } from "node:url";
 import { KEPLER_API_VERSION, satisfiesSemver } from "./kepler-api";
 import { loadCommandPackageManifest } from "./command-host/manifest";
-import { resolveExtensionDir, resolveExtensionRoots } from "./extension-roots";
+import { resolveExtensionDir, resolveExtensionRoots } from "./extension-package-registry";
 import type { ExtensionKind, ExtensionManifest } from "./extension-manifest-types";
 
 export type { ExtensionManifest } from "./extension-manifest-types";
@@ -16,7 +16,7 @@ export {
   resolveExtensionDir,
   resolveExtensionLocation,
   resolveSafeUserDataPath,
-} from "./extension-roots";
+} from "./extension-package-registry";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -176,7 +176,7 @@ export function loadExtensionManifest(id: string): ExtensionManifest | null {
     };
   }
   try {
-// SAFETY: The surrounding boundary establishes this documented contract.
+    // SAFETY: The surrounding boundary establishes this documented contract.
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as ExtensionManifest;
     if (manifest.id !== id) {
       console.warn(
