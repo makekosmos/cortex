@@ -22,6 +22,7 @@ const journal = {
   phase: "prepared" as const,
   grant_policy: "reconsent" as const,
   records_policy: "opaque-preserve" as const,
+  grant_transaction_token: null,
 };
 
 test("validates and durably writes the strict journal schema", async () => {
@@ -40,6 +41,46 @@ test("validates and durably writes the strict journal schema", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("persists the opaque grant token before canonical activation", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "cortex-journal-"));
+  try {
+    await expect(
+      runLegacyMigration({
+        dataDir: root,
+        journal,
+        verifyReplacement: async () => true,
+        stopAffected: async () => {},
+        snapshotBefore: async () => {},
+        stageDestination: async () => {},
+        revokeLegacyGrants: async () => "opaque-token",
+        activateCanonical: async () => {
+          expect(
+            (await readMigrationJournal(root, journal.target_id))?.grant_transaction_token,
+          ).toBe("opaque-token");
+          throw new Error("stop before activation");
+        },
+        restoreBefore: async () => {},
+      }),
+    ).rejects.toThrow("stop before activation");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("accepts an opaque grant transaction token for post-revoke recovery", () => {
+  expect(
+    validateMigrationJournal({ ...journal, grant_transaction_token: "opaque-token" }),
+  ).toMatchObject({
+    grant_transaction_token: "opaque-token",
+  });
+  expect(() => validateMigrationJournal({ ...journal, grant_transaction_token: 42 })).toThrow(
+    "grant_transaction_token is invalid",
+  );
+  expect(() => validateMigrationJournal({ ...journal, grant_transaction_token: "" })).toThrow(
+    "grant_transaction_token is invalid",
+  );
 });
 
 test("prepared recovery restores before-state before removing visibility marker", async () => {
@@ -93,7 +134,10 @@ test("writes prepared before cutover and restores it on activation failure", asy
         stopAffected: async () => events.push("stopped"),
         snapshotBefore: async () => events.push("snapshotted"),
         stageDestination: async () => events.push("staged"),
-        revokeLegacyGrants: async () => events.push("revoked"),
+        revokeLegacyGrants: async () => {
+          events.push("revoked");
+          return null;
+        },
         activateCanonical: async () => {
           events.push("activation-failed");
           throw new Error("activation failed");
@@ -130,7 +174,10 @@ test("restores the snapshot when staging fails before the prepared marker", asyn
           events.push("stage-failed");
           throw new Error("stage failed");
         },
-        revokeLegacyGrants: async () => events.push("revoked"),
+        revokeLegacyGrants: async () => {
+          events.push("revoked");
+          return null;
+        },
         activateCanonical: async () => events.push("activated"),
         restoreBefore: async () => events.push("restored"),
       }),
@@ -158,7 +205,10 @@ test("stop precedes snapshot and failure restores before the journal", async () 
           throw new Error("crash during stop");
         },
         stageDestination: async () => events.push("staged"),
-        revokeLegacyGrants: async () => events.push("revoked"),
+        revokeLegacyGrants: async () => {
+          events.push("revoked");
+          return null;
+        },
         activateCanonical: async () => events.push("activated"),
         restoreBefore: async () => events.push("restored"),
       }),
@@ -269,7 +319,10 @@ test("private finalization marker makes post-commit-journal failure recoverable"
         stopAffected: async () => events.push("stopped"),
         snapshotBefore: async () => events.push("snapshotted"),
         stageDestination: async () => events.push("staged"),
-        revokeLegacyGrants: async () => events.push("revoked"),
+        revokeLegacyGrants: async () => {
+          events.push("revoked");
+          return null;
+        },
         activateCanonical: async () => events.push("activated"),
         commitLegacyGrants: async () => {
           expect(await readFile(migrationFinalizationPath(root, journal.target_id), "utf8")).toBe(

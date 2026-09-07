@@ -141,11 +141,9 @@ export function createLegacyMigrationRunner(
   const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
   // SAFETY: Object.values is sourced exclusively from the canonical allowlist.
   const targets = [...new Set(Object.values(LEGACY_TO_CANONICAL))] as CanonicalId[];
-
   async function replacement(target: CanonicalId): Promise<ReplacementInfo | null> {
     return verifiedReplacement(request, await packageRows(request), target);
   }
-
   async function host(
     target: CanonicalId,
     ids: string[],
@@ -167,6 +165,7 @@ export function createLegacyMigrationRunner(
         phase: "prepared",
         grant_policy: "reconsent",
         records_policy: "opaque-preserve",
+        grant_transaction_token: null,
       },
       verifyReplacement: async () => (await replacement(target)) !== null,
       stopAffected: async () => {
@@ -210,6 +209,7 @@ export function createLegacyMigrationRunner(
         grantTransactionToken = isString(result.transaction_token)
           ? result.transaction_token
           : null;
+        return grantTransactionToken;
       },
       commitLegacyGrants: async () => {
         if (!grantTransactionToken) return;
@@ -240,7 +240,6 @@ export function createLegacyMigrationRunner(
       },
     };
   }
-
   async function recoverBeforeLaunch(): Promise<void> {
     await recoverLegacyMigrationsBeforeLaunch(dataDir, client);
   }
@@ -283,7 +282,9 @@ export async function recoverLegacyMigrationsBeforeLaunch(
       await recoverPreparedMigration(dataDir, target, async () => {
         await request({
           operation: "packages.rollback_legacy_grants",
-          params: { source_ids: journal.source_ids },
+          params: journal.grant_transaction_token
+            ? { transaction_token: journal.grant_transaction_token }
+            : { source_ids: journal.source_ids },
         });
         await restoreNamespace(dataDir, target);
         await restorePackageState(dataDir, target, request);
