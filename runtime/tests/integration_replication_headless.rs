@@ -199,7 +199,3 @@ async fn trusted_cortex_authorization_survives_core_restart() {
     .unwrap();
     assert_eq!(accepted_again["accepted"], true);
 }
-
-#[tokio::test]
-#[ignore = "awaits Cortex source-offline transport and refresh wiring"]
-async fn source_offline_recipient_flow_is_not_run_until_cortex_wiring_exists() {}

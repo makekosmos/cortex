@@ -84,6 +84,27 @@ pub async fn verify_source_offline_refresh(
     assert_eq!(lease["credential_generation"], 2);
     assert_eq!(lease["fencing_token"], 2);
 
+    assert!(
+        handle_operation(
+            "replication_acquire_refresh_lease",
+            json!({
+                "integration_id": super::support::INTEGRATION_ID,
+                "holder_node_id": setup.recipient.node_id,
+                "credential_generation": 2,
+                "now_ms": offline_now,
+                "ttl_ms": 60_000,
+                "expected_fencing_token": 1,
+                "device_id": setup.recipient.node_id,
+            }),
+            recipient,
+            data_dir,
+            packages,
+        )
+        .await
+        .is_err(),
+        "a stale refresh contender must not replace the current fence"
+    );
+
     let refreshed_envelope = json!({
         "integration_id": super::support::INTEGRATION_ID,
         "recipient_node_id": setup.recipient.node_id,
