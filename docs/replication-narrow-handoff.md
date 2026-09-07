@@ -35,11 +35,9 @@ remove that dependency.
 The delivered foundation exposes Rust library functions, including
 `persist_node_authorization`, `persist_integration_grant`, `prepare_signed_sync`,
 `validate_outbound_signed_sync` and the integration-specific `db` operations.
-The contract pin requested for consumers is Core commit
-`86ce336dde64589cd91019692ae8a9186ee33db4`. The current implementation,
-including Iroh addressed routing, is available at
-`a440f7e392d33d38393810a82ffbe73f01614afe` on
-`origin/codex/core-replication-narrow`.
+The current contract pin for consumers is Core commit
+`0b06342014238244749946bbe3db92d94dfa0868`, including the Iroh addressed
+routing implementation.
 
 It exposes sidecar RPC variants and FFI exports for the four operations above,
 plus the addressed `SignedIntegrationFrame`/`SignedIntegrationAck` protocol
@@ -65,7 +63,7 @@ Register `integrations/fatsecret/type-registration.json` through the existing
 `nutrition_entry_obj` records. Preserve the literal persisted type identifier.
 The schema artifact alone does not install a Cortex provider adapter.
 
-On the pinned baseline, `prepare_object` validates canonical registrations and
+On the historical baseline, `prepare_object` validates canonical registrations and
 retains a compatibility path for package registrations. The registration test
 proves registry compatibility and idempotency, not package ingress enforcement.
 The canonical validator itself requires a built-in canonical content contract,
@@ -131,9 +129,9 @@ Checked on Windows on 2026-09-05 against Core commit
 | `rtk git diff --check 8b3b67e4b9622d8f2730b2900804d4ab89212ade..HEAD` | PASS |
 | `rtk node scripts/ark-smoke.mjs` | FAIL at SDK step: expected sibling `../arca-sdk` absent in isolated worktree; guard and Rust tests passed |
 
-The final relay guard was checked by the repository clippy gate and focused
-tests above. Independent review of the final Iroh/network diff remains required;
-these checks do not prove Iroh routing or source-offline provider collection.
+At that historical point, the final relay guard was checked by the repository
+clippy gate and focused tests above; those checks did not prove Iroh routing or
+source-offline provider collection.
 
 ## Current documentation verification
 
