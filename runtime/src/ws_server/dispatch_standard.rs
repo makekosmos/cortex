@@ -4,22 +4,6 @@ fn replication_requires_authority(rest: &str) -> bool {
     rest.starts_with("replication_")
 }
 
-#[cfg(test)]
-mod tests {
-    use super::replication_requires_authority;
-
-    #[test]
-    fn every_replication_operation_requires_desktop_authority() {
-        for operation in [
-            "replication_acquire_refresh_lease",
-            "replication_send_signed_sync",
-            "replication_publish_credential_envelope_v2",
-        ] {
-            assert!(replication_requires_authority(operation));
-        }
-        assert!(!replication_requires_authority("list"));
-    }
-}
 pub(super) async fn dispatch_standard(
     request: crate::engine_dispatch::DispatchRequest,
     ark_host: Arc<ArkHost>,
@@ -255,4 +239,21 @@ pub(super) async fn dispatch_standard(
         }
     };
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::replication_requires_authority;
+
+    #[test]
+    fn every_replication_operation_requires_desktop_authority() {
+        for operation in [
+            "replication_acquire_refresh_lease",
+            "replication_send_signed_sync",
+            "replication_publish_credential_envelope_v2",
+        ] {
+            assert!(replication_requires_authority(operation));
+        }
+        assert!(!replication_requires_authority("list"));
+    }
 }
