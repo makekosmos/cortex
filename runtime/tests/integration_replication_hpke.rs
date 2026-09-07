@@ -136,8 +136,8 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
         json!({
             "space_id": SPACE_ID,
             "integration_id": PACKAGE_ID,
-            "package_version": PACKAGE_VERSION,
-            "setting": SETTING,
+            "package_version": "forged-version",
+            "setting": "forged-setting",
             "issuer_node_id": setup.origin.node_id,
             "recipient_node_id": setup.recipient.node_id,
             "recipient_public_key": setup.recipient.encryption_public_key,
