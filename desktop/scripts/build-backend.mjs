@@ -70,6 +70,7 @@ if (process.platform === "win32") {
   engineVersion = process.env.KOSMOS_ENGINE_VERSION ?? getVersion("win");
   const engineDir = path.join(shellRoot, ".tmp", "engine.next");
   const engineArchive = path.join(engineDir, "Kosmos-Engine.zip");
+  mkdirSync(engineDir, { recursive: true });
   const engineUrl =
     process.env.KOSMOS_ENGINE_RELEASE_URL ??
     `https://github.com/makekosmos/desktop/releases/download/v${engineVersion}/Kosmos-Engine-${engineVersion}.zip`;
@@ -93,7 +94,6 @@ if (process.platform === "win32") {
   }
   engineManifest.channel_url =
     "https://github.com/makekosmos/desktop/releases/latest/download/Kosmos-Engine-manifest.json";
-  mkdirSync(engineDir, { recursive: true });
   writeFileSync(
     path.join(engineDir, "engine-manifest.json"),
     JSON.stringify(engineManifest, null, 2) + "\n",
