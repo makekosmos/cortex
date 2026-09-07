@@ -34,4 +34,7 @@ test("GUI and Engine versions remain independent", () => {
     backend,
     /releases\/download\/v\$\{engineVersion\}\/Kosmos-Engine-\$\{engineVersion\}\.zip/,
   );
+  assert.match(script, /copyEngineRelease\(SHELL_ROOT, engineVersion\)/);
+  assert.match(script, /copyEngineManifest\(SHELL_ROOT, engineVersion\)/);
+  assert.match(script, /collectArtifacts\(outputDir, platform, version, engineVersion\)/);
 });

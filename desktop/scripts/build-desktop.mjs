@@ -104,11 +104,13 @@ function verifyEmbeddedBom(outputDir, platform, digest) {
   return embedded;
 }
 
-function collectArtifacts(outputDir, platform, version) {
+function collectArtifacts(outputDir, platform, version, engineVersion) {
   const channel = platform === "win" ? "latest.yml" : "latest-mac.yml";
+  const versions = [version, engineVersion].filter(Boolean);
   const names = readdirSync(outputDir).filter((name) => {
     if (name === channel) return true;
-    if (name !== "Kosmos-Engine-manifest.json" && !name.includes(version)) return false;
+    if (name !== "Kosmos-Engine-manifest.json" && !versions.some((value) => name.includes(value)))
+      return false;
     return /\.(?:exe|dmg|zip|blockmap|json)$/i.test(name);
   });
   const artifacts = names.map((name) => {
@@ -140,10 +142,10 @@ function verifyArkArtifact(bom) {
     die(`ARK artifact hash does not match BOM: ${expected.name}`);
 }
 
-async function emitProvenance(outputDir, platform, version, bom) {
+async function emitProvenance(outputDir, platform, version, bom, engineVersion) {
   const embedded = verifyEmbeddedBom(outputDir, platform, bom.digest);
   verifyLocalReleaseChannel(outputDir, platform, version);
-  const artifacts = collectArtifacts(outputDir, platform, version);
+  const artifacts = collectArtifacts(outputDir, platform, version, engineVersion);
   compareExpectedArtifacts(bom.value.artifacts, artifacts);
   const provenance = {
     schema_version: 1,
@@ -215,7 +217,8 @@ async function main() {
   }
   if (!bomPath) die("--bom <path> or KOSMOS_RELEASE_BOM is required for publish builds");
 
-  const version = getVersion(platform);
+  const version = getVersion(platform),
+    engineVersion = platform === "win" ? (process.env.KOSMOS_ENGINE_VERSION ?? version) : null;
   ensureCleanSource();
   const bom = await loadReleaseBom(bomPath, {
     root: path.resolve(SHELL_ROOT, ".."),
@@ -227,11 +230,9 @@ async function main() {
   log(`Version:  ${version}`);
   log(`BOM:      ${bom.value.id} (${bom.digest})`);
   log("");
-
   // ── 3. Resolve electron-builder binary ───────────────────────────────────
   const eb = resolveElectronBuilder();
   log(`electron-builder: ${eb}`);
-
   // ── 4. Build the electron-builder command ────────────────────────────────
   let ebArgs;
   if (platform === "win") {
@@ -239,7 +240,6 @@ async function main() {
   } else {
     ebArgs = ["--mac", "dmg", "--publish", "never", `-c.extraMetadata.version=${version}`];
   }
-
   log(`Running: ${eb} ${ebArgs.join(" ")}`);
   log("");
 
@@ -258,9 +258,8 @@ async function main() {
     );
     process.exit(ebResult.status ?? 1);
   }
-
-  if (platform === "win") copyEngineRelease(SHELL_ROOT, version);
-  if (platform === "win") copyEngineManifest(SHELL_ROOT, version);
+  if (platform === "win")
+    (copyEngineRelease(SHELL_ROOT, engineVersion), copyEngineManifest(SHELL_ROOT, engineVersion));
   log("");
   log("electron-builder succeeded. Emitting release provenance...");
   const releaseFiles = await emitProvenance(
@@ -268,6 +267,7 @@ async function main() {
     platform,
     version,
     bom,
+    engineVersion,
   );
   runFirstPartyContracts(platform);
   publishRelease(platform, version, [...releaseFiles.artifactFiles, ...releaseFiles.metadataFiles]);
