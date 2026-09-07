@@ -4,12 +4,16 @@ import fs from "node:fs";
 import path from "node:path";
 import type { JsonValue, Manifest, PackageArchive } from "./signed-app-types";
 
-const SOURCE_COMMIT = "32cb4cafe3a8362a4d1539d0e75c6364797da914";
-const ARCHIVE_PATH = "tests/fixtures/memoria-0.6.3.kspkg";
-const ARCHIVE_SHA256 = "14865b47b8f6a21c2b6f909723304dae43ca9213dd78e43fcd8a73bbc4599a0e";
+const SOURCE_COMMIT = "ffb0c88";
+const ARCHIVE_PATH = "release/memoria-0.6.6.kspkg";
+const ARCHIVE_SHA256 = "618a8b9ce61a280afe6729b5ccb01f0282ba934bb914f21bcdef101ac1d82916";
 
 const command = (file: string, args: string[], cwd: string) =>
   execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe" });
+const gitExecutable =
+  process.platform === "win32"
+    ? path.join(process.env.ProgramFiles ?? "C:\\Program Files", "Git", "cmd", "git.exe")
+    : "git";
 const digest = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 const isJsonObject = (value: JsonValue): value is { readonly [key: string]: JsonValue } =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -19,12 +23,16 @@ export function memoriaArchive(root: string, repositoryRoot: string): PackageArc
   const file = path.join(root, path.basename(ARCHIVE_PATH));
   let archive: Buffer;
   try {
-    archive = execFileSync("git", ["show", `${SOURCE_COMMIT}:${ARCHIVE_PATH}`], {
-      cwd: memoriaRoot,
-      encoding: null,
-      maxBuffer: 128 * 1024 * 1024,
-      stdio: "pipe",
-    });
+    archive = execFileSync(
+      gitExecutable,
+      ["-C", fs.realpathSync.native(memoriaRoot), "show", `${SOURCE_COMMIT}:${ARCHIVE_PATH}`],
+      {
+        cwd: repositoryRoot,
+        encoding: null,
+        maxBuffer: 128 * 1024 * 1024,
+        stdio: "pipe",
+      },
+    );
   } catch (error) {
     throw new Error(`Cannot read the pinned Memoria package fixture: ${String(error)}`);
   }
@@ -78,10 +86,10 @@ export function memoriaArchive(root: string, repositoryRoot: string): PackageArc
   if (!isJsonObject(parsed)) throw new Error("Memoria archive manifest must be a JSON object");
   if (
     digest(JSON.stringify(parsed)) !==
-      "72c7d437d56c7a766789e443fd0d48c7d0886541fd6547c6b54e8de0a95b78ea" ||
+      "fbcaba86002fd31f8d9ceccdeecb17bed048881ef30f4c6d930fffc8579b864b" ||
     parsed.schema_version !== 2 ||
     parsed.id !== "com.kosmos.memoria" ||
-    parsed.version !== "0.6.3" ||
+    parsed.version !== "0.6.6" ||
     parsed.kind !== "app" ||
     parsed.icon !== "icon.png" ||
     parsed.entrypoint !== "dist/index.html"
@@ -95,6 +103,10 @@ export function memoriaArchive(root: string, repositoryRoot: string): PackageArc
   ) {
     throw new Error("Memoria archive has unexpected compatibility metadata");
   }
-  const manifest = { ...parsed, id: parsed.id, version: parsed.version } satisfies Manifest;
+  const manifest = {
+    ...parsed,
+    id: parsed.id,
+    version: parsed.version,
+  } satisfies Manifest;
   return { file, manifest };
 }

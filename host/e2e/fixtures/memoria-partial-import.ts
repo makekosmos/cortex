@@ -32,6 +32,7 @@ type TestScope = typeof window & {
   __memoriaPartialImportInjected?: boolean;
   __memoriaPartialImportIds?: string[];
   __memoriaPartialImportOpened?: boolean;
+  __memoriaImportFirstWrite?: boolean;
 };
 
 export async function installPartialImportFailure(page: Page, importRoot: string) {
@@ -72,6 +73,45 @@ export async function installPartialImportFailure(page: Page, importRoot: string
         if (scope.__memoriaPartialImportWrites === 2 && !scope.__memoriaPartialImportInjected) {
           scope.__memoriaPartialImportInjected = true;
           return { ok: false, message: "E2E injected post-write failure" };
+        }
+        return result;
+      };
+    },
+    { importRoot },
+  );
+}
+
+export async function installPartialImportCrashPause(page: Page, importRoot: string) {
+  await page.evaluate(
+    ({ importRoot }) => {
+      // SAFETY: the test waits for Memoria to install window.api before this callback runs.
+      const scope = window as TestScope;
+      const api = scope.api;
+      if (!api) throw new Error("Memoria window.api is unavailable");
+      const originalSaveEntry = api.saveEntry;
+      api.openMarkdownVault = async () => ({
+        rootPath: importRoot,
+        files: [
+          {
+            path: `${importRoot}\\first.md`,
+            relativePath: "first.md",
+            name: "first.md",
+            content: "# Cortex crash import first\n\nFirst crash-import body",
+          },
+          {
+            path: `${importRoot}\\second.md`,
+            relativePath: "second.md",
+            name: "second.md",
+            content: "# Cortex crash import second\n\nSecond crash-import body",
+          },
+        ],
+        images: [],
+      });
+      api.saveEntry = async (entry) => {
+        const result = await originalSaveEntry(entry);
+        if (!scope.__memoriaImportFirstWrite) {
+          scope.__memoriaImportFirstWrite = true;
+          await new Promise<void>(() => undefined);
         }
         return result;
       };

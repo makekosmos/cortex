@@ -13,8 +13,21 @@ type ApiParams = Readonly<{ [key: string]: ApiValue }>;
 type ExposedApi = {
   identity: ApiValue | undefined;
   window: { minimize(): void; close(): void };
-  dialogs: { pickDirectoryGrant(): Promise<{ persistentGrantId: string; label: string } | null> };
-  launcher: { request(operation: string, params?: ApiParams): Promise<ApiValue> };
+  dialogs: {
+    pickDirectoryGrant(): Promise<{
+      persistentGrantId: string;
+      label: string;
+    } | null>;
+  };
+  userData: {
+    readJson<T = unknown>(name: string): Promise<T | null>;
+    writeJson<T = unknown>(name: string, value: T): Promise<void>;
+    deleteFile(name: string): Promise<boolean>;
+    path(): Promise<string>;
+  };
+  launcher: {
+    request(operation: string, params?: ApiParams): Promise<ApiValue>;
+  };
   ark?: {
     request(operation: string, params?: ApiParams): Promise<ApiValue>;
     subscribe(callback: (event: ApiValue) => void): () => void;
@@ -41,6 +54,17 @@ const api: ExposedApi = {
         label: string;
       } | null>,
   },
+  userData: {
+    readJson: (name) => ipcRenderer.invoke("host:user-data", { operation: "readJson", name }),
+    writeJson: (name, value) =>
+      ipcRenderer.invoke("host:user-data", {
+        operation: "writeJson",
+        name,
+        value,
+      }),
+    deleteFile: (name) => ipcRenderer.invoke("host:user-data", { operation: "deleteFile", name }),
+    path: () => ipcRenderer.invoke("host:user-data", { operation: "path" }),
+  },
   launcher: {
     request: (operation: string, params: ApiParams = {}) =>
       ipcRenderer.invoke("host:launcher-request", { operation, params }),
@@ -61,3 +85,4 @@ if (arkAllowed) {
 }
 
 contextBridge.exposeInMainWorld("kosmosApp", api);
+contextBridge.exposeInMainWorld("kepler", api);
