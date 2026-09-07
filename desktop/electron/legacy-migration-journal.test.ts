@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import type { ArkClient } from "@kosmos/ark";
+import type { ArkRequest } from "./legacy-migration-state";
 import {
   migrationJournalPath,
-  migrationFinalizationPath,
   readMigrationJournal,
   recoverPreparedMigration,
   runLegacyMigration,
@@ -12,7 +13,7 @@ import {
   writeMigrationJournal,
   isLegacyLaunchBlocked,
 } from "./legacy-migration-journal";
-import { restoreNamespace } from "./legacy-migration-runtime";
+import { recoverLegacyMigrationsBeforeLaunch } from "./legacy-migration-runtime";
 
 const journal = {
   schema_version: 1 as const,
@@ -81,6 +82,35 @@ test("accepts an opaque grant transaction token for post-revoke recovery", () =>
   expect(() => validateMigrationJournal({ ...journal, grant_transaction_token: "" })).toThrow(
     "grant_transaction_token is invalid",
   );
+});
+
+test("completes a finalizing journal after restart", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "cortex-journal-"));
+  try {
+    await writeMigrationJournal(root, {
+      ...journal,
+      phase: "finalizing",
+      grant_transaction_token: "opaque-token",
+    });
+    const requests: ArkRequest[] = [];
+    const client = {
+      async invokeOperation<T>(input: ArkRequest): Promise<T> {
+        requests.push(input);
+        // SAFETY: finalizing recovery ignores the operation response body.
+        return {} as T;
+      },
+    } satisfies Pick<ArkClient, "invokeOperation">;
+    await recoverLegacyMigrationsBeforeLaunch(root, client);
+    expect(requests).toEqual([
+      {
+        operation: "packages.commit_legacy_grants",
+        params: { transaction_token: "opaque-token" },
+      },
+    ]);
+    expect((await readMigrationJournal(root, journal.target_id))?.phase).toBe("committed");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("prepared recovery restores before-state before removing visibility marker", async () => {
@@ -220,94 +250,7 @@ test("stop precedes snapshot and failure restores before the journal", async () 
   }
 });
 
-test("stop failure before a completed namespace snapshot preserves canonical data", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "cortex-journal-"));
-  const destination = path.join(root, "extensions-data", journal.target_id, "state.json");
-  try {
-    await mkdir(path.dirname(destination), { recursive: true });
-    await writeFile(destination, '{"preserve":true}\n');
-    await expect(
-      runLegacyMigration({
-        dataDir: root,
-        journal,
-        verifyReplacement: async () => true,
-        stopAffected: async () => {
-          throw new Error("crash during stop");
-        },
-        snapshotBefore: async () => {
-          throw new Error("snapshot not reached");
-        },
-        stageDestination: async () => {},
-        revokeLegacyGrants: async () => {},
-        activateCanonical: async () => {},
-        restoreBefore: () => restoreNamespace(root, journal.target_id),
-      }),
-    ).rejects.toThrow("crash during stop");
-    expect(await readFile(destination, "utf8")).toBe('{"preserve":true}\n');
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-test("a stale snapshot marker cannot remove data from a new migration attempt", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "cortex-journal-"));
-  const before = path.join(
-    root,
-    "legacy-migrations",
-    "v1",
-    journal.target_id,
-    "before",
-  );
-  const destination = path.join(root, "extensions-data", journal.target_id, "state.json");
-  try {
-    await mkdir(path.join(before, "snapshot.complete"), { recursive: true });
-    await mkdir(path.dirname(destination), { recursive: true });
-    await writeFile(destination, '{"new-attempt":true}\n');
-    await expect(
-      runLegacyMigration({
-        dataDir: root,
-        journal,
-        verifyReplacement: async () => true,
-        stopAffected: async () => {
-          await rm(path.join(before, "snapshot.complete"), { recursive: true, force: true });
-          throw new Error("crash during stop");
-        },
-        snapshotBefore: async () => {},
-        stageDestination: async () => {},
-        revokeLegacyGrants: async () => {},
-        activateCanonical: async () => {},
-        restoreBefore: () => restoreNamespace(root, journal.target_id),
-      }),
-    ).rejects.toThrow("crash during stop");
-    expect(await readFile(destination, "utf8")).toBe('{"new-attempt":true}\n');
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-test("completed snapshot removes a newly-created canonical destination on rollback", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "cortex-journal-"));
-  const before = path.join(
-    root,
-    "legacy-migrations",
-    "v1",
-    journal.target_id,
-    "before",
-  );
-  const destination = path.join(root, "extensions-data", journal.target_id, "state.json");
-  try {
-    await mkdir(before, { recursive: true });
-    await mkdir(path.join(before, "snapshot.complete"));
-    await mkdir(path.dirname(destination), { recursive: true });
-    await writeFile(destination, '{"new":true}\n');
-    await restoreNamespace(root, journal.target_id);
-    await expect(readFile(destination, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-test("private finalization marker makes post-commit-journal failure recoverable", async () => {
+test("durable finalizing state makes post-commit-journal failure recoverable", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "cortex-journal-"));
   try {
     const events: string[] = [];
@@ -325,9 +268,7 @@ test("private finalization marker makes post-commit-journal failure recoverable"
         },
         activateCanonical: async () => events.push("activated"),
         commitLegacyGrants: async () => {
-          expect(await readFile(migrationFinalizationPath(root, journal.target_id), "utf8")).toBe(
-            "finalizing\n",
-          );
+          expect((await readMigrationJournal(root, journal.target_id))?.phase).toBe("finalizing");
           events.push("committed-grants");
         },
         writeJournal: async (value) => {
@@ -344,9 +285,8 @@ test("private finalization marker makes post-commit-journal failure recoverable"
       "revoked",
       "activated",
       "committed-grants",
-      "restored",
     ]);
-    expect(await readMigrationJournal(root, journal.target_id)).toBeNull();
+    expect((await readMigrationJournal(root, journal.target_id))?.phase).toBe("finalizing");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

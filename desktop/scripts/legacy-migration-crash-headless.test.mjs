@@ -266,12 +266,6 @@ try {
   if (active.length !== 1) throw new Error("committed recovery did not leave one active worker");
   if (await packageStatePending(committedDir))
     throw new Error("committed recovery left package-state.pending");
-  if (
-    await exists(
-      `${path.join(committedDir, "legacy-migrations", "v1", "com.kosmos.arcadia", "journal.json")}.finalizing`,
-    )
-  )
-    throw new Error("committed recovery left finalizing marker");
   console.log("headless migration crash cases passed: prepared rollback and committed restart");
   await stopBackend(running);
 } finally {
