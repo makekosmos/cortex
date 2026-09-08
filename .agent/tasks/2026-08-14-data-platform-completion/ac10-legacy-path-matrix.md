@@ -1,7 +1,8 @@
 # AC10 Windows legacy-path matrix
 
 Checked 2026-09-08 against merged Core `ba13c5b5aed364ef1b6704b5e08a98bc1898964a`,
-Cortex `199a4e379c5423c2e9b87cc46d000a0fefd53704` and Engine release `v0.1.2`.
+Cortex `199a4e379c5423c2e9b87cc46d000a0fefd53704`, Desktop/Host source
+`f70f25e5bd29d274ad0455c862584002e2d5850b` and Engine release `v0.1.2`.
 
 ## Literal protocol-retention condition
 
