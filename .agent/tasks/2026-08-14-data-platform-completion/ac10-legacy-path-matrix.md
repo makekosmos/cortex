@@ -1,7 +1,7 @@
 # AC10 Windows legacy-path matrix
 
-Checked 2026-09-08 against Cortex `0956455e80bc2aa5359c4254bfe2971fc361451e`
-and Engine release `v0.1.1`.
+Checked 2026-09-08 against merged Core `ba13c5b5aed364ef1b6704b5e08a98bc1898964a`,
+Cortex `199a4e379c5423c2e9b87cc46d000a0fefd53704` and Engine release `v0.1.2`.
 
 ## Literal protocol-retention condition
 
@@ -19,33 +19,22 @@ slice and migrated-consumer proof.
 | --- | --- | --- | --- |
 | Manifest v1 broad grants | `cortex/desktop/scripts/package-release.mjs`, `runtime/src/runtime_grants.rs`; Desktop/Cortex | Package-release rejects legacy v1; v2 grants compile from Core canonical registry | PASS/guarded |
 | App-owned canonical registration | `core/crates/ark-core/src/canonical_types/definitions`, `cortex/runtime/src/package_registration.rs`; Core/Cortex | Type-registry `13/13`; package registration reads Core canonical registrations and adds only package-owned definitions | PASS/guarded |
-| Legacy planning writes/tables | Core `crates/ark-core/src/schema.rs`, `db/legacy.rs`, `canonical_types/migration_registry`; Core | Read-only guard `1/1`; Area/Heading writes fail closed, new writes use canonical objects, migration readers remain live | RETAINED read-only migration boundary; contract-compatible under AC1/AC2 |
+| Legacy planning writes/tables | Core `crates/ark-core/src/canonical_types/migration`, `db/legacy.rs`; Core | Source archive, identity/semantic parity, transactional retirement and reopen/idempotence tests | PASS/retired; `areas`/`headings` removed after lossless migration |
 | HTTP-to-legacy-WS proxy | `cortex/runtime/src/engine_api`; Cortex | HTTP/WS socket parity and owner isolation `1/1`; no legacy proxy path found | PASS/guarded |
 | Hardcoded Host access policy | `cortex/runtime/src/runtime_grants.rs`, `package_service`; Cortex | v2 launch-scoped typed grants use Core canonical registry; authority/worker suites pass | PASS/guarded |
 | Obsolete Engine discovery paths | `cortex/desktop/electron/engine-discovery.test.ts`, `arca-sdk/src/ensure-engine.ts`; Desktop/SDK | Strict `engine.lock.json` discovery and incomplete-lock rejection `2/2` | PASS/guarded |
 
-Core planning boundary check: `cargo test --manifest-path
-crates/ark-core/Cargo.toml legacy_planning_writes_are_read_only_without_sync_side_effects
---quiet` — `PASS: 1 passed, 384 filtered out`. Area/Heading writes return
-`LegacyPlanningReadOnly` without changing any table counts, sync vector or
-tombstones. The remaining Todo/Project/Tag compatibility facade writes
-canonical objects and sync entities, so `db/legacy.rs` is not an obsolete
-planning-writer deletion target without a replacement API and migration proof.
-
-Runtime package rollback is likewise migration-owned: `desktop/electron/
-legacy-migration-runtime.ts` calls `packages.rollback_legacy_grants`, which is
-implemented by `runtime/src/ws_server/ops/package_legacy.rs`. Removing that
-operation now would break prepared-journal recovery; retain it until the
-replacement migration protocol is implemented and tested.
+Core planning retirement is guarded by the canonical source archive and
+transactional drop tests in `phase3_migration_system` (lossless archive,
+reopen/idempotence, mismatch rejection and partial-drop rollback). Runtime
+recovery is now migration-owned through typed
+`packages.restore_migration_snapshot`; the obsolete rollback RPC and its
+consumer are removed. Prepared null-token recovery uses the explicit source
+set, while stale/mismatched tokens return `NotFound` without a new restore.
 
 The isolated Phase 9 proof at Core commit `de9642fd` passes backup/reopen,
-integrity/FK, restore, digest stability and idempotent rerun, but it is not a
-proof that the listed legacy paths have been removed. AC10 therefore remains
-`OPEN`: all six frozen Windows behaviors and the 30-day condition pass,
-but Docs review confirms AC10's explicit removal requirement still applies to
-the retained planning tables/readers and migration rollback handlers. AC1/AC2
-compatibility explains their current use but does not satisfy removal. A
-replacement migration/recovery contract, consumer/source guards and reviewed
-deletion proof are required. Desktop obsolete
-resolver removal is delivered by Cortex PR43
-(`a43dbe90`, carried by Cortex `0956455e80bc2aa5359c4254bfe2971fc361451e`).
+integrity/FK, restore, digest stability and idempotent rerun. Combined with
+the Core retirement and Cortex typed-recovery proofs in
+`raw-ac10-proof-20260908.md`, AC10 is `PASS_WINDOWS_ONLY`. Desktop obsolete
+resolver removal is delivered by Cortex PR43 and remains covered by the
+strict discovery tests.

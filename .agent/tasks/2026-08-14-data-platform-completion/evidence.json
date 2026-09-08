@@ -1,17 +1,17 @@
 {
   "status": "BLOCKED",
   "capturedAt": "2026-09-08",
-  "coreCommit": "a209355aeee6937e4eb0807441bea72904597780",
+  "coreCommit": "ba13c5b5aed364ef1b6704b5e08a98bc1898964a",
   "ac8Commit": "f1e53e486c4b7e18941058f094f28d5cf775e505",
   "ac9Commit": "dfae4a86",
-  "evidenceBundleCommit": "a209355aeee6937e4eb0807441bea72904597780",
-  "deliveredHead": "a209355aeee6937e4eb0807441bea72904597780",
-  "runtimeMain": "0956455e80bc2aa5359c4254bfe2971fc361451e",
+  "evidenceBundleCommit": "pending-ac10-evidence-pr",
+  "deliveredHead": "ba13c5b5aed364ef1b6704b5e08a98bc1898964a",
+  "runtimeMain": "199a4e379c5423c2e9b87cc46d000a0fefd53704",
   "runtimePermissionMerge": "56ba941162bb15ae80644911f323811b4e133c5a",
   "runtimePermissionImplementation": "4540de750d849fe83a25454da003aaa5551d6489",
-  "cortexReleaseRef": "desktop-v0.1.1",
-  "desktopVersion": "0.1.1",
-  "desktopBomSha256": "5144c434e8f85dfe55c011843d1eaf7c89a89e19bfb45352fca507e981de873f",
+  "cortexReleaseRef": "desktop-v0.1.2",
+  "desktopVersion": "0.1.2",
+  "desktopBomSha256": "0874713b6793656d653ce5bb60d71c4393eee788dca1f1f9e73d67f8fabffd63",
   "cortexPackagedHostAcceptance": ".agent/tasks/2026-08-14-data-platform-completion/raw-windows-headless-20260908.md",
   "cortexResolverFix": "a43dbe90",
   "cortexResolverMerge": "0956455e80bc2aa5359c4254bfe2971fc361451e",
@@ -21,6 +21,9 @@
   "coreRpcFixtureSource": "0b06342014238244749946bbe3db92d94dfa0868",
   "phase3_8Manifest": ".agent/tasks/2026-08-14-data-platform-completion/phase3-8-manifest.json",
   "ac10PathMatrix": ".agent/tasks/2026-08-14-data-platform-completion/ac10-legacy-path-matrix.md",
+  "ac10Proof": ".agent/tasks/2026-08-14-data-platform-completion/raw-ac10-proof-20260908.md",
+  "cortexAc10Merge": "199a4e379c5423c2e9b87cc46d000a0fefd53704",
+  "engineArchiveSha256": "0874713b6793656d653ce5bb60d71c4393eee788dca1f1f9e73d67f8fabffd63",
   "ac2_9GapMatrix": ".agent/tasks/2026-08-14-data-platform-completion/ac2-9-gap-matrix.md",
   "independentReview": ".agent/tasks/2026-08-14-data-platform-completion/docs-independent-review-20260907.md",
   "frozenSpecUrl": "https://github.com/makekosmos/core/blob/056c71d585a1af4e3cc7c47eb05dae98f61ef5c8/.agent/tasks/2026-08-14-data-platform-completion/spec.md",
@@ -67,7 +70,7 @@
     "ac8LocalStateFixture": "PASS: 1 test, 199 filtered; device-keyed local state absent from export/sync/apply",
     "ac9FilterContract": "PASS_WINDOWS_ONLY: data_platform_phase7 6/6; actual loopback two-DB matrix 1/1 covers note/task full, game metadata, definitions-before-objects, required link, usage exclusion, reconnect/replay, narrowing, and typed tombstone delete/apply",
     "phase9ProofBundle": "PASS: de9642fd, 1/1, digest stable, object_count=1, foreign_key_check=0",
-    "ac10LegacyPathGuards": "MIXED: v1 rejection 8/8, discovery 2/2, migration recovery 7/7, Core planning read-only guard 1/1; obsolete resolver guard FAIL was on pre-PR43 head and is superseded by Cortex merge c630b4c"
+    "ac10LegacyPathGuards": "PASS_WINDOWS_ONLY: Core planning retirement 37 focused tests + 198 lib tests; Cortex typed recovery 15 Bun tests + 18 grant-authority tests + full pre-push gate; Engine 0.1.2 distribution/install 8/8; packaged smoke PASS"
   },
   "phase1_2_map": {
     "directDispatcher": {"commit": "316e36d61860458412db0e3ed048076d5c542520", "status": "ACCEPTED_LINUX"},
@@ -80,8 +83,8 @@
   "acceptance": {
     "AC1": "PASS_WINDOWS_ONLY",
     "AC2_AC9": "AC2 PASS_WINDOWS_ONLY; AC3_AC7 PASS_WINDOWS_ONLY; AC8 PASS_WINDOWS_ONLY; AC9 PASS_WINDOWS_ONLY (profile projection, owner-bound persistence/revision CAS, and actual two-DB transport matrix PASS)",
-    "AC10": "OPEN: cleanup not authorized while planning/rollback consumers remain live",
-    "AC16": "PASS_WINDOWS_ONLY; umbrella blocked only by AC10 and user-deferred non-Windows/visible-GUI rows"
+    "AC10": "PASS_WINDOWS_ONLY: planning tables retired after lossless archive; typed migration recovery replaces legacy rollback RPC; source guards and packaged proof pass",
+    "AC16": "PASS_WINDOWS_ONLY; umbrella blocked only by user-deferred non-Windows/visible-GUI rows"
   },
   "phase9": {
     "cleanupAuthorized": false,
@@ -91,8 +94,8 @@
     "visualGui": "NOT_RUN",
     "residuals": {
       "AC1": "Windows cross-consumer Engine/Host restart proof is now committed; visual GUI and non-Windows rows remain deferred/not run.",
-      "AC10": "NOT_RUN/OPEN: six production behavior guards and 30-day gate pass, but Core planning tables/readers and WS/package rollback remain live. AC1/AC2 compatibility does not override AC10 removal requirement; replacement migration/recovery contract, source guards and reviewed deletion proof are required. cleanupAuthorized remains false.",
-      "AC16": "Independent Docs review and final merged Core commit a209355aeee6937e4eb0807441bea72904597780 are pinned; hosted CI unavailable due billing limit."
+      "AC10": "PASS_WINDOWS_ONLY: Core planning retirement and Cortex typed migration recovery are merged and verified; non-Windows/visible-GUI scope remains deferred.",
+      "AC16": "Merged Core ba13c5b5, Cortex 199a4e37 and Engine v0.1.2 are pinned; hosted CI unavailable due billing limit."
     }
   }
 }
