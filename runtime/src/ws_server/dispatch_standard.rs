@@ -62,6 +62,18 @@ pub(super) async fn dispatch_standard(
         }
     } else if let Some(rest) = operation.strip_prefix("dictation.") {
         {
+            if rest == "trigger" {
+                return match package_service
+                    .invoke_worker_operation("dictation.trigger", params)
+                    .await
+                {
+                    Ok(value) => LocalResponse::ok(value),
+                    Err(error) => LocalResponse::err(format!(
+                        "dictation.trigger: {}",
+                        package_error_code(&error)
+                    )),
+                };
+            }
             let result = if rest == "lifecycle.set_autostart" {
                 manager_state
                     .set_autostart(
