@@ -95,8 +95,8 @@
           "to": "engine-manifest.json"
         },
         {
-          "from": "build/install-engine.ps1",
-          "to": "install-engine.ps1"
+          "from": "build/ensure-engine.ps1",
+          "to": "ensure-engine.ps1"
         },
         {
           "from": ".tmp/components/manager/win-unpacked",

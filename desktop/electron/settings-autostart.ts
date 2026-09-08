@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
+import type { JsonValue } from "./extension-permissions";
 
 export const AUTOSTART_ARGS: string[] = ["--start"];
 export const AUTOSTART_NAME = "Kosmos Engine";
@@ -19,9 +20,10 @@ export function engineAutostartPath(execPath = process.execPath): string {
     (process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Kosmos", "Engine") : "");
   const fallback = path.join(path.dirname(execPath), "resources", "Kosmos Runtime.exe");
   try {
+    // SAFETY: current.json is untrusted; fields are checked before use below.
     const pointer = JSON.parse(readFileSync(path.join(root, "current.json"), "utf8")) as {
-      schema_version?: unknown;
-      version?: unknown;
+      schema_version?: JsonValue;
+      version?: JsonValue;
     };
     if (pointer.schema_version !== 1 || !isEngineVersion(pointer.version)) return fallback;
     const engineRoot = path.resolve(root);
@@ -35,7 +37,7 @@ export function engineAutostartPath(execPath = process.execPath): string {
   return fallback;
 }
 
-function isEngineVersion(value: unknown): value is string {
+function isEngineVersion(value: JsonValue | undefined): value is string {
   return typeof value === "string" && /^\d+\.\d+\.\d+$/.test(value);
 }
 

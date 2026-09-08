@@ -5,6 +5,9 @@ import { test } from "node:test";
 
 const script = await readFile(path.join(import.meta.dirname, "build-desktop.mjs"), "utf8");
 const backend = await readFile(path.join(import.meta.dirname, "build-backend.mjs"), "utf8");
+const engineVersion = JSON.parse(
+  await readFile(path.join(import.meta.dirname, "..", "engine-version.json"), "utf8"),
+);
 
 test("release build validates before publishing immutable artifacts", () => {
   assert.match(script, /"--publish", "never"/);
@@ -29,7 +32,9 @@ test("release build validates before publishing immutable artifacts", () => {
 });
 
 test("GUI and Engine versions remain independent", () => {
-  assert.match(backend, /process\.env\.KOSMOS_ENGINE_VERSION \?\? getVersion\("win"\)/);
+  assert.equal(engineVersion.version, "0.1.3");
+  assert.match(backend, /process\.env\.KOSMOS_ENGINE_VERSION \?\? engineVersionConfig\.version/);
+  assert.match(backend, /build-engine-installer\.mjs/);
   assert.match(backend, /KOSMOS_ENGINE_REUSE_ARCHIVE/);
   assert.match(backend, /verifyEngineArchive\(engineArchive, engineManifest\)/);
   assert.match(

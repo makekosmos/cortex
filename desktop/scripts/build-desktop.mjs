@@ -13,9 +13,8 @@ import { copyEngineManifest, copyEngineRelease } from "./engine-distribution.mjs
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SHELL_ROOT = path.resolve(__dirname, "..");
-
+const ENGINE_VERSION = "0.1.3";
 const VALID_PLATFORMS = ["win", "mac"];
-
 function die(msg) {
   console.error(`[build-desktop] FATAL: ${msg}`);
   process.exit(1);
@@ -218,7 +217,8 @@ async function main() {
   if (!bomPath) die("--bom <path> or KOSMOS_RELEASE_BOM is required for publish builds");
 
   const version = getVersion(platform),
-    engineVersion = platform === "win" ? (process.env.KOSMOS_ENGINE_VERSION ?? version) : null;
+    engineVersion =
+      platform === "win" ? (process.env.KOSMOS_ENGINE_VERSION ?? ENGINE_VERSION) : null;
   ensureCleanSource();
   const bom = await loadReleaseBom(bomPath, {
     root: path.resolve(SHELL_ROOT, ".."),
@@ -259,8 +259,10 @@ async function main() {
     );
     process.exit(ebResult.status ?? 1);
   }
-  if (platform === "win")
-    (copyEngineRelease(SHELL_ROOT, engineVersion), copyEngineManifest(SHELL_ROOT, engineVersion));
+  if (platform === "win") {
+    copyEngineRelease(SHELL_ROOT, engineVersion);
+    copyEngineManifest(SHELL_ROOT, engineVersion);
+  }
   log("");
   log("electron-builder succeeded. Emitting release provenance...");
   const releaseFiles = await emitProvenance(
@@ -293,8 +295,6 @@ async function main() {
     console.error(`[build-desktop] Review the output above and follow the fix instructions.`);
     process.exit(verifyResult.status ?? 1);
   }
-
   log(`Build + verify complete for ${platform} v${version}. Release is consistent.`);
 }
-
 main().catch((error) => die(error instanceof Error ? error.message : String(error)));

@@ -12,9 +12,11 @@ import {
 } from "./runtime-staging.mjs";
 import { ensureArkCoreRpc } from "./ark-core-rpc.mjs";
 import { buildEngineArchive, verifyEngineArchive } from "./engine-distribution.mjs";
-import { getVersion } from "./release-version.mjs";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
+const engineVersionConfig = JSON.parse(
+  readFileSync(path.join(shellRoot, "engine-version.json"), "utf8"),
+);
 const releaseBuildLock = acquireBuildLock(shellRoot);
 cleanBuildIntermediates(shellRoot);
 process.on("exit", releaseBuildLock);
@@ -67,7 +69,7 @@ try {
 }
 let engineVersion = null;
 if (process.platform === "win32") {
-  engineVersion = process.env.KOSMOS_ENGINE_VERSION ?? getVersion("win");
+  engineVersion = process.env.KOSMOS_ENGINE_VERSION ?? engineVersionConfig.version;
   const engineDir = path.join(shellRoot, ".tmp", "engine.next");
   const engineArchive = path.join(engineDir, "Kosmos-Engine.zip");
   mkdirSync(engineDir, { recursive: true });
@@ -98,6 +100,12 @@ if (process.platform === "win32") {
     path.join(engineDir, "engine-manifest.json"),
     JSON.stringify(engineManifest, null, 2) + "\n",
   );
+  const installer = spawnSync(
+    process.execPath,
+    [path.join(shellRoot, "scripts", "build-engine-installer.mjs")],
+    { cwd: shellRoot, stdio: "inherit", windowsHide: true },
+  );
+  if ((installer.status ?? 1) !== 0) process.exit(installer.status ?? 1);
 }
 console.log(`[build-backend] staged Cortex and ARK runtime binaries`);
 if (engineVersion) console.log(`[build-backend] staged standalone engine ${engineVersion}`);

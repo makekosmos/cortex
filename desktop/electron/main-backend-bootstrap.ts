@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import type { Instance } from "./instance";
-import type { JsonRecord } from "./extension-permissions";
+import type { JsonRecord, JsonValue } from "./extension-permissions";
 
 interface ResolveBackendExeArgs {
   dirname: string;
@@ -19,9 +19,10 @@ function installedEngineBackend(env: NodeJS.ProcessEnv, platform: NodeJS.Platfor
       : null);
   if (!root) return null;
   try {
+    // SAFETY: current.json is untrusted; fields are checked before use below.
     const pointer = JSON.parse(readFileSync(path.join(root, "current.json"), "utf8")) as {
-      schema_version?: unknown;
-      version?: unknown;
+      schema_version?: JsonValue;
+      version?: JsonValue;
     };
     if (pointer.schema_version !== 1 || !isEngineVersion(pointer.version)) return null;
     const engineRoot = path.resolve(root);
@@ -40,7 +41,7 @@ function installedEngineBackend(env: NodeJS.ProcessEnv, platform: NodeJS.Platfor
   }
 }
 
-function isEngineVersion(value: unknown): value is string {
+function isEngineVersion(value: JsonValue | undefined): value is string {
   return typeof value === "string" && /^\d+\.\d+\.\d+$/.test(value);
 }
 
@@ -71,10 +72,10 @@ export function resolveBackendExe({
   const devRelease = path.resolve(dirname, "../../target/release", backendBin);
   if (existsSync(devRelease)) return devRelease;
 
-  const packaged = path.join(resourcesPath, packagedRuntime);
-  if (existsSync(packaged)) return packaged;
   const installed = installedEngineBackend(env, platform);
   if (installed) return installed;
+  const packaged = path.join(resourcesPath, packagedRuntime);
+  if (existsSync(packaged)) return packaged;
   return path.join(resourcesPath, backendBin);
 }
 

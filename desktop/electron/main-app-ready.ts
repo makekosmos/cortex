@@ -92,11 +92,14 @@ export async function runAppReady({
       process.env.KOSMOS_TEST_MODE === "1" ? launcher.showLauncher : launcher.openManager;
     openManager();
   }
-  void boot.catch((error: unknown) => {
-    log.error("startup", "Ark client initialization failed", {
-      err: String(error),
-      ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
-    });
+  void boot.catch((error) => {
+    log.error(
+      "startup",
+      "Ark client initialization failed",
+      error instanceof Error && error.stack
+        ? { err: String(error), stack: error.stack }
+        : { err: String(error) },
+    );
   });
   setFocusSessionShellOpener(launcher.showFocusSessionLauncher);
   setFocusSessionRuntime({ awaitArkReady });
@@ -107,12 +110,14 @@ export async function runAppReady({
   launcher.setTrayVisible(isTrayIconEnabled());
 
   powerMonitor.on("resume", () => {
-    void backendSupervisor.recoverBackendIfDead("power-resume").catch((error: unknown) => {
-      log.error("supervisor", "power-resume recovery failed", {
-        reason: "power-resume",
-        err: String(error),
-        ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
-      });
+    void backendSupervisor.recoverBackendIfDead("power-resume").catch((error) => {
+      log.error(
+        "supervisor",
+        "power-resume recovery failed",
+        error instanceof Error && error.stack
+          ? { reason: "power-resume", err: String(error), stack: error.stack }
+          : { reason: "power-resume", err: String(error) },
+      );
     });
   });
 
@@ -133,11 +138,14 @@ export async function runAppReady({
         await backendSupervisor.awaitArkReady();
         if (recoverLegacyMigration) await recoverLegacyMigration();
         await runLegacyMigration();
-      } catch (error: unknown) {
-        log.error("migration", "legacy migration failed", {
-          err: String(error),
-          ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
-        });
+      } catch (error) {
+        log.error(
+          "migration",
+          "legacy migration failed",
+          error instanceof Error && error.stack
+            ? { err: String(error), stack: error.stack }
+            : { err: String(error) },
+        );
       }
     })();
   }

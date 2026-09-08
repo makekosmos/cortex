@@ -140,6 +140,17 @@ export function copyEngineRelease(shellRoot, version) {
     path.join(shellRoot, ".tmp", "engine.next", "Kosmos-Engine.zip"),
     path.join(shellRoot, "release", `Kosmos-Engine-${version}.zip`),
   );
+  const installer = path.join(
+    shellRoot,
+    ".tmp",
+    "engine.next",
+    `Kosmos-Engine-Setup-${version}.exe`,
+  );
+  if (fs.existsSync(installer))
+    copyStandaloneEngineArtifact(
+      installer,
+      path.join(shellRoot, "release", path.basename(installer)),
+    );
 }
 
 export function copyEngineManifest(shellRoot, version) {

@@ -34,10 +34,21 @@ test("engineAutostartPath follows an installed Engine pointer and fails closed",
     path.join(root, "current.json"),
     JSON.stringify({ schema_version: 1, version: "1.2.3" }),
   );
+  const packagedRoot = path.join(root, "resources");
+  mkdirSync(packagedRoot, { recursive: true });
+  writeFileSync(path.join(packagedRoot, "Kosmos Runtime.exe"), "packaged");
   const previous = process.env.KOSMOS_ENGINE_ROOT;
   process.env.KOSMOS_ENGINE_ROOT = root;
   try {
     expect(engineAutostartPath("C:\\Kosmos\\Kosmos.exe")).toBe(backend);
+    expect(
+      resolveBackendExe({
+        dirname: path.join(root, "desktop"),
+        env: { KOSMOS_ENGINE_ROOT: root },
+        resourcesPath: packagedRoot,
+        platform: "win32",
+      }),
+    ).toBe(backend);
     writeFileSync(path.join(root, "current.json"), "{}");
     expect(engineAutostartPath("C:\\Kosmos\\Kosmos.exe")).toBe(
       path.join("C:", "Kosmos", "resources", "Kosmos Runtime.exe"),
@@ -57,7 +68,7 @@ test("engineAutostartPath follows an installed Engine pointer and fails closed",
           resourcesPath: path.join(root, "resources"),
           platform: "win32",
         }),
-      ).toBe(path.join(root, "resources", "kepler-backend.exe"));
+      ).toBe(path.join(root, "resources", "Kosmos Runtime.exe"));
     }
   } finally {
     if (previous === undefined) delete process.env.KOSMOS_ENGINE_ROOT;

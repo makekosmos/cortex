@@ -1,21 +1,3 @@
-// Kepler — Electron host для Kosmos ecosystem.
-//
-// Phase 1 baseline (scaffold):
-//   1. Spawn kepler-backend.exe child (singleton, держит ARK).
-//   2. Один frameless transparent BrowserWindow по центру (launcher).
-//   3. Окно hidden default; globalShortcut Ctrl+Shift+K (Win/Linux) /
-//      Cmd+Shift+K (macOS) toggle show/hide.
-//   4. backgroundMaterial: 'mica' (Win11) — graceful fallback на flat на
-//      older Windows / non-Win платформах.
-//   5. app.requestSingleInstanceLock — одна копия Kepler на машину.
-//   6. Tray icon с menu Open/Quit.
-//
-// Phase 2+ задачи (не в этом scaffold'е):
-//   - Полноценное extension API в preload (window.kepler.extensions.*).
-//   - WS-client к kepler-backend (FTS5 search, quick-create).
-//   - Window state persistence.
-//   - Auto-update mechanism.
-
 import { app, BrowserWindow, crashReporter, dialog, globalShortcut, protocol } from "electron";
 import { resolveInstance, applyInstanceToApp, verifyUserDataMatches } from "./instance";
 
@@ -141,12 +123,14 @@ const launcherController = createLauncherController({
     app.quit();
   },
   onLauncherShow: () => {
-    void backendSupervisor.recoverBackendIfDead("launcher-show").catch((error: unknown) => {
-      keplerLog.error("supervisor", "launcher recovery failed", {
-        reason: "launcher-show",
-        err: String(error),
-        ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
-      });
+    void backendSupervisor.recoverBackendIfDead("launcher-show").catch((error) => {
+      keplerLog.error(
+        "supervisor",
+        "launcher recovery failed",
+        error instanceof Error && error.stack
+          ? { reason: "launcher-show", err: String(error), stack: error.stack }
+          : { reason: "launcher-show", err: String(error) },
+      );
     });
   },
 });
@@ -282,11 +266,14 @@ void app
       },
     }),
   )
-  .catch((error: unknown) => {
-    keplerLog.error("startup", "app ready failed", {
-      err: String(error),
-      ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
-    });
+  .catch((error) => {
+    keplerLog.error(
+      "startup",
+      "app ready failed",
+      error instanceof Error && error.stack
+        ? { err: String(error), stack: error.stack }
+        : { err: String(error) },
+    );
   });
 
 app.on("window-all-closed", () => {

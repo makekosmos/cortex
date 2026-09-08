@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { JsonValue } from "./extension-permissions";
+import { isString } from "../src/shared/runtimeGuards";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -68,7 +69,7 @@ test("runAppReady opens Manager on manual launch and keeps autostart silent", ()
   expect(appReadySource).toContain("launcher.registerLauncherHotkeys");
   expect(appReadySource).toContain('"--autostart"');
   expect(appReadySource).toContain("void boot.catch");
-  expect(appReadySource).toContain('log.error("migration", "legacy migration failed"');
+  expect(appReadySource).toMatch(/log\.error\(\s*"migration",\s*"legacy migration failed"/);
   expect(appReadySource.indexOf("openManager();")).toBeLessThan(
     appReadySource.indexOf("if (runLegacyMigration)"),
   );
@@ -200,6 +201,7 @@ test("seeded hidden command state is shared by Settings and Launcher and recover
   });
   const launcherLoad = compileFunction(launcherSource, "loadHiddenCommandIds", {
     localStorage: storage,
+    isString,
   });
   // SAFETY: The extracted loaders return the seeded string-id arrays.
   settingsState.value = settingsLoad() as string[];
