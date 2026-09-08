@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 
 export const AUTOSTART_ARGS: string[] = ["--start"];
@@ -13,15 +13,40 @@ export const LEGACY_AUTOSTART_NAMES = [
 ];
 
 export function engineAutostartPath(execPath = process.execPath): string {
+  const configuredRoot = process.env.KOSMOS_ENGINE_ROOT?.trim();
   const root =
-    process.env.KOSMOS_ENGINE_ROOT ??
+    configuredRoot ||
     (process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Kosmos", "Engine") : "");
+  const fallback = path.join(path.dirname(execPath), "resources", "Kosmos Runtime.exe");
   try {
-    const pointer = JSON.parse(readFileSync(path.join(root, "current.json"), "utf8"));
-    const backend = path.join(root, "versions", pointer.version, "kepler-backend.exe");
-    if (pointer.schema_version === 1 && existsSync(backend)) return backend;
+    const pointer = JSON.parse(readFileSync(path.join(root, "current.json"), "utf8")) as {
+      schema_version?: unknown;
+      version?: unknown;
+    };
+    if (pointer.schema_version !== 1 || !isEngineVersion(pointer.version)) return fallback;
+    const engineRoot = path.resolve(root);
+    const versionsRoot = path.resolve(engineRoot, "versions");
+    const backend = path.resolve(versionsRoot, pointer.version, "kepler-backend.exe");
+    if (!isWithinRoot(backend, versionsRoot) || !existsSync(backend)) return fallback;
+    const realVersionsRoot = realpathSync(versionsRoot);
+    const realBackend = realpathSync(backend);
+    if (isWithinRoot(realBackend, realVersionsRoot)) return realBackend;
   } catch {}
-  return path.join(path.dirname(execPath), "resources", "Kosmos Runtime.exe");
+  return fallback;
+}
+
+function isEngineVersion(value: unknown): value is string {
+  return typeof value === "string" && /^\d+\.\d+\.\d+$/.test(value);
+}
+
+function isWithinRoot(candidate: string, root: string): boolean {
+  const relative = path.relative(root, candidate);
+  return (
+    relative !== "" &&
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
 }
 
 export type WindowsLaunchItem = {

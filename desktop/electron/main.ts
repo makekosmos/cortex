@@ -140,7 +140,15 @@ const launcherController = createLauncherController({
     isQuiting = true;
     app.quit();
   },
-  onLauncherShow: () => void backendSupervisor.recoverBackendIfDead("launcher-show"),
+  onLauncherShow: () => {
+    void backendSupervisor.recoverBackendIfDead("launcher-show").catch((error: unknown) => {
+      keplerLog.error("supervisor", "launcher recovery failed", {
+        reason: "launcher-show",
+        err: String(error),
+        ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
+      });
+    });
+  },
 });
 
 const { hideLauncher, setLauncherExpanded } = launcherController;
@@ -254,23 +262,32 @@ safeHandle("kepler:backend:restart", async () => {
 
 // --- lifecycle ---------------------------------------------------------------
 
-void app.whenReady().then(() =>
-  runAppReady({
-    awaitArkReady,
-    backendSupervisor,
-    instance: KEPLER_INSTANCE,
-    launcher: launcherController,
-    runBootSelfCheck,
-    recoverLegacyMigration: async () => {
-      const client = await backendSupervisor.awaitArkReady();
-      await recoverLegacyMigrationsBeforeLaunch(KEPLER_INSTANCE.dataDir, client);
-    },
-    runLegacyMigration: async () => {
-      const client = await backendSupervisor.awaitArkReady();
-      await createLegacyMigrationRunner(KEPLER_INSTANCE.dataDir, client).run();
-    },
-  }),
-);
+void app
+  .whenReady()
+  .then(() =>
+    runAppReady({
+      awaitArkReady,
+      backendSupervisor,
+      instance: KEPLER_INSTANCE,
+      launcher: launcherController,
+      log: keplerLog,
+      runBootSelfCheck,
+      recoverLegacyMigration: async () => {
+        const client = await backendSupervisor.awaitArkReady();
+        await recoverLegacyMigrationsBeforeLaunch(KEPLER_INSTANCE.dataDir, client);
+      },
+      runLegacyMigration: async () => {
+        const client = await backendSupervisor.awaitArkReady();
+        await createLegacyMigrationRunner(KEPLER_INSTANCE.dataDir, client).run();
+      },
+    }),
+  )
+  .catch((error: unknown) => {
+    keplerLog.error("startup", "app ready failed", {
+      err: String(error),
+      ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
+    });
+  });
 
 app.on("window-all-closed", () => {
   app.quit();

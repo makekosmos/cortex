@@ -67,6 +67,14 @@ test("runAppReady opens Manager on manual launch and keeps autostart silent", ()
   expect(appReadySource).toContain("launcher.setTrayVisible");
   expect(appReadySource).toContain("launcher.registerLauncherHotkeys");
   expect(appReadySource).toContain('"--autostart"');
+  expect(appReadySource).toContain("void boot.catch");
+  expect(appReadySource).toContain('log.error("migration", "legacy migration failed"');
+  expect(appReadySource.indexOf("openManager();")).toBeLessThan(
+    appReadySource.indexOf("if (runLegacyMigration)"),
+  );
+  expect(appReadySource.indexOf("launcher.setTrayVisible(isTrayIconEnabled())")).toBeLessThan(
+    appReadySource.indexOf("if (runLegacyMigration)"),
+  );
   expect(instanceSource).toContain('process.platform === "darwin" ? "Command+Space" : "Alt+Space"');
 });
 
@@ -137,7 +145,6 @@ test("launcher visibility remains owner", () => {
   expect(settingsViewSource).toContain("localStorage.setItem(HIDDEN_COMMANDS_KEY");
   expect(launcherSource).toContain("hiddenCommandIds.value.includes(cmd.id)");
   expect(launcherTemplateSource).toContain("toggleCommandVisibility(selectedCommand.id)");
-
 });
 
 function extractFunction(source: string, name: string): string {

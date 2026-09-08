@@ -8,6 +8,7 @@ import {
   launchItemMatchesAutostart,
   legacyAutostartPathCandidates,
 } from "./settings-autostart";
+import { resolveBackendExe } from "./main-backend-bootstrap";
 
 test("launchItemMatchesAutostart matches path args and enabled state", () => {
   const installDir = "Kosmos";
@@ -41,6 +42,23 @@ test("engineAutostartPath follows an installed Engine pointer and fails closed",
     expect(engineAutostartPath("C:\\Kosmos\\Kosmos.exe")).toBe(
       path.join("C:", "Kosmos", "resources", "Kosmos Runtime.exe"),
     );
+    for (const version of ["../outside", path.join(root, "absolute")]) {
+      writeFileSync(
+        path.join(root, "current.json"),
+        JSON.stringify({ schema_version: 1, version }),
+      );
+      expect(engineAutostartPath("C:\\Kosmos\\Kosmos.exe")).toBe(
+        path.join("C:", "Kosmos", "resources", "Kosmos Runtime.exe"),
+      );
+      expect(
+        resolveBackendExe({
+          dirname: path.join(root, "desktop"),
+          env: { KOSMOS_ENGINE_ROOT: root },
+          resourcesPath: path.join(root, "resources"),
+          platform: "win32",
+        }),
+      ).toBe(path.join(root, "resources", "kepler-backend.exe"));
+    }
   } finally {
     if (previous === undefined) delete process.env.KOSMOS_ENGINE_ROOT;
     else process.env.KOSMOS_ENGINE_ROOT = previous;
