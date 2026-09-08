@@ -18,15 +18,31 @@ pub const DICTATION_READ_OPERATIONS: &[&str] = &[
     "dictation.get_state",
     "dictation.get_config",
     "dictation.list_local_models",
+    "dictation.capture.start",
+    "dictation.capture.stop",
+    "dictation.speech.transcribe",
+    "dictation.input.insert_text",
+    "dictation.window.foreground",
 ];
 pub const DICTATION_WRITE_OPERATIONS: &[&str] = &[
     "dictation.update_config",
     "dictation.start_recording",
     "dictation.cancel",
+    "dictation.lifecycle.set_autostart",
+];
+const DICTATION_CONTROL_OPERATIONS: &[&str] = &[
+    "dictation.capture.start",
+    "dictation.capture.stop",
+    "dictation.speech.transcribe",
+    "dictation.input.insert_text",
+    "dictation.window.foreground",
+    "dictation.lifecycle.set_autostart",
 ];
 
 pub fn dictation_operation_capability(operation: &str) -> Option<&'static str> {
-    if DICTATION_READ_OPERATIONS.contains(&operation) {
+    if DICTATION_CONTROL_OPERATIONS.contains(&operation) {
+        Some("dictation.control")
+    } else if DICTATION_READ_OPERATIONS.contains(&operation) {
         Some("ark.read")
     } else if DICTATION_WRITE_OPERATIONS.contains(&operation) {
         Some("ark.write")
@@ -1389,6 +1405,26 @@ mod tests {
         assert_eq!(
             dictation_operation_capability("dictation.update_config"),
             Some("ark.write")
+        );
+        assert_eq!(
+            dictation_operation_capability("dictation.submit_audio"),
+            None
+        );
+        assert_eq!(
+            dictation_operation_capability("dictation.capture.future"),
+            None
+        );
+    }
+
+    #[test]
+    fn dictation_worker_contract_uses_only_control_scopes() {
+        assert_eq!(
+            dictation_operation_capability("dictation.capture.start"),
+            Some("dictation.control")
+        );
+        assert_eq!(
+            dictation_operation_capability("dictation.lifecycle.set_autostart"),
+            Some("dictation.control")
         );
         assert_eq!(
             dictation_operation_capability("dictation.submit_audio"),

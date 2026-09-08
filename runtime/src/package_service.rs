@@ -18,7 +18,7 @@ use zip::ZipArchive;
 
 pub use crate::package_manifest::{
     DefinitionSnapshotReader, IntegrationManifest, ManifestV2, PackageKind, PackageManifest,
-    VersionedManifest,
+    PermissionRequest, VersionedManifest,
 };
 use crate::{
     grant_authority::GrantAuthorityRegistry,

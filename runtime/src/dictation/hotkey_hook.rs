@@ -319,6 +319,11 @@ fn handle_event(vk: u32, is_down: bool) -> bool {
                     "event": "dictation_ptt_trigger",
                     "phase": phase,
                 }));
+                let _ = tx.send(json!({
+                    "event": "dictation.trigger",
+                    "kind": "ptt",
+                    "phase": phase,
+                }));
             }
         }
         HookMode::Toggle => {
@@ -326,6 +331,11 @@ fn handle_event(vk: u32, is_down: bool) -> bool {
                 if let Some(tx) = sender_opt {
                     let _ = tx.send(json!({
                         "event": "dictation_toggle_trigger",
+                    }));
+                    let _ = tx.send(json!({
+                        "event": "dictation.trigger",
+                        "kind": "toggle",
+                        "phase": "down",
                     }));
                 }
             }

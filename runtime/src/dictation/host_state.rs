@@ -54,6 +54,9 @@ pub struct DictationHost {
     /// Endpoint Groq transcriptions API. По умолчанию `groq::GROQ_ENDPOINT`;
     /// override для тестов на httpmock.
     groq_endpoint: String,
+    capture: std::sync::Mutex<Option<super::native_capture::Session>>,
+    contract_window_id: std::sync::Mutex<Option<String>>,
+    contract_events: std::sync::atomic::AtomicBool,
 }
 
 impl DictationHost {
@@ -103,6 +106,9 @@ impl DictationHost {
             events_tx: events_tx.clone(),
             data_dir,
             groq_endpoint: groq::GROQ_ENDPOINT.to_string(),
+            capture: std::sync::Mutex::new(None),
+            contract_window_id: std::sync::Mutex::new(None),
+            contract_events: std::sync::atomic::AtomicBool::new(false),
         });
         // Активируем PTT hook соответственно текущему trigger_mode.
         apply_ptt_hook(&cfg, &events_tx);
@@ -131,6 +137,9 @@ impl DictationHost {
             events_tx,
             data_dir,
             groq_endpoint,
+            capture: std::sync::Mutex::new(None),
+            contract_window_id: std::sync::Mutex::new(None),
+            contract_events: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -162,6 +171,38 @@ impl DictationHost {
             "canRetry": state.can_retry,
         });
         let _ = self.events_tx.send(v);
+        if self
+            .contract_events
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            let _ = self.events_tx.send(json!({
+            "event": "dictation.state_changed",
+            "state": match state.name {
+                DictationStateName::Recording => "capturing",
+                DictationStateName::Transcribing => "transcribing",
+                DictationStateName::Pending => "pending",
+                DictationStateName::Error => "error",
+                DictationStateName::Idle => "idle",
+            },
+            "errorCode": state.last_error,
+            "requestId": state.active_uuid,
+            }));
+            if let Some(error) = state.last_error.as_deref() {
+                let error_code = if error.contains("API key") {
+                    "auth_required"
+                } else if error.contains("model") || error.contains("модель") {
+                    "model_unavailable"
+                } else {
+                    "provider_disabled"
+                };
+                let _ = self.events_tx.send(json!({
+                    "event": "dictation.error",
+                    "requestId": state.active_uuid,
+                    "errorCode": error_code,
+                    "retryable": state.can_retry,
+                }));
+            }
+        }
     }
 
     /// Helper для перехода в Error state с понятным user_msg.
@@ -281,14 +322,14 @@ pub struct DictationResponse {
 }
 
 impl DictationResponse {
-    fn ok(data: Value) -> Self {
+    pub(crate) fn ok(data: Value) -> Self {
         Self {
             ok: true,
             data,
             error: None,
         }
     }
-    fn err(msg: impl Into<String>) -> Self {
+    pub(crate) fn err(msg: impl Into<String>) -> Self {
         Self {
             ok: false,
             data: Value::Null,

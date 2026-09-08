@@ -62,7 +62,35 @@ pub(super) async fn dispatch_standard(
         }
     } else if let Some(rest) = operation.strip_prefix("dictation.") {
         {
-            let result = handle_dictation_op(rest, params, &dictation_host).await;
+            if rest == "trigger" {
+                return match package_service
+                    .invoke_worker_operation("dictation.trigger", params)
+                    .await
+                {
+                    Ok(value) => LocalResponse::ok(value),
+                    Err(error) => LocalResponse::err(format!(
+                        "dictation.trigger: {}",
+                        package_error_code(&error)
+                    )),
+                };
+            }
+            let result = if rest == "lifecycle.set_autostart" {
+                manager_state
+                    .set_autostart(
+                        params
+                            .get("enabled")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false),
+                    )
+                    .map(|state| {
+                        crate::dictation::DictationResponse::ok(serde_json::json!({
+                            "enabled": state.get("enabled").and_then(Value::as_bool).unwrap_or(false),
+                        }))
+                    })
+                    .unwrap_or_else(crate::dictation::DictationResponse::err)
+            } else {
+                handle_dictation_op(rest, params, &dictation_host).await
+            };
             LocalResponse {
                 ok: result.ok,
                 data: result.data,

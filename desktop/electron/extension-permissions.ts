@@ -89,6 +89,7 @@ export function isRecord(value: JsonValue | undefined): value is JsonRecord {
 export function isString(value: JsonValue | undefined): value is string {
   return typeof value === "string";
 }
+
 function objectTypeFromParams(params: JsonRecord | undefined): string | null {
   const object = params?.object;
   if (!isRecord(object)) return null;
@@ -268,8 +269,9 @@ export function assertExtensionEventPermission(check: {
     throwPermissionError(check.extensionId, `event:${check.event}`, required);
   }
 }
-
 function requiredEventCapabilities(event: string): string[] {
+  if (["dictation.trigger", "dictation.models_changed", "dictation.error"].includes(event))
+    return ["dictation.control"];
   if (
     event === "entity_changed" ||
     event === "object_upserted" ||
@@ -286,7 +288,6 @@ function requiredEventCapabilities(event: string): string[] {
   if (event === "peer_list_updated" || event === "sync_error") return ["sync.read"];
   return [];
 }
-
 function throwPermissionError(
   extensionId: string,
   operation: string,

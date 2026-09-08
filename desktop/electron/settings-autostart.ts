@@ -1,14 +1,28 @@
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-export const AUTOSTART_ARGS: string[] = ["--autostart"];
-export const AUTOSTART_NAME = "Kosmos";
+export const AUTOSTART_ARGS: string[] = ["--start"];
+export const AUTOSTART_NAME = "Kosmos Engine";
 export const LEGACY_AUTOSTART_NAMES = [
   "CosCast",
   "com.kazui.kepler",
   "Kepler",
   "KeplerKosmos",
   "KosmosKepler",
+  "Kosmos",
 ];
+
+export function engineAutostartPath(execPath = process.execPath): string {
+  const root =
+    process.env.KOSMOS_ENGINE_ROOT ??
+    (process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Kosmos", "Engine") : "");
+  try {
+    const pointer = JSON.parse(readFileSync(path.join(root, "current.json"), "utf8"));
+    const backend = path.join(root, "versions", pointer.version, "kepler-backend.exe");
+    if (pointer.schema_version === 1 && existsSync(backend)) return backend;
+  } catch {}
+  return path.join(path.dirname(execPath), "resources", "Kosmos Runtime.exe");
+}
 
 export type WindowsLaunchItem = {
   name?: string;

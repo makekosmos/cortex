@@ -195,6 +195,9 @@ pub(super) async fn read_stdout<R: AsyncRead + Unpin + Send + 'static>(
                 };
                 let _ = sender.send(result);
             }
+            // Worker diagnostics are advisory; keep the process alive and let
+            // the correlated worker.result carry the operation failure.
+            WorkerMessage::Event(_) | WorkerMessage::Error(_) => {}
             _ => {
                 let _ = lifecycle_tx.send(WorkerLifecycleEvent::Finish {
                     generation,

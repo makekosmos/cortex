@@ -32,6 +32,38 @@ impl WsServer {
         package_service: Arc<PackageService>,
         correlation_id: String,
     ) -> Result<Self, WsServerError> {
+        Self::bind_with_hosts(
+            ark_host,
+            auth_token,
+            data_dir.clone(),
+            app_index,
+            file_index,
+            usage_diagnostics,
+            protocol_usage,
+            package_service,
+            correlation_id,
+            DictationHost::new(data_dir.clone()),
+            ManagerState::new(data_dir),
+        )
+        .await
+    }
+
+    /// Binds with Engine-owned Dictation and manager instances shared by the
+    /// package-worker supervisor and Host WebSocket clients.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn bind_with_hosts(
+        ark_host: Arc<ArkHost>,
+        auth_token: String,
+        data_dir: std::path::PathBuf,
+        app_index: Arc<AppIndex>,
+        file_index: Arc<FileIndex>,
+        usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
+        protocol_usage: Arc<ProtocolUsageStore>,
+        package_service: Arc<PackageService>,
+        correlation_id: String,
+        dictation_host: Arc<DictationHost>,
+        manager_state: ManagerState,
+    ) -> Result<Self, WsServerError> {
         let addr: SocketAddr = "127.0.0.1:0"
             .parse()
             .expect("hardcoded socket literal is always valid");
@@ -39,11 +71,9 @@ impl WsServer {
         let (agent_events, _) = tokio::sync::broadcast::channel(512);
         let command_bus = Arc::new(CommandBus::new());
         let pomodoro_host = PomodoroHost::new(data_dir.clone());
-        let dictation_host = DictationHost::new(data_dir.clone());
         let agents = Arc::new(tokio::sync::OnceCell::new());
         let agents_data_dir = Arc::new(data_dir.clone());
         let rpc_diagnostics: SharedRpcDiagnostics = Arc::new(RpcDiagnostics::new());
-        let manager_state = ManagerState::new(data_dir.clone());
         let store_catalog = StoreCatalogService::open_compiled(&data_dir)
             .ok()
             .map(Arc::new);

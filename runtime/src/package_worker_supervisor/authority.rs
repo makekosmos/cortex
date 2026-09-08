@@ -1,5 +1,4 @@
 use super::*;
-
 #[path = "authority/data_request.rs"]
 mod data_request;
 use data_request::execute_data_request;

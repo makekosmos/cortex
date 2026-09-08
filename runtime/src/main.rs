@@ -29,13 +29,15 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use kepler_backend::{
     ark_host::{self, ArkHost},
     auth, crash_reporter, db_backup,
+    dictation::DictationHost,
     engine_api::EngineApiServer,
     engine_control::{self, ControlMessage},
     engine_supervisor::{self, ProcessMode},
     lock_file::{self, EngineLockFile, ENGINE_LOCK_FILE_FORMAT_VERSION},
+    manager_api::ManagerState,
     observability::{self, CORRELATION_ID_ENV},
     package_service::PackageService,
-    package_worker_supervisor::PackageWorkerSupervisor,
+    package_worker_supervisor::{EngineCapabilityExecutor, PackageWorkerSupervisor},
     protocol_usage::ProtocolUsageStore,
     protocol_version::{API_VERSION, API_VERSION_CURRENT, PROTOCOL_VERSION},
     singleton::SingletonGuard,
@@ -443,8 +445,16 @@ async fn setup() -> Result<SetupState, DynError> {
     }
     worker_roots.sort();
     worker_roots.dedup();
-    let package_workers =
-        PackageWorkerSupervisor::with_ark(API_VERSION_CURRENT.major.into(), ark.clone());
+    let dictation_host = DictationHost::new(lock_dir.clone());
+    let manager_state = ManagerState::new(lock_dir.clone());
+    let package_workers = PackageWorkerSupervisor::with_ark_executor(
+        API_VERSION_CURRENT.major.into(),
+        Arc::new(EngineCapabilityExecutor::new(
+            ark.clone(),
+            dictation_host.clone(),
+            manager_state.clone(),
+        )),
+    );
     package_service.configure_workers(
         package_workers.clone(),
         worker_roots,
@@ -456,6 +466,36 @@ async fn setup() -> Result<SetupState, DynError> {
         package_service.restore_enabled_workers().await?;
     }
     let package_service = Arc::new(package_service);
+
+    // Hotkey hooks are Engine-owned; forward their normalized trigger to the
+    // installed Dictation worker so Desktop is never part of the control path.
+    let mut dictation_events = dictation_host.subscribe();
+    let dictation_packages = package_service.clone();
+    tokio::spawn(async move {
+        loop {
+            match dictation_events.recv().await {
+                Ok(event) => {
+                    if event.get("event").and_then(serde_json::Value::as_str)
+                        != Some("dictation.trigger")
+                    {
+                        continue;
+                    }
+                    let params = serde_json::json!({
+                        "kind": event.get("kind").and_then(serde_json::Value::as_str),
+                        "phase": event.get("phase").and_then(serde_json::Value::as_str),
+                    });
+                    if let Err(error) = dictation_packages
+                        .invoke_worker_operation("dictation.trigger", params)
+                        .await
+                    {
+                        tracing::debug!(error = %error, "dictation trigger worker unavailable");
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
 
     // App Index: индексирует Start Menu + UWP. SQLite в lock_dir (рядом с ark.db),
     // icon cache в lock_dir/app-icons/. На старте — load cached синхронно (<10ms),
@@ -485,7 +525,7 @@ async fn setup() -> Result<SetupState, DynError> {
     };
     file_index.bind_self();
 
-    let ws = WsServer::bind(
+    let ws = WsServer::bind_with_hosts(
         ark.clone(),
         token.clone(),
         lock_dir.clone(),
@@ -495,6 +535,8 @@ async fn setup() -> Result<SetupState, DynError> {
         protocol_usage.clone(),
         package_service.clone(),
         correlation_id.clone(),
+        dictation_host,
+        manager_state,
     )
     .await?;
     let port = ws.port();

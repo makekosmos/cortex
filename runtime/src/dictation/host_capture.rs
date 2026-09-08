@@ -71,6 +71,155 @@ async fn op_capture_foreground(host: &DictationHost) -> DictationResponse {
     DictationResponse::ok(json!({ "captured": hwnd.is_some() }))
 }
 
+async fn op_contract_foreground(host: &DictationHost) -> DictationResponse {
+    let hwnd = inject::capture_foreground_window();
+    if hwnd.is_none() {
+        return DictationResponse::err("device_unavailable");
+    }
+    let window_id = uuid::Uuid::new_v4().to_string();
+    let mut state = host.state.lock().await;
+    state.prev_hwnd = hwnd;
+    *host
+        .contract_window_id
+        .lock()
+        .expect("window mutex poisoned") = Some(window_id.clone());
+    DictationResponse::ok(json!({ "windowId": window_id }))
+}
+
+async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
+    host.contract_events
+        .store(true, std::sync::atomic::Ordering::Release);
+    if host.capture.lock().is_ok_and(|capture| capture.is_some()) {
+        return DictationResponse::err("busy");
+    }
+    let device_id = params.get("deviceId").and_then(Value::as_str).map(str::to_owned);
+    let capture_id = uuid::Uuid::new_v4().to_string();
+    let started = op_start_recording(host).await;
+    if !started.ok {
+        return started;
+    }
+    let native_capture_id = capture_id.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        super::native_capture::start(device_id.as_deref(), native_capture_id)
+    })
+    .await;
+    match result {
+        Ok(Ok((session, sample_rate, channels))) => {
+            *host.capture.lock().expect("capture mutex poisoned") = Some(session);
+            DictationResponse::ok(json!({
+                "captureId": capture_id,
+                "sampleRate": sample_rate,
+                "channels": channels,
+                "format": "wav"
+            }))
+        }
+        Ok(Err(error)) => {
+            let _ = op_cancel(host).await;
+            DictationResponse::err(error)
+        }
+        Err(error) => {
+            let _ = op_cancel(host).await;
+            DictationResponse::err(format!("capture.start: {error}"))
+        }
+    }
+}
+
+async fn op_capture_stop(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
+    let Some(capture_id) = params.get("captureId").and_then(Value::as_str) else {
+        return DictationResponse::err("capture.stop: missing captureId");
+    };
+    if capture_id.is_empty() {
+        return DictationResponse::err("capture.stop: invalid captureId");
+    }
+    let session = host
+        .capture
+        .lock()
+        .expect("capture mutex poisoned")
+        .take();
+    let Some(session) = session else {
+        return DictationResponse::err("capture.stop: capture not active");
+    };
+    if session.capture_id != capture_id {
+        *host.capture.lock().expect("capture mutex poisoned") = Some(session);
+        return DictationResponse::err("capture.stop: captureId does not match active capture");
+    }
+    let result = tokio::task::spawn_blocking(move || super::native_capture::stop(session)).await;
+    match result {
+        Ok(Ok(audio)) => {
+            // Keep the foreground capability token alive for the worker's
+            // subsequent speech.transcribe → input.insert_text sequence.
+            super::audio_duck::restore();
+            let mut state = host.state.lock().await;
+            *state = HostState::idle();
+            let snapshot = state.clone();
+            drop(state);
+            host.emit_state(&snapshot).await;
+            DictationResponse::ok(json!({
+                "audioB64": base64::engine::general_purpose::STANDARD.encode(audio.wav),
+                "format": audio.format,
+                "durationMs": audio.duration_ms
+            }))
+        }
+        Ok(Err(error)) => {
+            let _ = op_cancel(host).await;
+            DictationResponse::err(error)
+        }
+        Err(error) => {
+            let _ = op_cancel(host).await;
+            DictationResponse::err(format!("capture.stop: {error}"))
+        }
+    }
+}
+
+async fn op_speech_transcribe(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
+    host.contract_events
+        .store(true, std::sync::atomic::Ordering::Release);
+    if params.get("audioB64").and_then(Value::as_str).is_none() {
+        return DictationResponse::err("speech.transcribe: missing audioB64");
+    }
+    let state = host.current_state().await;
+    if state.get("state").and_then(Value::as_str) == Some("idle") {
+        let started = op_start_recording(host).await;
+        if !started.ok {
+            return started;
+        }
+    }
+    op_submit_audio(params, host).await
+}
+
+async fn op_insert_text(params: Value, host: &DictationHost) -> DictationResponse {
+    let Some(text) = params.get("text").and_then(Value::as_str).map(str::to_owned) else {
+        return DictationResponse::err("input.insert_text: missing text");
+    };
+    let Some(target) = params.get("targetWindow").and_then(Value::as_str) else {
+        return DictationResponse::err("input.insert_text: missing targetWindow");
+    };
+    let matches = {
+        let mut token = host
+            .contract_window_id
+            .lock()
+            .expect("window mutex poisoned");
+        let matches = token.as_deref() == Some(target);
+        if matches {
+            *token = None;
+        }
+        matches
+    };
+    if !matches {
+        return DictationResponse::err("window_unavailable");
+    }
+    let prev_hwnd = host.state.lock().await.prev_hwnd;
+    match tokio::task::spawn_blocking(move || {
+        inject::inject_blocking(&text, InjectMode::AutoPaste, prev_hwnd)
+    })
+    .await
+    {
+        Ok(Ok(())) => DictationResponse::ok(json!({ "inserted": true, "method": "paste" })),
+        Ok(Err(error)) => DictationResponse::err(format!("input.insert_text: {error}")),
+        Err(error) => DictationResponse::err(format!("input.insert_text: {error}")),
+    }
+}
+
 async fn preload_local_runtime_for_recording(host: &DictationHost) {
     #[cfg(test)]
     {
@@ -159,6 +308,14 @@ async fn op_start_recording(host: &DictationHost) -> DictationResponse {
 
 async fn op_cancel(host: &DictationHost) -> DictationResponse {
     super::audio_duck::restore();
+    *host
+        .contract_window_id
+        .lock()
+        .expect("window mutex poisoned") = None;
+    *host
+        .contract_window_id
+        .lock()
+        .expect("window mutex poisoned") = None;
     let mut s = host.state.lock().await;
     let should_cancel_sidecar = matches!(
         s.name,
@@ -313,22 +470,36 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
     // Одна inline-попытка — pill показывает «Распознаю…» ~1s в happy-path.
     // На фейле — spawn'им auto-retry в фоне (5/10/20/40s) и сразу возвращаем
     // OK с state=idle, чтобы pill закрылся без перехвата фокуса.
-    let outcome = process_one_attempt(
-        host,
-        &uuid,
-        &api_key,
-        record_seconds,
-        AttemptDelivery::Active,
-    )
-    .await;
+    let outcome = if params.get("delivery").and_then(Value::as_str) == Some("text_only") {
+        process_one_attempt_with_injector(
+            host,
+            &uuid,
+            &api_key,
+            record_seconds,
+            AttemptDelivery::Active,
+            std::sync::Arc::new(TextOnlyInjector),
+        )
+        .await
+    } else {
+        process_one_attempt(
+            host,
+            &uuid,
+            &api_key,
+            record_seconds,
+            AttemptDelivery::Active,
+        )
+        .await
+    };
     match outcome {
         AttemptOutcome::Success {
+            text,
             injected,
             delivery,
         } => {
             // process_one_attempt уже перевёл state в Idle.
             DictationResponse::ok(json!({
                 "uuid": uuid,
+                "text": text,
                 "state": "idle",
                 "injected": injected,
                 "delivery": delivery.as_str(),
