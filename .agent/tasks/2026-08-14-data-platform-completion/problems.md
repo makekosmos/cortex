@@ -1,7 +1,8 @@
 # Open evidence problems
 
-Status: `OPEN` — this file records unavailable or partial criteria; it does
-not authorize cleanup or legacy removal.
+Status: `PASS_WINDOWS_ONLY` — this file records only explicitly deferred
+rows and one pre-existing release-fixture residual; it does not authorize
+destructive cleanup beyond the merged AC10 changes.
 
 ## AC1 — PASS_WINDOWS_ONLY
 
@@ -27,12 +28,22 @@ covered by the focused tests, packaged smoke and Engine 0.1.2 artifact proof
 in `raw-ac10-proof-20260908.md`. AC10 therefore passes for the Windows scope.
 Non-Windows and visible-GUI rows remain deferred by user.
 
-## AC16 — PASS_WINDOWS_ONLY / umbrella blocked by deferred scope
+## AC16 — PASS_WINDOWS_ONLY
 
 Final merged Core commit `ba13c5b5aed364ef1b6704b5e08a98bc1898964a`, Cortex
-`199a4e379c5423c2e9b87cc46d000a0fefd53704` and Engine v0.1.2 are pinned. The
-umbrella remains blocked only by user-deferred non-Windows/visible-GUI rows;
-hosted CI was not started because of the account billing/spending limit.
+`199a4e379c5423c2e9b87cc46d000a0fefd53704`, Desktop `v0.9.22` and Engine
+`v0.1.2` are pinned. Non-Windows, visible-GUI, autostart, physical-microphone
+and Groq rows are explicitly deferred by the user; hosted CI was not started
+because of the account billing/spending limit.
+
+## Desktop first-party release fixture residual
+
+The Desktop `v0.9.22` release-contract run passes five of six existing
+first-party contracts. The Memoria crash-boundary fixture still times out
+waiting for its pre-crash `window.__memoriaImportFirstWrite` marker. This is a
+pre-existing fixture residual outside the AC10 typed migration-recovery path;
+the packaged AC10 smoke, Engine distribution/install checks and all other
+first-party contracts pass.
 
 ## AC8 / AC9 — current status
 

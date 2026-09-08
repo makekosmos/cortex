@@ -1,7 +1,8 @@
 # Data Platform completion evidence bundle
 
-Status: `BLOCKED` — AC10 is `PASS_WINDOWS_ONLY`; the umbrella remains blocked
-only by explicitly deferred non-Windows and visible-GUI rows.
+Status: `PASS_WINDOWS_ONLY` — the agreed Windows/headless delivery scope is
+complete. Non-Windows, visible-GUI, autostart, physical-microphone and Groq
+checks are explicitly deferred by the user and are not claimed here.
 
 Captured 2026-09-08 against merged Core PR #76 at
 `ba13c5b5aed364ef1b6704b5e08a98bc1898964a`.
@@ -12,6 +13,7 @@ Captured 2026-09-08 against merged Core PR #76 at
 - Delivery PR: https://github.com/makekosmos/core/pull/76
 - Cortex AC10 PR: https://github.com/makekosmos/cortex/pull/49
 - Engine AC10 release: https://github.com/makekosmos/desktop/releases/tag/v0.1.2
+- Compatible Desktop/Host release: https://github.com/makekosmos/desktop/releases/tag/v0.9.22
 - Current evidence files: `evidence.md`, `evidence.json`, `problems.md`,
   `phase3-8-manifest.json`, `ac10-legacy-path-matrix.md`, and
   `raw-ac1-agenda-host-restart-20260907.md`, `raw-ac10-proof-20260908.md` in
@@ -26,7 +28,7 @@ Captured 2026-09-08 against merged Core PR #76 at
   transport/tombstone closure remains pinned at `dfae4a86`.
 - AC8 fixture commit: `f1e53e486c4b7e18941058f094f28d5cf775e505` (`db/tests_sync/part4.rs`).
 - AC9 profile-contract commits: `3546d301`, loopback test `320772d2`, owner/revision persistence `5e348a01`, typed tombstones `377dd748`, and transport matrix `8d5db812`; focused profile suite `6 passed`, tombstone suite `1 passed`, transport matrix `1 passed`, and full local suite `439 passed`.
-- Evidence bundle commit: pending AC10 evidence PR.
+- Evidence bundle commit: `a83faaf588b95f6cebd718a9526c843946ef0f88` (merged evidence PR #77); this follow-up pins the compatible Desktop/Host release.
 - Delivered PR code head: `ba13c5b5aed364ef1b6704b5e08a98bc1898964a`.
 - Cortex current main: `199a4e379c5423c2e9b87cc46d000a0fefd53704` (merged AC10 PR #49).
 - Cortex permission contract: PR39 merge `56ba941162bb15ae80644911f323811b4e133c5a`;
@@ -80,6 +82,19 @@ replace the full Engine v1 reconnect contract or any visual GUI gate.
 
 The packaged candidate additionally passed the Manager/Host/Runtime install,
 Store refresh, bridge and cleanup flow in `raw-windows-headless-20260908.md`.
+
+The compatible Desktop/Host `v0.9.22` release is built from Cortex source
+`f70f25e5bd29d274ad0455c862584002e2d5850b`, pins Core
+`ba13c5b5aed364ef1b6704b5e08a98bc1898964a`, and uses Engine `v0.1.2`.
+The Windows installer SHA-256 is
+`44e51aa328717f0c4f1c1caac94883cb7b367b667a12616e063f5cef34981bd6`.
+The published channel verifier passes version, hash, size, blockmap and
+timestamp checks. Its packaged candidate smoke passes Manager/Host/Runtime,
+Store/bridge, headless Dictation start/cancel and owned-process cleanup.
+Five of six existing first-party release contracts pass; the remaining
+Memoria crash-boundary fixture still misses its pre-crash marker and is
+recorded as a pre-existing release-fixture residual outside the AC10 typed
+recovery path.
 
 Signed Memoria crash/restart acceptance on the Desktop `0.9.21` packaged
 candidate: `PASS`, 1/1, 34.7s. This is packaged Windows evidence and does not
@@ -169,9 +184,9 @@ Sanitized raw evidence is committed at
   0.1.2 manifest are recorded in `raw-ac10-proof-20260908.md`. Non-Windows
   and visible GUI rows remain deferred by user.
 
-- AC16: `PASS_WINDOWS_ONLY` for the delivered Windows evidence; the umbrella
-  remains `BLOCKED` only on user-deferred
-  visual/non-Windows rows. Frozen requirement (spec frozen at `056c71d5`): “Every
+- AC16: `PASS_WINDOWS_ONLY` for the delivered Windows evidence. Non-Windows,
+  visible-GUI, autostart, physical-microphone and Groq rows are explicitly
+  deferred by the user. Frozen requirement (spec frozen at `056c71d5`): “Every
   implementation slice has frozen spec, evidence/evidence.json with exact
   commit and per-AC result, and independent verification against the final
   integration commit. Any failed or unavailable criterion has `problems.md`;
@@ -182,9 +197,9 @@ Sanitized raw evidence is committed at
   pinned; hosted CI remains unavailable because the account billing/spending
   limit prevented job execution.
 
-Cross-platform Debian/Linux/macOS rows and visible GUI verification are
-`DEFERRED_BY_USER` / `NOT_RUN`; this Windows-only delivery must not promote
-those rows to PASS.
+Cross-platform Debian/Linux/macOS, visible GUI, autostart, physical microphone
+and Groq verification are `DEFERRED_BY_USER` / `NOT_RUN`; this Windows-only
+delivery does not promote those rows to PASS.
 
 ## Phase 9 gate semantics
 
@@ -204,8 +219,8 @@ no legacy client buckets and `legacy_zero_for_30_days=true` after 31 complete
 days at `2026-08-31T21:29:24.7197843Z`. This removes a timing blocker only; it
 does not authorize deletion of the still-consumed WS compatibility path.
 
-No destructive cleanup is permitted from this bundle. The remaining action is
-the explicit AC10 replacement migration/recovery contract and reviewed deletion
-proof for still-live planning/rollback consumers. Autostart GUI behavior,
-physical microphone smoke, Groq, non-Windows and visible GUI remain deferred by
-user; the local Whisper Turbo path was not a blocker for this headless gate.
+No destructive cleanup is permitted from this bundle. The explicit AC10
+replacement migration/recovery contract and reviewed deletion proof are now
+merged and verified for the Windows/headless scope. Core issue #34 can close
+with the deferred rows recorded above. The local Whisper Turbo path was not a
+blocker for this headless gate.
