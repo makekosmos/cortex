@@ -97,6 +97,77 @@ fn phase9_retires_planning_tables_after_lossless_canonical_migration() {
 }
 
 #[test]
+fn phase9_retirement_refuses_archive_or_semantic_mismatch_and_rolls_back_drop_batch() {
+    let conn = Connection::open_in_memory().unwrap();
+    init_schema_prerequisites_for_phase3(&conn).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE areas (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+         CREATE TABLE headings (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, project_id TEXT NOT NULL);
+         INSERT INTO areas(id,title,sort_order,created_at) VALUES('area-1','Work',7,'2026-01-01T00:00:00Z');
+         INSERT INTO projects(id,title,status,area_id,created_at) VALUES('project-1','Project','active','area-1','2026-01-02T00:00:00Z');
+         INSERT INTO headings(id,title,sort_order,project_id) VALUES('heading-1','Section',3,'project-1');",
+    )
+    .unwrap();
+    migrate_phase3(&conn).unwrap();
+
+    let original_raw: Vec<u8> = conn
+        .query_row(
+            "SELECT raw_source FROM canonical_migration_source_archive WHERE source_kind='native:areas' AND source_id='area-1'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    conn.execute(
+        "UPDATE canonical_migration_source_archive SET raw_source=?1 WHERE source_kind='native:areas' AND source_id='area-1'",
+        [b"tampered".as_slice()],
+    )
+    .unwrap();
+    assert!(retire_legacy_planning_tables(&conn).is_err());
+    assert!(table_exists(&conn, "areas"));
+    assert!(table_exists(&conn, "headings"));
+    conn.execute(
+        "UPDATE canonical_migration_source_archive SET raw_source=?1 WHERE source_kind='native:areas' AND source_id='area-1'",
+        [original_raw.as_slice()],
+    )
+    .unwrap();
+
+    let original_props: String = conn
+        .query_row(
+            "SELECT props_json FROM objects WHERE id='area-1'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    conn.execute("UPDATE objects SET props_json='{}' WHERE id='area-1'", [])
+        .unwrap();
+    assert!(retire_legacy_planning_tables(&conn).is_err());
+    assert!(table_exists(&conn, "areas"));
+    conn.execute(
+        "UPDATE objects SET props_json=?1 WHERE id='area-1'",
+        [original_props.as_str()],
+    )
+    .unwrap();
+
+    // A view with the legacy name makes the second DROP fail after the first
+    // one succeeds; the savepoint must restore the areas table.
+    conn.execute_batch(
+        "DROP TABLE headings;
+         CREATE VIEW headings AS SELECT 'heading-1' AS id, 'Section' AS title, 3 AS sort_order, 'project-1' AS project_id;",
+    )
+    .unwrap();
+    assert!(retire_legacy_planning_tables(&conn).is_err());
+    assert!(table_exists(&conn, "areas"));
+    assert!(!table_exists(&conn, "headings"));
+    assert!(conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='view' AND name='headings')",
+            [],
+            |row| row.get::<_, bool>(0),
+        )
+        .unwrap());
+}
+
+#[test]
 fn production_init_runs_phase3_once_and_reopen_is_idempotent() {
     let conn = Connection::open_in_memory().unwrap();
     init_schema(&conn).unwrap();

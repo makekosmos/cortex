@@ -262,6 +262,7 @@ pub fn retire_legacy_planning_tables(
         )
         .map_err(|e| MigrationError::Storage(e.to_string()))
     };
+    let inventory = preflight::inventory_sources(conn).map_err(MigrationError::Storage)?;
     let mut counts = Vec::new();
     for (table, source_kind) in [("areas", "native:areas"), ("headings", "native:headings")] {
         if !table_exists(table)? {
@@ -311,6 +312,58 @@ pub fn retire_legacy_planning_tables(
             .map_err(|e| MigrationError::Storage(e.to_string()))?;
         for row in rows {
             let id = row.map_err(|e| MigrationError::Storage(e.to_string()))?;
+            let (source_hash, raw_source, planned_json): (String, Vec<u8>, String) = conn
+                .query_row(
+                    "SELECT source_hash,raw_source,planned_json FROM canonical_migration_source_archive WHERE contract_version=?1 AND source_kind=?2 AND source_id=?3",
+                    params![CONTRACT_VERSION, source_kind, id.as_str()],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                )
+                .optional()
+                .map_err(|e| MigrationError::Storage(e.to_string()))?
+                .ok_or_else(|| {
+                    MigrationError::Objects(format!(
+                        "legacy planning row {table}/{id} has no archived source"
+                    ))
+                })?;
+            let item: migration_objects::PlannedItem = serde_json::from_str(&planned_json)
+                .map_err(|e| MigrationError::Storage(e.to_string()))?;
+            if item.source_id != id
+                || item.source_hash != source_hash
+                || item.raw_source != raw_source
+                || format!("{:x}", Sha256::digest(&raw_source)) != source_hash
+            {
+                return Err(MigrationError::Objects(format!(
+                    "legacy planning archive digest mismatch for {table}/{id}"
+                )));
+            }
+            let current = inventory
+                .iter()
+                .find(|record| record.source_kind.name() == table && record.source_id == id)
+                .ok_or_else(|| {
+                    MigrationError::Objects(format!(
+                        "legacy planning source disappeared for {table}/{id}"
+                    ))
+                })?;
+            if current.source_hash != source_hash || current.raw_source != raw_source {
+                return Err(MigrationError::Objects(format!(
+                    "legacy planning source changed after migration for {table}/{id}"
+                )));
+            }
+            let expected_hash = canonical_hash(&item)?;
+            let stored_hash: Option<String> = conn
+                .query_row(
+                    "SELECT canonical_hash FROM canonical_migration_items WHERE contract_version=?1 AND source_kind=?2 AND source_id=?3",
+                    params![CONTRACT_VERSION, source_kind, id.as_str()],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(|e| MigrationError::Storage(e.to_string()))?;
+            if stored_hash.as_deref() != Some(expected_hash.as_str()) {
+                return Err(MigrationError::Objects(format!(
+                    "legacy planning canonical digest mismatch for {table}/{id}"
+                )));
+            }
+            validate_canonical_state(conn, &item)?;
             let canonical: Option<(String, String)> = conn
                 .query_row(
                     "SELECT type_id,type_version FROM objects WHERE id=?1",
