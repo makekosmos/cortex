@@ -90,13 +90,22 @@ async function runCase(dataDir, phase, recoveryOnly, skipSetup) {
   await waitFor(coordinator.barrier);
   const transactionBeforeRecovery =
     phase === "prepared" ? await legacyGrantTransactions(dataDir) : undefined;
+  const journalBeforeRecovery =
+    phase === "prepared"
+      ? JSON.parse(
+          await readFile(
+            path.join(dataDir, "legacy-migrations", "v1", "com.kosmos.arcadia", "journal.json"),
+            "utf8",
+          ),
+        )
+      : undefined;
   coordinator.child.kill();
   await waitForExit(coordinator.child, true);
   if (phase === "prepared" && !isLegacyLaunchBlocked(dataDir, "arcadia"))
     throw new Error("prepared crash did not block legacy launch before recovery");
   const recovery = runCoordinator(dataDir, `${barrier}.unused`, "", recoveryOnly, true);
   await waitForExit(recovery.child);
-  return { dataDir, transactionBeforeRecovery };
+  return { dataDir, transactionBeforeRecovery, journalBeforeRecovery };
 }
 
 async function packageState(dataDir) {
@@ -185,13 +194,10 @@ try {
     transactionsBeforeRecovery[0].state !== "active"
   )
     throw new Error("prepared crash did not persist its exact grant transaction");
-  const journalBeforeRecovery = JSON.parse(
-    await readFile(
-      path.join(preparedDir, "legacy-migrations", "v1", "com.kosmos.arcadia", "journal.json"),
-      "utf8",
-    ),
-  );
-  if (journalBeforeRecovery.grant_transaction_token !== transactionsBeforeRecovery[0].token)
+  if (
+    preparedRun.journalBeforeRecovery.grant_transaction_token !==
+    transactionsBeforeRecovery[0].token
+  )
     throw new Error("prepared crash journal lost the exact grant transaction token");
   const transactionsAfterRecovery = await legacyGrantTransactions(preparedDir);
   if (
