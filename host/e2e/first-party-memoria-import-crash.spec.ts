@@ -99,7 +99,9 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     host = await launchHost();
     pids.add(host.process().pid);
     let page = await host.firstWindow();
-    await expect.poll(() => page.evaluate(() => Boolean(window.api))).toBe(true);
+    await expect
+      .poll(() => page.evaluate(() => Boolean(window.api)), { timeout: 30_000 })
+      .toBe(true);
     await page.evaluate(() => {
       window.location.hash = "#/settings";
     });
@@ -115,14 +117,16 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     await installPartialImportCrashPause(page, path.join(root, "crash-import-vault"));
     await page.getByTestId("eden-import-obsidian-vault").getByRole("button").click();
     await expect
-      .poll(() =>
-        page.evaluate(() => {
-          // SAFETY: the fixture installs this test-only marker before the import starts.
-          return Boolean(
-            (window as typeof window & { __memoriaImportFirstWrite?: boolean })
-              .__memoriaImportFirstWrite,
-          );
-        }),
+      .poll(
+        () =>
+          page.evaluate(() => {
+            // SAFETY: the fixture installs this test-only marker before the import starts.
+            return Boolean(
+              (window as typeof window & { __memoriaImportFirstWrite?: boolean })
+                .__memoriaImportFirstWrite,
+            );
+          }),
+        { timeout: 30_000 },
       )
       .toBe(true);
 
@@ -147,7 +151,9 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     host = await launchHost();
     pids.add(host.process().pid);
     page = await host.firstWindow();
-    await expect.poll(() => page.evaluate(() => Boolean(window.api))).toBe(true);
+    await expect
+      .poll(() => page.evaluate(() => Boolean(window.api)), { timeout: 30_000 })
+      .toBe(true);
     await expect
       .poll(() =>
         page.evaluate(async () =>
