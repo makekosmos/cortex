@@ -5,12 +5,12 @@
         // Verify tables exist
         let count: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('todos','projects','areas','tags','headings','tracked_apps','usage_sessions','usage_events','sync_kv','sync_tombstones')",
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('todos','projects','tags','tracked_apps','usage_sessions','usage_events','sync_kv','sync_tombstones')",
                 [],
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(count, 10);
+        assert_eq!(count, 8);
         let object_count: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('object_types', 'objects', 'object_links')",

@@ -1,7 +1,8 @@
 ﻿
 fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<(), String> {
-    // Areas and headings are planning-only compatibility rows; the frozen contract
-    // explicitly keeps them in place and never fabricates canonical objects.
+    // Areas and headings are migrated as canonical project objects. Their
+    // legacy kind, ordering and parent are carried in compatibility extensions
+    // so the compatibility read view remains lossless after table retirement.
     let mut todo = conn.prepare("SELECT id,title,notes,priority,scheduled_date,deadline,reminder_date,is_someday,is_completed,completed_at,is_cancelled,cancelled_at,heading_id,project_id,area_id,tag_ids,checklist_items,recurrence_rule,created_at FROM todos ORDER BY id").map_err(|e| e.to_string())?;
     for row in todo
         .query_map([], |r| {
@@ -178,26 +179,36 @@ fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<()
             raw_source: bytes,
         });
     }
-    let mut areas = conn
-        .prepare("SELECT id,title,created_at FROM areas ORDER BY id")
+    let has_table = |name: &str| {
+        conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
+            [name],
+            |row| row.get::<_, bool>(0),
+        )
+        .unwrap_or(false)
+    };
+    if has_table("areas") {
+      let mut areas = conn
+        .prepare("SELECT id,title,sort_order,created_at FROM areas ORDER BY id")
         .map_err(|e| e.to_string())?;
     for row in areas
         .query_map([], |r| {
             Ok((
                 r.get::<_, String>(0)?,
                 r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
+                r.get::<_, i64>(2)?,
+                r.get::<_, String>(3)?,
             ))
         })
         .map_err(|e| e.to_string())?
     {
-        let (id, title, created) = row.map_err(|e| e.to_string())?;
+        let (id, title, sort_order, created) = row.map_err(|e| e.to_string())?;
         let bytes = compact(&envelope(
             id.clone(),
             "project_obj",
             title,
             json!({"type":"doc","content":[{"type":"paragraph"}]}),
-            json!({}),
+            json!({"legacy_kind":"area","sort_order":sort_order}),
             created.clone(),
             created,
             None,
@@ -210,28 +221,36 @@ fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<()
             raw_source: bytes,
         });
     }
+    }
+    if has_table("headings") {
     let mut headings = conn
-        .prepare("SELECT id,title,project_id FROM headings ORDER BY id")
+        .prepare("SELECT id,title,sort_order,project_id FROM headings ORDER BY id")
         .map_err(|e| e.to_string())?;
     for row in headings
         .query_map([], |r| {
             Ok((
                 r.get::<_, String>(0)?,
                 r.get::<_, String>(1)?,
-                r.get::<_, Option<String>>(2)?,
+                r.get::<_, i64>(2)?,
+                r.get::<_, String>(3)?,
             ))
         })
         .map_err(|e| e.to_string())?
     {
-        let (id, title, project) = row.map_err(|e| e.to_string())?;
+        let (id, title, sort_order, project) = row.map_err(|e| e.to_string())?;
         let bytes = compact(&envelope(
             id.clone(),
             "project_obj",
             title,
             json!({"type":"doc","content":[{"type":"paragraph"}]}),
-            json!({"project_id":project}),
-            String::new(),
-            String::new(),
+            json!({
+                "legacy_kind":"heading",
+                "sort_order":sort_order,
+                "legacy_parent_project_id":project,
+                "related_ids":[project]
+            }),
+            "1970-01-01T00:00:00.000Z".into(),
+            "1970-01-01T00:00:00.000Z".into(),
             None,
         ))?;
         out.push(SourceRecord {
@@ -241,6 +260,7 @@ fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<()
             canonical_bytes: bytes.clone(),
             raw_source: bytes,
         });
+    }
     }
     Ok(())
 }

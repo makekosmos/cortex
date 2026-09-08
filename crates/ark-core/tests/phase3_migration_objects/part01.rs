@@ -118,8 +118,13 @@ fn populated_generic_fixture_maps_all_nine_aliases_and_applies_exact_envelope() 
 }
 
 #[test]
-fn native_adapters_use_real_columns_and_leave_area_heading_rows_read_only() {
+fn native_adapters_migrate_area_heading_identity_and_hierarchy() {
     let conn = db();
+    conn.execute_batch(
+        "CREATE TABLE areas (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+         CREATE TABLE headings (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, project_id TEXT NOT NULL);",
+    )
+    .unwrap();
     conn.execute("INSERT INTO todos(id,title,notes,priority,project_id,tag_ids,checklist_items,created_at) VALUES('todo-1','Todo','note',2,NULL,'[]','[]','2026-01-01T00:00:00Z')", []).unwrap();
     conn.execute("INSERT INTO projects(id,title,notes,status,color_tag,created_at) VALUES('project-1','Project','notes','completed','green','2026-01-01T00:00:00Z')", []).unwrap();
     conn.execute(
@@ -134,7 +139,7 @@ fn native_adapters_use_real_columns_and_leave_area_heading_rows_read_only() {
     .unwrap();
     conn.execute("INSERT INTO tags(id,title,color,created_at) VALUES('tag-1','Tag','blue','2026-01-01T00:00:00Z')", []).unwrap();
     let plan = plan_objects(&conn, "now").unwrap();
-    assert_eq!(plan.items.len(), 3);
+    assert_eq!(plan.items.len(), 5);
     assert!(plan.items.iter().any(|item| item.source_kind == "todos"
         && item.source_kind_variant
             == ark_core::canonical_types::preflight::SourceKind::Native("todos".into())));
@@ -146,7 +151,7 @@ fn native_adapters_use_real_columns_and_leave_area_heading_rows_read_only() {
             |r| r.get(0),
         )
         .unwrap();
-    assert_eq!(objects, 3);
+    assert_eq!(objects, 5);
     assert_eq!(
         conn.query_row::<i64, _, _>(
             "SELECT COUNT(*) FROM objects WHERE id IN ('area-1','heading-1')",
@@ -154,12 +159,10 @@ fn native_adapters_use_real_columns_and_leave_area_heading_rows_read_only() {
             |r| r.get(0)
         )
         .unwrap(),
-        0
+        2
     );
     assert_eq!(
-        conn.query_row::<i64, _, _>("SELECT COUNT(*) FROM areas WHERE id='area-1'", [], |r| r
-            .get(0))
-            .unwrap(),
+        conn.query_row::<i64, _, _>("SELECT COUNT(*) FROM object_links WHERE source_object_id='heading-1' AND link_type='related' AND target_object_id='project-1'", [], |r| r.get(0)).unwrap(),
         1
     );
 }

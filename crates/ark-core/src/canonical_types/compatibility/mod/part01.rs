@@ -97,6 +97,30 @@ pub fn map_legacy_with_context(
             }
         }
     }
+    if record.legacy_type_id == "project_obj" {
+        if let Some(target) = record
+            .props
+            .get("area_id")
+            .or_else(|| record.props.get("areaId"))
+            .and_then(Value::as_str)
+        {
+            if context
+                .existing_object_ids
+                .get(target)
+                .is_some_and(|identity| {
+                    identity.type_id == "com.kosmos.project" && identity.type_version == "1.0.0"
+                })
+            {
+                add_link(
+                    &mut mapped.links,
+                    &record.id,
+                    target,
+                    "related",
+                    &record.updated_at,
+                );
+            }
+        }
+    }
     for link in &mapped.links {
         let expected_type = expected_target_type(&record, link);
         if !context

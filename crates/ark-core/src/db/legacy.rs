@@ -141,24 +141,6 @@ pub fn delete_project(conn: &Connection, id: &str) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
-// Area CRUD
-// ---------------------------------------------------------------------------
-
-pub fn upsert_area(conn: &Connection, area: &Area) -> Result<(), String> {
-    conn.execute(
-        "INSERT INTO areas (id, title, sort_order, created_at)
-         VALUES (?1, ?2, ?3, ?4)
-         ON CONFLICT(id) DO UPDATE SET
-            title = excluded.title,
-            sort_order = excluded.sort_order,
-            created_at = excluded.created_at",
-        params![area.id, area.title, area.sort_order, area.created_at],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
 // Tag CRUD
 // ---------------------------------------------------------------------------
 
@@ -173,35 +155,6 @@ pub fn upsert_tag(conn: &Connection, tag: &Tag) -> Result<(), String> {
         params![tag.id, tag.title, tag.color, tag.created_at],
     )
     .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// Heading CRUD
-// ---------------------------------------------------------------------------
-
-pub fn upsert_heading(conn: &Connection, heading: &Heading) -> Result<(), String> {
-    conn.execute(
-        "INSERT INTO headings (id, title, sort_order, project_id)
-         VALUES (?1, ?2, ?3, ?4)
-         ON CONFLICT(id) DO UPDATE SET
-            title = excluded.title,
-            sort_order = excluded.sort_order,
-            project_id = excluded.project_id",
-        params![
-            heading.id,
-            heading.title,
-            heading.sort_order,
-            heading.project_id
-        ],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-pub fn delete_heading(conn: &Connection, id: &str) -> Result<(), String> {
-    conn.execute("DELETE FROM headings WHERE id = ?1", params![id])
-        .map_err(|e| e.to_string())?;
     Ok(())
 }
 

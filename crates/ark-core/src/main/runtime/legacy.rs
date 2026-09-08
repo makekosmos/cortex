@@ -100,11 +100,6 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             Ok(json!(true))
         }
 
-        Request::UpsertArea {
-            area: _area,
-            device_id: _device_id,
-        } => Err("LegacyPlanningReadOnly".to_string()),
-
         Request::UpsertTag { tag, device_id } => {
             let record = legacy_record(
                 &tag.id,
@@ -122,16 +117,6 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             });
             Ok(json!(true))
         }
-
-        Request::UpsertHeading {
-            heading: _heading,
-            device_id: _device_id,
-        } => Err("LegacyPlanningReadOnly".to_string()),
-
-        Request::DeleteHeading {
-            id: _id,
-            device_id: _device_id,
-        } => Err("LegacyPlanningReadOnly".to_string()),
 
         Request::UpsertTrackedApp {
             tracked_app,
@@ -175,4 +160,3 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
         _ => unreachable!("request routed to the wrong runtime handler"),
     }
 }
-

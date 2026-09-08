@@ -103,23 +103,8 @@ enum Request {
         #[serde(default)]
         device_id: Option<String>,
     },
-    UpsertArea {
-        area: Area,
-        #[serde(default)]
-        device_id: Option<String>,
-    },
     UpsertTag {
         tag: Tag,
-        #[serde(default)]
-        device_id: Option<String>,
-    },
-    UpsertHeading {
-        heading: Heading,
-        #[serde(default)]
-        device_id: Option<String>,
-    },
-    DeleteHeading {
-        id: String,
         #[serde(default)]
         device_id: Option<String>,
     },
