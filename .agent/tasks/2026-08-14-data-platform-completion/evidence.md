@@ -1,39 +1,44 @@
 # Data Platform completion evidence bundle
 
-Status: `BLOCKED` — evidence-only; no cleanup or legacy removal is authorized.
+Status: `BLOCKED` — AC10 is `PASS_WINDOWS_ONLY`; the umbrella remains blocked
+only by explicitly deferred non-Windows and visible-GUI rows.
 
-Captured 2026-09-08 against merged Core PR #73 at
-`a209355aeee6937e4eb0807441bea72904597780`.
+Captured 2026-09-08 against merged Core PR #76 at
+`ba13c5b5aed364ef1b6704b5e08a98bc1898964a`.
 
 ## Exact evidence links
 
 - Frozen spec: https://github.com/makekosmos/core/blob/056c71d585a1af4e3cc7c47eb05dae98f61ef5c8/.agent/tasks/2026-08-14-data-platform-completion/spec.md
-- Delivery PR: https://github.com/makekosmos/core/pull/73
+- Delivery PR: https://github.com/makekosmos/core/pull/76
+- Cortex AC10 PR: https://github.com/makekosmos/cortex/pull/49
+- Engine AC10 release: https://github.com/makekosmos/desktop/releases/tag/v0.1.2
 - Current evidence files: `evidence.md`, `evidence.json`, `problems.md`,
   `phase3-8-manifest.json`, `ac10-legacy-path-matrix.md`, and
-  `raw-ac1-agenda-host-restart-20260907.md` in this PR. The independent Docs
+  `raw-ac1-agenda-host-restart-20260907.md`, `raw-ac10-proof-20260908.md` in
+  this PR. The independent Docs
   verdict is recorded in `docs-independent-review-20260907.md`.
 - Historical Phase 9 proof source: https://github.com/makekosmos/core/commit/de9642fda19aa9d4284fb873b05e8024feab3203
-- Final merged Core commit: `a209355aeee6937e4eb0807441bea72904597780`.
+- Final merged Core commit: `ba13c5b5aed364ef1b6704b5e08a98bc1898964a`.
 
 ## Current delivered references
 
-- Core: `a209355aeee6937e4eb0807441bea72904597780` (merged PR #73); AC9
+- Core: `ba13c5b5aed364ef1b6704b5e08a98bc1898964a` (merged PR #76); AC9
   transport/tombstone closure remains pinned at `dfae4a86`.
 - AC8 fixture commit: `f1e53e486c4b7e18941058f094f28d5cf775e505` (`db/tests_sync/part4.rs`).
 - AC9 profile-contract commits: `3546d301`, loopback test `320772d2`, owner/revision persistence `5e348a01`, typed tombstones `377dd748`, and transport matrix `8d5db812`; focused profile suite `6 passed`, tombstone suite `1 passed`, transport matrix `1 passed`, and full local suite `439 passed`.
-- Evidence bundle commit: `a209355aeee6937e4eb0807441bea72904597780`.
-- Delivered PR code head: `a209355aeee6937e4eb0807441bea72904597780`.
-- Cortex current main: `0956455e80bc2aa5359c4254bfe2971fc361451e` (bridge/migration main).
+- Evidence bundle commit: pending AC10 evidence PR.
+- Delivered PR code head: `ba13c5b5aed364ef1b6704b5e08a98bc1898964a`.
+- Cortex current main: `199a4e379c5423c2e9b87cc46d000a0fefd53704` (merged AC10 PR #49).
 - Cortex permission contract: PR39 merge `56ba941162bb15ae80644911f323811b4e133c5a`;
   implementation `4540de750d849fe83a25454da003aaa5551d6489`.
-- Published Engine `0.1.1` archive SHA-256:
-  `5144c434e8f85dfe55c011843d1eaf7c89a89e19bfb45352fca507e981de873f`.
+- Published Engine `0.1.2` archive SHA-256:
+  `0874713b6793656d653ce5bb60d71c4393eee788dca1f1f9e73d67f8fabffd63`.
 - Store catalog17 asset SHA-256:
   `f49ee76f44d3f3aef12829ba8e1841652e6ce1f6f2347c467782f79498922550`;
   Package Index catalog18 asset SHA-256:
   `1e65f56a3d5f6cb382619d4f8211a4dc5a6fdac019eb1c5592b99072a68c633f`.
-- Packaged-host acceptance source: `raw-windows-headless-20260908.md`.
+- Packaged-host acceptance source: `raw-ac10-proof-20260908.md` and
+  `raw-windows-headless-20260908.md`.
 - Core RPC fixture source: `0b06342014238244749946bbe3db92d94dfa0868` (Core repository).
 - Arca SDK reconnect path: `18008cc` (`quality/portable-hooks`).
 - Windows Core RPC fixture: SHA-256
@@ -46,9 +51,9 @@ The immutable Phase 3–8 historical pin manifest is
 and evidence SHAs; Phase 7/8 entries explicitly retain their pending limits.
 
 The actual AC10 path/guard matrix is `ac10-legacy-path-matrix.md`. It records
-the failing obsolete-resolver guard and the passing v1 rejection, discovery,
-and migration-recovery guards; AC10 remains open because tracked compatibility
-paths still have live consumers.
+the passing v1 rejection, discovery, planning-retirement and typed
+migration-recovery guards. The raw closure commands and immutable artifact
+hashes are in `raw-ac10-proof-20260908.md`.
 
 AC2–AC9 are itemized in `ac2-9-gap-matrix.md`. AC3–AC9 now have explicit
 Windows-only headless evidence; only non-Windows and visible GUI rows remain
@@ -112,6 +117,9 @@ Sanitized raw evidence is committed at
 | Cortex Store runtime catalog | PASS: 12/12 |
 | ARK Markdown bridge package/runtime suites | PASS: 11/11 + 1/1 |
 | Packaged Manager/Host/Runtime headless smoke | PASS: catalog sequence18; clean process/package teardown |
+| Core AC10 planning retirement | PASS: merged Core `ba13c5b5`; 37 migration/retirement tests + 198 lib tests |
+| Cortex AC10 typed recovery | PASS: merged Cortex `199a4e37`; 15 Bun tests, 18 grant-authority tests, full pre-push gate |
+| Engine 0.1.2 distribution/install | PASS: archive `0874713b...ffd63`; 8/8 distribution/install tests |
 | Arca SDK `bun test tests/engine-v1-contract.test.ts` | PASS: 3/3; strict discovery, coalesced reconnect and bounded idempotent replay |
 | Core `phase3_migration` integration test | PASS: 13/13 |
 | Core `data_platform_phase7` | PASS: 6/6 on `dfae4a86`; profile modes/schema constraints, FilterV1 canonical digest, owner persistence and revision CAS |
@@ -145,7 +153,7 @@ Sanitized raw evidence is committed at
   idempotence, non-destructive narrowing, and delete→typed tombstone→filter→
   apply. Owner-bound persistence and monotonic revision CAS pass in
   `data_platform_phase7` (`6/6`); full local nextest is `439/439`.
-- AC10: `OPEN` (cleanup intentionally not authorized). Frozen requirement (spec frozen at
+- AC10: `PASS_WINDOWS_ONLY`. Frozen requirement (spec frozen at
   `056c71d5`): “Only after AC1–AC9 pass and first-party consumers have migrated,
   remove Manifest v1 broad grants, app-owned canonical registration, legacy
   planning writes/tables (after preserved backup/migration evidence),
@@ -154,17 +162,15 @@ Sanitized raw evidence is committed at
   removed paths cannot return.” Existing packaged Windows, migration, local-AI
   and reconnect proof is recorded in the immutable Phase 3–8 manifest and
   historical Phase 9 proof bundle. The listed production guards are now
-  PASS/guarded except for retained Core planning tables/readers and migration
-  rollback handlers, which still have live recovery consumers. AC10 remains
-  the listed production guards and 30-day condition pass, but Core planning
-  tables/readers and Cortex rollback recovery remain live. Docs review confirms
-  AC1/AC2 explain why they are currently needed but do not override AC10's
-  explicit removal requirement. Close with a reviewed replacement
-  migration/recovery contract, consumer/source-guard changes, and deletion
-  proof; no cleanup is authorized here.
+  PASS/guarded. Core planning retirement archives source rows, verifies
+  identity/semantics and drops `areas`/`headings` transactionally; Cortex
+  recovery uses the typed token/source-set contract and removes the legacy
+  rollback RPC. The source guards, focused tests, packaged smoke and Engine
+  0.1.2 manifest are recorded in `raw-ac10-proof-20260908.md`. Non-Windows
+  and visible GUI rows remain deferred by user.
 
 - AC16: `PASS_WINDOWS_ONLY` for the delivered Windows evidence; the umbrella
-  remains `BLOCKED` only on the explicit AC10 deletion contract and user-deferred
+  remains `BLOCKED` only on user-deferred
   visual/non-Windows rows. Frozen requirement (spec frozen at `056c71d5`): “Every
   implementation slice has frozen spec, evidence/evidence.json with exact
   commit and per-AC result, and independent verification against the final
