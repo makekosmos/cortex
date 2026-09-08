@@ -6,20 +6,17 @@ import {
   mergeLegacyExtensionData,
   validateLegacyExtensionDataRoot,
 } from "./extension-data-migration";
+import { recoverLegacyMigrations } from "./legacy-migration-recovery";
 import {
   LEGACY_TO_CANONICAL,
   type CanonicalId,
   type LegacyMigrationHost,
-  migrationFinalizationPath,
-  readMigrationJournal,
-  recoverPreparedMigration,
   runLegacyMigration,
   withLegacyMigrationLock,
 } from "./legacy-migration-journal";
 import {
   packageRows,
   packageStateSnapshotPending,
-  clearPackageStateSnapshotPending,
   restorePackageState,
   snapshotPackageState,
   verifiedReplacement,
@@ -141,11 +138,9 @@ export function createLegacyMigrationRunner(
   const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
   // SAFETY: Object.values is sourced exclusively from the canonical allowlist.
   const targets = [...new Set(Object.values(LEGACY_TO_CANONICAL))] as CanonicalId[];
-
   async function replacement(target: CanonicalId): Promise<ReplacementInfo | null> {
     return verifiedReplacement(request, await packageRows(request), target);
   }
-
   async function host(
     target: CanonicalId,
     ids: string[],
@@ -167,6 +162,7 @@ export function createLegacyMigrationRunner(
         phase: "prepared",
         grant_policy: "reconsent",
         records_policy: "opaque-preserve",
+        grant_transaction_token: null,
       },
       verifyReplacement: async () => (await replacement(target)) !== null,
       stopAffected: async () => {
@@ -204,12 +200,14 @@ export function createLegacyMigrationRunner(
         });
         if (
           !isRecord(result) ||
-          (result.transaction_token !== null && !isString(result.transaction_token))
+          (result.transaction_token !== null &&
+            (!isString(result.transaction_token) || result.transaction_token.length === 0))
         )
           throw new Error("legacy grant transaction response is invalid");
         grantTransactionToken = isString(result.transaction_token)
           ? result.transaction_token
           : null;
+        return grantTransactionToken;
       },
       commitLegacyGrants: async () => {
         if (!grantTransactionToken) return;
@@ -240,7 +238,6 @@ export function createLegacyMigrationRunner(
       },
     };
   }
-
   async function recoverBeforeLaunch(): Promise<void> {
     await recoverLegacyMigrationsBeforeLaunch(dataDir, client);
   }
@@ -268,33 +265,7 @@ export function createLegacyMigrationRunner(
 
 export async function recoverLegacyMigrationsBeforeLaunch(
   dataDir: string,
-  client?: ArkClient,
+  client?: Pick<ArkClient, "invokeOperation">,
 ): Promise<void> {
-  // SAFETY: Object.values is sourced exclusively from the canonical allowlist above.
-  const targets = [...new Set(Object.values(LEGACY_TO_CANONICAL))] as CanonicalId[];
-  for (const target of targets) {
-    const journal = await readMigrationJournal(dataDir, target);
-    if (journal?.phase === "prepared") {
-      if (!client) {
-        await restoreNamespace(dataDir, target);
-        continue;
-      }
-      const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
-      await recoverPreparedMigration(dataDir, target, async () => {
-        await request({
-          operation: "packages.rollback_legacy_grants",
-          params: { source_ids: journal.source_ids },
-        });
-        await restoreNamespace(dataDir, target);
-        await restorePackageState(dataDir, target, request);
-      });
-    } else if (journal?.phase === "committed") {
-      await rm(migrationFinalizationPath(dataDir, target), { force: true });
-      await clearPackageStateSnapshotPending(dataDir, target);
-    } else if (await packageStateSnapshotPending(dataDir, target)) {
-      if (!client) throw new Error("package state recovery requires PackageService");
-      const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
-      await restorePackageState(dataDir, target, request);
-    }
-  }
+  return recoverLegacyMigrations(dataDir, client, restoreNamespace, sourceIdsWithData);
 }

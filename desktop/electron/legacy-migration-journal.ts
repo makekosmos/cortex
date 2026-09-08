@@ -3,16 +3,14 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord, isString, type JsonRecord, type JsonValue } from "./extension-permissions";
 import { testMigrationBarrier } from "./test-migration-barrier";
-
 export const LEGACY_TO_CANONICAL = {
   arcadia: "com.kosmos.arcadia",
   arrancador: "com.kosmos.arcadia",
   eden: "com.kosmos.memoria",
   delphi: "com.kosmos.agenda",
 } as const;
-
 export type CanonicalId = (typeof LEGACY_TO_CANONICAL)[keyof typeof LEGACY_TO_CANONICAL];
-export type MigrationPhase = "prepared" | "committed";
+export type MigrationPhase = "prepared" | "finalizing" | "committed";
 export interface MigrationJournal extends JsonRecord {
   schema_version: 1;
   target_id: CanonicalId;
@@ -21,8 +19,8 @@ export interface MigrationJournal extends JsonRecord {
   phase: MigrationPhase;
   grant_policy: "reconsent";
   records_policy: "opaque-preserve" | "explicit-adapter-v1";
+  grant_transaction_token: string | null;
 }
-
 const JOURNAL_KEYS = new Set([
   "schema_version",
   "target_id",
@@ -31,6 +29,7 @@ const JOURNAL_KEYS = new Set([
   "phase",
   "grant_policy",
   "records_policy",
+  "grant_transaction_token",
 ]);
 const REPLACEMENT_KEYS = new Set(["version", "sha256", "catalog_sequence"]);
 const IDS = new Set(Object.keys(LEGACY_TO_CANONICAL));
@@ -39,17 +38,14 @@ const ACTIVE_MIGRATIONS = new Set<string>();
 function fail(message: string): never {
   throw new Error(`[kepler-shell] invalid legacy migration journal: ${message}`);
 }
-
 function exactKeys(value: JsonRecord, allowed: Set<string>, label: string): void {
   for (const key of Object.keys(value))
     if (!allowed.has(key)) fail(`${label} contains unknown field`);
 }
-
 function assertCanonical(value: JsonValue): asserts value is CanonicalId {
   // SAFETY: isString narrows the value before the allowlist lookup.
   if (!isString(value) || !TARGETS.has(value as CanonicalId)) fail("target_id is not allowlisted");
 }
-
 export function validateMigrationJournal(value: JsonValue): MigrationJournal {
   if (!isRecord(value)) fail("journal must be an object");
   exactKeys(value, JOURNAL_KEYS, "journal");
@@ -66,14 +62,25 @@ export function validateMigrationJournal(value: JsonValue): MigrationJournal {
   const sourceIds = value.source_ids.filter(isString);
   if (sourceIds.length !== value.source_ids.length) fail("source_ids is invalid");
   if (new Set(sourceIds).size !== sourceIds.length) fail("source_ids contains duplicates");
+  const rawGrantTransactionToken = value.grant_transaction_token;
   if (
-    sourceIds.some((id) => {
+    rawGrantTransactionToken !== undefined &&
+    rawGrantTransactionToken !== null &&
+    (!isString(rawGrantTransactionToken) ||
+      rawGrantTransactionToken.length === 0 ||
+      rawGrantTransactionToken.length > 128)
+  )
+    fail("grant_transaction_token is invalid");
+  const grantTransactionToken = isString(rawGrantTransactionToken)
+    ? rawGrantTransactionToken
+    : null;
+  if (
+    !sourceIds.every(
       // SAFETY: source_ids was checked against the legacy allowlist immediately above.
-      return LEGACY_TO_CANONICAL[id as keyof typeof LEGACY_TO_CANONICAL] !== targetId;
-    })
-  ) {
+      (id) => LEGACY_TO_CANONICAL[id as keyof typeof LEGACY_TO_CANONICAL] === targetId,
+    )
+  )
     fail("source_ids do not match target_id");
-  }
   if (!isRecord(value.replacement)) fail("replacement is invalid");
   exactKeys(value.replacement, REPLACEMENT_KEYS, "replacement");
   const version = value.replacement.version;
@@ -88,7 +95,8 @@ export function validateMigrationJournal(value: JsonValue): MigrationJournal {
   // SAFETY: the journal schema requires catalog_sequence to be a number.
   if (!Number.isSafeInteger(catalogSequence as number) || (catalogSequence as number) < 0)
     fail("replacement is invalid");
-  if (value.phase !== "prepared" && value.phase !== "committed") fail("phase is invalid");
+  if (value.phase !== "prepared" && value.phase !== "finalizing" && value.phase !== "committed")
+    fail("phase is invalid");
   if (value.grant_policy !== "reconsent") fail("grant_policy is invalid");
   if (
     value.records_policy !== "opaque-preserve" &&
@@ -96,9 +104,8 @@ export function validateMigrationJournal(value: JsonValue): MigrationJournal {
   ) {
     fail("records_policy is invalid");
   }
-  const phase = value.phase;
-  const recordsPolicy = value.records_policy;
-  // SAFETY: the literal checks above establish the domain values used below.
+  const phase = value.phase,
+    recordsPolicy = value.records_policy;
   return {
     schema_version: 1,
     target_id: targetId,
@@ -106,14 +113,14 @@ export function validateMigrationJournal(value: JsonValue): MigrationJournal {
     replacement: {
       version,
       sha256: String(value.replacement.sha256),
-      catalog_sequence: catalogSequence as number,
+      catalog_sequence: Number(catalogSequence),
     },
     phase,
     grant_policy: "reconsent",
     records_policy: recordsPolicy,
+    grant_transaction_token: grantTransactionToken,
   };
 }
-
 export function migrationJournalPath(dataDir: string, canonicalId: CanonicalId): string {
   if (!path.isAbsolute(dataDir) || !TARGETS.has(canonicalId)) fail("journal path is invalid");
   return path.join(path.resolve(dataDir), "legacy-migrations", "v1", canonicalId, "journal.json");
@@ -129,7 +136,9 @@ export function isLegacyLaunchBlocked(dataDir: string, id: string): boolean {
     ) as JsonValue;
     const journal = validateMigrationJournal(value);
     return (
-      (journal.phase === "prepared" || journal.phase === "committed") &&
+      (journal.phase === "prepared" ||
+        journal.phase === "finalizing" ||
+        journal.phase === "committed") &&
       journal.target_id === target
     );
   } catch (error) {
@@ -143,20 +152,17 @@ export function assertLegacyLaunchAllowed(dataDir: string, id: string): void {
   if (isLegacyLaunchBlocked(dataDir, id))
     throw new Error(`[kepler-shell] legacy package is disabled after migration: ${id}`);
 }
-
 export function isLegacyMigrationActive(dataDir: string, id: string): boolean {
   // SAFETY: the lookup is constrained to the literal legacy allowlist.
   const target = LEGACY_TO_CANONICAL[id as keyof typeof LEGACY_TO_CANONICAL];
   if (!target) return false;
   return ACTIVE_MIGRATIONS.has(migrationJournalPath(dataDir, target));
 }
-
 export function legacyMigrationTarget(id: string): CanonicalId | null {
   // SAFETY: the lookup is constrained to the literal legacy allowlist.
   const target = LEGACY_TO_CANONICAL[id as keyof typeof LEGACY_TO_CANONICAL];
   return target ?? null;
 }
-
 export async function withLegacyMigrationLock<T>(
   dataDir: string,
   canonicalId: CanonicalId,
@@ -171,7 +177,6 @@ export async function withLegacyMigrationLock<T>(
     ACTIVE_MIGRATIONS.delete(key);
   }
 }
-
 async function durableWrite(filePath: string, bytes: Buffer): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
   const temp = `${filePath}.${process.pid}.tmp`;
@@ -184,7 +189,6 @@ async function durableWrite(filePath: string, bytes: Buffer): Promise<void> {
   }
   await rename(temp, filePath);
 }
-
 export async function writeMigrationJournal(
   dataDir: string,
   journal: MigrationJournal,
@@ -193,7 +197,6 @@ export async function writeMigrationJournal(
   const filePath = migrationJournalPath(dataDir, valid.target_id);
   await durableWrite(filePath, Buffer.from(`${JSON.stringify(valid, null, 2)}\n`, "utf8"));
 }
-
 export async function readMigrationJournal(
   dataDir: string,
   canonicalId: CanonicalId,
@@ -207,7 +210,6 @@ export async function readMigrationJournal(
     throw error;
   }
 }
-
 export async function recoverPreparedMigration(
   dataDir: string,
   canonicalId: CanonicalId,
@@ -218,14 +220,8 @@ export async function recoverPreparedMigration(
   await restoreBefore();
   const journalPath = migrationJournalPath(dataDir, canonicalId);
   await rm(journalPath, { force: true });
-  await rm(migrationFinalizationPath(dataDir, canonicalId), { force: true });
   return true;
 }
-
-export function migrationFinalizationPath(dataDir: string, canonicalId: CanonicalId): string {
-  return `${migrationJournalPath(dataDir, canonicalId)}.finalizing`;
-}
-
 export async function migrationJournalExists(
   dataDir: string,
   canonicalId: CanonicalId,
@@ -238,7 +234,6 @@ export async function migrationJournalExists(
     throw error;
   }
 }
-
 export interface LegacyMigrationHost {
   dataDir: string;
   journal: MigrationJournal;
@@ -246,13 +241,12 @@ export interface LegacyMigrationHost {
   stopAffected: () => Promise<void>;
   snapshotBefore: () => Promise<void>;
   stageDestination: () => Promise<void>;
-  revokeLegacyGrants: () => Promise<void>;
+  revokeLegacyGrants: () => Promise<string | null>;
   commitLegacyGrants?: () => Promise<void>;
   activateCanonical: () => Promise<void>;
   restoreBefore: () => Promise<void>;
   writeJournal?: (journal: MigrationJournal) => Promise<void>;
 }
-
 export async function runLegacyMigration(
   host: LegacyMigrationHost,
 ): Promise<"committed" | "pending" | "recovered"> {
@@ -262,8 +256,9 @@ export async function runLegacyMigration(
     await recoverPreparedMigration(host.dataDir, host.journal.target_id, host.restoreBefore);
     return "recovered";
   }
+  if (current?.phase === "finalizing")
+    throw new Error("finalizing migration must be recovered before rerun");
   if (!(await host.verifyReplacement())) return "pending";
-
   let recoveryRequired = false;
   const write =
     host.writeJournal ??
@@ -273,18 +268,21 @@ export async function runLegacyMigration(
     await host.stopAffected();
     await host.snapshotBefore();
     await host.stageDestination();
-    await write({ ...host.journal, phase: "prepared" });
-    await host.revokeLegacyGrants();
+    const grantTransactionToken = await host.revokeLegacyGrants();
+    const preparedJournal: MigrationJournal = {
+      ...host.journal,
+      phase: "prepared",
+      grant_transaction_token: grantTransactionToken,
+    };
+    await write(preparedJournal);
     await host.activateCanonical();
     await testMigrationBarrier("prepared", host.journal.target_id);
-    await durableWrite(
-      migrationFinalizationPath(host.dataDir, host.journal.target_id),
-      Buffer.from("finalizing\n", "utf8"),
-    );
+    const finalizingJournal: MigrationJournal = { ...preparedJournal, phase: "finalizing" };
+    await write(finalizingJournal);
+    await testMigrationBarrier("finalizing", host.journal.target_id);
     await host.commitLegacyGrants?.();
-    await write({ ...host.journal, phase: "committed" });
+    await write({ ...finalizingJournal, phase: "committed" });
     await testMigrationBarrier("committed", host.journal.target_id);
-    await rm(migrationFinalizationPath(host.dataDir, host.journal.target_id), { force: true });
     return "committed";
   } catch (error) {
     if (recoveryRequired) {

@@ -3,7 +3,7 @@ import path from "node:path";
 import { durableTestWrite } from "./test-migration-io";
 
 export async function testMigrationBarrier(
-  phase: "prepared" | "committed",
+  phase: "prepared" | "finalizing" | "committed",
   targetId: string,
 ): Promise<void> {
   const marker = process.env.KOSMOS_TEST_MIGRATION_BARRIER;

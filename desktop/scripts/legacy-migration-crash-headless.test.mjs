@@ -88,13 +88,24 @@ async function runCase(dataDir, phase, recoveryOnly, skipSetup) {
   const barrier = path.join(dataDir, `crash-barrier-${phase}-${randomUUID()}`);
   const coordinator = runCoordinator(dataDir, barrier, phase, false, skipSetup);
   await waitFor(coordinator.barrier);
+  const transactionBeforeRecovery =
+    phase === "prepared" ? await legacyGrantTransactions(dataDir) : undefined;
+  const journalBeforeRecovery =
+    phase === "prepared"
+      ? JSON.parse(
+          await readFile(
+            path.join(dataDir, "legacy-migrations", "v1", "com.kosmos.arcadia", "journal.json"),
+            "utf8",
+          ),
+        )
+      : undefined;
   coordinator.child.kill();
   await waitForExit(coordinator.child, true);
   if (phase === "prepared" && !isLegacyLaunchBlocked(dataDir, "arcadia"))
     throw new Error("prepared crash did not block legacy launch before recovery");
   const recovery = runCoordinator(dataDir, `${barrier}.unused`, "", recoveryOnly, true);
   await waitForExit(recovery.child);
-  return dataDir;
+  return { dataDir, transactionBeforeRecovery, journalBeforeRecovery };
 }
 
 async function packageState(dataDir) {
@@ -118,6 +129,26 @@ async function packageStatePending(dataDir) {
 async function grantState(dataDir) {
   return JSON.stringify(
     JSON.parse(await readFile(path.join(dataDir, "grant-authority.json"), "utf8")),
+  );
+}
+
+async function legacyGrantTransactions(dataDir) {
+  return JSON.parse(await readFile(path.join(dataDir, "legacy-grant-transactions.json"), "utf8"));
+}
+
+async function packageStateSnapshot(dataDir) {
+  return JSON.parse(
+    await readFile(
+      path.join(
+        dataDir,
+        "legacy-migrations",
+        "v1",
+        "com.kosmos.arcadia",
+        "before",
+        "package-state.json",
+      ),
+      "utf8",
+    ),
   );
 }
 
@@ -154,7 +185,34 @@ try {
   await writeFile(path.join(dataDir, "grant-authority.json"), `${JSON.stringify(grantFixture)}\n`);
   const running = await startBackend(dataDir);
   const grantsBefore = await grantState(dataDir);
-  const preparedDir = await runCase(dataDir, "prepared", true, false);
+  const preparedRun = await runCase(dataDir, "prepared", true, false);
+  const preparedDir = preparedRun.dataDir;
+  const transactionsBeforeRecovery = preparedRun.transactionBeforeRecovery;
+  if (
+    !transactionsBeforeRecovery ||
+    transactionsBeforeRecovery.length !== 1 ||
+    transactionsBeforeRecovery[0].state !== "active"
+  )
+    throw new Error("prepared crash did not persist its exact grant transaction");
+  if (
+    preparedRun.journalBeforeRecovery.grant_transaction_token !==
+    transactionsBeforeRecovery[0].token
+  )
+    throw new Error("prepared crash journal lost the exact grant transaction token");
+  const transactionsAfterRecovery = await legacyGrantTransactions(preparedDir);
+  if (
+    transactionsAfterRecovery.length !== 1 ||
+    transactionsAfterRecovery[0].state !== "restored" ||
+    transactionsAfterRecovery[0].token !== transactionsBeforeRecovery[0].token
+  )
+    throw new Error("prepared crash did not roll back its exact grant transaction");
+  const restoredToken = transactionsAfterRecovery[0].token;
+  if (
+    !restoredToken ||
+    JSON.stringify(transactionsAfterRecovery[0].records) !==
+      JSON.stringify(transactionsBeforeRecovery[0].records)
+  )
+    throw new Error("prepared crash lost the exact grant transaction token");
   if (
     await exists(
       path.join(preparedDir, "legacy-migrations", "v1", "com.kosmos.arcadia", "journal.json"),
@@ -170,13 +228,37 @@ try {
     throw new Error("prepared crash recovery lost unknown settings");
   if ((await grantState(preparedDir)) !== grantsBefore)
     throw new Error("prepared crash recovery did not restore grants");
+  const packageRowsAfterRecovery = await packageState(preparedDir);
+  const packageSnapshot = await packageStateSnapshot(preparedDir);
+  if (
+    JSON.stringify(
+      packageRowsAfterRecovery.map(({ version, enabled }) => ({ version, enabled })),
+    ) !== JSON.stringify(packageSnapshot)
+  )
+    throw new Error("prepared crash recovery did not restore package state");
   if (await packageStatePending(preparedDir))
     throw new Error("prepared crash recovery left package-state.pending");
   const preparedActive = (await packageState(preparedDir)).filter((row) => row.enabled === true);
   if (preparedActive.length !== 1 || preparedActive[0].version !== "0.1.8")
     throw new Error("prepared crash recovery did not restore worker state");
 
-  const committedDir = await runCase(dataDir, "committed", false, true);
+  const recoveryAgain = runCoordinator(dataDir, `${randomUUID()}.unused`, "", true, true);
+  await waitForExit(recoveryAgain.child);
+  const transactionsAfterRetry = await legacyGrantTransactions(preparedDir);
+  if (JSON.stringify(transactionsAfterRetry) !== JSON.stringify(transactionsAfterRecovery))
+    throw new Error(`idempotent recovery changed grant transaction ${restoredToken}`);
+  if ((await grantState(preparedDir)) !== grantsBefore)
+    throw new Error("idempotent recovery changed restored grants");
+  if (await packageStatePending(preparedDir))
+    throw new Error("idempotent recovery recreated package-state.pending");
+  if (
+    await exists(
+      path.join(preparedDir, "legacy-migrations", "v1", "com.kosmos.arcadia", "journal.json"),
+    )
+  )
+    throw new Error("idempotent recovery recreated the migration journal");
+
+  const committedDir = (await runCase(dataDir, "committed", false, true)).dataDir;
   const journal = JSON.parse(
     await readFile(
       path.join(committedDir, "legacy-migrations", "v1", "com.kosmos.arcadia", "journal.json"),
@@ -190,12 +272,6 @@ try {
   if (active.length !== 1) throw new Error("committed recovery did not leave one active worker");
   if (await packageStatePending(committedDir))
     throw new Error("committed recovery left package-state.pending");
-  if (
-    await exists(
-      `${path.join(committedDir, "legacy-migrations", "v1", "com.kosmos.arcadia", "journal.json")}.finalizing`,
-    )
-  )
-    throw new Error("committed recovery left finalizing marker");
   console.log("headless migration crash cases passed: prepared rollback and committed restart");
   await stopBackend(running);
 } finally {
