@@ -15,7 +15,10 @@ use sha2::{Digest, Sha256};
 use std::{
     io::Write,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 use tempfile::TempDir;
 use zip::{write::FileOptions, ZipWriter};
@@ -27,6 +30,7 @@ const WORKER_ENTRYPOINT: &str = "worker/dictation-worker.exe";
 #[derive(Clone, Default)]
 struct SyntheticCapabilities {
     calls: Arc<Mutex<Vec<(String, Value)>>>,
+    fail: Arc<AtomicBool>,
 }
 
 #[async_trait]
@@ -36,6 +40,9 @@ impl ArkRequestExecutor for SyntheticCapabilities {
             .lock()
             .unwrap()
             .push((operation.to_owned(), params.clone()));
+        if self.fail.load(Ordering::Acquire) {
+            return Err("synthetic-failure");
+        }
         Ok(match operation {
             "dictation.window.foreground" => json!({"windowId":"window-1"}),
             "dictation.capture.start" => json!({"captureId":"capture-1"}),
@@ -221,6 +228,36 @@ async fn compiled_dictation_worker_round_trips_engine_capabilities() {
     );
     assert_eq!(calls[3].1["delivery"], "text_only");
     assert_eq!(calls[4].1["targetWindow"], "window-1");
+
+    capabilities.fail.store(true, Ordering::Release);
+    assert_eq!(
+        supervisor
+            .invoke(
+                PACKAGE_ID,
+                VERSION,
+                "dictation.trigger",
+                json!({ "kind": "ptt", "phase": "down" })
+            )
+            .await,
+        Err("unavailable")
+    );
+    assert_eq!(
+        supervisor.health(PACKAGE_ID, VERSION).state,
+        WorkerState::Running
+    );
+    capabilities.fail.store(false, Ordering::Release);
+    assert_eq!(
+        supervisor
+            .invoke(
+                PACKAGE_ID,
+                VERSION,
+                "dictation.trigger",
+                json!({ "kind": "ptt", "phase": "down" })
+            )
+            .await
+            .expect("worker recovery result")["state"],
+        "capturing"
+    );
 
     supervisor
         .stop(PACKAGE_ID, VERSION)
