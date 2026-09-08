@@ -42,3 +42,33 @@ aligned the Store listings with Package Index catalog18.
 - `cargo test --manifest-path packages/ark-markdown-bridge/Cargo.toml`:
   worker/unit/contract suites `11/11`.
 
+## Published Memoria crash/restart follow-up — 2026-09-08
+
+The published package defect found against catalog18 was fixed in Memoria
+`v0.6.7` (merged PR #12, `e04ebd8bc3dab07956289ad23a257fc76a285194`). The
+release archive is immutable: SHA-256
+`d1b5f39c6f06b2b6a760e27ed7ece49f3d8d51079d8901f8f1c0c080737c9023`, size
+`2886184`.
+
+Package Index PR #36 was merged as `833c70ece4ae709fc8a13788fb19a9b50cb5e700`
+and the production `catalog-19` workflow passed (`34260584066`). The signed
+catalog asset SHA-256 is
+`fbfc5853e75ec0f2f45cdc4ef7790ebdc217cf658fb91c166bec5fd8b0baa265`.
+
+Exact command:
+
+`bun run --cwd host e2e first-party-memoria-import-crash.spec.ts --workers=1`
+
+The test used the v0.9.22 source Host with real contextBridge IPC, production
+catalog19/signatures, published Memoria 0.6.7, and the packaged v0.1.2 Engine
+and ARK binaries from Desktop v0.9.22. `packages.trust_status`,
+`catalog_apply`, `install`, and `set_enabled` all returned `ok=true`; the
+import marker was reached, the Engine was crashed at the durable-step boundary,
+Host and Engine restarted, and the baseline entry set was restored. Result:
+`PASS`, 1/1, 21.7s, with temporary data and process cleanup complete.
+
+The exact packaged backend inputs were Engine SHA-256
+`76644e8625d19cfeea1811ac0e6cab50fb0733009e388cd245673386f9aebb9d` and ARK
+SHA-256 `266b74a334337812fcabd82cb30eceee98c857a2abb9dd2a1039a99b9bb036d6`.
+The harness timeout-only follow-up is Cortex commit `69bed8d75f73a17ed77af83fb3ac0034d0d77e27`
+(PR #51); no product/runtime release bytes changed.

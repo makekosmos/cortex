@@ -39,6 +39,14 @@ Captured 2026-09-08 against merged Core PR #76 at
   `f49ee76f44d3f3aef12829ba8e1841652e6ce1f6f2347c467782f79498922550`;
   Package Index catalog18 asset SHA-256:
   `1e65f56a3d5f6cb382619d4f8211a4dc5a6fdac019eb1c5592b99072a68c633f`.
+- Follow-up published Package Index `catalog-19` release:
+  `https://github.com/makekosmos/package-index/releases/tag/catalog-19`,
+  catalog SHA-256
+  `fbfc5853e75ec0f2f45cdc4ef7790ebdc217cf658fb91c166bec5fd8b0baa265`;
+  Memoria `v0.6.7` release:
+  `https://github.com/makekosmos/memoria/releases/tag/v0.6.7`, archive SHA-256
+  `d1b5f39c6f06b2b6a760e27ed7ece49f3d8d51079d8901f8f1c0c080737c9023`, size
+  `2886184`.
 - Packaged-host acceptance source: `raw-ac10-proof-20260908.md` and
   `raw-windows-headless-20260908.md`.
 - Core RPC fixture source: `0b06342014238244749946bbe3db92d94dfa0868` (Core repository).
@@ -97,7 +105,11 @@ recorded as a pre-existing release-fixture residual outside the AC10 typed
 recovery path.
 
 Signed Memoria crash/restart acceptance on the Desktop `0.9.21` packaged
-candidate: `PASS`, 1/1, 34.7s. This is packaged Windows evidence and does not
+candidate: `PASS`, 1/1, 34.7s. The published follow-up against catalog19 and
+Memoria `0.6.7` also passed `1/1` in `21.7s`, using the v0.9.22 source Host's
+real contextBridge IPC with the packaged v0.1.2 Engine/ARK binaries. It
+verified signed catalog apply/install/enable, the import crash boundary,
+restart, rollback, and cleanup. This remains headless evidence and does not
 close the visual GUI row.
 
 Additional AC1 Windows cross-consumer proof on Cortex
