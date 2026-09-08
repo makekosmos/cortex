@@ -112,8 +112,10 @@ function operationKey(listing: StoreListing) {
 }
 function detailActionState(listing: StoreListing) {
   const installed = installedFor(listing);
-  if (listing.kind === "external-app")
-    return { actionLabel: "Открыть сайт", actionDisabled: false };
+  if (listing.kind === "external-app") {
+    const available = snapshot.value?.state === "fresh";
+    return { actionLabel: available ? "Открыть сайт" : "Недоступно", actionDisabled: !available };
+  }
   if (installed?.kind === "app") return { actionLabel: "Открыть", actionDisabled: false };
   if (installed?.update_version) return { actionLabel: "Обновить", actionDisabled: false };
   return {

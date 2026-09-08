@@ -27,7 +27,10 @@ const icon = computed(() =>
   appIcon(props.listing.id, props.listing.icon_url, props.installed?.icon_path),
 );
 const canOpen = computed(
-  () => props.development || props.listing.kind === "external-app" || props.installed?.kind === "app",
+  () =>
+    props.development ||
+    (props.listing.kind === "external-app" && props.catalogAvailable) ||
+    props.installed?.kind === "app",
 );
 const canInstall = computed(
   () =>
