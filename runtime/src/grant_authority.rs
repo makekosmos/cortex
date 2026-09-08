@@ -85,6 +85,12 @@ pub struct LegacyGrantRevocation {
     pub revoked: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MigrationGrantRestoration {
+    pub snapshot_found: bool,
+    pub restored: usize,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 enum LegacyGrantTransactionState {
@@ -578,43 +584,60 @@ impl GrantAuthorityRegistry {
             .map(|result| result.revoked)
     }
 
-    /// Restore exactly the unrevoked records captured by `token`.
+    /// Restore exactly the records captured by the typed migration snapshot.
     ///
-    /// A current record is changed only when it is byte-for-byte identical to
-    /// the snapshot except for `revoked: true`; missing or otherwise changed
-    /// records fail closed instead of overwriting unrelated state.
-    pub fn restore_legacy_records(&self, token: &str) -> Result<usize, GrantError> {
-        self.restore_legacy_records_with_committed(token, false)
-    }
-
-    /// Roll back a migration that reached its durable finalization marker.
-    /// This is only used by crash recovery before the committed marker exists.
-    pub fn rollback_legacy_records(&self, token: &str) -> Result<usize, GrantError> {
-        self.restore_legacy_records_with_committed(token, true)
-    }
-
-    fn restore_legacy_records_with_committed(
+    /// The source set is part of the request so restart recovery cannot
+    /// restore a token under a different migration. With no token, resolve an
+    /// active snapshot by source set; this covers a crash after grant mutation
+    /// but before the host journal persisted the opaque token.
+    pub fn restore_migration_snapshot(
         &self,
-        token: &str,
-        allow_committed: bool,
-    ) -> Result<usize, GrantError> {
-        Self::validate_transaction_token(token)?;
+        source_ids: &[&str],
+        transaction_token: Option<&str>,
+    ) -> Result<MigrationGrantRestoration, GrantError> {
+        self.validate_legacy_records(source_ids)?;
+        if let Some(token) = transaction_token {
+            Self::validate_transaction_token(token)?;
+        }
         let _transaction_lock = self
             .legacy_transactions
             .lock()
             .unwrap_or_else(|p| p.into_inner());
         let mut transactions = self.load_transactions()?;
-        let transaction = transactions
-            .iter_mut()
-            .find(|transaction| transaction.token == token)
-            .ok_or(GrantError::NotFound)?;
-        match transaction.state {
-            LegacyGrantTransactionState::Restored => return Ok(0),
-            LegacyGrantTransactionState::Committed if !allow_committed => {
-                return Err(GrantError::Invalid)
+        let matches_sources = |transaction: &LegacyGrantTransaction| {
+            transaction
+                .source_ids
+                .iter()
+                .map(String::as_str)
+                .eq(source_ids.iter().copied())
+        };
+        let transaction_index = match transaction_token {
+            Some(token) => transactions
+                .iter()
+                .position(|transaction| transaction.token == token && matches_sources(transaction)),
+            None => transactions.iter().position(|transaction| {
+                transaction.state == LegacyGrantTransactionState::Active
+                    && matches_sources(transaction)
+            }),
+        };
+        let Some(transaction_index) = transaction_index else {
+            if transaction_token.is_some() {
+                return Err(GrantError::NotFound);
             }
-            LegacyGrantTransactionState::Committed => {}
-            LegacyGrantTransactionState::Active => {}
+            return Ok(MigrationGrantRestoration {
+                snapshot_found: false,
+                restored: 0,
+            });
+        };
+        let transaction = &mut transactions[transaction_index];
+        if transaction.state == LegacyGrantTransactionState::Committed {
+            return Err(GrantError::Invalid);
+        }
+        if transaction.state == LegacyGrantTransactionState::Restored {
+            return Ok(MigrationGrantRestoration {
+                snapshot_found: true,
+                restored: 0,
+            });
         }
 
         let mut records = self.load_records()?;
@@ -640,58 +663,10 @@ impl GrantAuthorityRegistry {
         }
         transaction.state = LegacyGrantTransactionState::Restored;
         self.save_transactions(&transactions)?;
-        Ok(restored)
-    }
-
-    /// Resolve the active transaction by its exact allowlisted source set for
-    /// restart recovery; the opaque token never leaves the runtime.
-    pub fn restore_legacy_records_for_sources(
-        &self,
-        source_ids: &[&str],
-    ) -> Result<usize, GrantError> {
-        self.validate_legacy_records(source_ids)?;
-        let token = self
-            .load_transactions()?
-            .into_iter()
-            .find(|transaction| {
-                transaction.state == LegacyGrantTransactionState::Active
-                    && transaction
-                        .source_ids
-                        .iter()
-                        .map(String::as_str)
-                        .eq(source_ids.iter().copied())
-            })
-            .map(|transaction| transaction.token)
-            .unwrap_or_default();
-        if token.is_empty() {
-            return Ok(0);
-        }
-        self.restore_legacy_records(&token)
-    }
-
-    pub fn rollback_legacy_records_for_sources(
-        &self,
-        source_ids: &[&str],
-    ) -> Result<usize, GrantError> {
-        self.validate_legacy_records(source_ids)?;
-        let token = self
-            .load_transactions()?
-            .into_iter()
-            .find(|transaction| {
-                (transaction.state == LegacyGrantTransactionState::Active
-                    || transaction.state == LegacyGrantTransactionState::Committed)
-                    && transaction
-                        .source_ids
-                        .iter()
-                        .map(String::as_str)
-                        .eq(source_ids.iter().copied())
-            })
-            .map(|transaction| transaction.token)
-            .unwrap_or_default();
-        if token.is_empty() {
-            return Ok(0);
-        }
-        self.rollback_legacy_records(&token)
+        Ok(MigrationGrantRestoration {
+            snapshot_found: true,
+            restored,
+        })
     }
 
     /// Mark a transaction successful. Committed transactions cannot be
@@ -1219,7 +1194,13 @@ mod tests {
         assert_eq!(revoked[2]["revoked"], false);
 
         let restarted = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf());
-        assert_eq!(restarted.restore_legacy_records(&token).unwrap(), 1);
+        assert_eq!(
+            restarted
+                .restore_migration_snapshot(&["eden"], Some(&token))
+                .unwrap()
+                .restored,
+            1
+        );
         let restored: serde_json::Value =
             serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         assert_eq!(restored[0]["revoked"], false);
@@ -1227,7 +1208,13 @@ mod tests {
         assert_eq!(restored[1]["revoked"], true);
         assert_eq!(restored[1]["future_marker"], "do-not-resurrect");
         assert_eq!(restored[2]["revoked"], false);
-        assert_eq!(restarted.restore_legacy_records(&token).unwrap(), 0);
+        assert_eq!(
+            restarted
+                .restore_migration_snapshot(&["eden"], Some(&token))
+                .unwrap()
+                .restored,
+            0
+        );
     }
 
     #[test]
@@ -1256,13 +1243,20 @@ mod tests {
         FAIL_PERSIST_AFTER_FSYNC.with(|fail| fail.set(true));
         assert_eq!(
             GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
-                .restore_legacy_records(&token),
+                .restore_migration_snapshot(&["eden"], Some(&token))
+                .map(|result| result.restored),
             Err(GrantError::Persistence)
         );
         FAIL_PERSIST_AFTER_FSYNC.with(|fail| fail.set(false));
 
         let restarted = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf());
-        assert_eq!(restarted.restore_legacy_records(&token).unwrap(), 1);
+        assert_eq!(
+            restarted
+                .restore_migration_snapshot(&["eden"], Some(&token))
+                .unwrap()
+                .restored,
+            1
+        );
         assert_eq!(
             restarted.commit_legacy_records(&token),
             Err(GrantError::Invalid)
@@ -1278,18 +1272,77 @@ mod tests {
             .unwrap();
         assert_eq!(
             GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
-                .restore_legacy_records(&committed_token),
+                .restore_migration_snapshot(&["eden"], Some(&committed_token))
+                .map(|result| result.restored),
             Err(GrantError::Invalid)
-        );
-        assert_eq!(
-            GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
-                .rollback_legacy_records(&committed_token)
-                .unwrap(),
-            1
         );
         let final_records: serde_json::Value =
             serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        assert_eq!(final_records[0]["revoked"], false);
+        assert_eq!(final_records[0]["revoked"], true);
         assert_eq!(final_records[0]["opaque"]["keep"], true);
+    }
+
+    #[test]
+    fn migration_snapshot_resolves_active_transaction_without_persisted_token() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("grant-authority.json");
+        let records = serde_json::json!([{
+            "version": 1,
+            "persistent_grant_id": "eden-grant",
+            "extension_id": "eden",
+            "provenance": "NativeDialog",
+            "exact_file": false,
+            "selected_path": dir.path().to_string_lossy(),
+            "root_identity": {"primary": 1, "secondary": 2},
+            "exact_file_identity": null,
+            "revoked": false
+        }]);
+        fs::write(&path, serde_json::to_vec(&records).unwrap()).unwrap();
+
+        let revoked = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
+            .revoke_legacy_records_transaction(&["eden"])
+            .unwrap();
+        assert_eq!(revoked.revoked, 1);
+        let restarted = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf());
+        let restored = restarted
+            .restore_migration_snapshot(&["eden"], None)
+            .unwrap();
+        assert_eq!(
+            restored,
+            MigrationGrantRestoration {
+                snapshot_found: true,
+                restored: 1
+            }
+        );
+    }
+
+    #[test]
+    fn stale_snapshot_token_cannot_restore_by_source_set() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("grant-authority.json");
+        let records = serde_json::json!([{
+            "version": 1,
+            "persistent_grant_id": "eden-grant",
+            "extension_id": "eden",
+            "provenance": "NativeDialog",
+            "exact_file": false,
+            "selected_path": dir.path().to_string_lossy(),
+            "root_identity": {"primary": 1, "secondary": 2},
+            "exact_file_identity": null,
+            "revoked": false
+        }]);
+        fs::write(&path, serde_json::to_vec(&records).unwrap()).unwrap();
+        GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf())
+            .revoke_legacy_records_transaction(&["eden"])
+            .unwrap();
+
+        let restarted = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf());
+        assert_eq!(
+            restarted.restore_migration_snapshot(&["eden"], Some("stale-token")),
+            Err(GrantError::NotFound)
+        );
+        let persisted: serde_json::Value =
+            serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        assert_eq!(persisted[0]["revoked"], true);
     }
 }

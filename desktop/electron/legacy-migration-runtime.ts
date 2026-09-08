@@ -226,10 +226,13 @@ export function createLegacyMigrationRunner(
       restoreBefore: async () => {
         if (grantRollbackNeeded) {
           await request({
-            operation: "packages.rollback_legacy_grants",
-            params: grantTransactionToken
-              ? { transaction_token: grantTransactionToken }
-              : { source_ids: ids },
+            operation: "packages.restore_migration_snapshot",
+            params: {
+              schema_version: 1,
+              target_id: target,
+              source_ids: ids,
+              transaction_token: grantTransactionToken,
+            },
           });
         }
         await restoreNamespace(dataDir, target);

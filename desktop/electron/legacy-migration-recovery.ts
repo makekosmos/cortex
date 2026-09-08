@@ -11,12 +11,29 @@ import {
   clearPackageStateSnapshotPending,
   packageStateSnapshotPending,
   restorePackageState,
+  type ArkRequest,
   type MigrationRequest,
 } from "./legacy-migration-state";
 
 type NamespaceRestorer = (dataDir: string, target: CanonicalId) => Promise<void>;
 type SourceIdsReader = (dataDir: string, target: CanonicalId) => Promise<string[]>;
 type MigrationClient = Pick<ArkClient, "invokeOperation">;
+
+function migrationSnapshotRequest(journal: {
+  target_id: CanonicalId;
+  source_ids: string[];
+  grant_transaction_token: string | null;
+}): ArkRequest {
+  return {
+    operation: "packages.restore_migration_snapshot",
+    params: {
+      schema_version: 1,
+      target_id: journal.target_id,
+      source_ids: journal.source_ids,
+      transaction_token: journal.grant_transaction_token,
+    },
+  };
+}
 
 export async function recoverLegacyMigrations(
   dataDir: string,
@@ -45,12 +62,7 @@ export async function recoverLegacyMigrations(
       }
       const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
       await recoverPreparedMigration(dataDir, target, async () => {
-        await request({
-          operation: "packages.rollback_legacy_grants",
-          params: journal.grant_transaction_token
-            ? { transaction_token: journal.grant_transaction_token }
-            : { source_ids: journal.source_ids },
-        });
+        await request(migrationSnapshotRequest(journal));
         await restoreNamespace(dataDir, target);
         await restorePackageState(dataDir, target, request);
       });
@@ -61,8 +73,13 @@ export async function recoverLegacyMigrations(
       const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
       const sourceIds = await sourceIdsWithData(dataDir, target);
       await request({
-        operation: "packages.rollback_legacy_grants",
-        params: { source_ids: sourceIds },
+        operation: "packages.restore_migration_snapshot",
+        params: {
+          schema_version: 1,
+          target_id: target,
+          source_ids: sourceIds,
+          transaction_token: null,
+        },
       });
       await restoreNamespace(dataDir, target);
       await restorePackageState(dataDir, target, request);

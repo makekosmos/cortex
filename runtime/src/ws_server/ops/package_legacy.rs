@@ -1,72 +1,87 @@
 use super::*;
 
-pub(crate) fn restore_legacy_grants(
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MigrationSnapshotRequest {
+    schema_version: u32,
+    target_id: String,
+    source_ids: Vec<String>,
+    transaction_token: Option<String>,
+}
+
+fn migration_sources_match_target(target_id: &str, source_ids: &[String]) -> bool {
+    let allowed = match target_id {
+        "com.kosmos.arcadia" => &["arcadia", "arrancador"][..],
+        "com.kosmos.memoria" => &["eden"][..],
+        "com.kosmos.agenda" => &["delphi"][..],
+        _ => return false,
+    };
+    !source_ids.is_empty()
+        && source_ids.iter().all(|id| allowed.contains(&id.as_str()))
+        && source_ids
+            .iter()
+            .enumerate()
+            .all(|(index, id)| !source_ids[..index].contains(id))
+}
+
+pub(crate) fn restore_migration_snapshot(
     subop: &str,
     params: serde_json::Value,
     service: &Arc<PackageService>,
 ) -> LocalResponse {
-    if let Some(token) = params.get("transaction_token").and_then(Value::as_str) {
-        return package_response(
-            subop,
-            service
-                .restore_legacy_grants(token)
-                .map(|restored| serde_json::json!({ "restored": restored })),
-        );
+    let request: MigrationSnapshotRequest =
+        match serde_json::from_value::<MigrationSnapshotRequest>(params) {
+            Ok(request) if request.schema_version == 1 => request,
+            Ok(_) => {
+                return LocalResponse::err("packages.restore_migration_snapshot: invalid-schema")
+            }
+            Err(_) => {
+                return LocalResponse::err("packages.restore_migration_snapshot: invalid-request")
+            }
+        };
+    if !migration_sources_match_target(&request.target_id, &request.source_ids)
+        || request
+            .transaction_token
+            .as_deref()
+            .is_some_and(|token| token.is_empty() || token.len() > 128)
+    {
+        return LocalResponse::err("packages.restore_migration_snapshot: invalid-request");
     }
-    let Some(source_ids) = params.get("source_ids").and_then(Value::as_array) else {
-        return LocalResponse::err("packages.restore_legacy_grants: invalid-request");
-    };
-    let Some(source_ids) = source_ids
-        .iter()
-        .map(Value::as_str)
-        .collect::<Option<Vec<_>>>()
-    else {
-        return LocalResponse::err("packages.restore_legacy_grants: invalid-request");
-    };
-    let source_ids = source_ids
-        .into_iter()
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
     package_response(
         subop,
         service
-            .restore_legacy_grants_for_sources(&source_ids)
-            .map(|restored| serde_json::json!({ "restored": restored })),
+            .restore_migration_snapshot(&request.source_ids, request.transaction_token.as_deref())
+            .map(|result| {
+                serde_json::json!({
+                    "snapshot_found": result.snapshot_found,
+                    "restored": result.restored,
+                })
+            }),
     )
 }
 
-pub(crate) fn rollback_legacy_grants(
-    subop: &str,
-    params: serde_json::Value,
-    service: &Arc<PackageService>,
-) -> LocalResponse {
-    if let Some(token) = params.get("transaction_token").and_then(Value::as_str) {
-        return package_response(
-            subop,
-            service
-                .rollback_legacy_grants(token)
-                .map(|restored| serde_json::json!({ "restored": restored })),
-        );
+#[cfg(test)]
+mod tests {
+    use super::migration_sources_match_target;
+
+    #[test]
+    fn snapshot_source_set_is_typed_and_target_bound() {
+        assert!(migration_sources_match_target(
+            "com.kosmos.arcadia",
+            &["arcadia".into(), "arrancador".into()]
+        ));
+        assert!(migration_sources_match_target(
+            "com.kosmos.arcadia",
+            &["arcadia".into()]
+        ));
+        assert!(!migration_sources_match_target(
+            "com.kosmos.arcadia",
+            &["eden".into()]
+        ));
+        assert!(!migration_sources_match_target("com.kosmos.arcadia", &[]));
+        assert!(!migration_sources_match_target(
+            "com.kosmos.arcadia",
+            &["arcadia".into(), "arcadia".into()]
+        ));
     }
-    let Some(source_ids) = params.get("source_ids").and_then(Value::as_array) else {
-        return LocalResponse::err("packages.rollback_legacy_grants: invalid-request");
-    };
-    let Some(source_ids) = source_ids
-        .iter()
-        .map(Value::as_str)
-        .collect::<Option<Vec<_>>>()
-    else {
-        return LocalResponse::err("packages.rollback_legacy_grants: invalid-request");
-    };
-    package_response(
-        subop,
-        service
-            .rollback_legacy_grants_for_sources(
-                &source_ids
-                    .into_iter()
-                    .map(str::to_owned)
-                    .collect::<Vec<_>>(),
-            )
-            .map(|restored| serde_json::json!({ "restored": restored })),
-    )
 }
