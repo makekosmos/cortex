@@ -158,7 +158,10 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
     init_schema_prerequisites_for_phase3(conn)?;
     migration::migrate_phase3(conn)
         .map(|_| ())
-        .map_err(|error| format!("phase3 migration during init_schema failed: {error:?}"))
+        .map_err(|error| format!("phase3 migration during init_schema failed: {error:?}"))?;
+    migration::retire_legacy_planning_tables(conn)
+        .map(|_| ())
+        .map_err(|error| format!("legacy planning retirement during init_schema failed: {error:?}"))
 }
 
 fn ensure_usage_runtime_ms(conn: &Connection) -> Result<(), String> {

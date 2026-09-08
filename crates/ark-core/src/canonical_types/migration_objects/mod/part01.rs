@@ -143,10 +143,6 @@ pub fn plan_objects(conn: &Connection, _now: &str) -> Result<ObjectPlan, ObjectP
     let mut items = Vec::new();
     let mut blocked_items = Vec::new();
     for r in &records {
-        if matches!(r.source_kind, SourceKind::Native(ref kind) if kind == "areas" || kind == "headings")
-        {
-            continue;
-        }
         if r.canonical_bytes.is_empty() {
             blocked_items.push(BlockedItem {
                 source_kind: r.source_kind.name().into(),
@@ -188,7 +184,19 @@ pub fn plan_objects(conn: &Connection, _now: &str) -> Result<ObjectPlan, ObjectP
             &b.code,
         ))
     });
-    items.sort_by(|a, b| (&a.source_kind, &a.source_id).cmp(&(&b.source_kind, &b.source_id)));
+    // Materialize project parents before heading compatibility links so the
+    // SQLite foreign-key boundary remains valid while preserving deterministic
+    // order for every other source kind.
+    items.sort_by(|a, b| {
+        let rank = |kind: &str| match kind {
+            "areas" => 0,
+            "projects" => 1,
+            "headings" => 2,
+            _ => 3,
+        };
+        (rank(&a.source_kind), &a.source_kind, &a.source_id)
+            .cmp(&(rank(&b.source_kind), &b.source_kind, &b.source_id))
+    });
     Ok(ObjectPlan {
         contract_version: CONTRACT_VERSION.into(),
         source_inventory_hash: inventory_hash(&records)?,

@@ -124,8 +124,16 @@ fn merge_archived_items(
             plan.items.push(item);
         }
     }
-    plan.items
-        .sort_by(|a, b| (&a.source_kind, &a.source_id).cmp(&(&b.source_kind, &b.source_id)));
+    plan.items.sort_by(|a, b| {
+        let rank = |kind: &str| match kind {
+            "areas" => 0,
+            "projects" => 1,
+            "headings" => 2,
+            _ => 3,
+        };
+        (rank(&a.source_kind), &a.source_kind, &a.source_id)
+            .cmp(&(rank(&b.source_kind), &b.source_kind, &b.source_id))
+    });
 }
 
 /// Apply a ready plan under one caller-visible outer savepoint.
@@ -222,6 +230,125 @@ pub fn migrate_phase3_with_options(
                 "ROLLBACK TO SAVEPOINT phase3_migration_outer; RELEASE SAVEPOINT phase3_migration_outer",
             );
             Err(error)
+        }
+    }
+}
+
+/// Retire the two legacy planning tables only after the canonical migration
+/// archived every source row and materialized the same IDs as project objects.
+/// The archive is the rollback source; a count or identity mismatch fails
+/// closed and leaves both legacy tables untouched.
+pub fn retire_legacy_planning_tables(
+    conn: &Connection,
+) -> Result<(usize, usize), MigrationError> {
+    let completed = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='canonical_migration_runs') AND EXISTS(SELECT 1 FROM canonical_migration_runs WHERE contract_version=?1 AND status='completed')",
+            [CONTRACT_VERSION],
+            |row| row.get::<_, bool>(0),
+        )
+        .map_err(|e| MigrationError::Storage(e.to_string()))?;
+    if !completed {
+        return Err(MigrationError::Objects(
+            "legacy planning retirement requires completed migration".into(),
+        ));
+    }
+
+    let table_exists = |table: &str| -> Result<bool, MigrationError> {
+        conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
+            [table],
+            |row| row.get::<_, bool>(0),
+        )
+        .map_err(|e| MigrationError::Storage(e.to_string()))
+    };
+    let mut counts = Vec::new();
+    for (table, source_kind) in [("areas", "native:areas"), ("headings", "native:headings")] {
+        if !table_exists(table)? {
+            counts.push(0usize);
+            continue;
+        }
+        let allowed_columns: &[&str] = match table {
+            "areas" => &["id", "title", "sort_order", "created_at"],
+            "headings" => &["id", "title", "sort_order", "project_id"],
+            _ => &[],
+        };
+        let columns = conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .map_err(|e| MigrationError::Storage(e.to_string()))?
+            .query_map([], |row| row.get::<_, String>(1))
+            .map_err(|e| MigrationError::Storage(e.to_string()))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| MigrationError::Storage(e.to_string()))?;
+        if columns
+            .iter()
+            .any(|column| !allowed_columns.contains(&column.as_str()))
+        {
+            return Err(MigrationError::Objects(format!(
+                "legacy planning table {table} has unmigrated columns"
+            )));
+        }
+        let source_count: i64 = conn
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))
+            .map_err(|e| MigrationError::Storage(e.to_string()))?;
+        let archive_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM canonical_migration_source_archive WHERE contract_version=?1 AND source_kind=?2",
+                params![CONTRACT_VERSION, source_kind],
+                |row| row.get(0),
+            )
+            .map_err(|e| MigrationError::Storage(e.to_string()))?;
+        if source_count != archive_count {
+            return Err(MigrationError::Objects(format!(
+                "legacy planning archive incomplete for {table}: {source_count} source rows, {archive_count} archived"
+            )));
+        }
+        let mut ids = conn
+            .prepare(&format!("SELECT id FROM {table} ORDER BY id"))
+            .map_err(|e| MigrationError::Storage(e.to_string()))?;
+        let rows = ids
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| MigrationError::Storage(e.to_string()))?;
+        for row in rows {
+            let id = row.map_err(|e| MigrationError::Storage(e.to_string()))?;
+            let canonical: Option<(String, String)> = conn
+                .query_row(
+                    "SELECT type_id,type_version FROM objects WHERE id=?1",
+                    [id.as_str()],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .optional()
+                .map_err(|e| MigrationError::Storage(e.to_string()))?;
+            if !matches!(
+                canonical.as_ref(),
+                Some((type_id, version))
+                    if type_id == "com.kosmos.project" && version == "1.0.0"
+            ) {
+                return Err(MigrationError::Objects(format!(
+                    "legacy planning row {table}/{id} has no canonical project"
+                )));
+            }
+        }
+        counts.push(source_count as usize);
+    }
+
+    conn.execute_batch("SAVEPOINT phase9_legacy_planning_retirement")
+        .map_err(|e| MigrationError::Storage(e.to_string()))?;
+    let result = conn.execute_batch(
+        "DROP TABLE IF EXISTS areas;
+         DROP TABLE IF EXISTS headings;",
+    );
+    match result {
+        Ok(()) => {
+            conn.execute_batch("RELEASE SAVEPOINT phase9_legacy_planning_retirement")
+                .map_err(|e| MigrationError::Storage(e.to_string()))?;
+            Ok((counts[0], counts[1]))
+        }
+        Err(error) => {
+            let _ = conn.execute_batch(
+                "ROLLBACK TO SAVEPOINT phase9_legacy_planning_retirement; RELEASE SAVEPOINT phase9_legacy_planning_retirement",
+            );
+            Err(MigrationError::Storage(error.to_string()))
         }
     }
 }

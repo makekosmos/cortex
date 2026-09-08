@@ -386,10 +386,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         | Request::DeleteProject { .. }
         | Request::BatchUpsertTodos { .. }
         | Request::UpsertProject { .. }
-        | Request::UpsertArea { .. }
         | Request::UpsertTag { .. }
-        | Request::UpsertHeading { .. }
-        | Request::DeleteHeading { .. }
         | Request::UpsertTrackedApp { .. }
         | Request::DeleteTrackedApp { .. }) => runtime_legacy::handle(request).await,
 

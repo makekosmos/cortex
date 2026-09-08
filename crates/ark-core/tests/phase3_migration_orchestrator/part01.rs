@@ -75,6 +75,11 @@ fn populated_fixture_reaches_real_orchestrator_and_preserves_source_only_rows() 
     for (id, alias, props) in aliases {
         legacy(&conn, id, alias, props);
     }
+    conn.execute_batch(
+        "CREATE TABLE areas (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+         CREATE TABLE headings (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, project_id TEXT NOT NULL);",
+    )
+    .unwrap();
     conn.execute("INSERT INTO todos(id,title,notes,priority,project_id,tag_ids,checklist_items,created_at) VALUES('todo-native','Todo','n',2,NULL,'[]','[]','2026-01-01T00:00:00Z')", []).unwrap();
     conn.execute("INSERT INTO projects(id,title,notes,status,color_tag,created_at) VALUES('project-native','Project','n','active','green','2026-01-01T00:00:00Z')", []).unwrap();
     conn.execute("INSERT INTO areas(id,title,created_at) VALUES('area-source','Area','2026-01-01T00:00:00Z')", []).unwrap();
@@ -83,7 +88,7 @@ fn populated_fixture_reaches_real_orchestrator_and_preserves_source_only_rows() 
     let report = migrate_phase3(&conn).unwrap();
     assert_eq!(
         (report.migrated, report.quarantined, report.blocked.len()),
-        (11, 1, 0)
+        (13, 1, 0)
     );
     assert_eq!(
         conn.query_row(
@@ -92,13 +97,13 @@ fn populated_fixture_reaches_real_orchestrator_and_preserves_source_only_rows() 
             |r| r.get::<_, i64>(0)
         )
         .unwrap(),
-        12
+        14
     );
     assert_eq!(
         conn.query_row("SELECT COUNT(*) FROM object_links", [], |r| r
             .get::<_, i64>(0))
             .unwrap(),
-        0
+        1
     );
     assert_eq!(
         conn.query_row("SELECT COUNT(*) FROM object_local_state", [], |r| r
@@ -120,7 +125,7 @@ fn populated_fixture_reaches_real_orchestrator_and_preserves_source_only_rows() 
             r.get::<_, i64>(0)
         })
         .unwrap(),
-        12
+        14
     );
     let archive: Vec<(String, String, String, String, String, String, String)> = conn
         .prepare("SELECT legacy_type_id,canonical_type_id,summary_json,versions_json,inbound_aliases_json,source_hash,archived_at FROM legacy_type_definition_archive ORDER BY legacy_type_id")
@@ -160,7 +165,7 @@ fn populated_fixture_reaches_real_orchestrator_and_preserves_source_only_rows() 
         assert!(legacy_id.ends_with("_obj"));
     }
     let rerun = migrate_phase3(&conn).unwrap();
-    assert_eq!(rerun.unchanged, 12);
+    assert_eq!(rerun.unchanged, 14);
     let archive_after: Vec<(String, String, String, String, String, String, String)> = conn
         .prepare("SELECT legacy_type_id,canonical_type_id,summary_json,versions_json,inbound_aliases_json,source_hash,archived_at FROM legacy_type_definition_archive ORDER BY legacy_type_id")
         .unwrap()
@@ -266,4 +271,3 @@ fn registry_fault_rolls_back_archive_registry_and_schema_bytes() {
     assert!(!table_exists(&conn, "legacy_type_definition_archive"));
     assert!(!table_exists(&conn, "canonical_migration_runs"));
 }
-

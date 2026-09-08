@@ -2,12 +2,6 @@
 // Delete helpers (for StorageBackend)
 // ---------------------------------------------------------------------------
 
-pub fn delete_area(conn: &Connection, id: &str) -> Result<(), String> {
-    conn.execute("DELETE FROM areas WHERE id = ?1", params![id])
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
 pub fn delete_tag(conn: &Connection, id: &str) -> Result<(), String> {
     conn.execute("DELETE FROM tags WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;

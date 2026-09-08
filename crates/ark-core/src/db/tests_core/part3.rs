@@ -50,20 +50,6 @@
     }
 
     #[test]
-    fn test_area_crud() {
-        let conn = setup_db();
-        let area = Area {
-            id: "a1".to_string(),
-            title: "Work".to_string(),
-            sort_order: 0,
-            created_at: "2026-01-01T00:00:00.000Z".to_string(),
-        };
-        upsert_area(&conn, &area).unwrap();
-        let data = load_all(&conn).unwrap();
-        assert_eq!(data.areas.len(), 1);
-    }
-
-    #[test]
     fn test_tag_crud() {
         let conn = setup_db();
         let tag = Tag {
@@ -76,24 +62,6 @@
         let data = load_all(&conn).unwrap();
         assert_eq!(data.tags.len(), 1);
         assert_eq!(data.tags[0].color, Some("red".to_string()));
-    }
-
-    #[test]
-    fn test_heading_crud() {
-        let conn = setup_db();
-        let heading = Heading {
-            id: "h1".to_string(),
-            title: "Section 1".to_string(),
-            sort_order: 0,
-            project_id: "p1".to_string(),
-        };
-        upsert_heading(&conn, &heading).unwrap();
-        let data = load_all(&conn).unwrap();
-        assert_eq!(data.headings.len(), 1);
-
-        delete_heading(&conn, "h1").unwrap();
-        let data = load_all(&conn).unwrap();
-        assert_eq!(data.headings.len(), 0);
     }
 
     #[test]

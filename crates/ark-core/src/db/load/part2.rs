@@ -85,26 +85,6 @@ fn load_all_projects(conn: &Connection) -> Result<Vec<Project>, String> {
         .map_err(|e| e.to_string())
 }
 
-fn load_all_areas(conn: &Connection) -> Result<Vec<Area>, String> {
-    let mut stmt = conn
-        .prepare("SELECT id, title, sort_order, created_at FROM areas")
-        .map_err(|e| e.to_string())?;
-
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(Area {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                sort_order: row.get(2)?,
-                created_at: row.get(3)?,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())
-}
-
 fn load_all_tags(conn: &Connection) -> Result<Vec<Tag>, String> {
     let mut stmt = conn
         .prepare("SELECT id, title, color, created_at FROM tags")
@@ -117,26 +97,6 @@ fn load_all_tags(conn: &Connection) -> Result<Vec<Tag>, String> {
                 title: row.get(1)?,
                 color: row.get(2)?,
                 created_at: row.get(3)?,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())
-}
-
-fn load_all_headings(conn: &Connection) -> Result<Vec<Heading>, String> {
-    let mut stmt = conn
-        .prepare("SELECT id, title, sort_order, project_id FROM headings")
-        .map_err(|e| e.to_string())?;
-
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(Heading {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                sort_order: row.get(2)?,
-                project_id: row.get(3)?,
             })
         })
         .map_err(|e| e.to_string())?;
