@@ -200,7 +200,8 @@ export function createLegacyMigrationRunner(
         });
         if (
           !isRecord(result) ||
-          (result.transaction_token !== null && !isString(result.transaction_token))
+          (result.transaction_token !== null &&
+            (!isString(result.transaction_token) || result.transaction_token.length === 0))
         )
           throw new Error("legacy grant transaction response is invalid");
         grantTransactionToken = isString(result.transaction_token)
