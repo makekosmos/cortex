@@ -1,20 +1,20 @@
 {
   "status": "BLOCKED",
   "capturedAt": "2026-09-08",
-  "coreCommit": "3546d301",
+  "coreCommit": "a209355aeee6937e4eb0807441bea72904597780",
   "ac8Commit": "f1e53e486c4b7e18941058f094f28d5cf775e505",
   "ac9Commit": "dfae4a86",
-  "evidenceBundleCommit": "0984a165",
-  "deliveredHead": "dfae4a86",
-  "runtimeMain": "c630b4c77a41e7d47f8db514995455143b93ee16",
+  "evidenceBundleCommit": "a209355aeee6937e4eb0807441bea72904597780",
+  "deliveredHead": "a209355aeee6937e4eb0807441bea72904597780",
+  "runtimeMain": "0956455e80bc2aa5359c4254bfe2971fc361451e",
   "runtimePermissionMerge": "56ba941162bb15ae80644911f323811b4e133c5a",
   "runtimePermissionImplementation": "4540de750d849fe83a25454da003aaa5551d6489",
-  "cortexReleaseRef": "v0.9.21",
-  "desktopVersion": "0.9.21",
-  "desktopBomSha256": "a1b0c75f4f42fcf429ec1927db62f3fe67bbc9cc3d6b97cd1c35e1e2ab5fe46c",
-  "cortexPackagedHostAcceptance": "90a58d6d8474717ab0c7f33b75a9576d448fd54e",
+  "cortexReleaseRef": "desktop-v0.1.1",
+  "desktopVersion": "0.1.1",
+  "desktopBomSha256": "5144c434e8f85dfe55c011843d1eaf7c89a89e19bfb45352fca507e981de873f",
+  "cortexPackagedHostAcceptance": ".agent/tasks/2026-08-14-data-platform-completion/raw-windows-headless-20260908.md",
   "cortexResolverFix": "a43dbe90",
-  "cortexResolverMerge": "c630b4c77a41e7d47f8db514995455143b93ee16",
+  "cortexResolverMerge": "0956455e80bc2aa5359c4254bfe2971fc361451e",
   "cortexAc1AgendaTestHead": "f4d972cd176f03338fe98ea77c4603db63e1594e",
   "ac1AgendaArtifact": ".agent/tasks/2026-08-14-data-platform-completion/raw-ac1-agenda-host-restart-20260907.md",
   "ac1AgendaArtifactSha256": "bdb32ef24e41c8cc62d93bdf9855ae8729c5f08e4b1e0a789977c760aa09daee",
@@ -26,6 +26,9 @@
   "frozenSpecUrl": "https://github.com/makekosmos/core/blob/056c71d585a1af4e3cc7c47eb05dae98f61ef5c8/.agent/tasks/2026-08-14-data-platform-completion/spec.md",
   "deliveryPrUrl": "https://github.com/makekosmos/core/pull/73",
   "historicalPhase9ProofUrl": "https://github.com/makekosmos/core/commit/de9642fda19aa9d4284fb873b05e8024feab3203",
+  "currentWindowsEvidence": ".agent/tasks/2026-08-14-data-platform-completion/raw-windows-headless-20260908.md",
+  "storeCatalogRelease": "https://github.com/makekosmos/store/releases/tag/catalog-17",
+  "packageIndexCatalog": "catalog-18",
   "protocolRetentionGate": {
     "status": "PASS",
     "auditCommit": "07eb1eb5",
@@ -49,10 +52,15 @@
     "clippy": "PASS with 31 existing warnings",
     "strictClippy": "FAIL: 22 existing baseline lint errors",
     "githubCi": "NOT_RUN: jobs were not started because the account billing/spending limit failed",
-    "windowsPackageWorker": "PASS: 11/11",
+    "windowsPackageWorker": "PASS: 12/12",
     "windowsPackageProcess": "PASS: 20/20",
     "cortex2Acceptance": "PASS: 7/7",
     "desktopAuthoritySocket": "PASS: 6/6",
+    "packageWorkerProtocol": "PASS: 8/8",
+    "phase5RuntimeGrants": "PASS: 6/6",
+    "storeCatalogRuntime": "PASS: 12/12",
+    "arkMarkdownBridge": "PASS: package 11/11; runtime 1/1",
+    "packagedHeadlessSmoke": "PASS: catalog sequence18; clean process/package teardown",
     "arcaSdkReconnectContract": "PASS: 3/3",
     "memoriaCrashRestart": "PASS: signed Desktop 0.9.21 packaged candidate, 1/1, 34.7s",
     "phase3Migration": "PASS: 13/13",
@@ -71,20 +79,20 @@
   },
   "acceptance": {
     "AC1": "PASS_WINDOWS_ONLY",
-    "AC2_AC9": "AC2 PASS_WINDOWS_ONLY; AC3_AC7 PARTIAL; AC8 PASS_WINDOWS_ONLY; AC9 PASS_WINDOWS_ONLY (profile projection, owner-bound persistence/revision CAS, and actual two-DB transport matrix PASS)",
-    "AC10": "NOT_RUN",
-    "AC16": "PARTIAL"
+    "AC2_AC9": "AC2 PASS_WINDOWS_ONLY; AC3_AC7 PASS_WINDOWS_ONLY; AC8 PASS_WINDOWS_ONLY; AC9 PASS_WINDOWS_ONLY (profile projection, owner-bound persistence/revision CAS, and actual two-DB transport matrix PASS)",
+    "AC10": "OPEN: cleanup not authorized while planning/rollback consumers remain live",
+    "AC16": "PASS_WINDOWS_ONLY; umbrella blocked only by AC10 and user-deferred non-Windows/visible-GUI rows"
   },
   "phase9": {
     "cleanupAuthorized": false,
     "thirtyDayWindow": "Gate 5 protocol-removal telemetry only",
-    "proofBundle": "PARTIAL: isolated backup/restore/idempotence proof passes; cleanup authorization remains separate",
+    "proofBundle": "PASS: isolated backup/restore/idempotence proof rerun; cleanup authorization remains separate",
     "crossPlatform": "DEFERRED_BY_USER",
     "visualGui": "NOT_RUN",
     "residuals": {
       "AC1": "Windows cross-consumer Engine/Host restart proof is now committed; visual GUI and non-Windows rows remain deferred/not run.",
       "AC10": "NOT_RUN/OPEN: six production behavior guards and 30-day gate pass, but Core planning tables/readers and WS/package rollback remain live. AC1/AC2 compatibility does not override AC10 removal requirement; replacement migration/recovery contract, source guards and reviewed deletion proof are required. cleanupAuthorized remains false.",
-    "AC16": "Independent Docs review passes against final candidate ede4e8c3; final merged Core commit and post-merge issue evidence remain pending."
+      "AC16": "Independent Docs review and final merged Core commit a209355aeee6937e4eb0807441bea72904597780 are pinned; hosted CI unavailable due billing limit."
     }
   }
 }

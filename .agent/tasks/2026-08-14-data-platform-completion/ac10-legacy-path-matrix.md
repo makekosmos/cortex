@@ -1,7 +1,7 @@
 # AC10 Windows legacy-path matrix
 
-Checked 2026-09-07 against Cortex `20fd15a90c3d429dd0f9fef025583f2992ed4862`
-and its clean tested head `f4d972cd176f03338fe98ea77c4603db63e1594e`.
+Checked 2026-09-08 against Cortex `0956455e80bc2aa5359c4254bfe2971fc361451e`
+and Engine release `v0.1.1`.
 
 ## Literal protocol-retention condition
 
@@ -41,11 +41,11 @@ replacement migration protocol is implemented and tested.
 The isolated Phase 9 proof at Core commit `de9642fd` passes backup/reopen,
 integrity/FK, restore, digest stability and idempotent rerun, but it is not a
 proof that the listed legacy paths have been removed. AC10 therefore remains
-`NOT_RUN`/open: all six frozen Windows behaviors and the 30-day condition pass,
+`OPEN`: all six frozen Windows behaviors and the 30-day condition pass,
 but Docs review confirms AC10's explicit removal requirement still applies to
 the retained planning tables/readers and migration rollback handlers. AC1/AC2
 compatibility explains their current use but does not satisfy removal. A
 replacement migration/recovery contract, consumer/source guards and reviewed
 deletion proof are required. Desktop obsolete
 resolver removal is delivered by Cortex PR43
-(`a43dbe90`, merged as `c630b4c77a41e7d47f8db514995455143b93ee16`).
+(`a43dbe90`, carried by Cortex `0956455e80bc2aa5359c4254bfe2971fc361451e`).

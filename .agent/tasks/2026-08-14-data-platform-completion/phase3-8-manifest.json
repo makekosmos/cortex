@@ -18,6 +18,15 @@
     "foreignKeyViolations": 0,
     "canonicalDigest": "c012d55bea98bfebf0dd7e8e56d56f3a900a4afb008a10d5bfe9c4af3696d5f5",
     "rerunDigest": "stable",
-    "cleanupAuthorized": false
+    "cleanupAuthorized": false,
+    "rerunEvidence": "raw-phase9-proof-20260908.md"
+  },
+  "currentDelivery": {
+    "core": "a209355aeee6937e4eb0807441bea72904597780",
+    "cortex": "0956455e80bc2aa5359c4254bfe2971fc361451e",
+    "engine": "desktop-v0.1.1",
+    "packageIndex": "catalog-18",
+    "store": "catalog-17",
+    "windowsHeadlessEvidence": "raw-windows-headless-20260908.md"
   }
 }

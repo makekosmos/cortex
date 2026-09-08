@@ -9,7 +9,15 @@ The exact-head Windows evidence covers Core guards, Cortex Host/process/
 authority targets, the Arca SDK reconnect contract (`3/3`), and signed Agenda
 Host↔Engine restart (`1/1`). Visual GUI and non-Windows rows remain deferred.
 
-## AC10 — NOT_RUN / OPEN
+## AC3–AC7 — PASS_WINDOWS_ONLY
+
+The packaged Windows headless flow and targeted contracts now close the prior
+artifact gaps: v2 install/recovery/uninstall, denied grants and broker fencing,
+Store/Package Index separation and replay checks, Marketplace contracts, and
+bridge identity/collision/round-trip behavior. Exact commands and pins are in
+`raw-windows-headless-20260908.md`.
+
+## AC10 — OPEN (cleanup not authorized)
 
 The six frozen production behaviors are now matrixed. Manifest-v1 grants,
 canonical registration, HTTP/WS parity, Host authority policy, and Engine
@@ -23,11 +31,13 @@ readers/recovery remain necessary but do not override that requirement. A
 replacement migration/recovery contract, consumer/source guards and reviewed
 deletion proof are still required. `cleanupAuthorized` remains false.
 
-## AC16 — PARTIAL
+## AC16 — PASS_WINDOWS_ONLY / umbrella blocked by AC10
 
-Independent Docs verification passes against final candidate `ede4e8c3` and is
-recorded in `docs-independent-review-20260907.md`. AC16 remains partial because PR
-#73 is not merged and the post-merge issue evidence is absent.
+Independent Docs verification and final merged Core commit
+`a209355aeee6937e4eb0807441bea72904597780` are pinned. The umbrella remains
+blocked only by the explicit AC10 deletion contract and user-deferred
+non-Windows/visible-GUI rows; hosted CI was not started because of the account
+billing/spending limit.
 
 ## AC8 / AC9 — current status
 
