@@ -141,8 +141,7 @@ pub(in crate::ws_server) async fn handle_package_op(
                     }),
             )
         }
-        "restore_legacy_grants" => restore_legacy_grants(subop, params, service),
-        "rollback_legacy_grants" => rollback_legacy_grants(subop, params, service),
+        "restore_migration_snapshot" => restore_migration_snapshot(subop, params, service),
         "commit_legacy_grants" => {
             let Some(token) = params.get("transaction_token").and_then(Value::as_str) else {
                 return LocalResponse::err("packages.commit_legacy_grants: invalid-request");
