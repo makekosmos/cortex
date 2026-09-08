@@ -75,6 +75,31 @@ impl SqliteStorageBackend {
         }
 
         let local_vector = remote_vector;
+        let authoritative_object_hlc = |id: &str| {
+            let object_revision = conn
+                .query_row(
+                    "SELECT hlc FROM object_sync_versions WHERE object_id = ?1",
+                    [id],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()
+                .ok()
+                .flatten();
+            let tombstone_revision = conn
+                .query_row(
+                    "SELECT hlc FROM sync_tombstones
+                     WHERE id = ?1 AND entity_type = 'object'",
+                    [id],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()
+                .ok()
+                .flatten();
+            [object_revision, tombstone_revision]
+                .into_iter()
+                .flatten()
+                .max_by(|left, right| HLC::compare_str(left, right))
+        };
         let make_entity = |entity_type: &str, id: &str, data| SyncEntity {
             entity_type: entity_type.to_string(),
             id: id.to_string(),
@@ -82,6 +107,7 @@ impl SqliteStorageBackend {
             hlc: local_vector
                 .get(id)
                 .cloned()
+                .or_else(|| (entity_type == "object").then(|| authoritative_object_hlc(id)).flatten())
                 .unwrap_or_else(|| HLC::now(device_id).to_string()),
             deleted: None,
             origin_device_id: None,
