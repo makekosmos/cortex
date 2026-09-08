@@ -46,9 +46,10 @@ if (!existsSync(bridge)) {
 
 const workspace = process.argv[2] === "--workspace";
 if (workspace) {
-  run(cortex, ["test", "--workspace", "--lib"]);
-  run(cortex, ["test", "--workspace", "--test", "*"]);
-  run(cortex, ["test", "-p", "kepler-backend", "--bins"]);
+  const features = ["--features", "iroh-spike"];
+  run(cortex, ["test", "--workspace", "--lib", ...features]);
+  run(cortex, ["test", "--workspace", "--test", "*", ...features]);
+  run(cortex, ["test", "-p", "kepler-backend", "--bins", ...features]);
 } else {
   run(cortex, ["test", "-p", "kepler-backend", "--lib", ...process.argv.slice(2)]);
 }
