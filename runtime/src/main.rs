@@ -29,13 +29,15 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use kepler_backend::{
     ark_host::{self, ArkHost},
     auth, crash_reporter, db_backup,
+    dictation::DictationHost,
     engine_api::EngineApiServer,
     engine_control::{self, ControlMessage},
     engine_supervisor::{self, ProcessMode},
     lock_file::{self, EngineLockFile, ENGINE_LOCK_FILE_FORMAT_VERSION},
+    manager_api::ManagerState,
     observability::{self, CORRELATION_ID_ENV},
     package_service::PackageService,
-    package_worker_supervisor::PackageWorkerSupervisor,
+    package_worker_supervisor::{EngineCapabilityExecutor, PackageWorkerSupervisor},
     protocol_usage::ProtocolUsageStore,
     protocol_version::{API_VERSION, API_VERSION_CURRENT, PROTOCOL_VERSION},
     singleton::SingletonGuard,
@@ -443,8 +445,16 @@ async fn setup() -> Result<SetupState, DynError> {
     }
     worker_roots.sort();
     worker_roots.dedup();
-    let package_workers =
-        PackageWorkerSupervisor::with_ark(API_VERSION_CURRENT.major.into(), ark.clone());
+    let dictation_host = DictationHost::new(lock_dir.clone());
+    let manager_state = ManagerState::new(lock_dir.clone());
+    let package_workers = PackageWorkerSupervisor::with_ark_executor(
+        API_VERSION_CURRENT.major.into(),
+        Arc::new(EngineCapabilityExecutor::new(
+            ark.clone(),
+            dictation_host.clone(),
+            manager_state.clone(),
+        )),
+    );
     package_service.configure_workers(
         package_workers.clone(),
         worker_roots,
@@ -485,7 +495,7 @@ async fn setup() -> Result<SetupState, DynError> {
     };
     file_index.bind_self();
 
-    let ws = WsServer::bind(
+    let ws = WsServer::bind_with_hosts(
         ark.clone(),
         token.clone(),
         lock_dir.clone(),
@@ -495,6 +505,8 @@ async fn setup() -> Result<SetupState, DynError> {
         protocol_usage.clone(),
         package_service.clone(),
         correlation_id.clone(),
+        dictation_host,
+        manager_state,
     )
     .await?;
     let port = ws.port();

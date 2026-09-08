@@ -108,16 +108,7 @@ pub(super) async fn dispatch(
                 .get("params")
                 .cloned()
                 .unwrap_or(serde_json::Value::Null);
-            let ark = inner.ark.as_ref().ok_or("unavailable")?;
-            let response = ark
-                .request(&operation, params)
-                .await
-                .map_err(|_| "unavailable")?;
-            if response.ok {
-                Ok(response.data)
-            } else {
-                Err("unavailable")
-            }
+            inner.ark_executor.request(&operation, params).await
         }
         WorkerMethod::NetworkFetch => {
             let url = call

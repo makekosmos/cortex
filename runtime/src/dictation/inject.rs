@@ -48,6 +48,7 @@ impl InjectError {
 pub(crate) enum Delivery {
     Pasted,
     ClipboardOnly,
+    TextOnly,
     ClipboardFallback { reason: &'static str },
 }
 
@@ -56,6 +57,7 @@ impl Delivery {
         match self {
             Self::Pasted => "pasted",
             Self::ClipboardOnly => "clipboard_only",
+            Self::TextOnly => "text_only",
             Self::ClipboardFallback { .. } => "clipboard_fallback",
         }
     }
@@ -63,7 +65,7 @@ impl Delivery {
     pub(crate) fn reason(self) -> Option<&'static str> {
         match self {
             Self::ClipboardFallback { reason } => Some(reason),
-            Self::Pasted | Self::ClipboardOnly => None,
+            Self::Pasted | Self::ClipboardOnly | Self::TextOnly => None,
         }
     }
 

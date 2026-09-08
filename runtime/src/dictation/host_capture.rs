@@ -144,15 +144,30 @@ async fn op_capture_stop(params: Value, host: &Arc<DictationHost>) -> DictationR
         return DictationResponse::err("capture.stop: captureId does not match active capture");
     }
     let result = tokio::task::spawn_blocking(move || super::native_capture::stop(session)).await;
-    let _ = op_cancel(host).await;
     match result {
-        Ok(Ok(audio)) => DictationResponse::ok(json!({
-            "audioB64": base64::engine::general_purpose::STANDARD.encode(audio.wav),
-            "format": audio.format,
-            "durationMs": audio.duration_ms
-        })),
-        Ok(Err(error)) => DictationResponse::err(error),
-        Err(error) => DictationResponse::err(format!("capture.stop: {error}")),
+        Ok(Ok(audio)) => {
+            // Keep the foreground capability token alive for the worker's
+            // subsequent speech.transcribe → input.insert_text sequence.
+            super::audio_duck::restore();
+            let mut state = host.state.lock().await;
+            *state = HostState::idle();
+            let snapshot = state.clone();
+            drop(state);
+            host.emit_state(&snapshot).await;
+            DictationResponse::ok(json!({
+                "audioB64": base64::engine::general_purpose::STANDARD.encode(audio.wav),
+                "format": audio.format,
+                "durationMs": audio.duration_ms
+            }))
+        }
+        Ok(Err(error)) => {
+            let _ = op_cancel(host).await;
+            DictationResponse::err(error)
+        }
+        Err(error) => {
+            let _ = op_cancel(host).await;
+            DictationResponse::err(format!("capture.stop: {error}"))
+        }
     }
 }
 
@@ -455,14 +470,26 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
     // Одна inline-попытка — pill показывает «Распознаю…» ~1s в happy-path.
     // На фейле — spawn'им auto-retry в фоне (5/10/20/40s) и сразу возвращаем
     // OK с state=idle, чтобы pill закрылся без перехвата фокуса.
-    let outcome = process_one_attempt(
-        host,
-        &uuid,
-        &api_key,
-        record_seconds,
-        AttemptDelivery::Active,
-    )
-    .await;
+    let outcome = if params.get("delivery").and_then(Value::as_str) == Some("text_only") {
+        process_one_attempt_with_injector(
+            host,
+            &uuid,
+            &api_key,
+            record_seconds,
+            AttemptDelivery::Active,
+            std::sync::Arc::new(TextOnlyInjector),
+        )
+        .await
+    } else {
+        process_one_attempt(
+            host,
+            &uuid,
+            &api_key,
+            record_seconds,
+            AttemptDelivery::Active,
+        )
+        .await
+    };
     match outcome {
         AttemptOutcome::Success {
             text,

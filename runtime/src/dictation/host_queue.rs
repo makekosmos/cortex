@@ -32,6 +32,21 @@ fn resolve_attempt_inject_mode(raw_mode: &str, mock_transcript: Option<&str>) ->
     }
 }
 
+struct TextOnlyInjector;
+
+impl inject::Injector for TextOnlyInjector {
+    fn inject(
+        &self,
+        _text: &str,
+        _mode: InjectMode,
+        _prev_hwnd: Option<isize>,
+    ) -> Result<inject::DeliveryResult, InjectError> {
+        Ok(inject::DeliveryResult {
+            delivery: inject::Delivery::TextOnly,
+        })
+    }
+}
+
 fn emit_contract_transcription(host: &DictationHost, request_id: &str, text: &str) {
     if !host
         .contract_events
