@@ -17,7 +17,7 @@ const result = spawnSync(process.execPath, [path.join(shellRoot, "scripts", "bui
   cwd: shellRoot,
   stdio: "inherit",
   windowsHide: true,
-  env: { ...process.env, KOSMOS_ENGINE_VERSION: version },
+  env: { ...process.env, KOSMOS_ENGINE_RELEASE: "1", KOSMOS_ENGINE_VERSION: version },
 });
 if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1);
 try {
