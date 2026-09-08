@@ -92,6 +92,7 @@ const detail = computed(() => {
       { label: "Каталог обновлён", value: formatDate(snapshot.value?.issued_at) },
     ],
     permissions: permissionSummaries(installedFor(listing)),
+    ...detailActionState(listing),
   };
 });
 function formatBytes(bytes?: number) {
@@ -108,6 +109,17 @@ function formatDate(value?: string) {
 }
 function operationKey(listing: StoreListing) {
   return installKey(listing, installedFor(listing));
+}
+function detailActionState(listing: StoreListing) {
+  const installed = installedFor(listing);
+  if (listing.kind === "external-app")
+    return { actionLabel: "Открыть сайт", actionDisabled: false };
+  if (installed?.kind === "app") return { actionLabel: "Открыть", actionDisabled: false };
+  if (installed?.update_version) return { actionLabel: "Обновить", actionDisabled: false };
+  return {
+    actionLabel: installed ? "Установлено" : "Установить",
+    actionDisabled: Boolean(installed),
+  };
 }
 function isInstalling(listing: StoreListing) {
   return installing.value.has(operationKey(listing));
@@ -159,6 +171,7 @@ function openExternal(listing: StoreListing) {
 }
 function runDetailAction() {
   if (!detail.value) return;
+  const installed = installedFor(detail.value.listing);
   if (detail.value.listing.kind === "external-app") openExternal(detail.value.listing);
   else if (development.value.some((item) => item.id === detail.value!.listing.id))
     void props.client.call(
@@ -166,9 +179,8 @@ function runDetailAction() {
       { package_id: detail.value.listing.id },
       `store-dev-open:${detail.value.listing.id}`,
     );
-  else if (installedFor(detail.value.listing))
-    void openPackage(installedFor(detail.value.listing)!);
-  else void install(detail.value.listing);
+  else if (installed?.kind === "app") void openPackage(installed);
+  else if (!installed?.update_version) void install(detail.value.listing);
 }
 function backToCatalog() {
   selectedListing.value = null;
@@ -195,16 +207,8 @@ onMounted(async () => {
   <section class="stack store-view" aria-label="Маркетплейс">
     <StoreDetail
       v-if="detail"
-      v-bind="{
-        ...detail,
-        actionLabel:
-          detail.listing.kind === 'external-app'
-            ? 'Открыть сайт'
-            : installedFor(detail.listing)
-              ? 'Открыть'
-              : 'Установить',
-        busy: isInstalling(detail.listing),
-      }"
+      v-bind="detail"
+      :busy="isInstalling(detail.listing)"
       @action="runDetailAction"
     />
     <template v-else>
