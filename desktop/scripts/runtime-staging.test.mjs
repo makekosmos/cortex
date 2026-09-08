@@ -24,7 +24,7 @@ test("non-default Cargo runtime is the one mapped into the Windows package", () 
     "kepler-focus-svc",
   ]);
   assert.match(ARK_CORE_REPOSITORY, /^https:\/\/github\.com\/makekosmos\/core\.git$/);
-  assert.equal(ARK_CORE_REVISION, "0b06342014238244749946bbe3db92d94dfa0868");
+  assert.equal(ARK_CORE_REVISION, "ba13c5b5aed364ef1b6704b5e08a98bc1898964a");
 
   const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-runtime-stage-"));
   try {
