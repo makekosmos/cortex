@@ -79,7 +79,19 @@ pub async fn handle_operation(
         "list" => snapshot(data_dir, packages),
         "login_contract" => packages
             .integration_login_contract(provider_id(&params)?)
+            .await
             .map_err(|_| "Интеграция не содержит доверенного сценария входа".to_string()),
+        "login_complete" => {
+            let callback = params
+                .get("callback")
+                .and_then(Value::as_str)
+                .ok_or("Нет результата входа")?;
+            packages
+                .complete_integration_login(provider_id(&params)?, callback)
+                .await
+                .map_err(|_| "Не удалось завершить вход. Начните вход заново.".to_string())?;
+            snapshot(data_dir, packages)
+        }
         "set_credential" => {
             let id = provider_id(&params)?;
             let value = params

@@ -48,6 +48,12 @@ pub struct BridgeWorkerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct IntegrationBootstrapConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_origin: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub site_id: Option<u32>,
     pub settings: Vec<IntegrationSetting>,
     pub values: HashMap<String, String>,
     pub secret_handles: HashMap<String, String>,
@@ -56,6 +62,13 @@ pub struct IntegrationBootstrapConfig {
 }
 impl IntegrationBootstrapConfig {
     pub fn validate(&self) -> Result<(), &'static str> {
+        if self
+            .account_key
+            .as_ref()
+            .is_some_and(|key| key.len() != 64 || !key.bytes().all(|b| b.is_ascii_hexdigit()))
+        {
+            return Err("invalid-account-key");
+        }
         if self.settings.len() > 64
             || self.values.len() > self.settings.len()
             || self.secret_handles.len() > self.settings.len()
@@ -733,6 +746,7 @@ mod tests {
             "schedule": {"interval_seconds": 3600}
         });
         let mut config: IntegrationBootstrapConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(config.account_key, None);
         config.settings[0].required = true;
         config.settings[1].required = true;
         assert!(config.validate().is_ok());
@@ -746,6 +760,9 @@ mod tests {
         .is_err());
 
         let invalid = |values, secret_handles| IntegrationBootstrapConfig {
+            account_key: None,
+            data_origin: None,
+            site_id: None,
             settings: config.settings.clone(),
             values,
             secret_handles,
@@ -768,6 +785,9 @@ mod tests {
         .validate()
         .is_err());
         assert!(IntegrationBootstrapConfig {
+            account_key: None,
+            data_origin: None,
+            site_id: None,
             settings: config.settings.clone(),
             values: HashMap::new(),
             secret_handles: HashMap::new(),
@@ -776,6 +796,9 @@ mod tests {
         .validate()
         .is_err());
         assert!(IntegrationBootstrapConfig {
+            account_key: None,
+            data_origin: None,
+            site_id: None,
             settings: config.settings.clone(),
             values: [("username".into(), "user".into())].into(),
             secret_handles: HashMap::new(),
@@ -788,6 +811,17 @@ mod tests {
                 .validate()
                 .is_err()
         );
+        assert!(IntegrationBootstrapConfig {
+            account_key: Some("not-a-sha256-digest".into()),
+            data_origin: None,
+            site_id: None,
+            settings: config.settings,
+            values: HashMap::new(),
+            secret_handles: HashMap::new(),
+            schedule: None,
+        }
+        .validate()
+        .is_err());
     }
 
     #[test]

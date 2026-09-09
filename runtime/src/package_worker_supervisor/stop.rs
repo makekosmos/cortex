@@ -37,6 +37,13 @@ impl PackageWorkerSupervisor {
                 worker.grant = None;
                 worker.bootstrap_token_hash = None;
             }
+            self.inner
+                .network_responses
+                .close_owner(&calls_dispatch::network_owner(
+                    id,
+                    version,
+                    worker.generation,
+                ));
             (worker.generation, worker.io_keys.clone(), stopped)
         };
         #[cfg(windows)]

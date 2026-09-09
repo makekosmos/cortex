@@ -519,6 +519,7 @@ export const managerOperations = {
   connectWithPairingCode: "connect_with_pairing_code",
   getIntegrations: "integrations.list",
   integrationLoginContract: "integrations.login_contract",
+  integrationLoginComplete: "integrations.login_complete",
   setIntegrationCredential: "integrations.set_credential",
   clearIntegrationCredential: "integrations.clear_credential",
   syncIntegrationNow: "integrations.sync_now",

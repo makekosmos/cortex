@@ -19,8 +19,10 @@ impl PackageService {
         for setting in &integration.settings {
             if setting.kind == crate::package_manifest::IntegrationSettingKind::Secret {
                 clear_package_integration_secret(&package.id, &package.version, &setting.key)?;
+                clear_package_integration_secret(&package.id, &package.version, &format!(":huawei-refresh:{}", setting.key))?;
             }
         }
+        huawei_login::cancel(&package.id, &package.version)?;
         Ok(())
     }
 }

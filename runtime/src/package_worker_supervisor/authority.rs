@@ -18,6 +18,8 @@ pub(super) struct SupervisorInner {
     pub(super) retry_tasks: Arc<TaskRegistry>,
     pub(super) worker_io: Arc<TaskRegistry>,
     pub(super) secrets: PackageWorkerSecretRegistry,
+    pub(super) network_responses: package_worker_broker::SnapshotRegistry,
+    pub(super) network_slots: tokio::sync::Semaphore,
     pub(super) grants: Mutex<Option<Arc<GrantAuthorityRegistry>>>,
     #[cfg(test)]
     pub(super) fail_next_start: std::sync::atomic::AtomicBool,
@@ -164,6 +166,8 @@ impl PackageWorkerSupervisor {
                 retry_tasks: TaskRegistry::owned(256),
                 worker_io: TaskRegistry::owned(256 * 3),
                 secrets: PackageWorkerSecretRegistry::new(),
+                network_responses: package_worker_broker::SnapshotRegistry::network_responses(),
+                network_slots: tokio::sync::Semaphore::new(4),
                 grants: Mutex::new(None),
                 #[cfg(test)]
                 fail_next_start: std::sync::atomic::AtomicBool::new(false),
@@ -187,6 +191,8 @@ impl PackageWorkerSupervisor {
                 retry_tasks: TaskRegistry::owned(256),
                 worker_io: TaskRegistry::owned(256 * 3),
                 secrets: PackageWorkerSecretRegistry::new(),
+                network_responses: package_worker_broker::SnapshotRegistry::network_responses(),
+                network_slots: tokio::sync::Semaphore::new(4),
                 grants: Mutex::new(None),
                 #[cfg(test)]
                 fail_next_start: std::sync::atomic::AtomicBool::new(false),
@@ -209,6 +215,8 @@ impl PackageWorkerSupervisor {
                 retry_tasks: TaskRegistry::owned(256),
                 worker_io: TaskRegistry::owned(256 * 3),
                 secrets: PackageWorkerSecretRegistry::new(),
+                network_responses: package_worker_broker::SnapshotRegistry::network_responses(),
+                network_slots: tokio::sync::Semaphore::new(4),
                 grants: Mutex::new(None),
                 #[cfg(test)]
                 fail_next_start: std::sync::atomic::AtomicBool::new(false),
