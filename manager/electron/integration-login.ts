@@ -2,7 +2,7 @@ import { BrowserWindow, ipcMain, session, type WebContents } from "electron";
 import { rpc } from "./engine-client";
 import { managerOperations as op } from "../src/manager-api";
 import { normalizeIntegrationSnapshot } from "./main-helpers";
-import { encodeTrustedCookieCredential, runIntegrationLogin } from "./integration-login-credential";
+import { encodeTrustedCookieCredential, runIntegrationLogin, waitForHuaweiCallback } from "./integration-login-credential";
 import { browserPartition } from "./browser-settings";
 import { isObject, isString, type Input } from "./manager-contract";
 
@@ -16,6 +16,7 @@ type TrustedLoginContract = {
   completionUrl: string;
   allowedCookieNames: string[];
   secretSetting: string;
+  codeExchange?: "huawei_health";
 };
 
 function waitForCredential(
@@ -86,15 +87,17 @@ function parseTrustedLoginContract(value: Input): TrustedLoginContract | null {
     ? raw.allowedCookieNames.filter(isString).filter((name) => name.length > 0)
     : [];
   const secretSetting = isString(raw.secretSetting) ? raw.secretSetting : "";
+  const codeExchange = raw.codeExchange === "huawei_health" ? "huawei_health" : undefined;
+  if (raw.codeExchange != null && !codeExchange) return null;
   try {
     const start = new URL(startUrl);
     const completion = new URL(completionUrl);
     if (
       !label ||
       start.protocol !== "https:" ||
-      completion.protocol !== "https:" ||
+      (codeExchange ? completionUrl !== "hms://redirect_url" : completion.protocol !== "https:") ||
       !secretSetting ||
-      allowedCookieNames.length === 0
+      (!codeExchange && allowedCookieNames.length === 0)
     )
       return null;
   } catch {
@@ -107,6 +110,7 @@ function parseTrustedLoginContract(value: Input): TrustedLoginContract | null {
     completionUrl,
     allowedCookieNames,
     secretSetting,
+    codeExchange,
   };
 }
 
@@ -177,6 +181,16 @@ async function login(
       };
     const persistent = persistBrowserData();
     const partition = browserPartition(GENERIC_INTEGRATION_PARTITION, persistent);
+    if (contract.codeExchange === "huawei_health") {
+      const win = createLoginWindow(sender, partition, `Вход в ${contract.label}`);
+      try {
+        const callback = await waitForHuaweiCallback(win, contract.startUrl);
+        const result = await rpc(op.integrationLoginComplete, { provider, callback });
+        return result.ok ? { ok: true, data: normalizeIntegrationSnapshot(result.data) } : result;
+      } finally {
+        if (!win.isDestroyed()) win.close();
+      }
+    }
     return await runIntegrationLogin({
       createWindow: () => createLoginWindow(sender, partition, `Вход в ${contract.label}`),
       loadLogin: (win) => win.loadURL(contract.startUrl),

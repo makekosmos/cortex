@@ -8,6 +8,8 @@ pub mod credential_envelope;
 mod credential_target;
 #[path = "integrations/validation.rs"]
 mod validation;
+#[path = "integrations/huawei_login.rs"]
+pub(crate) mod huawei_login;
 
 use secret_store::{
     read_package_integration_secret, save_package_integration_secret,
@@ -60,7 +62,7 @@ impl PackageService {
             .ok_or(PackageError::Invalid)
     }
 
-    pub fn integration_login_contract(&self, id: &str) -> Result<Value, PackageError> {
+    pub async fn integration_login_contract(&self, id: &str) -> Result<Value, PackageError> {
         let package = self.integration_package(id)?;
         let VersionedManifest::V2(manifest) = &package.manifest else {
             return Err(PackageError::Invalid);
@@ -70,16 +72,39 @@ impl PackageService {
             .as_ref()
             .and_then(|integration| integration.login.as_ref())
             .ok_or(PackageError::Invalid)?;
+        let start_url = if login.code_exchange.as_deref() == Some("huawei_health") {
+            huawei_login::begin(&package.id, &package.version).await?
+        } else {
+            login.start_url.clone()
+        };
         Ok(serde_json::json!({
             "provider": package.id,
             "label": manifest.name,
             "login": {
-                "startUrl": login.start_url,
+                "startUrl": start_url,
                 "completionUrl": login.completion_url,
                 "allowedCookieNames": login.allowed_cookie_names,
                 "secretSetting": login.secret_setting,
+                "codeExchange": login.code_exchange,
             }
         }))
+    }
+
+    pub async fn complete_integration_login(&self, id: &str, callback: &str) -> Result<(), PackageError> {
+        let package = self.integration_package(id)?;
+        let VersionedManifest::V2(manifest) = &package.manifest else { return Err(PackageError::Invalid); };
+        let login = manifest.integration.as_ref().and_then(|integration| integration.login.as_ref())
+            .filter(|login| login.code_exchange.as_deref() == Some("huawei_health"))
+            .ok_or(PackageError::Invalid)?;
+        let mut exchanged = huawei_login::exchange(&package.id, &package.version, callback).await?;
+        let _login_lock = huawei_login::lock().await;
+        huawei_login::prepare_commit(&package.id, &package.version, &exchanged)?;
+        let result = if self.integration_package(id)?.version == package.version {
+            self.set_integration_value_unlocked(id, Some(&login.secret_setting), &exchanged.credential).await
+        } else { Err(PackageError::Invalid) };
+        crate::package_worker_secrets::zeroize_secret(&mut exchanged.credential);
+        if result.is_ok() { huawei_login::cancel(&package.id, &package.version)?; }
+        result
     }
 
     fn integration_launch_config(
@@ -193,6 +218,25 @@ impl PackageService {
         setting_key: Option<&str>,
         value: &str,
     ) -> Result<(), PackageError> {
+        let _login_lock = huawei_login::lock().await;
+        if !valid_integration_value(value) { return Err(PackageError::Invalid); }
+        let package = self.integration_package(id)?;
+        if let VersionedManifest::V2(manifest) = &package.manifest {
+            if let Some(integration) = &manifest.integration {
+                if integration.login.as_ref().is_some_and(|login|
+                    login.code_exchange.as_deref() == Some("huawei_health")
+                        && (setting_key == Some(login.secret_setting.as_str())
+                            || (setting_key.is_none() && integration.settings.len() == 1))) {
+                    huawei_login::cancel(&package.id, &package.version)?;
+                }
+            }
+        }
+        self.set_integration_value_unlocked(id, setting_key, value).await
+    }
+
+    async fn set_integration_value_unlocked(
+        &self, id: &str, setting_key: Option<&str>, value: &str,
+    ) -> Result<(), PackageError> {
         let package = self.integration_package(id)?;
         let VersionedManifest::V2(manifest) = &package.manifest else {
             return Err(PackageError::Invalid);
@@ -253,6 +297,7 @@ impl PackageService {
     }
 
     pub async fn clear_integration_values(&self, id: &str) -> Result<(), PackageError> {
+        let _login_lock = huawei_login::lock().await;
         let packages = self
             .store
             .list()?
@@ -271,6 +316,7 @@ impl PackageService {
             return Err(PackageError::Invalid);
         }
         for package in &packages {
+            huawei_login::cancel(&package.id, &package.version)?;
             if package.enabled {
                 self.set_enabled(&package.id, &package.version, false).await?;
             }

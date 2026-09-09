@@ -1,0 +1,10 @@
+__pycache__/
+*.log
+*.jsonl
+*.partial
+.venv/
+session.json
+*.dpapi
+*.lock
+login-probe/
+archive*/

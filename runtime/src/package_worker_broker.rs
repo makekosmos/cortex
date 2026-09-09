@@ -22,6 +22,7 @@ use std::{
 use thiserror::Error;
 const MAX_BYTES: usize = 1024 * 1024;
 const MAX_JSON_BODY: usize = 64 * 1024;
+pub(crate) const MAX_NETWORK_RESPONSE: usize = 32 * 1024 * 1024;
 pub const MAX_DIRECTORY_ENTRIES: usize = 4096;
 const MAX_TEMPFILE_ATTEMPTS: usize = 128;
 static TEMPFILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -251,11 +252,25 @@ pub async fn fetch_with_secret_json(
     secret: Option<SecretRequest<'_>>,
     body: Option<&serde_json::Value>,
 ) -> Result<Vec<u8>, BrokerError> {
+    fetch_with_secret_json_limit(config, raw_url, secret, body, MAX_BYTES).await
+}
+
+pub(crate) async fn fetch_with_secret_json_limit(
+    config: &BrokerConfig,
+    raw_url: &str,
+    secret: Option<SecretRequest<'_>>,
+    body: Option<&serde_json::Value>,
+    limit: usize,
+) -> Result<Vec<u8>, BrokerError> {
+    if limit == 0 || limit > MAX_NETWORK_RESPONSE {
+        return Err(BrokerError::Invalid("invalid response limit".into()));
+    }
     let method = secret
         .as_ref()
         .map(|request| request.injection.request_method())
         .unwrap_or_default();
-    let body = request_body(method, body)?;
+    let injected_body = inject_json_body(body, secret.as_ref())?;
+    let body = request_body(method, injected_body.as_ref().or(body))?;
     let mut url = validate_url(config, raw_url)?;
     for redirect_count in 0..=3 {
         let host = url
@@ -328,17 +343,14 @@ pub async fn fetch_with_secret_json(
                 response.status()
             )));
         }
-        if response
-            .content_length()
-            .is_some_and(|n| n > MAX_BYTES as u64)
-        {
-            return Err(BrokerError::Invalid("response exceeds 1 MiB".into()));
+        if response.content_length().is_some_and(|n| n > limit as u64) {
+            return Err(BrokerError::Invalid("response exceeds limit".into()));
         }
         let mut out = Vec::new();
         let mut stream = response;
         while let Some(chunk) = stream.chunk().await? {
-            if out.len() + chunk.len() > MAX_BYTES {
-                return Err(BrokerError::Invalid("response exceeds 1 MiB".into()));
+            if out.len() + chunk.len() > limit {
+                return Err(BrokerError::Invalid("response exceeds limit".into()));
             }
             out.extend_from_slice(&chunk);
         }
@@ -365,6 +377,46 @@ fn request_body(
     })
 }
 
+fn session_field<'a>(session: &'a serde_json::Value, field: &str) -> Result<&'a str, BrokerError> {
+    session
+        .get(field)
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.is_empty() && value.len() <= 8192)
+        .ok_or_else(|| BrokerError::Invalid("missing or invalid session field".into()))
+}
+
+fn inject_json_body(
+    body: Option<&serde_json::Value>,
+    secret: Option<&SecretRequest<'_>>,
+) -> Result<Option<serde_json::Value>, BrokerError> {
+    let Some(SecretRequest {
+        injection: SecretInjection::Json { body_fields, .. },
+        secret,
+        ..
+    }) = secret
+    else {
+        return Ok(None);
+    };
+    let session: serde_json::Value = serde_json::from_str(secret)
+        .map_err(|_| BrokerError::Invalid("invalid JSON session".into()))?;
+    let mut body = body
+        .and_then(serde_json::Value::as_object)
+        .cloned()
+        .ok_or_else(|| BrokerError::Invalid("JSON session requires an object body".into()))?;
+    for (name, field) in body_fields {
+        if body.contains_key(name) {
+            return Err(BrokerError::Invalid(
+                "body contains reserved session field".into(),
+            ));
+        }
+        body.insert(
+            name.clone(),
+            serde_json::Value::String(session_field(&session, field)?.to_owned()),
+        );
+    }
+    Ok(Some(serde_json::Value::Object(body)))
+}
+
 fn apply_secret(
     request: reqwest::RequestBuilder,
     secret: &SecretRequest<'_>,
@@ -380,6 +432,24 @@ fn apply_secret(
             Ok(request.basic_auth(secret.secret, Some(password)))
         }
         SecretInjection::Query { .. } => Ok(request),
+        SecretInjection::Json {
+            header_fields,
+            headers,
+            ..
+        } => {
+            let session: serde_json::Value = serde_json::from_str(secret.secret)
+                .map_err(|_| BrokerError::Invalid("invalid JSON session".into()))?;
+            let mut request = request;
+            for (name, value) in headers {
+                request = request.header(name, value);
+            }
+            for (name, field) in header_fields {
+                let value = reqwest::header::HeaderValue::from_str(session_field(&session, field)?)
+                    .map_err(|_| BrokerError::Invalid("invalid session header".into()))?;
+                request = request.header(name, value);
+            }
+            Ok(request)
+        }
         SecretInjection::Cookies { .. } => {
             let values: HashMap<String, String> = serde_json::from_str(secret.secret)
                 .map_err(|_| BrokerError::Invalid("invalid secret cookies".into()))?;
@@ -437,12 +507,21 @@ struct SnapshotEntry {
 
 pub struct SnapshotRegistry {
     entries: Mutex<HashMap<String, SnapshotEntry>>,
+    network: bool,
 }
 
 impl SnapshotRegistry {
     pub fn new() -> Self {
         Self {
             entries: Mutex::new(HashMap::new()),
+            network: false,
+        }
+    }
+
+    pub(crate) fn network_responses() -> Self {
+        Self {
+            entries: Mutex::new(HashMap::new()),
+            network: true,
         }
     }
 
@@ -453,20 +532,33 @@ impl SnapshotRegistry {
         _source: &str,
         bytes: Vec<u8>,
     ) -> Result<String, BrokerError> {
-        if bytes.len() > MAX_BYTES.saturating_mul(16) {
+        let limit = if self.network {
+            MAX_NETWORK_RESPONSE
+        } else {
+            MAX_BYTES * 16
+        };
+        if bytes.len() > limit {
             return Err(BrokerError::Invalid("snapshot is too large".into()));
         }
-        let handle = uuid::Uuid::new_v4().to_string();
-        self.entries
+        let mut entries = self
+            .entries
             .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .insert(
-                handle.clone(),
-                SnapshotEntry {
-                    owner: owner.to_owned(),
-                    bytes,
-                },
-            );
+            .unwrap_or_else(|error| error.into_inner());
+        if self.network
+            && (entries.values().any(|entry| entry.owner == owner) || entries.len() >= 4)
+        {
+            return Err(BrokerError::Invalid(
+                "network response capacity exhausted".into(),
+            ));
+        }
+        let handle = uuid::Uuid::new_v4().to_string();
+        entries.insert(
+            handle.clone(),
+            SnapshotEntry {
+                owner: owner.to_owned(),
+                bytes,
+            },
+        );
         Ok(handle)
     }
 
@@ -1295,6 +1387,137 @@ mod tests {
         assert!(validate_url(&cfg, "https://example.net/a").is_err());
         assert!(validate_url(&cfg, "https://localhost/a").is_err());
     }
+    #[test]
+    fn json_session_injection_preserves_worker_body_and_hides_unmapped_fields() {
+        let injection: SecretInjection = serde_json::from_value(serde_json::json!({
+            "kind": "json", "origins": ["https://example.com"],
+            "body_fields": {"token": "accessToken"},
+            "header_fields": {"x-huid": "uid"}, "headers": {"x-version": "test"}
+        }))
+        .unwrap();
+        let secret = SecretRequest {
+            injection: &injection,
+            secret: r#"{"accessToken":"access","uid":"account","refreshToken":"private"}"#,
+            allowed_cookie_names: &[],
+        };
+        let body = serde_json::json!({"version": 42});
+        let injected = inject_json_body(Some(&body), Some(&secret))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            injected,
+            serde_json::json!({"version": 42, "token": "access"})
+        );
+        assert_eq!(body, serde_json::json!({"version": 42}));
+        let bytes = request_body(injection.request_method(), Some(&injected))
+            .unwrap()
+            .unwrap();
+        let request = apply_secret(
+            reqwest::Client::new()
+                .post("https://example.com")
+                .body(bytes),
+            &secret,
+        )
+        .unwrap()
+        .build()
+        .unwrap();
+        assert_eq!(request.headers()["x-huid"], "account");
+        assert_eq!(request.headers()["x-version"], "test");
+        assert!(
+            !String::from_utf8_lossy(request.body().unwrap().as_bytes().unwrap())
+                .contains("private")
+        );
+        assert!(inject_json_body(
+            Some(&serde_json::json!({"token":"override"})),
+            Some(&secret)
+        )
+        .is_err());
+        assert!(inject_json_body(Some(&serde_json::json!([])), Some(&secret)).is_err());
+        let missing = SecretRequest {
+            secret: r#"{"uid":"account"}"#,
+            ..secret
+        };
+        assert!(inject_json_body(Some(&body), Some(&missing)).is_err());
+        let invalid = SecretRequest {
+            secret: r#"{"uid":"bad\r\nheader","accessToken":"a"}"#,
+            ..missing
+        };
+        assert!(
+            apply_secret(reqwest::Client::new().post("https://example.com"), &invalid).is_err()
+        );
+    }
+
+    #[test]
+    fn network_response_buffers_are_bounded_and_owner_scoped() {
+        let responses = SnapshotRegistry::network_responses();
+        let data = vec![42; 25 * 1024 * 1024];
+        let handle = responses
+            .reserve("generation-1", "pkg", "url", data.clone())
+            .unwrap();
+        assert!(responses
+            .reserve("generation-1", "pkg", "url", vec![])
+            .is_err());
+        assert!(responses.chunk(&handle, "generation-2", 0, 1).is_err());
+        assert!(responses.close(&handle, "generation-2").is_err());
+        assert!(responses
+            .chunk(&handle, "generation-1", 0, MAX_SNAPSHOT_CHUNK + 1)
+            .is_err());
+        let mut restored = Vec::new();
+        while restored.len() < data.len() {
+            restored.extend(
+                responses
+                    .chunk(&handle, "generation-1", restored.len(), MAX_SNAPSHOT_CHUNK)
+                    .unwrap(),
+            );
+        }
+        assert_eq!(restored, data);
+        for owner in ["b", "c", "d"] {
+            responses.reserve(owner, "pkg", "url", vec![]).unwrap();
+        }
+        assert!(responses.reserve("e", "pkg", "url", vec![]).is_err());
+        responses.close_owner("generation-1");
+        assert!(responses.chunk(&handle, "generation-1", 0, 1).is_err());
+        assert!(responses.reserve("e", "pkg", "url", vec![]).is_ok());
+        assert!(SnapshotRegistry::new()
+            .reserve("a", "pkg", "url", data)
+            .is_err());
+    }
+
+    #[cfg(feature = "package-worker-fixture")]
+    #[tokio::test]
+    async fn network_response_http_limits_reject_oversized_content() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        for limit in [MAX_BYTES, MAX_NETWORK_RESPONSE] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let origin = format!("http://{}", listener.local_addr().unwrap());
+            let server = tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = [0; 4096];
+                socket.read(&mut request).await.unwrap();
+                socket
+                    .write_all(
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            limit + 1
+                        )
+                        .as_bytes(),
+                    )
+                    .await
+                    .unwrap();
+            });
+            let config = BrokerConfig::new([origin.clone()], vec![])
+                .unwrap()
+                .enable_local_test_origin();
+            let error = fetch_with_secret_json_limit(&config, &origin, None, None, limit)
+                .await
+                .unwrap_err();
+            assert!(
+                matches!(error, BrokerError::Invalid(message) if message == "response exceeds limit")
+            );
+            server.await.unwrap();
+        }
+    }
+
     #[test]
     fn secret_injection_is_manifest_bound_and_filters_cookies() {
         let client = reqwest::Client::new();

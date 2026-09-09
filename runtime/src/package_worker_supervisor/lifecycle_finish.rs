@@ -126,6 +126,9 @@ pub(super) async fn finish_inner_until(
         .calls
         .cancel_generation_until(&key.0, &key.1, generation, deadline)
         .await;
+    inner
+        .network_responses
+        .close_owner(&calls_dispatch::network_owner(&key.0, &key.1, generation));
     if !cancel_ok {
         cleanup_ok = false;
     }

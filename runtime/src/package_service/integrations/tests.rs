@@ -163,7 +163,9 @@ async fn clearing_provider_credentials_clears_and_disables_all_versions() {
     save_package_integration_secret("com.kosmos.provider", "2.0.0", "session", "new-secret")
         .unwrap();
 
+    save_package_integration_secret("com.kosmos.provider", "1.0.0", ":huawei-refresh:session", "rotated-secret").unwrap();
     service.clear_integration_values("com.kosmos.provider").await.unwrap();
+    assert!(read_package_integration_secret("com.kosmos.provider", "1.0.0", ":huawei-refresh:session").is_none());
 
     assert!(service.read_integration_settings().values.is_empty());
     assert!(read_package_integration_secret("com.kosmos.provider", "1.0.0", "session").is_none());

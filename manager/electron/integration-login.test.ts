@@ -1,10 +1,33 @@
 import { describe, expect, test } from "bun:test";
+import { EventEmitter } from "node:events";
 import {
   encodeTrustedCookieCredential,
   runIntegrationLogin,
+  waitForHuaweiCallback,
 } from "./integration-login-credential";
 
 describe("Manager integration login flow", () => {
+  test("captures an immediate Huawei redirect before load and removes listeners", async () => {
+    const win = new EventEmitter();
+    const webContents = new EventEmitter();
+    let prevented = false;
+    const callback = "hms://redirect_url?code=example&state=expected";
+    const fake = Object.assign(win, { webContents, loadURL: async () => {
+      webContents.emit("will-redirect", { preventDefault: () => { prevented = true; } }, callback);
+    } });
+    expect(await waitForHuaweiCallback(fake as never, "https://example.com")).toBe(callback);
+    expect(prevented).toBe(true);
+    expect(webContents.listenerCount("will-redirect")).toBe(0);
+    expect(win.listenerCount("closed")).toBe(0);
+  });
+
+  test("Huawei window cancellation rejects and removes navigation listeners", async () => {
+    const win = new EventEmitter();
+    const webContents = new EventEmitter();
+    const fake = Object.assign(win, { webContents, loadURL: async () => { win.emit("closed"); } });
+    await expect(waitForHuaweiCallback(fake as never, "https://example.com")).rejects.toThrow("cancelled");
+    expect(webContents.listenerCount("will-navigate")).toBe(0);
+  });
   test("closes only after Engine persistence and never returns the credential", async () => {
     const events: string[] = [];
     let persisted = "";

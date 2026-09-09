@@ -39,6 +39,14 @@ pub enum SecretInjection {
         origins: Vec<String>,
         parameter: String,
     },
+    Json {
+        origins: Vec<String>,
+        body_fields: BTreeMap<String, String>,
+        #[serde(default)]
+        header_fields: BTreeMap<String, String>,
+        #[serde(default)]
+        headers: BTreeMap<String, String>,
+    },
     Cookies {
         origins: Vec<String>,
         #[serde(default)]
@@ -82,6 +90,28 @@ impl SecretInjection {
                     .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')))
             .then_some(())
             .ok_or(()),
+            Self::Json {
+                origins,
+                body_fields,
+                header_fields,
+                headers,
+            } => (valid_origins(origins)
+                && !body_fields.is_empty()
+                && body_fields.len() <= MAX_FIXED_HEADERS
+                && header_fields.len() + headers.len() <= MAX_FIXED_HEADERS
+                && body_fields
+                    .iter()
+                    .all(|(name, field)| valid_field(name) && valid_field(field))
+                && header_fields.iter().all(|(name, field)| {
+                    valid_header(name, "placeholder")
+                        && valid_field(field)
+                        && !headers.keys().any(|fixed| fixed.eq_ignore_ascii_case(name))
+                })
+                && headers
+                    .iter()
+                    .all(|(name, value)| valid_header(name, value)))
+            .then_some(())
+            .ok_or(()),
             Self::Cookies {
                 origins,
                 headers,
@@ -105,6 +135,7 @@ impl SecretInjection {
             Self::Header { origins, .. }
             | Self::Basic { origins, .. }
             | Self::Query { origins, .. }
+            | Self::Json { origins, .. }
             | Self::Cookies { origins, .. } => origins,
         }
     }
@@ -112,6 +143,7 @@ impl SecretInjection {
     pub(crate) fn request_method(&self) -> IntegrationRequestMethod {
         match self {
             Self::Cookies { method, .. } => *method,
+            Self::Json { .. } => IntegrationRequestMethod::PostJson,
             _ => IntegrationRequestMethod::Get,
         }
     }
@@ -131,6 +163,14 @@ impl SecretInjection {
             _ => None,
         }
     }
+}
+
+fn valid_field(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= MAX_HEADER_NAME
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
 fn valid_header(name: &str, value: &str) -> bool {
