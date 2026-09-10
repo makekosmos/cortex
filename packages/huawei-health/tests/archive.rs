@@ -422,18 +422,19 @@ fn sync_requests_all_confirmed_stream_groups() {
             .map(|key| key["type"].as_u64().unwrap())
             .collect::<Vec<_>>()
     };
-    assert_eq!(
-        ids(&requests[0]),
-        vec![1, 2, 4, 7, 9, 11, 12, 13, 14, 15, 16, 18, 19, 21, 34001, 900000000]
-    );
-    assert_eq!(ids(&requests[1]).len(), 64);
+    assert_eq!(ids(&requests[0]), vec![1, 2, 7, 9, 11, 12, 13, 16, 19]);
+    assert_eq!(ids(&requests[1]).len(), 68);
     assert!(ids(&requests[1]).contains(&10006));
+    for extra in [500021, 500023, 500024, 500026] {
+        assert!(ids(&requests[1]).contains(&extra));
+    }
     assert_eq!(ids(&requests[2]).len(), 39);
     assert!(ids(&requests[2]).contains(&700013));
     let statistics = ids(&requests[3]);
-    assert_eq!(statistics.len(), 62);
+    assert_eq!(statistics.len(), 63);
     assert!(!statistics.contains(&200005));
     assert!(!statistics.contains(&300002));
+    assert!(statistics.contains(&800003));
     assert!(requests[3]["syncKeys"]
         .as_array()
         .unwrap()

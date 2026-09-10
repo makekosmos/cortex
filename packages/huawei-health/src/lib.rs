@@ -13,6 +13,7 @@ pub const DATA_ORIGINS: &[&str] = &[
 pub const TYPE_ID: &str = "com.kosmos.huawei-health.archive";
 pub const MAX_PAGE: usize = 32 * 1024 * 1024;
 const ARCHIVE_CHUNK: usize = 128 * 1024;
+const ARCHIVE_SCHEMA: &str = include_str!("../schemas/archive.schema.json");
 const MAX_DOWNLOAD_CHUNK: usize = 262_144;
 const BUSY_RETRY_DELAYS: &[u64] = &[5, 15, 30];
 // Type IDs from APK 16.1.6.320 assets/dict_config.txt; categories 0 and 1.
@@ -24,6 +25,9 @@ const POINT: &[u64] = &[
     500013, 500012, 500015, 500014, 400018, 400020, 300002, 300003, 300004, 500030, 500044, 500048,
     500050, 500051, 500052, 500055,
 ];
+// Additional point dictionaries from assets/dict_config.json. These are not
+// present in dict_config.txt but return valid point pages for this account.
+const EXTRA_POINT: &[u64] = &[500021, 500023, 500024, 500026];
 const SEQUENCE: &[u64] = &[
     700001, 700014, 700017, 700004, 700019, 700021, 700022, 700009, 700013, 30287, 700015, 700016,
     700018, 30288, 30289, 30291, 30292, 34260, 34266, 34259, 34265, 34228, 700011, 700012, 30290,
@@ -32,9 +36,10 @@ const SEQUENCE: &[u64] = &[
 ];
 // Base streams requested by Huawei's Llhe.a() sync builder, including the
 // three non-dictionary streams that are easy to miss in dict_config.txt.
-const LEGACY: &[u64] = &[
-    1, 2, 4, 7, 9, 11, 12, 13, 14, 15, 16, 18, 19, 21, 34001, 900000000,
-];
+const LEGACY: &[u64] = &[1, 2, 7, 9, 11, 12, 13, 16, 19];
+// Statistics dictionaries use a different endpoint. 800003 (sleep summary)
+// is declared only in dict_config.json and must not be sent to the point API.
+const EXTRA_STATISTICS: &[u64] = &[800003];
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
@@ -229,7 +234,7 @@ where
                 "typeId":TYPE_ID,"title":"Huawei Health — архив",
                 "contentJson":{"encoding":"base64","bytes":STANDARD.encode(chunk)},
                 "propsJson":{"source":"huawei-health","account":self.account,"stream":stream,
-                    "cursor":cursor,"sha256":digest,"chunk":index,"chunks":raw.len().div_ceil(ARCHIVE_CHUNK),"size":raw.len()},
+                    "cursor":cursor,"sha256":digest,"chunk":index,"chunks":raw.len().div_ceil(ARCHIVE_CHUNK),"size":raw.len(),"schemaVersion":1},
                 "createdAt":now,"updatedAt":now,"deletedAt":null
             }}))?;
         }
@@ -286,13 +291,18 @@ where
         }
         let now = Utc::now().to_rfc3339();
         self.write("upsert_object_type", json!({"object_type":{"id":TYPE_ID,"name":"Архив Huawei Health",
-            "schemaJson":"{}","uiSchemaJson":"{}","createdAt":now,"updatedAt":now,"systemLocked":false}}))?;
-        for (group, kinds) in [
+            "schemaJson":ARCHIVE_SCHEMA,"uiSchemaJson":"{}","createdAt":now,"updatedAt":now,"systemLocked":false}}))?;
+        let mut point_kinds = POINT.to_vec();
+        point_kinds.extend_from_slice(EXTRA_POINT);
+        let mut statistics_kinds = POINT.to_vec();
+        statistics_kinds.extend_from_slice(EXTRA_STATISTICS);
+        let groups: [(&str, &[u64]); 4] = [
             ("legacy", LEGACY),
-            ("point", POINT),
+            ("point", point_kinds.as_slice()),
             ("sequence", SEQUENCE),
-            ("statistics", POINT),
-        ] {
+            ("statistics", statistics_kinds.as_slice()),
+        ];
+        for (group, kinds) in groups {
             let kinds: Vec<_> = kinds
                 .iter()
                 .copied()
