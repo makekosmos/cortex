@@ -51,9 +51,16 @@ test("non-default Cargo runtime is the one mapped into the Windows package", () 
     const runtimeMapping = packageJson.build.win.extraResources.find(
       (entry) => entry.to === "engine-manifest.json",
     );
+    const engineArchiveMapping = packageJson.build.win.extraResources.find(
+      (entry) => entry.to === "Kosmos Engine.zip",
+    );
     assert.deepEqual(runtimeMapping, {
       from: ".tmp/engine.next/engine-manifest.json",
       to: "engine-manifest.json",
+    });
+    assert.deepEqual(engineArchiveMapping, {
+      from: ".tmp/engine.next/Kosmos-Engine.zip",
+      to: "Kosmos Engine.zip",
     });
     assert.equal(
       readFileSync(path.join(stageDir, "kepler-backend.exe"), "utf8"),

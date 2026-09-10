@@ -33,7 +33,7 @@ const emit = defineEmits<{
   <header class="store-marketplace-header">
     <div>
       <p class="eyebrow">Marketplace</p>
-      <h1>Приложения и интеграции</h1>
+      <h1>Приложения</h1>
     </div>
     <nav class="store-tabs" aria-label="Разделы Marketplace">
       <button
@@ -52,12 +52,6 @@ const emit = defineEmits<{
       >Платформа<select v-model="filters.platform">
         <option value="all">Все</option>
         <option v-for="value in options.platforms" :key="value" :value="value">{{ value }}</option>
-      </select></label
-    >
-    <label
-      >Тип<select v-model="filters.kind">
-        <option value="all">Все</option>
-        <option v-for="value in options.kinds" :key="value" :value="value">{{ value }}</option>
       </select></label
     >
     <label

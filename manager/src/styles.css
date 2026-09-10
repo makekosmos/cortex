@@ -415,8 +415,8 @@ summary:focus-visible {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: contain;
-  border-radius: 0;
+  object-fit: cover;
+  border-radius: var(--radius-input);
 }
 .store-card-icon-fallback {
   color: var(--muted-foreground);

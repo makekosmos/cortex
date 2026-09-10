@@ -41,12 +41,20 @@ def main(token_file, apk, destination, since=None):
         previous_stream(since, '_validate', account)
     with zipfile.ZipFile(apk) as source:
         dictionary = json.loads(source.read('assets/dict_config.txt'))['dictTypes']
+        extra = (json.loads(source.read('assets/dict_config.json'))['dictTypes']
+                 if 'assets/dict_config.json' in source.namelist() else [])
+    point_types = [x['typeId'] for x in dictionary if x.get('category') == 0]
+    point_types += [x['typeId'] for x in extra
+                    if x['typeId'] in (500021, 500023, 500024, 500026)]
+    statistics_types = [x['typeId'] for x in dictionary
+                        if x.get('category') == 0 and x['typeId'] not in (200005, 300002)]
+    if extra:
+        statistics_types.append(800003)
     groups = [
-        ('legacy', [1, 2, 4, 7, 9, 11, 12, 13, 14, 15, 16, 18, 19, 21, 34001, 900000000]),
-        ('point', [x['typeId'] for x in dictionary if x.get('category') == 0]),
+        ('legacy', [1, 2, 7, 9, 11, 12, 13, 16, 19]),
+        ('point', point_types),
         ('sequence', [x['typeId'] for x in dictionary if x.get('category') == 1]),
-        ('statistics', [x['typeId'] for x in dictionary if x.get('category') == 0
-                        and x['typeId'] not in (200005, 300002)]),
+        ('statistics', statistics_types),
     ]
     root = Path(destination)
     root.mkdir(exist_ok=False)

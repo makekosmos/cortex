@@ -4,15 +4,40 @@ import { describe, expect, test } from "bun:test";
 const read = (name: string) => readFileSync(new URL(`./views/${name}`, import.meta.url), "utf8");
 
 describe("Manager surface contract", () => {
+  test("keeps diagnostics visible while standalone apps stay out of the dashboard", () => {
+    const root = readFileSync(new URL("./ManagerRoot.vue", import.meta.url), "utf8");
+    expect(root).toContain('label: "Диагностика"');
+    expect(root).not.toContain('"com.kosmos.dictation"');
+    expect(root).not.toContain('"com.kosmos.focus"');
+    expect(root).toContain("DiagnosticsView");
+    expect(root).not.toContain("DictationSettingsView");
+    expect(root).not.toContain("FocusView");
+  });
+
   test("marketplace is one canonical app grid", () => {
     const source = read("StoreView.vue");
     expect(source).toContain("retiredListingIds");
     expect(source).toContain('"com.kosmos.eden"');
     expect(source).toContain('"com.kosmos.delphi"');
     expect(source).toContain("!retiredListingIds.has(item.id)");
+    expect(source).toContain('item.kind === "kosmos-package"');
+    expect(source).toContain('"ark-markdown-bridge"');
+    expect(source).toContain('"external.obsidian"');
+    expect(read("StoreMarketplaceControls.vue")).toContain("<h1>Приложения</h1>");
+    expect(read("StoreMarketplaceControls.vue")).not.toContain("Приложения и интеграции");
     expect(source).not.toContain("Рекомендуем");
     expect(source).not.toContain("store-section-title");
     expect(source).toContain("store-grid");
+  });
+
+  test("integrations list catalog sources and keeps Huawei visible", () => {
+    const connections = read("ConnectionsView.vue");
+    const helpers = readFileSync(new URL("./connection-helpers.ts", import.meta.url), "utf8");
+    expect(connections).toContain('"getStoreCatalog"');
+    expect(connections).toContain('"refreshStoreCatalog"');
+    expect(helpers).toContain('listing.kind !== "integration"');
+    expect(helpers).toContain('"ark-markdown-bridge"');
+    expect(helpers).toContain('"com.kosmos.huawei-health"');
   });
 
   test("data and titlebar use the shared contracts", () => {
@@ -92,7 +117,7 @@ describe("Manager surface contract", () => {
       /\.store-view \.store-card-icon-frame\s*\{[^}]*width: 48px;[^}]*height: 48px;/s,
     );
     expect(css).toMatch(
-      /\.store-card-icon\s*\{[^}]*width: 100%;[^}]*height: 100%;[^}]*object-fit: contain;[^}]*border-radius: 0;/s,
+      /\.store-card-icon\s*\{[^}]*width: 100%;[^}]*height: 100%;[^}]*object-fit: cover;[^}]*border-radius: var\(--radius-input\);/s,
     );
     expect(css).toMatch(/\.store-card-icon-frame\s*\{(?![^}]*\b(?:background|filter):)[^}]*\}/s);
     expect(css).not.toContain(".store-card-featured .store-card-icon");

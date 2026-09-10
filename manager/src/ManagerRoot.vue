@@ -21,6 +21,7 @@ import {
   PhDatabase,
   PhEngine,
   PhGear,
+  PhGauge,
   PhInfo,
   PhKey,
   PhPackage,
@@ -32,6 +33,7 @@ import { useManagerClient } from "./composables/useManagerClient";
 import DataView from "./views/DataView.vue";
 import SyncView from "./views/SyncView.vue";
 import StoreView from "./views/StoreView.vue";
+import DiagnosticsView from "./views/DiagnosticsView.vue";
 import EngineSettingsView from "./views/EngineSettingsView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import ConnectionsView from "./views/ConnectionsView.vue";
@@ -43,6 +45,7 @@ import BrowserSettingsView from "./views/BrowserSettingsView.vue";
 type ViewId =
   | "data"
   | "sync"
+  | "diagnostics"
   | "packages"
   | "engine"
   | "settings"
@@ -64,6 +67,11 @@ const views = {
     label: "Синхронизация",
     hint: "Устройства и связи",
     component: SyncView,
+  },
+  diagnostics: {
+    label: "Диагностика",
+    hint: "Состояние системы",
+    component: DiagnosticsView,
   },
   packages: {
     label: "Маркетплейс",
@@ -95,7 +103,11 @@ const views = {
     hint: "Kosmos Desktop и приложения",
     component: UpdatesView,
   },
-  secrets: { label: "Ключи", hint: "API-ключи и провайдеры", component: SecretsView },
+  secrets: {
+    label: "Ключи",
+    hint: "API-ключи и провайдеры",
+    component: SecretsView,
+  },
   browser: {
     label: "Браузер",
     hint: "Сессии и данные сайтов",
@@ -106,6 +118,7 @@ const icons = {
   data: PhDatabase,
   sync: PhArrowsClockwise,
   packages: PhStorefront,
+  diagnostics: PhGauge,
   engine: PhEngine,
   settings: PhGear,
   connections: PhPlugsConnected,
@@ -113,18 +126,17 @@ const icons = {
   updates: PhPackage,
   secrets: PhKey,
   browser: PhBrowser,
-} satisfies Record<
-  ViewId,
-  { label: string; hint: string; component: Component }
->;
-const primaryViewIds: Exclude<
-  ViewId,
-  "about" | "packages" | "updates" | "settings"
->[] = ["data", "sync", "engine", "connections", "secrets", "browser"];
-const commerceViewIds: Extract<ViewId, "packages" | "updates">[] = [
-  "packages",
-  "updates",
+} satisfies Record<ViewId, { label: string; hint: string; component: Component }>;
+const primaryViewIds: Exclude<ViewId, "about" | "packages" | "updates" | "settings">[] = [
+  "data",
+  "sync",
+  "diagnostics",
+  "engine",
+  "connections",
+  "secrets",
+  "browser",
 ];
+const commerceViewIds: Extract<ViewId, "packages" | "updates">[] = ["packages", "updates"];
 const active = computed(() => views[view.value]);
 
 async function select(next: ViewId) {
@@ -139,7 +151,6 @@ async function select(next: ViewId) {
 function backFromStoreDetail() {
   activeView.value?.backToCatalog?.();
 }
-
 onMounted(() => {
   void client.call("getHealth", undefined, "health");
 });
@@ -162,10 +173,7 @@ onMounted(() => {
       </TitlebarButton>
     </template>
     <template #sidebar>
-      <SettingsSidebar
-        aria-label="Разделы менеджера"
-        background="var(--bg-app)"
-      >
+      <SettingsSidebar aria-label="Разделы менеджера" background="var(--bg-app)">
         <div class="manager-sidebar-scroll kosmos-scroll">
           <div class="manager-sidebar-group">
             <SettingsSidebarButton
@@ -218,11 +226,7 @@ onMounted(() => {
         </div>
       </SettingsSidebar>
     </template>
-    <DesktopContentSurface
-      ref="surface"
-      :scrollable="true"
-      class="surface kosmos-scroll"
-    >
+    <DesktopContentSurface ref="surface" :scrollable="true" class="surface kosmos-scroll">
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <KeepAlive>
         <component

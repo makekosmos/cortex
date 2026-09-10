@@ -59,29 +59,23 @@ describe("marketplace behavior", () => {
     expect(result.map((item) => item.id)).toEqual(["com.example.app"]);
   });
 
-  test("keeps integrations and external apps in their marketplace tabs", () => {
+  test("keeps only applications in the marketplace", () => {
     const integration = listing({ id: "com.integration", kind: "integration" });
     const external = listing({ id: "com.external", kind: "external-app", distribution: undefined });
-    expect(
-      filterListings([integration, external], () => undefined, "integrations", {
+    const apps = filterListings(
+      [integration, external, listing({ id: "com.app" })],
+      () => undefined,
+      "discover",
+      {
         platform: "all",
         kind: "all",
         category: "all",
         data: "all",
         fidelity: "all",
         install: "all",
-      }).map((item) => item.id),
-    ).toEqual(["com.integration"]);
-    expect(
-      filterListings([integration, external], () => undefined, "external-apps", {
-        platform: "all",
-        kind: "all",
-        category: "all",
-        data: "all",
-        fidelity: "all",
-        install: "all",
-      }).map((item) => item.id),
-    ).toEqual(["com.external"]);
+      },
+    );
+    expect(apps.map((item) => item.id)).toEqual(["com.app"]);
   });
 
   test("recommends listings matching local ARK data types", () => {

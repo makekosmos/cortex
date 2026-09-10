@@ -15,8 +15,16 @@ def main(token_file, apk, destination, category=0):
     root.mkdir(exist_ok=False)
     with zipfile.ZipFile(apk) as source:
         dictionary = json.loads(source.read('assets/dict_config.txt'))['dictTypes']
+        extra = (json.loads(source.read('assets/dict_config.json'))['dictTypes']
+                 if 'assets/dict_config.json' in source.namelist() else [])
     types = {entry['typeId']: entry for entry in dictionary
              if entry.get('category') == (0 if category == 'statistics' else category)}
+    if category == 0:
+        for entry in extra:
+            if entry['typeId'] in (500021, 500023, 500024, 500026):
+                types[entry['typeId']] = entry
+    elif category == 'statistics' and extra:
+        types[800003] = {'typeId': 800003, 'name': 'SLEEP_PRO_RECORD'}
     if category == 'statistics':
         # APK excludes active hours and sport-goal achievements from this API.
         types = {kind: entry for kind, entry in types.items() if kind not in (200005, 300002)}
@@ -44,7 +52,7 @@ def main(token_file, apk, destination, category=0):
             path = 'health/getHealthStatisticsByVersion'
         run(token_file, root / str(kind), path, kind, item['version'])
     (root / 'complete.json').write_text(json.dumps(dict(
-        scope=f'APK dict_config.txt category={category} only', queried=len(types),
+        scope=f'APK dictionary category={category} plus confirmed extra streams', queried=len(types),
         streams=sum(v['version'] > 0 for v in versions))), encoding='utf-8')
 
 

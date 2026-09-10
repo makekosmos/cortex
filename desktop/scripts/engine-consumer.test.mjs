@@ -13,6 +13,7 @@ const names = [
   "ark-core-rpc.exe",
   "kepler-focus-helper.exe",
   "kepler-focus-svc.exe",
+  "tray.ico",
 ];
 
 function fixture() {

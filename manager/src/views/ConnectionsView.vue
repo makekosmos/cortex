@@ -1,18 +1,31 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { Button, Modal, SettingsList, SettingsRow, TextInput } from "@kosmos/visuals";
-import type { IntegrationProvider, IntegrationsSnapshot } from "../manager-api";
+import { Button, Modal, SettingsList, SettingsRow, Skeleton, TextInput } from "@kosmos/visuals";
+import type {
+  IntegrationProvider,
+  IntegrationsSnapshot,
+  StoreCatalogSnapshot,
+} from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
 import { appIcon } from "../app-icons";
+import { integrationCards, windowsListings, type ConnectionCard } from "../connection-helpers";
+import { installTarget } from "../store-helpers";
 
 const props = defineProps<{ client: ManagerClient }>();
 const snapshot = ref<IntegrationsSnapshot | null>(null);
+const catalog = ref<StoreCatalogSnapshot | null>(null);
+const loading = ref(true);
 type CredentialMap = Record<string, string>;
 type Setting = NonNullable<IntegrationProvider["settingSchema"]>[number];
 const credential = ref<CredentialMap>({});
 const settingDraft = ref<CredentialMap>({});
 const busy = ref<string | null>(null);
 const selectedProvider = ref<string | null>(null);
+const cards = computed(() =>
+  integrationCards(windowsListings(catalog.value?.listings ?? []), snapshot.value?.providers ?? []),
+);
+const selectedCard = computed(() => cards.value.find((card) => card.id === selectedProvider.value));
+const selected = computed(() => selectedCard.value?.provider);
 function authMode(provider: IntegrationProvider) {
   return provider.authMode === "browser_login" || provider.authMode === "none"
     ? provider.authMode
@@ -21,18 +34,37 @@ function authMode(provider: IntegrationProvider) {
 function credentialType(provider: IntegrationProvider) {
   return provider.credentialInputType === "text" ? "text" : "password";
 }
-function icon(provider: IntegrationProvider) {
-  return appIcon(provider.id, undefined, provider.iconPath);
+function icon(card: ConnectionCard) {
+  return appIcon(card.id, card.iconUrl, card.iconPath);
+}
+function statusLabel(card: ConnectionCard) {
+  if (!card.provider) return "Не установлена";
+  const connected = card.provider.hasCredential ? "Подключено" : "Не подключено";
+  return card.provider.enabled ? connected : `${connected} (пакет отключён)`;
 }
 function canLogin(provider: IntegrationProvider) {
   return authMode(provider) === "browser_login" && Boolean(provider.loginCapability);
 }
-const selected = computed(() => {
-  const provider = snapshot.value?.providers.find((item) => item.id === selectedProvider.value);
-  return provider;
-});
+function canInstall(card: ConnectionCard) {
+  return (
+    !card.provider &&
+    catalog.value?.state === "fresh" &&
+    card.listing !== undefined &&
+    Boolean(installTarget(card.listing))
+  );
+}
 async function load() {
-  snapshot.value = await props.client.call("getIntegrations", undefined, "integrations");
+  const [integrations, nextCatalog] = await Promise.all([
+    props.client.call<IntegrationsSnapshot>(
+      "getIntegrations",
+      undefined,
+      "connections-integrations",
+    ),
+    props.client.call<StoreCatalogSnapshot>("getStoreCatalog", undefined, "connections-catalog"),
+  ]);
+  if (integrations) snapshot.value = integrations;
+  if (nextCatalog) catalog.value = nextCatalog;
+  loading.value = false;
 }
 function settingKey(provider: IntegrationProvider, setting: Setting) {
   return `${provider.id}:${setting.key}`;
@@ -104,49 +136,69 @@ async function login(provider: IntegrationProvider) {
   busy.value = null;
   await load();
 }
+async function install(card: ConnectionCard) {
+  const target = card.listing ? installTarget(card.listing) : null;
+  if (!target) return;
+  busy.value = `${card.id}:install`;
+  await props.client.call("installPackage", target, `connection-install:${card.id}`);
+  busy.value = null;
+  await load();
+}
 function closePanel() {
   selectedProvider.value = null;
   void load();
 }
-onMounted(load);
+onMounted(async () => {
+  await load();
+  void Promise.all([
+    props.client.call("refreshPackageCatalog", undefined, "connections-initial-package-catalog"),
+    props.client.call("refreshStoreCatalog", undefined, "connections-initial-catalog"),
+  ]).then(() => load());
+});
 </script>
 
 <template>
-  <section class="stack connections-view">
-    <div class="connections-grid">
+  <section class="stack connections-view" aria-label="Интеграции">
+    <div v-if="loading && !cards.length" class="connections-grid" aria-label="Загрузка интеграций">
+      <Skeleton v-for="index in 6" :key="index" class="connection-card-skeleton" />
+    </div>
+    <div v-else-if="cards.length" class="connections-grid">
       <button
-        v-for="provider in snapshot?.providers ?? []"
-        :key="provider.id"
+        v-for="card in cards"
+        :key="card.id"
         type="button"
         class="connection-card"
-        :data-testid="`connection-card-${provider.id}`"
-        :aria-label="`${provider.label}: ${provider.hasCredential ? 'Подключено' : 'Не подключено'}${provider.enabled ? '' : ' (пакет отключён)'}`"
-        @click="selectedProvider = provider.id"
+        :data-testid="`connection-card-${card.id}`"
+        :aria-label="`${card.label}: ${statusLabel(card)}`"
+        @click="selectedProvider = card.id"
       >
         <img
-          v-if="icon(provider)"
+          v-if="icon(card)"
           class="connection-card-logo"
-          :src="icon(provider)"
+          :src="icon(card)"
           alt=""
           aria-hidden="true"
         />
         <span v-else class="connection-card-mark" aria-hidden="true">
-          {{ provider.label.slice(0, 2) }}
+          {{ card.label.slice(0, 2) }}
         </span>
-        <strong class="connection-card-name">{{ provider.label }}</strong>
+        <strong class="connection-card-name">{{ card.label }}</strong>
         <span
           class="connection-card-status"
           :class="{
-            'connection-card-status--connected': provider.hasCredential && provider.enabled,
+            'connection-card-status--connected': Boolean(
+              card.provider?.hasCredential && card.provider.enabled,
+            ),
           }"
           aria-hidden="true"
         />
       </button>
     </div>
+    <p v-else class="muted">Интеграции не найдены.</p>
 
     <Modal
-      :open="selected !== undefined"
-      :title="selected ? `Настройка ${selected.label}` : 'Настройка интеграции'"
+      :open="selectedProvider !== null"
+      :title="selectedCard ? `Настройка ${selectedCard.label}` : 'Настройка интеграции'"
       width="min(720px, 94vw)"
       @close="closePanel"
     >
@@ -218,6 +270,20 @@ onMounted(load);
             @click="act(selected, 'sync')"
             >Синхронизировать</Button
           >
+        </div>
+      </article>
+      <article v-else-if="selectedCard" class="stack connection-panel">
+        <p v-if="selectedCard.description" class="muted">{{ selectedCard.description }}</p>
+        <div class="actions">
+          <Button
+            v-if="canInstall(selectedCard)"
+            variant="surface"
+            size="sm"
+            :disabled="busy !== null"
+            @click="install(selectedCard)"
+            >{{ busy === `${selectedCard.id}:install` ? "Установка…" : "Установить" }}</Button
+          >
+          <p v-else class="muted">Установка сейчас недоступна.</p>
         </div>
       </article>
     </Modal>

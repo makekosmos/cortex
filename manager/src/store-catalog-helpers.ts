@@ -3,8 +3,6 @@ import type { DataSummary, InstalledStoreItem, StoreListing } from "./manager-ap
 export const marketplaceTabs = [
   { id: "discover", label: "Открыть" },
   { id: "kosmos-apps", label: "Приложения Kosmos" },
-  { id: "integrations", label: "Интеграции" },
-  { id: "external-apps", label: "Внешние приложения" },
   { id: "installed", label: "Установленные" },
   { id: "updates", label: "Обновления" },
 ] as const;
@@ -24,12 +22,10 @@ export function listingMatchesTab(
   tab: MarketplaceTab,
   installed: InstalledStoreItem | undefined,
 ) {
-  if (tab === "kosmos-apps") return listing.kind === "kosmos-package";
-  if (tab === "integrations") return listing.kind === "integration";
-  if (tab === "external-apps") return listing.kind === "external-app";
+  if (tab === "discover" || tab === "kosmos-apps") return listing.kind === "kosmos-package";
   if (tab === "installed") return Boolean(installed);
   if (tab === "updates") return Boolean(installed?.update_version);
-  return true;
+  return false;
 }
 
 export function filterListings(

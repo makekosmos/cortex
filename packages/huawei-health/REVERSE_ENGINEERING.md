@@ -217,6 +217,13 @@ currentVersion=0; это терминальное состояние при от
 
 `Llhe.a()` задаёт базовые type: 1,2,4,7,9,11,13,16,19,21,900000000,
 12,14,34001 и условно 15,18, затем добавляет dictionary types.
+`900000000` здесь является отдельным `HiSyncSampleConfig`: APK использует для
+него `GetSampleConfigByVersionReq` и `/profile/user/getSampleConfigByVersion`,
+а не health-data endpoint. Его ненулевая sync-версия — версия конфигурации,
+не количество медицинских записей.
+Остальные добавленные в этот базовый список типы 4/14/15/18/21/34001 в
+проверенном аккаунте вернули `version=0`; отдельной модели или рабочего
+payload для их семантического сопоставления не было.
 `Llhz.b(int,List,boolean)` строит syncKeys с dataType/type; для статистики
 добавляет category=SampleStatistic. Реальный EU getSyncVersions с базовыми
 типами и dataType=2 вернул версии 16 потоков, включая ненулевые.

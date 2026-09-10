@@ -26,8 +26,8 @@ web-login branch (`10414141`, `hms://redirect_url`) with Health backend
 tokens; an immediate refresh also succeeded. The home-country endpoint selected
 FR, and the EU motion-path endpoint returned 439 distinct workout records over
 27 nonempty pages plus an empty terminal page. Raw pages are archived outside
-Git with Windows DPAPI. Other health categories and ARK integration remain
-unfinished. Copying
+Git with Windows DPAPI. The package manifest and ARK archive worker now exist;
+catalog publication and a fresh native end-to-end login remain pending. Copying
 GreatFrontend's login URLs and cookie contract would not implement this flow.
 Do not add invented OAuth endpoints/cookie names or hand credentials to a worker
 as plaintext settings.
@@ -63,7 +63,7 @@ session through the existing keyring-backed integration setting. Cancellation,
 new login attempts and manual session replacement invalidate stale publication.
 The current exchange backend is the verified RU endpoint. Rust validation tests,
 Manager callback tests and typecheck pass; a fresh native end-to-end login is
-still pending, and this directory still lacks an installable worker manifest.
+still pending.
 
 ## Capture the missing live evidence
 
@@ -99,10 +99,11 @@ rtk proxy python tools/archive_health.py C:/private/session.dpapi "C:/private/Hu
 rtk proxy python tools/archive_health.py C:/private/session.dpapi "C:/private/Huawei Health.apk" C:/private/statistics-first --category statistics
 ```
 
-Each destination must be new. The health command covers category 0 from the APK's
-dict_config.txt by default. Sequence and statistics modes query their separate
-endpoints; none of these modes covers all account categories. Archives keep original response JSON
-encrypted; `complete.json` describes only that stream/batch. A failed batch is
+Each destination must be new. The health command covers category 0 from the APK
+dictionaries by default, including the confirmed extra point types. Sequence and
+statistics modes query their separate endpoints; none of these modes covers all
+account categories. Archives keep original response JSON encrypted;
+`complete.json` describes only that stream/batch. A failed batch is
 incomplete. `--since` resumes a saved checkpoint and matches account/stream;
 checkpoints are updated after each durable, validated page, including in batches
 that later fail. The checkpoint preserves the advertised target version so a
