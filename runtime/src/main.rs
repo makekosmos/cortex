@@ -5,7 +5,9 @@
 )]
 #![allow(dead_code, clippy::useless_conversion)]
 
-// Kosmos Kepler backend — headless binary.
+mod backend_tray;
+
+// Kosmos Kepler backend — native runtime and Windows tray owner.
 //
 // По умолчанию запускается как самостоятельный native supervisor. Внутренний
 // `--core-worker` режим содержит сам runtime («Electron only renders, Rust does
@@ -231,12 +233,19 @@ async fn run_core_worker() -> ExitCode {
     // ARK Host остаётся живым через clone (или базовый Arc) до конца main.
     let _keep_ark_alive = ark;
 
+    let (backend_tray, mut tray_events) = backend_tray::start();
     eprintln!("[kepler-backend] ready. Ctrl+C для shutdown.");
 
     let requested_control = if let Some(mut receiver) = control_commands.take() {
         loop {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => break None,
+                event = tray_events.recv() => match event {
+                    Some(backend_tray::TrayEvent::Exit) => {
+                        break Some(ControlMessage::ShutdownRequested);
+                    }
+                    None => break None,
+                },
                 command = receiver.recv() => match command {
                     Some(ControlMessage::DesktopLease { electron_pid, credential }) => {
                         desktop_authority.register(
@@ -264,10 +273,16 @@ async fn run_core_worker() -> ExitCode {
             }
         }
     } else {
-        let _ = tokio::signal::ctrl_c().await;
-        None
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => None,
+            event = tray_events.recv() => match event {
+                Some(backend_tray::TrayEvent::Exit) => Some(ControlMessage::ShutdownRequested),
+                None => None,
+            },
+        }
     };
     eprintln!("[kepler-backend] shutdown signal received, cleaning up");
+    backend_tray.stop();
 
     // Stop new HTTP/WS work before draining runtime-owned processes.
     api_shutdown.begin_shutdown().await;

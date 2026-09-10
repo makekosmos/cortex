@@ -8,6 +8,7 @@ export const ENGINE_FILES = [
   "ark-core-rpc.exe",
   "kepler-focus-helper.exe",
   "kepler-focus-svc.exe",
+  "tray.ico",
 ];
 
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");

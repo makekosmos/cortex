@@ -1,6 +1,5 @@
-import { BrowserWindow, globalShortcut, Menu, nativeImage, screen, Tray } from "electron";
+import { BrowserWindow, globalShortcut, screen } from "electron";
 import path from "node:path";
-import { existsSync } from "node:fs";
 import {
   applyWindowMaterial,
   backgroundMaterialOption,
@@ -56,15 +55,12 @@ export function createLauncherController(options: LauncherControllerOptions): La
     getIsQuiting,
     isDev,
     onLauncherShow,
-    productName,
-    quitApplication,
     resolveBackgroundMaterial,
     windowHeight,
     windowWidth,
   } = options;
 
   let mainWindow: BrowserWindow | null = null;
-  let tray: Tray | null = null;
   let launcherHidden = true;
 
   function defaultLauncherPosition(): LauncherPosition {
@@ -225,68 +221,8 @@ export function createLauncherController(options: LauncherControllerOptions): La
     // Окно теперь fixed-size; IPC оставлен как noop для backward-compat.
   }
 
-  function resolveTrayIconPath(): string | null {
-    // Windows tray требует .ico. На macOS `new Tray(path)` не умеет такой файл
-    // и бросает исключение, из-за чего startup обрывается раньше регистрации
-    // global hotkey. Поэтому platform-specific asset: Windows -> tray.ico,
-    // macOS/prod -> icon.png, dev -> dev.png.
-    const iconName =
-      process.platform === "win32"
-        ? isDev
-          ? "dev.png"
-          : "tray.ico"
-        : isDev
-          ? "dev.png"
-          : "icon.png";
-    const candidates: string[] = [];
-    if (process.resourcesPath) {
-      candidates.push(path.join(process.resourcesPath, iconName));
-    }
-    candidates.push(path.resolve(dirname, `../build/${iconName}`));
-    candidates.push(path.resolve(dirname, `../../build/${iconName}`));
-    for (const candidate of candidates) {
-      if (existsSync(candidate)) return candidate;
-    }
-    return null;
-  }
-
-  function createTray(): void {
-    if (tray) return;
-    const iconPath = resolveTrayIconPath();
-    try {
-      // Путь передаём строкой на Windows: nativeImage.createFromPath не
-      // декодирует .ico, а Tray(path) сам выбирает нужный кадр из multi-size ICO.
-      // На macOS сюда приходит PNG path.
-      tray = new Tray(iconPath ?? nativeImage.createEmpty());
-    } catch (e) {
-      console.error("[kepler-shell] tray create failed:", e);
-      tray = new Tray(nativeImage.createEmpty());
-    }
-    tray.setToolTip(productName);
-    console.log("[kepler-shell] tray created");
-    tray.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: "Открыть", click: () => openManager() },
-        { label: "Настройки", click: () => openManager() },
-        { type: "separator" },
-        {
-          label: "Выход",
-          click: () => {
-            quitApplication();
-          },
-        },
-      ]),
-    );
-    tray.on("click", () => openManager());
-  }
-
-  function setTrayVisible(enabled: boolean): void {
-    if (enabled) {
-      createTray();
-      return;
-    }
-    tray?.destroy();
-    tray = null;
+  function setTrayVisible(_enabled: boolean): void {
+    // The backend runtime owns the single Windows tray icon.
   }
 
   function registerLauncherHotkeys({

@@ -12,6 +12,7 @@ const names = [
   "ark-core-rpc.exe",
   "kepler-focus-helper.exe",
   "kepler-focus-svc.exe",
+  "tray.ico",
 ];
 const script = fileURLToPath(new URL("../build/install-engine.ps1", import.meta.url));
 
