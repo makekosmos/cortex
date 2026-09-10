@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { JsonValue } from "./extension-permissions";
+import { isString } from "../src/shared/runtimeGuards";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -137,7 +138,6 @@ test("launcher visibility remains owner", () => {
   expect(settingsViewSource).toContain("localStorage.setItem(HIDDEN_COMMANDS_KEY");
   expect(launcherSource).toContain("hiddenCommandIds.value.includes(cmd.id)");
   expect(launcherTemplateSource).toContain("toggleCommandVisibility(selectedCommand.id)");
-
 });
 
 function extractFunction(source: string, name: string): string {
@@ -193,6 +193,7 @@ test("seeded hidden command state is shared by Settings and Launcher and recover
   });
   const launcherLoad = compileFunction(launcherSource, "loadHiddenCommandIds", {
     localStorage: storage,
+    isString,
   });
   // SAFETY: The extracted loaders return the seeded string-id arrays.
   settingsState.value = settingsLoad() as string[];

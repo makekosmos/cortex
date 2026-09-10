@@ -42,11 +42,11 @@ describe("standalone Manager boundary", () => {
     expect(root).not.toContain("Центр управления");
     expect(root).not.toContain(">Обновить</Button>");
     expect(root).toContain("scrollPositions");
-    expect(settings).toContain("Запускать CosCast при входе в систему");
+    expect(settings).toContain("Запускать Kosmos при входе в систему");
     expect(main).toContain("app.setLoginItemSettings");
     expect(main).toContain("KOSMOS_APP_EXECUTABLE");
     expect(main).toContain("args: AUTOSTART_ARGS");
-    expect(main).toContain('name: "CosCast"');
+    expect(main).toContain('name: "Kosmos"');
     expect(main).toContain('name: "Kosmos Engine"');
     expect(main).toContain("resolveInstance().autorunEnabled");
     expect(main.indexOf("resolveInstance().autorunEnabled")).toBeLessThan(

@@ -906,7 +906,7 @@ function registerAll() {
     app.setLoginItemSettings({
       ...loginItemOptions,
       openAtLogin: value.enabled,
-      name: "CosCast",
+      name: "Kosmos",
     });
     app.setLoginItemSettings({
       ...legacyLoginItemOptions,

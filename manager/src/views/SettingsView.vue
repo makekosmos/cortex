@@ -69,16 +69,16 @@ onMounted(() => void load());
   <section class="stack settings-page">
     <SettingsList>
       <SettingsToggleRow
-        title="Запускать CosCast при входе в систему"
-        description="Автоматически запускать CosCast после входа в Windows."
+        title="Запускать Kosmos при входе в систему"
+        description="Автоматически запускать Kosmos после входа в Windows."
         :model-value="enabled"
         :label="label"
         :disabled="!available"
         @update:model-value="setAutostart"
       />
       <SettingsToggleRow
-        title="Показывать CosCast в системном трее"
-        description="Управляет значком CosCast в области уведомлений Windows."
+        title="Показывать Kosmos в системном трее"
+        description="Управляет значком Kosmos в области уведомлений Windows."
         :model-value="trayIcon"
         :label="trayIcon ? 'Показывать' : 'Скрывать'"
         @update:model-value="setTrayIcon"
