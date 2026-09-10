@@ -61,6 +61,7 @@ try {
     stageRuntimeBinary(bin, path.join(cortexTargetDir, "release"), stageDir);
   }
   stageRuntimeBinary(RUNTIME_BINARIES[1], path.join(cortexTargetDir, "release"), stageDir);
+  copyFileSync(path.join(shellRoot, "build", "tray.ico"), path.join(stageDir, "tray.ico"));
 } catch (error) {
   console.error(`[build-backend] ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);

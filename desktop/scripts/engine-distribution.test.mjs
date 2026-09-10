@@ -18,6 +18,7 @@ test("engine archive is independently verifiable and installable", () => {
     "ark-core-rpc.exe",
     "kepler-focus-helper.exe",
     "kepler-focus-svc.exe",
+    "tray.ico",
   ]) {
     mkdirSync(release, { recursive: true });
     writeFileSync(path.join(release, name), name);
@@ -44,6 +45,7 @@ test("independent engine versions accept a lower release line", () => {
     "ark-core-rpc.exe",
     "kepler-focus-helper.exe",
     "kepler-focus-svc.exe",
+    "tray.ico",
   ])
     writeFileSync(path.join(release, name), name);
   const manifest = buildEngineArchive(release, archive, {
@@ -64,6 +66,7 @@ test("engine archive rejects tampering", () => {
     "ark-core-rpc.exe",
     "kepler-focus-helper.exe",
     "kepler-focus-svc.exe",
+    "tray.ico",
   ])
     writeFileSync(path.join(release, name), "ok");
   const manifest = buildEngineArchive(release, archive, {
@@ -84,6 +87,7 @@ test("a valid installed engine is preserved", () => {
     "ark-core-rpc.exe",
     "kepler-focus-helper.exe",
     "kepler-focus-svc.exe",
+    "tray.ico",
   ])
     writeFileSync(path.join(release, name), "new");
   const manifest = buildEngineArchive(release, archive, {

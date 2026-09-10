@@ -31,7 +31,7 @@ const visibleConsoles = () => {
   const parsed = JSON.parse(output);
   return Array.isArray(parsed) ? parsed : [parsed];
 };
-const candidateProcesses = () => {
+const candidateProcesses = (processRoot = candidate) => {
   const output = execFileSync(
     "powershell.exe",
     [
@@ -42,12 +42,24 @@ const candidateProcesses = () => {
     {
       encoding: "utf8",
       windowsHide: true,
-      env: { ...process.env, KOSMOS_SMOKE_CANDIDATE: candidate },
+      env: { ...process.env, KOSMOS_SMOKE_CANDIDATE: processRoot },
     },
   ).trim();
   if (!output || output === "[]") return [];
   const parsed = JSON.parse(output);
   return Array.isArray(parsed) ? parsed : [parsed];
+};
+const backendTrayCreated = () => {
+  try {
+    return fs
+      .readdirSync(path.join(dataDir, "logs"))
+      .filter((name) => name.startsWith("kepler-backend"))
+      .some((name) =>
+        fs.readFileSync(path.join(dataDir, "logs", name), "utf8").includes("tray created"),
+      );
+  } catch {
+    return false;
+  }
 };
 
 const before = visibleConsoles();
@@ -60,7 +72,15 @@ const env = {
   KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
   KEPLER_SKIP_SYNC: "1",
   KEPLER_USAGE_TRACKER: "0",
+  RUST_LOG: "info",
 };
+if (process.env.KOSMOS_SMOKE_ENGINE_ROOT) {
+  env.KOSMOS_ENGINE_ROOT = process.env.KOSMOS_SMOKE_ENGINE_ROOT;
+}
+const processRoots = [candidate, ...(env.KOSMOS_ENGINE_ROOT ? [env.KOSMOS_ENGINE_ROOT] : [])];
+const remainingProcesses = () => [
+  ...new Set(processRoots.flatMap((processRoot) => candidateProcesses(processRoot))),
+];
 let child;
 let summary;
 const cleanup = async () => {
@@ -82,7 +102,7 @@ const cleanup = async () => {
       });
     } catch {}
   }
-  for (const pid of candidateProcesses()) {
+  for (const pid of remainingProcesses()) {
     try {
       execFileSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
         stdio: "ignore",
@@ -91,10 +111,10 @@ const cleanup = async () => {
     } catch {}
   }
   const deadline = Date.now() + 10_000;
-  while (candidateProcesses().length && Date.now() < deadline) {
+  while (remainingProcesses().length && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  const leftovers = candidateProcesses();
+  const leftovers = remainingProcesses();
   if (leftovers.length)
     throw new Error(`launcher left candidate processes: ${leftovers.join(",")}`);
   fs.rmSync(root, {
@@ -119,7 +139,7 @@ try {
   }
   const deadline = Date.now() + 30_000;
   while (
-    (!output.includes("[kepler-shell] tray created") ||
+    (!backendTrayCreated() ||
       !output.includes(`[kepler-shell] globalShortcut ${accelerator} registered`) ||
       !fs.existsSync(path.join(dataDir, "engine.lock.json"))) &&
     Date.now() < deadline
@@ -127,8 +147,7 @@ try {
     if (child.exitCode !== null) throw new Error(`launcher exited early: ${output}`);
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  if (!output.includes("[kepler-shell] tray created"))
-    throw new Error("tray creation was not confirmed");
+  if (!backendTrayCreated()) throw new Error("tray creation was not confirmed");
   if (!output.includes(`[kepler-shell] globalShortcut ${accelerator} registered`))
     throw new Error(`launcher global hotkey is not registered: ${output}`);
   if (!fs.existsSync(path.join(dataDir, "engine.lock.json")))

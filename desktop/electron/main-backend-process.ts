@@ -52,6 +52,12 @@ export function spawnBackendProcess({
     KOSMOS_DESKTOP_ROLE_PID: String(process.pid),
     RUST_BACKTRACE: "1",
   };
+  if (
+    process.platform === "win32" &&
+    path.basename(process.execPath).toLowerCase() === "kosmos.exe"
+  ) {
+    backendEnv.KOSMOS_CORTEX_EXECUTABLE ??= process.execPath;
+  }
   if (testGroqApiKey) {
     backendEnv.KOSMOS_TEST_GROQ_API_KEY = testGroqApiKey;
   } else {
