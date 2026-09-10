@@ -4,6 +4,13 @@ import dictationIcon from "../../desktop/build/app-icons/dictation.png";
 import kosmosIcon from "../../desktop/build/app-icons/kosmos.png";
 import memoriaIcon from "../../desktop/build/app-icons/memoria.png";
 import ordoIcon from "../../desktop/build/app-icons/ordo.png";
+import bigFrontendIcon from "../../desktop/src/integrations/assets/bigfrontend.svg";
+import codewarsIcon from "../../desktop/src/integrations/assets/codewars.svg";
+import greatFrontendIcon from "../../desktop/src/integrations/assets/greatfrontend.svg";
+import hevyIcon from "../../desktop/src/integrations/assets/hevy.svg";
+import huaweiHealthIcon from "../../desktop/src/integrations/assets/huawei-health.svg";
+import leetcodeIcon from "../../desktop/src/integrations/assets/leetcode.svg";
+import togglTrackIcon from "../../desktop/src/integrations/assets/toggl-track.svg";
 
 const appIcons = new Map([
   ["com.kosmos.agenda", agendaIcon],
@@ -12,6 +19,20 @@ const appIcons = new Map([
   ["com.kosmos.memoria", memoriaIcon],
   ["com.kosmos.focus", ordoIcon],
   ["com.kosmos.shell", kosmosIcon],
+  ["bigfrontend", bigFrontendIcon],
+  ["com.kosmos.bigfrontend", bigFrontendIcon],
+  ["greatfrontend", greatFrontendIcon],
+  ["com.kosmos.greatfrontend", greatFrontendIcon],
+  ["hevy", hevyIcon],
+  ["com.kosmos.hevy", hevyIcon],
+  ["huawei-health", huaweiHealthIcon],
+  ["com.kosmos.huawei-health", huaweiHealthIcon],
+  ["leetcode", leetcodeIcon],
+  ["com.kosmos.leetcode", leetcodeIcon],
+  ["codewars", codewarsIcon],
+  ["com.kosmos.codewars", codewarsIcon],
+  ["toggl", togglTrackIcon],
+  ["com.kosmos.toggl", togglTrackIcon],
 ]);
 
 export function appIcon(id: string, remote?: string | null, local?: string | null) {

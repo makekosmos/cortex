@@ -117,7 +117,7 @@ describe("Manager surface contract", () => {
       /\.store-view \.store-card-icon-frame\s*\{[^}]*width: 48px;[^}]*height: 48px;/s,
     );
     expect(css).toMatch(
-      /\.store-card-icon\s*\{[^}]*width: 100%;[^}]*height: 100%;[^}]*object-fit: contain;[^}]*border-radius: 0;/s,
+      /\.store-card-icon\s*\{[^}]*width: 100%;[^}]*height: 100%;[^}]*object-fit: cover;[^}]*border-radius: var\(--radius-input\);/s,
     );
     expect(css).toMatch(/\.store-card-icon-frame\s*\{(?![^}]*\b(?:background|filter):)[^}]*\}/s);
     expect(css).not.toContain(".store-card-featured .store-card-icon");
