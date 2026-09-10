@@ -27,7 +27,13 @@ const emit = defineEmits<{ detailChange: [boolean] }>();
 const { snapshot, loading, error, listings, installed, catalogPackages, load } = useStoreCatalog(
   props.client,
 );
-const retiredListingIds = new Set(["com.kosmos.eden", "com.kosmos.delphi"]);
+const retiredListingIds = new Set([
+  "com.kosmos.eden",
+  "com.kosmos.delphi",
+  "ark-markdown-bridge",
+  "com.kosmos.ark-markdown-bridge",
+  "external.obsidian",
+]);
 const installing = ref(new Set<string>());
 const feedback = ref(new Map<string, { kind: "success" | "error"; message: string }>());
 const selectedListing = ref<StoreListing | null>(null);
@@ -43,7 +49,9 @@ const filters = ref<MarketplaceFilters>({
   install: "all",
 });
 const rowsBase = computed(() => {
-  const apps = listings.value.filter((item) => !retiredListingIds.has(item.id));
+  const apps = listings.value.filter(
+    (item) => item.kind === "kosmos-package" && !retiredListingIds.has(item.id),
+  );
   const local = development.value.map((item) => ({
     id: item.id,
     kind: "kosmos-package" as const,
@@ -169,7 +177,11 @@ function showDetails(listing: StoreListing) {
   emit("detailChange", true);
 }
 function openExternal(listing: StoreListing) {
-  void props.client.call("openStoreExternal", { listing_id: listing.id }, `store-external:${listing.id}`);
+  void props.client.call(
+    "openStoreExternal",
+    { listing_id: listing.id },
+    `store-external:${listing.id}`,
+  );
 }
 function runDetailAction() {
   if (!detail.value) return;

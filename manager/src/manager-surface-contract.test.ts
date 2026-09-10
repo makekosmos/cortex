@@ -20,9 +20,24 @@ describe("Manager surface contract", () => {
     expect(source).toContain('"com.kosmos.eden"');
     expect(source).toContain('"com.kosmos.delphi"');
     expect(source).toContain("!retiredListingIds.has(item.id)");
+    expect(source).toContain('item.kind === "kosmos-package"');
+    expect(source).toContain('"ark-markdown-bridge"');
+    expect(source).toContain('"external.obsidian"');
+    expect(read("StoreMarketplaceControls.vue")).toContain("<h1>Приложения</h1>");
+    expect(read("StoreMarketplaceControls.vue")).not.toContain("Приложения и интеграции");
     expect(source).not.toContain("Рекомендуем");
     expect(source).not.toContain("store-section-title");
     expect(source).toContain("store-grid");
+  });
+
+  test("integrations list catalog sources and keeps Huawei visible", () => {
+    const connections = read("ConnectionsView.vue");
+    const helpers = readFileSync(new URL("./connection-helpers.ts", import.meta.url), "utf8");
+    expect(connections).toContain('"getStoreCatalog"');
+    expect(connections).toContain('"refreshStoreCatalog"');
+    expect(helpers).toContain('listing.kind !== "integration"');
+    expect(helpers).toContain('"ark-markdown-bridge"');
+    expect(helpers).toContain('"com.kosmos.huawei-health"');
   });
 
   test("data and titlebar use the shared contracts", () => {

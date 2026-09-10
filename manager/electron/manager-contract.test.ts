@@ -71,7 +71,7 @@ describe("standalone Manager boundary", () => {
     expect(helpers).toContain("iconPath:");
     expect(helpers).not.toContain("integrationProviders.includes");
     const connections = source("../src/views/ConnectionsView.vue");
-    expect(connections).toContain("appIcon(provider.id, undefined, provider.iconPath)");
+    expect(connections).toContain("appIcon(card.id, card.iconUrl, card.iconPath)");
     expect(connections).toContain("provider.settingSchema");
     expect(connections).not.toContain("assets/integrations");
     expect(operations).not.toContain("integrations.update_settings");
