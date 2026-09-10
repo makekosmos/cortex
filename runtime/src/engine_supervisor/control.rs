@@ -1,5 +1,7 @@
 use super::*;
 
+const DESKTOP_LEASE_READY_TIMEOUT: Duration = Duration::from_secs(30);
+
 pub fn restart_core() -> ExitCode {
     let data_dir = match lock_file::kosmos_data_dir() {
         Ok(path) => path,
@@ -47,7 +49,10 @@ pub(crate) async fn send_desktop_lease_when_ready(
     electron_pid: u32,
     credential: String,
 ) -> Result<(), engine_control::ControlError> {
-    let deadline = Instant::now() + Duration::from_secs(2);
+    // Engine cold start includes ARK/SQLite initialization and can exceed two
+    // seconds on a real user profile. Keep a bounded wait, but do not kill a
+    // healthy child before it reaches its authenticated control phase.
+    let deadline = Instant::now() + DESKTOP_LEASE_READY_TIMEOUT;
     loop {
         match control_server
             .send_to_core(ControlMessage::DesktopLease {

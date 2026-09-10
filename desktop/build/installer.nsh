@@ -7,11 +7,13 @@
 ;   - customRemoveFiles — финальная очистка
 
 !macro customInstall
-  ; The GUI package carries the signed standalone engine archive. Install it
-  ; into the shared engine root only when no valid engine is already present.
-  ; The helper exits nonzero on missing, unavailable, or untrusted artifacts;
+  ; The GUI package bootstraps the independently published Engine installer.
+  ; The helper validates the trusted URL, size, hash, registry and binaries;
   ; aborting here prevents a successful-looking GUI install without its engine.
-  nsExec::ExecToStack '"$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\install-engine.ps1" -Archive "$INSTDIR\resources\Kosmos Engine.zip" -Manifest "$INSTDIR\resources\engine-manifest.json" -TargetRoot "$LOCALAPPDATA\Kosmos\Engine"'
+  StrCpy $R0 "$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
+  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 +2
+    StrCpy $R0 "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
+  nsExec::ExecToStack '"$R0" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\ensure-engine.ps1" -Manifest "$INSTDIR\resources\engine-manifest.json" -TargetRoot "$LOCALAPPDATA\Kosmos\Engine"'
   Pop $0
   StrCmp $0 "0" engine_ready
   Abort "Kosmos Engine installation failed. Kosmos was not installed."
@@ -70,9 +72,6 @@
   Delete "$DESKTOP\Kosmos.lnk"
   Delete "$SMPROGRAMS\Kosmos.lnk"
 
-  ${ifNot} ${isUpdated}
-    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Kosmos Engine"
-  ${endIf}
   ; Если юзер активировал focus mode и в hosts остались managed
   ; entries — нужно очистить ДО deletion helper.exe. Запускаем helper с
   ; op=reset; UAC уже active т.к. uninstaller сам elevated (NSIS oneClick).

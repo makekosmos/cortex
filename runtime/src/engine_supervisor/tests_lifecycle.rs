@@ -1,4 +1,6 @@
 use super::*;
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
 
 #[tokio::test]
 #[cfg(unix)]
@@ -230,4 +232,65 @@ fn spontaneous_success_exit_is_unexpected() {
         crash_streak_after_exit(0, Duration::from_millis(1), ExitKind::Unexpected),
         1
     );
+}
+
+#[tokio::test]
+async fn desktop_lease_waits_for_slow_core_ready() {
+    let (mut server, endpoint) = ControlServer::bind(
+        "slow-lease-session".into(),
+        1,
+        "uid:test".into(),
+        b"controller-secret".to_vec(),
+        b"core-secret".to_vec(),
+    )
+    .await
+    .expect("control listener");
+    let state = ControlState {
+        endpoint,
+        supervisor_session_id: "slow-lease-session".into(),
+        child_generation: 1,
+        owner_identity: "uid:test".into(),
+        secret: engine_control::encode_secret(b"controller-secret"),
+    };
+    let core_state = state.clone();
+    let core = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(2100)).await;
+        let mut receiver = engine_control::start_core_control_with_secret(
+            core_state.clone(),
+            b"core-secret".to_vec(),
+        )
+        .await
+        .expect("core control");
+        assert!(matches!(
+            receiver.recv().await,
+            Some(ControlMessage::DesktopLease { .. })
+        ));
+        let mut stream = TcpStream::connect(&core_state.endpoint)
+            .await
+            .expect("control");
+        let mut envelope = engine_control::ControlEnvelope {
+            protocol_version: engine_control::CONTROL_PROTOCOL_VERSION,
+            supervisor_session_id: core_state.supervisor_session_id,
+            child_generation: 1,
+            request_id: uuid::Uuid::new_v4().to_string(),
+            owner_identity: core_state.owner_identity,
+            channel: engine_control::ControlChannel::CoreEvents,
+            message: ControlMessage::DesktopLeaseInstalled {
+                generation: 1,
+                electron_pid: 42,
+            },
+            authentication: String::new(),
+        };
+        envelope.authentication = engine_control::authentication_tag(b"core-secret", &envelope);
+        let bytes = serde_json::to_vec(&envelope).expect("control envelope");
+        stream
+            .write_u32(bytes.len() as u32)
+            .await
+            .expect("frame size");
+        stream.write_all(&bytes).await.expect("control frame");
+    });
+    send_desktop_lease_when_ready(&mut server, 42, "desktop-credential".into())
+        .await
+        .expect("slow core should still receive the lease");
+    core.await.expect("core task");
 }

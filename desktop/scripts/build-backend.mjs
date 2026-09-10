@@ -12,9 +12,12 @@ import {
 } from "./runtime-staging.mjs";
 import { ensureArkCoreRpc } from "./ark-core-rpc.mjs";
 import { buildEngineArchive, verifyEngineArchive } from "./engine-distribution.mjs";
-import { getVersion } from "./release-version.mjs";
+import { consumeEngineArtifacts } from "./engine-consumer.mjs";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
+const engineVersionConfig = JSON.parse(
+  readFileSync(path.join(shellRoot, "engine-version.json"), "utf8"),
+);
 const releaseBuildLock = acquireBuildLock(shellRoot);
 cleanBuildIntermediates(shellRoot);
 process.on("exit", releaseBuildLock);
@@ -68,37 +71,59 @@ try {
 }
 let engineVersion = null;
 if (process.platform === "win32") {
-  engineVersion = process.env.KOSMOS_ENGINE_VERSION ?? getVersion("win");
+  const engineRelease = process.env.KOSMOS_ENGINE_RELEASE === "1";
+  engineVersion = engineRelease ? process.env.KOSMOS_ENGINE_VERSION : engineVersionConfig.version;
+  if (engineRelease && !engineVersion) throw new Error("KOSMOS_ENGINE_VERSION is required");
   const engineDir = path.join(shellRoot, ".tmp", "engine.next");
-  const engineArchive = path.join(engineDir, "Kosmos-Engine.zip");
-  mkdirSync(engineDir, { recursive: true });
-  const engineUrl =
-    process.env.KOSMOS_ENGINE_RELEASE_URL ??
-    `https://github.com/makekosmos/desktop/releases/download/v${engineVersion}/Kosmos-Engine-${engineVersion}.zip`;
-  let engineManifest;
-  if (process.env.KOSMOS_ENGINE_REUSE_ARCHIVE) {
-    const sourceArchive = process.env.KOSMOS_ENGINE_REUSE_ARCHIVE;
-    const sourceManifest = process.env.KOSMOS_ENGINE_REUSE_MANIFEST;
-    if (!sourceManifest) throw new Error("KOSMOS_ENGINE_REUSE_MANIFEST is required");
-    copyFileSync(sourceArchive, engineArchive);
-    engineManifest = JSON.parse(readFileSync(sourceManifest, "utf8"));
-    if (
-      engineManifest.version !== engineVersion ||
-      !verifyEngineArchive(engineArchive, engineManifest)
-    )
-      throw new Error(`reused Engine does not match ${engineVersion}`);
+  if (!engineRelease) {
+    const reuse =
+      process.env.KOSMOS_ENGINE_REUSE_MANIFEST ||
+      process.env.KOSMOS_ENGINE_REUSE_ARCHIVE ||
+      process.env.KOSMOS_ENGINE_REUSE_INSTALLER
+        ? {
+            manifest: process.env.KOSMOS_ENGINE_REUSE_MANIFEST,
+            archive: process.env.KOSMOS_ENGINE_REUSE_ARCHIVE,
+            installer: process.env.KOSMOS_ENGINE_REUSE_INSTALLER,
+          }
+        : undefined;
+    await consumeEngineArtifacts({ version: engineVersion, targetDir: engineDir, reuse });
   } else {
-    engineManifest = buildEngineArchive(stageDir, engineArchive, {
-      version: engineVersion,
-      url: engineUrl,
-    });
+    const engineArchive = path.join(engineDir, "Kosmos-Engine.zip");
+    mkdirSync(engineDir, { recursive: true });
+    const engineUrl =
+      process.env.KOSMOS_ENGINE_RELEASE_URL ??
+      `https://github.com/makekosmos/desktop/releases/download/v${engineVersion}/Kosmos-Engine-${engineVersion}.zip`;
+    let engineManifest;
+    if (process.env.KOSMOS_ENGINE_REUSE_ARCHIVE) {
+      const sourceArchive = process.env.KOSMOS_ENGINE_REUSE_ARCHIVE;
+      const sourceManifest = process.env.KOSMOS_ENGINE_REUSE_MANIFEST;
+      if (!sourceManifest) throw new Error("KOSMOS_ENGINE_REUSE_MANIFEST is required");
+      copyFileSync(sourceArchive, engineArchive);
+      engineManifest = JSON.parse(readFileSync(sourceManifest, "utf8"));
+      if (
+        engineManifest.version !== engineVersion ||
+        !verifyEngineArchive(engineArchive, engineManifest)
+      )
+        throw new Error(`reused Engine does not match ${engineVersion}`);
+    } else {
+      engineManifest = buildEngineArchive(stageDir, engineArchive, {
+        version: engineVersion,
+        url: engineUrl,
+      });
+    }
+    engineManifest.channel_url =
+      "https://github.com/makekosmos/desktop/releases/latest/download/Kosmos-Engine-manifest.json";
+    writeFileSync(
+      path.join(engineDir, "engine-manifest.json"),
+      JSON.stringify(engineManifest, null, 2) + "\n",
+    );
+    const installer = spawnSync(
+      process.execPath,
+      [path.join(shellRoot, "scripts", "build-engine-installer.mjs")],
+      { cwd: shellRoot, stdio: "inherit", windowsHide: true },
+    );
+    if ((installer.status ?? 1) !== 0) process.exit(installer.status ?? 1);
   }
-  engineManifest.channel_url =
-    "https://github.com/makekosmos/desktop/releases/latest/download/Kosmos-Engine-manifest.json";
-  writeFileSync(
-    path.join(engineDir, "engine-manifest.json"),
-    JSON.stringify(engineManifest, null, 2) + "\n",
-  );
 }
 console.log(`[build-backend] staged Cortex and ARK runtime binaries`);
 if (engineVersion) console.log(`[build-backend] staged standalone engine ${engineVersion}`);

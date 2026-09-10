@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import type { Instance } from "./instance";
-import type { JsonRecord } from "./extension-permissions";
+import type { JsonRecord, JsonValue } from "./extension-permissions";
 
 interface ResolveBackendExeArgs {
   dirname: string;
@@ -11,24 +11,48 @@ interface ResolveBackendExeArgs {
 }
 
 function installedEngineBackend(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string | null {
+  const configuredRoot = env.KOSMOS_ENGINE_ROOT?.trim();
   const root =
-    env.KOSMOS_ENGINE_ROOT ??
+    configuredRoot ||
     (platform === "win32" && env.LOCALAPPDATA
       ? path.join(env.LOCALAPPDATA, "Kosmos", "Engine")
       : null);
   if (!root) return null;
   try {
-    const pointer = JSON.parse(readFileSync(path.join(root, "current.json"), "utf8"));
-    const backend = path.join(
-      root,
-      "versions",
+    // SAFETY: current.json is untrusted; fields are checked before use below.
+    const pointer = JSON.parse(readFileSync(path.join(root, "current.json"), "utf8")) as {
+      schema_version?: JsonValue;
+      version?: JsonValue;
+    };
+    if (pointer.schema_version !== 1 || !isEngineVersion(pointer.version)) return null;
+    const engineRoot = path.resolve(root);
+    const versionsRoot = path.resolve(engineRoot, "versions");
+    const backend = path.resolve(
+      versionsRoot,
       pointer.version,
       platform === "win32" ? "kepler-backend.exe" : "kepler-backend",
     );
-    return pointer.schema_version === 1 && existsSync(backend) ? backend : null;
+    if (!isWithinRoot(backend, versionsRoot) || !existsSync(backend)) return null;
+    const realVersionsRoot = realpathSync(versionsRoot);
+    const realBackend = realpathSync(backend);
+    return isWithinRoot(realBackend, realVersionsRoot) ? realBackend : null;
   } catch {
     return null;
   }
+}
+
+function isEngineVersion(value: JsonValue | undefined): value is string {
+  return typeof value === "string" && /^\d+\.\d+\.\d+$/.test(value);
+}
+
+function isWithinRoot(candidate: string, root: string): boolean {
+  const relative = path.relative(root, candidate);
+  return (
+    relative !== "" &&
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
 }
 
 export function resolveBackendExe({
@@ -48,10 +72,10 @@ export function resolveBackendExe({
   const devRelease = path.resolve(dirname, "../../target/release", backendBin);
   if (existsSync(devRelease)) return devRelease;
 
-  const packaged = path.join(resourcesPath, packagedRuntime);
-  if (existsSync(packaged)) return packaged;
   const installed = installedEngineBackend(env, platform);
   if (installed) return installed;
+  const packaged = path.join(resourcesPath, packagedRuntime);
+  if (existsSync(packaged)) return packaged;
   return path.join(resourcesPath, backendBin);
 }
 

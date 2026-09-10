@@ -31,25 +31,81 @@ function fixture() {
   return { root, archive, manifestPath, manifest };
 }
 
-function runInstall({ archive, manifestPath, root }) {
-  return spawnSync(
-    "powershell",
-    [
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-File",
-      script,
-      "-Archive",
-      archive,
-      "-Manifest",
-      manifestPath,
-      "-TargetRoot",
-      path.join(root, "installed"),
-    ],
-    { encoding: "utf8" },
-  );
+function runInstall({ archive, manifestPath, root, url }) {
+  const args = [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    script,
+    "-Archive",
+    archive,
+    "-Manifest",
+    manifestPath,
+    "-TargetRoot",
+    path.join(root, "installed"),
+  ];
+  if (url) args.push("-Url", url);
+  return spawnSync("powershell", args, { encoding: "utf8" });
 }
+
+function runInstallWithFakeRedownload({ archive, manifestPath, root, sourceArchive }) {
+  const quote = (value) => `'${value.replaceAll("'", "''")}'`;
+  const wrapper = path.join(root, "redownload.ps1");
+  writeFileSync(
+    wrapper,
+    `function Invoke-WebRequest {
+  param([string]$Uri, [string]$OutFile, [switch]$UseBasicParsing)
+  if ($Uri -ne 'https://github.com/makekosmos/desktop/releases/download/v1.2.3/engine.zip') { throw "unexpected download URL: $Uri" }
+  Copy-Item -LiteralPath ${quote(sourceArchive)} -Destination $OutFile -Force
+}
+& ${quote(script)} -Archive ${quote(archive)} -Manifest ${quote(manifestPath)} -TargetRoot ${quote(path.join(root, "installed"))} -Url 'https://github.com/makekosmos/desktop/releases/download/v1.2.3/engine.zip'
+exit $LASTEXITCODE
+`,
+    "utf8",
+  );
+  return spawnSync("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", wrapper], {
+    encoding: "utf8",
+  });
+}
+
+test("stale archive is replaced by a trusted redownload", () => {
+  const f = fixture();
+  const sourceArchive = path.join(f.root, "trusted-engine.zip");
+  cpSync(f.archive, sourceArchive);
+  writeFileSync(f.archive, "stale archive from previous update");
+  const result = runInstallWithFakeRedownload({ ...f, sourceArchive });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(f.archive).equals(readFileSync(sourceArchive)), true);
+  assert.equal(
+    JSON.parse(readFileSync(path.join(f.root, "installed", "current.json"), "utf8")).version,
+    "1.2.3",
+  );
+});
+
+test("corrupt redownload preserves the existing archive", () => {
+  const f = fixture();
+  const first = runInstall(f);
+  assert.equal(first.status, 0, first.stderr);
+  const staleArchive = Buffer.from("stale archive from previous update", "utf8");
+  writeFileSync(f.archive, staleArchive);
+  writeFileSync(
+    path.join(f.root, "installed", "current.json"),
+    JSON.stringify({ schema_version: 1, version: "0.0.1" }),
+  );
+  const corruptDownload = path.join(f.root, "corrupt-engine.zip");
+  writeFileSync(corruptDownload, "corrupt trusted response");
+  const result = runInstallWithFakeRedownload({
+    ...f,
+    sourceArchive: corruptDownload,
+  });
+  assert.notEqual(result.status, 0);
+  assert.deepEqual(readFileSync(f.archive), staleArchive);
+  assert.equal(
+    JSON.parse(readFileSync(path.join(f.root, "installed", "current.json"), "utf8")).version,
+    "0.0.1",
+  );
+});
 
 test("GUI dependency installs absent engine and reuses present engine", () => {
   const f = fixture();
@@ -84,7 +140,7 @@ test("GUI dependency installs absent engine and reuses present engine", () => {
 test("untrusted engine archive blocks GUI dependency install", () => {
   const f = fixture();
   writeFileSync(f.archive, "tampered");
-  const result = runInstall(f);
+  const result = runInstall({ ...f, url: "https://evil.example/engine.zip" });
   assert.notEqual(result.status, 0);
   assert.equal(existsSync(path.join(f.root, "installed")), false);
 });

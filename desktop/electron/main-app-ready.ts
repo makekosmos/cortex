@@ -1,5 +1,6 @@
 import { nativeTheme, powerMonitor } from "electron";
 import type { ArkClient } from "@kosmos/ark";
+import type { JsonRecord } from "./extension-permissions";
 import { showFocusBlockOverlay } from "./focus-overlay";
 import {
   setBlockedAppNotifier,
@@ -23,6 +24,10 @@ interface AppReadyBackendSupervisor {
   recoverBackendIfDead(reason: string): Promise<void>;
   spawnBackend(): void;
   awaitArkReady(): Promise<ArkClient>;
+}
+
+interface AppReadyLogger {
+  error(scope: string, message: string, data?: JsonRecord): void;
 }
 
 interface AppReadyInstance {
@@ -53,6 +58,7 @@ interface RunAppReadyOptions {
   backendSupervisor: AppReadyBackendSupervisor;
   instance: AppReadyInstance;
   launcher: AppReadyLauncher;
+  log: AppReadyLogger;
   runBootSelfCheck(): void;
   recoverLegacyMigration?(): Promise<void>;
   runLegacyMigration?(): Promise<void>;
@@ -63,6 +69,7 @@ export async function runAppReady({
   backendSupervisor,
   instance,
   launcher,
+  log,
   runBootSelfCheck,
   recoverLegacyMigration,
   runLegacyMigration,
@@ -80,17 +87,20 @@ export async function runAppReady({
   registerMainProtocols({ awaitArkReady });
   backendSupervisor.markBootInitStarted();
   const boot = backendSupervisor.initArkClient();
-  if (runLegacyMigration) {
-    await backendSupervisor.awaitArkReady();
-    if (recoverLegacyMigration) await recoverLegacyMigration();
-    await runLegacyMigration();
-  }
   if (!process.argv.includes("--autostart")) {
     const openManager =
       process.env.KOSMOS_TEST_MODE === "1" ? launcher.showLauncher : launcher.openManager;
     openManager();
-    void boot;
-  } else void boot;
+  }
+  void boot.catch((error) => {
+    log.error(
+      "startup",
+      "Ark client initialization failed",
+      error instanceof Error && error.stack
+        ? { err: String(error), stack: error.stack }
+        : { err: String(error) },
+    );
+  });
   setFocusSessionShellOpener(launcher.showFocusSessionLauncher);
   setFocusSessionRuntime({ awaitArkReady });
   setBlockedAppNotifier((app) => {
@@ -100,7 +110,15 @@ export async function runAppReady({
   launcher.setTrayVisible(isTrayIconEnabled());
 
   powerMonitor.on("resume", () => {
-    void backendSupervisor.recoverBackendIfDead("power-resume");
+    void backendSupervisor.recoverBackendIfDead("power-resume").catch((error) => {
+      log.error(
+        "supervisor",
+        "power-resume recovery failed",
+        error instanceof Error && error.stack
+          ? { reason: "power-resume", err: String(error), stack: error.stack }
+          : { reason: "power-resume", err: String(error) },
+      );
+    });
   });
 
   setupAutoUpdater({ isDev: !instance.autoupdaterEnabled });
@@ -113,4 +131,22 @@ export async function runAppReady({
     normalizeHotkeyAccelerator,
     setHotkeyReregisterCallback,
   });
+
+  if (runLegacyMigration) {
+    void (async () => {
+      try {
+        await backendSupervisor.awaitArkReady();
+        if (recoverLegacyMigration) await recoverLegacyMigration();
+        await runLegacyMigration();
+      } catch (error) {
+        log.error(
+          "migration",
+          "legacy migration failed",
+          error instanceof Error && error.stack
+            ? { err: String(error), stack: error.stack }
+            : { err: String(error) },
+        );
+      }
+    })();
+  }
 }

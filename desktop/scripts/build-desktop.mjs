@@ -13,9 +13,12 @@ import { copyEngineManifest, copyEngineRelease } from "./engine-distribution.mjs
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SHELL_ROOT = path.resolve(__dirname, "..");
-
 const VALID_PLATFORMS = ["win", "mac"];
-
+function stagedEngineVersion() {
+  return JSON.parse(
+    readFileSync(path.join(SHELL_ROOT, ".tmp/engine.next/engine-manifest.json"), "utf8"),
+  ).version;
+}
 function die(msg) {
   console.error(`[build-desktop] FATAL: ${msg}`);
   process.exit(1);
@@ -46,7 +49,6 @@ function resolveElectronBuilder() {
   // Fallback: assume on PATH
   return isWin ? "electron-builder.cmd" : "electron-builder";
 }
-
 function currentCommit() {
   try {
     return execFileSync("git", ["rev-parse", "HEAD"], { cwd: SHELL_ROOT, encoding: "utf8" }).trim();
@@ -54,7 +56,6 @@ function currentCommit() {
     die("unable to resolve the Cortex HEAD commit");
   }
 }
-
 function ensureCleanSource() {
   const tracked = execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], {
     cwd: SHELL_ROOT,
@@ -84,7 +85,6 @@ function ensureCleanSource() {
   ).trim();
   if (tracked || untracked) die("release builds require a clean tracked and source worktree");
 }
-
 function verifyEmbeddedBom(outputDir, platform, digest) {
   const candidates = [path.join(outputDir, "win-unpacked", "resources", "release-bom.json")];
   if (platform === "mac") {
@@ -218,7 +218,7 @@ async function main() {
   if (!bomPath) die("--bom <path> or KOSMOS_RELEASE_BOM is required for publish builds");
 
   const version = getVersion(platform),
-    engineVersion = platform === "win" ? (process.env.KOSMOS_ENGINE_VERSION ?? version) : null;
+    engineVersion = platform === "win" ? stagedEngineVersion() : null;
   ensureCleanSource();
   const bom = await loadReleaseBom(bomPath, {
     root: path.resolve(SHELL_ROOT, ".."),
@@ -259,8 +259,10 @@ async function main() {
     );
     process.exit(ebResult.status ?? 1);
   }
-  if (platform === "win")
-    (copyEngineRelease(SHELL_ROOT, engineVersion), copyEngineManifest(SHELL_ROOT, engineVersion));
+  if (platform === "win") {
+    copyEngineRelease(SHELL_ROOT, engineVersion);
+    copyEngineManifest(SHELL_ROOT, engineVersion);
+  }
   log("");
   log("electron-builder succeeded. Emitting release provenance...");
   const releaseFiles = await emitProvenance(
@@ -293,8 +295,6 @@ async function main() {
     console.error(`[build-desktop] Review the output above and follow the fix instructions.`);
     process.exit(verifyResult.status ?? 1);
   }
-
   log(`Build + verify complete for ${platform} v${version}. Release is consistent.`);
 }
-
 main().catch((error) => die(error instanceof Error ? error.message : String(error)));

@@ -1152,6 +1152,8 @@ async function createWindow() {
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   try {
     await (devUrl ? win.loadURL(devUrl) : win.loadFile(path.join(__dirname, "../dist/index.html")));
+    managerWindowReady = true;
+    presentManagerWindow(win);
   } catch (error) {
     if (!win.isDestroyed()) win.destroy();
     if (managerWindow === win) {
