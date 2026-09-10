@@ -17,7 +17,6 @@ import {
 } from "@kosmos/visuals";
 import {
   PhArrowsClockwise,
-  PhCrosshair,
   PhBrowser,
   PhDatabase,
   PhEngine,
@@ -25,7 +24,6 @@ import {
   PhGauge,
   PhInfo,
   PhKey,
-  PhMicrophone,
   PhPackage,
   PhPlugsConnected,
   PhStorefront,
@@ -43,7 +41,6 @@ import AboutView from "./views/AboutView.vue";
 import UpdatesView from "./views/UpdatesView.vue";
 import SecretsView from "./views/SecretsView.vue";
 import BrowserSettingsView from "./views/BrowserSettingsView.vue";
-import type { PackageSnapshot } from "./manager-api";
 
 type ViewId =
   | "data"
@@ -140,10 +137,6 @@ const primaryViewIds: Exclude<ViewId, "about" | "packages" | "updates" | "settin
   "browser",
 ];
 const commerceViewIds: Extract<ViewId, "packages" | "updates">[] = ["packages", "updates"];
-const standaloneApps = [
-  ["com.kosmos.dictation", "Диктовка и AI", PhMicrophone],
-  ["com.kosmos.focus", "Фокус", PhCrosshair],
-] as const;
 const active = computed(() => views[view.value]);
 
 async function select(next: ViewId) {
@@ -158,26 +151,6 @@ async function select(next: ViewId) {
 function backFromStoreDetail() {
   activeView.value?.backToCatalog?.();
 }
-async function openStandaloneApp(packageId: string) {
-  const packages = await client.call<PackageSnapshot>(
-    "getPackages",
-    { kind: "app" },
-    `app-list:${packageId}`,
-  );
-  const installed = packages?.packages.find((item) => item.id === packageId);
-  if (!installed) return select("packages");
-  if (
-    !installed.enabled &&
-    !(await client.call(
-      "setPackageEnabled",
-      { package_id: installed.id, version: installed.version, enabled: true },
-      `app-enable:${packageId}`,
-    ))
-  )
-    return;
-  await client.call("openPackage", { package_id: packageId }, `app-open:${packageId}`);
-}
-
 onMounted(() => {
   void client.call("getHealth", undefined, "health");
 });
@@ -226,17 +199,6 @@ onMounted(() => {
               icon-variant="plain"
               :icon-weight="view === id ? 'duotone' : 'regular'"
               @click="select(id)"
-            />
-          </div>
-          <div class="manager-sidebar-group manager-sidebar-group--apps">
-            <SettingsSidebarButton
-              v-for="app in standaloneApps"
-              :key="app[0]"
-              :icon="app[2]"
-              :label="app[1]"
-              :title="app[1]"
-              icon-variant="plain"
-              @click="openStandaloneApp(app[0])"
             />
           </div>
         </div>

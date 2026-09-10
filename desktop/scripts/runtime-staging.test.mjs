@@ -24,7 +24,7 @@ test("non-default Cargo runtime is the one mapped into the Windows package", () 
     "kepler-focus-svc",
   ]);
   assert.match(ARK_CORE_REPOSITORY, /^https:\/\/github\.com\/makekosmos\/core\.git$/);
-  assert.equal(ARK_CORE_REVISION, "ba13c5b5aed364ef1b6704b5e08a98bc1898964a");
+  assert.equal(ARK_CORE_REVISION, "80d74cdc711d7601db8a351ee1d26d5c1bdfe34f");
 
   const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-runtime-stage-"));
   try {
@@ -51,9 +51,16 @@ test("non-default Cargo runtime is the one mapped into the Windows package", () 
     const runtimeMapping = packageJson.build.win.extraResources.find(
       (entry) => entry.to === "engine-manifest.json",
     );
+    const engineArchiveMapping = packageJson.build.win.extraResources.find(
+      (entry) => entry.to === "Kosmos Engine.zip",
+    );
     assert.deepEqual(runtimeMapping, {
       from: ".tmp/engine.next/engine-manifest.json",
       to: "engine-manifest.json",
+    });
+    assert.deepEqual(engineArchiveMapping, {
+      from: ".tmp/engine.next/Kosmos-Engine.zip",
+      to: "Kosmos Engine.zip",
     });
     assert.equal(
       readFileSync(path.join(stageDir, "kepler-backend.exe"), "utf8"),

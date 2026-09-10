@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   effectiveCargoTargetDir,
@@ -13,6 +13,29 @@ import {
 import { ensureArkCoreRpc } from "./ark-core-rpc.mjs";
 import { buildEngineArchive, verifyEngineArchive } from "./engine-distribution.mjs";
 import { getVersion } from "./release-version.mjs";
+
+async function embedWindowsEngineIcons(stageDir, version) {
+  if (process.platform !== "win32") return;
+  const iconPath = path.join(shellRoot, "build", "icon.ico");
+  if (!existsSync(iconPath)) throw new Error(`Windows engine icon missing: ${iconPath}`);
+  const { rcedit } = await import("rcedit");
+  await Promise.all(
+    RUNTIME_BINARIES.map((binary) =>
+      rcedit(path.join(stageDir, `${binary}.exe`), {
+        icon: iconPath,
+        "version-string": {
+          ProductName: "Kosmos Engine",
+          FileDescription: "Kosmos Engine",
+          CompanyName: "Kazui",
+          OriginalFilename: `${binary}.exe`,
+          InternalName: binary,
+        },
+        "file-version": version,
+        "product-version": version,
+      }),
+    ),
+  );
+}
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const releaseBuildLock = acquireBuildLock(shellRoot);
@@ -68,6 +91,7 @@ try {
 let engineVersion = null;
 if (process.platform === "win32") {
   engineVersion = process.env.KOSMOS_ENGINE_VERSION ?? getVersion("win");
+  await embedWindowsEngineIcons(stageDir, engineVersion);
   const engineDir = path.join(shellRoot, ".tmp", "engine.next");
   const engineArchive = path.join(engineDir, "Kosmos-Engine.zip");
   mkdirSync(engineDir, { recursive: true });

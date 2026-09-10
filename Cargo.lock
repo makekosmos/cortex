@@ -127,11 +127,10 @@ dependencies = [
 [[package]]
 name = "ark-core"
 version = "0.1.0"
-source = "git+https://github.com/makekosmos/core.git?rev=ba13c5b5aed364ef1b6704b5e08a98bc1898964a#ba13c5b5aed364ef1b6704b5e08a98bc1898964a"
+source = "git+https://github.com/makekosmos/core.git?rev=80d74cdc711d7601db8a351ee1d26d5c1bdfe34f#80d74cdc711d7601db8a351ee1d26d5c1bdfe34f"
 dependencies = [
  "async-trait",
  "chrono",
- "ed25519-dalek 3.0.0-rc.0",
  "futures-util",
  "hostname",
  "if-addrs",
@@ -927,7 +926,6 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.3.0",
  "curve25519-dalek-derive",
- "digest 0.11.3",
  "fiat-crypto 0.3.0",
  "rustc_version",
  "subtle",
@@ -1114,16 +1112,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
 dependencies = [
  "pkcs8",
- "signature 2.2.0",
-]
-
-[[package]]
-name = "ed25519"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29fcf32e6c73d1079f83ab4d782de2d81620346a5f38c6237a86a22f8368980a"
-dependencies = [
- "signature 3.0.0",
+ "signature",
 ]
 
 [[package]]
@@ -1133,22 +1122,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70e796c081cee67dc755e1a36a0a172b897fab85fc3f6bc48307991f64e4eca9"
 dependencies = [
  "curve25519-dalek 4.1.3",
- "ed25519 2.2.3",
+ "ed25519",
  "serde",
  "sha2 0.10.9",
- "subtle",
- "zeroize",
-]
-
-[[package]]
-name = "ed25519-dalek"
-version = "3.0.0-rc.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b011170fe4f04665565b4110afef66774fe9ffff278f3eb5b81cc73d26e27d60"
-dependencies = [
- "curve25519-dalek 5.0.0",
- "ed25519 3.0.0",
- "sha2 0.11.0",
  "subtle",
  "zeroize",
 ]
@@ -2204,7 +2180,7 @@ dependencies = [
  "bytes",
  "chrono",
  "csv",
- "ed25519-dalek 2.2.0",
+ "ed25519-dalek",
  "fend-core",
  "flate2",
  "futures-util",
@@ -3692,12 +3668,6 @@ checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
 dependencies = [
  "rand_core 0.6.4",
 ]
-
-[[package]]
-name = "signature"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28d567dcbaf0049cb8ac2608a76cd95ff9e4412e1899d389ee400918ca7537f5"
 
 [[package]]
 name = "simd-adler32"

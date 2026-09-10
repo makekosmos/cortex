@@ -80,17 +80,17 @@ export async function runAppReady({
   registerMainProtocols({ awaitArkReady });
   backendSupervisor.markBootInitStarted();
   const boot = backendSupervisor.initArkClient();
+  if (!process.argv.includes("--autostart")) {
+    const openManager =
+      process.env.KOSMOS_TEST_MODE === "1" ? launcher.showLauncher : launcher.openManager;
+    openManager();
+  }
+  void boot;
   if (runLegacyMigration) {
     await backendSupervisor.awaitArkReady();
     if (recoverLegacyMigration) await recoverLegacyMigration();
     await runLegacyMigration();
   }
-  if (!process.argv.includes("--autostart")) {
-    const openManager =
-      process.env.KOSMOS_TEST_MODE === "1" ? launcher.showLauncher : launcher.openManager;
-    openManager();
-    void boot;
-  } else void boot;
   setFocusSessionShellOpener(launcher.showFocusSessionLauncher);
   setFocusSessionRuntime({ awaitArkReady });
   setBlockedAppNotifier((app) => {

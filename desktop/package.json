@@ -91,6 +91,10 @@
       ],
       "extraResources": [
         {
+          "from": ".tmp/engine.next/Kosmos-Engine.zip",
+          "to": "Kosmos Engine.zip"
+        },
+        {
           "from": ".tmp/engine.next/engine-manifest.json",
           "to": "engine-manifest.json"
         },

@@ -64,6 +64,9 @@ test("runAppReady opens Manager on manual launch and keeps autostart silent", ()
   expect(appReadySource.indexOf("initArkClient()")).toBeLessThan(
     appReadySource.indexOf("openManager();"),
   );
+  expect(appReadySource.indexOf("openManager();")).toBeLessThan(
+    appReadySource.indexOf("if (runLegacyMigration)"),
+  );
   expect(appReadySource).not.toContain("boot.then(openManager");
   expect(appReadySource).toContain("launcher.setTrayVisible");
   expect(appReadySource).toContain("launcher.registerLauncherHotkeys");

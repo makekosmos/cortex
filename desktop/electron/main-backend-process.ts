@@ -64,6 +64,12 @@ export function spawnBackendProcess({
     env: backendEnv,
     windowsHide: true,
   });
+  proc.on("error", (error) => {
+    log.error("backend", "backend process spawn failed", {
+      exe,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
   proc.unref();
   return { lockPath, proc };
 }

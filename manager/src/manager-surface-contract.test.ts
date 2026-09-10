@@ -4,12 +4,11 @@ import { describe, expect, test } from "bun:test";
 const read = (name: string) => readFileSync(new URL(`./views/${name}`, import.meta.url), "utf8");
 
 describe("Manager surface contract", () => {
-  test("keeps diagnostics visible and hands standalone apps to the Host", () => {
+  test("keeps diagnostics visible while standalone apps stay out of the dashboard", () => {
     const root = readFileSync(new URL("./ManagerRoot.vue", import.meta.url), "utf8");
     expect(root).toContain('label: "Диагностика"');
-    expect(root).toContain('"com.kosmos.dictation"');
-    expect(root).toContain('"com.kosmos.focus"');
-    expect(root).toContain('"openPackage"');
+    expect(root).not.toContain('"com.kosmos.dictation"');
+    expect(root).not.toContain('"com.kosmos.focus"');
     expect(root).toContain("DiagnosticsView");
     expect(root).not.toContain("DictationSettingsView");
     expect(root).not.toContain("FocusView");
