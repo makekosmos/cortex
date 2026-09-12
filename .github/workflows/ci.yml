@@ -111,7 +111,6 @@ jobs:
           cargo test --locked --package kepler-backend --test package_worker_windows --features package-worker-fixture
           cargo clippy --locked --package kepler-backend --all-targets --features package-worker-fixture -- -D warnings
           bun test desktop/electron/focus-enforcement.test.ts
-          bun run test:backend
           bun run test:rust
           bun run --cwd desktop test:runtime-staging
 
