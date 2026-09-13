@@ -93,6 +93,9 @@ test("docs and isolated assets are a safe no-op", () => {
   ]) {
     assert.equal(plan("--files", file).json.full, true, file);
   }
+  for (const file of ["shared/icon.svg", "packages/foo/logo.png"]) {
+    assert.equal(plan("--files", file).json.full, true, file);
+  }
 });
 
 test("explicit full always selects every check and job", () => {

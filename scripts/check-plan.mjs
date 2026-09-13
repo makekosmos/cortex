@@ -176,8 +176,8 @@ function classify(file) {
     /\.(?:md|mdx|txt)$/i.test(path)
   )
     return "full";
-  if (isDocumentation(path) || ASSET_EXTENSIONS.test(path)) return [];
   if (isFullInfluence(path)) return "full";
+  if (isDocumentation(path) || ASSET_EXTENSIONS.test(path)) return [];
   if (/^desktop\/src\//.test(path)) return ["desktop-typecheck", "lint", "format"];
   if (/^desktop\/electron\//.test(path))
     return ["desktop-typecheck", "desktop-contracts", "lint", "format"];
