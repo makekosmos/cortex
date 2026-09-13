@@ -69,6 +69,10 @@ impl ManagerState {
         }
     }
 
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
+    }
+
     pub async fn data_summary(
         &self,
         ark: &Arc<ArkHost>,

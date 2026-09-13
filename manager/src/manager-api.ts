@@ -327,6 +327,12 @@ export type FocusServiceStatus = {
 };
 export type FocusServiceAction = { ok: boolean; error?: string };
 export type FileIndexNtfsStatus = "active" | "fallback" | "unavailable" | "disabled" | "unknown";
+export type DatabaseBackup = {
+  name: string;
+  path: string;
+  size: number;
+  modified_at: string;
+};
 export type FileIndexScanProgress = {
   phase: string;
   root: string | null;
@@ -507,6 +513,12 @@ export interface ManagerApi {
   rescanFileIndex(): Promise<ManagerResult<FileIndexSettings>>;
   clearFileIndexCache(): Promise<ManagerResult<FileIndexSettings>>;
   pickFileIndexRoot(): Promise<ManagerResult<string | null>>;
+  getDbBackups(): Promise<ManagerResult<DatabaseBackup[]>>;
+  createDbBackup(): Promise<ManagerResult<{ path: string }>>;
+  openDbBackupsFolder(): Promise<ManagerResult<{ opened: boolean }>>;
+  restoreDbBackup(input: {
+    name: string;
+  }): Promise<ManagerResult<{ restored: true; name: string; objectCount: number }>>;
 }
 
 export const managerOperations = {
@@ -574,4 +586,6 @@ export const managerOperations = {
   removeFileIndexIgnore: "file_index.ignore_remove",
   rescanFileIndex: "file_index.rescan",
   clearFileIndexCache: "file_index.clear_cache",
+  getDbBackups: "manager.db_backups.list",
+  createDbBackup: "manager.db_backups.create",
 } as const;

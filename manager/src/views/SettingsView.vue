@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { Button, SettingsList, SettingsRow, SettingsToggleRow } from "@kosmos/visuals";
+import type { DatabaseBackup } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
 
 const props = defineProps<{ client: ManagerClient }>();
 const enabled = ref(false);
 const available = ref(false);
 const trayIcon = ref(true);
+const backups = ref<DatabaseBackup[]>([]);
+const backupBusy = ref(false);
+const backupMessage = ref<string | null>(null);
 const label = computed(() => (enabled.value ? "Включён" : "Отключён"));
+const lastBackup = computed(() => backups.value[0]?.modified_at ?? "нет снимков");
 
 type TraySettingsBridge = {
   trayIcon: { get(): Promise<boolean>; set(enabled: boolean): Promise<void> };
@@ -62,7 +67,55 @@ async function downloadLogs() {
   await props.client.call("saveSupportBundle", undefined, "support-bundle");
 }
 
-onMounted(() => void load());
+async function loadBackups() {
+  backups.value =
+    (await props.client.call<DatabaseBackup[]>("getDbBackups", undefined, "db-backups")) ?? [];
+}
+
+async function createBackup() {
+  backupBusy.value = true;
+  backupMessage.value = null;
+  try {
+    const result = await props.client.call<{ path: string }>(
+      "createDbBackup",
+      undefined,
+      "db-backup-create",
+    );
+    if (!result) return;
+    await loadBackups();
+    backupMessage.value = "Снимок базы создан.";
+  } finally {
+    backupBusy.value = false;
+  }
+}
+
+async function openBackupsFolder() {
+  await props.client.call("openDbBackupsFolder", undefined, "db-backups-open");
+}
+
+async function restoreBackup(backup: DatabaseBackup) {
+  if (!window.confirm(`Восстановить базу из снимка ${backup.name}? Engine перезапустится.`)) return;
+  backupBusy.value = true;
+  backupMessage.value = null;
+  try {
+    const result = await props.client.call<{
+      restored: true;
+      name: string;
+      objectCount: number;
+    }>("restoreDbBackup", { name: backup.name }, "db-backup-restore");
+    if (result) {
+      await loadBackups();
+      backupMessage.value = `База восстановлена. Объектов: ${result.objectCount}.`;
+    }
+  } finally {
+    backupBusy.value = false;
+  }
+}
+
+onMounted(() => {
+  void load();
+  void loadBackups();
+});
 </script>
 
 <template>
@@ -92,5 +145,40 @@ onMounted(() => void load());
         </template>
       </SettingsRow>
     </SettingsList>
+    <div class="card">
+      <div class="card-heading">
+        <h2>Резервные копии базы</h2>
+        <small>Последний снимок: {{ lastBackup }}</small>
+      </div>
+      <p class="muted">
+        Это локальные снимки базы данных ARK, а не синхронизация, Huawei, Store или экспорт.
+      </p>
+      <div class="toolbar">
+        <Button :disabled="backupBusy" @click="createBackup">Сделать бэкап сейчас</Button>
+        <Button variant="ghost" :disabled="backupBusy" @click="openBackupsFolder"
+          >Открыть папку бэкапов</Button
+        >
+      </div>
+      <p v-if="backupMessage" class="muted" role="status">{{ backupMessage }}</p>
+      <SettingsList v-if="backups.length">
+        <SettingsRow
+          v-for="backup in backups"
+          :key="backup.name"
+          :title="backup.name"
+          :description="`${backup.path} · ${backup.size} Б`"
+        >
+          <template #control>
+            <Button
+              size="sm"
+              variant="surface"
+              :disabled="backupBusy"
+              @click="restoreBackup(backup)"
+              >Восстановить</Button
+            >
+          </template>
+        </SettingsRow>
+      </SettingsList>
+      <p v-else class="muted">Снимков пока нет.</p>
+    </div>
   </section>
 </template>

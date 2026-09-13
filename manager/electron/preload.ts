@@ -101,5 +101,9 @@ const api: ManagerApi = {
   rescanFileIndex: () => invoke("manager.rescanFileIndex"),
   clearFileIndexCache: () => invoke("manager.clearFileIndexCache"),
   pickFileIndexRoot: () => invoke("manager.pickFileIndexRoot"),
+  getDbBackups: () => invoke("manager.getDbBackups"),
+  createDbBackup: () => invoke("manager.createDbBackup"),
+  openDbBackupsFolder: () => invoke("manager.openDbBackupsFolder"),
+  restoreDbBackup: (v) => invoke("manager.restoreDbBackup", v),
 };
 contextBridge.exposeInMainWorld("kosmosManager", api);

@@ -109,6 +109,14 @@ pub struct DbBackupDiagnosticsSnapshot {
     pub background_mode: bool,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DbBackupMetadata {
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+    pub modified_at: String,
+}
+
 /// Дождаться события `db_backup_result` для нашего `dest_str` (backup идёт
 /// async в ark-core-rpc). Bounded таймаутом, чтобы не зависнуть навсегда если
 /// ark-core-rpc умер посреди копирования.
@@ -152,6 +160,41 @@ fn ensure_backups_dir(data_dir: &Path) -> Result<PathBuf, String> {
     let dir = data_dir.join(BACKUPS_SUBDIR);
     std::fs::create_dir_all(&dir).map_err(|e| format!("create_dir_all {dir:?}: {e}"))?;
     Ok(dir)
+}
+
+pub fn list_backups(data_dir: &Path) -> Result<Vec<DbBackupMetadata>, String> {
+    let dir = data_dir.join(BACKUPS_SUBDIR);
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(format!("read_dir {dir:?}: {error}")),
+    };
+    let mut backups = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = match path.file_name().and_then(|value| value.to_str()) {
+            Some(name) if parse_backup_timestamp(name).is_some() => name.to_owned(),
+            _ => continue,
+        };
+        let metadata = match std::fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.is_file() => metadata,
+            _ => continue,
+        };
+        let modified_at = metadata
+            .modified()
+            .ok()
+            .map(|value| DateTime::<Utc>::from(value).to_rfc3339())
+            .unwrap_or_default();
+        let path = path.to_str().ok_or("backup path is not UTF-8")?.to_owned();
+        backups.push(DbBackupMetadata {
+            name,
+            path,
+            size: metadata.len(),
+            modified_at,
+        });
+    }
+    backups.sort_by(|a, b| b.name.cmp(&a.name));
+    Ok(backups)
 }
 
 /// Удалить все backup'ы кроме последних `retain` (sorted by parsed timestamp
@@ -288,6 +331,21 @@ mod tests {
         assert!(parse_backup_timestamp("ark.db").is_none());
         assert!(parse_backup_timestamp("ark.db.backup-not-a-date").is_none());
         assert!(parse_backup_timestamp("random.txt").is_none());
+    }
+
+    #[test]
+    fn lists_only_local_timestamped_backups() {
+        let dir = tempfile::tempdir().unwrap();
+        let backups = dir.path().join(BACKUPS_SUBDIR);
+        std::fs::create_dir_all(&backups).unwrap();
+        let newest = backup_filename(Utc::now());
+        std::fs::write(backups.join(&newest), b"backup").unwrap();
+        std::fs::write(backups.join("notes.txt"), b"ignore").unwrap();
+
+        let listed = list_backups(dir.path()).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].name, newest);
+        assert_eq!(listed[0].size, 6);
     }
 
     #[test]

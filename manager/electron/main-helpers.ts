@@ -57,8 +57,8 @@ function hostArgs(id: string, development?: DevPackage): string[] {
 }
 
 function startPackagedRuntime(): boolean {
-  const executable = resolvePackagedRuntimeExecutable(process.resourcesPath);
-  if (!app.isPackaged || process.platform !== "win32" || !fs.existsSync(executable)) return false;
+  const executable = resolveRuntimeExecutable();
+  if (!executable || (!app.isPackaged && !process.env.KOSMOS_CORTEX_EXECUTABLE)) return false;
   const child = spawn(executable, ["--start"], {
     detached: true,
     stdio: "ignore",
@@ -67,6 +67,14 @@ function startPackagedRuntime(): boolean {
   child.once("error", () => undefined);
   child.unref();
   return true;
+}
+
+function resolveRuntimeExecutable(): string | null {
+  const configured = process.env.KOSMOS_CORTEX_EXECUTABLE?.trim();
+  const executable = configured
+    ? path.resolve(configured)
+    : resolvePackagedRuntimeExecutable(process.resourcesPath);
+  return fs.existsSync(executable) ? executable : null;
 }
 
 const bounded = (value: Input, max: number): value is string =>
@@ -200,6 +208,7 @@ function normalizeIntegrationSnapshot(value: Input) {
 export {
   openHostedPackage,
   startPackagedRuntime,
+  resolveRuntimeExecutable,
   bounded,
   isObject,
   validation,
