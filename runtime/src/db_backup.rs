@@ -124,6 +124,53 @@ fn next_backup_destination(
     Err("unable to allocate a unique backup filename".to_string())
 }
 
+#[cfg(windows)]
+fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+
+    metadata.file_type().is_symlink() || metadata.file_attributes() & 0x400 != 0
+}
+
+#[cfg(not(windows))]
+fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
+}
+
+fn validated_backups_dir(data_dir: &Path, create: bool) -> Result<Option<PathBuf>, String> {
+    if create {
+        std::fs::create_dir_all(data_dir)
+            .map_err(|e| format!("create data directory {data_dir:?}: {e}"))?;
+    }
+    let canonical_data_dir = match data_dir.canonicalize() {
+        Ok(path) => path,
+        Err(error) if !create && error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("canonicalize data directory {data_dir:?}: {error}")),
+    };
+    let dir = data_dir.join(BACKUPS_SUBDIR);
+    if create {
+        std::fs::create_dir_all(&dir).map_err(|e| format!("create_dir_all {dir:?}: {e}"))?;
+    }
+    let metadata = match std::fs::symlink_metadata(&dir) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("stat backup directory {dir:?}: {error}")),
+    };
+    if !metadata.is_dir() || is_reparse_point(&metadata) {
+        return Err(format!(
+            "backup directory must be a real directory: {dir:?}"
+        ));
+    }
+    let canonical_dir = dir
+        .canonicalize()
+        .map_err(|e| format!("canonicalize backup directory {dir:?}: {e}"))?;
+    if !canonical_dir.starts_with(&canonical_data_dir) {
+        return Err(format!(
+            "backup directory escapes data directory: {canonical_dir:?}"
+        ));
+    }
+    Ok(Some(canonical_dir))
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct DbBackupMetadata {
     pub name: String,
@@ -172,18 +219,14 @@ async fn wait_for_backup_result(
 
 /// Ensure `<data_dir>/backups/` exists and return path.
 fn ensure_backups_dir(data_dir: &Path) -> Result<PathBuf, String> {
-    let dir = data_dir.join(BACKUPS_SUBDIR);
-    std::fs::create_dir_all(&dir).map_err(|e| format!("create_dir_all {dir:?}: {e}"))?;
-    Ok(dir)
+    validated_backups_dir(data_dir, true)?.ok_or("backup directory was not created".to_string())
 }
 
 pub fn list_backups(data_dir: &Path) -> Result<Vec<DbBackupMetadata>, String> {
-    let dir = data_dir.join(BACKUPS_SUBDIR);
-    let entries = match std::fs::read_dir(&dir) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(format!("read_dir {dir:?}: {error}")),
+    let Some(dir) = validated_backups_dir(data_dir, false)? else {
+        return Ok(Vec::new());
     };
+    let entries = std::fs::read_dir(&dir).map_err(|error| format!("read_dir {dir:?}: {error}"))?;
     let mut backups = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
@@ -363,6 +406,52 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].name, newest);
         assert_eq!(listed[0].size, 6);
+    }
+
+    #[test]
+    fn rejects_linked_backups_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let backups = root.path().join(BACKUPS_SUBDIR);
+        let linked = {
+            #[cfg(unix)]
+            {
+                std::os::unix::fs::symlink(target.path(), &backups).is_ok()
+            }
+            #[cfg(windows)]
+            {
+                std::os::windows::fs::symlink_dir(target.path(), &backups)
+                    .or_else(|_| {
+                        let command = format!(
+                            "mklink /J \"{}\" \"{}\"",
+                            backups.display(),
+                            target.path().display()
+                        );
+                        std::process::Command::new("cmd")
+                            .args(["/C", &command])
+                            .status()
+                            .map(|status| status.success())
+                            .and_then(|success| {
+                                if success {
+                                    Ok(())
+                                } else {
+                                    Err(std::io::Error::other("mklink failed"))
+                                }
+                            })
+                    })
+                    .is_ok()
+            }
+            #[cfg(not(any(unix, windows)))]
+            {
+                false
+            }
+        };
+        if !linked {
+            return;
+        }
+
+        assert!(list_backups(root.path()).is_err());
+        assert!(ensure_backups_dir(root.path()).is_err());
     }
 
     #[test]

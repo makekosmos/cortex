@@ -10,7 +10,6 @@ import {
   type OpenDialogOptions,
 } from "electron";
 import { statSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { rpc, status, subscribeDictationEvents, waitForEngineReady } from "./engine-client";
@@ -64,7 +63,7 @@ import {
 import { clearIntegrationBrowserData, registerIntegrationLoginHandlers } from "./integration-login";
 import { readBrowserDataPersistence, writeBrowserDataPersistence } from "./browser-settings";
 import { resolveInstance } from "../../desktop/electron/instance";
-import { normalizeDbBackups } from "./database-backups";
+import { normalizeDbBackups, resolveSafeDbBackupsFolder } from "./database-backups";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import {
@@ -883,8 +882,7 @@ function registerAll() {
     if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1")
       return { ok: true, data: { opened: false } };
     try {
-      const directory = path.join(dataRoot(), "backups");
-      await mkdir(directory, { recursive: true });
+      const directory = await resolveSafeDbBackupsFolder(dataRoot());
       const error = await shell.openPath(directory);
       return { ok: true, data: { opened: !error } };
     } catch {
