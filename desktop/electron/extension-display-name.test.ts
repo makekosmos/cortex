@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { extensionDisplayName } from "./extension-display-name";
 
 test("uses current names for legacy extension identifiers", () => {

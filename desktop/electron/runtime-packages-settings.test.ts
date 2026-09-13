@@ -1,9 +1,9 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 const source = await readFile(
-  path.join(import.meta.dir, "../src/views/settings/composables/useExtensionsTab.ts"),
+  path.join(import.meta.dirname, "../src/views/settings/composables/useExtensionsTab.ts"),
   "utf8",
 );
 

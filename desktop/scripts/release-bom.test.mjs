@@ -28,7 +28,7 @@ const context = {
       package: { name: "@makekosmos/ark", version: "0.1.1", integrity: `git:${"c".repeat(40)}` },
     },
   },
-  toolchain: { bun: "1.3.14", node: "24.15.0", rust: "1.95.0" },
+  toolchain: { pnpm: "12.4.1", node: "24.15.0", rust: "1.95.0" },
   api: { shell: "1.1.0", engine: "1.0.0", package_manifest: 2 },
 };
 

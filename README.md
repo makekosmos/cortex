@@ -32,27 +32,27 @@ See [`docs/rust-build-cache.md`](docs/rust-build-cache.md) for Rust cache,
 sidecar reuse, prebuilt UI development, and baseline evidence.
 
 ```text
-# Installed automatically by `bun install`; recover with:
-bun run prepare
+# Installed automatically by `pnpm install`; recover with:
+pnpm run prepare
 
 # Run the same hook contracts manually:
 bunx lefthook run pre-commit
 bunx lefthook run pre-push
 
 # Full local verification:
-bun run check
+pnpm run check
 
 # Print the affected-check plan (JSON on stdout, explanation on stderr):
-bun run check:plan
+pnpm run check:plan
 
 # Execute only the selected local checks:
-bun run check:affected
+pnpm run check:affected
 
 # Force the conservative full path:
 node scripts/check-plan.mjs --full --run
 
 # Validate a release BOM without building or publishing:
-bun run test:release-bom
+pnpm run test:release-bom
 
 # Preflight only (must pass before any compilation):
 node desktop/scripts/release-preflight.mjs --platform win --bom path/to/release-bom.json
@@ -70,7 +70,7 @@ node desktop/scripts/publish-release.mjs --platform win --receipt desktop/releas
 node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v1.json --dry-run
 ```
 
-`bun run --cwd desktop build` and `build:mac` read the same path from
+`pnpm run --cwd desktop build` and `build:mac` read the same path from
 `KOSMOS_RELEASE_BOM`, so the existing release commands cannot run without an
 explicit resolved BOM.
 
@@ -124,7 +124,7 @@ was blocked by KOS-50. Branch protection is disabled, and ruleset/merge-queue
 status is NOT_RUN. Use `--full` when reviewing uncertain changes and treat the
 planner's `reasons` field as the explanation for a full selection.
 
-The build wrapper validates Cortex/Core commits, the pinned Bun/Node/Rust toolchain, and
+The build wrapper validates Cortex/Core commits, the pinned pnpm/Node/Rust toolchain, and
 the shell/engine/package API contracts before electron-builder starts. Every local
 electron-builder path uses `--publish never`. It embeds the exact BOM at
 `resources/release-bom.json`, emits `release/release-provenance.json`, and atomically
@@ -133,10 +133,10 @@ writes `release/release-receipt.v1.json` with exact inputs and final artifact ha
 include expected `artifacts` entries to make a rebuild fail on a hash or size mismatch;
 omitted entries are recorded from the final build.
 
-`bun run check` covers layout, source-size, lint, changed-file Oxfmt, all frontend
+`pnpm run check` covers layout, source-size, lint, changed-file Oxfmt, all frontend
 typechecks, Rustfmt, workspace Clippy with warnings denied, complete workspace
-Rust tests, backend tests, and runtime staging. `bun install --frozen-lockfile`
-installs Lefthook hooks on a clean checkout; run `bun run prepare` if hooks are
+Rust tests, backend tests, and runtime staging. `pnpm install --frozen-lockfile`
+installs Lefthook hooks on a clean checkout; run `pnpm run prepare` if hooks are
 missing. Pre-commit uses the planner against staged files; pre-push uses the
 Git-provided ref range when stdin is available and otherwise falls back to the
 full backend and runtime suite.

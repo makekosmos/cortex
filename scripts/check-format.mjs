@@ -29,5 +29,8 @@ const files = changed.stdout.split(/\r?\n/).filter((file) => extensions.test(fil
 
 if (files.length === 0) process.exit(0);
 
-const result = spawnSync("oxfmt", ["--check", ...files], { stdio: "inherit" });
+const result = spawnSync("oxfmt", ["--check", ...files], {
+  stdio: "inherit",
+  shell: process.platform === "win32",
+});
 process.exit(result.status ?? 1);

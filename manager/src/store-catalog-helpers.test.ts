@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../../test-support/node-test.mjs";
 import { filterListings, permissionSummaries, recommendForData } from "./store-catalog-helpers";
 import type { DataSummary, InstalledStoreItem, StoreListing } from "./manager-api";
 

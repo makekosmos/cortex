@@ -2,7 +2,7 @@
   "name": "kosmos-desktop",
   "version": "0.5.4",
   "private": true,
-  "description": "Kosmos — desktop host for notes, tasks, games, focus, and activity",
+  "description": "Kosmos \u2014 desktop host for notes, tasks, games, focus, and activity",
   "author": "Kazui",
   "type": "module",
   "main": "dist-electron/main.js",
@@ -14,7 +14,7 @@
     "test:runtime-staging": "node --test scripts/runtime-staging.test.mjs",
     "test:dev-run": "node --test scripts/dev-run.test.mjs",
     "dev:kepler": "node -e \"process.env.KEPLER_DEV='1';require('node:child_process').spawnSync('vite',['--host','127.0.0.1','--port','9912','--strictPort','--configLoader','native'],{stdio:'inherit',shell:true,windowsHide:true,env:process.env});\"",
-    "dev": "bun run build:backend:dev && node scripts/dev.mjs",
+    "dev": "pnpm run build:backend:dev && node scripts/dev.mjs",
     "dev:no-build": "node scripts/dev.mjs",
     "dev:run": "node scripts/dev.mjs run",
     "dev:stop": "node scripts/dev.mjs stop",
@@ -23,15 +23,15 @@
     "dev:smoke": "node scripts/dev.mjs smoke",
     "build:js:shell": "tsc && vite build --configLoader native",
     "build:js": "tsc && vite build --configLoader native",
-    "build": "bun run build:backend && node scripts/release-preflight.mjs --platform win && bun run build:native:macos && bun run build:package-components && bun run build:js && node scripts/build-desktop.mjs --platform win --skip-preflight",
-    "build:mac": "bun run build:backend && node scripts/release-preflight.mjs --platform mac && bun run build:native:macos && bun run build:js && node scripts/build-desktop.mjs --platform mac",
+    "build": "pnpm run build:backend && node scripts/release-preflight.mjs --platform win && pnpm run build:native:macos && pnpm run build:package-components && pnpm run build:js && node scripts/build-desktop.mjs --platform win --skip-preflight",
+    "build:mac": "pnpm run build:backend && node scripts/release-preflight.mjs --platform mac && pnpm run build:native:macos && pnpm run build:js && node scripts/build-desktop.mjs --platform mac",
     "verify:channel": "node scripts/verify-release-channel.mjs",
     "typecheck": "tsc --noEmit",
-    "package:dir": "bun run build:backend && node scripts/release-preflight.mjs --platform win && bun run build:package-components && bun run build:js && electron-builder --dir --publish never",
+    "package:dir": "pnpm run build:backend && node scripts/release-preflight.mjs --platform win && pnpm run build:package-components && pnpm run build:js && electron-builder --dir --publish never",
     "build:package-components": "node scripts/build-package-components.mjs",
-    "package:mac": "bun run build:mac",
-    "test:e2e": "bun run build:js && playwright test --config playwright.config.ts",
-    "test:e2e:headed": "bun run build:js && playwright test --config playwright.config.ts --headed"
+    "package:mac": "pnpm run build:mac",
+    "test:e2e": "pnpm run build:js && playwright test --config playwright.config.ts",
+    "test:e2e:headed": "pnpm run build:js && playwright test --config playwright.config.ts --headed"
   },
   "dependencies": {
     "@lucide/vue": "^1.16.0",
@@ -54,7 +54,7 @@
     "vite": "^8.0.3",
     "vite-plugin-electron": "1.0.0-beta.2",
     "vite-plugin-electron-renderer": "^0.14.6",
-    "vue": "^3.6.0-beta.12"
+    "vue": "3.6.0-rc.7"
   },
   "build": {
     "appId": "com.kazui.kosmos",
@@ -157,5 +157,6 @@
       "deleteAppDataOnUninstall": false,
       "include": "build/installer.nsh"
     }
-  }
+  },
+  "packageManager": "pnpm@12.4.1"
 }

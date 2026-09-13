@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { readFileSync } from "node:fs";
 
 test("Manager opens even while Engine is recovering", () => {

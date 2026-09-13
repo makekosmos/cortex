@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { imageDimensions } from "./image-dimensions";
 
 test("imageDimensions reads PNG and standard JPEG SOF dimensions", () => {

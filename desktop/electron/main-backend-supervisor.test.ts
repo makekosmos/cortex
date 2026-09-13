@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { beforeEach, expect, mock, test } from "bun:test";
+import { beforeEach, expect, mock, test } from "../test-support/node-test.mjs";
 
 class FakeProcess extends EventEmitter {
   killed = false;

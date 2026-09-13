@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../test-support/node-test.mjs";
 import { lookupOpenLibraryIsbn } from "./book-metadata-open-library";
 import type { JsonValue } from "./json-contracts";
 

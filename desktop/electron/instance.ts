@@ -1,7 +1,7 @@
 // Instance slot resolution — single source of truth для разделения
 // prod / dev / multi-dev / test инстансов Kepler.
 //
-// Проблема: до этого модуля dev (`bun run --cwd platform/desktop dev`) и prod
+// Проблема: до этого модуля dev (`pnpm --dir platform/desktop dev`) и prod
 // (installed Kepler.exe) шарили `app.requestSingleInstanceLock()` (через
 // `appId=com.kazui.kepler`) и Electron `userData` (через `productName=Kepler`).
 // Параллельный запуск был невозможен — первый брал lock, второй редиректил

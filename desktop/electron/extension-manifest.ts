@@ -41,7 +41,7 @@ const __dirname = path.dirname(__filename);
 //
 // Это устраняет double opt-in (раньше нужно было `KEPLER_DEV_EXTENSIONS=1`
 // env + `developerMode: true` в settings + руками поднять `dev:extensions`).
-// Теперь `bun run dev` поднимает Vite-серверы автоматически (см. platform/desktop/scripts/dev.mjs),
+// Теперь `pnpm run dev` поднимает Vite-серверы автоматически (см. platform/desktop/scripts/dev.mjs),
 // а extension-host сам выясняет к кому подключаться.
 // ---------------------------------------------------------------------------
 
@@ -123,7 +123,7 @@ export async function resolveExtensionSource(
   if (!existsSync(entryHtml)) {
     console.error(
       `[kepler-shell] extension '${id}' entryHtml not found: ${entryHtml}` +
-        ` — для Vue extension'а сначала запусти build (bun run build:extensions).`,
+        ` — для Vue extension'а сначала запусти build (pnpm run build:extensions).`,
     );
     return null;
   }

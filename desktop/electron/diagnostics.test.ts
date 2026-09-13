@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { expect, mock, test } from "bun:test";
+import { expect, mock, test } from "../test-support/node-test.mjs";
 
 mock.module("electron", () => ({
   app: {

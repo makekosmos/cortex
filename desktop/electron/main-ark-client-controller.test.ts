@@ -1,4 +1,4 @@
-import { beforeEach, expect, mock, test } from "bun:test";
+import { beforeEach, expect, mock, test } from "../test-support/node-test.mjs";
 import type { JsonRecord } from "./extension-permissions";
 
 const engineLock = {
@@ -53,10 +53,10 @@ mock.module("@kosmos/ark", () => ({
 }));
 mock.module("./data-dir", () => ({ keplerDataDir: () => "C:\\Kosmos-test" }));
 mock.module("./logging", () => ({
-  keplerLog: { error: mock(), info: mock(), warn: mock(), setCorrelationId: mock() },
+  keplerLog: { error: mock.fn(), info: mock.fn(), warn: mock.fn(), setCorrelationId: mock.fn() },
 }));
-mock.module("./main-protocols", () => ({ clearMainProtocolCaches: mock() }));
-mock.module("./extension-ark-ipc", () => ({ setExtensionArkBridge: mock() }));
+mock.module("./main-protocols", () => ({ clearMainProtocolCaches: mock.fn() }));
+mock.module("./extension-ark-ipc", () => ({ setExtensionArkBridge: mock.fn() }));
 
 const { createMainArkClientController } = await import("./main-ark-client-controller");
 
@@ -84,7 +84,7 @@ beforeEach(() => {
   invokeError = null;
 });
 
-test("Desktop creates ArkClient with the Engine lock", async () => {
+test("Desktop creates ArkClient with the Engine lock", { concurrency: false }, async () => {
   const controller = createController();
   await controller.initArkClient();
 
@@ -97,7 +97,7 @@ test("Desktop creates ArkClient with the Engine lock", async () => {
   ]);
 });
 
-test("Desktop fails closed when Engine cannot launch", async () => {
+test("Desktop fails closed when Engine cannot launch", { concurrency: false }, async () => {
   nextState = {
     kind: "launch-failed",
     error: { kind: "launch-failed", message: "Engine did not start" },
@@ -109,12 +109,16 @@ test("Desktop fails closed when Engine cannot launch", async () => {
   expect(capturedOptions).toBeNull();
 });
 
-test("Desktop is not ready when the private authority lease is rejected", async () => {
-  invokeError = new Error("desktop authority denied");
-  const controller = createController();
-  const ready = controller.awaitArkReady().catch((error: Error) => error);
-  await controller.initArkClient();
+test(
+  "Desktop is not ready when the private authority lease is rejected",
+  { concurrency: false },
+  async () => {
+    invokeError = new Error("desktop authority denied");
+    const controller = createController();
+    const ready = controller.awaitArkReady().catch((error: Error) => error);
+    await controller.initArkClient();
 
-  expect(controller.getArkClient()).toBeNull();
-  expect((await ready).message).toContain("desktop authority denied");
-});
+    expect(controller.getArkClient()).toBeNull();
+    expect((await ready).message).toContain("desktop authority denied");
+  },
+);

@@ -1,10 +1,6 @@
 import path from "node:path";
-import { expect, test } from "bun:test";
-import {
-  kosmosAppIcon,
-  kosmosAppName,
-  kosmosAppShortcutIcon,
-} from "./kosmos-app-branding";
+import { expect, test } from "../test-support/node-test.mjs";
+import { kosmosAppIcon, kosmosAppName, kosmosAppShortcutIcon } from "./kosmos-app-branding";
 
 test("brands current package windows with Kosmos names and icons", () => {
   expect(kosmosAppName("com.kosmos.memoria", "Memoria")).toBe("Memoria");

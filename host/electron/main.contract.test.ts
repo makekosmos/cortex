@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../test-support/node-test.mjs";
 
 const source = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
 const hostApiSource = readFileSync(new URL("./host-api.ts", import.meta.url), "utf8");

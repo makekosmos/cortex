@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import {
   SETTINGS_WINDOW_SIZE,
   settingsWindowBounds,

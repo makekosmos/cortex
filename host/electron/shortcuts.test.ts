@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, mock, test } from "../test-support/node-test.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";

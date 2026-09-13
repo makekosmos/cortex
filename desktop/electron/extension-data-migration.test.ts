@@ -1,10 +1,15 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { mkdtemp, mkdir, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { mergeLegacyExtensionData } from "./extension-data-migration";
 
-async function tempRoots(): Promise<{ root: string; canonical: string; arcadia: string; arrancador: string }> {
+async function tempRoots(): Promise<{
+  root: string;
+  canonical: string;
+  arcadia: string;
+  arrancador: string;
+}> {
   const root = await mkdtemp(path.join(os.tmpdir(), "cortex-extension-data-"));
   const canonical = path.join(root, "canonical");
   const arcadia = path.join(root, "arcadia");
@@ -21,15 +26,27 @@ test("merges Arcadia aliases in fixed order and preserves destination values", a
     await mkdir(path.join(roots.arrancador, "nested"), { recursive: true });
     await writeFile(
       path.join(roots.canonical, "settings.json"),
-      JSON.stringify({ keep: "canonical", nested: { keep: "canonical", deleted: null }, array: ["canonical"] }),
+      JSON.stringify({
+        keep: "canonical",
+        nested: { keep: "canonical", deleted: null },
+        array: ["canonical"],
+      }),
     );
     await writeFile(
       path.join(roots.arcadia, "settings.json"),
-      JSON.stringify({ keep: "arcadia", nested: { keep: "arcadia", fromArcadia: true }, array: ["arcadia"] }),
+      JSON.stringify({
+        keep: "arcadia",
+        nested: { keep: "arcadia", fromArcadia: true },
+        array: ["arcadia"],
+      }),
     );
     await writeFile(
       path.join(roots.arrancador, "settings.json"),
-      JSON.stringify({ keep: "arrancador", nested: { fromArrancador: true }, array: ["arrancador"] }),
+      JSON.stringify({
+        keep: "arrancador",
+        nested: { fromArrancador: true },
+        array: ["arrancador"],
+      }),
     );
     await writeFile(path.join(roots.arrancador, "new.bin"), Buffer.from([1, 2, 3]));
 
@@ -44,11 +61,13 @@ test("merges Arcadia aliases in fixed order and preserves destination values", a
 
     expect(result.copiedFiles).toBe(1);
     expect(result.mergedJsonFiles).toBe(2);
-    expect(JSON.parse(await readFile(path.join(roots.canonical, "settings.json"), "utf8"))).toEqual({
-      keep: "canonical",
-      nested: { keep: "canonical", deleted: null, fromArcadia: true, fromArrancador: true },
-      array: ["canonical"],
-    });
+    expect(JSON.parse(await readFile(path.join(roots.canonical, "settings.json"), "utf8"))).toEqual(
+      {
+        keep: "canonical",
+        nested: { keep: "canonical", deleted: null, fromArcadia: true, fromArrancador: true },
+        array: ["canonical"],
+      },
+    );
     expect(await readFile(path.join(roots.canonical, "new.bin"))).toEqual(Buffer.from([1, 2, 3]));
   } finally {
     await rm(roots.root, { recursive: true, force: true });
@@ -65,8 +84,8 @@ test("copies missing files with source mtime and keeps invalid, scalar, array, a
     await writeFile(path.join(roots.arcadia, "invalid.json"), "{broken");
     await writeFile(path.join(roots.canonical, "scalar.json"), "null");
     await writeFile(path.join(roots.arcadia, "scalar.json"), '{"new":true}');
-    await writeFile(path.join(roots.canonical, "array.json"), "[\"destination\"]");
-    await writeFile(path.join(roots.arcadia, "array.json"), "[\"source\"]");
+    await writeFile(path.join(roots.canonical, "array.json"), '["destination"]');
+    await writeFile(path.join(roots.arcadia, "array.json"), '["source"]');
     await writeFile(path.join(roots.canonical, "same.bin"), "destination");
     await writeFile(path.join(roots.arcadia, "same.bin"), "source");
 
@@ -77,10 +96,14 @@ test("copies missing files with source mtime and keeps invalid, scalar, array, a
     });
 
     expect(await readFile(path.join(roots.canonical, "missing.txt"), "utf8")).toBe("source");
-    expect((await import("node:fs/promises")).stat(path.join(roots.canonical, "missing.txt"))).resolves.toMatchObject({ mtime });
+    expect(
+      (await import("node:fs/promises")).stat(path.join(roots.canonical, "missing.txt")),
+    ).resolves.toMatchObject({ mtime });
     expect(await readFile(path.join(roots.canonical, "invalid.json"), "utf8")).toBe("destination");
     expect(await readFile(path.join(roots.canonical, "scalar.json"), "utf8")).toBe("null");
-    expect(await readFile(path.join(roots.canonical, "array.json"), "utf8")).toBe('["destination"]');
+    expect(await readFile(path.join(roots.canonical, "array.json"), "utf8")).toBe(
+      '["destination"]',
+    );
     expect(await readFile(path.join(roots.canonical, "same.bin"), "utf8")).toBe("destination");
   } finally {
     await rm(roots.root, { recursive: true, force: true });
@@ -130,7 +153,10 @@ test("rejects allowlist violations, overlapping roots, and symlink escapes befor
 test("fills a deleted destination key while retaining nested null and arrays", async () => {
   const roots = await tempRoots();
   try {
-    await writeFile(path.join(roots.canonical, "state.json"), JSON.stringify({ retained: null, list: [] }));
+    await writeFile(
+      path.join(roots.canonical, "state.json"),
+      JSON.stringify({ retained: null, list: [] }),
+    );
     await writeFile(
       path.join(roots.arcadia, "state.json"),
       JSON.stringify({ deletedByUser: "restore-on-first-stage", retained: "source", list: [1, 2] }),

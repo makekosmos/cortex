@@ -1,13 +1,13 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 // Regression: 2026-07-10. The fullscreen blocked-app overlay must leave the
 // desktop transparent outside its intentional renderer edge gradient/popup.
 test("focus blocked-app overlay uses a transparent native surface", async () => {
-  const windowSource = await readFile(path.join(import.meta.dir, "focus-overlay.ts"), "utf8");
+  const windowSource = await readFile(path.join(import.meta.dirname, "focus-overlay.ts"), "utf8");
   const viewSource = await readFile(
-    path.join(import.meta.dir, "..", "src", "views", "FocusBlockOverlay.vue"),
+    path.join(import.meta.dirname, "..", "src", "views", "FocusBlockOverlay.vue"),
     "utf8",
   );
 

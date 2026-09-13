@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { localImageUrl, parseLocalImageRequestUrl } from "./local-image-protocol";
 
 test("parseLocalImageRequestUrl round-trips absolute local image paths", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../test-support/node-test.mjs";
 import { LaunchOwnership } from "./launch-ownership";
 
 type Claim = ReturnType<LaunchOwnership["claim"]>["current"];
@@ -8,8 +8,7 @@ const claim = (
   id: string,
   owner: NonNullable<unknown>,
   launchId: string,
-): Claim =>
-  ownership.claim(id, owner, 1, launchId).current;
+): Claim => ownership.claim(id, owner, 1, launchId).current;
 
 describe("LaunchOwnership", () => {
   test("normal release clears its local claim and revokes exactly once", async () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../test-support/node-test.mjs";
 import { assertExtensionHostPermission } from "./extension-permissions";
 
 const check = (capability: "userData.read" | "userData.write", permissions: string[]) =>

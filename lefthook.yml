@@ -4,11 +4,11 @@ pre-commit:
   parallel: false
   commands:
     affected-check:
-      run: bun run check:plan --mode pre-commit --run
+      run: pnpm run check:plan --mode pre-commit --run
 
 pre-push:
   parallel: false
   commands:
     affected-check:
-      run: bun run check:plan --mode pre-push --run
+      run: pnpm run check:plan --mode pre-push --run
       use_stdin: true

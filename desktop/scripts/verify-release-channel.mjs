@@ -18,8 +18,8 @@
 //   node scripts/verify-release-channel.mjs --platform win          # explicit platform
 //   node scripts/verify-release-channel.mjs --platform mac          # mac channel
 //   node scripts/verify-release-channel.mjs --platform win --version 0.5.3
-//   bun run verify:channel
-//   bun run verify:channel -- 0.5.3
+//   pnpm run verify:channel
+//   pnpm run verify:channel -- 0.5.3
 //
 // Version resolution order:
 //   1. --version flag
@@ -493,7 +493,10 @@ async function main() {
     }
 
     // Size check
-    if (Object.prototype.toString.call(expectedSize) === "[object Number]" && !isNaN(expectedSize)) {
+    if (
+      Object.prototype.toString.call(expectedSize) === "[object Number]" &&
+      !isNaN(expectedSize)
+    ) {
       if (actual.size !== expectedSize) {
         issues.push(
           `size MISMATCH:\n      ${channelFile}: ${expectedSize} bytes\n      actual:     ${actual.size} bytes`,
@@ -622,12 +625,12 @@ async function main() {
       `${LOG_PREFIX}   2. Bump a new patch version (e.g. ${version} → ${bumpPatch(version)}).`,
     );
     if (platform === "win") {
-      console.error(`${LOG_PREFIX}   3. Run one clean build+publish:  bun run build`);
+      console.error(`${LOG_PREFIX}   3. Run one clean build+publish:  pnpm run build`);
       console.error(
         `${LOG_PREFIX}      (which ends with: node scripts/build-desktop.mjs --platform win)`,
       );
     } else {
-      console.error(`${LOG_PREFIX}   3. Run one clean build+publish:  bun run build:mac`);
+      console.error(`${LOG_PREFIX}   3. Run one clean build+publish:  pnpm run build:mac`);
       console.error(
         `${LOG_PREFIX}      (which ends with: node scripts/build-desktop.mjs --platform mac)`,
       );

@@ -1,5 +1,10 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { createServer as createTcpServer, connect as connectTcp, type AddressInfo, type Server } from "node:net";
+import { afterEach, describe, expect, test } from "../test-support/node-test.mjs";
+import {
+  createServer as createTcpServer,
+  connect as connectTcp,
+  type AddressInfo,
+  type Server,
+} from "node:net";
 import { createBookMetadataConnectProxy } from "./book-metadata-connect-proxy";
 
 const servers: Server[] = [];

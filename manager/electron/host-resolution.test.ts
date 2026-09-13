@@ -1,9 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../test-support/node-test.mjs";
 import path from "node:path";
-import {
-  resolvePackagedHostExecutable,
-  resolvePackagedRuntimeExecutable,
-} from "./host-resolution";
+import { resolvePackagedHostExecutable, resolvePackagedRuntimeExecutable } from "./host-resolution";
 
 describe("Manager packaged Host resolution", () => {
   test("walks from nested Manager resources to its Desktop Host sibling", () => {

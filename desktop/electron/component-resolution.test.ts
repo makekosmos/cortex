@@ -1,13 +1,13 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { expect, mock, test } from "bun:test";
-import { resolvePackagedManagerExecutable } from "./manager-navigation";
+import { expect, mock, test } from "../test-support/node-test.mjs";
 
 mock.module("electron", () => ({
   app: { isPackaged: true, getPath: () => os.tmpdir() },
   shell: { openPath: async () => "" },
 }));
+const { resolvePackagedManagerExecutable } = await import("./manager-navigation");
 const { resolvePackagedHostExecutable } = await import("./host-app");
 
 test("packaged component resolvers stay Windows-only and require staged executables", () => {

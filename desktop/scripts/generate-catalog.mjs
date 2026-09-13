@@ -7,8 +7,8 @@
 // из локального source — products/<id> или legacy extensions/<id>.
 //
 // Usage:
-//   bun run --cwd platform/desktop ext:catalog -- <output-path>
-//   bun run --cwd platform/desktop ext:catalog -- .tmp/extensions/catalog.json
+//   pnpm --dir platform/desktop run ext:catalog -- <output-path>
+//   pnpm --dir platform/desktop run ext:catalog -- .tmp/extensions/catalog.json
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -132,7 +132,10 @@ async function main() {
       console.warn(`[ext:catalog] нет локального manifest.json для ${id} — skip`);
       continue;
     }
-    if (Object.prototype.toString.call(manifest.appId) !== "[object String]" || manifest.appId.length === 0) {
+    if (
+      Object.prototype.toString.call(manifest.appId) !== "[object String]" ||
+      manifest.appId.length === 0
+    ) {
       console.warn(`[ext:catalog] manifest.json для ${id} не содержит appId — skip`);
       continue;
     }

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../../test-support/node-test.mjs";
 import { appIcon } from "./app-icons";
 
 test("prefers bundled Kosmos icons and preserves external fallbacks", () => {

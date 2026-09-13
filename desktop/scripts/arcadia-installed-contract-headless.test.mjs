@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { cleanup, runConsumer, startBackend, stopBackend } from "./app-consumer-headless.mjs";
 
@@ -20,7 +21,7 @@ const app = {
 };
 
 async function launch(app, running) {
-  const lock = JSON.parse(await Bun.file(`${running.dataDir}/engine.lock.json`).text());
+  const lock = JSON.parse(await readFile(`${running.dataDir}/engine.lock.json`, "utf8"));
   const base = `http://127.0.0.1:${lock.http_port}`;
   const headers = {
     Authorization: `Bearer ${lock.auth_token}`,

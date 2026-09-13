@@ -4,11 +4,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { createRequire } from "node:module";
 
 const hostRoot = path.resolve(import.meta.dirname, "..");
 const repositoryRoot = path.resolve(hostRoot, "..");
 const tempRoot = path.resolve(os.tmpdir());
 const manifestPath = path.join(repositoryRoot, ".tmp", `host-e2e-cleanup-${randomUUID()}.json`);
+const playwrightCli = createRequire(import.meta.url).resolve("@playwright/test/cli");
 fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
 fs.writeFileSync(manifestPath, JSON.stringify({ roots: [], pids: [] }));
 
@@ -17,7 +19,7 @@ try {
   exited = await new Promise((resolve) => {
     const child = spawn(
       process.execPath,
-      ["x", "playwright", "test", "--config", "playwright.config.ts", ...process.argv.slice(2)],
+      [playwrightCli, "test", "--config", "playwright.config.ts", ...process.argv.slice(2)],
       {
         cwd: hostRoot,
         env: { ...process.env, KOSMOS_HOST_E2E_CLEANUP_MANIFEST: manifestPath },
