@@ -2,6 +2,8 @@ name: Shell checks
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 permissions:
@@ -9,17 +11,39 @@ permissions:
   packages: read
 
 concurrency:
-  group: shell-${{ github.workflow }}-${{ github.ref }}
+  group: shell-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      full: ${{ steps.plan.outputs.full }}
+      jobs: ${{ steps.plan.outputs.jobs }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - id: plan
+        env:
+          PLAN_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          PLAN_HEAD: ${{ github.sha }}
+        run: |
+          node scripts/check-plan.mjs --mode ci --base "$PLAN_BASE" --head "$PLAN_HEAD" > plan.json
+          echo "full=$(node -e "console.log(JSON.parse(require('fs').readFileSync('plan.json')).full)")" >> "$GITHUB_OUTPUT"
+          echo "jobs=$(node -e "console.log(JSON.parse(require('fs').readFileSync('plan.json')).jobs.join(','))")" >> "$GITHUB_OUTPUT"
+
   actionlint:
+    needs: plan
+    if: needs.plan.outputs.full == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2
 
   portable:
+    needs: plan
+    if: needs.plan.outputs.full == 'true' || contains(needs.plan.outputs.jobs, 'portable')
     runs-on: ubuntu-latest
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
@@ -101,6 +125,8 @@ jobs:
       - run: bun test host/electron/host-api-reconnect.test.ts
 
   windows-runtime:
+    needs: plan
+    if: needs.plan.outputs.full == 'true' || contains(needs.plan.outputs.jobs, 'windows-runtime')
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -145,6 +171,8 @@ jobs:
           bun run --cwd desktop test:runtime-staging
 
   first-party-contracts:
+    needs: plan
+    if: needs.plan.outputs.full == 'true' || contains(needs.plan.outputs.jobs, 'first-party-contracts')
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -256,3 +284,24 @@ jobs:
         env:
           CARGO_NET_OFFLINE: "true"
         run: bun run test:first-party-contracts
+
+  cortex-quality-gate:
+    if: always()
+    needs: [plan, actionlint, portable, windows-runtime, first-party-contracts]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every selected job to pass
+        env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+          SELECTED_JOBS: ${{ needs.plan.outputs.jobs }}
+          ACTIONLINT_RESULT: ${{ needs.actionlint.result }}
+          PORTABLE_RESULT: ${{ needs.portable.result }}
+          WINDOWS_RUNTIME_RESULT: ${{ needs.windows-runtime.result }}
+          FIRST_PARTY_RESULT: ${{ needs.first-party-contracts.result }}
+        run: |
+          set -eu
+          test "$PLAN_RESULT" = success
+          case ",$SELECTED_JOBS," in *,actionlint,*) test "$ACTIONLINT_RESULT" = success;; esac
+          case ",$SELECTED_JOBS," in *,portable,*) test "$PORTABLE_RESULT" = success;; esac
+          case ",$SELECTED_JOBS," in *,windows-runtime,*) test "$WINDOWS_RUNTIME_RESULT" = success;; esac
+          case ",$SELECTED_JOBS," in *,first-party-contracts,*) test "$FIRST_PARTY_RESULT" = success;; esac
