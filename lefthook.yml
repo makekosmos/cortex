@@ -11,3 +11,4 @@ pre-push:
   commands:
     affected-check:
       run: bun run check:plan --mode pre-push --run
+      use_stdin: true

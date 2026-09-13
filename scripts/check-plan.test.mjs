@@ -43,15 +43,17 @@ test("manager, host contracts, Rust, native, and first-party files expand conser
     "runtime-staging",
   ]);
   assert.deepEqual(plan("--files", "native-services/src/main.rs").json.checks, ["native-services"]);
-  assert.deepEqual(plan("--files", "host/e2e/first-party-foo.spec.ts").json.checks, [
-    "first-party-contracts",
-  ]);
+  assert.equal(plan("--files", "host/e2e/first-party-foo.spec.ts").json.full, true);
 });
 
 test("shared, lockfile, build, workflow, and unknown files fail closed", () => {
   for (const file of [
     "shared/ipc.ts",
     "bun.lock",
+    "runtime/Cargo.toml",
+    "desktop/package.json",
+    "packages/nested/pnpm-lock.yaml",
+    "runtime/rust-toolchain.toml",
     "desktop/scripts/build.mjs",
     ".github/workflows/ci.yml",
     "scripts/new-tool.mjs",
@@ -77,11 +79,19 @@ test("deleted shared or build files still fail closed", async () => {
 });
 
 test("docs and isolated assets are a safe no-op", () => {
-  for (const file of ["README.md", "docs/checks.md", "desktop/assets/icon.png"]) {
+  for (const file of ["README.md", "CHANGELOG.md", "docs/checks.md", "desktop/assets/icon.png"]) {
     const result = plan("--files", file).json;
     assert.equal(result.full, false, file);
     assert.deepEqual(result.checks, [], file);
     assert.deepEqual(result.jobs, [], file);
+  }
+  for (const file of [
+    "desktop/README.md",
+    "host/notes.txt",
+    "runtime/help.md",
+    "packages/readme.md",
+  ]) {
+    assert.equal(plan("--files", file).json.full, true, file);
   }
 });
 
@@ -108,7 +118,7 @@ test("invalid, missing, zero, and shallow bases fail closed", () => {
 });
 
 test("pre-push input parses one update and fails closed for new or ambiguous pushes", async () => {
-  const { parsePushInput } = await import("./check-plan.mjs");
+  const { parseNameStatus, parsePushInput } = await import("./check-plan.mjs");
   assert.deepEqual(parsePushInput("refs/heads/feature abc refs/heads/main def\n"), {
     localRef: "refs/heads/feature",
     localSha: "abc",
@@ -122,6 +132,16 @@ test("pre-push input parses one update and fails closed for new or ambiguous pus
     null,
   );
   assert.equal(parsePushInput("one\ntwo\n"), null);
+  assert.deepEqual(parseNameStatus("R100\0old/path.ts\0new/path.ts\0"), [
+    { path: "old/path.ts", status: "R" },
+    { path: "new/path.ts", status: "R" },
+  ]);
+  assert.deepEqual(parseNameStatus("C100\0old/path.ts\0copy/path.ts\0"), [
+    { path: "old/path.ts", status: "C" },
+    { path: "copy/path.ts", status: "C" },
+  ]);
+  for (const status of ["T", "U", "X", "Z"])
+    assert.equal(parseNameStatus(`${status}\0file\0`), null);
 });
 
 test("pre-push mode uses the pushed ref range from raw stdin", () => {
@@ -169,6 +189,7 @@ test("hook and CI entrypoints keep the planner and stable quality gate", () => {
   const workflow = readFileSync(`${root}.github/workflows/ci.yml`, "utf8");
   assert.match(hook, /check:plan --mode pre-commit --run/);
   assert.match(hook, /check:plan --mode pre-push --run/);
+  assert.match(hook, /use_stdin: true/);
   assert.match(workflow, /id: plan/);
   assert.match(workflow, /cortex-quality-gate:/);
   assert.match(workflow, /github\.event\.pull_request\.number \|\| github\.ref/);

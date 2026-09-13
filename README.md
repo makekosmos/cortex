@@ -86,8 +86,8 @@ on a hash or size mismatch; omitted entries are recorded from the final build.
 typechecks, Rustfmt, workspace Clippy with warnings denied, complete workspace
 Rust tests, backend tests, and runtime staging. `bun install --frozen-lockfile`
 installs Lefthook hooks on a clean checkout; run `bun run prepare` if hooks are
-missing. Pre-commit uses `glob_matcher: doublestar` to limit frontend typechecks
-to the changed Desktop, Host, or Manager tree; pre-push intentionally runs the
+missing. Pre-commit uses the planner against staged files; pre-push uses the
+Git-provided ref range when stdin is available and otherwise falls back to the
 full backend and runtime suite.
 
 The Rust gate runs every workspace library and integration test plus Cortex

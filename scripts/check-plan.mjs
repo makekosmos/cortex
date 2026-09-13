@@ -2,8 +2,10 @@ import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { executePlan } from "./check-plan-commands.mjs";
+import { parseNameStatus } from "./check-plan-git.mjs";
 
 export { executePlan } from "./check-plan-commands.mjs";
+export { parseNameStatus } from "./check-plan-git.mjs";
 
 const ALL_JOBS = ["actionlint", "portable", "windows-runtime", "first-party-contracts"];
 const CHECK_ORDER = [
@@ -44,21 +46,8 @@ function git(args) {
   return spawnSync("git", args, { cwd: process.cwd(), encoding: "utf8", env: gitEnv() });
 }
 
-function parseNameStatus(output) {
-  const tokens = output.split("\0").filter(Boolean);
-  const files = [];
-  for (let index = 0; index < tokens.length;) {
-    const status = tokens[index++];
-    if (!status) continue;
-    if (/^[RC]/.test(status)) index++;
-    const path = tokens[index++];
-    if (path) files.push({ path: path.replaceAll("\\", "/"), status: status[0] });
-  }
-  return files;
-}
-
 function diffFiles(rangeArgs) {
-  const result = git(["diff", "--name-status", "-z", "--diff-filter=ACMRD", ...rangeArgs]);
+  const result = git(["diff", "--name-status", "-z", ...rangeArgs]);
   if (result.error || result.status !== 0) return null;
   return parseNameStatus(result.stdout);
 }
@@ -154,12 +143,19 @@ function filesForMode(mode, base, head) {
 }
 
 function isDocumentation(path) {
-  return /^(?:docs?\/|\.github\/[^/]+\.md$)/i.test(path) || /\.(?:md|mdx|txt)$/i.test(path);
+  return (
+    /^docs\//i.test(path) ||
+    /^(?:README|CHANGELOG|CONTRIBUTING|CODE_OF_CONDUCT|SECURITY|LICENSE|NOTICE|AUTHORS|HISTORY|ROADMAP)(?:\.[^/]*)?$/i.test(
+      path,
+    )
+  );
 }
 
 function isFullInfluence(path) {
   return (
-    /^(?:package\.json|bun\.lock|Cargo\.lock|Cargo\.toml|dev-packages\.json)$/.test(path) ||
+    /(?:^|\/)(?:package\.json|(?:bun|pnpm|yarn)\.lock|package-lock\.json|Cargo\.(?:lock|toml)|dev-packages\.json|rust-toolchain(?:\.toml)?|\.tool-versions)$/.test(
+      path,
+    ) ||
     /^(?:\.github\/workflows\/|\.github\/actions\/)/.test(path) ||
     /^(?:lefthook\.ya?ml|\.ox(?:lintrc|fmtrc)\.|scripts\/check-plan\.)/.test(path) ||
     /(?:^|\/)(?:tsconfig(?:\.[^/]+)?\.json|vite\.config\.|webpack\.config\.|rollup\.config\.)/.test(
@@ -175,6 +171,11 @@ function isFullInfluence(path) {
 
 function classify(file) {
   const path = file.path;
+  if (
+    /^(?:desktop|host|manager|runtime|packages|shared)\//i.test(path) &&
+    /\.(?:md|mdx|txt)$/i.test(path)
+  )
+    return "full";
   if (isDocumentation(path) || ASSET_EXTENSIONS.test(path)) return [];
   if (isFullInfluence(path)) return "full";
   if (/^desktop\/src\//.test(path)) return ["desktop-typecheck", "lint", "format"];
@@ -182,7 +183,7 @@ function classify(file) {
     return ["desktop-typecheck", "desktop-contracts", "lint", "format"];
   if (/^manager\/src\//.test(path)) return ["manager-typecheck", "lint", "format"];
   if (/^host\/electron\//.test(path)) return ["host-typecheck", "host-contracts"];
-  if (/^host\/e2e\//.test(path)) return ["first-party-contracts"];
+  if (/^host\/e2e\//.test(path)) return "full";
   if (/^runtime\//.test(path)) return ["rustfmt", "clippy", "test:rust", "runtime-staging"];
   if (/^native-services\//.test(path)) return ["native-services"];
   return "full";
