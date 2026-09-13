@@ -24,7 +24,7 @@
     "test:release-bom": "node --test desktop/scripts/release-bom.test.mjs desktop/scripts/release-build-contract.test.mjs desktop/scripts/first-party-release-contracts.test.mjs desktop/scripts/release-channel-local.test.mjs desktop/scripts/package-release.test.mjs",
     "test:package-contract": "bun test desktop/electron/extension-manifest-validation.test.ts",
     "test:backend": "node runtime/scripts/test-lib.mjs",
-    "test:desktop-contracts": "bun test desktop/electron/instance.test.ts desktop/electron/focus-enforcement.test.ts desktop/build/installer-shortcut.test.mjs",
+    "test:desktop-contracts": "bun test desktop/electron/instance.test.ts desktop/electron/focus-enforcement.test.ts desktop/build/installer-shortcut.test.mjs desktop/scripts/dev-run.test.mjs",
     "test:first-party-contracts": "bun run --cwd host build && bun run --cwd host e2e first-party-agenda-contract.spec.ts first-party-arcadia-contract.spec.ts first-party-dictation-contract.spec.ts first-party-memoria-contract.spec.ts first-party-memoria-import-crash.spec.ts first-party-ordo-contract.spec.ts --workers=1"
   },
   "devDependencies": {

@@ -1,9 +1,9 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { redactText as redactSharedText } from "../scripts/redaction.mjs";
 import type { JsonRecord, JsonValue } from "./extension-permissions";
 export type { JsonRecord } from "./extension-permissions";
 
-const MAX_LOG_TEXT_BYTES = 16 * 1024;
 export const MAX_SUPPORT_TEXT_FILE_BYTES = 1024 * 1024;
 const SUPPORT_TEXT_EXTENSIONS = new Set([".json", ".log", ".txt"]);
 const SENSITIVE_KEYS = new Set([
@@ -29,21 +29,7 @@ interface RedactableObject {}
 type RedactableValue = JsonValue | RedactableObject;
 
 export function redactText(value: string): string {
-  let output = value
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
-    .replace(
-      /\b(?:authorization|auth[_-]?token|api[_-]?key|secret|password)\s*[:=]\s*[^\s,;]+/gi,
-      "[REDACTED]",
-    )
-    .replace(/\b[0-9a-f]{64}\b/gi, "[REDACTED]")
-    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, "[REDACTED]")
-    .replace(/[A-Z]:\\Users\\[^\s"'\\]+(?:\\[^\s"']+)*/gi, "[REDACTED_PATH]")
-    .replace(/(?:\/Users|\/home)\/[^\s"']+/g, "[REDACTED_PATH]");
-  if (Buffer.byteLength(output, "utf8") > MAX_LOG_TEXT_BYTES) {
-    output = Buffer.from(output, "utf8").subarray(0, MAX_LOG_TEXT_BYTES).toString("utf8");
-    output += "[TRUNCATED]";
-  }
-  return output;
+  return redactSharedText(value);
 }
 
 export function redactUnknown(value: RedactableValue, key = "", depth = 0): JsonValue {
