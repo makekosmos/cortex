@@ -37,8 +37,23 @@ export function validateUserDataKey(key: string): boolean {
 function resultError(error: UserDataError): UserDataResult<never> {
   return { ok: false, error };
 }
+export type UserDataOperation = "read" | "write" | "delete" | "stat";
+export interface UserDataStoreOptions {
+  beforeAccess?: (operation: UserDataOperation, filePath: string) => void | Promise<void>;
+}
 
-export function createUserDataStore(root: string) {
+function samePath(left: string, right: string): boolean {
+  const a = path.normalize(left);
+  const b = path.normalize(right);
+  return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
+function isContained(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+export function createUserDataStore(root: string, options: UserDataStoreOptions = {}) {
   const resolvedRoot = path.resolve(root);
   const filePath = (key: string): string | null => {
     if (!validateUserDataKey(key)) return null;
@@ -48,7 +63,10 @@ export function createUserDataStore(root: string) {
     return relative.startsWith("..") || path.isAbsolute(relative) ? null : resolved;
   };
 
-  const safeFilePath = async (key: string): Promise<UserDataResult<string>> => {
+  const safeFilePath = async (
+    key: string,
+    createParents = false,
+  ): Promise<UserDataResult<string>> => {
     const file = filePath(key);
     if (!file) return resultError("invalid-key");
     let realRoot: string;
@@ -56,30 +74,88 @@ export function createUserDataStore(root: string) {
       realRoot = await realpath(resolvedRoot);
     } catch (error) {
       return resultError(
-        error instanceof Error && "code" in error && error.code === "ENOENT"
+        !createParents && error instanceof Error && "code" in error && error.code === "ENOENT"
           ? "not-found"
           : "io-error",
       );
     }
-    let current = resolvedRoot;
-    for (const part of key.replaceAll("\\", "/").split("/")) {
+    if (!samePath(realRoot, resolvedRoot)) return resultError("io-error");
+    let current = realRoot;
+    const parts = key.replaceAll("\\", "/").split("/");
+    for (const [index, part] of parts.entries()) {
       current = path.join(current, part);
       try {
         const entry = await lstat(current);
         const realPath = await realpath(current);
-        const relative = path.relative(realRoot, realPath);
-        if (entry.isSymbolicLink() || relative.startsWith("..") || path.isAbsolute(relative))
+        if (
+          entry.isSymbolicLink() ||
+          !samePath(realPath, current) ||
+          !isContained(realRoot, realPath)
+        )
           return resultError("io-error");
       } catch (error) {
-        if (error instanceof Error && "code" in error && error.code === "ENOENT") break;
+        if (
+          error instanceof Error &&
+          "code" in error &&
+          error.code === "ENOENT" &&
+          createParents &&
+          index < parts.length - 1
+        ) {
+          try {
+            await mkdir(current);
+          } catch (mkdirError) {
+            if (
+              !(mkdirError instanceof Error) ||
+              !("code" in mkdirError) ||
+              mkdirError.code !== "EEXIST"
+            )
+              return resultError("io-error");
+          }
+          try {
+            const entry = await lstat(current);
+            const realPath = await realpath(current);
+            if (
+              entry.isSymbolicLink() ||
+              !samePath(realPath, current) ||
+              !isContained(realRoot, realPath)
+            )
+              return resultError("io-error");
+          } catch {
+            return resultError("io-error");
+          }
+          continue;
+        }
+        if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+          return createParents || index === parts.length - 1
+            ? { ok: true, data: current }
+            : resultError("not-found");
+        }
         return resultError("io-error");
       }
     }
-    return { ok: true, data: file };
+    return { ok: true, data: current };
   };
 
-  const readStat = async (key: string): Promise<UserDataStatResult> => {
-    const resolved = await safeFilePath(key);
+  const resolveForAccess = async (
+    key: string,
+    operation: UserDataOperation,
+    createParents = false,
+  ): Promise<UserDataResult<string>> => {
+    const resolved = await safeFilePath(key, createParents);
+    if (!resolved.ok) return resolved;
+    try {
+      await options.beforeAccess?.(operation, resolved.data);
+    } catch {
+      return resultError("io-error");
+    }
+    const verified = await safeFilePath(key, createParents);
+    return verified.ok && samePath(verified.data, resolved.data)
+      ? verified
+      : resultError("io-error");
+  };
+
+  const readStat = async (key: string, operation: "stat" = "stat"): Promise<UserDataStatResult> => {
+    const resolved = await resolveForAccess(key, operation);
     if (!resolved.ok) return resolved;
     try {
       const details = await stat(resolved.data);
@@ -97,13 +173,14 @@ export function createUserDataStore(root: string) {
 
   return {
     async read(key: string): Promise<UserDataReadResult> {
-      const details = await readStat(key);
-      if (!details.ok) return details;
-      const resolved = await safeFilePath(key);
+      const resolved = await resolveForAccess(key, "read");
       if (!resolved.ok) return resolved;
       let file: Awaited<ReturnType<typeof open>> | undefined;
       try {
         file = await open(resolved.data, "r");
+        const details = await file.stat();
+        if (!details.isFile()) return resultError("io-error");
+        if (details.size > USER_DATA_MAX_BYTES) return resultError("too-large");
         const buffer = Buffer.allocUnsafe(USER_DATA_MAX_BYTES + 1);
         const { bytesRead } = await file.read(buffer, 0, USER_DATA_MAX_BYTES + 1, 0);
         return bytesRead > USER_DATA_MAX_BYTES
@@ -123,13 +200,14 @@ export function createUserDataStore(root: string) {
     async write(key: string, bytes: Uint8Array): Promise<UserDataWriteResult> {
       if (!(bytes instanceof Uint8Array)) return resultError("io-error");
       if (bytes.byteLength > USER_DATA_MAX_BYTES) return resultError("too-large");
-      await mkdir(resolvedRoot, { recursive: true }).catch(() => undefined);
-      const resolved = await safeFilePath(key);
+      try {
+        await mkdir(resolvedRoot, { recursive: true });
+      } catch {
+        return resultError("io-error");
+      }
+      const resolved = await resolveForAccess(key, "write", true);
       if (!resolved.ok) return resolved;
       const file = resolved.data;
-      await mkdir(path.dirname(file), { recursive: true }).catch(() => undefined);
-      const checked = await safeFilePath(key);
-      if (!checked.ok) return checked;
       const temporary = `${file}.${randomUUID()}.tmp`;
       try {
         await writeFile(temporary, Buffer.from(bytes), { flag: "wx" });
@@ -143,10 +221,8 @@ export function createUserDataStore(root: string) {
     },
 
     async delete(key: string): Promise<UserDataDeleteResult> {
-      const resolved = await safeFilePath(key);
+      const resolved = await resolveForAccess(key, "delete");
       if (!resolved.ok) return resolved;
-      const details = await readStat(key);
-      if (!details.ok) return details.error === "not-found" ? details : resultError(details.error);
       try {
         await rm(resolved.data);
         return { ok: true, data: true };
@@ -159,7 +235,7 @@ export function createUserDataStore(root: string) {
       }
     },
 
-    stat: readStat,
+    stat: (key: string) => readStat(key),
   };
 }
 
