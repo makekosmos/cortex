@@ -57,10 +57,16 @@ architecture, pinned Core revision, exact binary name, and SHA-256:
 }
 ```
 
-Invalid, missing, stale, or mismatched manifests are diagnosed as
+With no target directory, a valid prebuilt is copied into a cache keyed by its
+platform, architecture, Core revision, and manifest hash; callers never receive
+the mutable manifest source path. Invalid, missing, stale, or mismatched manifests are diagnosed as
 `[ark-core-rpc] prebuilt rejected: ...` and fall back to the pinned source
 build. An arbitrary `ARK_CORE_RPC_PATH` is not used by this mode. Release
 builds do not consume the UI prebuilt setting.
+
+Node's Windows filesystem API has no single-call overwrite-and-rename primitive;
+publication therefore uses a verified temporary file plus backup/rollback
+renames. A failed publication leaves the prior target or cache entry recoverable.
 
 ## CI cache
 

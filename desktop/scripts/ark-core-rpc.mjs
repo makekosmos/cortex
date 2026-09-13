@@ -15,19 +15,15 @@ import {
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-
 export const ARK_CORE_REPOSITORY = "https://github.com/makekosmos/core.git";
 export const ARK_CORE_REVISION = "169c1967a074ae6658e81d59892247b24332ce29";
-
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const defaultCacheRoot = path.join(shellRoot, ".tmp", "ark-core-rpc");
 const LOCK_WAIT_MS = 10 * 60 * 1000;
 const STALE_LOCK_MS = 5 * 60 * 1000;
 const waitBuffer = new Int32Array(new SharedArrayBuffer(4));
-function featureKey(features) {
-  return features.length === 0 ? "default" : [...new Set(features)].sort().join("+");
-}
-
+const featureKey = (features) =>
+  features.length === 0 ? "default" : [...new Set(features)].sort().join("+");
 export function installRoot(
   debug,
   features,
@@ -44,18 +40,15 @@ export function installRoot(
     featureKey(features),
   );
 }
-
 function isProcessAlive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
     return true;
   } catch (error) {
-    if (error?.code === "EPERM") return true;
-    return false;
+    return error?.code === "EPERM";
   }
 }
-
 function readLock(lockPath) {
   try {
     const lock = JSON.parse(readFileSync(lockPath, "utf8"));
@@ -64,17 +57,8 @@ function readLock(lockPath) {
     return null;
   }
 }
-
 function claimStaleLock(lockPath, staleMs) {
-  const reaper = `${lockPath}.reaper`;
-  let reaperFd;
-  try {
-    reaperFd = openSync(reaper, "wx");
-    closeSync(reaperFd);
-  } catch {
-    return false;
-  }
-  const claimed = `${lockPath}.${process.pid}.${randomUUID()}.stale`;
+  const claimed = `${lockPath}.reap-${randomUUID()}`;
   try {
     const lock = readLock(lockPath);
     const age = Date.now() - statSync(lockPath).mtimeMs;
@@ -82,13 +66,10 @@ function claimStaleLock(lockPath, staleMs) {
     renameSync(lockPath, claimed);
   } catch {
     return false;
-  } finally {
-    rmSync(reaper, { force: true });
   }
   rmSync(claimed, { force: true });
   return true;
 }
-
 export function acquireCacheLock(
   lockPath,
   { waitMs = LOCK_WAIT_MS, staleMs = STALE_LOCK_MS } = {},
@@ -126,29 +107,9 @@ export function acquireCacheLock(
     }
   }
 }
-
-function sidecarName() {
-  return `ark-core-rpc${process.platform === "win32" ? ".exe" : ""}`;
-}
-
-function cachedBinary(root) {
-  return path.join(root, "bin", sidecarName());
-}
-
-function isCompleteCache(root) {
-  try {
-    return (
-      existsSync(cachedBinary(root)) &&
-      readFileSync(path.join(root, ".complete"), "utf8").trim() === ARK_CORE_REVISION
-    );
-  } catch {
-    return false;
-  }
-}
-function hashFile(filePath) {
-  return createHash("sha256").update(readFileSync(filePath)).digest("hex");
-}
-
+const sidecarName = () => `ark-core-rpc${process.platform === "win32" ? ".exe" : ""}`;
+const cachedBinary = (root) => path.join(root, "bin", sidecarName());
+const hashFile = (filePath) => createHash("sha256").update(readFileSync(filePath)).digest("hex");
 function readValidatedPrebuiltManifest(manifestPath) {
   let manifest;
   try {
@@ -180,12 +141,37 @@ function readValidatedPrebuiltManifest(manifestPath) {
     throw new Error("prebuilt SHA-256 does not match");
   return { binary, sha256: manifest.sha256.toLowerCase() };
 }
-
 export function validatePrebuiltManifest(manifestPath) {
   return readValidatedPrebuiltManifest(manifestPath).binary;
 }
-
-function publishToTarget(source, targetDir, expectedSha256, copyFile = copyFileSync) {
+function materializePrebuilt(prebuilt, cacheRoot, copyFile, renamePath) {
+  const root = path.join(
+    cacheRoot,
+    "prebuilt",
+    process.platform,
+    process.arch,
+    ARK_CORE_REVISION,
+    prebuilt.sha256,
+  );
+  const binary = path.join(root, sidecarName());
+  try {
+    if (
+      readFileSync(path.join(root, ".complete"), "utf8").trim() === prebuilt.sha256 &&
+      hashFile(binary) === prebuilt.sha256
+    )
+      return binary;
+  } catch {}
+  const result = publishToTarget(prebuilt.binary, root, prebuilt.sha256, copyFile, renamePath);
+  writeFileSync(path.join(root, ".complete"), `${prebuilt.sha256}\n`);
+  return result;
+}
+export function publishToTarget(
+  source,
+  targetDir,
+  expectedSha256,
+  copyFile = copyFileSync,
+  renamePath = renameSync,
+) {
   mkdirSync(targetDir, { recursive: true });
   const target = path.join(targetDir, sidecarName());
   const temporary = path.join(targetDir, `.${sidecarName()}.${randomUUID()}.tmp-`);
@@ -195,16 +181,16 @@ function publishToTarget(source, targetDir, expectedSha256, copyFile = copyFileS
       throw new Error("prebuilt SHA-256 changed during copy");
     if (existsSync(target)) {
       const backup = `${target}.${randomUUID()}.old-`;
-      renameSync(target, backup);
+      renamePath(target, backup);
       try {
-        renameSync(temporary, target);
+        renamePath(temporary, target);
       } catch (error) {
-        renameSync(backup, target);
+        renamePath(backup, target);
         throw error;
       }
       rmSync(backup, { force: true });
     } else {
-      renameSync(temporary, target);
+      renamePath(temporary, target);
     }
     return target;
   } catch (error) {
@@ -212,11 +198,11 @@ function publishToTarget(source, targetDir, expectedSha256, copyFile = copyFileS
     throw error;
   }
 }
-
-function buildCachedSidecar(root, { debug, features, cargoCommand, cargoArgsPrefix }) {
+function buildCachedSidecar(root, { debug, features, cargoCommand, cargoArgsPrefix, renamePath }) {
   const parent = path.dirname(root);
   mkdirSync(parent, { recursive: true });
   const staging = mkdtempSync(path.join(parent, `.${path.basename(root)}.tmp-`));
+  let backup;
   try {
     const args = [
       ...cargoArgsPrefix,
@@ -245,14 +231,23 @@ function buildCachedSidecar(root, { debug, features, cargoCommand, cargoArgsPref
     if (!existsSync(cachedBinary(staging)))
       throw new Error(`cargo install did not produce ${cachedBinary(staging)}`);
     writeFileSync(path.join(staging, ".complete"), `${ARK_CORE_REVISION}\n`);
-    rmSync(root, { recursive: true, force: true });
-    renameSync(staging, root);
+    backup = `${root}.${randomUUID()}.old-`;
+    if (existsSync(root)) renamePath(root, backup);
+    try {
+      renamePath(staging, root);
+    } catch (error) {
+      if (existsSync(backup)) renamePath(backup, root);
+      backup = undefined;
+      throw error;
+    }
+    if (backup) rmSync(backup, { recursive: true, force: true });
+    backup = undefined;
   } catch (error) {
+    if (backup && existsSync(backup) && !existsSync(root)) renameSync(backup, root);
     rmSync(staging, { recursive: true, force: true });
     throw error;
   }
 }
-
 export function ensureArkCoreRpc({
   debug = false,
   features = [],
@@ -262,33 +257,36 @@ export function ensureArkCoreRpc({
   cargoArgsPrefix = [],
   prebuiltManifest,
   copyFile = copyFileSync,
+  renamePath = renameSync,
 } = {}) {
   if (prebuiltManifest) {
-    let prebuilt;
     try {
-      prebuilt = readValidatedPrebuiltManifest(prebuiltManifest);
+      const prebuilt = readValidatedPrebuiltManifest(prebuiltManifest);
+      return targetDir
+        ? publishToTarget(prebuilt.binary, targetDir, prebuilt.sha256, copyFile, renamePath)
+        : materializePrebuilt(prebuilt, cacheRoot, copyFile, renamePath);
     } catch (error) {
       console.error(
         `[ark-core-rpc] prebuilt rejected: ${error.message}; falling back to source build`,
       );
     }
-    if (prebuilt)
-      return targetDir
-        ? publishToTarget(prebuilt.binary, targetDir, prebuilt.sha256, copyFile)
-        : prebuilt.binary;
   }
   const root = installRoot(debug, features, cacheRoot);
   const releaseLock = acquireCacheLock(`${root}.lock`);
   try {
-    if (!isCompleteCache(root))
-      buildCachedSidecar(root, { debug, features, cargoCommand, cargoArgsPrefix });
+    const marker = path.join(root, ".complete");
+    if (
+      !existsSync(cachedBinary(root)) ||
+      !existsSync(marker) ||
+      readFileSync(marker, "utf8").trim() !== ARK_CORE_REVISION
+    )
+      buildCachedSidecar(root, { debug, features, cargoCommand, cargoArgsPrefix, renamePath });
     const installed = cachedBinary(root);
     return targetDir ? publishToTarget(installed, targetDir) : installed;
   } finally {
     releaseLock();
   }
 }
-
 if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
