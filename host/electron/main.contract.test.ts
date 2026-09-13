@@ -80,6 +80,9 @@ describe("Host window safety contracts", () => {
     expect(source).toContain("parseOpenAppRequest(input)");
     expect(source).toContain("return openApp(");
     expect(source).toContain("parsed.request.id");
+    expect(source).toContain("const windowReady = new Map<string, Promise<boolean>>();");
+    expect(source).toContain("await sendNavigationWhenReady(windowReady.get(id)");
+    expect(source).toContain("const ready = new Promise<boolean>");
     expect(source).toContain('existing.webContents.send("kepler:extension:navigation", route)');
     expect(source).toContain('win.webContents.once("did-finish-load"');
     expect(source).toContain('win.webContents.send("kepler:extension:navigation", route)');

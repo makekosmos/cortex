@@ -1,7 +1,7 @@
 import type { JsonRecord, JsonValue } from "./host-api";
 
 export const SAFE_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
-const SAFE_ROUTE = /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]{0,1023}$/;
+const SAFE_ROUTE = /^\/(?!\/)[A-Za-z0-9._~!$&'()*+,;=:@%/-]{0,1023}$/;
 
 export type OpenAppRequest = Readonly<{
   id: string;
@@ -25,6 +25,19 @@ export function parseOpenAppRequest(input: JsonRecord | undefined): OpenAppReque
     return { ok: false, message: "Некорректный маршрут приложения." };
   }
   return { ok: true, request: { id: input.id, route: input.route } };
+}
+
+export async function sendNavigationWhenReady(
+  ready: Promise<boolean> | undefined,
+  send: () => void,
+): Promise<boolean> {
+  if (ready && !(await ready)) return false;
+  try {
+    send();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function isString(value: JsonValue | undefined): value is string {

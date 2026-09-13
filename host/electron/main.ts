@@ -22,7 +22,7 @@ import { HostLifecycle } from "./lifecycle";
 import { LaunchOwnership, type OwnedLaunch } from "./launch-ownership";
 import { kosmosAppIcon, kosmosAppName, kosmosAppShortcutIcon } from "./kosmos-app-branding";
 import { reconcileShortcuts } from "./shortcuts";
-import { parseOpenAppRequest } from "./app-navigation";
+import { parseOpenAppRequest, sendNavigationWhenReady } from "./app-navigation";
 
 const requested = (argv: string[]) => {
   for (let index = 0; index < argv.length; index += 1) {
@@ -58,6 +58,7 @@ const isOperationRequest = (value: JsonRecord): value is JsonRecord & { operatio
 const hasOpenApp = (argv: string[]) =>
   argv.some((argument) => argument === "--open-app" || argument.startsWith("--open-app="));
 const windows = new Map<string, BrowserWindow>();
+const windowReady = new Map<string, Promise<boolean>>();
 const manifests = new Map<string, AppLaunch>();
 const eventSubscribers = new Set<number>();
 const renewalTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -202,9 +203,10 @@ async function openApp(
       existing.focus();
     }
     if (route) {
-      try {
+      const delivered = await sendNavigationWhenReady(windowReady.get(id), () => {
         existing.webContents.send("kepler:extension:navigation", route);
-      } catch {
+      });
+      if (!delivered) {
         return { ok: false, message: "Не удалось передать маршрут приложению." };
       }
     }
@@ -238,6 +240,13 @@ async function openApp(
       ],
     },
   });
+  let markReady!: (ready: boolean) => void;
+  const ready = new Promise<boolean>((resolve) => {
+    markReady = resolve;
+  });
+  windowReady.set(id, ready);
+  win.webContents.once("did-finish-load", () => markReady(true));
+  win.webContents.once("did-fail-load", () => markReady(false));
   // Package HTML may still carry its legacy document title (Eden/Delphi).
   // Keep the native window, taskbar, and Alt+Tab name canonical.
   win.on("page-title-updated", (event) => {
@@ -280,6 +289,8 @@ async function openApp(
     if (isMainFrame) revokeOnNavigation(url);
   });
   win.on("closed", () => {
+    markReady(false);
+    if (windowReady.get(id) === ready) windowReady.delete(id);
     releaseLaunch(id, win, claim, webContentsId);
     console.warn("[host-lifecycle] window closed", {
       app_id: id,
@@ -298,11 +309,9 @@ async function openApp(
   });
   if (route) {
     win.webContents.once("did-finish-load", () => {
-      try {
+      void sendNavigationWhenReady(undefined, () => {
         win.webContents.send("kepler:extension:navigation", route);
-      } catch {
-        /* окно могло быть закрыто во время загрузки */
-      }
+      });
     });
   }
   try {
