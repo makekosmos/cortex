@@ -4,8 +4,10 @@ import tailwindcss from "@tailwindcss/vite";
 import electron from "vite-plugin-electron/simple";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveWorkspacePaths } from "../scripts/workspace.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const workspacePaths = resolveWorkspacePaths(path.resolve(__dirname, ".."), process.env);
 
 export default defineConfig({
   plugins: [
@@ -22,12 +24,12 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "@kosmos/ark": path.resolve(__dirname, "../../arca-sdk/src/index.ts"),
+      "@kosmos/ark": path.join(workspacePaths["arca-sdk"], "src/index.ts"),
       "@kosmos/visuals/theme/css": path.resolve(
         __dirname,
-        "../../imago/theme/css-variables.css",
+        path.join(workspacePaths.imago, "theme/css-variables.css"),
       ),
-      "@kosmos/visuals": path.resolve(__dirname, "../../imago"),
+      "@kosmos/visuals": workspacePaths.imago,
       "@raycast/api": path.resolve(__dirname, "../packages/raycast-api/src/index.ts"),
       "@shared": path.resolve(__dirname, "./shared"),
     },

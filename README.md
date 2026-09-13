@@ -50,6 +50,42 @@ node desktop/scripts/build-desktop.mjs --platform win --bom path/to/release-bom.
 `KOSMOS_RELEASE_BOM`, so the existing release commands cannot run without an
 explicit resolved BOM.
 
+## Shared workspace checkouts
+
+The root `package.json` `kosmos.workspace` object is the single source of truth
+for the pinned Imago and arca-sdk commits, package names, versions, and git
+integrity values. Core remains derived from `runtime/Cargo.toml`, the ARK
+sidecar pin, and the existing `core-pin.yml` toolchain workflow.
+
+```text
+# Read-only, pinned by default:
+node scripts/workspace.mjs doctor
+
+# Prepare ignored .tmp/workspace checkouts without changing them first:
+node scripts/workspace.mjs bootstrap --dry-run
+node scripts/workspace.mjs bootstrap
+
+# Explicit local development only; sibling directories are never discovered:
+KOSMOS_WORKSPACE_MODE=local \
+KOSMOS_IMAGO_PATH=/work/imago \
+KOSMOS_ARCA_SDK_PATH=/work/arca-sdk \
+node scripts/workspace.mjs doctor
+```
+
+Local bootstrap creates the same managed `.tmp/workspace` paths as pinned
+mode, using a directory junction on Windows or symlink on Unix. It never
+replaces an existing managed checkout or link with the wrong target.
+
+Pinned bootstrap runs each checkout's declared package manager with its frozen
+lockfile, builds it, and writes one `.tmp/workspace/prepared.json` stamp with
+HEAD, package/lock, and exported-output hashes. Doctor rejects missing or
+tampered stamps; matching bootstrap skips the work.
+
+To update a pin, change its commit, package version, and `git:<commit>`
+integrity together in `package.json`, then run `doctor` and the release-BOM
+tests. Bootstrap never resets, stashes, or overwrites a dirty checkout; remove
+`.tmp/workspace` yourself when a prepared checkout is no longer needed.
+
 The publish wrapper validates Cortex/Core commits, the pinned Bun/Node/Rust toolchain, and
 the shell/engine/package API contracts before electron-builder starts. It embeds the exact
 BOM at `resources/release-bom.json` and emits `release/release-provenance.json` with the

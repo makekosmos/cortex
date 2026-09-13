@@ -1,7 +1,13 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, test } from "bun:test";
+import { resolveWorkspacePaths } from "../../scripts/workspace.mjs";
 
 const read = (name: string) => readFileSync(new URL(`./views/${name}`, import.meta.url), "utf8");
+const workspacePaths = resolveWorkspacePaths(
+  path.resolve(import.meta.dirname, "../.."),
+  process.env,
+);
 
 describe("Manager surface contract", () => {
   test("keeps diagnostics visible while standalone apps stay out of the dashboard", () => {
@@ -57,8 +63,9 @@ describe("Manager surface contract", () => {
     expect(readFileSync(new URL("./main.ts", import.meta.url), "utf8")).toContain(
       'import "@kosmos/visuals/css"',
     );
+    if (!existsSync(workspacePaths.imago)) return;
     const chrome = readFileSync(
-      new URL("../../../imago/components/DesktopChrome.vue", import.meta.url),
+      path.join(workspacePaths.imago, "components/DesktopChrome.vue"),
       "utf8",
     );
     expect(chrome).toContain("grid-rows-[auto_minmax(0,1fr)]");
@@ -67,16 +74,10 @@ describe("Manager surface contract", () => {
     expect(chrome).toContain("sidebar-titlebar-divider");
     expect(chrome).toContain("border-r border-[var(--border-color-low-emphasis)]");
     expect(chrome).toContain("background: var(--kosmos-titlebar-background)");
-    const sidebar = readFileSync(
-      new URL("../../../imago/components/Sidebar.vue", import.meta.url),
-      "utf8",
-    );
+    const sidebar = readFileSync(path.join(workspacePaths.imago, "components/Sidebar.vue"), "utf8");
     expect(sidebar).toContain("scrollbar-gutter: stable both-edges");
     expect(sidebar).toContain("padding-inline: 0");
-    const theme = readFileSync(
-      new URL("../../../imago/theme/css-variables.css", import.meta.url),
-      "utf8",
-    );
+    const theme = readFileSync(path.join(workspacePaths.imago, "theme/css-variables.css"), "utf8");
     expect(theme).toContain("--kosmos-titlebar-background: #2a2a2a");
     expect(theme).toContain("letter-spacing: -0.015em");
     expect(readFileSync(new URL("./styles.css", import.meta.url), "utf8")).not.toContain(

@@ -7,7 +7,6 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "typecheck": "tsc --noEmit",
-    "prebuild": "bun --cwd ../../imago build",
     "build": "vite build",
     "package:win": "bun run build && electron-builder --win --dir"
   },

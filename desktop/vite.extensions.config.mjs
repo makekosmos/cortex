@@ -16,12 +16,14 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
+import { resolveWorkspacePaths } from "../scripts/workspace.mjs";
 import {
   findRepoExtensionEntry,
   listRepoExtensionEntries,
 } from "./scripts/repo-extension-roots.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const workspacePaths = resolveWorkspacePaths(path.resolve(__dirname, ".."), process.env);
 const repoRoot = path.resolve(__dirname, "..", "..");
 
 function discoverVueExtensions() {
@@ -96,19 +98,19 @@ export default defineConfig(({ mode }) => {
         },
         {
           find: /^@kosmos\/ark$/,
-          replacement: path.resolve(__dirname, "../../arca-sdk/src/index.ts"),
+          replacement: path.join(workspacePaths["arca-sdk"], "src/index.ts"),
         },
         {
           find: /^@kosmos\/visuals\/theme\/css$/,
-          replacement: path.resolve(__dirname, "../../imago/theme/css-variables.css"),
+          replacement: path.join(workspacePaths.imago, "theme/css-variables.css"),
         },
         {
           find: /^@kosmos\/visuals\/(.+)$/,
-          replacement: path.resolve(__dirname, "../../imago/$1"),
+          replacement: path.join(workspacePaths.imago, "$1"),
         },
         {
           find: /^@kosmos\/visuals$/,
-          replacement: path.resolve(__dirname, "../../imago"),
+          replacement: workspacePaths.imago,
         },
         {
           find: /^@lucide\/vue$/,
