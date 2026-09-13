@@ -28,6 +28,9 @@ the BOM validator or provenance emitter.
 
 ## Local checks
 
+See [`docs/rust-build-cache.md`](docs/rust-build-cache.md) for Rust cache,
+sidecar reuse, prebuilt UI development, and baseline evidence.
+
 ```text
 # Installed automatically by `bun install`; recover with:
 bun run prepare
