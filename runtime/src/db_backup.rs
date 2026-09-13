@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use chrono::{DateTime, Utc};
 use serde_json::json;
@@ -24,6 +24,7 @@ const SYNC_KV_LAST_BACKUP: &str = "kepler.last_backup_ts";
 const BACKUPS_SUBDIR: &str = "backups";
 const BACKUP_FILE_PREFIX: &str = "ark.db.backup-";
 static BACKUP_ACTIVE: AtomicBool = AtomicBool::new(false);
+static BACKUP_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 
 fn interval_hours() -> u64 {
     std::env::var("KEPLER_BACKUP_INTERVAL_HOURS")
@@ -107,6 +108,20 @@ pub struct DbBackupDiagnosticsSnapshot {
     pub pages_per_step: i32,
     pub pause_ms: u64,
     pub background_mode: bool,
+}
+
+fn next_backup_destination(
+    backups_dir: &Path,
+    mut now: DateTime<Utc>,
+) -> Result<(DateTime<Utc>, PathBuf), String> {
+    for _ in 0..86_400 {
+        let path = backups_dir.join(backup_filename(now));
+        if !path.exists() {
+            return Ok((now, path));
+        }
+        now += chrono::Duration::seconds(1);
+    }
+    Err("unable to allocate a unique backup filename".to_string())
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -224,10 +239,12 @@ fn rotate_backups(backups_dir: &Path, retain: usize) -> Result<usize, String> {
 /// Сделать backup сейчас (без проверки interval). Используется в тестах и
 /// при manual trigger через future IPC. Возвращает path созданного файла.
 pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, String> {
+    let _guard = BACKUP_LOCK
+        .get_or_init(|| tokio::sync::Mutex::new(()))
+        .lock()
+        .await;
     let backups_dir = ensure_backups_dir(data_dir)?;
-    let now = Utc::now();
-    let filename = backup_filename(now);
-    let dest = backups_dir.join(&filename);
+    let (now, dest) = next_backup_destination(&backups_dir, Utc::now())?;
     let dest_str = dest
         .to_str()
         .ok_or("backup dest path is not UTF-8")?
@@ -346,6 +363,17 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].name, newest);
         assert_eq!(listed[0].size, 6);
+    }
+
+    #[test]
+    fn allocates_a_unique_name_when_second_resolution_collides() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = Utc::now();
+        std::fs::write(dir.path().join(backup_filename(now)), b"existing").unwrap();
+
+        let (allocated, path) = next_backup_destination(dir.path(), now).unwrap();
+        assert_eq!(allocated, now + chrono::Duration::seconds(1));
+        assert_eq!(path, dir.path().join(backup_filename(allocated)));
     }
 
     #[test]

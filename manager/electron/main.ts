@@ -12,7 +12,7 @@ import {
 import { DatabaseSync } from "node:sqlite";
 import { spawn } from "node:child_process";
 import { statSync } from "node:fs";
-import { access, mkdir } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { rpc, status, subscribeDictationEvents, waitForEngineReady } from "./engine-client";
@@ -68,14 +68,45 @@ import { readBrowserDataPersistence, writeBrowserDataPersistence } from "./brows
 import { resolveInstance } from "../../desktop/electron/instance";
 import {
   normalizeDbBackups,
+  recoverDatabaseRestore,
   restoreDatabaseBackup,
   validDatabaseBackupName,
 } from "./database-backups";
+import { waitForEngineStopped } from "./engine-lifecycle";
 
 type SqliteIntegrityRow = { integrity_check?: Input };
 type SqliteTableRow = { name?: Input };
 type SqliteObjectRow = { id?: Input };
 type ArkBackupInspection = { objectIds: string[] };
+type SqliteNameRow = { name?: Input };
+
+const REQUIRED_ARK_SCHEMA: readonly [string, readonly string[]][] = [
+  ["object_types", ["id", "name", "schema_json", "ui_schema_json", "created_at", "updated_at"]],
+  [
+    "objects",
+    [
+      "id",
+      "type_id",
+      "type_version",
+      "title",
+      "content_json",
+      "props_json",
+      "created_at",
+      "updated_at",
+      "deleted_at",
+    ],
+  ],
+  ["object_links", ["id", "source_object_id", "target_object_id", "link_type", "created_at"]],
+  ["sync_kv", ["key", "value"]],
+  ["sync_tombstones", ["id", "entity_type", "hlc", "deleted_at"]],
+];
+const REQUIRED_ARK_INDEXES = [
+  "idx_objects_type_id",
+  "idx_objects_updated_at",
+  "idx_objects_deleted_at",
+  "idx_object_links_source",
+  "idx_object_links_target",
+] as const;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import {
@@ -138,11 +169,22 @@ function inspectSqliteArkBackup(file: string): ArkBackupInspection {
     const tables = database
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
       .all() as SqliteTableRow[];
-    if (
-      !tables.some(({ name }) => name === "objects") ||
-      !tables.some(({ name }) => name === "object_types")
-    )
-      throw new Error("Selected file is not an ARK backup");
+    const tableNames = tables.flatMap(({ name }) => (isString(name) ? [name] : []));
+    for (const [table, requiredColumns] of REQUIRED_ARK_SCHEMA) {
+      if (!tableNames.includes(table)) throw new Error("Selected file is not an ARK backup");
+      // SAFETY: table names come only from the fixed schema contract above.
+      const columns = database.prepare(`PRAGMA table_info('${table}')`).all() as SqliteNameRow[];
+      const columnNames = columns.flatMap(({ name }) => (isString(name) ? [name] : []));
+      if (requiredColumns.some((column) => !columnNames.includes(column)))
+        throw new Error("Selected file has an incompatible ARK schema");
+    }
+    // SAFETY: this SQLite query selects names from sqlite_master.
+    const indexes = database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+      .all() as SqliteNameRow[];
+    const indexNames = indexes.flatMap(({ name }) => (isString(name) ? [name] : []));
+    if (REQUIRED_ARK_INDEXES.some((index) => !indexNames.includes(index)))
+      throw new Error("Selected file has an incomplete ARK schema");
     // SAFETY: this SQLite query selects the optional id field from ARK objects.
     const rows = database
       .prepare("SELECT id FROM objects WHERE deleted_at IS NULL")
@@ -880,18 +922,7 @@ function registerAll() {
   register("manager.getDiagnosticsSnapshot", op.getDiagnosticsSnapshot);
   register("manager.getDiagnosticLogTail", op.getDiagnosticLogTail);
   const dataRoot = () => resolveManagerDataDir(app.getPath("appData"));
-  const waitForEngineStopped = async () => {
-    const lockPath = path.join(dataRoot(), "engine.lock.json");
-    for (let attempt = 0; attempt < 150; attempt += 1) {
-      try {
-        await access(lockPath);
-      } catch {
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    }
-    throw new Error("Engine did not stop before ARK restore");
-  };
+  const waitForStopped = () => waitForEngineStopped(path.join(dataRoot(), "engine.lock.json"));
   ipcMain.handle("manager.listCrashReports", async () => {
     try {
       return { ok: true, data: await listCrashReports(dataRoot()) };
@@ -978,7 +1009,7 @@ function registerAll() {
         stop: async () => {
           if (!(await runRuntimeControl("--shutdown"))) throw new Error("Engine shutdown refused");
         },
-        waitUntilStopped: waitForEngineStopped,
+        waitUntilStopped: waitForStopped,
         start: () => runRuntimeControl("--start"),
         waitUntilReady: async () => {
           await waitForEngineReady(30_000);
@@ -1331,7 +1362,18 @@ if (!app.requestSingleInstanceLock()) {
       }),
     );
     registerAll();
-    if (process.env.KOSMOS_HEADLESS !== "1" && process.env.KOSMOS_TEST_MODE !== "1") {
+    let restoreRecoveryReady = true;
+    try {
+      await recoverDatabaseRestore(resolveManagerDataDir(app.getPath("appData")));
+    } catch (error) {
+      restoreRecoveryReady = false;
+      console.error("ARK restore recovery failed; Engine start skipped", error);
+    }
+    if (
+      restoreRecoveryReady &&
+      process.env.KOSMOS_HEADLESS !== "1" &&
+      process.env.KOSMOS_TEST_MODE !== "1"
+    ) {
       startPackagedRuntime();
       void waitForEngineReady();
     }

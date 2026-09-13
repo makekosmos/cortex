@@ -67,9 +67,11 @@ async function downloadLogs() {
   await props.client.call("saveSupportBundle", undefined, "support-bundle");
 }
 
-async function loadBackups() {
-  backups.value =
-    (await props.client.call<DatabaseBackup[]>("getDbBackups", undefined, "db-backups")) ?? [];
+async function loadBackups(): Promise<boolean> {
+  const result = await props.client.call<DatabaseBackup[]>("getDbBackups", undefined, "db-backups");
+  if (!result) return false;
+  backups.value = result;
+  return true;
 }
 
 async function createBackup() {
@@ -82,8 +84,9 @@ async function createBackup() {
       "db-backup-create",
     );
     if (!result) return;
-    await loadBackups();
-    backupMessage.value = "Снимок базы создан.";
+    backupMessage.value = (await loadBackups())
+      ? "Снимок базы создан."
+      : "Снимок создан, но список обновить не удалось.";
   } finally {
     backupBusy.value = false;
   }
@@ -104,8 +107,9 @@ async function restoreBackup(backup: DatabaseBackup) {
       objectCount: number;
     }>("restoreDbBackup", { name: backup.name }, "db-backup-restore");
     if (result) {
-      await loadBackups();
-      backupMessage.value = `База восстановлена. Объектов: ${result.objectCount}.`;
+      backupMessage.value = (await loadBackups())
+        ? `База восстановлена. Объектов: ${result.objectCount}.`
+        : `База восстановлена, но список обновить не удалось. Объектов: ${result.objectCount}.`;
     }
   } finally {
     backupBusy.value = false;

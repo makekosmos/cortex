@@ -177,6 +177,7 @@ describe("Manager surface contract", () => {
     expect(settings).toContain("Сделать бэкап сейчас");
     expect(settings).toContain("Открыть папку бэкапов");
     expect(settings).toContain("Восстановить");
+    expect(settings).toContain("список обновить не удалось");
     expect(settings).toContain("window.confirm");
     for (const method of [
       "getDbBackups",
@@ -190,7 +191,10 @@ describe("Manager surface contract", () => {
     }
     expect(main).toContain("DatabaseSync");
     expect(main).toContain("PRAGMA integrity_check");
-    expect(main).toContain("Engine did not stop before ARK restore");
+    expect(main).toContain("idx_objects_type_id");
+    expect(
+      readFileSync(new URL("../electron/engine-lifecycle.ts", import.meta.url), "utf8"),
+    ).toContain("Engine did not stop before ARK restore");
     expect(main).toContain("list_object_summaries");
   });
 });
