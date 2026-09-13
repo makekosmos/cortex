@@ -114,6 +114,24 @@ export function validateReleaseBom(value, context) {
     semver(packagePin.version, `source.${name}.package.version`);
     if (packagePin.integrity !== `git:${dependency.commit}`)
       fail(`source.${name}.package.integrity does not match its commit`);
+    const workspaceName = name === "arca_sdk" ? "arca-sdk" : name;
+    const workspacePin = object(context.workspace?.[workspaceName], `workspace.${workspaceName}`);
+    string(workspacePin.repository, `workspace.${workspaceName}.repository`);
+    commit(workspacePin.commit, `workspace.${workspaceName}.commit`);
+    const workspacePackage = object(workspacePin.package, `workspace.${workspaceName}.package`);
+    string(workspacePackage.name, `workspace.${workspaceName}.package.name`);
+    semver(workspacePackage.version, `workspace.${workspaceName}.package.version`);
+    string(workspacePackage.integrity, `workspace.${workspaceName}.package.integrity`);
+    if (dependency.commit !== workspacePin.commit)
+      fail(`source.${name}.commit does not match the package.json workspace pin`);
+    if (dependency.repository !== workspacePin.repository)
+      fail(`source.${name}.repository does not match the package.json workspace pin`);
+    if (packagePin.name !== workspacePin.package.name)
+      fail(`source.${name}.package.name does not match the package.json workspace pin`);
+    if (packagePin.version !== workspacePin.package.version)
+      fail(`source.${name}.package.version does not match the package.json workspace pin`);
+    if (packagePin.integrity !== workspacePin.package.integrity)
+      fail(`source.${name}.package.integrity does not match the package.json workspace pin`);
   }
   const store = object(source.store, "source.store");
   string(store.repository, "source.store.repository");
@@ -180,6 +198,9 @@ export function validateReleaseBom(value, context) {
 
 async function repositoryContext(root, platform, currentCommit) {
   const packageJson = await readJson(path.join(root, "package.json"));
+  const workspace = packageJson.kosmos?.workspace;
+  if (!workspace?.imago || !workspace?.["arca-sdk"])
+    fail("package.json workspace pins are incomplete");
   const versions = await readJson(path.join(root, "desktop", "release-versions.json"));
   const workflow = await readFile(path.join(root, ".github", "workflows", "core-pin.yml"), "utf8");
   const cargo = await readFile(path.join(root, "runtime", "Cargo.toml"), "utf8");
@@ -215,6 +236,7 @@ async function repositoryContext(root, platform, currentCommit) {
     releaseVersion: versions[platform],
     coreCommit,
     arkCoreCommit,
+    workspace,
     toolchain: { bun, node, rust },
     api: { shell, engine, package_manifest: 2 },
   };
