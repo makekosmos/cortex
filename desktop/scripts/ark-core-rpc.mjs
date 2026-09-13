@@ -17,7 +17,6 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 export const ARK_CORE_REPOSITORY = "https://github.com/makekosmos/core.git";
-// Keep the Rust API and sidecar binary on the same immutable Core revision.
 export const ARK_CORE_REVISION = "169c1967a074ae6658e81d59892247b24332ce29";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -25,7 +24,6 @@ const defaultCacheRoot = path.join(shellRoot, ".tmp", "ark-core-rpc");
 const LOCK_WAIT_MS = 10 * 60 * 1000;
 const STALE_LOCK_MS = 5 * 60 * 1000;
 const waitBuffer = new Int32Array(new SharedArrayBuffer(4));
-
 function featureKey(features) {
   return features.length === 0 ? "default" : [...new Set(features)].sort().join("+");
 }
@@ -147,7 +145,6 @@ function isCompleteCache(root) {
     return false;
   }
 }
-
 function hashFile(filePath) {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
