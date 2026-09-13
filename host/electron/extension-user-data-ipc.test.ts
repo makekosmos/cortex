@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { WebContents } from "electron";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readdirSync, rmSync, symlinkSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -13,6 +14,37 @@ import {
 } from "./extension-user-data-ipc";
 
 describe("app-scoped binary user data", () => {
+  test("fails closed for a junction escaping the app root", async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-user-data-"));
+    const outside = mkdtempSync(path.join(os.tmpdir(), "kosmos-user-data-outside-"));
+    try {
+      const linked = path.join(root, "attachments");
+      const secret = path.join(outside, "secret.bin");
+      appendFileSync(secret, Buffer.from("outside"));
+      symlinkSync(outside, linked, "junction");
+      const store = createUserDataStore(root);
+
+      for (const result of [
+        await store.read("attachments/secret.bin"),
+        await store.write("attachments/secret.bin", new Uint8Array([1])),
+        await store.delete("attachments/secret.bin"),
+        await store.stat("attachments/secret.bin"),
+      ]) {
+        expect(result).toEqual({ ok: false, error: "io-error" });
+      }
+      expect(readFileSync(secret, "utf8")).toBe("outside");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps binary reads bounded after the initial size check", () => {
+    const source = readFileSync(new URL("./extension-user-data-ipc.ts", import.meta.url), "utf8");
+    expect(source).not.toContain("readFile(file)");
+    expect(source).toContain("file.read(buffer, 0, USER_DATA_MAX_BYTES + 1, 0)");
+  });
+
   test("accepts opaque path-safe keys and rejects filesystem paths", () => {
     expect(validateUserDataKey("attachments/task-1.bin")).toBe(true);
     for (const key of ["../escape", "attachments/../../escape", "/absolute", "C:\\escape", ""]) {
