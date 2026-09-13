@@ -46,8 +46,7 @@ function isString(value: JsonValue | undefined): value is string {
 
 function isValidEncodedRoute(route: string): boolean {
   try {
-    decodeURIComponent(route);
-    return true;
+    return !decodeURIComponent(route).startsWith("//");
   } catch {
     return false;
   }

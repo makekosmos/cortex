@@ -27,6 +27,12 @@ describe("renderer app navigation boundary", () => {
         message: "Некорректный маршрут приложения.",
       },
     );
+    expect(
+      parseOpenAppRequest({ id: "com.kosmos.memoria", route: "/%2F%2Fevil.test/note/42" }),
+    ).toEqual({
+      ok: false,
+      message: "Некорректный маршрут приложения.",
+    });
   });
 
   test("allows opening an app without a route", () => {
