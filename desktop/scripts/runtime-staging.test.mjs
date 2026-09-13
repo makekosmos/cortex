@@ -6,6 +6,8 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   effectiveCargoTargetDir,
+  resolveDevArkCoreRpcPath,
+  setDevArkCoreRpcPath,
   acquireBuildLock,
   cleanBuildIntermediates,
   RUNTIME_BINARIES,
@@ -83,6 +85,23 @@ test("build retention clears only disposable next outputs and protects active bu
     assert.throws(() => acquireBuildLock(root), /build already active/);
     release();
     assert.equal(existsSync(path.join(root, ".tmp", "build.active.lock")), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("dev runtime path replaces a stale ARK_CORE_RPC_PATH", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-runtime-stage-"));
+  try {
+    const targetDir = path.join(root, "target");
+    const sidecar = path.join(targetDir, "debug", "ark-core-rpc.exe");
+    mkdirSync(path.dirname(sidecar), { recursive: true });
+    writeFileSync(sidecar, "fresh");
+    const env = { ARK_CORE_RPC_PATH: "stale-dist/ark-core-rpc.exe" };
+    setDevArkCoreRpcPath(env, resolveDevArkCoreRpcPath(targetDir, "win32"));
+    assert.equal(env.ARK_CORE_RPC_PATH, sidecar);
+    setDevArkCoreRpcPath(env, undefined);
+    assert.equal("ARK_CORE_RPC_PATH" in env, false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

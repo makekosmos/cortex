@@ -3,7 +3,7 @@
 ## Baseline
 
 Measured on Windows 10.0.26200.0, x64, Rust/Cargo 1.95.0, Node 24.15.0,
-and Bun 1.3.14 at Cortex `origin/main` `4c1f2a139fcae92ac0cf995b40ea3a7713c3b63`.
+and Bun 1.3.14 at Cortex `origin/main` `4c1f2a139fcae92ac0cf995b40ea63a7713c3b63`.
 Cortex pins Core revision `169c1967a074ae6658e81d59892247b24332ce29`.
 
 ```text
@@ -65,8 +65,9 @@ builds do not consume the UI prebuilt setting.
 ## CI cache
 
 The Linux `portable` and Windows `windows-runtime` jobs cache Cargo git/db,
-registry, and `target` output with the pinned `actions/cache` v4 action. Keys
-include OS, runner architecture, a hash of exact `rustc -Vv` output, Cargo.lock,
+registry, `target` output, and the actual `desktop/.tmp/ark-core-rpc` sidecar
+cache with the pinned `actions/cache` v4 action. Keys
+include OS, runner architecture, a hash of exact `rustc -Vv` and `cargo -V` output, Cargo.lock,
 Cargo manifests/configuration, profile, features, and the job's material build
 scope. Dependency caches alone use an OS/toolchain restore prefix; target
 output uses exact keys. Target output is an untrusted CI convenience cache and

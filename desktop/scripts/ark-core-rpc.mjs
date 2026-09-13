@@ -23,15 +23,28 @@ export const ARK_CORE_REVISION = "169c1967a074ae6658e81d59892247b24332ce29";
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const defaultCacheRoot = path.join(shellRoot, ".tmp", "ark-core-rpc");
 const LOCK_WAIT_MS = 10 * 60 * 1000;
-const STALE_LOCK_MS = 15 * 60 * 1000;
+const STALE_LOCK_MS = 5 * 60 * 1000;
 const waitBuffer = new Int32Array(new SharedArrayBuffer(4));
 
 function featureKey(features) {
   return features.length === 0 ? "default" : [...new Set(features)].sort().join("+");
 }
 
-export function installRoot(debug, features, cacheRoot = defaultCacheRoot) {
-  return path.join(cacheRoot, ARK_CORE_REVISION, debug ? "debug" : "release", featureKey(features));
+export function installRoot(
+  debug,
+  features,
+  cacheRoot = defaultCacheRoot,
+  platform = process.platform,
+  arch = process.arch,
+) {
+  return path.join(
+    cacheRoot,
+    platform,
+    arch,
+    ARK_CORE_REVISION,
+    debug ? "debug" : "release",
+    featureKey(features),
+  );
 }
 
 function isProcessAlive(pid) {
@@ -39,7 +52,8 @@ function isProcessAlive(pid) {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
+  } catch (error) {
+    if (error?.code === "EPERM") return true;
     return false;
   }
 }
@@ -51,6 +65,30 @@ function readLock(lockPath) {
   } catch {
     return null;
   }
+}
+
+function claimStaleLock(lockPath, staleMs) {
+  const reaper = `${lockPath}.reaper`;
+  let reaperFd;
+  try {
+    reaperFd = openSync(reaper, "wx");
+    closeSync(reaperFd);
+  } catch {
+    return false;
+  }
+  const claimed = `${lockPath}.${process.pid}.${randomUUID()}.stale`;
+  try {
+    const lock = readLock(lockPath);
+    const age = Date.now() - statSync(lockPath).mtimeMs;
+    if ((lock && isProcessAlive(lock.pid)) || (!lock && age <= staleMs)) return false;
+    renameSync(lockPath, claimed);
+  } catch {
+    return false;
+  } finally {
+    rmSync(reaper, { force: true });
+  }
+  rmSync(claimed, { force: true });
+  return true;
 }
 
 export function acquireCacheLock(
@@ -82,7 +120,7 @@ export function acquireCacheLock(
         stale = true;
       }
       if (stale) {
-        rmSync(lockPath, { force: true });
+        claimStaleLock(lockPath, staleMs);
         continue;
       }
       if (Date.now() >= deadline) throw new Error(`timed out waiting for cache lock: ${lockPath}`);
@@ -114,7 +152,7 @@ function hashFile(filePath) {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
-export function validatePrebuiltManifest(manifestPath) {
+function readValidatedPrebuiltManifest(manifestPath) {
   let manifest;
   try {
     manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
@@ -143,14 +181,39 @@ export function validatePrebuiltManifest(manifestPath) {
   if (!existsSync(binary)) throw new Error(`prebuilt binary is missing: ${binary}`);
   if (hashFile(binary).toLowerCase() !== manifest.sha256.toLowerCase())
     throw new Error("prebuilt SHA-256 does not match");
-  return binary;
+  return { binary, sha256: manifest.sha256.toLowerCase() };
 }
 
-function copyToTarget(source, targetDir) {
+export function validatePrebuiltManifest(manifestPath) {
+  return readValidatedPrebuiltManifest(manifestPath).binary;
+}
+
+function publishToTarget(source, targetDir, expectedSha256, copyFile = copyFileSync) {
   mkdirSync(targetDir, { recursive: true });
   const target = path.join(targetDir, sidecarName());
-  copyFileSync(source, target);
-  return target;
+  const temporary = path.join(targetDir, `.${sidecarName()}.${randomUUID()}.tmp-`);
+  try {
+    copyFile(source, temporary);
+    if (expectedSha256 && hashFile(temporary) !== expectedSha256)
+      throw new Error("prebuilt SHA-256 changed during copy");
+    if (existsSync(target)) {
+      const backup = `${target}.${randomUUID()}.old-`;
+      renameSync(target, backup);
+      try {
+        renameSync(temporary, target);
+      } catch (error) {
+        renameSync(backup, target);
+        throw error;
+      }
+      rmSync(backup, { force: true });
+    } else {
+      renameSync(temporary, target);
+    }
+    return target;
+  } catch (error) {
+    rmSync(temporary, { force: true });
+    throw error;
+  }
 }
 
 function buildCachedSidecar(root, { debug, features, cargoCommand, cargoArgsPrefix }) {
@@ -201,16 +264,21 @@ export function ensureArkCoreRpc({
   cargoCommand = "cargo",
   cargoArgsPrefix = [],
   prebuiltManifest,
+  copyFile = copyFileSync,
 } = {}) {
   if (prebuiltManifest) {
+    let prebuilt;
     try {
-      const prebuilt = validatePrebuiltManifest(prebuiltManifest);
-      return targetDir ? copyToTarget(prebuilt, targetDir) : prebuilt;
+      prebuilt = readValidatedPrebuiltManifest(prebuiltManifest);
     } catch (error) {
       console.error(
         `[ark-core-rpc] prebuilt rejected: ${error.message}; falling back to source build`,
       );
     }
+    if (prebuilt)
+      return targetDir
+        ? publishToTarget(prebuilt.binary, targetDir, prebuilt.sha256, copyFile)
+        : prebuilt.binary;
   }
   const root = installRoot(debug, features, cacheRoot);
   const releaseLock = acquireCacheLock(`${root}.lock`);
@@ -218,7 +286,7 @@ export function ensureArkCoreRpc({
     if (!isCompleteCache(root))
       buildCachedSidecar(root, { debug, features, cargoCommand, cargoArgsPrefix });
     const installed = cachedBinary(root);
-    return targetDir ? copyToTarget(installed, targetDir) : installed;
+    return targetDir ? publishToTarget(installed, targetDir) : installed;
   } finally {
     releaseLock();
   }

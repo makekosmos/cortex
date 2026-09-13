@@ -6,11 +6,22 @@ import { existsSync, readFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  effectiveCargoTargetDir,
+  resolveDevArkCoreRpcPath,
+  setDevArkCoreRpcPath,
+} from "./runtime-staging.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const shellRoot = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(shellRoot, "..", "..");
 const defaultShellDevPort = 9912;
+const devTargetDir = effectiveCargoTargetDir(
+  shellRoot,
+  path.resolve(shellRoot, ".."),
+  process.env.CARGO_TARGET_DIR,
+);
+setDevArkCoreRpcPath(process.env, resolveDevArkCoreRpcPath(devTargetDir));
 
 // --- .env.local loader (per-worktree dev slot override) ---------------------
 // `platform/desktop/.env.local` (gitignored) задаёт `KEPLER_INSTANCE=dev-<slug>` для
