@@ -6,6 +6,7 @@ import {
 } from "@makekosmos/ark";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { SAFE_ID } from "./app-navigation";
 
 export type AppLaunch = {
   id: string;
@@ -45,7 +46,7 @@ export type DirectoryGrant = Readonly<{
   label: string;
 }>;
 export type PermissionGrant = { capability: string; scopes?: string[] };
-type JsonValue =
+export type JsonValue =
   | string
   | number
   | boolean
@@ -66,7 +67,6 @@ type CrashMetadata = {
 export type EngineResult<T> = { ok: true; data: T } | { ok: false; message: string };
 
 const API_VERSION = "1.0.0";
-const SAFE_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const SAFE_LAUNCH_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const isJsonString = (value: JsonValue | undefined): value is string =>
   typeof value === "string";

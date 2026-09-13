@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { OpenAppRequest, OpenAppRequestResult } from "./app-navigation";
 
 const identityArg = process.argv.find((value) => value.startsWith("--kosmos-app="));
 const arkAllowed = process.argv.includes("--kosmos-ark=1");
@@ -27,6 +28,12 @@ type ExposedApi = {
   };
   launcher: {
     request(operation: string, params?: ApiParams): Promise<ApiValue>;
+  };
+  apps: {
+    open(request: OpenAppRequest): Promise<OpenAppRequestResult>;
+  };
+  navigation: {
+    onNavigate(handler: (route: string) => void): () => void;
   };
   ark?: {
     request(operation: string, params?: ApiParams): Promise<ApiValue>;
@@ -68,6 +75,18 @@ const api: ExposedApi = {
   launcher: {
     request: (operation: string, params: ApiParams = {}) =>
       ipcRenderer.invoke("host:launcher-request", { operation, params }),
+  },
+  apps: {
+    open: (request: OpenAppRequest) =>
+      // SAFETY: the main process validates the renderer request and result shape.
+      ipcRenderer.invoke("host:app-open", request) as Promise<OpenAppRequestResult>,
+  },
+  navigation: {
+    onNavigate: (handler: (route: string) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, route: string) => handler(route);
+      ipcRenderer.on("kepler:extension:navigation", listener);
+      return () => ipcRenderer.removeListener("kepler:extension:navigation", listener);
+    },
   },
 };
 

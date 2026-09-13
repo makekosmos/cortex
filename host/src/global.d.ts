@@ -7,6 +7,8 @@ type HostJsonValue =
   | readonly HostJsonValue[]
   | { readonly [key: string]: HostJsonValue };
 type HostApiParams = Readonly<{ [key: string]: HostJsonValue }>;
+type HostAppOpenRequest = Readonly<{ id: string; route?: string }>;
+type HostAppOpenResult = { ok: true } | { ok: false; message: string };
 declare global {
   interface Window {
     kosmosApp: {
@@ -20,6 +22,8 @@ declare global {
         subscribe(callback: (event: HostJsonValue) => void): () => void;
       };
       launcher: { request(operation: string, params?: HostApiParams): Promise<HostJsonValue> };
+      apps: { open(request: HostAppOpenRequest): Promise<HostAppOpenResult> };
+      navigation: { onNavigate(handler: (route: string) => void): () => void };
     };
   }
 }

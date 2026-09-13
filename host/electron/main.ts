@@ -22,6 +22,7 @@ import { HostLifecycle } from "./lifecycle";
 import { LaunchOwnership, type OwnedLaunch } from "./launch-ownership";
 import { kosmosAppIcon, kosmosAppName, kosmosAppShortcutIcon } from "./kosmos-app-branding";
 import { reconcileShortcuts } from "./shortcuts";
+import { parseOpenAppRequest } from "./app-navigation";
 
 const requested = (argv: string[]) => {
   for (let index = 0; index < argv.length; index += 1) {
@@ -187,20 +188,33 @@ async function openApp(
   id: string,
   initial = false,
   developmentUrl = requestedDevelopmentUrl(process.argv),
-): Promise<void> {
+  route?: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const request = parseOpenAppRequest(route === undefined ? { id } : { id, route });
+  if (!request.ok) {
+    if (initial) reportFailure(request.message, true);
+    return request;
+  }
   const existing = windows.get(id);
   if (existing && !existing.isDestroyed()) {
     if (!headless) {
       existing.show();
       existing.focus();
     }
-    return;
+    if (route) {
+      try {
+        existing.webContents.send("kepler:extension:navigation", route);
+      } catch {
+        return { ok: false, message: "Не удалось передать маршрут приложению." };
+      }
+    }
+    return { ok: true };
   }
   const result = await engine.launchApp(id);
   if (!result.ok) {
     console.warn("desktop-host app launch rejected", { app_id: id });
     reportFailure(result.message, initial);
-    return;
+    return result;
   }
   const manifest = result.data;
   const name = kosmosAppName(manifest.id, manifest.name);
@@ -282,15 +296,26 @@ async function openApp(
   win.webContents.on("did-fail-load", () => {
     releaseLaunch(id, win, claim, webContentsId);
   });
+  if (route) {
+    win.webContents.once("did-finish-load", () => {
+      try {
+        win.webContents.send("kepler:extension:navigation", route);
+      } catch {
+        /* окно могло быть закрыто во время загрузки */
+      }
+    });
+  }
   try {
     await win.loadURL(developmentUrl ?? manifest.launch_url);
     void resolveLiveLaunchManifest(id, manifest);
+    return { ok: true };
   } catch {
     // Closing a window while navigation is pending is normal lifecycle, not a launch failure.
-    if (win.isDestroyed()) return;
+    if (win.isDestroyed()) return { ok: false, message: "Ресурс приложения недоступен." };
     console.warn("desktop-host app resource failed", { app_id: id });
     reportFailure("Ресурс приложения недоступен.", initial);
     win.close();
+    return { ok: false, message: "Ресурс приложения недоступен." };
   }
 }
 
@@ -317,6 +342,25 @@ if (!singleInstance) {
       if (!win) return;
       if (action === "minimize") win.minimize();
       else win.close();
+    });
+    ipcMain.handle("host:app-open", async (event, input: JsonRecord | undefined) => {
+      const sender = BrowserWindow.fromWebContents(event.sender);
+      const senderId = sender
+        ? [...windows.entries()].find(([, candidate]) => candidate === sender)?.[0]
+        : undefined;
+      if (!senderId || !manifests.has(senderId)) {
+        return { ok: false, message: "Неизвестный источник запроса открытия приложения." };
+      }
+      const parsed = isJsonRecord(input)
+        ? parseOpenAppRequest(input)
+        : { ok: false as const, message: "Некорректный запрос открытия приложения." };
+      if (!parsed.ok) return parsed;
+      return openApp(
+        parsed.request.id,
+        false,
+        requestedDevelopmentUrl(process.argv),
+        parsed.request.route,
+      );
     });
     ipcMain.handle("host:user-data", (event, input: JsonRecord | undefined) => {
       const operation = input?.operation;
