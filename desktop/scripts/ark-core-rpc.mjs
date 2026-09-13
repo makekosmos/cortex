@@ -1,27 +1,24 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   copyFileSync,
-  closeSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
   readFileSync,
+  readdirSync,
   renameSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { acquireCacheLock } from "./ark-core-rpc-lock.mjs";
+export { acquireCacheLock } from "./ark-core-rpc-lock.mjs";
 export const ARK_CORE_REPOSITORY = "https://github.com/makekosmos/core.git";
 export const ARK_CORE_REVISION = "169c1967a074ae6658e81d59892247b24332ce29";
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const defaultCacheRoot = path.join(shellRoot, ".tmp", "ark-core-rpc");
-const LOCK_WAIT_MS = 10 * 60 * 1000;
-const STALE_LOCK_MS = 5 * 60 * 1000;
-const waitBuffer = new Int32Array(new SharedArrayBuffer(4));
 const featureKey = (features) =>
   features.length === 0 ? "default" : [...new Set(features)].sort().join("+");
 export function installRoot(
@@ -40,76 +37,75 @@ export function installRoot(
     featureKey(features),
   );
 }
-function isProcessAlive(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error?.code === "EPERM";
-  }
-}
-function readLock(lockPath) {
-  try {
-    const lock = JSON.parse(readFileSync(lockPath, "utf8"));
-    return { pid: Number(lock.pid), token: lock.token };
-  } catch {
-    return null;
-  }
-}
-function claimStaleLock(lockPath, staleMs) {
-  const claimed = `${lockPath}.reap-${randomUUID()}`;
-  try {
-    const lock = readLock(lockPath);
-    const age = Date.now() - statSync(lockPath).mtimeMs;
-    if ((lock && isProcessAlive(lock.pid)) || (!lock && age <= staleMs)) return false;
-    renameSync(lockPath, claimed);
-  } catch {
-    return false;
-  }
-  rmSync(claimed, { force: true });
-  return true;
-}
-export function acquireCacheLock(
-  lockPath,
-  { waitMs = LOCK_WAIT_MS, staleMs = STALE_LOCK_MS } = {},
-) {
-  mkdirSync(path.dirname(lockPath), { recursive: true });
-  const token = randomUUID();
-  const deadline = Date.now() + waitMs;
-  while (true) {
-    try {
-      const fd = openSync(lockPath, "wx");
-      try {
-        writeFileSync(fd, JSON.stringify({ pid: process.pid, token, startedAt: Date.now() }));
-      } finally {
-        closeSync(fd);
-      }
-      return () => {
-        if (readLock(lockPath)?.token === token) rmSync(lockPath, { force: true });
-      };
-    } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-      let stale = false;
-      try {
-        const lock = readLock(lockPath);
-        const age = Date.now() - statSync(lockPath).mtimeMs;
-        stale = lock ? !isProcessAlive(lock.pid) : age > staleMs;
-      } catch {
-        stale = true;
-      }
-      if (stale) {
-        claimStaleLock(lockPath, staleMs);
-        continue;
-      }
-      if (Date.now() >= deadline) throw new Error(`timed out waiting for cache lock: ${lockPath}`);
-      Atomics.wait(waitBuffer, 0, 0, 50);
-    }
-  }
-}
 const sidecarName = () => `ark-core-rpc${process.platform === "win32" ? ".exe" : ""}`;
 const cachedBinary = (root) => path.join(root, "bin", sidecarName());
 const hashFile = (filePath) => createHash("sha256").update(readFileSync(filePath)).digest("hex");
+function backupPaths(target) {
+  const prefix = `${path.basename(target)}.`;
+  return readdirSync(path.dirname(target))
+    .filter((name) => name.startsWith(prefix) && name.endsWith(".old-"))
+    .map((name) => path.join(path.dirname(target), name))
+    .sort();
+}
+function isCompleteCache(root) {
+  try {
+    return (
+      existsSync(cachedBinary(root)) &&
+      readFileSync(path.join(root, ".complete"), "utf8").trim() === ARK_CORE_REVISION
+    );
+  } catch {
+    return false;
+  }
+}
+function recoverCacheEntry(root) {
+  const backups = backupPaths(root);
+  if (!existsSync(root)) {
+    for (const backup of backups) {
+      if (!isCompleteCache(backup)) {
+        rmSync(backup, { recursive: true, force: true });
+        continue;
+      }
+      try {
+        renameSync(backup, root);
+        break;
+      } catch {}
+    }
+  } else if (!isCompleteCache(root)) {
+    for (const backup of backups) {
+      if (!isCompleteCache(backup)) {
+        rmSync(backup, { recursive: true, force: true });
+        continue;
+      }
+      rmSync(root, { recursive: true, force: true });
+      try {
+        renameSync(backup, root);
+      } catch {}
+      break;
+    }
+  }
+  if (isCompleteCache(root))
+    for (const backup of backupPaths(root)) rmSync(backup, { recursive: true, force: true });
+}
+function recoverTargetBackup(target, expectedSha256) {
+  if (!existsSync(target))
+    for (const backup of backupPaths(target)) {
+      let valid = true;
+      try {
+        valid = !expectedSha256 || hashFile(backup) === expectedSha256;
+      } catch {
+        valid = false;
+      }
+      if (!valid) {
+        rmSync(backup, { force: true });
+        continue;
+      }
+      try {
+        renameSync(backup, target);
+        break;
+      } catch {}
+    }
+  if (existsSync(target)) for (const backup of backupPaths(target)) rmSync(backup, { force: true });
+}
 function readValidatedPrebuiltManifest(manifestPath) {
   let manifest;
   try {
@@ -174,6 +170,7 @@ export function publishToTarget(
 ) {
   mkdirSync(targetDir, { recursive: true });
   const target = path.join(targetDir, sidecarName());
+  recoverTargetBackup(target, expectedSha256);
   const temporary = path.join(targetDir, `.${sidecarName()}.${randomUUID()}.tmp-`);
   try {
     copyFile(source, temporary);
@@ -274,6 +271,7 @@ export function ensureArkCoreRpc({
   const root = installRoot(debug, features, cacheRoot);
   const releaseLock = acquireCacheLock(`${root}.lock`);
   try {
+    recoverCacheEntry(root);
     const marker = path.join(root, ".complete");
     if (
       !existsSync(cachedBinary(root)) ||

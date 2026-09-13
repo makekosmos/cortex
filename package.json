@@ -18,7 +18,7 @@
     "check": "bun run check:layout && bun run check:source-size && bun run lint && bun run format:check && bun run typecheck && bun run rustfmt && bun run clippy && bun run test:static && bun run test:rust && bun run --cwd desktop test:runtime-staging",
     "lint": "oxlint .",
     "test:source-size": "node --test scripts/check-source-size.test.mjs",
-    "test:sidecar": "node --test desktop/scripts/ark-core-rpc.test.mjs desktop/scripts/ark-core-rpc-edge.test.mjs",
+    "test:sidecar": "node --test desktop/scripts/ark-core-rpc.test.mjs desktop/scripts/ark-core-rpc-edge.test.mjs desktop/scripts/ark-core-rpc-recovery.test.mjs",
     "test:format": "node --test scripts/check-format.test.mjs",
     "test:release-bom": "node --test desktop/scripts/release-bom.test.mjs desktop/scripts/release-build-contract.test.mjs desktop/scripts/first-party-release-contracts.test.mjs desktop/scripts/release-channel-local.test.mjs desktop/scripts/package-release.test.mjs",
     "test:package-contract": "bun test desktop/electron/extension-manifest-validation.test.ts",

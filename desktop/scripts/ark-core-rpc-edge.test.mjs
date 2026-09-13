@@ -93,24 +93,41 @@ release();`;
 test("stale malformed lock is reclaimed", () =>
   withTempRoot("stale-lock", (root) => {
     const lockPath = path.join(root, "cache.lock"),
+      ticketPath = `${lockPath}.ticket-000-stale`,
       old = new Date(Date.now() - 60 * 60 * 1000);
-    writeFileSync(lockPath, "not-json");
-    utimesSync(lockPath, old, old);
+    writeFileSync(ticketPath, "not-json");
+    utimesSync(ticketPath, old, old);
     acquireCacheLock(lockPath, { waitMs: 100, staleMs: 1 })();
+    assert.equal(existsSync(ticketPath), false);
   }));
 
 test("concurrent stale reclaim has no global reaper lock", async () =>
   withTempRoot("stale-concurrent", async (root) => {
     const lockPath = path.join(root, "cache.lock");
-    writeFileSync(lockPath, JSON.stringify({ pid: 999_999_999, token: "dead" }));
-    writeFileSync(`${lockPath}.reap-leftover`, "leftover");
+    const stale = `${lockPath}.ticket-000-stale`;
+    writeFileSync(stale, JSON.stringify({ pid: 999_999_999, token: "dead" }));
+    utimesSync(stale, new Date(0), new Date(0));
+    const leftover = `${lockPath}.ticket-zzz-leftover`;
+    writeFileSync(leftover, "leftover");
+    utimesSync(leftover, new Date(0), new Date(0));
     assert.deepEqual(await Promise.all([runLockWorker(lockPath), runLockWorker(lockPath)]), [0, 0]);
-    assert.equal(existsSync(`${lockPath}.reap-leftover`), true);
+    assert.equal(existsSync(leftover), false);
     assert.deepEqual(
-      readdirSync(root).filter(
-        (name) => name.startsWith("cache.lock.reap-") && name !== "cache.lock.reap-leftover",
-      ),
+      readdirSync(root).filter((name) => name.startsWith("cache.lock.ticket-")),
       [],
+    );
+  }));
+
+test("a live ticket blocks later ownership", () =>
+  withTempRoot("ticket-owner", (root) => {
+    const lockPath = path.join(root, "cache.lock");
+    writeFileSync(
+      `${lockPath}.ticket-000-owner`,
+      JSON.stringify({ pid: process.pid, token: "owner" }),
+    );
+    assert.throws(
+      () => acquireCacheLock(lockPath, { waitMs: 1, staleMs: 60_000 }),
+      /timed out waiting for cache lock/,
     );
   }));
 
@@ -261,11 +278,12 @@ test("live and fresh malformed locks time out without deletion", () =>
       ["fresh", "not-json"],
     ]) {
       const lockPath = path.join(root, `${name}.lock`);
-      writeFileSync(lockPath, contents);
+      const ticketPath = `${lockPath}.ticket-000-owner`;
+      writeFileSync(ticketPath, contents);
       assert.throws(
         () => acquireCacheLock(lockPath, { waitMs: 1, staleMs: 60_000 }),
         /timed out waiting for cache lock/,
       );
-      assert.equal(existsSync(lockPath), true);
+      assert.equal(existsSync(ticketPath), true);
     }
   }));

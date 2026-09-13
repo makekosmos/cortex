@@ -11,10 +11,10 @@ rtk proxy cargo build --locked --bin ark-core-rpc --features iroh-spike --target
 rtk proxy cargo build --locked -p kepler-backend --bin kepler-backend --features windows-gui-subsystem --target-dir <dedicated> --timings
 ```
 
-| Build | Cold | Warm, unchanged | After a Rust edit | Dedicated target |
-| --- | ---: | ---: | ---: | ---: |
-| Core `ark-core-rpc`, `iroh-spike` | 2m47s | 0.93s | 14.25s | 4,591,137,913 bytes |
-| Cortex `kepler-backend`, `windows-gui-subsystem` | 3m29s | 1.01s | 14.39s | 5,322,661,606 bytes |
+| Build                                            |  Cold | Warm, unchanged | After a Rust edit |    Dedicated target |
+| ------------------------------------------------ | ----: | --------------: | ----------------: | ------------------: |
+| Core `ark-core-rpc`, `iroh-spike`                | 2m47s |           0.93s |            14.25s | 4,591,137,913 bytes |
+| Cortex `kepler-backend`, `windows-gui-subsystem` | 3m29s |           1.01s |            14.39s | 5,322,661,606 bytes |
 
 The six `cargo --timings` HTML reports were kept outside the repository in
 `.tmp/kos14-evidence`; they are evidence, not release inputs. Dedicated
@@ -64,9 +64,11 @@ the mutable manifest source path. Invalid, missing, stale, or mismatched manifes
 build. An arbitrary `ARK_CORE_RPC_PATH` is not used by this mode. Release
 builds do not consume the UI prebuilt setting.
 
-Node's Windows filesystem API has no single-call overwrite-and-rename primitive;
-publication therefore uses a verified temporary file plus backup/rollback
-renames. A failed publication leaves the prior target or cache entry recoverable.
+First publication stages and verifies a uniquely named file, then atomically
+renames it into the absent target. Replacement uses a uniquely named backup plus
+rename and rollback; if a process dies after moving the old path to its backup,
+the next invocation restores or reconciles that owned backup before use. A
+failed publication leaves the prior target or cache entry recoverable.
 
 ## CI cache
 
