@@ -516,9 +516,6 @@ export interface ManagerApi {
   getDbBackups(): Promise<ManagerResult<DatabaseBackup[]>>;
   createDbBackup(): Promise<ManagerResult<{ path: string }>>;
   openDbBackupsFolder(): Promise<ManagerResult<{ opened: boolean }>>;
-  restoreDbBackup(input: {
-    name: string;
-  }): Promise<ManagerResult<{ restored: true; name: string; objectCount: number }>>;
 }
 
 export const managerOperations = {

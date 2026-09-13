@@ -9,8 +9,6 @@ import {
   type WebContents,
   type OpenDialogOptions,
 } from "electron";
-import { DatabaseSync } from "node:sqlite";
-import { spawn } from "node:child_process";
 import { statSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -66,47 +64,7 @@ import {
 import { clearIntegrationBrowserData, registerIntegrationLoginHandlers } from "./integration-login";
 import { readBrowserDataPersistence, writeBrowserDataPersistence } from "./browser-settings";
 import { resolveInstance } from "../../desktop/electron/instance";
-import {
-  normalizeDbBackups,
-  recoverDatabaseRestore,
-  restoreDatabaseBackup,
-  validDatabaseBackupName,
-} from "./database-backups";
-import { waitForEngineStopped } from "./engine-lifecycle";
-
-type SqliteIntegrityRow = { integrity_check?: Input };
-type SqliteTableRow = { name?: Input };
-type SqliteObjectRow = { id?: Input };
-type ArkBackupInspection = { objectIds: string[] };
-type SqliteNameRow = { name?: Input };
-
-const REQUIRED_ARK_SCHEMA: readonly [string, readonly string[]][] = [
-  ["object_types", ["id", "name", "schema_json", "ui_schema_json", "created_at", "updated_at"]],
-  [
-    "objects",
-    [
-      "id",
-      "type_id",
-      "type_version",
-      "title",
-      "content_json",
-      "props_json",
-      "created_at",
-      "updated_at",
-      "deleted_at",
-    ],
-  ],
-  ["object_links", ["id", "source_object_id", "target_object_id", "link_type", "created_at"]],
-  ["sync_kv", ["key", "value"]],
-  ["sync_tombstones", ["id", "entity_type", "hlc", "deleted_at"]],
-];
-const REQUIRED_ARK_INDEXES = [
-  "idx_objects_type_id",
-  "idx_objects_updated_at",
-  "idx_objects_deleted_at",
-  "idx_object_links_source",
-  "idx_object_links_target",
-] as const;
+import { normalizeDbBackups } from "./database-backups";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import {
@@ -118,7 +76,6 @@ import {
   readDesktopUpdateState,
   requestDesktopUpdate,
   startPackagedRuntime,
-  resolveRuntimeExecutable,
   validIntegrationInput,
   validation,
 } from "./main-helpers";
@@ -156,60 +113,6 @@ function register(
     const error = validate?.(value);
     if (error) return { ok: false, code: "validation", message: error };
     return rpc(operation, transform ? transform(value) : value);
-  });
-}
-
-function inspectSqliteArkBackup(file: string): ArkBackupInspection {
-  const database = new DatabaseSync(file, { readOnly: true });
-  try {
-    // SAFETY: this SQLite query returns the single named integrity result.
-    const integrity = database.prepare("PRAGMA integrity_check").get() as SqliteIntegrityRow;
-    if (integrity.integrity_check !== "ok") throw new Error("SQLite integrity check failed");
-    // SAFETY: this SQLite query selects the optional name field from sqlite_master.
-    const tables = database
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-      .all() as SqliteTableRow[];
-    const tableNames = tables.flatMap(({ name }) => (isString(name) ? [name] : []));
-    for (const [table, requiredColumns] of REQUIRED_ARK_SCHEMA) {
-      if (!tableNames.includes(table)) throw new Error("Selected file is not an ARK backup");
-      // SAFETY: table names come only from the fixed schema contract above.
-      const columns = database.prepare(`PRAGMA table_info('${table}')`).all() as SqliteNameRow[];
-      const columnNames = columns.flatMap(({ name }) => (isString(name) ? [name] : []));
-      if (requiredColumns.some((column) => !columnNames.includes(column)))
-        throw new Error("Selected file has an incompatible ARK schema");
-    }
-    // SAFETY: this SQLite query selects names from sqlite_master.
-    const indexes = database
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
-      .all() as SqliteNameRow[];
-    const indexNames = indexes.flatMap(({ name }) => (isString(name) ? [name] : []));
-    if (REQUIRED_ARK_INDEXES.some((index) => !indexNames.includes(index)))
-      throw new Error("Selected file has an incomplete ARK schema");
-    // SAFETY: this SQLite query selects the optional id field from ARK objects.
-    const rows = database
-      .prepare("SELECT id FROM objects WHERE deleted_at IS NULL")
-      .all() as SqliteObjectRow[];
-    const objectIds = rows.flatMap(({ id }) => (isString(id) ? [id] : []));
-    if (objectIds.length !== rows.length) throw new Error("ARK backup has invalid object IDs");
-    return { objectIds };
-  } finally {
-    database.close();
-  }
-}
-
-function runRuntimeControl(argument: "--shutdown" | "--start"): Promise<boolean> {
-  const executable = resolveRuntimeExecutable();
-  if (!executable) return Promise.resolve(false);
-  return new Promise((resolve, reject) => {
-    const child = spawn(executable, [argument], { stdio: "ignore", windowsHide: true });
-    if (argument === "--start") {
-      child.once("error", reject);
-      child.unref();
-      resolve(true);
-      return;
-    }
-    child.once("error", reject);
-    child.once("exit", (code) => resolve(code === 0 || code === 2));
   });
 }
 
@@ -922,7 +825,6 @@ function registerAll() {
   register("manager.getDiagnosticsSnapshot", op.getDiagnosticsSnapshot);
   register("manager.getDiagnosticLogTail", op.getDiagnosticLogTail);
   const dataRoot = () => resolveManagerDataDir(app.getPath("appData"));
-  const waitForStopped = () => waitForEngineStopped(path.join(dataRoot(), "engine.lock.json"));
   ipcMain.handle("manager.listCrashReports", async () => {
     try {
       return { ok: true, data: await listCrashReports(dataRoot()) };
@@ -987,52 +889,6 @@ function registerAll() {
       return { ok: true, data: { opened: !error } };
     } catch {
       return { ok: false, code: "engine", message: "Не удалось открыть папку бэкапов." };
-    }
-  });
-  ipcMain.handle("manager.restoreDbBackup", async (_event, value) => {
-    if (
-      !isObject(value) ||
-      Object.keys(value).length !== 1 ||
-      !isString(value.name) ||
-      !validDatabaseBackupName(value.name)
-    )
-      return { ok: false, code: "validation", message: "Выберите корректный снимок ARK." };
-    if (!resolveRuntimeExecutable())
-      return {
-        ok: false,
-        code: "engine",
-        message: "Engine недоступен для безопасного восстановления.",
-      };
-    try {
-      const restored = await restoreDatabaseBackup(dataRoot(), value.name, {
-        inspectBackup: inspectSqliteArkBackup,
-        stop: async () => {
-          if (!(await runRuntimeControl("--shutdown"))) throw new Error("Engine shutdown refused");
-        },
-        waitUntilStopped: waitForStopped,
-        start: () => runRuntimeControl("--start"),
-        waitUntilReady: async () => {
-          await waitForEngineReady(30_000);
-          return (await status("/v1/health")).ok;
-        },
-        liveObjectIds: async () => {
-          const result = await rpc("list_object_summaries");
-          if (!result.ok) throw new Error(result.message);
-          return Array.isArray(result.data)
-            ? result.data.flatMap((item) => (isObject(item) && isString(item.id) ? [item.id] : []))
-            : [];
-        },
-      });
-      return {
-        ok: true,
-        data: { restored: true, name: restored.name, objectCount: restored.objectCount },
-      };
-    } catch (error) {
-      return {
-        ok: false,
-        code: "engine",
-        message: error instanceof Error ? error.message : "Не удалось восстановить ARK.",
-      };
     }
   });
   const appExecutable = process.env.KOSMOS_APP_EXECUTABLE?.trim();
@@ -1362,18 +1218,7 @@ if (!app.requestSingleInstanceLock()) {
       }),
     );
     registerAll();
-    let restoreRecoveryReady = true;
-    try {
-      await recoverDatabaseRestore(resolveManagerDataDir(app.getPath("appData")));
-    } catch (error) {
-      restoreRecoveryReady = false;
-      console.error("ARK restore recovery failed; Engine start skipped", error);
-    }
-    if (
-      restoreRecoveryReady &&
-      process.env.KOSMOS_HEADLESS !== "1" &&
-      process.env.KOSMOS_TEST_MODE !== "1"
-    ) {
+    if (process.env.KOSMOS_HEADLESS !== "1" && process.env.KOSMOS_TEST_MODE !== "1") {
       startPackagedRuntime();
       void waitForEngineReady();
     }

@@ -165,7 +165,7 @@ describe("Manager surface contract", () => {
     expect(updates).toContain("createDesktopVersionCache");
   });
 
-  test("exposes local ARK snapshots with accessible manual and restore actions", () => {
+  test("exposes local ARK snapshots with accessible manual actions", () => {
     const root = readFileSync(new URL("./ManagerRoot.vue", import.meta.url), "utf8");
     const settings = read("SettingsView.vue");
     const api = readFileSync(new URL("./manager-api.ts", import.meta.url), "utf8");
@@ -176,25 +176,15 @@ describe("Manager surface contract", () => {
     expect(settings).toContain("локальные снимки базы данных ARK");
     expect(settings).toContain("Сделать бэкап сейчас");
     expect(settings).toContain("Открыть папку бэкапов");
-    expect(settings).toContain("Восстановить");
-    expect(settings).toContain("список обновить не удалось");
-    expect(settings).toContain("window.confirm");
-    for (const method of [
-      "getDbBackups",
-      "createDbBackup",
-      "openDbBackupsFolder",
-      "restoreDbBackup",
-    ]) {
+    expect(settings).toContain("безопасный Runtime API");
+    expect(settings).not.toContain("Восстановить");
+    for (const method of ["getDbBackups", "createDbBackup", "openDbBackupsFolder"]) {
       expect(api).toContain(method);
       expect(preload).toContain(method);
       expect(main).toContain(`manager.${method}`);
     }
-    expect(main).toContain("DatabaseSync");
-    expect(main).toContain("PRAGMA integrity_check");
-    expect(main).toContain("idx_objects_type_id");
-    expect(
-      readFileSync(new URL("../electron/engine-lifecycle.ts", import.meta.url), "utf8"),
-    ).toContain("Engine did not stop before ARK restore");
-    expect(main).toContain("list_object_summaries");
+    expect(api).not.toContain("restoreDbBackup");
+    expect(preload).not.toContain("restoreDbBackup");
+    expect(main).not.toContain("restoreDbBackup");
   });
 });

@@ -96,26 +96,6 @@ async function openBackupsFolder() {
   await props.client.call("openDbBackupsFolder", undefined, "db-backups-open");
 }
 
-async function restoreBackup(backup: DatabaseBackup) {
-  if (!window.confirm(`Восстановить базу из снимка ${backup.name}? Engine перезапустится.`)) return;
-  backupBusy.value = true;
-  backupMessage.value = null;
-  try {
-    const result = await props.client.call<{
-      restored: true;
-      name: string;
-      objectCount: number;
-    }>("restoreDbBackup", { name: backup.name }, "db-backup-restore");
-    if (result) {
-      backupMessage.value = (await loadBackups())
-        ? `База восстановлена. Объектов: ${result.objectCount}.`
-        : `База восстановлена, но список обновить не удалось. Объектов: ${result.objectCount}.`;
-    }
-  } finally {
-    backupBusy.value = false;
-  }
-}
-
 onMounted(() => {
   void load();
   void loadBackups();
@@ -157,6 +137,9 @@ onMounted(() => {
       <p class="muted">
         Это локальные снимки базы данных ARK, а не синхронизация, Huawei, Store или экспорт.
       </p>
+      <p class="muted">
+        Восстановление временно недоступно; безопасный Runtime API отслеживается в KOS-51.
+      </p>
       <div class="toolbar">
         <Button :disabled="backupBusy" @click="createBackup">Сделать бэкап сейчас</Button>
         <Button variant="ghost" :disabled="backupBusy" @click="openBackupsFolder"
@@ -170,17 +153,7 @@ onMounted(() => {
           :key="backup.name"
           :title="backup.name"
           :description="`${backup.path} · ${backup.size} Б`"
-        >
-          <template #control>
-            <Button
-              size="sm"
-              variant="surface"
-              :disabled="backupBusy"
-              @click="restoreBackup(backup)"
-              >Восстановить</Button
-            >
-          </template>
-        </SettingsRow>
+        />
       </SettingsList>
       <p v-else class="muted">Снимков пока нет.</p>
     </div>
