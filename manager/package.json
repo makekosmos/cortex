@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "prebuild": "bun --cwd ../../imago build",
     "build": "vite build",
-    "package:win": "bun run build && electron-builder --win --dir"
+    "package:win": "node ../desktop/scripts/release-preflight.mjs --platform win && bun run build && electron-builder --win --dir --publish never"
   },
   "dependencies": {
     "@lucide/vue": "^1.16.0",
