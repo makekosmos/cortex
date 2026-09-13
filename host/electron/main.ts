@@ -23,6 +23,7 @@ import { LaunchOwnership, type OwnedLaunch } from "./launch-ownership";
 import { kosmosAppIcon, kosmosAppName, kosmosAppShortcutIcon } from "./kosmos-app-branding";
 import { reconcileShortcuts } from "./shortcuts";
 import { parseOpenAppRequest, sendNavigationWhenReady } from "./app-navigation";
+import { registerExtensionUserDataIpc } from "./extension-user-data-ipc";
 
 const requested = (argv: string[]) => {
   for (let index = 0; index < argv.length; index += 1) {
@@ -370,6 +371,18 @@ if (!singleInstance) {
         requestedDevelopmentUrl(process.argv),
         parsed.request.route,
       );
+    });
+    registerExtensionUserDataIpc({
+      handle: (channel, handler) => ipcMain.handle(channel, handler),
+      resolveAppForSender: (sender) => {
+        const win = BrowserWindow.fromWebContents(sender);
+        const appId = [...windows.entries()].find(([, candidate]) => candidate === win)?.[0];
+        const manifest = appId ? manifests.get(appId) : undefined;
+        return manifest
+          ? { appId: appId!, permissions: manifest.permissions.map((p) => p.capability) }
+          : null;
+      },
+      userDataDirForApp: (appId) => path.join(app.getPath("userData"), "extension-data", appId),
     });
     ipcMain.handle("host:user-data", (event, input: JsonRecord | undefined) => {
       const operation = input?.operation;

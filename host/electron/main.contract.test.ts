@@ -141,6 +141,18 @@ describe("Host window safety contracts", () => {
     expect(source).toMatch(/return\s+engine\.launcherRequest\(operation,\s*params\)/);
   });
 
+  test("binary user data stays app-scoped and pathless", () => {
+    expect(source).toContain("registerExtensionUserDataIpc({");
+    expect(source).toContain("handle: (channel, handler) => ipcMain.handle(channel, handler)");
+    expect(source).toContain("resolveAppForSender");
+    expect(source).toContain("userDataDirForApp");
+    expect(preloadSource).toContain('"host:user-data:binary"');
+    expect(preloadSource).toContain('{ operation: "read", key }');
+    expect(preloadSource).toContain('{ operation: "write", key, bytes }');
+    expect(preloadSource).toContain('{ operation: "delete", key }');
+    expect(preloadSource).toContain('{ operation: "stat", key }');
+  });
+
   test("does not expose an ARK bridge to launcher-only Apps", () => {
     expect(source).toContain(
       '`--kosmos-ark=${isV2Launch(manifest) || hasArkGrant(manifest.permissions) ? "1" : "0"}`',

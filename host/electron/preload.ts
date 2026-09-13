@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { OpenAppRequest, OpenAppRequestResult } from "./app-navigation";
+import type {
+  UserDataDeleteResult,
+  UserDataReadResult,
+  UserDataStatResult,
+  UserDataWriteResult,
+} from "./extension-user-data-ipc";
 
 const identityArg = process.argv.find((value) => value.startsWith("--kosmos-app="));
 const arkAllowed = process.argv.includes("--kosmos-ark=1");
@@ -21,6 +27,10 @@ type ExposedApi = {
     } | null>;
   };
   userData: {
+    read(key: string): Promise<UserDataReadResult>;
+    write(key: string, bytes: Uint8Array): Promise<UserDataWriteResult>;
+    delete(key: string): Promise<UserDataDeleteResult>;
+    stat(key: string): Promise<UserDataStatResult>;
     readJson<T = unknown>(name: string): Promise<T | null>;
     writeJson<T = unknown>(name: string, value: T): Promise<void>;
     deleteFile(name: string): Promise<boolean>;
@@ -62,6 +72,11 @@ const api: ExposedApi = {
       } | null>,
   },
   userData: {
+    read: (key) => ipcRenderer.invoke("host:user-data:binary", { operation: "read", key }),
+    write: (key, bytes) =>
+      ipcRenderer.invoke("host:user-data:binary", { operation: "write", key, bytes }),
+    delete: (key) => ipcRenderer.invoke("host:user-data:binary", { operation: "delete", key }),
+    stat: (key) => ipcRenderer.invoke("host:user-data:binary", { operation: "stat", key }),
     readJson: (name) => ipcRenderer.invoke("host:user-data", { operation: "readJson", name }),
     writeJson: (name, value) =>
       ipcRenderer.invoke("host:user-data", {

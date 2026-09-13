@@ -1,3 +1,9 @@
+import type {
+  UserDataDeleteResult,
+  UserDataReadResult,
+  UserDataStatResult,
+  UserDataWriteResult,
+} from "../electron/extension-user-data-ipc";
 export {};
 type HostJsonValue =
   | string
@@ -16,6 +22,12 @@ declare global {
       window: { minimize(): void; close(): void };
       dialogs: {
         pickDirectoryGrant(): Promise<{ persistentGrantId: string; label: string } | null>;
+      };
+      userData: {
+        read(key: string): Promise<UserDataReadResult>;
+        write(key: string, bytes: Uint8Array): Promise<UserDataWriteResult>;
+        delete(key: string): Promise<UserDataDeleteResult>;
+        stat(key: string): Promise<UserDataStatResult>;
       };
       ark: {
         request(operation: string, params?: HostApiParams): Promise<HostJsonValue>;
