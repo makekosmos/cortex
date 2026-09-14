@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { lstat, mkdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
   bridge,
+  checkoutDirty,
   cloneExact,
   hash,
   inspectCore,
@@ -19,6 +20,7 @@ import {
 import { NAMES, loadWorkspace, resolveMode, resolveWorkspacePaths } from "./workspace-config.mjs";
 export {
   cloneExact,
+  checkoutDirty,
   hash,
   inspectCore,
   inspectDependency,
@@ -135,7 +137,10 @@ export async function planBootstrap(
       continue;
     }
     const head = (await git(checkout, ["rev-parse", "HEAD"], true)).stdout,
-      dirty = Boolean((await git(checkout, ["status", "--porcelain"], true)).stdout);
+      dirty = await checkoutDirty(
+        checkout,
+        JSON.parse(await readFile(path.join(checkout, "package.json"), "utf8")),
+      );
     if (dirty && head !== pin.commit) {
       actions.push({ name, path: checkout, action: "blocked-dirty", head, commit: pin.commit });
       continue;
