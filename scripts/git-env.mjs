@@ -3,6 +3,5 @@ const repositoryContext = new Set(
     " ",
   ),
 );
-export const gitEnv = Object.fromEntries(
-  Object.entries(process.env).filter(([key]) => !repositoryContext.has(key)),
-);
+export const gitEnv = (env = process.env) =>
+  Object.fromEntries(Object.entries(env).filter(([key]) => !repositoryContext.has(key)));

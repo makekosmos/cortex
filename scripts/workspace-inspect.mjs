@@ -17,7 +17,7 @@ function run(exe, args, cwd, env = process.env) {
     );
   });
 }
-const git = (cwd, args) => run("git", args, cwd, gitEnv);
+const git = (cwd, args) => run("git", args, cwd, gitEnv());
 async function exists(file) {
   try {
     await stat(file);

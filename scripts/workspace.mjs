@@ -51,7 +51,7 @@ function run(exe, args, cwd, env = process.env) {
   });
 }
 async function git(cwd, args, allowFailure = false) {
-  const result = await run("git", args, cwd, gitEnv);
+  const result = await run("git", args, cwd, gitEnv());
   if (result.error) throw result.error;
   if (result.status !== 0 && !allowFailure)
     fail(`git ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
