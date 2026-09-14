@@ -104,7 +104,7 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
         &setup.recipient.node_id,
         free_loopback_port(),
         auth_secret,
-        Some(&origin_ticket),
+        None,
     )
     .await;
     let recipient_ticket = own_iroh_ticket(&recipient).await;
@@ -115,15 +115,6 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
         support::INTEGRATION_ID,
     )
     .unwrap();
-    start_iroh_sync(
-        &origin,
-        space_id,
-        &setup.origin.node_id,
-        free_loopback_port(),
-        auth_secret,
-        Some(&recipient_ticket),
-    )
-    .await;
     start_iroh_sync(
         &recipient,
         space_id,
