@@ -196,5 +196,5 @@ test("hook and CI entrypoints keep the planner and stable quality gate", () => {
   assert.match(workflow, /id: plan/);
   assert.match(workflow, /cortex-quality-gate:/);
   assert.match(workflow, /github\.event\.pull_request\.number \|\| github\.ref/);
-  assert.match(workflow, /branches:\n\s+- main/);
+  assert.match(workflow, /branches:\r?\n\s+- main/);
 });
