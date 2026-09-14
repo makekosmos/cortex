@@ -12,9 +12,21 @@ describe("Manager integration login flow", () => {
     const webContents = new EventEmitter();
     let prevented = false;
     const callback = "hms://redirect_url?code=example&state=expected";
-    const fake = Object.assign(win, { webContents, loadURL: async () => {
-      webContents.emit("will-redirect", { preventDefault: () => { prevented = true; } }, callback);
-    } });
+    const fake = Object.assign(win, {
+      webContents,
+      loadURL: async () => {
+        webContents.emit(
+          "will-redirect",
+          {
+            preventDefault: () => {
+              prevented = true;
+            },
+          },
+          callback,
+        );
+      },
+    });
+    // SAFETY: the EventEmitter fake implements the window members used by this boundary helper.
     expect(await waitForHuaweiCallback(fake as never, "https://example.com")).toBe(callback);
     expect(prevented).toBe(true);
     expect(webContents.listenerCount("will-redirect")).toBe(0);
@@ -24,8 +36,16 @@ describe("Manager integration login flow", () => {
   test("Huawei window cancellation rejects and removes navigation listeners", async () => {
     const win = new EventEmitter();
     const webContents = new EventEmitter();
-    const fake = Object.assign(win, { webContents, loadURL: async () => { win.emit("closed"); } });
-    await expect(waitForHuaweiCallback(fake as never, "https://example.com")).rejects.toThrow("cancelled");
+    const fake = Object.assign(win, {
+      webContents,
+      loadURL: async () => {
+        win.emit("closed");
+      },
+    });
+    // SAFETY: the EventEmitter fake implements the window members used by this boundary helper.
+    await expect(waitForHuaweiCallback(fake as never, "https://example.com")).rejects.toThrow(
+      "cancelled",
+    );
     expect(webContents.listenerCount("will-navigate")).toBe(0);
   });
   test("closes only after Engine persistence and never returns the credential", async () => {
@@ -51,43 +71,33 @@ describe("Manager integration login flow", () => {
       },
     });
 
-    expect(events).toEqual([
-      "create",
-      "load",
-      "fresh-cookies",
-      "persist",
-      "close",
-    ]);
+    expect(events).toEqual(["create", "load", "fresh-cookies", "persist", "close"]);
     expect(persisted).toBe('{"session":"session","csrf":"csrf"}');
     expect(JSON.stringify(result)).not.toContain("session");
   });
 
   test("keeps only contract-approved cookies within the keyring bound", () => {
     expect(
-      encodeTrustedCookieCredential(
-        { session: "session", csrf: "csrf", analytics: "drop" },
-        ["session", "csrf"],
-      ),
+      encodeTrustedCookieCredential({ session: "session", csrf: "csrf", analytics: "drop" }, [
+        "session",
+        "csrf",
+      ]),
     ).toBe('{"session":"session","csrf":"csrf"}');
     expect(encodeTrustedCookieCredential({}, ["session"])).toBeNull();
   });
 
   test("rejects missing or oversized contract cookies", () => {
     expect(encodeTrustedCookieCredential({ session: "" }, ["session"])).toBeNull();
-    expect(
-      encodeTrustedCookieCredential({ session: "x".repeat(2048) }, ["session"]),
-    ).toBeNull();
+    expect(encodeTrustedCookieCredential({ session: "x".repeat(2048) }, ["session"])).toBeNull();
   });
 
   test("requires every trusted cookie before persisting a generic session", () => {
+    expect(encodeTrustedCookieCredential({ session: "ok" }, ["session", "csrf"])).toBeNull();
     expect(
-      encodeTrustedCookieCredential({ session: "ok" }, ["session", "csrf"]),
-    ).toBeNull();
-    expect(
-      encodeTrustedCookieCredential(
-        { session: "ok", csrf: "token", foreign: "drop" },
-        ["session", "csrf"],
-      ),
+      encodeTrustedCookieCredential({ session: "ok", csrf: "token", foreign: "drop" }, [
+        "session",
+        "csrf",
+      ]),
     ).toBe('{"session":"ok","csrf":"token"}');
   });
 });

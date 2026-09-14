@@ -23,14 +23,14 @@ pub fn start() -> (BackendTray, UnboundedReceiver<TrayEvent>) {
         let thread_events = events.clone();
         let join = std::thread::spawn(move || windows_impl::run(thread_events, ready_sender));
         let thread_id = ready_receiver.recv().unwrap_or_default();
-        return (
+        (
             BackendTray {
                 thread_id,
                 join: Some(join),
                 _events: events,
             },
             receiver,
-        );
+        )
     }
     #[cfg(not(windows))]
     (BackendTray { _events: events }, receiver)
