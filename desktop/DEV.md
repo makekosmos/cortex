@@ -19,7 +19,13 @@ port, manifest, renderer log, and shell log. Stop validates the recorded PID
 start time and run marker, then terminates only that process tree. Reset
 resolves every path and refuses anything outside the recognized test root.
 
-Packaged smoke requires an explicit `KOSMOS_PACKAGED_ROOT` containing both
-`Kosmos.exe` and `resources/Kosmos Runtime.exe`. Missing production fixture
-assets are reported as `NOT_RUN`; the test never falls back to an installed
-engine. Dev and packaged smoke use the same backend-ready IPC assertion.
+Packaged smoke requires an explicit `KOSMOS_PACKAGED_ROOT` containing
+`Kosmos.exe`, `resources/Kosmos Engine.zip`, and its matching
+`resources/engine-manifest.json`. It verifies and installs that archive under
+the isolated run root; it never falls back to the user's installed engine.
+Missing production fixture assets are reported as `NOT_RUN`. Dev and packaged
+smoke use the same backend-ready IPC assertion.
+
+Set `KOSMOS_SMOKE_LIVE_DNS=1` to add the real
+`dictation.test_connectivity` ARK round-trip and require its `dns_resolve`
+stage to succeed. The default smoke remains deterministic and offline-safe.

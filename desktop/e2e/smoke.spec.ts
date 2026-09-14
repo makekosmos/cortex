@@ -4,7 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
 import { _electron as electron, type ElectronApplication, type Page } from "playwright";
-import { freshDataDir, launchKeplerWithDataDir, shutdownKeplerEngine } from "./helpers/launch";
+import {
+  freshDataDir,
+  launchKeplerWithDataDir,
+  shutdownKeplerEngine,
+  trackKeplerApplication,
+} from "./helpers/launch";
 import { waitForBackendReady } from "./helpers/wait";
 import { readRunManifest } from "../scripts/dev-run-manifest.mjs";
 
@@ -15,6 +20,7 @@ const managedManifest = managedManifestPath
   ? readRunManifest(managedManifestPath, testRoot)
   : undefined;
 const dataDirs = new Set<string>();
+test.setTimeout(60_000);
 
 async function launchKepler(): Promise<{
   app: ElectronApplication;
@@ -37,6 +43,14 @@ async function launchKepler(): Promise<{
       managedManifest?.runId,
     );
   } else {
+    const launchStartedAt = Date.now();
+    const engineRoot = process.env.KOSMOS_ENGINE_ROOT;
+    if (!engineRoot) throw new Error("packaged smoke engine root is missing");
+    // SAFETY: installEngineArchive writes current.json from a validated engine manifest.
+    const current = JSON.parse(fs.readFileSync(path.join(engineRoot, "current.json"), "utf8")) as {
+      version: string;
+    };
+    const backendExe = path.join(engineRoot, "versions", current.version, "kepler-backend.exe");
     const env = {
       ...process.env,
       KOSMOS_DATA_DIR: dataDir,
@@ -47,7 +61,6 @@ async function launchKepler(): Promise<{
       KEPLER_SKIP_SYNC: "1",
     };
     delete env.KEPLER_BACKEND_EXE;
-    delete env.KOSMOS_ENGINE_ROOT;
     delete env.VITE_DEV_SERVER_URL;
     app = await electron.launch({
       executablePath: path.join(packagedRoot, "Kosmos.exe"),
@@ -56,6 +69,7 @@ async function launchKepler(): Promise<{
       env,
       timeout: 20_000,
     });
+    await trackKeplerApplication(app, dataDir, launchStartedAt, backendExe);
   }
   const launcher = app.windows()[0] ?? (await app.waitForEvent("window", { timeout: 20_000 }));
   await launcher.waitForLoadState("domcontentloaded");
@@ -63,7 +77,7 @@ async function launchKepler(): Promise<{
     const devUrl = process.env.VITE_DEV_SERVER_URL;
     expect(devUrl).toBeTruthy();
     expect(new URL(launcher.url()).origin).toBe(new URL(devUrl!).origin);
-  } else expect(launcher.url()).not.toContain("dist/index.html");
+  } else expect(launcher.url()).toContain("/resources/app.asar/dist/index.html");
   await waitForBackendReady(launcher);
   return { app, launcher, dataDir };
 }
@@ -100,8 +114,18 @@ test("shell, IPC, and clipboard smoke use one Electron", async () => {
     const version = await launcher.evaluate(() => window.kepler.settings.version());
     expect(Object.prototype.toString.call(version)).toBe("[object String]");
     expect(String(version).length).toBeGreaterThan(0);
+    if (process.env.KOSMOS_SMOKE_LIVE_DNS === "1") {
+      // SAFETY: this opt-in ARK operation returns the ConnectivityReport domain contract.
+      const report = (await launcher.evaluate(() =>
+        window.kepler.ark.request("dictation.test_connectivity", {}),
+      )) as { stages?: Array<{ name?: string; ok?: boolean; ip?: string }> };
+      const dns = report.stages?.find((stage) => stage.name === "dns_resolve");
+      console.log(JSON.stringify({ liveDns: dns ?? null }));
+      expect(dns?.ok).toBe(true);
+    }
   } finally {
-    await app.close();
+    shutdownKeplerEngine(dataDir);
+    await app.close().catch(() => {});
     expect(fs.readFileSync(filePath).equals(seed)).toBe(true);
   }
 });

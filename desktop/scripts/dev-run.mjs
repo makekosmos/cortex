@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { installEngineArchive } from "./engine-distribution.mjs";
 import { processInfo, stopProcessTree } from "./dev-run-process.mjs";
 import { acquirePortLease, releasePortLease } from "./dev-run-port.mjs";
 import { redactText } from "./redaction.mjs";
@@ -109,6 +110,7 @@ export async function startRun(root = testRoot, attempt = 0, launchShell = true)
     KEPLER_SKIP_SYNC: "1",
     KOSMOS_SHELL_DEV_PORT: String(manifest.ports.shell),
     KOSMOS_RUN_ID: manifest.runId,
+    KOSMOS_DEV_RUN_MANAGED: "1",
     VITE_DEV_SERVER_URL: `http://127.0.0.1:${manifest.ports.shell}`,
   };
   try {
@@ -188,8 +190,10 @@ function packagedNotRunReason() {
   const root = process.env.KOSMOS_PACKAGED_ROOT?.trim();
   if (!root) return "KOSMOS_PACKAGED_ROOT is not set";
   if (!existsSync(path.join(root, "Kosmos.exe"))) return `Kosmos.exe is missing under ${root}`;
-  if (!existsSync(path.join(root, "resources", "Kosmos Runtime.exe")))
-    return `bundled Kosmos Runtime.exe is missing under ${root}`;
+  if (!existsSync(path.join(root, "resources", "Kosmos Engine.zip")))
+    return `bundled Kosmos Engine.zip is missing under ${root}`;
+  if (!existsSync(path.join(root, "resources", "engine-manifest.json")))
+    return `bundled engine-manifest.json is missing under ${root}`;
   return null;
 }
 
@@ -214,8 +218,19 @@ async function runSmoke() {
   try {
     const cli = path.join(shellRoot, "node_modules", "playwright", "cli.js");
     const smokeEnv = { ...process.env, KOSMOS_DEV_RUN_MANIFEST: running.manifestFile };
-    if (!packaged)
+    if (!packaged) {
       smokeEnv.VITE_DEV_SERVER_URL = `http://127.0.0.1:${running.manifest.ports.shell}`;
+    } else {
+      const packagedRoot = process.env.KOSMOS_PACKAGED_ROOT.trim();
+      const resources = path.join(packagedRoot, "resources");
+      const engineRoot = path.join(running.manifest.runRoot, "engine");
+      installEngineArchive(
+        path.join(resources, "Kosmos Engine.zip"),
+        JSON.parse(readFileSync(path.join(resources, "engine-manifest.json"), "utf8")),
+        engineRoot,
+      );
+      smokeEnv.KOSMOS_ENGINE_ROOT = engineRoot;
+    }
     const child = spawn(
       process.execPath,
       [cli, "test", "e2e/smoke.spec.ts", "--config", "playwright.config.ts"],

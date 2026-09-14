@@ -5,6 +5,7 @@ import {
   mkdirSync,
   openSync,
   realpathSync,
+  rmSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -72,5 +73,5 @@ export async function acquirePortLease(root, candidatePorts = []) {
 export function releasePortLease(file, root) {
   if (!file) return;
   assertLeasePath(file, root);
-  unlinkSync(file, { force: true });
+  rmSync(file, { force: true });
 }
