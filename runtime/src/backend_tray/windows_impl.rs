@@ -93,9 +93,9 @@ pub fn run(events: UnboundedSender<TrayEvent>, ready: SyncSender<u32>) {
         return;
     };
 
-    let mut notify = notify_data(window, icon);
+    let notify = notify_data(window, icon);
     unsafe {
-        if !Shell_NotifyIconW(NIM_ADD, &mut notify).as_bool() {
+        if !Shell_NotifyIconW(NIM_ADD, &notify).as_bool() {
             eprintln!("[kepler-backend] Shell_NotifyIconW(NIM_ADD) failed");
             let _ = DestroyWindow(window);
             let _ = DestroyIcon(icon);
@@ -111,7 +111,7 @@ pub fn run(events: UnboundedSender<TrayEvent>, ready: SyncSender<u32>) {
             let _ = TranslateMessage(&message);
             DispatchMessageW(&message);
         }
-        let _ = Shell_NotifyIconW(NIM_DELETE, &mut notify);
+        let _ = Shell_NotifyIconW(NIM_DELETE, &notify);
         let _ = DestroyWindow(window);
         let _ = DestroyIcon(icon);
     }

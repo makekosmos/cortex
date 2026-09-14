@@ -275,10 +275,9 @@ async fn run_core_worker() -> ExitCode {
     } else {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => None,
-            event = tray_events.recv() => match event {
-                Some(backend_tray::TrayEvent::Exit) => Some(ControlMessage::ShutdownRequested),
-                None => None,
-            },
+            event = tray_events.recv() => event.map(
+                |backend_tray::TrayEvent::Exit| ControlMessage::ShutdownRequested
+            ),
         }
     };
     eprintln!("[kepler-backend] shutdown signal received, cleaning up");
