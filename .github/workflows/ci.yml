@@ -70,6 +70,9 @@ jobs:
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 12.4.1
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
       - run: pnpm run check:layout
       - run: pnpm install --frozen-lockfile
         env:
@@ -79,9 +82,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: pnpm --dir manager install --frozen-lockfile
-      - run: bun test desktop/electron/settings-store.test.ts
-      - run: bun test desktop/electron/instance.test.ts
-      - run: bun test desktop/scripts/desktop-naming-contract.test.mjs
+      - run: node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs desktop/electron/settings-store.test.ts
+      - run: node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs desktop/electron/instance.test.ts
+      - run: node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs desktop/scripts/desktop-naming-contract.test.mjs
       - run: pnpm run check:source-size
       - run: pnpm run lint
       - run: pnpm run format:check
@@ -107,7 +110,9 @@ jobs:
         run: |
           ln -s "$GITHUB_WORKSPACE/_shared/arca-sdk" "$GITHUB_WORKSPACE/../arca-sdk"
           ln -s "$GITHUB_WORKSPACE/_shared/imago" "$GITHUB_WORKSPACE/../imago"
-      - run: pnpm --dir _shared/imago install --frozen-lockfile
+      - name: Install pinned Imago with its declared package manager
+        run: bun install --frozen-lockfile
+        working-directory: _shared/imago
       - run: pnpm run typecheck
       - run: pnpm run rustfmt
       - name: Run Rust checks with private Core access
@@ -121,8 +126,8 @@ jobs:
           pnpm run test:format
           pnpm run test:release-bom
           pnpm run test:package-contract
-          bun test desktop/build/installer-shortcut.test.mjs
-      - run: bun test host/electron/host-api-reconnect.test.ts
+          node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs desktop/build/installer-shortcut.test.mjs
+      - run: node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs host/electron/host-api-reconnect.test.ts
 
   windows-runtime:
     needs: plan
@@ -167,7 +172,7 @@ jobs:
           pnpm run test:rust
           cargo test --locked --package kepler-backend --test package_worker_windows --features package-worker-fixture
           cargo clippy --locked --package kepler-backend --all-targets --features package-worker-fixture -- -D warnings
-          bun test desktop/electron/focus-enforcement.test.ts
+          node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs desktop/electron/focus-enforcement.test.ts
           pnpm --dir desktop test:runtime-staging
 
   first-party-contracts:
@@ -182,6 +187,9 @@ jobs:
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 12.4.1
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
       - name: Checkout first-party package revisions
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -261,7 +269,9 @@ jobs:
           GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.KOSMOS_READ_TOKEN }}@github.com/makekosmos/core.git.insteadOf
           GIT_CONFIG_VALUE_0: https://github.com/makekosmos/core.git
         run: cargo fetch --locked
-      - run: pnpm --dir _first-party/imago install --frozen-lockfile
+      - name: Install pinned Imago with its declared package manager
+        run: bun install --frozen-lockfile
+        working-directory: _first-party/imago
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: pnpm --dir _first-party/arcadia install --frozen-lockfile
@@ -273,7 +283,9 @@ jobs:
       - run: pnpm --dir _first-party/ordo install --frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: pnpm --dir _first-party/imago build
+      - name: Build pinned Imago with its declared package manager
+        run: bun run build
+        working-directory: _first-party/imago
       - name: Verify Imago package entrypoint
         shell: pwsh
         run: if (!(Test-Path _first-party/imago/dist/index.js)) { throw "Imago package entrypoint is missing" }

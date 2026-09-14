@@ -5,8 +5,9 @@ import path from "node:path";
 import { gitEnv } from "./git-env.mjs";
 const STAMP = ".tmp/workspace/prepared.json";
 function run(exe, args, cwd, env = process.env) {
+  const command = process.platform === "win32" && exe === "pnpm" ? "pnpm.cmd" : exe;
   return new Promise((resolve) => {
-    const child = spawn(exe, args, { cwd, env, shell: false, windowsHide: true });
+    const child = spawn(command, args, { cwd, env, shell: command.endsWith(".cmd") });
     let stdout = "",
       stderr = "";
     child.stdout?.on("data", (data) => (stdout += data));
@@ -269,12 +270,12 @@ export async function inspectCore(root) {
 export async function inspectTools(root, packageJson) {
   const workflow = await readFile(path.join(root, ".github", "workflows", "core-pin.yml"), "utf8"),
     expected = {
-      bun: String(packageJson.packageManager ?? "").match(/^bun@(\d+\.\d+\.\d+)$/)?.[1],
+      pnpm: String(packageJson.packageManager ?? "").match(/^pnpm@(\d+\.\d+\.\d+)$/)?.[1],
       node: workflow.match(/node-version:\s*(\d+\.\d+\.\d+)/)?.[1],
       rust: workflow.match(/rustup toolchain install\s+(\d+\.\d+\.\d+)/)?.[1],
     },
     tools = {};
-  for (const [name, exe] of Object.entries({ bun: "bun", node: "node", rust: "rustc" })) {
+  for (const [name, exe] of Object.entries({ pnpm: "pnpm", node: "node", rust: "rustc" })) {
     const result = await run(exe, ["--version"], root),
       located = await run(process.platform === "win32" ? "where" : "which", [exe], root),
       version =

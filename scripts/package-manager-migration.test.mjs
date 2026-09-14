@@ -27,7 +27,6 @@ test("Cortex command and test contracts do not require Bun", () => {
     "host/package.json",
     "manager/package.json",
     "lefthook.yml",
-    ".github/workflows/ci.yml",
     "README.md",
   ];
   for (const file of files) assert.doesNotMatch(read(file), /\bbun(?:x)?\b|bun:test/, file);
@@ -35,6 +34,24 @@ test("Cortex command and test contracts do not require Bun", () => {
     const contents = read(`${file}/package.json`);
     assert.doesNotMatch(contents, /\bbun(?:x)?\b|bun:test/, `${file}/package.json`);
   }
+  assert.doesNotMatch(read("host/e2e/fixtures/host-runtime.test.ts"), /bun:test/);
+});
+
+test("CI uses Bun only for the external pinned Imago checkout", () => {
+  const source = read(".github/workflows/ci.yml");
+  assert.match(source, /oven-sh\/setup-bun@/);
+  assert.match(source, /bun install --frozen-lockfile/);
+});
+
+test("workspace doctor checks the Cortex pnpm toolchain", () => {
+  const source = read("scripts/workspace-inspect.mjs");
+  assert.match(source, /pnpm:\s*String\(packageJson\.packageManager/);
+  assert.doesNotMatch(source, /bun:\s*String\(packageJson\.packageManager/);
+});
+
+test("static checks include workspace contracts exactly once", () => {
+  const scripts = JSON.parse(read("package.json")).scripts;
+  assert.equal((scripts["test:static"].match(/test:workspace/g) ?? []).length, 1);
 });
 
 test("release BOM records the pnpm toolchain without changing Rust commands", () => {
