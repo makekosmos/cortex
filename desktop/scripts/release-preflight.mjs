@@ -15,6 +15,7 @@ export function currentCommit() {
 }
 
 export function ensureCleanSource() {
+  const repoRoot = path.resolve(SHELL_ROOT, "..");
   const tracked = execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], {
     cwd: SHELL_ROOT,
     encoding: "utf8",
@@ -26,20 +27,20 @@ export function ensureCleanSource() {
       "--others",
       "--exclude-standard",
       "--",
-      "src",
-      "electron",
-      "scripts",
-      "build",
-      "shared",
-      "../host/src",
-      "../host/electron",
-      "../manager/src",
-      "../manager/electron",
-      "../runtime/src",
-      "../native-services",
-      "../packages",
+      "desktop/src",
+      "desktop/electron",
+      "desktop/scripts",
+      "desktop/build",
+      "desktop/shared",
+      "host/src",
+      "host/electron",
+      "manager/src",
+      "manager/electron",
+      "runtime/src",
+      "native-services",
+      "packages",
     ],
-    { cwd: SHELL_ROOT, encoding: "utf8" },
+    { cwd: repoRoot, encoding: "utf8" },
   ).trim();
   if (tracked || untracked)
     throw new Error("release builds require a clean tracked and source worktree");

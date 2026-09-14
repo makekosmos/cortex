@@ -71,7 +71,10 @@ test("release build rejects a missing BOM before invoking electron-builder", asy
 });
 
 test("publish is a receipt consumer and never invokes build or package", async () => {
-  const publish = await readFile(path.join(scripts, "publish-release.mjs"), "utf8");
+  const publish = (await readFile(path.join(scripts, "publish-release.mjs"), "utf8")).replaceAll(
+    "\r\n",
+    "\n",
+  );
   assert.doesNotMatch(publish, /electron-builder|build-package-components|bun run build/);
   assert.match(publish, /verifyReceiptArtifacts/);
   assert.match(publish, /assertExactArtifactSet/);

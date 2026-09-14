@@ -52,7 +52,7 @@ function relativeArtifact(outputDir, file) {
 
 export function normalizeArtifactPath(value) {
   if (
-    typeof value !== "string" ||
+    Object.prototype.toString.call(value) !== "[object String]" ||
     !value ||
     value.includes("\\") ||
     path.posix.isAbsolute(value) ||
@@ -131,7 +131,7 @@ export async function verifyReceiptArtifacts(receipt, outputDir) {
   const seen = new Set();
   const verified = [];
   for (const [index, artifact] of receipt.artifacts.entries()) {
-    if (!artifact || typeof artifact.path !== "string")
+    if (!artifact || Object.prototype.toString.call(artifact.path) !== "[object String]")
       throw new Error(`receipt artifact ${index} has an unsafe path`);
     const normalizedPath = normalizeArtifactPath(artifact.path);
     const file = path.resolve(root, normalizedPath);
