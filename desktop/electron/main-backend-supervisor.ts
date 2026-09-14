@@ -11,6 +11,7 @@ import {
 } from "./main-backend-process";
 
 export { ARK_READY_REQUEST_TIMEOUT_MS } from "./main-ark-client-controller";
+export const BACKEND_TRAY_EXIT_CODE = 42;
 
 interface MainBackendSupervisorOptions {
   env: NodeJS.ProcessEnv;
@@ -25,6 +26,7 @@ interface MainBackendSupervisorOptions {
   teardownFocusSessionBackendSync(): void | Promise<void>;
   setupDictationHotkey(): Promise<void>;
   broadcastCommandsUpdated(): void;
+  onBackendExit?(code: number | null): void;
 }
 
 export interface MainBackendSupervisor {
@@ -82,6 +84,7 @@ export function createMainBackendSupervisor(
     proc.on("exit", (code) => {
       if (backendProc !== proc) return;
       backendProc = null;
+      options.onBackendExit?.(code);
       if (code !== 0 && !options.getIsQuiting()) {
         void arkController.resetArkClient(`engine supervisor exited code=${code}`);
       }

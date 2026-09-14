@@ -4,6 +4,8 @@ pub const CORE_WORKER_ARG: &str = "--core-worker";
 pub const RESTART_CORE_ARG: &str = "--restart-core";
 pub const SHUTDOWN_ARG: &str = "--shutdown";
 pub const START_ARG: &str = "--start";
+/// Exit reason propagated from the backend tray to the Electron owner.
+pub const TRAY_EXIT_CODE: u8 = 42;
 
 pub(crate) const RESTART_DELAYS: [Duration; 3] = [
     Duration::from_secs(1),

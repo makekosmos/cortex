@@ -119,6 +119,57 @@ export function installEngineArchive(archive, manifest, engineRoot) {
   return versionRoot;
 }
 
+export function resolveInstalledEngine(engineRoot) {
+  const root = fs.realpathSync(engineRoot);
+  const pointer = JSON.parse(fs.readFileSync(path.join(root, "current.json"), "utf8"));
+  if (pointer?.schema_version !== 1 || !ENGINE_VERSION.test(pointer.version ?? ""))
+    throw new Error("invalid installed Engine pointer");
+
+  const versionsRoot = fs.realpathSync(path.join(root, "versions"));
+  const versionRoot = path.resolve(versionsRoot, pointer.version);
+  if (!isWithinRoot(versionRoot, versionsRoot)) throw new Error("invalid installed Engine path");
+  const canonicalVersionRoot = fs.realpathSync(versionRoot);
+  if (!isWithinRoot(canonicalVersionRoot, versionsRoot))
+    throw new Error("installed Engine path escapes versions root");
+
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(canonicalVersionRoot, "engine-manifest.json"), "utf8"),
+  );
+  validateEngineManifest(manifest);
+  if (manifest.version !== pointer.version) throw new Error("installed Engine version mismatch");
+  const files = new Map(manifest.files.map((file) => [file.name, file]));
+  if (files.size !== ENGINE_FILES.length || ENGINE_FILES.some((name) => !files.has(name)))
+    throw new Error("installed Engine inputs are incomplete");
+  for (const name of ENGINE_FILES) {
+    const file = files.get(name);
+    const candidate = path.join(canonicalVersionRoot, name);
+    const canonical = fs.realpathSync(candidate);
+    if (!isWithinRoot(canonical, canonicalVersionRoot))
+      throw new Error(`installed Engine path escapes version root: ${name}`);
+    const data = fs.readFileSync(canonical);
+    if (data.length !== file.size || sha256(data) !== file.sha256)
+      throw new Error(`engine artifact mismatch: ${name}`);
+  }
+  return {
+    root,
+    version: pointer.version,
+    versionRoot: canonicalVersionRoot,
+    backend: fs.realpathSync(path.join(canonicalVersionRoot, "kepler-backend.exe")),
+    ark: fs.realpathSync(path.join(canonicalVersionRoot, "ark-core-rpc.exe")),
+    tray: fs.realpathSync(path.join(canonicalVersionRoot, "tray.ico")),
+  };
+}
+
+function isWithinRoot(candidate, root) {
+  const relative = path.relative(root, candidate);
+  return (
+    relative !== "" &&
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
+}
+
 function verifyInstalledEngine(root, manifest) {
   return (manifest.files ?? []).every((file) => {
     try {

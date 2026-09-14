@@ -224,6 +224,11 @@ pub async fn run_supervisor() -> ExitCode {
                     return ExitCode::SUCCESS;
                 }
                 ChildResult::Exited(status) => {
+                    if status.code() == Some(TRAY_EXIT_CODE as i32) {
+                        cleanup_state(&state_path);
+                        cleanup_state(&control_state_path);
+                        return ExitCode::from(TRAY_EXIT_CODE);
+                    }
                     let ran_for = started_at.elapsed();
                     last_exit = Some(ExitMetadata {
                         code: status.code(),

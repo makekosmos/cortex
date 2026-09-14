@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   buildEngineArchive,
   installEngineArchive,
+  resolveInstalledEngine,
   verifyEngineArchive,
 } from "./engine-distribution.mjs";
 
@@ -102,4 +103,33 @@ test("a valid installed engine is preserved", () => {
   writeFileSync(path.join(first, "kepler-backend.exe"), "corrupt");
   const repaired = installEngineArchive(archive, manifest, engineRoot);
   assert.equal(readFileSync(path.join(repaired, "kepler-backend.exe"), "utf8"), "new");
+});
+
+test("installed Engine resolution follows current.json and verifies canonical files", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-engine-resolve-"));
+  const release = path.join(root, "release");
+  const archive = path.join(root, "engine.zip");
+  mkdirSync(release, { recursive: true });
+  for (const name of [
+    "kepler-backend.exe",
+    "ark-core-rpc.exe",
+    "kepler-focus-helper.exe",
+    "kepler-focus-svc.exe",
+    "tray.ico",
+  ])
+    writeFileSync(path.join(release, name), name);
+  const manifest = buildEngineArchive(release, archive, {
+    version: "1.2.3",
+    url: "https://example.invalid/engine.zip",
+  });
+  const engineRoot = path.join(root, "installed");
+  installEngineArchive(archive, manifest, engineRoot);
+
+  const resolved = resolveInstalledEngine(engineRoot);
+  assert.equal(resolved.version, "1.2.3");
+  assert.equal(resolved.backend, path.join(engineRoot, "versions", "1.2.3", "kepler-backend.exe"));
+  assert.equal(resolved.ark, path.join(engineRoot, "versions", "1.2.3", "ark-core-rpc.exe"));
+
+  writeFileSync(resolved.backend, "tampered");
+  assert.throws(() => resolveInstalledEngine(engineRoot), /engine artifact mismatch/);
 });
