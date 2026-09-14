@@ -21,25 +21,32 @@ test("all local electron-builder package paths explicitly disable publishing", a
   assert.match(releaseBuild, /"--publish",\s*"never"/);
 });
 
-test("release preflight is the first command before package compilation", async () => {
+test("release builds materialize runtime before preflight", async () => {
   const desktop = JSON.parse(await readFile(path.join(scripts, "..", "package.json"), "utf8"));
   const manager = JSON.parse(
     await readFile(path.join(scripts, "..", "..", "manager", "package.json"), "utf8"),
   );
   const component = await readFile(path.join(scripts, "build-package-components.mjs"), "utf8");
-  assert.ok(
-    desktop.scripts.build.indexOf("release-preflight") <
-      desktop.scripts.build.indexOf("build:backend"),
-  );
-  assert.ok(
-    desktop.scripts["package:dir"].indexOf("release-preflight") <
-      desktop.scripts["package:dir"].indexOf("build:backend"),
-  );
+  for (const script of [
+    desktop.scripts.build,
+    desktop.scripts["build:mac"],
+    desktop.scripts["package:dir"],
+  ]) {
+    assert.ok(script.indexOf("build:backend") < script.indexOf("release-preflight"));
+  }
   assert.ok(
     manager.scripts["package:win"].indexOf("release-preflight") <
       manager.scripts["package:win"].indexOf("build"),
   );
   assert.ok(component.indexOf("release-preflight") < component.indexOf("const version"));
+});
+
+test("macOS release packaging performs final preflight", async () => {
+  const desktop = JSON.parse(await readFile(path.join(scripts, "..", "package.json"), "utf8"));
+  assert.doesNotMatch(
+    desktop.scripts["build:mac"],
+    /build-desktop\.mjs --platform mac --skip-preflight/,
+  );
 });
 
 test("release build rejects a missing BOM before invoking electron-builder", async () => {
