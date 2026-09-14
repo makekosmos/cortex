@@ -413,7 +413,7 @@ mod tests {
         use std::io::{Read, Write};
         let id = "huawei-refresh-test";
         let old = serde_json::json!({"resultCode":0,"uid":"u","accessToken":"old","refreshToken":"r","accessTokenExpireTime":1,"routing_verified":true,"data_origin":DATA_ORIGIN_DR3,"site_id":7});
-        let updated = serde_json::json!({"resultCode":0,"uid":"u","accessToken":"new","refreshToken":"r2","accessTokenExpireTime":now_ms()+3600_000,"routing_verified":true,"data_origin":DATA_ORIGIN_DR3,"site_id":7});
+        let updated = serde_json::json!({"resultCode":0,"uid":"u","accessToken":"new","refreshToken":"r2","accessTokenExpireTime":now_ms()+3_600_000,"routing_verified":true,"data_origin":DATA_ORIGIN_DR3,"site_id":7});
         save_package_integration_secret(id, "1", "session", &old.to_string()).unwrap();
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let url = format!("http://{}/refresh", listener.local_addr().unwrap());
