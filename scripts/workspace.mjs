@@ -18,6 +18,7 @@ import {
   writeStamp,
 } from "./workspace-inspect.mjs";
 import { NAMES, loadWorkspace, resolveMode, resolveWorkspacePaths } from "./workspace-config.mjs";
+import { gitEnv } from "./git-env.mjs";
 export {
   cloneExact,
   checkoutDirty,
@@ -36,9 +37,9 @@ export {
 const fail = (message) => {
   throw new Error(message);
 };
-function run(exe, args, cwd) {
+function run(exe, args, cwd, env = process.env) {
   return new Promise((resolve) => {
-    const child = spawn(exe, args, { cwd, shell: false, windowsHide: true });
+    const child = spawn(exe, args, { cwd, env, shell: false, windowsHide: true });
     let stdout = "",
       stderr = "";
     child.stdout?.on("data", (data) => (stdout += data));
@@ -50,7 +51,7 @@ function run(exe, args, cwd) {
   });
 }
 async function git(cwd, args, allowFailure = false) {
-  const result = await run("git", args, cwd);
+  const result = await run("git", args, cwd, gitEnv);
   if (result.error) throw result.error;
   if (result.status !== 0 && !allowFailure)
     fail(`git ${args.join(" ")} failed: ${result.stderr || result.stdout}`);

@@ -2,10 +2,11 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { gitEnv } from "./git-env.mjs";
 const STAMP = ".tmp/workspace/prepared.json";
-function run(exe, args, cwd) {
+function run(exe, args, cwd, env = process.env) {
   return new Promise((resolve) => {
-    const child = spawn(exe, args, { cwd, shell: false, windowsHide: true });
+    const child = spawn(exe, args, { cwd, env, shell: false, windowsHide: true });
     let stdout = "",
       stderr = "";
     child.stdout?.on("data", (data) => (stdout += data));
@@ -16,9 +17,7 @@ function run(exe, args, cwd) {
     );
   });
 }
-async function git(cwd, args) {
-  return run("git", args, cwd);
-}
+const git = (cwd, args) => run("git", args, cwd, gitEnv);
 async function exists(file) {
   try {
     await stat(file);

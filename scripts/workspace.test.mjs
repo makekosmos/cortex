@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync as runSync } from "node:child_process";
 import { access, mkdir, mkdtemp, readFile, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -17,7 +17,9 @@ import {
   resolveMode,
   writeCiOutput,
 } from "./workspace.mjs";
-
+import { gitEnv } from "./git-env.mjs";
+const execFileSync = (command, args, options) =>
+  runSync(command, args, { ...options, env: gitEnv });
 const commit = (letter) => letter.repeat(40);
 
 async function fixture() {
