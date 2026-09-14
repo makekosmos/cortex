@@ -2,9 +2,7 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-
 const STAMP = ".tmp/workspace/prepared.json";
-
 function run(exe, args, cwd) {
   return new Promise((resolve) => {
     const child = spawn(exe, args, { cwd, shell: false, windowsHide: true });
@@ -163,12 +161,27 @@ export async function hash(file) {
     .update(await readFile(file))
     .digest("hex");
 }
-export async function outputHashes(checkout, packageJson) {
+export async function checkoutDirty(checkout, packageJson) {
+  const status = await git(checkout, ["status", "--porcelain", "--untracked-files=all"]);
+  if (status.status !== 0) return true;
+  const generated = new Set(
+    ["node_modules", ...outputPaths(packageJson)].map(path.posix.normalize),
+  );
+  return status.stdout.split(/\r?\n/).some((line) => {
+    if (!line || !line.startsWith("?? ")) return Boolean(line);
+    const file = line.slice(3).replaceAll("\\", "/").replace(/^\.\//, "");
+    return ![...generated].some((path) => file === path || file.startsWith(`${path}/`));
+  });
+}
+function outputPaths(packageJson) {
   const files = new Set([packageJson.main || "dist/index.js"]);
-  if (typeof packageJson.types === "string") files.add(packageJson.types);
+  if (String(packageJson.types) === packageJson.types) files.add(packageJson.types);
   if (packageJson.name === "@makekosmos/visuals") files.add("dist/index.css");
+  return files;
+}
+export async function outputHashes(checkout, packageJson) {
   const outputs = {};
-  for (const relative of files) {
+  for (const relative of outputPaths(packageJson)) {
     const file = path.join(checkout, relative);
     if (!(await exists(file))) return null;
     outputs[relative.replaceAll("\\", "/")] = await hash(file);
@@ -195,15 +208,14 @@ export async function inspectDependency(root, name, checkout, pin, stamp) {
     result.status = "not-a-repository";
     return result;
   }
-  const head = await git(checkout, ["rev-parse", "HEAD"]),
-    status = await git(checkout, ["status", "--porcelain"]);
+  const head = await git(checkout, ["rev-parse", "HEAD"]);
   result.head = head.status === 0 ? head.stdout : null;
-  result.dirty = status.status !== 0 || Boolean(status.stdout);
-  result.checks.clean = !result.dirty;
   result.checks.pin = result.head === pin.commit;
   try {
     const packageFile = path.join(checkout, "package.json"),
       packageJson = JSON.parse(await readFile(packageFile, "utf8"));
+    result.dirty = await checkoutDirty(checkout, packageJson);
+    result.checks.clean = !result.dirty;
     result.version = packageJson.version ?? null;
     result.package = {
       name: packageJson.name,
@@ -229,6 +241,8 @@ export async function inspectDependency(root, name, checkout, pin, stamp) {
         JSON.stringify(entry.outputs) === JSON.stringify(outputs),
       );
   } catch {
+    result.dirty = true;
+    result.checks.clean = false;
     result.checks.package = false;
     if (stamp) result.checks.stamp = false;
   }

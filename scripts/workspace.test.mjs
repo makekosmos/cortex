@@ -103,7 +103,7 @@ test("matching clean checkouts produce an idempotent no-op", async () => {
   );
 });
 
-test("matching bootstrap prepares once, then reuses the content stamp", async () => {
+test("bootstrap accepts generated outputs but preserves untracked source", async () => {
   const root = await fixture();
   const checkout = path.join(root, ".tmp", "workspace", "imago");
   await mkdir(path.join(checkout, "dist"), { recursive: true });
@@ -119,10 +119,12 @@ test("matching bootstrap prepares once, then reuses the content stamp", async ()
   await writeFile(path.join(checkout, "bun.lock"), "lock\n");
   await writeFile(path.join(checkout, "dist", "index.js"), "export {}\n");
   await writeFile(path.join(checkout, "dist", "index.css"), ":root {}\n");
+  await mkdir(path.join(checkout, "node_modules"), { recursive: true });
+  await writeFile(path.join(checkout, "node_modules", "installed.txt"), "generated\n");
   execFileSync("git", ["init", "--initial-branch", "main"], { cwd: checkout });
   execFileSync("git", ["config", "user.email", "test@example.invalid"], { cwd: checkout });
   execFileSync("git", ["config", "user.name", "Test"], { cwd: checkout });
-  execFileSync("git", ["add", "."], { cwd: checkout });
+  execFileSync("git", ["add", "package.json", "bun.lock"], { cwd: checkout });
   execFileSync("git", ["commit", "-m", "fixture"], { cwd: checkout });
   const actual = execFileSync("git", ["rev-parse", "HEAD"], {
     cwd: checkout,
@@ -133,21 +135,17 @@ test("matching bootstrap prepares once, then reuses the content stamp", async ()
   manifest.kosmos.workspace.imago.package.integrity = `git:${actual}`;
   await writeFile(path.join(root, "package.json"), JSON.stringify(manifest));
   await mkdir(path.join(root, ".tmp", "workspace", "arca-sdk"), { recursive: true });
-  const calls = [];
-  const runTool = async (exe, args) => {
-    calls.push([exe, ...args]);
-    return { status: 0, stdout: args[0] === "--version" ? "1.3.14" : "", stderr: "" };
-  };
+  const runTool = async (_, args) => ({
+    status: 0,
+    stdout: args[0] === "--version" ? "1.3.14" : "",
+    stderr: "",
+  });
   const first = await planBootstrap(root, { runTool });
   assert.equal(first.actions.find(({ name }) => name === "imago").action, "prepare");
-  assert.deepEqual(calls, [
-    ["bun", "--version"],
-    ["bun", "install", "--frozen-lockfile"],
-    ["bun", "run", "build"],
-  ]);
+  await writeFile(path.join(checkout, "untracked.ts"), "changed\n");
   const second = await planBootstrap(root, { runTool });
-  assert.equal(second.actions.find(({ name }) => name === "imago").action, "noop");
-  assert.equal(calls.length, 3);
+  assert.equal(second.actions.find(({ name }) => name === "imago").action, "dirty-noop");
+  assert.equal(await readFile(path.join(checkout, "untracked.ts"), "utf8"), "changed\n");
   await assert.rejects(
     () =>
       prepareCheckout("imago", manifest.kosmos.workspace.imago, checkout, async () => ({
