@@ -45,6 +45,7 @@ import { check as checkUpdates, install as installUpdate } from "./autoupdater-h
 import { registerMainProcessIpc } from "./main-ipc-registrations";
 import {
   resolveBackendExePath,
+  BACKEND_TRAY_EXIT_CODE,
   runBootSelfCheckWithDeps,
   createMainBackendSupervisor,
   runAppReady,
@@ -60,7 +61,6 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 const WINDOW_WIDTH = 720;
 const WINDOW_HEIGHT = 460;
 const env = process.env;
@@ -89,7 +89,6 @@ protocol.registerSchemesAsPrivileged([
     },
   },
 ]);
-
 let isQuiting = false;
 let cleanupStarted = false;
 
@@ -106,6 +105,7 @@ const backendSupervisor = createMainBackendSupervisor({
   teardownFocusSessionBackendSync,
   setupDictationHotkey,
   broadcastCommandsUpdated,
+  onBackendExit: (code) => code === BACKEND_TRAY_EXIT_CODE && !isQuiting && app.quit(),
 });
 
 const launcherController = createLauncherController({

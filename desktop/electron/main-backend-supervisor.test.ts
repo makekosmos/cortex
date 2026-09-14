@@ -16,6 +16,7 @@ let restartCalls = 0;
 let lockProcessAlive = false;
 let controllerCredential = "";
 let spawnedCredential = "";
+let backendExitCalls: number[] = [];
 const controller = {
   awaitArkReady: async () => ({}),
   backendHealthy: async () => false,
@@ -56,7 +57,8 @@ mock.module("./main-backend-process", () => ({
   },
 }));
 
-const { createMainBackendSupervisor } = await import("./main-backend-supervisor");
+const { BACKEND_TRAY_EXIT_CODE, createMainBackendSupervisor } =
+  await import("./main-backend-supervisor");
 
 beforeEach(() => {
   spawnedProcesses.length = 0;
@@ -65,9 +67,13 @@ beforeEach(() => {
   lockProcessAlive = false;
   controllerCredential = "";
   spawnedCredential = "";
+  backendExitCalls = [];
 });
 
-function createTestSupervisor(getIsQuiting: () => boolean) {
+function createTestSupervisor(
+  getIsQuiting: () => boolean,
+  onBackendExit: (code: number | null) => void = () => {},
+) {
   return createMainBackendSupervisor({
     env: {},
     // SAFETY: The surrounding boundary establishes this documented contract.
@@ -82,6 +88,7 @@ function createTestSupervisor(getIsQuiting: () => boolean) {
     teardownFocusSessionBackendSync: () => {},
     setupDictationHotkey: async () => {},
     broadcastCommandsUpdated: () => {},
+    onBackendExit,
   });
 }
 
@@ -110,7 +117,12 @@ test("Electron shutdown does not kill the independent engine", () => {
 });
 
 test("idempotent ensure may exit while the lock-owned core stays alive", async () => {
-  const supervisor = createTestSupervisor(() => true);
+  const supervisor = createTestSupervisor(
+    () => true,
+    (code) => {
+      if (code === BACKEND_TRAY_EXIT_CODE) backendExitCalls.push(code);
+    },
+  );
   supervisor.spawnBackend();
   lockProcessAlive = true;
 
@@ -119,4 +131,34 @@ test("idempotent ensure may exit while the lock-owned core stays alive", async (
 
   expect(supervisor.isBackendRunning()).toBe(true);
   expect(resetCalls).toBe(0);
+  expect(backendExitCalls).toEqual([]);
+});
+
+test("tray backend exit notifies Electron so the UI can quit with it", () => {
+  expect(BACKEND_TRAY_EXIT_CODE).toBe(42);
+  const supervisor = createTestSupervisor(
+    () => false,
+    (code) => {
+      if (code === BACKEND_TRAY_EXIT_CODE) backendExitCalls.push(code);
+    },
+  );
+  supervisor.spawnBackend();
+
+  spawnedProcesses[0]!.emit("exit", BACKEND_TRAY_EXIT_CODE);
+
+  expect(backendExitCalls).toEqual([BACKEND_TRAY_EXIT_CODE]);
+});
+
+test("external shutdown exit does not ask Electron to quit", () => {
+  const supervisor = createTestSupervisor(
+    () => false,
+    (code) => {
+      if (code === BACKEND_TRAY_EXIT_CODE) backendExitCalls.push(code);
+    },
+  );
+  supervisor.spawnBackend();
+
+  spawnedProcesses[0]!.emit("exit", 0);
+
+  expect(backendExitCalls).toEqual([]);
 });

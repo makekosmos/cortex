@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createServer } from "node:net";
+import { installEngineArchive, resolveInstalledEngine } from "./engine-distribution.mjs";
 
 const normalMode = process.argv.includes("--normal");
 const dictationNativeNegative = process.argv.includes("--dictation-native-negative");
@@ -14,11 +15,11 @@ const candidateArg = process.argv
 if (normalMode && !candidateArg) throw new Error("--normal requires an installed root path");
 const candidate = path.resolve(candidateArg ?? "release/win-unpacked");
 const resources = path.join(candidate, "resources");
-const runtime = path.join(resources, "Kosmos Runtime.exe");
-const ark = path.join(resources, "Kosmos Data Engine.exe");
+const engineArchive = path.join(resources, "Kosmos Engine.zip");
+const engineManifest = path.join(resources, "engine-manifest.json");
 const managerExe = path.join(resources, "components", "manager", "Kosmos Manager.exe");
 const hostExe = path.join(resources, "components", "host", "Kosmos Package Host.exe");
-for (const file of [runtime, ark, managerExe, hostExe]) {
+for (const file of [engineArchive, engineManifest, managerExe, hostExe]) {
   if (!fs.existsSync(file)) throw new Error(`missing candidate artifact: ${path.basename(file)}`);
 }
 
@@ -265,7 +266,6 @@ const env = {
   APPDATA: path.join(root, "appdata"),
   LOCALAPPDATA: path.join(root, "localappdata"),
   KOSMOS_DATA_DIR: dataDir,
-  ARK_CORE_RPC_PATH: ark,
   KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
   KEPLER_SKIP_SYNC: "1",
   KEPLER_USAGE_TRACKER: "0",
@@ -277,6 +277,16 @@ if (normalMode) {
   env.KOSMOS_HEADLESS = "1";
   env.KOSMOS_TEST_MODE = "1";
 }
+const installedEngineRoot = path.join(env.LOCALAPPDATA, "Kosmos", "Engine");
+installEngineArchive(
+  engineArchive,
+  JSON.parse(fs.readFileSync(engineManifest, "utf8")),
+  installedEngineRoot,
+);
+const installedEngine = resolveInstalledEngine(installedEngineRoot);
+const runtime = installedEngine.backend;
+const ark = installedEngine.ark;
+env.ARK_CORE_RPC_PATH = ark;
 const cleanupRoot = () => {
   try {
     fs.rmSync(root, {

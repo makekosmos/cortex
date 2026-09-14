@@ -39,7 +39,9 @@ mod tests_lifecycle;
 mod tests_modes;
 
 pub use mode::process_mode;
-pub use model::{ProcessMode, CORE_WORKER_ARG, RESTART_CORE_ARG, SHUTDOWN_ARG, START_ARG};
+pub use model::{
+    ProcessMode, CORE_WORKER_ARG, RESTART_CORE_ARG, SHUTDOWN_ARG, START_ARG, TRAY_EXIT_CODE,
+};
 
 pub async fn run_supervisor() -> ExitCode {
     supervisor::run_supervisor().await

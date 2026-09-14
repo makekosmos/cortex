@@ -236,12 +236,14 @@ async fn run_core_worker() -> ExitCode {
     let (backend_tray, mut tray_events) = backend_tray::start();
     eprintln!("[kepler-backend] ready. Ctrl+C для shutdown.");
 
+    let mut tray_exit_requested = false;
     let requested_control = if let Some(mut receiver) = control_commands.take() {
         loop {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => break None,
                 event = tray_events.recv() => match event {
                     Some(backend_tray::TrayEvent::Exit) => {
+                        tray_exit_requested = true;
                         break Some(ControlMessage::ShutdownRequested);
                     }
                     None => break None,
@@ -276,7 +278,10 @@ async fn run_core_worker() -> ExitCode {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => None,
             event = tray_events.recv() => match event {
-                Some(backend_tray::TrayEvent::Exit) => Some(ControlMessage::ShutdownRequested),
+                Some(backend_tray::TrayEvent::Exit) => {
+                    tray_exit_requested = true;
+                    Some(ControlMessage::ShutdownRequested)
+                }
                 None => None,
             },
         }
@@ -319,6 +324,8 @@ async fn run_core_worker() -> ExitCode {
     } else if let Err(error) = ws_shutdown_result {
         observability::stderr(format!("[kepler-backend] WS shutdown failed: {error}"));
         ExitCode::FAILURE
+    } else if tray_exit_requested {
+        ExitCode::from(engine_supervisor::TRAY_EXIT_CODE)
     } else {
         ExitCode::SUCCESS
     }

@@ -220,11 +220,14 @@ fn show_context_menu(window: HWND) {
     let open = wide("Открыть");
     let exit = wide("Выход");
     unsafe {
-        if resolve_cortex_executable().is_some() {
-            let _ = AppendMenuW(menu, MF_STRING, MENU_OPEN, PCWSTR(open.as_ptr()));
-            let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
+        let commands = menu_commands(resolve_cortex_executable().is_some());
+        for (index, command) in commands.iter().enumerate() {
+            if index > 0 {
+                let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
+            }
+            let label = if *command == MENU_OPEN { &open } else { &exit };
+            let _ = AppendMenuW(menu, MF_STRING, *command, PCWSTR(label.as_ptr()));
         }
-        let _ = AppendMenuW(menu, MF_STRING, MENU_EXIT, PCWSTR(exit.as_ptr()));
         let mut point = POINT::default();
         let _ = GetCursorPos(&mut point);
         let _ = SetForegroundWindow(window);
@@ -248,6 +251,14 @@ fn show_context_menu(window: HWND) {
             }
             _ => {}
         }
+    }
+}
+
+fn menu_commands(cortex_present: bool) -> &'static [usize] {
+    if cortex_present {
+        &[MENU_OPEN, MENU_EXIT]
+    } else {
+        &[MENU_EXIT]
     }
 }
 
@@ -277,4 +288,13 @@ unsafe extern "system" fn window_proc(
         _ => return DefWindowProcW(window, message, wparam, lparam),
     }
     LRESULT(0)
+}
+#[cfg(test)]
+mod tests {
+    use super::{menu_commands, MENU_EXIT, MENU_OPEN};
+    #[test]
+    fn cortex_presence_controls_the_exact_tray_menu() {
+        assert_eq!(menu_commands(true), vec![MENU_OPEN, MENU_EXIT]);
+        assert_eq!(menu_commands(false), vec![MENU_EXIT]);
+    }
 }
