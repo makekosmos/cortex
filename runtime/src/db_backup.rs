@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use chrono::{DateTime, Utc};
 use serde_json::json;
@@ -24,6 +24,7 @@ const SYNC_KV_LAST_BACKUP: &str = "kepler.last_backup_ts";
 const BACKUPS_SUBDIR: &str = "backups";
 const BACKUP_FILE_PREFIX: &str = "ark.db.backup-";
 static BACKUP_ACTIVE: AtomicBool = AtomicBool::new(false);
+static BACKUP_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 
 fn interval_hours() -> u64 {
     std::env::var("KEPLER_BACKUP_INTERVAL_HOURS")
@@ -109,6 +110,75 @@ pub struct DbBackupDiagnosticsSnapshot {
     pub background_mode: bool,
 }
 
+fn next_backup_destination(
+    backups_dir: &Path,
+    mut now: DateTime<Utc>,
+) -> Result<(DateTime<Utc>, PathBuf), String> {
+    for _ in 0..86_400 {
+        let path = backups_dir.join(backup_filename(now));
+        if !path.exists() {
+            return Ok((now, path));
+        }
+        now += chrono::Duration::seconds(1);
+    }
+    Err("unable to allocate a unique backup filename".to_string())
+}
+
+#[cfg(windows)]
+fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+
+    metadata.file_type().is_symlink() || metadata.file_attributes() & 0x400 != 0
+}
+
+#[cfg(not(windows))]
+fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
+}
+
+fn validated_backups_dir(data_dir: &Path, create: bool) -> Result<Option<PathBuf>, String> {
+    if create {
+        std::fs::create_dir_all(data_dir)
+            .map_err(|e| format!("create data directory {data_dir:?}: {e}"))?;
+    }
+    let canonical_data_dir = match data_dir.canonicalize() {
+        Ok(path) => path,
+        Err(error) if !create && error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("canonicalize data directory {data_dir:?}: {error}")),
+    };
+    let dir = data_dir.join(BACKUPS_SUBDIR);
+    if create {
+        std::fs::create_dir_all(&dir).map_err(|e| format!("create_dir_all {dir:?}: {e}"))?;
+    }
+    let metadata = match std::fs::symlink_metadata(&dir) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("stat backup directory {dir:?}: {error}")),
+    };
+    if !metadata.is_dir() || is_reparse_point(&metadata) {
+        return Err(format!(
+            "backup directory must be a real directory: {dir:?}"
+        ));
+    }
+    let canonical_dir = dir
+        .canonicalize()
+        .map_err(|e| format!("canonicalize backup directory {dir:?}: {e}"))?;
+    if !canonical_dir.starts_with(&canonical_data_dir) {
+        return Err(format!(
+            "backup directory escapes data directory: {canonical_dir:?}"
+        ));
+    }
+    Ok(Some(canonical_dir))
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DbBackupMetadata {
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+    pub modified_at: String,
+}
+
 /// Дождаться события `db_backup_result` для нашего `dest_str` (backup идёт
 /// async в ark-core-rpc). Bounded таймаутом, чтобы не зависнуть навсегда если
 /// ark-core-rpc умер посреди копирования.
@@ -149,9 +219,40 @@ async fn wait_for_backup_result(
 
 /// Ensure `<data_dir>/backups/` exists and return path.
 fn ensure_backups_dir(data_dir: &Path) -> Result<PathBuf, String> {
-    let dir = data_dir.join(BACKUPS_SUBDIR);
-    std::fs::create_dir_all(&dir).map_err(|e| format!("create_dir_all {dir:?}: {e}"))?;
-    Ok(dir)
+    validated_backups_dir(data_dir, true)?.ok_or("backup directory was not created".to_string())
+}
+
+pub fn list_backups(data_dir: &Path) -> Result<Vec<DbBackupMetadata>, String> {
+    let Some(dir) = validated_backups_dir(data_dir, false)? else {
+        return Ok(Vec::new());
+    };
+    let entries = std::fs::read_dir(&dir).map_err(|error| format!("read_dir {dir:?}: {error}"))?;
+    let mut backups = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = match path.file_name().and_then(|value| value.to_str()) {
+            Some(name) if parse_backup_timestamp(name).is_some() => name.to_owned(),
+            _ => continue,
+        };
+        let metadata = match std::fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.is_file() => metadata,
+            _ => continue,
+        };
+        let modified_at = metadata
+            .modified()
+            .ok()
+            .map(|value| DateTime::<Utc>::from(value).to_rfc3339())
+            .unwrap_or_default();
+        let path = path.to_str().ok_or("backup path is not UTF-8")?.to_owned();
+        backups.push(DbBackupMetadata {
+            name,
+            path,
+            size: metadata.len(),
+            modified_at,
+        });
+    }
+    backups.sort_by(|a, b| b.name.cmp(&a.name));
+    Ok(backups)
 }
 
 /// Удалить все backup'ы кроме последних `retain` (sorted by parsed timestamp
@@ -181,10 +282,12 @@ fn rotate_backups(backups_dir: &Path, retain: usize) -> Result<usize, String> {
 /// Сделать backup сейчас (без проверки interval). Используется в тестах и
 /// при manual trigger через future IPC. Возвращает path созданного файла.
 pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, String> {
+    let _guard = BACKUP_LOCK
+        .get_or_init(|| tokio::sync::Mutex::new(()))
+        .lock()
+        .await;
     let backups_dir = ensure_backups_dir(data_dir)?;
-    let now = Utc::now();
-    let filename = backup_filename(now);
-    let dest = backups_dir.join(&filename);
+    let (now, dest) = next_backup_destination(&backups_dir, Utc::now())?;
     let dest_str = dest
         .to_str()
         .ok_or("backup dest path is not UTF-8")?
@@ -288,6 +391,78 @@ mod tests {
         assert!(parse_backup_timestamp("ark.db").is_none());
         assert!(parse_backup_timestamp("ark.db.backup-not-a-date").is_none());
         assert!(parse_backup_timestamp("random.txt").is_none());
+    }
+
+    #[test]
+    fn lists_only_local_timestamped_backups() {
+        let dir = tempfile::tempdir().unwrap();
+        let backups = dir.path().join(BACKUPS_SUBDIR);
+        std::fs::create_dir_all(&backups).unwrap();
+        let newest = backup_filename(Utc::now());
+        std::fs::write(backups.join(&newest), b"backup").unwrap();
+        std::fs::write(backups.join("notes.txt"), b"ignore").unwrap();
+
+        let listed = list_backups(dir.path()).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].name, newest);
+        assert_eq!(listed[0].size, 6);
+    }
+
+    #[test]
+    fn rejects_linked_backups_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let backups = root.path().join(BACKUPS_SUBDIR);
+        let linked = {
+            #[cfg(unix)]
+            {
+                std::os::unix::fs::symlink(target.path(), &backups).is_ok()
+            }
+            #[cfg(windows)]
+            {
+                std::os::windows::fs::symlink_dir(target.path(), &backups)
+                    .or_else(|_| {
+                        let command = format!(
+                            "mklink /J \"{}\" \"{}\"",
+                            backups.display(),
+                            target.path().display()
+                        );
+                        std::process::Command::new("cmd")
+                            .args(["/C", &command])
+                            .status()
+                            .map(|status| status.success())
+                            .and_then(|success| {
+                                if success {
+                                    Ok(())
+                                } else {
+                                    Err(std::io::Error::other("mklink failed"))
+                                }
+                            })
+                    })
+                    .is_ok()
+            }
+            #[cfg(not(any(unix, windows)))]
+            {
+                false
+            }
+        };
+        if !linked {
+            return;
+        }
+
+        assert!(list_backups(root.path()).is_err());
+        assert!(ensure_backups_dir(root.path()).is_err());
+    }
+
+    #[test]
+    fn allocates_a_unique_name_when_second_resolution_collides() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = Utc::now();
+        std::fs::write(dir.path().join(backup_filename(now)), b"existing").unwrap();
+
+        let (allocated, path) = next_backup_destination(dir.path(), now).unwrap();
+        assert_eq!(allocated, now + chrono::Duration::seconds(1));
+        assert_eq!(path, dir.path().join(backup_filename(allocated)));
     }
 
     #[test]

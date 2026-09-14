@@ -18,6 +18,7 @@ use crate::app_index::AppIndex;
 use crate::ark_host::ArkHost;
 use crate::auth;
 use crate::command_bus::{ClientId, CommandBus, CommandBusEvent, CommandManifest};
+use crate::db_backup;
 use crate::diagnostics::{RpcDiagnostics, SharedRpcDiagnostics};
 use crate::dictation::{handle_dictation_op, DictationHost};
 use crate::file_index::{FileIndex, FileIndexSettingsPatch};

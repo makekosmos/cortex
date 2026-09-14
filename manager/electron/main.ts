@@ -63,6 +63,7 @@ import {
 import { clearIntegrationBrowserData, registerIntegrationLoginHandlers } from "./integration-login";
 import { readBrowserDataPersistence, writeBrowserDataPersistence } from "./browser-settings";
 import { resolveInstance } from "../../desktop/electron/instance";
+import { normalizeDbBackups, resolveSafeDbBackupsFolder } from "./database-backups";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import {
@@ -865,6 +866,29 @@ function registerAll() {
   }
   ipcMain.handle("manager.openCrashReportsFolder", () => openFolder("crashes"));
   ipcMain.handle("manager.openLogsFolder", () => openFolder("logs"));
+  ipcMain.handle("manager.getDbBackups", async () => {
+    const result = await rpc(op.getDbBackups);
+    return result.ok ? { ok: true, data: normalizeDbBackups(result.data) } : result;
+  });
+  ipcMain.handle("manager.createDbBackup", async () => {
+    const result = await rpc(op.createDbBackup);
+    if (!result.ok) return result;
+    const raw = isObject(result.data) ? result.data.path : undefined;
+    return isString(raw)
+      ? { ok: true, data: { path: raw } }
+      : { ok: false, code: "engine", message: "Engine вернул некорректный путь бэкапа." };
+  });
+  ipcMain.handle("manager.openDbBackupsFolder", async () => {
+    if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1")
+      return { ok: true, data: { opened: false } };
+    try {
+      const directory = await resolveSafeDbBackupsFolder(dataRoot());
+      const error = await shell.openPath(directory);
+      return { ok: true, data: { opened: !error } };
+    } catch {
+      return { ok: false, code: "engine", message: "Не удалось открыть папку бэкапов." };
+    }
+  });
   const appExecutable = process.env.KOSMOS_APP_EXECUTABLE?.trim();
   const loginItemOptions = { path: appExecutable ?? "", args: AUTOSTART_ARGS };
   const legacyLoginItemOptions = {

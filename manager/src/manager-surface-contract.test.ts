@@ -164,4 +164,27 @@ describe("Manager surface contract", () => {
     expect(updates).toContain("updates-initial-store-catalog");
     expect(updates).toContain("createDesktopVersionCache");
   });
+
+  test("exposes local ARK snapshots with accessible manual actions", () => {
+    const root = readFileSync(new URL("./ManagerRoot.vue", import.meta.url), "utf8");
+    const settings = read("SettingsView.vue");
+    const api = readFileSync(new URL("./manager-api.ts", import.meta.url), "utf8");
+    const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
+    const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+    expect(root).toContain('label: "Настройки"');
+    expect(settings).toContain("Резервные копии базы");
+    expect(settings).toContain("локальные снимки базы данных ARK");
+    expect(settings).toContain("Сделать бэкап сейчас");
+    expect(settings).toContain("Открыть папку бэкапов");
+    expect(settings).toContain("безопасный Runtime API");
+    expect(settings).not.toContain("Восстановить");
+    for (const method of ["getDbBackups", "createDbBackup", "openDbBackupsFolder"]) {
+      expect(api).toContain(method);
+      expect(preload).toContain(method);
+      expect(main).toContain(`manager.${method}`);
+    }
+    expect(api).not.toContain("restoreDbBackup");
+    expect(preload).not.toContain("restoreDbBackup");
+    expect(main).not.toContain("restoreDbBackup");
+  });
 });
