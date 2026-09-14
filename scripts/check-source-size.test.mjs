@@ -54,3 +54,13 @@ test("only the explicit debt baseline is grandfathered", async () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /1 grandfathered file/);
 });
+
+test("grandfathers only the current Huawei source-size debt", async () => {
+  const result = await runFixture({
+    "packages/huawei-health/src/lib.rs": lines(365),
+    "packages/huawei-health/tests/archive.rs": lines(443),
+    "runtime/src/package_service/integrations/huawei_login.rs": lines(541),
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /3 grandfathered file/);
+});

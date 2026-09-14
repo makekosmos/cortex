@@ -1,7 +1,10 @@
 use super::*;
 #[path = "authority/data_request.rs"]
 mod data_request;
+#[path = "authority/typed_request.rs"]
+mod typed_request;
 use data_request::execute_data_request;
+pub(super) use typed_request::dispatch_typed_inner;
 
 pub(super) struct SupervisorInner {
     pub(super) workers: Mutex<HashMap<(String, String), LiveWorker>>,
@@ -277,31 +280,4 @@ impl PackageWorkerSupervisor {
     ) -> Result<serde_json::Value, &'static str> {
         dispatch_typed_inner(&self.inner, id, version, session_id, generation, request).await
     }
-}
-
-pub(super) async fn dispatch_typed_inner(
-    inner: &SupervisorInner,
-    id: &str,
-    version: &str,
-    session_id: &str,
-    generation: u64,
-    request: serde_json::Value,
-) -> Result<serde_json::Value, &'static str> {
-    let launch = lock(&inner.typed_launches)
-        .get(&(id.to_owned(), version.to_owned()))
-        .cloned()
-        .ok_or("forbidden")?;
-    if launch.session_id != session_id {
-        return Err("forbidden");
-    }
-    if launch.generation != generation {
-        return Err("stale-generation");
-    }
-    let request = serde_json::from_value::<DataRequest>(request).map_err(|_| "invalid-request")?;
-    launch
-        .grant
-        .authorize_request(&request)
-        .map_err(|_| "forbidden")?;
-    let params = serde_json::to_value(&request).map_err(|_| "invalid-request")?;
-    inner.ark_executor.request("data.request", params).await
 }
