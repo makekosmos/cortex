@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
@@ -6,6 +7,8 @@ import { test } from "node:test";
 const root = path.resolve(import.meta.dirname, "..");
 const packageRoots = [".", "desktop", "host", "manager"];
 const read = (file) => readFileSync(path.join(root, file), "utf8");
+const require = createRequire(path.join(root, "desktop", "package.json"));
+const typescript = require("typescript");
 
 test("Cortex uses pnpm 12.4.1 for every package root", () => {
   for (const packageRoot of packageRoots) {
@@ -66,4 +69,26 @@ test("Desktop Vue uses the workspace-pinned shared Imago revision", () => {
   assert.match(ci, /repository: \$\{\{ steps\.workspace\.outputs\.imago_repository \}\}/);
   assert.match(ci, /ref: \$\{\{ steps\.workspace\.outputs\.imago_commit \}\}/);
   assert.match(ci, /path: \.tmp\/workspace\/imago/);
+});
+
+test("Desktop and pinned Imago resolve Vue to one type identity", () => {
+  const compilerOptions = typescript.parseJsonConfigFileContent(
+    JSON.parse(read("desktop/tsconfig.json")),
+    typescript.sys,
+    path.join(root, "desktop"),
+  ).options;
+  const resolveVue = (containingFile) => {
+    const resolved = typescript.resolveModuleName(
+      "vue",
+      containingFile,
+      compilerOptions,
+      typescript.sys,
+    ).resolvedModule?.resolvedFileName;
+    assert.ok(resolved, `Vue did not resolve from ${containingFile}`);
+    return require("node:fs").realpathSync(resolved);
+  };
+  assert.equal(
+    resolveVue(path.join(root, "desktop/src/main.ts")),
+    resolveVue(path.join(root, ".tmp/workspace/imago/index.ts")),
+  );
 });
