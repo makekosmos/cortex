@@ -19,7 +19,7 @@ import {
 } from "./workspace.mjs";
 import { gitEnv } from "./git-env.mjs";
 const execFileSync = (command, args, options) =>
-  runSync(command, args, { ...options, env: gitEnv });
+  runSync(command, args, { ...options, env: gitEnv() });
 const commit = (letter) => letter.repeat(40);
 
 async function fixture() {

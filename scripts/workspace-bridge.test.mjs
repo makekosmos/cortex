@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { planBootstrap, resolveMode } from "./workspace.mjs";
+import { gitEnv } from "./git-env.mjs";
 
 const sha = (letter) => letter.repeat(40);
 async function fixture() {
@@ -30,6 +31,20 @@ const localEnv = (root) => ({
   KOSMOS_WORKSPACE_MODE: "local",
   KOSMOS_IMAGO_PATH: path.join(root, "local-imago"),
   KOSMOS_ARCA_SDK_PATH: path.join(root, "local-arca"),
+});
+
+test("git child env keeps variables set after module import", () => {
+  const key = "KOSMOS_TEST_LATE_ENV",
+    previous = process.env[key];
+  process.env[key] = "late";
+  try {
+    const env = gitEnv({ ...process.env, GIT_DIR: "repo-context" });
+    assert.equal(env[key], "late");
+    assert.equal(env.GIT_DIR, undefined);
+  } finally {
+    if (previous === undefined) delete process.env[key];
+    else process.env[key] = previous;
+  }
 });
 
 test("local bootstrap creates managed bridges and repeats as noop", async () => {
