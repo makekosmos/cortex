@@ -31,7 +31,17 @@ async function waitForBackendIdentity(
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const identity = processIdentityFromLock(lockPath, launchStartedAt, expectedExecutable);
-    if (identity) return identity;
+    if (identity) {
+      const supervisor = processInfo(identity.parentPid);
+      const executable = path.resolve(expectedExecutable).toLowerCase();
+      if (
+        supervisor &&
+        supervisor.commandLine.toLowerCase().includes(executable) &&
+        /(?:^|\s)--start(?:\s|$)/i.test(supervisor.commandLine)
+      )
+        return supervisor;
+      return identity;
+    }
     await delay(100);
   }
   return null;
@@ -75,6 +85,15 @@ export async function launchKeplerWithDataDir(
     },
     timeout: 20_000,
   });
+  await trackKeplerApplication(app, dataDir, launchStartedAt, expectedBackendExe);
+  return app;
+}
+export async function trackKeplerApplication(
+  app: ElectronApplication,
+  dataDir: string,
+  launchStartedAt: number,
+  expectedBackendExe: string,
+): Promise<void> {
   const pid = app.process().pid;
   const info = processInfo(pid);
   if (!info?.startTime) throw new Error(`Electron PID ${pid} identity is unavailable`);
@@ -84,7 +103,6 @@ export async function launchKeplerWithDataDir(
   };
   launchedPids.set(dataDir, owned);
   owned.backend = await waitForBackendIdentity(dataDir, launchStartedAt, expectedBackendExe);
-  return app;
 }
 export function shutdownKeplerEngine(dataDir: string): void {
   const owned = launchedPids.get(dataDir);

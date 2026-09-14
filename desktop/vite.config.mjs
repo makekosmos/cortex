@@ -8,13 +8,15 @@ import { resolveWorkspacePaths } from "../scripts/workspace.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const workspacePaths = resolveWorkspacePaths(path.resolve(__dirname, ".."), process.env);
+const electronMain = { entry: "electron/main.ts" };
+if (process.env.KOSMOS_DEV_RUN_MANAGED === "1") electronMain.onstart = () => undefined;
 
 export default defineConfig({
   plugins: [
     vue({ features: { vaporInterop: true } }),
     tailwindcss(),
     electron({
-      main: { entry: "electron/main.ts" },
+      main: electronMain,
       // Главный preload для launcher / settings и shared host.
       preload: {
         input: "electron/preload.ts",
@@ -39,6 +41,13 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5173,
     strictPort: true,
+    fs: {
+      allow: [
+        workspacePaths.imago,
+        workspacePaths["arca-sdk"],
+        path.resolve(__dirname, "../packages"),
+      ],
+    },
     hmr: {
       overlay: false,
     },

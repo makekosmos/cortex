@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -186,7 +194,7 @@ test(
     const launchStartedAt = Date.now() - 1_000;
     const child = spawn(
       process.execPath,
-      ["-e", "setTimeout(() => {}, 30000); // kepler-backend", "--", "--start"],
+      ["-e", "setTimeout(() => {}, 30000); // kepler-backend", "--", "--core-worker"],
       {
         windowsHide: true,
       },
@@ -211,7 +219,7 @@ test(
 
       const reused = spawn(
         process.execPath,
-        ["-e", "setTimeout(() => {}, 30000)", "--", "--start"],
+        ["-e", "setTimeout(() => {}, 30000)", "--", "--core-worker"],
         { windowsHide: true },
       );
       try {
@@ -245,6 +253,24 @@ test("port allocation retries when a candidate is occupied", async () => {
     releasePortLease(lease.file, root);
   } finally {
     server.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("reset tolerates a port lease already released by stop", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-dev-reset-test-"));
+  try {
+    const manifest = createRunManifest("desktop", root);
+    const lease = await acquirePortLease(root);
+    manifest.ports.shell = lease.port;
+    manifest.portLease = lease.file;
+    const file = path.join(manifest.runRoot, "manifest.json");
+    writeRunManifest(file, manifest);
+
+    releasePortLease(lease.file, root);
+    assert.equal(resetRun(file, root), manifest.runRoot);
+    assert.equal(existsSync(manifest.runRoot), false);
+  } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });

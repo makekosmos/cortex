@@ -123,7 +123,7 @@ export function processIdentityFromLock(
       Number.isFinite(info.createdAtMs) &&
       info.createdAtMs <= lockStartedAt &&
       info.commandLine.toLowerCase().includes(executable) &&
-      /(?:^|\s)--start(?:\s|$)/i.test(info.commandLine)
+      /(?:^|\s)--(?:start|core-worker)(?:\s|$)/i.test(info.commandLine)
       ? info
       : null;
   } catch {
