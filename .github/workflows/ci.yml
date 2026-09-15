@@ -73,6 +73,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+      - name: Resolve workspace pins
+        id: workspace
+        run: node scripts/workspace.mjs ci --github-output "$GITHUB_OUTPUT"
       - run: pnpm run check:layout
       - run: pnpm install --frozen-lockfile
         env:
@@ -101,18 +104,19 @@ jobs:
       - name: Checkout shared visuals
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: makekosmos/imago
-          path: _shared/imago
+          repository: ${{ steps.workspace.outputs.imago_repository }}
+          ref: ${{ steps.workspace.outputs.imago_commit }}
+          path: .tmp/workspace/imago
           fetch-depth: 1
           token: ${{ secrets.KOSMOS_READ_TOKEN }}
           persist-credentials: false
       - name: Link shared workspaces
         run: |
           ln -s "$GITHUB_WORKSPACE/_shared/arca-sdk" "$GITHUB_WORKSPACE/../arca-sdk"
-          ln -s "$GITHUB_WORKSPACE/_shared/imago" "$GITHUB_WORKSPACE/../imago"
+          ln -s "$GITHUB_WORKSPACE/.tmp/workspace/imago" "$GITHUB_WORKSPACE/../imago"
       - name: Install pinned Imago with its declared package manager
         run: bun install --frozen-lockfile
-        working-directory: _shared/imago
+        working-directory: .tmp/workspace/imago
       - run: pnpm run typecheck
       - run: pnpm run rustfmt
       - name: Run Rust checks with private Core access

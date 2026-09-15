@@ -36,8 +36,8 @@ sidecar reuse, prebuilt UI development, and baseline evidence.
 pnpm run prepare
 
 # Run the same hook contracts manually:
-bunx lefthook run pre-commit
-bunx lefthook run pre-push
+pnpm exec lefthook run pre-commit
+pnpm exec lefthook run pre-push
 
 # Full local verification:
 pnpm run check
