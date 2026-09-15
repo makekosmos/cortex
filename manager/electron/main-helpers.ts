@@ -75,7 +75,6 @@ const validation = (condition: boolean, message = "Проверьте введё
   condition ? null : message;
 const validIntegrationId = (value: Input): value is string =>
   isString(value) && /^[a-z0-9][a-z0-9._-]{0,127}$/.test(value);
-const AUTOSTART_ARGS = ["--autostart"];
 const desktopUpdateBridge = () =>
   resolveDesktopUpdateBridge({
     env: process.env,
@@ -203,7 +202,6 @@ export {
   bounded,
   isObject,
   validation,
-  AUTOSTART_ARGS,
   readDesktopUpdateState,
   requestDesktopUpdate,
   validIntegrationInput,
