@@ -5,6 +5,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const preflight = spawnSync(
+  process.execPath,
+  [path.join(root, "desktop", "scripts", "release-preflight.mjs"), "--platform", "win"],
+  { cwd: path.join(root, "desktop"), stdio: "inherit", windowsHide: true },
+);
+if (preflight.status !== 0) process.exit(preflight.status ?? 1);
 const version = JSON.parse(
   readFileSync(path.join(root, "desktop", "release-versions.json"), "utf8"),
 ).win;
@@ -30,6 +36,8 @@ for (const component of components) {
       "electron-builder",
       "--win",
       "--dir",
+      "--publish",
+      "never",
       `--config.extraMetadata.version=${version}`,
       "--config.win.signExecutable=false",
       `--config.directories.output=${output}`,

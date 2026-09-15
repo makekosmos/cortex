@@ -1,24 +1,22 @@
 #!/usr/bin/env node
 
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
-import { getVersion } from "./release-version.mjs";
 import { loadReleaseBom } from "./release-bom.mjs";
 import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
 import { bytes, documentHash, writeAtomic } from "./package-release-utils.mjs";
 import { runFirstPartyContracts } from "./first-party-release-contracts.mjs";
 import { copyEngineManifest, copyEngineRelease } from "./engine-distribution.mjs";
+import { createReceipt, writeReceipt } from "./release-receipt.mjs";
+import {
+  currentCommit,
+  runReleasePreflight,
+  SHELL_ROOT as PREFLIGHT_ROOT,
+} from "./release-preflight.mjs";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SHELL_ROOT = path.resolve(__dirname, "..");
+const SHELL_ROOT = PREFLIGHT_ROOT;
 const VALID_PLATFORMS = ["win", "mac"];
-function stagedEngineVersion() {
-  return JSON.parse(
-    readFileSync(path.join(SHELL_ROOT, ".tmp/engine.next/engine-manifest.json"), "utf8"),
-  ).version;
-}
 function die(msg) {
   console.error(`[build-desktop] FATAL: ${msg}`);
   process.exit(1);
@@ -34,6 +32,7 @@ function log(...args) {
  * Falls back to globally available "electron-builder".
  */
 function resolveElectronBuilder() {
+  if (process.env.KOSMOS_ELECTRON_BUILDER) return process.env.KOSMOS_ELECTRON_BUILDER;
   const isWin = process.platform === "win32";
   const binDir = path.join(SHELL_ROOT, "node_modules", ".bin");
   // bun installs Windows shims as .exe (+ .bunx); npm/pnpm use .cmd. Probe in
@@ -48,42 +47,6 @@ function resolveElectronBuilder() {
   }
   // Fallback: assume on PATH
   return isWin ? "electron-builder.cmd" : "electron-builder";
-}
-function currentCommit() {
-  try {
-    return execFileSync("git", ["rev-parse", "HEAD"], { cwd: SHELL_ROOT, encoding: "utf8" }).trim();
-  } catch {
-    die("unable to resolve the Cortex HEAD commit");
-  }
-}
-function ensureCleanSource() {
-  const tracked = execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], {
-    cwd: SHELL_ROOT,
-    encoding: "utf8",
-  }).trim();
-  const untracked = execFileSync(
-    "git",
-    [
-      "ls-files",
-      "--others",
-      "--exclude-standard",
-      "--",
-      "src",
-      "electron",
-      "scripts",
-      "build",
-      "shared",
-      "../host/src",
-      "../host/electron",
-      "../manager/src",
-      "../manager/electron",
-      "../runtime/src",
-      "../native-services",
-      "../packages",
-    ],
-    { cwd: SHELL_ROOT, encoding: "utf8" },
-  ).trim();
-  if (tracked || untracked) die("release builds require a clean tracked and source worktree");
 }
 function verifyEmbeddedBom(outputDir, platform, digest) {
   const candidates = [path.join(outputDir, "win-unpacked", "resources", "release-bom.json")];
@@ -133,15 +96,6 @@ function compareExpectedArtifacts(expected, actual) {
   }
 }
 
-function verifyArkArtifact(bom) {
-  const expected = bom.value.source.core.ark_artifact;
-  const file = path.join(SHELL_ROOT, ".tmp", "runtime.next", expected.name);
-  if (!existsSync(file) || statSync(file).size !== expected.size)
-    die(`ARK artifact is missing or has the wrong size: ${expected.name}`);
-  if (documentHash(readFileSync(file)) !== expected.sha256)
-    die(`ARK artifact hash does not match BOM: ${expected.name}`);
-}
-
 async function emitProvenance(outputDir, platform, version, bom, engineVersion) {
   const embedded = verifyEmbeddedBom(outputDir, platform, bom.digest);
   verifyLocalReleaseChannel(outputDir, platform, version);
@@ -167,45 +121,25 @@ async function emitProvenance(outputDir, platform, version, bom, engineVersion) 
   };
 }
 
-function publishRelease(platform, version, files) {
-  const repository = platform === "win" ? "makekosmos/desktop" : "makekosmos/desktop-mac";
-  if (!process.env.GH_TOKEN) die("GH_TOKEN is required to publish a verified release");
-  const existing = spawnSync("gh", ["release", "view", `v${version}`, "--repo", repository], {
-    cwd: SHELL_ROOT,
-    stdio: "ignore",
-    windowsHide: true,
-    env: process.env,
-  });
-  if (existing.status === 0) die(`immutable release already exists: ${repository} v${version}`);
-  const result = spawnSync(
-    "gh",
-    [
-      "release",
-      "create",
-      `v${version}`,
-      ...files,
-      "--repo",
-      repository,
-      "--title",
-      `Kosmos ${version}`,
-      "--notes",
-      "Immutable release assembled from the attached release BOM.",
-    ],
-    { cwd: SHELL_ROOT, stdio: "inherit", windowsHide: true, env: process.env },
-  );
-  if (result.status !== 0) die(`failed to publish verified release to ${repository}`);
-}
-
 async function main() {
   const args = process.argv.slice(2);
   let platform = null;
   let bomPath = process.env.KOSMOS_RELEASE_BOM ?? null;
+  let dryRun = false;
+  let receiptPath = null;
+  let skipPreflight = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--platform") {
       platform = args[++i];
     } else if (args[i] === "--bom") {
       bomPath = args[++i];
+    } else if (args[i] === "--receipt") {
+      receiptPath = args[++i];
+    } else if (args[i] === "--dry-run") {
+      dryRun = true;
+    } else if (args[i] === "--skip-preflight") {
+      skipPreflight = true;
     }
   }
 
@@ -215,21 +149,49 @@ async function main() {
   if (!VALID_PLATFORMS.includes(platform)) {
     die(`Unknown platform "${platform}". Valid: ${VALID_PLATFORMS.join(", ")}`);
   }
-  if (!bomPath) die("--bom <path> or KOSMOS_RELEASE_BOM is required for publish builds");
+  if (!bomPath) die("--bom <path> or KOSMOS_RELEASE_BOM is required for release builds");
 
-  const version = getVersion(platform),
-    engineVersion = platform === "win" ? stagedEngineVersion() : null;
-  ensureCleanSource();
-  const bom = await loadReleaseBom(bomPath, {
-    root: path.resolve(SHELL_ROOT, ".."),
-    platform,
-    currentCommit: currentCommit(),
-  });
-  verifyArkArtifact(bom);
+  const preflight = skipPreflight
+    ? {
+        platform,
+        version: JSON.parse(readFileSync(path.join(SHELL_ROOT, "release-versions.json"), "utf8"))[
+          platform
+        ],
+        engineVersion:
+          platform === "win"
+            ? JSON.parse(
+                readFileSync(
+                  path.join(SHELL_ROOT, ".tmp/engine.next/engine-manifest.json"),
+                  "utf8",
+                ),
+              ).version
+            : null,
+        currentCommit: currentCommit(),
+        bom: await loadReleaseBom(bomPath, {
+          root: path.resolve(SHELL_ROOT, ".."),
+          platform,
+          currentCommit: currentCommit(),
+        }),
+      }
+    : await runReleasePreflight({ platform, bomPath });
+  const { version, engineVersion, bom } = preflight;
+  receiptPath ??= path.join(SHELL_ROOT, "release", "release-receipt.v1.json");
+
+  // preflight: everything here is cheap and must happen before compilation.
+  if (!skipPreflight) log("Preflight: source, BOM, pins, and ARK artifact");
   log(`Platform: ${platform}`);
   log(`Version:  ${version}`);
   log(`BOM:      ${bom.value.id} (${bom.digest})`);
   log("");
+  if (dryRun) {
+    log("Dry-run plan:");
+    log(`  build: electron-builder --${platform} --publish never`);
+    log("  verify: local channel, BOM, provenance, first-party contracts, receipt");
+    log(
+      `  publish: node scripts/publish-release.mjs --platform ${platform} --receipt ${receiptPath}`,
+    );
+    return;
+  }
   if (platform === "win" && existsSync(path.join(SHELL_ROOT, "release")))
     readdirSync(path.join(SHELL_ROOT, "release"))
       .filter((name) => /^Kosmos-Engine-\d+\.\d+\.\d+\.(?:zip|json)$/.test(name))
@@ -273,28 +235,16 @@ async function main() {
     engineVersion,
   );
   runFirstPartyContracts(platform);
-  publishRelease(platform, version, [...releaseFiles.artifactFiles, ...releaseFiles.metadataFiles]);
-  log("Running verify guard...");
-  log("");
-  const verifyScript = path.join(__dirname, "verify-release-channel.mjs");
-  const verifyResult = spawnSync(
-    process.execPath, // node
-    [verifyScript, "--platform", platform, "--version", version],
-    {
-      cwd: SHELL_ROOT,
-      stdio: "inherit",
-      windowsHide: true,
-    },
-  );
-  if (verifyResult.status !== 0) {
-    console.error("");
-    console.error(`[build-desktop] verify-release-channel FAILED for ${platform} v${version}.`);
-    console.error(
-      `[build-desktop] The verified release was published but channel integrity failed.`,
-    );
-    console.error(`[build-desktop] Review the output above and follow the fix instructions.`);
-    process.exit(verifyResult.status ?? 1);
-  }
-  log(`Build + verify complete for ${platform} v${version}. Release is consistent.`);
+  const receipt = await createReceipt({
+    outputDir: path.join(SHELL_ROOT, "release"),
+    platform,
+    version,
+    currentCommit: currentCommit(),
+    bom,
+    files: [...releaseFiles.artifactFiles, ...releaseFiles.metadataFiles],
+  });
+  await writeReceipt(receiptPath, receipt);
+  log(`Verification receipt: ${receiptPath}`);
+  log(`Build + verify complete for ${platform} v${version}. Run publish-release.mjs explicitly.`);
 }
 main().catch((error) => die(error instanceof Error ? error.message : String(error)));

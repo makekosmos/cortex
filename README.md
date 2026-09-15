@@ -54,8 +54,20 @@ node scripts/check-plan.mjs --full --run
 # Validate a release BOM without building or publishing:
 bun run test:release-bom
 
-# Publish a platform build with an explicit, reviewed BOM:
+# Preflight only (must pass before any compilation):
+node desktop/scripts/release-preflight.mjs --platform win --bom path/to/release-bom.json
+
+# Build + package + verify (never publishes; writes a receipt):
 node desktop/scripts/build-desktop.mjs --platform win --bom path/to/release-bom.json
+
+# Run local preflight and print the plan without building or contacting GitHub:
+node desktop/scripts/build-desktop.mjs --platform win --bom path/to/release-bom.json --dry-run
+
+# Publish only the exact verified receipt (rehashes artifacts and rejects stale/mutated inputs):
+node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v1.json
+
+# Validate publish locally without GH mutation or HTTP:
+node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v1.json --dry-run
 ```
 
 `bun run --cwd desktop build` and `build:mac` read the same path from
@@ -76,11 +88,14 @@ was blocked by KOS-50. Branch protection is disabled, and ruleset/merge-queue
 status is NOT_RUN. Use `--full` when reviewing uncertain changes and treat the
 planner's `reasons` field as the explanation for a full selection.
 
-The publish wrapper validates Cortex/Core commits, the pinned Bun/Node/Rust toolchain, and
-the shell/engine/package API contracts before electron-builder starts. It embeds the exact
-BOM at `resources/release-bom.json` and emits `release/release-provenance.json` with the
-final artifact hashes. A BOM may include expected `artifacts` entries to make a rebuild fail
-on a hash or size mismatch; omitted entries are recorded from the final build.
+The build wrapper validates Cortex/Core commits, the pinned Bun/Node/Rust toolchain, and
+the shell/engine/package API contracts before electron-builder starts. Every local
+electron-builder path uses `--publish never`. It embeds the exact BOM at
+`resources/release-bom.json`, emits `release/release-provenance.json`, and atomically
+writes `release/release-receipt.v1.json` with exact inputs and final artifact hashes.
+`publish-release.mjs` consumes only that receipt; it never builds or packages. A BOM may
+include expected `artifacts` entries to make a rebuild fail on a hash or size mismatch;
+omitted entries are recorded from the final build.
 
 `bun run check` covers layout, source-size, lint, changed-file Oxfmt, all frontend
 typechecks, Rustfmt, workspace Clippy with warnings denied, complete workspace
