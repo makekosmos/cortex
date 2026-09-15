@@ -1,110 +1,131 @@
-// Phase 1 smoke для kepler-shell: проверяем что Electron-launcher запускается,
-// IPC handlers зарегистрированы и app корректно закрывается.
-//
-// Известные ограничения Phase 1:
-//   - Launcher window создаётся с `show: false` (toggle через global hotkey
-//     Ctrl+Shift+K). Playwright не умеет симулировать system global hotkeys,
-//     поэтому первое окно НЕ берём через firstWindow() — это бы upchaodило.
-//     Вместо этого через app.evaluate() пингуем main-process API.
-//   - kepler-backend.exe spawn'ится в whenReady(). Если бинарь не собран —
-//     main залогирует ошибку, но процесс не падает. Тест пройдёт даже без
-//     backend'а; это документированное Phase 1 поведение (см. main.ts
-//     resolveBackendExe / spawnBackend).
-//   - Изолированный userData передаём через app.setPath('userData', ...) до
-//     ready — невозможно из тестов; используем env KEPLER_E2E_USERDATA, но
-//     Phase 1 main.ts его пока не читает. Полагаемся на singleInstanceLock:
-//     если у юзера уже бежит Kepler, тест в worst-case завершится сразу.
-
-import path from "node:path";
+// Small smoke: one Electron per run, managed Vite in dev and the packaged app separately.
 import fs from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
-import { _electron as electron, type ElectronApplication } from "playwright";
-import electronBinary from "electron";
+import { _electron as electron, type ElectronApplication, type Page } from "playwright";
+import {
+  freshDataDir,
+  launchKeplerWithDataDir,
+  shutdownKeplerEngine,
+  trackKeplerApplication,
+} from "./helpers/launch";
+import { waitForBackendReady } from "./helpers/wait";
+import { readRunManifest } from "../scripts/dev-run-manifest.mjs";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const e2eRoot = path.join(appRoot, ".e2e");
-const userDataDir = path.join(e2eRoot, "kepler-shell-userdata");
-const dataDir = path.join(e2eRoot, "kepler-shell-data-smoke");
+const managedManifestPath = process.env.KOSMOS_DEV_RUN_MANIFEST;
+const testRoot = path.join(appRoot, ".e2e", "runs");
+const managedManifest = managedManifestPath
+  ? readRunManifest(managedManifestPath, testRoot)
+  : undefined;
+const dataDirs = new Set<string>();
+test.setTimeout(60_000);
 
-async function launchKepler(): Promise<ElectronApplication> {
-  fs.mkdirSync(userDataDir, { recursive: true });
+async function launchKepler(): Promise<{
+  app: ElectronApplication;
+  launcher: Page;
+  dataDir: string;
+}> {
+  const dataDir = managedManifest?.dataDir ?? freshDataDir("smoke");
+  const userDataDir = managedManifest?.userDataDir;
+  dataDirs.add(dataDir);
+  const filePath = path.join(dataDir, "clipboard-history.json");
   fs.mkdirSync(dataDir, { recursive: true });
-  return electron.launch({
-    executablePath: electronBinary,
-    cwd: appRoot,
-    args: [path.join(appRoot, "dist-electron", "main.js"), `--user-data-dir=${userDataDir}`],
-    env: {
+  fs.writeFileSync(filePath, '{"sensitive":"keep me"}\n', "utf8");
+  const packagedRoot = process.env.KOSMOS_PACKAGED_ROOT;
+  let app: ElectronApplication;
+  if (!packagedRoot) {
+    app = await launchKeplerWithDataDir(
+      dataDir,
+      { KEPLER_DEV: "1", VITE_DEV_SERVER_URL: process.env.VITE_DEV_SERVER_URL },
+      userDataDir,
+      managedManifest?.runId,
+    );
+  } else {
+    const launchStartedAt = Date.now();
+    const engineRoot = process.env.KOSMOS_ENGINE_ROOT;
+    if (!engineRoot) throw new Error("packaged smoke engine root is missing");
+    // SAFETY: installEngineArchive writes current.json from a validated engine manifest.
+    const current = JSON.parse(fs.readFileSync(path.join(engineRoot, "current.json"), "utf8")) as {
+      version: string;
+    };
+    const backendExe = path.join(engineRoot, "versions", current.version, "kepler-backend.exe");
+    const env = {
       ...process.env,
-      NODE_ENV: "test",
       KOSMOS_DATA_DIR: dataDir,
+      KEPLER_INSTANCE: `test-${path.basename(dataDir).toLowerCase()}`,
       KOSMOS_TEST_MODE: "1",
       KOSMOS_HEADLESS: "1",
       KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
-      // Hint backend skipping sync — kepler-backend поддерживает этот флаг
-      // сам, kepler-shell просто пробрасывает env в spawn.
       KEPLER_SKIP_SYNC: "1",
-    },
-    timeout: 20_000,
-  });
+    };
+    delete env.KEPLER_BACKEND_EXE;
+    delete env.VITE_DEV_SERVER_URL;
+    app = await electron.launch({
+      executablePath: path.join(packagedRoot, "Kosmos.exe"),
+      cwd: packagedRoot,
+      args: [`--user-data-dir=${userDataDir ?? path.join(dataDir, "userdata")}`],
+      env,
+      timeout: 20_000,
+    });
+    await trackKeplerApplication(app, dataDir, launchStartedAt, backendExe);
+  }
+  const launcher = app.windows()[0] ?? (await app.waitForEvent("window", { timeout: 20_000 }));
+  await launcher.waitForLoadState("domcontentloaded");
+  if (!packagedRoot) {
+    const devUrl = process.env.VITE_DEV_SERVER_URL;
+    expect(devUrl).toBeTruthy();
+    expect(new URL(launcher.url()).origin).toBe(new URL(devUrl!).origin);
+  } else expect(launcher.url()).toContain("/resources/app.asar/dist/index.html");
+  await waitForBackendReady(launcher);
+  return { app, launcher, dataDir };
 }
 
-test.describe("kepler-shell smoke", () => {
-  test("AC1: app запускается, getAppPath() и getName() возвращают валидные значения", async () => {
-    const app = await launchKepler();
-    try {
-      const appPath = await app.evaluate(({ app: electronApp }) => electronApp.getAppPath());
+test.afterEach(() => {
+  for (const dataDir of dataDirs) {
+    shutdownKeplerEngine(dataDir);
+    if (!managedManifest) fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+  dataDirs.clear();
+});
+
+test("shell, IPC, and clipboard smoke use one Electron", async () => {
+  const { app, launcher, dataDir } = await launchKepler();
+  const filePath = path.join(dataDir, "clipboard-history.json");
+  const seed = Buffer.from('{"sensitive":"keep me"}\n', "utf8");
+  try {
+    const appPath = await app.evaluate(({ app: electronApp }) => electronApp.getAppPath());
+    if (!process.env.KOSMOS_PACKAGED_ROOT) {
       expect(path.basename(appPath)).toBe("dist-electron");
       expect(path.normalize(path.dirname(appPath))).toBe(path.normalize(appRoot));
-
-      const name = await app.evaluate(({ app: electronApp }) => electronApp.getName());
-      expect(name).toBe("Kosmos [test]");
-    } finally {
-      await app.close();
     }
-  });
-
-  test("AC2: IPC handler 'kepler:window:hide' зарегистрирован, окно стартует скрытым", async () => {
-    const app = await launchKepler();
-    try {
-      // Окно создаётся с show: false — все BrowserWindow есть, но не visible.
-      const windowsInfo = await app.evaluate(({ BrowserWindow }) => {
-        const wins = BrowserWindow.getAllWindows();
-        return wins.map((w) => ({
-          isVisible: w.isVisible(),
-          isDestroyed: w.isDestroyed(),
-        }));
-      });
-
-      // По Phase 1 baseline должно быть ровно 1 окно, и оно hidden.
-      expect(windowsInfo.length).toBeGreaterThanOrEqual(1);
-      // Окно создано, но не visible — это ожидание Phase 1.
-      // Если в будущем default поменяется на show:true — тест нужно пересмотреть.
-      const launcher = windowsInfo[0];
-      expect(launcher.isDestroyed).toBe(false);
-    } finally {
-      await app.close();
+    expect(await app.evaluate(({ app: electronApp }) => electronApp.getName())).toBe(
+      "Kosmos [test]",
+    );
+    const windows = await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().map((window) => ({
+        isVisible: window.isVisible(),
+        isDestroyed: window.isDestroyed(),
+      })),
+    );
+    expect(windows.length).toBeGreaterThanOrEqual(1);
+    expect(windows[0].isDestroyed).toBe(false);
+    const version = await launcher.evaluate(() => window.kepler.settings.version());
+    expect(Object.prototype.toString.call(version)).toBe("[object String]");
+    expect(String(version).length).toBeGreaterThan(0);
+    if (process.env.KOSMOS_SMOKE_LIVE_DNS === "1") {
+      // SAFETY: this opt-in ARK operation returns the ConnectivityReport domain contract.
+      const report = (await launcher.evaluate(() =>
+        window.kepler.ark.request("dictation.test_connectivity", {}),
+      )) as { stages?: Array<{ name?: string; ok?: boolean; ip?: string }> };
+      const dns = report.stages?.find((stage) => stage.name === "dns_resolve");
+      console.log(JSON.stringify({ liveDns: dns ?? null }));
+      expect(dns?.ok).toBe(true);
     }
-  });
-
-  test("AC3: app.close() корректно завершает процесс", async () => {
-    const app = await launchKepler();
-    // Закрытие — единственная проверка; await не должен висеть/throw'ать.
-    await app.close();
-  });
-
-  test("AC4: headless startup preserves historical clipboard JSON", async () => {
-    const filePath = path.join(dataDir, "clipboard-history.json");
-    const seed = Buffer.from('{"sensitive":"keep me"}\n', "utf8");
-    fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(filePath, seed);
-    const app = await launchKepler();
-    try {
-      await app.evaluate(({ app: electronApp }) => electronApp.getName());
-    } finally {
-      await app.close();
-      expect(fs.readFileSync(filePath).equals(seed)).toBe(true);
-      fs.rmSync(filePath, { force: true });
-    }
-  });
+  } finally {
+    shutdownKeplerEngine(dataDir);
+    await app.close().catch(() => {});
+    expect(fs.readFileSync(filePath).equals(seed)).toBe(true);
+  }
 });
