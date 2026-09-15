@@ -70,8 +70,25 @@ describe("Host window safety contracts", () => {
 
   test("a user close during pending navigation is not fatal", () => {
     expect(source).toContain("await win.loadURL(developmentUrl ?? manifest.launch_url);");
-    expect(source).toContain("if (win.isDestroyed()) return;");
+    expect(source).toMatch(/if\s*\(win\.isDestroyed\(\)\)\s*return\s*\{/);
     expect(source).toContain('reportFailure("Ресурс приложения недоступен.", initial);');
+  });
+
+  test("renderer app navigation uses the existing launch and navigation transport", () => {
+    expect(source).toContain('ipcMain.handle("host:app-open"');
+    expect(source).toContain("BrowserWindow.fromWebContents(event.sender)");
+    expect(source).toContain("parseOpenAppRequest(input)");
+    expect(source).toContain("return openApp(");
+    expect(source).toContain("parsed.request.id");
+    expect(source).toContain("const windowReady = new Map<string, Promise<boolean>>();");
+    expect(source).toContain("await sendNavigationWhenReady(windowReady.get(id)");
+    expect(source).toContain("const ready = new Promise<boolean>");
+    expect(source).toContain('existing.webContents.send("kepler:extension:navigation", route)');
+    expect(source).toContain('win.webContents.once("did-finish-load"');
+    expect(source).toContain('win.webContents.send("kepler:extension:navigation", route)');
+    expect(preloadSource).toContain('"host:app-open"');
+    expect(preloadSource).toContain("apps:");
+    expect(preloadSource).toContain("navigation:");
   });
 
   test("live manifest validation resolves without minting a new launch lease", () => {
@@ -122,6 +139,18 @@ describe("Host window safety contracts", () => {
     }
     expect(source).toMatch(/hasLauncherGrant\(manifest\.permissions,\s*operation\)/);
     expect(source).toMatch(/return\s+engine\.launcherRequest\(operation,\s*params\)/);
+  });
+
+  test("binary user data stays app-scoped and pathless", () => {
+    expect(source).toContain("registerExtensionUserDataIpc({");
+    expect(source).toContain("handle: (channel, handler) => ipcMain.handle(channel, handler)");
+    expect(source).toContain("resolveAppForSender");
+    expect(source).toContain("userDataDirForApp");
+    expect(preloadSource).toContain('"host:user-data:binary"');
+    expect(preloadSource).toContain('{ operation: "read", key }');
+    expect(preloadSource).toContain('{ operation: "write", key, bytes }');
+    expect(preloadSource).toContain('{ operation: "delete", key }');
+    expect(preloadSource).toContain('{ operation: "stat", key }');
   });
 
   test("does not expose an ARK bridge to launcher-only Apps", () => {

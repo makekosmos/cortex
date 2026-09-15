@@ -93,6 +93,9 @@ test("signed Agenda installs, runs in Host, and survives Engine restart", async 
       id: "com.kosmos.agenda",
       version,
     });
+    expect(await page.evaluate(() => Object.keys(window.kosmosApp.userData))).toEqual(
+      expect.arrayContaining(["read", "write", "delete", "stat"]),
+    );
 
     const result = await page.evaluate(async () => {
       const object = {
