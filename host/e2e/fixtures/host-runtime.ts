@@ -321,7 +321,9 @@ export const closeHost = async (
   trackedPids: Set<number>,
 ): Promise<void> => {
   if (!host) return;
-  const pid = host.process().pid;
+  const child = host.process();
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const pid = child.pid;
   const createdAt = processCreatedAt(pid);
   if (!createdAt) throw new Error(`Host PID ${pid} identity is unavailable`);
   const pids = processTreePids(pid);

@@ -284,6 +284,7 @@ async fn run_core_worker() -> ExitCode {
                 }
                 None => None,
             },
+
         }
     };
     eprintln!("[kepler-backend] shutdown signal received, cleaning up");
