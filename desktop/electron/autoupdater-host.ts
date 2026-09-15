@@ -120,8 +120,9 @@ export function setupAutoUpdater(opts: { isDev: boolean }): void {
     broadcast({ kind: "error", message: err.message, ...bomState() });
   });
 
+  // Once per app start — later checks come only from the Settings button or a
+  // new process launch (second-instance --kosmos-update-check), no interval.
   void check();
-  setInterval(() => void check(), 6 * 60 * 60 * 1000);
 }
 
 export async function check(): Promise<UpdateState> {

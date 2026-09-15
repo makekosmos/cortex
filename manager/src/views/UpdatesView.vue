@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { SettingsList, Skeleton } from "@kosmos/visuals";
-import type {
-  DesktopUpdateState,
-  InstalledStoreItem,
-  StoreListing,
-} from "../manager-api";
+import { Button, SettingsList, Skeleton } from "@kosmos/visuals";
+import type { DesktopUpdateState, InstalledStoreItem, StoreListing } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
 import {
   installTarget,
@@ -16,6 +12,7 @@ import {
 import UpdatesRow from "./UpdatesRow.vue";
 import desktopIcon from "../../../desktop/build/icon.png";
 import { createDesktopVersionCache } from "../updates-version-cache";
+import { claimUpdatesSessionCheck } from "../updates-session";
 import { appIcon } from "../app-icons";
 
 const props = defineProps<{ client: ManagerClient }>();
@@ -25,6 +22,7 @@ const listings = ref<StoreListing[]>([]);
 const installed = ref<InstalledStoreItem[]>([]);
 const packagesAvailable = ref(false);
 const busy = ref<string | null>(null);
+const checking = ref(false);
 const loading = ref(true);
 let timer: ReturnType<typeof setInterval> | undefined;
 
@@ -33,9 +31,7 @@ const loadDesktopVersion = createDesktopVersionCache(() =>
 );
 const rows = computed(() =>
   latestInstalledPackages(installed.value).map((installedItem) => {
-    const listing = listings.value.find(
-      (item) => listingPackageId(item) === installedItem.id,
-    );
+    const listing = listings.value.find((item) => listingPackageId(item) === installedItem.id);
     return {
       id: installedItem.id,
       name: installedItem.name ?? listing?.name ?? installedItem.id,
@@ -48,8 +44,7 @@ const rows = computed(() =>
 
 function desktopStatus() {
   if (desktop.value.kind === "checking") return "Проверяем…";
-  if (desktop.value.kind === "downloading")
-    return `Скачивание ${desktop.value.percent}%`;
+  if (desktop.value.kind === "downloading") return `Скачивание ${desktop.value.percent}%`;
   if (desktop.value.kind === "downloaded") return "Готово к установке";
   if (desktop.value.kind === "available") return "Скачивание…";
   if (desktop.value.kind === "error") return `Ошибка: ${desktop.value.message}`;
@@ -59,8 +54,7 @@ function appStatus(item: (typeof rows.value)[number]) {
   if (!packagesAvailable.value)
     return "Пакеты недоступны: проверьте соединение и повторите проверку.";
   if (item.installedItem?.revoked) return "Пакет отозван.";
-  if (!item.installedItem && !item.listing)
-    return "Опубликованной версии пока нет.";
+  if (!item.installedItem && !item.listing) return "Опубликованной версии пока нет.";
   return "";
 }
 async function load() {
@@ -104,9 +98,7 @@ function actionLabel(item: (typeof rows.value)[number]) {
         ? "Открыть"
         : undefined;
 }
-async function update(
-  item: (typeof rows.value)[number],
-): Promise<string | null> {
+async function update(item: (typeof rows.value)[number]): Promise<string | null> {
   const listing = item.listing ?? {
     id: item.id,
     kind: "kosmos-package" as const,
@@ -119,22 +111,14 @@ async function update(
   try {
     if (action === "open") {
       if (
-        await props.client.call(
-          "openPackage",
-          { package_id: item.id },
-          `updates-open:${item.id}`,
-        )
+        await props.client.call("openPackage", { package_id: item.id }, `updates-open:${item.id}`)
       )
         return null;
       return `${item.name}: ${props.client.error.value ?? "ошибка запуска"}`;
     }
     if (
       !target ||
-      !(await props.client.call(
-        "installPackage",
-        target,
-        `updates-install:${item.id}`,
-      ))
+      !(await props.client.call("installPackage", target, `updates-install:${item.id}`))
     )
       return `${item.name}: ${props.client.error.value ?? "ошибка обновления"}`;
     await load();
@@ -144,35 +128,29 @@ async function update(
   }
 }
 async function installDesktop() {
-  await props.client.call(
-    "installDesktopUpdate",
-    undefined,
-    "desktop-update-install",
-  );
+  await props.client.call("installDesktopUpdate", undefined, "desktop-update-install");
   await load();
 }
+async function runCheck() {
+  if (checking.value) return;
+  checking.value = true;
+  try {
+    await Promise.all([
+      props.client.call("refreshPackageCatalog", undefined, "updates-package-catalog"),
+      props.client.call("refreshStoreCatalog", undefined, "updates-store-catalog"),
+      props.client.call<DesktopUpdateState>(
+        "checkDesktopUpdates",
+        undefined,
+        "desktop-update-check",
+      ),
+    ]);
+  } finally {
+    checking.value = false;
+    await load();
+  }
+}
 onMounted(() => {
-  void load()
-    .then(() =>
-      Promise.all([
-        props.client.call(
-          "refreshPackageCatalog",
-          undefined,
-          "updates-initial-package-catalog",
-        ),
-        props.client.call(
-          "refreshStoreCatalog",
-          undefined,
-          "updates-initial-store-catalog",
-        ),
-        props.client.call<DesktopUpdateState>(
-          "checkDesktopUpdates",
-          undefined,
-          "desktop-update-check",
-        ),
-      ]),
-    )
-    .finally(() => void load());
+  void (claimUpdatesSessionCheck() ? load().then(() => runCheck()) : load());
   timer = setInterval(() => void load(), 1500);
 });
 onBeforeUnmount(() => clearInterval(timer));
@@ -194,19 +172,28 @@ onBeforeUnmount(() => clearInterval(timer));
             : null
         "
         :status="desktopStatus()"
-        :action-label="
-          desktop.kind === 'downloaded'
-            ? 'Перезапустить и установить'
-            : undefined
-        "
+        :action-label="desktop.kind === 'downloaded' ? 'Перезапустить и установить' : undefined"
         :disabled="desktop.kind !== 'downloaded'"
         @action="installDesktop"
       />
     </SettingsList>
     <hr />
-    <h2 class="updates-heading">Приложения Kosmos</h2>
-    <div v-if="loading && !rows.length" class="flex flex-col gap-px" aria-label="Загрузка обновлений">
-      <Skeleton v-for="index in 5" :key="index" class="h-16 w-full first:rounded-t-lg last:rounded-b-lg" />
+    <div class="updates-heading-row">
+      <h2 class="updates-heading">Приложения Kosmos</h2>
+      <Button size="sm" variant="surface" :disabled="checking" @click="runCheck">
+        {{ checking ? "Проверяем…" : "Проверить обновления" }}
+      </Button>
+    </div>
+    <div
+      v-if="loading && !rows.length"
+      class="flex flex-col gap-px"
+      aria-label="Загрузка обновлений"
+    >
+      <Skeleton
+        v-for="index in 5"
+        :key="index"
+        class="h-16 w-full first:rounded-t-lg last:rounded-b-lg"
+      />
     </div>
     <SettingsList v-else>
       <UpdatesRow
@@ -217,21 +204,13 @@ onBeforeUnmount(() => clearInterval(timer));
         :icon="item.icon"
         :current="
           packagesAvailable
-            ? (item.installedItem?.version ??
-              item.listing?.distribution?.version ??
-              '—')
+            ? (item.installedItem?.version ?? item.listing?.distribution?.version ?? '—')
             : '—'
         "
-        :available="
-          packagesAvailable ? item.installedItem?.update_version : null
-        "
+        :available="packagesAvailable ? item.installedItem?.update_version : null"
         :status="appStatus(item)"
         :action-label="actionLabel(item)"
-        :disabled="
-          !packagesAvailable ||
-          item.installedItem?.revoked === true ||
-          !actionFor(item)
-        "
+        :disabled="!packagesAvailable || item.installedItem?.revoked === true || !actionFor(item)"
         :busy="busy === item.id"
         @action="update(item)"
       />
