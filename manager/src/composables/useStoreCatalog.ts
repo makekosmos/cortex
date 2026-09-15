@@ -1,4 +1,4 @@
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import type { ManagerClient } from "./useManagerClient";
 import type {
   InstalledStoreItem,
@@ -42,9 +42,14 @@ export function useStoreCatalog(client: ManagerClient) {
           ...item,
         })),
       };
-    } else error.value = "Каталог магазина недоступен.";
+    } else error.value = client.banner.value ? "Каталог магазина недоступен." : null;
     loading.value = false;
   }
+  // Engine recovery: refill the catalog once connectivity is back instead of
+  // leaving an empty store behind a healed transient gap.
+  watch(client.engine, (state) => {
+    if (state === "ready" && snapshot.value === null && !loading.value) void load();
+  });
   const installed = computed<InstalledStoreItem[]>(() => snapshot.value?.installed ?? []);
   return {
     snapshot,

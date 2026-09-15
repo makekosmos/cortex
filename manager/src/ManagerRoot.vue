@@ -55,7 +55,7 @@ type ViewId =
   | "secrets"
   | "browser";
 const client = useManagerClient();
-const { error } = client;
+const { banner } = client;
 const view = ref<ViewId>("data");
 const surface = useTemplateRef<ComponentPublicInstance>("surface");
 const activeView = useTemplateRef<{ backToCatalog?: () => void }>("activeView");
@@ -227,7 +227,7 @@ onMounted(() => {
       </SettingsSidebar>
     </template>
     <DesktopContentSurface ref="surface" :scrollable="true" class="surface kosmos-scroll">
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
+      <p v-if="banner" class="error" role="alert">{{ banner }}</p>
       <KeepAlive>
         <component
           ref="activeView"
