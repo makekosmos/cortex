@@ -20,13 +20,19 @@ host integration it needs at runtime.
 ## What is intentionally not promised
 
 The repository layout is portable, but the existing desktop build still
-expects external extension bundles, ARK, visuals, and release tooling. CI
-therefore validates ownership and local metadata only. A green layout check
-does not mean that a complete Windows installer can be built here yet.
+expects external extension bundles, ARK, visuals, and release tooling. Local
+checks therefore validate ownership and local metadata only. A green layout
+check does not mean that a complete Windows installer can be built here yet.
 Publish builds additionally require a reviewed release BOM; signing secrets are not read by
 the BOM validator or provenance emitter.
 
 ## Local checks
+
+Hosted GitHub Actions are disabled (KOS-76): no workflow runs on `push`,
+`pull_request`, or `schedule`; the remaining workflows are manual
+`workflow_dispatch` only. Done means the local gates pass — the lefthook
+pre-commit/pre-push contracts and `pnpm run check`. An absent or red hosted
+run is not a blocker; do not wait for it.
 
 See [`docs/rust-build-cache.md`](docs/rust-build-cache.md) for Rust cache,
 sidecar reuse, prebuilt UI development, and baseline evidence.
@@ -112,15 +118,17 @@ tests. Bootstrap never resets, stashes, or overwrites a dirty checkout; remove
 
 The affected-check planner is fail-closed: staged changes use `pre-commit`,
 the worktree plan includes tracked and untracked files, pre-push input uses
-the pushed ref range, and CI uses its explicit base/head SHAs. Missing,
-invalid, zero, shallow, or ambiguous revisions select the full check. Docs and
-isolated assets are a no-op; shared, lockfile, manifest, build, workflow, hook,
-and unknown changes select every CI job. The `cortex-quality-gate` job remains
-required even when selected jobs are intentionally skipped.
+the pushed ref range, and the manual dispatch workflow uses its explicit
+base/head SHAs. Missing, invalid, zero, shallow, or ambiguous revisions select
+the full check. Docs and isolated assets are a no-op; shared, lockfile,
+manifest, build, workflow, hook, and unknown changes select every job in the
+manual dispatch workflow. The `cortex-quality-gate` job remains required even
+when selected jobs are intentionally skipped.
 
 Cheap local baseline: layout 0.108s, source-size test 0.680s, and naming test
 0.154s. Full local and hosted job-minute measurements are NOT_RUN; hosted CI
-was blocked by KOS-50. Branch protection is disabled, and ruleset/merge-queue
+was blocked by KOS-50 and is now disabled by KOS-76, so no hosted evidence is
+expected. Branch protection is disabled, and ruleset/merge-queue
 status is NOT_RUN. Use `--full` when reviewing uncertain changes and treat the
 planner's `reasons` field as the explanation for a full selection.
 

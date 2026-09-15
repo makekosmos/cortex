@@ -1,10 +1,9 @@
 name: Shell checks
 
+# KOS-76: hosted CI is disabled. Local gates (lefthook pre-commit/pre-push,
+# `pnpm run check`) are authoritative; this workflow is manual dispatch only.
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read

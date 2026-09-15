@@ -1,16 +1,8 @@
 name: Core dependency pin
 
+# KOS-76: hosted CI is disabled. `node scripts/check-core-pin.mjs` and the
+# runtime staging test run locally; this workflow is manual dispatch only.
 on:
-  pull_request:
-    paths:
-      - "runtime/Cargo.toml"
-      - "desktop/scripts/ark-core-rpc.mjs"
-      - "desktop/scripts/runtime-staging.test.mjs"
-      - "Cargo.lock"
-      - "scripts/check-core-pin.mjs"
-      - ".github/workflows/core-pin.yml"
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

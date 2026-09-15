@@ -86,7 +86,8 @@ PR cache scope cannot write into the base branch's cache.
 `runtime/scripts/test-lib.mjs`; changing it was not measured. Peak-memory
 tradeoffs are `NOT_RUN`.
 
-Hosted CI evidence is `NOT_RUN` because KOS-50 billing/spending prevents runs;
-this is not a code failure. `sccache` was not installed because the baseline
+Hosted CI evidence is `NOT_RUN`: KOS-50 billing/spending prevented runs and
+KOS-76 removed the automatic triggers, so no hosted run is expected; this is
+not a code failure. `sccache` was not installed because the baseline
 machine did not have it and no measurement justified adding another cache
 layer.

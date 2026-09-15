@@ -196,5 +196,8 @@ test("hook and CI entrypoints keep the planner and stable quality gate", () => {
   assert.match(workflow, /id: plan/);
   assert.match(workflow, /cortex-quality-gate:/);
   assert.match(workflow, /github\.event\.pull_request\.number \|\| github\.ref/);
-  assert.match(workflow, /branches:\r?\n\s+- main/);
+  // KOS-76: hosted triggers stay disabled; the workflow is manual dispatch only.
+  const onBlock = workflow.match(/^on:\r?\n((?:[ \t].*\r?\n|\r?\n)*)/m)?.[1] ?? "";
+  assert.match(onBlock, /workflow_dispatch:/);
+  assert.doesNotMatch(onBlock, /\b(?:push|pull_request|pull_request_target|schedule):/);
 });
