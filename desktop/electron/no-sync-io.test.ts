@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -22,7 +22,7 @@ const bannedByFile = {
 
 for (const [file, banned] of Object.entries(bannedByFile)) {
   test(`${file}: нет синхронного I/O на горячих путях`, async () => {
-    const source = await readFile(path.join(import.meta.dir, file), "utf8");
+    const source = await readFile(path.join(import.meta.dirname, file), "utf8");
     const found = banned.filter((name) => source.includes(name));
     expect(found).toEqual([]);
   });

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "../test-support/node-test.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -18,9 +18,7 @@ describe("browser settings", () => {
     expect(readBrowserDataPersistence(file)).toBe(true);
     writeBrowserDataPersistence(file, false);
     expect(readBrowserDataPersistence(file)).toBe(false);
-    expect(browserPartition("kosmos-manager-browser", true)).toBe(
-      "persist:kosmos-manager-browser",
-    );
+    expect(browserPartition("kosmos-manager-browser", true)).toBe("persist:kosmos-manager-browser");
     expect(browserPartition("kosmos-manager-browser", false)).toBe(
       "kosmos-manager-browser-private",
     );

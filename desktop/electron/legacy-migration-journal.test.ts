@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";

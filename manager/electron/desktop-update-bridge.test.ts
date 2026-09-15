@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../test-support/node-test.mjs";
 import { resolveDesktopUpdateBridge } from "./desktop-update-bridge";
 
 const instance = {

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { dominantImageColor } from "./image-dominant-color";
 
 test("dominantImageColor prefers the largest chromatic bucket and falls back for grayscale", () => {

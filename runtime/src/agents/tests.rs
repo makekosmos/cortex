@@ -670,8 +670,12 @@ mod tests {
             .join("tests/fixtures/daedalus-fake-app-server.mjs")
             .canonicalize()
             .unwrap();
-        std::env::set_var("DAEDALUS_FAKE_APP_SERVER_EXE", "bun");
-        std::env::set_var("DAEDALUS_FAKE_APP_SERVER_SCRIPT", &script);
+        let script_arg = script
+            .to_string_lossy()
+            .trim_start_matches("\\\\?\\")
+            .replace('\\', "/");
+        std::env::set_var("DAEDALUS_FAKE_APP_SERVER_EXE", "node");
+        std::env::set_var("DAEDALUS_FAKE_APP_SERVER_SCRIPT", &script_arg);
 
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("repo");

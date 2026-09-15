@@ -3,7 +3,7 @@
 // разработки в стиле Raycast.
 //
 // Запуск:
-//   bun run dev:extensions
+//   pnpm run dev:extensions
 //   # или
 //   node scripts/dev-extensions.mjs
 //   # optional:

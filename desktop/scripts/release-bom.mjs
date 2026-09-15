@@ -138,8 +138,8 @@ export function validateReleaseBom(value, context) {
   commit(store.commit, "source.store.commit");
 
   const toolchain = object(source.toolchain, "source.toolchain");
-  for (const name of ["bun", "node", "rust"]) semver(toolchain[name], `source.toolchain.${name}`);
-  for (const name of ["bun", "node", "rust"])
+  for (const name of ["pnpm", "node", "rust"]) semver(toolchain[name], `source.toolchain.${name}`);
+  for (const name of ["pnpm", "node", "rust"])
     if (toolchain[name] !== context.toolchain[name])
       fail(`source.toolchain.${name} does not match the repository pin`);
   string(toolchain.target, "source.toolchain.target");
@@ -215,7 +215,7 @@ async function repositoryContext(root, platform, currentCommit) {
   );
   const arkCore = await readFile(path.join(root, "desktop", "scripts", "ark-core-rpc.mjs"), "utf8");
 
-  const bun = String(packageJson.packageManager ?? "").match(/^bun@(\d+\.\d+\.\d+)$/)?.[1];
+  const pnpm = String(packageJson.packageManager ?? "").match(/^pnpm@(\d+\.\d+\.\d+)$/)?.[1];
   const node = workflow.match(/node-version:\s*(\d+\.\d+\.\d+)/)?.[1];
   const rust = workflow.match(/rustup toolchain install\s+(\d+\.\d+\.\d+)/)?.[1];
   const coreCommit = cargo.match(
@@ -225,7 +225,7 @@ async function repositoryContext(root, platform, currentCommit) {
   const shell = shellApi.match(/KEPLER_API_VERSION\s*=\s*"([^"]+)"/)?.[1];
   const engine = engineApi.match(/ENGINE_API_VERSION\s*=\s*"([^"]+)"/)?.[1];
 
-  if (!bun || !node || !rust || !coreCommit || !arkCoreCommit || !shell || !engine)
+  if (!pnpm || !node || !rust || !coreCommit || !arkCoreCommit || !shell || !engine)
     fail("repository pins are incomplete or unreadable");
   if (!/manifest\.schema_version !== 2/.test(catalog))
     fail("package catalog is not pinned to manifest schema 2");
@@ -237,7 +237,7 @@ async function repositoryContext(root, platform, currentCommit) {
     coreCommit,
     arkCoreCommit,
     workspace,
-    toolchain: { bun, node, rust },
+    toolchain: { pnpm, node, rust },
     api: { shell, engine, package_manifest: 2 },
   };
 }

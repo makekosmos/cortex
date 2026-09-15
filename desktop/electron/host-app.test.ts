@@ -1,7 +1,7 @@
 import fs, { readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, expect, mock, test } from "bun:test";
+import { afterAll, expect, mock, test } from "../test-support/node-test.mjs";
 
 const appData = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-desktop-host-app-"));
 const startMenuFolder = "Kosmos";

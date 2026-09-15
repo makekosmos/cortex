@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { bufferToArrayBuffer, parseAppIconRequestUrl } from "./app-icon-protocol";
 
 test("parseAppIconRequestUrl accepts encoded app ids", () => {

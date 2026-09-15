@@ -67,7 +67,7 @@ foreach ($scenario in $Scenarios) {
     Write-Host ("  1. Закрой все процессы Kepler (если запущены).")
     Write-Host ("  2. В отдельном окне: ")
     Write-Host ("     {0}" -f $envHint)
-    Write-Host ("     bun run --cwd desktop dev")
+Write-Host ("     pnpm --dir desktop run dev")
     if ($scenario -eq 'all-extensions-idle') {
         Write-Host ("  3. Дождись пока launcher автоматически откроет все 4 extensions + dashboard (~5s).")
     } elseif ($scenario -ne 'launcher-only') {

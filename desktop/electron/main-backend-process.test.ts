@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, expect, mock, test } from "bun:test";
+import { afterEach, expect, mock, test } from "../test-support/node-test.mjs";
 
 mock.module("electron", () => ({
   app: { getPath: () => "C:\\Kosmos-test" },

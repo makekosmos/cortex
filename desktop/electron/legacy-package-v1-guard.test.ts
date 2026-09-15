@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { existsSync } from "node:fs";
 
 test("legacy extension resolver is absent", () => {

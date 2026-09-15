@@ -16,5 +16,5 @@ test("first-party release contracts fail closed", () => {
   assert.match(script, /\["run", "test:first-party-contracts"\]/);
   assert.match(script, /if \(result\.error\) throw result\.error/);
   assert.match(script, /if \(result\.status !== 0\)/);
-  assert.equal(desktopPackage.scripts["package:mac"], "bun run build:mac");
+  assert.equal(desktopPackage.scripts["package:mac"], "pnpm run build:mac");
 });

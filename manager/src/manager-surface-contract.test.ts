@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../../test-support/node-test.mjs";
 import { resolveWorkspacePaths } from "../../scripts/workspace.mjs";
 
 const read = (name: string) => readFileSync(new URL(`./views/${name}`, import.meta.url), "utf8");

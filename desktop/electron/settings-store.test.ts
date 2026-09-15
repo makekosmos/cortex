@@ -1,4 +1,4 @@
-import { beforeEach, afterAll, expect, mock, test } from "bun:test";
+import { beforeEach, afterAll, expect, mock, test } from "../test-support/node-test.mjs";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";

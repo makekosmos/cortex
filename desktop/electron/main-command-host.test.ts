@@ -1,4 +1,4 @@
-import { beforeEach, expect, mock, test } from "bun:test";
+import { beforeEach, expect, mock, test } from "../test-support/node-test.mjs";
 
 const openExtension = mock(async () => {});
 const commandRuntimeContext = mock(() => ({

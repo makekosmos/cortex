@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../../test-support/node-test.mjs";
 import type { InstalledStoreItem, StoreListing } from "./manager-api";
 import {
   installTarget,
@@ -37,28 +37,21 @@ const installed = (id: string): InstalledStoreItem => ({
 describe("store helpers", () => {
   test("matches listing by distribution package id and targets update", () => {
     const item = installed("pkg.notes");
-    expect(
-      installedForListing(listing("listing.notes", "pkg.notes"), [item]),
-    ).toBe(item);
+    expect(installedForListing(listing("listing.notes", "pkg.notes"), [item])).toBe(item);
     expect(installTarget(listing("listing.notes", "pkg.notes"), item)).toEqual({
       package_id: "pkg.notes",
       version: "1.1.0",
     });
-    expect(installKey(listing("listing.notes", "pkg.notes"), item)).toBe(
-      "pkg.notes",
-    );
+    expect(installKey(listing("listing.notes", "pkg.notes"), item)).toBe("pkg.notes");
   });
 
   test("uses the latest installed version for an app update", () => {
     const previous = { ...installed("pkg.notes"), version: "1.0.0" };
     const current = { ...installed("pkg.notes"), version: "1.1.0", update_version: null };
 
-    expect(
-      installedForListing(listing("listing.notes", "pkg.notes"), [
-        previous,
-        current,
-      ]),
-    ).toBe(current);
+    expect(installedForListing(listing("listing.notes", "pkg.notes"), [previous, current])).toBe(
+      current,
+    );
     expect(latestInstalledPackages([previous, current])).toEqual([current]);
   });
 
@@ -86,8 +79,6 @@ describe("store helpers", () => {
     expect(installTarget(unpublished)).toBeNull();
     expect(packageAction(unpublished)).toBeNull();
     expect(packageAction(unpublished, current)).toBe("open");
-    expect(packageAction(listing("com.kosmos.shell", "com.kosmos.shell"))).toBe(
-      "install",
-    );
+    expect(packageAction(listing("com.kosmos.shell", "com.kosmos.shell"))).toBe("install");
   });
 });

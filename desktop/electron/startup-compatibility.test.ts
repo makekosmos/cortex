@@ -1,42 +1,45 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import type { JsonValue } from "./extension-permissions";
 import { isString } from "../src/shared/runtimeGuards";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-const appReadySource = await readFile(path.join(import.meta.dir, "main-app-ready.ts"), "utf8");
+const appReadySource = await readFile(path.join(import.meta.dirname, "main-app-ready.ts"), "utf8");
 const managerNavigationSource = await readFile(
-  path.join(import.meta.dir, "manager-navigation.ts"),
+  path.join(import.meta.dirname, "manager-navigation.ts"),
   "utf8",
 );
-const hostAppSource = await readFile(path.join(import.meta.dir, "host-app.ts"), "utf8");
-const postUpdateSource = await readFile(path.join(import.meta.dir, "main-post-update.ts"), "utf8");
-const instanceSource = await readFile(path.join(import.meta.dir, "instance.ts"), "utf8");
-const rendererSource = await readFile(path.join(import.meta.dir, "../src/main.ts"), "utf8");
-const legacyAppSource = await readFile(path.join(import.meta.dir, "../src/App.vue"), "utf8");
+const hostAppSource = await readFile(path.join(import.meta.dirname, "host-app.ts"), "utf8");
+const postUpdateSource = await readFile(
+  path.join(import.meta.dirname, "main-post-update.ts"),
+  "utf8",
+);
+const instanceSource = await readFile(path.join(import.meta.dirname, "instance.ts"), "utf8");
+const rendererSource = await readFile(path.join(import.meta.dirname, "../src/main.ts"), "utf8");
+const legacyAppSource = await readFile(path.join(import.meta.dirname, "../src/App.vue"), "utf8");
 const settingsNavigationSource = await readFile(
-  path.join(import.meta.dir, "../src/views/settings/navigation.ts"),
+  path.join(import.meta.dirname, "../src/views/settings/navigation.ts"),
   "utf8",
 );
 const settingsNavigationDataSource = await readFile(
-  path.join(import.meta.dir, "../src/views/settings/navigation.data.ts"),
+  path.join(import.meta.dirname, "../src/views/settings/navigation.data.ts"),
   "utf8",
 );
 const settingsNavigationCommandsSource = await readFile(
-  path.join(import.meta.dir, "../src/views/settings/navigation.commands.ts"),
+  path.join(import.meta.dirname, "../src/views/settings/navigation.commands.ts"),
   "utf8",
 );
 const settingsViewSource = await readFile(
-  path.join(import.meta.dir, "../src/views/SettingsView.vue"),
+  path.join(import.meta.dirname, "../src/views/SettingsView.vue"),
   "utf8",
 );
 const launcherSource = await readFile(
-  path.join(import.meta.dir, "../src/views/LauncherView.vue"),
+  path.join(import.meta.dirname, "../src/views/LauncherView.vue"),
   "utf8",
 );
 const launcherTemplateSource = await readFile(
-  path.join(import.meta.dir, "../src/views/LauncherView.html"),
+  path.join(import.meta.dirname, "../src/views/LauncherView.html"),
   "utf8",
 );
 const clipboardRetirementSources = await Promise.all(
@@ -53,7 +56,9 @@ const clipboardRetirementSources = await Promise.all(
     "../src/views/SettingsView.vue",
     "../src/views/settings/navigation.ts",
     "../src/views/settings/navigation.data.ts",
-  ].map(async (file) => [file, await readFile(path.join(import.meta.dir, file), "utf8")] as const),
+  ].map(
+    async (file) => [file, await readFile(path.join(import.meta.dirname, file), "utf8")] as const,
+  ),
 );
 
 test("runAppReady opens Manager on manual launch and keeps autostart silent", () => {

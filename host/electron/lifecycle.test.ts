@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../test-support/node-test.mjs";
 import { HostLifecycle } from "./lifecycle";
 
 describe("HostLifecycle", () => {

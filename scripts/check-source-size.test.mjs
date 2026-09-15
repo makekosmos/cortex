@@ -50,9 +50,18 @@ test("retired Godfile paths cannot reuse an old exemption", async () => {
 });
 
 test("only the explicit debt baseline is grandfathered", async () => {
-  const result = await runFixture({ "runtime/src/main.rs": lines(301) });
+  const result = await runFixture({
+    "packages/huawei-health/src/lib.rs": lines(301),
+    "packages/huawei-health/tests/archive.rs": lines(301),
+    "runtime/src/main.rs": lines(301),
+    "runtime/src/package_service/integrations.rs": lines(301),
+    "runtime/src/package_service/integrations/huawei_login.rs": lines(301),
+    "runtime/src/package_worker_supervisor/authority.rs": lines(301),
+    "runtime/src/package_worker_supervisor/calls_dispatch.rs": lines(301),
+    "runtime/src/package_worker_supervisor/tests/api/opaque_roots.rs": lines(301),
+  });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /1 grandfathered file/);
+  assert.match(result.stdout, /8 grandfathered file/);
 });
 
 test("grandfathers only the current Huawei source-size debt", async () => {

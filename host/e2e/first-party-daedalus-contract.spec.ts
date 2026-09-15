@@ -197,10 +197,11 @@ test("signed Daedalus enforces its agents contract in Host", async () => {
     expect(result.afterSessions).toEqual({ ok: true, data: [] });
     const audit = JSON.parse(
       execFileSync(
-        "bun",
+        process.execPath,
         [
+          "--input-type=module",
           "--eval",
-          'import {Database} from "bun:sqlite"; const db=new Database(process.argv[1],{readonly:true}); process.stdout.write(JSON.stringify(db.query("SELECT event,result,package_id,package_version,project_id,mode,model FROM security_audit ORDER BY id DESC LIMIT 1").get()))',
+          'import { DatabaseSync } from "node:sqlite"; const db = new DatabaseSync(process.argv[1], { readOnly: true }); process.stdout.write(JSON.stringify(db.prepare("SELECT event,result,package_id,package_version,project_id,mode,model FROM security_audit ORDER BY id DESC LIMIT 1").get())); db.close()',
           path.join(dataDir, "extensions-data", "daedalus", "daedalus.db"),
         ],
         { encoding: "utf8", windowsHide: true },

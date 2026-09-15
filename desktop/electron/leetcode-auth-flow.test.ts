@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../test-support/node-test.mjs";
 import { runLeetCodeLogin } from "./leetcode-auth-flow";
 
 describe("LeetCode login flow", () => {

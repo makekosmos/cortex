@@ -8,7 +8,7 @@
     "dev": "node scripts/dev.mjs",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
-    "package:win": "node ../desktop/scripts/release-preflight.mjs --platform win && bun run build && electron-builder --win --dir --publish never"
+    "package:win": "node ../desktop/scripts/release-preflight.mjs --platform win && pnpm run build && electron-builder --win --dir --publish never"
   },
   "dependencies": {
     "@lucide/vue": "^1.16.0",
@@ -40,5 +40,6 @@
       "dist/**/*",
       "dist-electron/**/*"
     ]
-  }
+  },
+  "packageManager": "pnpm@12.4.1"
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Dev-flow backend build for `bun run dev` (debug profile, fast iterate).
+// Dev-flow backend build for `pnpm run dev` (debug profile, fast iterate).
 //
 // Default behavior is byte-for-byte the same as the previous inline
 // package.json command: `cargo build --manifest-path ../Cargo.toml --bin

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { isPublicNetworkAddress } from "./public-network-address";
 
 test("isPublicNetworkAddress rejects local and reserved addresses", () => {

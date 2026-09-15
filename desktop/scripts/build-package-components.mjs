@@ -14,7 +14,8 @@ if (preflight.status !== 0) process.exit(preflight.status ?? 1);
 const version = JSON.parse(
   readFileSync(path.join(root, "desktop", "release-versions.json"), "utf8"),
 ).win;
-const icons = spawnSync("bun", ["run", "scripts/build-app-icons.mjs"], {
+const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const icons = spawnSync(pnpm, ["run", "scripts/build-app-icons.mjs"], {
   cwd: path.join(root, "desktop"),
   stdio: "inherit",
   windowsHide: true,
@@ -23,7 +24,7 @@ if (icons.status !== 0) process.exit(icons.status ?? 1);
 const components = ["manager", "host"];
 for (const component of components) {
   const cwd = path.join(root, component);
-  const build = spawnSync("bun", ["run", "build"], {
+  const build = spawnSync(pnpm, ["run", "build"], {
     cwd,
     stdio: "inherit",
     windowsHide: true,
@@ -31,8 +32,9 @@ for (const component of components) {
   if (build.status !== 0) process.exit(build.status ?? 1);
   const output = path.join(root, "desktop", ".tmp", "components", component);
   const packaged = spawnSync(
-    "bunx",
+    pnpm,
     [
+      "exec",
       "electron-builder",
       "--win",
       "--dir",

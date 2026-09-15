@@ -20,8 +20,8 @@
 // → `extensions/<id>/`.
 //
 // Usage:
-//   bun run --cwd platform/desktop ext:install <path-to-dir-or-kext>
-//   bun run --cwd platform/desktop ext:install ./extension.kext
+//   pnpm --dir platform/desktop run ext:install -- <path-to-dir-or-kext>
+//   pnpm --dir platform/desktop run ext:install -- ./extension.kext
 
 import {
   existsSync,

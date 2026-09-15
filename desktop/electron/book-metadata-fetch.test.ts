@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../test-support/node-test.mjs";
 import type { IncomingMessage } from "node:http";
 import { Readable } from "node:stream";
 import {
@@ -12,7 +12,7 @@ function response(
   headers: Record<string, string>,
   body: string | Buffer = "",
 ): IncomingMessage {
-// SAFETY: The surrounding boundary establishes this documented contract.
+  // SAFETY: The surrounding boundary establishes this documented contract.
   return Object.assign(Readable.from([body]), { statusCode, headers }) as IncomingMessage;
 }
 
@@ -93,7 +93,7 @@ describe("book metadata page fetch", () => {
         throw new Error("expected HTTP error");
       } catch (error) {
         expect(error).toBeInstanceOf(BookMetadataHttpError);
-// SAFETY: The surrounding boundary establishes this documented contract.
+        // SAFETY: The surrounding boundary establishes this documented contract.
         expect((error as BookMetadataHttpError).statusCode).toBe(status);
       }
     }

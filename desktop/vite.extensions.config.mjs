@@ -71,21 +71,21 @@ export default defineConfig(({ mode }) => {
           find: /^highlight\.js\/lib\/languages\/(.+)$/,
           replacement: path.resolve(
             repoRoot,
-            "node_modules/.bun/highlight.js@11.11.1/node_modules/highlight.js/es/languages/$1.js",
+            "node_modules/.pnpm/highlight.js@11.11.1/node_modules/highlight.js/es/languages/$1.js",
           ),
         },
         {
           find: /^highlight\.js\/lib\/(.+)$/,
           replacement: path.resolve(
             repoRoot,
-            "node_modules/.bun/highlight.js@11.11.1/node_modules/highlight.js/es/$1.js",
+            "node_modules/.pnpm/highlight.js@11.11.1/node_modules/highlight.js/es/$1.js",
           ),
         },
         {
           find: /^highlight\.js$/,
           replacement: path.resolve(
             repoRoot,
-            "node_modules/.bun/highlight.js@11.11.1/node_modules/highlight.js/es/index.js",
+            "node_modules/.pnpm/highlight.js@11.11.1/node_modules/highlight.js/es/index.js",
           ),
         },
         {

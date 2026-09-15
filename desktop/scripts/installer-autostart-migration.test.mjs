@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 const LEGACY_AUTOSTART_NAMES = [
@@ -9,7 +9,7 @@ const LEGACY_AUTOSTART_NAMES = [
   "KosmosKepler",
 ];
 
-const installer = readFileSync(path.join(import.meta.dir, "../build/installer.nsh"), "utf8");
+const installer = readFileSync(path.join(import.meta.dirname, "../build/installer.nsh"), "utf8");
 const installBody = installer.slice(
   installer.indexOf("!macro customInstall"),
   installer.indexOf("!macroend", installer.indexOf("!macro customInstall")),

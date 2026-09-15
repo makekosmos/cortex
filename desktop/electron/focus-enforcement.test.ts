@@ -1,4 +1,4 @@
-import { expect, mock, test } from "bun:test";
+import { expect, mock, test } from "../test-support/node-test.mjs";
 import type { FocusNativeAdapter, FocusRequest } from "./focus-enforcement";
 
 mock.module("electron", () => ({

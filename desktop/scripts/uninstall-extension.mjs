@@ -11,7 +11,7 @@
 // удалить и user data — передай флаг --purge-data.
 //
 // Usage:
-//   bun run --cwd platform/desktop ext:uninstall <id> [--purge-data]
+//   pnpm --dir platform/desktop run ext:uninstall -- <id> [--purge-data]
 
 import { existsSync, rmSync } from "node:fs";
 import path from "node:path";

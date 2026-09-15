@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, test } from "../test-support/node-test.mjs";
 import { ensureEngineRunning } from "@kosmos/ark";
 import type { JsonRecord } from "./extension-permissions";
 

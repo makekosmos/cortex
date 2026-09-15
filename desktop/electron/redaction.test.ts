@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import type { JsonRecord } from "./extension-permissions";
 
 import {
@@ -29,7 +29,7 @@ test("redactUnknown recursively removes sensitive values", () => {
       token: "secret-value",
       payload: { title: "private note" },
     },
-// SAFETY: The surrounding boundary establishes this documented contract.
+    // SAFETY: The surrounding boundary establishes this documented contract.
   }) as JsonRecord;
   expect(output.safe).toBe("ok");
   expect(JSON.stringify(output)).not.toContain("secret-value");

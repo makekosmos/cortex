@@ -1,7 +1,7 @@
 import { access, lstat, mkdtemp, mkdir, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { clearCrashReports, listCrashReports, resolveManagerDataDir } from "./diagnostics-files";
 
 test("diagnostics files expose bounded regular-file metadata only", async () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect } from "../../test-support/node-test.mjs";
 import {
   buildGraph,
   type GraphObjectInput,

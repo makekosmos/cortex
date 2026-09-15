@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../test-support/node-test.mjs";
 import {
   normalizeConnectivity,
   normalizeFocusActiveState,
@@ -30,7 +30,7 @@ import {
   validPairingCode,
 } from "./manager-contract";
 
-const source = (name: string) => readFileSync(join(import.meta.dir, name), "utf8");
+const source = (name: string) => readFileSync(join(import.meta.dirname, name), "utf8");
 
 describe("standalone Manager boundary", () => {
   test("keeps Manager navigation stable and autostart targets Desktop", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../test-support/node-test.mjs";
 import { ArkBroker, type ArkRequest } from "./brokers/ark";
 import { createHostBrokers } from "./brokers";
 import { HostBrokerError } from "./brokers/types";

@@ -1,4 +1,4 @@
-import { afterEach, expect, mock, test } from "bun:test";
+import { afterEach, expect, mock, test } from "../test-support/node-test.mjs";
 import { ReconnectingEngineClient } from "@makekosmos/ark";
 
 const firstLock = { http_port: 4317, auth_token: "a".repeat(64) };
@@ -39,12 +39,12 @@ test("Host retries only its idempotent lifecycle settings request after 401", as
       JSON.stringify({ ok: true, data: { desktop_host: { warm_timeout_seconds: 300 } } }),
     );
   });
-  // SAFETY: Bun's mock function has the same call signature as global fetch in this test.
+  // SAFETY: Node's mock function has the same call signature as global fetch in this test.
   globalThis.fetch = fetchMock as typeof fetch;
 
   const client = new EngineClient("C:\\Kosmos-test");
   await expect(client.getWarmTimeout()).resolves.toEqual({ ok: true, data: 300 });
-  expect(fetchMock.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+  expect(fetchMock.mock.calls.map((call) => call.arguments[0])).toEqual([
     "http://127.0.0.1:4317/v1/rpc",
     "http://127.0.0.1:4318/v1/rpc",
   ]);
@@ -59,13 +59,13 @@ test("Host does not replay launch after 401 and uses the replacement for the fol
       JSON.stringify({ ok: true, data: { desktop_host: { warm_timeout_seconds: 0 } } }),
     );
   });
-  // SAFETY: Bun's mock function has the same call signature as global fetch in this test.
+  // SAFETY: Node's mock function has the same call signature as global fetch in this test.
   globalThis.fetch = fetchMock as typeof fetch;
 
   const client = new EngineClient("C:\\Kosmos-test");
   await expect(client.launchApp("demo")).resolves.toMatchObject({ ok: false });
   await expect(client.getWarmTimeout()).resolves.toEqual({ ok: true, data: 0 });
-  expect(fetchMock.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+  expect(fetchMock.mock.calls.map((call) => call.arguments[0])).toEqual([
     "http://127.0.0.1:4317/v1/apps/launch",
     "http://127.0.0.1:4318/v1/rpc",
   ]);
@@ -80,7 +80,7 @@ test("Host does not replay revoke after a closed transport and uses the replacem
       JSON.stringify({ ok: true, data: { desktop_host: { warm_timeout_seconds: 300 } } }),
     );
   });
-  // SAFETY: Bun's mock function has the same call signature as global fetch in this test.
+  // SAFETY: Node's mock function has the same call signature as global fetch in this test.
   globalThis.fetch = fetchMock as typeof fetch;
 
   const client = new EngineClient("C:\\Kosmos-test");
@@ -88,7 +88,7 @@ test("Host does not replay revoke after a closed transport and uses the replacem
     ok: false,
   });
   await expect(client.getWarmTimeout()).resolves.toEqual({ ok: true, data: 300 });
-  expect(fetchMock.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+  expect(fetchMock.mock.calls.map((call) => call.arguments[0])).toEqual([
     "http://127.0.0.1:4317/v1/apps/launch/123e4567-e89b-12d3-a456-426614174000",
     "http://127.0.0.1:4318/v1/rpc",
   ]);
@@ -111,7 +111,7 @@ test("Host registers a directory grant without returning the selected path", asy
       }),
     );
   });
-  // SAFETY: Bun's mock function has the same call signature as global fetch in this test.
+  // SAFETY: Node's mock function has the same call signature as global fetch in this test.
   globalThis.fetch = fetchMock as typeof fetch;
 
   const client = new EngineClient("C:\\Kosmos-test");
@@ -129,7 +129,7 @@ test("Host registers a directory grant without returning the selected path", asy
 
 test("Host rejects a relative directory before contacting Engine", async () => {
   const fetchMock = mock(async () => new Response("unexpected", { status: 500 }));
-  // SAFETY: Bun's mock function has the same call signature as global fetch in this test.
+  // SAFETY: Node's mock function has the same call signature as global fetch in this test.
   globalThis.fetch = fetchMock as typeof fetch;
 
   const client = new EngineClient("C:\\Kosmos-test");

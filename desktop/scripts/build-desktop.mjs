@@ -35,11 +35,9 @@ function resolveElectronBuilder() {
   if (process.env.KOSMOS_ELECTRON_BUILDER) return process.env.KOSMOS_ELECTRON_BUILDER;
   const isWin = process.platform === "win32";
   const binDir = path.join(SHELL_ROOT, "node_modules", ".bin");
-  // bun installs Windows shims as .exe (+ .bunx); npm/pnpm use .cmd. Probe in
-  // order and take the first that exists. In this bun workspace the binary is
-  // node_modules/.bin/electron-builder.exe.
+  // pnpm/npm use .cmd on Windows. Keep the local binary preference before PATH.
   const candidates = isWin
-    ? ["electron-builder.exe", "electron-builder.cmd", "electron-builder.bunx"]
+    ? ["electron-builder.cmd", "electron-builder.exe"]
     : ["electron-builder"];
   for (const name of candidates) {
     const p = path.join(binDir, name);

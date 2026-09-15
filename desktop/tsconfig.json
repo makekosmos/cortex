@@ -20,6 +20,7 @@
     "noFallthroughCasesInSwitch": true,
     "paths": {
       "@/*": ["./src/*"],
+      "vue": ["./node_modules/vue"],
       "@kosmos/ark": ["../.tmp/workspace/arca-sdk/src/index.ts"],
       "@kosmos/visuals": ["../.tmp/workspace/imago/index.ts"],
       "@kosmos/visuals/*": ["../.tmp/workspace/imago/*"],

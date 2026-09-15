@@ -1,9 +1,9 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-const root = path.resolve(import.meta.dir, "../..");
-const launcher = readFileSync(path.join(import.meta.dir, "main-launcher.ts"), "utf8");
+const root = path.resolve(import.meta.dirname, "../..");
+const launcher = readFileSync(path.join(import.meta.dirname, "main-launcher.ts"), "utf8");
 const tray = readFileSync(path.join(root, "runtime/src/backend_tray/windows_impl.rs"), "utf8");
 const engine = readFileSync(path.join(root, "desktop/scripts/engine-distribution.mjs"), "utf8");
 

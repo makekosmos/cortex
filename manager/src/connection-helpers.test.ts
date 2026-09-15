@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../../test-support/node-test.mjs";
 import { integrationCards } from "./connection-helpers";
 import type { IntegrationProvider, StoreListing } from "./manager-api";
 

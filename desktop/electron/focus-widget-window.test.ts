@@ -1,11 +1,13 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 // Regression: 2026-07-10. DWM background materials paint an opaque backing
 // surface behind transparent pixels around the rounded Focus widget on Win32.
 test("focus widget keeps its native backing surface transparent", async () => {
-  const source = await readFile(path.join(import.meta.dir, "focus-widget-window.ts"), "utf8");
+  const source = (
+    await readFile(path.join(import.meta.dirname, "focus-widget-window.ts"), "utf8")
+  ).replaceAll("\r\n", "\n");
   const createWindow = source.match(
     /export function createFocusWidgetWindow[\s\S]*?(?=\n}\n?$)/,
   )?.[0];

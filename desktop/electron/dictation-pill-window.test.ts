@@ -1,9 +1,9 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "../test-support/node-test.mjs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 test("dictation pill restores its topmost z-order before every show", async () => {
-  const source = await readFile(path.join(import.meta.dir, "dictation-pill.ts"), "utf8");
+  const source = await readFile(path.join(import.meta.dirname, "dictation-pill.ts"), "utf8");
   const showPill = source.match(
     /function showPill\(\): void \{[\s\S]*?(?=\nfunction hidePill)/,
   )?.[0];
@@ -22,7 +22,7 @@ test("dictation pill restores its topmost z-order before every show", async () =
 });
 
 test("dictation hotkey toggles directly without re-entering the command bus", async () => {
-  const source = await readFile(path.join(import.meta.dir, "dictation-pill.ts"), "utf8");
+  const source = await readFile(path.join(import.meta.dirname, "dictation-pill.ts"), "utf8");
 
   expect(source.match(/void toggleDictation\(\)/g)).toHaveLength(2);
   expect(source).not.toContain("dictationCommandInvoker");

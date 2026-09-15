@@ -7,12 +7,12 @@
 //   4. Computes SHA-256.
 //   5. gh release create <id>-v<version> ... <kext-file> в makekosmos/extensions.
 //
-// После publish — запусти `bun run ext:catalog -- <path>` чтобы обновить
+// После publish — запусти `pnpm run ext:catalog -- <path>` чтобы обновить
 // catalog.json (catalog генерится из gh api releases, не из локального state).
 //
 // Usage:
-//   bun run --cwd platform/desktop ext:publish <extension-id>
-//   bun run --cwd platform/desktop ext:publish --all
+//   pnpm --dir platform/desktop run ext:publish -- <extension-id>
+//   pnpm --dir platform/desktop run ext:publish -- --all
 //
 // Требуется:
 //   - gh CLI: либо в PATH, либо absolute path в KEPLER_GH_PATH env.
@@ -66,7 +66,7 @@ function readManifest(id) {
 
 function buildExtensions() {
   console.log(`[ext:publish] build:extensions...`);
-  execSync(`bun run build:extensions`, { cwd: SHELL_ROOT, stdio: "inherit" });
+  execSync(`pnpm run build:extensions`, { cwd: SHELL_ROOT, stdio: "inherit" });
 }
 
 function packageKext(id, manifest) {
@@ -195,5 +195,5 @@ for (const r of results) {
   console.log(`  - ${r.tag} (sha256 ${r.sha.slice(0, 12)}...)`);
 }
 console.log(
-  `[ext:publish] Не забудь: bun run --cwd platform/desktop ext:catalog -- <output-path> и push в makekosmos/extensions`,
+  `[ext:publish] Не забудь: pnpm --dir desktop run ext:catalog -- <output-path> и push в makekosmos/extensions`,
 );
