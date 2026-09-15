@@ -65,18 +65,21 @@ describe("Manager surface contract", () => {
     );
     if (!existsSync(workspacePaths.imago)) return;
     const chrome = readFileSync(
-      path.join(workspacePaths.imago, "components/DesktopChrome.vue"),
+      path.join(workspacePaths.imago, "packages/vue/src/components/DesktopChrome.vue"),
       "utf8",
     );
-    expect(chrome).toContain("grid-rows-[auto_minmax(0,1fr)]");
-    expect(chrome).toContain("col-span-full row-start-1");
-    expect(chrome).toContain("col-start-1 row-start-2");
     expect(chrome).toContain("sidebar-titlebar-divider");
-    expect(chrome).toContain("border-r border-[var(--border-color-low-emphasis)]");
-    expect(chrome).toContain("background: var(--kosmos-titlebar-background)");
-    const sidebar = readFileSync(path.join(workspacePaths.imago, "components/Sidebar.vue"), "utf8");
-    expect(sidebar).toContain("scrollbar-gutter: stable both-edges");
-    expect(sidebar).toContain("padding-inline: 0");
+    expect(chrome).toContain('slot name="titlebar-leading"');
+    const componentsCss = readFileSync(
+      path.join(workspacePaths.imago, "theme/components.css"),
+      "utf8",
+    );
+    // DesktopChrome grid: titlebar row + content, titlebar spans all columns.
+    expect(componentsCss).toContain("grid-template-rows:auto minmax(0,1fr)");
+    expect(componentsCss).toContain("grid-column:1/-1");
+    expect(componentsCss).toContain("grid-row-start:1");
+    expect(componentsCss).toContain("scrollbar-gutter: stable both-edges");
+    expect(componentsCss).toContain("padding-inline:0");
     const theme = readFileSync(path.join(workspacePaths.imago, "theme/css-variables.css"), "utf8");
     expect(theme).toContain("--kosmos-titlebar-background: #2a2a2a");
     expect(theme).toContain("letter-spacing: -0.015em");
@@ -105,6 +108,27 @@ describe("Manager surface contract", () => {
     expect(updates).toContain("Перезапустить и установить");
     expect(about).not.toContain("@click=\"$emit('checkUpdates')\"");
     expect(about).not.toContain("<Button");
+  });
+
+  test("update download progress is surfaced through the shared toast host", () => {
+    const root = readFileSync(new URL("./ManagerRoot.vue", import.meta.url), "utf8");
+    const updates = read("UpdatesView.vue");
+    // SAFETY: the assertion narrows to an optional chain — every access is
+    // optional-chained, so a missing field yields undefined, not a crash.
+    const packageJson = JSON.parse(
+      readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+    ) as { kosmos?: { workspace?: { imago?: { commit?: string } } } };
+    expect(root).toContain("provideToastHost");
+    expect(root).toContain("<ToastHost />");
+    expect(updates).toContain("useToast");
+    expect(updates).toContain("progress: state.percent");
+    expect(updates).toContain('state.kind === "downloading"');
+    expect(updates).toContain('state.kind === "downloaded"');
+    expect(updates).toContain('state.kind === "error"');
+    // The progressbar prop lives in imago ae9f61d+; the pin must not regress.
+    expect(packageJson.kosmos?.workspace?.imago?.commit).not.toBe(
+      "b1852cab9f8f08ae0b236b7759138d3117f720b8",
+    );
   });
 
   test("marketplace icons are uniform and have no background frame", () => {

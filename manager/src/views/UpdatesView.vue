@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { Button, SettingsList, Skeleton } from "@kosmos/visuals";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { Button, SettingsList, Skeleton, useToast } from "@kosmos/visuals";
 import type { DesktopUpdateState, InstalledStoreItem, StoreListing } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
 import {
@@ -25,6 +25,55 @@ const busy = ref<string | null>(null);
 const checking = ref(false);
 const loading = ref(true);
 let timer: ReturnType<typeof setInterval> | undefined;
+
+// Toast-прогресс загрузки/установки обновления — живёт на уровне ManagerRoot
+// (ToastHost), тут только следим за состоянием desktop-апдейтера.
+const toast = useToast();
+let updateToastId = 0;
+watch(
+  () => desktop.value,
+  (state) => {
+    if (state.kind === "downloading") {
+      const message = state.version
+        ? `Скачивание Kosmos ${state.version}`
+        : "Скачивание обновления Kosmos";
+      if (updateToastId) {
+        toast.update(updateToastId, { message, progress: state.percent });
+      } else {
+        updateToastId = toast.show({
+          title: "Обновление Kosmos",
+          message,
+          loading: true,
+          progress: state.percent,
+          duration: 0,
+          closable: true,
+        });
+      }
+      return;
+    }
+    if (!updateToastId) return;
+    const id = updateToastId;
+    updateToastId = 0;
+    toast.dismiss(id);
+    if (state.kind === "downloaded") {
+      toast.show({
+        tone: "success",
+        title: "Обновление Kosmos",
+        message: `Kosmos ${state.version} готов к установке`,
+        duration: 8000,
+        closable: true,
+      });
+    } else if (state.kind === "error") {
+      toast.show({
+        tone: "error",
+        title: "Обновление Kosmos",
+        message: `Не удалось обновить: ${state.message}`,
+        duration: 8000,
+        closable: true,
+      });
+    }
+  },
+);
 
 const loadDesktopVersion = createDesktopVersionCache(() =>
   props.client.call<string>("getAppVersion", undefined, "updates-version"),
