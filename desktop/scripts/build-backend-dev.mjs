@@ -45,6 +45,7 @@ const irohRequested =
 ensureArkCoreRpc({
   debug: true,
   features: irohRequested ? ["iroh-spike"] : [],
+  prebuiltManifest: process.env.ARK_CORE_RPC_PREBUILT,
   targetDir: path.join(targetDir, "debug"),
 });
 

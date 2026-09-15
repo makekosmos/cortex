@@ -55,6 +55,18 @@ export function effectiveCargoTargetDir(shellRoot, repoRoot, configuredTargetDir
     : path.join(repoRoot, "target");
 }
 
+export function resolveDevArkCoreRpcPath(targetDir, platform = process.platform) {
+  const suffix = platform === "win32" ? ".exe" : "";
+  const candidate = path.join(targetDir, "debug", `ark-core-rpc${suffix}`);
+  return existsSync(candidate) ? candidate : undefined;
+}
+
+export function setDevArkCoreRpcPath(env, sidecarPath) {
+  if (sidecarPath) env.ARK_CORE_RPC_PATH = sidecarPath;
+  else delete env.ARK_CORE_RPC_PATH;
+  return env;
+}
+
 export function stageRuntimeBinaries(releaseDir, stageDir, platform = process.platform) {
   const suffix = platform === "win32" ? ".exe" : "";
   mkdirSync(stageDir, { recursive: true });

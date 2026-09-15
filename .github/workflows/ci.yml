@@ -27,11 +27,22 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+      - id: rustc
+        run: echo "version=$(printf '%s\n' \"$(rustc -Vv)\" \"$(cargo -V)\" | sha256sum | cut -d ' ' -f1)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: ~/.cargo/registry
-          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: cargo-${{ runner.os }}-
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+          key: cargo-deps-${{ runner.os }}-${{ runner.arch }}-${{ steps.rustc.outputs.version }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-deps-${{ runner.os }}-${{ runner.arch }}-${{ steps.rustc.outputs.version }}-
+      # Compile output is an untrusted CI convenience cache, never a release artifact.
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            target
+            desktop/.tmp/ark-core-rpc
+          key: cargo-target-${{ runner.os }}-${{ runner.arch }}-${{ steps.rustc.outputs.version }}-${{ hashFiles('**/Cargo.toml', 'Cargo.lock', '.cargo/config.toml', 'desktop/scripts/ark-core-rpc.mjs') }}-debug-default+iroh-spike-workspace
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.14
@@ -96,6 +107,27 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.14
+      - id: rustc
+        shell: pwsh
+        run: |
+          $text = (rustc -Vv | Out-String) + (cargo -V | Out-String)
+          $bytes = [Text.Encoding]::UTF8.GetBytes($text)
+          $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+          "version=$hash" >> $env:GITHUB_OUTPUT
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~\.cargo\git
+            ~\.cargo\registry
+          key: cargo-deps-${{ runner.os }}-${{ runner.arch }}-${{ steps.rustc.outputs.version }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-deps-${{ runner.os }}-${{ runner.arch }}-${{ steps.rustc.outputs.version }}-
+      # Compile output is an untrusted CI convenience cache, never a release artifact.
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            target
+            desktop/.tmp/ark-core-rpc
+          key: cargo-target-${{ runner.os }}-${{ runner.arch }}-${{ steps.rustc.outputs.version }}-${{ hashFiles('**/Cargo.toml', 'Cargo.lock', '.cargo/config.toml', 'desktop/scripts/ark-core-rpc.mjs') }}-debug-default+iroh-spike+package-worker-fixture
       - run: bun install --frozen-lockfile
       - run: bun install --cwd desktop --frozen-lockfile
       - name: Run Windows runtime checks with private Core access
