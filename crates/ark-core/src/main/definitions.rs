@@ -323,6 +323,20 @@ enum Request {
         dest_path: String,
     },
 
+    /// KOS-51: privileged snapshot ops над Core-owned `<db_dir>/backups/`.
+    /// `backup_id` — только basename файла из этой директории (см.
+    /// `db::validate_snapshot_id`), никаких произвольных путей.
+    /// Restore применяется через SQLite Online Backup API в live conn под
+    /// `BACKUP_GATE` + глобальным DB mutex — нет момента с отсутствующей
+    /// primary DB. См. `.agent/tasks/2026-09-15-ark-snapshot-restore-rpc/`.
+    DbBackupList,
+    DbBackupValidate {
+        backup_id: String,
+    },
+    DbBackupRestore {
+        backup_id: String,
+    },
+
     // --- Sync ops (new) ---
     StartSync {
         space_id: String,
