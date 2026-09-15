@@ -1,31 +1,14 @@
 glob_matcher: doublestar
 
 pre-commit:
-  parallel: true
+  parallel: false
   commands:
-    source-size:
-      run: bun run check:source-size
-    oxlint:
-      glob: "**/*.{ts,tsx,vue,mjs,cjs,js,jsx}"
-      run: bunx oxlint {staged_files}
-    rustfmt:
-      glob: "**/*.{rs,toml}"
-      run: cargo fmt --all -- --check
-    desktop-typecheck:
-      glob: "desktop/**/*.{ts,tsx,vue,mjs,cjs,js,jsx,json}"
-      run: bun run --cwd desktop typecheck
-    host-typecheck:
-      glob: "host/**/*.{ts,tsx,vue,mjs,cjs,js,jsx,json}"
-      run: bun run --cwd host typecheck
-    manager-typecheck:
-      glob: "manager/**/*.{ts,tsx,vue,mjs,cjs,js,jsx,json}"
-      run: bun run --cwd manager typecheck
-    oxfmt:
-      glob: "**/*.{ts,tsx,vue,mjs,cjs,js,jsx,json,yml,yaml}"
-      run: bun run format:check --staged
+    affected-check:
+      run: bun run check:plan --mode pre-commit --run
 
 pre-push:
   parallel: false
   commands:
-    full-check:
-      run: bun run check
+    affected-check:
+      run: bun run check:plan --mode pre-push --run
+      use_stdin: true

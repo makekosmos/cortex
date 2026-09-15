@@ -42,6 +42,15 @@ bunx lefthook run pre-push
 # Full local verification:
 bun run check
 
+# Print the affected-check plan (JSON on stdout, explanation on stderr):
+bun run check:plan
+
+# Execute only the selected local checks:
+bun run check:affected
+
+# Force the conservative full path:
+node scripts/check-plan.mjs --full --run
+
 # Validate a release BOM without building or publishing:
 bun run test:release-bom
 
@@ -53,6 +62,20 @@ node desktop/scripts/build-desktop.mjs --platform win --bom path/to/release-bom.
 `KOSMOS_RELEASE_BOM`, so the existing release commands cannot run without an
 explicit resolved BOM.
 
+The affected-check planner is fail-closed: staged changes use `pre-commit`,
+the worktree plan includes tracked and untracked files, pre-push input uses
+the pushed ref range, and CI uses its explicit base/head SHAs. Missing,
+invalid, zero, shallow, or ambiguous revisions select the full check. Docs and
+isolated assets are a no-op; shared, lockfile, manifest, build, workflow, hook,
+and unknown changes select every CI job. The `cortex-quality-gate` job remains
+required even when selected jobs are intentionally skipped.
+
+Cheap local baseline: layout 0.108s, source-size test 0.680s, and naming test
+0.154s. Full local and hosted job-minute measurements are NOT_RUN; hosted CI
+was blocked by KOS-50. Branch protection is disabled, and ruleset/merge-queue
+status is NOT_RUN. Use `--full` when reviewing uncertain changes and treat the
+planner's `reasons` field as the explanation for a full selection.
+
 The publish wrapper validates Cortex/Core commits, the pinned Bun/Node/Rust toolchain, and
 the shell/engine/package API contracts before electron-builder starts. It embeds the exact
 BOM at `resources/release-bom.json` and emits `release/release-provenance.json` with the
@@ -63,8 +86,8 @@ on a hash or size mismatch; omitted entries are recorded from the final build.
 typechecks, Rustfmt, workspace Clippy with warnings denied, complete workspace
 Rust tests, backend tests, and runtime staging. `bun install --frozen-lockfile`
 installs Lefthook hooks on a clean checkout; run `bun run prepare` if hooks are
-missing. Pre-commit uses `glob_matcher: doublestar` to limit frontend typechecks
-to the changed Desktop, Host, or Manager tree; pre-push intentionally runs the
+missing. Pre-commit uses the planner against staged files; pre-push uses the
+Git-provided ref range when stdin is available and otherwise falls back to the
 full backend and runtime suite.
 
 The Rust gate runs every workspace library and integration test plus Cortex
