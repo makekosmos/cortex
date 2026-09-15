@@ -1,4 +1,4 @@
-import { describe, expect, test } from "../../test-support/node-test.mjs";
+import { after, describe, expect, test } from "../../test-support/node-test.mjs";
 import { useManagerClient } from "./useManagerClient";
 import type { EngineHealth, EngineInfo, ManagerApi, ManagerResult } from "../manager-api";
 
@@ -37,9 +37,17 @@ function fakeApi(handlers: {
 }
 
 describe("ManagerClient engine connectivity", () => {
+  const clients: { dispose(): void }[] = [];
+  function makeClient(options: Parameters<typeof useManagerClient>[0]) {
+    const client = useManagerClient(options);
+    clients.push(client);
+    return client;
+  }
+  after(() => clients.forEach((client) => client.dispose()));
+
   test("cold start keeps the red banner hidden while connecting", async () => {
     let healthy = false;
-    const client = useManagerClient({
+    const client = makeClient({
       api: fakeApi({ healthy: () => healthy }),
       graceMs: 40,
       probeMs: 10,
@@ -56,7 +64,7 @@ describe("ManagerClient engine connectivity", () => {
   });
 
   test("sustained outage still surfaces the banner after the grace window", async () => {
-    const client = useManagerClient({
+    const client = makeClient({
       api: fakeApi({ healthy: () => false }),
       graceMs: 40,
       probeMs: 10,
@@ -68,8 +76,8 @@ describe("ManagerClient engine connectivity", () => {
     expect(client.banner.value).toBe("Engine недоступен.");
   });
 
-  test("non-connectivity errors surface immediately", async () => {
-    const client = useManagerClient({
+  test("engine-answered errors stay on error, never on the banner", async () => {
+    const client = makeClient({
       api: fakeApi({
         healthy: () => true,
         info: () => ({ ok: false, code: "engine", message: "Операция не удалась" }),
@@ -80,13 +88,14 @@ describe("ManagerClient engine connectivity", () => {
     await client.call("getHealth", undefined, "health");
     expect(client.engine.value).toBe("ready");
     await client.call("getInfo", undefined, "info");
-    expect(client.banner.value).toBe("Операция не удалась");
+    expect(client.error.value).toBe("Операция не удалась");
+    expect(client.banner.value).toBe(null);
     expect(client.engine.value).toBe("ready");
   });
 
   test("a transient blip inside the grace window never flashes the banner", async () => {
     let healthy = true;
-    const client = useManagerClient({
+    const client = makeClient({
       api: fakeApi({ healthy: () => healthy }),
       graceMs: 50,
       probeMs: 10,

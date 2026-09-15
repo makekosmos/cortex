@@ -28,6 +28,7 @@ export interface ManagerClient {
   engine: Ref<EngineState>;
   banner: ComputedRef<string | null>;
   call<T>(method: ManagerMethod, payload?: JsonValue, key?: string): Promise<T | null>;
+  dispose(): void;
 }
 
 const ENGINE_GRACE_MS = 5_000;
@@ -55,11 +56,20 @@ export function useManagerClient(options: ManagerClientOptions = {}): ManagerCli
     rawError.value = message;
     errorIsConnectivity.value = connectivity;
   }
+  // Last connectivity failure — the only text the root banner may show.
+  const outageError = ref<string | null>(null);
   const requests = new Map<string, number>();
   let disposed = false;
   let failTimer: ReturnType<typeof setTimeout> | null = null;
   let probeTimer: ReturnType<typeof setTimeout> | null = null;
   let probing = false;
+
+  function dispose() {
+    disposed = true;
+    requests.clear();
+    if (failTimer !== null) clearTimeout(failTimer);
+    if (probeTimer !== null) clearTimeout(probeTimer);
+  }
 
   function noteSuccess() {
     if (failTimer !== null) {
@@ -70,6 +80,7 @@ export function useManagerClient(options: ManagerClientOptions = {}): ManagerCli
       clearTimeout(probeTimer);
       probeTimer = null;
     }
+    outageError.value = null;
     engine.value = "ready";
   }
 
@@ -113,11 +124,14 @@ export function useManagerClient(options: ManagerClientOptions = {}): ManagerCli
     }
   }
 
-  const banner = computed(() => {
-    if (rawError.value === null) return null;
-    if (!errorIsConnectivity.value) return rawError.value;
-    return engine.value === "failed" ? rawError.value : null;
-  });
+  // The red banner means exactly one thing: no Engine access for the whole
+  // grace window. Ordinary errors (including `engine` answers from a reachable
+  // backend) stay on `error` for view-level display and never flash the banner.
+  const banner = computed(() =>
+    engine.value === "failed"
+      ? (outageError.value ?? "Engine недоступен. Повторите попытку.")
+      : null,
+  );
 
   async function call<T>(
     method: ManagerMethod,
@@ -137,7 +151,13 @@ export function useManagerClient(options: ManagerClientOptions = {}): ManagerCli
       if (!result.ok) {
         const connectivity = CONNECTIVITY_CODES.has(result.code);
         setError(result.message, connectivity);
-        if (connectivity) noteOutage();
+        if (connectivity) {
+          outageError.value = result.message;
+          noteOutage();
+        } else if (result.code === "engine") {
+          // The backend answered — transport is alive; not an outage.
+          noteSuccess();
+        }
         return null;
       }
       setError(null);
@@ -145,7 +165,9 @@ export function useManagerClient(options: ManagerClientOptions = {}): ManagerCli
       return result.data;
     } catch (cause) {
       if (!disposed && requests.get(key) === request) {
-        setError(cause instanceof Error ? cause.message : "Не удалось связаться с движком", true);
+        const message = cause instanceof Error ? cause.message : "Не удалось связаться с движком";
+        setError(message, true);
+        outageError.value = message;
         noteOutage();
       }
       return null;
@@ -154,16 +176,9 @@ export function useManagerClient(options: ManagerClientOptions = {}): ManagerCli
     }
   }
 
-  if (getCurrentInstance()) {
-    onBeforeUnmount(() => {
-      disposed = true;
-      requests.clear();
-      if (failTimer !== null) clearTimeout(failTimer);
-      if (probeTimer !== null) clearTimeout(probeTimer);
-    });
-  }
+  if (getCurrentInstance()) onBeforeUnmount(dispose);
 
-  return { loading, error, engine, banner, call };
+  return { loading, error, engine, banner, call, dispose };
 }
 
 export type { ManagerResult };
