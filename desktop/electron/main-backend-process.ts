@@ -1,8 +1,39 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
 import type { JsonRecord } from "./extension-permissions";
+
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+
+// The backend owns the tray but older installed Engine versions ship no
+// tray.ico next to kepler-backend.exe, so the runtime-side exe-dir lookup has
+// nothing to find. Point it at the icon the GUI package always ships, and seed
+// the icon under %LOCALAPPDATA%\Kosmos — a path the runtime resolver already
+// checks — so standalone Engine starts (autologin, Start-menu Engine link)
+// resolve it without this env. The Engine install dir itself stays untouched:
+// its manifest gates reject unexpected files.
+function resolveTrayIcon(): string | null {
+  const candidates = [
+    path.join(process.resourcesPath ?? moduleDir, "tray.ico"),
+    path.resolve(moduleDir, "../build/tray.ico"),
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}
+
+function seedTrayIcon(icon: string): void {
+  const localAppData = process.env.LOCALAPPDATA;
+  if (!localAppData) return;
+  try {
+    const target = path.join(localAppData, "Kosmos", "tray.ico");
+    if (existsSync(target)) return;
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, readFileSync(icon));
+  } catch {
+    /* best effort: the env var still points the runtime at the icon */
+  }
+}
 
 interface BackendProcessLogger {
   error(scope: string, message: string, data?: JsonRecord): void;
@@ -57,6 +88,11 @@ export function spawnBackendProcess({
     path.basename(process.execPath).toLowerCase() === "kosmos.exe"
   ) {
     backendEnv.KOSMOS_CORTEX_EXECUTABLE ??= process.execPath;
+  }
+  const trayIcon = resolveTrayIcon();
+  if (trayIcon) {
+    backendEnv.KOSMOS_TRAY_ICON ??= trayIcon;
+    seedTrayIcon(trayIcon);
   }
   if (testGroqApiKey) {
     backendEnv.KOSMOS_TEST_GROQ_API_KEY = testGroqApiKey;

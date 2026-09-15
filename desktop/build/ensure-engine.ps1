@@ -8,6 +8,8 @@ $ErrorActionPreference = 'Stop'
 $semver = '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$'
 $engineKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\KosmosEngine'
 $engineFiles = @('kepler-backend.exe', 'ark-core-rpc.exe', 'kepler-focus-helper.exe', 'kepler-focus-svc.exe')
+# Files newer Engine payloads may add; older installed manifests stay valid.
+$engineOptionalFiles = @('tray.ico')
 
 function Get-FileSha256([string]$Path) {
   $sha = [Security.Cryptography.SHA256]::Create()
@@ -46,8 +48,10 @@ function Assert-Manifest([object]$Value, [bool]$RequireInstaller = $true) {
   }
   $actualNames = @($Value.files | ForEach-Object { $_.name } | Sort-Object)
   $requiredNames = @($engineFiles | Sort-Object)
-  if ($actualNames.Count -ne $requiredNames.Count -or
-      ($actualNames -join ',') -cne ($requiredNames -join ',')) {
+  $allowedNames = @($engineFiles + $engineOptionalFiles | Sort-Object)
+  $missingNames = @($requiredNames | Where-Object { $actualNames -cnotcontains $_ })
+  $unexpectedNames = @($actualNames | Where-Object { $allowedNames -cnotcontains $_ })
+  if ($missingNames.Count -gt 0 -or $unexpectedNames.Count -gt 0) {
     throw 'engine manifest files are incomplete'
   }
 }

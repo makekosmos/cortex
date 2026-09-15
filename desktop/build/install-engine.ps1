@@ -55,6 +55,9 @@ if ($Uninstall) {
     $candidate = Join-Path $versionRoot $name
     if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { throw "Engine file missing: $name" }
   }
+  # Newer payloads add files the strict check above predates; drop them so the
+  # version directory empties cleanly.
+  $optionalFiles = @('tray.ico')
   $currentFile = Join-Path $root 'current.json'
   $currentVersion = $null
   if (Test-Path -LiteralPath $currentFile) {
@@ -62,6 +65,7 @@ if ($Uninstall) {
   }
   $wasRunning = Stop-EngineForReplacement (Join-Path $versionRoot 'kepler-backend.exe')
   foreach ($name in $knownFiles) { Remove-Item -Force -LiteralPath (Join-Path $versionRoot $name) -ErrorAction Stop }
+  foreach ($name in $optionalFiles) { Remove-Item -Force -LiteralPath (Join-Path $versionRoot $name) -ErrorAction SilentlyContinue }
   Remove-Item -LiteralPath $versionRoot -Force -ErrorAction Stop
   if ($currentVersion -eq $Version) { Remove-Item -Force -LiteralPath $currentFile -ErrorAction Stop; exit 0 }
   exit 2
