@@ -67,7 +67,6 @@ import { normalizeDbBackups, resolveSafeDbBackupsFolder } from "./database-backu
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import {
-  AUTOSTART_ARGS,
   bounded,
   isObject,
   normalizeIntegrationSnapshot,
@@ -78,6 +77,7 @@ import {
   validIntegrationInput,
   validation,
 } from "./main-helpers";
+import { engineAutostartExe, isAutostartEnabled, setAutostartEnabled } from "./main-autostart";
 import { developmentPackage, developmentPackages } from "./dev-packages";
 let dictationSubscriber: WebContents | null = null;
 let stopDictationEvents: (() => void) | null = null;
@@ -890,17 +890,6 @@ function registerAll() {
     }
   });
   const appExecutable = process.env.KOSMOS_APP_EXECUTABLE?.trim();
-  const loginItemOptions = { path: appExecutable ?? "", args: AUTOSTART_ARGS };
-  const legacyLoginItemOptions = {
-    path: appExecutable ? path.join(path.dirname(appExecutable), "Kosmos.exe") : "",
-    args: AUTOSTART_ARGS,
-  };
-  const engineLoginItemOptions = {
-    path: appExecutable
-      ? path.join(path.dirname(appExecutable), "resources", "Kosmos Runtime.exe")
-      : "",
-    args: ["--start"],
-  };
   const autostartAvailable = () =>
     app.isPackaged &&
     process.platform === "win32" &&
@@ -908,13 +897,14 @@ function registerAll() {
     resolveInstance().autorunEnabled;
   ipcMain.handle("manager.getAutostart", () => {
     if (!autostartAvailable()) return { ok: true, data: { enabled: false, available: false } };
-    const settings = app.getLoginItemSettings(loginItemOptions);
-    const legacy = app.getLoginItemSettings(legacyLoginItemOptions);
-    const engine = app.getLoginItemSettings(engineLoginItemOptions);
     return {
       ok: true,
       data: {
-        enabled: settings.openAtLogin || legacy.openAtLogin || engine.openAtLogin,
+        enabled: isAutostartEnabled(
+          app,
+          appExecutable ?? "",
+          engineAutostartExe(appExecutable ?? ""),
+        ),
         available: true,
       },
     };
@@ -927,25 +917,15 @@ function registerAll() {
         message: "Недопустимое значение автозапуска.",
       };
     if (!autostartAvailable()) return { ok: true, data: { enabled: false, available: false } };
-    app.setLoginItemSettings({
-      ...loginItemOptions,
-      openAtLogin: value.enabled,
-      name: "Kosmos",
-    });
-    app.setLoginItemSettings({
-      ...legacyLoginItemOptions,
-      openAtLogin: false,
-      name: "Kosmos",
-    });
-    app.setLoginItemSettings({
-      ...engineLoginItemOptions,
-      openAtLogin: false,
-      name: "Kosmos Engine",
-    });
-    const settings = app.getLoginItemSettings(loginItemOptions);
+    const applied = setAutostartEnabled(
+      app,
+      appExecutable ?? "",
+      engineAutostartExe(appExecutable ?? ""),
+      value.enabled,
+    );
     return {
       ok: true,
-      data: { enabled: settings.openAtLogin, available: true },
+      data: { enabled: applied, available: true },
     };
   });
   ipcMain.handle("manager.getEngineSettings", async () => {

@@ -37,20 +37,21 @@ describe("standalone Manager boundary", () => {
     const root = source("../src/ManagerRoot.vue");
     const settings = source("../src/views/SettingsView.vue");
     const main = source("main.ts");
+    const autostart = source("main-autostart.ts");
     const navigation = source("../../desktop/electron/manager-navigation.ts");
     expect(root).toContain("<KeepAlive>");
     expect(root).not.toContain("Центр управления");
     expect(root).not.toContain(">Обновить</Button>");
     expect(root).toContain("scrollPositions");
     expect(settings).toContain("Запускать Kosmos при входе в систему");
-    expect(main).toContain("app.setLoginItemSettings");
+    expect(autostart).toContain("setLoginItemSettings");
     expect(main).toContain("KOSMOS_APP_EXECUTABLE");
-    expect(main).toContain("args: AUTOSTART_ARGS");
-    expect(main).toContain('name: "Kosmos"');
-    expect(main).toContain('name: "Kosmos Engine"');
+    expect(autostart).toContain("args: AUTOSTART_ARGS");
+    expect(autostart).toContain('AUTOSTART_NAME = "Kosmos"');
+    expect(autostart).toContain('ENGINE_AUTOSTART_NAME = "Kosmos Engine"');
     expect(main).toContain("resolveInstance().autorunEnabled");
     expect(main.indexOf("resolveInstance().autorunEnabled")).toBeLessThan(
-      main.indexOf("app.setLoginItemSettings"),
+      main.indexOf("setAutostartEnabled("),
     );
     expect(navigation).toContain("KOSMOS_APP_EXECUTABLE: process.execPath");
   });
