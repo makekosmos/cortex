@@ -14,6 +14,8 @@ import {
   SettingsSidebar,
   SettingsSidebarButton,
   TitlebarButton,
+  ToastHost,
+  provideToastHost,
 } from "@kosmos/visuals";
 import {
   PhArrowsClockwise,
@@ -56,6 +58,8 @@ type ViewId =
   | "browser";
 const client = useManagerClient();
 const { error } = client;
+// Toast host для update-прогресса и прочих уведомлений — descendants зовут useToast().
+provideToastHost();
 const view = ref<ViewId>("data");
 const surface = useTemplateRef<ComponentPublicInstance>("surface");
 const activeView = useTemplateRef<{ backToCatalog?: () => void }>("activeView");
@@ -157,6 +161,7 @@ onMounted(() => {
 </script>
 
 <template>
+  <ToastHost />
   <DesktopChrome appearance="settings" platform="windows">
     <template #titlebar-leading>
       <span class="kosmos-titlebar-brand">Kosmos</span>
