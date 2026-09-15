@@ -11,7 +11,7 @@
     "allowImportingTsExtensions": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "paths": { "@/*": ["./src/*"], "@kosmos/ark": ["../../arca-sdk/src/index.ts"] }
+    "paths": { "@/*": ["./src/*"], "@kosmos/ark": ["../.tmp/workspace/arca-sdk/src/index.ts"] }
   },
   "include": ["src", "electron"],
   "exclude": ["**/*.test.ts"]

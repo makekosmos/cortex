@@ -12,6 +12,22 @@ const context = {
   releaseVersion: "0.9.15",
   coreCommit: "b".repeat(40),
   arkCoreCommit: "b".repeat(40),
+  workspace: {
+    imago: {
+      repository: "makekosmos/imago",
+      commit: "d".repeat(40),
+      package: {
+        name: "@makekosmos/visuals",
+        version: "0.1.3",
+        integrity: `git:${"d".repeat(40)}`,
+      },
+    },
+    "arca-sdk": {
+      repository: "makekosmos/arca-sdk",
+      commit: "c".repeat(40),
+      package: { name: "@makekosmos/ark", version: "0.1.1", integrity: `git:${"c".repeat(40)}` },
+    },
+  },
   toolchain: { bun: "1.3.14", node: "24.15.0", rust: "1.95.0" },
   api: { shell: "1.1.0", engine: "1.0.0", package_manifest: 2 },
 };
@@ -100,6 +116,12 @@ test("rejects mutable package URLs and a mismatched ARK sidecar pin", () => {
     () => validateReleaseBom(bom(), { ...context, arkCoreCommit: "a".repeat(40) }),
     /ARK sidecar pin/,
   );
+});
+
+test("rejects first-party source metadata outside package.json pins", () => {
+  const value = bom();
+  value.source.imago.package.version = "0.1.4";
+  assert.throws(() => validateReleaseBom(value, context), /package\.json workspace pin/);
 });
 
 for (const [name, edit, message] of [

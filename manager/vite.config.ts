@@ -4,8 +4,10 @@ import tailwindcss from "@tailwindcss/vite";
 import electron from "vite-plugin-electron/simple";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveWorkspacePaths } from "../scripts/workspace.mjs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
+const workspacePaths = resolveWorkspacePaths(path.resolve(root, ".."), process.env);
 const externalElectron = process.env.KOSMOS_MANAGER_EXTERNAL_ELECTRON === "1";
 
 export default defineConfig({
@@ -28,13 +30,13 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@kosmos/ark": path.resolve(root, "../../arca-sdk/src/index.ts"),
+      "@kosmos/ark": path.join(workspacePaths["arca-sdk"], "src/index.ts"),
       "@kosmos/visuals/theme/css": path.resolve(
         root,
-        "../../imago/theme/css-variables.css",
+        path.join(workspacePaths.imago, "theme/css-variables.css"),
       ),
-      "@kosmos/visuals/css": path.resolve(root, "../../imago/dist/index.css"),
-      "@kosmos/visuals": path.resolve(root, "../../imago/index.ts"),
+      "@kosmos/visuals/css": path.join(workspacePaths.imago, "dist/index.css"),
+      "@kosmos/visuals": path.join(workspacePaths.imago, "index.ts"),
     },
     dedupe: ["vue"],
   },
