@@ -219,7 +219,10 @@ function buildCachedSidecar(root, { debug, features, cargoCommand, cargoArgsPref
     if (features.length > 0) args.push("--features", features.join(","));
     const result = spawnSync(cargoCommand, args, {
       cwd: shellRoot,
-      env: { ...process.env, CARGO_TARGET_DIR: path.join(staging, "target") },
+      env: {
+        ...process.env,
+        CARGO_TARGET_DIR: process.env.KOSMOS_ARK_TARGET_DIR ?? path.join(staging, "target"),
+      },
       stdio: "inherit",
       windowsHide: true,
     });
