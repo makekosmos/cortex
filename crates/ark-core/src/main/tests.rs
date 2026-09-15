@@ -23,6 +23,9 @@ mod tests {
     mod object_write_snapshot;
     #[path = "object_revision_compat.rs"]
     mod object_revision_compat;
+    /// KOS-51: atomic ARK snapshot restore RPC (list/validate/restore).
+    #[path = "snapshot_restore.rs"]
+    mod snapshot_restore;
 
     /// Regression for the legacy Todo/Project/Tag write handlers: local writes
     /// must record an HLC in the version vector and deletes must write a tombstone.

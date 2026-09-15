@@ -1,4 +1,5 @@
 include!("db/open.rs");
+include!("db/snapshot.rs");
 include!("db/legacy.rs");
 include!("db/objects.rs");
 include!("db/usage.rs");
@@ -22,6 +23,7 @@ mod tests {
     use serde_json::json;
 
     include!("db/tests_core.rs");
+    include!("db/tests_snapshot.rs");
     include!("db/tests_sync.rs");
     include!("db/tests_integration_replication.rs");
     include!("db/tests_integration_replication_issuer_lookup.rs");

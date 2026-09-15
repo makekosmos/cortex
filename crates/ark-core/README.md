@@ -35,6 +35,16 @@ When `relay_url` is provided, `ark-core-rpc` starts a relay bridge beside LAN sy
 
 `start_sync` accepts an optional `auth_secret`. When configured, LAN/P2P peers must prove they know the same secret by sending `auth_nonce` + `auth_hmac` in the `hello` message. This authenticates peers; it does not encrypt WebSocket traffic.
 
+## Snapshot Restore (KOS-51)
+
+Privileged ops over the Core-owned `<db_dir>/backups/` directory:
+
+- `db_backup_list` → `{ "backups": [{ "id", "size_bytes", "modified_ms" }] }` — regular files only.
+- `db_backup_validate` `{ "backup_id": "<basename>" }` → `{ "id", "exists", "integrity_ok", "schema_match", "valid", "error?" }` — dry-run; never mutates live DB.
+- `db_backup_restore` `{ "backup_id": "<basename>" }` → `{ "id", "restored": true, "objects", "links" }` — atomic in-place restore via SQLite Online Backup API into the live connection.
+
+`backup_id` is a basename only — no paths/traversal. Sources are opened without following symlinks/reparse points, staged into `backups/`, checked with `PRAGMA integrity_check` and a normalized `sqlite_schema` + migration-provenance fingerprint against the live DB before apply. A pre-restore rollback snapshot is kept until post-restore verification passes; verification failure restores the rollback. `db_backup` and `db_backup_restore` are serialized by a shared gate — they never overlap. Callers should reload UI after a successful `db_backup_restore`.
+
 ## TypeScript Integration
 
 Use `@kosmos/ark` from Electron main or another trusted Node process:

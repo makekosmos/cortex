@@ -48,11 +48,7 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
         }),
 
         Request::DbBackup { dest_path } => {
-            let src_path = DB_PATH
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone()
-                .ok_or_else(|| "Database not initialized. Call Init first.".to_string())?;
+            let src_path = current_db_path()?;
             let pages = backup_pages_per_step();
             let pause = std::time::Duration::from_millis(backup_pause_ms());
             let dest_for_thread = dest_path.clone();
@@ -61,10 +57,13 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             // mutex) — серийный RPC-loop сразу свободен для других запросов.
             // Завершение сообщается событием `db_backup_result`; kepler-backend
             // ждёт его, чтобы записать last_backup_ts + ротацию.
+            // KOS-51: BACKUP_GATE удерживается на всё копирование —
+            // `db_backup_restore` не может начаться посреди backup'а.
             std::thread::Builder::new()
                 .name("ark-db-backup".to_string())
                 .spawn(move || {
                     let _bg = background_priority::BackgroundThreadGuard::enter();
+                    let _gate = BACKUP_GATE.lock().unwrap_or_else(|e| e.into_inner());
                     let result =
                         db::backup_to_file_chunked(&src_path, &dest_for_thread, pages, pause);
                     let event = match &result {
@@ -84,6 +83,36 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
                 })
                 .map_err(|e| format!("spawn db_backup thread failed: {e}"))?;
             Ok(json!({ "started": true, "dest": dest_path }))
+        }
+
+        // KOS-51: list/validate — read-only над backups dir + live conn,
+        // BACKUP_GATE не нужен (не мутируют ничего).
+        Request::DbBackupList => {
+            let db_path = current_db_path()?;
+            let backups = db::list_snapshots(&db_path)?;
+            Ok(json!({ "backups": backups }))
+        }
+
+        Request::DbBackupValidate { backup_id } => {
+            let db_path = current_db_path()?;
+            with_conn(|conn| {
+                let validation = db::validate_snapshot(conn, &db_path, &backup_id)?;
+                serde_json::to_value(validation).map_err(|e| e.to_string())
+            })
+        }
+
+        // KOS-51: атомарный restore. Порядок захвата: BACKUP_GATE → DB mutex
+        // (with_conn_mut). Restore держит оба на всю операцию — ни backup, ни
+        // обычные ARK ops не выполняются параллельно, момента с отсутствующей
+        // или частично заменённой primary DB нет (Online Backup API пишет
+        // destination транзакционно).
+        Request::DbBackupRestore { backup_id } => {
+            let db_path = current_db_path()?;
+            let _gate = BACKUP_GATE.lock().unwrap_or_else(|e| e.into_inner());
+            with_conn_mut(|conn| {
+                let report = db::restore_snapshot(conn, &db_path, &backup_id)?;
+                serde_json::to_value(report).map_err(|e| e.to_string())
+            })
         }
 
         Request::StartSync {

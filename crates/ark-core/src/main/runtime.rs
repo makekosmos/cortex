@@ -155,6 +155,41 @@ fn get_shared_conn() -> Result<Arc<StdMutex<rusqlite::Connection>>, String> {
         .ok_or_else(|| "Database not initialized. Call Init first.".to_string())
 }
 
+/// `&mut` вариант `with_conn` — для операций, меняющих саму базу под
+/// `Connection` (например `conn.restore` в `db_backup_restore`, KOS-51).
+/// Глобальный DB mutex удерживается на всё замыкание: никакой другой ARK op
+/// не выполняется параллельно.
+fn with_conn_mut<T, F>(f: F) -> Result<T, String>
+where
+    F: FnOnce(&mut rusqlite::Connection) -> Result<T, String>,
+{
+    let outer = DB.lock().unwrap_or_else(|e| e.into_inner());
+    let shared = outer
+        .as_ref()
+        .ok_or_else(|| "Database not initialized. Call Init first.".to_string())?
+        .clone();
+    drop(outer);
+    let mut inner = shared.lock().unwrap_or_else(|e| e.into_inner());
+    f(&mut inner)
+}
+
+/// KOS-51: сериализует background `db_backup` копирование и
+/// `db_backup_restore` — backup и restore никогда не пересекаются.
+/// Порядок захвата всегда `BACKUP_GATE` → DB mutex (deadlock-safe: backup
+/// thread работает на отдельном read-коннекшне и DB mutex не берёт).
+static BACKUP_GATE: StdMutex<()> = StdMutex::new(());
+
+/// Путь к live ARK DB (из Init). Общий accessor для `db_backup`,
+/// `db_backup_list/validate/restore` — restore резолвит `<dir>/backups/`
+/// от этого пути.
+fn current_db_path() -> Result<String, String> {
+    DB_PATH
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+        .ok_or_else(|| "Database not initialized. Call Init first.".to_string())
+}
+
 // --- DB backup: background-priority thread + chunking config ---------------
 
 /// Страниц за один шаг online-backup. Меньше шаг → мягче для диска. Override
@@ -437,6 +472,9 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         | Request::ClearAll
         | Request::DeleteTrashed
         | Request::DbBackup { .. }
+        | Request::DbBackupList
+        | Request::DbBackupValidate { .. }
+        | Request::DbBackupRestore { .. }
         | Request::StartSync { .. }
         | Request::StopSync
         | Request::BroadcastChange { .. }
