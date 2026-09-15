@@ -10,12 +10,12 @@ const workspacePaths = resolveWorkspacePaths(
 );
 
 describe("Manager surface contract", () => {
-  test("keeps diagnostics visible while standalone apps stay out of the dashboard", () => {
+  test("keeps diagnostics out of the dashboard and standalone apps too", () => {
     const root = readFileSync(new URL("./ManagerRoot.vue", import.meta.url), "utf8");
-    expect(root).toContain('label: "Диагностика"');
+    expect(root).not.toContain('label: "Диагностика"');
+    expect(root).not.toContain("DiagnosticsView");
     expect(root).not.toContain('"com.kosmos.dictation"');
     expect(root).not.toContain('"com.kosmos.focus"');
-    expect(root).toContain("DiagnosticsView");
     expect(root).not.toContain("DictationSettingsView");
     expect(root).not.toContain("FocusView");
   });

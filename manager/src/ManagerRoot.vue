@@ -21,7 +21,6 @@ import {
   PhDatabase,
   PhEngine,
   PhGear,
-  PhGauge,
   PhInfo,
   PhKey,
   PhPackage,
@@ -33,7 +32,6 @@ import { useManagerClient } from "./composables/useManagerClient";
 import DataView from "./views/DataView.vue";
 import SyncView from "./views/SyncView.vue";
 import StoreView from "./views/StoreView.vue";
-import DiagnosticsView from "./views/DiagnosticsView.vue";
 import EngineSettingsView from "./views/EngineSettingsView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import ConnectionsView from "./views/ConnectionsView.vue";
@@ -45,7 +43,6 @@ import BrowserSettingsView from "./views/BrowserSettingsView.vue";
 type ViewId =
   | "data"
   | "sync"
-  | "diagnostics"
   | "packages"
   | "engine"
   | "settings"
@@ -67,11 +64,6 @@ const views = {
     label: "Синхронизация",
     hint: "Устройства и связи",
     component: SyncView,
-  },
-  diagnostics: {
-    label: "Диагностика",
-    hint: "Состояние системы",
-    component: DiagnosticsView,
   },
   packages: {
     label: "Маркетплейс",
@@ -118,7 +110,6 @@ const icons = {
   data: PhDatabase,
   sync: PhArrowsClockwise,
   packages: PhStorefront,
-  diagnostics: PhGauge,
   engine: PhEngine,
   settings: PhGear,
   connections: PhPlugsConnected,
@@ -130,7 +121,6 @@ const icons = {
 const primaryViewIds: Exclude<ViewId, "about" | "packages" | "updates" | "settings">[] = [
   "data",
   "sync",
-  "diagnostics",
   "engine",
   "connections",
   "secrets",
