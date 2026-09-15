@@ -94,7 +94,8 @@ describe("Manager surface contract", () => {
     );
     expect(root).toContain('label: "Обновления"');
     expect(root).toContain("UpdatesView");
-    expect(updates).not.toContain("Проверить обновления");
+    expect(updates).toContain("Проверить обновления");
+    expect(updates).toContain("claimUpdatesSessionCheck");
     expect(updates).not.toContain("Обновить всё");
     expect(updates).not.toContain("Проверка Desktop и приложений через их штатные каналы.");
     expect(updates).toContain("<SettingsList>");
