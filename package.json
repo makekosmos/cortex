@@ -30,7 +30,8 @@
     "test:backend": "node runtime/scripts/test-lib.mjs",
     "test:desktop-contracts": "node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs desktop/electron/instance.test.ts desktop/electron/focus-enforcement.test.ts desktop/build/installer-shortcut.test.mjs",
     "test:first-party-contracts": "pnpm --dir host run build && pnpm --dir host run e2e first-party-agenda-contract.spec.ts first-party-arcadia-contract.spec.ts first-party-dictation-contract.spec.ts first-party-memoria-contract.spec.ts first-party-memoria-import-crash.spec.ts first-party-ordo-contract.spec.ts --workers=1",
-    "test:package-manager": "node --test scripts/package-manager-migration.test.mjs"
+    "test:package-manager": "node --test scripts/package-manager-migration.test.mjs scripts/spawn-shell-contract.test.mjs manager/scripts/dev.test.mjs",
+    "test:desktop-tooling": "node --test manager/scripts/dev-electron.test.mjs desktop/scripts/build-package-components.e2e.test.mjs"
   },
   "devDependencies": {
     "@oxlint/plugins": "1.80.0",
