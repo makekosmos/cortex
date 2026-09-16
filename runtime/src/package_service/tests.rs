@@ -235,6 +235,31 @@ pub(crate) mod tests {
         assert_eq!(installed.version, "2.0.0");
     }
 
+    #[tokio::test]
+    async fn development_app_can_be_disabled_and_re_enabled_without_catalog() {
+        let dir = tempdir().expect("temp dir");
+        let manifest = VersionedManifest::V2(manifest_v2_with_canonical_access());
+        let (archive, _, _) = archive_with_versioned_manifest(dir.path(), &manifest);
+        let (trust_store, _, _) = trust();
+        let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
+
+        service
+            .install_development_app_from_path("com.kosmos.demo", "2.0.0", &archive)
+            .expect("development install");
+
+        let disabled = service
+            .set_enabled("com.kosmos.demo", "2.0.0", false)
+            .await
+            .expect("disable");
+        assert!(!disabled.enabled);
+
+        let enabled = service
+            .set_enabled("com.kosmos.demo", "2.0.0", true)
+            .await
+            .expect("re-enable");
+        assert!(enabled.enabled);
+    }
+
     fn archive_with_versioned_manifest_and_documents(
         root: &Path,
         package_manifest: &VersionedManifest,

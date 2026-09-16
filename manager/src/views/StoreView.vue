@@ -61,7 +61,7 @@ const rowsBase = computed(() => {
     kind: "kosmos-package" as const,
     name: item.name,
     publisher: item.publisher,
-    icon_url: item.icon_url,
+    icon_url: item.icon_url ?? undefined,
     distribution: { package_id: item.id, version: item.version },
   }));
   return [...local, ...apps.filter((item) => !development.value.some((dev) => dev.id === item.id))];

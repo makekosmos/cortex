@@ -95,6 +95,7 @@ function normalizePackageItem(value: Input, catalog: boolean): PackageItem | nul
     worker_state: text(value.worker_state, 64, catalog ? "catalog" : "stopped"),
     worker_health: text(value.worker_health, 64, text(value.worker_state, 64, "unknown")),
     update_version: validPackageVersion(value.update_version) ? value.update_version : null,
+    catalog_sequence: number(value.catalog_sequence, 0, Number.MAX_SAFE_INTEGER),
     catalog,
   };
 }

@@ -86,6 +86,7 @@ export type PackageItem = {
   worker_health?: string;
   update_version?: string | null;
   archive_size?: number;
+  catalog_sequence?: number;
   catalog?: boolean;
 };
 export type PackageSnapshot = {
@@ -150,7 +151,13 @@ export type DevelopmentPackage = {
   name: string;
   version: string;
   publisher: string;
-  icon_url: string;
+  icon_url: string | null;
+  source_path?: string;
+};
+export type DevEnvironment = {
+  enabled: boolean;
+  data_dir: string | null;
+  run_id: string | null;
 };
 export type DisclosureDataRule = {
   type: string;
@@ -447,6 +454,13 @@ export interface ManagerApi {
   }): Promise<ManagerResult<PackageDisclosure>>;
   openPackage(input: { package_id: string }): Promise<ManagerResult<{ opened: boolean }>>;
   getDevelopmentPackages(): Promise<ManagerResult<DevelopmentPackage[]>>;
+  getDevEnvironment(): Promise<ManagerResult<DevEnvironment>>;
+  installDevelopmentPackage(input: {
+    package_id: string;
+  }): Promise<ManagerResult<{ installed: boolean; package_id: string; version: string }>>;
+  installDevelopmentPath(input: {
+    path: string;
+  }): Promise<ManagerResult<{ installed: boolean; package_id: string; version: string }>>;
   openDevelopmentPackage(input: {
     package_id: string;
   }): Promise<ManagerResult<{ opened: boolean }>>;

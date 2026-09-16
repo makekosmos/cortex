@@ -53,7 +53,9 @@ function openHostedPackage(id: string, development?: DevPackage) {
 }
 
 function hostArgs(id: string, development?: DevPackage): string[] {
-  return development ? [`--open-app=${id}`, `--dev-url=${development.url}`] : [`--open-app=${id}`];
+  return development?.url
+    ? [`--open-app=${id}`, `--dev-url=${development.url}`]
+    : [`--open-app=${id}`];
 }
 
 function startPackagedRuntime(): boolean {
