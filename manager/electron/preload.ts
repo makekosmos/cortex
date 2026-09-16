@@ -104,5 +104,7 @@ const api: ManagerApi = {
   getDbBackups: () => invoke("manager.getDbBackups"),
   createDbBackup: () => invoke("manager.createDbBackup"),
   openDbBackupsFolder: () => invoke("manager.openDbBackupsFolder"),
+  validateDbBackup: (v) => invoke("manager.validateDbBackup", v),
+  restoreDbBackup: (v) => invoke("manager.restoreDbBackup", v),
 };
 contextBridge.exposeInMainWorld("kosmosManager", api);

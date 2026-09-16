@@ -63,7 +63,13 @@ import {
 import { clearIntegrationBrowserData, registerIntegrationLoginHandlers } from "./integration-login";
 import { readBrowserDataPersistence, writeBrowserDataPersistence } from "./browser-settings";
 import { resolveInstance } from "../../desktop/electron/instance";
-import { normalizeDbBackups, resolveSafeDbBackupsFolder } from "./database-backups";
+import {
+  normalizeDbBackupRestore,
+  normalizeDbBackupValidation,
+  normalizeDbBackups,
+  resolveSafeDbBackupsFolder,
+  validDbBackupId,
+} from "./database-backups";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import {
@@ -888,6 +894,24 @@ function registerAll() {
     } catch {
       return { ok: false, code: "engine", message: "Не удалось открыть папку бэкапов." };
     }
+  });
+  const dbBackupId = (value: Input): string | null =>
+    isObject(value) && validDbBackupId(value.backup_id) ? value.backup_id : null;
+  ipcMain.handle("manager.validateDbBackup", async (_event, value) => {
+    const id = dbBackupId(value);
+    if (!id) return { ok: false, code: "validation", message: "Недопустимое имя снимка базы." };
+    const result = await rpc(op.validateDbBackup, { backup_id: id });
+    return result.ok ? { ok: true, data: normalizeDbBackupValidation(result.data) } : result;
+  });
+  ipcMain.handle("manager.restoreDbBackup", async (_event, value) => {
+    const id = dbBackupId(value);
+    if (!id) return { ok: false, code: "validation", message: "Недопустимое имя снимка базы." };
+    const result = await rpc(op.restoreDbBackup, { backup_id: id });
+    if (!result.ok) return result;
+    const restored = normalizeDbBackupRestore(result.data);
+    return restored
+      ? { ok: true, data: restored }
+      : { ok: false, code: "engine", message: "Engine вернул некорректный ответ restore." };
   });
   const appExecutable = process.env.KOSMOS_APP_EXECUTABLE?.trim();
   const autostartAvailable = () =>

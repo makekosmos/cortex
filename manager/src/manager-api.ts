@@ -329,9 +329,22 @@ export type FocusServiceAction = { ok: boolean; error?: string };
 export type FileIndexNtfsStatus = "active" | "fallback" | "unavailable" | "disabled" | "unknown";
 export type DatabaseBackup = {
   name: string;
-  path: string;
   size: number;
-  modified_at: string;
+  modified_at: string | null;
+};
+export type DbBackupValidation = {
+  id: string;
+  exists: boolean;
+  integrity_ok: boolean;
+  schema_match: boolean;
+  valid: boolean;
+  error: string | null;
+};
+export type DbBackupRestoreResult = {
+  id: string;
+  restored: boolean;
+  objects: number;
+  links: number;
 };
 export type FileIndexScanProgress = {
   phase: string;
@@ -516,6 +529,8 @@ export interface ManagerApi {
   getDbBackups(): Promise<ManagerResult<DatabaseBackup[]>>;
   createDbBackup(): Promise<ManagerResult<{ path: string }>>;
   openDbBackupsFolder(): Promise<ManagerResult<{ opened: boolean }>>;
+  validateDbBackup(input: { backup_id: string }): Promise<ManagerResult<DbBackupValidation>>;
+  restoreDbBackup(input: { backup_id: string }): Promise<ManagerResult<DbBackupRestoreResult>>;
 }
 
 export const managerOperations = {
@@ -585,4 +600,6 @@ export const managerOperations = {
   clearFileIndexCache: "file_index.clear_cache",
   getDbBackups: "manager.db_backups.list",
   createDbBackup: "manager.db_backups.create",
+  validateDbBackup: "manager.db_backups.validate",
+  restoreDbBackup: "manager.db_backups.restore",
 } as const;

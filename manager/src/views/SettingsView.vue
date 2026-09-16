@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { Button, SettingsList, SettingsRow, SettingsToggleRow } from "@kosmos/visuals";
-import type { DatabaseBackup } from "../manager-api";
+import type { DatabaseBackup, DbBackupRestoreResult, DbBackupValidation } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
 
 const props = defineProps<{ client: ManagerClient }>();
@@ -65,6 +65,74 @@ async function setTrayIcon(value: boolean) {
 
 async function downloadLogs() {
   await props.client.call("saveSupportBundle", undefined, "support-bundle");
+}
+
+function formatBytes(size: number): string {
+  if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} МБ`;
+  if (size >= 1024) return `${(size / 1024).toFixed(1)} КБ`;
+  return `${size} Б`;
+}
+
+function validationReason(check: DbBackupValidation): string {
+  if (check.error) return check.error;
+  if (!check.exists) return "файл не найден в папке снимков";
+  if (!check.integrity_ok) return "файл повреждён";
+  if (!check.schema_match) return "несовместимая схема данных";
+  return "неизвестная причина";
+}
+
+async function validateDbBackup(backup: DatabaseBackup): Promise<DbBackupValidation | null> {
+  const check = await props.client.call<DbBackupValidation>(
+    "validateDbBackup",
+    { backup_id: backup.name },
+    `db-backup-validate-${backup.name}`,
+  );
+  return check;
+}
+
+async function checkBackup(backup: DatabaseBackup) {
+  if (backupBusy.value) return;
+  backupBusy.value = true;
+  backupMessage.value = null;
+  try {
+    const check = await validateDbBackup(backup);
+    if (!check) return;
+    backupMessage.value = check.valid
+      ? `Снимок ${backup.name} годен к восстановлению.`
+      : `Снимок ${backup.name} не годен к восстановлению: ${validationReason(check)}`;
+  } finally {
+    backupBusy.value = false;
+  }
+}
+
+async function restoreBackup(backup: DatabaseBackup) {
+  if (backupBusy.value) return;
+  if (
+    !window.confirm(
+      `Восстановить базу данных из снимка ${backup.name}?\n\nТекущие данные будут заменены содержимым снимка. Открытые окна Kosmos перезагрузятся.`,
+    )
+  )
+    return;
+  backupBusy.value = true;
+  backupMessage.value = null;
+  try {
+    const check = await validateDbBackup(backup);
+    if (!check) return;
+    if (!check.valid) {
+      backupMessage.value = `Восстановление отклонено — снимок не годен: ${validationReason(check)}`;
+      return;
+    }
+    const restored = await props.client.call<DbBackupRestoreResult>(
+      "restoreDbBackup",
+      { backup_id: backup.name },
+      "db-backup-restore",
+    );
+    if (!restored) return;
+    backupMessage.value = `Восстановлено: ${restored.objects} объектов, ${restored.links} связей. Manager перезагружается…`;
+    window.setTimeout(() => window.location.reload(), 1500);
+  } finally {
+    backupBusy.value = false;
+  }
 }
 
 async function loadBackups(): Promise<boolean> {
@@ -138,7 +206,8 @@ onMounted(() => {
         Это локальные снимки базы данных ARK, а не синхронизация, Huawei, Store или экспорт.
       </p>
       <p class="muted">
-        Восстановление временно недоступно; безопасный Runtime API отслеживается в KOS-51.
+        Восстановление заменяет текущие данные содержимым снимка; перед ним снимок проверяется, а
+        открытые окна Kosmos перезагружаются.
       </p>
       <div class="toolbar">
         <Button :disabled="backupBusy" @click="createBackup">Сделать бэкап сейчас</Button>
@@ -152,8 +221,17 @@ onMounted(() => {
           v-for="backup in backups"
           :key="backup.name"
           :title="backup.name"
-          :description="`${backup.path} · ${backup.size} Б`"
-        />
+          :description="`${formatBytes(backup.size)} · ${backup.modified_at ?? 'нет даты'}`"
+        >
+          <template #control>
+            <Button size="sm" variant="ghost" :disabled="backupBusy" @click="checkBackup(backup)"
+              >Проверить</Button
+            >
+            <Button size="sm" :disabled="backupBusy" @click="restoreBackup(backup)"
+              >Восстановить</Button
+            >
+          </template>
+        </SettingsRow>
       </SettingsList>
       <p v-else class="muted">Снимков пока нет.</p>
     </div>

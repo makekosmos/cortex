@@ -253,13 +253,11 @@ pub(super) async fn dispatch_standard(
                 )
                 .await
                 .map(LocalResponse::ok),
-            "db_backups.list" => db_backup::list_backups(manager_state.data_dir())
-                .map(|backups| serde_json::json!({ "backups": backups }))
-                .map(LocalResponse::ok),
-            "db_backups.create" => db_backup::run_backup_now(&ark_host, manager_state.data_dir())
-                .await
-                .map(|path| serde_json::json!({ "path": path }))
-                .map(LocalResponse::ok),
+            _ if rest.starts_with("db_backups.") => {
+                db_backup::handle_manager_op(rest, &ark_host, manager_state.data_dir(), &params)
+                    .await
+                    .map(LocalResponse::ok)
+            }
             _ => Err(format!("manager.{rest}: unknown-operation")),
         };
         result.unwrap_or_else(LocalResponse::err)

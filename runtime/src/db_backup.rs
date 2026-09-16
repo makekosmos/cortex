@@ -171,14 +171,6 @@ fn validated_backups_dir(data_dir: &Path, create: bool) -> Result<Option<PathBuf
     Ok(Some(canonical_dir))
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct DbBackupMetadata {
-    pub name: String,
-    pub path: String,
-    pub size: u64,
-    pub modified_at: String,
-}
-
 /// Дождаться события `db_backup_result` для нашего `dest_str` (backup идёт
 /// async в ark-core-rpc). Bounded таймаутом, чтобы не зависнуть навсегда если
 /// ark-core-rpc умер посреди копирования.
@@ -220,39 +212,6 @@ async fn wait_for_backup_result(
 /// Ensure `<data_dir>/backups/` exists and return path.
 fn ensure_backups_dir(data_dir: &Path) -> Result<PathBuf, String> {
     validated_backups_dir(data_dir, true)?.ok_or("backup directory was not created".to_string())
-}
-
-pub fn list_backups(data_dir: &Path) -> Result<Vec<DbBackupMetadata>, String> {
-    let Some(dir) = validated_backups_dir(data_dir, false)? else {
-        return Ok(Vec::new());
-    };
-    let entries = std::fs::read_dir(&dir).map_err(|error| format!("read_dir {dir:?}: {error}"))?;
-    let mut backups = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = match path.file_name().and_then(|value| value.to_str()) {
-            Some(name) if parse_backup_timestamp(name).is_some() => name.to_owned(),
-            _ => continue,
-        };
-        let metadata = match std::fs::symlink_metadata(&path) {
-            Ok(metadata) if metadata.is_file() => metadata,
-            _ => continue,
-        };
-        let modified_at = metadata
-            .modified()
-            .ok()
-            .map(|value| DateTime::<Utc>::from(value).to_rfc3339())
-            .unwrap_or_default();
-        let path = path.to_str().ok_or("backup path is not UTF-8")?.to_owned();
-        backups.push(DbBackupMetadata {
-            name,
-            path,
-            size: metadata.len(),
-            modified_at,
-        });
-    }
-    backups.sort_by(|a, b| b.name.cmp(&a.name));
-    Ok(backups)
 }
 
 /// Удалить все backup'ы кроме последних `retain` (sorted by parsed timestamp
@@ -333,6 +292,96 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
     Ok(dest)
 }
 
+// ---------------------------------------------------------------------------
+// KOS-77: privileged Core snapshot RPCs (KOS-51: db_backup_list /
+// db_backup_validate / db_backup_restore). Manager не трогает файлы сам —
+// `<db_dir>/backups/` принадлежит Core; restore идёт Online Backup API в live
+// conn под BACKUP_GATE, без момента с отсутствующей primary DB.
+// ---------------------------------------------------------------------------
+
+/// `backup_id` — только basename в формате `ark.db.backup-YYYY-MM-DD-HHMMSS`
+/// (ровно то, что создаёт `run_backup_now` и показывает список Manager'а).
+/// Core повторно проверяет границы (basename-only, no-follow, staging),
+/// но этот boundary fail-closed отсекает произвольные строки до RPC.
+fn snapshot_id(params: &serde_json::Value) -> Result<&str, String> {
+    let id = params
+        .get("backup_id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    if parse_backup_timestamp(id).is_some() {
+        Ok(id)
+    } else {
+        Err("backup_id must be an ark.db backup filename".to_string())
+    }
+}
+
+async fn core_snapshot_request(
+    ark: &ArkHost,
+    operation: &str,
+    params: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let response = ark
+        .request(operation, params)
+        .await
+        .map_err(|e| format!("{operation} RPC failed: {e}"))?;
+    if !response.ok {
+        return Err(response
+            .error
+            .unwrap_or_else(|| format!("{operation} failed")));
+    }
+    Ok(response.data)
+}
+
+async fn list_snapshots(ark: &ArkHost) -> Result<serde_json::Value, String> {
+    core_snapshot_request(ark, "db_backup_list", json!({})).await
+}
+
+async fn validate_snapshot(
+    ark: &ArkHost,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let id = snapshot_id(params)?;
+    core_snapshot_request(ark, "db_backup_validate", json!({ "backup_id": id })).await
+}
+
+/// Атомарный restore через Core. После успеха публикует `db_restored` всем
+/// WS клиентам (desktop shell, host apps): их in-memory состояние устарело,
+/// они обязаны перечитать ARK.
+async fn restore_snapshot(
+    ark: &ArkHost,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let id = snapshot_id(params)?;
+    let report =
+        core_snapshot_request(ark, "db_backup_restore", json!({ "backup_id": id })).await?;
+    let mut event = serde_json::Map::new();
+    event.insert("event".to_string(), json!("db_restored"));
+    if let Some(fields) = report.as_object() {
+        event.extend(fields.clone());
+    }
+    ark.emit_event(serde_json::Value::Object(event));
+    Ok(report)
+}
+
+/// `manager.db_backups.*` — единая точка входа из dispatch_standard.
+/// list/validate/restore уходят в Core; create остаётся на scheduler'е выше.
+pub async fn handle_manager_op(
+    op: &str,
+    ark: &ArkHost,
+    data_dir: &Path,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    match op {
+        "db_backups.list" => list_snapshots(ark).await,
+        "db_backups.create" => run_backup_now(ark, data_dir)
+            .await
+            .map(|path| json!({ "path": path })),
+        "db_backups.validate" => validate_snapshot(ark, params).await,
+        "db_backups.restore" => restore_snapshot(ark, params).await,
+        _ => Err(format!("manager.{op}: unknown-operation")),
+    }
+}
+
 /// Проверить когда был последний backup, и если прошло >= interval —
 /// сделать backup. Вызывается на старте backend (не как periodic timer —
 /// backend каждый restart дёргает; для long-running daemon процессов
@@ -394,18 +443,27 @@ mod tests {
     }
 
     #[test]
-    fn lists_only_local_timestamped_backups() {
-        let dir = tempfile::tempdir().unwrap();
-        let backups = dir.path().join(BACKUPS_SUBDIR);
-        std::fs::create_dir_all(&backups).unwrap();
-        let newest = backup_filename(Utc::now());
-        std::fs::write(backups.join(&newest), b"backup").unwrap();
-        std::fs::write(backups.join("notes.txt"), b"ignore").unwrap();
-
-        let listed = list_backups(dir.path()).unwrap();
-        assert_eq!(listed.len(), 1);
-        assert_eq!(listed[0].name, newest);
-        assert_eq!(listed[0].size, 6);
+    fn snapshot_id_accepts_only_backup_basenames() {
+        let params = serde_json::json!({ "backup_id": "ark.db.backup-2026-09-16-153045" });
+        assert_eq!(
+            snapshot_id(&params).unwrap(),
+            "ark.db.backup-2026-09-16-153045"
+        );
+        for bad in [
+            "",
+            "ark.db",
+            "ark.db.backup-2026-09-16",
+            "ark.db.backup-not-a-date",
+            ".restore-rollback-1.db",
+            "../ark.db.backup-2026-09-16-153045",
+            "sub/ark.db.backup-2026-09-16-153045",
+            "ark.db.backup-2026-09-16-153045.db",
+        ] {
+            let params = serde_json::json!({ "backup_id": bad });
+            assert!(snapshot_id(&params).is_err(), "{bad} must be rejected");
+        }
+        assert!(snapshot_id(&serde_json::json!({})).is_err());
+        assert!(snapshot_id(&serde_json::json!({ "backup_id": 42 })).is_err());
     }
 
     #[test]
@@ -450,7 +508,6 @@ mod tests {
             return;
         }
 
-        assert!(list_backups(root.path()).is_err());
         assert!(ensure_backups_dir(root.path()).is_err());
     }
 
