@@ -18,19 +18,22 @@ const available = (port) =>
     server.once("listening", () => server.close(() => resolve(true)));
     server.listen(port, "127.0.0.1");
   });
+const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const run = (cwd, args, inherited = env) => {
-  const result = spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", args, {
+  const result = spawnSync(pnpm, args, {
     cwd,
     env: inherited,
     stdio: "inherit",
+    shell: pnpm.endsWith(".cmd"),
   });
   if (result.status !== 0) process.exit(result.status ?? 1);
 };
 const start = (cwd, args, inherited = env) => {
-  const child = spawn(process.platform === "win32" ? "pnpm.cmd" : "pnpm", args, {
+  const child = spawn(pnpm, args, {
     cwd,
     env: inherited,
     stdio: "inherit",
+    shell: pnpm.endsWith(".cmd"),
   });
   child.on("exit", (code) => process.exit(code ?? 0));
   return child;
@@ -50,10 +53,10 @@ for (const entry of packages) {
   run(cwd, ["run", "package:kspkg"]);
   start(cwd, ["run", "dev"]);
 }
-start(manager, ["x", "vite", "--host", "127.0.0.1", "--port", "5174", "--strictPort"]);
+start(manager, ["exec", "vite", "--host", "127.0.0.1", "--port", "5174", "--strictPort"]);
 setTimeout(
   () =>
-    start(manager, ["x", "electron", "."], {
+    start(manager, ["exec", "electron", "."], {
       ...env,
       VITE_DEV_SERVER_URL: "http://127.0.0.1:5174",
       KOSMOS_HOST_MAIN: path.join(cortex, "host", "dist-electron", "main.js"),
