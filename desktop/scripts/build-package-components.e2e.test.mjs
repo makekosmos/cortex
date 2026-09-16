@@ -40,7 +40,13 @@ const dependenciesReady = ["desktop", "manager", "host"].every((component) =>
 );
 
 const prerequisites =
-  process.platform === "win32" && cleanWorktree && dependenciesReady && git(["rev-parse", "HEAD"]);
+  process.platform === "win32" &&
+  cleanWorktree &&
+  dependenciesReady &&
+  // electron-builder runs pnpm install for production deps; the host package
+  // pulls @makekosmos/* from GitHub Packages, which requires a token.
+  !!process.env.NODE_AUTH_TOKEN &&
+  git(["rev-parse", "HEAD"]);
 
 async function writeTestBom() {
   const currentCommit = git(["rev-parse", "HEAD"]);
@@ -123,7 +129,7 @@ test(
     timeout: 15 * 60_000,
     skip: prerequisites
       ? false
-      : "requires Windows, a clean committed worktree, and installed desktop/manager/host deps",
+      : "requires Windows, a clean committed worktree, installed desktop/manager/host deps, and NODE_AUTH_TOKEN for GitHub Packages",
   },
   async (t) => {
     // build-app-icons.mjs resolves the Ordo icon from a sibling checkout.
