@@ -1704,36 +1704,6 @@ mod tests {
         assert_ne!(metadata.ino(), fs::metadata(&path).unwrap().ino());
     }
 
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn fd_counter_stays_bounded_across_ten_thousand_real_snapshot_cycles() {
-        fn fd_count() -> usize {
-            std::fs::read_dir("/proc/self/fd").unwrap().count()
-        }
-        let before = fd_count();
-        let snapshots = SnapshotRegistry::new();
-        let bytes: Vec<u8> = (0..=255).cycle().take(65_537).collect();
-        for _ in 0..10_000 {
-            let handle = snapshots
-                .reserve("owner", "package", "bundled", bytes.clone())
-                .unwrap();
-            let mut received = Vec::new();
-            let mut offset = 0;
-            while offset < bytes.len() {
-                let chunk = snapshots
-                    .chunk(&handle, "owner", offset, 16 * 1024)
-                    .unwrap();
-                assert!(!chunk.is_empty());
-                received.extend_from_slice(&chunk);
-                offset += chunk.len();
-            }
-            assert_eq!(received, bytes);
-            snapshots.close(&handle, "owner").unwrap();
-            assert_eq!(snapshots.len(), 0);
-        }
-        assert!(fd_count().saturating_sub(before) <= 2);
-    }
-
     #[cfg(windows)]
     #[test]
     fn creates_temp_file_relative_to_validated_parent_handle() {

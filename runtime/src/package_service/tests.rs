@@ -48,7 +48,11 @@ pub(crate) mod tests {
             permissions: vec![],
             targets: vec![crate::package_manifest::ManifestTarget {
                 runtime: crate::package_manifest::TargetRuntime::KosmosHost,
-                os: vec![crate::package_manifest::TargetOs::Windows],
+                os: vec![
+                    crate::package_manifest::TargetOs::Windows,
+                    crate::package_manifest::TargetOs::Macos,
+                    crate::package_manifest::TargetOs::Linux,
+                ],
                 arch: None,
                 entrypoint: None,
             }],
@@ -90,7 +94,11 @@ pub(crate) mod tests {
             permissions: vec![],
             targets: vec![crate::package_manifest::ManifestTarget {
                 runtime: crate::package_manifest::TargetRuntime::KosmosHost,
-                os: vec![crate::package_manifest::TargetOs::Windows],
+                os: vec![
+                    crate::package_manifest::TargetOs::Windows,
+                    crate::package_manifest::TargetOs::Macos,
+                    crate::package_manifest::TargetOs::Linux,
+                ],
                 arch: None,
                 entrypoint: None,
             }],
@@ -1345,7 +1353,11 @@ pub(crate) mod tests {
             ],
             targets: vec![crate::package_manifest::ManifestTarget {
                 runtime: crate::package_manifest::TargetRuntime::Worker,
-                os: vec![crate::package_manifest::TargetOs::Windows],
+                os: vec![
+                    crate::package_manifest::TargetOs::Windows,
+                    crate::package_manifest::TargetOs::Macos,
+                    crate::package_manifest::TargetOs::Linux,
+                ],
                 arch: None,
                 entrypoint: None,
             }],

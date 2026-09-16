@@ -26,6 +26,7 @@ pub fn start(device_id: Option<&str>, capture_id: String) -> Result<(Session, u3
     }
     #[cfg(not(windows))]
     {
+        let _ = capture_id;
         Err("device_unavailable".into())
     }
 }

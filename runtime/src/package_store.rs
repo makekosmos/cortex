@@ -1000,6 +1000,11 @@ mod tests {
         m.kind = PackageKind::Source;
         m.entrypoint = "worker.exe".into();
         m.targets[0].runtime = crate::package_manifest::TargetRuntime::Worker;
+        m.targets[0].os = vec![
+            crate::package_manifest::TargetOs::Windows,
+            crate::package_manifest::TargetOs::Macos,
+            crate::package_manifest::TargetOs::Linux,
+        ];
         m.targets[0].entrypoint = Some("worker.exe".into());
         archive(&p, &m, "worker.exe");
         let bytes = fs::read(&p).unwrap();
@@ -1037,6 +1042,11 @@ mod tests {
             manifest.version = version.into();
             manifest.entrypoint = "worker.exe".into();
             manifest.targets[0].runtime = crate::package_manifest::TargetRuntime::Worker;
+            manifest.targets[0].os = vec![
+                crate::package_manifest::TargetOs::Windows,
+                crate::package_manifest::TargetOs::Macos,
+                crate::package_manifest::TargetOs::Linux,
+            ];
             manifest.targets[0].entrypoint = Some("worker.exe".into());
             let expected = VersionedManifest::V2(manifest);
             let archive_path = d.path().join(format!("{version}.kspkg"));
@@ -1084,6 +1094,11 @@ mod tests {
         m.kind = PackageKind::Source;
         m.entrypoint = "worker.exe".into();
         m.targets[0].runtime = crate::package_manifest::TargetRuntime::Worker;
+        m.targets[0].os = vec![
+            crate::package_manifest::TargetOs::Windows,
+            crate::package_manifest::TargetOs::Macos,
+            crate::package_manifest::TargetOs::Linux,
+        ];
         m.targets[0].entrypoint = Some("worker.exe".into());
         archive(&p, &m, "worker.exe");
         let bytes = fs::read(&p).unwrap();
