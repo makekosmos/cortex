@@ -224,10 +224,11 @@ pub(in crate::ws_server) async fn handle_package_op(
             else {
                 return LocalResponse::err("packages.install_development: invalid-request");
             };
-            package_response(
-                subop,
-                service.install_development_app_from_path(id, version, archive_path),
-            )
+            let result = service.install_development_app_from_path(id, version, archive_path);
+            if let Err(error) = &result {
+                tracing::warn!(%id, %version, error = ?error, "development package install failed");
+            }
+            package_response(subop, result)
         }
         "set_enabled" => {
             let Some(id) = params

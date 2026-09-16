@@ -15,6 +15,11 @@ export default defineConfig({
     fs: {
       allow: [path.resolve(root, "../..")],
     },
+    watch: {
+      // dev-run keeps engine data under .dev/; a recursive watcher would hold
+      // a directory handle on package staging dirs and break install renames.
+      ignored: ["**/.dev/**"],
+    },
   },
   plugins: [
     vue(),

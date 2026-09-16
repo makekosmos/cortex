@@ -43,8 +43,10 @@ pub async fn invoke_worker_operation(
             .map_err(PackageError::Worker)
     }
 
-    /// Development-only app install. Production packages must continue through
-    /// the signed catalog path above.
+    /// Development-only install from a local archive. Production packages
+    /// must continue through the signed catalog path above. Any package kind
+    /// is accepted so locally built sources and bridges can be exercised
+    /// without a catalog release.
     pub fn install_development_app_from_path(
         &self,
         id: &str,
@@ -68,11 +70,32 @@ pub async fn invoke_worker_operation(
             .read_to_string(&mut raw_manifest)
             .map_err(|_| PackageError::Invalid)?;
         let manifest = PackageManifest::parse(&raw_manifest).map_err(|_| PackageError::Invalid)?;
-        if !matches!(manifest.kind(), PackageKind::App)
-            || manifest.id() != id
-            || manifest.version() != version
-        {
+        if manifest.id() != id || manifest.version() != version {
             return Err(PackageError::Invalid);
+        }
+        let definition_documents = match &manifest {
+            VersionedManifest::V2(manifest) if !manifest.data.defines.is_empty() => {
+                let documents = definition_documents_from_archive(path, manifest)?;
+                self.package_registrations
+                    .validate_manifest(manifest, &documents)
+                    .map_err(|_| PackageError::Invalid)?;
+                Some((manifest.clone(), documents))
+            }
+            _ => None,
+        };
+        let definition_snapshot = definition_documents
+            .as_ref()
+            .map(|_| self.package_registrations.snapshot())
+            .transpose()
+            .map_err(|_| PackageError::Persistence)?;
+        let previous = self.store.installed(id, version).ok();
+        if self.worker.as_ref().is_some_and(|worker| {
+            !matches!(
+                worker.supervisor.health(id, version).state,
+                WorkerState::Stopped
+            )
+        }) {
+            return Err(PackageError::Persistence);
         }
         let hash = format!("{:x}", Sha256::digest(&bytes));
         let package = self.store.install_versioned(
@@ -82,7 +105,63 @@ pub async fn invoke_worker_operation(
             &manifest,
             0,
         )?;
-        self.ensure_typed_grant(&package)?;
+        if let Some((manifest, documents)) = definition_documents {
+            if let Err(error) = self
+                .package_registrations
+                .register_manifest(&manifest, &documents)
+            {
+                let rollback = self.restore_install_after_failure(
+                    definition_snapshot.as_deref(),
+                    previous.as_ref(),
+                    &package.id,
+                    &package.version,
+                );
+                if let Err(rollback) = rollback {
+                    return Err(rollback);
+                }
+                return Err(match error {
+                    crate::package_registration::RegistrationError::Persistence => {
+                        PackageError::Persistence
+                    }
+                    _ => PackageError::Invalid,
+                });
+            }
+            if let Err(error) = self.refresh_typed_registry() {
+                self.restore_install_after_failure(
+                    definition_snapshot.as_deref(),
+                    previous.as_ref(),
+                    &package.id,
+                    &package.version,
+                )?;
+                return Err(error);
+            }
+            if let Err(error) = self.ensure_typed_grant(&package) {
+                self.restore_install_after_failure(
+                    definition_snapshot.as_deref(),
+                    previous.as_ref(),
+                    &package.id,
+                    &package.version,
+                )?;
+                return Err(error);
+            }
+            if let Err(error) = self.register_configured_package_definitions() {
+                self.restore_install_after_failure(
+                    definition_snapshot.as_deref(),
+                    previous.as_ref(),
+                    &package.id,
+                    &package.version,
+                )?;
+                return Err(error);
+            }
+        } else if let Err(error) = self.ensure_typed_grant(&package) {
+            self.restore_install_after_failure(
+                None,
+                previous.as_ref(),
+                &package.id,
+                &package.version,
+            )?;
+            return Err(error);
+        }
         if package.manifest.worker_entrypoint().is_none() {
             self.store.enable(id, version)?;
         }
@@ -986,7 +1065,15 @@ pub async fn invoke_worker_operation(
                 return Err(PackageError::Persistence);
             }
             if enabled {
-                self.enable_locked(id, version)?;
+                // Dev-installed records (catalog_sequence 0) are absent from
+                // the signed catalog by construction; debug builds enable them
+                // directly. Release builds keep requiring a catalog entry.
+                if cfg!(debug_assertions) && installed.catalog_sequence == 0 {
+                    self.ensure_typed_grant(&installed)?;
+                    self.store.enable(id, version)?;
+                } else {
+                    self.enable_locked(id, version)?;
+                }
             } else {
                 self.disable_locked(id, version)?;
             }
@@ -998,8 +1085,19 @@ pub async fn invoke_worker_operation(
         }
         let worker = self.worker.as_ref().ok_or(PackageError::Invalid)?;
         let _worker_mutation = worker.mutation.lock().await;
-        self.set_worker_enabled_locked(id, version, enabled, true, Some(&installed))
-            .await
+        // Dev-installed records (catalog_sequence 0) are absent from the signed
+        // catalog by construction; debug builds still allow enabling them so
+        // locally built packages can run end to end. Release builds keep
+        // requiring a current catalog entry for every worker launch.
+        let require_current_catalog = !cfg!(debug_assertions) || installed.catalog_sequence != 0;
+        self.set_worker_enabled_locked(
+            id,
+            version,
+            enabled,
+            require_current_catalog,
+            Some(&installed),
+        )
+        .await
     }
 
     async fn set_worker_enabled_locked(

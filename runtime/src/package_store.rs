@@ -357,6 +357,9 @@ impl PackageStore {
             fs::remove_dir_all(&staging)?;
         }
         fs::create_dir_all(&staging)?;
+        // Extracted trees nest deeply (hash + archive paths); canonicalize so
+        // Windows gets extended-length paths instead of MAX_PATH denials.
+        let staging = fs::canonicalize(&staging)?;
         let result = self.extract_verify(&mut zip, &staging, expected_manifest, &hash);
         if let Err(error) = result {
             let _ = fs::remove_dir_all(&staging);
@@ -369,11 +372,9 @@ impl PackageStore {
                 .join("blobs")
                 .join(format!(".{hash}.{}.tmp", std::process::id()));
             fs::copy(archive, &blob_tmp)?;
-            fs::rename(blob_tmp, &blob)?;
+            fs::rename(&blob_tmp, &blob)?;
         }
-        let unpacked = self
-            .root
-            .join("unpacked")
+        let unpacked = fs::canonicalize(self.root.join("unpacked"))?
             .join(expected_manifest.id())
             .join(expected_manifest.version())
             .join(&hash);
@@ -381,7 +382,25 @@ impl PackageStore {
             fs::create_dir_all(parent)?;
         }
         if !unpacked.exists() {
-            fs::rename(&staging, &unpacked)?;
+            // Freshly extracted trees can be held open by indexer/AV scans on
+            // Windows for several seconds; a directory move fails with
+            // AccessDenied until the transient handle closes. Retry with
+            // backoff; the operation is rare enough that a few seconds is fine.
+            let mut attempt = 0u32;
+            loop {
+                match fs::rename(&staging, &unpacked) {
+                    Ok(()) => break,
+                    Err(error) => {
+                        attempt += 1;
+                        let retries_left =
+                            attempt < 40 && matches!(error.kind(), io::ErrorKind::PermissionDenied);
+                        if !retries_left {
+                            return Err(error.into());
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(250));
+                    }
+                }
+            }
         } else {
             fs::remove_dir_all(&staging)?;
         }
