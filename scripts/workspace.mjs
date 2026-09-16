@@ -38,8 +38,14 @@ const fail = (message) => {
   throw new Error(message);
 };
 function run(exe, args, cwd, env = process.env) {
+  const command = process.platform === "win32" && exe === "pnpm" ? "pnpm.cmd" : exe;
   return new Promise((resolve) => {
-    const child = spawn(exe, args, { cwd, env, shell: false, windowsHide: true });
+    const child = spawn(command, args, {
+      cwd,
+      env,
+      shell: command.endsWith(".cmd"),
+      windowsHide: true,
+    });
     let stdout = "",
       stderr = "";
     child.stdout?.on("data", (data) => (stdout += data));
