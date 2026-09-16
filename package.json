@@ -25,7 +25,7 @@
     "test:sidecar": "node --test desktop/scripts/ark-core-rpc.test.mjs desktop/scripts/ark-core-rpc-edge.test.mjs desktop/scripts/ark-core-rpc-recovery.test.mjs",
     "test:workspace": "node --test scripts/workspace.test.mjs scripts/workspace-bridge.test.mjs",
     "test:format": "node --test scripts/check-format.test.mjs",
-    "test:release-bom": "node --test desktop/scripts/release-bom.test.mjs desktop/scripts/release-build-contract.test.mjs desktop/scripts/release-pipeline.test.mjs desktop/scripts/first-party-release-contracts.test.mjs desktop/scripts/release-channel-local.test.mjs desktop/scripts/package-release.test.mjs",
+    "test:release-bom": "node --test desktop/scripts/release-bom.test.mjs desktop/scripts/release-build-contract.test.mjs desktop/scripts/release-pipeline.test.mjs desktop/scripts/release-preflight.test.mjs desktop/scripts/first-party-release-contracts.test.mjs desktop/scripts/release-channel-local.test.mjs desktop/scripts/package-release.test.mjs",
     "test:package-contract": "node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs desktop/electron/extension-manifest-validation.test.ts",
     "test:backend": "node runtime/scripts/test-lib.mjs",
     "test:desktop-contracts": "node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs desktop/electron/instance.test.ts desktop/electron/focus-enforcement.test.ts desktop/build/installer-shortcut.test.mjs",
