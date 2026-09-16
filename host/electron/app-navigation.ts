@@ -12,16 +12,16 @@ export type OpenAppRequestResult =
   | { ok: true; request: OpenAppRequest }
   | { ok: false; message: string };
 
+export function isSafeAppRoute(route: string): boolean {
+  return SAFE_ROUTE.test(route) && (!route.includes("%") || isValidEncodedRoute(route));
+}
+
 export function parseOpenAppRequest(input: JsonRecord | undefined): OpenAppRequestResult {
   if (!input || !isString(input.id) || !SAFE_ID.test(input.id)) {
     return { ok: false, message: "Некорректный идентификатор приложения." };
   }
   if (input.route === undefined) return { ok: true, request: { id: input.id } };
-  if (
-    !isString(input.route) ||
-    !SAFE_ROUTE.test(input.route) ||
-    (input.route.includes("%") && !isValidEncodedRoute(input.route))
-  ) {
+  if (!isString(input.route) || !isSafeAppRoute(input.route)) {
     return { ok: false, message: "Некорректный маршрут приложения." };
   }
   return { ok: true, request: { id: input.id, route: input.route } };
