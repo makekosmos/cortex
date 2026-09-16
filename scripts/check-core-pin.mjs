@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
 
-const expectedRevision = "39769f4fc7f222f518fd23d1952e1fce0fa27335";
+const expectedRevision = "84b84987d585db9e4cb145a1faca7b796bb56699";
 const retiredRevision = "6692038ed5c0cb7052f2b5ffc3e206358bb0a10c";
 const retiredPath = "core/ark/crates/ark-core/rust";
 const files = [
