@@ -321,12 +321,16 @@ async fn run_core_worker() -> ExitCode {
     eprintln!("[kepler-backend] bye");
     if let Err(error) = http_shutdown_result {
         observability::stderr(format!("[kepler-backend] HTTP shutdown failed: {error}"));
-        ExitCode::FAILURE
-    } else if let Err(error) = ws_shutdown_result {
+    }
+    if let Err(error) = ws_shutdown_result {
         observability::stderr(format!("[kepler-backend] WS shutdown failed: {error}"));
-        ExitCode::FAILURE
-    } else if tray_exit_requested {
+    }
+    // Tray Exit is explicit user intent: cleanup failures are logged above but
+    // must still surface TRAY_EXIT_CODE so supervisor/Desktop quit.
+    if tray_exit_requested {
         ExitCode::from(engine_supervisor::TRAY_EXIT_CODE)
+    } else if http_shutdown_result.is_err() || ws_shutdown_result.is_err() {
+        ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
     }
