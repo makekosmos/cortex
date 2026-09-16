@@ -10,6 +10,7 @@ async fn handle_request(
     request_timeout: Duration,
     operations: HttpOperationRegistry,
     launch_leases: Arc<Mutex<LaunchLeaseRegistry>>,
+    user_data: Arc<crate::user_data::UserDataRoots>,
     http_port: u16,
 ) -> Result<HttpResponse, Infallible> {
     let response = if request.method() == Method::GET
@@ -30,6 +31,7 @@ async fn handle_request(
                     request_timeout,
                     operations,
                     launch_leases,
+                    user_data,
                     http_port,
                 )
                 .await
@@ -52,6 +54,7 @@ async fn handle_authenticated_request(
     request_timeout: Duration,
     operations: HttpOperationRegistry,
     launch_leases: Arc<Mutex<LaunchLeaseRegistry>>,
+    user_data: Arc<crate::user_data::UserDataRoots>,
     http_port: u16,
 ) -> HttpResponse {
     let method = request.method().clone();
@@ -76,6 +79,12 @@ async fn handle_authenticated_request(
         (&Method::POST, "/v1/rpc") => {
             handle_rpc(request, client, correlation_id, dispatcher, request_timeout, operations,
                 protocol_usage).await
+        }
+        (&Method::POST, "/v1/user-data") => {
+            handle_user_data(request, client, user_data).await
+        }
+        (&Method::PUT, "/v1/user-data") => {
+            handle_user_data_write(request, client, user_data).await
         }
         (&Method::POST, "/v1/apps/resolve") => {
             handle_resolve(request, package_service).await

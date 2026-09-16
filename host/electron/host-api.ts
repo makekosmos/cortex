@@ -65,6 +65,12 @@ type CrashMetadata = {
 };
 
 export type EngineResult<T> = { ok: true; data: T } | { ok: false; message: string };
+/**
+ * `/v1/user-data` result preserving the Engine's raw error code so callers
+ * can distinguish typed failures (not-found/invalid-key/too-large/
+ * unknown-root) from transport errors.
+ */
+export type UserDataCallResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 const API_VERSION = "1.0.0";
 const SAFE_LAUNCH_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -435,6 +441,162 @@ export class EngineClient {
       return { ok: false, message: "Engine вернул некорректный grant каталога." };
     }
     return { ok: true, data: { persistentGrantId, label } };
+  }
+
+  /**
+   * Pin the Host userData base directory to an Engine-native directory
+   * handle. Every returned root id is opaque and stays valid until Engine
+   * restarts, after which callers must open again.
+   */
+  async userDataOpenRoot(root: string): Promise<UserDataCallResult<{ rootId: string }>> {
+    if (!isAbsolutePath(root)) return { ok: false, error: "invalid-request" };
+    const result = await this.userDataOperation<JsonRecord>({ operation: "open_root", root }, true);
+    if (!result.ok) return result;
+    const rootId = result.data.root_id;
+    return isString(rootId) && /^[\w-]{1,128}$/.test(rootId)
+      ? { ok: true, data: { rootId } }
+      : { ok: false, error: "io-error" };
+  }
+
+  async userDataRead(
+    rootId: string,
+    appId: string,
+    key: string,
+  ): Promise<UserDataCallResult<Uint8Array>> {
+    const result = await this.userDataOperation<JsonRecord>(
+      { operation: "read", root_id: rootId, app_id: appId, key },
+      true,
+    );
+    if (!result.ok) return result;
+    const encoded = result.data.bytes;
+    // Base64 of a 25 MiB payload is ~35 MB; larger responses are malformed.
+    if (!isString(encoded) || encoded.length > 36_000_000) return { ok: false, error: "io-error" };
+    return { ok: true, data: new Uint8Array(Buffer.from(encoded, "base64")) };
+  }
+
+  async userDataWrite(
+    rootId: string,
+    appId: string,
+    key: string,
+    bytes: Uint8Array,
+  ): Promise<UserDataCallResult<{ sizeBytes: number }>> {
+    const result = await this.userDataRequest<JsonRecord>(
+      {
+        method: "PUT",
+        headers: {
+          "X-Kosmos-User-Data-Root": rootId,
+          "X-Kosmos-User-Data-App": appId,
+          "X-Kosmos-User-Data-Key": key,
+        },
+        body: bytes.slice().buffer,
+      },
+      true,
+    );
+    if (!result.ok) return result;
+    const sizeBytes = result.data.size_bytes;
+    return isNumber(sizeBytes) && Number.isInteger(sizeBytes) && sizeBytes >= 0
+      ? { ok: true, data: { sizeBytes } }
+      : { ok: false, error: "io-error" };
+  }
+
+  async userDataStat(
+    rootId: string,
+    appId: string,
+    key: string,
+  ): Promise<UserDataCallResult<{ sizeBytes: number }>> {
+    const result = await this.userDataOperation<JsonRecord>(
+      { operation: "stat", root_id: rootId, app_id: appId, key },
+      true,
+    );
+    if (!result.ok) return result;
+    const sizeBytes = result.data.size_bytes;
+    return isNumber(sizeBytes) && Number.isInteger(sizeBytes) && sizeBytes >= 0
+      ? { ok: true, data: { sizeBytes } }
+      : { ok: false, error: "io-error" };
+  }
+
+  async userDataDelete(
+    rootId: string,
+    appId: string,
+    key: string,
+  ): Promise<UserDataCallResult<{ deleted: true }>> {
+    const result = await this.userDataOperation<JsonRecord>(
+      { operation: "delete", root_id: rootId, app_id: appId, key },
+      false,
+    );
+    if (!result.ok) return result;
+    return result.data.deleted === true
+      ? { ok: true, data: { deleted: true } }
+      : { ok: false, error: "io-error" };
+  }
+
+  private userDataOperation<T>(
+    body: JsonRecord,
+    idempotent: boolean,
+  ): Promise<UserDataCallResult<T>> {
+    return this.userDataRequest<T>(
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      idempotent,
+    );
+  }
+
+  /**
+   * `/v1/user-data` shares the Engine auth handshake but keeps the raw error
+   * code — the userData contract distinguishes `not-found`/`invalid-key`/
+   * `too-large`/`unknown-root` from generic transport failures.
+   */
+  private async userDataRequest<T>(
+    init: RequestInit,
+    idempotent: boolean,
+  ): Promise<UserDataCallResult<T>> {
+    try {
+      return await this.reconnectingArk.execute(() => this.userDataFetch<T>(init), {
+        idempotent,
+      });
+    } catch {
+      return { ok: false, error: "io-error" };
+    }
+  }
+
+  private async userDataFetch<T>(init: RequestInit): Promise<UserDataCallResult<T>> {
+    if (!this.lock) {
+      const connected = await this.ensureEngineRunning();
+      if (!connected.ok) return { ok: false, error: "io-error" };
+    }
+    const lock = this.lock;
+    if (!lock) return { ok: false, error: "io-error" };
+    const response = await fetch(`http://127.0.0.1:${lock.http_port}/v1/user-data`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${lock.auth_token}`,
+        "X-Kosmos-Api-Version": API_VERSION,
+        "X-Kosmos-Client-Class": "desktop-host",
+        "X-Kosmos-Client-Version": "1.0.0",
+        "X-Kosmos-Client-Pid": String(process.pid),
+        ...init.headers,
+      },
+      signal: AbortSignal.timeout(60_000),
+    });
+    if ([401, 426].includes(response.status))
+      throw Object.assign(new Error(`HTTP ${response.status}`), {
+        status: response.status,
+      });
+    // SAFETY: the envelope is parsed defensively; any malformed shape maps to io-error.
+    const value = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      data?: T;
+      error?: string;
+    } | null;
+    if (!response.ok || !value || value.ok !== true || !("data" in value)) {
+      const code = value?.error;
+      return { ok: false, error: isString(code) ? code : "io-error" };
+    }
+    // SAFETY: the property check above rejects a missing data key; JSON cannot encode undefined.
+    return { ok: true, data: value.data as T };
   }
 
   async getWarmTimeout(): Promise<EngineResult<0 | 300>> {
