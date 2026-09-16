@@ -40,6 +40,9 @@ export const cargoTarget = (): string =>
     }),
   ).target_directory;
 
+export const executableName = (base: string): string =>
+  process.platform === "win32" ? `${base}.exe` : base;
+
 export const buildEngine = (
   trust: { root: string; releases: string },
   force = false,
@@ -50,8 +53,8 @@ export const buildEngine = (
   });
   const target = cargoTarget();
   const binaries: EngineBinaries = {
-    engine: path.join(target, "debug", "kepler-backend.exe"),
-    ark: path.join(target, "debug", "ark-core-rpc.exe"),
+    engine: path.join(target, "debug", executableName("kepler-backend")),
+    ark: path.join(target, "debug", executableName("ark-core-rpc")),
   };
   if (!force && fs.existsSync(binaries.engine) && fs.existsSync(binaries.ark)) return binaries;
   execFileSync(
@@ -169,7 +172,43 @@ const isPidAlive = (pid: number): boolean => {
   }
 };
 
+type ProcRow = { pid: number; ppid: number; start: string };
+
+// Linux: /proc/<pid>/stat field 22 (starttime, jiffies since boot) identifies
+// the process incarnation; comm may contain spaces/parens so parse after the
+// last ")". Windows: WMI CreationDate (ISO timestamp).
+const readProcStat = (pid: number): ProcRow | undefined => {
+  try {
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
+    const close = stat.lastIndexOf(")");
+    if (close < 0) return undefined;
+    const fields = stat.slice(close + 2).split(" ");
+    const ppid = Number(fields[1]);
+    const start = fields[19];
+    return Number.isInteger(ppid) && start !== undefined && start.length > 0
+      ? { pid, ppid, start }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const listProcStats = (): ProcRow[] => {
+  try {
+    return fs
+      .readdirSync("/proc")
+      .filter((name) => /^\d+$/.test(name))
+      .flatMap((name) => {
+        const row = readProcStat(Number(name));
+        return row ? [row] : [];
+      });
+  } catch {
+    return [];
+  }
+};
+
 const processCreatedAt = (pid: number): string | undefined => {
+  if (process.platform !== "win32") return readProcStat(pid)?.start;
   try {
     const createdAt = execFileSync(
       "powershell.exe",
@@ -190,7 +229,28 @@ const processCreatedAt = (pid: number): string | undefined => {
 const isSameProcess = (pid: number, createdAt?: string): boolean =>
   createdAt !== undefined && isPidAlive(pid) && processCreatedAt(pid) === createdAt;
 
+const processTreePidsPosix = (rootPid: number): Set<number> => {
+  const rows = listProcStats();
+  const rootRow = readProcStat(rootPid);
+  const rootCreatedAt = trackedPidCreatedAt.get(rootPid);
+  if (rootCreatedAt && rootRow?.start !== rootCreatedAt) return new Set([rootPid]);
+  const result = new Set([rootPid]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const row of rows) {
+      if (result.has(row.ppid) && !result.has(row.pid)) {
+        result.add(row.pid);
+        changed = true;
+      }
+    }
+  }
+  for (const row of rows) if (result.has(row.pid)) trackedPidCreatedAt.set(row.pid, row.start);
+  return result;
+};
+
 export const processTreePids = (rootPid: number): Set<number> => {
+  if (process.platform !== "win32") return processTreePidsPosix(rootPid);
   const output = execFileSync(
     "powershell.exe",
     [
@@ -246,13 +306,19 @@ export const waitForPidGone = async (
 
 const forceStop = async (pid: number, label: string, createdAt?: string): Promise<void> => {
   if (!isSameProcess(pid, createdAt)) return;
-  try {
-    execFileSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
-      windowsHide: true,
-      stdio: "ignore",
-      timeout: 5_000,
-    });
-  } catch {}
+  if (process.platform === "win32") {
+    try {
+      execFileSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+        windowsHide: true,
+        stdio: "ignore",
+        timeout: 5_000,
+      });
+    } catch {}
+  } else {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {}
+  }
   await waitForPidGone(pid, label, createdAt);
 };
 
