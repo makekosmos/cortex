@@ -129,6 +129,41 @@ test("valid prebuilt is owned, while missing prebuilt falls back to source", () 
     assert.equal(readFileSync(fallback, "utf8"), "fake-sidecar");
   }));
 
+test("KOSMOS_ARK_TARGET_DIR overrides the staging cargo target dir", () =>
+  withTempRoot("target-dir", (root) => {
+    const record = path.join(root, "cargo-env"),
+      fakeCargo = path.join(root, "record-cargo.mjs");
+    writeFileSync(
+      fakeCargo,
+      `import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+const args = process.argv.slice(2), installRoot = args[args.indexOf("--root") + 1];
+appendFileSync(${JSON.stringify(record)}, installRoot + "\\n" + (process.env.CARGO_TARGET_DIR ?? "") + "\\n");
+mkdirSync(path.join(installRoot, "bin"), { recursive: true });
+writeFileSync(path.join(installRoot, "bin", ${JSON.stringify(`ark-core-rpc${process.platform === "win32" ? ".exe" : ""}`)}), "fake-sidecar");
+`,
+    );
+    const options = {
+        cacheRoot: path.join(root, "cache-default"),
+        cargoCommand: process.execPath,
+        cargoArgsPrefix: [fakeCargo],
+      },
+      saved = process.env.KOSMOS_ARK_TARGET_DIR;
+    try {
+      delete process.env.KOSMOS_ARK_TARGET_DIR;
+      ensureArkCoreRpc(options);
+      const override = path.join(root, "short-target");
+      process.env.KOSMOS_ARK_TARGET_DIR = override;
+      ensureArkCoreRpc({ ...options, cacheRoot: path.join(root, "cache-override") });
+      const [staging, fallback, , overridden] = readFileSync(record, "utf8").split("\n");
+      assert.equal(fallback, path.join(staging, "target"));
+      assert.equal(overridden, override);
+    } finally {
+      if (saved === undefined) delete process.env.KOSMOS_ARK_TARGET_DIR;
+      else process.env.KOSMOS_ARK_TARGET_DIR = saved;
+    }
+  }));
+
 test("cache keys include profile, features, platform, and arch", () => {
   const root = path.join(tmpdir(), `kosmos-ark-core-rpc-keys-${process.pid}`);
   assert.equal(installRoot(true, ["b", "a"], root), installRoot(true, ["a", "b"], root));
