@@ -31,6 +31,7 @@ import {
   normalizeFileIndexDiagnostics,
   normalizeFileIndexSettings,
   normalizeEngineSettings,
+  normalizePackageDisclosure,
   normalizePackageSnapshot,
   normalizePackageTrustStatus,
   validPackageId,
@@ -763,6 +764,17 @@ function registerAll() {
       };
     }
     return { ok: true, data: { installed: true } };
+  });
+  ipcMain.handle("manager.getPackageDisclosure", async (_event, value) => {
+    const input = packageInput(value);
+    if (!input)
+      return {
+        ok: false,
+        code: "validation",
+        message: "Недопустимые данные пакета.",
+      };
+    const result = await rpc(op.getPackageDisclosure, input);
+    return result.ok ? { ok: true, data: normalizePackageDisclosure(result.data) } : result;
   });
   ipcMain.handle("manager.openPackage", async (_event, value) => {
     if (!isObject(value) || Object.keys(value).length !== 1 || !validPackageId(value.package_id))

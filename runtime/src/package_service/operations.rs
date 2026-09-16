@@ -149,6 +149,27 @@ pub async fn invoke_worker_operation(
             && trust.ensure_package_allowed(entry).is_ok()
     }
 
+    /// Read-only projection of the declared permission contract for a package
+    /// version. The signed catalog entry is preferred because it is what a
+    /// pending install would deliver; the verified installed manifest covers
+    /// versions that have already left the catalog.
+    pub fn disclosure(&self, id: &str, version: &str) -> Result<PackageDisclosure, PackageError> {
+        if id.is_empty() || version.is_empty() {
+            return Err(PackageError::Invalid);
+        }
+        let mut state = Self::lock(&self.state);
+        if let Ok(entry) = Self::current_entry(&mut state, id, version) {
+            return Ok(package_disclosure(&entry.manifest));
+        }
+        drop(state);
+        if let Ok(package) = self.store.installed(id, version) {
+            if !package.revoked {
+                return Ok(package_disclosure(&package.manifest));
+            }
+        }
+        Err(PackageError::Invalid)
+    }
+
     pub fn list_filtered(
         &self,
         kind: Option<PackageKind>,

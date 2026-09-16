@@ -145,6 +145,9 @@ function normalizeIntegrationSnapshot(value: Input) {
         {
           id: entry.id,
           label: isString(entry.label) ? entry.label.slice(0, 64) : entry.id,
+          packageVersion: isString(entry.packageVersion)
+            ? entry.packageVersion.slice(0, 64)
+            : undefined,
           credentialLabel: isString(entry.credentialLabel)
             ? entry.credentialLabel.slice(0, 64)
             : "Ключ",

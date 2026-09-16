@@ -152,6 +152,30 @@ export type DevelopmentPackage = {
   publisher: string;
   icon_url: string;
 };
+export type DisclosureDataRule = {
+  type: string;
+  versions: string;
+  actions: string[];
+  fields_read: string[];
+  fields_write: string[];
+  relations_read: string[];
+  relations_write: string[];
+};
+export type DisclosureMapping = {
+  type: string;
+  direction: string;
+  fidelity: string;
+};
+export type PackageDisclosure = {
+  id: string;
+  name: string;
+  version: string;
+  kind: "app" | "source" | "bridge";
+  publisher: string;
+  capabilities: Array<{ capability: string; scopes: string[] }>;
+  data: DisclosureDataRule[];
+  mappings: DisclosureMapping[];
+};
 export type BridgeConfig = {
   vault_root: string;
   selected_types: string[];
@@ -198,6 +222,7 @@ export type PairingCode = { code: string; expires_at?: string };
 export type IntegrationProvider = {
   id: string;
   label: string;
+  packageVersion?: string;
   credentialLabel: string;
   credentialUrl: string;
   hasCredential: boolean;
@@ -416,6 +441,10 @@ export interface ManagerApi {
   getPackageTrustStatus(): Promise<ManagerResult<unknown>>;
   refreshPackageCatalog(): Promise<ManagerResult<unknown>>;
   installPackage(input: { package_id: string; version: string }): Promise<ManagerResult<unknown>>;
+  getPackageDisclosure(input: {
+    package_id: string;
+    version: string;
+  }): Promise<ManagerResult<PackageDisclosure>>;
   openPackage(input: { package_id: string }): Promise<ManagerResult<{ opened: boolean }>>;
   getDevelopmentPackages(): Promise<ManagerResult<DevelopmentPackage[]>>;
   openDevelopmentPackage(input: {
@@ -540,6 +569,7 @@ export const managerOperations = {
   getPackageTrustStatus: "packages.trust_status",
   refreshPackageCatalog: "packages.refresh_catalog",
   installPackage: "packages.install",
+  getPackageDisclosure: "packages.disclosure",
   setPackageEnabled: "packages.set_enabled",
   uninstallPackage: "packages.uninstall",
   getBridgeConfig: "packages.bridge_config",

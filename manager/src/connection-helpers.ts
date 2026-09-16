@@ -37,6 +37,20 @@ function visibleIntegration(id: string) {
   return !HIDDEN_INTEGRATION_IDS.has(id);
 }
 
+export function authMode(provider: IntegrationProvider) {
+  return provider.authMode === "browser_login" || provider.authMode === "none"
+    ? provider.authMode
+    : "credential";
+}
+
+export function credentialType(provider: IntegrationProvider) {
+  return provider.credentialInputType === "text" ? "text" : "password";
+}
+
+export function canLogin(provider: IntegrationProvider) {
+  return authMode(provider) === "browser_login" && Boolean(provider.loginCapability);
+}
+
 export function integrationCards(
   listings: StoreListing[],
   providers: IntegrationProvider[],

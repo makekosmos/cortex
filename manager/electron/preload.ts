@@ -32,6 +32,7 @@ const api: ManagerApi = {
   getPackageTrustStatus: () => invoke("manager.getPackageTrustStatus"),
   refreshPackageCatalog: () => invoke("manager.refreshPackageCatalog"),
   installPackage: (v) => invoke("manager.installPackage", v),
+  getPackageDisclosure: (v) => invoke("manager.getPackageDisclosure", v),
   openPackage: (v) => invoke("manager.openPackage", v),
   getDevelopmentPackages: () => invoke("manager.getDevelopmentPackages"),
   openDevelopmentPackage: (v) => invoke("manager.openDevelopmentPackage", v),
