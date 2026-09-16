@@ -970,6 +970,194 @@
         assert_eq!(dispatcher.live_owner_count(), 0);
     }
 
+    #[tokio::test]
+    async fn user_data_endpoint_requires_desktop_host_and_round_trips_by_handle() {
+        let dir = tempfile::tempdir().expect("user data dir");
+        let root = dir.path().join("userdata");
+        std::fs::create_dir_all(&root).expect("root dir");
+        let token = "a".repeat(64);
+        let server =
+            EngineApiServer::bind_with_test_dispatcher(token.clone(), test_dispatcher(), REQUEST_TIMEOUT)
+                .await
+                .expect("server");
+        let port = server.port();
+        let task = tokio::spawn(server.run());
+
+        // Non-host client classes are rejected before touching the filesystem.
+        let denied = request_with_client(
+            &token,
+            "POST",
+            "/v1/user-data",
+            r#"{"operation":"stat","root_id":"x","app_id":"app","key":"a"}"#,
+            "engine-http",
+            "1.0.0",
+        );
+        assert!(raw_http(port, &denied).await.starts_with("HTTP/1.1 403"));
+
+        let open = format!(
+            r#"{{"operation":"open_root","root":{}}}"#,
+            serde_json::to_string(root.to_str().expect("utf8 root")).expect("json root")
+        );
+        let response = raw_http(
+            port,
+            &request_with_client(&token, "POST", "/v1/user-data", &open, "desktop-host", "1.0.0"),
+        )
+        .await;
+        let body = response_json(&response);
+        assert_eq!(body["ok"], true, "{response}");
+        let root_id = body["data"]["root_id"].as_str().expect("root id").to_owned();
+
+        // Binary writes arrive over PUT so the payload never crosses a JSON
+        // or WebSocket ceiling.
+        let put = format!(
+            "PUT /v1/user-data HTTP/1.1\r\n\
+             Authorization: Bearer {token}\r\n\
+             X-Kosmos-Client-Pid: {}\r\n\
+             X-Kosmos-Api-Version: {API_VERSION}\r\n\
+             X-Kosmos-Client-Class: desktop-host\r\n\
+             X-Kosmos-User-Data-Root: {root_id}\r\n\
+             X-Kosmos-User-Data-App: com.kosmos.agenda\r\n\
+             X-Kosmos-User-Data-Key: attachments/task-1.bin\r\n\
+             Content-Length: 7\r\n\
+             Connection: close\r\n\r\n\x00\x01inert",
+            std::process::id()
+        );
+        let response = raw_http(port, &put).await;
+        let body = response_json(&response);
+        assert_eq!(body["ok"], true, "{response}");
+        assert_eq!(body["data"]["size_bytes"], 7);
+
+        let stat = format!(
+            r#"{{"operation":"stat","root_id":"{root_id}","app_id":"com.kosmos.agenda","key":"attachments/task-1.bin"}}"#
+        );
+        let body = response_json(
+            &raw_http(
+                port,
+                &request_with_client(&token, "POST", "/v1/user-data", &stat, "desktop-host", "1.0.0"),
+            )
+            .await,
+        );
+        assert_eq!(body["data"]["size_bytes"], 7);
+
+        let read = format!(
+            r#"{{"operation":"read","root_id":"{root_id}","app_id":"com.kosmos.agenda","key":"attachments/task-1.bin"}}"#
+        );
+        let body = response_json(
+            &raw_http(
+                port,
+                &request_with_client(&token, "POST", "/v1/user-data", &read, "desktop-host", "1.0.0"),
+            )
+            .await,
+        );
+        use base64::Engine as _;
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(body["data"]["bytes"].as_str().expect("base64 bytes"))
+            .expect("decode");
+        assert_eq!(decoded, b"\x00\x01inert");
+        assert_eq!(
+            std::fs::read(root.join("extension-data/com.kosmos.agenda/attachments/task-1.bin"))
+                .expect("on-disk payload"),
+            b"\x00\x01inert"
+        );
+
+        let traversal = format!(
+            r#"{{"operation":"read","root_id":"{root_id}","app_id":"com.kosmos.agenda","key":"../escape"}}"#
+        );
+        let body = response_json(
+            &raw_http(
+                port,
+                &request_with_client(&token, "POST", "/v1/user-data", &traversal, "desktop-host", "1.0.0"),
+            )
+            .await,
+        );
+        assert_eq!(body["ok"], false);
+        assert_eq!(body["error"], "invalid-key");
+
+        let delete = format!(
+            r#"{{"operation":"delete","root_id":"{root_id}","app_id":"com.kosmos.agenda","key":"attachments/task-1.bin"}}"#
+        );
+        let body = response_json(
+            &raw_http(
+                port,
+                &request_with_client(&token, "POST", "/v1/user-data", &delete, "desktop-host", "1.0.0"),
+            )
+            .await,
+        );
+        assert_eq!(body["data"]["deleted"], true);
+        let body = response_json(
+            &raw_http(
+                port,
+                &request_with_client(&token, "POST", "/v1/user-data", &stat, "desktop-host", "1.0.0"),
+            )
+            .await,
+        );
+        assert_eq!(body["ok"], false);
+        assert_eq!(body["error"], "not-found");
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn user_data_endpoint_rejects_unknown_roots_and_missing_fields() {
+        let token = "a".repeat(64);
+        let server =
+            EngineApiServer::bind_with_test_dispatcher(token.clone(), test_dispatcher(), REQUEST_TIMEOUT)
+                .await
+                .expect("server");
+        let port = server.port();
+        let task = tokio::spawn(server.run());
+
+        let unknown = request_with_client(
+            &token,
+            "POST",
+            "/v1/user-data",
+            r#"{"operation":"read","root_id":"00000000-0000-4000-8000-0000000000aa","app_id":"app","key":"a.bin"}"#,
+            "desktop-host",
+            "1.0.0",
+        );
+        let response = raw_http(port, &unknown).await;
+        assert!(response.starts_with("HTTP/1.1 404"), "{response}");
+        assert_eq!(response_json(&response)["error"], "unknown-root");
+
+        let missing_key = request_with_client(
+            &token,
+            "POST",
+            "/v1/user-data",
+            r#"{"operation":"read","root_id":"x","app_id":"app"}"#,
+            "desktop-host",
+            "1.0.0",
+        );
+        let response = raw_http(port, &missing_key).await;
+        assert!(response.starts_with("HTTP/1.1 400"), "{response}");
+
+        let unknown_op = request_with_client(
+            &token,
+            "POST",
+            "/v1/user-data",
+            r#"{"operation":"symlink_root","root_id":"x"}"#,
+            "desktop-host",
+            "1.0.0",
+        );
+        let response = raw_http(port, &unknown_op).await;
+        assert!(response.starts_with("HTTP/1.1 400"), "{response}");
+
+        // A PUT without the key header is rejected before the body is read.
+        let put = format!(
+            "PUT /v1/user-data HTTP/1.1\r\n\
+             Authorization: Bearer {token}\r\n\
+             X-Kosmos-Client-Pid: {}\r\n\
+             X-Kosmos-Api-Version: {API_VERSION}\r\n\
+             X-Kosmos-Client-Class: desktop-host\r\n\
+             X-Kosmos-User-Data-Root: x\r\n\
+             X-Kosmos-User-Data-App: app\r\n\
+             Content-Length: 1\r\n\
+             Connection: close\r\n\r\nx",
+            std::process::id()
+        );
+        let response = raw_http(port, &put).await;
+        assert!(response.starts_with("HTTP/1.1 400"), "{response}");
+        task.abort();
+    }
+
     fn request(token: &str, method: &str, path: &str, body: &str) -> String {
         request_with_pid(token, method, path, body, &std::process::id().to_string())
     }

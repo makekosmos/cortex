@@ -131,7 +131,7 @@ jobs:
           pnpm run test:release-bom
           pnpm run test:package-contract
           node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs desktop/build/installer-shortcut.test.mjs
-      - run: node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs host/electron/host-api-reconnect.test.ts
+      - run: pnpm run test:host-contracts
 
   windows-runtime:
     needs: plan

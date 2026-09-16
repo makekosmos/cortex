@@ -145,7 +145,9 @@ describe("Host window safety contracts", () => {
     expect(source).toContain("registerExtensionUserDataIpc({");
     expect(source).toContain("handle: (channel, handler) => ipcMain.handle(channel, handler)");
     expect(source).toContain("resolveAppForSender");
-    expect(source).toContain("userDataDirForApp");
+    expect(source).toContain("userDataStoreForApp");
+    expect(source).toContain("createEngineUserDataStores(");
+    expect(source).toContain('app.getPath("userData")');
     expect(preloadSource).toContain('"host:user-data:binary"');
     expect(preloadSource).toContain('{ operation: "read", key }');
     expect(preloadSource).toContain('{ operation: "write", key, bytes }');

@@ -16,7 +16,7 @@ function commandsFor(plan) {
       "manager-typecheck": ["bun", ["run", "typecheck:manager"]],
       "host-typecheck": ["bun", ["run", "typecheck:host"]],
       "desktop-contracts": ["bun", ["run", "test:desktop-contracts"]],
-      "host-contracts": ["bun", ["test", "host/electron/host-api-reconnect.test.ts"]],
+      "host-contracts": ["bun", ["run", "test:host-contracts"]],
       "first-party-contracts": ["bun", ["run", "test:first-party-contracts"]],
       rustfmt: ["bun", ["run", "rustfmt"]],
       clippy: ["bun", ["run", "clippy"]],

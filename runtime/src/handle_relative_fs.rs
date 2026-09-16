@@ -269,6 +269,34 @@ pub fn mkdir_relative(root: &RootHandle, components: &[&str]) -> io::Result<()> 
     }
 }
 
+/// Return the byte size of a regular file beneath `root`.
+///
+/// Every component resolves relative to an already validated directory handle
+/// and the file is measured on its open handle, so a swapped parent, reparse
+/// point, or replaced file cannot redirect the stat outside `root`.
+pub fn stat_relative(root: &RootHandle, components: &[&str]) -> io::Result<u64> {
+    validate_components(components)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::{AsRawFd, FromRawFd};
+        let parent = open_directory_relative(root, &components[..components.len() - 1])?;
+        let fd = openat(parent.as_raw_fd(), components[components.len() - 1], false)?;
+        let file = unsafe { std::fs::File::from_raw_fd(fd) };
+        let metadata = file.metadata()?;
+        if !metadata.is_file() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "not a regular file",
+            ));
+        }
+        Ok(metadata.len())
+    }
+    #[cfg(windows)]
+    {
+        windows::stat_relative(root, components)
+    }
+}
+
 /// Return the stable identity of a regular file directly below `root`.
 ///
 /// The file is opened relative to the already validated root handle so a
@@ -1698,6 +1726,22 @@ mod windows {
             parent = child;
         }
         Ok(())
+    }
+
+    pub fn stat_relative(root: &RootHandle, components: &[&str]) -> io::Result<u64> {
+        let mut parent = relative_duplicate(root.handle.raw())?;
+        for component in &components[..components.len() - 1] {
+            let child = relative(parent.raw(), component, true)?;
+            validate_opened(child.raw(), None, true)?;
+            parent = child;
+        }
+        let file = relative(parent.raw(), components[components.len() - 1], false)?;
+        validate_opened(file.raw(), None, false)?;
+        let standard: FileStandardInfo = query(file.raw(), FILE_STANDARD_INFO_CLASS)?;
+        if standard.end_of_file < 0 {
+            return Err(io::Error::other("negative file size"));
+        }
+        Ok(standard.end_of_file as u64)
     }
 
     pub fn file_identity(root: &RootHandle, component: &str) -> io::Result<RootIdentity> {

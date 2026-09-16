@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "../test-support/node-test.mjs";
 import { parseOpenAppRequest, sendNavigationWhenReady } from "./app-navigation";
 
 describe("renderer app navigation boundary", () => {
