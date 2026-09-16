@@ -84,8 +84,12 @@ export async function runReleasePreflight({ platform, bomPath }) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
-  const platform = args[args.indexOf("--platform") + 1];
-  const bomPath = args[args.indexOf("--bom") + 1] ?? process.env.KOSMOS_RELEASE_BOM;
+  const flagValue = (flag) => {
+    const index = args.indexOf(flag);
+    return index === -1 ? undefined : args[index + 1];
+  };
+  const platform = flagValue("--platform");
+  const bomPath = flagValue("--bom") ?? process.env.KOSMOS_RELEASE_BOM;
   runReleasePreflight({ platform, bomPath })
     .then(({ platform: checkedPlatform, version, bom }) =>
       console.log(`[release-preflight] PASS ${checkedPlatform} v${version} BOM ${bom.value.id}`),
