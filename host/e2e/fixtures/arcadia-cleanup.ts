@@ -5,6 +5,7 @@ import type { ElectronApplication } from "playwright";
 import {
   cargoTarget,
   closeHost,
+  executableName,
   processTreePids,
   recordCleanup,
   terminate,
@@ -29,7 +30,7 @@ export async function cleanupArcadiaE2e(options: {
       errors.push(error);
     }
   };
-  const engineBinary = path.join(cargoTarget(), "debug", "kepler-backend.exe");
+  const engineBinary = path.join(cargoTarget(), "debug", executableName("kepler-backend"));
   if (host) pids.add(host.process().pid);
   if (restartedEngine?.pid) for (const pid of processTreePids(restartedEngine.pid)) pids.add(pid);
   if (engine?.pid) for (const pid of processTreePids(engine.pid)) pids.add(pid);

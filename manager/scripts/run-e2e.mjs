@@ -6,10 +6,10 @@ import path from "node:path";
 import process from "node:process";
 import { createRequire } from "node:module";
 
-const hostRoot = path.resolve(import.meta.dirname, "..");
-const repositoryRoot = path.resolve(hostRoot, "..");
+const managerRoot = path.resolve(import.meta.dirname, "..");
+const repositoryRoot = path.resolve(managerRoot, "..");
 const tempRoot = path.resolve(os.tmpdir());
-const manifestPath = path.join(repositoryRoot, ".tmp", `host-e2e-cleanup-${randomUUID()}.json`);
+const manifestPath = path.join(repositoryRoot, ".tmp", `manager-e2e-cleanup-${randomUUID()}.json`);
 const playwrightCli = createRequire(import.meta.url).resolve("@playwright/test/cli");
 fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
 fs.writeFileSync(manifestPath, JSON.stringify({ roots: [], pids: [] }));
@@ -21,21 +21,21 @@ try {
       process.execPath,
       [playwrightCli, "test", "--config", "playwright.config.ts", ...process.argv.slice(2)],
       {
-        cwd: hostRoot,
-        env: { ...process.env, KOSMOS_HOST_E2E_CLEANUP_MANIFEST: manifestPath },
+        cwd: managerRoot,
+        env: { ...process.env, KOSMOS_MANAGER_E2E_CLEANUP_MANIFEST: manifestPath },
         stdio: "inherit",
         windowsHide: true,
       },
     );
     child.once("error", (error) => {
-      console.error(`[host-e2e] runner failed: ${error.message}`);
+      console.error(`[manager-e2e] runner failed: ${error.message}`);
       resolve(1);
     });
     child.once("exit", (code) => resolve(code ?? 1));
   });
 } catch (error) {
   console.error(
-    `[host-e2e] runner failed: ${error instanceof Error ? error.message : String(error)}`,
+    `[manager-e2e] runner failed: ${error instanceof Error ? error.message : String(error)}`,
   );
 }
 
@@ -122,7 +122,7 @@ try {
     const resolved = isString(root) ? path.resolve(root) : "";
     if (
       path.dirname(resolved).toLowerCase() !== tempRoot.toLowerCase() ||
-      !path.basename(resolved).startsWith("kosmos-host-e2e-")
+      !path.basename(resolved).startsWith("kosmos-manager-e2e-")
     )
       throw new Error(`unsafe cleanup root: ${root}`);
     for (const { ProcessId: pid, CreationDate: createdAt } of ownedPids(resolved)) {
@@ -133,7 +133,7 @@ try {
     }
     fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
     if (fs.existsSync(resolved)) throw new Error(`cleanup root remains: ${resolved}`);
-    console.log(`[host-e2e] cleaned ${resolved}`);
+    console.log(`[manager-e2e] cleaned ${resolved}`);
   }
   for (const entry of manifest.pids) {
     const pid = Number.isInteger(entry) ? entry : entry?.pid;
@@ -150,7 +150,7 @@ try {
 } catch (error) {
   cleanupFailed = true;
   console.error(
-    `[host-e2e] cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
+    `[manager-e2e] cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
   );
 } finally {
   fs.rmSync(manifestPath, { force: true });

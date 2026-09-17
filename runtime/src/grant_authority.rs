@@ -782,8 +782,12 @@ mod tests {
             .register(&o, "ext", &f, true, GrantProvenance::NativeDialog, None)
             .unwrap();
         let p2 = p2.unwrap();
+        // Move-in replacement: the new file is created while the original
+        // still exists, so its identity differs on every filesystem.
+        let swapped = root2.join("x.new");
+        fs::write(&swapped, b"b").unwrap();
         fs::remove_file(&f).unwrap();
-        fs::write(&f, b"b").unwrap();
+        fs::rename(&swapped, &f).unwrap();
         assert_eq!(reg.reopen(&o, &p2, "ext"), Err(GrantError::IdentityChanged));
     }
     #[test]
@@ -796,8 +800,12 @@ mod tests {
         let (id, _, _) = reg
             .register(&o, "ext", &file, true, GrantProvenance::NativeDialog, None)
             .unwrap();
+        // Move-in replacement: the new file is created while the original
+        // still exists, so its identity differs on every filesystem.
+        let swapped = dir.path().join("a.txt.new");
+        fs::write(&swapped, b"replacement").unwrap();
         fs::remove_file(&file).unwrap();
-        fs::write(&file, b"replacement").unwrap();
+        fs::rename(&swapped, &file).unwrap();
 
         assert_eq!(
             reg.read(&id, &o, "ext", &["a.txt"], 64),
