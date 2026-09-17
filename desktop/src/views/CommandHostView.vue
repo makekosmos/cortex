@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, shallowRef } from "vue";
-import { DesktopChrome, DesktopContentSurface, type ToastTone } from "@kosmos/visuals";
+import { DesktopChrome, DesktopContentSurface, usePlatform, type ToastTone } from "@kosmos/visuals";
 import type { CommandFeedbackEvent, CommandSnapshot } from "../../shared/command-ipc";
 import { isFunction } from "../shared/runtimeGuards";
 import CommandFormView from "../command-host/CommandFormView.vue";
@@ -28,6 +28,7 @@ const sessionId = computed(() => {
   const raw = window.location.hash.split("?", 2)[1] ?? "";
   return new URLSearchParams(raw).get("session");
 });
+const { platform } = usePlatform();
 
 onMounted(async () => {
   const id = sessionId.value;
@@ -88,7 +89,7 @@ function dismissFeedback(id: number): void {
 </script>
 
 <template>
-  <DesktopChrome platform="windows" :title="snapshot?.commandTitle ?? 'Команда'">
+  <DesktopChrome :platform="platform" :title="snapshot?.commandTitle ?? 'Команда'">
     <DesktopContentSurface class="command-host">
       <CommandListView
         v-if="snapshot?.root.type === 'List'"
