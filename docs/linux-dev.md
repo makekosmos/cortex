@@ -1,10 +1,10 @@
 # Linux development: host + Engine + first-party apps
 
-Verified on Ubuntu 24.04 x86_64 (KOS-53, KOS-93, KOS-94, KOS-95). The
+Verified on Ubuntu 24.04 x86_64 (KOS-53, KOS-93, KOS-94, KOS-95, KOS-96). The
 supported gate is the first-party E2E suite, which builds the Engine, spawns
 the pinned `ark-core-rpc` sidecar, installs the signed
-Agenda/Memoria/Ordo/Arcadia `.kspkg`, and launches the Electron Host under
-Xvfb — all in isolated `/tmp` roots with PID-identity cleanup.
+Agenda/Memoria/Ordo/Arcadia/Dictation `.kspkg`, and launches the Electron
+Host under Xvfb — all in isolated `/tmp` roots with PID-identity cleanup.
 
 ## Toolchain
 
@@ -65,7 +65,8 @@ xvfb-run -a pnpm --dir host run e2e \
   first-party-memoria-contract.spec.ts first-party-memoria-smoke.spec.ts \
   first-party-memoria-import-crash.spec.ts \
   first-party-ordo-contract.spec.ts \
-  first-party-arcadia-contract.spec.ts
+  first-party-arcadia-contract.spec.ts \
+  first-party-dictation-contract.spec.ts
 ```
 
 - `first-party-agenda-contract` — signed Agenda installs, launches in Host,
@@ -103,6 +104,26 @@ xvfb-run -a pnpm --dir host run e2e \
   at the pinned commit (`bun install && bun run package:kspkg`). On Windows
   the same spec additionally covers the worker path: `games.*` CRUD, the
   hostile-Steam launch rejection, and SQOBA backup/restore recovery.
+- `first-party-dictation-contract` — signed Dictation installs and launches
+  in Host through the `kosmos-host` manifest target (the `worker` target
+  stays Windows-only because package workers are unsupported off Windows).
+  The Linux smoke exercises the Engine-owned `dictation.*` grant through
+  `window.kosmosApp.ark`: `dictation.get_state`/`get_config`/
+  `list_local_models`/`update_config`, the recording state machine
+  (`start_recording` → `recording`, duplicate → `unavailable`, `cancel` →
+  `idle`), out-of-grant denial (`dictation.submit_audio` →
+  `invalid-request`), sanitized responses (no path/key-shaped keys reach the
+  renderer), and config surviving an Engine restart. The
+  `dictation.control`/`worker.invoke` ops the Linux manifest declares —
+  `dictation.capture.start`, `dictation.window.foreground`,
+  `dictation.lifecycle.set_autostart`, `dictation.trigger` — answer
+  `unavailable` because capture/hotkey/autostart are Engine stubs off
+  Windows and no package worker is running; the spec asserts that rather
+  than branching on the OS. Requires the reviewed
+  `release/dictation-0.2.5.kspkg` built in the `dictation/` checkout at the
+  pinned commit (`bun install && bun run package:kspkg`). On Windows the
+  same spec replays the checked-in `dictation-0.2.2` fixture, which predates
+  the worker contract.
 
 The harness is platform-neutral: binary names come from `executableName()`,
 fixture ZIPs use `desktop/scripts/zip-utils.mjs`, and process cleanup reads
@@ -114,19 +135,22 @@ which the specs add only on `process.platform === "linux"`.
 
 - `pnpm install` for `host/` requires `read:packages` on GitHub Packages;
   without it use the `link:` fallback above.
-- The Arcadia package worker is Windows-only: on Linux `games.*`
-  operations answer `unavailable`, and the Steam-scan/SQOBA save-backup
-  flows are exercised by the spec only on Windows. The Linux-built
-  `release/arcadia-0.1.11.kspkg` still carries the declared Windows worker
-  entry (`worker/arcadia-worker.exe`, an ELF there) because the packager
-  always copies the built worker to that path — it is never launched
-  off Windows.
-- Building the Arcadia package on Linux needs its `@kosmos/visuals`
-  dependency resolved to a sibling `imago/` checkout (the vite config
-  aliases it) — install/build imago first, then
-  `bun run package:kspkg` in `arcadia/`.
-- Specs for other first-party apps (Daedalus/Dictation/Shell/topology)
+- The Arcadia and Dictation package workers are Windows-only: on Linux
+  `games.*`/`dictation.trigger` operations answer `unavailable`, and the
+  Steam-scan/SQOBA save-backup flows are exercised by the Arcadia spec only
+  on Windows. The Linux-built `release/arcadia-0.1.11.kspkg` and
+  `release/dictation-0.2.5.kspkg` still carry the declared Windows worker
+  entries (`worker/arcadia-worker.exe`, `worker/dictation-worker.exe`, ELF
+  binaries there) because the packager always copies the built worker to
+  that path — they are never launched off Windows.
+- Building the Arcadia/Dictation packages on Linux needs their
+  `@kosmos/visuals` dependency resolved to a sibling `imago/` checkout
+  (the vite config aliases it) — install/build imago first, then
+  `bun run package:kspkg` in `arcadia/` or `dictation/`.
+- Specs for other first-party apps (Daedalus/Shell/topology)
   assume the monorepo layout or Windows-only tools and are not part of
   the Linux gate.
-- Tray, global shortcuts, dictation capture, and start-menu integration
-  remain Windows-only; the Engine stubs them out off-Windows.
+- Tray, global shortcuts, dictation capture, foreground-window targeting,
+  autostart, and start-menu integration remain Windows-only; the Engine
+  stubs them out off-Windows and the Dictation spec asserts `unavailable`
+  rather than the app branching on the OS.
