@@ -6,6 +6,9 @@ use ark_core::db::{
 use rusqlite::{params, Connection};
 use serde_json::json;
 
+#[path = "support/phase3_legacy_fixtures.rs"]
+mod phase3_legacy_fixtures;
+
 fn table_exists(conn: &Connection, name: &str) -> bool {
     conn.query_row(
         "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
@@ -165,6 +168,33 @@ fn phase9_retirement_refuses_archive_or_semantic_mismatch_and_rolls_back_drop_ba
             |row| row.get::<_, bool>(0),
         )
         .unwrap());
+}
+
+#[test]
+fn init_schema_tolerates_blocked_phase3_plan_and_keeps_legacy_tables() {
+    // KOS-89: pre-phase3 DB where at least one legacy source fails canonical
+    // mapping → plan reports "blocked" → migrate_phase3 returns early without
+    // creating the migration ledger. init_schema must not treat legacy table
+    // retirement as unconditional in that state: the engine has to start,
+    // legacy tables stay readable through the compatibility view, and
+    // retirement remains armed for the next successful migration.
+    let conn = Connection::open_in_memory().unwrap();
+    init_schema_prerequisites_for_phase3(&conn).unwrap();
+    phase3_legacy_fixtures::seed_historical_legacy_authorities(&conn);
+    conn.execute_batch(
+        "CREATE TABLE areas (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+         CREATE TABLE headings (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, project_id TEXT NOT NULL);
+         INSERT INTO areas(id,title,sort_order,created_at) VALUES('area-1','Work',7,'2026-01-01T00:00:00Z');
+         INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,updated_at) VALUES('dangling-note','note_obj','0.0.0-legacy','n','{}','{\"relatedNotes\":[\"missing-target\"]}','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z');",
+    )
+    .unwrap();
+
+    init_schema(&conn).unwrap();
+    init_schema(&conn).unwrap();
+    assert!(table_exists(&conn, "areas"));
+    assert!(table_exists(&conn, "headings"));
+    assert!(retire_legacy_planning_tables(&conn).is_err());
+    assert_eq!(count(&conn, "areas"), 1);
 }
 
 #[test]
