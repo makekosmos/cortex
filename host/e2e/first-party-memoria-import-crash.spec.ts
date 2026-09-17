@@ -187,12 +187,40 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
         ),
       )
       .toEqual(baselineEntryIds);
-    const afterRestart = await readImportCrashDiagnostics(page);
-    console.log(`[host-e2e] journal after restart=${JSON.stringify(afterRestart)}`);
+    // Recovery persists one checkpoint per compensated operation, so the
+    // journal still reads "applying" while later operations roll back —
+    // entry IDs reach baseline as soon as the in-flight write is undone.
+    // Wait for the terminal checkpoint, which flips status last.
+    let afterRestart: Awaited<
+      ReturnType<typeof readImportCrashDiagnostics>
+    > | null = null;
+    try {
+      await expect
+        .poll(
+          async () => {
+            afterRestart = await readImportCrashDiagnostics(page);
+            const userData = afterRestart.journal.userData;
+            return userData && typeof userData === "object"
+              ? ((userData as { status?: unknown }).status ?? null)
+              : null;
+          },
+          { timeout: 30_000 },
+        )
+        .toBe("rolled-back");
+    } finally {
+      console.log(
+        `[host-e2e] journal after restart=${JSON.stringify(afterRestart)}`,
+      );
+    }
     expect(
-      afterRestart.journal.userData,
-      JSON.stringify(afterRestart.journal),
-    ).toMatchObject({ status: "rolled-back" });
+      afterRestart?.journal.userData,
+      JSON.stringify(afterRestart?.journal),
+    ).toMatchObject({
+      status: "rolled-back",
+      applied: [],
+      inFlight: null,
+      rolledBack: expect.arrayContaining([0, 1]),
+    });
   } finally {
     const cleanupErrors: unknown[] = [];
     const attempt = async (action: () => Promise<void>) => {
