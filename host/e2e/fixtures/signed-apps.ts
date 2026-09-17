@@ -9,6 +9,7 @@ import { arcadiaArchive } from "./arcadia-archive";
 import { memoriaArchive } from "./memoria-archive";
 import { ordoArchive } from "./ordo-archive";
 import { TEST_ONLY_RELEASE, TEST_ONLY_ROOT } from "./signing-keys";
+import { gitEnv } from "../../../scripts/git-env.mjs";
 import type { JsonValue, Manifest, PackageArchive, Permission } from "./signed-app-types";
 import { entriesFromDir, readZip, writeZip } from "../../../desktop/scripts/zip-utils.mjs";
 type SignedApps = {
@@ -19,7 +20,7 @@ type SignedApps = {
   trust: { root: string; releases: string };
 };
 const command = (file: string, args: string[], cwd: string) =>
-  execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe" });
+  execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe", env: gitEnv() });
 const cortexRoot = (repositoryRoot: string) => {
   const roots = [repositoryRoot, path.join(repositoryRoot, "cortex")];
   const root = roots.find((candidate) =>
@@ -119,6 +120,7 @@ function agendaArchive(root: string, repositoryRoot: string): PackageArchive {
     cwd: agendaRoot,
     maxBuffer: 128 * 1024 * 1024,
     stdio: "pipe",
+    env: gitEnv(),
   });
   if (
     createHash("sha256").update(archive).digest("hex") !==

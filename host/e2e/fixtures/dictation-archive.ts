@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { gitEnv } from "../../../scripts/git-env.mjs";
 import { readZip } from "../../../desktop/scripts/zip-utils.mjs";
 
 // Windows replays the reviewed checked-in fixture; Dictation 0.2.2 predates
@@ -94,6 +95,7 @@ export function dictationArchive(root: string, repositoryRoot: string) {
         cwd: sourceRoot,
         maxBuffer: 10 * 1024 * 1024,
         stdio: ["ignore", "pipe", "pipe"],
+        env: gitEnv(),
       }),
     );
   } else {
@@ -101,6 +103,7 @@ export function dictationArchive(root: string, repositoryRoot: string) {
       cwd: sourceRoot,
       encoding: "utf8",
       stdio: "pipe",
+      env: gitEnv(),
     }).trim();
     if (checkout !== LINUX_SOURCE_COMMIT)
       throw new Error(
@@ -167,6 +170,7 @@ export function dictationArchive(root: string, repositoryRoot: string) {
         cwd: sourceRoot,
         encoding: "utf8",
         stdio: "pipe",
+        env: gitEnv(),
       }),
     ) as Manifest;
     if (!isDeepStrictEqual(manifest, reviewed))

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { isJsonRecord, isJsonString } from "../../electron/host-api";
+import { gitEnv } from "../../../scripts/git-env.mjs";
 import { waitForPidGone } from "./host-runtime";
 import type { JsonValue } from "./signed-app-types";
 
@@ -36,7 +37,12 @@ export const createGitProject = (root: string): string => {
   const project = path.join(root, "daedalus-project");
   fs.mkdirSync(project, { recursive: true });
   const git = (args: string[]) =>
-    execFileSync("git", args, { cwd: project, stdio: "ignore", windowsHide: true });
+    execFileSync("git", args, {
+      cwd: project,
+      stdio: "ignore",
+      windowsHide: true,
+      env: gitEnv(),
+    });
   git(["init"]);
   git(["config", "user.email", "daedalus@test.invalid"]);
   git(["config", "user.name", "Daedalus Test"]);
