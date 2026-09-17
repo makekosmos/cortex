@@ -138,8 +138,10 @@ export type InstalledStoreItem = PackageItem & {
     relations_write: string[];
   }>;
 };
+export type StorePlatform = "windows" | "macos" | "linux" | "ios" | "android";
 export type StoreCatalogSnapshot = {
   state: "fresh" | "expired" | "unavailable";
+  platform?: StorePlatform;
   sequence?: number;
   issued_at?: string;
   expires_at?: string;

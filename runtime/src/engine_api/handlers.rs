@@ -1,6 +1,7 @@
 include!("handlers/request.rs");
 include!("handlers/request_routes.rs");
 include!("handlers/directory_grant.rs");
+include!("handlers/user_data.rs");
 include!("handlers/app_rpc.rs");
 include!("handlers/assets.rs");
 include!("handlers/authorization.rs");

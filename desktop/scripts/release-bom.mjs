@@ -196,7 +196,7 @@ export function validateReleaseBom(value, context) {
   return value;
 }
 
-async function repositoryContext(root, platform, currentCommit) {
+export async function repositoryContext(root, platform, currentCommit) {
   const packageJson = await readJson(path.join(root, "package.json"));
   const workspace = packageJson.kosmos?.workspace;
   if (!workspace?.imago || !workspace?.["arca-sdk"])

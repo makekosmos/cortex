@@ -28,6 +28,7 @@ test("Cortex command and test contracts do not require Bun", () => {
     "manager/package.json",
     "lefthook.yml",
     "README.md",
+    "scripts/check-plan-commands.mjs",
   ];
   for (const file of files) assert.doesNotMatch(read(file), /\bbun(?:x)?\b|bun:test/, file);
   for (const file of ["desktop", "host", "manager"]) {

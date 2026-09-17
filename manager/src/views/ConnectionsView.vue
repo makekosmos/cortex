@@ -13,7 +13,6 @@ import {
   canLogin,
   credentialType,
   integrationCards,
-  windowsListings,
   type ConnectionCard,
 } from "../connection-helpers";
 import { installTarget } from "../store-helpers";
@@ -31,7 +30,11 @@ const disclosure = usePackageDisclosure(props.client);
 const busy = ref<string | null>(null);
 const selectedProvider = ref<string | null>(null);
 const cards = computed(() =>
-  integrationCards(windowsListings(catalog.value?.listings ?? []), snapshot.value?.providers ?? []),
+  integrationCards(
+    catalog.value?.listings ?? [],
+    snapshot.value?.providers ?? [],
+    catalog.value?.platform,
+  ),
 );
 const selectedCard = computed(() => cards.value.find((card) => card.id === selectedProvider.value));
 const selected = computed(() => selectedCard.value?.provider);
@@ -107,18 +110,8 @@ async function save(provider: IntegrationProvider) {
 }
 async function act(provider: IntegrationProvider, action: "clear" | "sync") {
   busy.value = `${provider.id}:${action}`;
-  if (action === "clear")
-    await props.client.call(
-      "clearIntegrationCredential",
-      { provider: provider.id },
-      `integration:${provider.id}`,
-    );
-  if (action === "sync")
-    await props.client.call(
-      "syncIntegrationNow",
-      { provider: provider.id },
-      `integration:${provider.id}`,
-    );
+  const op = action === "clear" ? "clearIntegrationCredential" : "syncIntegrationNow";
+  await props.client.call(op, { provider: provider.id }, `integration:${provider.id}`);
   busy.value = null;
   await load();
 }

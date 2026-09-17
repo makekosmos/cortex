@@ -886,7 +886,14 @@ mod tests {
     fn worker_entrypoint_selects_the_current_target_only() {
         let input = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["windows"]},{"runtime":"worker","os":["windows"],"arch":["x86_64"],"entrypoint":"worker-windows.exe"},{"runtime":"worker","os":["linux"],"arch":["x86_64"],"entrypoint":"worker-linux.exe"}],"data":{"access":[],"defines":[],"mappings":[]}}"#;
         let manifest = PackageManifest::parse(input).unwrap();
-        assert_eq!(manifest.worker_entrypoint(), Some("worker-windows.exe"));
+        let expected = if cfg!(windows) {
+            Some("worker-windows.exe")
+        } else if cfg!(target_os = "linux") {
+            Some("worker-linux.exe")
+        } else {
+            None
+        };
+        assert_eq!(manifest.worker_entrypoint(), expected);
         let VersionedManifest::V2(manifest) = manifest else {
             panic!()
         };

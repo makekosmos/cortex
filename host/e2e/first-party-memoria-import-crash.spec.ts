@@ -6,16 +6,21 @@ import { _electron as electron, type ElectronApplication } from "playwright";
 import { test, expect } from "@playwright/test";
 import electronBinary from "electron";
 import { createSignedApps } from "./fixtures/signed-apps";
-import { installPartialImportCrashPause } from "./fixtures/memoria-partial-import";
+import {
+  installPartialImportCrashPause,
+  readImportCrashDiagnostics,
+} from "./fixtures/memoria-partial-import";
 import {
   buildEngine,
   cargoTarget,
   closeHost,
   crashProcessTree,
+  executableName,
   hostE2eEnvironment,
   processTreePids,
   recordCleanup,
   rpc,
+  rpcError,
   startEngine,
   terminate,
   waitForPidGone,
@@ -37,10 +42,14 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
   const userData = path.join(root, "host-user-data");
   const environment = hostE2eEnvironment({
     APPDATA: path.join(root, "appdata"),
+    XDG_CONFIG_HOME: path.join(root, "xdg-config"),
     KOSMOS_DATA_DIR: dataDir,
     KOSMOS_HEADLESS: "1",
     KOSMOS_TEST_MODE: "1",
   });
+  // Linux containers typically lack unprivileged user namespaces for the
+  // Chromium SUID sandbox.
+  if (process.platform === "linux") environment.ELECTRON_DISABLE_SANDBOX = "1";
   if (process.env.KEPLER_BACKEND_EXE) {
     environment.KEPLER_BACKEND_EXE = process.env.KEPLER_BACKEND_EXE;
   }
@@ -68,33 +77,25 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     engine = started.child;
     if (engine.pid) pids.add(engine.pid);
     let lock = started.lock;
-    expect((await rpc(lock, "packages.trust_status")).ok).toBe(true);
-    expect(
-      (
-        await rpc(lock, "packages.catalog_apply", {
-          document: apps.catalog,
-          signatures: apps.signatures,
-        })
-      ).ok,
-    ).toBe(true);
-    expect(
-      (
-        await rpc(lock, "packages.install", {
-          id: "com.kosmos.memoria",
-          version,
-          archive_path: archive,
-        })
-      ).ok,
-    ).toBe(true);
-    expect(
-      (
-        await rpc(lock, "packages.set_enabled", {
-          id: "com.kosmos.memoria",
-          version,
-          enabled: true,
-        })
-      ).ok,
-    ).toBe(true);
+    const trust = await rpc(lock, "packages.trust_status");
+    expect(trust.ok, rpcError(trust)).toBe(true);
+    const catalog = await rpc(lock, "packages.catalog_apply", {
+      document: apps.catalog,
+      signatures: apps.signatures,
+    });
+    expect(catalog.ok, rpcError(catalog)).toBe(true);
+    const install = await rpc(lock, "packages.install", {
+      id: "com.kosmos.memoria",
+      version,
+      archive_path: archive,
+    });
+    expect(install.ok, rpcError(install)).toBe(true);
+    const enable = await rpc(lock, "packages.set_enabled", {
+      id: "com.kosmos.memoria",
+      version,
+      enabled: true,
+    });
+    expect(enable.ok, rpcError(enable)).toBe(true);
 
     host = await launchHost();
     pids.add(host.process().pid);
@@ -117,21 +118,43 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     await installPartialImportCrashPause(page, path.join(root, "crash-import-vault"));
     await page.getByTestId("eden-import-obsidian-vault").getByRole("button").click();
     await expect
-      .poll(
-        () =>
-          page.evaluate(() => {
-            // SAFETY: the fixture installs this test-only marker before the import starts.
-            return Boolean(
-              (window as typeof window & { __memoriaImportFirstWrite?: boolean })
-                .__memoriaImportFirstWrite,
-            );
-          }),
-        { timeout: 30_000 },
+      .poll(() =>
+        page.evaluate(() => {
+          // SAFETY: the fixture installs this test-only marker before the import starts.
+          return Boolean(
+            (window as typeof window & { __memoriaPartialImportOpened?: boolean })
+              .__memoriaPartialImportOpened,
+          );
+        }),
       )
       .toBe(true);
+    try {
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() => {
+              // SAFETY: the fixture installs this test-only marker before the import starts.
+              return Boolean(
+                (window as typeof window & { __memoriaImportFirstWrite?: boolean })
+                  .__memoriaImportFirstWrite,
+              );
+            }),
+          { timeout: 30_000 },
+        )
+        .toBe(true);
+    } catch (error) {
+      const diagnostics = await readImportCrashDiagnostics(page);
+      console.log(
+        `[host-e2e] import diagnostics on first-write timeout=${JSON.stringify(diagnostics)}`,
+      );
+      console.log(
+        `[host-e2e] host windows=${JSON.stringify((host?.windows() ?? []).map((win) => win.url()))}`,
+      );
+      throw error;
+    }
 
     console.log(
-      `[host-e2e] journal before crash=${await page.evaluate(() => localStorage.getItem("memoria.obsidian-import-journal.v1"))}`,
+      `[host-e2e] journal before crash=${JSON.stringify(await readImportCrashDiagnostics(page))}`,
     );
     await closeHost(host, pids);
     host = undefined;
@@ -164,6 +187,30 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
         ),
       )
       .toEqual(baselineEntryIds);
+    // Recovery persists one checkpoint per compensated operation, so the
+    // journal still reads "applying" while later operations roll back —
+    // entry IDs reach baseline as soon as the in-flight write is undone.
+    // Wait for the terminal checkpoint, which flips status last.
+    let afterRestart: Awaited<ReturnType<typeof readImportCrashDiagnostics>> | null = null;
+    try {
+      await expect
+        .poll(
+          async () => {
+            afterRestart = await readImportCrashDiagnostics(page);
+            return afterRestart.journal.userData?.status ?? null;
+          },
+          { timeout: 30_000 },
+        )
+        .toBe("rolled-back");
+    } finally {
+      console.log(`[host-e2e] journal after restart=${JSON.stringify(afterRestart)}`);
+    }
+    expect(afterRestart?.journal.userData, JSON.stringify(afterRestart?.journal)).toMatchObject({
+      status: "rolled-back",
+      applied: [],
+      inFlight: null,
+      rolledBack: expect.arrayContaining([0, 1]),
+    });
   } finally {
     const cleanupErrors: unknown[] = [];
     const attempt = async (action: () => Promise<void>) => {
@@ -175,17 +222,9 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     };
     if (host) pids.add(host.process().pid);
     await attempt(() => closeHost(host, pids));
-    await attempt(() =>
-      terminate(
-        restartedEngine,
-        path.join(cargoTarget(), "debug", "kepler-backend.exe"),
-        dataDir,
-        "restarted Engine",
-      ),
-    );
-    await attempt(() =>
-      terminate(engine, path.join(cargoTarget(), "debug", "kepler-backend.exe"), dataDir, "Engine"),
-    );
+    const engineBinary = path.join(cargoTarget(), "debug", executableName("kepler-backend"));
+    await attempt(() => terminate(restartedEngine, engineBinary, dataDir, "restarted Engine"));
+    await attempt(() => terminate(engine, engineBinary, dataDir, "Engine"));
     for (const pid of pids) await attempt(() => waitForPidGone(pid, "recorded teardown process"));
     try {
       recordCleanup(cleanupManifest, root, pids);

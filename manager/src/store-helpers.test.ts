@@ -5,6 +5,7 @@ import {
   installKey,
   installedForListing,
   latestInstalledPackages,
+  listingSupportsPlatform,
   packageAction,
 } from "./store-helpers";
 
@@ -67,6 +68,22 @@ describe("store helpers", () => {
       package_id: "com.kosmos.dictation",
       version: "1.1.0",
     });
+  });
+
+  test("gates listings on the host platform token", () => {
+    const windowsOnly = listing("listing.windows", "pkg.windows");
+    const portable = {
+      ...listing("listing.portable", "pkg.portable"),
+      availability: { platforms: ["windows", "linux"] },
+    };
+    const undeclared = { ...listing("listing.none", "pkg.none"), availability: undefined };
+
+    expect(listingSupportsPlatform(windowsOnly, "linux")).toBe(false);
+    expect(listingSupportsPlatform(portable, "linux")).toBe(true);
+    expect(listingSupportsPlatform(undeclared, "linux")).toBe(false);
+    // No host token → no platform gate (fixture/degraded contexts stay visible).
+    expect(listingSupportsPlatform(windowsOnly)).toBe(true);
+    expect(listingSupportsPlatform(undeclared)).toBe(true);
   });
 
   test("only exposes an install action when a target version exists", () => {

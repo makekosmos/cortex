@@ -44,6 +44,7 @@ pub struct EngineApiServer {
     correlation_id: Arc<String>,
     package_service: Arc<PackageService>,
     launch_leases: Arc<Mutex<LaunchLeaseRegistry>>,
+    user_data: Arc<crate::user_data::UserDataRoots>,
     cleanup_interval: Duration,
     operations: HttpOperationRegistry,
     connections: Arc<HttpConnectionLifecycle>,
@@ -383,6 +384,7 @@ impl EngineApiServer {
             correlation_id: Arc::new(correlation_id),
             package_service,
             launch_leases: Arc::new(Mutex::new(LaunchLeaseRegistry::with_limits(ttl, capacity))),
+            user_data: Arc::new(crate::user_data::UserDataRoots::new()),
             cleanup_interval,
             operations: HttpOperationRegistry::default(),
             connections: Arc::new(HttpConnectionLifecycle::default()),
@@ -436,6 +438,7 @@ impl EngineApiServer {
             let request_timeout = self.request_timeout;
             let operations = self.operations.clone();
             let launch_leases = self.launch_leases.clone();
+            let user_data = self.user_data.clone();
             let http_port = self.port();
             let connections = self.connections.clone();
             let permit = match connections.capacity.clone().try_acquire_owned() {
@@ -486,6 +489,7 @@ impl EngineApiServer {
                         request_timeout,
                         operations.clone(),
                         launch_leases.clone(),
+                        user_data.clone(),
                         http_port,
                     )
                 });

@@ -10,6 +10,7 @@ import {
   buildEngine,
   cargoTarget,
   closeHost,
+  executableName,
   hostE2eEnvironment,
   recordCleanup,
   rpc,
@@ -31,10 +32,14 @@ test("signed Agenda installs, runs in Host, and survives Engine restart", async 
   const userData = path.join(root, "host-user-data");
   const environment = hostE2eEnvironment({
     APPDATA: path.join(root, "appdata"),
+    XDG_CONFIG_HOME: path.join(root, "xdg-config"),
     KOSMOS_DATA_DIR: dataDir,
     KOSMOS_HEADLESS: "1",
     KOSMOS_TEST_MODE: "1",
   });
+  // Linux containers typically lack unprivileged user namespaces for the
+  // Chromium SUID sandbox.
+  if (process.platform === "linux") environment.ELECTRON_DISABLE_SANDBOX = "1";
   const cleanupManifest = process.env.KOSMOS_HOST_E2E_CLEANUP_MANIFEST;
   if (!cleanupManifest) throw new Error("KOSMOS_HOST_E2E_CLEANUP_MANIFEST is required");
   recordCleanup(cleanupManifest, root, new Set());
@@ -275,17 +280,9 @@ test("signed Agenda installs, runs in Host, and survives Engine restart", async 
     };
     if (host) pids.add(host.process().pid);
     await attempt(() => closeHost(host, pids));
-    await attempt(() =>
-      terminate(
-        restartedEngine,
-        path.join(cargoTarget(), "debug", "kepler-backend.exe"),
-        dataDir,
-        "restarted Engine",
-      ),
-    );
-    await attempt(() =>
-      terminate(engine, path.join(cargoTarget(), "debug", "kepler-backend.exe"), dataDir, "Engine"),
-    );
+    const engineBinary = path.join(cargoTarget(), "debug", executableName("kepler-backend"));
+    await attempt(() => terminate(restartedEngine, engineBinary, dataDir, "restarted Engine"));
+    await attempt(() => terminate(engine, engineBinary, dataDir, "Engine"));
     for (const pid of pids) {
       await attempt(() => waitForPidGone(pid, "recorded teardown process"));
     }

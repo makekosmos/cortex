@@ -23,7 +23,10 @@ import { LaunchOwnership, type OwnedLaunch } from "./launch-ownership";
 import { kosmosAppIcon, kosmosAppName, kosmosAppShortcutIcon } from "./kosmos-app-branding";
 import { reconcileShortcuts } from "./shortcuts";
 import { parseOpenAppRequest, sendNavigationWhenReady } from "./app-navigation";
-import { registerExtensionUserDataIpc } from "./extension-user-data-ipc";
+import {
+  createEngineUserDataStores,
+  registerExtensionUserDataIpc,
+} from "./extension-user-data-ipc";
 
 const requested = (argv: string[]) => {
   for (let index = 0; index < argv.length; index += 1) {
@@ -372,6 +375,16 @@ if (!singleInstance) {
         parsed.request.route,
       );
     });
+    const userDataStores = createEngineUserDataStores(
+      {
+        openRoot: (root) => engine.userDataOpenRoot(root),
+        read: (rootId, appId, key) => engine.userDataRead(rootId, appId, key),
+        write: (rootId, appId, key, bytes) => engine.userDataWrite(rootId, appId, key, bytes),
+        stat: (rootId, appId, key) => engine.userDataStat(rootId, appId, key),
+        delete: (rootId, appId, key) => engine.userDataDelete(rootId, appId, key),
+      },
+      app.getPath("userData"),
+    );
     registerExtensionUserDataIpc({
       handle: (channel, handler) => ipcMain.handle(channel, handler),
       resolveAppForSender: (sender) => {
@@ -382,7 +395,7 @@ if (!singleInstance) {
           ? { appId: appId!, permissions: manifest.permissions.map((p) => p.capability) }
           : null;
       },
-      userDataDirForApp: (appId) => path.join(app.getPath("userData"), "extension-data", appId),
+      userDataStoreForApp: (appId) => userDataStores.forApp(appId),
     });
     ipcMain.handle("host:user-data", (event, input: JsonRecord | undefined) => {
       const operation = input?.operation;

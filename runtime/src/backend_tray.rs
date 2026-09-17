@@ -37,11 +37,12 @@ pub fn start() -> (BackendTray, UnboundedReceiver<TrayEvent>) {
 }
 
 impl BackendTray {
-    pub fn stop(mut self) {
+    pub fn stop(self) {
         #[cfg(windows)]
         {
-            windows_impl::stop(self.thread_id);
-            if let Some(join) = self.join.take() {
+            let mut this = self;
+            windows_impl::stop(this.thread_id);
+            if let Some(join) = this.join.take() {
                 let _ = join.join();
             }
         }

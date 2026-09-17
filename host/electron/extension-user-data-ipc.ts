@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
-import { lstat, mkdir, open, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { mkdirSync } from "node:fs";
 import type { WebContents } from "electron";
-import { isJsonString } from "./host-api";
+import { isJsonString, type UserDataCallResult } from "./host-api";
+
+export type { UserDataCallResult } from "./host-api";
 
 type JsonValue =
   | string
@@ -37,205 +37,152 @@ export function validateUserDataKey(key: string): boolean {
 function resultError(error: UserDataError): UserDataResult<never> {
   return { ok: false, error };
 }
-export type UserDataOperation = "read" | "write" | "delete" | "stat";
-export interface UserDataStoreOptions {
-  beforeAccess?: (operation: UserDataOperation, filePath: string) => void | Promise<void>;
-}
 
-function samePath(left: string, right: string): boolean {
-  const a = path.normalize(left);
-  const b = path.normalize(right);
-  return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
-}
-
-function isContained(root: string, candidate: string): boolean {
-  const relative = path.relative(root, candidate);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
-
-export function createUserDataStore(root: string, options: UserDataStoreOptions = {}) {
-  const resolvedRoot = path.resolve(root);
-  const filePath = (key: string): string | null => {
-    if (!validateUserDataKey(key)) return null;
-    const normalized = key.replaceAll("\\", "/");
-    const resolved = path.resolve(resolvedRoot, ...normalized.split("/"));
-    const relative = path.relative(resolvedRoot, resolved);
-    return relative.startsWith("..") || path.isAbsolute(relative) ? null : resolved;
-  };
-
-  const safeFilePath = async (
+/**
+ * Binary user-data primitive implemented by Engine over its handle-relative
+ * native filesystem. `openRoot` pins the Host userData base directory once;
+ * every operation resolves `extension-data/<appId>/<key>` relative to that
+ * handle, so a junction or replaced parent can never redirect I/O outside it.
+ * A reported `unknown-root` asks the caller to re-pin and retry once.
+ */
+export interface UserDataBackend {
+  openRoot(root: string): Promise<UserDataCallResult<{ rootId: string }>>;
+  read(rootId: string, appId: string, key: string): Promise<UserDataCallResult<Uint8Array>>;
+  write(
+    rootId: string,
+    appId: string,
     key: string,
-    createParents = false,
-  ): Promise<UserDataResult<string>> => {
-    const file = filePath(key);
-    if (!file) return resultError("invalid-key");
-    let realRoot: string;
-    try {
-      realRoot = await realpath(resolvedRoot);
-    } catch (error) {
-      return resultError(
-        !createParents && error instanceof Error && "code" in error && error.code === "ENOENT"
-          ? "not-found"
-          : "io-error",
-      );
-    }
-    if (!samePath(realRoot, resolvedRoot)) return resultError("io-error");
-    let current = realRoot;
-    const parts = key.replaceAll("\\", "/").split("/");
-    for (const [index, part] of parts.entries()) {
-      current = path.join(current, part);
-      try {
-        const entry = await lstat(current);
-        const realPath = await realpath(current);
-        if (
-          entry.isSymbolicLink() ||
-          !samePath(realPath, current) ||
-          !isContained(realRoot, realPath)
-        )
+    bytes: Uint8Array,
+  ): Promise<UserDataCallResult<{ sizeBytes: number }>>;
+  stat(
+    rootId: string,
+    appId: string,
+    key: string,
+  ): Promise<UserDataCallResult<{ sizeBytes: number }>>;
+  delete(
+    rootId: string,
+    appId: string,
+    key: string,
+  ): Promise<UserDataCallResult<{ deleted: true }>>;
+}
+
+export interface UserDataStore {
+  read(key: string): Promise<UserDataReadResult>;
+  write(key: string, bytes: Uint8Array): Promise<UserDataWriteResult>;
+  delete(key: string): Promise<UserDataDeleteResult>;
+  stat(key: string): Promise<UserDataStatResult>;
+}
+
+export interface UserDataStores {
+  forApp(appId: string): UserDataStore;
+}
+
+const SAFE_ROOT_ID = /^[\w-]{1,128}$/;
+const SAFE_APP_ID = /^[\w][\w.-]{0,255}$/;
+
+function mapEngineError(code: string): UserDataError {
+  return code === "not-found" || code === "invalid-key" || code === "too-large" ? code : "io-error";
+}
+
+export function createEngineUserDataStores(
+  backend: UserDataBackend,
+  userDataRoot: string,
+): UserDataStores {
+  let pinned: Promise<UserDataResult<string>> | null = null;
+
+  const pin = (): Promise<UserDataResult<string>> => {
+    if (pinned) return pinned;
+    const pending = backend.openRoot(userDataRoot).then(async (result) => {
+      if (!result.ok && result.error === "not-found") {
+        try {
+          mkdirSync(userDataRoot, { recursive: true });
+        } catch {
           return resultError("io-error");
-      } catch (error) {
-        if (
-          error instanceof Error &&
-          "code" in error &&
-          error.code === "ENOENT" &&
-          createParents &&
-          index < parts.length - 1
-        ) {
-          try {
-            await mkdir(current);
-          } catch (mkdirError) {
-            if (
-              !(mkdirError instanceof Error) ||
-              !("code" in mkdirError) ||
-              mkdirError.code !== "EEXIST"
-            )
-              return resultError("io-error");
-          }
-          try {
-            const entry = await lstat(current);
-            const realPath = await realpath(current);
-            if (
-              entry.isSymbolicLink() ||
-              !samePath(realPath, current) ||
-              !isContained(realRoot, realPath)
-            )
-              return resultError("io-error");
-          } catch {
-            return resultError("io-error");
-          }
-          continue;
         }
-        if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-          return createParents || index === parts.length - 1
-            ? { ok: true, data: current }
-            : resultError("not-found");
-        }
-        return resultError("io-error");
+        result = await backend.openRoot(userDataRoot);
       }
-    }
-    return { ok: true, data: current };
+      if (!result.ok) return resultError(mapEngineError(result.error));
+      return SAFE_ROOT_ID.test(result.data.rootId)
+        ? ({ ok: true, data: result.data.rootId } as const)
+        : resultError("io-error");
+    });
+    pinned = pending;
+    void pending.then((settled) => {
+      if (!settled.ok && pinned === pending) pinned = null;
+    });
+    return pending;
   };
 
-  const resolveForAccess = async (
-    key: string,
-    operation: UserDataOperation,
-    createParents = false,
-  ): Promise<UserDataResult<string>> => {
-    const resolved = await safeFilePath(key, createParents);
-    if (!resolved.ok) return resolved;
-    try {
-      await options.beforeAccess?.(operation, resolved.data);
-    } catch {
-      return resultError("io-error");
+  const invoke = async <T>(
+    appId: string,
+    call: (rootId: string) => Promise<UserDataCallResult<T>>,
+  ): Promise<UserDataResult<T>> => {
+    if (!SAFE_APP_ID.test(appId)) return resultError("io-error");
+    let root = await pin();
+    if (!root.ok) return root;
+    let result = await call(root.data);
+    if (!result.ok && result.error === "unknown-root") {
+      pinned = null;
+      root = await pin();
+      if (!root.ok) return root;
+      result = await call(root.data);
     }
-    const verified = await safeFilePath(key, createParents);
-    return verified.ok && samePath(verified.data, resolved.data)
-      ? verified
-      : resultError("io-error");
+    return result.ok ? result : resultError(mapEngineError(result.error));
   };
 
-  const readStat = async (key: string, operation: "stat" = "stat"): Promise<UserDataStatResult> => {
-    const resolved = await resolveForAccess(key, operation);
-    if (!resolved.ok) return resolved;
-    try {
-      const details = await stat(resolved.data);
-      if (!details.isFile()) return resultError("io-error");
-      if (details.size > USER_DATA_MAX_BYTES) return resultError("too-large");
-      return { ok: true, data: { sizeBytes: details.size } };
-    } catch (error) {
-      return resultError(
-        error instanceof Error && "code" in error && error.code === "ENOENT"
-          ? "not-found"
-          : "io-error",
-      );
-    }
-  };
+  const stores = new Map<string, UserDataStore>();
 
   return {
-    async read(key: string): Promise<UserDataReadResult> {
-      const resolved = await resolveForAccess(key, "read");
-      if (!resolved.ok) return resolved;
-      let file: Awaited<ReturnType<typeof open>> | undefined;
-      try {
-        file = await open(resolved.data, "r");
-        const details = await file.stat();
-        if (!details.isFile()) return resultError("io-error");
-        if (details.size > USER_DATA_MAX_BYTES) return resultError("too-large");
-        const buffer = Buffer.allocUnsafe(USER_DATA_MAX_BYTES + 1);
-        const { bytesRead } = await file.read(buffer, 0, USER_DATA_MAX_BYTES + 1, 0);
-        return bytesRead > USER_DATA_MAX_BYTES
-          ? resultError("too-large")
-          : { ok: true, data: new Uint8Array(buffer.subarray(0, bytesRead)) };
-      } catch (error) {
-        return resultError(
-          error instanceof Error && "code" in error && error.code === "ENOENT"
-            ? "not-found"
-            : "io-error",
-        );
-      } finally {
-        await file?.close().catch(() => undefined);
-      }
+    forApp(appId: string): UserDataStore {
+      let store = stores.get(appId);
+      if (store) return store;
+      store = {
+        read(key) {
+          if (!validateUserDataKey(key)) return Promise.resolve(resultError("invalid-key"));
+          return invoke(appId, (rootId) => backend.read(rootId, appId, key)).then((result) =>
+            result.ok && result.data.byteLength > USER_DATA_MAX_BYTES
+              ? resultError("too-large")
+              : result,
+          );
+        },
+        write(key, bytes) {
+          if (!(bytes instanceof Uint8Array)) return Promise.resolve(resultError("io-error"));
+          if (bytes.byteLength > USER_DATA_MAX_BYTES)
+            return Promise.resolve(resultError("too-large"));
+          if (!validateUserDataKey(key)) return Promise.resolve(resultError("invalid-key"));
+          return invoke(appId, (rootId) => backend.write(rootId, appId, key, bytes)).then(
+            (result) =>
+              result.ok && result.data.sizeBytes !== bytes.byteLength
+                ? resultError("io-error")
+                : result,
+          );
+        },
+        delete(key) {
+          if (!validateUserDataKey(key)) return Promise.resolve(resultError("invalid-key"));
+          return invoke(appId, (rootId) => backend.delete(rootId, appId, key)).then((result) =>
+            result.ok
+              ? result.data.deleted === true
+                ? ({ ok: true, data: true } as const)
+                : resultError("io-error")
+              : result,
+          );
+        },
+        stat(key) {
+          if (!validateUserDataKey(key)) return Promise.resolve(resultError("invalid-key"));
+          return invoke(appId, (rootId) => backend.stat(rootId, appId, key)).then((result) => {
+            if (!result.ok) return result;
+            const sizeBytes = result.data.sizeBytes;
+            return !Number.isInteger(sizeBytes) || sizeBytes < 0
+              ? resultError("io-error")
+              : sizeBytes > USER_DATA_MAX_BYTES
+                ? resultError("too-large")
+                : result;
+          });
+        },
+      };
+      stores.set(appId, store);
+      return store;
     },
-
-    async write(key: string, bytes: Uint8Array): Promise<UserDataWriteResult> {
-      if (!(bytes instanceof Uint8Array)) return resultError("io-error");
-      if (bytes.byteLength > USER_DATA_MAX_BYTES) return resultError("too-large");
-      try {
-        await mkdir(resolvedRoot, { recursive: true });
-      } catch {
-        return resultError("io-error");
-      }
-      const resolved = await resolveForAccess(key, "write", true);
-      if (!resolved.ok) return resolved;
-      const file = resolved.data;
-      const temporary = `${file}.${randomUUID()}.tmp`;
-      try {
-        await writeFile(temporary, Buffer.from(bytes), { flag: "wx" });
-        await rename(temporary, file);
-        return { ok: true, data: { sizeBytes: bytes.byteLength } };
-      } catch {
-        return resultError("io-error");
-      } finally {
-        await rm(temporary, { force: true }).catch(() => undefined);
-      }
-    },
-
-    async delete(key: string): Promise<UserDataDeleteResult> {
-      const resolved = await resolveForAccess(key, "delete");
-      if (!resolved.ok) return resolved;
-      try {
-        await rm(resolved.data);
-        return { ok: true, data: true };
-      } catch (error) {
-        return resultError(
-          error instanceof Error && "code" in error && error.code === "ENOENT"
-            ? "not-found"
-            : "io-error",
-        );
-      }
-    },
-
-    stat: (key: string) => readStat(key),
   };
 }
 
@@ -251,7 +198,7 @@ export interface UserDataAppAuthority {
 export interface ExtensionUserDataIpcOptions {
   handle(channel: string, handler: UserDataIpcHandler): void;
   resolveAppForSender(sender: WebContents): UserDataAppAuthority | null;
-  userDataDirForApp(appId: string): string;
+  userDataStoreForApp(appId: string): UserDataStore;
 }
 
 export type UserDataIpcEnvelope = {
@@ -281,7 +228,7 @@ export type UserDataIpcHandler = (
 export function registerExtensionUserDataIpc({
   handle,
   resolveAppForSender,
-  userDataDirForApp,
+  userDataStoreForApp,
 }: ExtensionUserDataIpcOptions): void {
   handle("host:user-data:binary", async (event, input) => {
     const authority = resolveAppForSender(event.sender);
@@ -291,7 +238,7 @@ export function registerExtensionUserDataIpc({
     const writing = request.operation === "write" || request.operation === "delete";
     const permission = writing ? "filesystem.write" : "filesystem.read";
     if (!authority.permissions.includes(permission)) throw new Error("User data permission denied");
-    const store = createUserDataStore(userDataDirForApp(authority.appId));
+    const store = userDataStoreForApp(authority.appId);
     if (request.operation === "read") return store.read(request.key);
     if (request.operation === "write") return store.write(request.key, request.bytes);
     if (request.operation === "delete") return store.delete(request.key);

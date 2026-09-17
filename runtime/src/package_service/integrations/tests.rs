@@ -23,7 +23,7 @@ fn integration_manifest(version: &str) -> VersionedManifest {
         permissions: vec![],
         targets: vec![ManifestTarget {
             runtime: TargetRuntime::Worker,
-            os: vec![TargetOs::Windows],
+            os: vec![TargetOs::Windows, TargetOs::Macos, TargetOs::Linux],
             arch: None,
             entrypoint: Some("worker.exe".into()),
         }],

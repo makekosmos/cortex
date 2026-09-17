@@ -15,11 +15,13 @@ const version = JSON.parse(
   readFileSync(path.join(root, "desktop", "release-versions.json"), "utf8"),
 ).win;
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-const icons = spawnSync(pnpm, ["run", "scripts/build-app-icons.mjs"], {
-  cwd: path.join(root, "desktop"),
-  stdio: "inherit",
-  windowsHide: true,
-});
+const shell = pnpm.endsWith(".cmd");
+const shellArg = (value) => (shell ? `"${value}"` : value);
+const icons = spawnSync(
+  process.execPath,
+  [path.join(root, "desktop", "scripts/build-app-icons.mjs")],
+  { cwd: path.join(root, "desktop"), stdio: "inherit", windowsHide: true },
+);
 if (icons.status !== 0) process.exit(icons.status ?? 1);
 const components = ["manager", "host"];
 for (const component of components) {
@@ -28,6 +30,7 @@ for (const component of components) {
     cwd,
     stdio: "inherit",
     windowsHide: true,
+    shell,
   });
   if (build.status !== 0) process.exit(build.status ?? 1);
   const output = path.join(root, "desktop", ".tmp", "components", component);
@@ -42,9 +45,9 @@ for (const component of components) {
       "never",
       `--config.extraMetadata.version=${version}`,
       "--config.win.signExecutable=false",
-      `--config.directories.output=${output}`,
+      `--config.directories.output=${shellArg(output)}`,
     ],
-    { cwd, stdio: "inherit", windowsHide: true },
+    { cwd, stdio: "inherit", windowsHide: true, shell },
   );
   if (packaged.status !== 0) process.exit(packaged.status ?? 1);
 }

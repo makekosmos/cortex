@@ -6,10 +6,12 @@ import { _electron as electron, type ElectronApplication } from "playwright";
 import { test, expect } from "@playwright/test";
 import electronBinary from "electron";
 import { createSignedApps } from "./fixtures/signed-apps";
+import { DICTATION_ARCHIVE_SHA256 } from "./fixtures/dictation-archive";
 import {
   buildEngine,
   cargoTarget,
   closeHost,
+  executableName,
   hostE2eEnvironment,
   recordCleanup,
   rpc,
@@ -21,6 +23,12 @@ import {
 const hostRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceRoot = path.resolve(hostRoot, "..", "..");
 const hostMain = path.join(hostRoot, "dist-electron", "main.js");
+// Package workers are Windows-only: the Linux pin (0.2.5) declares a
+// Windows-only worker target, so it enables through the kosmos-host target
+// alone and the worker-backed/control ops answer "unavailable". The win32
+// pin (0.2.2) predates the worker contract entirely.
+const isWindows = process.platform === "win32";
+const expectedVersion = isWindows ? "0.2.2" : "0.2.5";
 const forbiddenRendererKeys =
   /"(?:apiKey|credentialHandle|secret|token|password|localModelPath|localCommandPath|microphoneDeviceId|modelsDir|commandPath|path|url|filename|description|networkProfile|httpProxy|transcriptionPrompt|activeUuid|lastError)"\s*:/;
 
@@ -36,10 +44,13 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
   const userData = path.join(root, "host-user-data");
   const environment = hostE2eEnvironment({
     APPDATA: path.join(root, "appdata"),
+    XDG_CONFIG_HOME: path.join(root, "xdg-config"),
     KOSMOS_DATA_DIR: dataDir,
     KOSMOS_HEADLESS: "1",
     KOSMOS_TEST_MODE: "1",
   });
+  // Linux containers lack unprivileged user namespaces for the Chromium sandbox.
+  if (process.platform === "linux") environment.ELECTRON_DISABLE_SANDBOX = "1";
   let host: ElectronApplication | undefined;
   let engine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
   let restartedEngine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
@@ -57,7 +68,8 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
       false,
       true,
     );
-    expect(apps.versions["com.kosmos.dictation"]).toBe("0.2.2");
+    const version = apps.versions["com.kosmos.dictation"];
+    expect(version).toBe(expectedVersion);
     const archive = apps.archives["com.kosmos.dictation"];
     expect(archive).toBeTruthy();
     // SAFETY: createSignedApps serializes the catalog shape asserted below.
@@ -74,10 +86,10 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
       manifest: {
         schema_version: 2,
         id: "com.kosmos.dictation",
-        version: "0.2.2",
+        version: expectedVersion,
         entrypoint: "dist/index.html",
       },
-      sha256: "2a1c001a2240275a4f8fa5307cce1faf1132442f8a51e98bbbbd7de1800ffac6",
+      sha256: DICTATION_ARCHIVE_SHA256,
     });
 
     const binaries = buildEngine(apps.trust);
@@ -99,7 +111,7 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
       (
         await rpc(lock, "packages.install", {
           id: "com.kosmos.dictation",
-          version: "0.2.2",
+          version,
           archive_path: archive,
         })
       ).ok,
@@ -108,11 +120,24 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
       (
         await rpc(lock, "packages.set_enabled", {
           id: "com.kosmos.dictation",
-          version: "0.2.2",
+          version,
           enabled: true,
         })
       ).ok,
     ).toBe(true);
+    expect(await rpc(lock, "packages.list", { kind: "app" })).toMatchObject({
+      ok: true,
+      data: {
+        packages: expect.arrayContaining([
+          expect.objectContaining({
+            id: "com.kosmos.dictation",
+            version,
+            enabled: true,
+            worker_state: "stopped",
+          }),
+        ]),
+      },
+    });
 
     host = await electron.launch({
       executablePath: electronBinary,
@@ -125,7 +150,7 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
     await expect.poll(() => host?.windows().length ?? 0).toBe(1);
     expect(await page.evaluate(() => window.kosmosApp.identity)).toMatchObject({
       id: "com.kosmos.dictation",
-      version: "0.2.2",
+      version,
     });
 
     const responses = await page.evaluate(async () => {
@@ -157,6 +182,28 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
     });
     expect(responses.cancelled).toMatchObject({ ok: true, data: { state: "idle" } });
     expect(responses.afterCancel).toMatchObject({ ok: true, data: { state: "idle" } });
+    if (!isWindows) {
+      // The worker target is Windows-only, so dictation.trigger has no running
+      // worker; capture/foreground/autostart are Engine stubs off Windows.
+      // capture.start fails after its internal start_recording, so the state
+      // machine must settle back to idle.
+      const contract = await page.evaluate(async () => {
+        const request = window.kosmosApp.ark.request;
+        return {
+          trigger: await request("dictation.trigger", {}),
+          captureStart: await request("dictation.capture.start", {}),
+          foreground: await request("dictation.window.foreground", {}),
+          autostart: await request("dictation.lifecycle.set_autostart", { enabled: false }),
+          afterContract: await request("dictation.get_state", {}),
+        };
+      });
+      const unavailable = { ok: false, message: "Engine отклонил операцию: unavailable." };
+      expect(contract.trigger).toEqual(unavailable);
+      expect(contract.captureStart).toEqual(unavailable);
+      expect(contract.foreground).toEqual(unavailable);
+      expect(contract.autostart).toEqual(unavailable);
+      expect(contract.afterContract).toMatchObject({ ok: true, data: { state: "idle" } });
+    }
     for (const response of [responses.state, responses.config, responses.models, responses.updated])
       expect(JSON.stringify(response)).not.toMatch(forbiddenRendererKeys);
 
@@ -213,13 +260,18 @@ test("signed Dictation enforces its v2 contract in Host", async () => {
     await attempt(() =>
       terminate(
         restartedEngine,
-        path.join(cargoTarget(), "debug", "kepler-backend.exe"),
+        path.join(cargoTarget(), "debug", executableName("kepler-backend")),
         dataDir,
         "restarted Engine",
       ),
     );
     await attempt(() =>
-      terminate(engine, path.join(cargoTarget(), "debug", "kepler-backend.exe"), dataDir, "Engine"),
+      terminate(
+        engine,
+        path.join(cargoTarget(), "debug", executableName("kepler-backend")),
+        dataDir,
+        "Engine",
+      ),
     );
     for (const pid of pids) await attempt(() => waitForPidGone(pid, "recorded teardown process"));
     try {
