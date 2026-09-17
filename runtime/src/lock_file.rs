@@ -33,6 +33,31 @@ fn lock_permissions_disabled() -> bool {
     std::env::var(LOCK_PERMISSIONS_DISABLED_ENV).as_deref() == Ok("1")
 }
 
+/// Транзиентные fs-ошибки Windows: AV/индексер кратковременно держит хэндл на
+/// свежесозданных файлах, и rename/remove/copy падают с access/sharing ошибками.
+/// Ретраим с bounded backoff; последняя ошибка возвращается как есть.
+pub(crate) fn retry_io<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+    const ATTEMPTS: u32 = 20;
+    for attempt in 0..ATTEMPTS {
+        match op() {
+            Err(error) if is_transient_io(&error) && attempt + 1 < ATTEMPTS => {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            result => return result,
+        }
+    }
+    unreachable!("retry_io всегда возвращается из цикла попыток")
+}
+
+fn is_transient_io(error: &io::Error) -> bool {
+    if error.kind() == io::ErrorKind::PermissionDenied {
+        return true;
+    }
+    // ERROR_SHARING_VIOLATION (32) / ERROR_DIR_NOT_EMPTY (145) /
+    // ERROR_USER_MAPPED_FILE (1224)
+    matches!(error.raw_os_error(), Some(32 | 145 | 1224))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EngineLockFile {
     pub format_version: u32,
@@ -107,7 +132,7 @@ pub(crate) fn write_owner_only_json<T: Serialize>(
     value: &T,
 ) -> Result<(), LockFileError> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
+        retry_io(|| fs::create_dir_all(parent))?;
     }
 
     let json = serde_json::to_vec_pretty(value)?;
@@ -126,7 +151,7 @@ pub(crate) fn write_owner_only_json<T: Serialize>(
     // Write + fsync.
     {
         use io::Write as _;
-        let mut f = fs::File::create(&temp_path)?;
+        let mut f = retry_io(|| fs::File::create(&temp_path))?;
         f.write_all(&json)?;
         f.sync_all()?;
     }
@@ -135,7 +160,7 @@ pub(crate) fn write_owner_only_json<T: Serialize>(
     apply_owner_only_permissions(&temp_path)?;
 
     // Atomic rename (overwrites existing на Win и Unix).
-    fs::rename(&temp_path, path)?;
+    retry_io(|| fs::rename(&temp_path, path))?;
 
     Ok(())
 }
@@ -143,14 +168,14 @@ pub(crate) fn write_owner_only_json<T: Serialize>(
 /// Harden a package-private state directory. Production callers must fail
 /// closed when the OS cannot apply the owner-only ACL.
 pub(crate) fn ensure_owner_only_directory(path: &Path) -> Result<(), io::Error> {
-    fs::create_dir_all(path)?;
-    apply_owner_only_directory_permissions(path)
+    retry_io(|| fs::create_dir_all(path))?;
+    retry_io(|| apply_owner_only_directory_permissions(path))
 }
 
 pub(crate) fn read_owner_only_json<T: for<'de> Deserialize<'de>>(
     path: &Path,
 ) -> Result<T, io::Error> {
-    let bytes = fs::read(path)?;
+    let bytes = retry_io(|| fs::read(path))?;
     serde_json::from_slice(&bytes).map_err(io::Error::other)
 }
 
