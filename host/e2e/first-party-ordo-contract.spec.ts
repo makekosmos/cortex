@@ -17,6 +17,7 @@ import {
   buildEngine,
   cargoTarget,
   closeHost,
+  executableName,
   hostE2eEnvironment,
   recordCleanup,
   rpc,
@@ -50,28 +51,29 @@ test("signed Ordo enforces its v2 contract in Host", async () => {
   const userData = path.join(root, "host-user-data");
   const environment = hostE2eEnvironment({
     APPDATA: path.join(root, "appdata"),
+    XDG_CONFIG_HOME: path.join(root, "xdg-config"),
     KOSMOS_DATA_DIR: dataDir,
     KOSMOS_HEADLESS: "1",
     KOSMOS_TEST_MODE: "1",
   });
+  // Linux containers lack unprivileged user namespaces for the Chromium sandbox.
+  if (process.platform === "linux") environment.ELECTRON_DISABLE_SANDBOX = "1";
   let host: ElectronApplication | undefined;
   let engine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
   let restartedEngine: Awaited<ReturnType<typeof startEngine>>["child"] | undefined;
   const pids = new Set<number>();
-  const launchHost = () =>
-    electron.launch({
+  const openHost = async () => {
+    const launched = await electron.launch({
       executablePath: electronBinary,
       args: [`--user-data-dir=${userData}`, hostMain, "--open-app", "com.kosmos.focus"],
       env: environment,
       timeout: 30_000,
     });
-  const openHost = async () => {
-    const launched = await launchHost();
     host = launched;
     pids.add(launched.process().pid);
     const page = await launched.firstWindow();
     await expect.poll(() => launched.windows().length).toBe(1);
-    return page;
+    return { page, pid: launched.process().pid };
   };
 
   try {
@@ -95,7 +97,7 @@ test("signed Ordo enforces its v2 contract in Host", async () => {
             version: "0.1.3",
             entrypoint: "dist/index.html",
           }),
-          sha256: "401781dd9ad396455068546926fc95a16ea772cca42d967114cf60b746afe3e3",
+          sha256: "a546cd6085a9092a4ef50dd3db9a1ad8ad6f47069f8c0da03f52735d3d7a6e9a",
         }),
       ]),
     );
@@ -124,9 +126,7 @@ test("signed Ordo enforces its v2 contract in Host", async () => {
       await rpc(lock, "packages.set_enabled", { id: "com.kosmos.focus", version, enabled: true }),
     );
 
-    const page = await openHost();
-    if (!host) throw new Error("Host launch did not publish its process");
-    const firstHostPid = host.process().pid;
+    const { page, pid: firstHostPid } = await openHost();
     assertResponse(await page.evaluate(() => window.kosmosApp.identity), {
       id: "com.kosmos.focus",
       version,
@@ -163,7 +163,7 @@ test("signed Ordo enforces its v2 contract in Host", async () => {
     host = undefined;
     await terminate(
       engine,
-      path.join(cargoTarget(), "debug", "kepler-backend.exe"),
+      path.join(cargoTarget(), "debug", executableName("kepler-backend")),
       dataDir,
       "initial Engine",
     );
@@ -183,9 +183,9 @@ test("signed Ordo enforces its v2 contract in Host", async () => {
       },
     });
 
-    let restartedPage = await openHost();
-    if (!host) throw new Error("restarted Host launch did not publish its process");
-    expect(host.process().pid).not.toBe(firstHostPid);
+    const relaunched = await openHost();
+    let restartedPage = relaunched.page;
+    expect(relaunched.pid).not.toBe(firstHostPid);
     const runningAfterRestart = await restartedPage.evaluate(async () => ({
       listed: await window.kosmosApp.ark.request("focus.list_blocklists", {}),
       active: await window.kosmosApp.ark.request("focus.get_active_state", {}),
@@ -221,7 +221,7 @@ test("signed Ordo enforces its v2 contract in Host", async () => {
     await closeHost(host, pids);
     host = undefined;
 
-    restartedPage = await openHost();
+    restartedPage = (await openHost()).page;
     const afterHostRestart = await restartedPage.evaluate(async () => ({
       pomodoro: await window.kosmosApp.ark.request("pomodoro.get_state", {}),
       focus: await window.kosmosApp.ark.request("focus.get_active_state", {}),
@@ -247,7 +247,7 @@ test("signed Ordo enforces its v2 contract in Host", async () => {
     const overdueRestart = await startEngine(binaries.engine, binaries.ark, dataDir);
     restartedEngine = overdueRestart.child;
     if (restartedEngine.pid) pids.add(restartedEngine.pid);
-    restartedPage = await openHost();
+    restartedPage = (await openHost()).page;
     const overdue = await restartedPage.evaluate(() =>
       window.kosmosApp.ark.request("pomodoro.get_state", {}),
     );
@@ -277,7 +277,7 @@ test("signed Ordo enforces its v2 contract in Host", async () => {
     });
   } finally {
     const cleanupErrors: unknown[] = [];
-    const engineBinary = path.join(cargoTarget(), "debug", "kepler-backend.exe");
+    const engineBinary = path.join(cargoTarget(), "debug", executableName("kepler-backend"));
     const attempt = async (action: () => Promise<void>) => {
       try {
         await action();
