@@ -8,6 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 export const RUNTIME_BINARIES = [
@@ -53,6 +54,15 @@ export function effectiveCargoTargetDir(shellRoot, repoRoot, configuredTargetDir
   return configuredTargetDir
     ? path.resolve(shellRoot, configuredTargetDir)
     : path.join(repoRoot, "target");
+}
+
+export function defaultArkCoreTargetDir() {
+  const home = os.homedir();
+  const base =
+    process.platform === "win32"
+      ? (process.env.LOCALAPPDATA ?? path.join(home, "AppData", "Local"))
+      : (process.env.XDG_CACHE_HOME ?? path.join(home, ".cache"));
+  return path.join(base, "kosmos", "ark-target");
 }
 
 export function resolveDevArkCoreRpcPath(targetDir, platform = process.platform) {
