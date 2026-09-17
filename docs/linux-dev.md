@@ -1,12 +1,14 @@
 # Linux development: host + Engine + Manager + first-party apps
 
 Verified on Ubuntu 24.04 x86_64 (KOS-53, KOS-93, KOS-94, KOS-95, KOS-96,
-KOS-97, KOS-98, KOS-102). The supported gate is the first-party E2E suite, which builds the
+KOS-97, KOS-98, KOS-102, KOS-105). The supported gate is the first-party E2E suite, which builds the
 Engine, spawns the pinned `ark-core-rpc` sidecar, installs the signed
 Agenda/Memoria/Ordo/Arcadia/Dictation `.kspkg`, and launches the Electron
 Host under Xvfb — plus the standalone Manager E2E suite, which attaches the
-Manager Electron app to a live Engine over `engine.lock.json` — all in
-isolated `/tmp` roots with PID-identity cleanup.
+Manager Electron app to a live Engine over `engine.lock.json` and covers
+the Маркетплейс store-catalog surface — all in isolated `/tmp` roots with
+PID-identity cleanup. The whole stack — Engine, Host, Manager, and the
+Store catalog gate — is on `main`; no feature branch is required.
 
 ## Toolchain
 
@@ -24,7 +26,9 @@ corepack prepare pnpm@12.4.1 --activate  # pinned packageManager
 
 ```text
 cargo build -p kepler-backend            # writes target/debug/kepler-backend
-cargo build --bin ark-core-rpc           # writes target/debug/ark-core-rpc
+node desktop/scripts/ark-core-rpc.mjs --debug --target-dir target/debug
+# cargo-installs ark-core-rpc from the pinned makekosmos/core rev into
+# desktop/.tmp/ark-core-rpc, then publishes it to target/debug/
 ```
 
 The Engine discovers the sidecar via `ARK_CORE_RPC_PATH` or workspace
@@ -52,7 +56,8 @@ NODE_AUTH_TOKEN=<token with read:packages> pnpm --dir host install --frozen-lock
 If the token cannot read private packages, fall back to the pinned workspace
 checkout (`node scripts/workspace.mjs bootstrap` provisions
 `.tmp/workspace/arca-sdk`), temporarily pointing the dependency at it with
-`link:.tmp/workspace/arca-sdk` — do not commit that edit.
+`link:../.tmp/workspace/arca-sdk` (relative to `host/`) — do not commit
+that edit.
 
 ```text
 pnpm --dir host run typecheck
@@ -182,8 +187,10 @@ Manager window hidden (asserted via `BrowserWindow.isVisible() === false`).
 ## Full-contour smoke (one command)
 
 ```text
-node scripts/linux-smoke.mjs [--apps-root DIR] [--report FILE] [--no-xvfb]
+node scripts/linux-smoke.mjs --apps-root /workspace --report .tmp/linux-smoke-report.md
 ```
+
+Supported flags: `--apps-root DIR`, `--report FILE`, `--no-xvfb`.
 
 `scripts/linux-smoke.mjs` is the reproducible Linux gate for the whole
 contour. Run it from the repository root; it re-execs itself under
@@ -193,13 +200,14 @@ contour. Run it from the repository root; it re-execs itself under
 root, then runs the gates in order:
 
 1. `preflight` — Linux plus node/pnpm/cargo/git/bun/xvfb-run on `PATH`.
-2. `workspace-deps` — `node scripts/workspace.mjs bootstrap` pins
-   `.tmp/workspace/{imago,arca-sdk}` to the `kosmos.workspace` commits and
-   verifies the built outputs the vite configs consume.
+2. `workspace-deps` — the `workspace.mjs bootstrap` planner pins
+   `.tmp/workspace/{imago,arca-sdk}` to the `kosmos.workspace` commits
+   (with a manual clone + install + build fallback when the planner cannot
+   run) and verifies the built outputs the vite configs consume.
 3. `app-checkouts` — every first-party app checkout next to the worktree
    (sibling dirs of the repo root) is at the reviewed pin and carries its
-   `release/*.kspkg`. `--apps-root DIR` (or `KOSMOS_SMOKE_APPS_ROOT`)
-   symlinks `DIR/<app>` into place when the sibling is missing.
+   `release/*.kspkg`. `--apps-root DIR` symlinks `DIR/<app>` into place
+   when the sibling is missing.
 4. `engine-bootstrap` — builds `ark-core-rpc` + `kepler-backend`, starts the
    Engine against an isolated `KOSMOS_DATA_DIR`, and asserts
    `engine.lock.json` plus authenticated `GET /v1/health` → 200 before
@@ -211,9 +219,18 @@ root, then runs the gates in order:
 
 Each gate reports `PASS`, `FAIL`, or `NOT_RUN` (a gate is `NOT_RUN` when a
 prerequisite gate did not pass). The run exits non-zero unless every gate
-passed and always writes a Markdown report — `.tmp/linux-smoke-report.md`
-by default, or `--report FILE` — with per-gate status, elapsed time, and a
-detail line.
+passed and always writes a Markdown report — `--report FILE`, defaulting
+to `.tmp/linux-smoke-report.md` — with per-gate status, elapsed time, and
+a detail line.
+
+Known argv quirk until KOS-111 lands: option values are read positionally
+as `argv[indexOf(flag) + 1]`, so an absent flag resolves to `argv[0]` —
+the node executable path — rather than `undefined`. Always pass
+`--report FILE` explicitly: without it the report path falls back to the
+node binary instead of `.tmp/linux-smoke-report.md`, and the final write
+targets that binary. The same quirk shadows `KOSMOS_SMOKE_APPS_ROOT` (an
+absent `--apps-root` reads as a truthy non-flag path, so the env var is
+never consulted), so pass `--apps-root DIR` explicitly too.
 
 When `pnpm --dir host install --frozen-lockfile` cannot reach
 `@makekosmos/ark` on GitHub Packages (HTTP 403 without `read:packages`),
@@ -290,13 +307,17 @@ sites now consume the host-written `<html data-platform>` marker that the
 preloads set from `process.platform` (`desktop/electron/extension-preload.ts`,
 `desktop/electron/preload-bridge.ts`) — read directly, or via
 `usePlatform()` from `@kosmos/visuals` — so apps keep a single source of
-platform truth and run no OS detection of their own. Open follow-ups: the
-Manager store catalog still filters `availability.platforms` by a
-hardcoded `"windows"` token (`manager/src/composables/useStoreCatalog.ts`,
-`manager/src/connection-helpers.ts`) until an Engine/host platform API
-exists, and Arcadia's library copy is Windows-centric (`.exe` paths,
-`C:\Games\...` placeholder). To re-run the search from a directory holding
-the app checkouts:
+platform truth and run no OS detection of their own. The Manager store
+catalog consumes the same shape end-to-end: the Engine reports the host
+OS as a `platform` token on `store.catalog`/`store.refresh`, and
+`manager/src/composables/useStoreCatalog.ts` +
+`manager/src/connection-helpers.ts` filter `availability.platforms`
+against it (the `store-catalog` spec asserts the filtering on Linux).
+Memoria's `getPlatform()` keeps a `navigator.userAgent` fallback only for
+sessions where the marker is absent (running outside the Host).
+Remaining follow-up: Arcadia's library copy is Windows-centric (`.exe`
+paths, `C:\Games\...` placeholder). To re-run the search from a directory
+holding the app checkouts:
 
 ```text
 rg -n 'process\.platform|os\.platform|navigator\.platform|navigator\.userAgent|\bwin32\b|\bdarwin\b|data-platform|platform="' \
