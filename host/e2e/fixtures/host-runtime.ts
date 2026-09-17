@@ -44,12 +44,16 @@ export const executableName = (base: string): string =>
   process.platform === "win32" ? `${base}.exe` : base;
 
 export const buildEngine = (
-  trust: { root: string; releases: string },
+  trust: { root: string; releases: string; storeKeyId?: string; storePublicKey?: string },
   force = false,
 ): EngineBinaries => {
   const env = hostE2eEnvironment({
     KOSMOS_PACKAGE_ROOT_KEY_JSON: trust.root,
     KOSMOS_PACKAGE_RELEASE_KEYS_JSON: trust.releases,
+    ...(trust.storeKeyId ? { KOSMOS_STORE_CATALOG_KEY_ID: trust.storeKeyId } : {}),
+    ...(trust.storePublicKey
+      ? { KOSMOS_STORE_CATALOG_PUBLIC_KEY_B64: trust.storePublicKey }
+      : {}),
   });
   const target = cargoTarget();
   const binaries: EngineBinaries = {

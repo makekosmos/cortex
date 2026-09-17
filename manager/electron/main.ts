@@ -599,7 +599,9 @@ function registerAll() {
     });
     if (!result.ok) return result;
     // SAFETY: successful RPC payload is validated as string or record before URL parsing.
-    const raw = isString(result.data) ? result.data : (result.data as InputRecord)?.official_url;
+    const raw = isString(result.data)
+      ? result.data
+      : ((result.data as InputRecord)?.url ?? (result.data as InputRecord)?.official_url);
     if (!isString(raw)) return { ok: false, code: "engine", message: "Движок не вернул ссылку." };
     let url: URL;
     try {
@@ -617,6 +619,8 @@ function registerAll() {
         code: "validation",
         message: "Разрешены только HTTPS-ссылки.",
       };
+    if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1")
+      return { ok: true, data: { opened: false } };
     await shell.openExternal(url.toString());
     return { ok: true, data: { opened: true } };
   });
