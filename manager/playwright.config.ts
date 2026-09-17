@@ -6,6 +6,7 @@ const managerRoot = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   testDir: path.join(managerRoot, "e2e"),
+  globalSetup: path.join(managerRoot, "e2e", "global-setup.ts"),
   timeout: 90_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,

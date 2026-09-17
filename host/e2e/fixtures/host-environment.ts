@@ -38,5 +38,6 @@ export const hostE2eEnvironment = (overrides: NodeJS.ProcessEnv = {}): NodeJS.Pr
         return value === undefined ? [] : [[key, value]];
       }),
     ),
-    overrides,
+    // An undefined override means "absent" so callers can strip defaults.
+    Object.fromEntries(Object.entries(overrides).filter(([, value]) => value !== undefined)),
   );

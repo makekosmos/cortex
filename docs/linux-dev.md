@@ -1,10 +1,12 @@
-# Linux development: host + Engine + first-party apps
+# Linux development: host + Engine + Manager + first-party apps
 
-Verified on Ubuntu 24.04 x86_64 (KOS-53, KOS-93, KOS-94, KOS-95, KOS-96). The
-supported gate is the first-party E2E suite, which builds the Engine, spawns
-the pinned `ark-core-rpc` sidecar, installs the signed
+Verified on Ubuntu 24.04 x86_64 (KOS-53, KOS-93, KOS-94, KOS-95, KOS-96,
+KOS-97). The supported gate is the first-party E2E suite, which builds the
+Engine, spawns the pinned `ark-core-rpc` sidecar, installs the signed
 Agenda/Memoria/Ordo/Arcadia/Dictation `.kspkg`, and launches the Electron
-Host under Xvfb — all in isolated `/tmp` roots with PID-identity cleanup.
+Host under Xvfb — plus the standalone Manager E2E suite, which attaches the
+Manager Electron app to a live Engine over `engine.lock.json` — all in
+isolated `/tmp` roots with PID-identity cleanup.
 
 ## Toolchain
 
@@ -125,11 +127,52 @@ xvfb-run -a pnpm --dir host run e2e \
   same spec replays the checked-in `dictation-0.2.2` fixture, which predates
   the worker contract.
 
+## Manager E2E (headless)
+
+```text
+pnpm --dir manager run build            # writes manager/dist + dist-electron
+xvfb-run -a pnpm --dir manager run e2e  # all specs; append spec names to filter
+```
+
+`manager/scripts/run-e2e.mjs` wraps Playwright with a cleanup manifest: each
+spec runs in a `kosmos-manager-e2e-*` temp root, and the runner sweeps
+leftover roots/processes by PID identity (`/proc` start time on Linux,
+WMI `CreationDate` on Windows). `manager/e2e/global-setup.ts` builds the
+Engine + `ark-core-rpc` sidecar with the shared test signing keys before the
+suite starts. On Linux the specs export `ELECTRON_DISABLE_SANDBOX=1` and
+isolate `XDG_CONFIG_HOME`/`APPDATA` per run; `KOSMOS_HEADLESS=1` keeps the
+Manager window hidden (asserted via `BrowserWindow.isVisible() === false`).
+
+- `diagnostics` — Engine up; Manager launches, walks every sidebar section
+  (Данные, Синхронизация, Движок, Интеграции, Ключи, Браузер, Маркетплейс,
+  Обновления, О приложении, Настройки), and exercises the metadata-only
+  diagnostics IPC surface: crash reports expose names only (never file
+  contents or paths), support-bundle save cancels headless-safe, and
+  folder-open calls answer `opened: false` off a real display.
+- `engine-lifecycle` — the attach/reattach smoke: Engine writes
+  `engine.lock.json` (api v1), Manager attaches and answers
+  `getHealth`/`getInfo`/`getEngineSettings`, exits independently while the
+  Engine stays alive, and a reattached Manager re-reads the same lock and
+  increments the Engine's `protocol-usage.json` `api_v1` counters. Also
+  covers retained dictation assets across migration and — on Node 22.5+
+  runners where `node:sqlite` exists — the legacy usage-tracker settings
+  migration (skipped on Node 20).
+- `file-index-manager` — `file_index.*` Engine RPCs and the
+  `window.kosmosManager.*FileIndex*` API keep working across a Manager
+  relaunch; the File Index feature intentionally has no sidebar surface.
+- `sync-manager` — a deterministic in-process HTTP fixture answers the same
+  `engine.lock.json` + `/v1/rpc` contract: sync snapshot, pairing-code
+  reveal/copy, connect/disconnect peer flows, serialized refresh, and an
+  unavailable-Engine reopen. The lock `auth_token` is asserted absent from
+  the rendered DOM.
+
 The harness is platform-neutral: binary names come from `executableName()`,
 fixture ZIPs use `desktop/scripts/zip-utils.mjs`, and process cleanup reads
 `/proc` on Linux (PID + start-time identity) while Windows keeps the
-PowerShell/WMI path. Linux Electron containers typically need `--no-sandbox`,
-which the specs add only on `process.platform === "linux"`.
+PowerShell/WMI path. Linux Electron containers typically lack the namespaces
+the Chromium sandbox needs, which the specs disable only on
+`process.platform === "linux"` (`--no-sandbox` in Host specs,
+`ELECTRON_DISABLE_SANDBOX=1` in Manager specs).
 
 ## Intentional gaps
 
@@ -154,3 +197,17 @@ which the specs add only on `process.platform === "linux"`.
   autostart, and start-menu integration remain Windows-only; the Engine
   stubs them out off-Windows and the Dictation spec asserts `unavailable`
   rather than the app branching on the OS.
+- Manager keeps the same rule: `manager.getAutostart` reports
+  `available: false` for the unpackaged e2e build (and for anything not
+  `win32`), and Manager `src/` contains no `process.platform` checks —
+  capability decisions stay in the Engine/main-process responses. The
+  Manager suite asserts `available: false` instead of adding UI branches.
+- `manager/e2e` is not covered by `pnpm --dir manager run typecheck`
+  (`tsconfig` includes `src` + `electron` only, same as `host/`); the specs
+  are exercised by Playwright instead.
+- The usage-tracker settings-migration test needs `node:sqlite` (Node
+  22.5+); on Node 20 runners it skips, so the row-count assertions are
+  Windows/CI-only for now.
+- The bundled Manager CSP (`font-src 'self'`) blocks the app's own `data:`
+  fonts — a pre-existing product issue; the diagnostics spec ignores
+  exactly that console error and still fails on any other.
