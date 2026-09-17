@@ -12,10 +12,12 @@ import {
   cargoTarget,
   closeHost,
   crashProcessTree,
+  executableName,
   hostE2eEnvironment,
   processTreePids,
   recordCleanup,
   rpc,
+  rpcError,
   startEngine,
   terminate,
   waitForPidGone,
@@ -37,10 +39,14 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
   const userData = path.join(root, "host-user-data");
   const environment = hostE2eEnvironment({
     APPDATA: path.join(root, "appdata"),
+    XDG_CONFIG_HOME: path.join(root, "xdg-config"),
     KOSMOS_DATA_DIR: dataDir,
     KOSMOS_HEADLESS: "1",
     KOSMOS_TEST_MODE: "1",
   });
+  // Linux containers typically lack unprivileged user namespaces for the
+  // Chromium SUID sandbox.
+  if (process.platform === "linux") environment.ELECTRON_DISABLE_SANDBOX = "1";
   if (process.env.KEPLER_BACKEND_EXE) {
     environment.KEPLER_BACKEND_EXE = process.env.KEPLER_BACKEND_EXE;
   }
@@ -68,33 +74,25 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     engine = started.child;
     if (engine.pid) pids.add(engine.pid);
     let lock = started.lock;
-    expect((await rpc(lock, "packages.trust_status")).ok).toBe(true);
-    expect(
-      (
-        await rpc(lock, "packages.catalog_apply", {
-          document: apps.catalog,
-          signatures: apps.signatures,
-        })
-      ).ok,
-    ).toBe(true);
-    expect(
-      (
-        await rpc(lock, "packages.install", {
-          id: "com.kosmos.memoria",
-          version,
-          archive_path: archive,
-        })
-      ).ok,
-    ).toBe(true);
-    expect(
-      (
-        await rpc(lock, "packages.set_enabled", {
-          id: "com.kosmos.memoria",
-          version,
-          enabled: true,
-        })
-      ).ok,
-    ).toBe(true);
+    const trust = await rpc(lock, "packages.trust_status");
+    expect(trust.ok, rpcError(trust)).toBe(true);
+    const catalog = await rpc(lock, "packages.catalog_apply", {
+      document: apps.catalog,
+      signatures: apps.signatures,
+    });
+    expect(catalog.ok, rpcError(catalog)).toBe(true);
+    const install = await rpc(lock, "packages.install", {
+      id: "com.kosmos.memoria",
+      version,
+      archive_path: archive,
+    });
+    expect(install.ok, rpcError(install)).toBe(true);
+    const enable = await rpc(lock, "packages.set_enabled", {
+      id: "com.kosmos.memoria",
+      version,
+      enabled: true,
+    });
+    expect(enable.ok, rpcError(enable)).toBe(true);
 
     host = await launchHost();
     pids.add(host.process().pid);
@@ -175,17 +173,9 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     };
     if (host) pids.add(host.process().pid);
     await attempt(() => closeHost(host, pids));
-    await attempt(() =>
-      terminate(
-        restartedEngine,
-        path.join(cargoTarget(), "debug", "kepler-backend.exe"),
-        dataDir,
-        "restarted Engine",
-      ),
-    );
-    await attempt(() =>
-      terminate(engine, path.join(cargoTarget(), "debug", "kepler-backend.exe"), dataDir, "Engine"),
-    );
+    const engineBinary = path.join(cargoTarget(), "debug", executableName("kepler-backend"));
+    await attempt(() => terminate(restartedEngine, engineBinary, dataDir, "restarted Engine"));
+    await attempt(() => terminate(engine, engineBinary, dataDir, "Engine"));
     for (const pid of pids) await attempt(() => waitForPidGone(pid, "recorded teardown process"));
     try {
       recordCleanup(cleanupManifest, root, pids);

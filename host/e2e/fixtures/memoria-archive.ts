@@ -3,13 +3,12 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { JsonValue, Manifest, PackageArchive } from "./signed-app-types";
+import { readZip } from "../../../desktop/scripts/zip-utils.mjs";
 
-const SOURCE_COMMIT = "ffb0c88";
-const ARCHIVE_PATH = "release/memoria-0.6.6.kspkg";
-const ARCHIVE_SHA256 = "618a8b9ce61a280afe6729b5ccb01f0282ba934bb914f21bcdef101ac1d82916";
+const SOURCE_COMMIT = "9ae7892bb6d66615506f2109c12f8438f6f1aa36";
+const ARCHIVE_PATH = "release/memoria-0.6.8.kspkg";
+const ARCHIVE_SHA256 = "351103b14c75cc0c670e574024ebfd5ec0a56643809e5fc0815cb2260f37e294";
 
-const command = (file: string, args: string[], cwd: string) =>
-  execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe" });
 const gitExecutable =
   process.platform === "win32"
     ? path.join(process.env.ProgramFiles ?? "C:\\Program Files", "Git", "cmd", "git.exe")
@@ -17,6 +16,10 @@ const gitExecutable =
 const digest = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 const isJsonObject = (value: JsonValue): value is { readonly [key: string]: JsonValue } =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+// Package v1 archives are plain ZIPs; the shared desktop reader is portable,
+// unlike `tar` (bsdtar on Windows auto-detects ZIP, GNU tar on Linux does not).
+const zipEntry = (file: string, name: string) => readZip(file).find((entry) => entry.name === name);
 
 export function memoriaArchive(root: string, repositoryRoot: string): PackageArchive {
   const memoriaRoot = path.join(repositoryRoot, "memoria");
@@ -40,7 +43,7 @@ export function memoriaArchive(root: string, repositoryRoot: string): PackageArc
     throw new Error("Memoria package fixture digest mismatch");
   fs.writeFileSync(file, archive);
 
-  const entries = command("tar", ["-tf", file], root).split(/\r?\n/).filter(Boolean);
+  const entries = readZip(file).map((entry) => entry.name);
   if (entries.filter((entry) => entry === "manifest.json").length !== 1) {
     throw new Error("Memoria archive must contain exactly one manifest.json");
   }
@@ -78,28 +81,31 @@ export function memoriaArchive(root: string, repositoryRoot: string): PackageArc
 
   let parsed: JsonValue;
   try {
+    const manifestEntry = zipEntry(file, "manifest.json");
+    if (!manifestEntry) throw new Error("manifest.json entry missing");
     // SAFETY: isJsonObject and the required manifest fields are checked below.
-    parsed = JSON.parse(command("tar", ["-xOf", file, "manifest.json"], root)) as JsonValue;
+    parsed = JSON.parse(manifestEntry.data.toString("utf8")) as JsonValue;
   } catch (error) {
     throw new Error(`Memoria archive manifest is not valid JSON: ${String(error)}`);
   }
   if (!isJsonObject(parsed)) throw new Error("Memoria archive manifest must be a JSON object");
   if (
     digest(JSON.stringify(parsed)) !==
-      "fbcaba86002fd31f8d9ceccdeecb17bed048881ef30f4c6d930fffc8579b864b" ||
+      "7bdc84375e069b1ba6ba2c99780bcd18c9e5c4d9db2b3285d1508498c96c2b69" ||
     parsed.schema_version !== 2 ||
     parsed.id !== "com.kosmos.memoria" ||
-    parsed.version !== "0.6.6" ||
+    parsed.version !== "0.6.8" ||
     parsed.kind !== "app" ||
     parsed.icon !== "icon.png" ||
     parsed.entrypoint !== "dist/index.html"
   ) {
     throw new Error("Memoria archive manifest has unexpected identity or entrypoint");
   }
-  const compatibility = command("tar", ["-xOf", file, "compatibility.json"], root);
+  const compatibilityEntry = zipEntry(file, "compatibility.json");
+  if (!compatibilityEntry) throw new Error("Memoria archive is missing compatibility.json");
   if (
-    digest(JSON.stringify(JSON.parse(compatibility))) !==
-    "4f5dc7b1d4423217fcb37a7c02f71b4d23b2ce07629dd57eaa95f33c663e3c31"
+    digest(JSON.stringify(JSON.parse(compatibilityEntry.data.toString("utf8")))) !==
+    "be1e21bd940532a69c22e026b220a05e3341e4a5c9dfeccd8064e8540171bc61"
   ) {
     throw new Error("Memoria archive has unexpected compatibility metadata");
   }

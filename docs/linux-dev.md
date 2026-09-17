@@ -1,10 +1,10 @@
-# Linux development: host + Engine + first-party Agenda
+# Linux development: host + Engine + first-party apps
 
-Verified on Ubuntu 24.04 x86_64 (KOS-53). The supported gate is the
+Verified on Ubuntu 24.04 x86_64 (KOS-53, KOS-93). The supported gate is the
 first-party E2E suite, which builds the Engine, spawns the pinned
-`ark-core-rpc` sidecar, installs the signed Agenda `.kspkg`, and launches the
-Electron Host under Xvfb — all in isolated `/tmp` roots with PID-identity
-cleanup.
+`ark-core-rpc` sidecar, installs the signed Agenda/Memoria `.kspkg`, and
+launches the Electron Host under Xvfb — all in isolated `/tmp` roots with
+PID-identity cleanup.
 
 ## Toolchain
 
@@ -61,7 +61,9 @@ pnpm --dir host run build                # writes host/dist-electron
 
 ```text
 xvfb-run -a pnpm --dir host run e2e \
-  first-party-agenda-contract.spec.ts first-party-agenda-smoke.spec.ts
+  first-party-agenda-contract.spec.ts first-party-agenda-smoke.spec.ts \
+  first-party-memoria-contract.spec.ts first-party-memoria-smoke.spec.ts \
+  first-party-memoria-import-crash.spec.ts
 ```
 
 - `first-party-agenda-contract` — signed Agenda installs, launches in Host,
@@ -70,6 +72,15 @@ xvfb-run -a pnpm --dir host run e2e \
 - `first-party-agenda-smoke` — the daily smoke: packaged Agenda UI capture
   ("Новая задача") → row in Входящие (Inbox) → task card, with the object
   verified through the ARK bridge.
+- `first-party-memoria-contract` — signed Memoria installs, rolls back a
+  partial Obsidian-vault import, performs scoped ARK CRUD through
+  `window.kosmosApp.ark`, denies out-of-grant operations, and survives an
+  Engine crash + restart with persisted data.
+- `first-party-memoria-smoke` — the daily smoke: packaged Memoria UI
+  "Добавить заметку" → title + body typed in the Tiptap editor → autosave →
+  card in Всё (Everything), with the note verified through the ARK bridge.
+- `first-party-memoria-import-crash` — an import interrupted after a durable
+  entry write rolls back on the next Engine/Host launch.
 
 The harness is platform-neutral: binary names come from `executableName()`,
 fixture ZIPs use `desktop/scripts/zip-utils.mjs`, and process cleanup reads
@@ -81,8 +92,8 @@ which the specs add only on `process.platform === "linux"`.
 
 - `pnpm install` for `host/` requires `read:packages` on GitHub Packages;
   without it use the `link:` fallback above.
-- Specs for other first-party apps (Arcadia/Daedalus/Dictation/Memoria/Ordo/
-  Shell/topology) assume the monorepo layout or Windows-only tools and are
+- Specs for other first-party apps (Arcadia/Daedalus/Dictation/Ordo/Shell/
+  topology) assume the monorepo layout or Windows-only tools and are
   not part of the Linux gate.
 - Tray, global shortcuts, dictation capture, and start-menu integration
   remain Windows-only; the Engine stubs them out off-Windows.
