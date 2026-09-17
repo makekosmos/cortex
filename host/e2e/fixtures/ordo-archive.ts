@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { gitEnv } from "../../../scripts/git-env.mjs";
 import { readZip } from "../../../desktop/scripts/zip-utils.mjs";
 
 const DIGEST = "a546cd6085a9092a4ef50dd3db9a1ad8ad6f47069f8c0da03f52735d3d7a6e9a";
@@ -73,6 +74,7 @@ export function ordoArchive(root: string, repositoryRoot: string) {
     execFileSync(gitExecutable, ["rev-parse", "HEAD"], {
       cwd: repository,
       encoding: "utf8",
+      env: gitEnv(),
     }).trim() !== SOURCE_COMMIT
   )
     throw new Error("Ordo checkout does not match the reviewed package revision");

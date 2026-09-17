@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { gitEnv } from "../../../scripts/git-env.mjs";
 import { readZip } from "../../../desktop/scripts/zip-utils.mjs";
 
 // Windows replays the reviewed checked-in fixture built from the pinned sources;
@@ -110,6 +111,7 @@ export function arcadiaArchive(root: string, repositoryRoot: string) {
     cwd: sourceRoot,
     encoding: "utf8",
     stdio: "pipe",
+    env: gitEnv(),
   }).trim();
   const expectedCheckout = isWindows ? WINDOWS_ARCHIVE_COMMIT : LINUX_SOURCE_COMMIT;
   if (checkout !== expectedCheckout)
@@ -125,6 +127,7 @@ export function arcadiaArchive(root: string, repositoryRoot: string) {
       execFileSync(gitExecutable, ["cat-file", "-e", `${commit}^{commit}`], {
         cwd: path.join(repositoryRoot, name),
         stdio: "pipe",
+        env: gitEnv(),
       });
     }
   }
@@ -162,6 +165,7 @@ export function arcadiaArchive(root: string, repositoryRoot: string) {
       cwd: sourceRoot,
       encoding: "utf8",
       stdio: "pipe",
+      env: gitEnv(),
     }),
   ) as Manifest;
   if (!isDeepStrictEqual(archived, reviewed))

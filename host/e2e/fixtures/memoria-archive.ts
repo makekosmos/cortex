@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { gitEnv } from "../../../scripts/git-env.mjs";
 import type { JsonValue, Manifest, PackageArchive } from "./signed-app-types";
 import { readZip } from "../../../desktop/scripts/zip-utils.mjs";
 
@@ -34,6 +35,7 @@ export function memoriaArchive(root: string, repositoryRoot: string): PackageArc
         encoding: null,
         maxBuffer: 128 * 1024 * 1024,
         stdio: "pipe",
+        env: gitEnv(),
       },
     );
   } catch (error) {
