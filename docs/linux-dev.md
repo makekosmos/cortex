@@ -1,7 +1,7 @@
 # Linux development: host + Engine + Manager + first-party apps
 
 Verified on Ubuntu 24.04 x86_64 (KOS-53, KOS-93, KOS-94, KOS-95, KOS-96,
-KOS-97). The supported gate is the first-party E2E suite, which builds the
+KOS-97, KOS-98, KOS-102). The supported gate is the first-party E2E suite, which builds the
 Engine, spawns the pinned `ark-core-rpc` sidecar, installs the signed
 Agenda/Memoria/Ordo/Arcadia/Dictation `.kspkg`, and launches the Electron
 Host under Xvfb — plus the standalone Manager E2E suite, which attaches the
@@ -165,6 +165,56 @@ Manager window hidden (asserted via `BrowserWindow.isVisible() === false`).
   reveal/copy, connect/disconnect peer flows, serialized refresh, and an
   unavailable-Engine reopen. The lock `auth_token` is asserted absent from
   the rendered DOM.
+- `store-catalog` — a test-signed Store catalog fixture (external catalog
+  refresh/install fails closed) exercises `store.catalog`/
+  `store.external_url`, `packages.catalog_apply`, `packages.install` with
+  `archive_path`, and `packages.set_enabled` from the Manager UI, with
+  catalog metadata and effective grants projected onto the installed app.
+
+## Full-contour smoke (one command)
+
+```text
+node scripts/linux-smoke.mjs [--apps-root DIR] [--report FILE] [--no-xvfb]
+```
+
+`scripts/linux-smoke.mjs` is the reproducible Linux gate for the whole
+contour. Run it from the repository root; it re-execs itself under
+`xvfb-run -a` when no `DISPLAY` exists (pass `--no-xvfb` to opt out), sets
+`ELECTRON_DISABLE_SANDBOX=1` + `KOSMOS_HEADLESS=1`, isolates
+`XDG_CONFIG_HOME`/`XDG_CACHE_HOME`/`XDG_DATA_HOME` under a per-run `/tmp`
+root, then runs the gates in order:
+
+1. `preflight` — Linux plus node/pnpm/cargo/git/bun/xvfb-run on `PATH`.
+2. `workspace-deps` — `node scripts/workspace.mjs bootstrap` pins
+   `.tmp/workspace/{imago,arca-sdk}` to the `kosmos.workspace` commits and
+   verifies the built outputs the vite configs consume.
+3. `app-checkouts` — every first-party app checkout next to the worktree
+   (sibling dirs of the repo root) is at the reviewed pin and carries its
+   `release/*.kspkg`. `--apps-root DIR` (or `KOSMOS_SMOKE_APPS_ROOT`)
+   symlinks `DIR/<app>` into place when the sibling is missing.
+4. `engine-bootstrap` — builds `ark-core-rpc` + `kepler-backend`, starts the
+   Engine against an isolated `KOSMOS_DATA_DIR`, and asserts
+   `engine.lock.json` plus authenticated `GET /v1/health` → 200 before
+   shutting it down.
+5. `host-deps`/`host-build` — `pnpm install` + `vite build` for `host/`.
+6. `host-e2e` — the eight first-party contract/smoke specs above.
+7. `manager-deps`/`manager-build` — same for `manager/`.
+8. `manager-e2e` — the full Manager suite including `store-catalog`.
+
+Each gate reports `PASS`, `FAIL`, or `NOT_RUN` (a gate is `NOT_RUN` when a
+prerequisite gate did not pass). The run exits non-zero unless every gate
+passed and always writes a Markdown report — `.tmp/linux-smoke-report.md`
+by default, or `--report FILE` — with per-gate status, elapsed time, and a
+detail line.
+
+When `pnpm --dir host install --frozen-lockfile` cannot reach
+`@makekosmos/ark` on GitHub Packages (HTTP 403 without `read:packages`),
+`host-deps` automatically falls back to
+`link:../.tmp/workspace/arca-sdk` for that install only and restores
+`host/package.json` + `host/pnpm-lock.yaml` afterwards — the `link:` edit
+is never committed. On Node 20 the legacy usage-tracker migration spec
+inside `engine-lifecycle` skips (`node:sqlite` needs Node 22.5+); the
+Manager gate still counts as `PASS` with `1 skipped`.
 
 The harness is platform-neutral: binary names come from `executableName()`,
 fixture ZIPs use `desktop/scripts/zip-utils.mjs`, and process cleanup reads
