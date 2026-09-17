@@ -17,7 +17,7 @@ import { acquireCacheLock } from "./ark-core-rpc-lock.mjs";
 import { defaultArkCoreTargetDir } from "./runtime-staging.mjs";
 export { acquireCacheLock } from "./ark-core-rpc-lock.mjs";
 export const ARK_CORE_REPOSITORY = "https://github.com/makekosmos/core.git";
-export const ARK_CORE_REVISION = "84b84987d585db9e4cb145a1faca7b796bb56699";
+export const ARK_CORE_REVISION = "d6c18302e8edaa6c9adf2f751fb135885572e1e7";
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const defaultCacheRoot = path.join(shellRoot, ".tmp", "ark-core-rpc");
 const featureKey = (features) =>
