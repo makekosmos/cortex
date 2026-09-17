@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const script = fileURLToPath(new URL("./check-plan.mjs", import.meta.url));
+const root = fileURLToPath(new URL("../", import.meta.url));
 
 function invoke(args, options = {}) {
   return spawnSync(process.execPath, [script, ...args], {
@@ -182,9 +183,9 @@ test("full gate runs the root check plus host and first-party contract suites", 
   );
   assert.equal(status, 0);
   assert.deepEqual(seen, [
-    "bun run check",
-    "bun run test:host-contracts",
-    "bun run test:first-party-contracts",
+    "pnpm run check",
+    "pnpm run test:host-contracts",
+    "pnpm run test:first-party-contracts",
   ]);
 });
 
@@ -213,10 +214,10 @@ test("full gate runs the same contract commands an affected plan selects", async
     return seen;
   };
   const affected = run(createPlan({ mode: "worktree", files: ["host/electron/main.ts"] }));
-  assert.ok(affected.includes("bun run test:host-contracts"));
+  assert.ok(affected.includes("pnpm run test:host-contracts"));
   const full = run(createPlan({ mode: "worktree", full: true }));
-  assert.ok(full.includes("bun run test:host-contracts"));
-  assert.ok(full.includes("bun run test:first-party-contracts"));
+  assert.ok(full.includes("pnpm run test:host-contracts"));
+  assert.ok(full.includes("pnpm run test:first-party-contracts"));
 });
 
 test("pre-commit retains the existing source-size safeguard through the planner", async () => {
@@ -236,7 +237,6 @@ test("pre-commit retains the existing source-size safeguard through the planner"
 });
 
 test("hook and CI entrypoints keep the planner and stable quality gate", () => {
-  const root = fileURLToPath(new URL("../", import.meta.url));
   const hook = readFileSync(`${root}lefthook.yml`, "utf8");
   const workflow = readFileSync(`${root}.github/workflows/ci.yml`, "utf8");
   assert.match(hook, /check:plan --mode pre-commit --run/);
