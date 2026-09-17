@@ -98,10 +98,10 @@ test("Manager Sync uses the isolated deterministic fixture", async () => {
     await onlinePeer.getByRole("button", { name: "Отключить" }).click();
     await expect(peers.filter({ hasText: "Телефон" })).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Обновить" }).evaluate((button) => {
-      (button as HTMLButtonElement).click();
-      (button as HTMLButtonElement).click();
-      (button as HTMLButtonElement).click();
+    await page.getByRole("button", { name: "Обновить" }).evaluate((element) => {
+      // SAFETY: getByRole("button") resolves a native <button>, always an HTMLButtonElement.
+      const button = element as HTMLButtonElement;
+      for (let click = 0; click < 3; click += 1) button.click();
     });
     await delay(100);
     expect(fixture.maxConcurrentSnapshots).toBe(1);

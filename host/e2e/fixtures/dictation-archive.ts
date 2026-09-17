@@ -135,11 +135,12 @@ export function dictationArchive(root: string, repositoryRoot: string) {
   const manifest = JSON.parse(zipEntry("manifest.json").toString("utf8")) as Manifest;
   // Declared worker entrypoints come from the manifest targets, not a
   // hard-coded name; the same check holds on both pins.
+  // SAFETY: targets comes from the signed archive manifest validated above.
   const workerEntrypoints = (
     manifest.targets as readonly { runtime?: string; entrypoint?: string }[]
-  ).flatMap((target) =>
-    target.runtime === "worker" && typeof target.entrypoint === "string" ? [target.entrypoint] : [],
-  );
+  )
+    .flatMap((target) => (target.runtime === "worker" ? [target.entrypoint] : []))
+    .filter((entrypoint): entrypoint is string => entrypoint !== undefined);
   for (const entrypoint of workerEntrypoints)
     if (!entries.includes(entrypoint))
       throw new Error(`Dictation archive is missing declared worker entrypoint ${entrypoint}`);

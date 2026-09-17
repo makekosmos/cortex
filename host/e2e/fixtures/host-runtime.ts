@@ -50,11 +50,9 @@ export const buildEngine = (
   const env = hostE2eEnvironment({
     KOSMOS_PACKAGE_ROOT_KEY_JSON: trust.root,
     KOSMOS_PACKAGE_RELEASE_KEYS_JSON: trust.releases,
-    ...(trust.storeKeyId ? { KOSMOS_STORE_CATALOG_KEY_ID: trust.storeKeyId } : {}),
-    ...(trust.storePublicKey
-      ? { KOSMOS_STORE_CATALOG_PUBLIC_KEY_B64: trust.storePublicKey }
-      : {}),
   });
+  if (trust.storeKeyId) env.KOSMOS_STORE_CATALOG_KEY_ID = trust.storeKeyId;
+  if (trust.storePublicKey) env.KOSMOS_STORE_CATALOG_PUBLIC_KEY_B64 = trust.storePublicKey;
   const target = cargoTarget();
   const binaries: EngineBinaries = {
     engine: path.join(target, "debug", executableName("kepler-backend")),

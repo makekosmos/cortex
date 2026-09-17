@@ -60,6 +60,10 @@ pub(in crate::ws_server) async fn handle_package_op(
                 service.verify_installed_app(id, version, hash, catalog_sequence),
             )
         }
+        "disclosure" => match package_id_version(subop, &params) {
+            Ok((id, version)) => package_response(subop, service.disclosure(id, version)),
+            Err(response) => return response,
+        },
         "refresh_catalog" => package_response(subop, service.refresh_catalog().await),
         "catalog_apply" => {
             let Some(document) = params.get("document").and_then(serde_json::Value::as_str) else {
@@ -220,10 +224,11 @@ pub(in crate::ws_server) async fn handle_package_op(
             else {
                 return LocalResponse::err("packages.install_development: invalid-request");
             };
-            package_response(
-                subop,
-                service.install_development_app_from_path(id, version, archive_path),
-            )
+            let result = service.install_development_app_from_path(id, version, archive_path);
+            if let Err(error) = &result {
+                tracing::warn!(%id, %version, error = ?error, "development package install failed");
+            }
+            package_response(subop, result)
         }
         "set_enabled" => {
             let Some(id) = params
@@ -241,19 +246,10 @@ pub(in crate::ws_server) async fn handle_package_op(
             };
             package_response(subop, service.set_enabled(id, version, enabled).await)
         }
-        "bridge_config" => {
-            let Some(id) = params
-                .get("id")
-                .or_else(|| params.get("package_id"))
-                .and_then(serde_json::Value::as_str)
-            else {
-                return LocalResponse::err("packages.bridge_config: invalid-request");
-            };
-            let Some(version) = params.get("version").and_then(serde_json::Value::as_str) else {
-                return LocalResponse::err("packages.bridge_config: invalid-request");
-            };
-            package_response(subop, service.bridge_config(id, version))
-        }
+        "bridge_config" => match package_id_version(subop, &params) {
+            Ok((id, version)) => package_response(subop, service.bridge_config(id, version)),
+            Err(response) => return response,
+        },
         "bridge_config_set" => {
             let Some(id) = params
                 .get("id")

@@ -191,31 +191,21 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     // journal still reads "applying" while later operations roll back —
     // entry IDs reach baseline as soon as the in-flight write is undone.
     // Wait for the terminal checkpoint, which flips status last.
-    let afterRestart: Awaited<
-      ReturnType<typeof readImportCrashDiagnostics>
-    > | null = null;
+    let afterRestart: Awaited<ReturnType<typeof readImportCrashDiagnostics>> | null = null;
     try {
       await expect
         .poll(
           async () => {
             afterRestart = await readImportCrashDiagnostics(page);
-            const userData = afterRestart.journal.userData;
-            return userData && typeof userData === "object"
-              ? ((userData as { status?: unknown }).status ?? null)
-              : null;
+            return afterRestart.journal.userData?.status ?? null;
           },
           { timeout: 30_000 },
         )
         .toBe("rolled-back");
     } finally {
-      console.log(
-        `[host-e2e] journal after restart=${JSON.stringify(afterRestart)}`,
-      );
+      console.log(`[host-e2e] journal after restart=${JSON.stringify(afterRestart)}`);
     }
-    expect(
-      afterRestart?.journal.userData,
-      JSON.stringify(afterRestart?.journal),
-    ).toMatchObject({
+    expect(afterRestart?.journal.userData, JSON.stringify(afterRestart?.journal)).toMatchObject({
       status: "rolled-back",
       applied: [],
       inFlight: null,

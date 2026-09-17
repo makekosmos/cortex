@@ -235,7 +235,10 @@ test("Manager Store browses the signed catalog and installs metadata", async () 
       window.kosmosManager.openStoreExternal({ listing_id: "store.fixture-app" }),
     );
     expect(notExternal).toMatchObject({ ok: false, code: "engine" });
-    const invalid = await page.evaluate(() => window.kosmosManager.openStoreExternal({} as never));
+    const invalid = await page.evaluate(() =>
+      // SAFETY: intentionally malformed input — the contract must reject it before reaching Engine.
+      window.kosmosManager.openStoreExternal({} as never),
+    );
     expect(invalid).toMatchObject({ ok: false, code: "validation" });
 
     expect(await page.locator("body").innerText()).not.toContain(lock.auth_token);

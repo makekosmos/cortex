@@ -26,6 +26,7 @@ import {
   PhGear,
   PhInfo,
   PhKey,
+  PhCode,
   PhPackage,
   PhPlugsConnected,
   PhStorefront,
@@ -42,6 +43,7 @@ import AboutView from "./views/AboutView.vue";
 import UpdatesView from "./views/UpdatesView.vue";
 import SecretsView from "./views/SecretsView.vue";
 import BrowserSettingsView from "./views/BrowserSettingsView.vue";
+import DevPanelView from "./views/DevPanelView.vue";
 
 type ViewId =
   | "data"
@@ -53,7 +55,8 @@ type ViewId =
   | "about"
   | "updates"
   | "secrets"
-  | "browser";
+  | "browser"
+  | "dev";
 const client = useManagerClient();
 const { banner } = client;
 // Toast host для update-прогресса и прочих уведомлений — descendants зовут useToast().
@@ -110,6 +113,11 @@ const views = {
     hint: "Сессии и данные сайтов",
     component: BrowserSettingsView,
   },
+  dev: {
+    label: "Разработка",
+    hint: "Локальные пакеты и инстанс",
+    component: DevPanelView,
+  },
 };
 const icons = {
   data: PhDatabase,
@@ -122,15 +130,20 @@ const icons = {
   updates: PhPackage,
   secrets: PhKey,
   browser: PhBrowser,
+  dev: PhCode,
 } satisfies Record<ViewId, { label: string; hint: string; component: Component }>;
-const primaryViewIds: Exclude<ViewId, "about" | "packages" | "updates" | "settings">[] = [
-  "data",
-  "sync",
-  "engine",
-  "connections",
-  "secrets",
-  "browser",
-];
+const devEnabled = ref(false);
+const primaryViewIds = computed<Exclude<ViewId, "about" | "packages" | "updates" | "settings">[]>(
+  () => [
+    "data",
+    "sync",
+    "engine",
+    "connections",
+    "secrets",
+    "browser",
+    ...(devEnabled.value ? (["dev"] as const) : []),
+  ],
+);
 const commerceViewIds: Extract<ViewId, "packages" | "updates">[] = ["packages", "updates"];
 const active = computed(() => views[view.value]);
 const { platform } = usePlatform();
@@ -149,6 +162,9 @@ function backFromStoreDetail() {
 }
 onMounted(() => {
   void client.call("getHealth", undefined, "health");
+  void client.call<{ enabled: boolean }>("getDevEnvironment", undefined, "dev-env").then((env) => {
+    devEnabled.value = env?.enabled === true;
+  });
 });
 </script>
 

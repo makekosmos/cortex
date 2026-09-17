@@ -11,3 +11,5 @@ artifacts/
 .agent/
 *.tsbuildinfo
 desktop/release-*/
+manager/.dev/
+.dev-data/

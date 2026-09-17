@@ -17,8 +17,8 @@ use thiserror::Error;
 use zip::ZipArchive;
 
 pub use crate::package_manifest::{
-    DefinitionSnapshotReader, IntegrationManifest, ManifestV2, PackageKind, PackageManifest,
-    PermissionRequest, VersionedManifest,
+    DataAction, DefinitionSnapshotReader, IntegrationManifest, ManifestV2, MappingDirection,
+    MappingFidelity, PackageKind, PackageManifest, PermissionRequest, VersionedManifest,
 };
 use crate::{
     grant_authority::GrantAuthorityRegistry,
@@ -152,6 +152,42 @@ pub struct CatalogPackageSummary {
     pub revoked: bool,
 }
 
+/// Declared data access for the pre-connect disclosure contract.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DisclosureDataRule {
+    #[serde(rename = "type")]
+    pub type_id: String,
+    pub versions: String,
+    pub actions: Vec<DataAction>,
+    pub fields_read: Vec<String>,
+    pub fields_write: Vec<String>,
+    pub relations_read: Vec<String>,
+    pub relations_write: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DisclosureMapping {
+    #[serde(rename = "type")]
+    pub type_id: String,
+    pub direction: MappingDirection,
+    pub fidelity: MappingFidelity,
+}
+
+/// Read-only projection of a package's declared permission contract. It is
+/// sourced from the signed catalog entry or the verified installed manifest,
+/// never from store listing copy.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PackageDisclosure {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub kind: PackageKind,
+    pub publisher: String,
+    pub capabilities: Vec<PermissionRequest>,
+    pub data: Vec<DisclosureDataRule>,
+    pub mappings: Vec<DisclosureMapping>,
+}
+
 /// Configuration owned by Engine, never by the bridge worker or package archive.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -214,6 +250,7 @@ struct WorkerRuntime {
 include!("package_service/core.rs");
 include!("package_service/operations.rs");
 include!("package_service/helpers.rs");
+include!("package_service/disclosure.rs");
 include!("package_service/integrations.rs");
 #[cfg(test)]
 include!("package_service/tests.rs");

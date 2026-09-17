@@ -73,9 +73,7 @@ test.describe("Engine Manager isolated lifecycle", () => {
     const binaries = engineBinaries();
     const pids = new Set<number>();
     const managerEnv = managerEnvironment(runRoot, dataDir);
-    const engineEnv = (
-      usageTrackerOverride: "0" | "1" | undefined,
-    ): Record<string, string | undefined> => ({
+    const engineEnv = (usageTrackerOverride: "0" | "1" | undefined) => ({
       KOSMOS_LOCAL_STT_DIR: dataDir,
       KOSMOS_TEST_MODE: "1",
       KOSMOS_TEST_GROQ_API_KEY: "fixture-key-not-user-data",

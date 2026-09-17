@@ -101,6 +101,7 @@ export function ordoArchive(root: string, repositoryRoot: string) {
   // SAFETY: the archive has exactly one manifest.json and its bytes are JSON-encoded.
   const manifestEntry = zipEntry(file, "manifest.json");
   if (!manifestEntry) throw new Error("Ordo archive is missing manifest.json");
+  // SAFETY: the pinned archive manifest is compared field-for-field with the expected contract.
   const manifest = JSON.parse(manifestEntry.data.toString("utf8")) as typeof EXPECTED_MANIFEST;
   if (JSON.stringify(manifest) !== JSON.stringify(EXPECTED_MANIFEST))
     throw new Error("Ordo archive manifest does not match the reviewed v2 contract");

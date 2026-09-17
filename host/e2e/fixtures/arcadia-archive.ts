@@ -166,6 +166,7 @@ export function arcadiaArchive(root: string, repositoryRoot: string) {
   ) as Manifest;
   if (!isDeepStrictEqual(archived, reviewed))
     throw new Error(`Arcadia archive manifest does not match source commit ${SOURCE_COMMIT}`);
+  // SAFETY: targets comes from the signed archive manifest validated above.
   const workerEntrypoint = (
     archived.targets as readonly { runtime?: string; entrypoint?: string }[]
   ).find((target) => target.runtime === "worker")?.entrypoint;

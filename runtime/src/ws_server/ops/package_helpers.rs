@@ -12,6 +12,23 @@ pub(in crate::ws_server) fn package_signatures(
         })
 }
 
+pub(in crate::ws_server) fn package_id_version<'a>(
+    subop: &str,
+    params: &'a serde_json::Value,
+) -> Result<(&'a str, &'a str), LocalResponse> {
+    let invalid = || LocalResponse::err(format!("packages.{subop}: invalid-request"));
+    let id = params
+        .get("id")
+        .or_else(|| params.get("package_id"))
+        .and_then(Value::as_str)
+        .ok_or_else(invalid)?;
+    let version = params
+        .get("version")
+        .and_then(Value::as_str)
+        .ok_or_else(invalid)?;
+    Ok((id, version))
+}
+
 pub(in crate::ws_server) async fn package_blocking<T, F>(work: F) -> Result<T, PackageError>
 where
     T: Send + 'static,
