@@ -19,7 +19,11 @@
 //     транзакционно, момента с отсутствующей/частично заменённой primary DB
 //     нет;
 //   - перед apply снимается pre-restore rollback snapshot; провал
-//     post-restore verification откатывает live DB из него.
+//     post-restore verification откатывает live DB из него. Если и откат
+//     не удался, snapshot НЕ удаляется: переименовывается в обычный
+//     basename `ark.db.pre-restore-failed-*`, видимый в `db_backup_list`
+//     и пригодный для `db_backup_restore` — это последний путь к
+//     pre-restore данным (KOS-83).
 
 use std::fs;
 use std::io;
@@ -341,6 +345,10 @@ pub fn validate_snapshot(
 /// Seam для тестов: `(live_conn, expected_snapshot_fingerprint)`.
 type PostVerify = dyn Fn(&Connection, &[String]) -> Result<(), String>;
 
+/// Seam для тестов: `(live_conn, rollback_snapshot_path)` — откат live DB
+/// из pre-restore snapshot'а.
+type RollbackRestore = dyn Fn(&mut Connection, &Path) -> Result<(), String>;
+
 /// Post-restore verification по умолчанию: integrity live DB + schema
 /// fingerprint совпадает с fingerprint'ом применённого snapshot'а.
 fn default_post_verify(conn: &Connection, expected: &[String]) -> Result<(), String> {
@@ -352,6 +360,39 @@ fn default_post_verify(conn: &Connection, expected: &[String]) -> Result<(), Str
     Ok(())
 }
 
+/// Откат по умолчанию: Online Backup из rollback-файла обратно в live conn.
+fn default_rollback_restore(conn: &mut Connection, path: &Path) -> Result<(), String> {
+    conn.restore(
+        rusqlite::DatabaseName::Main,
+        path,
+        None::<fn(rusqlite::backup::Progress)>,
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// KOS-83: при двойном провале (post-verify + rollback) pre-restore snapshot —
+/// последний путь к данным пользователя, его нельзя удалять. Переименовываем
+/// hidden `.restore-rollback-*` в обычный basename, чтобы копия попадала в
+/// `db_backup_list` и восстанавливалась штатным `db_backup_restore`.
+/// Возвращает текст для RPC-ошибки: где искать сохранённую копию.
+fn preserve_rollback_snapshot(db_path: &str, rollback: &Path, nonce: &str) -> String {
+    if !rollback.exists() {
+        return "pre-restore snapshot is missing; manual DB recovery required".to_string();
+    }
+    let kept_name = format!("ark.db.pre-restore-failed-{nonce}.db");
+    let kept = backups_dir(db_path).join(&kept_name);
+    match fs::rename(rollback, &kept) {
+        Ok(()) => format!(
+            "pre-restore snapshot preserved as '{kept_name}' in backups dir; \
+             restore it via db_backup_restore to recover prior data"
+        ),
+        Err(_) => format!(
+            "pre-restore snapshot preserved at '{}'; manual recovery required",
+            rollback.display()
+        ),
+    }
+}
+
 /// `db_backup_restore`: атомарно восстанавливает live DB из snapshot'а.
 /// Вызывается под глобальным DB mutex из RPC handler'а — параллельных
 /// reader/writer нет, backup-поток остановлен `BACKUP_GATE`.
@@ -360,7 +401,7 @@ pub fn restore_snapshot(
     db_path: &str,
     id: &str,
 ) -> Result<RestoreReport, String> {
-    restore_snapshot_impl(conn, db_path, id, &default_post_verify)
+    restore_snapshot_impl(conn, db_path, id, &default_post_verify, &default_rollback_restore)
 }
 
 fn restore_snapshot_impl(
@@ -368,14 +409,13 @@ fn restore_snapshot_impl(
     db_path: &str,
     id: &str,
     post_verify: &PostVerify,
+    rollback_restore: &RollbackRestore,
 ) -> Result<RestoreReport, String> {
     // 1. Resolve + stage (no-follow, содержимое frozen до apply).
     let staging = stage_snapshot(db_path, id)?;
 
-    let rollback = backups_dir(db_path).join(format!(
-        ".restore-rollback-{:016x}.db",
-        rand::random::<u64>()
-    ));
+    let rollback_nonce = format!("{:016x}", rand::random::<u64>());
+    let rollback = backups_dir(db_path).join(format!(".restore-rollback-{rollback_nonce}.db"));
     let cleanup = |staging: &Path, rollback: &Path| {
         let _ = fs::remove_file(staging);
         let _ = fs::remove_file(rollback);
@@ -420,18 +460,23 @@ fn restore_snapshot_impl(
 
     // 5. Post-restore verification; провал → откат из rollback snapshot'а.
     if let Err(verify_err) = post_verify(conn, &snapshot_fp) {
-        let rollback_result = conn.restore(
-            rusqlite::DatabaseName::Main,
-            &rollback,
-            None::<fn(rusqlite::backup::Progress)>,
-        );
-        cleanup(&staging, &rollback);
+        let rollback_result = rollback_restore(conn, &rollback);
+        // Staging — временная копия нетронутого snapshot'а из backups/,
+        // чистим всегда. Rollback-файл удаляем только при успешном откате:
+        // при двойном провале это последний путь к pre-restore данным —
+        // сохраняем под видимым для db_backup_list именем (KOS-83).
+        let _ = fs::remove_file(&staging);
         return Err(match rollback_result {
-            Ok(()) => format!(
-                "post-restore verification failed ({verify_err}); live DB rolled back"
-            ),
+            Ok(()) => {
+                let _ = fs::remove_file(&rollback);
+                format!(
+                    "post-restore verification failed ({verify_err}); live DB rolled back"
+                )
+            }
             Err(rollback_err) => format!(
-                "post-restore verification failed ({verify_err}); rollback failed: {rollback_err}"
+                "post-restore verification failed ({verify_err}); rollback failed: \
+                 {rollback_err}; {}",
+                preserve_rollback_snapshot(db_path, &rollback, &rollback_nonce)
             ),
         });
     }

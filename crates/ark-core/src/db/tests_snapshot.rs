@@ -76,8 +76,13 @@
         let failing_verify = |_conn: &Connection, _fp: &[String]| -> Result<(), String> {
             Err("injected post-verify failure".to_string())
         };
-        let result =
-            restore_snapshot_impl(&mut conn, &db_path, "ark.db.backup-rollback", &failing_verify);
+        let result = restore_snapshot_impl(
+            &mut conn,
+            &db_path,
+            "ark.db.backup-rollback",
+            &failing_verify,
+            &default_rollback_restore,
+        );
         let err = result.expect_err("post-verify failure must fail the restore");
         assert!(
             err.contains("rolled back"),
@@ -88,6 +93,94 @@
         assert!(
             list_objects(&conn).unwrap().is_empty(),
             "rollback must restore the PRE-RESTORE live state, not the snapshot"
+        );
+        check_integrity(&conn).unwrap();
+
+        // Успешный откат подчищает staging и rollback — в backups/ остаётся
+        // только исходный snapshot.
+        let leftovers: Vec<String> = fs::read_dir(backups_dir(&db_path))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(leftovers, vec!["ark.db.backup-rollback".to_string()]);
+    }
+
+    /// KOS-83: провал post-verify + провал rollback — pre-restore snapshot
+    /// НЕ удаляется, а сохраняется под видимым basename'ом и остаётся
+    /// валидной точкой восстановления pre-restore данных.
+    #[test]
+    fn restore_preserves_rollback_snapshot_when_verify_and_rollback_both_fail() {
+        let (_dir, db_path, mut conn) = setup_file_db();
+        seed_object(&conn, "obj-snap", "in snapshot");
+        make_snapshot(&conn, &db_path, "ark.db.backup-dblfail");
+
+        // Live DB расходится со snapshot'ом: объект удалён ПОСЛЕ backup'а.
+        conn.execute("DELETE FROM objects WHERE id = 'obj-snap'", [])
+            .unwrap();
+
+        let failing_verify = |_conn: &Connection, _fp: &[String]| -> Result<(), String> {
+            Err("injected post-verify failure".to_string())
+        };
+        let failing_rollback = |_conn: &mut Connection, _path: &Path| -> Result<(), String> {
+            Err("injected rollback failure".to_string())
+        };
+        let result = restore_snapshot_impl(
+            &mut conn,
+            &db_path,
+            "ark.db.backup-dblfail",
+            &failing_verify,
+            &failing_rollback,
+        );
+        let err = result.expect_err("double failure must fail the restore");
+        assert!(
+            err.contains("rollback failed") && err.contains("pre-restore snapshot preserved"),
+            "error must surface preserved snapshot: {err}"
+        );
+
+        // Pre-restore snapshot сохранён под видимым для list/restore именем;
+        // hidden rollback-файла и staging-копии не осталось.
+        let names: Vec<String> = fs::read_dir(backups_dir(&db_path))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        let preserved: Vec<&String> = names
+            .iter()
+            .filter(|name| name.starts_with("ark.db.pre-restore-failed-"))
+            .collect();
+        assert_eq!(preserved.len(), 1, "expected one preserved snapshot: {names:?}");
+        assert!(
+            !names.iter().any(|name| name.starts_with('.')),
+            "hidden staging/rollback files must not be left behind: {names:?}"
+        );
+        assert!(
+            err.contains(preserved[0].as_str()),
+            "error must name the preserved snapshot: {err}"
+        );
+        let listed = list_snapshots(&db_path).unwrap();
+        assert!(
+            listed.iter().any(|entry| entry.id == *preserved[0]),
+            "preserved snapshot must be visible via list_snapshots"
+        );
+
+        // Содержимое — pre-restore состояние live DB (объект удалён),
+        // а не данные snapshot'а.
+        let preserved_path = backups_dir(&db_path).join(preserved[0]);
+        let preserved_conn = Connection::open(&preserved_path).unwrap();
+        check_integrity(&preserved_conn).unwrap();
+        assert!(
+            list_objects(&preserved_conn).unwrap().is_empty(),
+            "preserved snapshot must hold the PRE-RESTORE state"
+        );
+        drop(preserved_conn);
+
+        // Полный recovery path: сохранённый snapshot восстанавливается
+        // штатным restore_snapshot.
+        let report = restore_snapshot(&mut conn, &db_path, preserved[0]).unwrap();
+        assert!(report.restored);
+        assert_eq!(report.objects, 0);
+        assert!(
+            list_objects(&conn).unwrap().is_empty(),
+            "restoring the preserved snapshot must return live DB to pre-restore state"
         );
         check_integrity(&conn).unwrap();
     }
