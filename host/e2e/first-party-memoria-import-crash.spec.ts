@@ -6,7 +6,10 @@ import { _electron as electron, type ElectronApplication } from "playwright";
 import { test, expect } from "@playwright/test";
 import electronBinary from "electron";
 import { createSignedApps } from "./fixtures/signed-apps";
-import { installPartialImportCrashPause } from "./fixtures/memoria-partial-import";
+import {
+  installPartialImportCrashPause,
+  readImportCrashDiagnostics,
+} from "./fixtures/memoria-partial-import";
 import {
   buildEngine,
   cargoTarget,
@@ -115,21 +118,43 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
     await installPartialImportCrashPause(page, path.join(root, "crash-import-vault"));
     await page.getByTestId("eden-import-obsidian-vault").getByRole("button").click();
     await expect
-      .poll(
-        () =>
-          page.evaluate(() => {
-            // SAFETY: the fixture installs this test-only marker before the import starts.
-            return Boolean(
-              (window as typeof window & { __memoriaImportFirstWrite?: boolean })
-                .__memoriaImportFirstWrite,
-            );
-          }),
-        { timeout: 30_000 },
+      .poll(() =>
+        page.evaluate(() => {
+          // SAFETY: the fixture installs this test-only marker before the import starts.
+          return Boolean(
+            (window as typeof window & { __memoriaPartialImportOpened?: boolean })
+              .__memoriaPartialImportOpened,
+          );
+        }),
       )
       .toBe(true);
+    try {
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() => {
+              // SAFETY: the fixture installs this test-only marker before the import starts.
+              return Boolean(
+                (window as typeof window & { __memoriaImportFirstWrite?: boolean })
+                  .__memoriaImportFirstWrite,
+              );
+            }),
+          { timeout: 30_000 },
+        )
+        .toBe(true);
+    } catch (error) {
+      const diagnostics = await readImportCrashDiagnostics(page);
+      console.log(
+        `[host-e2e] import diagnostics on first-write timeout=${JSON.stringify(diagnostics)}`,
+      );
+      console.log(
+        `[host-e2e] host windows=${JSON.stringify((host?.windows() ?? []).map((win) => win.url()))}`,
+      );
+      throw error;
+    }
 
     console.log(
-      `[host-e2e] journal before crash=${await page.evaluate(() => localStorage.getItem("memoria.obsidian-import-journal.v1"))}`,
+      `[host-e2e] journal before crash=${JSON.stringify(await readImportCrashDiagnostics(page))}`,
     );
     await closeHost(host, pids);
     host = undefined;
@@ -162,6 +187,12 @@ test("signed Memoria rolls back an import interrupted after a durable entry writ
         ),
       )
       .toEqual(baselineEntryIds);
+    const afterRestart = await readImportCrashDiagnostics(page);
+    console.log(`[host-e2e] journal after restart=${JSON.stringify(afterRestart)}`);
+    expect(
+      afterRestart.journal.userData,
+      JSON.stringify(afterRestart.journal),
+    ).toMatchObject({ status: "rolled-back" });
   } finally {
     const cleanupErrors: unknown[] = [];
     const attempt = async (action: () => Promise<void>) => {
