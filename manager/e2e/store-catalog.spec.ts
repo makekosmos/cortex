@@ -5,11 +5,7 @@ import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
 import type { ElectronApplication } from "playwright";
 import { createSignedApps } from "../../host/e2e/fixtures/signed-apps";
-import {
-  seedStoreCatalog,
-  storeExternalListing,
-  storePackageListing,
-} from "./store-fixture";
+import { seedStoreCatalog, storeExternalListing, storePackageListing } from "./store-fixture";
 import {
   cleanupManifest,
   closeHost,
@@ -25,9 +21,16 @@ import {
   terminate,
   waitForPidGone,
 } from "./manager-runtime";
+import type { JsonValue } from "./manager-runtime";
 
 const managerRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceRoot = path.resolve(managerRoot, "..");
+
+const isJsonObject = (
+  value: JsonValue | undefined,
+): value is { readonly [key: string]: JsonValue } =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const isString = (value: JsonValue | undefined): value is string => typeof value === "string";
 
 // Store/catalog smoke on the Manager harness: the Engine boots with a
 // persisted test-signed Store Catalog (`store/catalog.json`), the package
@@ -56,8 +59,18 @@ test("Manager Store browses the signed catalog and installs metadata", async () 
     "host-e2e-app-a",
     "1.0.0",
   );
+  // Mixed-platform fixture: the Windows-only entry must follow the Engine's
+  // host platform token — visible on Windows, filtered out elsewhere.
+  const windowsOnly = storePackageListing(
+    "store.fixture-windows-only",
+    "Windows Only App",
+    "host-e2e-app-b",
+    "1.0.0",
+    ["windows"],
+  );
   seedStoreCatalog(runRoot, dataDir, 7, "2026-09-01T00:00:00Z", "2030-01-01T00:00:00Z", [
     listing,
+    windowsOnly,
     storeExternalListing("external.fixture", "Fixture External", "https://example.com/"),
   ]);
   let engine: ChildProcess | undefined;
@@ -76,6 +89,13 @@ test("Manager Store browses the signed catalog and installs metadata", async () 
     expect(applied.ok, rpcError(applied)).toBe(true);
     const engineCatalog = await rpc(lock, "store.catalog");
     expect(engineCatalog).toMatchObject({ ok: true, data: { state: "fresh", sequence: 7 } });
+    // The Engine reports the host OS as a catalog `platforms` token; the
+    // Manager filters listings by it instead of branching on the OS itself.
+    const platformToken = isJsonObject(engineCatalog.data)
+      ? engineCatalog.data.platform
+      : undefined;
+    const hostPlatform = isString(platformToken) ? platformToken : undefined;
+    expect(hostPlatform).toBeTruthy();
     const resolvedUrl = await rpc(lock, "store.external_url", {
       listing_id: "external.fixture",
     });
@@ -87,16 +107,21 @@ test("Manager Store browses the signed catalog and installs metadata", async () 
     await expect(page.locator("[aria-label='Разделы менеджера']")).toBeVisible();
 
     const snapshot = await page.evaluate(() => window.kosmosManager.getStoreCatalog());
-    expect(snapshot).toMatchObject({ ok: true, data: { state: "fresh", sequence: 7 } });
+    expect(snapshot).toMatchObject({
+      ok: true,
+      data: { state: "fresh", sequence: 7, platform: hostPlatform },
+    });
     const listingIds = (snapshot.ok ? snapshot.data.listings : []).map((item) => item.id);
     expect(listingIds).toEqual(
-      expect.arrayContaining(["store.fixture-app", "external.fixture"]),
+      expect.arrayContaining([
+        "store.fixture-app",
+        "store.fixture-windows-only",
+        "external.fixture",
+      ]),
     );
     const packages = await page.evaluate(() => window.kosmosManager.getPackages());
     const catalogIds = (packages.ok ? packages.data.catalog : []).map((item) => item.id);
-    expect(catalogIds).toEqual(
-      expect.arrayContaining(["host-e2e-app-a", "host-e2e-app-b"]),
-    );
+    expect(catalogIds).toEqual(expect.arrayContaining(["host-e2e-app-a", "host-e2e-app-b"]));
     const trust = await page.evaluate(() => window.kosmosManager.getPackageTrustStatus());
     expect(trust).toMatchObject({
       ok: true,
@@ -119,6 +144,21 @@ test("Manager Store browses the signed catalog and installs metadata", async () 
       }),
     ).toBeVisible();
     expect(await page.locator(".store-card", { hasText: "Fixture External" }).count()).toBe(0);
+    // The grid filters by the Engine-reported host platform: the Windows-only
+    // listing renders only when the token is "windows".
+    const windowsOnlyCard = page.locator(".store-card", { hasText: "Windows Only App" });
+    if (hostPlatform === "windows") await expect(windowsOnlyCard).toBeVisible();
+    else await expect(windowsOnlyCard).toHaveCount(0);
+
+    // The same token gates the Интеграции catalog surface: the first-party
+    // Huawei Health entry is Windows-only by manifest, so its card follows
+    // the host platform rather than always rendering.
+    await sidebar.getByRole("button", { name: "Интеграции", exact: true }).click();
+    const huaweiCard = page.locator("[data-testid='connection-card-com.kosmos.huawei-health']");
+    await expect(huaweiCard).toHaveCount(hostPlatform === "windows" ? 1 : 0);
+    await sidebar.getByRole("button", { name: "Маркетплейс", exact: true }).click();
+    await expect(card).toBeVisible();
+
     await card.click();
     const detail = page.locator(".store-detail-app-header");
     await expect(detail.getByRole("heading", { name: "Fixture Store App" })).toBeVisible();
@@ -163,9 +203,9 @@ test("Manager Store browses the signed catalog and installs metadata", async () 
       enabled: true,
       revoked: false,
     });
-    expect(
-      installed?.effective_grants?.some((grant) => grant.type === "com.kosmos.note"),
-    ).toBe(true);
+    expect(installed?.effective_grants?.some((grant) => grant.type === "com.kosmos.note")).toBe(
+      true,
+    );
     // Opening a hosted app stays a Host capability: absent under headless.
     const opened = await page.evaluate(() =>
       window.kosmosManager.openPackage({ package_id: "host-e2e-app-a" }),
@@ -195,9 +235,7 @@ test("Manager Store browses the signed catalog and installs metadata", async () 
       window.kosmosManager.openStoreExternal({ listing_id: "store.fixture-app" }),
     );
     expect(notExternal).toMatchObject({ ok: false, code: "engine" });
-    const invalid = await page.evaluate(() =>
-      window.kosmosManager.openStoreExternal({} as never),
-    );
+    const invalid = await page.evaluate(() => window.kosmosManager.openStoreExternal({} as never));
     expect(invalid).toMatchObject({ ok: false, code: "validation" });
 
     expect(await page.locator("body").innerText()).not.toContain(lock.auth_token);

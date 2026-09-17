@@ -165,6 +165,16 @@ Manager window hidden (asserted via `BrowserWindow.isVisible() === false`).
   reveal/copy, connect/disconnect peer flows, serialized refresh, and an
   unavailable-Engine reopen. The lock `auth_token` is asserted absent from
   the rendered DOM.
+- `store-catalog` — a signed test catalog is seeded through
+  `package.apply_index`, then the Маркетплейс browses it, opens listing
+  details, resolves `store.external_url`, and a refresh against a dead
+  catalog URL fails closed (listings kept, `state: "stale"`). The fixture
+  mixes a portable listing (`["linux", "windows"]`) with a Windows-only
+  one: the Engine reports the host OS as `platform` on `store.catalog`/
+  `store.refresh`, and the spec asserts the Manager filters
+  `availability.platforms` by that token — on Linux the Windows-only app
+  and the Windows-only first-party Huawei Health integration card are
+  hidden, while portable listings stay visible.
 
 The harness is platform-neutral: binary names come from `executableName()`,
 fixture ZIPs use `desktop/scripts/zip-utils.mjs`, and process cleanup reads
@@ -202,6 +212,11 @@ the Chromium sandbox needs, which the specs disable only on
   `win32`), and Manager `src/` contains no `process.platform` checks —
   capability decisions stay in the Engine/main-process responses. The
   Manager suite asserts `available: false` instead of adding UI branches.
+  Marketplace filtering follows the same shape: `store.catalog`/
+  `store.refresh` responses carry a `platform` token mapped from the host
+  OS inside the Engine (`windows`/`macos`, `linux` otherwise), and Manager
+  renderer code filters `availability.platforms` against it rather than
+  detecting the OS itself.
 - `manager/e2e` is not covered by `pnpm --dir manager run typecheck`
   (`tsconfig` includes `src` + `electron` only, same as `host/`); the specs
   are exercised by Playwright instead.
