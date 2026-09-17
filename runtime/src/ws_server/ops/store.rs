@@ -1,6 +1,6 @@
 use super::*;
 use crate::package_manifest::PackageKind;
-use crate::store_catalog::PackageReleaseKind;
+use crate::store_catalog::{PackageReleaseKind, Platform};
 struct StoreCatalogIndex<'a> {
     packages: &'a PackageService,
 }
@@ -60,6 +60,7 @@ pub(in crate::ws_server) async fn handle_store_op(
             Some(catalog) => catalog.catalog(chrono::Utc::now(), installed),
             None => CatalogDto {
                 state: "unavailable".into(),
+                platform: Platform::current(),
                 sequence: None,
                 issued_at: None,
                 expires_at: None,

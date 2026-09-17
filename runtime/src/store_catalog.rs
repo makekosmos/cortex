@@ -148,6 +148,21 @@ pub enum Platform {
     Ios,
     Android,
 }
+impl Platform {
+    /// Host OS token in the catalog availability vocabulary. The Engine owns
+    /// the OS→token mapping so shells filter listings without OS branches of
+    /// their own. Non-desktop targets fold into Linux, matching
+    /// `ManifestTarget::supports_current`.
+    pub fn current() -> Self {
+        if cfg!(windows) {
+            Self::Windows
+        } else if cfg!(target_os = "macos") {
+            Self::Macos
+        } else {
+            Self::Linux
+        }
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct DataCompatibility {
@@ -373,6 +388,7 @@ impl CatalogCache {
         };
         CatalogDto {
             state: state.into(),
+            platform: Platform::current(),
             sequence,
             issued_at,
             expires_at,
@@ -415,6 +431,9 @@ pub struct EffectiveGrantProjection {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CatalogDto {
     pub state: String,
+    /// Host platform token (`Platform`) so clients can filter listing
+    /// `availability.platforms` without their own OS detection.
+    pub platform: Platform,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sequence: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -709,5 +728,37 @@ fn normalize_document(document: &mut CatalogDocument) {
                 &b.fidelity,
             ))
         });
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn current_platform_serializes_to_the_host_catalog_token() {
+        let expected = if cfg!(windows) {
+            "windows"
+        } else if cfg!(target_os = "macos") {
+            "macos"
+        } else {
+            "linux"
+        };
+        assert_eq!(
+            serde_json::to_value(Platform::current()).unwrap(),
+            serde_json::Value::String(expected.into())
+        );
+    }
+
+    #[test]
+    fn catalog_dto_reports_the_host_platform_even_when_unavailable() {
+        let dto = CatalogCache::default().dto(Utc::now(), Vec::new());
+        assert_eq!(dto.state, "unavailable");
+        assert_eq!(dto.platform, Platform::current());
+        assert_eq!(
+            serde_json::to_value(&dto).unwrap().get("platform"),
+            Some(&serde_json::to_value(Platform::current()).unwrap())
+        );
     }
 }
