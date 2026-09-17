@@ -107,16 +107,24 @@ test("Manager diagnostics stays metadata-only and headless-safe", async () => {
         nav: "Интеграции",
         check: async () => {
           const cards = page.locator(".connection-card");
-          await expect(cards.first()).toBeVisible();
-          expect(await cards.count()).toBeGreaterThan(0);
-          await expect(cards.first()).toHaveAttribute(
-            "aria-label",
-            /Подключено|Не подключено|Не установлена/,
-          );
-          await cards.first().click();
-          await expect(page.getByRole("dialog")).toBeVisible();
-          await page.getByRole("dialog").getByRole("button", { name: "Закрыть" }).click();
-          await expect(page.getByRole("dialog")).toHaveCount(0);
+          // First-party catalog entries are gated by the Engine-reported host
+          // platform, so a host with no compatible integrations renders the
+          // empty state instead of cards.
+          const empty = page.getByText("Интеграции не найдены.");
+          await expect(cards.first().or(empty)).toBeVisible();
+          if ((await cards.count()) > 0) {
+            await expect(cards.first()).toBeVisible();
+            await expect(cards.first()).toHaveAttribute(
+              "aria-label",
+              /Подключено|Не подключено|Не установлена/,
+            );
+            await cards.first().click();
+            await expect(page.getByRole("dialog")).toBeVisible();
+            await page.getByRole("dialog").getByRole("button", { name: "Закрыть" }).click();
+            await expect(page.getByRole("dialog")).toHaveCount(0);
+          } else {
+            await expect(page.getByText("Интеграции не найдены.")).toBeVisible();
+          }
         },
       },
       {

@@ -40,6 +40,7 @@ export const storePackageListing = (
   name: string,
   packageId: string,
   version: string,
+  platforms: string[] = ["linux", "windows"],
 ): StoreFixtureListing => ({
   id,
   kind: "kosmos-package",
@@ -48,7 +49,7 @@ export const storePackageListing = (
   publisher_tier: "kosmos",
   description: "Signed store fixture package listing.",
   categories: ["productivity"],
-  availability: { platforms: ["linux", "windows"] },
+  availability: { platforms },
   data_compatibility: [
     {
       type: "com.kosmos.note",
