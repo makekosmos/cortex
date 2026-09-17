@@ -1,10 +1,10 @@
 # Linux development: host + Engine + first-party apps
 
-Verified on Ubuntu 24.04 x86_64 (KOS-53, KOS-93, KOS-94). The supported gate
-is the first-party E2E suite, which builds the Engine, spawns the pinned
-`ark-core-rpc` sidecar, installs the signed Agenda/Memoria/Ordo `.kspkg`, and
-launches the Electron Host under Xvfb — all in isolated `/tmp` roots with
-PID-identity cleanup.
+Verified on Ubuntu 24.04 x86_64 (KOS-53, KOS-93, KOS-94, KOS-95). The
+supported gate is the first-party E2E suite, which builds the Engine, spawns
+the pinned `ark-core-rpc` sidecar, installs the signed
+Agenda/Memoria/Ordo/Arcadia `.kspkg`, and launches the Electron Host under
+Xvfb — all in isolated `/tmp` roots with PID-identity cleanup.
 
 ## Toolchain
 
@@ -64,7 +64,8 @@ xvfb-run -a pnpm --dir host run e2e \
   first-party-agenda-contract.spec.ts first-party-agenda-smoke.spec.ts \
   first-party-memoria-contract.spec.ts first-party-memoria-smoke.spec.ts \
   first-party-memoria-import-crash.spec.ts \
-  first-party-ordo-contract.spec.ts
+  first-party-ordo-contract.spec.ts \
+  first-party-arcadia-contract.spec.ts
 ```
 
 - `first-party-agenda-contract` — signed Agenda installs, launches in Host,
@@ -89,6 +90,19 @@ xvfb-run -a pnpm --dir host run e2e \
   pomodoro + focus state across Engine and Host restarts. Requires the
   reviewed `release/ordo-0.1.3.kspkg` built in the `ordo/` checkout at the
   pinned commit (`bun install && bun run package:kspkg`).
+- `first-party-arcadia-contract` — signed Arcadia installs and launches in
+  Host through the `kosmos-host` manifest target (the only target declared
+  for Linux; the `worker` target stays Windows-only because package workers
+  are unsupported off Windows). The Linux smoke exercises the typed
+  `com.kosmos.game@1.0.0` grant through `window.kosmosApp.ark`:
+  `upsert_object` create+update, `get_object`/`list_objects` read-back,
+  out-of-grant denials (`upsert_object_type`, foreign `com.kosmos.note`
+  write, `delete_object`), `games.*` answering `unavailable` without a
+  worker, and the object surviving an Engine crash + restart. Requires the
+  reviewed `release/arcadia-0.1.11.kspkg` built in the `arcadia/` checkout
+  at the pinned commit (`bun install && bun run package:kspkg`). On Windows
+  the same spec additionally covers the worker path: `games.*` CRUD, the
+  hostile-Steam launch rejection, and SQOBA backup/restore recovery.
 
 The harness is platform-neutral: binary names come from `executableName()`,
 fixture ZIPs use `desktop/scripts/zip-utils.mjs`, and process cleanup reads
@@ -100,8 +114,19 @@ which the specs add only on `process.platform === "linux"`.
 
 - `pnpm install` for `host/` requires `read:packages` on GitHub Packages;
   without it use the `link:` fallback above.
-- Specs for other first-party apps (Arcadia/Daedalus/Dictation/Shell/
-  topology) assume the monorepo layout or Windows-only tools and are
-  not part of the Linux gate.
+- The Arcadia package worker is Windows-only: on Linux `games.*`
+  operations answer `unavailable`, and the Steam-scan/SQOBA save-backup
+  flows are exercised by the spec only on Windows. The Linux-built
+  `release/arcadia-0.1.11.kspkg` still carries the declared Windows worker
+  entry (`worker/arcadia-worker.exe`, an ELF there) because the packager
+  always copies the built worker to that path — it is never launched
+  off Windows.
+- Building the Arcadia package on Linux needs its `@kosmos/visuals`
+  dependency resolved to a sibling `imago/` checkout (the vite config
+  aliases it) — install/build imago first, then
+  `bun run package:kspkg` in `arcadia/`.
+- Specs for other first-party apps (Daedalus/Dictation/Shell/topology)
+  assume the monorepo layout or Windows-only tools and are not part of
+  the Linux gate.
 - Tray, global shortcuts, dictation capture, and start-menu integration
   remain Windows-only; the Engine stubs them out off-Windows.
