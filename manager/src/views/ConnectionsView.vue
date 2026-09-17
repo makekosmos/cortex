@@ -8,7 +8,7 @@ import type {
 } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
 import { appIcon } from "../app-icons";
-import { integrationCards, windowsListings, type ConnectionCard } from "../connection-helpers";
+import { integrationCards, type ConnectionCard } from "../connection-helpers";
 import { installTarget } from "../store-helpers";
 
 const props = defineProps<{ client: ManagerClient }>();
@@ -22,7 +22,11 @@ const settingDraft = ref<CredentialMap>({});
 const busy = ref<string | null>(null);
 const selectedProvider = ref<string | null>(null);
 const cards = computed(() =>
-  integrationCards(windowsListings(catalog.value?.listings ?? []), snapshot.value?.providers ?? []),
+  integrationCards(
+    catalog.value?.listings ?? [],
+    snapshot.value?.providers ?? [],
+    catalog.value?.platform,
+  ),
 );
 const selectedCard = computed(() => cards.value.find((card) => card.id === selectedProvider.value));
 const selected = computed(() => selectedCard.value?.provider);

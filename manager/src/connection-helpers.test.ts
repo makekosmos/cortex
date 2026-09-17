@@ -33,6 +33,7 @@ describe("integration cards", () => {
     const cards = integrationCards(
       [integration("integration.codewars", "codewars", "Codewars")],
       [provider("codewars"), provider("toggl")],
+      "windows",
     );
 
     expect(cards.map((card) => card.id)).toEqual(["codewars", "com.kosmos.huawei-health", "toggl"]);
@@ -43,8 +44,27 @@ describe("integration cards", () => {
     const cards = integrationCards(
       [integration("integration.bridge", "ark-markdown-bridge", "ARK Markdown Bridge")],
       [],
+      "windows",
     );
 
     expect(cards.map((card) => card.id)).toEqual(["com.kosmos.huawei-health"]);
+  });
+
+  test("filters catalog and first-party listings by the host platform", () => {
+    const cards = integrationCards(
+      [
+        integration("integration.codewars", "codewars", "Codewars"),
+        {
+          ...integration("integration.portable", "portable", "Portable"),
+          availability: { platforms: ["windows", "linux"] },
+        },
+      ],
+      [provider("toggl")],
+      "linux",
+    );
+
+    // Windows-only catalog listings and the Windows-only Huawei entry hide on
+    // Linux; installed providers are Engine-reported and always listed.
+    expect(cards.map((card) => card.id)).toEqual(["portable", "toggl"]);
   });
 });

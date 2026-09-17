@@ -1,5 +1,6 @@
 import { computed, ref, watch } from "vue";
 import type { ManagerClient } from "./useManagerClient";
+import { listingSupportsPlatform } from "../store-helpers";
 import type {
   InstalledStoreItem,
   PackageItem,
@@ -16,7 +17,7 @@ export function useStoreCatalog(client: ManagerClient) {
   const catalogPackages = ref<PackageItem[]>([]);
   const listings = computed(() =>
     (snapshot.value?.listings ?? []).filter((listing) =>
-      (listing.availability?.platforms ?? []).includes("windows"),
+      listingSupportsPlatform(listing, snapshot.value?.platform),
     ),
   );
   async function load(refresh = false) {
