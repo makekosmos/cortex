@@ -96,10 +96,33 @@ function pnpmSpawn() {
     : { file: "pnpm", prefix: [] };
 }
 
+// Git exports GIT_DIR/GIT_WORK_TREE and friends into hook processes. Inside a
+// linked worktree that leaks the current worktree's gitdir into every check we
+// spawn — e.g. host e2e fixtures shell out to `git` in sibling app checkouts
+// and would silently operate on the wrong repository. Scrub git's hook env so
+// each command re-discovers the repository from its own cwd.
+const GIT_HOOK_ENV_KEYS = [
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_COMMON_DIR",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_CEILING_DIRECTORIES",
+  "GIT_PREFIX",
+];
+
+export function checkEnv() {
+  const env = { ...process.env };
+  for (const key of GIT_HOOK_ENV_KEYS) delete env[key];
+  return env;
+}
+
 export function runCommand(command) {
   const spawn = command.command === "pnpm" ? pnpmSpawn() : { file: command.command, prefix: [] };
   const result = spawnSync(spawn.file, [...spawn.prefix, ...command.args], {
     cwd: process.cwd(),
+    env: checkEnv(),
     encoding: "utf8",
     stdio: ["inherit", "pipe", "pipe"],
     windowsHide: true,
