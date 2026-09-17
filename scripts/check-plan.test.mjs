@@ -170,6 +170,55 @@ test("command failures aggregate instead of stopping after the first selected gr
   assert.deepEqual(seen, ["desktop-typecheck", "manager-typecheck"]);
 });
 
+test("full gate runs the root check plus host and first-party contract suites", async () => {
+  const { executePlan } = await import("./check-plan.mjs");
+  const seen = [];
+  const status = executePlan(
+    { mode: "worktree", full: true, checks: ["full"], changed: [], reasons: [] },
+    (command) => {
+      seen.push(`${command.command} ${command.args.join(" ")}`);
+      return 0;
+    },
+  );
+  assert.equal(status, 0);
+  assert.deepEqual(seen, [
+    "bun run check",
+    "bun run test:host-contracts",
+    "bun run test:first-party-contracts",
+  ]);
+});
+
+test("full gate still fails when a contract suite fails and runs every command", async () => {
+  const { executePlan } = await import("./check-plan.mjs");
+  const seen = [];
+  const status = executePlan(
+    { mode: "worktree", full: true, checks: ["full"], changed: [], reasons: [] },
+    (command) => {
+      seen.push(command.name);
+      return command.name === "host-contracts" ? 1 : 0;
+    },
+  );
+  assert.equal(status, 1);
+  assert.deepEqual(seen, ["full", "host-contracts", "first-party-contracts"]);
+});
+
+test("full gate runs the same contract commands an affected plan selects", async () => {
+  const { createPlan, executePlan } = await import("./check-plan.mjs");
+  const run = (plan) => {
+    const seen = [];
+    executePlan(plan, (command) => {
+      seen.push(`${command.command} ${command.args.join(" ")}`);
+      return 0;
+    });
+    return seen;
+  };
+  const affected = run(createPlan({ mode: "worktree", files: ["host/electron/main.ts"] }));
+  assert.ok(affected.includes("bun run test:host-contracts"));
+  const full = run(createPlan({ mode: "worktree", full: true }));
+  assert.ok(full.includes("bun run test:host-contracts"));
+  assert.ok(full.includes("bun run test:first-party-contracts"));
+});
+
 test("pre-commit retains the existing source-size safeguard through the planner", async () => {
   const { executePlan } = await import("./check-plan.mjs");
   const seen = [];
