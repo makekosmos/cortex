@@ -9,3 +9,9 @@ export const TEST_ONLY_RELEASE = {
     "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIOySB4fj+9fjjYqVGN0MUgvLCskThB42RZM33lFKNGId\n-----END PRIVATE KEY-----\n",
   publicKey: "38NFuh0ZiMf4CFadsii2MYZhb3+nIZgqMelepE8Xjho=",
 };
+export const TEST_ONLY_STORE = {
+  privateKey:
+    "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEILJip2sm44kmthTuVD7jEcexS2Pvbq8NXSRjTxr5Nop0\n-----END PRIVATE KEY-----\n",
+  publicKey: "WfIKwKU5F/RyZZWPhZXNmuiDjIU8yTw1BiYC0XdQDSQ=",
+  keyId: "store-test",
+};

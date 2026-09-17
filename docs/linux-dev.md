@@ -1,7 +1,7 @@
 # Linux development: host + Engine + Manager + first-party apps
 
 Verified on Ubuntu 24.04 x86_64 (KOS-53, KOS-93, KOS-94, KOS-95, KOS-96,
-KOS-97). The supported gate is the first-party E2E suite, which builds the
+KOS-97, KOS-98, KOS-102). The supported gate is the first-party E2E suite, which builds the
 Engine, spawns the pinned `ark-core-rpc` sidecar, installs the signed
 Agenda/Memoria/Ordo/Arcadia/Dictation `.kspkg`, and launches the Electron
 Host under Xvfb — plus the standalone Manager E2E suite, which attaches the
@@ -165,6 +165,64 @@ Manager window hidden (asserted via `BrowserWindow.isVisible() === false`).
   reveal/copy, connect/disconnect peer flows, serialized refresh, and an
   unavailable-Engine reopen. The lock `auth_token` is asserted absent from
   the rendered DOM.
+- `store-catalog` — a test-signed Store catalog fixture is seeded through
+  `packages.catalog_apply`, then the Маркетплейс browses it, opens listing
+  details, resolves `store.external_url`, installs via `packages.install`
+  with `archive_path`, and toggles `packages.set_enabled` from the Manager
+  UI, with catalog metadata and effective grants projected onto the
+  installed app; a refresh against a dead catalog URL fails closed
+  (listings kept, `state: "stale"`). The fixture mixes a portable listing
+  (`["linux", "windows"]`) with a Windows-only one: the Engine reports the
+  host OS as `platform` on `store.catalog`/`store.refresh`, and the spec
+  asserts the Manager filters `availability.platforms` by that token — on
+  Linux the Windows-only app and the Windows-only first-party Huawei
+  Health integration card are hidden, while portable listings stay
+  visible.
+
+## Full-contour smoke (one command)
+
+```text
+node scripts/linux-smoke.mjs [--apps-root DIR] [--report FILE] [--no-xvfb]
+```
+
+`scripts/linux-smoke.mjs` is the reproducible Linux gate for the whole
+contour. Run it from the repository root; it re-execs itself under
+`xvfb-run -a` when no `DISPLAY` exists (pass `--no-xvfb` to opt out), sets
+`ELECTRON_DISABLE_SANDBOX=1` + `KOSMOS_HEADLESS=1`, isolates
+`XDG_CONFIG_HOME`/`XDG_CACHE_HOME`/`XDG_DATA_HOME` under a per-run `/tmp`
+root, then runs the gates in order:
+
+1. `preflight` — Linux plus node/pnpm/cargo/git/bun/xvfb-run on `PATH`.
+2. `workspace-deps` — `node scripts/workspace.mjs bootstrap` pins
+   `.tmp/workspace/{imago,arca-sdk}` to the `kosmos.workspace` commits and
+   verifies the built outputs the vite configs consume.
+3. `app-checkouts` — every first-party app checkout next to the worktree
+   (sibling dirs of the repo root) is at the reviewed pin and carries its
+   `release/*.kspkg`. `--apps-root DIR` (or `KOSMOS_SMOKE_APPS_ROOT`)
+   symlinks `DIR/<app>` into place when the sibling is missing.
+4. `engine-bootstrap` — builds `ark-core-rpc` + `kepler-backend`, starts the
+   Engine against an isolated `KOSMOS_DATA_DIR`, and asserts
+   `engine.lock.json` plus authenticated `GET /v1/health` → 200 before
+   shutting it down.
+5. `host-deps`/`host-build` — `pnpm install` + `vite build` for `host/`.
+6. `host-e2e` — the eight first-party contract/smoke specs above.
+7. `manager-deps`/`manager-build` — same for `manager/`.
+8. `manager-e2e` — the full Manager suite including `store-catalog`.
+
+Each gate reports `PASS`, `FAIL`, or `NOT_RUN` (a gate is `NOT_RUN` when a
+prerequisite gate did not pass). The run exits non-zero unless every gate
+passed and always writes a Markdown report — `.tmp/linux-smoke-report.md`
+by default, or `--report FILE` — with per-gate status, elapsed time, and a
+detail line.
+
+When `pnpm --dir host install --frozen-lockfile` cannot reach
+`@makekosmos/ark` on GitHub Packages (HTTP 403 without `read:packages`),
+`host-deps` automatically falls back to
+`link:../.tmp/workspace/arca-sdk` for that install only and restores
+`host/package.json` + `host/pnpm-lock.yaml` afterwards — the `link:` edit
+is never committed. On Node 20 the legacy usage-tracker migration spec
+inside `engine-lifecycle` skips (`node:sqlite` needs Node 22.5+); the
+Manager gate still counts as `PASS` with `1 skipped`.
 
 The harness is platform-neutral: binary names come from `executableName()`,
 fixture ZIPs use `desktop/scripts/zip-utils.mjs`, and process cleanup reads
@@ -202,6 +260,11 @@ the Chromium sandbox needs, which the specs disable only on
   `win32`), and Manager `src/` contains no `process.platform` checks —
   capability decisions stay in the Engine/main-process responses. The
   Manager suite asserts `available: false` instead of adding UI branches.
+  Marketplace filtering follows the same shape: `store.catalog`/
+  `store.refresh` responses carry a `platform` token mapped from the host
+  OS inside the Engine (`windows`/`macos`, `linux` otherwise), and Manager
+  renderer code filters `availability.platforms` against it rather than
+  detecting the OS itself.
 - `manager/e2e` is not covered by `pnpm --dir manager run typecheck`
   (`tsconfig` includes `src` + `electron` only, same as `host/`); the specs
   are exercised by Playwright instead.
@@ -211,3 +274,32 @@ the Chromium sandbox needs, which the specs disable only on
 - The bundled Manager CSP (`font-src 'self'`) blocks the app's own `data:`
   fonts — a pre-existing product issue; the diagnostics spec ignores
   exactly that console error and still fails on any other.
+
+## OS-branch audit (KOS-100)
+
+A KOS-100 audit of first-party app product `src/` (Agenda, Memoria, Ordo,
+Arcadia, Dictation, Store, Manager UI) found no `process.platform` or
+`os.platform` use in renderer code — Electron-main hits under
+`*/electron/`, dev tooling under `*/scripts/`, and test harnesses under
+`*/tests/`/`*/e2e/` are the layers where OS branches belong. The only
+app-side OS detection was window-chrome styling: `navigator.platform` /
+`navigator.userAgent` sniffing feeding the `DesktopChrome` `platform`
+prop (Agenda, Memoria, Arcadia) and the prop hardcoded to `"windows"`
+(Dictation, `ManagerRoot`, `DashboardView`, `CommandHostView`). Those
+sites now consume the host-written `<html data-platform>` marker that the
+preloads set from `process.platform` (`desktop/electron/extension-preload.ts`,
+`desktop/electron/preload-bridge.ts`) — read directly, or via
+`usePlatform()` from `@kosmos/visuals` — so apps keep a single source of
+platform truth and run no OS detection of their own. Open follow-ups: the
+Manager store catalog still filters `availability.platforms` by a
+hardcoded `"windows"` token (`manager/src/composables/useStoreCatalog.ts`,
+`manager/src/connection-helpers.ts`) until an Engine/host platform API
+exists, and Arcadia's library copy is Windows-centric (`.exe` paths,
+`C:\Games\...` placeholder). To re-run the search from a directory holding
+the app checkouts:
+
+```text
+rg -n 'process\.platform|os\.platform|navigator\.platform|navigator\.userAgent|\bwin32\b|\bdarwin\b|data-platform|platform="' \
+  agenda/src memoria/src ordo/src arcadia/src dictation/src \
+  cortex/manager/src
+```

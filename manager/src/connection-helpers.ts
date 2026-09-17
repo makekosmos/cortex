@@ -1,5 +1,5 @@
 import type { IntegrationProvider, StoreListing } from "./manager-api";
-import { listingPackageId } from "./store-helpers";
+import { listingPackageId, listingSupportsPlatform } from "./store-helpers";
 
 export type ConnectionCard = {
   id: string;
@@ -25,8 +25,8 @@ const FIRST_PARTY_INTEGRATIONS: StoreListing[] = [
   },
 ];
 
-export function windowsListings(listings: StoreListing[]) {
-  return listings.filter((listing) => (listing.availability?.platforms ?? []).includes("windows"));
+export function platformListings(listings: StoreListing[], platform?: string) {
+  return listings.filter((listing) => listingSupportsPlatform(listing, platform));
 }
 
 function integrationId(listing: StoreListing) {
@@ -40,11 +40,12 @@ function visibleIntegration(id: string) {
 export function integrationCards(
   listings: StoreListing[],
   providers: IntegrationProvider[],
+  platform?: string,
 ): ConnectionCard[] {
   const byId = new Map(providers.map((provider) => [provider.id, provider]));
   const seen = new Set<string>();
   const cards: ConnectionCard[] = [];
-  for (const listing of [...listings, ...FIRST_PARTY_INTEGRATIONS]) {
+  for (const listing of platformListings([...listings, ...FIRST_PARTY_INTEGRATIONS], platform)) {
     if (listing.kind !== "integration") continue;
     const id = integrationId(listing);
     if (!visibleIntegration(id) || seen.has(id)) continue;
