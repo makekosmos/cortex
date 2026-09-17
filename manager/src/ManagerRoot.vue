@@ -16,6 +16,7 @@ import {
   TitlebarButton,
   ToastHost,
   provideToastHost,
+  usePlatform,
 } from "@kosmos/visuals";
 import {
   PhArrowsClockwise,
@@ -132,6 +133,7 @@ const primaryViewIds: Exclude<ViewId, "about" | "packages" | "updates" | "settin
 ];
 const commerceViewIds: Extract<ViewId, "packages" | "updates">[] = ["packages", "updates"];
 const active = computed(() => views[view.value]);
+const { platform } = usePlatform();
 
 async function select(next: ViewId) {
   // SAFETY: the template ref targets the root element of the active view component.
@@ -152,7 +154,7 @@ onMounted(() => {
 
 <template>
   <ToastHost />
-  <DesktopChrome appearance="settings" platform="windows">
+  <DesktopChrome appearance="settings" :platform="platform">
     <template #titlebar-leading>
       <span class="kosmos-titlebar-brand">Kosmos</span>
     </template>

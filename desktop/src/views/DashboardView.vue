@@ -9,6 +9,7 @@ import {
   TitlebarHistoryControls,
   ToastHost,
   provideToastHost,
+  usePlatform,
 } from "@kosmos/visuals";
 import BodyView from "../body/BodyView.vue";
 import CoderView from "../coder/CoderView.vue";
@@ -44,6 +45,7 @@ const section = ref<DashboardSection>(
         : "data",
 );
 const showUsage = computed(() => section.value === "data" && currentTypeId.value === "__usage__");
+const { platform } = usePlatform();
 provideToastHost();
 
 function phosphorSidebarIcon(icon: Component, weight: "duotone" | "fill"): Component {
@@ -137,7 +139,7 @@ function selectCoder(): void {
 <template>
   <div class="dashboard" tabindex="0">
     <ToastHost />
-    <DesktopChrome appearance="settings" platform="windows">
+    <DesktopChrome appearance="settings" :platform="platform">
       <template #sidebar>
         <SettingsSidebar title="Kosmos" background="var(--bg-app)">
           <div class="dashboard-sidebar-scroll kosmos-scroll">
