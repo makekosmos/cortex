@@ -211,3 +211,32 @@ the Chromium sandbox needs, which the specs disable only on
 - The bundled Manager CSP (`font-src 'self'`) blocks the app's own `data:`
   fonts — a pre-existing product issue; the diagnostics spec ignores
   exactly that console error and still fails on any other.
+
+## OS-branch audit (KOS-100)
+
+A KOS-100 audit of first-party app product `src/` (Agenda, Memoria, Ordo,
+Arcadia, Dictation, Store, Manager UI) found no `process.platform` or
+`os.platform` use in renderer code — Electron-main hits under
+`*/electron/`, dev tooling under `*/scripts/`, and test harnesses under
+`*/tests/`/`*/e2e/` are the layers where OS branches belong. The only
+app-side OS detection was window-chrome styling: `navigator.platform` /
+`navigator.userAgent` sniffing feeding the `DesktopChrome` `platform`
+prop (Agenda, Memoria, Arcadia) and the prop hardcoded to `"windows"`
+(Dictation, `ManagerRoot`, `DashboardView`, `CommandHostView`). Those
+sites now consume the host-written `<html data-platform>` marker that the
+preloads set from `process.platform` (`desktop/electron/extension-preload.ts`,
+`desktop/electron/preload-bridge.ts`) — read directly, or via
+`usePlatform()` from `@kosmos/visuals` — so apps keep a single source of
+platform truth and run no OS detection of their own. Open follow-ups: the
+Manager store catalog still filters `availability.platforms` by a
+hardcoded `"windows"` token (`manager/src/composables/useStoreCatalog.ts`,
+`manager/src/connection-helpers.ts`) until an Engine/host platform API
+exists, and Arcadia's library copy is Windows-centric (`.exe` paths,
+`C:\Games\...` placeholder). To re-run the search from a directory holding
+the app checkouts:
+
+```text
+rg -n 'process\.platform|os\.platform|navigator\.platform|navigator\.userAgent|\bwin32\b|\bdarwin\b|data-platform|platform="' \
+  agenda/src memoria/src ordo/src arcadia/src dictation/src \
+  cortex/manager/src
+```
