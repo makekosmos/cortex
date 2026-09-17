@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { flag } from "./argv.mjs";
 import { gitEnv } from "./git-env.mjs";
 import { loadWorkspace } from "./workspace-config.mjs";
 import { planBootstrap } from "./workspace.mjs";
@@ -43,7 +44,7 @@ const WORKSPACE_OUTPUTS = {
   "arca-sdk": ["dist/index.js"],
 };
 
-const arg = (name) => process.argv[process.argv.indexOf(name) + 1];
+const arg = (name) => flag(process.argv, name);
 const has = (name) => process.argv.includes(name);
 const reportPath = path.resolve(repoRoot, arg("--report") ?? ".tmp/linux-smoke-report.md"),
   appsRoot = arg("--apps-root") ?? process.env.KOSMOS_SMOKE_APPS_ROOT;
