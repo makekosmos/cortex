@@ -19,6 +19,7 @@ import {
 } from "./workspace-inspect.mjs";
 import { NAMES, loadWorkspace, resolveMode, resolveWorkspacePaths } from "./workspace-config.mjs";
 import { gitEnv } from "./git-env.mjs";
+import { flag } from "./argv.mjs";
 export {
   cloneExact,
   checkoutDirty,
@@ -242,10 +243,6 @@ export async function writeCiOutput(root, file) {
       .join(os.EOL)}${os.EOL}`,
   );
   return values;
-}
-function flag(args, name) {
-  const index = args.indexOf(name);
-  return index < 0 ? null : args[index + 1];
 }
 async function main() {
   const args = process.argv.slice(2),
