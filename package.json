@@ -5,7 +5,6 @@
     "workspace": "node scripts/workspace.mjs",
     "prepare": "lefthook install",
     "check:plan": "node scripts/check-plan.mjs --mode worktree",
-    "check:plan:ci": "node scripts/check-plan.mjs --mode ci",
     "check:affected": "node scripts/check-plan.mjs --mode worktree --run",
     "check:layout": "node scripts/check-layout.mjs",
     "check:source-size": "node scripts/check-source-size.mjs",

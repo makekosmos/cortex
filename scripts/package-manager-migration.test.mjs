@@ -38,12 +38,6 @@ test("Cortex command and test contracts do not require Bun", () => {
   assert.doesNotMatch(read("host/e2e/fixtures/host-runtime.test.ts"), /bun:test/);
 });
 
-test("CI uses Bun only for the external pinned Imago checkout", () => {
-  const source = read(".github/workflows/ci.yml");
-  assert.match(source, /oven-sh\/setup-bun@/);
-  assert.match(source, /bun install --frozen-lockfile/);
-});
-
 test("workspace doctor checks the Cortex pnpm toolchain", () => {
   const source = read("scripts/workspace-inspect.mjs");
   assert.match(source, /pnpm:\s*String\(packageJson\.packageManager/);
@@ -71,22 +65,12 @@ test("Node-launched host E2E uses pnpm exec", () => {
   assert.doesNotMatch(source, /shell:\s*true/);
 });
 
-test("CI pins pnpm action setup to the reviewed v4 commit", () => {
-  const source = read(".github/workflows/ci.yml");
-  assert.equal(
-    (source.match(/pnpm\/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa/g) ?? []).length,
-    3,
-  );
-  assert.doesNotMatch(source, /pnpm\/action-setup@v4/);
-});
-
 test("Desktop Vue uses the workspace-pinned shared Imago revision", () => {
   const desktop = JSON.parse(read("desktop/package.json"));
   assert.equal(desktop.devDependencies.vue, "3.6.0-rc.7");
-  const ci = read(".github/workflows/ci.yml");
-  assert.match(ci, /repository: \$\{\{ steps\.workspace\.outputs\.imago_repository \}\}/);
-  assert.match(ci, /ref: \$\{\{ steps\.workspace\.outputs\.imago_commit \}\}/);
-  assert.match(ci, /path: \.tmp\/workspace\/imago/);
+  const workspace = JSON.parse(read("package.json")).kosmos?.workspace;
+  assert.match(workspace?.imago?.repository ?? "", /^makekosmos\/imago$/);
+  assert.match(workspace?.imago?.commit ?? "", /^[0-9a-f]{40}$/);
 });
 
 test("Desktop and pinned Imago resolve Vue to one type identity", () => {

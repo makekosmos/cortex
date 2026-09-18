@@ -268,11 +268,11 @@ export async function inspectCore(root) {
   };
 }
 export async function inspectTools(root, packageJson) {
-  const workflow = await readFile(path.join(root, ".github", "workflows", "core-pin.yml"), "utf8"),
+  const toolchain = JSON.parse(await readFile(path.join(root, "toolchain.json"), "utf8")),
     expected = {
       pnpm: String(packageJson.packageManager ?? "").match(/^pnpm@(\d+\.\d+\.\d+)$/)?.[1],
-      node: workflow.match(/node-version:\s*(\d+\.\d+\.\d+)/)?.[1],
-      rust: workflow.match(/rustup toolchain install\s+(\d+\.\d+\.\d+)/)?.[1],
+      node: toolchain.node,
+      rust: toolchain.rust,
     },
     tools = {};
   for (const [name, exe] of Object.entries({ pnpm: "pnpm", node: "node", rust: "rustc" })) {
