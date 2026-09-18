@@ -6,9 +6,9 @@ import { gitEnv } from "../../../scripts/git-env.mjs";
 import type { JsonValue, Manifest, PackageArchive } from "./signed-app-types";
 import { readZip } from "../../../desktop/scripts/zip-utils.mjs";
 
-const SOURCE_COMMIT = "9ae7892bb6d66615506f2109c12f8438f6f1aa36";
-const ARCHIVE_PATH = "release/memoria-0.6.8.kspkg";
-const ARCHIVE_SHA256 = "351103b14c75cc0c670e574024ebfd5ec0a56643809e5fc0815cb2260f37e294";
+const SOURCE_COMMIT = "771414565868809b01468fca84e5440015fdff41";
+const ARCHIVE_PATH = "release/memoria-0.6.9.kspkg";
+const ARCHIVE_SHA256 = "66a159607d634e87e442b24516a7688bb6f5e67be8e72b068e794d2954d0400e";
 
 const gitExecutable =
   process.platform === "win32"
@@ -93,10 +93,10 @@ export function memoriaArchive(root: string, repositoryRoot: string): PackageArc
   if (!isJsonObject(parsed)) throw new Error("Memoria archive manifest must be a JSON object");
   if (
     digest(JSON.stringify(parsed)) !==
-      "7bdc84375e069b1ba6ba2c99780bcd18c9e5c4d9db2b3285d1508498c96c2b69" ||
+      "189a8644cb89fa419cc7bed486e73d46e36d07fc49b2fe59e969befe2285f36b" ||
     parsed.schema_version !== 2 ||
     parsed.id !== "com.kosmos.memoria" ||
-    parsed.version !== "0.6.8" ||
+    parsed.version !== "0.6.9" ||
     parsed.kind !== "app" ||
     parsed.icon !== "icon.png" ||
     parsed.entrypoint !== "dist/index.html"
