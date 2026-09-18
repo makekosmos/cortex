@@ -26,13 +26,20 @@ type TestApi = {
   listAllEntries: () => Promise<readonly TestEntry[]>;
 };
 
+type TestJournalSnapshot = { status?: unknown };
+
 type TestScope = typeof window & {
   api?: TestApi;
+  kosmosApp?: {
+    userData?: { readJson?: (name: string) => Promise<TestJournalSnapshot | null> };
+  };
   __memoriaPartialImportWrites?: number;
   __memoriaPartialImportInjected?: boolean;
   __memoriaPartialImportIds?: string[];
   __memoriaPartialImportOpened?: boolean;
   __memoriaImportFirstWrite?: boolean;
+  __memoriaImportSaveCalls?: number;
+  __memoriaImportSaveError?: string;
 };
 
 export async function installPartialImportFailure(page: Page, importRoot: string) {
@@ -89,26 +96,36 @@ export async function installPartialImportCrashPause(page: Page, importRoot: str
       const api = scope.api;
       if (!api) throw new Error("Memoria window.api is unavailable");
       const originalSaveEntry = api.saveEntry;
-      api.openMarkdownVault = async () => ({
-        rootPath: importRoot,
-        files: [
-          {
-            path: `${importRoot}\\first.md`,
-            relativePath: "first.md",
-            name: "first.md",
-            content: "# Cortex crash import first\n\nFirst crash-import body",
-          },
-          {
-            path: `${importRoot}\\second.md`,
-            relativePath: "second.md",
-            name: "second.md",
-            content: "# Cortex crash import second\n\nSecond crash-import body",
-          },
-        ],
-        images: [],
-      });
+      api.openMarkdownVault = async () => {
+        scope.__memoriaPartialImportOpened = true;
+        return {
+          rootPath: importRoot,
+          files: [
+            {
+              path: `${importRoot}\\first.md`,
+              relativePath: "first.md",
+              name: "first.md",
+              content: "# Cortex crash import first\n\nFirst crash-import body",
+            },
+            {
+              path: `${importRoot}\\second.md`,
+              relativePath: "second.md",
+              name: "second.md",
+              content: "# Cortex crash import second\n\nSecond crash-import body",
+            },
+          ],
+          images: [],
+        };
+      };
       api.saveEntry = async (entry) => {
-        const result = await originalSaveEntry(entry);
+        scope.__memoriaImportSaveCalls = (scope.__memoriaImportSaveCalls ?? 0) + 1;
+        let result;
+        try {
+          result = await originalSaveEntry(entry);
+        } catch (error) {
+          scope.__memoriaImportSaveError = String(error);
+          throw error;
+        }
         if (!scope.__memoriaImportFirstWrite) {
           scope.__memoriaImportFirstWrite = true;
           await new Promise<void>(() => undefined);
@@ -135,6 +152,38 @@ export async function readPartialImportState(page: Page) {
         .map((element) => element.textContent?.trim())
         .filter(Boolean)
         .join(" "),
+    };
+  });
+}
+
+export async function readImportCrashDiagnostics(page: Page) {
+  return page.evaluate(async () => {
+    // SAFETY: installPartialImportCrashPause establishes this test-only window shape.
+    const scope = window as TestScope;
+    let userDataJournal: TestJournalSnapshot | null = null;
+    let userDataJournalError: string | null = null;
+    try {
+      userDataJournal =
+        (await scope.kosmosApp?.userData?.readJson?.("memoria-obsidian-import-journal.json")) ??
+        null;
+    } catch (error) {
+      userDataJournalError = String(error);
+    }
+    return {
+      opened: scope.__memoriaPartialImportOpened === true,
+      firstWrite: scope.__memoriaImportFirstWrite === true,
+      saveCalls: scope.__memoriaImportSaveCalls ?? 0,
+      saveError: scope.__memoriaImportSaveError ?? null,
+      status: Array.from(document.querySelectorAll(".settings-row-desc-plain"))
+        .map((element) => element.textContent?.trim())
+        .filter(Boolean)
+        .join(" "),
+      progress: document.querySelector(".settings-markdown-progress")?.textContent?.trim() ?? null,
+      journal: {
+        localStorage: localStorage.getItem("memoria.obsidian-import-journal.v1"),
+        userData: userDataJournal,
+        userDataError: userDataJournalError,
+      },
     };
   });
 }

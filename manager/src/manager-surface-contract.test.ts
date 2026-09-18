@@ -187,7 +187,7 @@ describe("Manager surface contract", () => {
     expect(updates).toContain("!actionFor(item)");
     expect(updates).toContain("item.listing?.distribution?.version");
     expect(updates).toContain("actionLabel(item)");
-    expect(updates).toContain("updates-initial-store-catalog");
+    expect(updates).toContain("updates-store-catalog");
     expect(updates).toContain("createDesktopVersionCache");
   });
 

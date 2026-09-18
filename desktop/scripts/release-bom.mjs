@@ -196,13 +196,13 @@ export function validateReleaseBom(value, context) {
   return value;
 }
 
-async function repositoryContext(root, platform, currentCommit) {
+export async function repositoryContext(root, platform, currentCommit) {
   const packageJson = await readJson(path.join(root, "package.json"));
   const workspace = packageJson.kosmos?.workspace;
   if (!workspace?.imago || !workspace?.["arca-sdk"])
     fail("package.json workspace pins are incomplete");
   const versions = await readJson(path.join(root, "desktop", "release-versions.json"));
-  const workflow = await readFile(path.join(root, ".github", "workflows", "core-pin.yml"), "utf8");
+  const toolchain = await readJson(path.join(root, "toolchain.json"));
   const cargo = await readFile(path.join(root, "runtime", "Cargo.toml"), "utf8");
   const shellApi = await readFile(path.join(root, "desktop", "electron", "kepler-api.ts"), "utf8");
   const engineApi = await readFile(
@@ -216,8 +216,8 @@ async function repositoryContext(root, platform, currentCommit) {
   const arkCore = await readFile(path.join(root, "desktop", "scripts", "ark-core-rpc.mjs"), "utf8");
 
   const pnpm = String(packageJson.packageManager ?? "").match(/^pnpm@(\d+\.\d+\.\d+)$/)?.[1];
-  const node = workflow.match(/node-version:\s*(\d+\.\d+\.\d+)/)?.[1];
-  const rust = workflow.match(/rustup toolchain install\s+(\d+\.\d+\.\d+)/)?.[1];
+  const node = toolchain.node;
+  const rust = toolchain.rust;
   const coreCommit = cargo.match(
     /git = "https:\/\/github\.com\/makekosmos\/core\.git", rev = "([0-9a-f]{40})"/,
   )?.[1];

@@ -53,7 +53,9 @@ function openHostedPackage(id: string, development?: DevPackage) {
 }
 
 function hostArgs(id: string, development?: DevPackage): string[] {
-  return development ? [`--open-app=${id}`, `--dev-url=${development.url}`] : [`--open-app=${id}`];
+  return development?.url
+    ? [`--open-app=${id}`, `--dev-url=${development.url}`]
+    : [`--open-app=${id}`];
 }
 
 function startPackagedRuntime(): boolean {
@@ -145,6 +147,9 @@ function normalizeIntegrationSnapshot(value: Input) {
         {
           id: entry.id,
           label: isString(entry.label) ? entry.label.slice(0, 64) : entry.id,
+          packageVersion: isString(entry.packageVersion)
+            ? entry.packageVersion.slice(0, 64)
+            : undefined,
           credentialLabel: isString(entry.credentialLabel)
             ? entry.credentialLabel.slice(0, 64)
             : "Ключ",

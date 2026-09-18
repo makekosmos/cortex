@@ -1,5 +1,5 @@
 import type { IntegrationProvider, StoreListing } from "./manager-api";
-import { listingPackageId } from "./store-helpers";
+import { listingPackageId, listingSupportsPlatform } from "./store-helpers";
 
 export type ConnectionCard = {
   id: string;
@@ -25,8 +25,8 @@ const FIRST_PARTY_INTEGRATIONS: StoreListing[] = [
   },
 ];
 
-export function windowsListings(listings: StoreListing[]) {
-  return listings.filter((listing) => (listing.availability?.platforms ?? []).includes("windows"));
+export function platformListings(listings: StoreListing[], platform?: string) {
+  return listings.filter((listing) => listingSupportsPlatform(listing, platform));
 }
 
 function integrationId(listing: StoreListing) {
@@ -37,14 +37,29 @@ function visibleIntegration(id: string) {
   return !HIDDEN_INTEGRATION_IDS.has(id);
 }
 
+export function authMode(provider: IntegrationProvider) {
+  return provider.authMode === "browser_login" || provider.authMode === "none"
+    ? provider.authMode
+    : "credential";
+}
+
+export function credentialType(provider: IntegrationProvider) {
+  return provider.credentialInputType === "text" ? "text" : "password";
+}
+
+export function canLogin(provider: IntegrationProvider) {
+  return authMode(provider) === "browser_login" && Boolean(provider.loginCapability);
+}
+
 export function integrationCards(
   listings: StoreListing[],
   providers: IntegrationProvider[],
+  platform?: string,
 ): ConnectionCard[] {
   const byId = new Map(providers.map((provider) => [provider.id, provider]));
   const seen = new Set<string>();
   const cards: ConnectionCard[] = [];
-  for (const listing of [...listings, ...FIRST_PARTY_INTEGRATIONS]) {
+  for (const listing of platformListings([...listings, ...FIRST_PARTY_INTEGRATIONS], platform)) {
     if (listing.kind !== "integration") continue;
     const id = integrationId(listing);
     if (!visibleIntegration(id) || seen.has(id)) continue;

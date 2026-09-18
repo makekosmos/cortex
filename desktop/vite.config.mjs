@@ -51,6 +51,11 @@ export default defineConfig({
     hmr: {
       overlay: false,
     },
+    watch: {
+      // dev-run keeps engine data under .e2e/; a recursive watcher would hold
+      // a directory handle on package staging dirs and break install renames.
+      ignored: ["**/.e2e/**"],
+    },
   },
   clearScreen: false,
 });

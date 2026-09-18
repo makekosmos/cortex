@@ -35,6 +35,24 @@ stop active builds and remove only that directory; the next call reports Cargo
 output and rebuilds it. Do not remove a lock while its recorded process is
 alive.
 
+## `KOSMOS_ARK_TARGET_DIR`
+
+A source build sets `CARGO_TARGET_DIR` for `cargo install` so Cargo output
+stays inside the staging directory instead of the global Cargo target. On
+Windows the staging path under `desktop/.tmp/ark-core-rpc` grows past ~260
+characters once platform, revision, profile, and feature keys join it, and
+`ml64`/`link.exe` then fail with `MASM A1009: line too long` or `LNK1104`.
+Set `KOSMOS_ARK_TARGET_DIR` to a short absolute path to redirect Cargo output:
+
+```text
+$env:KOSMOS_ARK_TARGET_DIR = 'C:\ark-target'
+bun run --cwd desktop dev
+```
+
+When the variable is unset the target dir stays `<staging>/target` beside the
+staged `--root`. Prebuilt manifests never invoke Cargo, so the override only
+affects source builds.
+
 ## Explicit prebuilt mode for UI development
 
 The default remains a source build. UI development may opt in explicitly:
@@ -70,7 +88,11 @@ rename and rollback; if a process dies after moving the old path to its backup,
 the next invocation restores or reconciles that owned backup before use. A
 failed publication leaves the prior target or cache entry recoverable.
 
-## CI cache
+## CI cache (retired)
+
+Hosted GitHub Actions CI has been removed (the org does not provision paid
+runner minutes). This section is retained as the design record for cache keys
+in case local or future remote caching reuses them.
 
 The Linux `portable` and Windows `windows-runtime` jobs cache Cargo git/db,
 registry, `target` output, and the actual `desktop/.tmp/ark-core-rpc` sidecar

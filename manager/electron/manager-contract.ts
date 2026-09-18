@@ -14,6 +14,7 @@ import type {
   FocusActiveState,
   FocusBlocklist,
   EngineSettings,
+  PackageDisclosure,
   PackageItem,
   PackageSnapshot,
   PackageTrustStatus,
@@ -24,25 +25,16 @@ import type {
 
 export type Input = JsonValue | undefined;
 export type InputRecord = JsonRecord;
-export const isString = (value: Input | undefined): value is string =>
-  typeof value === "string";
-export const isNumber = (value: Input | undefined): value is number =>
-  typeof value === "number";
-export const isBoolean = (value: Input | undefined): value is boolean =>
-  typeof value === "boolean";
+export const isString = (value: Input | undefined): value is string => typeof value === "string";
+export const isNumber = (value: Input | undefined): value is number => typeof value === "number";
+export const isBoolean = (value: Input | undefined): value is boolean => typeof value === "boolean";
 
 export const isObject = (value: Input | undefined): value is InputRecord =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const text = (value: Input | undefined, max: number, fallback = ""): string =>
   isString(value) && value.length <= max ? value : fallback;
-const number = (
-  value: Input | undefined,
-  fallback = 0,
-  max = Number.MAX_SAFE_INTEGER,
-): number =>
-  isNumber(value) && Number.isFinite(value)
-    ? Math.max(0, Math.min(max, value))
-    : fallback;
+const number = (value: Input | undefined, fallback = 0, max = Number.MAX_SAFE_INTEGER): number =>
+  isNumber(value) && Number.isFinite(value) ? Math.max(0, Math.min(max, value)) : fallback;
 const flag = (value: Input | undefined): boolean => value === true;
 
 export function normalizeEngineSettings(value: Input): EngineSettings {
@@ -57,26 +49,14 @@ export function normalizeEngineSettings(value: Input): EngineSettings {
   };
 }
 
-export function validateUsageTrackerSettingsPatch(
-  value: Input,
-): value is { enabled: boolean } {
-  return (
-    isObject(value) &&
-    Object.keys(value).length === 1 &&
-    isBoolean(value.enabled)
-  );
+export function validateUsageTrackerSettingsPatch(value: Input): value is { enabled: boolean } {
+  return isObject(value) && Object.keys(value).length === 1 && isBoolean(value.enabled);
 }
 
-const boundedList = (
-  value: Input,
-  maxItems: number,
-  maxLength: number,
-): string[] =>
+const boundedList = (value: Input, maxItems: number, maxLength: number): string[] =>
   Array.isArray(value)
     ? value
-        .filter(
-          (item): item is string => isString(item) && item.length <= maxLength,
-        )
+        .filter((item): item is string => isString(item) && item.length <= maxLength)
         .slice(0, maxItems)
     : [];
 
@@ -94,20 +74,11 @@ export function validPackageVersion(value: Input): value is string {
 }
 
 function packageKind(value: Input): PackageItem["kind"] | null {
-  return value === "app" || value === "source" || value === "bridge"
-    ? value
-    : null;
+  return value === "app" || value === "source" || value === "bridge" ? value : null;
 }
 
-function normalizePackageItem(
-  value: Input,
-  catalog: boolean,
-): PackageItem | null {
-  if (
-    !isObject(value) ||
-    !validPackageId(value.id) ||
-    !validPackageVersion(value.version)
-  )
+function normalizePackageItem(value: Input, catalog: boolean): PackageItem | null {
+  if (!isObject(value) || !validPackageId(value.id) || !validPackageVersion(value.version))
     return null;
   const kind = packageKind(value.kind);
   if (!kind) return null;
@@ -122,14 +93,9 @@ function normalizePackageItem(
     revoked: value.revoked === true,
     revocation_reason: text(value.revocation_reason, 256) || null,
     worker_state: text(value.worker_state, 64, catalog ? "catalog" : "stopped"),
-    worker_health: text(
-      value.worker_health,
-      64,
-      text(value.worker_state, 64, "unknown"),
-    ),
-    update_version: validPackageVersion(value.update_version)
-      ? value.update_version
-      : null,
+    worker_health: text(value.worker_health, 64, text(value.worker_state, 64, "unknown")),
+    update_version: validPackageVersion(value.update_version) ? value.update_version : null,
+    catalog_sequence: number(value.catalog_sequence, 0, Number.MAX_SAFE_INTEGER),
     catalog,
   };
 }
@@ -142,14 +108,11 @@ export function normalizePackageSnapshot(value: Input): PackageSnapshot {
         return normalized ? [normalized] : [];
       })
     : [];
-  const installedKeys = new Set(
-    installed.map((item: PackageItem) => `${item.id}@${item.version}`),
-  );
+  const installedKeys = new Set(installed.map((item: PackageItem) => `${item.id}@${item.version}`));
   const catalog = Array.isArray(raw.catalog)
     ? raw.catalog.flatMap((item: Input) => {
         const normalized = normalizePackageItem(item, true);
-        return normalized &&
-          !installedKeys.has(`${normalized.id}@${normalized.version}`)
+        return normalized && !installedKeys.has(`${normalized.id}@${normalized.version}`)
           ? [normalized]
           : [];
       })
@@ -159,6 +122,60 @@ export function normalizePackageSnapshot(value: Input): PackageSnapshot {
     catalog,
     total: number(raw.total, installed.length, 100_000),
     truncated: raw.truncated === true,
+  };
+}
+
+export function normalizePackageDisclosure(value: Input): PackageDisclosure {
+  const raw = isObject(value) ? value : {};
+  const capabilities = Array.isArray(raw.capabilities)
+    ? raw.capabilities.flatMap((item: Input) => {
+        if (!isObject(item)) return [];
+        const capability = text(item.capability, 128);
+        if (!capability) return [];
+        return [{ capability, scopes: boundedList(item.scopes, 16, 256) }];
+      })
+    : [];
+  const data = Array.isArray(raw.data)
+    ? raw.data.flatMap((item: Input) => {
+        if (!isObject(item)) return [];
+        const type = text(item.type, 128);
+        if (!type) return [];
+        return [
+          {
+            type,
+            versions: text(item.versions, 128, "*"),
+            actions: boundedList(item.actions, 8, 64),
+            fields_read: boundedList(item.fields_read, 128, 256),
+            fields_write: boundedList(item.fields_write, 128, 256),
+            relations_read: boundedList(item.relations_read, 64, 256),
+            relations_write: boundedList(item.relations_write, 64, 256),
+          },
+        ];
+      })
+    : [];
+  const mappings = Array.isArray(raw.mappings)
+    ? raw.mappings.flatMap((item: Input) => {
+        if (!isObject(item)) return [];
+        const type = text(item.type, 128);
+        if (!type) return [];
+        return [
+          {
+            type,
+            direction: text(item.direction, 64),
+            fidelity: text(item.fidelity, 64),
+          },
+        ];
+      })
+    : [];
+  return {
+    id: text(raw.id, 128),
+    name: text(raw.name, 256),
+    version: text(raw.version, 64),
+    kind: packageKind(raw.kind) ?? "app",
+    publisher: text(raw.publisher, 256),
+    capabilities: capabilities.slice(0, 32),
+    data: data.slice(0, 64),
+    mappings: mappings.slice(0, 64),
   };
 }
 
@@ -188,11 +205,7 @@ export function normalizePackageTrustStatus(value: Input): PackageTrustStatus {
     message,
     configured,
     revoked_packages: number(trust.revoked_packages, 0, 100_000),
-    catalog_sequence: number(
-      trust.catalog_sequence,
-      0,
-      Number.MAX_SAFE_INTEGER,
-    ),
+    catalog_sequence: number(trust.catalog_sequence, 0, Number.MAX_SAFE_INTEGER),
     expires_at: expiresAt,
   };
 }
@@ -210,9 +223,7 @@ function normalizeScanProgress(value: Input): FileIndexScanProgress {
   };
 }
 
-export function validateFileIndexSettingsPatch(
-  value: Input,
-): FileIndexSettingsPatch | null {
+export function validateFileIndexSettingsPatch(value: Input): FileIndexSettingsPatch | null {
   if (!isObject(value)) return null;
   const keys = Object.keys(value);
   const allowed = new Set([
@@ -228,23 +239,15 @@ export function validateFileIndexSettingsPatch(
   return value as FileIndexSettingsPatch;
 }
 
-export function validateFileIndexPath(
-  value: Input,
-  maxLength = 4096,
-): value is string {
-  if (!isString(value) || value.trim().length === 0 || value.length > maxLength)
-    return false;
+export function validateFileIndexPath(value: Input, maxLength = 4096): value is string {
+  if (!isString(value) || value.trim().length === 0 || value.length > maxLength) return false;
   const path = value.trim();
   return !path.startsWith("\\\\") && !path.startsWith("//");
 }
 
 export function normalizeFileIndexSettings(value: Input): FileIndexSettings {
   const raw =
-    isObject(value) && isObject(value.settings)
-      ? value.settings
-      : isObject(value)
-        ? value
-        : {};
+    isObject(value) && isObject(value.settings) ? value.settings : isObject(value) ? value : {};
   const ntfsStatus = raw.ntfs_status;
   return {
     enabled: flag(raw.enabled),
@@ -266,28 +269,19 @@ export function normalizeFileIndexSettings(value: Input): FileIndexSettings {
   };
 }
 
-export function normalizeFileIndexDiagnostics(
-  value: Input,
-): FileIndexDiagnostics {
+export function normalizeFileIndexDiagnostics(value: Input): FileIndexDiagnostics {
   const raw =
     isObject(value) && isObject(value.diagnostics)
       ? value.diagnostics
       : isObject(value)
         ? value
         : {};
-  const risk =
-    raw.risk_level === "warning" || raw.risk_level === "danger"
-      ? raw.risk_level
-      : "ok";
+  const risk = raw.risk_level === "warning" || raw.risk_level === "danger" ? raw.risk_level : "ok";
   const riskReasons =
     risk === "danger"
-      ? [
-          "Индекс содержит потенциально слишком широкий корень или большой объём.",
-        ]
+      ? ["Индекс содержит потенциально слишком широкий корень или большой объём."]
       : risk === "warning"
-        ? [
-            "Индекс требует внимания по ограничению размера или полноте диагностики.",
-          ]
+        ? ["Индекс требует внимания по ограничению размера или полноте диагностики."]
         : [];
   return {
     db_size_bytes: number(raw.db_size_bytes, 0, Number.MAX_SAFE_INTEGER),
@@ -304,9 +298,7 @@ export function normalizeFileIndexDiagnostics(
   };
 }
 
-export function normalizeDictationConfig(
-  value: Input,
-): DictationConfigSnapshot {
+export function normalizeDictationConfig(value: Input): DictationConfigSnapshot {
   const root = isObject(value) ? value : {};
   const raw = isObject(root.config) ? root.config : root;
   const profile = isObject(raw.networkProfile) ? raw.networkProfile : {};
@@ -323,17 +315,12 @@ export function normalizeDictationConfig(
         ? text(raw.microphoneDeviceId, 512)
         : null,
       language: text(raw.language, 32, "ru"),
-      triggerMode:
-        raw.triggerMode === "push_to_talk" ? "push_to_talk" : "toggle",
-      injectMode:
-        raw.injectMode === "clipboard_only" ? "clipboard_only" : "auto_paste",
+      triggerMode: raw.triggerMode === "push_to_talk" ? "push_to_talk" : "toggle",
+      injectMode: raw.injectMode === "clipboard_only" ? "clipboard_only" : "auto_paste",
       hotkey: text(raw.hotkey, 128, "CTRL+SHIFT+SPACE"),
       duckAudioDuringRecording: flag(raw.duckAudioDuringRecording),
       localIdleUnloadMs: number(raw.localIdleUnloadMs, 300_000, 86_400_000),
-      provider:
-        raw.provider === "local" || raw.provider === "mock"
-          ? raw.provider
-          : "groq",
+      provider: raw.provider === "local" || raw.provider === "mock" ? raw.provider : "groq",
       providerEnabled: raw.providerEnabled !== false,
       model: text(raw.model, 128, "whisper-large-v3-turbo"),
       networkProfile,
@@ -342,37 +329,25 @@ export function normalizeDictationConfig(
   };
 }
 
-export function validateDictationConfigPatch(
-  value: Input,
-): DictationConfigPatch | null {
+export function validateDictationConfigPatch(value: Input): DictationConfigPatch | null {
   if (!isObject(value)) return null;
   const entries = Object.entries(value);
   if (
     !entries.length ||
     // SAFETY: the key is checked against the finite DictationConfigPatch key set.
-    entries.some(
-      ([key]) => !DICTATION_PATCH_KEYS.has(key as keyof DictationConfigPatch),
-    )
+    entries.some(([key]) => !DICTATION_PATCH_KEYS.has(key as keyof DictationConfigPatch))
   )
     return null;
   const patch: DictationConfigPatch = {};
   for (const [key, item] of entries) {
     if (key === "microphoneDeviceId" && (item === null || text(item, 512)))
       patch.microphoneDeviceId = item === null ? null : text(item, 512);
-    else if (key === "language" && text(item, 32))
-      patch.language = text(item, 32);
-    else if (
-      key === "triggerMode" &&
-      (item === "toggle" || item === "push_to_talk")
-    )
+    else if (key === "language" && text(item, 32)) patch.language = text(item, 32);
+    else if (key === "triggerMode" && (item === "toggle" || item === "push_to_talk"))
       patch.triggerMode = item;
-    else if (
-      key === "injectMode" &&
-      (item === "auto_paste" || item === "clipboard_only")
-    )
+    else if (key === "injectMode" && (item === "auto_paste" || item === "clipboard_only"))
       patch.injectMode = item;
-    else if (key === "hotkey" && text(item, 128))
-      patch.hotkey = text(item, 128);
+    else if (key === "hotkey" && text(item, 128)) patch.hotkey = text(item, 128);
     else if (key === "duckAudioDuringRecording" && isBoolean(item))
       patch.duckAudioDuringRecording = item;
     else if (
@@ -383,26 +358,15 @@ export function validateDictationConfigPatch(
       item <= 86_400_000
     )
       patch.localIdleUnloadMs = item;
-    else if (
-      key === "provider" &&
-      (item === "groq" || item === "local" || item === "mock")
-    )
+    else if (key === "provider" && (item === "groq" || item === "local" || item === "mock"))
       patch.provider = item;
-    else if (key === "providerEnabled" && isBoolean(item))
-      patch.providerEnabled = item;
+    else if (key === "providerEnabled" && isBoolean(item)) patch.providerEnabled = item;
     else if (key === "model" && text(item, 128)) patch.model = text(item, 128);
     else if (key === "networkProfile" && isObject(item)) {
       const kind = item.kind;
-      if (
-        kind === "system" ||
-        kind === "cloudflare_doh" ||
-        kind === "google_doh"
-      )
+      if (kind === "system" || kind === "cloudflare_doh" || kind === "google_doh")
         patch.networkProfile = { kind };
-      else if (
-        kind === "custom_doh" &&
-        text(item.url, 2048).startsWith("https://")
-      )
+      else if (kind === "custom_doh" && text(item.url, 2048).startsWith("https://"))
         patch.networkProfile = { kind, url: text(item.url, 2048) };
       else return null;
     } else return null;
@@ -437,9 +401,7 @@ export function normalizeDictationStats(value: Input): DictationStats {
   };
 }
 
-export function normalizeDictationLocalModels(
-  value: Input,
-): DictationLocalModels {
+export function normalizeDictationLocalModels(value: Input): DictationLocalModels {
   const raw = isObject(value) ? value : {};
   return Array.isArray(raw.models)
     ? raw.models.flatMap((item: Input) => {
@@ -457,9 +419,7 @@ export function normalizeDictationLocalModels(
     : [];
 }
 
-export function normalizeDictationPending(
-  value: Input,
-): DictationPendingItem[] {
+export function normalizeDictationPending(value: Input): DictationPendingItem[] {
   const raw = Array.isArray(value)
     ? value
     : isObject(value) && Array.isArray(value.items)
@@ -498,9 +458,7 @@ export function normalizeConnectivity(value: Input): DictationConnectivity {
   };
 }
 
-export function normalizeDictationEvent(
-  value: Input,
-): DictationProgressEvent | null {
+export function normalizeDictationEvent(value: Input): DictationProgressEvent | null {
   const event = isObject(value) ? value : {};
   if (event.event === "dictation_capture_key")
     return {
@@ -536,9 +494,7 @@ export function toDeviceParams(peerId: string): DeviceParams {
 }
 
 export function validPairingCode(value: Input): value is string {
-  return (
-    isString(value) && value.trim().length >= 8 && value.trim().length <= 256
-  );
+  return isString(value) && value.trim().length >= 8 && value.trim().length <= 256;
 }
 
 export function normalizePairingCode(value: Input): string | null {
@@ -551,26 +507,20 @@ export function normalizeSyncSnapshot(value: Input): SyncSnapshot {
   const raw = isObject(value) ? value : {};
   const rawLocal = isObject(raw.local_device) ? raw.local_device : {};
   const transport =
-    raw.transport === "iroh" ||
-    raw.transport === "relay" ||
-    raw.transport === "lan"
+    raw.transport === "iroh" || raw.transport === "relay" || raw.transport === "lan"
       ? raw.transport
       : "unknown";
   const validIso = (candidate: Input): string | null => {
     if (
       !isString(candidate) ||
       candidate.length > 128 ||
-      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(
-        candidate,
-      )
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(candidate)
     )
       return null;
     const [, year, month, day, hour, minute, second] = candidate.match(
       /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/,
     )!;
-    const daysInMonth = new Date(
-      Date.UTC(Number(year), Number(month), 0),
-    ).getUTCDate();
+    const daysInMonth = new Date(Date.UTC(Number(year), Number(month), 0)).getUTCDate();
     if (
       Number(month) < 1 ||
       Number(month) > 12 ||
@@ -588,16 +538,10 @@ export function normalizeSyncSnapshot(value: Input): SyncSnapshot {
     ? raw.peers.flatMap((peer: Input) => {
         if (!isObject(peer)) return [];
         const item = peer;
-        const id = isString(item.device_id)
-          ? item.device_id
-          : isString(item.id)
-            ? item.id
-            : "";
+        const id = isString(item.device_id) ? item.device_id : isString(item.id) ? item.id : "";
         if (!id.trim() || id.length > 256) return [];
         const status =
-          item.status === "online" || item.status === "offline"
-            ? item.status
-            : "unknown";
+          item.status === "online" || item.status === "offline" ? item.status : "unknown";
         // SAFETY: id/name/status are normalized to the peer contract before this cast.
         const normalized = {
           id,
@@ -622,8 +566,7 @@ export function normalizeSyncSnapshot(value: Input): SyncSnapshot {
     return text.length > 0 && text.length <= 256 ? text : null;
   };
   const localId = boundedText(rawLocal.device_id) ?? boundedText(rawLocal.id);
-  const localName =
-    boundedText(rawLocal.device_name) ?? boundedText(rawLocal.name);
+  const localName = boundedText(rawLocal.device_name) ?? boundedText(rawLocal.name);
   const result: SyncSnapshot = {
     running,
     status: running ? "running" : "stopped",
@@ -632,21 +575,17 @@ export function normalizeSyncSnapshot(value: Input): SyncSnapshot {
     peers,
   };
   if (raw.pairing_available === true) result.pairing_available = true;
-  if (raw.own_pairing_code_available === true)
-    result.own_pairing_code_available = true;
+  if (raw.own_pairing_code_available === true) result.own_pairing_code_available = true;
   return result;
 }
 
 export function normalizeFocusBlocklists(value: Input): FocusBlocklist[] {
-  const raw =
-    isObject(value) && Array.isArray(value.blocklists) ? value.blocklists : [];
+  const raw = isObject(value) && Array.isArray(value.blocklists) ? value.blocklists : [];
   return raw.flatMap((item: Input) => {
-    if (!isObject(item) || !validFocusId(item.id) || !text(item.name, 256))
-      return [];
+    if (!isObject(item) || !validFocusId(item.id) || !text(item.name, 256)) return [];
     const domains = Array.isArray(item.domains)
       ? item.domains.filter(
-          (entry: Input): entry is string =>
-            isString(entry) && entry.length <= 512,
+          (entry: Input): entry is string => isString(entry) && entry.length <= 512,
         )
       : [];
     return [

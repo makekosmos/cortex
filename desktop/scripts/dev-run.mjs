@@ -24,7 +24,11 @@ function attachLog(child, file) {
   let output = "";
   const append = (chunk) => {
     output = redactText(output + String(chunk));
-    writeFileSync(file, output, "utf8");
+    // Best-effort: a child can outlive its run dir when a failed attempt is
+    // reset underneath it — a log write must never crash the runner.
+    try {
+      writeFileSync(file, output, "utf8");
+    } catch {}
   };
   child.stdout?.on("data", append);
   child.stderr?.on("data", append);

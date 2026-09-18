@@ -9,7 +9,7 @@ import {
   type WebContents,
   type OpenDialogOptions,
 } from "electron";
-import { statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { rpc, status, subscribeDictationEvents, waitForEngineReady } from "./engine-client";
@@ -31,6 +31,7 @@ import {
   normalizeFileIndexDiagnostics,
   normalizeFileIndexSettings,
   normalizeEngineSettings,
+  normalizePackageDisclosure,
   normalizePackageSnapshot,
   normalizePackageTrustStatus,
   validPackageId,
@@ -84,7 +85,12 @@ import {
   validation,
 } from "./main-helpers";
 import { engineAutostartExe, isAutostartEnabled, setAutostartEnabled } from "./main-autostart";
-import { developmentPackage, developmentPackages } from "./dev-packages";
+import {
+  developmentPackage,
+  developmentPackages,
+  resolveDevelopmentPackageDir,
+} from "./dev-packages";
+import { readPackageArchiveManifest } from "./dev-archive";
 let dictationSubscriber: WebContents | null = null;
 let stopDictationEvents: (() => void) | null = null;
 
@@ -605,7 +611,9 @@ function registerAll() {
     });
     if (!result.ok) return result;
     // SAFETY: successful RPC payload is validated as string or record before URL parsing.
-    const raw = isString(result.data) ? result.data : (result.data as InputRecord)?.official_url;
+    const raw = isString(result.data)
+      ? result.data
+      : ((result.data as InputRecord)?.url ?? (result.data as InputRecord)?.official_url);
     if (!isString(raw)) return { ok: false, code: "engine", message: "Движок не вернул ссылку." };
     let url: URL;
     try {
@@ -623,6 +631,8 @@ function registerAll() {
         code: "validation",
         message: "Разрешены только HTTPS-ссылки.",
       };
+    if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1")
+      return { ok: true, data: { opened: false } };
     await shell.openExternal(url.toString());
     return { ok: true, data: { opened: true } };
   });
@@ -770,6 +780,17 @@ function registerAll() {
     }
     return { ok: true, data: { installed: true } };
   });
+  ipcMain.handle("manager.getPackageDisclosure", async (_event, value) => {
+    const input = packageInput(value);
+    if (!input)
+      return {
+        ok: false,
+        code: "validation",
+        message: "Недопустимые данные пакета.",
+      };
+    const result = await rpc(op.getPackageDisclosure, input);
+    return result.ok ? { ok: true, data: normalizePackageDisclosure(result.data) } : result;
+  });
   ipcMain.handle("manager.openPackage", async (_event, value) => {
     if (!isObject(value) || Object.keys(value).length !== 1 || !validPackageId(value.package_id))
       return {
@@ -783,12 +804,101 @@ function registerAll() {
   });
   ipcMain.handle("manager.getDevelopmentPackages", () => ({
     ok: true,
-    data: developmentPackages().map(({ archivePath: _archivePath, iconPath, url, ...entry }) => {
-      const iconUrl = new URL(path.basename(iconPath), url);
-      iconUrl.searchParams.set("v", String(statSync(iconPath).mtimeMs));
-      return { ...entry, icon_url: iconUrl.toString() };
-    }),
+    data: developmentPackages().map(
+      ({ archivePath: _archivePath, iconPath, sourcePath, url, ...entry }) => {
+        const iconUrl =
+          url && iconPath && existsSync(iconPath) ? new URL(path.basename(iconPath), url) : null;
+        if (iconUrl) iconUrl.searchParams.set("v", String(statSync(iconPath).mtimeMs));
+        return {
+          ...entry,
+          icon_url: iconUrl ? iconUrl.toString() : null,
+          source_path: sourcePath,
+        };
+      },
+    ),
   }));
+  ipcMain.handle("manager.getDevEnvironment", () => ({
+    ok: true,
+    data: {
+      enabled: process.env.KOSMOS_DEV_PACKAGES === "1",
+      data_dir: bounded(process.env.KOSMOS_DATA_DIR, 4096) ? process.env.KOSMOS_DATA_DIR : null,
+      run_id: bounded(process.env.KOSMOS_RUN_ID, 64) ? process.env.KOSMOS_RUN_ID : null,
+    },
+  }));
+  ipcMain.handle("manager.installDevelopmentPackage", async (_event, value) => {
+    if (
+      process.env.KOSMOS_DEV_PACKAGES !== "1" ||
+      !isObject(value) ||
+      Object.keys(value).length !== 1 ||
+      !validPackageId(value.package_id)
+    )
+      return { ok: false, code: "validation", message: "Invalid development package." };
+    const development = developmentPackage(value.package_id);
+    if (!development)
+      return {
+        ok: false,
+        code: "validation",
+        message: "Development package is not configured.",
+      };
+    const installed = await rpc("packages.install_development", {
+      package_id: development.id,
+      version: development.version,
+      archive_path: development.archivePath,
+    });
+    return installed.ok
+      ? {
+          ok: true,
+          data: { installed: true, package_id: development.id, version: development.version },
+        }
+      : installed;
+  });
+  ipcMain.handle("manager.installDevelopmentPath", async (_event, value) => {
+    if (
+      process.env.KOSMOS_DEV_PACKAGES !== "1" ||
+      !isObject(value) ||
+      Object.keys(value).length !== 1 ||
+      !isString(value.path) ||
+      !bounded(value.path, 4096)
+    )
+      return {
+        ok: false,
+        code: "validation",
+        message: "Недопустимый путь к пакету.",
+      };
+    const target = path.resolve(value.path);
+    const resolved = target.toLowerCase().endsWith(".kspkg")
+      ? (() => {
+          const manifest = readPackageArchiveManifest(target);
+          return manifest ? { ...manifest, archivePath: target } : null;
+        })()
+      : (() => {
+          const development = resolveDevelopmentPackageDir(target);
+          return development
+            ? {
+                id: development.id,
+                version: development.version,
+                archivePath: development.archivePath,
+              }
+            : null;
+        })();
+    if (!resolved || !existsSync(resolved.archivePath))
+      return {
+        ok: false,
+        code: "validation",
+        message: "По этому пути не найден собранный .kspkg или директория пакета.",
+      };
+    const installed = await rpc("packages.install_development", {
+      package_id: resolved.id,
+      version: resolved.version,
+      archive_path: resolved.archivePath,
+    });
+    return installed.ok
+      ? {
+          ok: true,
+          data: { installed: true, package_id: resolved.id, version: resolved.version },
+        }
+      : installed;
+  });
   ipcMain.handle("manager.openDevelopmentPackage", async (_event, value) => {
     if (!isObject(value) || Object.keys(value).length !== 1 || !validPackageId(value.package_id))
       return { ok: false, code: "validation", message: "Invalid development package." };

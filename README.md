@@ -79,7 +79,7 @@ explicit resolved BOM.
 The root `package.json` `kosmos.workspace` object is the single source of truth
 for the pinned Imago and arca-sdk commits, package names, versions, and git
 integrity values. Core remains derived from `runtime/Cargo.toml`, the ARK
-sidecar pin, and the existing `core-pin.yml` toolchain workflow.
+sidecar pin, and the root `toolchain.json` toolchain pins.
 
 ```text
 # Read-only, pinned by default:
@@ -111,16 +111,15 @@ tests. Bootstrap never resets, stashes, or overwrites a dirty checkout; remove
 `.tmp/workspace` yourself when a prepared checkout is no longer needed.
 
 The affected-check planner is fail-closed: staged changes use `pre-commit`,
-the worktree plan includes tracked and untracked files, pre-push input uses
-the pushed ref range, and CI uses its explicit base/head SHAs. Missing,
-invalid, zero, shallow, or ambiguous revisions select the full check. Docs and
-isolated assets are a no-op; shared, lockfile, manifest, build, workflow, hook,
-and unknown changes select every CI job. The `cortex-quality-gate` job remains
-required even when selected jobs are intentionally skipped.
+the worktree plan includes tracked and untracked files, and pre-push input
+uses the pushed ref range. Missing, invalid, zero, shallow, or ambiguous
+revisions select the full check. Docs and isolated assets are a no-op;
+shared, lockfile, manifest, build, workflow, hook, and unknown changes select
+the full check.
 
 Cheap local baseline: layout 0.108s, source-size test 0.680s, and naming test
-0.154s. Full local and hosted job-minute measurements are NOT_RUN; hosted CI
-was blocked by KOS-50. Branch protection is disabled, and ruleset/merge-queue
+0.154s. There is no hosted CI by policy; local Lefthook gates are the only
+enforceable checks. Branch protection is disabled, and ruleset/merge-queue
 status is NOT_RUN. Use `--full` when reviewing uncertain changes and treat the
 planner's `reasons` field as the explanation for a full selection.
 

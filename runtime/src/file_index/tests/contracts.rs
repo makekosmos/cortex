@@ -7,13 +7,18 @@ fn risk_boundaries_reject_empty_and_broad_roots() {
     let (empty_level, _) = assess_root_path_risk("");
     assert_eq!(empty_level, FileIndexRiskLevel::Danger);
 
-    let (broad_level, reasons) = assess_root_path_risk(r"C:\Users");
+    let (broad, specific) = if cfg!(windows) {
+        (r"C:\Users", r"C:\Users\kirill\Coding")
+    } else {
+        ("/home", "/home/user/Coding")
+    };
+    let (broad_level, reasons) = assess_root_path_risk(broad);
     assert_eq!(broad_level, FileIndexRiskLevel::Danger);
     assert!(reasons
         .iter()
         .any(|reason| reason.contains("слишком широким")));
 
-    let (specific_level, _) = assess_root_path_risk(r"C:\Users\kirill\Coding");
+    let (specific_level, _) = assess_root_path_risk(specific);
     assert_eq!(specific_level, FileIndexRiskLevel::Ok);
 }
 

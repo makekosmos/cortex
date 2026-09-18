@@ -1,60 +1,134 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import path from "node:path";
 
 const SOURCE_EXTENSIONS = /\.(?:[cm]?[jt]sx?|vue)$/i;
 const FORMAT_EXTENSIONS = /\.(?:[cm]?[jt]sx?|vue|json|ya?ml)$/i;
+const requireFromRoot = createRequire(new URL("../package.json", import.meta.url));
+
+const COMMANDS_BY_CHECK = {
+  "desktop-typecheck": ["pnpm", ["run", "typecheck:desktop"]],
+  "manager-typecheck": ["pnpm", ["run", "typecheck:manager"]],
+  "host-typecheck": ["pnpm", ["run", "typecheck:host"]],
+  "desktop-contracts": ["pnpm", ["run", "test:desktop-contracts"]],
+  "host-contracts": ["pnpm", ["run", "test:host-contracts"]],
+  "first-party-contracts": ["pnpm", ["run", "test:first-party-contracts"]],
+  rustfmt: ["pnpm", ["run", "rustfmt"]],
+  clippy: ["pnpm", ["run", "clippy"]],
+  "test:rust": ["pnpm", ["run", "test:rust"]],
+  "runtime-staging": ["pnpm", ["--dir", "desktop", "run", "test:runtime-staging"]],
+  "native-services": [
+    "cargo",
+    [
+      "build",
+      "--locked",
+      "-p",
+      "kepler-watcher",
+      "-p",
+      "kepler-focus-helper",
+      "-p",
+      "kepler-focus-svc",
+      "--bins",
+    ],
+  ],
+};
+
+const FULL_CONTRACT_CHECKS = ["host-contracts", "first-party-contracts"];
+
+function commandFor(check) {
+  const [command, args] = COMMANDS_BY_CHECK[check];
+  return { name: check, command, args };
+}
+
+function toolBin(name) {
+  const manifest = requireFromRoot.resolve(`${name}/package.json`);
+  const bin = JSON.parse(readFileSync(manifest, "utf8")).bin;
+  const relative = bin[name] ?? bin;
+  return path.join(path.dirname(manifest), relative);
+}
 
 function commandsFor(plan) {
-  if (plan.full) return [{ name: "full", command: "bun", args: ["run", "check"] }];
+  if (plan.full)
+    return [
+      { name: "full", command: "pnpm", args: ["run", "check"] },
+      ...FULL_CONTRACT_CHECKS.map(commandFor),
+    ];
   const commands = [];
   if (plan.mode === "pre-commit")
-    commands.push({ name: "source-size", command: "bun", args: ["run", "check:source-size"] });
+    commands.push({ name: "source-size", command: "pnpm", args: ["run", "check:source-size"] });
   const files = plan.changed.filter((path) => SOURCE_EXTENSIONS.test(path));
   const formatFiles = plan.changed.filter((path) => FORMAT_EXTENSIONS.test(path));
   for (const check of plan.checks) {
-    const commandsByCheck = {
-      "desktop-typecheck": ["bun", ["run", "typecheck:desktop"]],
-      "manager-typecheck": ["bun", ["run", "typecheck:manager"]],
-      "host-typecheck": ["bun", ["run", "typecheck:host"]],
-      "desktop-contracts": ["bun", ["run", "test:desktop-contracts"]],
-      "host-contracts": ["bun", ["test", "host/electron/host-api-reconnect.test.ts"]],
-      "first-party-contracts": ["bun", ["run", "test:first-party-contracts"]],
-      rustfmt: ["bun", ["run", "rustfmt"]],
-      clippy: ["bun", ["run", "clippy"]],
-      "test:rust": ["bun", ["run", "test:rust"]],
-      "runtime-staging": ["bun", ["run", "--cwd", "desktop", "test:runtime-staging"]],
-      "native-services": [
-        "cargo",
-        [
-          "build",
-          "--locked",
-          "-p",
-          "kepler-watcher",
-          "-p",
-          "kepler-focus-helper",
-          "-p",
-          "kepler-focus-svc",
-          "--bins",
-        ],
-      ],
-    };
     if (check === "lint" && files.length)
-      commands.push({ name: check, command: "bunx", args: ["oxlint", ...files] });
+      commands.push({
+        name: check,
+        command: process.execPath,
+        args: [toolBin("oxlint"), ...files],
+      });
     else if (check === "format" && formatFiles.length)
-      commands.push({ name: check, command: "bunx", args: ["oxfmt", "--check", ...formatFiles] });
-    else if (commandsByCheck[check]) {
-      const [command, args] = commandsByCheck[check];
-      commands.push({ name: check, command, args });
-    }
+      commands.push({
+        name: check,
+        command: process.execPath,
+        args: [toolBin("oxfmt"), "--check", ...formatFiles],
+      });
+    else if (COMMANDS_BY_CHECK[check]) commands.push(commandFor(check));
   }
   return commands;
 }
 
-function runCommand(command) {
-  const result = spawnSync(command.command, command.args, {
+// pnpm is spawned without a shell so argument vectors (including file paths)
+// reach it verbatim. When check-plan itself runs under `pnpm run`, pnpm
+// exports npm_execpath pointing at its own entrypoint: .cjs/.mjs/.js files go
+// through the current Node, native binaries and .exe spawn directly. Without
+// it we fall back to PATH — on Windows pnpm resolves to pnpm.cmd, which Node
+// refuses to spawn without a shell (EINVAL, CVE-2024-27980), so that one
+// literal-argument-only fallback goes through cmd.
+function pnpmSpawn() {
+  const entrypoint = process.env.npm_execpath;
+  if (entrypoint && /pnpm/i.test(path.basename(entrypoint))) {
+    if (/\.[cm]?js$/i.test(entrypoint)) return { file: process.execPath, prefix: [entrypoint] };
+    if (process.platform !== "win32" || /\.exe$/i.test(entrypoint))
+      return { file: entrypoint, prefix: [] };
+  }
+  return process.platform === "win32"
+    ? { file: "pnpm.cmd", prefix: [], shell: true }
+    : { file: "pnpm", prefix: [] };
+}
+
+// Git exports GIT_DIR/GIT_WORK_TREE and friends into hook processes. Inside a
+// linked worktree that leaks the current worktree's gitdir into every check we
+// spawn — e.g. host e2e fixtures shell out to `git` in sibling app checkouts
+// and would silently operate on the wrong repository. Scrub git's hook env so
+// each command re-discovers the repository from its own cwd.
+const GIT_HOOK_ENV_KEYS = [
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_COMMON_DIR",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_CEILING_DIRECTORIES",
+  "GIT_PREFIX",
+];
+
+export function checkEnv() {
+  const env = { ...process.env };
+  for (const key of GIT_HOOK_ENV_KEYS) delete env[key];
+  return env;
+}
+
+export function runCommand(command) {
+  const spawn = command.command === "pnpm" ? pnpmSpawn() : { file: command.command, prefix: [] };
+  const result = spawnSync(spawn.file, [...spawn.prefix, ...command.args], {
     cwd: process.cwd(),
+    env: checkEnv(),
     encoding: "utf8",
     stdio: ["inherit", "pipe", "pipe"],
+    windowsHide: true,
+    shell: spawn.shell === true,
   });
+  if (result.error) process.stderr.write(`${command.name}: ${result.error.message}\n`);
   if (result.stdout) process.stderr.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
   return result.error || result.status === null ? 1 : result.status;

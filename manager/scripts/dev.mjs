@@ -1,66 +1,96 @@
-import { spawn, spawnSync } from "node:child_process";
-import fs from "node:fs";
+#!/usr/bin/env node
+// Full local dev bring-up for Manager: builds the debug Engine and its
+// ark-core-rpc sidecar from this checkout, builds Host and Manager, builds the
+// configured dev packages with each package's own package manager, then starts
+// an isolated run (engine + vite + electron) via dev-run.mjs.
+//
+//   pnpm run dev          build everything, then run in the foreground
+//   pnpm run dev:run      skip the builds, just start a run
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import net from "node:net";
+import { packageManagerCommand } from "./dev-run.mjs";
 
-const manager = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const scriptRoot = path.dirname(fileURLToPath(import.meta.url));
+const manager = path.resolve(scriptRoot, "..");
 const cortex = path.resolve(manager, "..");
-const config = JSON.parse(fs.readFileSync(path.join(cortex, "dev-packages.json"), "utf8"));
-const packages = Array.isArray(config.packages) ? config.packages : [];
-const env = { ...process.env, KOSMOS_DEV_PACKAGES: "1", KOSMOS_MANAGER_EXTERNAL_ELECTRON: "1" };
-const buildEnv = { ...env };
-delete buildEnv.KOSMOS_MANAGER_EXTERNAL_ELECTRON;
-const available = (port) =>
-  new Promise((resolve) => {
-    const server = net.createServer();
-    server.once("error", () => resolve(false));
-    server.once("listening", () => server.close(() => resolve(true)));
-    server.listen(port, "127.0.0.1");
-  });
-const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-const pnpmShell = pnpm.endsWith(".cmd");
-const run = (cwd, args, inherited = env) => {
-  const result = spawnSync(pnpm, args, {
+const node = process.execPath;
+
+const step = (label) => console.log(`\x1b[36m[dev] ${label}\x1b[0m`);
+const attempt = (command, args, cwd, env = process.env, stdio = "ignore") =>
+  spawnSync(command, args, {
     cwd,
-    env: inherited,
-    stdio: "inherit",
-    shell: pnpmShell,
-  });
-  if (result.status !== 0) process.exit(result.status ?? 1);
-};
-const start = (cwd, args, inherited = env) => {
-  const child = spawn(pnpm, args, {
+    env,
+    stdio,
+    windowsHide: true,
+    shell: command === "pnpm" && process.platform === "win32",
+  }).status ?? 1;
+const run = (command, args, cwd, env = process.env) => {
+  const result = spawnSync(command, args, {
     cwd,
-    env: inherited,
+    env,
     stdio: "inherit",
-    shell: pnpmShell,
+    windowsHide: true,
+    shell: command === "pnpm" && process.platform === "win32",
   });
-  child.on("exit", (code) => process.exit(code ?? 0));
-  return child;
+  if ((result.status ?? 1) !== 0) {
+    console.error(`[dev] ${command} ${args.join(" ")} failed in ${cwd}`);
+    process.exit(result.status ?? 1);
+  }
 };
 
-if (!(await available(5174))) {
-  console.error("Port 5174 is already in use. Stop the existing Manager dev session first.");
-  process.exit(1);
+const workspaceScript = path.join(cortex, "scripts", "workspace.mjs");
+if (attempt(node, [workspaceScript, "doctor"], cortex) !== 0) {
+  step("preparing workspace dependencies (imago, arca-sdk)");
+  const workspaceEnv = { ...process.env };
+  if (!workspaceEnv.KOSMOS_WORKSPACE_MODE) {
+    const imago = path.resolve(cortex, "..", "imago");
+    const arcaSdk = path.resolve(cortex, "..", "arca-sdk");
+    if (
+      existsSync(path.join(imago, "package.json")) &&
+      existsSync(path.join(arcaSdk, "package.json"))
+    ) {
+      workspaceEnv.KOSMOS_WORKSPACE_MODE = "local";
+      workspaceEnv.KOSMOS_IMAGO_PATH = imago;
+      workspaceEnv.KOSMOS_ARCA_SDK_PATH = arcaSdk;
+      step(`linking sibling checkouts (${imago}, ${arcaSdk})`);
+    }
+  }
+  run(node, [workspaceScript, "bootstrap"], cortex, workspaceEnv);
 }
 
-run(path.join(cortex, "host"), ["run", "build"]);
-run(manager, ["run", "build"], buildEnv);
-for (const entry of packages) {
+step("building debug engine (cargo)");
+run(node, [path.join(cortex, "desktop", "scripts", "build-backend-dev.mjs")], cortex);
+
+step("building package host");
+run("pnpm", ["run", "build"], path.join(cortex, "host"));
+
+step("building manager");
+run("pnpm", ["run", "build"], manager);
+
+const configPath = path.join(cortex, "dev-packages.json");
+const config = JSON.parse(readFileSync(configPath, "utf8"));
+const failedPackages = [];
+for (const entry of Array.isArray(config.packages) ? config.packages : []) {
   const relativePath = String(entry?.path ?? "").trim();
   if (!relativePath) continue;
-  const cwd = path.resolve(cortex, relativePath);
-  run(cwd, ["run", "package:kspkg"]);
-  start(cwd, ["run", "dev"]);
+  const root = path.resolve(cortex, relativePath);
+  const manifestFile = path.join(root, "package.json");
+  if (!existsSync(manifestFile)) {
+    step(`skipping ${relativePath}: package.json missing`);
+    continue;
+  }
+  const { binary, scripts } = packageManagerCommand(root);
+  if (scripts["package:kspkg"]) {
+    step(`packaging ${relativePath} (${binary} run package:kspkg)`);
+    if (attempt(binary, ["run", "package:kspkg"], root, process.env, "inherit") !== 0) {
+      console.error(`[dev] ${relativePath} failed to package; skipping`);
+      failedPackages.push(relativePath);
+    }
+  }
 }
-start(manager, ["x", "vite", "--host", "127.0.0.1", "--port", "5174", "--strictPort"]);
-setTimeout(
-  () =>
-    start(manager, ["x", "electron", "."], {
-      ...env,
-      VITE_DEV_SERVER_URL: "http://127.0.0.1:5174",
-      KOSMOS_HOST_MAIN: path.join(cortex, "host", "dist-electron", "main.js"),
-    }),
-  800,
-);
+if (failedPackages.length) console.error(`[dev] packages not built: ${failedPackages.join(", ")}`);
+
+step("starting isolated run (Ctrl+C to stop; `pnpm run dev:list` shows all)");
+run(node, [path.join(scriptRoot, "dev-run.mjs"), "run"], manager);

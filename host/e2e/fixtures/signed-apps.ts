@@ -9,7 +9,9 @@ import { arcadiaArchive } from "./arcadia-archive";
 import { memoriaArchive } from "./memoria-archive";
 import { ordoArchive } from "./ordo-archive";
 import { TEST_ONLY_RELEASE, TEST_ONLY_ROOT } from "./signing-keys";
+import { gitEnv } from "../../../scripts/git-env.mjs";
 import type { JsonValue, Manifest, PackageArchive, Permission } from "./signed-app-types";
+import { entriesFromDir, readZip, writeZip } from "../../../desktop/scripts/zip-utils.mjs";
 type SignedApps = {
   archives: Record<string, string>;
   versions: Record<string, string>;
@@ -18,7 +20,7 @@ type SignedApps = {
   trust: { root: string; releases: string };
 };
 const command = (file: string, args: string[], cwd: string) =>
-  execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe" });
+  execFileSync(file, args, { cwd, encoding: "utf8", stdio: "pipe", env: gitEnv() });
 const cortexRoot = (repositoryRoot: string) => {
   const roots = [repositoryRoot, path.join(repositoryRoot, "cortex")];
   const root = roots.find((candidate) =>
@@ -28,18 +30,9 @@ const cortexRoot = (repositoryRoot: string) => {
     throw new Error("Could not locate Cortex desktop/scripts/package-sign.mjs");
   return root;
 };
-const ps = (value: string) => `'${value.replaceAll("'", "''")}'`;
-const zipDirectory = (stage: string, file: string, cwd: string) =>
-  command(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      `$stage=${ps(stage)}; $file=${ps(file)}; Add-Type -AssemblyName System.IO.Compression; Add-Type -AssemblyName System.IO.Compression.FileSystem; $stream=[IO.File]::Open($file,[IO.FileMode]::Create); try { $zip=[IO.Compression.ZipArchive]::new($stream,[IO.Compression.ZipArchiveMode]::Create,$false); try { Get-ChildItem -LiteralPath $stage -Recurse -File | ForEach-Object { $entry=$zip.CreateEntry($_.FullName.Substring($stage.Length + 1).Replace('\\','/'),[IO.Compression.CompressionLevel]::Optimal); $input=[IO.File]::OpenRead($_.FullName); $output=$entry.Open(); try { $input.CopyTo($output) } finally { $output.Dispose(); $input.Dispose() } } } finally { $zip.Dispose() } } finally { $stream.Dispose() }`,
-    ],
-    cwd,
-  );
+// Portable ZIP write: Package v1 archives are plain ZIPs, and the fixture does
+// not require compression — the shared desktop writer is enough on every OS.
+const zipDirectory = (stage: string, file: string) => writeZip(file, entriesFromDir(stage));
 
 const archive = (
   root: string,
@@ -87,7 +80,7 @@ const archive = (
     path.join(stage, "app.js"),
     `${closeOnLoad ? "setTimeout(()=>window.kosmosApp.window.close(),0);" : ""}window.__hostEvents=[];window.kosmosApp.ark.subscribe((event)=>window.__hostEvents.push(event));`,
   );
-  zipDirectory(stage, file, root);
+  zipDirectory(stage, file);
   return { file, manifest };
 };
 
@@ -111,7 +104,7 @@ const packageDirectory = (
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.copyFileSync(icon, target);
   }
-  zipDirectory(stage, file, root);
+  zipDirectory(stage, file);
   return { file, manifest };
 };
 
@@ -120,21 +113,23 @@ const isJsonObject = (value: JsonValue): value is { readonly [key: string]: Json
 
 function agendaArchive(root: string, repositoryRoot: string): PackageArchive {
   const agendaRoot = path.join(repositoryRoot, "agenda");
-  const archivePath = "release/agenda-0.2.4.kspkg";
+  const agendaCommit = "04425784fda4864e5f66fc575d3d042864a4b8dd";
+  const archivePath = "release/agenda-0.2.7.kspkg";
   const file = path.join(root, path.basename(archivePath));
-  const archive = execFileSync(
-    "git",
-    ["show", `a0d5f5296f2cdc7930f7c575f65ede04eda37b12:${archivePath}`],
-    { cwd: agendaRoot, maxBuffer: 128 * 1024 * 1024, stdio: "pipe" },
-  );
+  const archive = execFileSync("git", ["show", `${agendaCommit}:${archivePath}`], {
+    cwd: agendaRoot,
+    maxBuffer: 128 * 1024 * 1024,
+    stdio: "pipe",
+    env: gitEnv(),
+  });
   if (
     createHash("sha256").update(archive).digest("hex") !==
-    "00167e71b8c42d1a4cabda36ddde87b97e2573f8b3ce134120ad5cc40b15bf58"
+    "fb90fd4e6f09c4b99267ff6b636821d6753486f0b6b3f56778846e8f943f59b7"
   ) {
     throw new Error("Agenda package fixture digest mismatch");
   }
   fs.writeFileSync(file, archive);
-  const entries = command("tar", ["-tf", file], root).split(/\r?\n/).filter(Boolean);
+  const entries = readZip(file).map((entry) => entry.name);
   if (entries.filter((entry) => entry === "manifest.json").length !== 1) {
     throw new Error("Agenda archive must contain exactly one manifest.json");
   }
@@ -160,27 +155,29 @@ function agendaArchive(root: string, repositoryRoot: string): PackageArchive {
       entry !== "manifest.json" &&
       entry !== "icon.png" &&
       entry !== "schemas/" &&
-      entry !== "schemas/agenda-references.schema.json" &&
+      !entry.startsWith("schemas/") &&
       entry !== "dist/" &&
       !entry.startsWith("dist/")
     )
       throw new Error(`Agenda archive has unexpected entry: ${entry}`);
   let parsed: JsonValue;
   try {
+    const manifestEntry = readZip(file).find((entry) => entry.name === "manifest.json");
+    if (!manifestEntry) throw new Error("manifest.json entry missing");
     // SAFETY: isJsonObject and the required manifest fields are checked below.
-    parsed = JSON.parse(command("tar", ["-xOf", file, "manifest.json"], root)) as JsonValue;
+    parsed = JSON.parse(manifestEntry.data.toString("utf8")) as JsonValue;
   } catch (error) {
     throw new Error(`Agenda archive manifest is not valid JSON: ${String(error)}`);
   }
   if (!isJsonObject(parsed)) throw new Error("Agenda archive manifest must be a JSON object");
   // SAFETY: the pinned repository manifest is compared deeply with the validated archive object.
   const reviewed = JSON.parse(
-    command("git", ["show", "a0d5f5296f2cdc7930f7c575f65ede04eda37b12:manifest.json"], agendaRoot),
+    command("git", ["show", `${agendaCommit}:manifest.json`], agendaRoot),
   ) as JsonValue;
   if (
     !isDeepStrictEqual(parsed, reviewed) ||
     parsed.id !== "com.kosmos.agenda" ||
-    parsed.version !== "0.2.4" ||
+    parsed.version !== "0.2.7" ||
     parsed.entrypoint !== "dist/index.html"
   ) {
     throw new Error("Agenda archive manifest has unexpected id, version, or entrypoint");

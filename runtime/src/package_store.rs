@@ -357,6 +357,9 @@ impl PackageStore {
             retry_io(|| fs::remove_dir_all(&staging))?;
         }
         retry_io(|| fs::create_dir_all(&staging))?;
+        // Extracted trees nest deeply (hash + archive paths); canonicalize so
+        // Windows gets extended-length paths instead of MAX_PATH denials.
+        let staging = fs::canonicalize(&staging)?;
         let result = self.extract_verify(&mut zip, &staging, expected_manifest, &hash);
         if let Err(error) = result {
             let _ = fs::remove_dir_all(&staging);
@@ -371,9 +374,7 @@ impl PackageStore {
             retry_io(|| fs::copy(archive, &blob_tmp))?;
             retry_io(|| fs::rename(&blob_tmp, &blob))?;
         }
-        let unpacked = self
-            .root
-            .join("unpacked")
+        let unpacked = fs::canonicalize(self.root.join("unpacked"))?
             .join(expected_manifest.id())
             .join(expected_manifest.version())
             .join(&hash);
@@ -381,7 +382,25 @@ impl PackageStore {
             retry_io(|| fs::create_dir_all(parent))?;
         }
         if !unpacked.exists() {
-            retry_io(|| fs::rename(&staging, &unpacked))?;
+            // Freshly extracted trees can be held open by indexer/AV scans on
+            // Windows for several seconds; a directory move fails with
+            // AccessDenied until the transient handle closes. Retry with
+            // backoff; the operation is rare enough that a few seconds is fine.
+            let mut attempt = 0u32;
+            loop {
+                match fs::rename(&staging, &unpacked) {
+                    Ok(()) => break,
+                    Err(error) => {
+                        attempt += 1;
+                        let retries_left =
+                            attempt < 40 && matches!(error.kind(), io::ErrorKind::PermissionDenied);
+                        if !retries_left {
+                            return Err(error.into());
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(250));
+                    }
+                }
+            }
         } else {
             retry_io(|| fs::remove_dir_all(&staging))?;
         }
@@ -1000,6 +1019,11 @@ mod tests {
         m.kind = PackageKind::Source;
         m.entrypoint = "worker.exe".into();
         m.targets[0].runtime = crate::package_manifest::TargetRuntime::Worker;
+        m.targets[0].os = vec![
+            crate::package_manifest::TargetOs::Windows,
+            crate::package_manifest::TargetOs::Macos,
+            crate::package_manifest::TargetOs::Linux,
+        ];
         m.targets[0].entrypoint = Some("worker.exe".into());
         archive(&p, &m, "worker.exe");
         let bytes = fs::read(&p).unwrap();
@@ -1037,6 +1061,11 @@ mod tests {
             manifest.version = version.into();
             manifest.entrypoint = "worker.exe".into();
             manifest.targets[0].runtime = crate::package_manifest::TargetRuntime::Worker;
+            manifest.targets[0].os = vec![
+                crate::package_manifest::TargetOs::Windows,
+                crate::package_manifest::TargetOs::Macos,
+                crate::package_manifest::TargetOs::Linux,
+            ];
             manifest.targets[0].entrypoint = Some("worker.exe".into());
             let expected = VersionedManifest::V2(manifest);
             let archive_path = d.path().join(format!("{version}.kspkg"));
@@ -1084,6 +1113,11 @@ mod tests {
         m.kind = PackageKind::Source;
         m.entrypoint = "worker.exe".into();
         m.targets[0].runtime = crate::package_manifest::TargetRuntime::Worker;
+        m.targets[0].os = vec![
+            crate::package_manifest::TargetOs::Windows,
+            crate::package_manifest::TargetOs::Macos,
+            crate::package_manifest::TargetOs::Linux,
+        ];
         m.targets[0].entrypoint = Some("worker.exe".into());
         archive(&p, &m, "worker.exe");
         let bytes = fs::read(&p).unwrap();

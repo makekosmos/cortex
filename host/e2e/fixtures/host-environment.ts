@@ -5,6 +5,10 @@ const inheritedEnvironmentKeys = [
   "CARGO_TARGET_DIR",
   "CI",
   "COMSPEC",
+  "DBUS_SESSION_BUS_ADDRESS",
+  "DISPLAY",
+  "HOME",
+  "LANG",
   "LOCALAPPDATA",
   "PATH",
   "PATHEXT",
@@ -14,11 +18,16 @@ const inheritedEnvironmentKeys = [
   "RUSTC_WRAPPER",
   "RUSTFLAGS",
   "RUSTUP_HOME",
+  "SHELL",
   "SystemRoot",
   "TEMP",
   "TMP",
+  "USER",
   "USERPROFILE",
   "WINDIR",
+  "XAUTHORITY",
+  "XDG_CONFIG_HOME",
+  "XDG_RUNTIME_DIR",
 ];
 
 export const hostE2eEnvironment = (overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv =>
@@ -29,5 +38,6 @@ export const hostE2eEnvironment = (overrides: NodeJS.ProcessEnv = {}): NodeJS.Pr
         return value === undefined ? [] : [[key, value]];
       }),
     ),
-    overrides,
+    // An undefined override means "absent" so callers can strip defaults.
+    Object.fromEntries(Object.entries(overrides).filter(([, value]) => value !== undefined)),
   );

@@ -41,7 +41,18 @@ try {
 
 let cleanupFailed = false;
 const isString = (value) => value?.constructor === String;
-const ownedPids = (root) => {
+const isWindows = process.platform === "win32";
+const readProcStart = (pid) => {
+  try {
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
+    const close = stat.lastIndexOf(")");
+    if (close < 0) return undefined;
+    return stat.slice(close + 2).split(" ")[19] || undefined;
+  } catch {
+    return undefined;
+  }
+};
+const ownedPidsWindows = (root) => {
   const literal = root.replaceAll("'", "''");
   const output = execFileSync(
     "powershell.exe",
@@ -63,7 +74,24 @@ const ownedPids = (root) => {
       isString(entry.CreationDate),
   );
 };
+const ownedPidsPosix = (root) => {
+  const out = [];
+  for (const name of fs.readdirSync("/proc")) {
+    if (!/^\d+$/.test(name)) continue;
+    const pid = Number(name);
+    if (pid === process.pid) continue;
+    try {
+      const cmdline = fs.readFileSync(`/proc/${name}/cmdline`, "utf8").replaceAll("\0", " ");
+      if (!cmdline.includes(root)) continue;
+      const createdAt = readProcStart(pid);
+      if (createdAt) out.push({ ProcessId: pid, CreationDate: createdAt });
+    } catch {}
+  }
+  return out;
+};
+const ownedPids = (root) => (isWindows ? ownedPidsWindows(root) : ownedPidsPosix(root));
 const processCreatedAt = (pid) => {
+  if (!isWindows) return readProcStart(pid);
   const output = execFileSync(
     "powershell.exe",
     [
@@ -75,6 +103,16 @@ const processCreatedAt = (pid) => {
     { encoding: "utf8", windowsHide: true },
   ).trim();
   return output || undefined;
+};
+const forceKill = (pid) => {
+  if (isWindows) {
+    execFileSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+  } else {
+    process.kill(pid, "SIGKILL");
+  }
 };
 try {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
@@ -90,10 +128,7 @@ try {
     for (const { ProcessId: pid, CreationDate: createdAt } of ownedPids(resolved)) {
       if (processCreatedAt(pid) !== createdAt) continue;
       try {
-        execFileSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
-          stdio: "ignore",
-          windowsHide: true,
-        });
+        forceKill(pid);
       } catch {}
     }
     fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });

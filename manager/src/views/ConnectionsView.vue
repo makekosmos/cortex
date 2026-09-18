@@ -8,32 +8,36 @@ import type {
 } from "../manager-api";
 import type { ManagerClient } from "../composables/useManagerClient";
 import { appIcon } from "../app-icons";
-import { integrationCards, windowsListings, type ConnectionCard } from "../connection-helpers";
+import {
+  authMode,
+  canLogin,
+  credentialType,
+  integrationCards,
+  type ConnectionCard,
+} from "../connection-helpers";
 import { installTarget } from "../store-helpers";
+import { useConnectionDrafts } from "../composables/useConnectionDrafts";
+import { usePackageDisclosure } from "../composables/usePackageDisclosure";
+import PermissionDisclosure from "./PermissionDisclosure.vue";
 
 const props = defineProps<{ client: ManagerClient }>();
 const snapshot = ref<IntegrationsSnapshot | null>(null);
 const catalog = ref<StoreCatalogSnapshot | null>(null);
 const loading = ref(true);
-type CredentialMap = Record<string, string>;
-type Setting = NonNullable<IntegrationProvider["settingSchema"]>[number];
-const credential = ref<CredentialMap>({});
-const settingDraft = ref<CredentialMap>({});
+const { credential, settingKey, settingValue, setSettingValue, schema, canSave } =
+  useConnectionDrafts();
+const disclosure = usePackageDisclosure(props.client);
 const busy = ref<string | null>(null);
 const selectedProvider = ref<string | null>(null);
 const cards = computed(() =>
-  integrationCards(windowsListings(catalog.value?.listings ?? []), snapshot.value?.providers ?? []),
+  integrationCards(
+    catalog.value?.listings ?? [],
+    snapshot.value?.providers ?? [],
+    catalog.value?.platform,
+  ),
 );
 const selectedCard = computed(() => cards.value.find((card) => card.id === selectedProvider.value));
 const selected = computed(() => selectedCard.value?.provider);
-function authMode(provider: IntegrationProvider) {
-  return provider.authMode === "browser_login" || provider.authMode === "none"
-    ? provider.authMode
-    : "credential";
-}
-function credentialType(provider: IntegrationProvider) {
-  return provider.credentialInputType === "text" ? "text" : "password";
-}
 function icon(card: ConnectionCard) {
   return appIcon(card.id, card.iconUrl, card.iconPath);
 }
@@ -41,9 +45,6 @@ function statusLabel(card: ConnectionCard) {
   if (!card.provider) return "Не установлена";
   const connected = card.provider.hasCredential ? "Подключено" : "Не подключено";
   return card.provider.enabled ? connected : `${connected} (пакет отключён)`;
-}
-function canLogin(provider: IntegrationProvider) {
-  return authMode(provider) === "browser_login" && Boolean(provider.loginCapability);
 }
 function canInstall(card: ConnectionCard) {
   return (
@@ -66,24 +67,23 @@ async function load() {
   if (nextCatalog) catalog.value = nextCatalog;
   loading.value = false;
 }
-function settingKey(provider: IntegrationProvider, setting: Setting) {
-  return `${provider.id}:${setting.key}`;
-}
-function settingValue(provider: IntegrationProvider, setting: Setting) {
-  return (
-    settingDraft.value[settingKey(provider, setting)] ?? provider.settingValues?.[setting.key] ?? ""
-  );
-}
-function setSettingValue(provider: IntegrationProvider, setting: Setting, value: string) {
-  settingDraft.value[settingKey(provider, setting)] = value;
-}
-function schema(provider: IntegrationProvider) {
-  return provider.settingSchema ?? [];
-}
-function canSave(provider: IntegrationProvider) {
-  return schema(provider).length > 0
-    ? schema(provider).some((setting) => settingValue(provider, setting).trim())
-    : Boolean(credential.value[provider.id]?.trim());
+function select(card: ConnectionCard) {
+  if (card.provider?.hasCredential) {
+    selectedProvider.value = card.id;
+    return;
+  }
+  const target = card.provider
+    ? { package_id: card.provider.id, version: card.provider.packageVersion }
+    : card.listing
+      ? installTarget(card.listing)
+      : null;
+  if (!card.provider && !target) {
+    selectedProvider.value = card.id;
+    return;
+  }
+  void disclosure.request(target, card.label, () => {
+    selectedProvider.value = card.id;
+  });
 }
 async function save(provider: IntegrationProvider) {
   busy.value = `${provider.id}:save`;
@@ -110,18 +110,8 @@ async function save(provider: IntegrationProvider) {
 }
 async function act(provider: IntegrationProvider, action: "clear" | "sync") {
   busy.value = `${provider.id}:${action}`;
-  if (action === "clear")
-    await props.client.call(
-      "clearIntegrationCredential",
-      { provider: provider.id },
-      `integration:${provider.id}`,
-    );
-  if (action === "sync")
-    await props.client.call(
-      "syncIntegrationNow",
-      { provider: provider.id },
-      `integration:${provider.id}`,
-    );
+  const op = action === "clear" ? "clearIntegrationCredential" : "syncIntegrationNow";
+  await props.client.call(op, { provider: provider.id }, `integration:${provider.id}`);
   busy.value = null;
   await load();
 }
@@ -170,7 +160,7 @@ onMounted(async () => {
         class="connection-card"
         :data-testid="`connection-card-${card.id}`"
         :aria-label="`${card.label}: ${statusLabel(card)}`"
-        @click="selectedProvider = card.id"
+        @click="select(card)"
       >
         <img
           v-if="icon(card)"
@@ -287,5 +277,15 @@ onMounted(async () => {
         </div>
       </article>
     </Modal>
+
+    <PermissionDisclosure
+      :open="disclosure.state.open"
+      :name="disclosure.state.name"
+      :sections="disclosure.state.sections"
+      :unavailable="disclosure.state.unavailable"
+      :busy="disclosure.state.busy"
+      @confirm="disclosure.confirm"
+      @decline="disclosure.decline"
+    />
   </section>
 </template>

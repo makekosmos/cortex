@@ -19,6 +19,7 @@ import {
 } from "./workspace-inspect.mjs";
 import { NAMES, loadWorkspace, resolveMode, resolveWorkspacePaths } from "./workspace-config.mjs";
 import { gitEnv } from "./git-env.mjs";
+import { flag } from "./argv.mjs";
 export {
   cloneExact,
   checkoutDirty,
@@ -38,8 +39,14 @@ const fail = (message) => {
   throw new Error(message);
 };
 function run(exe, args, cwd, env = process.env) {
+  const command = process.platform === "win32" && exe === "pnpm" ? "pnpm.cmd" : exe;
   return new Promise((resolve) => {
-    const child = spawn(exe, args, { cwd, env, shell: false, windowsHide: true });
+    const child = spawn(command, args, {
+      cwd,
+      env,
+      shell: command.endsWith(".cmd"),
+      windowsHide: true,
+    });
     let stdout = "",
       stderr = "";
     child.stdout?.on("data", (data) => (stdout += data));
@@ -236,10 +243,6 @@ export async function writeCiOutput(root, file) {
       .join(os.EOL)}${os.EOL}`,
   );
   return values;
-}
-function flag(args, name) {
-  const index = args.indexOf(name);
-  return index < 0 ? null : args[index + 1];
 }
 async function main() {
   const args = process.argv.slice(2),

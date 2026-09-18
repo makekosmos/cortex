@@ -46,6 +46,7 @@ impl PackageService {
             providers.push(serde_json::json!({
                 "id": package.id,
                 "label": manifest.name,
+                "packageVersion": package.version,
                 "credentialLabel": first.map(|setting| setting.label.as_str()).unwrap_or("Данные подключения"),
                 "credentialUrl": integration.login.as_ref().map(|login| login.start_url.as_str()).unwrap_or(""),
                 "hasCredential": has_credential,

@@ -10,6 +10,9 @@ import type {
 import type { ManagerClient } from "../composables/useManagerClient";
 import { useStoreCatalog } from "../composables/useStoreCatalog";
 import { installKey, installTarget, installedForListing } from "../store-helpers";
+import { needsStoreDisclosure } from "../disclosure-helpers";
+import { usePackageDisclosure } from "../composables/usePackageDisclosure";
+import PermissionDisclosure from "./PermissionDisclosure.vue";
 import StoreListingCard from "./StoreListingCard.vue";
 import StoreDetail from "./StoreDetail.vue";
 import StoreMarketplaceControls from "./StoreMarketplaceControls.vue";
@@ -27,6 +30,7 @@ const emit = defineEmits<{ detailChange: [boolean] }>();
 const { snapshot, loading, error, listings, installed, catalogPackages, load } = useStoreCatalog(
   props.client,
 );
+const disclosure = usePackageDisclosure(props.client);
 const retiredListingIds = new Set([
   "com.kosmos.eden",
   "com.kosmos.delphi",
@@ -57,7 +61,7 @@ const rowsBase = computed(() => {
     kind: "kosmos-package" as const,
     name: item.name,
     publisher: item.publisher,
-    icon_url: item.icon_url,
+    icon_url: item.icon_url ?? undefined,
     distribution: { package_id: item.id, version: item.version },
   }));
   return [...local, ...apps.filter((item) => !development.value.some((dev) => dev.id === item.id))];
@@ -140,6 +144,12 @@ function installFeedback(listing: StoreListing) {
 async function install(listing: StoreListing) {
   const target = installTarget(listing, installedFor(listing));
   if (!target || installing.value.has(target.package_id)) return;
+  const developmentPackage = development.value.some((item) => item.id === listing.id);
+  if (!needsStoreDisclosure(listing, developmentPackage)) return doInstall(target);
+  await disclosure.request(target, listing.name, () => doInstall(target));
+}
+async function doInstall(target: { package_id: string; version: string }) {
+  if (installing.value.has(target.package_id)) return;
   installing.value = new Set(installing.value).add(target.package_id);
   try {
     const result = await props.client.call(
@@ -264,5 +274,14 @@ onMounted(async () => {
       </div>
       <p v-else class="muted">Приложений не найдено.</p>
     </template>
+    <PermissionDisclosure
+      :open="disclosure.state.open"
+      :name="disclosure.state.name"
+      :sections="disclosure.state.sections"
+      :unavailable="disclosure.state.unavailable"
+      :busy="disclosure.state.busy"
+      @confirm="disclosure.confirm"
+      @decline="disclosure.decline"
+    />
   </section>
 </template>

@@ -9,6 +9,7 @@ import {
   TitlebarHistoryControls,
   ToastHost,
   provideToastHost,
+  usePlatform,
 } from "@kosmos/visuals";
 import BodyView from "../body/BodyView.vue";
 import CoderView from "../coder/CoderView.vue";
@@ -44,6 +45,7 @@ const section = ref<DashboardSection>(
         : "data",
 );
 const showUsage = computed(() => section.value === "data" && currentTypeId.value === "__usage__");
+const { platform } = usePlatform();
 provideToastHost();
 
 function phosphorSidebarIcon(icon: Component, weight: "duotone" | "fill"): Component {
@@ -75,18 +77,18 @@ onMounted(async () => {
     await loadObjects(null);
   }
 
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+  // SAFETY: the surrounding domain validation preserves the asserted contract.
   // SAFETY: the preload bridge is installed on the desktop window before mount.
   const subscribe = (window as DashboardWindow).kepler?.ark?.subscribe;
 
   if (subscribe) {
     unsubscribeObjectUpserted = subscribe("object_upserted", (payload) => {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+      // SAFETY: the surrounding domain validation preserves the asserted contract.
       const p = payload as { type_id?: string };
       void handleObjectChangeEvent(p.type_id ?? null);
     });
     unsubscribeObjectDeleted = subscribe("object_deleted", (payload) => {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+      // SAFETY: the surrounding domain validation preserves the asserted contract.
       const p = payload as { type_id?: string };
       void handleObjectChangeEvent(p.type_id ?? null);
     });
@@ -137,7 +139,7 @@ function selectCoder(): void {
 <template>
   <div class="dashboard" tabindex="0">
     <ToastHost />
-    <DesktopChrome appearance="settings" platform="windows">
+    <DesktopChrome appearance="settings" :platform="platform">
       <template #sidebar>
         <SettingsSidebar title="Kosmos" background="var(--bg-app)">
           <div class="dashboard-sidebar-scroll kosmos-scroll">

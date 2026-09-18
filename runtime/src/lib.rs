@@ -80,4 +80,5 @@ pub mod singleton;
 pub mod store_catalog;
 pub mod sync;
 pub mod usage_tracker;
+pub mod user_data;
 pub mod ws_server;

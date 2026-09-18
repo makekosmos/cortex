@@ -22,6 +22,7 @@ import {
   validateFileIndexPath,
   validateFileIndexSettingsPatch,
   validateUsageTrackerSettingsPatch,
+  normalizePackageDisclosure,
   normalizePairingCode,
   normalizeSyncSnapshot,
   toDeviceParams,
@@ -72,8 +73,9 @@ describe("standalone Manager boundary", () => {
     expect(helpers).toContain("iconPath:");
     expect(helpers).not.toContain("integrationProviders.includes");
     const connections = source("../src/views/ConnectionsView.vue");
+    const drafts = source("../src/composables/useConnectionDrafts.ts");
     expect(connections).toContain("appIcon(card.id, card.iconUrl, card.iconPath)");
-    expect(connections).toContain("provider.settingSchema");
+    expect(drafts).toContain("provider.settingSchema");
     expect(connections).not.toContain("assets/integrations");
     expect(operations).not.toContain("integrations.update_settings");
     expect(preload).not.toContain("manager.updateIntegrationSettings");
@@ -215,6 +217,7 @@ describe("standalone Manager boundary", () => {
           worker_state: "running",
           worker_health: "running",
           update_version: null,
+          catalog_sequence: 0,
           catalog: false,
         },
       ],
@@ -232,6 +235,7 @@ describe("standalone Manager boundary", () => {
           worker_state: "catalog",
           worker_health: "unknown",
           update_version: null,
+          catalog_sequence: 0,
           catalog: true,
         },
       ],
@@ -249,6 +253,96 @@ describe("standalone Manager boundary", () => {
     expect(installHandler).not.toContain("archive_path");
     expect(main).not.toContain("catalog_apply");
     expect(main).not.toContain("revocation_apply");
+  });
+
+  test("keeps the disclosure contract read-only and consent-gated", () => {
+    const api = source("../src/manager-api.ts");
+    const preload = source("preload.ts");
+    const main = source("main.ts");
+    const helpers = source("main-helpers.ts");
+    expect(api).toContain('getPackageDisclosure: "packages.disclosure"');
+    expect(api).toContain("getPackageDisclosure(input: {");
+    expect(api).toContain("packageVersion?: string");
+    expect(preload).toContain(
+      'getPackageDisclosure: (v) => invoke("manager.getPackageDisclosure", v)',
+    );
+    const disclosure = main.slice(
+      main.indexOf('ipcMain.handle("manager.getPackageDisclosure"'),
+      main.indexOf('ipcMain.handle("manager.openPackage"'),
+    );
+    expect(disclosure).toContain("packageInput(value)");
+    expect(disclosure).toContain("normalizePackageDisclosure");
+    expect(disclosure).not.toContain("install");
+    expect(helpers).toContain("packageVersion");
+    const runtime = source("../../runtime/src/ws_server/ops/package.rs");
+    expect(runtime).toContain('"disclosure"');
+    const connections = source("../src/views/ConnectionsView.vue");
+    expect(connections).toContain("disclosure.request(");
+    expect(connections).toContain("PermissionDisclosure");
+    const store = source("../src/views/StoreView.vue");
+    expect(store).toContain("needsStoreDisclosure");
+    expect(store).toContain("PermissionDisclosure");
+  });
+
+  test("normalizes the disclosure projection and drops unknown fields", () => {
+    expect(
+      normalizePackageDisclosure({
+        id: "com.kosmos.demo",
+        name: "Demo",
+        version: "1.0.0",
+        kind: "source",
+        publisher: "kosmos",
+        capabilities: [
+          { capability: "network", scopes: ["https://api.example.com/"], secret: "drop" },
+          { capability: "" },
+          "junk",
+        ],
+        data: [
+          {
+            type: "workout_obj",
+            versions: "*",
+            actions: ["create", "update"],
+            fields_read: [],
+            fields_write: ["props.title"],
+            relations_read: [],
+            relations_write: [],
+            secret: "drop",
+          },
+          { type: "" },
+        ],
+        mappings: [{ type: "workout_obj", direction: "import", fidelity: "lossless" }],
+        secret: "drop",
+      }),
+    ).toEqual({
+      id: "com.kosmos.demo",
+      name: "Demo",
+      version: "1.0.0",
+      kind: "source",
+      publisher: "kosmos",
+      capabilities: [{ capability: "network", scopes: ["https://api.example.com/"] }],
+      data: [
+        {
+          type: "workout_obj",
+          versions: "*",
+          actions: ["create", "update"],
+          fields_read: [],
+          fields_write: ["props.title"],
+          relations_read: [],
+          relations_write: [],
+        },
+      ],
+      mappings: [{ type: "workout_obj", direction: "import", fidelity: "lossless" }],
+    });
+    expect(normalizePackageDisclosure("junk")).toEqual({
+      id: "",
+      name: "",
+      version: "",
+      kind: "app",
+      publisher: "",
+      capabilities: [],
+      data: [],
+      mappings: [],
+    });
   });
 
   test("returns only safe trust state", () => {

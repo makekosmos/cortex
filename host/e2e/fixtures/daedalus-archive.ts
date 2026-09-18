@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { gitEnv } from "../../../scripts/git-env.mjs";
 
 type JsonValue =
   | string
@@ -19,8 +20,11 @@ export function daedalusArchive(root: string, repositoryRoot: string) {
   const source = path.join(repository, "release", "daedalus-0.1.0.kspkg");
   if (!fs.existsSync(source)) throw new Error(`Daedalus release archive not found: ${source}`);
   if (
-    execFileSync("git", ["rev-parse", "HEAD"], { cwd: repository, encoding: "utf8" }).trim() !==
-    "7c1f40878276d2d6a81dc847efabc41ec8f757b2"
+    execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repository,
+      encoding: "utf8",
+      env: gitEnv(),
+    }).trim() !== "7c1f40878276d2d6a81dc847efabc41ec8f757b2"
   )
     throw new Error("Daedalus checkout does not match the reviewed package revision");
   const file = path.join(root, path.basename(source));

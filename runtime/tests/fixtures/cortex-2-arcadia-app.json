@@ -9,8 +9,12 @@
   "publisher": "kosmos",
   "permissions": [],
   "targets": [
-    { "runtime": "kosmos-host", "os": ["windows"] },
-    { "runtime": "worker", "os": ["windows"], "entrypoint": "arcadia-worker.exe" }
+    { "runtime": "kosmos-host", "os": ["windows", "macos", "linux"] },
+    {
+      "runtime": "worker",
+      "os": ["windows", "macos", "linux"],
+      "entrypoint": "arcadia-worker.exe"
+    }
   ],
   "data": { "access": [], "defines": [], "mappings": [] }
 }
