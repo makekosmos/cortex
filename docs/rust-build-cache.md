@@ -88,7 +88,11 @@ rename and rollback; if a process dies after moving the old path to its backup,
 the next invocation restores or reconciles that owned backup before use. A
 failed publication leaves the prior target or cache entry recoverable.
 
-## CI cache
+## CI cache (retired)
+
+Hosted GitHub Actions CI has been removed (the org does not provision paid
+runner minutes). This section is retained as the design record for cache keys
+in case local or future remote caching reuses them.
 
 The Linux `portable` and Windows `windows-runtime` jobs cache Cargo git/db,
 registry, `target` output, and the actual `desktop/.tmp/ark-core-rpc` sidecar

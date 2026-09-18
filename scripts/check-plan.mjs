@@ -7,7 +7,6 @@ import { parseNameStatus } from "./check-plan-git.mjs";
 export { executePlan } from "./check-plan-commands.mjs";
 export { parseNameStatus } from "./check-plan-git.mjs";
 
-const ALL_JOBS = ["actionlint", "portable", "windows-runtime", "first-party-contracts"];
 const CHECK_ORDER = [
   "desktop-typecheck",
   "manager-typecheck",
@@ -95,12 +94,11 @@ function failClosed(mode, reason, changed = []) {
     full: true,
     changed: changed.map((file) => file.path),
     checks: ["full"],
-    jobs: ALL_JOBS,
     reasons: [reason],
   };
 }
 
-function filesForMode(mode, base, head) {
+function filesForMode(mode) {
   if (mode === "pre-commit") {
     const files = diffFiles(["--cached", "HEAD"]);
     return files ? { files } : { full: "unable to inspect staged changes" };
@@ -129,15 +127,6 @@ function filesForMode(mode, base, head) {
       return { full: "pre-push history has no unique merge base" };
     const files = diffFiles([`${push.remoteSha}...${push.localSha}`]);
     return files ? { files } : { full: "unable to inspect pre-push diff" };
-  }
-  if (mode === "ci") {
-    if (!base || !head || ZERO_SHA.test(base) || ZERO_SHA.test(head))
-      return { full: "CI diff base or head is unavailable" };
-    if (isShallow() || !validCommit(base) || !validCommit(head))
-      return { full: "CI diff base or head is missing" };
-    if (!oneMergeBase(base, head)) return { full: "CI diff has no unique merge base" };
-    const files = diffFiles([`${base}...${head}`]);
-    return files ? { files } : { full: "unable to inspect CI diff" };
   }
   return { full: `unknown planner mode: ${mode}` };
 }
@@ -193,30 +182,13 @@ function orderedChecks(checks) {
   return CHECK_ORDER.filter((check) => checks.has(check));
 }
 
-function jobsFor(checks, full) {
-  if (full) return ALL_JOBS;
-  const jobs = new Set();
-  if (checks.has("first-party-contracts")) jobs.add("first-party-contracts");
-  if (["runtime-staging", "native-services"].some((check) => checks.has(check))) {
-    jobs.add("portable");
-    jobs.add("windows-runtime");
-  }
-  if (
-    [...checks].some(
-      (check) => !["first-party-contracts", "runtime-staging", "native-services"].includes(check),
-    )
-  )
-    jobs.add("portable");
-  return ALL_JOBS.filter((job) => jobs.has(job));
-}
-
-export function createPlan({ mode = "worktree", base, head, full = false, files } = {}) {
+export function createPlan({ mode = "worktree", full = false, files } = {}) {
   if (full) return failClosed(mode, "explicit full override");
   const discovered = files
     ? {
         files: files.map((file) => (file?.path ? file : { path: file, status: "A" })),
       }
-    : filesForMode(mode, base, head);
+    : filesForMode(mode);
   if (discovered.full) return failClosed(mode, discovered.full);
   const changed = discovered.files;
   if (changed.length === 0)
@@ -226,7 +198,6 @@ export function createPlan({ mode = "worktree", base, head, full = false, files 
       full: false,
       changed: [],
       checks: [],
-      jobs: [],
       reasons: ["no changes"],
     };
 
@@ -249,7 +220,6 @@ export function createPlan({ mode = "worktree", base, head, full = false, files 
     full: false,
     changed: changed.map((file) => file.path),
     checks: ordered,
-    jobs: jobsFor(checks, false),
     reasons,
   };
 }
@@ -262,10 +232,6 @@ function parseArgs(argv) {
     else if (arg === "--run") options.run = true;
     else if (arg === "--mode") options.mode = argv[++index];
     else if (arg.startsWith("--mode=")) options.mode = arg.slice(7);
-    else if (arg === "--base") options.base = argv[++index];
-    else if (arg.startsWith("--base=")) options.base = arg.slice(7);
-    else if (arg === "--head") options.head = argv[++index];
-    else if (arg.startsWith("--head=")) options.head = arg.slice(7);
     else if (arg === "--files") {
       options.files = [];
       while (argv[index + 1] && !argv[index + 1].startsWith("--"))

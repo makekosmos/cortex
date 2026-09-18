@@ -21,7 +21,7 @@ function plan(...args) {
 }
 
 test("desktop UI selects desktop typecheck, changed lint, and format", () => {
-  const result = plan("--mode", "ci", "--files", "desktop/src/App.vue");
+  const result = plan("--mode", "worktree", "--files", "desktop/src/App.vue");
   assert.deepEqual(result.json.checks, ["desktop-typecheck", "lint", "format"]);
   assert.equal(result.json.full, false);
   assert.match(result.stderr, /desktop\/src\/App\.vue/);
@@ -62,19 +62,14 @@ test("shared, lockfile, build, workflow, and unknown files fail closed", () => {
   ]) {
     const result = plan("--files", file).json;
     assert.equal(result.full, true, file);
-    assert.deepEqual(result.jobs, [
-      "actionlint",
-      "portable",
-      "windows-runtime",
-      "first-party-contracts",
-    ]);
+    assert.deepEqual(result.checks, ["full"], file);
   }
 });
 
 test("deleted shared or build files still fail closed", async () => {
   const { createPlan } = await import("./check-plan.mjs");
   for (const path of ["shared/ipc.ts", "desktop/scripts/build.mjs"]) {
-    const result = createPlan({ mode: "ci", files: [{ path, status: "D" }] });
+    const result = createPlan({ mode: "worktree", files: [{ path, status: "D" }] });
     assert.equal(result.full, true, path);
   }
 });
@@ -84,7 +79,6 @@ test("docs and isolated assets are a safe no-op", () => {
     const result = plan("--files", file).json;
     assert.equal(result.full, false, file);
     assert.deepEqual(result.checks, [], file);
-    assert.deepEqual(result.jobs, [], file);
   }
   for (const file of [
     "desktop/README.md",
@@ -99,25 +93,16 @@ test("docs and isolated assets are a safe no-op", () => {
   }
 });
 
-test("explicit full always selects every check and job", () => {
+test("explicit full always selects every check", () => {
   const result = plan("--full").json;
   assert.equal(result.full, true);
   assert.deepEqual(result.checks, ["full"]);
-  assert.deepEqual(result.jobs, [
-    "actionlint",
-    "portable",
-    "windows-runtime",
-    "first-party-contracts",
-  ]);
 });
 
-test("invalid, missing, zero, and shallow bases fail closed", () => {
-  for (const args of [
-    ["--mode", "ci", "--base", "not-a-commit", "--head", "HEAD"],
-    ["--mode", "ci", "--base", "0000000000000000000000000000000000000000", "--head", "HEAD"],
-    ["--mode", "ci", "--base", "HEAD", "--head", "missing-head"],
-  ]) {
-    assert.equal(plan(...args).json.full, true);
+test("unknown planner modes fail closed", async () => {
+  const { createPlan } = await import("./check-plan.mjs");
+  for (const mode of ["ci", "nonexistent"]) {
+    assert.equal(createPlan({ mode }).full, true, mode);
   }
 });
 
@@ -236,14 +221,24 @@ test("pre-commit retains the existing source-size safeguard through the planner"
   assert.deepEqual(seen, ["source-size"]);
 });
 
-test("hook and CI entrypoints keep the planner and stable quality gate", () => {
+test("hook entrypoints keep the planner gate", () => {
   const hook = readFileSync(`${root}lefthook.yml`, "utf8");
-  const workflow = readFileSync(`${root}.github/workflows/ci.yml`, "utf8");
   assert.match(hook, /check:plan --mode pre-commit --run/);
   assert.match(hook, /check:plan --mode pre-push --run/);
   assert.match(hook, /use_stdin: true/);
-  assert.match(workflow, /id: plan/);
-  assert.match(workflow, /cortex-quality-gate:/);
-  assert.match(workflow, /github\.event\.pull_request\.number \|\| github\.ref/);
-  assert.match(workflow, /branches:\r?\n\s+- main/);
+});
+
+test("checkEnv strips git hook variables from spawned check commands", async () => {
+  const { checkEnv } = await import("./check-plan-commands.mjs");
+  const saved = process.env.GIT_DIR;
+  process.env.GIT_DIR = "leaked-by-git";
+  try {
+    const env = checkEnv();
+    assert.equal(env.GIT_DIR, undefined);
+    assert.equal(env.GIT_WORK_TREE, undefined);
+    assert.equal(env.PATH, process.env.PATH);
+  } finally {
+    if (saved === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = saved;
+  }
 });

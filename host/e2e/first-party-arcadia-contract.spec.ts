@@ -197,34 +197,37 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
       expect(initialGames, JSON.stringify(initialGames)).toMatchObject({ ok: true, data: [] });
       await expectHostileSteamRejected(page, windowsFixtures.hostileSteam);
       sqobaRecovery = await exerciseSqoba(page, dataDir, windowsFixtures.fakeExe, saveRoot);
-      const first = await page.evaluate(async (exePath) => {
-        const added = await window.kosmosApp.ark!.request("games.add_manual", {
-          name: GAME_TITLE,
-          exe_path: exePath,
-          save_roots: [],
-        });
-        // SAFETY: games.add_manual returns the installed Arcadia worker's documented result envelope.
-        const id = (added as { data?: { id?: string } } | null)?.data?.id;
-        return {
-          id,
-          added,
-          listed: await window.kosmosApp.ark!.request("games.list", {}),
-          read: id
-            ? await window.kosmosApp.ark!.request("games.read", { id })
-            : { ok: false, message: "missing-game-id" },
-          undeclaredType: await window.kosmosApp.ark!.request("upsert_object_type", {
-            object_type: { id: "arcadia-host-e2e-undeclared", name: "Denied" },
-          }),
-          foreignType: await window.kosmosApp.ark!.request("upsert_object", {
-            object: {
-              id: "arcadia-host-e2e-foreign",
-              typeId: "com.kosmos.note",
-              typeVersion: "1.0.0",
-              title: "Denied",
-            },
-          }),
-        };
-      }, windowsFixtures.fakeExe);
+      const first = await page.evaluate(
+        async ({ exePath, title }) => {
+          const added = await window.kosmosApp.ark!.request("games.add_manual", {
+            name: title,
+            exe_path: exePath,
+            save_roots: [],
+          });
+          // SAFETY: games.add_manual returns the installed Arcadia worker's documented result envelope.
+          const id = (added as { data?: { id?: string } } | null)?.data?.id;
+          return {
+            id,
+            added,
+            listed: await window.kosmosApp.ark!.request("games.list", {}),
+            read: id
+              ? await window.kosmosApp.ark!.request("games.read", { id })
+              : { ok: false, message: "missing-game-id" },
+            undeclaredType: await window.kosmosApp.ark!.request("upsert_object_type", {
+              object_type: { id: "arcadia-host-e2e-undeclared", name: "Denied" },
+            }),
+            foreignType: await window.kosmosApp.ark!.request("upsert_object", {
+              object: {
+                id: "arcadia-host-e2e-foreign",
+                typeId: "com.kosmos.note",
+                typeVersion: "1.0.0",
+                title: "Denied",
+              },
+            }),
+          };
+        },
+        { exePath: windowsFixtures.fakeExe, title: GAME_TITLE },
+      );
       expect(first.added, JSON.stringify(first.added)).toMatchObject({
         ok: true,
         data: { ok: true, id: expect.any(String) },
