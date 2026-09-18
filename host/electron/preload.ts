@@ -17,9 +17,26 @@ type ApiValue =
   | readonly ApiValue[]
   | { readonly [key: string]: ApiValue };
 type ApiParams = Readonly<{ [key: string]: ApiValue }>;
+export type AuxWindowRequest = Readonly<{
+  key: string;
+  route?: string;
+  width?: number;
+  height?: number;
+  minWidth?: number;
+  minHeight?: number;
+  alwaysOnTop?: boolean;
+}>;
+export type AuxWindowOpenResult = { ok: true } | { ok: false; message: string };
+
 type ExposedApi = {
   identity: ApiValue | undefined;
-  window: { minimize(): void; close(): void };
+  window: {
+    minimize(): void;
+    close(): void;
+    open(request: AuxWindowRequest): Promise<AuxWindowOpenResult>;
+    setAlwaysOnTop(flag: boolean): Promise<boolean>;
+    isAlwaysOnTop(): Promise<boolean>;
+  };
   dialogs: {
     pickDirectoryGrant(): Promise<{
       persistentGrantId: string;
@@ -62,6 +79,15 @@ const api: ExposedApi = {
   window: {
     minimize: () => ipcRenderer.send("host:window", "minimize"),
     close: () => ipcRenderer.send("host:window", "close"),
+    // SAFETY: main validates the request shape, binds the window to the
+    // sender's app id and launch, and caps secondary window count.
+    open: (request: AuxWindowRequest) =>
+      ipcRenderer.invoke("host:window:open", request) as Promise<AuxWindowOpenResult>,
+    // SAFETY: main returns the actual always-on-top flag after applying it.
+    setAlwaysOnTop: (flag: boolean) =>
+      ipcRenderer.invoke("host:window:always-on-top", flag) as Promise<boolean>,
+    // SAFETY: main returns the window's current always-on-top flag.
+    isAlwaysOnTop: () => ipcRenderer.invoke("host:window:always-on-top") as Promise<boolean>,
   },
   dialogs: {
     // SAFETY: main owns this IPC handler and validates the exact opaque response shape.

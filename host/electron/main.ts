@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen } from "electron";
 import { fileURLToPath } from "node:url";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -15,6 +15,8 @@ import {
   type AppLaunch,
   type SidecarEvent,
   type JsonRecord,
+  type JsonValue,
+  isJsonBoolean,
   isJsonRecord,
   isJsonString,
 } from "./host-api";
@@ -23,6 +25,14 @@ import { LaunchOwnership, type OwnedLaunch } from "./launch-ownership";
 import { kosmosAppIcon, kosmosAppName, kosmosAppShortcutIcon } from "./kosmos-app-branding";
 import { reconcileShortcuts } from "./shortcuts";
 import { parseOpenAppRequest, sendNavigationWhenReady } from "./app-navigation";
+import {
+  auxWindowKey,
+  auxWindowStateFileName,
+  MAX_AUX_WINDOWS_PER_APP,
+  parseAuxWindowSpec,
+  parseAuxWindowState,
+  type AuxWindowSpec,
+} from "./app-windows";
 import {
   createEngineUserDataStores,
   registerExtensionUserDataIpc,
@@ -61,7 +71,18 @@ const isOperationRequest = (value: JsonRecord): value is JsonRecord & { operatio
   isJsonString(value.operation);
 const hasOpenApp = (argv: string[]) =>
   argv.some((argument) => argument === "--open-app" || argument.startsWith("--open-app="));
+// Primary windows are keyed by app id; renderer-named auxiliary windows by
+// `auxWindowKey(appId, key)`. `windowApps` tracks every live window's app
+// context so a launch lease is released only when its last window goes away.
+type WindowContext = Readonly<{
+  appId: string;
+  key: string | null;
+  claim: OwnedLaunch;
+  win: BrowserWindow;
+}>;
 const windows = new Map<string, BrowserWindow>();
+const auxWindows = new Map<string, BrowserWindow>();
+const windowApps = new Map<number, WindowContext>();
 const windowReady = new Map<string, Promise<boolean>>();
 const manifests = new Map<string, AppLaunch>();
 const eventSubscribers = new Set<number>();
@@ -78,6 +99,12 @@ const requestExit = (): void => {
 // explicit Engine setting of 0 still overrides it before the first close.
 const lifecycle = new HostLifecycle(requestExit);
 
+const appIdForWindow = (win: BrowserWindow | null): string | undefined =>
+  win ? windowApps.get(win.webContents.id)?.appId : undefined;
+
+const appWindows = (appId: string): BrowserWindow[] =>
+  [...windowApps.values()].filter((ctx) => ctx.appId === appId).map((ctx) => ctx.win);
+
 function clearLaunchRenewal(launchId: string): void {
   const timer = renewalTimers.get(launchId);
   if (timer) clearTimeout(timer);
@@ -93,9 +120,10 @@ function scheduleLaunchRenewal(manifest: AppLaunch, retry = false): void {
       app_id: manifest.id.slice(0, 128),
       outcome: "expired",
     });
-    const win = windows.get(manifest.id);
-    if (win && !win.isDestroyed()) win.close();
-    else void revokeLaunch(manifest.id, manifest.launch_id);
+    const appWins = appWindows(manifest.id);
+    if (appWins.length > 0) {
+      for (const win of appWins) if (!win.isDestroyed()) win.close();
+    } else void revokeLaunch(manifest.id, manifest.launch_id);
     return;
   }
   const timer = setTimeout(async () => {
@@ -128,15 +156,15 @@ const reportFailure = (message: string, exit = false): void => {
 };
 
 const fanoutArkEvent = (event: SidecarEvent): void => {
-  for (const [id, win] of windows) {
-    const manifest = manifests.get(id);
+  for (const ctx of windowApps.values()) {
+    const manifest = manifests.get(ctx.appId);
     if (
       !manifest ||
-      !eventSubscribers.has(win.webContents.id) ||
+      !eventSubscribers.has(ctx.win.webContents.id) ||
       !hasLaunchReadPermission(manifest, event)
     )
       continue;
-    win.webContents.send("host:ark-event", event);
+    ctx.win.webContents.send("host:ark-event", event);
   }
 };
 
@@ -179,28 +207,41 @@ function revokeLaunch(id: string, launchId: string): Promise<void> {
   );
 }
 
-function releaseLaunch(
-  id: string,
-  win: BrowserWindow,
-  claim: OwnedLaunch,
-  webContentsId: number,
-): void {
-  const launchId = ownership.take(claim);
+function releaseWindow(win: BrowserWindow, webContentsId: number): void {
+  const ctx = windowApps.get(webContentsId);
+  if (!ctx) return;
+  windowApps.delete(webContentsId);
+  eventSubscribers.delete(webContentsId);
+  if (ctx.key === null) {
+    if (windows.get(ctx.appId) === win) windows.delete(ctx.appId);
+  } else {
+    const key = auxWindowKey(ctx.appId, ctx.key);
+    if (auxWindows.get(key) === win) auxWindows.delete(key);
+  }
+  lifecycle.closed();
+  // The launch lease backs every window of the app; it is revoked only once
+  // the last window releases, so auxiliary windows keep working after the
+  // primary window closes.
+  if (appWindows(ctx.appId).length > 0) return;
+  // `ctx.claim` is normally the live claim; if a newer launch replaced it while
+  // auxiliary windows stayed open, the window releases the current claim so
+  // the active lease — not a stale one — is revoked.
+  const launchId = ownership.take(ownership.current(ctx.appId) ?? ctx.claim);
   if (!launchId) return;
   clearLaunchRenewal(launchId);
-  eventSubscribers.delete(webContentsId);
-  if (windows.get(id) === win) windows.delete(id);
-  if (manifests.get(id)?.launch_id === launchId) manifests.delete(id);
-  lifecycle.closed();
-  void revokeLaunch(id, launchId);
+  if (manifests.get(ctx.appId)?.launch_id === launchId) manifests.delete(ctx.appId);
+  void revokeLaunch(ctx.appId, launchId);
 }
 
 function cleanupReplacedLaunch(replaced: OwnedLaunch): void {
   clearLaunchRenewal(replaced.launchId);
   eventSubscribers.delete(replaced.webContentsId);
+  // Auxiliary windows can keep a claim alive after its primary window has
+  // already been released; only a still-tracked window decrements the count.
+  const tracked = windowApps.delete(replaced.webContentsId);
   if (windows.get(replaced.id) === replaced.owner) windows.delete(replaced.id);
   if (manifests.get(replaced.id)?.launch_id === replaced.launchId) manifests.delete(replaced.id);
-  lifecycle.closed();
+  if (tracked) lifecycle.closed();
   void revokeLaunch(replaced.id, replaced.launchId);
 }
 
@@ -275,6 +316,14 @@ async function openApp(
   const webContentsId = win.webContents.id;
   const { current: claim, replaced } = ownership.claim(id, win, webContentsId, manifest.launch_id);
   lifecycle.opened();
+  windowApps.set(webContentsId, { appId: id, key: null, claim, win });
+  // Surviving auxiliary windows of a previous launch adopt the fresh claim so
+  // the last-closing window revokes the active lease, not the replaced one.
+  for (const [wcid, ctx] of windowApps) {
+    if (ctx.appId === id && ctx.claim !== claim) {
+      windowApps.set(wcid, { ...ctx, claim });
+    }
+  }
   if (replaced) cleanupReplacedLaunch(replaced);
   manifests.set(id, manifest);
   windows.set(id, win);
@@ -296,7 +345,15 @@ async function openApp(
   };
   const revokeOnNavigation = (url: string): void => {
     if (!leavesLaunchOrigin(url)) return;
-    releaseLaunch(id, win, claim, webContentsId);
+    // A launched renderer leaving its origin tears the whole app down: every
+    // window shares the same launch-scoped authority.
+    for (const target of appWindows(id)) {
+      releaseWindow(target, target.webContents.id);
+      if (!target.isDestroyed()) target.close();
+    }
+    // The navigating window itself may already be untracked (a zombie left by
+    // an earlier did-fail-load); it still must not keep a revoked lease alive.
+    releaseWindow(win, webContentsId);
     if (!win.isDestroyed()) win.close();
   };
   win.webContents.on("will-navigate", (event, url) => {
@@ -310,21 +367,21 @@ async function openApp(
   win.on("closed", () => {
     markReady(false);
     if (windowReady.get(id) === ready) windowReady.delete(id);
-    releaseLaunch(id, win, claim, webContentsId);
+    releaseWindow(win, webContentsId);
     console.warn("[host-lifecycle] window closed", {
       app_id: id,
-      remaining: windows.size,
+      remaining: windowApps.size,
     });
   });
   win.webContents.on("render-process-gone", (_event, details) => {
-    releaseLaunch(id, win, claim, webContentsId);
+    releaseWindow(win, webContentsId);
     console.warn(
       "desktop-host renderer stopped",
       redactedCrashMetadata(id, manifest.version, details),
     );
   });
   win.webContents.on("did-fail-load", () => {
-    releaseLaunch(id, win, claim, webContentsId);
+    releaseWindow(win, webContentsId);
   });
   if (route) {
     win.webContents.once("did-finish-load", () => {
@@ -343,6 +400,238 @@ async function openApp(
     console.warn("desktop-host app resource failed", { app_id: id });
     reportFailure("Ресурс приложения недоступен.", initial);
     win.close();
+    return { ok: false, message: "Ресурс приложения недоступен." };
+  }
+}
+
+// Window states live outside `extension-data` so app-scoped userData IPC can
+// neither read, forge, nor collide with them.
+const auxWindowStateDir = (appId: string): string =>
+  path.join(app.getPath("userData"), "window-states", appId);
+
+const readAuxWindowState = (appId: string, key: string) => {
+  try {
+    return parseAuxWindowState(
+      JSON.parse(
+        readFileSync(path.join(auxWindowStateDir(appId), auxWindowStateFileName(key)), "utf8"),
+      ),
+    );
+  } catch {
+    return {};
+  }
+};
+
+const writeAuxWindowState = (appId: string, key: string, win: BrowserWindow): void => {
+  try {
+    const bounds = win.getNormalBounds();
+    const dir = auxWindowStateDir(appId);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      path.join(dir, auxWindowStateFileName(key)),
+      JSON.stringify({ ...bounds, alwaysOnTop: win.isAlwaysOnTop() }),
+      "utf8",
+    );
+  } catch {
+    // Window-state bookkeeping must never break window teardown.
+  }
+};
+
+const auxWindowCount = (appId: string): number =>
+  [...windowApps.values()].filter((ctx) => ctx.appId === appId && ctx.key !== null).length;
+
+// Mirrors `windowReady` for auxiliary windows so a route resend to a window
+// that is still on its first load is not silently dropped.
+const auxWindowReady = new Map<string, Promise<boolean>>();
+
+// The initial route rides in the URL hash: the renderer reads
+// `window.location.hash` synchronously at boot, so an auxiliary surface never
+// flashes the primary view before the route arrives over IPC.
+const auxWindowUrl = (base: string, route: string | undefined): string => {
+  if (!route) return base;
+  try {
+    const url = new URL(base);
+    url.hash = route;
+    return url.toString();
+  } catch {
+    return base;
+  }
+};
+
+async function openAuxWindow(
+  appId: string,
+  spec: AuxWindowSpec,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const manifest = manifests.get(appId);
+  const claim = ownership.current(appId);
+  if (!manifest || !claim || claim.launchId !== manifest.launch_id)
+    return { ok: false, message: "Приложение не запущено." };
+  const composite = auxWindowKey(appId, spec.key);
+  const existing = auxWindows.get(composite);
+  if (existing && !existing.isDestroyed()) {
+    if (!headless) {
+      existing.show();
+      existing.focus();
+    }
+    if (spec.route) {
+      const delivered = await sendNavigationWhenReady(auxWindowReady.get(composite), () => {
+        existing.webContents.send("kepler:extension:navigation", spec.route);
+      });
+      if (!delivered) return { ok: false, message: "Не удалось передать маршрут окну." };
+    }
+    return { ok: true };
+  }
+  if (auxWindowCount(appId) >= MAX_AUX_WINDOWS_PER_APP)
+    return { ok: false, message: "Достигнут лимит дополнительных окон приложения." };
+
+  const developmentUrl = requestedDevelopmentUrl(process.argv);
+  const name = kosmosAppName(manifest.id, manifest.name);
+  const state = readAuxWindowState(appId, spec.key);
+  const { x: sx, y: sy, width: sw, height: sh } = state;
+  const savedBounds =
+    sx !== undefined &&
+    sy !== undefined &&
+    sw !== undefined &&
+    sh !== undefined &&
+    screen
+      .getAllDisplays()
+      .some(
+        ({ workArea }) =>
+          Math.min(sx + sw, workArea.x + workArea.width) - Math.max(sx, workArea.x) > 0 &&
+          Math.min(sy + sh, workArea.y + workArea.height) - Math.max(sy, workArea.y) > 0,
+      )
+      ? state
+      : {};
+  const options: Electron.BrowserWindowConstructorOptions = {
+    show: !headless,
+    title: name,
+    icon: kosmosAppIcon(process.resourcesPath, manifest.id),
+    autoHideMenuBar: true,
+    width: savedBounds.width ?? spec.width,
+    height: savedBounds.height ?? spec.height,
+    minWidth: spec.minWidth,
+    minHeight: spec.minHeight,
+    // Pin state restores even when saved bounds are off-screen and dropped.
+    alwaysOnTop: state.alwaysOnTop ?? spec.alwaysOnTop ?? false,
+    backgroundColor: "#1d1d1f",
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: fileURLToPath(new URL("./preload.mjs", import.meta.url)),
+      additionalArguments: [
+        `--kosmos-app=${JSON.stringify({ id: manifest.id, version: manifest.version, name })}`,
+        `--kosmos-ark=${isV2Launch(manifest) || hasArkGrant(manifest.permissions) ? "1" : "0"}`,
+      ],
+    },
+  };
+  if (savedBounds.x !== undefined && savedBounds.y !== undefined) {
+    options.x = savedBounds.x;
+    options.y = savedBounds.y;
+  }
+  const win = new BrowserWindow(options);
+  win.on("page-title-updated", (event) => {
+    event.preventDefault();
+    win.setTitle(name);
+  });
+  const webContentsId = win.webContents.id;
+  let markReady!: (ready: boolean) => void;
+  const ready = new Promise<boolean>((resolve) => {
+    markReady = resolve;
+  });
+  auxWindowReady.set(composite, ready);
+  win.webContents.once("did-finish-load", () => markReady(true));
+  win.webContents.once("did-fail-load", () => markReady(false));
+  windowApps.set(webContentsId, { appId, key: spec.key, claim, win });
+  auxWindows.set(composite, win);
+  lifecycle.opened();
+
+  let stateTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleStateSave = (): void => {
+    if (stateTimer) clearTimeout(stateTimer);
+    stateTimer = setTimeout(() => {
+      stateTimer = undefined;
+      if (!win.isDestroyed()) writeAuxWindowState(appId, spec.key, win);
+    }, 300);
+  };
+  // `moved`/`resized` fire on Windows and macOS; `move`/`resize` also cover
+  // Linux. Position is additionally persisted unconditionally on close.
+  win.on("moved", scheduleStateSave);
+  win.on("resized", scheduleStateSave);
+  win.on("move", scheduleStateSave);
+  win.on("resize", scheduleStateSave);
+  win.on("always-on-top-changed", scheduleStateSave);
+  win.on("close", () => {
+    if (!win.isDestroyed()) writeAuxWindowState(appId, spec.key, win);
+  });
+
+  const launchUrl = developmentUrl ?? manifest.launch_url;
+  const launchOrigin = (() => {
+    try {
+      return new URL(launchUrl).origin;
+    } catch {
+      return "";
+    }
+  })();
+  const leavesLaunchOrigin = (url: string): boolean => {
+    if (!isV2Launch(manifest)) return false;
+    try {
+      return new URL(url).origin !== launchOrigin;
+    } catch {
+      return true;
+    }
+  };
+  const revokeOnNavigation = (url: string): void => {
+    if (!leavesLaunchOrigin(url)) return;
+    for (const target of appWindows(appId)) {
+      releaseWindow(target, target.webContents.id);
+      if (!target.isDestroyed()) target.close();
+    }
+    releaseWindow(win, webContentsId);
+    if (!win.isDestroyed()) win.close();
+  };
+  win.webContents.on("will-navigate", (event, url) => {
+    if (!leavesLaunchOrigin(url)) return;
+    event.preventDefault();
+    revokeOnNavigation(url);
+  });
+  win.webContents.on("did-start-navigation", (_event, url, _isInPlace, isMainFrame) => {
+    if (isMainFrame) revokeOnNavigation(url);
+  });
+  win.on("closed", () => {
+    markReady(false);
+    if (auxWindowReady.get(composite) === ready) auxWindowReady.delete(composite);
+    if (stateTimer) clearTimeout(stateTimer);
+    releaseWindow(win, webContentsId);
+    console.warn("[host-lifecycle] window closed", {
+      app_id: appId,
+      remaining: windowApps.size,
+    });
+  });
+  win.webContents.on("render-process-gone", (_event, details) => {
+    releaseWindow(win, webContentsId);
+    // A dead sticker surface is not worth keeping on screen.
+    if (!win.isDestroyed()) win.close();
+    console.warn(
+      "desktop-host renderer stopped",
+      redactedCrashMetadata(appId, manifest.version, details),
+    );
+  });
+  win.webContents.on("did-fail-load", () => {
+    releaseWindow(win, webContentsId);
+    if (!win.isDestroyed()) win.close();
+  });
+  const route = spec.route;
+  if (route) {
+    win.webContents.once("did-finish-load", () => {
+      void sendNavigationWhenReady(undefined, () => {
+        win.webContents.send("kepler:extension:navigation", route);
+      });
+    });
+  }
+  try {
+    await win.loadURL(auxWindowUrl(launchUrl, route));
+    return { ok: true };
+  } catch {
+    if (!win.isDestroyed()) win.close();
     return { ok: false, message: "Ресурс приложения недоступен." };
   }
 }
@@ -369,13 +658,30 @@ if (!singleInstance) {
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win) return;
       if (action === "minimize") win.minimize();
-      else win.close();
+      else if (action === "close") win.close();
+    });
+    ipcMain.handle("host:window:open", async (event, input: JsonRecord | undefined) => {
+      const appId = appIdForWindow(BrowserWindow.fromWebContents(event.sender));
+      if (!appId || !manifests.has(appId)) {
+        return { ok: false, message: "Неизвестный источник запроса окна." };
+      }
+      const parsed = isJsonRecord(input)
+        ? parseAuxWindowSpec(input)
+        : { ok: false as const, message: "Некорректный запрос окна приложения." };
+      if (!parsed.ok) return parsed;
+      return openAuxWindow(appId, parsed.spec);
+    });
+    ipcMain.handle("host:window:always-on-top", (event, flag: JsonValue | undefined) => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const ctx = win ? windowApps.get(win.webContents.id) : undefined;
+      // Pinning is an auxiliary-window control; the primary surface is not
+      // allowed to lift itself above other windows.
+      if (!win || win.isDestroyed() || !ctx || ctx.key === null) return false;
+      if (isJsonBoolean(flag)) win.setAlwaysOnTop(flag);
+      return win.isAlwaysOnTop();
     });
     ipcMain.handle("host:app-open", async (event, input: JsonRecord | undefined) => {
-      const sender = BrowserWindow.fromWebContents(event.sender);
-      const senderId = sender
-        ? [...windows.entries()].find(([, candidate]) => candidate === sender)?.[0]
-        : undefined;
+      const senderId = appIdForWindow(BrowserWindow.fromWebContents(event.sender));
       if (!senderId || !manifests.has(senderId)) {
         return { ok: false, message: "Неизвестный источник запроса открытия приложения." };
       }
@@ -403,8 +709,7 @@ if (!singleInstance) {
     registerExtensionUserDataIpc({
       handle: (channel, handler) => ipcMain.handle(channel, handler),
       resolveAppForSender: (sender) => {
-        const win = BrowserWindow.fromWebContents(sender);
-        const appId = [...windows.entries()].find(([, candidate]) => candidate === win)?.[0];
+        const appId = appIdForWindow(BrowserWindow.fromWebContents(sender));
         const manifest = appId ? manifests.get(appId) : undefined;
         return manifest
           ? { appId: appId!, permissions: manifest.permissions.map((p) => p.capability) }
@@ -415,8 +720,7 @@ if (!singleInstance) {
     ipcMain.handle("host:user-data", (event, input: JsonRecord | undefined) => {
       const operation = input?.operation;
       const name = input?.name;
-      const win = BrowserWindow.fromWebContents(event.sender);
-      const appId = [...windows.entries()].find(([, candidate]) => candidate === win)?.[0];
+      const appId = appIdForWindow(BrowserWindow.fromWebContents(event.sender));
       const manifest = appId ? manifests.get(appId) : undefined;
       if (!appId || !manifest) throw new Error("Unknown app sender");
       const write = operation === "writeJson" || operation === "deleteFile";
@@ -443,15 +747,12 @@ if (!singleInstance) {
       throw new Error("Unknown user data operation");
     });
     ipcMain.on("host:ark-subscribe", (event) => {
-      const win = BrowserWindow.fromWebContents(event.sender);
-      if (!win) return;
-      const appId = [...windows.entries()].find(([, candidate]) => candidate === win)?.[0];
+      const appId = appIdForWindow(BrowserWindow.fromWebContents(event.sender));
       const manifest = appId ? manifests.get(appId) : undefined;
       if (manifest && hasLaunchReadPermission(manifest)) eventSubscribers.add(event.sender.id);
     });
     ipcMain.handle("host:ark-request", async (event, input: JsonRecord | undefined) => {
-      const win = BrowserWindow.fromWebContents(event.sender);
-      const appId = [...windows.entries()].find(([, candidate]) => candidate === win)?.[0];
+      const appId = appIdForWindow(BrowserWindow.fromWebContents(event.sender));
       const manifest = appId ? manifests.get(appId) : undefined;
       if (!manifest || !isJsonRecord(input))
         return {
@@ -493,7 +794,7 @@ if (!singleInstance) {
     ipcMain.handle("host:dialogs:pick-directory-grant", async (event) => {
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win || win.isDestroyed()) return null;
-      const appId = [...windows.entries()].find(([, candidate]) => candidate === win)?.[0];
+      const appId = appIdForWindow(win);
       const manifest = appId ? manifests.get(appId) : undefined;
       if (!manifest || !isV2Launch(manifest) || !manifest.broker_token) return null;
 
@@ -516,10 +817,7 @@ if (!singleInstance) {
       return result.ok ? result.data : null;
     });
     ipcMain.handle("host:launcher-request", async (event, input: JsonRecord | undefined) => {
-      const win = BrowserWindow.fromWebContents(event.sender);
-      const appId = win
-        ? [...windows.entries()].find(([, candidate]) => candidate === win)?.[0]
-        : undefined;
+      const appId = appIdForWindow(BrowserWindow.fromWebContents(event.sender));
       const operation = isJsonString(input?.operation) ? input.operation : "";
       const params = isJsonRecord(input?.params) ? input.params : {};
       const manifest = appId ? manifests.get(appId) : undefined;
@@ -586,6 +884,10 @@ if (!singleInstance) {
     shutdownDraining = true;
     // Clear all renderer-reachable state before bounded best-effort network cleanup.
     windows.clear();
+    auxWindows.clear();
+    windowReady.clear();
+    auxWindowReady.clear();
+    windowApps.clear();
     manifests.clear();
     eventSubscribers.clear();
     for (const timer of renewalTimers.values()) clearTimeout(timer);

@@ -34,8 +34,8 @@ describe("Host window safety contracts", () => {
     expect(source).toContain(
       'import { LaunchOwnership, type OwnedLaunch } from "./launch-ownership";',
     );
-    expect(source).toContain("const launchId = ownership.take(claim);");
-    expect(source).toContain("void revokeLaunch(id, launchId);");
+    expect(source).toContain("ownership.take(ownership.current(ctx.appId) ?? ctx.claim)");
+    expect(source).toContain("void revokeLaunch(ctx.appId, launchId);");
     expect(source).toContain('win.webContents.on("render-process-gone"');
     expect(source).toContain('win.webContents.on("did-fail-load"');
   });
@@ -89,6 +89,39 @@ describe("Host window safety contracts", () => {
     expect(preloadSource).toContain('"host:app-open"');
     expect(preloadSource).toContain("apps:");
     expect(preloadSource).toContain("navigation:");
+  });
+
+  test("auxiliary app windows share the launch and release it with the last window", () => {
+    expect(source).toContain('ipcMain.handle("host:window:open"');
+    expect(source).toContain('ipcMain.handle("host:window:always-on-top"');
+    expect(source).toContain("parseAuxWindowSpec(input)");
+    expect(source).toContain("MAX_AUX_WINDOWS_PER_APP");
+    expect(source).toContain("auxWindows.clear();");
+    const openAux = source.slice(source.indexOf("async function openAuxWindow"));
+    expect(openAux).not.toContain("engine.launchApp(");
+    expect(openAux).toContain("ownership.current(appId)");
+    expect(openAux).toContain('existing.webContents.send("kepler:extension:navigation"');
+    expect(openAux).toContain('win.on("always-on-top-changed"');
+    // Auxiliary windows ride the dev-server URL in dev mode and carry their
+    // route in the URL hash so the renderer never mounts the primary view.
+    expect(openAux).toContain("developmentUrl ?? manifest.launch_url");
+    expect(openAux).toContain("auxWindowUrl(launchUrl, route)");
+    // Route resends to a window still on its first load wait for readiness.
+    expect(openAux).toContain("sendNavigationWhenReady(auxWindowReady.get(composite)");
+    expect(source).toContain("if (appWindows(ctx.appId).length > 0) return;");
+    expect(preloadSource).toContain('"host:window:open"');
+    expect(preloadSource).toContain('"host:window:always-on-top"');
+  });
+
+  test("a replaced launch never corrupts lifecycle accounting", () => {
+    // Surviving auxiliary windows adopt the fresh claim so the last-closing
+    // window revokes the active lease.
+    expect(source).toContain("ctx.claim !== claim");
+    expect(source).toContain("windowApps.set(wcid, { ...ctx, claim })");
+    // The replaced primary window may already be released: only a still-live
+    // tracked window decrements the open count.
+    expect(source).toContain("const tracked = windowApps.delete(replaced.webContentsId);");
+    expect(source).toContain("if (tracked) lifecycle.closed();");
   });
 
   test("live manifest validation resolves without minting a new launch lease", () => {
@@ -190,7 +223,7 @@ describe("Host window safety contracts", () => {
     expect(source).toContain("const renewalTimers = new Map");
     expect(source).toContain("engine.renewLaunch(");
     expect(hostApiSource).toContain("if (untilExpiry <= 1_000) return null;");
-    expect(source).toContain("if (win && !win.isDestroyed()) win.close();");
+    expect(source).toContain("for (const win of appWins) if (!win.isDestroyed()) win.close();");
     expect(source).toContain("clearLaunchRenewal(launchId);");
     expect(source).toContain("for (const timer of renewalTimers.values()) clearTimeout(timer);");
   });
@@ -214,7 +247,7 @@ describe("Host window safety contracts", () => {
       source.indexOf('ipcMain.handle("host:dialogs:pick-directory-grant"'),
     );
     expect(picker).toContain("BrowserWindow.fromWebContents(event.sender)");
-    expect(picker).toContain("const appId = [...windows.entries()]");
+    expect(picker).toContain("const appId = appIdForWindow(win)");
     expect(picker).toContain(
       "if (!manifest || !isV2Launch(manifest) || !manifest.broker_token) return null;",
     );
