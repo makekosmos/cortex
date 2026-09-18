@@ -140,6 +140,21 @@ const fanoutArkEvent = (event: SidecarEvent): void => {
   }
 };
 
+// KOS-77: после Core db_backup_restore live ARK заменён содержимым снимка —
+// in-memory состояние открытых приложений устарело. Событие уходит в fanout
+// как обычно, а host дополнительно перезагружает окна, чтобы они перечитали
+// данные из восстановленной базы.
+const reloadAppsAfterDbRestore = (): void => {
+  for (const win of windows.values()) {
+    if (!win.isDestroyed()) win.webContents.reload();
+  }
+};
+
+const handleArkEvent = (event: SidecarEvent): void => {
+  fanoutArkEvent(event);
+  if (event.event === "db_restored") reloadAppsAfterDbRestore();
+};
+
 async function resolveLiveLaunchManifest(id: string, launch: AppLaunch): Promise<void> {
   const resolved = await engine.resolveApp(id, launch.version);
   if (!resolved.ok || resolved.data.id !== launch.id || resolved.data.version !== launch.version) {
@@ -349,7 +364,7 @@ if (!singleInstance) {
   app.whenReady().then(async () => {
     const timeout = await engine.getWarmTimeout();
     if (timeout.ok) lifecycle.setWarmTimeout(timeout.data);
-    engine.onArkEvent(fanoutArkEvent);
+    engine.onArkEvent(handleArkEvent);
     ipcMain.on("host:window", (event, action: "minimize" | "close") => {
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win) return;

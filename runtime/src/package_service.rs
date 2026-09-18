@@ -22,7 +22,7 @@ pub use crate::package_manifest::{
 };
 use crate::{
     grant_authority::GrantAuthorityRegistry,
-    lock_file::{ensure_owner_only_directory, write_owner_only_json},
+    lock_file::{ensure_owner_only_directory, retry_io, write_owner_only_json},
     package_registration::PackageRegistrationRegistry,
     package_store::{InstalledPackage, PackageStore, StoreError},
     package_trust::{

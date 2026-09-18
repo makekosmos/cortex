@@ -11,6 +11,7 @@ import {
   installRoot,
   validatePrebuiltManifest,
 } from "./ark-core-rpc.mjs";
+import { defaultArkCoreTargetDir } from "./runtime-staging.mjs";
 
 const moduleUrl = new URL("./ark-core-rpc.mjs", import.meta.url).href;
 
@@ -155,8 +156,8 @@ writeFileSync(path.join(installRoot, "bin", ${JSON.stringify(`ark-core-rpc${proc
       const override = path.join(root, "short-target");
       process.env.KOSMOS_ARK_TARGET_DIR = override;
       ensureArkCoreRpc({ ...options, cacheRoot: path.join(root, "cache-override") });
-      const [staging, fallback, , overridden] = readFileSync(record, "utf8").split("\n");
-      assert.equal(fallback, path.join(staging, "target"));
+      const [, fallback, , overridden] = readFileSync(record, "utf8").split("\n");
+      assert.equal(fallback, defaultArkCoreTargetDir());
       assert.equal(overridden, override);
     } finally {
       if (saved === undefined) delete process.env.KOSMOS_ARK_TARGET_DIR;

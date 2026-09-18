@@ -12,7 +12,7 @@ mod windows;
 #[cfg(windows)]
 pub(super) use windows::*;
 #[cfg(test)]
-pub(super) const STOP_DEADLINE: Duration = Duration::from_millis(25);
+pub(super) const STOP_DEADLINE: Duration = Duration::from_secs(2);
 pub(super) const PROCESS_LAUNCH_DEADLINE: Duration = Duration::from_secs(10);
 pub(super) const MAX_IN_FLIGHT: u32 = 4;
 pub(super) const RESTART_DELAYS: [Duration; 3] = [

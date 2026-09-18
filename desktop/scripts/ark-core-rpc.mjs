@@ -14,9 +14,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { acquireCacheLock } from "./ark-core-rpc-lock.mjs";
+import { defaultArkCoreTargetDir } from "./runtime-staging.mjs";
 export { acquireCacheLock } from "./ark-core-rpc-lock.mjs";
 export const ARK_CORE_REPOSITORY = "https://github.com/makekosmos/core.git";
-export const ARK_CORE_REVISION = "169c1967a074ae6658e81d59892247b24332ce29";
+export const ARK_CORE_REVISION = "d6c18302e8edaa6c9adf2f751fb135885572e1e7";
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const defaultCacheRoot = path.join(shellRoot, ".tmp", "ark-core-rpc");
 const featureKey = (features) =>
@@ -221,7 +222,7 @@ function buildCachedSidecar(root, { debug, features, cargoCommand, cargoArgsPref
       cwd: shellRoot,
       env: {
         ...process.env,
-        CARGO_TARGET_DIR: process.env.KOSMOS_ARK_TARGET_DIR ?? path.join(staging, "target"),
+        CARGO_TARGET_DIR: process.env.KOSMOS_ARK_TARGET_DIR ?? defaultArkCoreTargetDir(),
       },
       stdio: "inherit",
       windowsHide: true,

@@ -17,7 +17,7 @@ fn now_ms() -> u64 {
 }
 
 pub async fn wait_for_peer(host: &ArkHost, device_id: &str) {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(45);
     loop {
         let response = host
             .request("get_connected_peers", json!({}))

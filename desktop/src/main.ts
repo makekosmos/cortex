@@ -42,6 +42,21 @@ function rootView() {
   return App;
 }
 
+// KOS-77: `db_restored` приходит из Engine после snapshot-restore через Core
+// db_backup_restore. In-memory состояние всех data-view устарело — окно
+// перезагружается и перечитывает ARK. Overlay-окна (focus widget / block
+// overlay / dictation pill) не показывают ARK-данные и не перезагружаются,
+// чтобы не срывать активную focus/dictation сессию.
+const OVERLAY_ROOTS = ["#focus-widget", "#focus-block-overlay", "#dictation-pill"];
+window.kepler?.ark?.onEvent?.((event) => {
+  if (
+    event?.event === "db_restored" &&
+    !OVERLAY_ROOTS.some((root) => window.location.hash.startsWith(root))
+  ) {
+    window.location.reload();
+  }
+});
+
 const app = createApp({
   render: () => h(rootView()),
 });

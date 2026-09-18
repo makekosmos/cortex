@@ -14,7 +14,7 @@ impl PackageService {
 
     pub fn open(data_dir: impl AsRef<Path>) -> Result<Self, PackageError> {
         let root = data_dir.as_ref().join("packages");
-        fs::create_dir_all(&root).map_err(|_| PackageError::Persistence)?;
+        retry_io(|| fs::create_dir_all(&root)).map_err(|_| PackageError::Persistence)?;
         let trust = match (
             option_env!("KOSMOS_PACKAGE_ROOT_KEY_JSON"),
             option_env!("KOSMOS_PACKAGE_RELEASE_KEYS_JSON"),
@@ -441,7 +441,7 @@ impl PackageService {
             .root
             .join("blobs")
             .join(format!("{}.kspkg", previous.hash));
-        let size = fs::metadata(&archive)
+        let size = retry_io(|| fs::metadata(&archive))
             .map_err(|_| PackageError::Persistence)?
             .len();
         self.store.install_versioned(
@@ -528,13 +528,14 @@ impl PackageService {
     }
 
     fn read_env(path: &Path) -> Result<(Vec<u8>, SignatureSet), PackageError> {
-        let metadata = fs::metadata(path).map_err(|_| PackageError::Persistence)?;
+        let metadata = retry_io(|| fs::metadata(path)).map_err(|_| PackageError::Persistence)?;
         if !metadata.is_file() || metadata.len() > MAX_ENVELOPE {
             return Err(PackageError::Invalid);
         }
-        let env: Envelope =
-            serde_json::from_slice(&fs::read(path).map_err(|_| PackageError::Persistence)?)
-                .map_err(|_| PackageError::Persistence)?;
+        let env: Envelope = serde_json::from_slice(
+            &retry_io(|| fs::read(path)).map_err(|_| PackageError::Persistence)?,
+        )
+        .map_err(|_| PackageError::Persistence)?;
         let bytes = STANDARD
             .decode(env.bytes)
             .map_err(|_| PackageError::Persistence)?;

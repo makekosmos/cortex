@@ -202,15 +202,33 @@ describe("Manager surface contract", () => {
     expect(settings).toContain("локальные снимки базы данных ARK");
     expect(settings).toContain("Сделать бэкап сейчас");
     expect(settings).toContain("Открыть папку бэкапов");
-    expect(settings).toContain("безопасный Runtime API");
-    expect(settings).not.toContain("Восстановить");
-    for (const method of ["getDbBackups", "createDbBackup", "openDbBackupsFolder"]) {
+    expect(settings).toContain("Проверить");
+    expect(settings).toContain("Восстановить");
+    expect(settings).toContain("window.confirm");
+    expect(settings).toContain("validateDbBackup");
+    expect(settings).toContain("restoreDbBackup");
+    for (const method of [
+      "getDbBackups",
+      "createDbBackup",
+      "openDbBackupsFolder",
+      "validateDbBackup",
+      "restoreDbBackup",
+    ]) {
       expect(api).toContain(method);
       expect(preload).toContain(method);
       expect(main).toContain(`manager.${method}`);
     }
-    expect(api).not.toContain("restoreDbBackup");
-    expect(preload).not.toContain("restoreDbBackup");
-    expect(main).not.toContain("restoreDbBackup");
+    // Restore идёт только через Core db_backup_* RPC в Engine — Manager не
+    // конструирует и не подменяет файлы базы сам (KOS-77 / KOS-51).
+    expect(main).not.toContain("copyFile");
+    expect(main).not.toContain("renameSync");
+    for (const operation of [
+      "manager.db_backups.list",
+      "manager.db_backups.create",
+      "manager.db_backups.validate",
+      "manager.db_backups.restore",
+    ]) {
+      expect(api).toContain(`"${operation}"`);
+    }
   });
 });

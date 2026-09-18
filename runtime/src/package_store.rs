@@ -1,6 +1,6 @@
 //! Immutable, fail-closed `.kspkg` archive store. This module never executes package code.
 
-use crate::lock_file::write_owner_only_json;
+use crate::lock_file::{retry_io, write_owner_only_json};
 use crate::package_manifest::{ManifestError, PackageKind, PackageManifest, VersionedManifest};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -87,8 +87,8 @@ pub struct PackageStore {
 impl PackageStore {
     pub fn new(root: impl Into<PathBuf>) -> Result<Self, StoreError> {
         let root = root.into();
-        fs::create_dir_all(root.join("blobs"))?;
-        fs::create_dir_all(root.join("unpacked"))?;
+        retry_io(|| fs::create_dir_all(root.join("blobs")))?;
+        retry_io(|| fs::create_dir_all(root.join("unpacked")))?;
         Ok(Self {
             root,
             mutation: Mutex::new(()),
@@ -331,7 +331,7 @@ impl PackageStore {
         }
         expected_manifest.validate()?;
         let archive = archive.as_ref();
-        let metadata = fs::metadata(archive)?;
+        let metadata = retry_io(|| fs::metadata(archive))?;
         if metadata.len() != expected_size || metadata.len() > MAX_ARCHIVE {
             return Err(if metadata.len() != expected_size {
                 StoreError::SizeMismatch
@@ -339,12 +339,12 @@ impl PackageStore {
                 StoreError::Archive("archive too large".into())
             });
         }
-        let bytes = fs::read(archive)?;
+        let bytes = retry_io(|| fs::read(archive))?;
         let hash = hex_hash(&bytes);
         if !eq_hash(&hash, expected_hash) {
             return Err(StoreError::HashMismatch);
         }
-        let file = fs::File::open(archive)?;
+        let file = retry_io(|| fs::File::open(archive))?;
         let mut zip = ZipArchive::new(file)?;
         if zip.len() > MAX_ENTRIES {
             return Err(StoreError::Archive("too many entries".into()));
@@ -354,9 +354,9 @@ impl PackageStore {
             STAGING_COUNTER.fetch_add(1, Ordering::Relaxed)
         ));
         if staging.exists() {
-            fs::remove_dir_all(&staging)?;
+            retry_io(|| fs::remove_dir_all(&staging))?;
         }
-        fs::create_dir_all(&staging)?;
+        retry_io(|| fs::create_dir_all(&staging))?;
         // Extracted trees nest deeply (hash + archive paths); canonicalize so
         // Windows gets extended-length paths instead of MAX_PATH denials.
         let staging = fs::canonicalize(&staging)?;
@@ -371,15 +371,15 @@ impl PackageStore {
                 .root
                 .join("blobs")
                 .join(format!(".{hash}.{}.tmp", std::process::id()));
-            fs::copy(archive, &blob_tmp)?;
-            fs::rename(&blob_tmp, &blob)?;
+            retry_io(|| fs::copy(archive, &blob_tmp))?;
+            retry_io(|| fs::rename(&blob_tmp, &blob))?;
         }
         let unpacked = fs::canonicalize(self.root.join("unpacked"))?
             .join(expected_manifest.id())
             .join(expected_manifest.version())
             .join(&hash);
         if let Some(parent) = unpacked.parent() {
-            fs::create_dir_all(parent)?;
+            retry_io(|| fs::create_dir_all(parent))?;
         }
         if !unpacked.exists() {
             // Freshly extracted trees can be held open by indexer/AV scans on
@@ -402,7 +402,7 @@ impl PackageStore {
                 }
             }
         } else {
-            fs::remove_dir_all(&staging)?;
+            retry_io(|| fs::remove_dir_all(&staging))?;
         }
         let package = InstalledPackage {
             id: expected_manifest.id().to_owned(),
@@ -464,7 +464,7 @@ impl PackageStore {
                         return Err(StoreError::Archive("unsupported file type".into()));
                     }
                 }
-                fs::create_dir_all(staging.join(&name))?;
+                retry_io(|| fs::create_dir_all(staging.join(&name)))?;
                 continue;
             }
             if let Some(file_type) = file_type {
@@ -478,9 +478,9 @@ impl PackageStore {
             }
             let out = staging.join(&name);
             if let Some(parent) = out.parent() {
-                fs::create_dir_all(parent)?;
+                retry_io(|| fs::create_dir_all(parent))?;
             }
-            let mut file = fs::File::create(&out)?;
+            let mut file = retry_io(|| fs::File::create(&out))?;
             let declared_size = entry.size();
             let copied = io::copy(
                 &mut (&mut entry).take(declared_size.saturating_add(1)),
@@ -490,7 +490,7 @@ impl PackageStore {
                 return Err(StoreError::Archive("entry size mismatch".into()));
             }
             if normalized.eq_ignore_ascii_case("manifest.json") {
-                found_manifest = Some(fs::read(&out)?);
+                found_manifest = Some(retry_io(|| fs::read(&out))?);
             }
             if normalized == expected.entrypoint() {
                 found_entry = true;
@@ -613,7 +613,7 @@ impl PackageStore {
         if !self.state_path().exists() {
             return Ok(StoreState::default());
         }
-        let state: StoreState = serde_json::from_slice(&fs::read(self.state_path())?)
+        let state: StoreState = serde_json::from_slice(&retry_io(|| fs::read(self.state_path()))?)
             .map_err(|e| StoreError::State(e.to_string()))?;
         if state.format_version != STATE_FORMAT_VERSION {
             return Err(StoreError::State("unsupported state format".into()));
@@ -744,11 +744,11 @@ fn open_immutable_read(path: &Path) -> io::Result<fs::File> {
     #[cfg(windows)]
     {
         use std::os::windows::fs::OpenOptionsExt;
-        return fs::OpenOptions::new().read(true).share_mode(1).open(path);
+        return retry_io(|| fs::OpenOptions::new().read(true).share_mode(1).open(path));
     }
     #[cfg(not(windows))]
     {
-        fs::File::open(path)
+        retry_io(|| fs::File::open(path))
     }
 }
 fn eq_hash(a: &str, b: &str) -> bool {

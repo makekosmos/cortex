@@ -261,6 +261,15 @@ impl ArkHost {
     pub fn subscribe_events(&self) -> broadcast::Receiver<(String, serde_json::Value)> {
         self.events_tx.subscribe()
     }
+    /// Публикует engine-side событие в общий broadcast — все подключённые WS
+    /// клиенты получат его как обычный ark event. Для событий, которые
+    /// порождает сам runtime (например `db_restored` после `db_backup_restore`:
+    /// Core завершает restore синхронным ответом и сам события не шлёт).
+    pub fn emit_event(&self, payload: serde_json::Value) {
+        if let Some(name) = payload.get("event").and_then(serde_json::Value::as_str) {
+            let _ = self.events_tx.send((name.to_owned(), payload));
+        }
+    }
     pub fn stderr_tail_snapshot(&self) -> Vec<String> {
         self.stderr_tail
             .lock()

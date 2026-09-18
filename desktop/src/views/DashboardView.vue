@@ -77,18 +77,18 @@ onMounted(async () => {
     await loadObjects(null);
   }
 
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+  // SAFETY: the surrounding domain validation preserves the asserted contract.
   // SAFETY: the preload bridge is installed on the desktop window before mount.
   const subscribe = (window as DashboardWindow).kepler?.ark?.subscribe;
 
   if (subscribe) {
     unsubscribeObjectUpserted = subscribe("object_upserted", (payload) => {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+      // SAFETY: the surrounding domain validation preserves the asserted contract.
       const p = payload as { type_id?: string };
       void handleObjectChangeEvent(p.type_id ?? null);
     });
     unsubscribeObjectDeleted = subscribe("object_deleted", (payload) => {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+      // SAFETY: the surrounding domain validation preserves the asserted contract.
       const p = payload as { type_id?: string };
       void handleObjectChangeEvent(p.type_id ?? null);
     });

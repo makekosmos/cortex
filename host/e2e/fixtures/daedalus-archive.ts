@@ -24,8 +24,7 @@ export function daedalusArchive(root: string, repositoryRoot: string) {
       cwd: repository,
       encoding: "utf8",
       env: gitEnv(),
-    }).trim() !==
-    "7c1f40878276d2d6a81dc847efabc41ec8f757b2"
+    }).trim() !== "7c1f40878276d2d6a81dc847efabc41ec8f757b2"
   )
     throw new Error("Daedalus checkout does not match the reviewed package revision");
   const file = path.join(root, path.basename(source));
