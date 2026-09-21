@@ -69,8 +69,7 @@ pub fn render(
                     .flex()
                     .gap_2()
                     .child(
-                        Button::new("open-logs")
-                            .ghost()
+                        imago_gpui::button::ghost("open-logs")
                             .label("Открыть папку журналов")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 match crate::engine::data_dir().map(|d| d.join("logs")) {
@@ -86,8 +85,7 @@ pub fn render(
                             })),
                     )
                     .child(
-                        Button::new("open-crashes")
-                            .ghost()
+                        imago_gpui::button::ghost("open-crashes")
                             .label("Открыть отчёты об ошибках")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 match crate::engine::data_dir().map(|d| d.join("crashes")) {
@@ -111,7 +109,7 @@ pub fn render(
             )
             .child(
                 div().flex().gap_2().child(
-                    Button::new("bundle")
+                    imago_gpui::button::secondary("bundle")
                         .label("Создать пакет поддержки")
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.call(
@@ -143,8 +141,7 @@ pub fn render(
                         .flex()
                         .gap_2()
                         .child(
-                            Button::new("bundle-save")
-                                .primary()
+                            imago_gpui::button::primary("bundle-save")
                                 .label(format!("Сохранить в {path_str}"))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.action(
@@ -155,8 +152,7 @@ pub fn render(
                                 })),
                         )
                         .child(
-                            Button::new("bundle-cancel")
-                                .ghost()
+                            imago_gpui::button::ghost("bundle-cancel")
                                 .label("Отмена")
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     let h = vstr(&this.data("@bundle"), "handle");
@@ -203,5 +199,3 @@ pub fn render(
 
     col.into_any_element()
 }
-
-use gpui_component::button::{Button, ButtonVariants};

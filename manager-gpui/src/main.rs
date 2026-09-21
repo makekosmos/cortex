@@ -35,6 +35,7 @@ fn window_bounds(cx: &mut App) -> Bounds<gpui::Pixels> {
 fn main() {
     gpui::application().run(|cx: &mut App| {
         gpui_component::init(cx);
+        imago_gpui::theme::apply(cx);
         let bounds = window_bounds(cx);
         cx.open_window(
             WindowOptions {

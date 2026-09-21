@@ -3325,6 +3325,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09e54e57b4c48b40f7aec75635392b12b3421fa26fe8b4332e63138ed278459c"
 
 [[package]]
+name = "imago-gpui"
+version = "0.1.0"
+source = "git+https://github.com/makekosmos/imago.git?rev=300fe3717cb68f1f653c39310fffb0d0b8b8ba6e#300fe3717cb68f1f653c39310fffb0d0b8b8ba6e"
+dependencies = [
+ "gpui-base",
+ "gpui-component",
+ "gpui-kit",
+]
+
+[[package]]
 name = "imgref"
 version = "1.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3837,6 +3847,7 @@ dependencies = [
  "flate2",
  "gpui-component",
  "gpui-kit",
+ "imago-gpui",
  "serde",
  "serde_json",
  "ureq",

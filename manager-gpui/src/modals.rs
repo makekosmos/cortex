@@ -1,8 +1,8 @@
 //! Modal layers: destructive-action confirm, package disclosure consent,
 //! store listing detail.
 use ::gpui::{prelude::*, *};
-use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::scroll::ScrollableElement;
+use imago_gpui::button;
 use serde_json::Value;
 
 use crate::app::{Confirm, ManagerApp};
@@ -46,22 +46,23 @@ pub fn render_confirm(confirm: &Confirm, cx: &mut Context<ManagerApp>) -> impl I
                         .gap_2()
                         .justify_end()
                         .child(
-                            Button::new("cancel")
-                                .ghost()
+                            button::ghost("cancel")
                                 .label("Отмена")
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.confirm = None;
                                     cx.notify();
                                 })),
                         )
-                        .child(Button::new("ok").danger().label("Подтвердить").on_click(
-                            cx.listener(|this, _, _, cx| {
-                                if let Some(c) = this.confirm.take() {
-                                    this.action(c.op, c.params);
-                                }
-                                cx.notify();
-                            }),
-                        )),
+                        .child(
+                            button::danger("ok")
+                                .label("Подтвердить")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(c) = this.confirm.take() {
+                                        this.action(c.op, c.params);
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
                 ),
         )
 }
@@ -128,8 +129,7 @@ pub fn render_overlay(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> imp
                         .gap_2()
                         .justify_end()
                         .child(
-                            Button::new("close")
-                                .ghost()
+                            button::ghost("close")
                                 .label("Закрыть")
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.detail = None;
@@ -140,8 +140,7 @@ pub fn render_overlay(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> imp
                         )
                         .when(app.pending_install.is_some(), |d| {
                             d.child(
-                                Button::new("consent-install")
-                                    .primary()
+                                button::primary("consent-install")
                                     .label("Установить")
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         if let Some(pid) = this.pending_install.take() {

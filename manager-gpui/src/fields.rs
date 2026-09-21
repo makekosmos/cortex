@@ -1,8 +1,9 @@
 //! View primitives + JSON accessors: section/card/row/kv/badge/btn/toggle/
 //! empty/slot_or and the serde_json::Value getters every view uses.
 use ::gpui::{prelude::*, *};
-use gpui_component::button::{Button, ButtonVariants};
+use gpui_component::button::Button;
 use gpui_component::switch::Switch;
+use imago_gpui::button::{self, ButtonKind};
 use serde_json::Value;
 
 use crate::app::ManagerApp;
@@ -157,17 +158,17 @@ pub fn btn(
     cx: &mut Context<ManagerApp>,
     on_click: impl Fn(&mut ManagerApp, &mut Context<ManagerApp>) + 'static,
 ) -> Button {
-    let b = Button::new(id)
+    let kind = if primary {
+        ButtonKind::Primary
+    } else {
+        ButtonKind::Ghost
+    };
+    button::button(id, kind)
         .label(label)
         .on_click(cx.listener(move |this, _, _, cx| {
             on_click(this, cx);
             cx.notify();
-        }));
-    if primary {
-        b.primary()
-    } else {
-        b.ghost()
-    }
+        }))
 }
 
 /// Button whose id must be dynamic (per-row actions like disconnect/uninstall).
@@ -177,8 +178,7 @@ pub fn btn_id(
     label: &'static str,
     listener: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Button {
-    Button::new(SharedString::from(id.to_string()))
-        .ghost()
+    button::ghost(SharedString::from(id.to_string()))
         .label(label)
         .on_click(listener)
 }
