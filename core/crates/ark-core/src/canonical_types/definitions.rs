@@ -1,0 +1,9 @@
+include!("definitions/part01.rs");
+include!("definitions/part02.rs");
+include!("definitions/part03.rs");
+include!("definitions/part04.rs");
+include!("definitions/part05.rs");
+include!("definitions/part06.rs");
+include!("definitions/part07.rs");
+include!("definitions/part08.rs");
+include!("definitions/part09.rs");

@@ -1,0 +1,124 @@
+# === OS ===
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# === IDEs ===
+.idea/
+.vscode/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+xcuserdata/
+*.perspectivev3
+*.mode1v3
+*.mode2v3
+*.pbxuser
+!default.pbxuser
+!default.mode1v3
+!default.mode2v3
+!default.perspectivev3
+
+# === TypeScript / JavaScript ===
+node_modules/
+dist/
+dist-*/
+.expo/
+*.tsbuildinfo
+.cache/
+playwright-report/
+test-results/
+coverage/
+blob-report/
+.e2e/
+.vitest-attachments/
+
+# === Storybook ===
+storybook-static/
+*storybook.log
+
+# === Bun ===
+bun.lockb
+.bun_cache/
+.bun_tmp/
+.tmp/
+
+# === Rust ===
+target/
+target-*/
+*.rlib
+
+# === Swift / Xcode ===
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.moved-aside
+*.hmap
+*.xccheckout
+*.xcscmblueprint
+.build/
+Package.resolved
+
+# === Kotlin / Android ===
+*.apk
+*.aab
+*.class
+*.jar
+*.aar
+local.properties
+.gradle/
+.cxx/
+
+# === Python ===
+.venv/
+__pycache__/
+*.pyc
+
+# === SQLite ===
+*.db-shm
+*.db-wal
+
+# === Agent artifacts ===
+.agent/
+.agents/
+.claude
+graphify-out/
+.serena/
+.headroom/
+.desloppify/
+.agent/tmp/
+.agent/tasks/**/smoke/
+.agent/tasks/**/*.db
+.agent/tasks/**/*.sqlite
+.agent/tasks/**/*.sqlite3
+.agent/tasks/**/*.zip
+
+# === Electron Builder ===
+release/
+apps/arrancador/out/
+apps/arrancador/example/
+apps/arrancador/.zenflow/
+apps/dashboard/.e2e/
+apps/dashboard/.tmp/
+tests/.e2e/
+
+# === Workspace policy ===
+apps/delphi/ts/bun.lock
+apps/eden/ts/bun.lock
+apps/olympia/package-lock.json
+
+# === Общее ===
+*.log
+*.env
+*.env.*
+!*.env.example
+*.docx
+.turbo/
+sample
+
+.npm-global
+.pi
+.pi-data
+.omx/

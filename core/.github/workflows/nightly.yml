@@ -1,0 +1,33 @@
+# Nightly Rust smoke — запускается cron'ом ночью UTC,
+# либо вручную через `workflow_dispatch`. Не блокирует PR.
+#
+# Цель: ловить регрессии до следующего рабочего дня, без burn'а compute
+# на каждом PR (Windows runner на GH = 2× billing multiplier).
+#
+# См. .agent/tasks/2026-05-22-bug-detection-phase3-ci/spec.md.
+
+name: Nightly Rust
+
+on:
+  schedule:
+    # 03:00 UTC = 06:00 МСК. После рабочего дня.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: rust (workspace tests, Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-stable
+      - name: Cargo test
+        run: cargo test --workspace --lib
