@@ -58,6 +58,11 @@ test("core subtree maps crates to rust checks and inert paths to none", () => {
   assert.equal(plan("--files", "core/ark/packages/ark/package.json").json.full, true);
 });
 
+test("manager-gpui maps to its standalone crate gate", () => {
+  assert.deepEqual(plan("--files", "manager-gpui/src/app.rs").json.checks, ["manager-gpui"]);
+  assert.equal(plan("--files", "manager-gpui/Cargo.toml").json.full, true);
+});
+
 test("shared, lockfile, build, workflow, and unknown files fail closed", () => {
   for (const file of [
     "shared/ipc.ts",
