@@ -151,11 +151,14 @@ const IGNORED = new Set([
   "target",
   "tools",
 ]);
+// Vendored upstream subtree: keeps its own conventions and gates.
+const IGNORED_SUBTREES = new Set(["core"]);
 
-async function collect(dir, files = []) {
+async function collect(dir, files = [], depth = 0) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (entry.isDirectory() && !IGNORED.has(entry.name)) {
-      await collect(path.join(dir, entry.name), files);
+      if (depth === 0 && IGNORED_SUBTREES.has(entry.name)) continue;
+      await collect(path.join(dir, entry.name), files, depth + 1);
     } else if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name))) {
       files.push(path.join(dir, entry.name));
     }

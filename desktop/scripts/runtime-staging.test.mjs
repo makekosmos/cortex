@@ -13,7 +13,12 @@ import {
   RUNTIME_BINARIES,
   stageRuntimeBinaries,
 } from "./runtime-staging.mjs";
-import { ARK_CORE_REPOSITORY, ARK_CORE_REVISION } from "./ark-core-rpc.mjs";
+import {
+  ARK_CORE_REPOSITORY,
+  ARK_CORE_SOURCE,
+  ARK_CORE_SOURCE_DIR,
+  arkCoreSourceId,
+} from "./ark-core-rpc.mjs";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const cortexRoot = path.resolve(shellRoot, "..");
@@ -26,7 +31,9 @@ test("non-default Cargo runtime is the one mapped into the Windows package", () 
     "kepler-focus-svc",
   ]);
   assert.match(ARK_CORE_REPOSITORY, /^https:\/\/github\.com\/makekosmos\/core\.git$/);
-  assert.equal(ARK_CORE_REVISION, "d6c18302e8edaa6c9adf2f751fb135885572e1e7");
+  assert.equal(ARK_CORE_SOURCE, "core/crates/ark-core");
+  assert.equal(ARK_CORE_SOURCE_DIR, path.join(cortexRoot, "core", "crates", "ark-core"));
+  assert.match(arkCoreSourceId(), /^sha256:[0-9a-f]{64}$/);
 
   const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-runtime-stage-"));
   try {

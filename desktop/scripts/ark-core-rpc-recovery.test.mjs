@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import {
-  ARK_CORE_REVISION,
+  arkCoreSourceId,
   ensureArkCoreRpc,
   installRoot,
   publishToTarget,
@@ -46,7 +46,7 @@ test("cache recovers a complete backup left after process death", () =>
       backup = `${keyRoot}.crash.old-`;
     mkdirSync(path.join(backup, "bin"), { recursive: true });
     writeFileSync(path.join(backup, "bin", binaryName), "old");
-    writeFileSync(path.join(backup, ".complete"), `${ARK_CORE_REVISION}\n`);
+    writeFileSync(path.join(backup, ".complete"), `${arkCoreSourceId()}\n`);
     const result = ensureArkCoreRpc({ debug: true, cacheRoot, cargoCommand: "missing-cargo" });
     assert.equal(readFileSync(result, "utf8"), "old");
     assert.equal(existsSync(backup), false);
@@ -62,8 +62,8 @@ test("cache replaces an incomplete canonical with a complete backup", () =>
     writeFileSync(path.join(keyRoot, ".complete"), "wrong\n");
     mkdirSync(path.join(backup, "bin"), { recursive: true });
     writeFileSync(path.join(backup, "bin", binaryName), "old");
-    writeFileSync(path.join(backup, ".complete"), `${ARK_CORE_REVISION}\n`);
+    writeFileSync(path.join(backup, ".complete"), `${arkCoreSourceId()}\n`);
     const result = ensureArkCoreRpc({ debug: true, cacheRoot, cargoCommand: "missing-cargo" });
     assert.equal(readFileSync(result, "utf8"), "old");
-    assert.equal(readFileSync(path.join(keyRoot, ".complete"), "utf8").trim(), ARK_CORE_REVISION);
+    assert.equal(readFileSync(path.join(keyRoot, ".complete"), "utf8").trim(), arkCoreSourceId());
   }));

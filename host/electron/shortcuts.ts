@@ -23,7 +23,7 @@ export function shortcutArgs(
   id: string,
   defaultApp = process.defaultApp,
 ): string {
-  const prefix = defaultApp && appPath ? `${quoteWindowsArg(path.resolve(appPath))} ` : "";
+  const prefix = defaultApp && appPath ? `${quoteWindowsArg(path.win32.resolve(appPath))} ` : "";
   return `${prefix}--open-app=${id}`;
 }
 
@@ -126,8 +126,7 @@ export function reconcileShortcuts(apps: ShortcutApp[], executable = process.exe
       item.iconPath && fs.existsSync(item.iconPath)
         ? { ...shortcut, icon: item.iconPath, iconIndex: 0 }
         : shortcut;
-    if (shell.writeShortcutLink(file, "create", shortcutWithIcon))
-      next.push({ id: item.id, file });
+    if (shell.writeShortcutLink(file, "create", shortcutWithIcon)) next.push({ id: item.id, file });
   }
   const index = path.join(root, INDEX);
   const temp = path.join(root, `${INDEX}.tmp`);

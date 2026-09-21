@@ -10,8 +10,6 @@ const context = {
   currentCommit: "a".repeat(40),
   platform: "win",
   releaseVersion: "0.9.15",
-  coreCommit: "b".repeat(40),
-  arkCoreCommit: "b".repeat(40),
   workspace: {
     imago: {
       repository: "makekosmos/imago",
@@ -41,8 +39,9 @@ function bom() {
     source: {
       cortex: { repository: "makekosmos/cortex", commit: context.currentCommit },
       core: {
-        repository: "makekosmos/core",
-        commit: context.coreCommit,
+        repository: "makekosmos/cortex",
+        commit: context.currentCommit,
+        path: "core/",
         ark_artifact: { name: "ark-core-rpc.exe", sha256: "a".repeat(64), size: 9454592 },
       },
       arca_sdk: {
@@ -107,15 +106,14 @@ test("rejects signing secrets", () => {
   assert.throws(() => validateReleaseBom(value, context), /private_key/);
 });
 
-test("rejects mutable package URLs and a mismatched ARK sidecar pin", () => {
+test("rejects mutable package URLs and a divergent Core subtree commit", () => {
   const mutable = bom();
   mutable.packages[0].artifact.url =
     "https://github.com/makekosmos/package-index/releases/latest/download/fixture.kspkg";
   assert.throws(() => validateReleaseBom(mutable, context), /immutable catalog release/);
-  assert.throws(
-    () => validateReleaseBom(bom(), { ...context, arkCoreCommit: "a".repeat(40) }),
-    /ARK sidecar pin/,
-  );
+  const divergent = bom();
+  divergent.source.core.commit = "b".repeat(40);
+  assert.throws(() => validateReleaseBom(divergent, context), /source\.core\.commit/);
 });
 
 test("rejects first-party source metadata outside package.json pins", () => {

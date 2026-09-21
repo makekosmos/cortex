@@ -14,10 +14,11 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { acquireCacheLock } from "./ark-core-rpc-lock.mjs";
+import { arkCoreSourceId, ARK_CORE_SOURCE_DIR } from "./ark-core-source.mjs";
 import { defaultArkCoreTargetDir } from "./runtime-staging.mjs";
 export { acquireCacheLock } from "./ark-core-rpc-lock.mjs";
+export { arkCoreSourceId, ARK_CORE_SOURCE, ARK_CORE_SOURCE_DIR } from "./ark-core-source.mjs";
 export const ARK_CORE_REPOSITORY = "https://github.com/makekosmos/core.git";
-export const ARK_CORE_REVISION = "d6c18302e8edaa6c9adf2f751fb135885572e1e7";
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const defaultCacheRoot = path.join(shellRoot, ".tmp", "ark-core-rpc");
 const featureKey = (features) =>
@@ -28,12 +29,13 @@ export function installRoot(
   cacheRoot = defaultCacheRoot,
   platform = process.platform,
   arch = process.arch,
+  sourceId = arkCoreSourceId(),
 ) {
   return path.join(
     cacheRoot,
     platform,
     arch,
-    ARK_CORE_REVISION,
+    sourceId.replace(":", "-"),
     debug ? "debug" : "release",
     featureKey(features),
   );
@@ -48,21 +50,21 @@ function backupPaths(target) {
     .map((name) => path.join(path.dirname(target), name))
     .sort();
 }
-function isCompleteCache(root) {
+function isCompleteCache(root, sourceId) {
   try {
     return (
       existsSync(cachedBinary(root)) &&
-      readFileSync(path.join(root, ".complete"), "utf8").trim() === ARK_CORE_REVISION
+      readFileSync(path.join(root, ".complete"), "utf8").trim() === sourceId
     );
   } catch {
     return false;
   }
 }
-function recoverCacheEntry(root) {
+function recoverCacheEntry(root, sourceId) {
   const backups = backupPaths(root);
   if (!existsSync(root)) {
     for (const backup of backups) {
-      if (!isCompleteCache(backup)) {
+      if (!isCompleteCache(backup, sourceId)) {
         rmSync(backup, { recursive: true, force: true });
         continue;
       }
@@ -71,9 +73,9 @@ function recoverCacheEntry(root) {
         break;
       } catch {}
     }
-  } else if (!isCompleteCache(root)) {
+  } else if (!isCompleteCache(root, sourceId)) {
     for (const backup of backups) {
-      if (!isCompleteCache(backup)) {
+      if (!isCompleteCache(backup, sourceId)) {
         rmSync(backup, { recursive: true, force: true });
         continue;
       }
@@ -84,7 +86,7 @@ function recoverCacheEntry(root) {
       break;
     }
   }
-  if (isCompleteCache(root))
+  if (isCompleteCache(root, sourceId))
     for (const backup of backupPaths(root)) rmSync(backup, { recursive: true, force: true });
 }
 function recoverTargetBackup(target, expectedSha256) {
@@ -120,8 +122,8 @@ function readValidatedPrebuiltManifest(manifestPath) {
     );
   if (manifest.arch !== process.arch)
     throw new Error(`prebuilt arch ${manifest.arch ?? "missing"} does not match ${process.arch}`);
-  if (manifest.coreRevision !== ARK_CORE_REVISION)
-    throw new Error("prebuilt Core revision does not match the pinned revision");
+  if (manifest.coreRevision !== arkCoreSourceId())
+    throw new Error("prebuilt Core revision does not match the in-tree ark-core source");
   if (
     !manifest.binary ||
     manifest.binary.constructor !== String ||
@@ -147,7 +149,7 @@ function materializePrebuilt(prebuilt, cacheRoot, copyFile, renamePath) {
     "prebuilt",
     process.platform,
     process.arch,
-    ARK_CORE_REVISION,
+    arkCoreSourceId().replace(":", "-"),
     prebuilt.sha256,
   );
   const binary = path.join(root, sidecarName());
@@ -205,11 +207,8 @@ function buildCachedSidecar(root, { debug, features, cargoCommand, cargoArgsPref
     const args = [
       ...cargoArgsPrefix,
       "install",
-      "--git",
-      ARK_CORE_REPOSITORY,
-      "--rev",
-      ARK_CORE_REVISION,
-      "ark-core",
+      "--path",
+      ARK_CORE_SOURCE_DIR,
       "--bin",
       "ark-core-rpc",
       "--root",
@@ -231,7 +230,7 @@ function buildCachedSidecar(root, { debug, features, cargoCommand, cargoArgsPref
       throw new Error(`cargo install failed with status ${result.status ?? 1}`);
     if (!existsSync(cachedBinary(staging)))
       throw new Error(`cargo install did not produce ${cachedBinary(staging)}`);
-    writeFileSync(path.join(staging, ".complete"), `${ARK_CORE_REVISION}\n`);
+    writeFileSync(path.join(staging, ".complete"), `${arkCoreSourceId()}\n`);
     backup = `${root}.${randomUUID()}.old-`;
     if (existsSync(root)) renamePath(root, backup);
     try {
@@ -272,15 +271,16 @@ export function ensureArkCoreRpc({
       );
     }
   }
-  const root = installRoot(debug, features, cacheRoot);
+  const sourceId = arkCoreSourceId();
+  const root = installRoot(debug, features, cacheRoot, undefined, undefined, sourceId);
   const releaseLock = acquireCacheLock(`${root}.lock`);
   try {
-    recoverCacheEntry(root);
+    recoverCacheEntry(root, sourceId);
     const marker = path.join(root, ".complete");
     if (
       !existsSync(cachedBinary(root)) ||
       !existsSync(marker) ||
-      readFileSync(marker, "utf8").trim() !== ARK_CORE_REVISION
+      readFileSync(marker, "utf8").trim() !== sourceId
     )
       buildCachedSidecar(root, { debug, features, cargoCommand, cargoArgsPrefix, renamePath });
     const installed = cachedBinary(root);

@@ -14,7 +14,7 @@
     "typecheck:host": "pnpm --dir host run typecheck",
     "typecheck:manager": "pnpm --dir manager run typecheck",
     "rustfmt": "cargo fmt --all -- --check",
-    "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
+    "clippy": "cargo clippy --workspace --all-targets -- -D warnings && cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --all-features -- -D warnings -A clippy::too_many_arguments -A clippy::option_map_unit_fn -A clippy::map_flatten -A clippy::nonminimal_bool -A clippy::type_complexity -A clippy::collapsible_if -A clippy::let_and_return -A clippy::result_large_err -A clippy::duplicated_attributes -A clippy::useless_conversion -A clippy::panic -A clippy::assertions_on_constants",
     "test:rust": "node runtime/scripts/test-lib.mjs --workspace",
     "test:static": "pnpm run test:source-size && pnpm run test:format && pnpm run test:workspace && pnpm run test:package-manager && pnpm run test:check-plan && pnpm run test:release-bom && pnpm run test:package-contract && pnpm run test:desktop-contracts && pnpm run test:sidecar",
     "test": "pnpm run test:static && pnpm run test:backend",

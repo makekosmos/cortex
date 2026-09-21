@@ -75,7 +75,14 @@ pub fn backups_dir(db_path: &str) -> PathBuf {
 /// `backup_id` обязан быть чистым basename'ом: ровно один `Component::Normal`,
 /// без `..`, разделителей и точечных (staging/hidden) имён.
 fn validate_snapshot_id(id: &str) -> Result<(), String> {
-    if id.is_empty() || id.starts_with('.') {
+    // Reject separators explicitly: Path::components() treats `\` as a normal
+    // character on Unix, so the component check alone is platform-dependent.
+    if id.is_empty()
+        || id.starts_with('.')
+        || id.contains('/')
+        || id.contains('\\')
+        || id.contains(':')
+    {
         return Err(format!("invalid snapshot id: {id:?}"));
     }
     let mut components = Path::new(id).components();

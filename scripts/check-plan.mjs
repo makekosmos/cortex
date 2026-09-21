@@ -175,6 +175,12 @@ function classify(file) {
   if (/^host\/e2e\//.test(path)) return "full";
   if (/^runtime\//.test(path)) return ["rustfmt", "clippy", "test:rust", "runtime-staging"];
   if (/^native-services\//.test(path)) return ["native-services"];
+  // core/ is the vendored upstream subtree: crate sources join the workspace
+  // gates, everything else (docs, the generated TS package, tooling) is not
+  // built by Cortex checks. Manifests/lockfiles under core/ already failed
+  // closed via isFullInfluence above.
+  if (/^core\/crates\//.test(path)) return ["rustfmt", "clippy", "test:rust"];
+  if (/^core\//.test(path)) return [];
   return "full";
 }
 

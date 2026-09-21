@@ -94,5 +94,26 @@ name = "iroh_bidirectional_network"
 path = "tests/iroh_bidirectional_network/main.rs"
 required-features = ["iroh-spike"]
 
-[lints]
-workspace = true
+# Explicit table (not workspace = true): ark-core is a member of both the
+# core/ workspace and the Cortex workspace after the KOS-129 subtree merge,
+# and needs identical lint policy under either root. Mirrors the upstream
+# workspace lints plus the upstream clippy allow-list.
+[lints.clippy]
+unwrap_used = "deny"
+panic = "allow"
+todo = "warn"
+unimplemented = "warn"
+too_many_arguments = "allow"
+option_map_unit_fn = "allow"
+map_flatten = "allow"
+nonminimal_bool = "allow"
+type_complexity = "allow"
+collapsible_if = "allow"
+let_and_return = "allow"
+result_large_err = "allow"
+duplicated_attributes = "allow"
+useless_conversion = "allow"
+assertions_on_constants = "allow"
+
+[lints.rust]
+unused_must_use = "deny"

@@ -47,7 +47,12 @@ if (!existsSync(bridge)) {
 const workspace = process.argv[2] === "--workspace";
 if (workspace) {
   run(cortex, ["test", "--workspace", "--lib"]);
-  run(cortex, ["test", "--workspace", "--test", "*"]);
+  // ark-core's iroh_bidirectional_network target requires the iroh-spike
+  // feature; an explicit --test wildcard makes cargo error on it instead of
+  // skipping. Run ark-core with default target selection (same coverage as
+  // upstream's `cargo test --manifest-path crates/ark-core/Cargo.toml`).
+  run(cortex, ["test", "--workspace", "--exclude", "ark-core", "--test", "*"]);
+  run(cortex, ["test", "-p", "ark-core"]);
   run(cortex, ["test", "-p", "kepler-backend", "--bins"]);
 } else {
   run(cortex, ["test", "-p", "kepler-backend", "--lib", ...process.argv.slice(2)]);

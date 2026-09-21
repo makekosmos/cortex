@@ -74,7 +74,7 @@ describe("desktop-host shortcut reconciliation", () => {
   });
 
   test("routes local Electron shortcuts through the installed Host entrypoint", () => {
-    const appPath = path.join("C:\\Kosmos Host", "dist-electron", "main.js");
+    const appPath = path.win32.join("C:\\Kosmos Host", "dist-electron", "main.js");
     expect(shortcutArgs(appPath, "notes.app", true)).toBe(`"${appPath}" --open-app=notes.app`);
     expect(shortcutArgs(appPath, "notes.app", false)).toBe("--open-app=notes.app");
   });

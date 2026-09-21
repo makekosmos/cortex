@@ -47,6 +47,17 @@ test("manager, host contracts, Rust, native, and first-party files expand conser
   assert.equal(plan("--files", "host/e2e/first-party-foo.spec.ts").json.full, true);
 });
 
+test("core subtree maps crates to rust checks and inert paths to none", () => {
+  assert.deepEqual(plan("--files", "core/crates/ark-core/src/lib.rs").json.checks, [
+    "rustfmt",
+    "clippy",
+    "test:rust",
+  ]);
+  assert.deepEqual(plan("--files", "core/docs/plan.md").json.checks, []);
+  assert.equal(plan("--files", "core/Cargo.toml").json.full, true);
+  assert.equal(plan("--files", "core/ark/packages/ark/package.json").json.full, true);
+});
+
 test("shared, lockfile, build, workflow, and unknown files fail closed", () => {
   for (const file of [
     "shared/ipc.ts",

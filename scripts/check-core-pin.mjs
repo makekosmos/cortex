@@ -1,13 +1,15 @@
 #!/usr/bin/env node
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 
-const expectedRevision = "d6c18302e8edaa6c9adf2f751fb135885572e1e7";
 const retiredRevision = "6692038ed5c0cb7052f2b5ffc3e206358bb0a10c";
 const retiredPath = "core/ark/crates/ark-core/rust";
+const subtreePath = "core/crates/ark-core";
 const files = [
+  "Cargo.toml",
   "runtime/Cargo.toml",
   "desktop/scripts/ark-core-rpc.mjs",
-  "desktop/scripts/runtime-staging.test.mjs",
+  "desktop/scripts/ark-core-source.mjs",
   "Cargo.lock",
 ];
 
@@ -19,22 +21,36 @@ for (const [file, content] of contents) {
   if (content.includes(retiredPath)) throw new Error(`${file} still references retired Core path`);
 }
 
+if (!existsSync(`${subtreePath}/Cargo.toml`))
+  throw new Error(`in-tree Core subtree is missing: ${subtreePath}`);
+const subtreeManifest = await readFile(`${subtreePath}/Cargo.toml`, "utf8");
+if (!/^name = "ark-core"$/m.test(subtreeManifest))
+  throw new Error(`${subtreePath}/Cargo.toml is not the ark-core crate`);
+
+const workspace = contents.get("Cargo.toml");
+if (!workspace.includes(`"${subtreePath}"`))
+  throw new Error(`Cargo.toml workspace members do not include ${subtreePath}`);
+
 const runtime = contents.get("runtime/Cargo.toml");
-if (
-  !runtime.includes(
-    `git = "https://github.com/makekosmos/core.git", rev = "${expectedRevision}", package = "ark-core"`,
-  )
-) {
-  throw new Error("runtime/Cargo.toml does not pin the merged flattened Core revision");
-}
+if (runtime.includes("github.com/makekosmos/core"))
+  throw new Error("runtime/Cargo.toml still pins ark-core from the remote Core repository");
+if (!runtime.includes('path = "../core/crates/ark-core", package = "ark-core"'))
+  throw new Error("runtime/Cargo.toml does not depend on the in-tree ark-core subtree");
+
 const sidecar = contents.get("desktop/scripts/ark-core-rpc.mjs");
-if (!sidecar.includes(`ARK_CORE_REVISION = "${expectedRevision}"`)) {
-  throw new Error("sidecar installer is not aligned with the merged Core revision");
-}
+if (!sidecar.includes('"--path"'))
+  throw new Error("sidecar installer does not build ark-core-rpc from the in-tree subtree");
+if (sidecar.includes('"--git"') || sidecar.includes('"--rev"'))
+  throw new Error("sidecar installer still fetches ark-core from a remote revision");
+const source = contents.get("desktop/scripts/ark-core-source.mjs");
+if (!source.includes(`"${subtreePath}"`))
+  throw new Error("ark-core source module does not point at the in-tree subtree");
+
 const lock = contents.get("Cargo.lock");
-const lockedSource = `git+https://github.com/makekosmos/core.git?rev=${expectedRevision}#${expectedRevision}`;
-if (!lock.includes(lockedSource))
-  throw new Error("Cargo.lock does not resolve the exact Core revision");
+const arkPackage = lock.match(/\[\[package\]\]\nname = "ark-core"\n[^[]*/)?.[0];
+if (!arkPackage) throw new Error("Cargo.lock does not contain an ark-core package");
 if ((lock.match(/name = "ark-core"/g) ?? []).length !== 1)
   throw new Error("Cargo.lock has an unexpected ark-core package count");
-console.log(`Core dependency pin passed: ${expectedRevision}; retired path/revision absent.`);
+if (/source = /.test(arkPackage))
+  throw new Error("Cargo.lock resolves ark-core from a source other than the workspace path");
+console.log("Core subtree pin passed: ark-core resolves from core/crates/ark-core in-tree.");
