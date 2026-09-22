@@ -63,7 +63,7 @@ fn render_provider(
                 } else {
                     "Не подключена"
                 },
-                if connected { SUCCESS } else { MUTED_FG },
+                if connected { SUCCESS() } else { MUTED_FG() },
             ))
             .child(btn_id(
                 &format!("sync-{id}"),

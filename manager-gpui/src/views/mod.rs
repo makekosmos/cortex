@@ -1,7 +1,6 @@
-//! View registry mirroring ManagerRoot.vue's nav table: same order, same
-//! Russian labels/hints, Lucide icons matching the Phosphor set.
-use ::gpui::assets::IconName;
+//! Manager views grouped by purpose, with shared Imago icons.
 use ::gpui::{prelude::*, *};
+use gpui_component::Icon;
 
 use crate::app::ManagerApp;
 
@@ -38,18 +37,11 @@ pub enum StoreTab {
     Installed,
 }
 
-pub const ALL: &[View] = &[
-    View::Data,
-    View::Sync,
-    View::Packages,
-    View::Engine,
-    View::Settings,
-    View::Connections,
-    View::About,
-    View::Updates,
-    View::Secrets,
-    View::Browser,
-    View::Dev,
+pub const NAV_GROUPS: &[&[View]] = &[
+    &[View::Data, View::Packages, View::Browser],
+    &[View::Sync, View::Connections, View::Secrets],
+    &[View::Settings, View::Engine, View::Dev],
+    &[View::Updates, View::About],
 ];
 
 impl View {
@@ -69,37 +61,21 @@ impl View {
         }
     }
 
-    pub fn icon(self) -> IconName {
-        match self {
-            View::Data => IconName::Database,
-            View::Sync => IconName::RefreshCcw,
-            View::Packages => IconName::Store,
-            View::Engine => IconName::Cpu,
-            View::Settings => IconName::Settings,
-            View::Connections => IconName::PlugZap,
-            View::About => IconName::Info,
-            View::Updates => IconName::Package,
-            View::Secrets => IconName::Key,
-            View::Browser => IconName::Globe,
-            View::Dev => IconName::CodeXml,
-        }
-    }
-}
-
-/// (titlebar label, subtitle) — same hints as ManagerRoot.vue.
-pub fn meta(view: View) -> (&'static str, &'static str) {
-    match view {
-        View::Data => ("Данные", "Типы и объекты"),
-        View::Sync => ("Синхронизация", "Устройства и связи"),
-        View::Packages => ("Маркетплейс", "Приложения и интеграции"),
-        View::Engine => ("Движок", "Настройки запуска"),
-        View::Settings => ("Настройки", "Запуск Kosmos"),
-        View::Connections => ("Интеграции", "Источники данных"),
-        View::About => ("О приложении", "Версия и сведения о Kosmos"),
-        View::Updates => ("Обновления", "Kosmos Desktop и приложения"),
-        View::Secrets => ("Ключи", "API-ключи и провайдеры"),
-        View::Browser => ("Браузер", "Сессии и данные сайтов"),
-        View::Dev => ("Разработка", "Локальные пакеты и инстанс"),
+    pub fn icon(self) -> Icon {
+        let path = match self {
+            View::Data => "icons/database.svg",
+            View::Sync => "icons/sync.svg",
+            View::Packages => "icons/store.svg",
+            View::Engine => "icons/cpu.svg",
+            View::Settings => "icons/settings.svg",
+            View::Connections => "icons/connections.svg",
+            View::About => "icons/help-circle.svg",
+            View::Updates => "icons/download.svg",
+            View::Secrets => "icons/key.svg",
+            View::Browser => "icons/globe.svg",
+            View::Dev => "icons/code.svg",
+        };
+        Icon::default().path(path)
     }
 }
 

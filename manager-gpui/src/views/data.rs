@@ -35,8 +35,8 @@ pub fn render(
                     .w(px(200.))
                     .child(
                         div()
-                            .text_xs()
-                            .text_color(c(MUTED_FG))
+                            .text_size(px(12.))
+                            .text_color(c(MUTED_FG()))
                             .child(vstr(t, "name")),
                     )
                     .child(
@@ -47,8 +47,8 @@ pub fn render(
                     )
                     .child(
                         div()
-                            .text_xs()
-                            .text_color(c(MUTED_FG))
+                            .text_size(px(12.))
+                            .text_color(c(MUTED_FG()))
                             .child(fmt_bytes(vnum(t, "logical_bytes"))),
                     ),
             );
@@ -58,10 +58,15 @@ pub fn render(
             .flex_col()
             .gap_2()
             .child(cards)
-            .child(div().text_xs().text_color(c(MUTED_FG)).child(format!(
-                "Управляемое хранилище: {}",
-                fmt_bytes(vnum(v, "managed_storage_bytes"))
-            )))
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(c(MUTED_FG()))
+                    .child(format!(
+                        "Управляемое хранилище: {}",
+                        fmt_bytes(vnum(v, "managed_storage_bytes"))
+                    )),
+            )
             .into_any_element()
     }));
 
@@ -84,8 +89,8 @@ pub fn render(
     let mut types = card().w(px(260.)).flex_none();
     types = types.child(
         div()
-            .text_xs()
-            .text_color(c(MUTED_FG))
+            .text_size(px(12.))
+            .text_color(c(MUTED_FG()))
             .child("Типы объектов"),
     );
     let types_val = app.data("data.types");
@@ -109,14 +114,14 @@ pub fn render(
                 .items_center()
                 .gap_2()
                 .cursor_pointer()
-                .when(selected, |d| d.bg(fade(ACCENT, 0.18)))
-                .when(!selected, |d| d.hover(|s| s.bg(fade(FG, 0.06))))
-                .child(div().flex_1().text_sm().child(if name.is_empty() {
+                .when(selected, |d| d.bg(fade(ACCENT(), 0.18)))
+                .when(!selected, |d| d.hover(|s| s.bg(fade(FG(), 0.06))))
+                .child(div().flex_1().text_size(px(13.)).child(if name.is_empty() {
                     id.clone()
                 } else {
                     name
                 }))
-                .child(badge(format!("{count:.0}"), MUTED_FG))
+                .child(badge(format!("{count:.0}"), MUTED_FG()))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.data_type = Some(id.clone());
                     this.call(
@@ -143,7 +148,12 @@ pub fn render(
         format!("Объекты ({})", items.len())
     };
     let mut list = card();
-    list = list.child(div().text_xs().text_color(c(MUTED_FG)).child(header));
+    list = list.child(
+        div()
+            .text_size(px(12.))
+            .text_color(c(MUTED_FG()))
+            .child(header),
+    );
     if items.is_empty() {
         list = list.child(empty("Нет объектов"));
     }

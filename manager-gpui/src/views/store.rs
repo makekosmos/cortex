@@ -39,9 +39,9 @@ pub fn render(
                 .items_center()
                 .rounded_md()
                 .cursor_pointer()
-                .text_sm()
-                .when(active, |d| d.bg(fade(ACCENT, 0.18)))
-                .when(!active, |d| d.hover(|s| s.bg(fade(FG, 0.06))))
+                .text_size(px(13.))
+                .when(active, |d| d.bg(fade(ACCENT(), 0.18)))
+                .when(!active, |d| d.hover(|s| s.bg(fade(FG(), 0.06))))
                 .child(label)
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.store_tab = tab;
@@ -83,7 +83,7 @@ pub fn render(
                 } else {
                     "Не настроено"
                 },
-                if configured { SUCCESS } else { WARN },
+                if configured { SUCCESS() } else { WARN() },
             )),
         );
         el = el.child(kv("Доверенные ключи", vstr(trust, "trusted_release_keys")));
@@ -122,7 +122,7 @@ fn render_catalog(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElem
                 name.clone(),
                 if desc.is_empty() { kind.clone() } else { desc },
             );
-            r = r.child(badge(format!("v{ver}"), MUTED_FG));
+            r = r.child(badge(format!("v{ver}"), MUTED_FG()));
             let install_id = id.clone();
             let detail_item = item.clone();
             r = r
@@ -130,8 +130,8 @@ fn render_catalog(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElem
                     div()
                         .id(SharedString::from(format!("listing-{id}")))
                         .cursor_pointer()
-                        .text_sm()
-                        .text_color(c(ACCENT))
+                        .text_size(px(13.))
+                        .text_color(c(ACCENT()))
                         .child("Подробнее")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.detail = Some(detail_item.clone());
@@ -162,8 +162,8 @@ fn render_installed(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyEl
         let mut el = card();
         el = el.child(
             div()
-                .text_xs()
-                .text_color(c(MUTED_FG))
+                .text_size(px(12.))
+                .text_color(c(MUTED_FG()))
                 .child(format!("Установленные пакеты ({})", items.len())),
         );
         if items.is_empty() {
@@ -183,7 +183,7 @@ fn render_installed(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyEl
             let uid = id.clone();
             el = el.child(
                 row(format!("{name} · v{ver}"), id.clone())
-                    .child(badge(status, if enabled { SUCCESS } else { MUTED_FG }))
+                    .child(badge(status, if enabled { SUCCESS() } else { MUTED_FG() }))
                     .child(toggle(
                         // leaks a key per package id — ids are stable and few
                         Box::leak(format!("en-{rid}").into_boxed_str()),

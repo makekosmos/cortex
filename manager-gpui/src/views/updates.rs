@@ -27,7 +27,7 @@ pub fn render(
                 "Kosmos Desktop",
                 "Обновления оболочки доставляет Kosmos Host (Electron). Здесь отображаются обновления пакетов Engine.",
             )
-            .child(badge("Host", MUTED_FG)),
+            .child(badge("Host", MUTED_FG())),
         ),
     );
 
@@ -70,8 +70,8 @@ fn render_updates(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElem
     let mut el = card();
     el = el.child(
         div()
-            .text_xs()
-            .text_color(c(MUTED_FG))
+            .text_size(px(12.))
+            .text_color(c(MUTED_FG()))
             .child(format!("Доступные обновления ({})", updates.len())),
     );
     if updates.is_empty() {

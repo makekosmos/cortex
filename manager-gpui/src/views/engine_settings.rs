@@ -26,8 +26,8 @@ pub fn render(
         let mut el = card();
         el = el.child(
             div()
-                .text_xs()
-                .text_color(c(MUTED_FG))
+                .text_size(px(12.))
+                .text_color(c(MUTED_FG()))
                 .child("Текущие значения"),
         );
         el = el.child(kv("Тёплый таймаут", format!("{warm:.0} сек.")));
@@ -47,14 +47,14 @@ pub fn render(
         card()
             .child(
                 div()
-                    .text_sm()
+                    .text_size(px(13.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("Тёплый таймаут"),
             )
             .child(
                 div()
-                    .text_xs()
-                    .text_color(c(MUTED_FG))
+                    .text_size(px(12.))
+                    .text_color(c(MUTED_FG()))
                     .child("Через сколько секунд Engine выгружает неактивный хост."),
             )
             .child(

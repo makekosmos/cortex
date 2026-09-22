@@ -10,7 +10,7 @@ gpui = { package = "gpui-kit", version = "=0.6.2" }
 gpui-component = "=0.6.2"
 # Imago GPUI shared palette/chrome (KOS-132). Pinned by rev; the crate
 # lives in crates/imago-gpui inside the imago repo workspace.
-imago-gpui = { git = "https://github.com/makekosmos/imago.git", rev = "300fe3717cb68f1f653c39310fffb0d0b8b8ba6e" }
+imago-gpui = { git = "https://github.com/makekosmos/imago.git", rev = "b9dd284e70a56a151b525626c3b2463679cb8c9a" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 uuid = { version = "1.26.1", features = ["v4"] }

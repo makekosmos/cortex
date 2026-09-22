@@ -70,10 +70,15 @@ pub fn render(
                     },
                 )),
             )
-            .child(div().text_xs().text_color(c(MUTED_FG)).child(format!(
-                "Файл: {}",
-                path().map(|p| p.display().to_string()).unwrap_or_default()
-            ))),
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(c(MUTED_FG()))
+                    .child(format!(
+                        "Файл: {}",
+                        path().map(|p| p.display().to_string()).unwrap_or_default()
+                    )),
+            ),
     );
     col.into_any_element()
 }

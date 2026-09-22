@@ -6,6 +6,7 @@ mod app;
 mod devpkg;
 mod engine;
 mod fields;
+mod fps;
 mod modals;
 mod render;
 mod theme;
@@ -33,30 +34,35 @@ fn window_bounds(cx: &mut App) -> Bounds<gpui::Pixels> {
 }
 
 fn main() {
-    gpui::application().run(|cx: &mut App| {
-        gpui_component::init(cx);
-        imago_gpui::theme::apply(cx);
-        let bounds = window_bounds(cx);
-        cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                titlebar: Some(gpui::TitlebarOptions {
-                    title: Some(SharedString::from("Kosmos Manager")),
-                    appears_transparent: true,
-                    traffic_light_position: Some(gpui::point(px(12.), px(14.))),
-                }),
-                ..Default::default()
-            },
-            |window, cx| {
-                let manager = cx.new(|cx| ManagerApp::new(window, cx));
-                cx.new(|cx| gpui_component::Root::new(manager, window, cx))
-            },
-        )
-        .unwrap();
-        if std::env::var("MANAGER_GPUI_OFFSCREEN").is_err() {
-            cx.activate(true);
-        }
-    });
+    gpui::application()
+        .with_assets(imago_gpui::assets::Assets)
+        .run(|cx: &mut App| {
+            gpui_component::init(cx);
+            cx.text_system()
+                .add_fonts(imago_gpui::assets::font_bytes())
+                .expect("load Imago fonts");
+            imago_gpui::theme::apply(cx);
+            let bounds = window_bounds(cx);
+            cx.open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    titlebar: Some(gpui::TitlebarOptions {
+                        title: Some(SharedString::from("Kosmos Manager")),
+                        appears_transparent: true,
+                        traffic_light_position: Some(gpui::point(px(12.), px(14.))),
+                    }),
+                    ..Default::default()
+                },
+                |window, cx| {
+                    let manager = cx.new(|cx| ManagerApp::new(window, cx));
+                    cx.new(|cx| gpui_component::Root::new(manager, window, cx))
+                },
+            )
+            .unwrap();
+            if std::env::var("MANAGER_GPUI_OFFSCREEN").is_err() {
+                cx.activate(true);
+            }
+        });
 }
 
 #[allow(dead_code)]

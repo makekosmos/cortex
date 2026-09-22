@@ -33,7 +33,12 @@ pub fn render(
 
     col = col.child(slot_or(app, "about.info", |v| {
         let mut el = card();
-        el = el.child(div().text_xs().text_color(c(MUTED_FG)).child("Engine"));
+        el = el.child(
+            div()
+                .text_size(px(12.))
+                .text_color(c(MUTED_FG()))
+                .child("Engine"),
+        );
         for key in ["version", "api_version", "build", "channel"] {
             let val = vopt(v, key);
             if let Some(val) = val {
@@ -51,7 +56,7 @@ pub fn render(
         card()
             .child(row("Здоровье Engine", "Проверка /v1/health").child(badge(
                 if ok { "Готов" } else { "Не готов" },
-                if ok { SUCCESS } else { DESTRUCTIVE },
+                if ok { SUCCESS() } else { DESTRUCTIVE() },
             )))
             .into_any_element()
     }));
@@ -60,7 +65,7 @@ pub fn render(
         card()
             .child(
                 div()
-                    .text_sm()
+                    .text_size(px(13.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("Диагностика"),
             )
@@ -103,8 +108,8 @@ pub fn render(
             )
             .child(
                 div()
-                    .text_xs()
-                    .text_color(c(MUTED_FG))
+                    .text_size(px(12.))
+                    .text_color(c(MUTED_FG()))
                     .child("Снимок поддержки собирается Engine и сохраняется в файл."),
             )
             .child(
@@ -175,8 +180,8 @@ pub fn render(
         let mut el = card();
         el = el.child(
             div()
-                .text_xs()
-                .text_color(c(MUTED_FG))
+                .text_size(px(12.))
+                .text_color(c(MUTED_FG()))
                 .child(format!("Журнал диагностики ({} записей)", entries.len())),
         );
         if entries.is_empty() {

@@ -28,7 +28,7 @@ pub fn render(
                 "Автозапуск при входе",
                 "Управляется Kosmos Host (Electron). Откройте Host для изменения.",
             )
-            .child(badge("Host", MUTED_FG)),
+            .child(badge("Host", MUTED_FG())),
         ),
     );
 
@@ -136,7 +136,7 @@ pub fn render(
                 )
                 .child(badge(
                     if ok { "OK" } else { "Ошибка" },
-                    if ok { SUCCESS } else { DESTRUCTIVE },
+                    if ok { SUCCESS() } else { DESTRUCTIVE() },
                 )),
             ),
         );

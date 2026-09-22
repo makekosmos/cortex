@@ -22,22 +22,22 @@ pub fn render_confirm(confirm: &Confirm, cx: &mut Context<ManagerApp>) -> impl I
                 .w(px(420.))
                 .p_5()
                 .rounded_lg()
-                .bg(c(POPOVER))
+                .bg(c(POPOVER()))
                 .border_1()
-                .border_color(c(BORDER))
+                .border_color(c(BORDER()))
                 .flex()
                 .flex_col()
                 .gap_3()
                 .child(
                     div()
-                        .text_sm()
+                        .text_size(px(13.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(confirm.title.clone()),
                 )
                 .child(
                     div()
-                        .text_sm()
-                        .text_color(c(MUTED_FG))
+                        .text_size(px(13.))
+                        .text_color(c(MUTED_FG()))
                         .child(confirm.body.clone()),
                 )
                 .child(
@@ -102,16 +102,16 @@ pub fn render_overlay(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> imp
                 .max_h(px(480.))
                 .p_5()
                 .rounded_lg()
-                .bg(c(POPOVER))
+                .bg(c(POPOVER()))
                 .border_1()
-                .border_color(c(BORDER))
+                .border_color(c(BORDER()))
                 .flex()
                 .flex_col()
                 .gap_3()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .child(
                     div()
-                        .text_sm()
+                        .text_size(px(13.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(title),
                 )
@@ -119,8 +119,8 @@ pub fn render_overlay(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> imp
                     div()
                         .flex_1()
                         .overflow_y_scrollbar()
-                        .text_xs()
-                        .text_color(c(MUTED_FG))
+                        .text_size(px(12.))
+                        .text_color(c(MUTED_FG()))
                         .child(body),
                 )
                 .child(
