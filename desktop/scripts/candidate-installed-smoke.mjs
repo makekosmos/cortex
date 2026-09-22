@@ -358,15 +358,24 @@ try {
       return result.ok ? result : undefined;
     }, operation);
 
-  manager = await launchElectronDebug(managerExe, path.join(root, "manager-user-data"), [
-    "--open=packages",
-  ]);
+  // components/manager is the manager-gpui exe (KOS-134): there is no CDP
+  // endpoint, so launch coverage is process liveness plus — in normal mode —
+  // a visible window. Offscreen placement keeps the headless leg invisible.
+  manager = {
+    child: spawn(managerExe, [], {
+      env: normalMode ? env : { ...env, MANAGER_GPUI_OFFSCREEN: "1" },
+      stdio: "ignore",
+      windowsHide: !normalMode,
+    }),
+  };
   managerPid = manager.child.pid;
-  const managerPages = manager.targets.filter(
-    (item) => item.type === "page" && String(item.url).includes("index.html"),
-  );
-  expect(managerPages.length >= 1, "Manager renderer did not load");
-  if (normalMode) expect(managerPages.length === 1, "Manager must expose exactly one app page");
+  await sleep(2_000);
+  expect(alive(managerPid), "Manager (GPUI) exited during launch");
+  if (normalMode)
+    await waitFor(
+      () => (windowInventory([managerPid]).some((item) => item.visibleWindow) ? true : undefined),
+      "Manager window",
+    );
   const refresh = await rpcEventually("packages.refresh_catalog");
   expect(refresh.ok, `Manager did not refresh the default catalog: ${JSON.stringify(refresh)}`);
   const trust = await rpc("packages.trust_status");
@@ -467,7 +476,8 @@ try {
   expect(
     normalMode
       ? runtimeWindow && !runtimeWindow.visibleWindow
-      : windows.every((item) => !item.visibleWindow),
+      : // The offscreen GPUI Manager owns a real HWND while parked at -20000.
+        windows.every((item) => !item.visibleWindow || item.pid === managerPid),
     normalMode
       ? "Runtime exposed a visible Win32 window"
       : "headless candidate exposed a visible Win32 window",
@@ -737,7 +747,7 @@ try {
       hostPid,
       windows,
       expectedAppPages: {
-        manager: managerPages.map(redactedTarget),
+        manager: { type: "gpui-process", pid: managerPid },
         host: shellTargets.map(redactedTarget),
       },
     },

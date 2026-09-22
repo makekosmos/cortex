@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,8 +23,45 @@ const icons = spawnSync(
   { cwd: path.join(root, "desktop"), stdio: "inherit", windowsHide: true },
 );
 if (icons.status !== 0) process.exit(icons.status ?? 1);
-const components = ["manager", "host"];
-for (const component of components) {
+
+// KOS-134: components/manager ships manager-gpui — a single-file Rust/GPUI
+// exe staged under the packaged name resolvePackagedManagerExecutable()
+// resolves in desktop/electron/manager-navigation.ts. The target triple is
+// the toolchain.target the release BOM records for Windows builds.
+const MANAGER_TARGET = "x86_64-pc-windows-msvc";
+const managerRelease = path.join(root, "manager-gpui", "target", MANAGER_TARGET, "release");
+const managerBuild = spawnSync(
+  "cargo",
+  [
+    "build",
+    "--locked",
+    "--release",
+    "--target",
+    MANAGER_TARGET,
+    "--manifest-path",
+    path.join(root, "manager-gpui", "Cargo.toml"),
+    "--target-dir",
+    path.join(root, "manager-gpui", "target"),
+  ],
+  { cwd: path.join(root, "manager-gpui"), stdio: "inherit", windowsHide: true },
+);
+if (managerBuild.status !== 0) process.exit(managerBuild.status ?? 1);
+const managerExe = path.join(managerRelease, "manager-gpui.exe");
+if (!existsSync(managerExe)) {
+  console.error(`[build-package-components] missing ${managerExe}`);
+  process.exit(1);
+}
+const managerStage = path.join(root, "desktop", ".tmp", "components", "manager", "win-unpacked");
+rmSync(managerStage, { recursive: true, force: true });
+mkdirSync(managerStage, { recursive: true });
+copyFileSync(managerExe, path.join(managerStage, "Kosmos Manager.exe"));
+for (const entry of readdirSync(managerRelease)) {
+  if (entry.toLowerCase().endsWith(".dll"))
+    copyFileSync(path.join(managerRelease, entry), path.join(managerStage, entry));
+}
+
+// components/host stays the Electron Package Host (docs/gpui-host-decision.md).
+for (const component of ["host"]) {
   const cwd = path.join(root, component);
   const build = spawnSync(pnpm, ["run", "build"], {
     cwd,

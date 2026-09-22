@@ -30,8 +30,10 @@ can be ported with the same worker-thread + slot-store architecture.
 
 ## Roadmap (dual-run → optional transition)
 
-- **Now (KOS-127):** Electron Host ships the product. `manager-gpui` exists
-  as a dev/QA tool and the proof that the Engine contract is UI-agnostic.
+- **Now (KOS-127/KOS-134):** Electron Host ships the product. Since KOS-134
+  the Windows package embeds `manager-gpui` as `components/manager`
+  (`Kosmos Manager.exe`) — the Vue `manager/` source stays in the repo for
+  rollback but is no longer the packaged default.
 - **Follow-up A — Windows GPUI bring-up:** build `manager-gpui` on Windows,
   QA input/IME/titlebar/HiDPI, fix `windows_subsystem` + traffic-light
   assumptions (Linux-only conveniences are already isolated in `main.rs`).

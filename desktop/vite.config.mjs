@@ -31,6 +31,8 @@ export default defineConfig({
         __dirname,
         path.join(workspacePaths.imago, "theme/css-variables.css"),
       ),
+      // exports map: ./components -> ./packages/vue/src/components
+      "@kosmos/visuals/components": path.join(workspacePaths.imago, "packages/vue/src/components"),
       "@kosmos/visuals": workspacePaths.imago,
       "@raycast/api": path.resolve(__dirname, "../packages/raycast-api/src/index.ts"),
       "@shared": path.resolve(__dirname, "./shared"),

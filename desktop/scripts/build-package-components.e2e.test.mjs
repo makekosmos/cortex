@@ -30,12 +30,15 @@ const cleanWorktree =
     "host/electron",
     "manager/src",
     "manager/electron",
+    "manager-gpui",
     "runtime/src",
     "native-services",
     "packages",
   ]) === "";
 
-const dependenciesReady = ["desktop", "manager", "host"].every((component) =>
+// The Manager component is manager-gpui (cargo), so only the desktop and host
+// legs need installed pnpm dependencies.
+const dependenciesReady = ["desktop", "host"].every((component) =>
   existsSync(path.join(root, component, "node_modules")),
 );
 
@@ -43,6 +46,7 @@ const prerequisites =
   process.platform === "win32" &&
   cleanWorktree &&
   dependenciesReady &&
+  spawnSync("cargo", ["--version"], { encoding: "utf8" }).status === 0 &&
   // electron-builder runs pnpm install for production deps; the host package
   // pulls @makekosmos/* from GitHub Packages, which requires a token.
   !!process.env.NODE_AUTH_TOKEN &&
@@ -130,7 +134,7 @@ test(
     timeout: 15 * 60_000,
     skip: prerequisites
       ? false
-      : "requires Windows, a clean committed worktree, installed desktop/manager/host deps, and NODE_AUTH_TOKEN for GitHub Packages",
+      : "requires Windows, a clean committed worktree, installed desktop/host deps, cargo on PATH, and NODE_AUTH_TOKEN for GitHub Packages",
   },
   async (t) => {
     // build-app-icons.mjs resolves the Ordo icon from a sibling checkout.
@@ -163,11 +167,11 @@ test(
 
     for (const name of ["kosmos", "memoria", "agenda", "arcadia", "dictation", "ordo"])
       assert.ok(existsSync(path.join(desktop, "build", "app-icons", `${name}.ico`)), name);
+    const managerOut = path.join(desktop, ".tmp", "components", "manager", "win-unpacked");
+    assert.ok(existsSync(path.join(managerOut, "Kosmos Manager.exe")), "manager unpackaged output");
     assert.ok(
-      existsSync(
-        path.join(desktop, ".tmp", "components", "manager", "win-unpacked", "Kosmos Manager.exe"),
-      ),
-      "manager unpackaged output",
+      !existsSync(path.join(managerOut, "resources")),
+      "manager component must be the GPUI exe, not an Electron package",
     );
     assert.ok(
       existsSync(

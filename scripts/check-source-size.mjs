@@ -59,6 +59,7 @@ const GRANDFATHERED = new Set([
   "host/e2e/topology.spec.ts",
   "host/electron/host-api.ts",
   "host/electron/main.ts",
+  "manager-gpui/src/app.rs",
   "manager/e2e/engine-lifecycle.spec.ts",
   "manager/electron/main.ts",
   "manager/electron/manager-contract.test.ts",

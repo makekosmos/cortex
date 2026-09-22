@@ -36,6 +36,7 @@ export function ensureCleanSource() {
       "host/electron",
       "manager/src",
       "manager/electron",
+      "manager-gpui",
       "runtime/src",
       "native-services",
       "packages",
