@@ -254,9 +254,9 @@ export async function inspectCore(root) {
     sidecar = await readFile(path.join(root, "desktop", "scripts", "ark-core-rpc.mjs"), "utf8"),
     lock = await readFile(path.join(root, "Cargo.lock"), "utf8");
   const pathPin = cargo.includes('path = "../core/crates/ark-core"'),
-    arkPackage = lock.match(/\[\[package\]\]\nname = "ark-core"\n[^[]*/)?.[0];
+    arkPackage = lock.match(/\[\[package\]\]\r?\nname = "ark-core"\r?\n[^[]*/)?.[0];
   return {
-    source: "in-tree subtree (upstream https://github.com/makekosmos/core.git)",
+    source: "Cortex source (core/)",
     path: "core/crates/ark-core",
     head: null,
     version: arkPackage?.match(/version = "([^"]+)"/)?.[1] ?? null,

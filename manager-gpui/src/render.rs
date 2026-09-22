@@ -11,21 +11,29 @@ use crate::widgets::*;
 
 impl Render for ManagerApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_theme(window, cx);
+        let sidebar_p = self.sidebar_progress(window);
         let active = views::render(self.view, self, window, cx);
         let mut root = div()
             .size_full()
             .flex()
-            .bg(c(BG))
-            .text_color(c(FG))
-            .child(render_sidebar(self, cx))
+            .relative()
+            .overflow_hidden()
+            .bg(c(BG()))
+            .text_color(c(FG()))
+            .font_family("Inter")
+            .text_size(px(13.))
+            .line_height(px(20.))
+            .child(render_sidebar(self, sidebar_p, cx))
             .child(
                 div()
                     .flex_1()
+                    .min_w_0()
                     .h_full()
                     .flex()
                     .flex_col()
                     .overflow_hidden()
-                    .child(render_titlebar(self, cx))
+                    .child(render_titlebar(self, sidebar_p, cx))
                     .child(
                         div()
                             .flex_1()
@@ -36,9 +44,19 @@ impl Render for ManagerApp {
                             .gap_4()
                             .child(active),
                     ),
+            )
+            .child(render_sidebar_toggle(cx));
+        if self.dev_fps {
+            root = root.child(
+                div()
+                    .absolute()
+                    .bottom_3()
+                    .right_3()
+                    .child(self.fps_view.clone()),
             );
+        }
         if self.error.is_some() || self.action_busy {
-            root = root.child(render_banner(self, cx));
+            root = root.child(render_banner(self, sidebar_p, cx));
         }
         if let Some(confirm) = &self.confirm {
             root = root.child(render_confirm(confirm, cx));

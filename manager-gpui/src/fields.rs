@@ -1,8 +1,9 @@
 //! View primitives + JSON accessors: section/card/row/kv/badge/btn/toggle/
 //! empty/slot_or and the serde_json::Value getters every view uses.
 use ::gpui::{prelude::*, *};
-use gpui_component::button::{Button, ButtonVariants};
+use gpui_component::button::Button;
 use gpui_component::switch::Switch;
+use imago_gpui::button::{self, ButtonKind};
 use serde_json::Value;
 
 use crate::app::ManagerApp;
@@ -80,14 +81,14 @@ pub fn section(title: &str, hint: &str) -> impl IntoElement {
         .gap_0p5()
         .child(
             div()
-                .text_base()
+                .text_size(px(15.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(title.to_string()),
         )
         .child(
             div()
-                .text_xs()
-                .text_color(c(MUTED_FG))
+                .text_size(px(12.))
+                .text_color(c(MUTED_FG()))
                 .child(hint.to_string()),
         )
 }
@@ -97,8 +98,8 @@ pub fn card() -> Div {
         .w_full()
         .rounded_lg()
         .border_1()
-        .border_color(c(BORDER))
-        .bg(c(CARD))
+        .border_color(c(BORDER()))
+        .bg(c(CARD()))
         .p_4()
         .flex()
         .flex_col()
@@ -118,8 +119,13 @@ pub fn row(label: impl Into<String>, sub: impl Into<String>) -> Div {
                 .min_w_0()
                 .flex()
                 .flex_col()
-                .child(div().text_sm().child(label.into()))
-                .child(div().text_xs().text_color(c(MUTED_FG)).child(sub.into())),
+                .child(div().text_size(px(13.)).child(label.into()))
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .text_color(c(MUTED_FG()))
+                        .child(sub.into()),
+                ),
         )
 }
 
@@ -132,11 +138,11 @@ pub fn kv(key: &str, value: impl Into<String>) -> Div {
             div()
                 .w(px(180.))
                 .flex_none()
-                .text_sm()
-                .text_color(c(MUTED_FG))
+                .text_size(px(13.))
+                .text_color(c(MUTED_FG()))
                 .child(key.to_string()),
         )
-        .child(div().flex_1().text_sm().child(value.into()))
+        .child(div().flex_1().text_size(px(13.)).child(value.into()))
 }
 
 pub fn badge(text: impl Into<String>, color: u32) -> impl IntoElement {
@@ -145,7 +151,7 @@ pub fn badge(text: impl Into<String>, color: u32) -> impl IntoElement {
         .py_0p5()
         .rounded_full()
         .bg(fade(color, 0.15))
-        .text_xs()
+        .text_size(px(12.))
         .text_color(c(color))
         .child(text.into())
 }
@@ -157,17 +163,17 @@ pub fn btn(
     cx: &mut Context<ManagerApp>,
     on_click: impl Fn(&mut ManagerApp, &mut Context<ManagerApp>) + 'static,
 ) -> Button {
-    let b = Button::new(id)
+    let kind = if primary {
+        ButtonKind::Primary
+    } else {
+        ButtonKind::Ghost
+    };
+    button::button(id, kind)
         .label(label)
         .on_click(cx.listener(move |this, _, _, cx| {
             on_click(this, cx);
             cx.notify();
-        }));
-    if primary {
-        b.primary()
-    } else {
-        b.ghost()
-    }
+        }))
 }
 
 /// Button whose id must be dynamic (per-row actions like disconnect/uninstall).
@@ -177,8 +183,7 @@ pub fn btn_id(
     label: &'static str,
     listener: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Button {
-    Button::new(SharedString::from(id.to_string()))
-        .ghost()
+    button::ghost(SharedString::from(id.to_string()))
         .label(label)
         .on_click(listener)
 }
@@ -200,8 +205,8 @@ pub fn toggle(
 pub fn empty(text: &str) -> impl IntoElement {
     div()
         .p_6()
-        .text_sm()
-        .text_color(c(MUTED_FG))
+        .text_size(px(13.))
+        .text_color(c(MUTED_FG()))
         .child(text.to_string())
 }
 
@@ -212,13 +217,13 @@ where
     match app.slot(slot) {
         Some(crate::app::Slot::Ready(v)) => render(v),
         Some(crate::app::Slot::Failed(e)) => div()
-            .text_sm()
-            .text_color(c(DESTRUCTIVE))
+            .text_size(px(13.))
+            .text_color(c(DESTRUCTIVE()))
             .child(e.clone())
             .into_any_element(),
         _ => div()
-            .text_sm()
-            .text_color(c(MUTED_FG))
+            .text_size(px(13.))
+            .text_color(c(MUTED_FG()))
             .child("Загрузка…")
             .into_any_element(),
     }

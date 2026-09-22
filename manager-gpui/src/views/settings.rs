@@ -1,7 +1,7 @@
 //! Настройки — автозапуск (Host-owned) + резервные копии БД
 //! manager.db_backups.* (SettingsView.vue parity).
 use ::gpui::{prelude::*, *};
-use gpui_component::button::{Button, ButtonVariants};
+use imago_gpui::button;
 use serde_json::json;
 
 use crate::app::ManagerApp;
@@ -28,7 +28,7 @@ pub fn render(
                 "Автозапуск при входе",
                 "Управляется Kosmos Host (Electron). Откройте Host для изменения.",
             )
-            .child(badge("Host", MUTED_FG)),
+            .child(badge("Host", MUTED_FG())),
         ),
     );
 
@@ -51,7 +51,7 @@ pub fn render(
                     .flex()
                     .gap_2()
                     .child(
-                        Button::new("mk-backup")
+                        button::secondary("mk-backup")
                             .label("Сделать бэкап сейчас")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.action("manager.db_backups.create", json!({}));
@@ -59,8 +59,7 @@ pub fn render(
                             })),
                     )
                     .child(
-                        Button::new("open-backups")
-                            .ghost()
+                        button::ghost("open-backups")
                             .label("Открыть папку")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 match crate::engine::data_dir().map(|d| d.join("backups")) {
@@ -137,7 +136,7 @@ pub fn render(
                 )
                 .child(badge(
                     if ok { "OK" } else { "Ошибка" },
-                    if ok { SUCCESS } else { DESTRUCTIVE },
+                    if ok { SUCCESS() } else { DESTRUCTIVE() },
                 )),
             ),
         );

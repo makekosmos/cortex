@@ -3,11 +3,13 @@
 //! string the issuing view chose — views render whatever arrived.
 use std::collections::HashMap;
 use std::sync::mpsc::TryRecvError;
+use std::time::Instant;
 
 use ::gpui::{prelude::*, *};
 use gpui_component::input::InputState;
 use serde_json::Value;
 
+use crate::fps::FpsOverlay;
 use crate::views::{self, StoreTab, View};
 use crate::worker::{Command, Worker};
 
@@ -26,6 +28,14 @@ pub struct Confirm {
 
 pub struct ManagerApp {
     pub view: View,
+    pub sidebar_t: f32,
+    pub sidebar_target: f32,
+    pub sidebar_stamp: Instant,
+    pub theme_mode: u8,
+    pub theme_idx: usize,
+    pub dev_fps: bool,
+    pub fps_view: Entity<FpsOverlay>,
+    applied_theme: Option<(u8, usize, bool)>,
     worker: Worker,
     pub slots: HashMap<String, Slot>,
     pub inputs: HashMap<String, Entity<InputState>>,
@@ -52,6 +62,17 @@ impl ManagerApp {
         let data_dir = crate::engine::data_dir().ok();
         let mut this = Self {
             view: View::Data,
+            sidebar_t: 1.0,
+            sidebar_target: 1.0,
+            sidebar_stamp: Instant::now(),
+            theme_mode: 1,
+            theme_idx: 0,
+            dev_fps: std::env::var("MANAGER_FPS").is_ok(),
+            fps_view: {
+                let manager = cx.weak_entity();
+                cx.new(|_| FpsOverlay::new(manager))
+            },
+            applied_theme: None,
             worker: Worker::start(data_dir),
             slots: HashMap::new(),
             inputs: HashMap::new(),
@@ -78,6 +99,42 @@ impl ManagerApp {
         .detach();
         let _ = window;
         this
+    }
+
+    pub fn sync_theme(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let system_dark = matches!(
+            window.appearance(),
+            WindowAppearance::Dark | WindowAppearance::VibrantDark
+        );
+        let dark = match self.theme_mode {
+            0 => false,
+            2 => system_dark,
+            _ => true,
+        };
+        let selected = (self.theme_mode, self.theme_idx, dark);
+        if self.applied_theme == Some(selected) {
+            return;
+        }
+        self.applied_theme = Some(selected);
+        imago_gpui::theme::set_mode(dark);
+        imago_gpui::theme::set_theme(self.theme_idx);
+        imago_gpui::theme::apply(cx);
+        cx.set_window_appearance(match self.theme_mode {
+            0 => Some(WindowAppearance::Light),
+            1 => Some(WindowAppearance::Dark),
+            _ => None,
+        });
+    }
+
+    pub fn sidebar_progress(&mut self, window: &Window) -> f32 {
+        let now = Instant::now();
+        let dt = now.duration_since(self.sidebar_stamp).as_secs_f32();
+        self.sidebar_stamp = now;
+        self.sidebar_t = advance_sidebar(self.sidebar_t, self.sidebar_target, dt);
+        if (self.sidebar_t - self.sidebar_target).abs() > 0.0005 {
+            window.request_animation_frame();
+        }
+        imago_gpui::theme::ease_emphasized(self.sidebar_t.clamp(0.0, 1.0))
     }
 
     /// Queue an Engine op into a named slot; the reply overwrites it.
@@ -255,5 +312,26 @@ impl ManagerApp {
             }
             cx.notify();
         }
+    }
+}
+
+fn advance_sidebar(current: f32, target: f32, dt: f32) -> f32 {
+    let step = dt / 0.33;
+    if target > current {
+        (current + step).min(target)
+    } else {
+        (current - step).max(target)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::advance_sidebar;
+
+    #[test]
+    fn sidebar_animation_moves_both_directions_without_overshoot() {
+        assert_eq!(advance_sidebar(1.0, 0.0, 0.33), 0.0);
+        assert_eq!(advance_sidebar(0.0, 1.0, 0.33), 1.0);
+        assert!((advance_sidebar(1.0, 0.0, 0.165) - 0.5).abs() < 0.001);
     }
 }

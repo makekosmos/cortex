@@ -33,7 +33,12 @@ pub fn render(
 
     col = col.child(slot_or(app, "about.info", |v| {
         let mut el = card();
-        el = el.child(div().text_xs().text_color(c(MUTED_FG)).child("Engine"));
+        el = el.child(
+            div()
+                .text_size(px(12.))
+                .text_color(c(MUTED_FG()))
+                .child("Engine"),
+        );
         for key in ["version", "api_version", "build", "channel"] {
             let val = vopt(v, key);
             if let Some(val) = val {
@@ -51,7 +56,7 @@ pub fn render(
         card()
             .child(row("Здоровье Engine", "Проверка /v1/health").child(badge(
                 if ok { "Готов" } else { "Не готов" },
-                if ok { SUCCESS } else { DESTRUCTIVE },
+                if ok { SUCCESS() } else { DESTRUCTIVE() },
             )))
             .into_any_element()
     }));
@@ -60,7 +65,7 @@ pub fn render(
         card()
             .child(
                 div()
-                    .text_sm()
+                    .text_size(px(13.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("Диагностика"),
             )
@@ -69,8 +74,7 @@ pub fn render(
                     .flex()
                     .gap_2()
                     .child(
-                        Button::new("open-logs")
-                            .ghost()
+                        imago_gpui::button::ghost("open-logs")
                             .label("Открыть папку журналов")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 match crate::engine::data_dir().map(|d| d.join("logs")) {
@@ -86,8 +90,7 @@ pub fn render(
                             })),
                     )
                     .child(
-                        Button::new("open-crashes")
-                            .ghost()
+                        imago_gpui::button::ghost("open-crashes")
                             .label("Открыть отчёты об ошибках")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 match crate::engine::data_dir().map(|d| d.join("crashes")) {
@@ -105,13 +108,13 @@ pub fn render(
             )
             .child(
                 div()
-                    .text_xs()
-                    .text_color(c(MUTED_FG))
+                    .text_size(px(12.))
+                    .text_color(c(MUTED_FG()))
                     .child("Снимок поддержки собирается Engine и сохраняется в файл."),
             )
             .child(
                 div().flex().gap_2().child(
-                    Button::new("bundle")
+                    imago_gpui::button::secondary("bundle")
                         .label("Создать пакет поддержки")
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.call(
@@ -143,8 +146,7 @@ pub fn render(
                         .flex()
                         .gap_2()
                         .child(
-                            Button::new("bundle-save")
-                                .primary()
+                            imago_gpui::button::primary("bundle-save")
                                 .label(format!("Сохранить в {path_str}"))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.action(
@@ -155,8 +157,7 @@ pub fn render(
                                 })),
                         )
                         .child(
-                            Button::new("bundle-cancel")
-                                .ghost()
+                            imago_gpui::button::ghost("bundle-cancel")
                                 .label("Отмена")
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     let h = vstr(&this.data("@bundle"), "handle");
@@ -179,8 +180,8 @@ pub fn render(
         let mut el = card();
         el = el.child(
             div()
-                .text_xs()
-                .text_color(c(MUTED_FG))
+                .text_size(px(12.))
+                .text_color(c(MUTED_FG()))
                 .child(format!("Журнал диагностики ({} записей)", entries.len())),
         );
         if entries.is_empty() {
@@ -203,5 +204,3 @@ pub fn render(
 
     col.into_any_element()
 }
-
-use gpui_component::button::{Button, ButtonVariants};

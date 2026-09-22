@@ -32,7 +32,7 @@ pub fn render(
                 } else {
                     "Остановлена"
                 },
-                if running { SUCCESS } else { WARN },
+                if running { SUCCESS() } else { WARN() },
             )),
         );
         el = el.child(kv("Устройство", vstr(device, "device_name")));
@@ -54,8 +54,8 @@ pub fn render(
         let mut el = card();
         el = el.child(
             div()
-                .text_xs()
-                .text_color(c(MUTED_FG))
+                .text_size(px(12.))
+                .text_color(c(MUTED_FG()))
                 .child("Ваш код подключения"),
         );
         if code.is_empty() {
@@ -63,7 +63,7 @@ pub fn render(
         } else {
             el = el.child(
                 div()
-                    .text_sm()
+                    .text_size(px(13.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(code),
             );
@@ -76,8 +76,8 @@ pub fn render(
         card()
             .child(
                 div()
-                    .text_xs()
-                    .text_color(c(MUTED_FG))
+                    .text_size(px(12.))
+                    .text_color(c(MUTED_FG()))
                     .child("Подключить устройство"),
             )
             .child(
@@ -108,8 +108,8 @@ pub fn render(
         let mut el = card();
         el = el.child(
             div()
-                .text_xs()
-                .text_color(c(MUTED_FG))
+                .text_size(px(12.))
+                .text_color(c(MUTED_FG()))
                 .child(format!("Связанные устройства ({})", peers.len())),
         );
         if peers.is_empty() {

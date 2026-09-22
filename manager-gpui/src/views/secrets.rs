@@ -32,7 +32,7 @@ pub fn render(
                 } else {
                     "Ключ не задан"
                 },
-                if has_key { SUCCESS } else { WARN },
+                if has_key { SUCCESS() } else { WARN() },
             )),
         );
         el = el.child(kv("Провайдер", vstr(cfg, "provider")));
@@ -63,7 +63,7 @@ pub fn render(
     let key_in = app.input("secrets.key", "gsk_…", window, cx);
     col = col.child(
         card()
-            .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child("API-ключ Groq"))
+            .child(div().text_size(px(13.)).font_weight(FontWeight::SEMIBOLD).child("API-ключ Groq"))
             .child(
                 div()
                     .flex()
@@ -122,7 +122,7 @@ pub fn render(
         });
         col = col.child(card().child(row("Проверка ключа", msg).child(badge(
             if ok { "OK" } else { "Отклонён" },
-            if ok { SUCCESS } else { DESTRUCTIVE },
+            if ok { SUCCESS() } else { DESTRUCTIVE() },
         ))));
     }
     let test = app.data("secrets.test");
@@ -141,7 +141,7 @@ pub fn render(
                     } else {
                         "Недоступен"
                     },
-                    if ok { SUCCESS } else { DESTRUCTIVE },
+                    if ok { SUCCESS() } else { DESTRUCTIVE() },
                 )),
             ),
         );
@@ -151,8 +151,8 @@ pub fn render(
         card()
             .child(
                 div()
-                    .text_xs()
-                    .text_color(c(MUTED_FG))
+                    .text_size(px(12.))
+                    .text_color(c(MUTED_FG()))
                     .child("Статистика диктовки"),
             )
             .child(kv("Сессий", vstr(v, "totalSessions")))
