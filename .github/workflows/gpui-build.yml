@@ -1,0 +1,62 @@
+name: GPUI Windows build
+
+on:
+  push:
+    branches: [kos-132]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpui-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: '0'
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            core -> target
+            manager-gpui -> target
+      - name: Test Manager
+        run: cargo +stable test --locked --manifest-path manager-gpui/Cargo.toml
+      - name: Build Manager
+        run: cargo +stable build --locked --release --manifest-path manager-gpui/Cargo.toml
+      - name: Build Engine
+        run: cargo +stable build --locked --release -p kepler-backend --bin kepler-backend
+      - name: Build Core
+        run: cargo +stable build --locked --release --manifest-path core/Cargo.toml -p ark-core --bin ark-core-rpc --features iroh-spike
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist
+          Copy-Item manager-gpui/target/release/manager-gpui.exe dist/
+          Copy-Item target/release/kepler-backend.exe dist/
+          Copy-Item core/target/release/ark-core-rpc.exe dist/
+          Get-ChildItem target/release,core/target/release,manager-gpui/target/release -Filter *.dll | Copy-Item -Destination dist/
+          @'
+          Start kepler-backend.exe first, then manager-gpui.exe.
+          Both use %APPDATA%\Kosmos by default; KOSMOS_DATA_DIR overrides it.
+          This is a development build from kos-132, with known UI bugs.
+          '@ | Set-Content dist/README.txt
+          git rev-parse HEAD | Set-Content dist/SOURCE.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cortex-gpui-windows
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
