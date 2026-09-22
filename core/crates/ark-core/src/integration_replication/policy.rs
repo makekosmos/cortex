@@ -18,6 +18,39 @@ pub(crate) fn require_text(
     Ok(())
 }
 
+// Key records bind by exact bytes; reject obvious private material and text
+// that could be silently normalized. This is not cryptographic key parsing.
+pub(crate) fn require_public_key_record(
+    value: &str,
+    field: &'static str,
+) -> Result<(), IntegrationContractError> {
+    require_text(value, field)?;
+    let normalized = value.to_ascii_lowercase();
+    if value != value.trim()
+        || value.chars().any(char::is_control)
+        || normalized.contains("private key")
+        || normalized.contains("begin private")
+        || normalized.contains("end private")
+    {
+        return Err(IntegrationContractError::InvalidPublicKey { field });
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_key_id(value: &str) -> Result<(), IntegrationContractError> {
+    let Some(digest) = value.strip_prefix("sha256:") else {
+        return Err(IntegrationContractError::InvalidKeyId);
+    };
+    if digest.len() != 64
+        || !digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+    {
+        return Err(IntegrationContractError::InvalidKeyId);
+    }
+    Ok(())
+}
+
 pub(crate) fn require_nonzero(
     value: u64,
     field: &'static str,

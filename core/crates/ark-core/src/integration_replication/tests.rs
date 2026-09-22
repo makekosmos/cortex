@@ -218,6 +218,38 @@ fn envelope_recipient_and_grant_are_verified() {
 }
 
 #[test]
+fn public_key_records_and_envelope_ids_reject_malformed_values() {
+    for value in ["-----BEGIN PRIVATE KEY-----", "public\nkey", " public-key "] {
+        for field in [
+            "signing_public_key",
+            "encryption_public_key",
+            "transport_public_key",
+        ] {
+            let mut serialized = serde_json::to_value(node(NodeStatus::Active)).unwrap();
+            serialized[field] = json!(value);
+            let value_node: AuthorizedNode = serde_json::from_value(serialized).unwrap();
+            assert!(
+                value_node.validate().is_err(),
+                "accepted {field}: {value:?}"
+            );
+        }
+        let mut value_grant = grant(GrantStatus::Active);
+        value_grant.node_encryption_key = value.into();
+        assert!(
+            value_grant.validate().is_err(),
+            "accepted grant key: {value:?}"
+        );
+    }
+    for key_id in ["sha256:not-a-digest", "key-1", "sha256:"] {
+        let mut value = envelope();
+        value.key_id = key_id.into();
+        assert!(value.validate().is_err(), "accepted key id: {key_id}");
+    }
+    assert!(node(NodeStatus::Active).validate().is_ok());
+    assert!(envelope().validate().is_ok());
+}
+
+#[test]
 fn revocation_and_reauthorization_require_a_higher_epoch() {
     let revoked = node(NodeStatus::Active)
         .revoke(3, "2026-08-30T01:00:00Z")

@@ -1,4 +1,6 @@
-use super::policy::{require_newer, require_nonzero, require_text};
+use super::policy::{
+    require_newer, require_nonzero, require_public_key_record, require_text, validate_key_id,
+};
 use super::validate_public_settings;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -32,6 +34,10 @@ pub enum IntegrationContractError {
     LeaseGenerationMismatch,
     #[error("refresh fencing token does not match the lease")]
     LeaseFenceMismatch,
+    #[error("{field} is not a safe public-key record")]
+    InvalidPublicKey { field: &'static str },
+    #[error("key_id is not a version-1 sha256 public-key identifier")]
+    InvalidKeyId,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -93,10 +99,10 @@ impl AuthorizedNode {
     pub fn validate(&self) -> Result<(), IntegrationContractError> {
         require_text(&self.node_id, "node_id")?;
         require_text(&self.key_fingerprint, "key_fingerprint")?;
-        require_text(&self.signing_public_key, "signing_public_key")?;
-        require_text(&self.encryption_public_key, "encryption_public_key")?;
+        require_public_key_record(&self.signing_public_key, "signing_public_key")?;
+        require_public_key_record(&self.encryption_public_key, "encryption_public_key")?;
         if let Some(value) = self.transport_public_key.as_deref() {
-            require_text(value, "transport_public_key")?;
+            require_public_key_record(value, "transport_public_key")?;
         }
         require_text(&self.authorized_at, "authorized_at")?;
         require_text(&self.hlc, "hlc")?;
@@ -202,7 +208,7 @@ impl IntegrationNodeGrant {
     pub fn validate(&self) -> Result<(), IntegrationContractError> {
         require_text(&self.integration_id, "integration_id")?;
         require_text(&self.node_id, "node_id")?;
-        require_text(&self.node_encryption_key, "node_encryption_key")?;
+        require_public_key_record(&self.node_encryption_key, "node_encryption_key")?;
         require_text(&self.authorized_at, "authorized_at")?;
         require_text(&self.hlc, "hlc")?;
         require_nonzero(self.grant_epoch, "grant_epoch")?;
@@ -264,7 +270,7 @@ impl IntegrationCredentialEnvelope {
     pub fn validate(&self) -> Result<(), IntegrationContractError> {
         require_text(&self.integration_id, "integration_id")?;
         require_text(&self.recipient_node_id, "recipient_node_id")?;
-        require_text(&self.key_id, "key_id")?;
+        validate_key_id(&self.key_id)?;
         require_text(&self.algorithm, "algorithm")?;
         require_text(&self.nonce, "nonce")?;
         require_text(&self.ciphertext, "ciphertext")?;
