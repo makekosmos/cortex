@@ -24,10 +24,11 @@ corepack prepare pnpm@12.4.1 --activate  # pinned packageManager
 
 ## Engine + ARK sidecar
 
-`ark-core` lives in-tree under `core/` (a `git subtree` of
-`makekosmos/core`); a single Cortex checkout builds the whole product — no
-sibling Core clone is needed. `runtime` depends on it via a path dependency
-and `node scripts/check-core-pin.mjs` guards that wiring.
+`ark-core` is owned by Cortex and lives under `core/`, without a separate
+Git repository or upstream synchronization. Edit and commit Core changes in
+Cortex. A single Cortex checkout builds the whole product. `runtime` uses
+a path dependency; `node scripts/check-core-pin.mjs` checks that wiring and
+rejects a nested `core/.git`.
 
 ```text
 cargo build -p kepler-backend            # writes target/debug/kepler-backend

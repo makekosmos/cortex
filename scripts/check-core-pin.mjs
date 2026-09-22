@@ -14,7 +14,9 @@ const files = [
 ];
 
 const contents = new Map();
-for (const file of files) contents.set(file, await readFile(file, "utf8"));
+if (existsSync("core/.git"))
+  throw new Error("core/ must belong to Cortex, without a nested Git repository");
+for (const file of files) contents.set(file, (await readFile(file, "utf8")).replace(/\r\n/g, "\n"));
 for (const [file, content] of contents) {
   if (content.includes(retiredRevision))
     throw new Error(`${file} still pins retired Core revision`);
@@ -23,7 +25,7 @@ for (const [file, content] of contents) {
 
 if (!existsSync(`${subtreePath}/Cargo.toml`))
   throw new Error(`in-tree Core subtree is missing: ${subtreePath}`);
-const subtreeManifest = await readFile(`${subtreePath}/Cargo.toml`, "utf8");
+const subtreeManifest = (await readFile(`${subtreePath}/Cargo.toml`, "utf8")).replace(/\r\n/g, "\n");
 if (!/^name = "ark-core"$/m.test(subtreeManifest))
   throw new Error(`${subtreePath}/Cargo.toml is not the ark-core crate`);
 
@@ -53,4 +55,4 @@ if ((lock.match(/name = "ark-core"/g) ?? []).length !== 1)
   throw new Error("Cargo.lock has an unexpected ark-core package count");
 if (/source = /.test(arkPackage))
   throw new Error("Cargo.lock resolves ark-core from a source other than the workspace path");
-console.log("Core subtree pin passed: ark-core resolves from core/crates/ark-core in-tree.");
+console.log("Core ownership passed: ark-core is local Cortex source, without a nested Git repository.");

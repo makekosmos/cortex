@@ -14,7 +14,6 @@ import {
   stageRuntimeBinaries,
 } from "./runtime-staging.mjs";
 import {
-  ARK_CORE_REPOSITORY,
   ARK_CORE_SOURCE,
   ARK_CORE_SOURCE_DIR,
   arkCoreSourceId,
@@ -30,7 +29,7 @@ test("non-default Cargo runtime is the one mapped into the Windows package", () 
     "kepler-focus-helper",
     "kepler-focus-svc",
   ]);
-  assert.match(ARK_CORE_REPOSITORY, /^https:\/\/github\.com\/makekosmos\/core\.git$/);
+  assert.equal(existsSync(path.join(cortexRoot, "core", ".git")), false);
   assert.equal(ARK_CORE_SOURCE, "core/crates/ark-core");
   assert.equal(ARK_CORE_SOURCE_DIR, path.join(cortexRoot, "core", "crates", "ark-core"));
   assert.match(arkCoreSourceId(), /^sha256:[0-9a-f]{64}$/);
