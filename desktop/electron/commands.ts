@@ -4,6 +4,7 @@
 // running extension'ов через kepler-backend command bus.
 
 import { openDashboardWindow } from "./dashboard-window";
+import { openAgenda } from "./agenda-navigation";
 import { openHostedApp } from "./host-app";
 import {
   openFocusSessionShell,
@@ -100,6 +101,18 @@ export const COMMANDS: InternalCommand[] = [
     kind: "command",
     appName: "Kosmos",
     exec: () => openHostedApp("com.kosmos.graph"),
+  },
+  {
+    // KOS-137: GPUI Agenda ships inside the installer as
+    // components/agenda/Kosmos Agenda.exe — same Engine lock as Manager.
+    // The Vue Agenda (com.kosmos.agenda package) stays installed as fallback.
+    id: "kosmos:agenda-gpui",
+    title: "Открыть Agenda (GPUI)",
+    subtitle: "Задачи · нативная оболочка",
+    category: "open",
+    kind: "command",
+    appName: "Kosmos",
+    exec: () => openAgenda(),
   },
   {
     id: "kepler:focus-session",

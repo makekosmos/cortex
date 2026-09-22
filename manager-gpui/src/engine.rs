@@ -151,6 +151,38 @@ pub fn host_user_data() -> Option<PathBuf> {
     base.map(|v| v.join("Kosmos Manager"))
 }
 
+/// Packaged Agenda GPUI lives next to this exe as
+/// `resources/components/agenda/Kosmos Agenda.exe` (KOS-137).
+/// `KOSMOS_AGENDA_EXECUTABLE` overrides for dev/local runs.
+pub fn agenda_executable() -> Option<PathBuf> {
+    if let Some(path) = std::env::var_os("KOSMOS_AGENDA_EXECUTABLE").filter(|v| !v.is_empty()) {
+        let candidate = PathBuf::from(path);
+        return candidate.is_file().then_some(candidate);
+    }
+    let exe = std::env::current_exe().ok()?;
+    let candidate = exe
+        .parent()?
+        .parent()?
+        .join("agenda")
+        .join("Kosmos Agenda.exe");
+    candidate.is_file().then_some(candidate)
+}
+
+/// Launch the sibling Agenda component; the child inherits this process env
+/// (the shell sets KOSMOS_DATA_DIR at spawn). `data_dir` re-pins the same
+/// Engine lock when Manager itself was started directly.
+pub fn open_agenda(data_dir: Option<&std::path::Path>) -> Result<(), String> {
+    let exe = agenda_executable().ok_or("Agenda не входит в эту сборку Kosmos.")?;
+    let mut command = std::process::Command::new(exe);
+    if let Some(dir) = data_dir {
+        command.env("KOSMOS_DATA_DIR", dir);
+    }
+    command
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Не удалось запустить Agenda: {e}"))
+}
+
 /// Open a file/folder with the OS handler (Electron shell.openPath parity).
 pub fn open_path(path: &std::path::Path) -> Result<(), String> {
     #[cfg(target_os = "windows")]
