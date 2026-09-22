@@ -4,27 +4,27 @@ import path from "node:path";
 import { app } from "electron";
 import { keplerDataDir } from "./data-dir";
 
-export function resolvePackagedManagerExecutable(
+export function resolvePackagedAgendaExecutable(
   resourcesPath = process.resourcesPath,
   platform = process.platform,
 ): string | null {
   if (platform !== "win32" || !resourcesPath) return null;
-  const candidate = path.join(resourcesPath, "components", "manager", "Kosmos Manager.exe");
+  const candidate = path.join(resourcesPath, "components", "agenda", "Kosmos Agenda.exe");
   return fs.existsSync(candidate) ? candidate : null;
 }
 
-export function openManager(): void {
+// Launch contract mirrors openManager(): the packaged GPUI Agenda is a
+// sibling component, so the child inherits the instance data dir through
+// KOSMOS_DATA_DIR and discovers the same engine.lock.json as Manager.
+// KOSMOS_AGENDA_EXECUTABLE overrides the binary for dev/local runs.
+export function openAgenda(): void {
   if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1") return;
-  const executable = process.env.KOSMOS_MANAGER_EXECUTABLE?.trim();
-  const managerEnv = {
+  const executable = process.env.KOSMOS_AGENDA_EXECUTABLE?.trim();
+  const agendaEnv = {
     ...process.env,
-    // Pin the instance data dir explicitly: on dev/test slots it differs
-    // from the manager-gpui %APPDATA%/Kosmos default, and the Engine lock
-    // must always be the one this instance spawned.
     KOSMOS_DATA_DIR: keplerDataDir(),
     KOSMOS_APP_EXECUTABLE: process.execPath,
     KOSMOS_DESKTOP_VERSION: app.isPackaged ? app.getVersion() : "",
-    KOSMOS_UPDATE_STATE_FILE: path.join(keplerDataDir(), "update-state.json"),
   };
   if (executable) {
     const resolved = path.resolve(executable);
@@ -33,34 +33,24 @@ export function openManager(): void {
         detached: true,
         stdio: "ignore",
         windowsHide: true,
-        env: managerEnv,
+        env: agendaEnv,
       });
       child.unref();
+    } else {
+      console.warn(`[kepler-shell] KOSMOS_AGENDA_EXECUTABLE not found: ${resolved}`);
     }
     return;
   }
-  const main = process.env.KOSMOS_MANAGER_MAIN?.trim();
-  if (main) {
-    const resolved = path.resolve(main);
-    if (fs.existsSync(resolved)) {
-      const child = spawn(process.execPath, [resolved], {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true,
-        env: managerEnv,
-      });
-      child.unref();
-    }
-    return;
-  }
-  const packaged = resolvePackagedManagerExecutable();
+  const packaged = resolvePackagedAgendaExecutable();
   if (packaged) {
     const child = spawn(packaged, [], {
       detached: true,
       stdio: "ignore",
       windowsHide: true,
-      env: managerEnv,
+      env: agendaEnv,
     });
     child.unref();
+  } else {
+    console.warn("[kepler-shell] components/agenda/Kosmos Agenda.exe is not packaged");
   }
 }

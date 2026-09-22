@@ -60,6 +60,84 @@ for (const entry of readdirSync(managerRelease)) {
     copyFileSync(path.join(managerRelease, entry), path.join(managerStage, entry));
 }
 
+// KOS-137: components/agenda ships agenda-gpui — same single-file Rust/GPUI
+// shape as Manager, staged under the packaged name
+// resolvePackagedAgendaExecutable() resolves in desktop/electron/agenda-navigation.ts.
+// agenda-gpui lives in its own repository: resolve the checkout from
+// KOSMOS_AGENDA_GPUI_SRC or the ../agenda-gpui sibling (same convention the
+// sibling extension repos use), then verify it sits on the commit
+// desktop/component-pins.json records.
+const agendaPins = JSON.parse(
+  readFileSync(path.join(root, "desktop", "component-pins.json"), "utf8"),
+);
+const agendaPin = agendaPins.agenda_gpui;
+if (!agendaPin?.commit || !/^[0-9a-f]{40}$/.test(agendaPin.commit)) {
+  console.error(
+    "[build-package-components] component-pins.json agenda_gpui.commit must be a 40-hex commit",
+  );
+  process.exit(1);
+}
+const agendaSrc = path.resolve(
+  process.env.KOSMOS_AGENDA_GPUI_SRC?.trim() || path.join(root, "..", "agenda-gpui"),
+);
+if (!existsSync(path.join(agendaSrc, "Cargo.toml"))) {
+  console.error(
+    `[build-package-components] agenda-gpui checkout not found at ${agendaSrc} — ` +
+      `clone ${agendaPin.repository} at ${agendaPin.commit} or set KOSMOS_AGENDA_GPUI_SRC`,
+  );
+  process.exit(1);
+}
+const agendaHead = spawnSync("git", ["rev-parse", "HEAD"], {
+  cwd: agendaSrc,
+  encoding: "utf8",
+  windowsHide: true,
+});
+const agendaCommit = agendaHead.stdout?.trim();
+if (agendaHead.status !== 0 || agendaCommit !== agendaPin.commit) {
+  console.error(
+    `[build-package-components] agenda-gpui at ${agendaSrc} is on ${agendaCommit ?? "unreadable HEAD"}, ` +
+      `component-pins.json requires ${agendaPin.commit}`,
+  );
+  process.exit(1);
+}
+const agendaRelease = path.join(agendaSrc, "target", MANAGER_TARGET, "release");
+const agendaBuild = spawnSync(
+  "cargo",
+  [
+    "build",
+    "--locked",
+    "--release",
+    "--target",
+    MANAGER_TARGET,
+    "--manifest-path",
+    path.join(agendaSrc, "Cargo.toml"),
+    "--target-dir",
+    path.join(agendaSrc, "target"),
+  ],
+  {
+    cwd: agendaSrc,
+    stdio: "inherit",
+    windowsHide: true,
+    // VERSIONINFO inside Kosmos Agenda.exe carries the desktop release
+    // version (agenda-gpui build.rs falls back to its own crate version).
+    env: { ...process.env, KOSMOS_AGENDA_VERSION: version },
+  },
+);
+if (agendaBuild.status !== 0) process.exit(agendaBuild.status ?? 1);
+const agendaExe = path.join(agendaRelease, "agenda-gpui.exe");
+if (!existsSync(agendaExe)) {
+  console.error(`[build-package-components] missing ${agendaExe}`);
+  process.exit(1);
+}
+const agendaStage = path.join(root, "desktop", ".tmp", "components", "agenda", "win-unpacked");
+rmSync(agendaStage, { recursive: true, force: true });
+mkdirSync(agendaStage, { recursive: true });
+copyFileSync(agendaExe, path.join(agendaStage, "Kosmos Agenda.exe"));
+for (const entry of readdirSync(agendaRelease)) {
+  if (entry.toLowerCase().endsWith(".dll"))
+    copyFileSync(path.join(agendaRelease, entry), path.join(agendaStage, entry));
+}
+
 // components/host stays the Electron Package Host (docs/gpui-host-decision.md).
 for (const component of ["host"]) {
   const cwd = path.join(root, component);

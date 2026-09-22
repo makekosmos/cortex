@@ -31,6 +31,33 @@ pub fn render(
     el = el.child(kv("Manager (GPUI)", env!("CARGO_PKG_VERSION")));
     col = col.child(el);
 
+    // KOS-137: sibling component entry point — Agenda GPUI launches on the
+    // same data dir / engine.lock.json as this Manager.
+    col = col.child(
+        card()
+            .child(row("Agenda", "Задачи и календарь · нативная оболочка GPUI"))
+            .child(if crate::engine::agenda_executable().is_some() {
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(
+                        imago_gpui::button::secondary("open-agenda")
+                            .label("Открыть Agenda")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                let dir = crate::engine::data_dir().ok();
+                                match crate::engine::open_agenda(dir.as_deref()) {
+                                    Ok(()) => this.notice = Some("Agenda запущена.".into()),
+                                    Err(e) => this.error = Some(e),
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .into_any_element()
+            } else {
+                empty("Agenda не входит в эту сборку Kosmos").into_any_element()
+            }),
+    );
+
     col = col.child(slot_or(app, "about.info", |v| {
         let mut el = card();
         el = el.child(

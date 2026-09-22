@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync, copyFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -42,10 +42,26 @@ const dependenciesReady = ["desktop", "host"].every((component) =>
   existsSync(path.join(root, component, "node_modules")),
 );
 
+// components/agenda builds from the pinned agenda-gpui checkout
+// (KOSMOS_AGENDA_GPUI_SRC or ../agenda-gpui), verified against
+// desktop/component-pins.json.
+const agendaPin = JSON.parse(
+  readFileSync(path.join(desktop, "component-pins.json"), "utf8"),
+).agenda_gpui;
+const agendaSrc = path.resolve(
+  process.env.KOSMOS_AGENDA_GPUI_SRC?.trim() || path.join(root, "..", "agenda-gpui"),
+);
+const agendaReady =
+  !!agendaPin?.commit &&
+  existsSync(path.join(agendaSrc, "Cargo.toml")) &&
+  spawnSync("git", ["rev-parse", "HEAD"], { cwd: agendaSrc, encoding: "utf8" }).stdout?.trim() ===
+    agendaPin.commit;
+
 const prerequisites =
   process.platform === "win32" &&
   cleanWorktree &&
   dependenciesReady &&
+  agendaReady &&
   spawnSync("cargo", ["--version"], { encoding: "utf8" }).status === 0 &&
   // electron-builder runs pnpm install for production deps; the host package
   // pulls @makekosmos/* from GitHub Packages, which requires a token.
@@ -172,6 +188,12 @@ test(
     assert.ok(
       !existsSync(path.join(managerOut, "resources")),
       "manager component must be the GPUI exe, not an Electron package",
+    );
+    const agendaOut = path.join(desktop, ".tmp", "components", "agenda", "win-unpacked");
+    assert.ok(existsSync(path.join(agendaOut, "Kosmos Agenda.exe")), "agenda unpackaged output");
+    assert.ok(
+      !existsSync(path.join(agendaOut, "resources")),
+      "agenda component must be the GPUI exe, not an Electron package",
     );
     assert.ok(
       existsSync(
