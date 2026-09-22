@@ -1,0 +1,15 @@
+{
+  "task_id": "2026-09-15-ark-snapshot-restore-rpc",
+  "linear": "KOS-51",
+  "verified_at": "2026-09-15T00:00:00Z",
+  "results": [
+    { "ac": "AC1", "verdict": "PASS", "command": "cargo test --manifest-path crates/ark-core/Cargo.toml db_backup_restore_roundtrip_survives_reinit" },
+    { "ac": "AC1", "verdict": "PASS", "command": "node .tmp/kos51-e2e.js" },
+    { "ac": "AC2", "verdict": "PASS", "command": "cargo test --manifest-path crates/ark-core/Cargo.toml db_backup_restore_waits_for_backup_gate" },
+    { "ac": "AC3", "verdict": "PASS", "command": "cargo test --manifest-path crates/ark-core/Cargo.toml --lib snapshot" },
+    { "ac": "AC4", "verdict": "PASS", "command": "cargo test --manifest-path crates/ark-core/Cargo.toml db_backup_restore_roundtrip_survives_reinit" },
+    { "ac": "AC5", "verdict": "PASS", "command": "cargo test --manifest-path crates/ark-core/Cargo.toml restore_rolls_back" },
+    { "ac": "AC6", "verdict": "PASS", "command": "cargo test --manifest-path crates/ark-core/Cargo.toml db_backup_list_and_validate_contract" },
+    { "ac": "AC7", "verdict": "PASS", "command": "cargo test --manifest-path crates/ark-core/Cargo.toml (401 passed, 0 failed); cargo clippy --all-targets; bun run ark:guard:writes; node scripts/ark-consumer.mjs" }
+  ]
+}

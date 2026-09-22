@@ -1,0 +1,119 @@
+[package]
+name = "ark-core"
+version = "0.1.0"
+edition.workspace = true
+description = "Unified DB + sync engine for Kepler/Delphi"
+
+[lib]
+name = "ark_core"
+path = "src/lib.rs"
+crate-type = ["cdylib", "lib"]
+
+[[bin]]
+name = "ark-core-rpc"
+path = "src/main.rs"
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[[bin]]
+name = "ark-sync-node"
+path = "src/bin/ark-sync-node.rs"
+required-features = ["iroh-spike"]
+
+[dependencies]
+rusqlite.workspace = true
+tokio = { version = "1", features = [
+  "rt-multi-thread",
+  "macros",
+  "net",
+  "time",
+  "sync",
+  "io-util",
+  "io-std",
+  "signal",
+] }
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+ed25519-dalek = "=3.0.0-rc.0"
+semver.workspace = true
+chrono.workspace = true
+rand.workspace = true
+async-trait = "0.1"
+uniffi = { version = "0.28", features = ["cli"] }
+if-addrs = "0.13"
+hostname.workspace = true
+thiserror.workspace = true
+# Phase 5 bug-detection: ts-rs codegen для wire-protocol типов.
+# Derive opt-in через #[cfg_attr(feature = "ts-rs", derive(TS))] — production
+# build не подтягивает ts-rs runtime (он только для тестов которые экспортят
+# bindings).
+ts-rs = { version = "10", optional = true, features = ["import-esm"] }
+# Фаза 0 spike: iroh p2p QUIC-транспорт, за feature-флагом `iroh-spike`.
+# Production build (без флагов) не подтягивает этот крейт — см.
+# .agent/tasks/2026-06-16-iroh-transport/spec.md §3.1.
+iroh = { version = "1.0.0", optional = true }
+# Шаг 3: ticket-based pairing (NodeTicket/EndpointTicket) — отдельный крейт,
+# `iroh` 1.0.0 их не реэкспортирует (проверено: нет `Ticket` в src/lib.rs).
+iroh-tickets = { version = "1.0.0", optional = true }
+
+# DB backup runs на отдельном потоке с пониженным CPU+I/O приоритетом
+# (THREAD_MODE_BACKGROUND_BEGIN), чтобы тяжёлое копирование не насыщало диск.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+  "Win32_System_Threading",
+  # KOS-51: FILE_FLAG_OPEN_REPARSE_POINT для no-follow open snapshot-файлов.
+  "Win32_Storage_FileSystem",
+] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+tempfile.workspace = true
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+proptest = "1.5"
+
+[features]
+bench-fixtures = []
+windows-gui-subsystem = []
+# Phase 5: opt-in для cargo test --features ts-rs (генерирует bindings/*.ts).
+ts-rs = ["dep:ts-rs"]
+# Фаза 0 iroh-spike: см. .agent/tasks/2026-06-16-iroh-transport/spec.md.
+iroh-spike = ["dep:iroh", "dep:iroh-tickets"]
+
+[[bench]]
+name = "delphi_filters"
+harness = false
+required-features = ["bench-fixtures"]
+
+[[test]]
+name = "iroh_bidirectional_network"
+path = "tests/iroh_bidirectional_network/main.rs"
+required-features = ["iroh-spike"]
+
+# Explicit table (not workspace = true): ark-core is a member of both the
+# core/ workspace and the Cortex workspace after the KOS-129 subtree merge,
+# and needs identical lint policy under either root. Mirrors the upstream
+# workspace lints plus the upstream clippy allow-list.
+[lints.clippy]
+unwrap_used = "deny"
+panic = "allow"
+todo = "warn"
+unimplemented = "warn"
+too_many_arguments = "allow"
+option_map_unit_fn = "allow"
+map_flatten = "allow"
+nonminimal_bool = "allow"
+type_complexity = "allow"
+collapsible_if = "allow"
+let_and_return = "allow"
+result_large_err = "allow"
+duplicated_attributes = "allow"
+useless_conversion = "allow"
+assertions_on_constants = "allow"
+
+[lints.rust]
+unused_must_use = "deny"

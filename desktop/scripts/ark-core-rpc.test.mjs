@@ -6,7 +6,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { test } from "node:test";
 import {
-  ARK_CORE_REVISION,
+  arkCoreSourceId,
   ensureArkCoreRpc,
   installRoot,
   validatePrebuiltManifest,
@@ -49,7 +49,7 @@ function writePrebuilt(root) {
     JSON.stringify({
       platform: process.platform,
       arch: process.arch,
-      coreRevision: ARK_CORE_REVISION,
+      coreRevision: arkCoreSourceId(),
       binary: path.basename(binary),
       sha256: createHash("sha256").update(readFileSync(binary)).digest("hex"),
     }),

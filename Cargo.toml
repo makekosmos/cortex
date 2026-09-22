@@ -5,6 +5,7 @@ members = [
   "native-services/kepler-watcher",
   "native-services/kepler-focus-helper",
   "native-services/kepler-focus-svc",
+  "core/crates/ark-core",
 ]
 
 [profile.test]
@@ -35,3 +36,4 @@ semver = "1"
 futures-util = "0.3"
 tokio-tungstenite = "0.24"
 tempfile = "3"
+hostname = "0.4"

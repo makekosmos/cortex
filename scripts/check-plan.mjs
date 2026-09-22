@@ -19,6 +19,7 @@ const CHECK_ORDER = [
   "test:rust",
   "runtime-staging",
   "native-services",
+  "manager-gpui",
   "lint",
   "format",
 ];
@@ -175,6 +176,17 @@ function classify(file) {
   if (/^host\/e2e\//.test(path)) return "full";
   if (/^runtime\//.test(path)) return ["rustfmt", "clippy", "test:rust", "runtime-staging"];
   if (/^native-services\//.test(path)) return ["native-services"];
+  // core/ is the vendored upstream subtree: crate sources join the workspace
+  // gates, everything else (docs, the generated TS package, tooling) is not
+  // built by Cortex checks. Manifests/lockfiles under core/ already failed
+  // closed via isFullInfluence above.
+  if (/^core\/crates\//.test(path)) return ["rustfmt", "clippy", "test:rust"];
+  if (/^core\//.test(path)) return [];
+  // manager-gpui is a standalone Cargo workspace (own [workspace] table), so
+  // it stays out of the cortex `cargo fmt/clippy/test --workspace` sweep and
+  // gets its own gate. Its Cargo.toml/Cargo.lock still fail closed via
+  // isFullInfluence above.
+  if (/^manager-gpui\//.test(path)) return ["manager-gpui"];
   return "full";
 }
 

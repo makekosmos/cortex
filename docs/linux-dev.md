@@ -24,15 +24,24 @@ corepack prepare pnpm@12.4.1 --activate  # pinned packageManager
 
 ## Engine + ARK sidecar
 
+`ark-core` lives in-tree under `core/` (a `git subtree` of
+`makekosmos/core`); a single Cortex checkout builds the whole product — no
+sibling Core clone is needed. `runtime` depends on it via a path dependency
+and `node scripts/check-core-pin.mjs` guards that wiring.
+
 ```text
 cargo build -p kepler-backend            # writes target/debug/kepler-backend
+cargo build -p ark-core --bin ark-core-rpc
+# writes target/debug/ark-core-rpc — or use the cached installer:
 node desktop/scripts/ark-core-rpc.mjs --debug --target-dir target/debug
-# cargo-installs ark-core-rpc from the pinned makekosmos/core rev into
-# desktop/.tmp/ark-core-rpc, then publishes it to target/debug/
+# cargo-installs ark-core-rpc from core/crates/ark-core into
+# desktop/.tmp/ark-core-rpc (keyed by subtree content hash), then
+# publishes it to target/debug/
 ```
 
 The Engine discovers the sidecar via `ARK_CORE_RPC_PATH` or workspace
-candidates; the E2E harness passes an explicit path. Manual run:
+candidates (`target/debug/ark-core-rpc` resolves automatically); the E2E
+harness passes an explicit path. Manual run:
 
 ```text
 KOSMOS_DATA_DIR=/tmp/kosmos-data KOSMOS_HEADLESS=1 target/debug/kepler-backend &

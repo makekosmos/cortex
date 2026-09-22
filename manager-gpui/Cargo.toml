@@ -1,0 +1,33 @@
+[package]
+name = "manager-gpui"
+version = "0.1.0"
+edition = "2021"
+description = "GPUI Kosmos Manager — Engine-driven shell parity with the Vue Manager (KOS-130)"
+default-run = "manager-gpui"
+
+[dependencies]
+gpui = { package = "gpui-kit", version = "=0.6.2" }
+gpui-component = "=0.6.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+uuid = { version = "1.26.1", features = ["v4"] }
+ureq = { version = "2.12", default-features = false, features = ["json"] }
+flate2 = "1.1"
+
+# Dev builds: keep debug info but optimize — unoptimized taffy/cosmic-text/
+# gpui (and our own render path) make even modest UIs run at ~20fps.
+[profile.dev]
+opt-level = 3
+
+[profile.dev.package."*"]
+opt-level = 3
+debug-assertions = false
+overflow-checks = false
+
+[profile.release]
+debug = false
+debug-assertions = false
+
+# Standalone crate: the Manager GPUI shell carries heavyweight UI deps that
+# the runtime workspace must not inherit (mirrors how agenda-gpui ships).
+[workspace]

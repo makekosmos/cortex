@@ -1,0 +1,49 @@
+# Pre-commit hooks — lefthook
+# Install: bun install
+
+glob_matcher: doublestar
+
+pre-commit:
+  parallel: false
+  commands:
+    ark-core-rust:
+      glob: "{Cargo.toml,Cargo.lock,rust-toolchain*,.cargo/**/*,**/build.rs,crates/ark-core/**/*.rs}"
+      run: cd crates/ark-core && cargo check --quiet
+    rustfmt:
+      glob: "**/*.rs"
+      run: cargo fmt --check
+    # Keep generated TypeScript bindings in sync with Rust types.
+    ts-rs-bindings-fresh:
+      glob: "{crates/ark-core/src/types/**/*.rs,crates/ark-core/src/type_registry/**/*.rs}"
+      run: node scripts/check-ark-generated.mjs
+    oxlint:
+      glob: "*.{ts,tsx,vue,mjs,cjs,js,jsx}"
+      run: bunx oxlint {staged_files}
+    ark-guard-writes:
+      glob: "scripts/**/*.{ts,tsx,mjs,cjs,js}"
+      run: bun run ark:guard:writes
+    oxfmt:
+      glob: "*.{ts,tsx,vue,mjs,cjs,js,jsx,json}"
+      run: bunx oxfmt --check {staged_files}
+
+pre-push:
+  parallel: false
+  commands:
+    test-ark-core:
+      glob: "{Cargo.toml,Cargo.lock,rust-toolchain*,.cargo/**/*,**/build.rs,crates/ark-core/**/*.rs}"
+      run: cargo nextest run --workspace --all-features
+    # Hygiene: orphan deps в Cargo workspace. Fail если найдены unused —
+    # автор должен либо удалить (cargo shear --fix), либо добавить в
+    # ignore-list если deps нужны для feature-flag'а / build-script'а.
+    cargo-shear:
+      glob: "**/Cargo.toml"
+      run: cargo shear
+    clippy:
+      glob: "{Cargo.toml,Cargo.lock,rust-toolchain*,.cargo/**/*,**/build.rs,**/*.rs}"
+      # Existing baseline; new warning categories still fail the hook.
+      run: cargo clippy --workspace --all-targets --all-features -- -D warnings -A clippy::too_many_arguments -A clippy::option_map_unit_fn -A clippy::map_flatten -A clippy::nonminimal_bool -A clippy::type_complexity -A clippy::collapsible_if -A clippy::let_and_return -A clippy::result_large_err -A clippy::duplicated_attributes -A clippy::useless_conversion -A clippy::panic -A clippy::assertions_on_constants
+    cargo-deny:
+      glob: "{Cargo.toml,Cargo.lock}"
+      run: cargo deny check advisories bans sources
+    source-size:
+      run: bun run check:source-size

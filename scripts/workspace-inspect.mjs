@@ -253,17 +253,17 @@ export async function inspectCore(root) {
   const cargo = await readFile(path.join(root, "runtime", "Cargo.toml"), "utf8"),
     sidecar = await readFile(path.join(root, "desktop", "scripts", "ark-core-rpc.mjs"), "utf8"),
     lock = await readFile(path.join(root, "Cargo.lock"), "utf8");
-  const head = cargo.match(/makekosmos\/core\.git", rev = "([0-9a-f]{40})/)?.[1],
-    sidecarHead = sidecar.match(/ARK_CORE_REVISION\s*=\s*"([0-9a-f]{40})"/)?.[1];
+  const pathPin = cargo.includes('path = "../core/crates/ark-core"'),
+    arkPackage = lock.match(/\[\[package\]\]\nname = "ark-core"\n[^[]*/)?.[0];
   return {
-    source: "https://github.com/makekosmos/core.git",
-    path: "runtime/Cargo.toml",
-    head,
-    version: lock.match(/name = "ark-core"\s+version = "([^"]+)"/)?.[1] ?? null,
+    source: "in-tree subtree (upstream https://github.com/makekosmos/core.git)",
+    path: "core/crates/ark-core",
+    head: null,
+    version: arkPackage?.match(/version = "([^"]+)"/)?.[1] ?? null,
     checks: {
-      cargoPin: Boolean(head),
-      sidecarPin: head === sidecarHead,
-      lockPin: Boolean(head && lock.includes(head)),
+      cargoPin: pathPin && !cargo.includes("github.com/makekosmos/core"),
+      sidecarPin: sidecar.includes('"--path"') && !sidecar.includes('"--rev"'),
+      lockPin: Boolean(arkPackage && !/source = /.test(arkPackage)),
     },
   };
 }

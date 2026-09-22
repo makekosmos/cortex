@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="ru" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kosmos — Overview</title>
+    <link rel="stylesheet" href="./kosmos-overview.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">K</div>
+          <div class="brand-name">Kosmos</div>
+        </div>
+        <div id="nav"></div>
+      </aside>
+
+      <main id="top">
+        <header class="titlebar">
+          <div>
+            <h1 class="page-title">Kosmos</h1>
+            <div class="page-subtitle">
+              Local-first personal-software monorepo · ARK runtime + Electron apps
+            </div>
+          </div>
+          <button class="theme-toggle" id="themeToggle" type="button">Light</button>
+        </header>
+
+        <section class="diagram" aria-label="Architecture">
+          <div class="layer">
+            <div class="layer-title">Electron renderer + preload</div>
+            <div class="layer-sub">Eden · Delphi · Arrancador · Dashboard · Olympia · Elysium</div>
+          </div>
+          <div class="arrow">│ narrow preload API</div>
+          <div class="layer">
+            <div class="layer-title">Electron main</div>
+            <div class="layer-sub">
+              App orchestration · talks to sidecar via
+              <span class="mono">@kosmos/ark</span>
+            </div>
+          </div>
+          <div class="arrow">│ newline-delimited JSON · stdin/stdout</div>
+          <div class="layer runtime">
+            <div class="layer-title">ark-core-rpc (Rust)</div>
+            <div class="layer-sub">SQLite · objects · usage · sync_server/client · relay · HLC</div>
+          </div>
+        </section>
+
+        <h2 class="section" id="stats">Snapshot</h2>
+        <div class="grid cols-3" id="statsGrid"></div>
+
+        <h2 class="section" id="apps">Apps</h2>
+        <div class="grid cols-2" id="appsGrid"></div>
+
+        <h2 class="section" id="packages">Packages</h2>
+        <div class="grid cols-2" id="packagesGrid"></div>
+
+        <h2 class="section" id="services">Services</h2>
+        <div class="grid cols-2" id="servicesGrid"></div>
+
+        <h2 class="section" id="rules">Rules of the road</h2>
+        <div class="grid cols-2" id="rulesGrid"></div>
+
+        <h2 class="section" id="docs">Key docs</h2>
+        <div class="card">
+          <ul class="tight" id="docsList"></ul>
+        </div>
+
+        <footer>
+          Сгенерировано из памяти и текущего состояния репозитория · дизайн-токены из
+          <span class="mono">kosmos-visuals</span>.
+        </footer>
+      </main>
+    </div>
+    <script>
+      const navGroups = [
+        {
+          label: "Overview",
+          items: [
+            ["Architecture", "#top", true],
+            ["Status", "#stats"],
+          ],
+        },
+        {
+          label: "Layers",
+          items: [
+            ["Apps", "#apps"],
+            ["Packages", "#packages"],
+            ["Services", "#services"],
+          ],
+        },
+        {
+          label: "Process",
+          items: [
+            ["Rules", "#rules"],
+            ["Docs", "#docs"],
+          ],
+        },
+      ];
+
+      const stats = [
+        ["Apps", "7", "Electron · Expo/RN · JVM service"],
+        ["Packages", "8", "ARK core, SDK, relay, visuals, shared"],
+        ["Task folders", "198", 'Proof-loop в <span class="mono">.agent/tasks/</span>'],
+      ];
+
+      const apps = [
+        {
+          title: "eden",
+          meta: 'Vue + Electron · <span class="mono">apps/eden/ts</span>',
+          desc: 'Заметки и редактор. Сохранение через <span class="mono">note_obj</span> и кастомные ARK-объекты; Heart — только editor/vault-специфика и one-time миграции.',
+          tags: [["ARK objects", "canon"], ["Vue 3.5"]],
+        },
+        {
+          title: "delphi",
+          meta: 'Electron + Kotlin · <span class="mono">apps/delphi/ts</span>',
+          desc: 'Task tracking. После старта задачи мигрируют в <span class="mono">task_obj</span> ARK-объекты. Legacy DB-sidecar удалён.',
+          tags: [["task_obj", "canon"], ["auto-migrate"]],
+        },
+        {
+          title: "arrancador",
+          meta: 'Electron · <span class="mono">apps/arrancador</span>',
+          desc: 'Игровая библиотека, playtime, бэкапы. Writes/backfill/process search идут через <span class="mono">@kosmos/ark</span>; read-only SQLite — только fallback.',
+          tags: [["game_obj", "canon"], ["usage"]],
+        },
+        {
+          title: "dashboard",
+          meta: 'Electron · <span class="mono">apps/dashboard</span>',
+          desc: "Read-only ARK analytics. Может читать выбранные SQLite-БД из Electron main, но запись в ARK-таблицы запрещена.",
+          tags: [["read-only", "read"]],
+        },
+        {
+          title: "olympia",
+          meta: 'Expo / React Native · <span class="mono">apps/olympia</span>',
+          desc: "Тренировки.",
+          tags: [["RN"]],
+        },
+        {
+          title: "elysium",
+          meta: 'Expo / React Native · <span class="mono">apps/elysium</span>',
+          desc: "Питание.",
+          tags: [["RN"]],
+        },
+        {
+          title: "ark-service",
+          meta: 'Kotlin / Gradle · <span class="mono">apps/ark-service</span>',
+          desc: "JVM-поверхность ARK service.",
+          tags: [["JVM"]],
+        },
+      ];
+
+      const packages = [
+        {
+          title: "ark-core",
+          meta: 'Rust crate + <span class="mono">ark-core-rpc</span> sidecar',
+          desc: "SQLite-схема, CRUD объектов, usage storage, LAN sync, relay-bridge с HMAC-auth, HLC, beacon, mesh, p2p. Канон рантайма.",
+          tags: [["canon", "canon"]],
+        },
+        {
+          title: "TypeScript bindings",
+          meta: 'Generated · <span class="mono">core/ark/packages/ark/src/generated</span>',
+          desc: "Типы, сгенерированные из канонических Rust-контрактов.",
+          tags: [["canon", "canon"]],
+        },
+        {
+          title: "ark-relay-server",
+          meta: "WebSocket relay",
+          desc: 'Раздаёт <span class="mono">hello</span>, <span class="mono">version_vector</span>, <span class="mono">sync_changes</span>, <span class="mono">live_change</span> между пирами.',
+          tags: [["infra"]],
+        },
+        {
+          title: "kosmos-visuals",
+          meta: '<span class="mono">packages/kosmos-visuals</span>',
+          desc: 'Общая UI-система: токены, CSS-переменные, <span class="mono">Sidebar</span>, <span class="mono">Titlebar</span>, <span class="mono">DesktopChrome</span>, <span class="mono">CommandPalette</span>, <span class="mono">GamePosterCard</span>…',
+          tags: [["shared", "shared"]],
+        },
+        {
+          title: "apple-like · shared-space",
+          meta: "UI / data shared layers",
+          desc: "Платформенные адаптации и общее пространство данных для приложений.",
+          tags: [["shared", "shared"]],
+        },
+      ];
+
+      const services = [
+        {
+          title: "usage-tracker",
+          meta: 'Rust · <span class="mono">services/usage-tracker</span>',
+          desc: "Захват usage data, запись в ARK через RPC, не напрямую в SQLite.",
+          tags: [["via RPC", "canon"]],
+        },
+      ];
+
+      const rules = [
+        {
+          title: "ARK write boundary",
+          items: [
+            'Все записи — через <span class="mono">@kosmos/ark</span> или <span class="mono">ark_core::db</span>.',
+            "Прямые SQL writes в app services запрещены.",
+            "Dashboard — read-only.",
+            'Перед правками data path: <span class="mono">bun run ark:guard:writes</span>.',
+          ],
+        },
+        {
+          title: "Test DB isolation",
+          items: [
+            "Никогда не указывай тестам user ARK DB.",
+            'Используй <span class="mono">.tmp</span>, <span class="mono">.e2e</span>, <span class="mono">.agent/tasks/&lt;TASK&gt;/</span>, OS temp.',
+            'Smoke: <span class="mono">bun run ark:smoke</span>.',
+          ],
+        },
+        {
+          title: "Proof loop",
+          items: [
+            '<span class="mono">.agent/tasks/&lt;DATE&gt;-&lt;slug&gt;/spec.md</span> → реализация → <span class="mono">evidence.{md,json}</span> → если не PASS → <span class="mono">problems.md</span> → fix → reverify.',
+            "Каждый AC должен быть PASS, иначе таск не закрыт.",
+          ],
+        },
+        {
+          title: "Tooling",
+          badges: [
+            "Bun 1.3.5",
+            "oxlint",
+            "oxfmt",
+            "lefthook",
+            "Vitest",
+            "Playwright",
+            "Vue 3.6 (beta)",
+          ],
+        },
+      ];
+
+      const docs = [
+        ["crates/ark-core/README.md", 'RPC контракт, sync, <span class="mono">auth_secret</span>.'],
+        ["docs/ARK-SMOKE-MATRIX.md", "smoke-команды по компонентам."],
+        ["docs/ARK-READONLY-SQL-BOUNDARY.md", "что dashboard'у можно/нельзя."],
+        ["docs/DELPHI-LEGACY-DB-DECISION.md", "почему legacy sidecar удалён."],
+        ["docs/EDEN-HEART-ARK-BOUNDARY.md", "границы Heart vs ARK в Eden."],
+        ["apps/&lt;name&gt;/AGENTS.md", "локальные правила app-уровня."],
+      ];
+
+      function badge([label, kind = ""]) {
+        return `<span class="badge ${kind}"><span class="dot"></span>${label}</span>`;
+      }
+
+      function card({ title, meta, desc, tags = [] }) {
+        return `<div class="card app-tile"><h3>${title}</h3><div class="meta">${meta}</div><div class="desc">${desc}</div><div class="tags">${tags.map(badge).join("")}</div></div>`;
+      }
+
+      function render() {
+        document.getElementById("nav").innerHTML = navGroups
+          .map(
+            ({ label, items }) =>
+              `<div class="nav-group"><div class="nav-label">${label}</div>${items.map(([text, href, active]) => `<a class="nav-item ${active ? "active" : ""}" href="${href}"><span class="nav-dot"${active ? ' style="background: var(--accent)"' : ""}></span>${text}</a>`).join("")}</div>`,
+          )
+          .join("");
+        document.getElementById("statsGrid").innerHTML = stats
+          .map(
+            ([label, value, hint]) =>
+              `<div class="card stat"><div class="label">${label}</div><div class="value">${value}</div><div class="hint">${hint}</div></div>`,
+          )
+          .join("");
+        document.getElementById("appsGrid").innerHTML = apps.map(card).join("");
+        document.getElementById("packagesGrid").innerHTML = packages.map(card).join("");
+        document.getElementById("servicesGrid").innerHTML = services.map(card).join("");
+        document.getElementById("rulesGrid").innerHTML = rules
+          .map(
+            (rule) =>
+              `<div class="card"><h3 style="margin-top: 0; font-size: 15px">${rule.title}</h3>${rule.badges ? `<div class="pill-row">${rule.badges.map((label) => badge([label])).join("")}</div>` : `<ul class="tight">${rule.items.map((item) => `<li>${item}</li>`).join("")}</ul>`}</div>`,
+          )
+          .join("");
+        document.getElementById("docsList").innerHTML = docs
+          .map(([path, text]) => `<li><span class="mono">${path}</span> — ${text}</li>`)
+          .join("");
+      }
+
+      function installThemeToggle() {
+        const root = document.documentElement;
+        const btn = document.getElementById("themeToggle");
+        const setLabel = () => {
+          btn.textContent = root.classList.contains("dark") ? "Light" : "Dark";
+        };
+        setLabel();
+        btn.addEventListener("click", () => {
+          root.classList.toggle("dark");
+          setLabel();
+        });
+      }
+
+      render();
+      installThemeToggle();
+    </script>
+  </body>
+</html>

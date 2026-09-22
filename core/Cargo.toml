@@ -1,0 +1,54 @@
+[workspace]
+resolver = "2"
+members = ["crates/ark-core"]
+
+[workspace.package]
+edition = "2021"
+
+# Phase 2 bug-detection: ловим класс рантайм-проблем на clippy. Уровни:
+#   - warn:  не блокирует CI, но виден в `cargo clippy` output. Превращается
+#            в deny на отдельных fix-проходах когда warning'и подчищены.
+#   - deny:  fail-loud — есть нерушимое правило (forbidden.md → Mutex discipline
+#            про unused_must_use в sync handler'ах).
+#
+# Per-crate Cargo.toml подключают через:
+#   [lints]
+#   workspace = true
+# Lints применяются ко всем targets (включая tests/benches). Production
+# paths используют unwrap_or_else(|e| e.into_inner()) для Mutex poison
+# recovery (forbidden.md → Mutex discipline) и expect("invariant") где надо.
+# Тестовый код легитимно использует unwrap() — там действует
+# `#![cfg_attr(test, allow(clippy::unwrap_used))]` на уровне crate root
+# (lib.rs / main.rs) и `#![allow(clippy::unwrap_used)]` для tests/*.rs /
+# benches/*.rs.
+# panic / todo / unimplemented — warn (sentinel недоделанного кода).
+#
+# unused_must_use (rust core): deny — нулевое количество сейчас, новые
+# попадания блокируются (forbidden.md → Sync, bump_sync_version_vector
+# возвращает Result который ОБЯЗАН быть использован).
+[workspace.lints.clippy]
+unwrap_used = "deny"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+
+[workspace.lints.rust]
+unused_must_use = "deny"
+
+# Common dependencies pinned at workspace level. Per-crate Cargo.toml
+# consume them via `{ workspace = true }`. Deps with crate-specific
+# feature variation (notably `tokio`, `windows`) stay per-crate.
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+thiserror = "1"
+rand = "0.8"
+hostname = "0.4"
+sha2 = "0.10"
+semver = "1"
+futures-util = "0.3"
+tokio-tungstenite = "0.24"
+tempfile = "3"

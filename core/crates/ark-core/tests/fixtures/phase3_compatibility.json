@@ -1,0 +1,778 @@
+{
+  "provenance": {
+    "generator": "phase3-compatibility-corpus",
+    "mapper": "ark_core::canonical_types::compatibility::map_legacy_source",
+    "mode": "rust-production-mapper"
+  },
+  "cases": [
+    {
+      "name": "note-success",
+      "source": {
+        "id": "note-1",
+        "legacy_type_id": "note_obj",
+        "title": "Note",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        },
+        "props": {
+          "description": "hello",
+          "tag_ids": ["tag-2", "tag-1"]
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "links": [
+            {
+              "createdAt": "2026-01-02T00:00:00Z",
+              "id": "lnk*70077f31b11333b168fc9dc316603f9c09bc0eb4ecfab939147f6b24caca4aeb",
+              "linkType": "tag",
+              "sourceObjectId": "note-1",
+              "targetObjectId": "tag-1"
+            },
+            {
+              "createdAt": "2026-01-02T00:00:00Z",
+              "id": "lnk*5b7cafaf3a595add131bfccd55987c02488199fd942839651692e81fd9d266b7",
+              "linkType": "tag",
+              "sourceObjectId": "note-1",
+              "targetObjectId": "tag-2"
+            }
+          ],
+          "localState": [],
+          "object": {
+            "contentJson": {
+              "content": [
+                {
+                  "type": "paragraph"
+                }
+              ],
+              "type": "doc"
+            },
+            "createdAt": "2026-01-01T00:00:00Z",
+            "deletedAt": null,
+            "id": "note-1",
+            "propsJson": {
+              "description": "hello",
+              "extensions": {
+                "compatibility": {}
+              }
+            },
+            "title": "Note",
+            "typeId": "com.kosmos.note",
+            "typeVersion": "1.0.0",
+            "updatedAt": "2026-01-02T00:00:00Z"
+          },
+          "quarantine": [],
+          "rawSource": "{\"id\":\"note-1\",\"legacy_type_id\":\"note_obj\",\"title\":\"Note\",\"content\":{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"},\"props\":{\"description\":\"hello\",\"tag_ids\":[\"tag-2\",\"tag-1\"]},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}"
+        }
+      }
+    },
+    {
+      "name": "note-secret-failure",
+      "source": {
+        "id": "note-secret",
+        "legacy_type_id": "note_obj",
+        "title": "Note",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        },
+        "props": {
+          "api_token": "secret"
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "error": {
+          "code": "SECRET_FIELD",
+          "pointer": "/props/api_token",
+          "rawSource": "{\"id\":\"note-secret\",\"legacy_type_id\":\"note_obj\",\"title\":\"Note\",\"content\":{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"},\"props\":{\"api_token\":\"secret\"},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}",
+          "sourceId": "note-secret",
+          "sourceKind": "note_obj"
+        },
+        "ok": false
+      }
+    },
+    {
+      "name": "project-success",
+      "source": {
+        "id": "project-1",
+        "legacy_type_id": "project_obj",
+        "title": "Project",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        },
+        "props": {
+          "status": "active",
+          "scheduled_date": "2026-01-03"
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "links": [],
+          "localState": [],
+          "object": {
+            "contentJson": {
+              "content": [
+                {
+                  "type": "paragraph"
+                }
+              ],
+              "type": "doc"
+            },
+            "createdAt": "2026-01-01T00:00:00Z",
+            "deletedAt": null,
+            "id": "project-1",
+            "propsJson": {
+              "color": null,
+              "dueAt": null,
+              "extensions": {
+                "compatibility": {}
+              },
+              "scheduledAt": "2026-01-03",
+              "status": "active"
+            },
+            "title": "Project",
+            "typeId": "com.kosmos.project",
+            "typeVersion": "1.0.0",
+            "updatedAt": "2026-01-02T00:00:00Z"
+          },
+          "quarantine": [],
+          "rawSource": "{\"id\":\"project-1\",\"legacy_type_id\":\"project_obj\",\"title\":\"Project\",\"content\":{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"},\"props\":{\"scheduled_date\":\"2026-01-03\",\"status\":\"active\"},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}"
+        }
+      }
+    },
+    {
+      "name": "project-status-failure",
+      "source": {
+        "id": "project-bad",
+        "legacy_type_id": "project_obj",
+        "title": "Project",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        },
+        "props": {
+          "status": "bogus"
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "error": {
+          "code": "INVALID_FIELD",
+          "pointer": "/props/status",
+          "rawSource": "{\"id\":\"project-bad\",\"legacy_type_id\":\"project_obj\",\"title\":\"Project\",\"content\":{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"},\"props\":{\"status\":\"bogus\"},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}",
+          "sourceId": "project-bad",
+          "sourceKind": "project_obj"
+        },
+        "ok": false
+      }
+    },
+    {
+      "name": "tag-success",
+      "source": {
+        "id": "tag-1",
+        "legacy_type_id": "tag_obj",
+        "title": "Tag",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        },
+        "props": {
+          "color": "#abc"
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "links": [],
+          "localState": [],
+          "object": {
+            "contentJson": {
+              "content": [
+                {
+                  "type": "paragraph"
+                }
+              ],
+              "type": "doc"
+            },
+            "createdAt": "2026-01-01T00:00:00Z",
+            "deletedAt": null,
+            "id": "tag-1",
+            "propsJson": {
+              "color": "#abc",
+              "extensions": {
+                "compatibility": {}
+              }
+            },
+            "title": "Tag",
+            "typeId": "com.kosmos.tag",
+            "typeVersion": "1.0.0",
+            "updatedAt": "2026-01-02T00:00:00Z"
+          },
+          "quarantine": [],
+          "rawSource": "{\"id\":\"tag-1\",\"legacy_type_id\":\"tag_obj\",\"title\":\"Tag\",\"content\":{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"},\"props\":{\"color\":\"#abc\"},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}"
+        }
+      }
+    },
+    {
+      "name": "tag-invalid-color",
+      "source": {
+        "id": "tag-bad",
+        "legacy_type_id": "tag_obj",
+        "title": "Tag",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        },
+        "props": {
+          "color": 7
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "error": {
+          "code": "INVALID_FIELD",
+          "pointer": "/props/color",
+          "rawSource": "{\"id\":\"tag-bad\",\"legacy_type_id\":\"tag_obj\",\"title\":\"Tag\",\"content\":{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"},\"props\":{\"color\":7},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}",
+          "sourceId": "tag-bad",
+          "sourceKind": "tag_obj"
+        },
+        "ok": false
+      }
+    },
+    {
+      "name": "person-success",
+      "source": {
+        "id": "person-1",
+        "legacy_type_id": "person_obj",
+        "title": "Person",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        },
+        "props": {
+          "first_name": "Ada",
+          "last_name": "Lovelace",
+          "photo_id": "image-1"
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "links": [
+            {
+              "createdAt": "2026-01-02T00:00:00Z",
+              "id": "lnk*7cd0a597c8aea9c48af9ca867a7454aec6c2a9a298206ecdbc8d0913b2c286b7",
+              "linkType": "photo",
+              "sourceObjectId": "person-1",
+              "targetObjectId": "image-1"
+            }
+          ],
+          "localState": [],
+          "object": {
+            "contentJson": {
+              "content": [
+                {
+                  "type": "paragraph"
+                }
+              ],
+              "type": "doc"
+            },
+            "createdAt": "2026-01-01T00:00:00Z",
+            "deletedAt": null,
+            "id": "person-1",
+            "propsJson": {
+              "birthDate": null,
+              "extensions": {
+                "compatibility": {}
+              },
+              "firstName": "Ada",
+              "lastName": "Lovelace",
+              "patronymic": null
+            },
+            "title": "Person",
+            "typeId": "com.kosmos.person",
+            "typeVersion": "1.0.0",
+            "updatedAt": "2026-01-02T00:00:00Z"
+          },
+          "quarantine": [],
+          "rawSource": "{\"id\":\"person-1\",\"legacy_type_id\":\"person_obj\",\"title\":\"Person\",\"content\":{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"},\"props\":{\"first_name\":\"Ada\",\"last_name\":\"Lovelace\",\"photo_id\":\"image-1\"},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}"
+        }
+      }
+    },
+    {
+      "name": "person-cardinality-failure",
+      "source": {
+        "id": "person-bad",
+        "legacy_type_id": "person_obj",
+        "title": "Person",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        },
+        "props": {
+          "photo_id": ["image-1", "image-2"]
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "error": {
+          "code": "INVALID_FIELD",
+          "pointer": "/props/photo_id",
+          "rawSource": "{\"id\":\"person-bad\",\"legacy_type_id\":\"person_obj\",\"title\":\"Person\",\"content\":{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"},\"props\":{\"photo_id\":[\"image-1\",\"image-2\"]},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}",
+          "sourceId": "person-bad",
+          "sourceKind": "person_obj"
+        },
+        "ok": false
+      }
+    },
+    {
+      "name": "image-success",
+      "source": {
+        "id": "image-1",
+        "legacy_type_id": "image_obj",
+        "title": "Image",
+        "content": {
+          "arbitrary": true
+        },
+        "props": {
+          "file_name": "pic.png",
+          "mime_type": "image/png",
+          "size_bytes": 42,
+          "source_path": "/tmp/pic.png"
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "links": [],
+          "localState": [
+            {
+              "dataJson": {
+                "image": {
+                  "sourcePath": "/tmp/pic.png"
+                }
+              }
+            }
+          ],
+          "object": {
+            "contentJson": {
+              "arbitrary": true
+            },
+            "createdAt": "2026-01-01T00:00:00Z",
+            "deletedAt": null,
+            "id": "image-1",
+            "propsJson": {
+              "altText": "",
+              "extensions": {
+                "compatibility": {}
+              },
+              "fileName": "pic.png",
+              "height": null,
+              "mimeType": "image/png",
+              "resolution": null,
+              "sizeBytes": 42,
+              "width": null
+            },
+            "title": "Image",
+            "typeId": "com.kosmos.image",
+            "typeVersion": "1.0.0",
+            "updatedAt": "2026-01-02T00:00:00Z"
+          },
+          "quarantine": [],
+          "rawSource": "{\"id\":\"image-1\",\"legacy_type_id\":\"image_obj\",\"title\":\"Image\",\"content\":{\"arbitrary\":true},\"props\":{\"file_name\":\"pic.png\",\"mime_type\":\"image/png\",\"size_bytes\":42,\"source_path\":\"/tmp/pic.png\"},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}"
+        }
+      }
+    },
+    {
+      "name": "image-invalid-size",
+      "source": {
+        "id": "image-bad",
+        "legacy_type_id": "image_obj",
+        "title": "Image",
+        "content": {
+          "arbitrary": true
+        },
+        "props": {
+          "size_bytes": "42"
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "error": {
+          "code": "INVALID_FIELD",
+          "pointer": "/props/sizeBytes",
+          "rawSource": "{\"id\":\"image-bad\",\"legacy_type_id\":\"image_obj\",\"title\":\"Image\",\"content\":{\"arbitrary\":true},\"props\":{\"size_bytes\":\"42\"},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}",
+          "sourceId": "image-bad",
+          "sourceKind": "image_obj"
+        },
+        "ok": false
+      }
+    },
+    {
+      "name": "time-entry-success",
+      "source": {
+        "id": "time-1",
+        "legacy_type_id": "time_entry_obj",
+        "title": "Timer",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        },
+        "props": {
+          "started_at": "2026-01-01T10:00:00Z",
+          "source": "manual",
+          "task_id": "task-1"
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "links": [
+            {
+              "createdAt": "2026-01-02T00:00:00Z",
+              "id": "lnk*be3a45cff8fa739c2ce66e334d1b527c1e8cca740ebed37989feb9d0b5209522",
+              "linkType": "for-task",
+              "sourceObjectId": "time-1",
+              "targetObjectId": "task-1"
+            }
+          ],
+          "localState": [],
+          "object": {
+            "contentJson": {
+              "content": [
+                {
+                  "type": "paragraph"
+                }
+              ],
+              "type": "doc"
+            },
+            "createdAt": "2026-01-01T00:00:00Z",
+            "deletedAt": null,
+            "id": "time-1",
+            "propsJson": {
+              "billable": false,
+              "endedAt": null,
+              "extensions": {
+                "compatibility": {}
+              },
+              "source": "manual",
+              "startedAt": "2026-01-01T10:00:00Z",
+              "taskTitle": null
+            },
+            "title": "Timer",
+            "typeId": "com.kosmos.time-entry",
+            "typeVersion": "1.0.0",
+            "updatedAt": "2026-01-02T00:00:00Z"
+          },
+          "quarantine": [],
+          "rawSource": "{\"id\":\"time-1\",\"legacy_type_id\":\"time_entry_obj\",\"title\":\"Timer\",\"content\":{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"},\"props\":{\"source\":\"manual\",\"started_at\":\"2026-01-01T10:00:00Z\",\"task_id\":\"task-1\"},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}"
+        }
+      }
+    },
+    {
+      "name": "time-entry-source-failure",
+      "source": {
+        "id": "time-bad",
+        "legacy_type_id": "time_entry_obj",
+        "title": "Timer",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        },
+        "props": {
+          "started_at": "2026-01-01T10:00:00Z",
+          "source": "other"
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "error": {
+          "code": "INVALID_FIELD",
+          "pointer": "/props/source",
+          "rawSource": "{\"id\":\"time-bad\",\"legacy_type_id\":\"time_entry_obj\",\"title\":\"Timer\",\"content\":{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"},\"props\":{\"source\":\"other\",\"started_at\":\"2026-01-01T10:00:00Z\"},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}",
+          "sourceId": "time-bad",
+          "sourceKind": "time_entry_obj"
+        },
+        "ok": false
+      }
+    },
+    {
+      "name": "game-success",
+      "source": {
+        "id": "game-1",
+        "legacy_type_id": "game_obj",
+        "title": "Game",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        },
+        "props": {
+          "play_status": "in_progress",
+          "genres": ["rpg"],
+          "total_playtime_seconds": 42
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "links": [],
+          "localState": [
+            {
+              "dataJson": {
+                "game": {
+                  "legacyAggregates": {
+                    "totalPlaytimeSeconds": 42
+                  }
+                }
+              }
+            }
+          ],
+          "object": {
+            "contentJson": {
+              "content": [
+                {
+                  "type": "paragraph"
+                }
+              ],
+              "type": "doc"
+            },
+            "createdAt": "2026-01-01T00:00:00Z",
+            "deletedAt": null,
+            "id": "game-1",
+            "propsJson": {
+              "description": null,
+              "extensions": {
+                "compatibility": {}
+              },
+              "genres": ["rpg"],
+              "platforms": [],
+              "playStatus": "inProgress",
+              "released": null,
+              "userRating": null
+            },
+            "title": "Game",
+            "typeId": "com.kosmos.game",
+            "typeVersion": "1.0.0",
+            "updatedAt": "2026-01-02T00:00:00Z"
+          },
+          "quarantine": [],
+          "rawSource": "{\"id\":\"game-1\",\"legacy_type_id\":\"game_obj\",\"title\":\"Game\",\"content\":{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"},\"props\":{\"genres\":[\"rpg\"],\"play_status\":\"in_progress\",\"total_playtime_seconds\":42},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}"
+        }
+      }
+    },
+    {
+      "name": "game-invalid-rating",
+      "source": {
+        "id": "game-bad",
+        "legacy_type_id": "game_obj",
+        "title": "Game",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        },
+        "props": {
+          "userRating": 11
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "error": {
+          "code": "INVALID_FIELD",
+          "pointer": "/props/userRating",
+          "rawSource": "{\"id\":\"game-bad\",\"legacy_type_id\":\"game_obj\",\"title\":\"Game\",\"content\":{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"},\"props\":{\"userRating\":11},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}",
+          "sourceId": "game-bad",
+          "sourceKind": "game_obj"
+        },
+        "ok": false
+      }
+    },
+    {
+      "name": "book-success",
+      "source": {
+        "id": "book-1",
+        "legacy_type_id": "book_obj",
+        "title": "Book",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        },
+        "props": {
+          "author": "Ada",
+          "page_count": 10,
+          "cover_image": "https://example.invalid/cover"
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "links": [],
+          "localState": [],
+          "object": {
+            "contentJson": {
+              "content": [
+                {
+                  "type": "paragraph"
+                }
+              ],
+              "type": "doc"
+            },
+            "createdAt": "2026-01-01T00:00:00Z",
+            "deletedAt": null,
+            "id": "book-1",
+            "propsJson": {
+              "author": "Ada",
+              "extensions": {
+                "compatibility": {}
+              },
+              "isbn": null,
+              "language": null,
+              "pageCount": 10,
+              "publishedDate": null,
+              "publisher": null,
+              "sourceUrl": null
+            },
+            "title": "Book",
+            "typeId": "com.kosmos.book",
+            "typeVersion": "1.0.0",
+            "updatedAt": "2026-01-02T00:00:00Z"
+          },
+          "quarantine": [
+            {
+              "fieldsJson": {
+                "coverImage": "https://example.invalid/cover"
+              }
+            }
+          ],
+          "rawSource": "{\"id\":\"book-1\",\"legacy_type_id\":\"book_obj\",\"title\":\"Book\",\"content\":{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"},\"props\":{\"author\":\"Ada\",\"cover_image\":\"https://example.invalid/cover\",\"page_count\":10},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}"
+        }
+      }
+    },
+    {
+      "name": "book-invalid-page-count",
+      "source": {
+        "id": "book-bad",
+        "legacy_type_id": "book_obj",
+        "title": "Book",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph"
+            }
+          ]
+        },
+        "props": {
+          "page_count": "ten"
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "deleted_at": null
+      },
+      "expected": {
+        "error": {
+          "code": "INVALID_FIELD",
+          "pointer": "/props/pageCount",
+          "rawSource": "{\"id\":\"book-bad\",\"legacy_type_id\":\"book_obj\",\"title\":\"Book\",\"content\":{\"content\":[{\"type\":\"paragraph\"}],\"type\":\"doc\"},\"props\":{\"page_count\":\"ten\"},\"created_at\":\"2026-01-01T00:00:00Z\",\"updated_at\":\"2026-01-02T00:00:00Z\",\"deleted_at\":null}",
+          "sourceId": "book-bad",
+          "sourceKind": "book_obj"
+        },
+        "ok": false
+      }
+    }
+  ]
+}

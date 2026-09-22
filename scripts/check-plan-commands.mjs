@@ -18,6 +18,7 @@ const COMMANDS_BY_CHECK = {
   clippy: ["pnpm", ["run", "clippy"]],
   "test:rust": ["pnpm", ["run", "test:rust"]],
   "runtime-staging": ["pnpm", ["--dir", "desktop", "run", "test:runtime-staging"]],
+  "manager-gpui": ["pnpm", ["run", "check:manager-gpui"]],
   "native-services": [
     "cargo",
     [

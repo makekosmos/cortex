@@ -95,9 +95,8 @@ export function validateReleaseBom(value, context) {
   const core = object(source.core, "source.core");
   string(core.repository, "source.core.repository");
   commit(core.commit, "source.core.commit");
-  if (core.commit !== context.coreCommit) fail("source.core.commit does not match Cortex Core pin");
-  if (core.commit !== context.arkCoreCommit)
-    fail("source.core.commit does not match the ARK sidecar pin");
+  if (core.commit !== cortex.commit) fail("source.core.commit does not match source.cortex.commit");
+  if (core.path !== "core/") fail("source.core.path must be the in-tree core/ subtree");
   const arkArtifact = object(core.ark_artifact, "source.core.ark_artifact");
   const arkName = string(arkArtifact.name, "source.core.ark_artifact.name");
   if (arkName !== (context.platform === "win" ? "ark-core-rpc.exe" : "ark-core-rpc"))
@@ -213,19 +212,20 @@ export async function repositoryContext(root, platform, currentCommit) {
     path.join(root, "desktop", "scripts", "package-catalog.mjs"),
     "utf8",
   );
-  const arkCore = await readFile(path.join(root, "desktop", "scripts", "ark-core-rpc.mjs"), "utf8");
+  const arkCore = await readFile(
+    path.join(root, "desktop", "scripts", "ark-core-source.mjs"),
+    "utf8",
+  );
 
   const pnpm = String(packageJson.packageManager ?? "").match(/^pnpm@(\d+\.\d+\.\d+)$/)?.[1];
   const node = toolchain.node;
   const rust = toolchain.rust;
-  const coreCommit = cargo.match(
-    /git = "https:\/\/github\.com\/makekosmos\/core\.git", rev = "([0-9a-f]{40})"/,
-  )?.[1];
-  const arkCoreCommit = arkCore.match(/ARK_CORE_REVISION\s*=\s*"([0-9a-f]{40})"/)?.[1];
+  const corePathPin = /path = "\.\.\/core\/crates\/ark-core", package = "ark-core"/.test(cargo);
+  const arkCoreSource = /ARK_CORE_SOURCE\s*=\s*"core\/crates\/ark-core"/.test(arkCore);
   const shell = shellApi.match(/KEPLER_API_VERSION\s*=\s*"([^"]+)"/)?.[1];
   const engine = engineApi.match(/ENGINE_API_VERSION\s*=\s*"([^"]+)"/)?.[1];
 
-  if (!pnpm || !node || !rust || !coreCommit || !arkCoreCommit || !shell || !engine)
+  if (!pnpm || !node || !rust || !corePathPin || !arkCoreSource || !shell || !engine)
     fail("repository pins are incomplete or unreadable");
   if (!/manifest\.schema_version !== 2/.test(catalog))
     fail("package catalog is not pinned to manifest schema 2");
@@ -234,8 +234,6 @@ export async function repositoryContext(root, platform, currentCommit) {
     currentCommit,
     platform,
     releaseVersion: versions[platform],
-    coreCommit,
-    arkCoreCommit,
     workspace,
     toolchain: { pnpm, node, rust },
     api: { shell, engine, package_manifest: 2 },

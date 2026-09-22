@@ -52,9 +52,9 @@ async function writeTestBom() {
   const currentCommit = git(["rev-parse", "HEAD"]);
   const ctx = await repositoryContext(root, "win", currentCommit);
   assert.equal(
-    ctx.coreCommit,
-    ctx.arkCoreCommit,
-    "release requires the Cargo core pin to equal the ARK sidecar pin",
+    ctx.currentCommit,
+    currentCommit,
+    "release requires the in-tree core/ subtree to ride on the Cortex commit",
   );
 
   const arkDir = path.join(desktop, ".tmp", "runtime.next");
@@ -74,8 +74,9 @@ async function writeTestBom() {
     source: {
       cortex: { repository: "makekosmos/cortex", commit: currentCommit },
       core: {
-        repository: "makekosmos/core",
-        commit: ctx.coreCommit,
+        repository: "makekosmos/cortex",
+        commit: currentCommit,
+        path: "core/",
         ark_artifact: {
           name: "ark-core-rpc.exe",
           sha256: documentHash(arkBytes),
