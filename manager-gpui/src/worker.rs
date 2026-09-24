@@ -17,6 +17,27 @@ pub enum Command {
     /// Usage report: get_usage_analytics merged with per-row icon paths
     /// resolved through app_index (store.ts::loadUsageRows parity).
     UsageReport { slot: String },
+    /// Pill start: `dictation.capture_foreground_window` (inject target HWND,
+    /// captured before the pill window exists) then engine-owned mic capture
+    /// via `dictation.capture.start` (WASAPI 16kHz mono WAV on Windows).
+    DictationStart { slot: String },
+    /// Pill stop: `dictation.capture.stop {captureId}` → `{audioB64,
+    /// durationMs}` payload for the follow-up transcribe call.
+    DictationStop { slot: String, capture_id: String },
+    /// Chained after the pill window closed: re-capture the foreground HWND
+    /// (capture.stop resets `prev_hwnd`) then `dictation.speech.transcribe`,
+    /// which transcribes and injects per the configured `injectMode`.
+    DictationTranscribe {
+        slot: String,
+        audio_b64: String,
+        duration_sec: f64,
+    },
+    /// Pill cancel: terminate the capture session (audio discarded) and reset
+    /// the backend state machine via `dictation.cancel`.
+    DictationCancel {
+        slot: String,
+        capture_id: Option<String>,
+    },
 }
 
 pub struct Reply {
@@ -48,6 +69,27 @@ impl Worker {
                     Command::UsageReport { slot } => Reply {
                         slot,
                         result: usage_report(&engine),
+                    },
+                    Command::DictationStart { slot } => Reply {
+                        slot,
+                        result: dictation_start(&engine),
+                    },
+                    Command::DictationStop { slot, capture_id } => Reply {
+                        slot,
+                        result: engine
+                            .rpc("dictation.capture.stop", json!({ "captureId": capture_id })),
+                    },
+                    Command::DictationTranscribe {
+                        slot,
+                        audio_b64,
+                        duration_sec,
+                    } => Reply {
+                        slot,
+                        result: dictation_transcribe(&engine, &audio_b64, duration_sec),
+                    },
+                    Command::DictationCancel { slot, capture_id } => Reply {
+                        slot,
+                        result: dictation_cancel(&engine, capture_id.as_deref()),
                     },
                 };
                 if results.send(reply).is_err() {
@@ -116,4 +158,43 @@ fn usage_report(engine: &Engine) -> Result<Value, String> {
         row["iconPath"] = icon.map_or(Value::Null, Value::String);
     }
     Ok(snapshot)
+}
+
+// --- Dictation pill session (Electron dictation-pill.ts parity) --------------
+
+/// Foreground HWND is captured before the pill window exists — on Windows the
+/// inject path restores focus to it and sends the paste shortcut. Failure is
+/// non-fatal (clipboard-only fallback in the runtime).
+fn dictation_start(engine: &Engine) -> Result<Value, String> {
+    let _ = engine.rpc("dictation.capture_foreground_window", json!({}));
+    engine.rpc("dictation.capture.start", json!({}))
+}
+
+/// `dictation.capture.stop` clears `prev_hwnd` together with the rest of the
+/// session state, so the foreground HWND is re-captured here — the pill window
+/// is already closed by the time this runs and the target app owns the
+/// foreground again. `speech.transcribe` then runs the queued
+/// transcribe + inject attempt inline.
+fn dictation_transcribe(
+    engine: &Engine,
+    audio_b64: &str,
+    duration_sec: f64,
+) -> Result<Value, String> {
+    if audio_b64.is_empty() {
+        return Err("Engine не вернул аудио записи".into());
+    }
+    let _ = engine.rpc("dictation.capture_foreground_window", json!({}));
+    engine.rpc(
+        "dictation.speech.transcribe",
+        json!({ "audioB64": audio_b64, "durationSec": duration_sec }),
+    )
+}
+
+/// `dictation.cancel` resets the state machine but leaves a live capture
+/// session marked busy, so the session is stopped (audio discarded) first.
+fn dictation_cancel(engine: &Engine, capture_id: Option<&str>) -> Result<Value, String> {
+    if let Some(id) = capture_id {
+        let _ = engine.rpc("dictation.capture.stop", json!({ "captureId": id }));
+    }
+    engine.rpc("dictation.cancel", json!({}))
 }
