@@ -7,7 +7,7 @@ const buildDir = path.dirname(fileURLToPath(import.meta.url));
 const installer = readFileSync(path.join(buildDir, "installer.nsh"), "utf8");
 const desktopPackage = JSON.parse(readFileSync(path.join(buildDir, "..", "package.json"), "utf8"));
 const electronMain = readFileSync(
-  path.join(buildDir, "..", "electron", "main-launcher.ts"),
+  path.join(buildDir, "..", "electron", "main-app-ready.ts"),
   "utf8",
 );
 const shell = "$INSTDIR\\Kosmos.exe";

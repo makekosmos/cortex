@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// GeneralTab — глобальный хоткей лаунчера и tray icon.
+// GeneralTab — глобальный хоткей shell и tray icon.
 
 import { Button, HotkeyCapture } from "@kosmos/visuals";
 import LegacyRow from "../components/LegacyRow.vue";
@@ -13,7 +13,7 @@ defineProps<{
 }>();
 
 defineEmits<{
-  launcherHotkeyChange: [v: string];
+  hotkeyChange: [v: string];
   resetHotkey: [];
   toggleTrayIcon: [e: Event];
 }>();
@@ -23,12 +23,12 @@ defineEmits<{
   <div v-if="loading" class="empty">Загрузка…</div>
 
   <div v-else class="rows kosmos-scroll">
-    <LegacyRow title="Глобальный хоткей" hint="Показать или скрыть launcher" :error="hotkeyError">
+    <LegacyRow title="Глобальный хоткей" hint="Открыть Kosmos" :error="hotkeyError">
       <div class="hotkey-control">
         <HotkeyCapture
           :model-value="hotkey"
           capture-prompt="Нажми сочетание…"
-          @update:modelValue="(v: string) => $emit('launcherHotkeyChange', v)"
+          @update:modelValue="(v: string) => $emit('hotkeyChange', v)"
         />
         <Button variant="ghost" size="sm" @click="$emit('resetHotkey')">Сброс</Button>
       </div>

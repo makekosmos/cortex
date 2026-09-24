@@ -1,6 +1,6 @@
 // Settings window для Kepler — отдельный BrowserWindow, грузит тот же
 // renderer-bundle с hash `#settings`, src/main.ts по hash рендерит
-// SettingsView вместо LauncherView. Single Vue codebase, два окна.
+// SettingsView. Single Vue codebase, несколько окон.
 //
 // IPC handlers регистрируются eagerly на module-import (см. `import
 // "./settings-window"` в main.ts). Открывается через
@@ -25,13 +25,11 @@ export {
 } from "./settings-store";
 import {
   DEFAULT_HOTKEY,
-  getLauncherStateTtlMinutes,
   getStoredHotkey,
   isTrayIconEnabled,
   normalizeHotkeyAccelerator,
   setStoredHotkey,
   setTrayIconEnabled,
-  writeSettings,
 } from "./settings-store";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -136,9 +134,8 @@ ipcMain.handle("kepler:settings:close", () => {
 ipcMain.handle("kepler:settings:tray-icon:get", () => isTrayIconEnabled());
 
 ipcMain.handle("kepler:settings:tray-icon:set", (_e, enabled: boolean) => {
-  const value = !!enabled;
-  setTrayIconEnabled(value);
-  setTrayVisibilityCallback?.(value);
+  // Иконкой в трее владеет backend runtime — здесь только персистим флаг.
+  setTrayIconEnabled(!!enabled);
 });
 
 ipcMain.handle("kepler:settings:version", () => app.getVersion());
@@ -172,17 +169,3 @@ let reregisterHotkeyCallback: ((accelerator: string) => boolean) | null = null;
 export function setHotkeyReregisterCallback(cb: (accelerator: string) => boolean): void {
   reregisterHotkeyCallback = cb;
 }
-
-let setTrayVisibilityCallback: ((enabled: boolean) => void) | null = null;
-export function setTrayVisibilityController(cb: (enabled: boolean) => void): void {
-  setTrayVisibilityCallback = cb;
-}
-
-ipcMain.handle("kepler:settings:launcher-state-ttl:get", () => getLauncherStateTtlMinutes());
-
-ipcMain.handle("kepler:settings:launcher-state-ttl:set", (_e, minutes: number) => {
-  const n = Number(minutes);
-  if (Number.isFinite(n) && n >= 0) {
-    writeSettings({ launcherStateTtlMinutes: Math.floor(n) });
-  }
-});

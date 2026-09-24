@@ -1,6 +1,6 @@
 // Dashboard window для Kepler — отдельный BrowserWindow, грузит тот же
 // renderer-bundle с hash `#/dashboard`, src/main.ts по hash рендерит
-// DashboardView вместо LauncherView.
+// DashboardView как root view для `#/dashboard`.
 //
 // Dashboard теперь встроен в shell (не extension), это ARK browser:
 // sidebar по типам объектов + таблица содержимого. Концепция spaces убрана

@@ -2,7 +2,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { BrowserWindow, screen } from "electron";
 
 export interface WindowMoveBenchmarkInput {
-  windowKind?: "launcher" | "settings" | "extension" | "flatTest";
+  windowKind?: "settings" | "extension" | "flatTest";
   steps?: number;
   intervalMs?: number;
   acrossDisplays?: boolean;
@@ -27,11 +27,6 @@ function percentile(values: number[], p: number): number {
 
 function findBenchmarkWindow(kind: WindowMoveBenchmarkInput["windowKind"]): BrowserWindow | null {
   const windows = BrowserWindow.getAllWindows().filter((win) => !win.isDestroyed());
-  if (kind === "launcher") {
-    return (
-      windows.find((win) => win.webContents.getURL().includes("launcher")) ?? windows[0] ?? null
-    );
-  }
   if (kind === "settings") {
     return (
       windows.find((win) => win.getTitle().toLowerCase().includes("settings")) ??
@@ -69,7 +64,7 @@ export async function runWindowMoveBenchmark(
 ): Promise<WindowMoveBenchmarkResult> {
   const steps = Math.max(1, Math.min(5_000, Math.floor(input.steps ?? 600)));
   const intervalMs = Math.max(1, Math.min(1_000, Math.floor(input.intervalMs ?? 16)));
-  const kind = input.windowKind ?? "launcher";
+  const kind = input.windowKind ?? "flatTest";
   const ownsWindow = kind === "flatTest";
   const win = ownsWindow ? createFlatBenchmarkWindow() : findBenchmarkWindow(kind);
   if (!win || win.isDestroyed()) {

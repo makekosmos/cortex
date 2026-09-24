@@ -6,14 +6,11 @@ import { registerLeetCodeIntegrationIpc } from "./leetcode-integration";
 type RegisterMainProcessIpcOptions = {
   awaitArkReady(timeoutMs?: number): Promise<any>;
   getArkClient(): any;
-  hideLauncher(): void;
-  setLauncherExpanded(expanded: boolean): void;
 };
 
 export function registerMainProcessIpc(options: RegisterMainProcessIpcOptions) {
   const commandsController = registerMainCommands({
     getArkClient: options.getArkClient,
-    hideLauncher: options.hideLauncher,
   });
 
   registerMainDataIpc({
@@ -24,8 +21,6 @@ export function registerMainProcessIpc(options: RegisterMainProcessIpcOptions) {
   registerMainShellIpc({
     awaitArkReady: options.awaitArkReady,
     getArkClient: options.getArkClient,
-    hideLauncher: options.hideLauncher,
-    setLauncherExpanded: options.setLauncherExpanded,
   });
 
   return commandsController;

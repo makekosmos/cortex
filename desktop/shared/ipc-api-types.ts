@@ -63,26 +63,15 @@ export interface KeplerApi extends KeplerApiShellServices {
     uninstall(id: string): Promise<boolean>;
   };
 
-  /** Управление окном launcher'а. */
-  window: {
-    hide(): Promise<void>;
-    /** Зарегистрировать callback на показ окна (от globalShortcut). */
-    onShow(listener: () => void): () => void;
-    /** Зарегистрировать callback на скрытие окна. */
-    onHide(listener: () => void): () => void;
-    /** Растягивает окно в expanded (с результатами) / collapsed (только input). */
-    setExpanded(expanded: boolean): Promise<void>;
-  };
-
-  /** Поиск по ARK FTS5 через backend — не используется в launcher'е сейчас,
+  /** Поиск по ARK FTS5 через backend — пока без UI-потребителя в shell,
       оставлен для будущих использований (например, отдельный режим поиска по
       объектам через префикс или toggle). */
   search: {
     query(text: string): Promise<SearchResult[]>;
   };
 
-  /** ARK-объекты — пока не показываются в launcher'е (после pivot'а на
-      command registry). Зарезервировано на будущее. */
+  /** ARK-объекты — пока без UI-потребителя в shell. Зарезервировано на
+      будущее. */
   objects: {
     listRecent(limit?: number): Promise<SearchResult[]>;
   };
@@ -95,10 +84,10 @@ export interface KeplerApi extends KeplerApiShellServices {
     onEvent(listener: (event: IpcJsonObject) => void): () => void;
   };
 
-  /** Command registry — то что показывает launcher: список запуска апок +
-      их action-ручки (Pomodoro start, create note и т.п.). Action-команды
-      приходят dynamic от running апок через backend; static open-команды
-      исполняются локально kepler-shell'ом. */
+  /** Command registry — список запуска апок + их action-ручки (Pomodoro
+      start, create note и т.п.). Action-команды приходят dynamic от running
+      апок через backend; static open-команды исполняются локально
+      kepler-shell'ом. */
   commands: {
     list(): Promise<CommandRecord[]>;
     invoke(id: string): Promise<void>;

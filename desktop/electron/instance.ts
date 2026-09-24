@@ -166,7 +166,7 @@ export function resolveInstance(): Instance {
   // Hotkey: prod использует platform-native accelerator; dev = Alt+`
   // (legacy, не конфликтует с prod-инстансом). dev-<x> и test-<x> =
   // disabled (несколько dev-инстансов не могут поделить один accelerator;
-  // пользователь активирует launcher через tray click).
+  // пользователь открывает shell через tray click).
   const hotkey = hotkeyForSlot(slot);
 
   return (cached = {

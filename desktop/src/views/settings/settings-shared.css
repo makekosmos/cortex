@@ -12,33 +12,7 @@
  * Когда добавляешь общий (нужный и другим приложениям) utility — клади его в
  * visuals settings-shell.css, а не сюда. */
 
-/* === Misc inputs (launcher state TTL) === */
-
-.settings-shell .ttl-input {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  color: var(--kosmos-muted-fg);
-  font-size: 0.8125rem;
-}
-
-.settings-shell .ttl-input input {
-  width: 64px;
-  padding: 6px 8px;
-  font-family: inherit;
-  font-size: 0.8125rem;
-  color: var(--kosmos-fg);
-  background: var(--vp-c-bg-soft, var(--kosmos-sidebar-surface));
-  border: 1px solid var(--kosmos-border);
-  border-radius: 6px;
-  text-align: right;
-}
-
-.settings-shell .ttl-input input:focus {
-  outline: none;
-  border-color: var(--vp-c-brand-1, var(--kosmos-fg));
-}
+/* === Misc inputs === */
 
 .settings-shell .hotkey-control {
   display: inline-flex;

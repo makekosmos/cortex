@@ -156,7 +156,7 @@ export interface MarketplaceCatalog {
   extensions: MarketplaceExtension[];
 }
 
-/** Команда в launcher'е — единица того что пользователь может вызвать. */
+/** Команда в command registry — единица того что пользователь может вызвать. */
 export interface CommandRecord {
   id: string;
   title: string;

@@ -17,7 +17,7 @@ export default defineConfig({
     tailwindcss(),
     electron({
       main: electronMain,
-      // Главный preload для launcher / settings и shared host.
+      // Главный preload для settings / overlay окон и shared host.
       preload: {
         input: "electron/preload.ts",
       },
