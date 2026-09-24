@@ -13,11 +13,7 @@ use crate::fps::FpsOverlay;
 use crate::views::{self, StoreTab, View};
 use crate::worker::{Command, Worker};
 
-pub enum Slot {
-    Loading,
-    Ready(Value),
-    Failed(String),
-}
+pub use kosmos_gpui_kit::fields::Slot;
 
 pub struct Confirm {
     pub title: String,
@@ -59,7 +55,7 @@ pub struct ManagerApp {
 
 impl ManagerApp {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let data_dir = crate::engine::data_dir().ok();
+        let data_dir = kosmos_gpui_kit::engine::data_dir().ok();
         let mut this = Self {
             view: View::Data,
             sidebar_t: 1.0,
@@ -236,10 +232,6 @@ impl ManagerApp {
             .unwrap_or_default()
     }
 
-    pub fn slot(&self, key: &str) -> Option<&Slot> {
-        self.slots.get(key)
-    }
-
     /// Ready slot payload or Null — views stay total over missing data.
     pub fn data(&self, key: &str) -> Value {
         match self.slots.get(key) {
@@ -287,7 +279,7 @@ impl ManagerApp {
                             .unwrap_or_else(|| v.as_str().unwrap_or_default().to_string());
                         if url.is_empty() {
                             self.error = Some("Engine не вернул ссылку маркетплейса.".into());
-                        } else if let Err(e) = crate::engine::open_url(&url) {
+                        } else if let Err(e) = kosmos_gpui_kit::engine::open_url(&url) {
                             self.error = Some(e);
                         }
                     }
@@ -312,6 +304,13 @@ impl ManagerApp {
             }
             cx.notify();
         }
+    }
+}
+
+/// Exposes the named data slots to `kosmos_gpui_kit::fields::slot_or`.
+impl kosmos_gpui_kit::fields::Slots for ManagerApp {
+    fn slot(&self, key: &str) -> Option<&Slot> {
+        self.slots.get(key)
     }
 }
 

@@ -3551,6 +3551,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
+name = "kosmos-gpui-kit"
+version = "0.1.0"
+source = "git+https://github.com/makekosmos/kosmos-gpui-kit?rev=268ffed89f6eecf6f3f6538c08fcf18f2dc28e32#268ffed89f6eecf6f3f6538c08fcf18f2dc28e32"
+dependencies = [
+ "gpui-component",
+ "gpui-kit",
+ "imago-gpui",
+ "serde",
+ "serde_json",
+ "ureq",
+ "uuid",
+]
+
+[[package]]
 name = "kqueue"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3849,6 +3863,7 @@ dependencies = [
  "gpui-component",
  "gpui-kit",
  "imago-gpui",
+ "kosmos-gpui-kit",
  "serde",
  "serde_json",
  "ureq",

@@ -5,8 +5,8 @@ use gpui_component::input::Input;
 use serde_json::json;
 
 use crate::app::ManagerApp;
-use crate::theme::*;
 use crate::widgets::*;
+use kosmos_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("data.summary", "manager.data.summary", json!({}));

@@ -4,8 +4,8 @@
 use ::gpui::{prelude::*, *};
 
 use crate::app::ManagerApp;
-use crate::theme::*;
 use crate::widgets::*;
+use kosmos_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.slots.insert(
@@ -15,7 +15,7 @@ pub fn load(app: &mut ManagerApp) {
 }
 
 fn path() -> Option<std::path::PathBuf> {
-    crate::engine::host_user_data().map(|d| d.join("browser.json"))
+    kosmos_gpui_kit::engine::host_user_data().map(|d| d.join("browser.json"))
 }
 
 fn read_persist() -> bool {

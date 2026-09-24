@@ -3,7 +3,7 @@
 use serde_json::Value;
 use std::sync::mpsc::{Receiver, Sender};
 
-use crate::engine::Engine;
+use kosmos_gpui_kit::engine::Engine;
 
 pub enum Command {
     /// POST /v1/rpc — `slot` routes the reply into `ManagerApp::slots`.
