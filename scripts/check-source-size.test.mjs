@@ -53,13 +53,12 @@ test("only the explicit debt baseline is grandfathered", async () => {
   const result = await runFixture({
     "runtime/src/main.rs": lines(301),
     "runtime/src/package_service/integrations.rs": lines(301),
-    "runtime/src/package_service/integrations/huawei_login.rs": lines(301),
     "runtime/src/package_worker_supervisor/authority.rs": lines(301),
     "runtime/src/package_worker_supervisor/calls_dispatch.rs": lines(301),
     "runtime/src/package_worker_supervisor/tests/api/opaque_roots.rs": lines(301),
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /6 grandfathered file/);
+  assert.match(result.stdout, /5 grandfathered file/);
 });
 
 test("moved packages/ sources are no longer grandfathered", async () => {
@@ -69,4 +68,5 @@ test("moved packages/ sources are no longer grandfathered", async () => {
   });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /packages\/huawei-health\/src\/lib\.rs: 365 lines \(max 300\)/);
+  assert.match(result.stderr, /huawei_login\.rs: 541 lines \(max 300\)/);
 });

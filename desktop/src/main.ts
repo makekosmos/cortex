@@ -12,7 +12,6 @@ installScrollFadeListener();
 // грузит URL с разным hash, рендер ниже выбирает соответствующий root view.
 //   (no hash)                  → legacy compatibility launcher (App.vue)
 //   #settings                  → SettingsView
-//   #/dashboard                → DashboardRoot (DashboardView)
 const hash = ref(window.location.hash);
 window.addEventListener("hashchange", () => {
   hash.value = window.location.hash;
@@ -21,10 +20,6 @@ window.addEventListener("hashchange", () => {
 function rootView() {
   const currentHash = hash.value;
   if (currentHash.startsWith("#settings")) return SettingsView;
-  if (currentHash.startsWith("#/dashboard")) {
-    // Async — dashboard views и их деревья не нужны для launcher / settings окон.
-    return defineAsyncComponent(() => import("./views/DashboardRoot.vue"));
-  }
   if (currentHash.startsWith("#focus-widget")) {
     // Tiny always-on-top widget для активной pomodoro сессии. Async чтобы
     // не тащить в launcher bundle.

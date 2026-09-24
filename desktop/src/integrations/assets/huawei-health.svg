@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Huawei Health">
-  <defs><linearGradient id="g" x1="8" y1="40" x2="40" y2="8" gradientUnits="userSpaceOnUse"><stop stop-color="#d71920"/><stop offset="1" stop-color="#7b1fa2"/></linearGradient></defs>
-  <rect width="48" height="48" rx="12" fill="url(#g)"/>
-  <path fill="#fff" d="M24 37.5c-1.8-2.5-10.5-8.3-10.5-15.2 0-3.7 2.4-6.3 5.7-6.3 2.1 0 3.8 1.1 4.8 2.8 1-1.7 2.7-2.8 4.8-2.8 3.3 0 5.7 2.6 5.7 6.3 0 6.9-8.7 12.7-10.5 15.2Z"/>
-  <path fill="#d71920" d="M16.5 23.4h4.4l1.5-3.7 3 8.8 1.7-4.1h4.4v2.4h-5.9l-1.1 2.5-2.2-6.5-1 2.9h-4.8v-2.3Z"/>
-</svg>

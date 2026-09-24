@@ -3,7 +3,6 @@ import { computed, ref, onMounted, onUnmounted, nextTick, watch } from "vue";
 import type { Component } from "vue";
 import {
   Settings as SettingsIcon,
-  Database as DatabaseIcon,
   Target as TargetIcon,
   ArrowLeft,
   ArrowUpCircle,
@@ -17,7 +16,6 @@ import {
   Square,
   Pencil,
   Calculator,
-  Activity as BodyIcon,
 } from "@lucide/vue";
 import { KbdKey, ActionsPanel } from "@kosmos/visuals";
 import BuiltInIcon from "../components/BuiltInIcon.vue";
@@ -72,16 +70,6 @@ const BUILTIN_ICONS = {
     icon: SettingsIcon,
     from: "oklch(0.42 0 0)",
     to: "oklch(0.26 0 0)",
-  },
-  "dashboard:open": {
-    icon: DatabaseIcon,
-    from: "oklch(0.62 0.16 165)",
-    to: "oklch(0.42 0.14 175)",
-  },
-  "kosmos:body": {
-    icon: BodyIcon,
-    from: "oklch(0.7 0.17 145)",
-    to: "oklch(0.45 0.15 165)",
   },
   "kepler:focus-session": {
     icon: TargetIcon,
