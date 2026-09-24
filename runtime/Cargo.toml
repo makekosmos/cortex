@@ -30,6 +30,7 @@ path = "src/bin/ark-markdown-bridge.rs"
 
 [dependencies]
 ark-core = { path = "../core/crates/ark-core", package = "ark-core" }
+kosmos-package-protocol = { path = "crates/kosmos-package-protocol" }
 rusqlite.workspace = true
 tokio = { version = "1", features = [
   "rt-multi-thread",
