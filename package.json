@@ -9,10 +9,9 @@
     "check:layout": "node scripts/check-layout.mjs",
     "check:source-size": "node scripts/check-source-size.mjs",
     "format:check": "node scripts/check-format.mjs",
-    "typecheck": "pnpm run typecheck:desktop && pnpm run typecheck:host && pnpm run typecheck:manager",
+    "typecheck": "pnpm run typecheck:desktop && pnpm run typecheck:host",
     "typecheck:desktop": "pnpm --dir desktop run typecheck",
     "typecheck:host": "pnpm --dir host run typecheck",
-    "typecheck:manager": "pnpm --dir manager run typecheck",
     "rustfmt": "cargo fmt --all -- --check",
     "clippy": "cargo clippy --workspace --all-targets -- -D warnings && cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --all-features -- -D warnings -A clippy::too_many_arguments -A clippy::option_map_unit_fn -A clippy::map_flatten -A clippy::nonminimal_bool -A clippy::type_complexity -A clippy::collapsible_if -A clippy::let_and_return -A clippy::result_large_err -A clippy::duplicated_attributes -A clippy::useless_conversion -A clippy::panic -A clippy::assertions_on_constants",
     "test:rust": "node runtime/scripts/test-lib.mjs --workspace",
@@ -33,7 +32,7 @@
     "test:host-contracts": "node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs \"host/electron/*.test.ts\"",
     "test:first-party-contracts": "pnpm --dir host run build && pnpm --dir host run e2e first-party-agenda-contract.spec.ts first-party-arcadia-contract.spec.ts first-party-dictation-contract.spec.ts first-party-memoria-contract.spec.ts first-party-memoria-import-crash.spec.ts first-party-ordo-contract.spec.ts --workers=1",
     "test:package-manager": "node --test scripts/package-manager-migration.test.mjs scripts/spawn-shell-contract.test.mjs",
-    "test:desktop-tooling": "node --test manager/scripts/dev-electron.test.mjs desktop/scripts/build-package-components.e2e.test.mjs"
+    "test:desktop-tooling": "node --test desktop/scripts/build-package-components.e2e.test.mjs"
   },
   "devDependencies": {
     "@oxlint/plugins": "1.80.0",

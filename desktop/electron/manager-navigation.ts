@@ -39,20 +39,6 @@ export function openManager(): void {
     }
     return;
   }
-  const main = process.env.KOSMOS_MANAGER_MAIN?.trim();
-  if (main) {
-    const resolved = path.resolve(main);
-    if (fs.existsSync(resolved)) {
-      const child = spawn(process.execPath, [resolved], {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true,
-        env: managerEnv,
-      });
-      child.unref();
-    }
-    return;
-  }
   const packaged = resolvePackagedManagerExecutable();
   if (packaged) {
     const child = spawn(packaged, [], {

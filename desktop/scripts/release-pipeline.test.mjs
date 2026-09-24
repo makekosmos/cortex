@@ -9,12 +9,8 @@ const scripts = path.join(import.meta.dirname);
 
 test("all local electron-builder package paths explicitly disable publishing", async () => {
   const desktop = JSON.parse(await readFile(path.join(scripts, "..", "package.json"), "utf8"));
-  const manager = JSON.parse(
-    await readFile(path.join(scripts, "..", "..", "manager", "package.json"), "utf8"),
-  );
   const component = await readFile(path.join(scripts, "build-package-components.mjs"), "utf8");
   assert.match(desktop.scripts["package:dir"], /--publish never/);
-  assert.match(manager.scripts["package:win"], /--publish never/);
   assert.match(component, /"--publish",\s*"never"/);
   const releaseBuild = await readFile(path.join(scripts, "build-desktop.mjs"), "utf8");
   assert.doesNotMatch(releaseBuild, /gh\s+release\s+(?:view|create)/);
@@ -23,9 +19,6 @@ test("all local electron-builder package paths explicitly disable publishing", a
 
 test("release builds materialize runtime before preflight", async () => {
   const desktop = JSON.parse(await readFile(path.join(scripts, "..", "package.json"), "utf8"));
-  const manager = JSON.parse(
-    await readFile(path.join(scripts, "..", "..", "manager", "package.json"), "utf8"),
-  );
   const component = await readFile(path.join(scripts, "build-package-components.mjs"), "utf8");
   for (const script of [
     desktop.scripts.build,
@@ -34,10 +27,6 @@ test("release builds materialize runtime before preflight", async () => {
   ]) {
     assert.ok(script.indexOf("build:backend") < script.indexOf("release-preflight"));
   }
-  assert.ok(
-    manager.scripts["package:win"].indexOf("release-preflight") <
-      manager.scripts["package:win"].indexOf("build"),
-  );
   assert.ok(component.indexOf("release-preflight") < component.indexOf("const version"));
 });
 

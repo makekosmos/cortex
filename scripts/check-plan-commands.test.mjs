@@ -40,7 +40,7 @@ test("selective checks emit pnpm run commands and Rust stays on cargo", async ()
     );
     return seen;
   };
-  assert.deepEqual(run(["manager/src/App.vue"])[0], "pnpm run typecheck:manager");
+  assert.deepEqual(run(["desktop/src/App.vue"])[0], "pnpm run typecheck:desktop");
   assert.deepEqual(run(["host/electron/main.ts"]), [
     "pnpm run typecheck:host",
     "pnpm run test:host-contracts",

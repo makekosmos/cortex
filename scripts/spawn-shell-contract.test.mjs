@@ -7,13 +7,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 const root = path.resolve(import.meta.dirname, "..");
-const scriptDirs = [
-  "scripts",
-  "desktop/scripts",
-  "manager/scripts",
-  "host/scripts",
-  "runtime/scripts",
-];
+const scriptDirs = ["scripts", "desktop/scripts", "host/scripts", "runtime/scripts"];
 
 // Node >=18.20.2 (CVE-2024-27980) throws EINVAL when spawn/spawnSync/execFile
 // targets a .cmd/.bat without `shell`. Plain "pnpm" (no .exe) also fails to

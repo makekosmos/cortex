@@ -1,12 +1,11 @@
-import { access } from 'node:fs/promises';
+import { access } from "node:fs/promises";
 
 const required = [
-  'desktop/package.json',
-  'manager/package.json',
-  'runtime/Cargo.toml',
-  'native-services/kepler-focus-svc/Cargo.toml',
-  'native-services/kepler-focus-helper/Cargo.toml',
-  'native-services/kepler-watcher/Cargo.toml',
+  "desktop/package.json",
+  "runtime/Cargo.toml",
+  "native-services/kepler-focus-svc/Cargo.toml",
+  "native-services/kepler-focus-helper/Cargo.toml",
+  "native-services/kepler-watcher/Cargo.toml",
 ];
 
 for (const file of required) await access(file);

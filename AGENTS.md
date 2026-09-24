@@ -1,7 +1,7 @@
 # AGENTS.md — Cortex
 
 Cortex owns the desktop shell (`desktop/`), host services (`host/`), Manager
-(`manager/`) and the Rust runtime (`runtime/`). Техническая документация:
+(`manager-gpui/`) and the Rust runtime (`runtime/`). Техническая документация:
 [`makekosmos/docs`](https://github.com/makekosmos/docs).
 
 ## Universal never rules
