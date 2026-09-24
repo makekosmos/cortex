@@ -31,7 +31,6 @@ const GRANDFATHERED = new Set([
   "desktop/src/coder/useCoderStats.ts",
   "desktop/src/components/FocusCommandPanel.vue",
   "desktop/src/integrations/IntegrationSettingsPanel.vue",
-  "desktop/src/my-cosmos/MyCosmosView.vue",
   "desktop/src/views/DictationPillView.vue",
   "desktop/src/views/FocusBlockOverlay.vue",
   "desktop/src/views/FocusWidgetView.vue",
