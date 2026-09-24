@@ -494,6 +494,63 @@ impl ManagerApp {
             }
             cx.notify();
         }
+        // Engine broadcast events from the WS subscription (worker thread →
+        // this UI-thread drain). A dead events thread degrades the hotkey
+        // silently — the RPC surface keeps working, so no error banner.
+        loop {
+            let event = match self.worker.events.try_recv() {
+                Ok(event) => event,
+                Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => break,
+            };
+            self.handle_engine_event(event, cx);
+            cx.notify();
+        }
+    }
+
+    /// desktop/electron/dictation-pill.ts parity: the Rust WH_KEYBOARD_LL
+    /// hook emits `dictation_toggle_trigger` (toggle mode) and
+    /// `dictation_ptt_trigger {phase}` (PTT mode — both phases route into the
+    /// same toggle call the view button and pill Стоп use). State/progress
+    /// events refresh the matching Диктовка slots.
+    fn handle_engine_event(&mut self, event: Value, cx: &mut Context<Self>) {
+        let name = event
+            .get("event")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        match name {
+            "dictation_toggle_trigger" | "dictation_ptt_trigger" => {
+                self.dictation_toggle(cx);
+            }
+            "dictation_state_changed" | "dictation.state_changed" | "dictation_config_changed" => {
+                self.call("dictation.state", "dictation.get_state", json!({}));
+            }
+            "dictation_stats_changed" => {
+                self.call("dictation.stats", "dictation.get_stats", json!({}));
+            }
+            "dictation_pending_changed" => {
+                self.call("dictation.pending", "dictation.list_pending", json!({}));
+            }
+            // Progress ticks stream per chunk — stash the payload for the
+            // view rather than re-issuing RPCs; started resets the slot and
+            // complete/failed clear it while refreshing the model list.
+            "dictation_local_model_download_progress"
+            | "dictation_local_model_download_started" => {
+                self.slots
+                    .insert("dictation.download".into(), Slot::Ready(event));
+            }
+            "dictation_local_model_download_complete" | "dictation_local_model_download_failed" => {
+                self.slots.remove("dictation.download");
+                self.call("dictation.local", "dictation.local_status", json!({}));
+                self.call("dictation.models", "dictation.list_local_models", json!({}));
+            }
+            // Hotkey-capture feed for a future capture row in Диктовка
+            // (`dictation.begin_hotkey_capture` isn't exposed there yet).
+            "dictation_capture_key" | "dictation_capture_cancelled" => {
+                self.slots
+                    .insert("dictation.capture".into(), Slot::Ready(event));
+            }
+            _ => {}
+        }
     }
 }
 

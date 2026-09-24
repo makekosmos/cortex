@@ -13,7 +13,7 @@ gpui-component = "=0.6.2"
 imago-gpui = { git = "https://github.com/makekosmos/imago.git", rev = "b9dd284e70a56a151b525626c3b2463679cb8c9a" }
 # Shared GPUI surface (theme/widgets/fields/engine) extracted from this crate.
 # Pinned by rev; its gpui/imago-gpui specs must stay identical to ours.
-kosmos-gpui-kit = { git = "https://github.com/makekosmos/kosmos-gpui-kit", rev = "268ffed89f6eecf6f3f6538c08fcf18f2dc28e32" }
+kosmos-gpui-kit = { git = "https://github.com/makekosmos/kosmos-gpui-kit", rev = "b5f9b931cc4aff7aa248c88d6719569a1bd97fce" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 uuid = { version = "1.26.1", features = ["v4"] }

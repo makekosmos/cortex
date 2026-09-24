@@ -13,10 +13,10 @@
 //! Gaps vs the Electron pill: there is no per-window hide/show in the
 //! PlatformWindow trait, so the window is opened on record start and closed
 //! via `Window::remove_window`; the waveform (renderer-side AnalyserNode) has
-//! no equivalent — the pill shows a static status instead; and the global
-//! hotkey events (`dictation_toggle_trigger`) are WS broadcast events the
-//! Engine HTTP client cannot subscribe to, so the pill is triggered from the
-//! Диктовка view only.
+//! no equivalent — the pill shows a static status instead. The global
+//! hotkey reaches us through the Engine WS subscription
+//! (`dictation_toggle_trigger` / `dictation_ptt_trigger` →
+//! `ManagerApp::dictation_toggle`, same path as the view button).
 use ::gpui::{prelude::*, *};
 use imago_gpui::button;
 

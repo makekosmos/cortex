@@ -6,10 +6,12 @@
 //! `download_local_model`/`delete_local_model`) и запуск pill-оверлея записи
 //! (Engine-owned WASAPI capture — `dictation.capture.*` + `speech.transcribe`).
 //!
-//! Не перенесено из Vue (нужен WS-канал событий Engine — HTTP клиент его не
-//! подписывает): захват нового хоткея (`begin_hotkey_capture` отдаёт клавиши
-//! через broadcast `dictation_capture_key`), live-прогресс скачивания модели и
-//! запуск записи по глобальной горячей клавише.
+//! WS-канал событий Engine (`worker.rs` → `ManagerApp::handle_engine_event`):
+//! глобальная горячая клавиша запускает pill (`dictation_toggle_trigger` /
+//! `dictation_ptt_trigger`), live-прогресс скачивания модели живёт в слоте
+//! `dictation.download`. Не перенесено из Vue: захват нового хоткея —
+//! `begin_hotkey_capture` здесь не вызывается; capture-события складываются
+//! в слот `dictation.capture` для будущей строки назначения клавиши.
 use ::gpui::{prelude::*, *};
 use gpui_component::Disableable;
 use imago_gpui::button;
@@ -171,8 +173,8 @@ fn record_card(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement
                 }),
         )
         .child(div().text_size(px(12.)).text_color(c(MUTED_FG())).child(
-            "Глобальная горячая клавиша пока приходит только в Electron Host \
-                     (события Engine по WS; у GPUI-клиента только HTTP).",
+            "Глобальная горячая клавиша приходит по WS-событиям Engine \
+                     (dictation_toggle_trigger / dictation_ptt_trigger).",
         ))
         .into_any_element()
 }
