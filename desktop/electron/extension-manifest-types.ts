@@ -1,7 +1,6 @@
-import type { CommandPackageManifest } from "./command-host/manifest";
 import type { JsonRecord } from "./extension-permissions";
 
-export type ExtensionKind = "vue" | "static" | "native" | "command-extension";
+export type ExtensionKind = "vue" | "static" | "native";
 
 /**
  * Объявление команды в `manifest.json` extension'а. Полный id рендерится
@@ -28,7 +27,7 @@ interface KextManifestCommand {
    *  - `action`: invoke в running extension через ARK commands bus. Если
    *    extension не запущен — Kepler auto-launch'ит и dispatch'ит после
    *    mount. */
-  mode?: "open" | "action" | "command-view" | "command-no-view" | "command-menu-bar";
+  mode?: "open" | "action";
 }
 
 export interface ExtensionManifest {
@@ -66,11 +65,6 @@ export interface ExtensionManifest {
    */
   keplerApiVersion?: string;
   kind?: ExtensionKind;
-  /**
-   * Command package metadata derived from `package.json`.
-   * Present only for `kind: "command-extension"` extensions.
-   */
-  commandPackage?: CommandPackageManifest;
   entryHtml?: string;
   /**
    * Native extension entrypoint. Used only when `kind: "native"`.

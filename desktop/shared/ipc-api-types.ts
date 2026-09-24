@@ -18,14 +18,6 @@ import type {
   SearchResult,
   StartFocusSessionInput,
 } from "./ipc-types";
-import type {
-  CommandActionRequest,
-  CommandActionResult,
-  CommandFeedbackEvent,
-  CommandFilePickerRequest,
-  CommandFilePickerResult,
-  CommandSnapshot,
-} from "./command-ipc";
 
 /**
  */
@@ -114,23 +106,6 @@ export interface KeplerApi extends KeplerApiShellServices {
         новые команды или вышла из эфира). Колбэк вызывается без аргументов —
         renderer'у следует заново вызвать list(). */
     onUpdated(listener: () => void): () => void;
-  };
-
-  command: {
-    snapshot(sessionId: string): Promise<CommandSnapshot | null>;
-    action(sessionId: string, action: CommandActionRequest): Promise<CommandActionResult>;
-    pickFiles(
-      sessionId: string,
-      request: CommandFilePickerRequest,
-    ): Promise<CommandFilePickerResult>;
-    onSnapshotUpdated(
-      sessionId: string,
-      listener: (snapshot: CommandSnapshot) => void,
-    ): () => void;
-    onFeedback(
-      sessionId: string,
-      listener: (event: CommandFeedbackEvent) => void,
-    ): () => void;
   };
 
   /** Shell-owned Focus Session command page. Main process owns pomodoro,

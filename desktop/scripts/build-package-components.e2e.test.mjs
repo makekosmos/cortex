@@ -31,7 +31,6 @@ const cleanWorktree =
     "manager-gpui",
     "runtime/src",
     "native-services",
-    "packages",
   ]) === "";
 
 // The Manager component is manager-gpui (cargo), so only the desktop and host

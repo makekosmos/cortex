@@ -1191,6 +1191,8 @@ pub(crate) mod tests {
         let dir = tempdir().expect("tempdir");
         let mut packages = Vec::new();
         let mut archives = Vec::new();
+        // Manifests pinned from makekosmos/integrations 66f9040 (the repo the
+        // provider sources moved to); runtime only needs their parsed shape.
         for package in [
             "bigfrontend",
             "greatfrontend",
@@ -1200,9 +1202,8 @@ pub(crate) mod tests {
             "toggl",
         ] {
             let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../packages")
-                .join(package)
-                .join("manifest.json");
+                .join("tests/fixtures")
+                .join(format!("{package}.package.manifest.json"));
             let raw = fs::read_to_string(path).unwrap_or_else(|_| panic!("{package} manifest"));
             let VersionedManifest::V2(manifest) =
                 PackageManifest::parse(&raw).unwrap_or_else(|_| panic!("valid {package} manifest"))
@@ -1249,6 +1250,8 @@ pub(crate) mod tests {
 
     #[test]
     fn provider_package_manifests_use_the_generic_integration_contract() {
+        // Manifests pinned from makekosmos/integrations 66f9040 (the repo the
+        // provider sources moved to); runtime only needs their parsed shape.
         for package in [
             "bigfrontend",
             "greatfrontend",
@@ -1258,9 +1261,8 @@ pub(crate) mod tests {
             "toggl",
         ] {
             let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../packages")
-                .join(package)
-                .join("manifest.json");
+                .join("tests/fixtures")
+                .join(format!("{package}.package.manifest.json"));
             let raw = fs::read_to_string(path).unwrap_or_else(|_| panic!("{package} manifest"));
             let VersionedManifest::V2(manifest) =
                 PackageManifest::parse(&raw).unwrap_or_else(|_| panic!("valid {package} manifest"))

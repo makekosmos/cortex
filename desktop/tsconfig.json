@@ -24,8 +24,6 @@
       "@kosmos/ark": ["../.tmp/workspace/arca-sdk/src/index.ts"],
       "@kosmos/visuals": ["../.tmp/workspace/imago/index.ts"],
       "@kosmos/visuals/*": ["../.tmp/workspace/imago/*"],
-      "@raycast/api": ["../packages/raycast-api/src/index.ts"],
-      "@raycast/api/*": ["../packages/raycast-api/src/*"],
       "@shared/*": ["./shared/*"]
     }
   },

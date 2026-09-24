@@ -19,10 +19,8 @@ export interface DeclaredCommand {
   extensionId: string;
   /** Hash-route из manifest (если задан). */
   route?: string;
-  /** Mode: `open`, `action`, or command runner. */
-  mode: "open" | "action" | "command-view" | "command-no-view" | "command-menu-bar";
-  /** Command name for `kind: "command-extension"` packages. */
-  commandName?: string;
+  /** Mode: `open` or `action`. */
+  mode: "open" | "action";
 }
 
 interface IconCacheEntry {
@@ -128,14 +126,13 @@ export function loadDeclaredCommands(): DeclaredCommand[] {
         id: fullId,
         title: cmd.title,
         subtitle: cmd.subtitle ?? manifest.name,
-        category: cmd.mode === "action" || cmd.mode === "command-no-view" ? "action" : "open",
+        category: cmd.mode === "action" ? "action" : "open",
         kind: cmd.kind ?? "command",
         appName: manifest.name,
         icon,
         extensionId: manifest.id,
         route: cmd.route,
         mode: cmd.mode ?? "open",
-        commandName: manifest.kind === "command-extension" ? cmd.id : undefined,
       });
     }
   }

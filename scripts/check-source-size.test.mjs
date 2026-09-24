@@ -51,8 +51,6 @@ test("retired Godfile paths cannot reuse an old exemption", async () => {
 
 test("only the explicit debt baseline is grandfathered", async () => {
   const result = await runFixture({
-    "packages/huawei-health/src/lib.rs": lines(301),
-    "packages/huawei-health/tests/archive.rs": lines(301),
     "runtime/src/main.rs": lines(301),
     "runtime/src/package_service/integrations.rs": lines(301),
     "runtime/src/package_service/integrations/huawei_login.rs": lines(301),
@@ -61,15 +59,14 @@ test("only the explicit debt baseline is grandfathered", async () => {
     "runtime/src/package_worker_supervisor/tests/api/opaque_roots.rs": lines(301),
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /8 grandfathered file/);
+  assert.match(result.stdout, /6 grandfathered file/);
 });
 
-test("grandfathers only the current Huawei source-size debt", async () => {
+test("moved packages/ sources are no longer grandfathered", async () => {
   const result = await runFixture({
     "packages/huawei-health/src/lib.rs": lines(365),
-    "packages/huawei-health/tests/archive.rs": lines(443),
     "runtime/src/package_service/integrations/huawei_login.rs": lines(541),
   });
-  assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /3 grandfathered file/);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /packages\/huawei-health\/src\/lib\.rs: 365 lines \(max 300\)/);
 });
