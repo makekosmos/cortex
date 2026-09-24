@@ -10,6 +10,11 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
+// Stable worker-facing protocol types live in the standalone
+// `kosmos-package-protocol` crate so out-of-tree workers can pin them by git
+// rev without depending on the runtime source tree.
+pub use kosmos_package_protocol::{BridgeStatus, BridgeWorkerConfig};
+
 pub const MAX_LINE_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -35,15 +40,6 @@ macro_rules! msg {
             $($body)*
         }
     };
-}
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct BridgeWorkerConfig {
-    pub vault_root: String,
-    pub state_root: String,
-    pub selected_types: Vec<String>,
-    pub editable_fields: Vec<String>,
-    pub readonly_fields: Vec<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -152,13 +148,6 @@ impl RunMessage {
     }
 }
 msg!(HelloMessage { pub method: String, pub package_id: String, pub version: String, pub hash: String, pub pid: u32, pub api_version: u32, pub token: String });
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct BridgeStatus {
-    pub last_sync: Option<String>,
-    pub conflict_count: u32,
-    pub last_conflict_at: Option<String>,
-}
 msg!(HeartbeatMessage { pub method: String, pub generation: u64, pub token: String, #[serde(default)] pub bridge_status: Option<BridgeStatus> });
 msg!(CallMessage { pub method: String, pub id: String, pub generation: u64, pub token: String, pub operation: WorkerMethod, pub params: serde_json::Value });
 msg!(InvokeMessage { pub method: String, pub id: String, pub generation: u64, pub operation: String, pub params: serde_json::Value });
