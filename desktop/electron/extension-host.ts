@@ -345,7 +345,7 @@ ipcMain.handle("kepler:extension:dialogs:pick-directory", async (event) => {
 // IPC: host-action (extension → kepler-shell host action)
 // ---------------------------------------------------------------------------
 
-// Reserved для будущих host-action типа "show settings", "focus launcher" и т.п.
+// Reserved для будущих host-action типа "show settings", "focus shell" и т.п.
 // Сейчас просто логирует и возвращает false (action not handled).
 ipcMain.handle("kepler:extension:invoke-host", (_e, action: string, _payload?: JsonValue) => {
   console.error(`[kepler-shell] extension invoke-host: ${action} (no handler)`);

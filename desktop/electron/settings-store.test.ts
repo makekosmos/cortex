@@ -46,11 +46,11 @@ test("legacy settings are read and promoted on the next write", () => {
 
   expect(readSettings()).toEqual(legacy);
 
-  writeSettings({ launcherStateTtlMinutes: 15 });
+  writeSettings({ showTrayIcon: true });
 
   expect(JSON.parse(readFileSync(currentPath, "utf8"))).toEqual({
     ...legacy,
-    launcherStateTtlMinutes: 15,
+    showTrayIcon: true,
   });
   expect(JSON.parse(readFileSync(legacyPath, "utf8"))).toEqual(legacy);
 });

@@ -199,10 +199,7 @@ function hidePill(): void {
   }
 }
 
-async function callBackend(
-  operation: string,
-  params: JsonRecord = {},
-): Promise<JsonRecord> {
+async function callBackend(operation: string, params: JsonRecord = {}): Promise<JsonRecord> {
   const ark = await requireDictationRuntime().awaitArkReady();
   return ark.invokeOperation<JsonRecord>({ operation, ...params });
 }
@@ -356,7 +353,7 @@ export async function setupDictationHotkey(): Promise<void> {
     // транспарентное BrowserWindow + DWM композицию + Vue bundle загрузку
     // во время startup'а (это съедает +200-400ms ready-time). 3s — компромисс
     // между «не успел warmup до первого нажатия» и «не толкаемся за CPU
-    // с launcher mount + ark connect + extension scan».
+    // с manager mount + ark connect + extension scan».
     setTimeout(() => {
       // setImmediate уводит вызов на следующий tick event loop'а, давая
       // приоритет любым ожидающим тяжёлым задачам.

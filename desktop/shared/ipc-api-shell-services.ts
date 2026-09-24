@@ -23,7 +23,7 @@ interface DiagnosticsMetricsSnapshot {
 }
 
 interface DiagnosticsWindowMoveBenchmarkInput {
-  windowKind?: "launcher" | "settings" | "flatTest";
+  windowKind?: "settings" | "extension" | "flatTest";
   steps?: number;
   intervalMs?: number;
   acrossDisplays?: boolean;
@@ -157,12 +157,6 @@ export interface KeplerApiShellServices {
       get(): Promise<boolean>;
       set(enabled: boolean): Promise<void>;
     };
-    /** Сколько минут хранить позицию в лаунчере (query / selection / scroll)
-        между открытиями. 0 = всегда ресетить. Default 5. */
-    launcherStateTtl: {
-      get(): Promise<number>;
-      set(minutes: number): Promise<void>;
-    };
     /** Версия Kepler из app.getVersion(). */
     version(): Promise<string>;
     /** Сводка занимаемого места в папках данных Kosmos. */
@@ -190,7 +184,6 @@ export interface KeplerApiShellServices {
     ready(): void;
     onShow(listener: (feedback: FocusOverlayFeedback) => void): () => void;
     setInteractive(interactive: boolean): Promise<void>;
-    showBlocked(app: { id: string; title: string; icon?: string | null }): Promise<void>;
     /** Сигнализирует main, что анимация завершена и окно можно скрыть. */
     done(): void;
   };
@@ -205,16 +198,9 @@ export interface KeplerApiShellServices {
     traceStart(): Promise<{ ok: true }>;
     /** Stop Chromium trace collection and return the written trace path. */
     traceStop(outPath?: string): Promise<{ path: string }>;
-    /** Repeatable setBounds benchmark for launcher/settings/test windows. */
+    /** Repeatable setBounds benchmark for settings/extension/test windows. */
     windowMoveBenchmark(
       input?: DiagnosticsWindowMoveBenchmarkInput,
     ): Promise<DiagnosticsWindowMoveBenchmarkResult>;
-  };
-  /** Post-update first launch — main process детектит `post-update.flag` в
-      userData (создаётся autoupdater-host'ом перед quitAndInstall) и шлёт
-      одноразовое событие в renderer. UI показывает banner «Kepler обновлён». */
-  postUpdate: {
-    /** Подписка на post-update push. Returns unsubscribe. */
-    onShown(listener: (payload: { version: string }) => void): () => void;
   };
 }

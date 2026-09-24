@@ -39,14 +39,6 @@ ipcMain.on("kepler:focus-overlay:done", () => {
   overlayWin.hide();
 });
 
-// Renderer (launcher) просит показать overlay при запуске заблокированного app.
-ipcMain.handle(
-  "kepler:focus-overlay:show-blocked",
-  (_e, app: { id: string; title: string; icon?: string | null }) => {
-    showFocusBlockOverlay(app);
-  },
-);
-
 function markReady(): void {
   if (readyFallbackTimer) {
     clearTimeout(readyFallbackTimer);

@@ -9,7 +9,8 @@ import { resolveInstance, applyInstanceToApp, verifyUserDataMatches } from "./in
 const KEPLER_INSTANCE = resolveInstance();
 applyInstanceToApp(KEPLER_INSTANCE);
 
-// macOS: launcher — frameless полупрозрачное окно без постоянного always-on-top.
+// macOS: overlay-окна (dictation pill, focus widget, block overlay) — frameless
+// полупрозрачные окна без постоянного always-on-top.
 // macOS Window Server помечает такое окно как occluded, и Chromium останавливает
 // compositor (paint замерзает через 1-2с после показа — Vue реактивность жива,
 // но экран не перерисовывается). Эти switch'и отключают occlusion-throttling на
@@ -24,9 +25,7 @@ import {
   APP_ICON_PROTOCOL,
   LOCAL_IMAGE_PROTOCOL,
   keplerLog,
-  resolveWindowMaterial,
   safeHandle,
-  type KosmosWindowMaterial,
 } from "./main-shell-services";
 import {
   setupFocusWidgetBackendSync,
@@ -39,8 +38,7 @@ import {
   teardownFocusSessionBackendSync,
   teardownPomodoroNotifier,
 } from "./main-runtime-integrations";
-import { createLauncherController } from "./main-launcher";
-import { openSettings } from "./settings-window";
+import { openManager } from "./manager-navigation";
 import { check as checkUpdates, install as installUpdate } from "./autoupdater-host";
 import { registerMainProcessIpc } from "./main-ipc-registrations";
 import {
@@ -61,14 +59,7 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const WINDOW_WIDTH = 720;
-const WINDOW_HEIGHT = 460;
 const env = process.env;
-const devServerUrl = env.VITE_DEV_SERVER_URL;
-
-function resolveLauncherBgMaterial(): KosmosWindowMaterial {
-  return resolveWindowMaterial("none");
-}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -108,35 +99,6 @@ const backendSupervisor = createMainBackendSupervisor({
   onBackendExit: (code) => code === BACKEND_TRAY_EXIT_CODE && !isQuiting && app.quit(),
 });
 
-const launcherController = createLauncherController({
-  isDev: !!devServerUrl,
-  productName: KEPLER_INSTANCE.productName,
-  windowWidth: WINDOW_WIDTH,
-  windowHeight: WINDOW_HEIGHT,
-  dirname: __dirname,
-  devServerUrl,
-  resolveBackgroundMaterial: resolveLauncherBgMaterial,
-  getIsQuiting: () => isQuiting,
-  openSettings,
-  quitApplication: () => {
-    isQuiting = true;
-    app.quit();
-  },
-  onLauncherShow: () => {
-    void backendSupervisor.recoverBackendIfDead("launcher-show").catch((error) => {
-      keplerLog.error(
-        "supervisor",
-        "launcher recovery failed",
-        error instanceof Error && error.stack
-          ? { reason: "launcher-show", err: String(error), stack: error.stack }
-          : { reason: "launcher-show", err: String(error) },
-      );
-    });
-  },
-});
-
-const { hideLauncher, setLauncherExpanded } = launcherController;
-
 export function broadcastCommandsUpdated(): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
@@ -152,8 +114,6 @@ export function broadcastCommandsUpdated(): void {
 registerMainProcessIpc({
   awaitArkReady,
   getArkClient: () => backendSupervisor.getArkClient(),
-  hideLauncher,
-  setLauncherExpanded,
 });
 
 setupMainFocusRuntime(awaitArkReady);
@@ -183,7 +143,7 @@ app.on("second-instance", (_event, argv) => {
     installUpdate();
     return;
   }
-  launcherController.openManager();
+  openManager();
 });
 
 // --- Electron crash reporter ------------------------------------------------
@@ -253,7 +213,6 @@ void app
       awaitArkReady,
       backendSupervisor,
       instance: KEPLER_INSTANCE,
-      launcher: launcherController,
       log: keplerLog,
       runBootSelfCheck,
       recoverLegacyMigration: async () => {

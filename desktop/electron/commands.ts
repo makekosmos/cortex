@@ -40,7 +40,6 @@ export interface InternalCommand {
    */
   icon?: () => string | undefined;
   shortcut?: string | (() => string | undefined | Promise<string | undefined>);
-  keepsLauncherOpen?: boolean;
   exec: (event?: IpcMainInvokeEvent) => Promise<void> | void;
 }
 
@@ -121,7 +120,6 @@ export const COMMANDS: InternalCommand[] = [
     category: "open",
     kind: "command",
     appName: "Kosmos",
-    keepsLauncherOpen: true,
     exec: () => openFocusSessionShell(),
   },
   {

@@ -71,20 +71,6 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
         ipcRenderer.invoke("kepler:extension:revert", id, timestamp),
       uninstall: (id: string) => ipcRenderer.invoke("kepler:extension:uninstall", id),
     },
-    window: {
-      hide: () => ipcRenderer.invoke("kepler:window:hide"),
-      onShow: (listener) => {
-        const handler = () => listener();
-        ipcRenderer.on("kepler:window:show", handler);
-        return () => ipcRenderer.removeListener("kepler:window:show", handler);
-      },
-      onHide: (listener) => {
-        const handler = () => listener();
-        ipcRenderer.on("kepler:window:hide", handler);
-        return () => ipcRenderer.removeListener("kepler:window:hide", handler);
-      },
-      setExpanded: (expanded) => ipcRenderer.invoke("kepler:window:setExpanded", expanded),
-    },
     search: {
       query: (text) => ipcRenderer.invoke("kepler:search:query", text),
     },

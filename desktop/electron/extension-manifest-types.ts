@@ -9,7 +9,7 @@ export type ExtensionKind = "vue" | "static" | "native";
 interface KextManifestCommand {
   /** Локальный id (без префикса extension'а). [a-z0-9:-]+. */
   id: string;
-  /** Подпись в launcher'е (RU). */
+  /** Подпись в command palette / shell (RU). */
   title: string;
   /** Доп. подпись справа (название extension'а или категория). */
   subtitle?: string;
@@ -92,7 +92,7 @@ export interface ExtensionManifest {
   preload?: string;
   /**
    * Относительный путь к иконке extension'а внутри его директории
-   * (обычно `icon.png`). Используется launcher'ом для open-команд.
+   * (обычно `icon.png`). Используется shell'ом для open-команд.
    */
   icon?: string;
   /**
@@ -146,7 +146,7 @@ export interface ExtensionManifest {
    * Declarative commands extension'а (Raycast-style). Manifest = source of
    * truth для entry-point команд: открыть extension с конкретным route,
    * либо триггернуть action который extension обработает через
-   * `kepler.navigation.onNavigate`. Видны в launcher всегда (пока
+   * `kepler.navigation.onNavigate`. Видны в shell всегда (пока
    * extension установлен), не требуют running state.
    *
    * Полный id команды = `${manifest.id}:${cmd.id}` — security boundary

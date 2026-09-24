@@ -52,10 +52,7 @@ function isNullableNumber<T>(value: T): value is T & (number | null) {
   return value === null || typeof value === "number";
 }
 
-function isCatalogExtension<T>(
-  value: T,
-  requireAppId: boolean,
-): value is T & CatalogExtension {
+function isCatalogExtension<T>(value: T, requireAppId: boolean): value is T & CatalogExtension {
   if (!isRecord(value)) return false;
   return (
     typeof value.id === "string" &&
@@ -293,7 +290,7 @@ async function autoUpdateExtensionsOnce(forceCatalog = true): Promise<void> {
  * Стартует фоновый перефетч catalog.json каждые 24h. Cache TTL fetchCatalog —
  * 1h, поэтому если юзер открывает Settings часто, периодический check не
  * мешает. Цель: чтобы Settings → Маркетплейс badge сразу был актуален даже
- * на свежем старте launcher'а.
+ * на свежем старте shell'а.
  */
 export function startPeriodicCatalogCheck(): void {
   if (periodicTimer) return;
