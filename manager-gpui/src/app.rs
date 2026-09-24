@@ -7,9 +7,10 @@ use std::time::Instant;
 
 use ::gpui::{prelude::*, *};
 use gpui_component::input::InputState;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::fps::FpsOverlay;
+use crate::pill::{DictationPill, PillPhase};
 use crate::views::{self, StoreTab, View};
 use crate::worker::{Command, Worker};
 
@@ -49,6 +50,18 @@ pub struct ManagerApp {
     pub pending_install: Option<String>,
     /// Store listing shown in the detail overlay.
     pub detail: Option<Value>,
+    /// Dictation pill overlay window while a recording session is active.
+    /// `WindowKind::PopUp` — no hide API exists, so the window is closed
+    /// (`remove_window`) rather than hidden.
+    pub pill: Option<WindowHandle<DictationPill>>,
+    /// Pill session phase (Starting/Recording/Processing) — rendered by both
+    /// the pill window and the Диктовка view.
+    pub pill_phase: Option<PillPhase>,
+    /// `captureId` of the live `dictation.capture.start` session.
+    pill_capture: Option<String>,
+    /// `durationMs` from `capture.stop` — merged into the transcribe result
+    /// for the result card (the transcribe reply doesn't carry it).
+    pill_last_duration_ms: f64,
     pub(crate) action_busy: bool,
     worker_dead: bool,
 }
@@ -80,6 +93,10 @@ impl ManagerApp {
             disclosure: None,
             pending_install: None,
             detail: None,
+            pill: None,
+            pill_phase: None,
+            pill_capture: None,
+            pill_last_duration_ms: 0.0,
             action_busy: false,
             worker_dead: false,
         };
@@ -190,6 +207,79 @@ impl ManagerApp {
         self.call("@action", op, params);
     }
 
+    /// Worker command that doesn't map to a view-data slot (pill session
+    /// control ops are intercepted by name in `drain`).
+    fn send_command(&mut self, command: Command) {
+        if self.worker.commands.send(command).is_err() {
+            self.worker_dead = true;
+            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
+        }
+    }
+
+    /// Dictation pill toggle — view button and the pill's own Стоп button.
+    /// `toggleDictation` parity: re-entry while Starting/Processing is ignored.
+    pub fn dictation_toggle(&mut self, cx: &mut Context<Self>) {
+        match self.pill_phase {
+            None => self.dictation_begin(cx),
+            Some(PillPhase::Recording) => self.dictation_finish(cx),
+            Some(PillPhase::Starting | PillPhase::Processing) => {}
+        }
+    }
+
+    /// Cancel the session from any phase: close the pill, terminate the
+    /// capture session and reset the backend state machine.
+    pub fn dictation_cancel(&mut self, cx: &mut Context<Self>) {
+        self.close_pill(cx);
+        self.pill_phase = None;
+        let capture_id = self.pill_capture.take();
+        self.send_command(Command::DictationCancel {
+            slot: "dictation.pill.cancel".into(),
+            capture_id,
+        });
+        cx.notify();
+    }
+
+    /// Idle → Starting: open the overlay immediately (it renders "Запуск
+    /// записи…"), then ask the Engine to capture the foreground HWND and start
+    /// WASAPI capture.
+    fn dictation_begin(&mut self, cx: &mut Context<Self>) {
+        if self.pill.is_none() {
+            self.pill = crate::pill::open(cx.entity(), cx);
+        }
+        self.pill_phase = Some(PillPhase::Starting);
+        self.send_command(Command::DictationStart {
+            slot: "dictation.pill.start".into(),
+        });
+        cx.notify();
+    }
+
+    /// Recording → Processing: close the pill BEFORE `capture.stop` so the OS
+    /// foreground returns to the target window — the transcribe step
+    /// re-captures that HWND for `injectMode: auto_paste` delivery.
+    fn dictation_finish(&mut self, cx: &mut Context<Self>) {
+        self.close_pill(cx);
+        self.pill_phase = Some(PillPhase::Processing);
+        match self.pill_capture.take() {
+            Some(capture_id) => self.send_command(Command::DictationStop {
+                slot: "dictation.pill.stop".into(),
+                capture_id,
+            }),
+            None => self.send_command(Command::DictationCancel {
+                slot: "dictation.pill.cancel".into(),
+                capture_id: None,
+            }),
+        }
+        cx.notify();
+    }
+
+    fn close_pill(&mut self, cx: &mut Context<Self>) {
+        if let Some(handle) = self.pill.take() {
+            handle
+                .update(cx, |_, window, _| window.remove_window())
+                .ok();
+        }
+    }
+
     /// Destructive op behind the confirm modal.
     pub fn ask_confirm(
         &mut self,
@@ -277,6 +367,90 @@ impl ManagerApp {
                         views::load(self.view, self);
                     }
                     Err(e) => self.error = Some(e),
+                }
+            } else if reply.slot == "dictation.pill.start" {
+                match reply.result {
+                    Ok(v) => {
+                        let capture_id = v
+                            .get("captureId")
+                            .and_then(Value::as_str)
+                            .map(str::to_string);
+                        // Cancel during Starting: the pill is already gone —
+                        // stop the just-started session instead of resurrecting.
+                        if self.pill_phase.is_none() {
+                            self.send_command(Command::DictationCancel {
+                                slot: "dictation.pill.cancel".into(),
+                                capture_id,
+                            });
+                        } else if let Some(id) = capture_id {
+                            self.pill_capture = Some(id);
+                            self.pill_phase = Some(PillPhase::Recording);
+                        } else {
+                            self.pill_phase = None;
+                            self.close_pill(cx);
+                            self.error = Some("Engine не вернул captureId".into());
+                        }
+                    }
+                    Err(e) => {
+                        self.pill_phase = None;
+                        self.pill_capture = None;
+                        self.close_pill(cx);
+                        self.error = Some(e);
+                    }
+                }
+            } else if reply.slot == "dictation.pill.stop" {
+                match reply.result {
+                    Ok(v) => {
+                        let audio_b64 = v
+                            .get("audioB64")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string();
+                        // speech.transcribe's reply has no durationMs — carry it
+                        // over so the result card shows the record length.
+                        self.pill_last_duration_ms =
+                            v.get("durationMs").and_then(Value::as_f64).unwrap_or(0.0);
+                        self.send_command(Command::DictationTranscribe {
+                            slot: "dictation.pill.result".into(),
+                            audio_b64,
+                            duration_sec: self.pill_last_duration_ms / 1000.0,
+                        });
+                    }
+                    Err(e) => {
+                        self.pill_phase = None;
+                        self.error = Some(e);
+                    }
+                }
+            } else if reply.slot == "dictation.pill.result" {
+                self.pill_phase = None;
+                match reply.result {
+                    Ok(mut v) => {
+                        if let Some(obj) = v.as_object_mut() {
+                            obj.insert(
+                                "durationMs".into(),
+                                Value::from(self.pill_last_duration_ms),
+                            );
+                        }
+                        self.slots.insert("dictation.result".into(), Slot::Ready(v));
+                        if self.error.is_some() {
+                            self.error = None;
+                        }
+                        // Post-session refresh: state machine + stats + очередь
+                        // (same refresh-after-write as `action`).
+                        self.call("dictation.state", "dictation.get_state", json!({}));
+                        self.call("dictation.stats", "dictation.get_stats", json!({}));
+                        self.call("dictation.pending", "dictation.list_pending", json!({}));
+                    }
+                    Err(e) => self.error = Some(e),
+                }
+            } else if reply.slot == "dictation.pill.cancel" {
+                self.pill_phase = None;
+                self.pill_capture = None;
+                if let Err(e) = reply.result {
+                    self.error = Some(e);
+                }
+                if matches!(self.view, View::Dictation) {
+                    self.call("dictation.state", "dictation.get_state", json!({}));
                 }
             } else if reply.slot == "disclosure" {
                 // packages.disclosure → consent overlay before install.
