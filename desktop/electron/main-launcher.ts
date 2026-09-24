@@ -39,7 +39,6 @@ export interface LauncherController {
   createLauncher(): void;
   showLauncher(): void;
   hideLauncher(): void;
-  showFocusSessionLauncher(): void;
   setLauncherExpanded(expanded: boolean): void;
   setTrayVisible(enabled: boolean): void;
   openManager(): void;
@@ -197,11 +196,6 @@ export function createLauncherController(options: LauncherControllerOptions): La
     onLauncherShow?.();
   }
 
-  function showFocusSessionLauncher(): void {
-    if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1") return;
-    void openHostedApp("com.kosmos.shell");
-  }
-
   function hideLauncher(): void {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     if (launcherHidden) return;
@@ -299,7 +293,6 @@ export function createLauncherController(options: LauncherControllerOptions): La
     createLauncher,
     showLauncher,
     hideLauncher,
-    showFocusSessionLauncher,
     setLauncherExpanded,
     setTrayVisible,
     openManager,

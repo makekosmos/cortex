@@ -5,7 +5,7 @@
 
 import type { Component } from "vue";
 
-export type Tab = "general" | "about" | "debug" | "time-tracker" | "file-index" | "export";
+export type Tab = "general" | "about" | "debug" | "file-index" | "export";
 
 export interface SettingsNavigationItem {
   tab: Tab;
@@ -20,7 +20,7 @@ export interface SettingsNavigationItem {
   keywords: string[];
 }
 
-export type AppSettingsTab = "time-tracker";
+export type AppSettingsTab = string;
 
 export interface AppCommandSetting {
   id: string;
@@ -33,5 +33,4 @@ export interface AppCommandSetting {
 
 export const HIDDEN_COMMANDS_KEY = "kepler.launcher.hiddenCommandIds";
 
-export { appCommandSettings } from "./navigation.commands";
 export { settingsNavigationItems } from "./navigation.data";

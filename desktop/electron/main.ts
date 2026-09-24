@@ -28,17 +28,7 @@ import {
   safeHandle,
   type KosmosWindowMaterial,
 } from "./main-shell-services";
-import {
-  setupFocusWidgetBackendSync,
-  teardownFocusWidgetBackendSync,
-  setupMainDictationRuntime,
-  setupMainFocusRuntime,
-  setupFocusSessionBackendSync,
-  setupDictationHotkey,
-  setupPomodoroNotifier,
-  teardownFocusSessionBackendSync,
-  teardownPomodoroNotifier,
-} from "./main-runtime-integrations";
+import { setupMainDictationRuntime, setupDictationHotkey } from "./main-runtime-integrations";
 import { createLauncherController } from "./main-launcher";
 import { openSettings } from "./settings-window";
 import { check as checkUpdates, install as installUpdate } from "./autoupdater-host";
@@ -97,12 +87,6 @@ const backendSupervisor = createMainBackendSupervisor({
   instance: KEPLER_INSTANCE,
   resolveBackendExe,
   getIsQuiting: () => isQuiting,
-  setupPomodoroNotifier,
-  teardownPomodoroNotifier,
-  setupFocusWidgetBackendSync,
-  teardownFocusWidgetBackendSync,
-  setupFocusSessionBackendSync,
-  teardownFocusSessionBackendSync,
   setupDictationHotkey,
   broadcastCommandsUpdated,
   onBackendExit: (code) => code === BACKEND_TRAY_EXIT_CODE && !isQuiting && app.quit(),
@@ -156,7 +140,6 @@ registerMainProcessIpc({
   setLauncherExpanded,
 });
 
-setupMainFocusRuntime(awaitArkReady);
 setupMainDictationRuntime({
   awaitArkReady,
   broadcastCommandsUpdated,

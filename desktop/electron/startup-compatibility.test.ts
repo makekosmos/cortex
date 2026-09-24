@@ -26,10 +26,6 @@ const settingsNavigationDataSource = await readFile(
   path.join(import.meta.dirname, "../src/views/settings/navigation.data.ts"),
   "utf8",
 );
-const settingsNavigationCommandsSource = await readFile(
-  path.join(import.meta.dirname, "../src/views/settings/navigation.commands.ts"),
-  "utf8",
-);
 const settingsViewSource = await readFile(
   path.join(import.meta.dirname, "../src/views/SettingsView.vue"),
   "utf8",
@@ -137,21 +133,16 @@ test("launcher visibility remains owner", () => {
   for (const source of [
     settingsNavigationSource,
     settingsNavigationDataSource,
-    settingsNavigationCommandsSource,
     settingsViewSource,
   ]) {
     expect(source).not.toMatch(/notes|tasks|games|eden:|delphi:|arrancador:/i);
   }
-  expect(settingsNavigationSource).toContain('"time-tracker"');
   expect(settingsNavigationSource).toContain("kepler.launcher.hiddenCommandIds");
   expect(launcherSource).toContain(
     'const HIDDEN_COMMANDS_KEY = "kepler.launcher.hiddenCommandIds"',
   );
   expect(launcherSource).toContain("Скрытые команды");
   expect(launcherSource).toContain("localStorage.setItem(HIDDEN_COMMANDS_KEY");
-  expect(settingsViewSource).toContain("localStorage.getItem(HIDDEN_COMMANDS_KEY)");
-  expect(settingsViewSource).toContain("hiddenCommandIds.value.includes(id)");
-  expect(settingsViewSource).toContain("localStorage.setItem(HIDDEN_COMMANDS_KEY");
   expect(launcherSource).toContain("hiddenCommandIds.value.includes(cmd.id)");
   expect(launcherTemplateSource).toContain("toggleCommandVisibility(selectedCommand.id)");
 });
@@ -190,7 +181,7 @@ function compileFunction(
 
 interface CompileBindings {}
 
-test("seeded hidden command state is shared by Settings and Launcher and recovers", () => {
+test("seeded hidden command state is loaded by Launcher and recovers", () => {
   const values = new Map<string, string>();
   const storage = {
     getItem: (key: string) => values.get(key) ?? null,
@@ -201,21 +192,13 @@ test("seeded hidden command state is shared by Settings and Launcher and recover
   values.set(key, JSON.stringify(seeded));
 
   // SAFETY: Test state is intentionally initialized as a string-id collection.
-  const settingsState = { value: [] as string[] };
-  // SAFETY: Test state is intentionally initialized as a string-id collection.
   const launcherState = { value: [] as string[] };
-  const settingsLoad = compileFunction(settingsViewSource, "loadHiddenCommandIds", {
-    localStorage: storage,
-  });
   const launcherLoad = compileFunction(launcherSource, "loadHiddenCommandIds", {
     localStorage: storage,
     isString,
   });
   // SAFETY: The extracted loaders return the seeded string-id arrays.
-  settingsState.value = settingsLoad() as string[];
-  // SAFETY: The extracted loaders return the seeded string-id arrays.
   launcherState.value = launcherLoad() as string[];
-  expect(settingsState.value).toEqual(seeded);
   expect(launcherState.value).toEqual(seeded);
 
   const launcherVisible = compileFunction(launcherSource, "isCommandVisible", {

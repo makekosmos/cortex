@@ -1,12 +1,8 @@
 import { ipcRenderer } from "electron";
 import type { KeplerApi } from "../shared/ipc-types";
-import type { FocusOverlayFeedback } from "../shared/ipc-api-shell-services";
 import type { UpdateState } from "../shared/ipc-types";
 
-type KeplerSettingsBridge = Pick<
-  KeplerApi,
-  "settings" | "focusOverlay" | "diagnostics" | "postUpdate"
->;
+type KeplerSettingsBridge = Pick<KeplerApi, "settings" | "diagnostics" | "postUpdate">;
 
 export function createKeplerSettingsBridge(): KeplerSettingsBridge {
   return {
@@ -37,19 +33,6 @@ export function createKeplerSettingsBridge(): KeplerSettingsBridge {
           return () => ipcRenderer.removeListener("kepler:settings:update:state", handler);
         },
       },
-    },
-    focusOverlay: {
-      ready: () => ipcRenderer.send("kepler:focus-overlay:ready"),
-      onShow: (listener) => {
-        const handler = (_e: Electron.IpcRendererEvent, feedback: FocusOverlayFeedback) =>
-          listener(feedback);
-        ipcRenderer.on("kepler:focus-overlay:show", handler);
-        return () => ipcRenderer.removeListener("kepler:focus-overlay:show", handler);
-      },
-      setInteractive: (interactive: boolean) =>
-        ipcRenderer.invoke("kepler:focus-overlay:set-interactive", interactive),
-      showBlocked: (app) => ipcRenderer.invoke("kepler:focus-overlay:show-blocked", app),
-      done: () => ipcRenderer.send("kepler:focus-overlay:done"),
     },
     diagnostics: {
       bundle: () => ipcRenderer.invoke("kepler:diagnostics:bundle"),

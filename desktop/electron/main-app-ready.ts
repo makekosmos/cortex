@@ -1,12 +1,6 @@
 import { nativeTheme, powerMonitor } from "electron";
 import type { ArkClient } from "@kosmos/ark";
 import type { JsonRecord } from "./extension-permissions";
-import { showFocusBlockOverlay } from "./focus-overlay";
-import {
-  setBlockedAppNotifier,
-  setFocusSessionRuntime,
-  setFocusSessionShellOpener,
-} from "./focus-session";
 import { registerMainProtocols } from "./main-protocols";
 import { handlePostUpdateFirstLaunch } from "./main-post-update";
 import { setupAutoUpdater } from "./autoupdater-host";
@@ -50,7 +44,6 @@ interface AppReadyLauncher extends PostUpdateLauncher {
     setHotkeyReregisterCallback: typeof setHotkeyReregisterCallback;
   }): void;
   setTrayVisible(visible: boolean): void;
-  showFocusSessionLauncher(): void;
 }
 
 interface RunAppReadyOptions {
@@ -100,11 +93,6 @@ export async function runAppReady({
         ? { err: String(error), stack: error.stack }
         : { err: String(error) },
     );
-  });
-  setFocusSessionShellOpener(launcher.showFocusSessionLauncher);
-  setFocusSessionRuntime({ awaitArkReady });
-  setBlockedAppNotifier((app) => {
-    showFocusBlockOverlay(app);
   });
   setTrayVisibilityController(launcher.setTrayVisible);
   launcher.setTrayVisible(isTrayIconEnabled());

@@ -14,12 +14,6 @@ interface MainArkClientControllerOptions {
   desktopAuthorityCredential: string;
   instance: Instance;
   isBackendRunning(): boolean;
-  setupPomodoroNotifier(options: { arkClient: ArkClient }): void;
-  teardownPomodoroNotifier(): void;
-  setupFocusWidgetBackendSync(options: { arkClient: ArkClient }): void;
-  teardownFocusWidgetBackendSync(): void;
-  setupFocusSessionBackendSync(options: { arkClient: ArkClient }): void;
-  teardownFocusSessionBackendSync(): void | Promise<void>;
   setupDictationHotkey(): Promise<void>;
   broadcastCommandsUpdated(): void;
 }
@@ -105,9 +99,6 @@ export function createMainArkClientController(
     arkRendererEventsUnsubscribe?.();
     arkRendererEventsUnsubscribe = null;
     if (wasConnected) broadcastBackendEvent("kepler:backend:disconnected");
-    options.teardownPomodoroNotifier();
-    options.teardownFocusWidgetBackendSync();
-    await options.teardownFocusSessionBackendSync();
     if (prev) {
       try {
         await prev.stop();
@@ -227,21 +218,6 @@ export function createMainArkClientController(
   }
 
   function setupConnectedClient(client: ArkClient): void {
-    try {
-      options.setupPomodoroNotifier({ arkClient: client });
-    } catch (e) {
-      keplerLog.error("pomodoro-notifier", "setup failed", { err: String(e) });
-    }
-    try {
-      options.setupFocusWidgetBackendSync({ arkClient: client });
-    } catch (e) {
-      keplerLog.error("focus-widget", "backend sync setup failed", { err: String(e) });
-    }
-    try {
-      options.setupFocusSessionBackendSync({ arkClient: client });
-    } catch (e) {
-      keplerLog.error("focus-session", "backend sync setup failed", { err: String(e) });
-    }
     void options
       .setupDictationHotkey()
       .catch((e) => keplerLog.error("dictation", "hotkey setup failed", { err: String(e) }));
@@ -272,8 +248,6 @@ export function createMainArkClientController(
   }
 
   async function shutdown(): Promise<void> {
-    await options.teardownFocusSessionBackendSync();
-    options.teardownPomodoroNotifier();
     if (arkClient) {
       try {
         await arkClient.stop();

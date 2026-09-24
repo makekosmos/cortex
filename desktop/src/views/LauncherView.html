@@ -1,226 +1,219 @@
-  <div class="launcher" @keydown="onKey">
-    <div
-      class="search-bar"
-      :class="{
+<div class="launcher" @keydown="onKey">
+  <div
+    class="search-bar"
+    :class="{
         'search-bar--subpage': mode !== 'commands',
         'search-bar--hidden': mode === 'hidden',
       }"
+  >
+    <button
+      v-if="mode !== 'commands'"
+      class="search-icon-button"
+      type="button"
+      title="Назад"
+      @click="leaveCommandMode"
     >
-      <button
-        v-if="mode !== 'commands'"
-        class="search-icon-button"
-        type="button"
-        title="Назад"
-        @click="leaveCommandMode"
-      >
-        <ArrowLeft :size="17" />
-      </button>
-      <input
-        v-if="mode !== 'focus' && mode !== 'hidden'"
-        ref="inputRef"
-        v-model="query"
-        class="search"
-        type="text"
-        :placeholder="searchPlaceholder"
-        spellcheck="false"
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="off"
-        @input="onInput"
-      />
-      <div v-else class="search-heading">{{ headerTitle }}</div>
-    </div>
-    <div
-      ref="listRef"
-      class="list kosmos-scroll"
-      :class="{ 'list--focus': mode === 'focus' }"
-      @scroll="onListScroll"
-      @mousedown="onListMouseDown"
-    >
-      <FocusCommandPanel v-if="mode === 'focus'" ref="focusPanelRef" />
-      <template v-else-if="mode === 'hidden'">
-        <div v-if="hiddenCommandsList.length === 0" class="empty">Нет скрытых команд</div>
-        <ul v-else class="results">
-          <li v-for="cmd in hiddenCommandsList" :key="cmd.id" class="result result--hidden">
-            <BuiltInIcon
-              v-if="builtInIconFor(cmd)"
-              :icon="builtInIconFor(cmd)?.icon"
-              :svg-src="builtInIconFor(cmd)?.svgSrc"
-              :icon-color="builtInIconFor(cmd)?.iconColor"
-              :from="builtInIconFor(cmd)?.from"
-              :to="builtInIconFor(cmd)?.to"
-            />
-            <img
-              v-else-if="cmd.icon"
-              :src="cmd.icon"
-              class="icon"
-              alt=""
-              loading="lazy"
-              decoding="async"
-            />
-            <BuiltInIcon v-else />
-            <span class="title">{{ cmd.title }}</span>
-            <span class="kind-label">{{
-              cmd.appName ?? (cmd.kind === "app" ? "Приложение" : "Команда")
-            }}</span>
-            <button type="button" class="unhide-btn" @click.stop="toggleCommandVisibility(cmd.id)">
-              Показать
-            </button>
+      <ArrowLeft :size="17" />
+    </button>
+    <input
+      v-if="mode !== 'hidden'"
+      ref="inputRef"
+      v-model="query"
+      class="search"
+      type="text"
+      :placeholder="searchPlaceholder"
+      spellcheck="false"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      @input="onInput"
+    />
+    <div v-else class="search-heading">{{ headerTitle }}</div>
+  </div>
+  <div ref="listRef" class="list kosmos-scroll" @scroll="onListScroll" @mousedown="onListMouseDown">
+    <template v-if="mode === 'hidden'">
+      <div v-if="hiddenCommandsList.length === 0" class="empty">Нет скрытых команд</div>
+      <ul v-else class="results">
+        <li v-for="cmd in hiddenCommandsList" :key="cmd.id" class="result result--hidden">
+          <BuiltInIcon
+            v-if="builtInIconFor(cmd)"
+            :icon="builtInIconFor(cmd)?.icon"
+            :svg-src="builtInIconFor(cmd)?.svgSrc"
+            :icon-color="builtInIconFor(cmd)?.iconColor"
+            :from="builtInIconFor(cmd)?.from"
+            :to="builtInIconFor(cmd)?.to"
+          />
+          <img
+            v-else-if="cmd.icon"
+            :src="cmd.icon"
+            class="icon"
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+          <BuiltInIcon v-else />
+          <span class="title">{{ cmd.title }}</span>
+          <span class="kind-label"
+            >{{ cmd.appName ?? (cmd.kind === "app" ? "Приложение" : "Команда") }}</span
+          >
+          <button type="button" class="unhide-btn" @click.stop="toggleCommandVisibility(cmd.id)">
+            Показать
+          </button>
+        </li>
+      </ul>
+    </template>
+    <template v-else>
+      <template v-if="postUpdateVersion">
+        <div class="section-label">Готово</div>
+        <ul class="results">
+          <li class="result update-tile post-update-tile" @click="dismissPostUpdate">
+            <span class="update-icon update-icon-large post-update-icon">
+              <Check :size="22" :stroke-width="2.5" />
+            </span>
+            <div class="update-body">
+              <div class="update-title">Kepler обновлён до v{{ postUpdateVersion }}</div>
+              <div class="update-description">Нажми, чтобы скрыть</div>
+            </div>
           </li>
         </ul>
       </template>
-      <template v-else>
-        <template v-if="postUpdateVersion">
-          <div class="section-label">Готово</div>
-          <ul class="results">
-            <li class="result update-tile post-update-tile" @click="dismissPostUpdate">
-              <span class="update-icon update-icon-large post-update-icon">
-                <Check :size="22" :stroke-width="2.5" />
-              </span>
-              <div class="update-body">
-                <div class="update-title">Kepler обновлён до v{{ postUpdateVersion }}</div>
-                <div class="update-description">Нажми, чтобы скрыть</div>
-              </div>
-            </li>
-          </ul>
-        </template>
-        <template v-else-if="updateBanner">
-          <div class="section-label">Обновление</div>
-          <ul class="results">
-            <li
-              class="result update-tile"
-              :class="{ selected: selectedIndex === 0, disabled: !updateBanner.clickable }"
-              @click="
+      <template v-else-if="updateBanner">
+        <div class="section-label">Обновление</div>
+        <ul class="results">
+          <li
+            class="result update-tile"
+            :class="{ selected: selectedIndex === 0, disabled: !updateBanner.clickable }"
+            @click="
                 () => {
                   selectedIndex = 0;
                   void invokeSelected();
                 }
               "
-            >
-              <span class="update-icon update-icon-large">
-                <component
-                  :is="updateBanner.icon"
-                  :size="22"
-                  :stroke-width="2"
-                  :class="{ spin: updateBanner.spinning }"
-                />
-              </span>
-              <div class="update-body">
-                <div class="update-title">{{ updateBanner.title }}</div>
-                <div class="update-description">{{ updateBanner.description }}</div>
-              </div>
-              <span
-                v-if="updateBanner.progress !== undefined"
-                class="update-tile-progress"
-                :style="{ width: `${updateBanner.progress}%` }"
+          >
+            <span class="update-icon update-icon-large">
+              <component
+                :is="updateBanner.icon"
+                :size="22"
+                :stroke-width="2"
+                :class="{ spin: updateBanner.spinning }"
               />
-            </li>
-          </ul>
-        </template>
-        <template v-if="groupedNoQuery">
-          <template v-if="groupedNoQuery.favorites.length > 0">
-            <div class="section-label">Избранное</div>
-            <ul class="results">
-              <li
-                v-for="(cmd, idx) in groupedNoQuery.favorites"
-                :key="`fav-${cmd.id}`"
-                class="result"
-                :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
-                @click="selectedIndex = (updateBanner ? 1 : 0) + idx"
-                @dblclick="
+            </span>
+            <div class="update-body">
+              <div class="update-title">{{ updateBanner.title }}</div>
+              <div class="update-description">{{ updateBanner.description }}</div>
+            </div>
+            <span
+              v-if="updateBanner.progress !== undefined"
+              class="update-tile-progress"
+              :style="{ width: `${updateBanner.progress}%` }"
+            />
+          </li>
+        </ul>
+      </template>
+      <template v-if="groupedNoQuery">
+        <template v-if="groupedNoQuery.favorites.length > 0">
+          <div class="section-label">Избранное</div>
+          <ul class="results">
+            <li
+              v-for="(cmd, idx) in groupedNoQuery.favorites"
+              :key="`fav-${cmd.id}`"
+              class="result"
+              :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
+              @click="selectedIndex = (updateBanner ? 1 : 0) + idx"
+              @dblclick="
                   () => {
                     selectedIndex = (updateBanner ? 1 : 0) + idx;
                     void invokeSelected();
                   }
                 "
+            >
+              <BuiltInIcon
+                v-if="builtInIconFor(cmd)"
+                :icon="builtInIconFor(cmd)?.icon"
+                :svg-src="builtInIconFor(cmd)?.svgSrc"
+                :icon-color="builtInIconFor(cmd)?.iconColor"
+                :from="builtInIconFor(cmd)?.from"
+                :to="builtInIconFor(cmd)?.to"
+              />
+              <img
+                v-else-if="cmd.icon"
+                :src="cmd.icon"
+                class="icon"
+                alt=""
+                loading="lazy"
+                decoding="async"
+              />
+              <BuiltInIcon v-else />
+              <span class="title">{{ cmd.title }}</span>
+              <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name"
+                >{{ cmd.appName }}</span
               >
-                <BuiltInIcon
-                  v-if="builtInIconFor(cmd)"
-                  :icon="builtInIconFor(cmd)?.icon"
-                  :svg-src="builtInIconFor(cmd)?.svgSrc"
-                  :icon-color="builtInIconFor(cmd)?.iconColor"
-                  :from="builtInIconFor(cmd)?.from"
-                  :to="builtInIconFor(cmd)?.to"
-                />
-                <img
-                  v-else-if="cmd.icon"
-                  :src="cmd.icon"
-                  class="icon"
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                />
-                <BuiltInIcon v-else />
-                <span class="title">{{ cmd.title }}</span>
-                <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
-                  cmd.appName
-                }}</span>
-                <span class="kind-label">{{
-                  cmd.kind === "command" ? "Команда" : "Приложение"
-                }}</span>
-              </li>
-            </ul>
-          </template>
-          <template v-if="groupedNoQuery.recent.length > 0">
-            <div class="section-label">Недавние</div>
-            <ul class="results">
-              <li
-                v-for="(cmd, idx) in groupedNoQuery.recent"
-                :key="`recent-${cmd.id}`"
-                class="result"
-                :class="{
+              <span class="kind-label"
+                >{{ cmd.kind === "command" ? "Команда" : "Приложение" }}</span
+              >
+            </li>
+          </ul>
+        </template>
+        <template v-if="groupedNoQuery.recent.length > 0">
+          <div class="section-label">Недавние</div>
+          <ul class="results">
+            <li
+              v-for="(cmd, idx) in groupedNoQuery.recent"
+              :key="`recent-${cmd.id}`"
+              class="result"
+              :class="{
                   selected:
                     (updateBanner ? 1 : 0) + groupedNoQuery.favorites.length + idx ===
                     selectedIndex,
                 }"
-                @click="
+              @click="
                   selectedIndex = (updateBanner ? 1 : 0) + groupedNoQuery?.favorites.length + idx
                 "
-                @dblclick="
+              @dblclick="
                   () => {
                     selectedIndex = (updateBanner ? 1 : 0) + groupedNoQuery?.favorites.length + idx;
                     void invokeSelected();
                   }
                 "
+            >
+              <BuiltInIcon
+                v-if="builtInIconFor(cmd)"
+                :icon="builtInIconFor(cmd)?.icon"
+                :svg-src="builtInIconFor(cmd)?.svgSrc"
+                :icon-color="builtInIconFor(cmd)?.iconColor"
+                :from="builtInIconFor(cmd)?.from"
+                :to="builtInIconFor(cmd)?.to"
+              />
+              <img
+                v-else-if="cmd.icon"
+                :src="cmd.icon"
+                class="icon"
+                alt=""
+                loading="lazy"
+                decoding="async"
+              />
+              <BuiltInIcon v-else />
+              <span class="title">{{ cmd.title }}</span>
+              <span v-if="cmd.kind === 'file' && cmd.subtitle" class="subtitle"
+                >{{ cmd.subtitle }}</span
               >
-                <BuiltInIcon
-                  v-if="builtInIconFor(cmd)"
-                  :icon="builtInIconFor(cmd)?.icon"
-                  :svg-src="builtInIconFor(cmd)?.svgSrc"
-                  :icon-color="builtInIconFor(cmd)?.iconColor"
-                  :from="builtInIconFor(cmd)?.from"
-                  :to="builtInIconFor(cmd)?.to"
-                />
-                <img
-                  v-else-if="cmd.icon"
-                  :src="cmd.icon"
-                  class="icon"
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                />
-                <BuiltInIcon v-else />
-                <span class="title">{{ cmd.title }}</span>
-                <span v-if="cmd.kind === 'file' && cmd.subtitle" class="subtitle">{{
-                  cmd.subtitle
-                }}</span>
-                <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
-                  cmd.appName
-                }}</span>
-                <span class="kind-label">{{
-                  cmd.kind === "command" ? "Команда" : "Приложение"
-                }}</span>
-              </li>
-            </ul>
-          </template>
-          <template v-if="groupedNoQuery.all.length > 0">
-            <div class="section-label">Все</div>
-            <ul class="results">
-              <li
-                v-for="(cmd, idx) in groupedNoQuery.all"
-                :key="`all-${cmd.id}`"
-                class="result"
-                :class="{
+              <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name"
+                >{{ cmd.appName }}</span
+              >
+              <span class="kind-label"
+                >{{ cmd.kind === "command" ? "Команда" : "Приложение" }}</span
+              >
+            </li>
+          </ul>
+        </template>
+        <template v-if="groupedNoQuery.all.length > 0">
+          <div class="section-label">Все</div>
+          <ul class="results">
+            <li
+              v-for="(cmd, idx) in groupedNoQuery.all"
+              :key="`all-${cmd.id}`"
+              class="result"
+              :class="{
                   selected:
                     (updateBanner ? 1 : 0) +
                       groupedNoQuery.favorites.length +
@@ -228,14 +221,14 @@
                       idx ===
                     selectedIndex,
                 }"
-                @click="
+              @click="
                   selectedIndex =
                     (updateBanner ? 1 : 0) +
                     groupedNoQuery?.favorites.length +
                     groupedNoQuery?.recent.length +
                     idx
                 "
-                @dblclick="
+              @dblclick="
                   () => {
                     selectedIndex =
                       (updateBanner ? 1 : 0) +
@@ -245,188 +238,188 @@
                     void invokeSelected();
                   }
                 "
+            >
+              <BuiltInIcon
+                v-if="builtInIconFor(cmd)"
+                :icon="builtInIconFor(cmd)?.icon"
+                :svg-src="builtInIconFor(cmd)?.svgSrc"
+                :icon-color="builtInIconFor(cmd)?.iconColor"
+                :from="builtInIconFor(cmd)?.from"
+                :to="builtInIconFor(cmd)?.to"
+              />
+              <img
+                v-else-if="cmd.icon"
+                :src="cmd.icon"
+                class="icon"
+                alt=""
+                loading="lazy"
+                decoding="async"
+              />
+              <BuiltInIcon v-else />
+              <span class="title">{{ cmd.title }}</span>
+              <span v-if="cmd.kind === 'file' && cmd.subtitle" class="subtitle"
+                >{{ cmd.subtitle }}</span
               >
-                <BuiltInIcon
-                  v-if="builtInIconFor(cmd)"
-                  :icon="builtInIconFor(cmd)?.icon"
-                  :svg-src="builtInIconFor(cmd)?.svgSrc"
-                  :icon-color="builtInIconFor(cmd)?.iconColor"
-                  :from="builtInIconFor(cmd)?.from"
-                  :to="builtInIconFor(cmd)?.to"
-                />
-                <img
-                  v-else-if="cmd.icon"
-                  :src="cmd.icon"
-                  class="icon"
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                />
-                <BuiltInIcon v-else />
-                <span class="title">{{ cmd.title }}</span>
-                <span v-if="cmd.kind === 'file' && cmd.subtitle" class="subtitle">{{
-                  cmd.subtitle
-                }}</span>
-                <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
-                  cmd.appName
-                }}</span>
-                <span class="kind-label">{{
-                  cmd.kind === "command" ? "Команда" : "Приложение"
-                }}</span>
-              </li>
-            </ul>
-          </template>
+              <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name"
+                >{{ cmd.appName }}</span
+              >
+              <span class="kind-label"
+                >{{ cmd.kind === "command" ? "Команда" : "Приложение" }}</span
+              >
+            </li>
+          </ul>
         </template>
-        <template v-else>
-          <div v-if="filteredCommands.length === 0 && fileCommands.length === 0" class="empty">
-            Ничего не найдено
-          </div>
-          <template v-if="calculatorCommand">
-            <div class="section-label">Калькулятор</div>
-            <ul class="results">
-              <li
-                class="result result--calculator"
-                :class="{ selected: (updateBanner ? 1 : 0) === selectedIndex }"
-                @click="
+      </template>
+      <template v-else>
+        <div v-if="filteredCommands.length === 0 && fileCommands.length === 0" class="empty">
+          Ничего не найдено
+        </div>
+        <template v-if="calculatorCommand">
+          <div class="section-label">Калькулятор</div>
+          <ul class="results">
+            <li
+              class="result result--calculator"
+              :class="{ selected: (updateBanner ? 1 : 0) === selectedIndex }"
+              @click="
                   () => {
                     selectedIndex = updateBanner ? 1 : 0;
                     void invokeSelected();
                   }
                 "
-                aria-label="Скопировать результат вычисления"
-              >
-                <div class="calculator-card__side">
-                  <strong class="calculator-card__value calculator-card__expression">{{
-                    calculatorCommand.subtitle
-                  }}</strong>
-                  <span class="calculator-card__badge">Выражение</span>
-                </div>
-                <span class="calculator-card__arrow" aria-hidden="true">→</span>
-                <div class="calculator-card__side calculator-card__side--result">
-                  <strong class="calculator-card__value calculator-card__result">{{
-                    calculatorCommand.title
-                  }}</strong>
-                  <span class="calculator-card__badge">Результат</span>
-                </div>
-              </li>
-            </ul>
-          </template>
-          <template v-if="matchedCommands.length > 0">
-            <div class="section-label">Все</div>
-            <ul class="results">
-              <li
-                v-for="(cmd, idx) in matchedCommands"
-                :key="cmd.id"
-                class="result"
-                :class="{
+              aria-label="Скопировать результат вычисления"
+            >
+              <div class="calculator-card__side">
+                <strong class="calculator-card__value calculator-card__expression"
+                  >{{ calculatorCommand.subtitle }}</strong
+                >
+                <span class="calculator-card__badge">Выражение</span>
+              </div>
+              <span class="calculator-card__arrow" aria-hidden="true">→</span>
+              <div class="calculator-card__side calculator-card__side--result">
+                <strong class="calculator-card__value calculator-card__result"
+                  >{{ calculatorCommand.title }}</strong
+                >
+                <span class="calculator-card__badge">Результат</span>
+              </div>
+            </li>
+          </ul>
+        </template>
+        <template v-if="matchedCommands.length > 0">
+          <div class="section-label">Все</div>
+          <ul class="results">
+            <li
+              v-for="(cmd, idx) in matchedCommands"
+              :key="cmd.id"
+              class="result"
+              :class="{
                   selected:
                     (updateBanner ? 1 : 0) + (calculatorCommand ? 1 : 0) + idx === selectedIndex,
                 }"
-                @click="
+              @click="
                   () => {
                     selectedIndex = (updateBanner ? 1 : 0) + (calculatorCommand ? 1 : 0) + idx;
                   }
                 "
-                @dblclick="
+              @dblclick="
                   () => {
                     selectedIndex = (updateBanner ? 1 : 0) + (calculatorCommand ? 1 : 0) + idx;
                     void invokeSelected();
                   }
                 "
+            >
+              <BuiltInIcon
+                v-if="builtInIconFor(cmd)"
+                :icon="builtInIconFor(cmd)?.icon"
+                :svg-src="builtInIconFor(cmd)?.svgSrc"
+                :icon-color="builtInIconFor(cmd)?.iconColor"
+                :from="builtInIconFor(cmd)?.from"
+                :to="builtInIconFor(cmd)?.to"
+              />
+              <img
+                v-else-if="cmd.icon"
+                :src="cmd.icon"
+                class="icon"
+                alt=""
+                loading="lazy"
+                decoding="async"
+              />
+              <span v-else class="icon icon-placeholder" aria-hidden="true" />
+              <span class="title">{{ cmd.title }}</span>
+              <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name"
+                >{{ cmd.appName }}</span
               >
-                <BuiltInIcon
-                  v-if="builtInIconFor(cmd)"
-                  :icon="builtInIconFor(cmd)?.icon"
-                  :svg-src="builtInIconFor(cmd)?.svgSrc"
-                  :icon-color="builtInIconFor(cmd)?.iconColor"
-                  :from="builtInIconFor(cmd)?.from"
-                  :to="builtInIconFor(cmd)?.to"
-                />
-                <img
-                  v-else-if="cmd.icon"
-                  :src="cmd.icon"
-                  class="icon"
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                />
-                <span v-else class="icon icon-placeholder" aria-hidden="true" />
-                <span class="title">{{ cmd.title }}</span>
-                <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
-                  cmd.appName
-                }}</span>
-                <span class="kind-label">{{
-                  cmd.kind === "command" ? "Команда" : "Приложение"
-                }}</span>
-              </li>
-            </ul>
-          </template>
-          <template v-if="fileCommands.length > 0">
-            <div class="section-label">Файлы</div>
-            <ul class="results">
-              <template v-for="(cmd, idx) in fileCommands" :key="cmd.id">
-                <FileSearchResultRow
-                  :title="cmd.title"
-                  :path="cmd.subtitle ?? ''"
-                  :selected="
+              <span class="kind-label"
+                >{{ cmd.kind === "command" ? "Команда" : "Приложение" }}</span
+              >
+            </li>
+          </ul>
+        </template>
+        <template v-if="fileCommands.length > 0">
+          <div class="section-label">Файлы</div>
+          <ul class="results">
+            <template v-for="(cmd, idx) in fileCommands" :key="cmd.id">
+              <FileSearchResultRow
+                :title="cmd.title"
+                :path="cmd.subtitle ?? ''"
+                :selected="
                     (updateBanner ? 1 : 0) + filteredCommands.length + idx === selectedIndex
                   "
-                  @select="
+                @select="
                     () => {
                       selectedIndex = (updateBanner ? 1 : 0) + filteredCommands.length + idx;
                     }
                   "
-                />
-              </template>
-            </ul>
-          </template>
+              />
+            </template>
+          </ul>
         </template>
       </template>
-    </div>
-    <div
-      v-if="actionsOpen || menuOpen"
-      class="actions-backdrop"
-      @click="
+    </template>
+  </div>
+  <div
+    v-if="actionsOpen || menuOpen"
+    class="actions-backdrop"
+    @click="
         actionsOpen = false;
         menuOpen = false;
       "
-    />
+  />
 
-    <!-- Меню гамбургера -->
-    <div v-if="menuOpen" class="launcher-menu">
-      <ul class="launcher-menu__list">
-        <li
-          class="launcher-menu__item"
-          @click="
+  <!-- Меню гамбургера -->
+  <div v-if="menuOpen" class="launcher-menu">
+    <ul class="launcher-menu__list">
+      <li
+        class="launcher-menu__item"
+        @click="
             () => {
               menuOpen = false;
               openGitHub();
             }
           "
+      >
+        <span class="launcher-menu__label">На GitHub</span>
+        <span class="launcher-menu__hint">↗</span>
+      </li>
+      <li class="launcher-menu__item" @click="enterHiddenMode">
+        <span class="launcher-menu__label">Показать скрытые</span>
+        <span v-if="hiddenCommandIds.length > 0" class="launcher-menu__badge"
+          >{{ hiddenCommandIds.length }}</span
         >
-          <span class="launcher-menu__label">На GitHub</span>
-          <span class="launcher-menu__hint">↗</span>
-        </li>
-        <li class="launcher-menu__item" @click="enterHiddenMode">
-          <span class="launcher-menu__label">Показать скрытые</span>
-          <span v-if="hiddenCommandIds.length > 0" class="launcher-menu__badge">{{
-            hiddenCommandIds.length
-          }}</span>
-        </li>
-      </ul>
-    </div>
-    <ActionsPanel
-      v-if="actionsOpen && selectedCommand"
-      :is-favorite="favoriteIds.includes(selectedCommand.id)"
-      :is-hidden="hiddenCommandIds.includes(selectedCommand.id)"
-      :can-hide="selectedCommand.kind !== 'file'"
-      @open="
+      </li>
+    </ul>
+  </div>
+  <ActionsPanel
+    v-if="actionsOpen && selectedCommand"
+    :is-favorite="favoriteIds.includes(selectedCommand.id)"
+    :is-hidden="hiddenCommandIds.includes(selectedCommand.id)"
+    :can-hide="selectedCommand.kind !== 'file'"
+    @open="
         () => {
           actionsOpen = false;
           void invokeSelected();
         }
       "
-      @toggle-favorite="
+    @toggle-favorite="
         () => {
           if (selectedCommand) {
             toggleFavorite(selectedCommand.id);
@@ -434,7 +427,7 @@
           }
         }
       "
-      @toggle-hide="
+    @toggle-hide="
         () => {
           if (selectedCommand) {
             toggleCommandVisibility(selectedCommand.id);
@@ -442,52 +435,37 @@
           }
         }
       "
-    />
-    <!-- Footer: hidden mode -->
-    <div v-if="mode === 'hidden'" class="launcher-footer">
-      <span class="launcher-footer__left launcher-footer__left--mode">
-        <EyeOff :size="14" />
-        Скрытые команды
-      </span>
-    </div>
+  />
+  <!-- Footer: hidden mode -->
+  <div v-if="mode === 'hidden'" class="launcher-footer">
+    <span class="launcher-footer__left launcher-footer__left--mode">
+      <EyeOff :size="14" />
+      Скрытые команды
+    </span>
+  </div>
 
-    <!-- Footer: focus mode -->
-    <div v-else-if="mode === 'focus'" class="launcher-footer">
-      <span class="launcher-footer__left launcher-footer__left--mode">
-        <TargetIcon :size="14" />
-        Фокус
-      </span>
+  <!-- Footer: commands mode -->
+  <div v-else class="launcher-footer">
+    <button type="button" class="launcher-footer__menu-btn" @click="menuOpen = !menuOpen">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+        <rect x="1" y="3" width="12" height="1.5" rx="0.75" fill="currentColor" />
+        <rect x="1" y="6.25" width="12" height="1.5" rx="0.75" fill="currentColor" />
+        <rect x="1" y="9.5" width="12" height="1.5" rx="0.75" fill="currentColor" />
+      </svg>
+    </button>
+    <div class="launcher-footer__actions">
+      <button type="button" class="launcher-footer__hint-btn" @click="void invokeSelected()">
+        {{ calculatorSelected ? "Копировать" : "Открыть команды" }} <KbdKey>↵</KbdKey>
+      </button>
+      <span v-if="!calculatorSelected" class="launcher-footer__sep" aria-hidden="true" />
       <button
+        v-if="!calculatorSelected"
         type="button"
-        class="launcher-footer__hint-btn launcher-footer__hint-btn--primary"
-        @click="void focusPanelRef?.start()"
+        class="launcher-footer__hint-btn"
+        @click="selectedCommand && (actionsOpen = !actionsOpen)"
       >
-        {{ focusEditMode ? "Продолжить" : "Начать фокус" }} <KbdKey>↵</KbdKey>
+        Опции <KbdKey>Ctrl</KbdKey><KbdKey>K</KbdKey>
       </button>
-    </div>
-
-    <!-- Footer: commands mode -->
-    <div v-else class="launcher-footer">
-      <button type="button" class="launcher-footer__menu-btn" @click="menuOpen = !menuOpen">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-          <rect x="1" y="3" width="12" height="1.5" rx="0.75" fill="currentColor" />
-          <rect x="1" y="6.25" width="12" height="1.5" rx="0.75" fill="currentColor" />
-          <rect x="1" y="9.5" width="12" height="1.5" rx="0.75" fill="currentColor" />
-        </svg>
-      </button>
-      <div class="launcher-footer__actions">
-        <button type="button" class="launcher-footer__hint-btn" @click="void invokeSelected()">
-          {{ calculatorSelected ? "Копировать" : "Открыть команды" }} <KbdKey>↵</KbdKey>
-        </button>
-        <span v-if="!calculatorSelected" class="launcher-footer__sep" aria-hidden="true" />
-        <button
-          v-if="!calculatorSelected"
-          type="button"
-          class="launcher-footer__hint-btn"
-          @click="selectedCommand && (actionsOpen = !actionsOpen)"
-        >
-          Опции <KbdKey>Ctrl</KbdKey><KbdKey>K</KbdKey>
-        </button>
-      </div>
     </div>
   </div>
+</div>
