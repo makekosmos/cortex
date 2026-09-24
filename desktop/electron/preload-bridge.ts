@@ -1,5 +1,4 @@
 import { ipcRenderer } from "electron";
-import type { CommandFeedbackEvent, CommandSnapshot } from "../shared/command-ipc";
 import type { KeplerApi } from "../shared/ipc-types";
 import { createKeplerSettingsBridge } from "./preload-settings-bridge";
 import type { JsonRecord } from "./extension-permissions";
@@ -16,11 +15,6 @@ type KeplerTestApi = {
 };
 
 type KeplerPreloadApi = KeplerApi & KeplerTestApi;
-type CommandIpcPayload = {
-  sessionId?: string;
-  snapshot?: CommandSnapshot;
-  event?: CommandFeedbackEvent;
-};
 
 type ArkEventPayload = JsonRecord;
 type BlockedApp = { id: string; title: string; icon?: string | null };
@@ -69,7 +63,8 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
     },
     extension: {
       installedList: () => ipcRenderer.invoke("kepler:extension:installed:list"),
-      catalogFetch: (force?: boolean) => ipcRenderer.invoke("kepler:extension:catalog:fetch", force),
+      catalogFetch: (force?: boolean) =>
+        ipcRenderer.invoke("kepler:extension:catalog:fetch", force),
       installFromUrl: (url: string, sha256: string | null) =>
         ipcRenderer.invoke("kepler:extension:install:fromUrl", url, sha256),
       revert: (id: string, timestamp?: string) =>
@@ -114,30 +109,6 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
         const handler = () => listener();
         ipcRenderer.on("kepler:commands:updated", handler);
         return () => ipcRenderer.removeListener("kepler:commands:updated", handler);
-      },
-    },
-    command: {
-      snapshot: (sessionId) => ipcRenderer.invoke("kepler:command:snapshot", sessionId),
-      action: (sessionId, action) => ipcRenderer.invoke("kepler:command:action", sessionId, action),
-      pickFiles: (sessionId, request) =>
-        ipcRenderer.invoke("kepler:command:pick-files", sessionId, request),
-      onSnapshotUpdated: (sessionId, listener) => {
-        const handler = (_event: Electron.IpcRendererEvent, payload: CommandIpcPayload) => {
-          if (payload.sessionId === sessionId && payload.snapshot !== undefined) {
-            listener(payload.snapshot);
-          }
-        };
-        ipcRenderer.on("kepler:command:snapshot-updated", handler);
-        return () => ipcRenderer.removeListener("kepler:command:snapshot-updated", handler);
-      },
-      onFeedback: (sessionId, listener) => {
-        const handler = (_event: Electron.IpcRendererEvent, payload: CommandIpcPayload) => {
-          if (payload.sessionId === sessionId && payload.event !== undefined) {
-            listener(payload.event);
-          }
-        };
-        ipcRenderer.on("kepler:command:feedback", handler);
-        return () => ipcRenderer.removeListener("kepler:command:feedback", handler);
       },
     },
     focusSession: {

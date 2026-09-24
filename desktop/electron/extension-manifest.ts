@@ -3,7 +3,6 @@ import path from "node:path";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
 import { KEPLER_API_VERSION, satisfiesSemver } from "./kepler-api";
-import { loadCommandPackageManifest } from "./command-host/manifest";
 import { resolveExtensionDir, resolveExtensionRoots } from "./extension-package-registry";
 import type { ExtensionKind, ExtensionManifest } from "./extension-manifest-types";
 
@@ -139,42 +138,7 @@ export function loadExtensionManifest(id: string): ExtensionManifest | null {
   const dir = resolveExtensionDir(id);
   if (!dir) return null;
   const manifestPath = path.join(dir, "manifest.json");
-  if (!existsSync(manifestPath)) {
-    const commandPackage = loadCommandPackageManifest(dir);
-    if (!commandPackage) return null;
-    if (commandPackage.name !== id) {
-      console.warn(
-        `[kepler-shell] Command package name mismatch: folder=${id}, package=${commandPackage.name}`,
-      );
-      return null;
-    }
-    return {
-      id: commandPackage.name,
-      name: commandPackage.title,
-      version: commandPackage.version,
-      description: commandPackage.description,
-      author: commandPackage.author,
-      permissions: commandPackage.kosmos?.permissions,
-      kind: "command-extension",
-      icon: commandPackage.icon,
-      windowEffect: commandPackage.kosmos?.windowEffect,
-      keplerApiVersion: commandPackage.kosmos?.minKosmosApiVersion,
-      commandPackage,
-      commands: commandPackage.commands.map((command) => ({
-        id: command.name,
-        title: command.title,
-        subtitle: command.subtitle ?? commandPackage.title,
-        icon: command.icon ?? commandPackage.icon,
-        kind: "command",
-        mode:
-          command.mode === "no-view"
-            ? "command-no-view"
-            : command.mode === "menu-bar"
-              ? "command-menu-bar"
-              : "command-view",
-      })),
-    };
-  }
+  if (!existsSync(manifestPath)) return null;
   try {
     // SAFETY: The surrounding boundary establishes this documented contract.
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as ExtensionManifest;

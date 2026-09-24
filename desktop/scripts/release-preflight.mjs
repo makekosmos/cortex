@@ -37,7 +37,6 @@ export function ensureCleanSource() {
       "manager-gpui",
       "runtime/src",
       "native-services",
-      "packages",
     ],
     { cwd: repoRoot, encoding: "utf8" },
   ).trim();

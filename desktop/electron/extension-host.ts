@@ -30,8 +30,6 @@ import {
   isHeadlessOrTest,
   listExtensions,
   loadExtensionManifest,
-  resolveExtensionLocation,
-  type ExtensionManifest,
 } from "./extension-manifest";
 export { findDeclaredCommand, loadDeclaredCommands } from "./extension-declared-commands";
 export { extensionUserDataDir } from "./extension-manifest";
@@ -208,12 +206,6 @@ async function openExtensionImpl(
     await openNativeExtension(id, manifest, route);
     return;
   }
-  if (manifest.kind === "command-extension") {
-    console.warn(
-      `[kepler-shell] Command view commands are not implemented yet: ${id}${route ? ` (${route})` : ""}`,
-    );
-    return;
-  }
   await openExtensionBrowserWindow({
     id,
     route,
@@ -227,17 +219,6 @@ async function openExtensionImpl(
     focusExistingWindow: focusExistingExtensionWindow,
   });
 }
-export function commandRuntimeContext(id: string): {
-  manifest: ExtensionManifest;
-  dir: string;
-  source: ExtensionPermissionSource;
-} | null {
-  const manifest = loadExtensionManifest(id);
-  const location = resolveExtensionLocation(id);
-  if (!manifest || !location || manifest.kind !== "command-extension") return null;
-  return { manifest, dir: location.dir, source: location.source };
-}
-
 function windowForSender(sender: WebContents): BrowserWindow | null {
   const win = BrowserWindow.fromWebContents(sender);
   return win && !win.isDestroyed() ? win : null;

@@ -34,7 +34,6 @@ export default defineConfig({
       // exports map: ./components -> ./packages/vue/src/components
       "@kosmos/visuals/components": path.join(workspacePaths.imago, "packages/vue/src/components"),
       "@kosmos/visuals": workspacePaths.imago,
-      "@raycast/api": path.resolve(__dirname, "../packages/raycast-api/src/index.ts"),
       "@shared": path.resolve(__dirname, "./shared"),
     },
     dedupe: ["vue"],
@@ -44,11 +43,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     fs: {
-      allow: [
-        workspacePaths.imago,
-        workspacePaths["arca-sdk"],
-        path.resolve(__dirname, "../packages"),
-      ],
+      allow: [workspacePaths.imago, workspacePaths["arca-sdk"]],
     },
     hmr: {
       overlay: false,

@@ -14,8 +14,6 @@ const SOURCE_LIMIT = 300;
 const SOURCE_EXTENSIONS = new Set([".cjs", ".js", ".jsx", ".mjs", ".rs", ".ts", ".tsx", ".vue"]);
 const GRANDFATHERED = new Set([
   // Static debt baseline. Additions here require an intentional review.
-  "packages/huawei-health/src/lib.rs",
-  "packages/huawei-health/tests/archive.rs",
   "runtime/src/package_service/integrations/huawei_login.rs",
   "desktop/e2e/dictation.spec.ts",
   "desktop/electron/dictation-pill.ts",
@@ -31,11 +29,8 @@ const GRANDFATHERED = new Set([
   "desktop/src/body/BodyView.vue",
   "desktop/src/coder/CoderView.vue",
   "desktop/src/coder/useCoderStats.ts",
-  "desktop/src/command-host/CommandFormView.vue",
-  "desktop/src/command-host/CommandListView.vue",
   "desktop/src/components/FocusCommandPanel.vue",
   "desktop/src/integrations/IntegrationSettingsPanel.vue",
-  "desktop/src/my-cosmos/MyCosmosView.vue",
   "desktop/src/views/DictationPillView.vue",
   "desktop/src/views/FocusBlockOverlay.vue",
   "desktop/src/views/FocusWidgetView.vue",
@@ -49,8 +44,6 @@ const GRANDFATHERED = new Set([
   "desktop/src/views/settings/tabs/FileSearchTab.vue",
   "desktop/src/views/settings/tabs/FocusBlocklistEditor.vue",
   "desktop/src/views/settings/tabs/SyncTab.vue",
-  "packages/huawei-health/src/lib.rs",
-  "packages/huawei-health/tests/archive.rs",
   "host/e2e/cosmos-graph.spec.ts",
   "host/e2e/first-party-arcadia-contract.spec.ts",
   "host/e2e/fixtures/host-runtime.ts",
