@@ -148,6 +148,22 @@ impl ManagerApp {
         }
     }
 
+    /// Queue the composite usage report (analytics + icon resolution) into a
+    /// named slot; the reply overwrites it.
+    pub fn usage_report(&mut self, slot: impl Into<String>) {
+        let slot = slot.into();
+        self.slots.insert(slot.clone(), Slot::Loading);
+        if self
+            .worker
+            .commands
+            .send(Command::UsageReport { slot })
+            .is_err()
+        {
+            self.worker_dead = true;
+            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
+        }
+    }
+
     /// Queue a GET /v1/<path> status surface into a named slot.
     pub fn status(&mut self, slot: impl Into<String>, path: &'static str) {
         let slot = slot.into();
