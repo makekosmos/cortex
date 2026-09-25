@@ -165,10 +165,37 @@ pub fn hint_button(
         .child(label)
 }
 
+/// Recording session phase mirrored from `ManagerApp` so the pill and the
+/// Диктовка view render the same machine.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PillPhase {
+    /// `dictation.capture.start` in flight.
+    Starting,
+    /// Engine-owned WASAPI capture is live; pill window is visible.
+    Recording,
+    /// `capture.stop` → `speech.transcribe` chain in flight (pill stays open
+    /// showing the processing wave, like Vue's transcribing status).
+    Processing,
+}
+
+/// Footer delivery outcome (Vue `TranscriptDelivery` parity) shown after the
+/// transcribe reply until `ManagerApp::schedule_pill_close` fires.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PillDelivery {
+    Pasted,
+    ClipboardOnly,
+    ClipboardFallback,
+    Failed,
+}
+
 /// Open the pill bottom-center of the primary display's work area. Returns
 /// `None` when no display is available or window creation failed — callers
 /// fall back to the in-view status instead of crashing the app.
-pub fn open(manager: Entity<ManagerApp>, cx: &mut App) -> Option<WindowHandle<DictationPill>> {
+pub fn open(
+    manager: Entity<ManagerApp>,
+    hotkey: String,
+    cx: &mut App,
+) -> Option<WindowHandle<DictationPill>> {
     let display = cx.primary_display()?;
     let area = display.visible_bounds();
     let origin = point(
@@ -191,7 +218,9 @@ pub fn open(manager: Entity<ManagerApp>, cx: &mut App) -> Option<WindowHandle<Di
             window_background: WindowBackgroundAppearance::Transparent,
             ..Default::default()
         },
-        move |_, cx| cx.new(|cx| DictationPill::new(manager, cx)),
+        move |_, cx| {
+            cx.new(|cx| DictationPill::new(manager, crate::pill::PillPhase::Starting, hotkey, cx))
+        },
     )
     .ok()
 }

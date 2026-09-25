@@ -8,11 +8,10 @@
 use ::gpui::{prelude::*, *};
 
 use crate::app::ManagerApp;
-pub use crate::pill_wave::open;
 use crate::pill_wave::{
     hint_button, kbd, paint_wave, Wave, DELIVERY_PASTED, WAVE_ERROR, WAVE_RECORDING, WAVE_WAITING,
 };
-use kosmos_gpui_kit::fields::vstr;
+pub use crate::pill_wave::{open, PillDelivery, PillPhase};
 use kosmos_gpui_kit::theme::*;
 
 /// Vue pill body is 380x126 (`dictation-pill.ts` PILL_WIDTH/PILL_HEIGHT).
@@ -21,29 +20,6 @@ pub(crate) const PILL_H: f32 = 126.;
 /// Bottom-center of the work area, like the Electron pill.
 pub(crate) const BOTTOM_MARGIN: f32 = 100.;
 const FOOTER_H: f32 = 34.;
-
-/// Recording session phase mirrored from `ManagerApp` so the pill and the
-/// Диктовка view render the same machine.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum PillPhase {
-    /// `dictation.capture.start` in flight.
-    Starting,
-    /// Engine-owned WASAPI capture is live; pill window is visible.
-    Recording,
-    /// `capture.stop` → `speech.transcribe` chain in flight (pill stays open
-    /// showing the processing wave, like Vue's transcribing status).
-    Processing,
-}
-
-/// Footer delivery outcome (Vue `TranscriptDelivery` parity) shown after the
-/// transcribe reply until `ManagerApp::schedule_pill_close` fires.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum PillDelivery {
-    Pasted,
-    ClipboardOnly,
-    ClipboardFallback,
-    Failed,
-}
 
 impl PillDelivery {
     /// Vue `deliveryLabel()` parity.
@@ -78,7 +54,16 @@ impl PillPhase {
 }
 
 pub struct DictationPill {
+    /// Click handlers only — the window is opened from inside a
+    /// `ManagerApp` update, so `render` must NEVER touch this entity
+    /// (re-entrant read → "already being updated" panic). State is a
+    /// snapshot pushed by `ManagerApp::push_pill`.
     manager: Entity<ManagerApp>,
+    phase: PillPhase,
+    delivery: Option<PillDelivery>,
+    /// Ring buffer of the last 120 RMS samples pushed by the owner.
+    levels: Vec<f32>,
+    hotkey: String,
     /// Synthetic-wave clock for the Processing status (ticks at ~30fps only
     /// while the phase needs animation).
     processing_time: f32,
@@ -86,24 +71,22 @@ pub struct DictationPill {
     /// the processing wave blends out of it (`processingTransitionProgress`).
     last_active: Vec<f32>,
     processing_blend: f32,
-    _subscription: Subscription,
     _ticker: Task<()>,
 }
 
 impl DictationPill {
-    pub(crate) fn new(manager: Entity<ManagerApp>, cx: &mut Context<Self>) -> Self {
-        let subscription = cx.observe(&manager, |_, _, cx| cx.notify());
+    pub(crate) fn new(
+        manager: Entity<ManagerApp>,
+        phase: PillPhase,
+        hotkey: String,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let ticker = cx.spawn(async move |this, cx| loop {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(33))
                 .await;
             let alive = this.update(cx, |this, cx| {
-                let processing = this
-                    .manager
-                    .read_with(cx, |app, _| app.pill_phase)
-                    .unwrap_or(PillPhase::Processing)
-                    == PillPhase::Processing;
-                if processing {
+                if this.phase == PillPhase::Processing && this.delivery.is_none() {
                     this.processing_time += 0.03;
                     this.processing_blend = (this.processing_blend + 0.02).min(1.0);
                     cx.notify();
@@ -115,43 +98,51 @@ impl DictationPill {
         });
         Self {
             manager,
+            phase,
+            delivery: None,
+            levels: Vec::new(),
+            hotkey,
             processing_time: 0.0,
             last_active: Vec::new(),
             processing_blend: 0.0,
-            _subscription: subscription,
             _ticker: ticker,
         }
+    }
+
+    /// Owner pushes the session snapshot after every mutation (`ManagerApp::push_pill`).
+    pub(crate) fn set_state(
+        &mut self,
+        phase: PillPhase,
+        delivery: Option<PillDelivery>,
+        levels: Vec<f32>,
+        hotkey: String,
+        cx: &mut Context<Self>,
+    ) {
+        if phase == PillPhase::Processing && self.phase != PillPhase::Processing {
+            // Vue `processingTransitionProgress`: the synthetic wave blends
+            // out of the last live waveform.
+            self.last_active = levels.clone();
+            self.processing_time = 0.0;
+            self.processing_blend = 0.0;
+        }
+        self.phase = phase;
+        self.delivery = delivery;
+        self.levels = levels;
+        self.hotkey = hotkey;
+        cx.notify();
     }
 }
 
 impl Render for DictationPill {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (phase, delivery, levels, hotkey) = self.manager.read_with(cx, |app, _| {
-            (
-                app.pill_phase.unwrap_or(PillPhase::Starting),
-                app.pill_delivery,
-                app.pill_levels.iter().copied().collect::<Vec<f32>>(),
-                app.data("dictation.state")
-                    .get("config")
-                    .map(|c| vstr(c, "hotkey"))
-                    .filter(|h| !h.is_empty())
-                    .unwrap_or_else(|| "Ctrl+Shift+;".into()),
-            )
-        });
+        let (phase, delivery, hotkey) = (self.phase, self.delivery, self.hotkey.clone());
         let recording = phase == PillPhase::Recording;
-
-        if phase == PillPhase::Processing && self.last_active.is_empty() {
-            // Snapshot entered via clone — render() is &mut so this is legal.
-            self.last_active = levels.clone();
-            self.processing_time = 0.0;
-            self.processing_blend = 0.0;
-        }
 
         let (wave, wave_color) = match delivery {
             Some(d) => (Wave::Idle, d.dot_color()),
             None => match phase {
                 PillPhase::Starting => (Wave::Idle, WAVE_RECORDING),
-                PillPhase::Recording => (Wave::Live(levels), WAVE_RECORDING),
+                PillPhase::Recording => (Wave::Live(self.levels.clone()), WAVE_RECORDING),
                 PillPhase::Processing => (
                     Wave::Processing {
                         time: self.processing_time,

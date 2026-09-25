@@ -263,7 +263,7 @@ impl ManagerApp {
         self.pill_delivery = None;
         self.pill_levels.clear();
         if self.pill.is_none() {
-            self.pill = crate::pill::open(cx.entity(), cx);
+            self.pill = crate::pill::open(cx.entity(), self.dictation_hotkey(), cx);
         }
         // The pill footer renders the configured hotkey next to Отправить —
         // fetch it even when the Диктовка view was never opened.
@@ -271,6 +271,7 @@ impl ManagerApp {
             self.call("dictation.state", "dictation.get_state", json!({}));
         }
         self.pill_phase = Some(PillPhase::Starting);
+        self.push_pill(cx);
         self.send_command(Command::DictationStart {
             slot: "dictation.pill.start".into(),
         });
@@ -282,6 +283,7 @@ impl ManagerApp {
     /// so the target app keeps foreground for the auto_paste re-capture).
     fn dictation_finish(&mut self, cx: &mut Context<Self>) {
         self.pill_phase = Some(PillPhase::Processing);
+        self.push_pill(cx);
         match self.pill_capture.take() {
             Some(capture_id) => self.send_command(Command::DictationStop {
                 slot: "dictation.pill.stop".into(),
@@ -299,6 +301,32 @@ impl ManagerApp {
         if let Some(handle) = self.pill.take() {
             handle
                 .update(cx, |_, window, _| window.remove_window())
+                .ok();
+        }
+    }
+
+    /// The pill footer renders the configured hotkey next to Отправить.
+    fn dictation_hotkey(&self) -> String {
+        self.data("dictation.state")
+            .get("config")
+            .map(|c| kosmos_gpui_kit::fields::vstr(c, "hotkey"))
+            .filter(|h| !h.is_empty())
+            .unwrap_or_else(|| "Ctrl+Shift+;".into())
+    }
+
+    /// Push the session snapshot into the pill entity. The pill renders ONLY
+    /// its own fields — `cx.open_window` draws synchronously, and that first
+    /// draw would re-enter the `ManagerApp` update that opened it.
+    fn push_pill(&self, cx: &mut Context<Self>) {
+        if let Some(handle) = &self.pill {
+            let phase = self.pill_phase.unwrap_or(PillPhase::Starting);
+            let delivery = self.pill_delivery;
+            let levels = self.pill_levels.iter().copied().collect::<Vec<f32>>();
+            let hotkey = self.dictation_hotkey();
+            handle
+                .update(cx, |pill, _, cx| {
+                    pill.set_state(phase, delivery, levels, hotkey, cx)
+                })
                 .ok();
         }
     }
@@ -589,6 +617,9 @@ impl ManagerApp {
             self.handle_engine_event(event, cx);
             cx.notify();
         }
+        // Single funnel for async session mutations (RPC replies + WS events):
+        // refresh the pill's snapshot once per drain tick.
+        self.push_pill(cx);
     }
 
     /// desktop/electron/dictation-pill.ts parity: the Rust WH_KEYBOARD_LL
