@@ -91,6 +91,16 @@ fn rms_i16le(bytes: &[u8]) -> f32 {
     (sum / n as f64).sqrt().min(1.0) as f32
 }
 
+/// Перцепционная нормализация уровня для waveform: линейный RMS → шкала
+/// ~dBFS (-55 dB → 0, 0 dB → 1). Обычная речь (-30..-15 dBFS RMS) даёт
+/// видимые бары — паритет с AnalyserNode-спектром Vue-пилюли, где даже
+/// тихая речь двигала waveform.
+fn level_for_ui(rms: f32) -> f32 {
+    const FLOOR_DB: f32 = -55.0;
+    let db = 20.0 * rms.max(1e-6).log10();
+    ((db - FLOOR_DB) / -FLOOR_DB).clamp(0.0, 1.0)
+}
+
 fn capture_windows(
     stop_rx: mpsc::Receiver<()>,
     ready_tx: mpsc::Sender<Result<(u32, u16), String>>,
@@ -178,7 +188,7 @@ fn capture_windows(
                 if let Some(sink) = &level_sink {
                     if last_level_emit.elapsed() >= std::time::Duration::from_millis(30) {
                         last_level_emit = std::time::Instant::now();
-                        let _ = sink.send(rms_i16le(bytes));
+                        let _ = sink.send(level_for_ui(rms_i16le(bytes)));
                     }
                 }
                 pcm.extend_from_slice(bytes);
