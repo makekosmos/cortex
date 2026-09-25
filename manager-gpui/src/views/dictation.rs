@@ -18,7 +18,6 @@ use imago_gpui::button;
 use serde_json::json;
 
 use crate::app::ManagerApp;
-use crate::pill::PillPhase;
 use crate::views::dictation_cards;
 use crate::widgets::*;
 use kosmos_gpui_kit::theme::*;
@@ -137,44 +136,47 @@ fn trigger_label(mode: &str) -> &'static str {
 // --- Запись (pill) ----------------------------------------------------------
 
 fn record_card(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
-    let phase = app.pill_phase;
-    let (label, hint): (&str, &str) = match phase {
-        Some(PillPhase::Starting) => ("Запуск записи…", "Engine открывает захват микрофона"),
-        Some(PillPhase::Recording) => (
-            "Остановить запись",
-            "Идёт запись — pill-окно у нижнего края экрана",
+    // The pill overlay and session orchestration live in the standalone
+    // dictation-gpui app — this card only mirrors Engine state and issues
+    // Engine-level start/cancel.
+    let state = vstr(&app.data("dictation.state"), "state");
+    let (label, hint): (&str, &str) = match state.as_str() {
+        "recording" => (
+            "Идёт запись",
+            "Pill-оверлей показывает приложение Kosmos Dictation; стоп — по хоткею",
         ),
-        Some(PillPhase::Processing) => ("Распознаю…", "capture.stop → speech.transcribe"),
-        None => (
+        "transcribing" | "waiting" => ("Распознаю…", "speech.transcribe в Engine"),
+        _ => (
             "Начать запись",
             "WASAPI-захват на стороне Engine, результат вставляется/копируется по injectMode",
         ),
     };
-    let busy = phase.is_some();
+    let recording = state == "recording";
+    let busy = recording || state == "transcribing" || state == "waiting";
     card()
         .child(
-            row("Pill-оверлей", hint)
+            row("Запись", hint)
                 .child(
                     button::primary("dictation-toggle")
                         .label(label)
-                        .when(busy && phase != Some(PillPhase::Recording), |b| {
-                            b.disabled(true)
-                        })
+                        .disabled(busy)
                         .on_click(cx.listener(|this, _, _, cx| {
-                            this.dictation_toggle(cx);
+                            this.action("dictation.capture.start", json!({}));
+                            cx.notify();
                         })),
                 )
-                .when(phase.is_some(), |el| {
+                .when(recording, |el| {
                     el.child(button::ghost("dictation-cancel").label("Отмена").on_click(
                         cx.listener(|this, _, _, cx| {
-                            this.dictation_cancel(cx);
+                            this.action("dictation.cancel", json!({}));
+                            cx.notify();
                         }),
                     ))
                 }),
         )
         .child(div().text_size(px(12.)).text_color(c(MUTED_FG())).child(
-            "Глобальная горячая клавиша приходит по WS-событиям Engine \
-                     (dictation_toggle_trigger / dictation_ptt_trigger).",
+            "Pill-оверлей и глобальная горячая клавиша — отдельное приложение \
+             Kosmos Dictation (dictation-gpui) поверх событий Engine.",
         ))
         .into_any_element()
 }

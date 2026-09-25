@@ -10,7 +10,6 @@ use gpui_component::input::InputState;
 use serde_json::{json, Value};
 
 use crate::fps::FpsOverlay;
-use crate::pill::{DictationPill, PillPhase};
 use crate::views::{self, StoreTab, View};
 use crate::worker::{Command, Worker};
 
@@ -50,28 +49,9 @@ pub struct ManagerApp {
     pub pending_install: Option<String>,
     /// Store listing shown in the detail overlay.
     pub detail: Option<Value>,
-    /// Dictation pill overlay window while a recording session is active.
-    /// `WindowKind::PopUp` — no hide API exists, so the window is closed
-    /// (`remove_window`) rather than hidden.
-    pub pill: Option<WindowHandle<DictationPill>>,
-    /// Pill session phase (Starting/Recording/Processing) — rendered by both
-    /// the pill window and the Диктовка view.
-    pub pill_phase: Option<PillPhase>,
-    /// `captureId` of the live `dictation.capture.start` session.
-    pill_capture: Option<String>,
-    /// `durationMs` from `capture.stop` — merged into the transcribe result
-    /// for the result card (the transcribe reply doesn't carry it).
-    pill_last_duration_ms: f64,
-    /// Live mic RMS levels (`dictation_audio_level` WS events) — the pill's
-    /// waveform ring buffer, last 120 samples like the Vue pill history.
-    pub pill_levels: std::collections::VecDeque<f32>,
-    /// Delivery state after `speech.transcribe` (Vue pill-footer parity):
-    /// the pill stays open showing Вставлено/Буфер обмена/Ошибка, then closes
-    /// after the per-kind delay.
-    pub pill_delivery: Option<crate::pill::PillDelivery>,
-    /// Monotonic session counter — a delayed pill close scheduled by session N
-    /// must not kill the window if session N+1 already started.
-    pill_session: u64,
+    /// The dictation pill overlay and session orchestration live in the
+    /// standalone dictation-gpui app; this client only mirrors Engine state
+    /// in the Диктовка settings view.
     pub(crate) action_busy: bool,
     worker_dead: bool,
 }
@@ -103,13 +83,6 @@ impl ManagerApp {
             disclosure: None,
             pending_install: None,
             detail: None,
-            pill: None,
-            pill_phase: None,
-            pill_capture: None,
-            pill_last_duration_ms: 0.0,
-            pill_levels: std::collections::VecDeque::new(),
-            pill_delivery: None,
-            pill_session: 0,
             action_busy: false,
             worker_dead: false,
         };
@@ -220,160 +193,6 @@ impl ManagerApp {
         self.call("@action", op, params);
     }
 
-    /// Worker command that doesn't map to a view-data slot (pill session
-    /// control ops are intercepted by name in `drain`).
-    fn send_command(&mut self, command: Command) {
-        if self.worker.commands.send(command).is_err() {
-            self.worker_dead = true;
-            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
-        }
-    }
-
-    /// Dictation pill toggle — view button and the pill's own Стоп button.
-    /// `toggleDictation` parity: re-entry while Starting/Processing is ignored.
-    pub fn dictation_toggle(&mut self, cx: &mut Context<Self>) {
-        match self.pill_phase {
-            None => self.dictation_begin(cx),
-            Some(PillPhase::Recording) => self.dictation_finish(cx),
-            Some(PillPhase::Starting | PillPhase::Processing) => {}
-        }
-    }
-
-    /// Cancel the session from any phase: close the pill, terminate the
-    /// capture session and reset the backend state machine.
-    pub fn dictation_cancel(&mut self, cx: &mut Context<Self>) {
-        self.close_pill(cx);
-        self.pill_phase = None;
-        self.pill_delivery = None;
-        self.pill_levels.clear();
-        self.pill_session += 1;
-        let capture_id = self.pill_capture.take();
-        self.send_command(Command::DictationCancel {
-            slot: "dictation.pill.cancel".into(),
-            capture_id,
-        });
-        cx.notify();
-    }
-
-    /// Idle → Starting: open the overlay immediately (it renders "Запуск
-    /// записи…"), then ask the Engine to capture the foreground HWND and start
-    /// WASAPI capture.
-    fn dictation_begin(&mut self, cx: &mut Context<Self>) {
-        self.pill_session += 1;
-        self.pill_delivery = None;
-        self.pill_levels.clear();
-        if self.pill.is_none() {
-            self.pill = crate::pill::open(cx.entity(), self.dictation_hotkey(), cx);
-        }
-        // The pill footer renders the configured hotkey next to Отправить —
-        // fetch it even when the Диктовка view was never opened.
-        if !matches!(self.slots.get("dictation.state"), Some(Slot::Ready(_))) {
-            self.call("dictation.state", "dictation.get_state", json!({}));
-        }
-        self.pill_phase = Some(PillPhase::Starting);
-        self.push_pill(cx);
-        self.send_command(Command::DictationStart {
-            slot: "dictation.pill.start".into(),
-        });
-        cx.notify();
-    }
-
-    /// Recording → Processing: the pill STAYS open showing the processing
-    /// waveform (Vue pill parity — its no-activate PopUp never takes focus,
-    /// so the target app keeps foreground for the auto_paste re-capture).
-    fn dictation_finish(&mut self, cx: &mut Context<Self>) {
-        self.pill_phase = Some(PillPhase::Processing);
-        self.push_pill(cx);
-        match self.pill_capture.take() {
-            Some(capture_id) => self.send_command(Command::DictationStop {
-                slot: "dictation.pill.stop".into(),
-                capture_id,
-            }),
-            None => self.send_command(Command::DictationCancel {
-                slot: "dictation.pill.cancel".into(),
-                capture_id: None,
-            }),
-        }
-        cx.notify();
-    }
-
-    fn close_pill(&mut self, cx: &mut Context<Self>) {
-        if let Some(handle) = self.pill.take() {
-            handle
-                .update(cx, |_, window, _| window.remove_window())
-                .ok();
-        }
-    }
-
-    /// The pill footer renders the configured hotkey next to Отправить.
-    fn dictation_hotkey(&self) -> String {
-        self.data("dictation.state")
-            .get("config")
-            .map(|c| kosmos_gpui_kit::fields::vstr(c, "hotkey"))
-            .filter(|h| !h.is_empty())
-            .unwrap_or_else(|| "Ctrl+Shift+;".into())
-    }
-
-    /// Push the session snapshot into the pill entity. The pill renders ONLY
-    /// its own fields — `cx.open_window` draws synchronously, and that first
-    /// draw would re-enter the `ManagerApp` update that opened it.
-    fn push_pill(&self, cx: &mut Context<Self>) {
-        if let Some(handle) = &self.pill {
-            let phase = self.pill_phase.unwrap_or(PillPhase::Starting);
-            let delivery = self.pill_delivery;
-            let levels = self.pill_levels.iter().copied().collect::<Vec<f32>>();
-            let hotkey = self.dictation_hotkey();
-            handle
-                .update(cx, |pill, _, cx| {
-                    pill.set_state(phase, delivery, levels, hotkey, cx)
-                })
-                .ok();
-        }
-    }
-
-    /// Vue `deliveryFinishDelay` parity — the delivery outcome stays visible
-    /// long enough to read, then the overlay closes itself. The session
-    /// counter guards against a stale timer closing a NEW session's pill.
-    fn schedule_pill_close(&mut self, cx: &mut Context<Self>) {
-        use crate::pill::PillDelivery;
-        let delay = match self.pill_delivery {
-            Some(PillDelivery::Pasted) => std::time::Duration::from_millis(80),
-            Some(PillDelivery::ClipboardOnly) => std::time::Duration::from_millis(2500),
-            Some(PillDelivery::ClipboardFallback | PillDelivery::Failed) | None => {
-                std::time::Duration::from_millis(4500)
-            }
-        };
-        let session = self.pill_session;
-        cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(delay).await;
-            let _ = this.update(cx, |this, cx| {
-                if this.pill_session == session && this.pill_phase == Some(PillPhase::Processing) {
-                    this.pill_phase = None;
-                    this.pill_delivery = None;
-                    this.close_pill(cx);
-                    cx.notify();
-                }
-            });
-        })
-        .detach();
-    }
-
-    /// Map a `speech.transcribe` reply onto the Vue pill delivery semantics.
-    fn pill_delivery_of(v: &Value) -> crate::pill::PillDelivery {
-        use crate::pill::PillDelivery;
-        match v.get("delivery").and_then(Value::as_str) {
-            Some("pasted") => PillDelivery::Pasted,
-            Some("clipboard_only") => PillDelivery::ClipboardOnly,
-            Some("clipboard_fallback") => PillDelivery::ClipboardFallback,
-            Some("failed") => PillDelivery::Failed,
-            _ if v.get("state").and_then(Value::as_str) == Some("error") => PillDelivery::Failed,
-            _ if v.get("injected").and_then(Value::as_bool) == Some(false) => {
-                PillDelivery::ClipboardFallback
-            }
-            _ => PillDelivery::Pasted,
-        }
-    }
-
     /// Destructive op behind the confirm modal.
     pub fn ask_confirm(
         &mut self,
@@ -462,108 +281,6 @@ impl ManagerApp {
                     }
                     Err(e) => self.error = Some(e),
                 }
-            } else if reply.slot == "dictation.pill.start" {
-                match reply.result {
-                    Ok(v) => {
-                        let capture_id = v
-                            .get("captureId")
-                            .and_then(Value::as_str)
-                            .map(str::to_string);
-                        // Cancel during Starting: the pill is already gone —
-                        // stop the just-started session instead of resurrecting.
-                        if self.pill_phase.is_none() {
-                            self.send_command(Command::DictationCancel {
-                                slot: "dictation.pill.cancel".into(),
-                                capture_id,
-                            });
-                        } else if let Some(id) = capture_id {
-                            self.pill_capture = Some(id);
-                            self.pill_phase = Some(PillPhase::Recording);
-                        } else {
-                            self.pill_phase = Some(PillPhase::Processing);
-                            self.pill_delivery = Some(crate::pill::PillDelivery::Failed);
-                            self.schedule_pill_close(cx);
-                            self.error = Some("Engine не вернул captureId".into());
-                        }
-                    }
-                    Err(e) => {
-                        // Vue pill parity: показать ошибку в overlay, а не
-                        // мгновенно закрыть (delivery=failed → 4.5s).
-                        self.pill_phase = Some(PillPhase::Processing);
-                        self.pill_capture = None;
-                        self.pill_delivery = Some(crate::pill::PillDelivery::Failed);
-                        self.schedule_pill_close(cx);
-                        self.error = Some(e);
-                    }
-                }
-            } else if reply.slot == "dictation.pill.stop" {
-                match reply.result {
-                    Ok(v) => {
-                        let audio_b64 = v
-                            .get("audioB64")
-                            .and_then(Value::as_str)
-                            .unwrap_or_default()
-                            .to_string();
-                        // speech.transcribe's reply has no durationMs — carry it
-                        // over so the result card shows the record length.
-                        self.pill_last_duration_ms =
-                            v.get("durationMs").and_then(Value::as_f64).unwrap_or(0.0);
-                        self.send_command(Command::DictationTranscribe {
-                            slot: "dictation.pill.result".into(),
-                            audio_b64,
-                            duration_sec: self.pill_last_duration_ms / 1000.0,
-                        });
-                    }
-                    Err(e) => {
-                        self.pill_phase = Some(PillPhase::Processing);
-                        self.pill_delivery = Some(crate::pill::PillDelivery::Failed);
-                        self.schedule_pill_close(cx);
-                        self.error = Some(e);
-                    }
-                }
-            } else if reply.slot == "dictation.pill.result" {
-                match reply.result {
-                    Ok(mut v) => {
-                        if v.get("cancelled").and_then(Value::as_bool) == Some(true) {
-                            self.pill_phase = None;
-                            self.pill_delivery = None;
-                            self.close_pill(cx);
-                        } else {
-                            self.pill_delivery = Some(Self::pill_delivery_of(&v));
-                            self.schedule_pill_close(cx);
-                        }
-                        if let Some(obj) = v.as_object_mut() {
-                            obj.insert(
-                                "durationMs".into(),
-                                Value::from(self.pill_last_duration_ms),
-                            );
-                        }
-                        self.slots.insert("dictation.result".into(), Slot::Ready(v));
-                        if self.error.is_some() {
-                            self.error = None;
-                        }
-                        // Post-session refresh: state machine + stats + очередь
-                        // (same refresh-after-write as `action`).
-                        self.call("dictation.state", "dictation.get_state", json!({}));
-                        self.call("dictation.stats", "dictation.get_stats", json!({}));
-                        self.call("dictation.pending", "dictation.list_pending", json!({}));
-                    }
-                    Err(e) => {
-                        self.pill_phase = Some(PillPhase::Processing);
-                        self.pill_delivery = Some(crate::pill::PillDelivery::Failed);
-                        self.schedule_pill_close(cx);
-                        self.error = Some(e);
-                    }
-                }
-            } else if reply.slot == "dictation.pill.cancel" {
-                self.pill_phase = None;
-                self.pill_capture = None;
-                if let Err(e) = reply.result {
-                    self.error = Some(e);
-                }
-                if matches!(self.view, View::Dictation) {
-                    self.call("dictation.state", "dictation.get_state", json!({}));
-                }
             } else if reply.slot == "disclosure" {
                 // packages.disclosure → consent overlay before install.
                 match reply.result {
@@ -617,34 +334,18 @@ impl ManagerApp {
             self.handle_engine_event(event, cx);
             cx.notify();
         }
-        // Single funnel for async session mutations (RPC replies + WS events):
-        // refresh the pill's snapshot once per drain tick.
-        self.push_pill(cx);
     }
 
-    /// desktop/electron/dictation-pill.ts parity: the Rust WH_KEYBOARD_LL
-    /// hook emits `dictation_toggle_trigger` (toggle mode) and
-    /// `dictation_ptt_trigger {phase}` (PTT mode — both phases route into the
-    /// same toggle call the view button and pill Стоп use). State/progress
-    /// events refresh the matching Диктовка slots.
-    fn handle_engine_event(&mut self, event: Value, cx: &mut Context<Self>) {
+    /// Engine broadcast events → slot refreshes. Dictation hotkey triggers
+    /// (`dictation_toggle_trigger` / `dictation_ptt_trigger`) are NOT handled
+    /// here — the standalone dictation-gpui app owns the pill session.
+    /// State/progress events refresh the matching Диктовка slots.
+    fn handle_engine_event(&mut self, event: Value, _cx: &mut Context<Self>) {
         let name = event
             .get("event")
             .and_then(Value::as_str)
             .unwrap_or_default();
         match name {
-            "dictation_toggle_trigger" | "dictation_ptt_trigger" => {
-                self.dictation_toggle(cx);
-            }
-            // Live mic RMS from the Engine capture thread — ring buffer of the
-            // last 120 samples for the pill waveform (Vue WAVEFORM_HISTORY_SIZE).
-            "dictation_audio_level" if self.pill_phase == Some(PillPhase::Recording) => {
-                let level = event.get("level").and_then(Value::as_f64).unwrap_or(0.0) as f32;
-                if self.pill_levels.len() >= 120 {
-                    self.pill_levels.pop_front();
-                }
-                self.pill_levels.push_back(level.clamp(0.0, 1.0));
-            }
             "dictation_state_changed" | "dictation.state_changed" | "dictation_config_changed" => {
                 self.call("dictation.state", "dictation.get_state", json!({}));
             }
