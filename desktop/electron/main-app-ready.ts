@@ -1,12 +1,6 @@
 import { BrowserWindow, globalShortcut, nativeTheme, powerMonitor } from "electron";
 import type { ArkClient } from "@kosmos/ark";
 import type { JsonRecord } from "./extension-permissions";
-import { showFocusBlockOverlay } from "./focus-overlay";
-import {
-  setBlockedAppNotifier,
-  setFocusSessionRuntime,
-  setFocusSessionShellOpener,
-} from "./focus-session";
 import { openHostedApp } from "./host-app";
 import { openManager } from "./manager-navigation";
 import { openTestHarnessWindow } from "./main-test-window";
@@ -159,13 +153,6 @@ export async function runAppReady({
         ? { err: String(error), stack: error.stack }
         : { err: String(error) },
     );
-  });
-  setFocusSessionShellOpener(() => {
-    void openHostedApp("com.kosmos.shell");
-  });
-  setFocusSessionRuntime({ awaitArkReady });
-  setBlockedAppNotifier((app) => {
-    showFocusBlockOverlay(app);
   });
 
   powerMonitor.on("resume", () => {

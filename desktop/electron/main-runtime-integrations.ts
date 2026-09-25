@@ -1,21 +1,5 @@
 import { setDictationShortcutResolver } from "./commands";
-import {
-  setDictationRuntime,
-  setupDictationHotkey,
-} from "./dictation-pill";
-import {
-  setFocusWidgetFocusSessionOpener,
-  setFocusWidgetRuntime,
-  setupFocusWidgetBackendSync,
-  teardownFocusWidgetBackendSync,
-} from "./focus-widget";
-import {
-  openFocusSessionShell,
-  setupFocusSessionBackendSync,
-  teardownFocusSessionBackendSync,
-} from "./focus-session";
-import { setupPomodoroNotifier, teardownPomodoroNotifier } from "./pomodoro-notifier";
-import { openSettings } from "./settings-window";
+import { setDictationRuntime, setupDictationHotkey } from "./dictation-pill";
 import { isString } from "../src/shared/runtimeGuards";
 
 type AwaitArkReady = (timeoutMs?: number) => Promise<any>;
@@ -59,11 +43,6 @@ function setDictationHotkeyCache(hotkey?: string | null): void {
   dictationHotkeyCache = isString(hotkey) && hotkey.trim() ? hotkey.trim() : null;
 }
 
-export function setupMainFocusRuntime(awaitArkReady: AwaitArkReady): void {
-  setFocusWidgetFocusSessionOpener(openFocusSessionShell);
-  setFocusWidgetRuntime({ awaitArkReady });
-}
-
 export function setupMainDictationRuntime(options: {
   awaitArkReady: AwaitArkReady;
   broadcastCommandsUpdated(): void;
@@ -77,13 +56,4 @@ export function setupMainDictationRuntime(options: {
   });
 }
 
-export {
-  openSettings,
-  setupDictationHotkey,
-  setupFocusSessionBackendSync,
-  setupFocusWidgetBackendSync,
-  setupPomodoroNotifier,
-  teardownFocusSessionBackendSync,
-  teardownFocusWidgetBackendSync,
-  teardownPomodoroNotifier,
-};
+export { setupDictationHotkey };

@@ -18,12 +18,6 @@ interface MainBackendSupervisorOptions {
   instance: Instance;
   resolveBackendExe(): string;
   getIsQuiting(): boolean;
-  setupPomodoroNotifier(options: { arkClient: ArkClient }): void;
-  teardownPomodoroNotifier(): void;
-  setupFocusWidgetBackendSync(options: { arkClient: ArkClient }): void;
-  teardownFocusWidgetBackendSync(): void;
-  setupFocusSessionBackendSync(options: { arkClient: ArkClient }): void;
-  teardownFocusSessionBackendSync(): void | Promise<void>;
   setupDictationHotkey(): Promise<void>;
   broadcastCommandsUpdated(): void;
   onBackendExit?(code: number | null): void;
@@ -54,12 +48,6 @@ export function createMainBackendSupervisor(
     desktopAuthorityCredential,
     instance: options.instance,
     isBackendRunning,
-    setupPomodoroNotifier: options.setupPomodoroNotifier,
-    teardownPomodoroNotifier: options.teardownPomodoroNotifier,
-    setupFocusWidgetBackendSync: options.setupFocusWidgetBackendSync,
-    teardownFocusWidgetBackendSync: options.teardownFocusWidgetBackendSync,
-    setupFocusSessionBackendSync: options.setupFocusSessionBackendSync,
-    teardownFocusSessionBackendSync: options.teardownFocusSessionBackendSync,
     setupDictationHotkey: options.setupDictationHotkey,
     broadcastCommandsUpdated: options.broadcastCommandsUpdated,
   });

@@ -10,13 +10,9 @@ import type {
   FileIndexSettingsPatch,
   FileSearchDiagnosticsReport,
   FileSearchRootEstimate,
-  FocusBlocklist,
-  FocusSessionSnapshot,
-  FocusSessionTask,
   InstalledExtensionInfo,
   MarketplaceCatalog,
   SearchResult,
-  StartFocusSessionInput,
 } from "./ipc-types";
 
 /**
@@ -95,28 +91,6 @@ export interface KeplerApi extends KeplerApiShellServices {
         новые команды или вышла из эфира). Колбэк вызывается без аргументов —
         renderer'у следует заново вызвать list(). */
     onUpdated(listener: () => void): () => void;
-  };
-
-  /** Shell-owned Focus Session command page. Main process owns pomodoro,
-      ARK time_entry and blocklist side effects; renderer only sends intents. */
-  focusSession: {
-    open(): Promise<void>;
-    snapshot(): Promise<FocusSessionSnapshot>;
-    listTasks(): Promise<FocusSessionTask[]>;
-    listBlocklists(): Promise<FocusBlocklist[]>;
-    start(input: StartFocusSessionInput): Promise<FocusSessionSnapshot>;
-    pause(): Promise<FocusSessionSnapshot>;
-    resume(): Promise<FocusSessionSnapshot>;
-    skip(): Promise<FocusSessionSnapshot>;
-    stop(): Promise<FocusSessionSnapshot>;
-    /** «Выполнена»: stop + пометить привязанную задачу выполненной. */
-    complete(): Promise<FocusSessionSnapshot>;
-    onOpenShell(listener: () => void): () => void;
-    onUpdated(listener: () => void): () => void;
-    onAppBlocked(
-      listener: (app: { id: string; title: string; icon?: string | null }) => void,
-    ): () => void;
-    snoozeApp(appId: string): Promise<void>;
   };
 
   /** Универсальный per-type data export. Phase 7. Конвертеры регистрируются

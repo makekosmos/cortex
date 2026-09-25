@@ -17,16 +17,6 @@ type KeplerTestApi = {
 type KeplerPreloadApi = KeplerApi & KeplerTestApi;
 
 type ArkEventPayload = JsonRecord;
-type BlockedApp = { id: string; title: string; icon?: string | null };
-type FocusWidgetState = {
-  active: boolean;
-  remainingSec: number;
-  totalSec: number;
-  label: string;
-  mode: "work" | "break" | "stopwatch";
-  blockingActive: boolean;
-  isPaused: boolean;
-};
 type DictationCommand = { kind: "start" | "stop" | "cancel" };
 type DictationCapturePayload = JsonRecord;
 
@@ -97,37 +87,6 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
         return () => ipcRenderer.removeListener("kepler:commands:updated", handler);
       },
     },
-    focusSession: {
-      open: () => ipcRenderer.invoke("kepler:focus-session:open"),
-      snapshot: () => ipcRenderer.invoke("kepler:focus-session:snapshot"),
-      listTasks: () => ipcRenderer.invoke("kepler:focus-session:list-tasks"),
-      listBlocklists: () => ipcRenderer.invoke("kepler:focus-session:list-blocklists"),
-      start: (input) => ipcRenderer.invoke("kepler:focus-session:start", input),
-      pause: () => ipcRenderer.invoke("kepler:focus-session:pause"),
-      resume: () => ipcRenderer.invoke("kepler:focus-session:resume"),
-      skip: () => ipcRenderer.invoke("kepler:focus-session:skip"),
-      stop: () => ipcRenderer.invoke("kepler:focus-session:stop"),
-      complete: () => ipcRenderer.invoke("kepler:focus-session:complete"),
-      onOpenShell: (listener) => {
-        const handler = () => listener();
-        ipcRenderer.on("kepler:focus-session:open-shell", handler);
-        return () => ipcRenderer.removeListener("kepler:focus-session:open-shell", handler);
-      },
-      onUpdated: (listener) => {
-        const handler = () => listener();
-        ipcRenderer.on("kepler:focus-session:updated", handler);
-        return () => ipcRenderer.removeListener("kepler:focus-session:updated", handler);
-      },
-      onAppBlocked: (listener) => {
-        const handler = (_e: Electron.IpcRendererEvent, app: BlockedApp) => {
-          // SAFETY: The focus IPC channel emits the documented blocked-app shape.
-          listener(app);
-        };
-        ipcRenderer.on("kepler:focus:app-blocked", handler);
-        return () => ipcRenderer.removeListener("kepler:focus:app-blocked", handler);
-      },
-      snoozeApp: (appId: string) => ipcRenderer.invoke("kepler:focus-session:snooze-app", appId),
-    },
     export: {
       list: () => ipcRenderer.invoke("kepler:export:list"),
       run: (args) => ipcRenderer.invoke("kepler:export:run", args),
@@ -149,31 +108,6 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
       clearCache: () => ipcRenderer.invoke("kepler:file-search:clear-cache"),
       pickScope: () => ipcRenderer.invoke("kepler:file-search:pickScope"),
     },
-    focusWidget: {
-      setState: (patch) => ipcRenderer.invoke("kepler:focus-widget:set-state", patch),
-      getState: () => ipcRenderer.invoke("kepler:focus-widget:get-state"),
-      hide: () => ipcRenderer.invoke("kepler:focus-widget:hide"),
-      openFocusSession: () => ipcRenderer.invoke("kepler:focus-widget:open-focus-session"),
-      pomodoro: {
-        pause: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:pause"),
-        resume: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:resume"),
-        skip: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:skip"),
-        complete: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:complete"),
-        stop: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:stop"),
-      },
-      stopwatch: {
-        stop: () => ipcRenderer.invoke("kepler:focus-widget:stopwatch:stop"),
-      },
-      showMenu: () => ipcRenderer.invoke("kepler:focus-widget:show-menu"),
-      onState: (handler) => {
-        const wrapper = (_e: Electron.IpcRendererEvent, state: FocusWidgetState) => {
-          // SAFETY: The focus-widget IPC channel emits the documented state shape.
-          handler(state);
-        };
-        ipcRenderer.on("kepler:focus-widget:state", wrapper);
-        return () => ipcRenderer.removeListener("kepler:focus-widget:state", wrapper);
-      },
-    },
     dictation: {
       toggle: () => ipcRenderer.invoke("kepler:dictation:toggle"),
       cancel: () => ipcRenderer.invoke("kepler:dictation:cancel"),
@@ -193,23 +127,6 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
         };
         ipcRenderer.on("kepler:dictation:capture", wrapper);
         return () => ipcRenderer.removeListener("kepler:dictation:capture", wrapper);
-      },
-    },
-    focusService: {
-      status: () => ipcRenderer.invoke("kepler:focus-service:status"),
-      ping: () => ipcRenderer.invoke("kepler:focus-service:ping"),
-      install: () => ipcRenderer.invoke("kepler:focus-service:install"),
-      uninstall: () => ipcRenderer.invoke("kepler:focus-service:uninstall"),
-      start: () => ipcRenderer.invoke("kepler:focus-service:start"),
-      stop: () => ipcRenderer.invoke("kepler:focus-service:stop"),
-      autoInstallDeclined: {
-        get: () => ipcRenderer.invoke("kepler:focus-service:auto-install-declined:get"),
-        set: (value) => ipcRenderer.invoke("kepler:focus-service:auto-install-declined:set", value),
-      },
-      onStatusChanged: (cb) => {
-        const wrapper = () => cb();
-        ipcRenderer.on("kepler:focus-service:status-changed", wrapper);
-        return () => ipcRenderer.removeListener("kepler:focus-service:status-changed", wrapper);
       },
     },
     ...createKeplerSettingsBridge(),

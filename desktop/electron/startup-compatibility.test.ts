@@ -112,4 +112,86 @@ test("settings sources stay free of retired app references", () => {
   ]) {
     expect(source).not.toMatch(/notes|tasks|games|eden:|delphi:|arrancador:/i);
   }
+  expect(settingsNavigationSource).toContain("kepler.launcher.hiddenCommandIds");
+  expect(launcherSource).toContain(
+    'const HIDDEN_COMMANDS_KEY = "kepler.launcher.hiddenCommandIds"',
+  );
+  expect(launcherSource).toContain("Скрытые команды");
+  expect(launcherSource).toContain("localStorage.setItem(HIDDEN_COMMANDS_KEY");
+  expect(launcherSource).toContain("hiddenCommandIds.value.includes(cmd.id)");
+  expect(launcherTemplateSource).toContain("toggleCommandVisibility(selectedCommand.id)");
+});
+
+function extractFunction(source: string, name: string): string {
+  const start = source.indexOf(`function ${name}`);
+  if (start < 0) throw new Error(`missing ${name}`);
+  const bodyStart = source.indexOf("{", start);
+  let depth = 0;
+  for (let i = bodyStart; i < source.length; i += 1) {
+    if (source[i] === "{") depth += 1;
+    if (source[i] === "}" && --depth === 0) return source.slice(start, i + 1);
+  }
+  throw new Error(`unterminated ${name}`);
+}
+
+function compileFunction(
+  source: string,
+  name: string,
+  bindings: CompileBindings,
+): (...args: JsonValue[]) => JsonValue {
+  const js = extractFunction(source, name)
+    .replaceAll("): string[] {", "){")
+    .replaceAll("): boolean {", "){")
+    .replaceAll("(id): id is string", "(id)")
+    .replaceAll("(id: string)", "(id)")
+    .replaceAll("(ids: string[])", "(ids)")
+    .replaceAll("(cmd: CommandRecord)", "(cmd)");
+  const factory = new Function(
+    ...Object.keys(bindings),
+    `const HIDDEN_COMMANDS_KEY = "kepler.launcher.hiddenCommandIds"; ${js}; return ${name};`,
+  );
+  // SAFETY: The extracted function is compiled from the named source and returns JSON-compatible test data.
+  return factory(...Object.values(bindings)) as (...args: JsonValue[]) => JsonValue;
+}
+
+interface CompileBindings {}
+
+test("seeded hidden command state is loaded by Launcher and recovers", () => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => void values.set(key, value),
+  };
+  const key = "kepler.launcher.hiddenCommandIds";
+  const seeded = ["eden:open", "delphi:task:create", "arrancador:open"];
+  values.set(key, JSON.stringify(seeded));
+
+  // SAFETY: Test state is intentionally initialized as a string-id collection.
+  const launcherState = { value: [] as string[] };
+  const launcherLoad = compileFunction(launcherSource, "loadHiddenCommandIds", {
+    localStorage: storage,
+    isString,
+  });
+  // SAFETY: The extracted loaders return the seeded string-id arrays.
+  launcherState.value = launcherLoad() as string[];
+  expect(launcherState.value).toEqual(seeded);
+
+  const launcherVisible = compileFunction(launcherSource, "isCommandVisible", {
+    hiddenCommandIds: launcherState,
+  });
+  // SAFETY: The extracted visibility function accepts command-shaped JSON objects.
+  expect(launcherVisible({ id: "eden:open" })).toBe(false);
+  expect(launcherVisible({ id: "delphi:task:today" })).toBe(true);
+
+  const launcherToggle = compileFunction(launcherSource, "toggleCommandVisibility", {
+    localStorage: storage,
+    hiddenCommandIds: launcherState,
+    selectedIndex: { value: 0 },
+    refreshCommands: () => Promise.resolve(),
+  });
+  launcherToggle("eden:open");
+  expect(JSON.parse(values.get(key) ?? "[]")).not.toContain("eden:open");
+  expect(launcherState.value).not.toContain("eden:open");
+  launcherToggle("eden:open");
+  expect(JSON.parse(values.get(key) ?? "[]")).toContain("eden:open");
 });

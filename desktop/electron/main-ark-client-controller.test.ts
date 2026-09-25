@@ -66,12 +66,6 @@ function createController() {
     // SAFETY: The test supplies the minimal instance shape consumed by the controller.
     instance: { slot: "test" } as never,
     isBackendRunning: () => true,
-    setupPomodoroNotifier: () => {},
-    teardownPomodoroNotifier: () => {},
-    setupFocusWidgetBackendSync: () => {},
-    teardownFocusWidgetBackendSync: () => {},
-    setupFocusSessionBackendSync: () => {},
-    teardownFocusSessionBackendSync: () => {},
     setupDictationHotkey: async () => {},
     broadcastCommandsUpdated: () => {},
   });

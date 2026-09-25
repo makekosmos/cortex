@@ -339,7 +339,6 @@ onBeforeUnmount(() => {
           <FileIndexTab />
         </template>
 
-        <!-- Focus tab — управление блок-листами доменов и активной блокировкой -->
         <!-- Export tab — список зарегистрированных converters + history -->
         <template v-else-if="activeTab === 'export'">
           <ExportTab />
