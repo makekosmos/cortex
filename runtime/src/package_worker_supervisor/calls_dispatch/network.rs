@@ -90,21 +90,6 @@ pub(super) async fn dispatch_network(
                     .find(|setting| setting.key == setting_key)
                     .ok_or_else(denied)?;
                 let injection = setting.injection.as_ref().ok_or_else(denied)?;
-                if integration.login.as_ref().is_some_and(|login| {
-                    login.secret_setting == setting_key
-                        && login.code_exchange.as_deref() == Some("huawei_health")
-                }) {
-                    let updated = crate::package_service::huawei_login::session_for_request(
-                        &grant.package_id,
-                        &grant.version,
-                        &setting_key,
-                        &secret,
-                    )
-                    .await
-                    .map_err(|_| denied())?;
-                    crate::package_worker_secrets::zeroize_secret(&mut secret);
-                    secret = updated;
-                }
                 let cookie_names = integration
                     .login
                     .as_ref()

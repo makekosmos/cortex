@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 const root = path.resolve(import.meta.dirname, "..");
-const packageRoots = [".", "desktop", "host", "manager"];
+const packageRoots = [".", "desktop", "host"];
 const read = (file) => readFileSync(path.join(root, file), "utf8");
 const require = createRequire(path.join(root, "desktop", "package.json"));
 const typescript = require("typescript");
@@ -25,13 +25,12 @@ test("Cortex command and test contracts do not require Bun", () => {
     "package.json",
     "desktop/package.json",
     "host/package.json",
-    "manager/package.json",
     "lefthook.yml",
     "README.md",
     "scripts/check-plan-commands.mjs",
   ];
   for (const file of files) assert.doesNotMatch(read(file), /\bbun(?:x)?\b|bun:test/, file);
-  for (const file of ["desktop", "host", "manager"]) {
+  for (const file of ["desktop", "host"]) {
     const contents = read(`${file}/package.json`);
     assert.doesNotMatch(contents, /\bbun(?:x)?\b|bun:test/, `${file}/package.json`);
   }

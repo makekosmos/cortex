@@ -37,38 +37,12 @@ async function launchIsolated(
   return { app, userDataDir };
 }
 
-const managerRoot = path.resolve(appRoot, "..", "manager");
-
-async function launchManagerIsolated(
-  dataDir: string,
-  ambientAppDataDir?: string,
-): Promise<{ app: ElectronApplication; userDataDir: string }> {
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-manager-userdata-"));
-  const env = {
-    ...process.env,
-    NODE_ENV: "test",
-    KOSMOS_DATA_DIR: dataDir,
-    KOSMOS_TEST_MODE: "1",
-    KOSMOS_HEADLESS: "1",
-    KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
-  };
-  if (ambientAppDataDir) env.APPDATA = ambientAppDataDir;
-  const app = await electron.launch({
-    executablePath: electronBinary,
-    cwd: managerRoot,
-    args: [path.join(managerRoot, "dist-electron", "main.js"), `--user-data-dir=${userDataDir}`],
-    env,
-    timeout: 20_000,
-  });
-  return { app, userDataDir };
-}
-
 function usageSnapshot(dataDir: string): {
   clients?: Record<string, number>;
   legacy?: { connections?: number };
 } | null {
   try {
-// SAFETY: the test fixture or assertion setup establishes the expected contract.
+    // SAFETY: the test fixture or assertion setup establishes the expected contract.
     return JSON.parse(fs.readFileSync(path.join(dataDir, "protocol-usage.json"), "utf8")) as {
       clients?: Record<string, number>;
       legacy?: { connections?: number };
@@ -96,7 +70,7 @@ function shutdownIsolatedEngine(dataDir: string): void {
   if (!fs.existsSync(lockPath)) return;
   const pid = (() => {
     try {
-// SAFETY: the test fixture or assertion setup establishes the expected contract.
+      // SAFETY: the test fixture or assertion setup establishes the expected contract.
       const parsed = JSON.parse(fs.readFileSync(lockPath, "utf8")) as { pid?: unknown };
       return isInteger(parsed.pid) ? parsed.pid : null;
     } catch {
@@ -133,7 +107,7 @@ function isInteger<T>(value: T): value is T & number {
   return typeof value === "number" && Number.isInteger(value);
 }
 
-test("Desktop and Manager share Engine v1 attribution without ambient-data access", async () => {
+test("Desktop keeps Engine v1 attribution without ambient-data access", async () => {
   test.setTimeout(120_000);
   const ambientDir = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-desktop-ambient-"));
   const sentinelPath = path.join(ambientDir, "sentinel.txt");
@@ -141,7 +115,6 @@ test("Desktop and Manager share Engine v1 attribution without ambient-data acces
   const firstDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-desktop-engine-v1-"));
   const secondDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-desktop-engine-v1-repeat-"));
   let launched: { app: ElectronApplication; userDataDir: string } | undefined;
-  let manager: { app: ElectronApplication; userDataDir: string } | undefined;
   let repeated: { app: ElectronApplication; userDataDir: string } | undefined;
   try {
     launched = await launchIsolated(firstDataDir, ambientDir);
@@ -177,19 +150,6 @@ test("Desktop and Manager share Engine v1 attribution without ambient-data acces
     expect(result.subscribed).toBe(true);
     expect(result.eventCount).toBeGreaterThan(0);
 
-    manager = await launchManagerIsolated(firstDataDir, ambientDir);
-    const managerPage =
-      manager.app.windows()[0] ?? (await manager.app.waitForEvent("window", { timeout: 20_000 }));
-    const health = await managerPage.evaluate(() => window.kosmosManager.getHealth());
-    expect(health.ok).toBe(true);
-    const info = await managerPage.evaluate(() => window.kosmosManager.getInfo());
-    expect(info.ok).toBe(true);
-    const dataSummary = await managerPage.evaluate(() => window.kosmosManager.getDataSummary());
-    expect(dataSummary.ok).toBe(true);
-    await manager.app.close();
-    removeTempDir(manager.userDataDir, "kosmos-manager-userdata-");
-    manager = undefined;
-
     await expect
       .poll(
         () => {
@@ -198,9 +158,6 @@ test("Desktop and Manager share Engine v1 attribution without ambient-data acces
           return (
             Object.keys(usage.clients ?? {}).some((key) =>
               key.startsWith("api_v1:kosmos-desktop@"),
-            ) &&
-            Object.keys(usage.clients ?? {}).some((key) =>
-              key.startsWith("api_v1:engine-manager@"),
             ) &&
             !Object.keys(usage.clients ?? {}).some((key) => key.startsWith("legacy:kosmos-")) &&
             usage.legacy?.connections === 0
@@ -241,10 +198,8 @@ test("Desktop and Manager share Engine v1 attribution without ambient-data acces
   } finally {
     shutdownIsolatedEngine(firstDataDir);
     shutdownIsolatedEngine(secondDataDir);
-    await manager?.app.close().catch(() => undefined);
     await repeated?.app.close().catch(() => undefined);
     await launched?.app.close().catch(() => undefined);
-    removeTempDir(manager?.userDataDir, "kosmos-manager-userdata-");
     removeTempDir(repeated?.userDataDir, "kosmos-desktop-userdata-");
     removeTempDir(launched?.userDataDir, "kosmos-desktop-userdata-");
     removeTempDir(firstDataDir, "kosmos-desktop-engine-v1-");

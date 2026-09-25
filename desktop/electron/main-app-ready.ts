@@ -1,21 +1,15 @@
-import { nativeTheme, powerMonitor } from "electron";
+import { BrowserWindow, globalShortcut, nativeTheme, powerMonitor } from "electron";
 import type { ArkClient } from "@kosmos/ark";
-import type { JsonRecord } from "./extension-permissions";
-import { showFocusBlockOverlay } from "./focus-overlay";
-import {
-  setBlockedAppNotifier,
-  setFocusSessionRuntime,
-  setFocusSessionShellOpener,
-} from "./focus-session";
+import type { JsonRecord } from "./json-types";
+import { openHostedApp } from "./host-app";
+import { openManager } from "./manager-navigation";
+import { openTestHarnessWindow } from "./main-test-window";
 import { registerMainProtocols } from "./main-protocols";
-import { handlePostUpdateFirstLaunch } from "./main-post-update";
 import { setupAutoUpdater } from "./autoupdater-host";
 import {
   getStoredHotkey,
-  isTrayIconEnabled,
   normalizeHotkeyAccelerator,
   setHotkeyReregisterCallback,
-  setTrayVisibilityController,
 } from "./settings-window";
 
 interface AppReadyBackendSupervisor {
@@ -36,39 +30,97 @@ interface AppReadyInstance {
   slot: string;
 }
 
-type PostUpdateLauncher = Parameters<typeof handlePostUpdateFirstLaunch>[0];
-
-interface AppReadyLauncher extends PostUpdateLauncher {
-  createLauncher(): void;
-  showLauncher(): void;
-  openManager(): void;
-  registerLauncherHotkeys(options: {
-    slot: string;
-    slotHotkey: string | null;
-    getStoredHotkey: typeof getStoredHotkey;
-    normalizeHotkeyAccelerator: typeof normalizeHotkeyAccelerator;
-    setHotkeyReregisterCallback: typeof setHotkeyReregisterCallback;
-  }): void;
-  setTrayVisible(visible: boolean): void;
-  showFocusSessionLauncher(): void;
-}
-
 interface RunAppReadyOptions {
   awaitArkReady: Parameters<typeof registerMainProtocols>[0]["awaitArkReady"];
   backendSupervisor: AppReadyBackendSupervisor;
   instance: AppReadyInstance;
-  launcher: AppReadyLauncher;
   log: AppReadyLogger;
   runBootSelfCheck(): void;
   recoverLegacyMigration?(): Promise<void>;
   runLegacyMigration?(): Promise<void>;
 }
 
+interface RegisterGlobalHotkeyOptions {
+  slot: string;
+  slotHotkey: string | null;
+  getStoredHotkey: () => string;
+  normalizeHotkeyAccelerator: (accelerator: string) => string | null;
+  setHotkeyReregisterCallback: (callback: (accelerator: string) => boolean) => void;
+}
+
+function registerGlobalHotkey({
+  getStoredHotkey: readStoredHotkey,
+  normalizeHotkeyAccelerator: normalizeAccelerator,
+  setHotkeyReregisterCallback: setReregisterCallback,
+  slot,
+  slotHotkey,
+}: RegisterGlobalHotkeyOptions): void {
+  // Anti-repeat по delta-времени между fire'ами. Windows key-repeat шлёт
+  // WM_HOTKEY каждые ~33 мс пока сочетание зажато; тап-тап (с реальным
+  // отпусканием пробела) даёт паузу >>=100 мс. Threshold 80 мс отрезает
+  // auto-repeat но пропускает быстрые тапы (>12 Hz всё равно бывает редко).
+  // Глобальный accelerator при этом всегда зарегистрирован - Windows не
+  // выдаёт Alt+Space в системные меню окна.
+  let lastFireAt = 0;
+  const openShell = () => {
+    const now = Date.now();
+    const gap = now - lastFireAt;
+    lastFireAt = now;
+    if (gap < 80) return;
+    if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1") return;
+    void openHostedApp("com.kosmos.shell");
+  };
+
+  // Slot'ы без hotkey (dev-<x>, test-<x>) - пропускаем регистрацию вовсе.
+  // Пользователь открывает shell через tray click. Это критично для
+  // multi-dev: два инстанса не могут поделить один accelerator, второй
+  // молча проиграл бы Windows OS race.
+  if (slotHotkey !== null) {
+    let currentAccelerator = readStoredHotkey();
+    function tryRegister(accelerator: string): boolean {
+      const normalized = normalizeAccelerator(accelerator);
+      if (!normalized) return false;
+      try {
+        if (globalShortcut.isRegistered(currentAccelerator)) {
+          globalShortcut.unregister(currentAccelerator);
+        }
+        const registered = globalShortcut.register(normalized, openShell);
+        if (registered) {
+          currentAccelerator = normalized;
+          console.log(`[kepler-shell] globalShortcut ${normalized} registered`);
+          return true;
+        }
+        // Откатываемся на предыдущий, если новая регистрация не удалась.
+        globalShortcut.register(currentAccelerator, openShell);
+        return false;
+      } catch (e) {
+        console.error("[kepler-shell] globalShortcut register error:", e);
+        return false;
+      }
+    }
+    const ok = tryRegister(currentAccelerator);
+    setReregisterCallback(tryRegister);
+    if (!ok) {
+      console.error(`[kepler-shell] globalShortcut ${currentAccelerator} register failed`);
+    }
+  } else {
+    console.log(`[kepler-shell] hotkey disabled for slot ${slot} - use tray click`);
+  }
+
+  // F12 toggle DevTools (dev mode только) - глобальный hotkey удобнее чем
+  // accelerator menu. Windows route'ит global accelerator к фокусному окну;
+  // в multi-dev только активное окно получит toggle.
+  if (process.env.VITE_DEV_SERVER_URL) {
+    globalShortcut.register("F12", () => {
+      BrowserWindow.getFocusedWindow()?.webContents.toggleDevTools();
+    });
+  }
+}
+
 export async function runAppReady({
   awaitArkReady,
   backendSupervisor,
   instance,
-  launcher,
   log,
   runBootSelfCheck,
   recoverLegacyMigration,
@@ -79,7 +131,7 @@ export async function runAppReady({
 
   if (process.argv.includes("--autostart")) {
     console.log(
-      "[kepler-shell] launched from Windows autorun (--autostart marker present); launcher remains hidden, tray icon only",
+      "[kepler-shell] launched from Windows autorun (--autostart marker present); shell remains silent, tray icon only",
     );
   }
 
@@ -88,9 +140,10 @@ export async function runAppReady({
   backendSupervisor.markBootInitStarted();
   const boot = backendSupervisor.initArkClient();
   if (!process.argv.includes("--autostart")) {
-    const openManager =
-      process.env.KOSMOS_TEST_MODE === "1" ? launcher.showLauncher : launcher.openManager;
-    openManager();
+    // В test mode Playwright нужен любой renderer с `window.kepler` bridge —
+    // открываем скрытое harness-окно вместо Manager.
+    const openSurface = process.env.KOSMOS_TEST_MODE === "1" ? openTestHarnessWindow : openManager;
+    openSurface();
   }
   void boot.catch((error) => {
     log.error(
@@ -101,13 +154,6 @@ export async function runAppReady({
         : { err: String(error) },
     );
   });
-  setFocusSessionShellOpener(launcher.showFocusSessionLauncher);
-  setFocusSessionRuntime({ awaitArkReady });
-  setBlockedAppNotifier((app) => {
-    showFocusBlockOverlay(app);
-  });
-  setTrayVisibilityController(launcher.setTrayVisible);
-  launcher.setTrayVisible(isTrayIconEnabled());
 
   powerMonitor.on("resume", () => {
     void backendSupervisor.recoverBackendIfDead("power-resume").catch((error) => {
@@ -122,9 +168,8 @@ export async function runAppReady({
   });
 
   setupAutoUpdater({ isDev: !instance.autoupdaterEnabled });
-  handlePostUpdateFirstLaunch(launcher);
 
-  launcher.registerLauncherHotkeys({
+  registerGlobalHotkey({
     slot: instance.slot,
     slotHotkey: instance.hotkey,
     getStoredHotkey,

@@ -1,8 +1,8 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { redactText as redactSharedText } from "../scripts/redaction.mjs";
-import type { JsonRecord, JsonValue } from "./extension-permissions";
-export type { JsonRecord } from "./extension-permissions";
+import type { JsonRecord, JsonValue } from "./json-types";
+export type { JsonRecord } from "./json-types";
 
 export const MAX_SUPPORT_TEXT_FILE_BYTES = 1024 * 1024;
 const SUPPORT_TEXT_EXTENSIONS = new Set([".json", ".log", ".txt"]);

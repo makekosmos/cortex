@@ -4,12 +4,10 @@ import type { ArkClient } from "@kosmos/ark";
 interface MainShellIpcOptions {
   awaitArkReady(timeoutMs?: number): Promise<ArkClient>;
   getArkClient(): ArkClient | null;
-  hideLauncher(): void;
-  setLauncherExpanded(expanded: boolean): void;
 }
 
 export function registerMainShellIpc(options: MainShellIpcOptions): void {
-  const { awaitArkReady, getArkClient, hideLauncher, setLauncherExpanded } = options;
+  const { awaitArkReady, getArkClient } = options;
 
   if (process.env.KOSMOS_TEST_MODE === "1") {
     ipcMain.handle("kepler:__test:waitForReady", async (_e, timeoutMs?: number): Promise<void> => {
@@ -36,10 +34,6 @@ export function registerMainShellIpc(options: MainShellIpcOptions): void {
   }
 
   ipcMain.handle("kepler:shell:openExternal", (_e, url: string) => shell.openExternal(url));
-  ipcMain.handle("kepler:window:hide", () => hideLauncher());
-  ipcMain.handle("kepler:window:setExpanded", (_e, expanded: boolean) =>
-    setLauncherExpanded(!!expanded),
-  );
 }
 
 function isPositiveNumber(value: number | undefined): value is number {

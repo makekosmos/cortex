@@ -14,7 +14,6 @@ import {
 } from "@kosmos/visuals";
 import { ChevronRight, ListRestart, Trash2 } from "@lucide/vue";
 import AdvancedPageLayout, { type IntroDescriptor } from "../components/AdvancedPageLayout.vue";
-import AppCommandsTab from "./AppCommandsTab.vue";
 import ModelProviderBadge from "./ModelProviderBadge.vue";
 import {
   DICTATION_IDLE_UNLOAD_OPTIONS,
@@ -24,12 +23,6 @@ import {
   type DictationVoiceModelOption,
 } from "../composables/useDictationConfig";
 import { useDictationPending } from "../composables/useDictationPending";
-import type { AppCommandSetting } from "../navigation";
-
-const emit = defineEmits<{
-  toggleUsageTracker: [e: Event];
-  toggleCommandVisibility: [id: string, e: Event];
-}>();
 
 // Системный hotkey-capture (begin_hotkey_capture) — adapter-метод: ловит даже
 // системные сочетания до WebContents через low-level hook (Windows) / CGEventTap
@@ -37,9 +30,6 @@ const emit = defineEmits<{
 // инкапсулирована per-OS внутри backend-адаптера.
 const props = defineProps<{
   intro: IntroDescriptor | null;
-  commands: AppCommandSetting[];
-  usageTracker: boolean;
-  isCommandVisible: (id: string) => boolean;
 }>();
 
 const ctx = inject(DictationConfigKey);
@@ -69,14 +59,6 @@ const {
   onDictationCaptureEnd,
   onDictationIdleUnloadChange,
 } = ctx;
-
-const commandsWithBinding = computed<AppCommandSetting[]>(() =>
-  props.commands.map((command) =>
-    command.id === "kepler:dictation"
-      ? { ...command, shortcut: dictationConfig.value.hotkey }
-      : command,
-  ),
-);
 
 const {
   pendingItems,
@@ -262,18 +244,6 @@ onMounted(async () => {
           </button>
         </SettingsList>
       </section>
-
-      <AppCommandsTab
-        :intro="null"
-        active-tab="dictation"
-        :commands="commandsWithBinding"
-        :usage-tracker="usageTracker"
-        :is-command-visible="isCommandVisible"
-        @toggle-usage-tracker="(e: Event) => emit('toggleUsageTracker', e)"
-        @toggle-command-visibility="
-          (id: string, e: Event) => emit('toggleCommandVisibility', id, e)
-        "
-      />
     </template>
 
     <template v-else>

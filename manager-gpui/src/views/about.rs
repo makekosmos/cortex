@@ -5,8 +5,8 @@ use ::gpui::{prelude::*, *};
 use serde_json::json;
 
 use crate::app::ManagerApp;
-use crate::theme::*;
 use crate::widgets::*;
+use kosmos_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.status("about.health", "health");
@@ -36,7 +36,7 @@ pub fn render(
     col = col.child(
         card()
             .child(row("Agenda", "Задачи и календарь · нативная оболочка GPUI"))
-            .child(if crate::engine::agenda_executable().is_some() {
+            .child(if kosmos_gpui_kit::engine::agenda_executable().is_some() {
                 div()
                     .flex()
                     .gap_2()
@@ -44,8 +44,8 @@ pub fn render(
                         imago_gpui::button::secondary("open-agenda")
                             .label("Открыть Agenda")
                             .on_click(cx.listener(|this, _, _, cx| {
-                                let dir = crate::engine::data_dir().ok();
-                                match crate::engine::open_agenda(dir.as_deref()) {
+                                let dir = kosmos_gpui_kit::engine::data_dir().ok();
+                                match kosmos_gpui_kit::engine::open_agenda(dir.as_deref()) {
                                     Ok(()) => this.notice = Some("Agenda запущена.".into()),
                                     Err(e) => this.error = Some(e),
                                 }
@@ -104,10 +104,10 @@ pub fn render(
                         imago_gpui::button::ghost("open-logs")
                             .label("Открыть папку журналов")
                             .on_click(cx.listener(|this, _, _, cx| {
-                                match crate::engine::data_dir().map(|d| d.join("logs")) {
+                                match kosmos_gpui_kit::engine::data_dir().map(|d| d.join("logs")) {
                                     Ok(dir) => {
                                         std::fs::create_dir_all(&dir).ok();
-                                        if let Err(e) = crate::engine::open_path(&dir) {
+                                        if let Err(e) = kosmos_gpui_kit::engine::open_path(&dir) {
                                             this.error = Some(e);
                                         }
                                     }
@@ -120,10 +120,11 @@ pub fn render(
                         imago_gpui::button::ghost("open-crashes")
                             .label("Открыть отчёты об ошибках")
                             .on_click(cx.listener(|this, _, _, cx| {
-                                match crate::engine::data_dir().map(|d| d.join("crashes")) {
+                                match kosmos_gpui_kit::engine::data_dir().map(|d| d.join("crashes"))
+                                {
                                     Ok(dir) => {
                                         std::fs::create_dir_all(&dir).ok();
-                                        if let Err(e) = crate::engine::open_path(&dir) {
+                                        if let Err(e) = kosmos_gpui_kit::engine::open_path(&dir) {
                                             this.error = Some(e);
                                         }
                                     }

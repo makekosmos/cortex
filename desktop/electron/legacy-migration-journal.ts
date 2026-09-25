@@ -1,7 +1,7 @@
 import { mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { isRecord, isString, type JsonRecord, type JsonValue } from "./extension-permissions";
+import { isRecord, isString, type JsonRecord, type JsonValue } from "./json-types";
 import { testMigrationBarrier } from "./test-migration-barrier";
 export const LEGACY_TO_CANONICAL = {
   arcadia: "com.kosmos.arcadia",

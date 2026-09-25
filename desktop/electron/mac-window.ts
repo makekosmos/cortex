@@ -1,6 +1,6 @@
 // macOS-нативные опции BrowserWindow.
 //
-// Применяются только к chrome-окнам (settings / dashboard / extensions) с
+// Применяются только к chrome-окнам (settings / extensions) с
 // `titleBarStyle: "hidden"` — там macOS рисует traffic lights, которые нужно
 // вертикально отцентрировать в нашем ~36px titlebar и подложить нативный
 // vibrancy вместо Windows-only `backgroundMaterial: "acrylic"`.

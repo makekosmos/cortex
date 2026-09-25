@@ -9,7 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { isRecord, isString, type JsonRecord, type JsonValue } from "./extension-permissions";
+import { isRecord, isString, type JsonRecord, type JsonValue } from "./json-types";
 
 export interface LegacyExtensionDataSource {
   id: string;

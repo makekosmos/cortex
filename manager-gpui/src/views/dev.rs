@@ -6,8 +6,8 @@ use gpui_component::input::Input;
 use serde_json::json;
 
 use crate::app::ManagerApp;
-use crate::theme::*;
 use crate::widgets::*;
+use kosmos_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("dev.packages", "packages.list", json!({}));
@@ -142,7 +142,7 @@ pub fn render(
             .child(kv("Режим", "GPUI Manager"))
             .child(kv(
                 "Данные",
-                crate::engine::data_dir()
+                kosmos_gpui_kit::engine::data_dir()
                     .map(|p| p.display().to_string())
                     .unwrap_or_else(|_| "не найдена".into()),
             ))

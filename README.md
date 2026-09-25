@@ -8,8 +8,6 @@ This repository owns the CosCast desktop application and its host-side services:
 - `agenda-gpui` (sibling repo `makekosmos/agenda-gpui`, pinned in
   `desktop/component-pins.json`) — the Kosmos Agenda shipped in the Windows
   package as `resources/components/agenda/Kosmos Agenda.exe`;
-- `manager/` — the legacy Electron/Vue Manager, kept for rollback and not
-  packaged by default;
 - `runtime/` — the Rust backend process supervised by the host;
 - `native-services/` — Windows focus/watcher services used by the host.
 

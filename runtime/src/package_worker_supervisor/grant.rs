@@ -134,29 +134,10 @@ impl PackageWorkerSupervisor {
                         IntegrationSettingKind::Text => {}
                     }
                 }
-                let huawei_routing = config
-                    .manifest
-                    .login
-                    .as_ref()
-                    .filter(|login| login.code_exchange.as_deref() == Some("huawei_health"))
-                    .map(|login| {
-                        let credential = config
-                            .secrets
-                            .get(&login.secret_setting)
-                            .ok_or("grant-failed")?;
-                        let account_key =
-                            crate::package_service::huawei_login::account_key(credential)
-                                .map_err(|_| "grant-failed")?;
-                        let (data_origin, site_id) =
-                            crate::package_service::huawei_login::worker_routing(credential)
-                                .map_err(|_| "grant-failed")?;
-                        Ok::<_, &'static str>((account_key, data_origin, site_id))
-                    })
-                    .transpose()?;
                 let bootstrap = IntegrationBootstrapConfig {
-                    account_key: huawei_routing.as_ref().map(|routing| routing.0.clone()),
-                    data_origin: huawei_routing.as_ref().map(|routing| routing.1.clone()),
-                    site_id: huawei_routing.as_ref().map(|routing| routing.2),
+                    account_key: None,
+                    data_origin: None,
+                    site_id: None,
                     settings: config.manifest.settings.clone(),
                     values: config.values.clone(),
                     secret_handles: handles,

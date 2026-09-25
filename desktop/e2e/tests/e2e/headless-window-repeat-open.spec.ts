@@ -10,7 +10,7 @@ async function visibleWindows(app: Awaited<ReturnType<typeof launchKeplerWithDat
   );
 }
 
-test("headless repeat-open does not show existing settings/dashboard windows", async () => {
+test("headless repeat-open does not show existing settings windows", async () => {
   const dataDir = freshDataDir("headless-repeat-open");
 
   const app = await launchKeplerWithDataDir(dataDir);
@@ -48,11 +48,6 @@ test("headless repeat-open does not show existing settings/dashboard windows", a
         );
       })
       .toBe(1);
-
-    await launcher.evaluate(async () => {
-      await window.kepler.commands.invoke("dashboard:open");
-      await window.kepler.commands.invoke("dashboard:open");
-    });
 
     await app.evaluate(({ app: electronApp }) => {
       // SAFETY: the test fixture or assertion setup establishes the expected contract.

@@ -5,8 +5,8 @@ use imago_gpui::button;
 use serde_json::json;
 
 use crate::app::ManagerApp;
-use crate::theme::*;
 use crate::widgets::*;
+use kosmos_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("backups.list", "manager.db_backups.list", json!({}));
@@ -62,10 +62,11 @@ pub fn render(
                         button::ghost("open-backups")
                             .label("Открыть папку")
                             .on_click(cx.listener(|this, _, _, cx| {
-                                match crate::engine::data_dir().map(|d| d.join("backups")) {
+                                match kosmos_gpui_kit::engine::data_dir().map(|d| d.join("backups"))
+                                {
                                     Ok(dir) => {
                                         std::fs::create_dir_all(&dir).ok();
-                                        if let Err(e) = crate::engine::open_path(&dir) {
+                                        if let Err(e) = kosmos_gpui_kit::engine::open_path(&dir) {
                                             this.error = Some(e);
                                         }
                                     }

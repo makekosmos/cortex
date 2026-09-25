@@ -1,5 +1,5 @@
 import type { KeplerApiShellServices } from "./ipc-api-shell-services";
-import type { IpcJsonObject, IpcJsonValue } from "./ipc-json";
+import type { IpcJsonObject } from "./ipc-json";
 // Контракт renderer API для `window.kepler` (см. preload.ts).
 
 import type {
@@ -10,22 +10,13 @@ import type {
   FileIndexSettingsPatch,
   FileSearchDiagnosticsReport,
   FileSearchRootEstimate,
-  FocusBlocklist,
-  FocusSessionSnapshot,
-  FocusSessionTask,
-  InstalledExtensionInfo,
-  MarketplaceCatalog,
   SearchResult,
-  StartFocusSessionInput,
 } from "./ipc-types";
-import type {
-  CommandActionRequest,
-  CommandActionResult,
-  CommandFeedbackEvent,
-  CommandFilePickerRequest,
-  CommandFilePickerResult,
-  CommandSnapshot,
-} from "./command-ipc";
+
+// Kepler shell API contract version for `window.kepler.*`. Read as text by
+// desktop/scripts/release-bom.mjs — keep the `KEPLER_API_VERSION = "x.y.z"`
+// shape intact when bumping.
+export const KEPLER_API_VERSION = "1.1.0";
 
 /**
  */
@@ -58,55 +49,30 @@ export interface KeplerApi extends KeplerApiShellServices {
     openExternal(url: string): Promise<void>;
   };
 
-  integrations: {
-    connectLeetCode<T = unknown>(): Promise<T>;
-    disconnectLeetCode<T = unknown>(): Promise<T>;
-  };
-
-  extension: {
-    installedList(): Promise<InstalledExtensionInfo[]>;
-    catalogFetch(force?: boolean): Promise<MarketplaceCatalog>;
-    installFromUrl(url: string, sha256: string | null): Promise<IpcJsonValue>;
-    revert(id: string, timestamp?: string): Promise<boolean>;
-    uninstall(id: string): Promise<boolean>;
-  };
-
-  /** Управление окном launcher'а. */
-  window: {
-    hide(): Promise<void>;
-    /** Зарегистрировать callback на показ окна (от globalShortcut). */
-    onShow(listener: () => void): () => void;
-    /** Зарегистрировать callback на скрытие окна. */
-    onHide(listener: () => void): () => void;
-    /** Растягивает окно в expanded (с результатами) / collapsed (только input). */
-    setExpanded(expanded: boolean): Promise<void>;
-  };
-
-  /** Поиск по ARK FTS5 через backend — не используется в launcher'е сейчас,
+  /** Поиск по ARK FTS5 через backend — пока без UI-потребителя в shell,
       оставлен для будущих использований (например, отдельный режим поиска по
       объектам через префикс или toggle). */
   search: {
     query(text: string): Promise<SearchResult[]>;
   };
 
-  /** ARK-объекты — пока не показываются в launcher'е (после pivot'а на
-      command registry). Зарезервировано на будущее. */
+  /** ARK-объекты — пока без UI-потребителя в shell. Зарезервировано на
+      будущее. */
   objects: {
     listRecent(limit?: number): Promise<SearchResult[]>;
   };
 
-  /** Generic ARK RPC bridge — используется встроенным Dashboard view'ом
-      для list_object_types / list_objects / list_objects_by_type. Main
-      проксирует на ArkClient (см. main.ts). */
+  /** Generic ARK RPC bridge — используется shell-views (focus, dictation)
+      для Engine ops. Main проксирует на ArkClient (см. main.ts). */
   ark: {
     request<T = unknown>(operation: string, params?: IpcJsonObject): Promise<T>;
     onEvent(listener: (event: IpcJsonObject) => void): () => void;
   };
 
-  /** Command registry — то что показывает launcher: список запуска апок +
-      их action-ручки (Pomodoro start, create note и т.п.). Action-команды
-      приходят dynamic от running апок через backend; static open-команды
-      исполняются локально kepler-shell'ом. */
+  /** Command registry — список запуска апок + их action-ручки (Pomodoro
+      start, create note и т.п.). Action-команды приходят dynamic от running
+      апок через backend; static open-команды исполняются локально
+      kepler-shell'ом. */
   commands: {
     list(): Promise<CommandRecord[]>;
     invoke(id: string): Promise<void>;
@@ -114,45 +80,6 @@ export interface KeplerApi extends KeplerApiShellServices {
         новые команды или вышла из эфира). Колбэк вызывается без аргументов —
         renderer'у следует заново вызвать list(). */
     onUpdated(listener: () => void): () => void;
-  };
-
-  command: {
-    snapshot(sessionId: string): Promise<CommandSnapshot | null>;
-    action(sessionId: string, action: CommandActionRequest): Promise<CommandActionResult>;
-    pickFiles(
-      sessionId: string,
-      request: CommandFilePickerRequest,
-    ): Promise<CommandFilePickerResult>;
-    onSnapshotUpdated(
-      sessionId: string,
-      listener: (snapshot: CommandSnapshot) => void,
-    ): () => void;
-    onFeedback(
-      sessionId: string,
-      listener: (event: CommandFeedbackEvent) => void,
-    ): () => void;
-  };
-
-  /** Shell-owned Focus Session command page. Main process owns pomodoro,
-      ARK time_entry and blocklist side effects; renderer only sends intents. */
-  focusSession: {
-    open(): Promise<void>;
-    snapshot(): Promise<FocusSessionSnapshot>;
-    listTasks(): Promise<FocusSessionTask[]>;
-    listBlocklists(): Promise<FocusBlocklist[]>;
-    start(input: StartFocusSessionInput): Promise<FocusSessionSnapshot>;
-    pause(): Promise<FocusSessionSnapshot>;
-    resume(): Promise<FocusSessionSnapshot>;
-    skip(): Promise<FocusSessionSnapshot>;
-    stop(): Promise<FocusSessionSnapshot>;
-    /** «Выполнена»: stop + пометить привязанную задачу выполненной. */
-    complete(): Promise<FocusSessionSnapshot>;
-    onOpenShell(listener: () => void): () => void;
-    onUpdated(listener: () => void): () => void;
-    onAppBlocked(
-      listener: (app: { id: string; title: string; icon?: string | null }) => void,
-    ): () => void;
-    snoozeApp(appId: string): Promise<void>;
   };
 
   /** Универсальный per-type data export. Phase 7. Конвертеры регистрируются

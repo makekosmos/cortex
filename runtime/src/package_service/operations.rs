@@ -1386,12 +1386,6 @@ pub async fn invoke_worker_operation(
 
     fn uninstall(&self, id: &str, version: &str) -> Result<(), PackageError> {
         let package = self.store.installed(id, version)?;
-        // Synchronous uninstall must not race an in-flight Huawei login or rotation.
-        let _login_lock = if matches!(&package.manifest, VersionedManifest::V2(manifest)
-            if manifest.integration.as_ref().and_then(|v| v.login.as_ref())
-                .is_some_and(|login| login.code_exchange.as_deref() == Some("huawei_health"))) {
-            Some(huawei_login::try_lock()?)
-        } else { None };
         let _mutation = Self::lock(&self.mutation);
         if let Some(worker) = self.worker.as_ref() {
             worker.supervisor.revoke_typed_launch(id, version);

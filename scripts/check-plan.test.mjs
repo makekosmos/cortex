@@ -27,12 +27,7 @@ test("desktop UI selects desktop typecheck, changed lint, and format", () => {
   assert.match(result.stderr, /desktop\/src\/App\.vue/);
 });
 
-test("manager, host contracts, Rust, native, and first-party files expand conservatively", () => {
-  assert.deepEqual(plan("--files", "manager/src/App.vue").json.checks, [
-    "manager-typecheck",
-    "lint",
-    "format",
-  ]);
+test("host contracts, Rust, native, and first-party files expand conservatively", () => {
   assert.deepEqual(plan("--files", "host/electron/main.ts").json.checks, [
     "host-typecheck",
     "host-contracts",
@@ -162,14 +157,14 @@ test("command failures aggregate instead of stopping after the first selected gr
   const { executePlan } = await import("./check-plan.mjs");
   const seen = [];
   const status = executePlan(
-    { full: false, checks: ["desktop-typecheck", "manager-typecheck"], changed: [], reasons: [] },
+    { full: false, checks: ["desktop-typecheck", "host-typecheck"], changed: [], reasons: [] },
     (command) => {
       seen.push(command.name);
       return command.name === "desktop-typecheck" ? 1 : 0;
     },
   );
   assert.equal(status, 1);
-  assert.deepEqual(seen, ["desktop-typecheck", "manager-typecheck"]);
+  assert.deepEqual(seen, ["desktop-typecheck", "host-typecheck"]);
 });
 
 test("full gate runs the root check plus host and first-party contract suites", async () => {

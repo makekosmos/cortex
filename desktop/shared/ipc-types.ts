@@ -122,41 +122,7 @@ export interface FileSearchRootWarning {
 
 export type FileSearchDiagnosticsReport = FileIndexDiagnosticsSnapshot;
 
-export interface InstalledExtensionInfo {
-  id: string;
-  appId: string | null;
-  name: string;
-  kind: string | null;
-  version: string | null;
-  description: string | null;
-  author: string | null;
-  iconDataUri: string | null;
-  backupCount: number;
-  backupTimestamps: string[];
-  source: "installed" | "dev";
-}
-
-export interface MarketplaceExtension {
-  id: string;
-  appId: string | null;
-  name: string;
-  description: string;
-  author: string | null;
-  version: string;
-  keplerApiVersion: string;
-  iconUrl: string | null;
-  downloadUrl: string;
-  sha256: string | null;
-  size: number | null;
-}
-
-export interface MarketplaceCatalog {
-  schemaVersion: number;
-  updatedAt: string;
-  extensions: MarketplaceExtension[];
-}
-
-/** Команда в launcher'е — единица того что пользователь может вызвать. */
+/** Команда в command registry — единица того что пользователь может вызвать. */
 export interface CommandRecord {
   id: string;
   title: string;
@@ -175,70 +141,6 @@ export interface CommandRecord {
   icon?: string;
   /** Опциональный глобальный хоткей/accelerator, если команда имеет binding. */
   shortcut?: string;
-}
-
-type FocusSessionPhase = "idle" | "work" | "shortBreak" | "longBreak";
-
-interface FocusSessionPomodoroState {
-  phase: FocusSessionPhase;
-  remainingMs: number;
-  totalMs: number;
-  completedPomodoros: number;
-  isRunning: boolean;
-  isPaused: boolean;
-  phaseEndsAtMs?: number | null;
-  title?: string;
-  tasks?: Array<{ id: string; title: string }>;
-}
-
-export interface FocusActiveState {
-  active: boolean;
-  blocklist_id?: string | null;
-  blocked_app_ids?: string[];
-  blocked_apps?: FocusBlockedApp[];
-  started_at?: string | null;
-}
-
-export interface FocusBlockedApp {
-  id: string;
-  name: string;
-  icon?: string | null;
-  exec_path?: string | null;
-}
-
-export interface FocusBlocklist {
-  id: string;
-  name: string;
-  domains: string[];
-  createdAt: string;
-  preset?: boolean;
-  icon?: string;
-  kind?: "domains" | "raw";
-}
-
-export interface FocusSessionTask {
-  id: string;
-  title: string;
-  status?: string | null;
-}
-
-export interface StartFocusSessionInput {
-  title: string;
-  durationMin: number;
-  taskId?: string | null;
-  taskTitle?: string | null;
-  mode?: "block" | "allow";
-  categoryIds?: string[];
-  blocklistId?: string | null;
-  blockedAppIds?: string[];
-  blockedApps?: FocusBlockedApp[];
-}
-
-export interface FocusSessionSnapshot {
-  pomodoro: FocusSessionPomodoroState;
-  focus: FocusActiveState;
-  runningEntryId: string | null;
-  focusError?: string | null;
 }
 
 export type { KeplerApi } from "./ipc-api-types";

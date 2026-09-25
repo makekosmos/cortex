@@ -3043,6 +3043,7 @@ dependencies = [
  "ignore",
  "image",
  "keyring",
+ "kosmos-package-protocol",
  "libc",
  "libloading",
  "lnk",
@@ -3112,6 +3113,13 @@ dependencies = [
  "security-framework 3.7.0",
  "windows-sys 0.60.2",
  "zeroize",
+]
+
+[[package]]
+name = "kosmos-package-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

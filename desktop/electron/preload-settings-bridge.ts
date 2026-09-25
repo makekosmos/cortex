@@ -1,12 +1,8 @@
 import { ipcRenderer } from "electron";
 import type { KeplerApi } from "../shared/ipc-types";
-import type { FocusOverlayFeedback } from "../shared/ipc-api-shell-services";
 import type { UpdateState } from "../shared/ipc-types";
 
-type KeplerSettingsBridge = Pick<
-  KeplerApi,
-  "settings" | "focusOverlay" | "diagnostics" | "postUpdate"
->;
+type KeplerSettingsBridge = Pick<KeplerApi, "settings" | "diagnostics">;
 
 export function createKeplerSettingsBridge(): KeplerSettingsBridge {
   return {
@@ -16,11 +12,6 @@ export function createKeplerSettingsBridge(): KeplerSettingsBridge {
       trayIcon: {
         get: () => ipcRenderer.invoke("kepler:settings:tray-icon:get"),
         set: (enabled) => ipcRenderer.invoke("kepler:settings:tray-icon:set", enabled),
-      },
-      launcherStateTtl: {
-        get: () => ipcRenderer.invoke("kepler:settings:launcher-state-ttl:get"),
-        set: (minutes: number) =>
-          ipcRenderer.invoke("kepler:settings:launcher-state-ttl:set", minutes),
       },
       version: () => ipcRenderer.invoke("kepler:settings:version"),
       storageSummary: () => ipcRenderer.invoke("kepler:settings:storage-summary"),
@@ -38,19 +29,6 @@ export function createKeplerSettingsBridge(): KeplerSettingsBridge {
         },
       },
     },
-    focusOverlay: {
-      ready: () => ipcRenderer.send("kepler:focus-overlay:ready"),
-      onShow: (listener) => {
-        const handler = (_e: Electron.IpcRendererEvent, feedback: FocusOverlayFeedback) =>
-          listener(feedback);
-        ipcRenderer.on("kepler:focus-overlay:show", handler);
-        return () => ipcRenderer.removeListener("kepler:focus-overlay:show", handler);
-      },
-      setInteractive: (interactive: boolean) =>
-        ipcRenderer.invoke("kepler:focus-overlay:set-interactive", interactive),
-      showBlocked: (app) => ipcRenderer.invoke("kepler:focus-overlay:show-blocked", app),
-      done: () => ipcRenderer.send("kepler:focus-overlay:done"),
-    },
     diagnostics: {
       bundle: () => ipcRenderer.invoke("kepler:diagnostics:bundle"),
       metrics: () => ipcRenderer.invoke("kepler:diagnostics:metrics"),
@@ -58,14 +36,6 @@ export function createKeplerSettingsBridge(): KeplerSettingsBridge {
       traceStop: (outPath?: string) => ipcRenderer.invoke("kepler:diagnostics:trace-stop", outPath),
       windowMoveBenchmark: (input) =>
         ipcRenderer.invoke("kepler:diagnostics:window-move-benchmark", input),
-    },
-    postUpdate: {
-      onShown: (listener) => {
-        const handler = (_e: Electron.IpcRendererEvent, payload: { version: string }) =>
-          listener(payload);
-        ipcRenderer.on("kepler:post-update", handler);
-        return () => ipcRenderer.removeListener("kepler:post-update", handler);
-      },
     },
   };
 }

@@ -1,7 +1,7 @@
 import { mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { ArkClient } from "@kosmos/ark";
-import { isRecord, isString, type JsonValue } from "./extension-permissions";
+import { isRecord, isString, type JsonValue } from "./json-types";
 import type { CanonicalId } from "./legacy-migration-journal";
 
 export type ArkRequest = Parameters<ArkClient["invokeOperation"]>[0];

@@ -1,5 +1,5 @@
 import { beforeEach, expect, mock, test } from "../test-support/node-test.mjs";
-import type { JsonRecord } from "./extension-permissions";
+import type { JsonRecord } from "./json-types";
 
 const engineLock = {
   format_version: 1,
@@ -56,7 +56,6 @@ mock.module("./logging", () => ({
   keplerLog: { error: mock.fn(), info: mock.fn(), warn: mock.fn(), setCorrelationId: mock.fn() },
 }));
 mock.module("./main-protocols", () => ({ clearMainProtocolCaches: mock.fn() }));
-mock.module("./extension-ark-ipc", () => ({ setExtensionArkBridge: mock.fn() }));
 
 const { createMainArkClientController } = await import("./main-ark-client-controller");
 
@@ -66,12 +65,6 @@ function createController() {
     // SAFETY: The test supplies the minimal instance shape consumed by the controller.
     instance: { slot: "test" } as never,
     isBackendRunning: () => true,
-    setupPomodoroNotifier: () => {},
-    teardownPomodoroNotifier: () => {},
-    setupFocusWidgetBackendSync: () => {},
-    teardownFocusWidgetBackendSync: () => {},
-    setupFocusSessionBackendSync: () => {},
-    teardownFocusSessionBackendSync: () => {},
     setupDictationHotkey: async () => {},
     broadcastCommandsUpdated: () => {},
   });

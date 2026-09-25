@@ -1,18 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
-  appCommandSettings,
-  HIDDEN_COMMANDS_KEY,
   settingsNavigationItems,
-  type AppCommandSetting,
-  type AppSettingsTab,
   type SettingsNavigationItem,
   type Tab,
 } from "./settings/navigation";
 import UpdateBanner from "./settings/components/UpdateBanner.vue";
 import AboutTab from "./settings/tabs/AboutTab.vue";
-import AppCommandsTab from "./settings/tabs/AppCommandsTab.vue";
-import DebugTab from "./settings/tabs/DebugTab.vue";
 import ExportTab from "./settings/tabs/ExportTab.vue";
 import FileIndexTab from "./settings/tabs/FileIndexTab.vue";
 import GeneralTab from "./settings/tabs/GeneralTab.vue";
@@ -98,57 +92,12 @@ const activeAdvancedIntro = computed(() => {
   return item;
 });
 
-const hiddenCommandIds = ref<string[]>(loadHiddenCommandIds());
-
-const activeAppCommands = computed<AppCommandSetting[]>(() => {
-  const current = activeTab.value;
-  if (!current || !isAppSettingsTab(current)) return [];
-  return appCommandSettings[current];
-});
-
-function isAppSettingsTab(value: Tab): value is AppSettingsTab {
-  return value === "time-tracker";
-}
-
-function loadHiddenCommandIds(): string[] {
-  try {
-    const raw = localStorage.getItem(HIDDEN_COMMANDS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveHiddenCommandIds(ids: string[]) {
-  const normalized = Array.from(new Set(ids)).sort();
-  localStorage.setItem(HIDDEN_COMMANDS_KEY, JSON.stringify(normalized));
-  hiddenCommandIds.value = normalized;
-}
-
-function isCommandVisible(id: string): boolean {
-  return !hiddenCommandIds.value.includes(id);
-}
-
-function onToggleCommandVisibility(id: string, event: Event) {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
-  const checked = (event.target as HTMLInputElement).checked;
-  const next = new Set(hiddenCommandIds.value);
-  if (checked) {
-    next.delete(id);
-  } else {
-    next.add(id);
-  }
-  saveHiddenCommandIds(Array.from(next));
-}
-
 // --- General ----------------------------------------------------------------
 
 const hotkey = ref<string>("");
 const hotkeyError = ref<string>("");
 
-async function onLauncherHotkeyChange(acc: string) {
+async function onHotkeyChange(acc: string) {
   const r = await window.kepler.settings.hotkeySet(acc);
   if (r.ok) {
     hotkey.value = acc;
@@ -165,20 +114,17 @@ async function resetHotkey() {
 }
 const version = ref<string>("");
 const trayIcon = ref<boolean>(true);
-const launcherStateTtl = ref<number>(5);
 const loading = ref<boolean>(true);
 
 async function loadGeneral() {
   loading.value = true;
   try {
-    const [h, v, ttl] = await Promise.all([
+    const [h, v] = await Promise.all([
       window.kepler.settings.hotkey(),
       window.kepler.settings.version(),
-      window.kepler.settings.launcherStateTtl.get(),
     ]);
     hotkey.value = h;
     version.value = v;
-    launcherStateTtl.value = ttl;
   } catch (e) {
     console.warn("settings load failed", e);
   } finally {
@@ -195,7 +141,7 @@ async function loadTrayIcon() {
 }
 
 async function onToggleTrayIcon(e: Event) {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
+  // SAFETY: the surrounding domain validation preserves the asserted contract.
   const desired = (e.target as HTMLInputElement).checked;
   trayIcon.value = desired;
   try {
@@ -204,20 +150,6 @@ async function onToggleTrayIcon(e: Event) {
   } catch (err) {
     console.warn("trayIcon set failed", err);
     trayIcon.value = await window.kepler.settings.trayIcon.get();
-  }
-}
-
-async function onLauncherStateTtlChange(e: Event) {
-// SAFETY: the surrounding domain validation preserves the asserted contract.
-  const target = e.target as HTMLInputElement;
-  const minutes = Number(target.value);
-  if (!Number.isFinite(minutes) || minutes < 0) return;
-  try {
-    await window.kepler.settings.launcherStateTtl.set(minutes);
-    launcherStateTtl.value = await window.kepler.settings.launcherStateTtl.get();
-  } catch (err) {
-    console.warn("launcherStateTtl set failed", err);
-    launcherStateTtl.value = await window.kepler.settings.launcherStateTtl.get();
   }
 }
 
@@ -386,7 +318,7 @@ onBeforeUnmount(() => {
             :hotkey="hotkey"
             :hotkey-error="hotkeyError"
             :tray-icon="trayIcon"
-            @launcher-hotkey-change="onLauncherHotkeyChange"
+            @hotkey-change="onHotkeyChange"
             @reset-hotkey="resetHotkey"
             @toggle-tray-icon="onToggleTrayIcon"
           />
@@ -403,28 +335,10 @@ onBeforeUnmount(() => {
           />
         </template>
 
-        <template v-else-if="activeTab === 'debug'">
-          <DebugTab
-            :launcher-state-ttl="launcherStateTtl"
-            @launcher-state-ttl-change="onLauncherStateTtlChange"
-          />
-        </template>
-
-        <template v-else-if="activeTab === 'time-tracker'">
-          <AppCommandsTab
-            :intro="activeAdvancedIntro"
-            :active-tab="activeTab"
-            :commands="activeAppCommands"
-            :is-command-visible="isCommandVisible"
-            @toggle-command-visibility="onToggleCommandVisibility"
-          />
-        </template>
-
         <template v-else-if="activeTab === 'file-index'">
           <FileIndexTab />
         </template>
 
-        <!-- Focus tab — управление блок-листами доменов и активной блокировкой -->
         <!-- Export tab — список зарегистрированных converters + history -->
         <template v-else-if="activeTab === 'export'">
           <ExportTab />
@@ -443,7 +357,7 @@ onBeforeUnmount(() => {
 
 /* Все scoped tab-specific CSS переехали в соответствующие per-tab компоненты:
  * - LegacyToggle / UpdateBanner (shell-local components)
-* - AppCommandsTab / ExportTab
+ * - ExportTab
  *   (per-tab .vue с собственным scoped-style)
  *
  * Утилитарные классы (.row, .btn, .label, .hint, .advanced-page и т.д.)

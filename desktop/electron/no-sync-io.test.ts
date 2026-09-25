@@ -5,7 +5,7 @@ import path from "node:path";
 // Regression: 2026-06-10, .agent/tasks/2026-06-10-electron-main-async-io.
 // Синхронный fs/child_process I/O в IPC/protocol handler'ах вешает все окна shell'а.
 // Для каждого файла — список запрещённых синхронных вызовов на его горячих путях.
-// Файлы вне списка (focus-widget, dashboard-window и т.п.) осознанно не покрыты:
+// Файлы вне списка (focus-widget и т.п.) осознанно не покрыты:
 // их sync-вызовы — мелкие одноразовые JSON state read/write (см. spec § Scope).
 const bannedByFile = {
   "diagnostics.ts": [

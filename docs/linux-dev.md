@@ -1,14 +1,12 @@
-# Linux development: host + Engine + Manager + first-party apps
+# Linux development: host + Engine + first-party apps
 
 Verified on Ubuntu 24.04 x86_64 (KOS-53, KOS-93, KOS-94, KOS-95, KOS-96,
 KOS-97, KOS-98, KOS-102, KOS-105). The supported gate is the first-party E2E suite, which builds the
 Engine, spawns the pinned `ark-core-rpc` sidecar, installs the signed
 Agenda/Memoria/Ordo/Arcadia/Dictation `.kspkg`, and launches the Electron
-Host under Xvfb — plus the standalone Manager E2E suite, which attaches the
-Manager Electron app to a live Engine over `engine.lock.json` and covers
-the Маркетплейс store-catalog surface — all in isolated `/tmp` roots with
-PID-identity cleanup. The whole stack — Engine, Host, Manager, and the
-Store catalog gate — is on `main`; no feature branch is required.
+Host under Xvfb — all in isolated `/tmp` roots with PID-identity cleanup.
+The whole stack — Engine, Host, and the Store catalog gate — is on `main`;
+no feature branch is required.
 
 ## Toolchain
 
@@ -142,58 +140,6 @@ xvfb-run -a pnpm --dir host run e2e \
   same spec replays the checked-in `dictation-0.2.2` fixture, which predates
   the worker contract.
 
-## Manager E2E (headless)
-
-```text
-pnpm --dir manager run build            # writes manager/dist + dist-electron
-xvfb-run -a pnpm --dir manager run e2e  # all specs; append spec names to filter
-```
-
-`manager/scripts/run-e2e.mjs` wraps Playwright with a cleanup manifest: each
-spec runs in a `kosmos-manager-e2e-*` temp root, and the runner sweeps
-leftover roots/processes by PID identity (`/proc` start time on Linux,
-WMI `CreationDate` on Windows). `manager/e2e/global-setup.ts` builds the
-Engine + `ark-core-rpc` sidecar with the shared test signing keys before the
-suite starts. On Linux the specs export `ELECTRON_DISABLE_SANDBOX=1` and
-isolate `XDG_CONFIG_HOME`/`APPDATA` per run; `KOSMOS_HEADLESS=1` keeps the
-Manager window hidden (asserted via `BrowserWindow.isVisible() === false`).
-
-- `diagnostics` — Engine up; Manager launches, walks every sidebar section
-  (Данные, Синхронизация, Движок, Интеграции, Ключи, Браузер, Маркетплейс,
-  Обновления, О приложении, Настройки), and exercises the metadata-only
-  diagnostics IPC surface: crash reports expose names only (never file
-  contents or paths), support-bundle save cancels headless-safe, and
-  folder-open calls answer `opened: false` off a real display.
-- `engine-lifecycle` — the attach/reattach smoke: Engine writes
-  `engine.lock.json` (api v1), Manager attaches and answers
-  `getHealth`/`getInfo`/`getEngineSettings`, exits independently while the
-  Engine stays alive, and a reattached Manager re-reads the same lock and
-  increments the Engine's `protocol-usage.json` `api_v1` counters. Also
-  covers retained dictation assets across migration and — on Node 22.5+
-  runners where `node:sqlite` exists — the legacy usage-tracker settings
-  migration (skipped on Node 20).
-- `file-index-manager` — `file_index.*` Engine RPCs and the
-  `window.kosmosManager.*FileIndex*` API keep working across a Manager
-  relaunch; the File Index feature intentionally has no sidebar surface.
-- `sync-manager` — a deterministic in-process HTTP fixture answers the same
-  `engine.lock.json` + `/v1/rpc` contract: sync snapshot, pairing-code
-  reveal/copy, connect/disconnect peer flows, serialized refresh, and an
-  unavailable-Engine reopen. The lock `auth_token` is asserted absent from
-  the rendered DOM.
-- `store-catalog` — a test-signed Store catalog fixture is seeded through
-  `packages.catalog_apply`, then the Маркетплейс browses it, opens listing
-  details, resolves `store.external_url`, installs via `packages.install`
-  with `archive_path`, and toggles `packages.set_enabled` from the Manager
-  UI, with catalog metadata and effective grants projected onto the
-  installed app; a refresh against a dead catalog URL fails closed
-  (listings kept, `state: "stale"`). The fixture mixes a portable listing
-  (`["linux", "windows"]`) with a Windows-only one: the Engine reports the
-  host OS as `platform` on `store.catalog`/`store.refresh`, and the spec
-  asserts the Manager filters `availability.platforms` by that token — on
-  Linux the Windows-only app and the Windows-only first-party Huawei
-  Health integration card are hidden, while portable listings stay
-  visible.
-
 ## Full-contour smoke (one command)
 
 ```text
@@ -224,8 +170,6 @@ root, then runs the gates in order:
    shutting it down.
 5. `host-deps`/`host-build` — `pnpm install` + `vite build` for `host/`.
 6. `host-e2e` — the eight first-party contract/smoke specs above.
-7. `manager-deps`/`manager-build` — same for `manager/`.
-8. `manager-e2e` — the full Manager suite including `store-catalog`.
 
 Each gate reports `PASS`, `FAIL`, or `NOT_RUN` (a gate is `NOT_RUN` when a
 prerequisite gate did not pass). The run exits non-zero unless every gate
@@ -247,17 +191,14 @@ When `pnpm --dir host install --frozen-lockfile` cannot reach
 `host-deps` automatically falls back to
 `link:../.tmp/workspace/arca-sdk` for that install only and restores
 `host/package.json` + `host/pnpm-lock.yaml` afterwards — the `link:` edit
-is never committed. On Node 20 the legacy usage-tracker migration spec
-inside `engine-lifecycle` skips (`node:sqlite` needs Node 22.5+); the
-Manager gate still counts as `PASS` with `1 skipped`.
+is never committed.
 
 The harness is platform-neutral: binary names come from `executableName()`,
 fixture ZIPs use `desktop/scripts/zip-utils.mjs`, and process cleanup reads
 `/proc` on Linux (PID + start-time identity) while Windows keeps the
 PowerShell/WMI path. Linux Electron containers typically lack the namespaces
 the Chromium sandbox needs, which the specs disable only on
-`process.platform === "linux"` (`--no-sandbox` in Host specs,
-`ELECTRON_DISABLE_SANDBOX=1` in Manager specs).
+`process.platform === "linux"` (`--no-sandbox` in Host specs).
 
 ## Intentional gaps
 
@@ -282,47 +223,23 @@ the Chromium sandbox needs, which the specs disable only on
   autostart, and start-menu integration remain Windows-only; the Engine
   stubs them out off-Windows and the Dictation spec asserts `unavailable`
   rather than the app branching on the OS.
-- Manager keeps the same rule: `manager.getAutostart` reports
-  `available: false` for the unpackaged e2e build (and for anything not
-  `win32`), and Manager `src/` contains no `process.platform` checks —
-  capability decisions stay in the Engine/main-process responses. The
-  Manager suite asserts `available: false` instead of adding UI branches.
-  Marketplace filtering follows the same shape: `store.catalog`/
-  `store.refresh` responses carry a `platform` token mapped from the host
-  OS inside the Engine (`windows`/`macos`, `linux` otherwise), and Manager
-  renderer code filters `availability.platforms` against it rather than
-  detecting the OS itself.
-- `manager/e2e` is not covered by `pnpm --dir manager run typecheck`
-  (`tsconfig` includes `src` + `electron` only, same as `host/`); the specs
-  are exercised by Playwright instead.
-- The usage-tracker settings-migration test needs `node:sqlite` (Node
-  22.5+); on Node 20 runners it skips, so the row-count assertions are
-  Windows/CI-only for now.
-- The bundled Manager CSP (`font-src 'self'`) blocks the app's own `data:`
-  fonts — a pre-existing product issue; the diagnostics spec ignores
-  exactly that console error and still fails on any other.
 
 ## OS-branch audit (KOS-100)
 
 A KOS-100 audit of first-party app product `src/` (Agenda, Memoria, Ordo,
-Arcadia, Dictation, Store, Manager UI) found no `process.platform` or
+Arcadia, Dictation, Store) found no `process.platform` or
 `os.platform` use in renderer code — Electron-main hits under
 `*/electron/`, dev tooling under `*/scripts/`, and test harnesses under
 `*/tests/`/`*/e2e/` are the layers where OS branches belong. The only
 app-side OS detection was window-chrome styling: `navigator.platform` /
 `navigator.userAgent` sniffing feeding the `DesktopChrome` `platform`
 prop (Agenda, Memoria, Arcadia) and the prop hardcoded to `"windows"`
-(Dictation, `ManagerRoot`, `DashboardView`, `CommandHostView`). Those
+(Dictation, `DashboardView`, `CommandHostView`). Those
 sites now consume the host-written `<html data-platform>` marker that the
 preloads set from `process.platform` (`desktop/electron/extension-preload.ts`,
 `desktop/electron/preload-bridge.ts`) — read directly, or via
 `usePlatform()` from `@kosmos/visuals` — so apps keep a single source of
-platform truth and run no OS detection of their own. The Manager store
-catalog consumes the same shape end-to-end: the Engine reports the host
-OS as a `platform` token on `store.catalog`/`store.refresh`, and
-`manager/src/composables/useStoreCatalog.ts` +
-`manager/src/connection-helpers.ts` filter `availability.platforms`
-against it (the `store-catalog` spec asserts the filtering on Linux).
+platform truth and run no OS detection of their own.
 Memoria's `getPlatform()` keeps a `navigator.userAgent` fallback only for
 sessions where the marker is absent (running outside the Host).
 Remaining follow-up: Arcadia's library copy is Windows-centric (`.exe`
@@ -331,6 +248,5 @@ holding the app checkouts:
 
 ```text
 rg -n 'process\.platform|os\.platform|navigator\.platform|navigator\.userAgent|\bwin32\b|\bdarwin\b|data-platform|platform="' \
-  agenda/src memoria/src ordo/src arcadia/src dictation/src \
-  cortex/manager/src
+  agenda/src memoria/src ordo/src arcadia/src dictation/src
 ```
