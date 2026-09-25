@@ -4,7 +4,7 @@ import {
   getFocusBlockStatus,
   type HelperResponse,
 } from "./focus-block";
-import { isRecord, isString, type JsonRecord, type JsonValue } from "./extension-permissions";
+import { isRecord, isString, type JsonRecord, type JsonValue } from "./json-types";
 
 export type FocusRequest = (operation: string, params?: JsonRecord) => Promise<JsonValue>;
 const isBoolean = (value: JsonValue | undefined): value is boolean => typeof value === "boolean";

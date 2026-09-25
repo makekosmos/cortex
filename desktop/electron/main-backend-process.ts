@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
-import type { JsonRecord } from "./extension-permissions";
+import type { JsonRecord } from "./json-types";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 

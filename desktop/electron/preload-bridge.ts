@@ -1,7 +1,7 @@
 import { ipcRenderer } from "electron";
 import type { KeplerApi } from "../shared/ipc-types";
 import { createKeplerSettingsBridge } from "./preload-settings-bridge";
-import type { JsonRecord } from "./extension-permissions";
+import type { JsonRecord } from "./json-types";
 
 type KeplerTestApi = {
   __test?: {
@@ -46,16 +46,6 @@ export function createKeplerPreloadApi(): KeplerPreloadApi {
     },
     shell: {
       openExternal: (url: string) => ipcRenderer.invoke("kepler:shell:openExternal", url),
-    },
-    extension: {
-      installedList: () => ipcRenderer.invoke("kepler:extension:installed:list"),
-      catalogFetch: (force?: boolean) =>
-        ipcRenderer.invoke("kepler:extension:catalog:fetch", force),
-      installFromUrl: (url: string, sha256: string | null) =>
-        ipcRenderer.invoke("kepler:extension:install:fromUrl", url, sha256),
-      revert: (id: string, timestamp?: string) =>
-        ipcRenderer.invoke("kepler:extension:revert", id, timestamp),
-      uninstall: (id: string) => ipcRenderer.invoke("kepler:extension:uninstall", id),
     },
     search: {
       query: (text) => ipcRenderer.invoke("kepler:search:query", text),

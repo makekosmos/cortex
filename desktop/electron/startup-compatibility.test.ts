@@ -1,4 +1,6 @@
 import { expect, test } from "../test-support/node-test.mjs";
+import type { JsonValue } from "./json-types";
+import { isString } from "../src/shared/runtimeGuards";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";

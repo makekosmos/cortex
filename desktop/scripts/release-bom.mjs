@@ -203,7 +203,7 @@ export async function repositoryContext(root, platform, currentCommit) {
   const versions = await readJson(path.join(root, "desktop", "release-versions.json"));
   const toolchain = await readJson(path.join(root, "toolchain.json"));
   const cargo = await readFile(path.join(root, "runtime", "Cargo.toml"), "utf8");
-  const shellApi = await readFile(path.join(root, "desktop", "electron", "kepler-api.ts"), "utf8");
+  const shellApi = await readFile(path.join(root, "desktop", "shared", "ipc-api-types.ts"), "utf8");
   const engineApi = await readFile(
     path.join(root, "manager", "electron", "engine-client.ts"),
     "utf8",

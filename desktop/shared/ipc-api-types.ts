@@ -1,5 +1,5 @@
 import type { KeplerApiShellServices } from "./ipc-api-shell-services";
-import type { IpcJsonObject, IpcJsonValue } from "./ipc-json";
+import type { IpcJsonObject } from "./ipc-json";
 // Контракт renderer API для `window.kepler` (см. preload.ts).
 
 import type {
@@ -10,10 +10,13 @@ import type {
   FileIndexSettingsPatch,
   FileSearchDiagnosticsReport,
   FileSearchRootEstimate,
-  InstalledExtensionInfo,
-  MarketplaceCatalog,
   SearchResult,
 } from "./ipc-types";
+
+// Kepler shell API contract version for `window.kepler.*`. Read as text by
+// desktop/scripts/release-bom.mjs — keep the `KEPLER_API_VERSION = "x.y.z"`
+// shape intact when bumping.
+export const KEPLER_API_VERSION = "1.1.0";
 
 /**
  */
@@ -44,14 +47,6 @@ export interface KeplerApi extends KeplerApiShellServices {
 
   shell: {
     openExternal(url: string): Promise<void>;
-  };
-
-  extension: {
-    installedList(): Promise<InstalledExtensionInfo[]>;
-    catalogFetch(force?: boolean): Promise<MarketplaceCatalog>;
-    installFromUrl(url: string, sha256: string | null): Promise<IpcJsonValue>;
-    revert(id: string, timestamp?: string): Promise<boolean>;
-    uninstall(id: string): Promise<boolean>;
   };
 
   /** Поиск по ARK FTS5 через backend — пока без UI-потребителя в shell,

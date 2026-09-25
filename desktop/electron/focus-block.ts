@@ -20,7 +20,7 @@ import crypto from "node:crypto";
 import { app, BrowserWindow } from "electron";
 import { fileURLToPath } from "node:url";
 import { pingService, sendViaPipe } from "../../shared/focus-service-client";
-import type { JsonRecord, JsonValue } from "./extension-permissions";
+import type { JsonRecord, JsonValue } from "./json-types";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

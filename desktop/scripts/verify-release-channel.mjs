@@ -93,7 +93,7 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Resolve gh CLI path, same pattern as generate-catalog.mjs and publish-extension.mjs */
+/** Resolve gh CLI path. */
 function resolveGh() {
   if (process.env.KEPLER_GH_PATH && existsSync(process.env.KEPLER_GH_PATH)) {
     return process.env.KEPLER_GH_PATH;

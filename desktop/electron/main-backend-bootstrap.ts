@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import type { Instance } from "./instance";
-import type { JsonRecord, JsonValue } from "./extension-permissions";
+import type { JsonRecord, JsonValue } from "./json-types";
 
 interface ResolveBackendExeArgs {
   dirname: string;

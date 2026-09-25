@@ -1,5 +1,5 @@
 import { BrowserWindow, dialog, type MessageBoxOptions, type WebFrameMain } from "electron";
-import { isRecord, type JsonRecord, type JsonValue } from "./extension-permissions";
+import { isRecord, type JsonRecord, type JsonValue } from "./json-types";
 import {
   buildFullAccessConsentDetails,
   consentNonce,

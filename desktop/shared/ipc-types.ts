@@ -122,40 +122,6 @@ export interface FileSearchRootWarning {
 
 export type FileSearchDiagnosticsReport = FileIndexDiagnosticsSnapshot;
 
-export interface InstalledExtensionInfo {
-  id: string;
-  appId: string | null;
-  name: string;
-  kind: string | null;
-  version: string | null;
-  description: string | null;
-  author: string | null;
-  iconDataUri: string | null;
-  backupCount: number;
-  backupTimestamps: string[];
-  source: "installed" | "dev";
-}
-
-export interface MarketplaceExtension {
-  id: string;
-  appId: string | null;
-  name: string;
-  description: string;
-  author: string | null;
-  version: string;
-  keplerApiVersion: string;
-  iconUrl: string | null;
-  downloadUrl: string;
-  sha256: string | null;
-  size: number | null;
-}
-
-export interface MarketplaceCatalog {
-  schemaVersion: number;
-  updatedAt: string;
-  extensions: MarketplaceExtension[];
-}
-
 /** Команда в command registry — единица того что пользователь может вызвать. */
 export interface CommandRecord {
   id: string;

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
-import type { JsonValue } from "./extension-permissions";
+import type { JsonValue } from "./json-types";
 
 export const AUTOSTART_ARGS: string[] = ["--start"];
 export const AUTOSTART_NAME = "Kosmos Engine";
