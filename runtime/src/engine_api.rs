@@ -29,7 +29,10 @@ use crate::protocol_version::{
 };
 use crate::runtime_grants::{DataRequest, FieldInput, LaunchGrant};
 
-const MAX_HTTP_BODY_BYTES: usize = 1024 * 1024;
+// 32 MiB — `dictation.speech.transcribe` ships base64 WAV in the JSON body
+// (~43 KiB/s at 16 kHz mono), so the old 1 MiB cap 413'd any recording
+// longer than ~24 s. 32 MiB covers ~12 min of dictation.
+const MAX_HTTP_BODY_BYTES: usize = 32 * 1024 * 1024;
 const LAUNCH_LEASE_TTL: Duration = Duration::from_secs(300);
 const DATA_GRANT_TTL: Duration = Duration::from_secs(900);
 const MAX_ACTIVE_LAUNCH_LEASES: usize = 2_048;
