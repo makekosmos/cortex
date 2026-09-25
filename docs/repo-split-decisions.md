@@ -243,6 +243,26 @@ private, `main` @ `80ced30`, локально `C:\Users\kirill\Coding\makekosmos
 | 2026-09-24 | Комбинированный check на `c2beed29` | `pnpm run check` PASS (полный гейт на объединённом дереве волны 1) |
 | 2026-09-24 | D3: Usage порт в manager-gpui | `31d8f715` смёржен → `b02d8aef`; `views/usage.rs` + `get_usage_analytics`/`app_index.*` через kit engine client; гейт PASS |
 
+| 2026-09-24 | D3.5: Dictation GPUI-модуль | `8dae4127` смёржен → `00ef9ac1`; `views/dictation{,_cards}.rs` + `pill.rs` (PopUp overlay, реальный always-on-top); весь `dictation.*` ops через `/v1/rpc` |
+| 2026-09-24 | dictation AGENTS.md | `chore/agents-gpui-move` @ `5a7df7c` в репо dictation — UI переезжает в cortex, репо заморожен |
+
+- Dictation GPUI: глобальный хоткей не работает — `hotkey_hook` шлёт события по Engine WS, а `kosmos_gpui_kit::engine` HTTP-only. **Блокер для удаления Vue-пилюли**: нужен WS-subscriber в kit. Также нет waveform-уровней (WASAPI на engine) и прогресса скачивания моделей (WS-события).
+- ureq timeout 15s в kit engine client — длинные транскрипции могут падать client-side (pending-item сохраняется, retry работает).
+
+| 2026-09-25 | D1: Launcher удалён | `abeae56e` → merge `b47bb1c9`; launcher surface (LauncherView, main-launcher, post-update, App.vue, assets, launcher commands) убран; COMMANDS/openHostedApp сохранены |
+| 2026-09-25 | D2: Focus UI удалён | `5d18f38a` → merge `a1191eb1`; весь `desktop/electron/focus-*` UI + FocusWidget/BlockOverlay/FocusTab убраны; `focus-block.ts`/`focus-enforcement.ts` (OS-блокировка через Helper) и Engine ops `focus.*`/`pomodoro.*` сохранены |
+| 2026-09-25 | D4: Vue Dashboard удалён | `17f6d975` → merge `4fb17d4f`; dashboard/, body/, coder/, integrations/, leetcode host-код, huawei_login/cleanup в runtime; generic credential machinery сохранён |
+| 2026-09-25 | WS-подписка в kit | kit @ `b5f9b93` (engine_ws); cortex `ab0090d6` → merge `302892f5`; хоткей → pill работает через Engine WS |
+
+| 2026-09-25 | W4x: `.kext`-рантайм удалён | `4c6265d` merge — Phase-4 extension runtime убран (~67 файлов), мигратор и `extensions-data/` сохранены, shared-утилиты → `json-types.ts` |
+| 2026-09-25 | Волна 2+4 завершена | Все removal-ветки смёржены в `chore/remove-vue-manager`; desktop/ сокращён до host-инфра + SettingsView + DictationPillView |
+
+- Dictation Vue pill (`desktop/src/views/DictationPillView.vue` + `dictation-pill.ts`) — GPUI-модуль с хоткеем работает, но waveform и прогресс скачивания моделей — только в Electron. Пилюлю не удалять до parity (нужен level-feed с engine или отдельное решение).
+- Shell settings (`SettingsView.vue`) — последняя Vue-поверхность; уходит когда GPUI настройки будут портированы (волна 3, след. задача).
+
+| 2026-09-25 | Финальный check | `pnpm run check` на объединённом дереве — PASS; каждый merge-коммит проходил полный check-plan с host e2e |
+| 2026-09-25 | Интеграция в kos-137 | `chore/remove-vue-manager` смёржен в локальный `kos-137`; дерево байт-идентично проверенному (`ffc6a13`). Не запушено — требуется твоё решение |
+
 ### Известные follow-up долги
 
 - `publish-package-v1.yml` workflow: для fetch из private integrations нужен `gh auth setup-git`/токен (workflows не трогаем — отдельная задача).
