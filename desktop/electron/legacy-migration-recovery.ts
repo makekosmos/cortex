@@ -1,5 +1,5 @@
 import type { ArkClient } from "@kosmos/ark";
-import type { JsonValue } from "./extension-permissions";
+import type { JsonValue } from "./json-types";
 import {
   LEGACY_TO_CANONICAL,
   type CanonicalId,

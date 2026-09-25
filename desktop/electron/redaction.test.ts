@@ -1,5 +1,5 @@
 import { expect, test } from "../test-support/node-test.mjs";
-import type { JsonRecord } from "./extension-permissions";
+import type { JsonRecord } from "./json-types";
 
 import {
   createCrashMetadata,

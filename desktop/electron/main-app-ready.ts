@@ -1,6 +1,6 @@
 import { nativeTheme, powerMonitor } from "electron";
 import type { ArkClient } from "@kosmos/ark";
-import type { JsonRecord } from "./extension-permissions";
+import type { JsonRecord } from "./json-types";
 import { showFocusBlockOverlay } from "./focus-overlay";
 import {
   setBlockedAppNotifier,

@@ -1,6 +1,6 @@
 import { BrowserWindow } from "electron";
 import type { ArkClient } from "@kosmos/ark";
-import type { JsonRecord, JsonValue } from "./extension-permissions";
+import type { JsonRecord, JsonValue } from "./json-types";
 import {
   applyAuthoritativeFocusState,
   reconcileFocusState as reconcileNativeFocusState,

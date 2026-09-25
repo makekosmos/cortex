@@ -1,5 +1,5 @@
 import { beforeEach, expect, mock, test } from "../test-support/node-test.mjs";
-import type { JsonRecord } from "./extension-permissions";
+import type { JsonRecord } from "./json-types";
 
 const engineLock = {
   format_version: 1,
@@ -56,7 +56,6 @@ mock.module("./logging", () => ({
   keplerLog: { error: mock.fn(), info: mock.fn(), warn: mock.fn(), setCorrelationId: mock.fn() },
 }));
 mock.module("./main-protocols", () => ({ clearMainProtocolCaches: mock.fn() }));
-mock.module("./extension-ark-ipc", () => ({ setExtensionArkBridge: mock.fn() }));
 
 const { createMainArkClientController } = await import("./main-ark-client-controller");
 

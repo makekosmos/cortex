@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { isRecord, type JsonRecord, type JsonValue } from "./extension-permissions";
+import { isRecord, type JsonRecord, type JsonValue } from "./json-types";
 
 const SUMMARY_LIMIT = 240;
 const CONSENT_OPERATIONS = new Set([

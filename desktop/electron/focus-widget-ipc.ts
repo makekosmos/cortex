@@ -2,7 +2,7 @@ import { BrowserWindow, Menu, ipcMain, type MenuItemConstructorOptions } from "e
 import type { ArkClient } from "@kosmos/ark";
 import type { FocusState } from "./focus-widget-state";
 import type { FocusSessionSnapshot } from "./focus-session-types";
-import type { JsonRecord, JsonValue } from "./extension-permissions";
+import type { JsonRecord, JsonValue } from "./json-types";
 
 type ArkRequest = Parameters<ArkClient["invokeOperation"]>[0];
 
