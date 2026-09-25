@@ -46,11 +46,6 @@ export interface KeplerApi extends KeplerApiShellServices {
     openExternal(url: string): Promise<void>;
   };
 
-  integrations: {
-    connectLeetCode<T = unknown>(): Promise<T>;
-    disconnectLeetCode<T = unknown>(): Promise<T>;
-  };
-
   extension: {
     installedList(): Promise<InstalledExtensionInfo[]>;
     catalogFetch(force?: boolean): Promise<MarketplaceCatalog>;
@@ -72,9 +67,8 @@ export interface KeplerApi extends KeplerApiShellServices {
     listRecent(limit?: number): Promise<SearchResult[]>;
   };
 
-  /** Generic ARK RPC bridge — используется встроенным Dashboard view'ом
-      для list_object_types / list_objects / list_objects_by_type. Main
-      проксирует на ArkClient (см. main.ts). */
+  /** Generic ARK RPC bridge — используется shell-views (focus, dictation)
+      для Engine ops. Main проксирует на ArkClient (см. main.ts). */
   ark: {
     request<T = unknown>(operation: string, params?: IpcJsonObject): Promise<T>;
     onEvent(listener: (event: IpcJsonObject) => void): () => void;

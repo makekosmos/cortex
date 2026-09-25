@@ -14,7 +14,6 @@ const SOURCE_LIMIT = 300;
 const SOURCE_EXTENSIONS = new Set([".cjs", ".js", ".jsx", ".mjs", ".rs", ".ts", ".tsx", ".vue"]);
 const GRANDFATHERED = new Set([
   // Static debt baseline. Additions here require an intentional review.
-  "runtime/src/package_service/integrations/huawei_login.rs",
   "desktop/e2e/dictation.spec.ts",
   "desktop/electron/dictation-pill.ts",
   "desktop/electron/extension-browser-window.ts",
@@ -24,10 +23,6 @@ const GRANDFATHERED = new Set([
   "desktop/electron/instance.ts",
   "desktop/scripts/candidate-installed-smoke.mjs",
   "desktop/scripts/verify-release-channel.mjs",
-  "desktop/src/body/BodyView.vue",
-  "desktop/src/coder/CoderView.vue",
-  "desktop/src/coder/useCoderStats.ts",
-  "desktop/src/integrations/IntegrationSettingsPanel.vue",
   "desktop/src/views/DictationPillView.vue",
   "desktop/src/views/InstallExtensionView.vue",
   "desktop/src/views/SettingsView.vue",
@@ -99,7 +94,6 @@ const GRANDFATHERED = new Set([
   "runtime/src/package_registration.rs",
   "runtime/src/package_service/core.rs",
   "runtime/src/package_service/integrations.rs",
-  "runtime/src/package_service/integrations/huawei_login.rs",
   "runtime/src/package_service/operations.rs",
   "runtime/src/package_service/tests.rs",
   "runtime/src/package_store.rs",

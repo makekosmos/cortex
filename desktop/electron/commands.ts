@@ -3,7 +3,6 @@
 // Action-commands (Pomodoro start, create note и т.п.) приходят dynamic от
 // running extension'ов через kepler-backend command bus.
 
-import { openDashboardWindow } from "./dashboard-window";
 import { openAgenda } from "./agenda-navigation";
 import { openHostedApp } from "./host-app";
 import { toggleDictation } from "./dictation-pill";
@@ -24,7 +23,7 @@ export interface InternalCommand {
   /**
    * Если задано — команда видна только когда extension с этим id установлен
    * (`%APPDATA%\Kosmos\extensions\<id>\manifest.json` существует). Kepler-
-   * internal команды (settings/dashboard/check-updates) оставляют поле
+   * internal команды (settings/check-updates) оставляют поле
    * undefined и видны всегда.
    */
   /**
@@ -66,24 +65,6 @@ async function runCheckUpdates(): Promise<void> {
 export const COMMANDS: InternalCommand[] = [
   // Kepler-internal команды (shell-owned, не extensions). Extension'ы
   // объявляют свои команды в `manifest.commands[]` — см.
-  {
-    id: "dashboard:open",
-    title: "Открыть таблицу данных",
-    subtitle: "Просмотр объектов ARK",
-    category: "open",
-    kind: "command",
-    appName: "Kosmos",
-    exec: () => openDashboardWindow(),
-  },
-  {
-    id: "kosmos:body",
-    title: "Открыть тело",
-    subtitle: "Развитие и нагрузка на мышцы",
-    category: "open",
-    kind: "command",
-    appName: "Kosmos",
-    exec: () => openDashboardWindow("body"),
-  },
   {
     id: "kosmos:my-cosmos",
     title: "Мой космос",
