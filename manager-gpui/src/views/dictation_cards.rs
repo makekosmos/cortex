@@ -280,9 +280,18 @@ pub(crate) fn local_card(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> 
         }
         el = el.child(r);
     }
-    el =
-        el.child(div().text_size(px(12.)).text_color(c(MUTED_FG())).child(
-            "Прогресс скачивания приходит по WS-событиям — обновите виджет после загрузки.",
-        ));
+    // Live download progress from the WS event slot
+    // (`dictation_local_model_download_progress`, app.rs::handle_engine_event).
+    let download = app.data("dictation.download");
+    if !download.is_null() {
+        let model = vopt(&download, "modelId").unwrap_or_else(|| "модель".into());
+        let percent = vnum(&download, "percent");
+        let text = if percent > 0.0 {
+            format!("{model} — {percent:.0}%")
+        } else {
+            format!("{model}…")
+        };
+        el = el.child(kv("Скачивание", text));
+    }
     el.into_any_element()
 }
