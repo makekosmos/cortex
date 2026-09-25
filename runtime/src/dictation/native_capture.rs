@@ -16,17 +16,21 @@ pub struct Session {
     join: std::thread::JoinHandle<Result<CapturedAudio, String>>,
 }
 
-pub fn start(device_id: Option<&str>, capture_id: String) -> Result<(Session, u32, u16), String> {
+pub fn start(
+    device_id: Option<&str>,
+    capture_id: String,
+    level_sink: Option<mpsc::Sender<f32>>,
+) -> Result<(Session, u32, u16), String> {
     if device_id.is_some_and(|id| !id.is_empty()) {
         return Err("device_unavailable".into());
     }
     #[cfg(windows)]
     {
-        return start_windows(capture_id);
+        return start_windows(capture_id, level_sink);
     }
     #[cfg(not(windows))]
     {
-        let _ = capture_id;
+        let _ = (capture_id, level_sink);
         Err("device_unavailable".into())
     }
 }
@@ -40,13 +44,16 @@ pub fn stop(session: Session) -> Result<CapturedAudio, String> {
 }
 
 #[cfg(windows)]
-fn start_windows(capture_id: String) -> Result<(Session, u32, u16), String> {
+fn start_windows(
+    capture_id: String,
+    level_sink: Option<mpsc::Sender<f32>>,
+) -> Result<(Session, u32, u16), String> {
     let (stop_tx, stop_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::channel();
     let join = std::thread::Builder::new()
         .name("kosmos-dictation-capture".into())
         .spawn(move || {
-            let result = capture_windows(stop_rx, ready_tx.clone());
+            let result = capture_windows(stop_rx, ready_tx.clone(), level_sink);
             if let Err(error) = &result {
                 let _ = ready_tx.send(Err(error.clone()));
             }
@@ -68,9 +75,26 @@ fn start_windows(capture_id: String) -> Result<(Session, u32, u16), String> {
 }
 
 #[cfg(windows)]
+/// RMS (0.0..=1.0) одного PCM16-фрейм-пакета — пилюля рисует из них waveform,
+/// как Vue-пилюля из AnalyserNode. Молчание (SILENT flag) шлём как 0.
+fn rms_i16le(bytes: &[u8]) -> f32 {
+    let mut sum = 0.0f64;
+    let mut n = 0u64;
+    for chunk in bytes.chunks_exact(2) {
+        let s = i16::from_le_bytes([chunk[0], chunk[1]]) as f64 / 32768.0;
+        sum += s * s;
+        n += 1;
+    }
+    if n == 0 {
+        return 0.0;
+    }
+    (sum / n as f64).sqrt().min(1.0) as f32
+}
+
 fn capture_windows(
     stop_rx: mpsc::Receiver<()>,
     ready_tx: mpsc::Sender<Result<(u32, u16), String>>,
+    level_sink: Option<mpsc::Sender<f32>>,
 ) -> Result<CapturedAudio, String> {
     use std::ptr::null_mut;
     use windows::Win32::Media::Audio::{
@@ -125,6 +149,9 @@ fn capture_windows(
     unsafe { client.Start() }.map_err(|_| "permission_denied".to_string())?;
     let _ = ready_tx.send(Ok((16_000, 1)));
     let mut pcm = Vec::new();
+    // Level events throttled до ~30 Гц — UI-перерисовка чаще бессмысленна,
+    // а broadcast-канал не должен засоряться.
+    let mut last_level_emit = std::time::Instant::now() - std::time::Duration::from_millis(100);
     loop {
         if stop_rx.try_recv().is_ok() {
             break;
@@ -140,10 +167,21 @@ fn capture_windows(
             let byte_count = frames as usize * 2;
             if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
                 pcm.resize(pcm.len() + byte_count, 0);
+                if let Some(sink) = &level_sink {
+                    if last_level_emit.elapsed() >= std::time::Duration::from_millis(30) {
+                        last_level_emit = std::time::Instant::now();
+                        let _ = sink.send(0.0);
+                    }
+                }
             } else if !data.is_null() {
-                pcm.extend_from_slice(unsafe {
-                    std::slice::from_raw_parts(data.cast::<u8>(), byte_count)
-                });
+                let bytes = unsafe { std::slice::from_raw_parts(data.cast::<u8>(), byte_count) };
+                if let Some(sink) = &level_sink {
+                    if last_level_emit.elapsed() >= std::time::Duration::from_millis(30) {
+                        last_level_emit = std::time::Instant::now();
+                        let _ = sink.send(rms_i16le(bytes));
+                    }
+                }
+                pcm.extend_from_slice(bytes);
             }
             unsafe { capture.ReleaseBuffer(frames) }.map_err(|_| "capture_failed".to_string())?;
             packet_frames =

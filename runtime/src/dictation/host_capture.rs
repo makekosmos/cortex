@@ -98,9 +98,30 @@ async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> Dictation
     if !started.ok {
         return started;
     }
+    // Live RMS-уровни микрофона → broadcast `dictation_audio_level`, чтобы
+    // pill-оверлей мог рисовать waveform (паритет с Vue pill AnalyserNode).
+    // broadcast::send синхронный и не блокирует — вызывается прямо из
+    // capture-потока через mpsc-переходник.
+    let (level_tx, level_rx) = std::sync::mpsc::channel::<f32>();
+    {
+        let events_tx = host.events_tx.clone();
+        let level_capture_id = capture_id.clone();
+        std::thread::Builder::new()
+            .name("kosmos-dictation-levels".into())
+            .spawn(move || {
+                for level in level_rx {
+                    let _ = events_tx.send(json!({
+                        "event": "dictation_audio_level",
+                        "captureId": level_capture_id,
+                        "level": level,
+                    }));
+                }
+            })
+            .ok();
+    }
     let native_capture_id = capture_id.clone();
     let result = tokio::task::spawn_blocking(move || {
-        super::native_capture::start(device_id.as_deref(), native_capture_id)
+        super::native_capture::start(device_id.as_deref(), native_capture_id, Some(level_tx))
     })
     .await;
     match result {

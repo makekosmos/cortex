@@ -8,6 +8,7 @@ mod devpkg;
 mod fps;
 mod modals;
 mod pill;
+mod pill_wave;
 mod render;
 mod views;
 mod widgets;
