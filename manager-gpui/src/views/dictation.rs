@@ -18,7 +18,7 @@ use imago_gpui::button;
 use serde_json::json;
 
 use crate::app::ManagerApp;
-use crate::views::dictation_cards;
+use crate::views::{dictation_cards, dictation_local};
 use crate::widgets::*;
 use kosmos_gpui_kit::theme::*;
 
@@ -48,7 +48,7 @@ pub fn render(
     col = col.child(dictation_cards::config_card(app, cx));
     col = col.child(dictation_cards::stats_card(app, cx));
     col = col.child(dictation_cards::pending_card(app, cx));
-    col = col.child(dictation_cards::local_card(app, cx));
+    col = col.child(dictation_local::local_card(app, cx));
 
     col.into_any_element()
 }

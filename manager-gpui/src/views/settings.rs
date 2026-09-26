@@ -32,10 +32,13 @@ pub fn render(
             "Engine стартует с входом в Windows без UI (kepler-backend --start)",
         );
         if available {
-            row_el = row_el.child(toggle("engine-autostart", enabled, cx, |this, on, cx| {
-                this.action("engine.autostart.set", json!({ "enabled": on }));
-                cx.notify();
-            }));
+            row_el = row_el.child(
+                toggle("engine-autostart", enabled, cx, |this, on, cx| {
+                    this.action("engine.autostart.set", json!({ "enabled": on }));
+                    cx.notify();
+                })
+                .accessibility_label("Автозапуск при входе"),
+            );
         } else {
             row_el = row_el.child(badge(
                 &vopt(v, "reason").unwrap_or_else(|| "недоступно".into()),

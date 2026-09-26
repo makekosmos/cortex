@@ -95,12 +95,14 @@ fn rms_i16le(bytes: &[u8]) -> f32 {
 /// ~dBFS (-55 dB → 0, 0 dB → 1). Обычная речь (-30..-15 dBFS RMS) даёт
 /// видимые бары — паритет с AnalyserNode-спектром Vue-пилюли, где даже
 /// тихая речь двигала waveform.
+#[cfg(windows)]
 fn level_for_ui(rms: f32) -> f32 {
     const FLOOR_DB: f32 = -55.0;
     let db = 20.0 * rms.max(1e-6).log10();
     ((db - FLOOR_DB) / -FLOOR_DB).clamp(0.0, 1.0)
 }
 
+#[cfg(windows)]
 fn capture_windows(
     stop_rx: mpsc::Receiver<()>,
     ready_tx: mpsc::Sender<Result<(u32, u16), String>>,

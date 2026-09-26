@@ -107,7 +107,10 @@ pub fn render(
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.theme_idx = index;
                     cx.notify();
-                })),
+                }))
+                .role(Role::Button)
+                .aria_label(format!("Тема: {}", definition.name))
+                .aria_selected(active),
         );
     }
     col = col.child(
@@ -125,9 +128,12 @@ pub fn render(
                     "FPS-счётчик",
                     "График, средний FPS, 1% и 0.1% low в правом нижнем углу.",
                 )
-                .child(toggle("dev-fps", app.dev_fps, cx, |this, checked, _| {
-                    this.dev_fps = checked;
-                })),
+                .child(
+                    toggle("dev-fps", app.dev_fps, cx, |this, checked, _| {
+                        this.dev_fps = checked;
+                    })
+                    .accessibility_label("FPS-счётчик"),
+                ),
             ),
     );
 

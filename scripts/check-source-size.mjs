@@ -120,6 +120,9 @@ const IGNORED = new Set([
   "release",
   "target",
   "tools",
+  // Vendored third-party crate sources (e.g. manager-gpui/vendor/) are not
+  // our code — same reason core/ is an IGNORED_SUBTREE.
+  "vendor",
 ]);
 // Vendored upstream subtree: keeps its own conventions and gates.
 const IGNORED_SUBTREES = new Set(["core"]);

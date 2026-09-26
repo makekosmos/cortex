@@ -46,17 +46,22 @@ pub fn render(
     let has_key = vbool(&config_slot, "hasApiKey") || vbool(cfg, "hasApiKey");
     if has_key {
         col = col.child(
-            card().child(row("Использовать Groq для диктовки", "").child(toggle(
-                "secrets-provider",
-                vbool(cfg, "providerEnabled"),
-                cx,
-                |this, checked, _| {
-                    this.action(
-                        "dictation.update_config",
-                        json!({"providerEnabled": checked}),
-                    );
-                },
-            ))),
+            card().child(
+                row("Использовать Groq для диктовки", "").child(
+                    toggle(
+                        "secrets-provider",
+                        vbool(cfg, "providerEnabled"),
+                        cx,
+                        |this, checked, _| {
+                            this.action(
+                                "dictation.update_config",
+                                json!({"providerEnabled": checked}),
+                            );
+                        },
+                    )
+                    .accessibility_label("Использовать Groq для диктовки"),
+                ),
+            ),
         );
     }
 
@@ -68,7 +73,7 @@ pub fn render(
                 div()
                     .flex()
                     .gap_2()
-                    .child(div().flex_1().child(Input::new(&key_in)))
+                    .child(div().flex_1().child(Input::new(&key_in).aria_label("API-ключ Groq")))
                     .child(btn("secrets-verify", "Проверить", false, cx, |this, cx| {
                         let key = this.input_value("secrets.key", cx);
                         if !key.is_empty() {

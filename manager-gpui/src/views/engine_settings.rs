@@ -93,17 +93,15 @@ pub fn render(
                 "Счётчик использования",
                 "Анонимная статистика запусков для приоритизации разработки.",
             )
-            .child(toggle(
-                "engine-tracker",
-                tracker_on,
-                cx,
-                |this, checked, _| {
+            .child(
+                toggle("engine-tracker", tracker_on, cx, |this, checked, _| {
                     this.action(
                         "engine.settings.set",
                         json!({"usage_tracker": {"enabled": checked}}),
                     );
-                },
-            )),
+                })
+                .accessibility_label("Счётчик использования"),
+            ),
         ),
     );
 

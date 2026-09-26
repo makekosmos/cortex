@@ -51,11 +51,8 @@ pub fn render(
                     "Сохранять данные сайтов",
                     "Куки и сессии встроенного браузера между запусками.",
                 )
-                .child(toggle(
-                    "browser-persist",
-                    persist,
-                    cx,
-                    |this, checked, cx| {
+                .child(
+                    toggle("browser-persist", persist, cx, |this, checked, cx| {
                         match write_persist(checked) {
                             Ok(()) => {
                                 this.slots.insert(
@@ -67,8 +64,9 @@ pub fn render(
                             Err(e) => this.error = Some(e),
                         }
                         cx.notify();
-                    },
-                )),
+                    })
+                    .accessibility_label("Сохранять данные сайтов"),
+                ),
             )
             .child(
                 div()
