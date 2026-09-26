@@ -97,14 +97,14 @@ pub struct DictationConfig {
     pub duck_audio_during_recording: bool,
     /// Через сколько мс простоя выгружать whisper-server процесс (освободить
     /// VRAM / RAM). `Some(ms)` = выгрузить через ms миллисекунд бездействия;
-    /// `None` = никогда не выгружать. Default = 5 минут (300 000 мс).
+    /// `None` = никогда не выгружать. Default = 10 минут (600 000 мс).
     /// Используется только для direct whisper-server пути (local engine).
     #[serde(default = "default_local_idle_unload_ms")]
     pub local_idle_unload_ms: Option<u64>,
 }
 
 fn default_local_idle_unload_ms() -> Option<u64> {
-    Some(300_000)
+    Some(600_000)
 }
 
 impl Default for DictationConfig {
@@ -126,7 +126,7 @@ impl Default for DictationConfig {
             local_model: None,
             microphone_device_id: None,
             duck_audio_during_recording: false,
-            local_idle_unload_ms: Some(300_000),
+            local_idle_unload_ms: Some(600_000),
         }
     }
 }
@@ -496,7 +496,7 @@ mod tests {
         )
         .expect("write");
         let loaded = load_from(&path);
-        assert_eq!(loaded.local_idle_unload_ms, Some(300_000));
+        assert_eq!(loaded.local_idle_unload_ms, Some(600_000));
     }
 
     #[test]
@@ -586,7 +586,7 @@ mod tests {
         assert_eq!(loaded.model, "whisper-large-v3-turbo");
         assert_eq!(loaded.inject_mode, InjectMode::ClipboardOnly);
         // Битое поле падает на дефолт, остальное цело.
-        assert_eq!(loaded.local_idle_unload_ms, Some(300_000));
+        assert_eq!(loaded.local_idle_unload_ms, Some(600_000));
     }
 
     #[test]
