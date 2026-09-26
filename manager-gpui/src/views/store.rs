@@ -46,7 +46,10 @@ pub fn render(
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.store_tab = tab;
                     cx.notify();
-                })),
+                }))
+                .role(Role::Tab)
+                .aria_label(label)
+                .aria_selected(active),
         );
     }
     tabs = tabs
@@ -136,7 +139,9 @@ fn render_catalog(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElem
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.detail = Some(detail_item.clone());
                             cx.notify();
-                        })),
+                        }))
+                        .role(Role::Button)
+                        .aria_label(format!("Подробнее: {name}")),
                 )
                 .child(btn_id(&format!("install-{id}"), "Установить", {
                     let pid = install_id;
@@ -184,18 +189,21 @@ fn render_installed(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyEl
             el = el.child(
                 row(format!("{name} · v{ver}"), id.clone())
                     .child(badge(status, if enabled { SUCCESS() } else { MUTED_FG() }))
-                    .child(toggle(
-                        // leaks a key per package id — ids are stable and few
-                        Box::leak(format!("en-{rid}").into_boxed_str()),
-                        enabled,
-                        cx,
-                        move |this, checked, _| {
-                            this.action(
-                                "packages.set_enabled",
-                                json!({"package_id": rid, "enabled": checked}),
-                            );
-                        },
-                    ))
+                    .child(
+                        toggle(
+                            // leaks a key per package id — ids are stable and few
+                            Box::leak(format!("en-{rid}").into_boxed_str()),
+                            enabled,
+                            cx,
+                            move |this, checked, _| {
+                                this.action(
+                                    "packages.set_enabled",
+                                    json!({"package_id": rid, "enabled": checked}),
+                                );
+                            },
+                        )
+                        .accessibility_label(format!("{name} · v{ver}")),
+                    )
                     .child(btn_id(&format!("un-{id}"), "Удалить", {
                         let pid = uid;
                         cx.listener(move |this, _, _, cx| {

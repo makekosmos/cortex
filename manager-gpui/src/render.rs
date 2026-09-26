@@ -45,7 +45,7 @@ impl Render for ManagerApp {
                             .child(active),
                     ),
             )
-            .child(render_sidebar_toggle(cx));
+            .child(render_sidebar_toggle(self.sidebar_target > 0.5, cx));
         if self.dev_fps {
             root = root.child(
                 div()

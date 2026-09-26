@@ -11,6 +11,7 @@ pub mod data;
 pub mod dev;
 pub mod dictation;
 mod dictation_cards;
+mod dictation_local;
 pub mod engine_settings;
 pub mod secrets;
 pub mod settings;

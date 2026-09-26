@@ -109,12 +109,17 @@ pub fn render_titlebar(
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.load_current();
                     cx.notify();
-                })),
+                }))
+                .role(Role::Button)
+                .aria_label("Обновить")
+                .accessibility_id("refresh"),
         )
-        .child(render_window_controls())
+        // Same frameless min/close row as kosmos_gpui_kit's helper, but with
+        // AccessKit role + Russian names (KOS-142).
+        .child(chrome::window_controls())
 }
 
-pub fn render_sidebar_toggle(cx: &mut Context<ManagerApp>) -> impl IntoElement {
+pub fn render_sidebar_toggle(open: bool, cx: &mut Context<ManagerApp>) -> impl IntoElement {
     let weak = cx.weak_entity();
     div()
         .id("sidebar-toggle")
@@ -147,7 +152,11 @@ pub fn render_sidebar_toggle(cx: &mut Context<ManagerApp>) -> impl IntoElement {
                         this.sidebar_stamp = std::time::Instant::now();
                         cx.notify();
                     });
-                }),
+                })
+                .role(Role::Switch)
+                .aria_label("Боковая панель")
+                .aria_toggled(if open { Toggled::True } else { Toggled::False })
+                .accessibility_id("sidebar-toggle"),
         )
 }
 

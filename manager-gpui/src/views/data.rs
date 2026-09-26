@@ -104,6 +104,11 @@ pub fn render(
         let name = vstr(&t, "name");
         let count = vnum(&t, "count");
         let selected = app.data_type.as_deref() == Some(id.as_str());
+        let row_name = if name.is_empty() {
+            id.clone()
+        } else {
+            name.clone()
+        };
         types = types.child(
             div()
                 .id(SharedString::from(format!("type-{id}")))
@@ -116,11 +121,7 @@ pub fn render(
                 .cursor_pointer()
                 .when(selected, |d| d.bg(fade(ACCENT(), 0.18)))
                 .when(!selected, |d| d.hover(|s| s.bg(fade(FG(), 0.06))))
-                .child(div().flex_1().text_size(px(13.)).child(if name.is_empty() {
-                    id.clone()
-                } else {
-                    name
-                }))
+                .child(div().flex_1().text_size(px(13.)).child(row_name.clone()))
                 .child(badge(format!("{count:.0}"), MUTED_FG()))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.data_type = Some(id.clone());
@@ -130,7 +131,10 @@ pub fn render(
                         json!({"type_id": id, "limit": 200}),
                     );
                     cx.notify();
-                })),
+                }))
+                .role(Role::Button)
+                .aria_label(row_name)
+                .aria_selected(selected),
         );
     }
     body = body.child(types);

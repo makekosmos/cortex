@@ -65,3 +65,6 @@ fn main() {
 
 #[allow(dead_code)]
 fn _sig(_: &mut Window, _: &mut Context<ManagerApp>) {}
+
+#[cfg(test)]
+mod a11y_tests;

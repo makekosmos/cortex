@@ -46,17 +46,22 @@ pub fn render(
     let has_key = vbool(&config_slot, "hasApiKey") || vbool(cfg, "hasApiKey");
     if has_key {
         col = col.child(
-            card().child(row("Использовать Groq для диктовки", "").child(toggle(
-                "secrets-provider",
-                vbool(cfg, "providerEnabled"),
-                cx,
-                |this, checked, _| {
-                    this.action(
-                        "dictation.update_config",
-                        json!({"providerEnabled": checked}),
-                    );
-                },
-            ))),
+            card().child(
+                row("Использовать Groq для диктовки", "").child(
+                    toggle(
+                        "secrets-provider",
+                        vbool(cfg, "providerEnabled"),
+                        cx,
+                        |this, checked, _| {
+                            this.action(
+                                "dictation.update_config",
+                                json!({"providerEnabled": checked}),
+                            );
+                        },
+                    )
+                    .accessibility_label("Использовать Groq для диктовки"),
+                ),
+            ),
         );
     }
 
