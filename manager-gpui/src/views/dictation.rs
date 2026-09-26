@@ -41,7 +41,7 @@ pub fn render(
         "Голосовой ввод: состояние, модель, очередь распознавания",
     ));
 
-    col = col.child(state_card(app));
+    col = col.child(state_card(app, cx));
     col = col.child(record_card(app, cx));
     col = col.child(result_card(app));
     // Secondary cards live in dictation_cards.rs (source-size gate).
@@ -74,7 +74,7 @@ fn state_color(state: &str) -> u32 {
     }
 }
 
-fn state_card(app: &mut ManagerApp) -> AnyElement {
+fn state_card(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
     slot_or(app, "dictation.state", |v| {
         let state = vstr(v, "state");
         let cfg = vget(v, "config");
@@ -93,7 +93,29 @@ fn state_card(app: &mut ManagerApp) -> AnyElement {
             )
             .child(badge(state_label(&state), state_color(&state))),
         );
-        el = el.child(kv("Горячая клавиша", vstr(cfg, "hotkey")));
+        let capturing = app.hotkey_capturing;
+        let mut hotkey_row = row(
+            "Горячая клавиша",
+            if capturing {
+                "Нажмите комбинацию… (Esc — отмена)".to_string()
+            } else {
+                vstr(cfg, "hotkey")
+            },
+        );
+        if capturing {
+            hotkey_row = hotkey_row.child(badge("Захват", WARN()));
+        } else {
+            hotkey_row = hotkey_row.child(
+                button::ghost("dict-hotkey-change")
+                    .label("Изменить")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.hotkey_capturing = true;
+                        this.action("dictation.begin_hotkey_capture", json!({}));
+                        cx.notify();
+                    })),
+            );
+        }
+        el = el.child(hotkey_row);
         el = el.child(kv(
             "Режим триггера",
             trigger_label(&vstr(cfg, "triggerMode")),

@@ -53,6 +53,9 @@ pub struct ManagerApp {
     /// standalone dictation-gpui app; this client only mirrors Engine state
     /// in the Диктовка settings view.
     pub(crate) action_busy: bool,
+    /// `dictation.begin_hotkey_capture` armed — the hook intercepts the next
+    /// keystroke and emits `dictation_capture_key` / `_cancelled`.
+    pub hotkey_capturing: bool,
     worker_dead: bool,
 }
 
@@ -84,6 +87,7 @@ impl ManagerApp {
             pending_install: None,
             detail: None,
             action_busy: false,
+            hotkey_capturing: false,
             worker_dead: false,
         };
         this.load_current();
@@ -368,9 +372,21 @@ impl ManagerApp {
                 self.call("dictation.local", "dictation.local_status", json!({}));
                 self.call("dictation.models", "dictation.list_local_models", json!({}));
             }
-            // Hotkey-capture feed for a future capture row in Диктовка
-            // (`dictation.begin_hotkey_capture` isn't exposed there yet).
-            "dictation_capture_key" | "dictation_capture_cancelled" => {
+            // Hotkey capture armed from the Диктовка view: the key lands
+            // here → rebuild the accelerator → `update_config` (Engine
+            // re-registers the hook immediately) → rearm off.
+            "dictation_capture_key" => {
+                self.slots
+                    .insert("dictation.capture".into(), Slot::Ready(event.clone()));
+                if self.hotkey_capturing {
+                    if let Some(accel) = build_accelerator(&event) {
+                        self.action("dictation.update_config", json!({ "hotkey": accel }));
+                    }
+                    self.hotkey_capturing = false;
+                }
+            }
+            "dictation_capture_cancelled" => {
+                self.hotkey_capturing = false;
                 self.slots
                     .insert("dictation.capture".into(), Slot::Ready(event));
             }
@@ -392,6 +408,59 @@ fn advance_sidebar(current: f32, target: f32, dt: f32) -> f32 {
         (current + step).min(target)
     } else {
         (current - step).max(target)
+    }
+}
+
+/// vk + modifier flags → Electron-style accelerator ("Ctrl+Shift+;").
+/// Ported from `useDictationConfig.shared.ts` (vkToKeyName/buildAccelerator).
+fn build_accelerator(event: &Value) -> Option<String> {
+    let vk = event.get("vk").and_then(Value::as_u64)? as u32;
+    let key = vk_to_key_name(vk)?;
+    let mut parts = Vec::new();
+    for (flag, name) in [
+        ("ctrl", "Ctrl"),
+        ("alt", "Alt"),
+        ("shift", "Shift"),
+        ("win", "Super"),
+    ] {
+        if event.get(flag).and_then(Value::as_bool) == Some(true) {
+            parts.push(name.to_string());
+        }
+    }
+    parts.push(key);
+    Some(parts.join("+"))
+}
+
+fn vk_to_key_name(vk: u32) -> Option<String> {
+    match vk {
+        0x41..=0x5A | 0x30..=0x39 => char::from_u32(vk).map(|c| c.to_string()),
+        0x70..=0x87 => Some(format!("F{}", vk - 0x6f)),
+        0xBA => Some(";".into()),
+        0xBB => Some("+".into()),
+        0xBC => Some(",".into()),
+        0xBD => Some("-".into()),
+        0xBE => Some(".".into()),
+        0xBF => Some("/".into()),
+        0xC0 => Some("`".into()),
+        0xDB => Some("[".into()),
+        0xDC => Some("\\".into()),
+        0xDD => Some("]".into()),
+        0xDE => Some("'".into()),
+        0x08 => Some("Backspace".into()),
+        0x09 => Some("Tab".into()),
+        0x0D => Some("Enter".into()),
+        0x20 => Some("Space".into()),
+        0x21 => Some("PageUp".into()),
+        0x22 => Some("PageDown".into()),
+        0x23 => Some("End".into()),
+        0x24 => Some("Home".into()),
+        0x25 => Some("Left".into()),
+        0x26 => Some("Up".into()),
+        0x27 => Some("Right".into()),
+        0x28 => Some("Down".into()),
+        0x2D => Some("Insert".into()),
+        0x2E => Some("Delete".into()),
+        _ => None,
     }
 }
 
