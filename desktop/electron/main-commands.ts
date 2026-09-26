@@ -8,7 +8,6 @@ import { keplerLog } from "./logging";
 
 interface MainCommandsOptions {
   getArkClient: () => ArkClient | null;
-  hideLauncher: () => void;
 }
 
 export interface MainCommandsController {
@@ -17,7 +16,7 @@ export interface MainCommandsController {
 }
 
 export function registerMainCommands(options: MainCommandsOptions): MainCommandsController {
-  const { getArkClient, hideLauncher } = options;
+  const { getArkClient } = options;
 
   function broadcastCommandsUpdated(): void {
     void import("electron").then(({ BrowserWindow }) => {
@@ -30,10 +29,9 @@ export function registerMainCommands(options: MainCommandsOptions): MainCommands
   async function staticCommands(): Promise<CommandRecord[]> {
     const records: CommandRecord[] = [];
     for (const c of COMMANDS) {
-      const shortcut =
-        isShortcut(c.shortcut)
-          ? await Promise.resolve(c.shortcut()).catch(() => undefined)
-          : c.shortcut;
+      const shortcut = isShortcut(c.shortcut)
+        ? await Promise.resolve(c.shortcut()).catch(() => undefined)
+        : c.shortcut;
       records.push({
         id: c.id,
         title: c.title,
@@ -99,7 +97,6 @@ export function registerMainCommands(options: MainCommandsOptions): MainCommands
       } catch (e) {
         console.error(`[kepler-shell] command ${id} failed:`, e);
       }
-      if (!internal.keepsLauncherOpen) hideLauncher();
       return;
     }
     const arkClient = getArkClient();
@@ -112,7 +109,6 @@ export function registerMainCommands(options: MainCommandsOptions): MainCommands
     } else {
       console.warn(`[kepler-shell] unknown command (no arkClient): ${id}`);
     }
-    hideLauncher();
   }
 
   safeHandle("kepler:commands:invoke", async (event, id: string): Promise<void> => {

@@ -7,17 +7,13 @@ use std::time::Instant;
 
 use ::gpui::{prelude::*, *};
 use gpui_component::input::InputState;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::fps::FpsOverlay;
 use crate::views::{self, StoreTab, View};
 use crate::worker::{Command, Worker};
 
-pub enum Slot {
-    Loading,
-    Ready(Value),
-    Failed(String),
-}
+pub use kosmos_gpui_kit::fields::Slot;
 
 pub struct Confirm {
     pub title: String,
@@ -53,13 +49,19 @@ pub struct ManagerApp {
     pub pending_install: Option<String>,
     /// Store listing shown in the detail overlay.
     pub detail: Option<Value>,
+    /// The dictation pill overlay and session orchestration live in the
+    /// standalone dictation-gpui app; this client only mirrors Engine state
+    /// in the Диктовка settings view.
     pub(crate) action_busy: bool,
+    /// `dictation.begin_hotkey_capture` armed — the hook intercepts the next
+    /// keystroke and emits `dictation_capture_key` / `_cancelled`.
+    pub hotkey_capturing: bool,
     worker_dead: bool,
 }
 
 impl ManagerApp {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let data_dir = crate::engine::data_dir().ok();
+        let data_dir = kosmos_gpui_kit::engine::data_dir().ok();
         let mut this = Self {
             view: View::Data,
             sidebar_t: 1.0,
@@ -85,6 +87,7 @@ impl ManagerApp {
             pending_install: None,
             detail: None,
             action_busy: false,
+            hotkey_capturing: false,
             worker_dead: false,
         };
         this.load_current();
@@ -145,6 +148,22 @@ impl ManagerApp {
             .worker
             .commands
             .send(Command::Rpc { slot, op, params })
+            .is_err()
+        {
+            self.worker_dead = true;
+            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
+        }
+    }
+
+    /// Queue the composite usage report (analytics + icon resolution) into a
+    /// named slot; the reply overwrites it.
+    pub fn usage_report(&mut self, slot: impl Into<String>) {
+        let slot = slot.into();
+        self.slots.insert(slot.clone(), Slot::Loading);
+        if self
+            .worker
+            .commands
+            .send(Command::UsageReport { slot })
             .is_err()
         {
             self.worker_dead = true;
@@ -236,10 +255,6 @@ impl ManagerApp {
             .unwrap_or_default()
     }
 
-    pub fn slot(&self, key: &str) -> Option<&Slot> {
-        self.slots.get(key)
-    }
-
     /// Ready slot payload or Null — views stay total over missing data.
     pub fn data(&self, key: &str) -> Value {
         match self.slots.get(key) {
@@ -287,7 +302,7 @@ impl ManagerApp {
                             .unwrap_or_else(|| v.as_str().unwrap_or_default().to_string());
                         if url.is_empty() {
                             self.error = Some("Engine не вернул ссылку маркетплейса.".into());
-                        } else if let Err(e) = crate::engine::open_url(&url) {
+                        } else if let Err(e) = kosmos_gpui_kit::engine::open_url(&url) {
                             self.error = Some(e);
                         }
                     }
@@ -312,6 +327,78 @@ impl ManagerApp {
             }
             cx.notify();
         }
+        // Engine broadcast events from the WS subscription (worker thread →
+        // this UI-thread drain). A dead events thread degrades the hotkey
+        // silently — the RPC surface keeps working, so no error banner.
+        loop {
+            let event = match self.worker.events.try_recv() {
+                Ok(event) => event,
+                Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => break,
+            };
+            self.handle_engine_event(event, cx);
+            cx.notify();
+        }
+    }
+
+    /// Engine broadcast events → slot refreshes. Dictation hotkey triggers
+    /// (`dictation_toggle_trigger` / `dictation_ptt_trigger`) are NOT handled
+    /// here — the standalone dictation-gpui app owns the pill session.
+    /// State/progress events refresh the matching Диктовка slots.
+    fn handle_engine_event(&mut self, event: Value, _cx: &mut Context<Self>) {
+        let name = event
+            .get("event")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        match name {
+            "dictation_state_changed" | "dictation.state_changed" | "dictation_config_changed" => {
+                self.call("dictation.state", "dictation.get_state", json!({}));
+            }
+            "dictation_stats_changed" => {
+                self.call("dictation.stats", "dictation.get_stats", json!({}));
+            }
+            "dictation_pending_changed" => {
+                self.call("dictation.pending", "dictation.list_pending", json!({}));
+            }
+            // Progress ticks stream per chunk — stash the payload for the
+            // view rather than re-issuing RPCs; started resets the slot and
+            // complete/failed clear it while refreshing the model list.
+            "dictation_local_model_download_progress"
+            | "dictation_local_model_download_started" => {
+                self.slots
+                    .insert("dictation.download".into(), Slot::Ready(event));
+            }
+            "dictation_local_model_download_complete" | "dictation_local_model_download_failed" => {
+                self.slots.remove("dictation.download");
+                self.call("dictation.local", "dictation.local_status", json!({}));
+                self.call("dictation.models", "dictation.list_local_models", json!({}));
+            }
+            // Hotkey capture armed from the Диктовка view: the key lands
+            // here → rebuild the accelerator → `update_config` (Engine
+            // re-registers the hook immediately) → rearm off.
+            "dictation_capture_key" => {
+                self.slots
+                    .insert("dictation.capture".into(), Slot::Ready(event.clone()));
+                if self.hotkey_capturing {
+                    if let Some(accel) = build_accelerator(&event) {
+                        self.action("dictation.update_config", json!({ "hotkey": accel }));
+                    }
+                    self.hotkey_capturing = false;
+                }
+            }
+            "dictation_capture_cancelled" => {
+                self.hotkey_capturing = false;
+                self.slots
+                    .insert("dictation.capture".into(), Slot::Ready(event));
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Exposes the named data slots to `kosmos_gpui_kit::fields::slot_or`.
+impl kosmos_gpui_kit::fields::Slots for ManagerApp {
+    fn slot(&self, key: &str) -> Option<&Slot> {
+        self.slots.get(key)
     }
 }
 
@@ -321,6 +408,59 @@ fn advance_sidebar(current: f32, target: f32, dt: f32) -> f32 {
         (current + step).min(target)
     } else {
         (current - step).max(target)
+    }
+}
+
+/// vk + modifier flags → Electron-style accelerator ("Ctrl+Shift+;").
+/// Ported from `useDictationConfig.shared.ts` (vkToKeyName/buildAccelerator).
+fn build_accelerator(event: &Value) -> Option<String> {
+    let vk = event.get("vk").and_then(Value::as_u64)? as u32;
+    let key = vk_to_key_name(vk)?;
+    let mut parts = Vec::new();
+    for (flag, name) in [
+        ("ctrl", "Ctrl"),
+        ("alt", "Alt"),
+        ("shift", "Shift"),
+        ("win", "Super"),
+    ] {
+        if event.get(flag).and_then(Value::as_bool) == Some(true) {
+            parts.push(name.to_string());
+        }
+    }
+    parts.push(key);
+    Some(parts.join("+"))
+}
+
+fn vk_to_key_name(vk: u32) -> Option<String> {
+    match vk {
+        0x41..=0x5A | 0x30..=0x39 => char::from_u32(vk).map(|c| c.to_string()),
+        0x70..=0x87 => Some(format!("F{}", vk - 0x6f)),
+        0xBA => Some(";".into()),
+        0xBB => Some("+".into()),
+        0xBC => Some(",".into()),
+        0xBD => Some("-".into()),
+        0xBE => Some(".".into()),
+        0xBF => Some("/".into()),
+        0xC0 => Some("`".into()),
+        0xDB => Some("[".into()),
+        0xDC => Some("\\".into()),
+        0xDD => Some("]".into()),
+        0xDE => Some("'".into()),
+        0x08 => Some("Backspace".into()),
+        0x09 => Some("Tab".into()),
+        0x0D => Some("Enter".into()),
+        0x20 => Some("Space".into()),
+        0x21 => Some("PageUp".into()),
+        0x22 => Some("PageDown".into()),
+        0x23 => Some("End".into()),
+        0x24 => Some("Home".into()),
+        0x25 => Some("Left".into()),
+        0x26 => Some("Up".into()),
+        0x27 => Some("Right".into()),
+        0x28 => Some("Down".into()),
+        0x2D => Some("Insert".into()),
+        0x2E => Some("Delete".into()),
+        _ => None,
     }
 }
 

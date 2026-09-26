@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync, copyFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -28,21 +28,38 @@ const cleanWorktree =
     "desktop/shared",
     "host/src",
     "host/electron",
-    "manager/src",
-    "manager/electron",
+    "manager-gpui",
     "runtime/src",
     "native-services",
-    "packages",
   ]) === "";
 
-const dependenciesReady = ["desktop", "manager", "host"].every((component) =>
+// The Manager component is manager-gpui (cargo), so only the desktop and host
+// legs need installed pnpm dependencies.
+const dependenciesReady = ["desktop", "host"].every((component) =>
   existsSync(path.join(root, component, "node_modules")),
 );
+
+// components/agenda builds from the pinned agenda-gpui checkout
+// (KOSMOS_AGENDA_GPUI_SRC or ../agenda-gpui), verified against
+// desktop/component-pins.json.
+const agendaPin = JSON.parse(
+  readFileSync(path.join(desktop, "component-pins.json"), "utf8"),
+).agenda_gpui;
+const agendaSrc = path.resolve(
+  process.env.KOSMOS_AGENDA_GPUI_SRC?.trim() || path.join(root, "..", "agenda-gpui"),
+);
+const agendaReady =
+  !!agendaPin?.commit &&
+  existsSync(path.join(agendaSrc, "Cargo.toml")) &&
+  spawnSync("git", ["rev-parse", "HEAD"], { cwd: agendaSrc, encoding: "utf8" }).stdout?.trim() ===
+    agendaPin.commit;
 
 const prerequisites =
   process.platform === "win32" &&
   cleanWorktree &&
   dependenciesReady &&
+  agendaReady &&
+  spawnSync("cargo", ["--version"], { encoding: "utf8" }).status === 0 &&
   // electron-builder runs pnpm install for production deps; the host package
   // pulls @makekosmos/* from GitHub Packages, which requires a token.
   !!process.env.NODE_AUTH_TOKEN &&
@@ -130,7 +147,7 @@ test(
     timeout: 15 * 60_000,
     skip: prerequisites
       ? false
-      : "requires Windows, a clean committed worktree, installed desktop/manager/host deps, and NODE_AUTH_TOKEN for GitHub Packages",
+      : "requires Windows, a clean committed worktree, installed desktop/host deps, cargo on PATH, and NODE_AUTH_TOKEN for GitHub Packages",
   },
   async (t) => {
     // build-app-icons.mjs resolves the Ordo icon from a sibling checkout.
@@ -163,11 +180,17 @@ test(
 
     for (const name of ["kosmos", "memoria", "agenda", "arcadia", "dictation", "ordo"])
       assert.ok(existsSync(path.join(desktop, "build", "app-icons", `${name}.ico`)), name);
+    const managerOut = path.join(desktop, ".tmp", "components", "manager", "win-unpacked");
+    assert.ok(existsSync(path.join(managerOut, "Kosmos Manager.exe")), "manager unpackaged output");
     assert.ok(
-      existsSync(
-        path.join(desktop, ".tmp", "components", "manager", "win-unpacked", "Kosmos Manager.exe"),
-      ),
-      "manager unpackaged output",
+      !existsSync(path.join(managerOut, "resources")),
+      "manager component must be the GPUI exe, not an Electron package",
+    );
+    const agendaOut = path.join(desktop, ".tmp", "components", "agenda", "win-unpacked");
+    assert.ok(existsSync(path.join(agendaOut, "Kosmos Agenda.exe")), "agenda unpackaged output");
+    assert.ok(
+      !existsSync(path.join(agendaOut, "resources")),
+      "agenda component must be the GPUI exe, not an Electron package",
     );
     assert.ok(
       existsSync(

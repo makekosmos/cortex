@@ -18,8 +18,9 @@ const resources = path.join(candidate, "resources");
 const engineArchive = path.join(resources, "Kosmos Engine.zip");
 const engineManifest = path.join(resources, "engine-manifest.json");
 const managerExe = path.join(resources, "components", "manager", "Kosmos Manager.exe");
+const agendaExe = path.join(resources, "components", "agenda", "Kosmos Agenda.exe");
 const hostExe = path.join(resources, "components", "host", "Kosmos Package Host.exe");
-for (const file of [engineArchive, engineManifest, managerExe, hostExe]) {
+for (const file of [engineArchive, engineManifest, managerExe, agendaExe, hostExe]) {
   if (!fs.existsSync(file)) throw new Error(`missing candidate artifact: ${path.basename(file)}`);
 }
 
@@ -313,8 +314,10 @@ const cleanupRoot = () => {
 };
 let engine;
 let manager;
+let agenda;
 let host;
 let managerPid;
+let agendaPid;
 let hostPid;
 let summary;
 const before = {
@@ -358,15 +361,46 @@ try {
       return result.ok ? result : undefined;
     }, operation);
 
-  manager = await launchElectronDebug(managerExe, path.join(root, "manager-user-data"), [
-    "--open=packages",
-  ]);
+  // components/manager is the manager-gpui exe (KOS-134): there is no CDP
+  // endpoint, so launch coverage is process liveness plus — in normal mode —
+  // a visible window. Offscreen placement keeps the headless leg invisible.
+  manager = {
+    child: spawn(managerExe, [], {
+      env: normalMode ? env : { ...env, MANAGER_GPUI_OFFSCREEN: "1" },
+      stdio: "ignore",
+      windowsHide: !normalMode,
+    }),
+  };
   managerPid = manager.child.pid;
-  const managerPages = manager.targets.filter(
-    (item) => item.type === "page" && String(item.url).includes("index.html"),
-  );
-  expect(managerPages.length >= 1, "Manager renderer did not load");
-  if (normalMode) expect(managerPages.length === 1, "Manager must expose exactly one app page");
+  await sleep(2_000);
+  expect(alive(managerPid), "Manager (GPUI) exited during launch");
+  if (normalMode)
+    await waitFor(
+      () => (windowInventory([managerPid]).some((item) => item.visibleWindow) ? true : undefined),
+      "Manager window",
+    );
+
+  // components/agenda is the agenda-gpui exe (KOS-137): same no-CDP shape as
+  // Manager — process liveness plus a visible window in normal mode. The
+  // smoke stops it again so later window checks only track Manager/Host.
+  agenda = {
+    child: spawn(agendaExe, [], {
+      env: normalMode ? env : { ...env, AGENDA_OFFSCREEN: "1" },
+      stdio: "ignore",
+      windowsHide: !normalMode,
+    }),
+  };
+  agendaPid = agenda.child.pid;
+  await sleep(2_000);
+  expect(alive(agendaPid), "Agenda (GPUI) exited during launch");
+  if (normalMode)
+    await waitFor(
+      () => (windowInventory([agendaPid]).some((item) => item.visibleWindow) ? true : undefined),
+      "Agenda window",
+    );
+  await stop(agenda.child, "Agenda");
+  agenda = undefined;
+
   const refresh = await rpcEventually("packages.refresh_catalog");
   expect(refresh.ok, `Manager did not refresh the default catalog: ${JSON.stringify(refresh)}`);
   const trust = await rpc("packages.trust_status");
@@ -467,7 +501,8 @@ try {
   expect(
     normalMode
       ? runtimeWindow && !runtimeWindow.visibleWindow
-      : windows.every((item) => !item.visibleWindow),
+      : // The offscreen GPUI Manager owns a real HWND while parked at -20000.
+        windows.every((item) => !item.visibleWindow || item.pid === managerPid),
     normalMode
       ? "Runtime exposed a visible Win32 window"
       : "headless candidate exposed a visible Win32 window",
@@ -734,10 +769,12 @@ try {
     ownedDuring: {
       runtimePid: engine.pid,
       managerPid,
+      agendaPid,
       hostPid,
       windows,
       expectedAppPages: {
-        manager: managerPages.map(redactedTarget),
+        manager: { type: "gpui-process", pid: managerPid },
+        agenda: { type: "gpui-process", pid: agendaPid },
         host: shellTargets.map(redactedTarget),
       },
     },
@@ -752,6 +789,7 @@ try {
     }
   };
   await attemptCleanup("Host", () => stop(host?.child, "Host"));
+  await attemptCleanup("Agenda", () => stop(agenda?.child, "Agenda"));
   await attemptCleanup("Manager", () => stop(manager?.child, "Manager"));
   await attemptCleanup("Runtime", () => terminate(engine, "Runtime"));
   await attemptCleanup("Runtime locks", () =>
@@ -782,7 +820,7 @@ try {
       `data root cleanup: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  const afterOwned = windowInventory([engine?.pid, managerPid, hostPid].filter(Boolean));
+  const afterOwned = windowInventory([engine?.pid, managerPid, agendaPid, hostPid].filter(Boolean));
   const afterKosmos = kosmosProcessInventory();
   const newKosmosProcesses = kosmosProcessDelta(before.kosmosProcesses, afterKosmos);
   if (normalMode && extraVisibleConsoles.length > 0)

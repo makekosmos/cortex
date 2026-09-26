@@ -264,17 +264,6 @@ try {
     ["host-build", "app-checkouts", "engine-bootstrap"],
     e2eGate("host", HOST_SPECS, `${HOST_SPECS.length} first-party specs`),
   );
-  await runGate("manager-deps", ["workspace-deps"], () => {
-    must(step("pnpm", ["--dir", "manager", "install", "--frozen-lockfile"]), "manager install");
-    ensureElectron("manager");
-    return "frozen lockfile";
-  });
-  await runGate("manager-build", ["manager-deps"], buildGate("manager"));
-  await runGate(
-    "manager-e2e",
-    ["manager-build", "engine-bootstrap"],
-    e2eGate("manager", [], "all specs incl. store-catalog"),
-  );
 } finally {
   if (savedHost) for (const [f, data] of savedHost) fs.writeFileSync(f, data);
 }

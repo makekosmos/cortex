@@ -5,9 +5,9 @@ use gpui_component::scroll::ScrollableElement;
 
 use crate::app::ManagerApp;
 use crate::modals::{render_confirm, render_overlay};
-use crate::theme::*;
 use crate::views;
 use crate::widgets::*;
+use kosmos_gpui_kit::theme::*;
 
 impl Render for ManagerApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {

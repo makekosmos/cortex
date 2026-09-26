@@ -5,21 +5,12 @@ import type { Instance } from "./instance";
 import { keplerDataDir } from "./data-dir";
 import { keplerLog } from "./logging";
 import { clearMainProtocolCaches } from "./main-protocols";
-import { setExtensionArkBridge } from "./extension-ark-ipc";
-import type { JsonValue } from "./extension-permissions";
 type ArkRendererEvent = Parameters<Parameters<ArkClient["onArkEvent"]>[0]>[0];
-type ArkRequest = Parameters<ArkClient["invokeOperation"]>[0];
 
 interface MainArkClientControllerOptions {
   desktopAuthorityCredential: string;
   instance: Instance;
   isBackendRunning(): boolean;
-  setupPomodoroNotifier(options: { arkClient: ArkClient }): void;
-  teardownPomodoroNotifier(): void;
-  setupFocusWidgetBackendSync(options: { arkClient: ArkClient }): void;
-  teardownFocusWidgetBackendSync(): void;
-  setupFocusSessionBackendSync(options: { arkClient: ArkClient }): void;
-  teardownFocusSessionBackendSync(): void | Promise<void>;
   setupDictationHotkey(): Promise<void>;
   broadcastCommandsUpdated(): void;
 }
@@ -100,14 +91,10 @@ export function createMainArkClientController(
     arkClientReady = null;
     const prev = arkClient;
     arkClient = null;
-    setExtensionArkBridge({ request: null, subscribe: null });
     clearMainProtocolCaches();
     arkRendererEventsUnsubscribe?.();
     arkRendererEventsUnsubscribe = null;
     if (wasConnected) broadcastBackendEvent("kepler:backend:disconnected");
-    options.teardownPomodoroNotifier();
-    options.teardownFocusWidgetBackendSync();
-    await options.teardownFocusSessionBackendSync();
     if (prev) {
       try {
         await prev.stop();
@@ -199,17 +186,6 @@ export function createMainArkClientController(
         throw error;
       }
       arkClient = client;
-      setExtensionArkBridge({
-        // SAFETY: ExtensionArkPermission validates the JSON request before this host bridge call.
-        request: (request) => client.invokeOperation(request as ArkRequest) as Promise<JsonValue>,
-        subscribe: (event, handler) =>
-          client.onArkEvent((payload) => {
-            if (payload.event === event) {
-              // SAFETY: ARK transport events are JSON wire values checked before delivery.
-              handler(payload as JsonValue);
-            }
-          }),
-      });
       arkInitRetryAttempt = 0;
       arkClientReadyResolve?.(client);
       broadcastBackendEvent("kepler:backend:ready");
@@ -227,21 +203,6 @@ export function createMainArkClientController(
   }
 
   function setupConnectedClient(client: ArkClient): void {
-    try {
-      options.setupPomodoroNotifier({ arkClient: client });
-    } catch (e) {
-      keplerLog.error("pomodoro-notifier", "setup failed", { err: String(e) });
-    }
-    try {
-      options.setupFocusWidgetBackendSync({ arkClient: client });
-    } catch (e) {
-      keplerLog.error("focus-widget", "backend sync setup failed", { err: String(e) });
-    }
-    try {
-      options.setupFocusSessionBackendSync({ arkClient: client });
-    } catch (e) {
-      keplerLog.error("focus-session", "backend sync setup failed", { err: String(e) });
-    }
     void options
       .setupDictationHotkey()
       .catch((e) => keplerLog.error("dictation", "hotkey setup failed", { err: String(e) }));
@@ -272,8 +233,6 @@ export function createMainArkClientController(
   }
 
   async function shutdown(): Promise<void> {
-    await options.teardownFocusSessionBackendSync();
-    options.teardownPomodoroNotifier();
     if (arkClient) {
       try {
         await arkClient.stop();
@@ -282,7 +241,6 @@ export function createMainArkClientController(
       }
       arkClient = null;
     }
-    setExtensionArkBridge({ request: null, subscribe: null });
   }
 
   return {

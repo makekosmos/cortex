@@ -377,11 +377,11 @@ impl ManagerState {
     }
 
     pub fn autostart(&self) -> Value {
-        let available = cfg!(windows)
-            && !cfg!(debug_assertions)
-            && std::env::var_os("KOSMOS_TEST_MODE").is_none();
+        // Dev builds too: the manager-gpui settings toggle registers
+        // `<exe> --start` — headless engine at sign-in, no UI window.
+        let available = cfg!(windows) && std::env::var_os("KOSMOS_TEST_MODE").is_none();
         let enabled = available && windows_autostart_enabled();
-        json!({"enabled": enabled, "available": available, "reason": if available { Value::Null } else { json!("production-only") }})
+        json!({"enabled": enabled, "available": available, "reason": if available { Value::Null } else { json!("unsupported-platform-or-test") }})
     }
 
     pub fn set_autostart(&self, enabled: bool) -> Result<Value, String> {

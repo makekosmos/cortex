@@ -5,7 +5,7 @@ import { safeHandle } from "./ipc-safe";
 import { keplerLog } from "./logging";
 import { registerMainDataSettingsIpc } from "./main-data-ipc-settings";
 import { applyAuthoritativeFocusState } from "./focus-enforcement";
-import type { JsonValue } from "./extension-permissions";
+import type { JsonValue } from "./json-types";
 import { isString } from "../src/shared/runtimeGuards";
 import { assertMainRendererArkRequestAllowed } from "./full-access-consent";
 

@@ -27,6 +27,12 @@
   CreateShortCut "$DESKTOP\Kosmos.lnk" "$INSTDIR\Kosmos.exe"
   CreateShortCut "$SMPROGRAMS\Kosmos.lnk" "$INSTDIR\Kosmos.exe"
 
+  ; KOS-137: Agenda GPUI ships as a sibling component next to Manager.
+  ; Guarded so a package built without components/agenda leaves no dead link.
+  IfFileExists "$INSTDIR\resources\components\agenda\Kosmos Agenda.exe" 0 agenda_shortcut_done
+    CreateShortCut "$SMPROGRAMS\Kosmos Agenda.lnk" "$INSTDIR\resources\components\agenda\Kosmos Agenda.exe"
+  agenda_shortcut_done:
+
   ; Kepler → Kosmos product rename. Legacy shortcuts are removed best-effort;
   ; user data remains untouched.
   Delete "$DESKTOP\Kepler.lnk"
@@ -71,6 +77,7 @@
   Delete "$SMPROGRAMS\CosCast.lnk"
   Delete "$DESKTOP\Kosmos.lnk"
   Delete "$SMPROGRAMS\Kosmos.lnk"
+  Delete "$SMPROGRAMS\Kosmos Agenda.lnk"
 
   ; Если юзер активировал focus mode и в hosts остались managed
   ; entries — нужно очистить ДО deletion helper.exe. Запускаем helper с

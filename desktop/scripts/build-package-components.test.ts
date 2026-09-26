@@ -15,3 +15,65 @@ test("packaged Manager and Host inherit the Desktop release version", () => {
   expect(source).toContain("--config.win.signExecutable=false");
   expect(source).not.toContain("--config.win.signAndEditExecutable=false");
 });
+
+test("components/manager is the manager-gpui exe staged under the packaged name", () => {
+  const source = readFileSync(
+    path.join(import.meta.dirname, "build-package-components.mjs"),
+    "utf8",
+  );
+  const resolver = readFileSync(
+    path.join(import.meta.dirname, "..", "electron", "manager-navigation.ts"),
+    "utf8",
+  );
+  const packaged = JSON.parse(
+    readFileSync(path.join(import.meta.dirname, "..", "package.json"), "utf8"),
+  );
+  expect(source).toContain('"cargo"');
+  expect(source).toContain('"--locked"');
+  expect(source).toContain("x86_64-pc-windows-msvc");
+  expect(source).toContain("manager-gpui");
+  expect(source).toContain('"Kosmos Manager.exe"');
+  expect(resolver).toContain('"components", "manager", "Kosmos Manager.exe"');
+  expect(source).not.toContain('"manager", "host"');
+  expect(
+    packaged.build.win.extraResources.some(
+      (entry: { from: string; to: string }) =>
+        entry.from === ".tmp/components/manager/win-unpacked" && entry.to === "components/manager",
+    ),
+  ).toBeTruthy();
+});
+
+test("components/agenda is the pinned agenda-gpui exe staged under the packaged name", () => {
+  const source = readFileSync(
+    path.join(import.meta.dirname, "build-package-components.mjs"),
+    "utf8",
+  );
+  const resolver = readFileSync(
+    path.join(import.meta.dirname, "..", "electron", "agenda-navigation.ts"),
+    "utf8",
+  );
+  const packaged = JSON.parse(
+    readFileSync(path.join(import.meta.dirname, "..", "package.json"), "utf8"),
+  );
+  const pins = JSON.parse(
+    readFileSync(path.join(import.meta.dirname, "..", "component-pins.json"), "utf8"),
+  );
+  expect(pins.agenda_gpui.repository).toBe("makekosmos/agenda-gpui");
+  expect(pins.agenda_gpui.commit).toMatch(/^[0-9a-f]{40}$/);
+  expect(source).toContain("component-pins.json");
+  expect(source).toContain("KOSMOS_AGENDA_GPUI_SRC");
+  expect(source).toContain('"rev-parse", "HEAD"');
+  expect(source).toContain("x86_64-pc-windows-msvc");
+  expect(source).toContain("agenda-gpui");
+  expect(source).toContain("KOSMOS_AGENDA_VERSION");
+  expect(source).toContain('"Kosmos Agenda.exe"');
+  expect(resolver).toContain('"components", "agenda", "Kosmos Agenda.exe"');
+  expect(resolver).toContain("KOSMOS_AGENDA_EXECUTABLE");
+  expect(resolver).toContain("KOSMOS_DATA_DIR");
+  expect(
+    packaged.build.win.extraResources.some(
+      (entry: { from: string; to: string }) =>
+        entry.from === ".tmp/components/agenda/win-unpacked" && entry.to === "components/agenda",
+    ),
+  ).toBeTruthy();
+});

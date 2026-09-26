@@ -18,6 +18,10 @@ export function openManager(): void {
   const executable = process.env.KOSMOS_MANAGER_EXECUTABLE?.trim();
   const managerEnv = {
     ...process.env,
+    // Pin the instance data dir explicitly: on dev/test slots it differs
+    // from the manager-gpui %APPDATA%/Kosmos default, and the Engine lock
+    // must always be the one this instance spawned.
+    KOSMOS_DATA_DIR: keplerDataDir(),
     KOSMOS_APP_EXECUTABLE: process.execPath,
     KOSMOS_DESKTOP_VERSION: app.isPackaged ? app.getVersion() : "",
     KOSMOS_UPDATE_STATE_FILE: path.join(keplerDataDir(), "update-state.json"),
@@ -26,20 +30,6 @@ export function openManager(): void {
     const resolved = path.resolve(executable);
     if (fs.existsSync(resolved)) {
       const child = spawn(resolved, [], {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true,
-        env: managerEnv,
-      });
-      child.unref();
-    }
-    return;
-  }
-  const main = process.env.KOSMOS_MANAGER_MAIN?.trim();
-  if (main) {
-    const resolved = path.resolve(main);
-    if (fs.existsSync(resolved)) {
-      const child = spawn(process.execPath, [resolved], {
         detached: true,
         stdio: "ignore",
         windowsHide: true,

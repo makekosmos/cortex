@@ -9,7 +9,6 @@ const requireFromRoot = createRequire(new URL("../package.json", import.meta.url
 
 const COMMANDS_BY_CHECK = {
   "desktop-typecheck": ["pnpm", ["run", "typecheck:desktop"]],
-  "manager-typecheck": ["pnpm", ["run", "typecheck:manager"]],
   "host-typecheck": ["pnpm", ["run", "typecheck:host"]],
   "desktop-contracts": ["pnpm", ["run", "test:desktop-contracts"]],
   "host-contracts": ["pnpm", ["run", "test:host-contracts"]],

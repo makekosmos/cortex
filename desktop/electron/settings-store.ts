@@ -2,13 +2,11 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { keplerDataDir } from "./data-dir";
 import { resolveInstance } from "./instance";
-import { isNumber, isRecord } from "../src/shared/runtimeGuards";
+import { isRecord } from "../src/shared/runtimeGuards";
 
 interface KeplerShellSettings {
   hotkey?: string;
   showTrayIcon?: boolean;
-  /** Сколько минут хранить позицию в лаунчере. 0 = всегда ресетим. */
-  launcherStateTtlMinutes?: number;
 }
 
 const DEFAULT_HOTKEY_PROD = process.platform === "darwin" ? "Command+Space" : "Alt+Space";
@@ -29,7 +27,6 @@ const MODIFIER_ALIASES = {
 } satisfies Record<string, string>;
 
 const MODIFIER_ORDER = ["Command", "Control", "Alt", "Shift", "Super"];
-const DEFAULT_LAUNCHER_STATE_TTL_MIN = 5;
 
 export const SETTINGS_FILE_NAME = "kosmos-settings.json";
 export const LEGACY_SETTINGS_FILE_NAME = "kepler-shell-settings.json";
@@ -126,12 +123,4 @@ export function getStoredHotkey(): string {
 export function setStoredHotkey(value: string): void {
   const normalized = normalizeHotkeyAccelerator(value);
   writeSettings({ hotkey: normalized || DEFAULT_HOTKEY });
-}
-
-export function getLauncherStateTtlMinutes(): number {
-  const v = readSettings().launcherStateTtlMinutes;
-  if (!isNumber(v) || Number.isNaN(v) || v < 0) {
-    return DEFAULT_LAUNCHER_STATE_TTL_MIN;
-  }
-  return Math.floor(v);
 }

@@ -7,14 +7,7 @@ const arkSource = [
   path.resolve(process.cwd(), "../../arca-sdk/src/index.ts"),
   path.resolve(process.cwd(), "../../../arca-sdk/src/index.ts"),
 ].find(existsSync);
-const aliases = new Map([
-  ["@raycast/api", new URL("../packages/raycast-api/src/index.ts", import.meta.url).href],
-  [
-    "@raycast/api/jsx-runtime",
-    new URL("../packages/raycast-api/src/jsx-runtime.ts", import.meta.url).href,
-  ],
-  ...(arkSource ? [["@kosmos/ark", pathToFileURL(arkSource).href]] : []),
-]);
+const aliases = new Map(arkSource ? [["@kosmos/ark", pathToFileURL(arkSource).href]] : []);
 
 const extensions = [".ts", ".tsx", ".mjs", ".js"];
 

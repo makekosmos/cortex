@@ -1,4 +1,4 @@
-import { Bug, FolderSearch, Info, Settings, Timer } from "@lucide/vue";
+import { FolderSearch, Info, Settings } from "@lucide/vue";
 import kosmosIconPng from "../../../build/icon.png";
 
 import type { SettingsNavigationItem } from "./navigation";
@@ -10,36 +10,7 @@ export const settingsNavigationItems: SettingsNavigationItem[] = [
     group: "main",
     layout: "basic",
     icon: Settings,
-    keywords: [
-      "общие",
-      "настройки",
-      "глобальный хоткей",
-      "launcher",
-      "автозапуск",
-      "windows",
-      "трей",
-      "tray",
-    ],
-  },
-  {
-    tab: "debug",
-    label: "Дебаг",
-    group: "main",
-    layout: "basic",
-    icon: Bug,
-    keywords: [
-      "дебаг",
-      "debug",
-      "developer mode",
-      "режим разработчика",
-      "backend",
-      "lock файл",
-      "отчеты об ошибках",
-      "bug report",
-      "логи",
-      "crash",
-      "позиция в лаунчере",
-    ],
+    keywords: ["общие", "настройки", "глобальный хоткей", "автозапуск", "windows", "трей", "tray"],
   },
   {
     tab: "about",
@@ -50,27 +21,6 @@ export const settingsNavigationItems: SettingsNavigationItem[] = [
     introImage: kosmosIconPng,
     description: "Kosmos и обновления приложения.",
     keywords: ["about", "о приложении", "версия", "kepler", "kosmos", "обновления", "update"],
-  },
-  {
-    tab: "time-tracker",
-    label: "Фокус-таймер",
-    group: "advanced",
-    layout: "advanced",
-    icon: Timer,
-    iconGradient: { from: "#F59E0B", to: "#92400E" },
-    sidebarImage: kosmosIconPng,
-    introImage: kosmosIconPng,
-    description: "Shell-owned фокус-сессии, задача и таймер.",
-    keywords: [
-      "фокус-таймер",
-      "трекер времени",
-      "time tracker",
-      "pomodoro",
-      "таймер",
-      "focus",
-      "трекать активные приложения",
-      "usage tracker",
-    ],
   },
   {
     tab: "file-index",

@@ -9,7 +9,6 @@ export { parseNameStatus } from "./check-plan-git.mjs";
 
 const CHECK_ORDER = [
   "desktop-typecheck",
-  "manager-typecheck",
   "host-typecheck",
   "host-contracts",
   "desktop-contracts",
@@ -161,17 +160,13 @@ function isFullInfluence(path) {
 
 function classify(file) {
   const path = file.path;
-  if (
-    /^(?:desktop|host|manager|runtime|packages|shared)\//i.test(path) &&
-    /\.(?:md|mdx|txt)$/i.test(path)
-  )
+  if (/^(?:desktop|host|runtime|packages|shared)\//i.test(path) && /\.(?:md|mdx|txt)$/i.test(path))
     return "full";
   if (isFullInfluence(path)) return "full";
   if (isDocumentation(path) || ASSET_EXTENSIONS.test(path)) return [];
   if (/^desktop\/src\//.test(path)) return ["desktop-typecheck", "lint", "format"];
   if (/^desktop\/electron\//.test(path))
     return ["desktop-typecheck", "desktop-contracts", "lint", "format"];
-  if (/^manager\/src\//.test(path)) return ["manager-typecheck", "lint", "format"];
   if (/^host\/electron\//.test(path)) return ["host-typecheck", "host-contracts"];
   if (/^host\/e2e\//.test(path)) return "full";
   if (/^runtime\//.test(path)) return ["rustfmt", "clippy", "test:rust", "runtime-staging"];

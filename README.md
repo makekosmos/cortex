@@ -3,7 +3,11 @@
 This repository owns the CosCast desktop application and its host-side services:
 
 - `desktop/` — Electron host, preload/IPC, packaging and shell UI;
-- `manager/` — the standalone Kosmos Manager window;
+- `manager-gpui/` — the Kosmos Manager shipped in the Windows package as
+  `resources/components/manager/Kosmos Manager.exe`;
+- `agenda-gpui` (sibling repo `makekosmos/agenda-gpui`, pinned in
+  `desktop/component-pins.json`) — the Kosmos Agenda shipped in the Windows
+  package as `resources/components/agenda/Kosmos Agenda.exe`;
 - `runtime/` — the Rust backend process supervised by the host;
 - `native-services/` — Windows focus/watcher services used by the host.
 
@@ -56,6 +60,11 @@ pnpm run test:release-bom
 
 # Preflight only (must pass before any compilation):
 node desktop/scripts/release-preflight.mjs --platform win --bom path/to/release-bom.json
+
+# Stage packaged components under desktop/.tmp/components (Windows only):
+# manager-gpui is cargo-built for x86_64-pc-windows-msvc and staged as
+# manager/win-unpacked/Kosmos Manager.exe; host stays the Electron build.
+KOSMOS_RELEASE_BOM=path/to/release-bom.json node desktop/scripts/build-package-components.mjs
 
 # Build + package + verify (never publishes; writes a receipt):
 node desktop/scripts/build-desktop.mjs --platform win --bom path/to/release-bom.json

@@ -1,7 +1,7 @@
 import { cp, lstat, mkdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import type { ArkClient } from "@kosmos/ark";
-import { isRecord, isString, type JsonValue } from "./extension-permissions";
+import { isRecord, isString, type JsonValue } from "./json-types";
 import {
   mergeLegacyExtensionData,
   validateLegacyExtensionDataRoot,
@@ -130,10 +130,8 @@ interface LegacyMigrationRunner {
 export function createLegacyMigrationRunner(
   dataDir: string,
   client: ArkClient,
-  stopLegacyExtension: (id: string) => Promise<void> = async (id) => {
-    const { stopExtension } = await import("./extension-host");
-    await stopExtension(id);
-  },
+  // The legacy .kext extension host is gone; nothing remains to stop.
+  stopLegacyExtension: (id: string) => Promise<void> = async () => {},
 ): LegacyMigrationRunner {
   const request: MigrationRequest = (input) => client.invokeOperation<JsonValue>(input);
   // SAFETY: Object.values is sourced exclusively from the canonical allowlist.
