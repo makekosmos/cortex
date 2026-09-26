@@ -10,6 +10,7 @@ use kosmos_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("backups.list", "manager.db_backups.list", json!({}));
+    app.call("engine.autostart", "engine.autostart.get", json!({}));
 }
 
 pub fn render(
@@ -20,17 +21,29 @@ pub fn render(
     let mut col = div().flex().flex_col().gap_4().w_full();
     col = col.child(section("Настройки", "Запуск Kosmos"));
 
-    // Autostart is a Host capability (registry/.desktop entry owned by
-    // Electron main); GPUI Manager surfaces the state as informational.
-    col = col.child(
-        card().child(
-            row(
-                "Автозапуск при входе",
-                "Управляется Kosmos Host (Electron). Откройте Host для изменения.",
-            )
-            .child(badge("Host", MUTED_FG())),
-        ),
-    );
+    // Engine-owned autostart: registers `kepler-backend --start` in the HKCU
+    // Run key — headless Engine at sign-in, no UI window (the standalone
+    // Dictation app has its own Run entry and relies on Engine being up).
+    col = col.child(slot_or(app, "engine.autostart", |v| {
+        let available = vbool(v, "available");
+        let enabled = vbool(v, "enabled");
+        let mut row_el = row(
+            "Автозапуск при входе",
+            "Engine стартует с входом в Windows без UI (kepler-backend --start)",
+        );
+        if available {
+            row_el = row_el.child(toggle("engine-autostart", enabled, cx, |this, on, cx| {
+                this.action("engine.autostart.set", json!({ "enabled": on }));
+                cx.notify();
+            }));
+        } else {
+            row_el = row_el.child(badge(
+                &vopt(v, "reason").unwrap_or_else(|| "недоступно".into()),
+                MUTED_FG(),
+            ));
+        }
+        card().child(row_el).into_any_element()
+    }));
 
     col = col.child(slot_or(app, "backups.list", |v| {
         let backups = varr(v, "backups");
