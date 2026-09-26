@@ -83,7 +83,7 @@ walkdir = "2"
 # File Index: user-mode traversal with .gitignore support + user globs.
 ignore = "0.4"
 globset = "0.4"
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 # Dictation Phase 1 (2026-05-24): диктация Groq cloud.
 # enigo — кросс-платформенная симуляция клавиш (Win32 SendInput) для Ctrl+V инжекта.
 # arboard — clipboard read/write с восстановлением оригинала после inject.

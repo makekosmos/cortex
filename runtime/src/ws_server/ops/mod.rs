@@ -25,6 +25,7 @@ impl LocalResponse {
 }
 
 mod app_index;
+mod app_net;
 mod calculator;
 mod command;
 mod diagnostics;
@@ -38,6 +39,7 @@ mod store;
 mod transport;
 
 pub(super) use app_index::*;
+pub(super) use app_net::*;
 pub(super) use calculator::*;
 pub(super) use command::*;
 pub(super) use diagnostics::*;

@@ -115,6 +115,37 @@ pub fn agents_operation_capability(operation: &str) -> Option<&'static str> {
     }
 }
 
+/// App-facing Engine network ops (KOS-152): `network` manifest scopes are
+/// named groups — `bookMetadata` and `images` — and each name owns a fixed
+/// set of operations. Origin-form network scopes (`https://…`) are worker
+/// grants, not app ops, and never land here.
+pub const APP_NETWORK_SCOPES: &[&str] = &["bookMetadata", "images"];
+const APP_NETWORK_OPERATIONS: &[(&str, &str)] = &[
+    ("bookMetadata.lookupIsbn", "bookMetadata"),
+    ("bookMetadata.fetchPage", "bookMetadata"),
+    ("images.fetch", "images"),
+    ("images.dominantColor", "images"),
+    ("images.storeCover", "images"),
+];
+
+/// Maps a registered app network operation to the `network` scope that owns
+/// it; unknown operation names return `None` so `parse_app_rpc` rejects them.
+pub fn app_network_operation_scope(operation: &str) -> Option<&'static str> {
+    APP_NETWORK_OPERATIONS
+        .iter()
+        .find(|(name, _)| *name == operation)
+        .map(|(_, scope)| *scope)
+}
+
+/// Deny registered app network ops whose `network` scope is not granted.
+pub fn require_app_network_scope(operation: &str, grant: &LaunchGrant) -> Result<(), &'static str> {
+    let scope = app_network_operation_scope(operation).ok_or("unsupported app operation")?;
+    if !grant.allows_app_network_scope(scope) {
+        return Err("network grant denied");
+    }
+    Ok(())
+}
+
 const MAX_RULES: usize = 64;
 const MAX_CAPABILITIES: usize = 64;
 const MAX_BATCH: usize = 100;
@@ -831,6 +862,20 @@ pub fn compile_manifest_v2(
             operations: worker_operations,
         });
     }
+    let app_network_scopes: Vec<String> = manifest
+        .permissions
+        .iter()
+        .filter(|permission| permission.capability == "network")
+        .flat_map(|permission| permission.scopes.iter().cloned())
+        .filter(|scope| APP_NETWORK_SCOPES.contains(&scope.as_str()))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    if !app_network_scopes.is_empty() {
+        grant.capabilities.push(ScopedCapability::AppNetwork {
+            scopes: app_network_scopes,
+        });
+    }
     Ok(grant)
 }
 
@@ -905,6 +950,11 @@ pub enum ScopedCapability {
     },
     WorkerInvoke {
         operations: Vec<String>,
+    },
+    /// Named `network` scopes (`bookMetadata`, `images`) — Engine-owned app
+    /// network ops, distinct from origin-form worker network grants.
+    AppNetwork {
+        scopes: Vec<String>,
     },
 }
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -1030,6 +1080,12 @@ impl LaunchGrant {
             matches!(capability, ScopedCapability::WorkerInvoke { operations } if operations.iter().any(|allowed| {
                 allowed == operation || allowed.strip_suffix(".*").is_some_and(|prefix| operation.starts_with(&format!("{prefix}.")))
             }))
+        })
+    }
+
+    pub fn allows_app_network_scope(&self, scope: &str) -> bool {
+        self.capabilities.iter().any(|capability| {
+            matches!(capability, ScopedCapability::AppNetwork { scopes } if scopes.iter().any(|allowed| allowed == scope))
         })
     }
 
@@ -1430,6 +1486,59 @@ mod tests {
             dictation_operation_capability("dictation.submit_audio"),
             None
         );
+    }
+
+    #[test]
+    fn manifest_v2_grants_named_network_scopes_only() {
+        let raw = r#"{
+            "schema_version": 2, "id": "com.kosmos.memoria", "name": "Memoria",
+            "version": "0.6.9", "kind": "app", "engine_api": ">=1.0.0",
+            "entrypoint": "dist/index.html", "publisher": "kosmos",
+            "permissions": [{"capability": "network", "scopes": ["bookMetadata", "images"]}],
+            "targets": [{"runtime": "kosmos-host", "os": ["windows"]}],
+            "data": {"access": [], "defines": [], "mappings": []}
+        }"#;
+        let crate::package_manifest::VersionedManifest::V2(manifest) =
+            crate::package_manifest::PackageManifest::parse(raw).expect("valid manifest")
+        else {
+            unreachable!("expected v2 manifest");
+        };
+
+        let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "digest")
+            .expect("compiled grant");
+        for operation in [
+            "bookMetadata.lookupIsbn",
+            "bookMetadata.fetchPage",
+            "images.fetch",
+            "images.dominantColor",
+            "images.storeCover",
+        ] {
+            let scope = app_network_operation_scope(operation).unwrap();
+            assert!(grant.allows_app_network_scope(scope), "{operation}");
+        }
+        assert_eq!(app_network_operation_scope("bookMetadata.evil"), None);
+        assert_eq!(app_network_operation_scope("images.deleteAll"), None);
+    }
+
+    #[test]
+    fn manifest_v2_without_network_scope_denies_app_network_ops() {
+        let raw = r#"{
+            "schema_version": 2, "id": "com.kosmos.demo", "name": "Demo",
+            "version": "1.0.0", "kind": "app", "engine_api": ">=1.0.0",
+            "entrypoint": "dist/index.html", "publisher": "kosmos",
+            "permissions": [{"capability": "network", "scopes": ["https://api.example.com"]}],
+            "targets": [{"runtime": "kosmos-host", "os": ["windows"]}],
+            "data": {"access": [], "defines": [], "mappings": []}
+        }"#;
+        let crate::package_manifest::VersionedManifest::V2(manifest) =
+            crate::package_manifest::PackageManifest::parse(raw).expect("valid manifest")
+        else {
+            unreachable!("expected v2 manifest");
+        };
+        let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "digest")
+            .expect("compiled grant");
+        assert!(!grant.allows_app_network_scope("bookMetadata"));
+        assert!(!grant.allows_app_network_scope("images"));
     }
 
     #[test]

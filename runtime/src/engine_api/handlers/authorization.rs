@@ -39,6 +39,8 @@ fn parse_app_rpc(
             && grant.allows_focus_operation(operation))
         || (crate::runtime_grants::agents_operation_capability(operation).is_some()
             && grant.allows_agents_operation(operation))
+        || crate::runtime_grants::app_network_operation_scope(operation)
+            .is_some_and(|scope| grant.allows_app_network_scope(scope))
         || (!operation.starts_with("agents.") && grant.allows_worker_operation(operation)))
     {
         return Err("unsupported app operation");
