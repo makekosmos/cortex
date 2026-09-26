@@ -506,6 +506,44 @@ impl GrantAuthorityRegistry {
                 .map_err(|_| GrantError::ScopeMismatch)
         })
     }
+    /// Run `operation` against the root handle of an authorized directory
+    /// grant. Owner, extension and root-identity checks are identical to the
+    /// per-file entry points; `exact_file` grants are always rejected here so
+    /// vault-style operations cannot treat a file grant as a directory.
+    pub(crate) fn with_directory_root<T>(
+        &self,
+        grant_id: &str,
+        owner: &GrantOwner,
+        extension_id: &str,
+        operation: impl FnOnce(&RootHandle) -> io::Result<T>,
+    ) -> Result<T, GrantError> {
+        self.with_authorized_grant(grant_id, owner, extension_id, &["."], false, |grant| {
+            operation(&grant.root).map_err(|_| GrantError::ScopeMismatch)
+        })
+    }
+    /// Live grant count for one owner — used to bound root-handle retention
+    /// for `/v1/rpc` vault roots, which have no disconnect hook.
+    pub fn owner_grant_count(&self, owner: &GrantOwner) -> usize {
+        self.grants
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .values()
+            .filter(|g| &g.owner == owner)
+            .count()
+    }
+    /// Drop one grant owned by `owner`. Returns false when the id is unknown
+    /// or belongs to a different owner (never removes across owners).
+    pub fn close(&self, grant_id: &str, owner: &GrantOwner) -> bool {
+        let mut grants = self.grants.lock().unwrap_or_else(|p| p.into_inner());
+        if grants
+            .get(grant_id)
+            .is_some_and(|grant| &grant.owner == owner)
+        {
+            grants.remove(grant_id);
+            return true;
+        }
+        false
+    }
     pub fn close_owner(&self, owner: GrantOwner) -> usize {
         let mut grants = self.grants.lock().unwrap_or_else(|p| p.into_inner());
         let before = grants.len();

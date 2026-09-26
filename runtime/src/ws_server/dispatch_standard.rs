@@ -21,7 +21,7 @@ pub(super) async fn dispatch_standard(
     package_service: Arc<PackageService>,
     store_catalog: Option<Arc<StoreCatalogService>>,
     _snapshots: Arc<crate::package_worker_broker::SnapshotRegistry>,
-    _grants: Arc<GrantAuthorityRegistry>,
+    grants: Arc<GrantAuthorityRegistry>,
     _desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,
     manager_state: ManagerState,
     correlation_id: Arc<String>,
@@ -106,6 +106,8 @@ pub(super) async fn dispatch_standard(
                 error: result.error,
             }
         }
+    } else if let Some(rest) = operation.strip_prefix("filesystem.") {
+        handle_filesystem_op(rest, params, &client, &grants).await
     } else if let Some(rest) = operation.strip_prefix("export.") {
         handle_export_op(rest, params, &ark_host).await
     } else if let Some(rest) = operation.strip_prefix("arrancador.") {

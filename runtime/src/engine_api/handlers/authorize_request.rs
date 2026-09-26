@@ -6,6 +6,9 @@ async fn authorize_app_request(
     client: &DispatchClient,
 ) -> Result<Value, &'static str> {
     let map = params.as_object_mut().ok_or("app params must be an object")?;
+    if let Some(denied) = crate::runtime_grants::scoped_capability_denied(operation, grant) {
+        return Err(denied);
+    }
     match operation {
         operation if crate::runtime_grants::dictation_operation_capability(operation).is_some() => {
             if !grant.allows_dictation_operation(operation) {
@@ -261,6 +264,7 @@ async fn authorize_app_request(
     }
     Ok(params)
 }
+
 
 fn link_parts(link: &Value) -> Result<(&str, &str, &str), &'static str> {
     let source = param_str(link, "source_object_id", "sourceObjectId")

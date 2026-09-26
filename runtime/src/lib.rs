@@ -60,6 +60,7 @@ pub mod handle_relative_fs;
 pub mod integrations;
 pub mod lock_file;
 pub mod manager_api;
+pub mod markdown_vault;
 pub mod observability;
 pub mod package_manifest;
 pub mod package_registration;
