@@ -73,7 +73,7 @@ pub fn render(
                 div()
                     .flex()
                     .gap_2()
-                    .child(div().flex_1().child(Input::new(&key_in)))
+                    .child(div().flex_1().child(Input::new(&key_in).aria_label("API-ключ Groq")))
                     .child(btn("secrets-verify", "Проверить", false, cx, |this, cx| {
                         let key = this.input_value("secrets.key", cx);
                         if !key.is_empty() {

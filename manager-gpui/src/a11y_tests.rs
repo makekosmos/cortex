@@ -29,12 +29,14 @@ const INTERACTIVE_ROLES: &[&str] = &[
     "MenuItemRadio",
     "RadioButton",
     "ScrollBar",
-    "SearchBox",
+    "SearchInput",
     "Slider",
     "SpinButton",
     "Switch",
     "Tab",
-    "TextBox",
+    "TextInput",
+    "MultilineTextInput",
+    "PasswordInput",
     "TreeItem",
 ];
 
