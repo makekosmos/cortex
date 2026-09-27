@@ -81,6 +81,25 @@ fn scan_loads_markdown_and_skips_ignored_dirs() {
 }
 
 #[test]
+fn scan_decodes_non_utf8_markdown_lossily() {
+    // TS parity: `readFileSync(path, "utf8")` replaces malformed bytes with
+    // U+FFFD instead of throwing — one legacy-encoded note must not abort
+    // the whole vault scan.
+    let (td, root) = fixture();
+    fs::write(td.path().join("good.md"), "# ok").unwrap();
+    // Windows-1251 "Привет" — invalid UTF-8 byte sequence.
+    fs::write(
+        td.path().join("bad.md"),
+        [0xCFu8, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2],
+    )
+    .unwrap();
+    let scan = scan_root(&root, td.path()).unwrap();
+    assert_eq!(scan.files.len(), 2);
+    let bad = scan.files.iter().find(|f| f.name == "bad.md").unwrap();
+    assert!(bad.content.contains('\u{FFFD}'));
+}
+
+#[test]
 fn scan_skips_oversized_and_collects_image_metadata() {
     let (td, root) = fixture();
     fs::write(
