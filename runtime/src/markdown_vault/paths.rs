@@ -44,7 +44,12 @@ pub fn resolve_vault_source_path(source: &str) -> Option<PathBuf> {
     if trimmed.is_empty() {
         return None;
     }
-    if trimmed.len() >= 5 && trimmed[..5].eq_ignore_ascii_case("file:") {
+    // `get(..5)` — `trimmed[..5]` panics when byte 5 splits a multi-byte char
+    // (`"文件:…"`), and a non-ASCII prefix cannot equal `file:` anyway.
+    if trimmed
+        .get(..5)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("file:"))
+    {
         return file_url_to_path(trimmed).filter(|p| p.is_absolute());
     }
     if let Some(decoded) = super::local_image::parse_local_image_request_url(trimmed) {
