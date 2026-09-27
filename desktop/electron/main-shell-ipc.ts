@@ -1,9 +1,22 @@
 import { ipcMain, shell } from "electron";
 import type { ArkClient } from "@kosmos/ark";
+import { isString } from "../src/shared/runtimeGuards";
 
 interface MainShellIpcOptions {
   awaitArkReady(timeoutMs?: number): Promise<ArkClient>;
   getArkClient(): ArkClient | null;
+}
+
+// `shell.openExternal` hands the URL to the OS shell — on Windows `file:` /
+// UNC paths execute the target. Only browser-safe schemes may leave the app.
+const EXTERNAL_URL_SCHEMES = new Set(["https:", "http:", "mailto:"]);
+
+function safeParseUrl(url: string): URL | null {
+  try {
+    return new URL(url);
+  } catch {
+    return null;
+  }
 }
 
 export function registerMainShellIpc(options: MainShellIpcOptions): void {
@@ -33,7 +46,13 @@ export function registerMainShellIpc(options: MainShellIpcOptions): void {
     });
   }
 
-  ipcMain.handle("kepler:shell:openExternal", (_e, url: string) => shell.openExternal(url));
+  ipcMain.handle("kepler:shell:openExternal", (_e, url: string) => {
+    const parsed = isString(url) ? safeParseUrl(url) : null;
+    if (!parsed || !EXTERNAL_URL_SCHEMES.has(parsed.protocol)) {
+      throw new Error("kepler:shell:openExternal: URL scheme is not allowed");
+    }
+    return shell.openExternal(url);
+  });
 }
 
 function isPositiveNumber(value: number | undefined): value is number {
