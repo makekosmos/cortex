@@ -2,5 +2,9 @@
   "agenda_gpui": {
     "repository": "makekosmos/agenda-gpui",
     "commit": "0251a0e65f09a9ac8f6836a6e02908817fad7d52"
+  },
+  "memoria_gpui": {
+    "repository": "makekosmos/memoria-gpui",
+    "commit": "3b673d522479ca7d738e0f981a379b2e82722966"
   }
 }

@@ -67,10 +67,10 @@ for (const entry of readdirSync(managerRelease)) {
 // KOSMOS_AGENDA_GPUI_SRC or the ../agenda-gpui sibling (same convention the
 // sibling extension repos use), then verify it sits on the commit
 // desktop/component-pins.json records.
-const agendaPins = JSON.parse(
+const componentPins = JSON.parse(
   readFileSync(path.join(root, "desktop", "component-pins.json"), "utf8"),
 );
-const agendaPin = agendaPins.agenda_gpui;
+const agendaPin = componentPins.agenda_gpui;
 if (!agendaPin?.commit || !/^[0-9a-f]{40}$/.test(agendaPin.commit)) {
   console.error(
     "[build-package-components] component-pins.json agenda_gpui.commit must be a 40-hex commit",
@@ -136,6 +136,81 @@ copyFileSync(agendaExe, path.join(agendaStage, "Kosmos Agenda.exe"));
 for (const entry of readdirSync(agendaRelease)) {
   if (entry.toLowerCase().endsWith(".dll"))
     copyFileSync(path.join(agendaRelease, entry), path.join(agendaStage, entry));
+}
+
+// KOS-156: components/memoria ships memoria-gpui — same single-file
+// Rust/GPUI shape as Agenda, staged under the packaged name
+// resolvePackagedMemoriaExecutable() resolves in
+// desktop/electron/memoria-navigation.ts. memoria-gpui lives in its own
+// repository: resolve the checkout from KOSMOS_MEMORIA_GPUI_SRC or the
+// ../memoria-gpui sibling, then verify it sits on the commit
+// desktop/component-pins.json records.
+const memoriaPin = componentPins.memoria_gpui;
+if (!memoriaPin?.commit || !/^[0-9a-f]{40}$/.test(memoriaPin.commit)) {
+  console.error(
+    "[build-package-components] component-pins.json memoria_gpui.commit must be a 40-hex commit",
+  );
+  process.exit(1);
+}
+const memoriaSrc = path.resolve(
+  process.env.KOSMOS_MEMORIA_GPUI_SRC?.trim() || path.join(root, "..", "memoria-gpui"),
+);
+if (!existsSync(path.join(memoriaSrc, "Cargo.toml"))) {
+  console.error(
+    `[build-package-components] memoria-gpui checkout not found at ${memoriaSrc} — ` +
+      `clone ${memoriaPin.repository} at ${memoriaPin.commit} or set KOSMOS_MEMORIA_GPUI_SRC`,
+  );
+  process.exit(1);
+}
+const memoriaHead = spawnSync("git", ["rev-parse", "HEAD"], {
+  cwd: memoriaSrc,
+  encoding: "utf8",
+  windowsHide: true,
+});
+const memoriaCommit = memoriaHead.stdout?.trim();
+if (memoriaHead.status !== 0 || memoriaCommit !== memoriaPin.commit) {
+  console.error(
+    `[build-package-components] memoria-gpui at ${memoriaSrc} is on ${memoriaCommit ?? "unreadable HEAD"}, ` +
+      `component-pins.json requires ${memoriaPin.commit}`,
+  );
+  process.exit(1);
+}
+const memoriaRelease = path.join(memoriaSrc, "target", MANAGER_TARGET, "release");
+const memoriaBuild = spawnSync(
+  "cargo",
+  [
+    "build",
+    "--locked",
+    "--release",
+    "--target",
+    MANAGER_TARGET,
+    "--manifest-path",
+    path.join(memoriaSrc, "Cargo.toml"),
+    "--target-dir",
+    path.join(memoriaSrc, "target"),
+  ],
+  {
+    cwd: memoriaSrc,
+    stdio: "inherit",
+    windowsHide: true,
+    // VERSIONINFO inside Kosmos Memoria.exe carries the desktop release
+    // version (memoria-gpui build.rs falls back to its own crate version).
+    env: { ...process.env, KOSMOS_MEMORIA_VERSION: version },
+  },
+);
+if (memoriaBuild.status !== 0) process.exit(memoriaBuild.status ?? 1);
+const memoriaExe = path.join(memoriaRelease, "memoria-gpui.exe");
+if (!existsSync(memoriaExe)) {
+  console.error(`[build-package-components] missing ${memoriaExe}`);
+  process.exit(1);
+}
+const memoriaStage = path.join(root, "desktop", ".tmp", "components", "memoria", "win-unpacked");
+rmSync(memoriaStage, { recursive: true, force: true });
+mkdirSync(memoriaStage, { recursive: true });
+copyFileSync(memoriaExe, path.join(memoriaStage, "Kosmos Memoria.exe"));
+for (const entry of readdirSync(memoriaRelease)) {
+  if (entry.toLowerCase().endsWith(".dll"))
+    copyFileSync(path.join(memoriaRelease, entry), path.join(memoriaStage, entry));
 }
 
 // components/host stays the Electron Package Host (docs/gpui-host-decision.md).

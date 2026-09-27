@@ -37,6 +37,12 @@ The three KOS-131 blockers are resolved or rescoped:
   `app_index.*`), Data object browser, Secrets, Sync, Connections, Dev,
   About. Packaged as `components/manager/Kosmos Manager.exe`.
 - `agenda-gpui` — packaged as `components/agenda/Kosmos Agenda.exe`.
+- `memoria-gpui` — packaged as `components/memoria/Kosmos Memoria.exe`,
+  pinned via `desktop/component-pins.json` (`memoria_gpui`) and launched
+  through the shell command «Открыть Memoria (GPUI)», the Start Menu
+  «Kosmos Memoria» shortcut, or the GPUI Manager About view; the Vue
+  Memoria package (`com.kosmos.memoria` .kspkg) stays installable as
+  fallback (KOS-156).
 - `dictation-gpui` — standalone GPUI app owning the pill overlay and
   session orchestration; singleton via mutex; driven by Engine WS
   `dictation_toggle_trigger` / `dictation_ptt_trigger` events.
@@ -89,10 +95,10 @@ from memory. «Window» means a real `BrowserWindow` creation site.
 |---|---|
 | Preload bridges | `preload.ts`, `preload-bridge.ts`, `preload-settings-bridge.ts` (`window.kepler` API) |
 | Custom protocols | `main-protocols.ts`, `app-icon-protocol.ts`, `shared/electron/local-image-protocol.ts` — `kosmos-icon://app/<id>` (Engine `app_index.icon_path` + byte cache), `kosmos-local-image://` |
-| Command registry | `commands.ts`, `main-commands.ts` — static commands (open GPUI Agenda, open hosted graph, dictation toggle, settings, check-updates) merged with Engine `commands.list` |
+| Command registry | `commands.ts`, `main-commands.ts` — static commands (open GPUI Agenda, open GPUI Memoria, open hosted graph, dictation toggle, settings, check-updates) merged with Engine `commands.list` |
 | Data IPC | `main-data-ipc.ts`, `main-data-ipc-settings.ts`, `main-shell-ipc.ts` — `kepler:ark:request` passthrough (with `assertMainRendererArkRequestAllowed` consent guard), search/objects, export list/run, settings + update + test hooks |
 | Full-access consent | `full-access-consent.ts` (live guard), `full-access-consent-ipc.ts` (dialog flow — currently orphaned, was wired through the removed extension host) |
-| Component spawners | `manager-navigation.ts` (`Kosmos Manager.exe`), `agenda-navigation.ts` (`Kosmos Agenda.exe`), `host-app.ts` `openHostedApp()` (`Kosmos Package Host.exe --open-app=<id>`, `KOSMOS_HOST_*` dev paths, Start-Menu `.lnk` fallback) |
+| Component spawners | `manager-navigation.ts` (`Kosmos Manager.exe`), `agenda-navigation.ts` (`Kosmos Agenda.exe`), `memoria-navigation.ts` (`Kosmos Memoria.exe`), `host-app.ts` `openHostedApp()` (`Kosmos Package Host.exe --open-app=<id>`, `KOSMOS_HOST_*` dev paths, Start-Menu `.lnk` fallback) |
 
 ### E. Legacy data migration
 
@@ -147,7 +153,8 @@ that spawns them. Steps 1–4 are already landed and listed for the record.
    diagnostics bundle (pure fs/zip logic — ports directly).
 9. **Hosted packages → off the Electron Package Host.** The hard block.
    Two compatible tracks: (a) each active `.kspkg` app gets a native GPUI
-   port (agenda done; memoria/arcadia/ordo pending), and (b) if a
+   port (agenda done; memoria packaged/launchable as of KOS-156;
+   arcadia/ordo pending), and (b) if a
    transitional web-rendered host is needed, it must not be Electron —
    but the direction is per-app ports, not a new webview layer. The
    launch-lease protocol (`launch_id`/`broker_token`/TTL renew/revoke) is

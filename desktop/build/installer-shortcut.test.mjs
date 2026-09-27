@@ -25,6 +25,13 @@ test("Agenda GPUI component gets a guarded Start Menu shortcut with cleanup", ()
   expect(installer).toContain('Delete "$SMPROGRAMS\\Kosmos Agenda.lnk"');
 });
 
+test("Memoria GPUI component gets a guarded Start Menu shortcut with cleanup", () => {
+  const memoria = "$INSTDIR\\resources\\components\\memoria\\Kosmos Memoria.exe";
+  expect(installer).toContain(`IfFileExists "${memoria}"`);
+  expect(installer).toContain(`CreateShortCut "$SMPROGRAMS\\Kosmos Memoria.lnk" "${memoria}"`);
+  expect(installer).toContain('Delete "$SMPROGRAMS\\Kosmos Memoria.lnk"');
+});
+
 test("rename keeps the legacy app identity and shell IPC namespace", () => {
   expect(desktopPackage.build.appId).toBe("com.kazui.kosmos");
   expect(electronMain).toContain('"com.kosmos.shell"');

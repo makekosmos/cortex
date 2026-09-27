@@ -118,6 +118,10 @@
           "to": "components/agenda"
         },
         {
+          "from": ".tmp/components/memoria/win-unpacked",
+          "to": "components/memoria"
+        },
+        {
           "from": ".tmp/components/host/win-unpacked",
           "to": "components/host"
         }

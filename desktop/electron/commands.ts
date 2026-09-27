@@ -5,6 +5,7 @@
 
 import { openAgenda } from "./agenda-navigation";
 import { openHostedApp } from "./host-app";
+import { openMemoria } from "./memoria-navigation";
 import { toggleDictation } from "./dictation-pill";
 import { DEFAULT_HOTKEY, openSettings } from "./settings-window";
 import { check as checkUpdates } from "./autoupdater-host";
@@ -85,6 +86,18 @@ export const COMMANDS: InternalCommand[] = [
     kind: "command",
     appName: "Kosmos",
     exec: () => openAgenda(),
+  },
+  {
+    // KOS-156: GPUI Memoria ships inside the installer as
+    // components/memoria/Kosmos Memoria.exe — same Engine lock as Manager.
+    // The Vue Memoria (com.kosmos.memoria package) stays installed as fallback.
+    id: "kosmos:memoria-gpui",
+    title: "Открыть Memoria (GPUI)",
+    subtitle: "Заметки · нативная оболочка",
+    category: "open",
+    kind: "command",
+    appName: "Kosmos",
+    exec: () => openMemoria(),
   },
   {
     id: "kepler:dictation",
