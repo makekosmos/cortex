@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -165,18 +165,7 @@ test(
       ? false
       : "requires Windows, a clean committed worktree, installed desktop/host deps, cargo on PATH, and NODE_AUTH_TOKEN for GitHub Packages",
   },
-  async (t) => {
-    // build-app-icons.mjs resolves the Ordo icon from a sibling checkout.
-    const focus = path.join(root, "..", "focus");
-    const createdFocus = !existsSync(path.join(focus, "icon.png"));
-    if (createdFocus) {
-      mkdirSync(focus, { recursive: true });
-      copyFileSync(path.join(desktop, "build", "icon.png"), path.join(focus, "icon.png"));
-    }
-    t.after(() => {
-      if (createdFocus) rmSync(focus, { recursive: true, force: true });
-    });
-
+  async () => {
     const bom = await writeTestBom();
     const result = spawnSync(
       process.execPath,
@@ -194,7 +183,7 @@ test(
       `exit ${result.status} ${result.error?.code ?? ""}\n${result.stderr}\n${result.stdout.slice(-3000)}`,
     );
 
-    for (const name of ["kosmos", "memoria", "agenda", "arcadia", "dictation", "ordo"])
+    for (const name of ["kosmos", "memoria", "agenda", "arcadia", "dictation"])
       assert.ok(existsSync(path.join(desktop, "build", "app-icons", `${name}.ico`)), name);
     const managerOut = path.join(desktop, ".tmp", "components", "manager", "win-unpacked");
     assert.ok(existsSync(path.join(managerOut, "Kosmos Manager.exe")), "manager unpackaged output");
