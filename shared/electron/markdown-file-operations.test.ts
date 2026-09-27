@@ -72,19 +72,30 @@ describe("Markdown file operations", () => {
         dialogs,
       ),
     ).rejects.toThrow();
-    if (process.platform === "win32") {
-      await expect(
-        performMarkdownFileOperation(
-          "exportVault",
-          {
-            files: [
-              { relativePath: "A.md", content: "A" },
-              { relativePath: "a.md", content: "a" },
-            ],
-          },
-          dialogs,
-        ),
-      ).rejects.toThrow("Duplicate Markdown vault path");
+  });
+
+  test("rejects case-colliding export paths on case-insensitive filesystems", async () => {
+    const { root, dialogs } = fixture();
+    fs.mkdirSync(path.join(root, "export"));
+    const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
+    for (const platform of ["darwin", "win32"]) {
+      Object.defineProperty(process, "platform", { value: platform });
+      try {
+        await expect(
+          performMarkdownFileOperation(
+            "exportVault",
+            {
+              files: [
+                { relativePath: "A.md", content: "A" },
+                { relativePath: "a.md", content: "a" },
+              ],
+            },
+            dialogs,
+          ),
+        ).rejects.toThrow("Duplicate Markdown vault path");
+      } finally {
+        Object.defineProperty(process, "platform", descriptor!);
+      }
     }
   });
 });

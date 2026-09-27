@@ -1,6 +1,6 @@
 import { protocol } from "electron";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import type { ArkClient } from "@kosmos/ark";
 import { keplerLog } from "./logging";
 import {
@@ -14,6 +14,7 @@ import {
   parseLocalImageRequestUrl,
   resolveLocalImagePath,
 } from "../../shared/electron/local-image-protocol";
+import { MARKDOWN_IMAGE_MAX_BYTES } from "../../shared/electron/markdown-vault";
 
 interface MainProtocolOptions {
   awaitArkReady(timeoutMs?: number): Promise<ArkClient>;
@@ -54,7 +55,7 @@ function registerAppIconProtocol(options: MainProtocolOptions): void {
       const resp = (await client.invokeOperation({
         operation: "app_index.icon_path",
         id: appId,
-// SAFETY: The surrounding boundary establishes this documented contract.
+        // SAFETY: The surrounding boundary establishes this documented contract.
       })) as { path?: string };
       const iconPath = resp?.path ?? "";
       if (!iconPath || !existsSync(iconPath)) {
@@ -80,7 +81,6 @@ function registerAppIconProtocol(options: MainProtocolOptions): void {
   });
 }
 
-
 function registerLocalImageProtocol(): void {
   protocol.handle(LOCAL_IMAGE_PROTOCOL, async (request) => {
     let imagePath: string | null = null;
@@ -95,7 +95,16 @@ function registerLocalImageProtocol(): void {
         return new Response(null, { status: 404 });
       }
 
+      // Vault scan caps image size before linking, but the protocol handler
+      // is reachable with any crafted URL — bound the buffered read too.
+      const meta = await stat(resolvedPath);
+      if (!meta.isFile() || meta.size > MARKDOWN_IMAGE_MAX_BYTES) {
+        return new Response(null, { status: 404 });
+      }
       const bytes = await readFile(resolvedPath);
+      if (bytes.length > MARKDOWN_IMAGE_MAX_BYTES) {
+        return new Response(null, { status: 404 });
+      }
       return new Response(bufferToArrayBuffer(bytes), {
         headers: {
           "content-type": localImageMimeType(resolvedPath),
