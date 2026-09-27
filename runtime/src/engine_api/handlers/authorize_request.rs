@@ -10,21 +10,8 @@ async fn authorize_app_request(
         return Err(denied);
     }
     match operation {
-        operation if crate::runtime_grants::dictation_operation_capability(operation).is_some() => {
-            if !grant.allows_dictation_operation(operation) {
-                return Err("dictation grant denied");
-            }
-        }
-        operation if crate::runtime_grants::focus_operation_capability(operation).is_some() => {
-            if !grant.allows_focus_operation(operation) {
-                return Err("focus grant denied");
-            }
-        }
-        operation if crate::runtime_grants::agents_operation_capability(operation).is_some() => {
-            if !grant.allows_agents_operation(operation) {
-                return Err("agents grant denied");
-            }
-        }
+        // dictation/focus/agents/filesystem already gated by scoped_capability_denied above
+        operation if crate::runtime_grants::scoped_capability(operation).is_some() => {}
         operation if crate::runtime_grants::app_network_operation_scope(operation).is_some() =>
             crate::runtime_grants::require_app_network_scope(operation, grant)?,
         operation if !operation.starts_with("agents.") && grant.allows_worker_operation(operation) => {}
