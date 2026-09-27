@@ -205,7 +205,7 @@ export async function repositoryContext(root, platform, currentCommit) {
   const cargo = await readFile(path.join(root, "runtime", "Cargo.toml"), "utf8");
   const shellApi = await readFile(path.join(root, "desktop", "shared", "ipc-api-types.ts"), "utf8");
   const engineApi = await readFile(
-    path.join(root, "manager", "electron", "engine-client.ts"),
+    path.join(root, "runtime", "src", "protocol_version.rs"),
     "utf8",
   );
   const catalog = await readFile(
@@ -223,7 +223,7 @@ export async function repositoryContext(root, platform, currentCommit) {
   const corePathPin = /path = "\.\.\/core\/crates\/ark-core", package = "ark-core"/.test(cargo);
   const arkCoreSource = /ARK_CORE_SOURCE\s*=\s*"core\/crates\/ark-core"/.test(arkCore);
   const shell = shellApi.match(/KEPLER_API_VERSION\s*=\s*"([^"]+)"/)?.[1];
-  const engine = engineApi.match(/ENGINE_API_VERSION\s*=\s*"([^"]+)"/)?.[1];
+  const engine = engineApi.match(/pub const API_VERSION: &str = "([^"]+)"/)?.[1];
 
   if (!pnpm || !node || !rust || !corePathPin || !arkCoreSource || !shell || !engine)
     fail("repository pins are incomplete or unreadable");
