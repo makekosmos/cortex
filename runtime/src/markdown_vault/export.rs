@@ -26,7 +26,10 @@ impl VaultExportFile {
         let joined = match self {
             Self::Text { components, .. } | Self::Copy { components, .. } => components.join("/"),
         };
-        if cfg!(windows) {
+        // APFS (the default macOS volume) is case-insensitive like NTFS: two
+        // export entries that differ only in case would silently overwrite
+        // each other, so the dup check must fold case there too.
+        if cfg!(any(windows, target_os = "macos")) {
             joined.to_lowercase()
         } else {
             joined

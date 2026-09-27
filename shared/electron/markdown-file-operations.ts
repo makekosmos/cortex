@@ -101,13 +101,13 @@ export async function performMarkdownFileOperation(
   let textCount = 0;
   let imageCount = 0;
   const writtenPaths = new Set<string>();
+  const caseInsensitiveFs = process.platform === "win32" || process.platform === "darwin";
   const planned: Array<{ file: MarkdownVaultExportFile; outputPath: string }> = [];
   // SAFETY: the export payload is validated field-by-field before use.
   for (const file of files as MarkdownVaultExportFile[]) {
-    if (!file || !isString(file.relativePath))
-      throw new Error("Invalid Markdown vault file");
+    if (!file || !isString(file.relativePath)) throw new Error("Invalid Markdown vault file");
     const outputPath = safeVaultOutputPath(outputDir, file.relativePath);
-    const outputKey = process.platform === "win32" ? outputPath.toLowerCase() : outputPath;
+    const outputKey = caseInsensitiveFs ? outputPath.toLowerCase() : outputPath;
     if (writtenPaths.has(outputKey)) throw new Error("Duplicate Markdown vault path");
     writtenPaths.add(outputKey);
     if (isString(file.content)) {
