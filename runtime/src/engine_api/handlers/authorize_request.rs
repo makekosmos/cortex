@@ -5,9 +5,7 @@ async fn authorize_app_request(
     dispatcher: &crate::engine_dispatch::EngineDispatcher,
     client: &DispatchClient,
 ) -> Result<Value, &'static str> {
-    let map = params
-        .as_object_mut()
-        .ok_or("app params must be an object")?;
+    let map = params.as_object_mut().ok_or("app params must be an object")?;
     match operation {
         operation if crate::runtime_grants::dictation_operation_capability(operation).is_some() => {
             if !grant.allows_dictation_operation(operation) {
@@ -24,6 +22,8 @@ async fn authorize_app_request(
                 return Err("agents grant denied");
             }
         }
+        operation if crate::runtime_grants::app_network_operation_scope(operation).is_some() =>
+            crate::runtime_grants::require_app_network_scope(operation, grant)?,
         operation if !operation.starts_with("agents.") && grant.allows_worker_operation(operation) => {}
         "list_objects_by_type" | "list_object_summaries_by_type" => {
             let raw_type = map

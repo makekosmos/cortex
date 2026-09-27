@@ -125,6 +125,8 @@ pub(super) async fn dispatch_standard(
         handle_app_index_op(rest, params, &app_index).await
     } else if let Some(rest) = operation.strip_prefix("calculator.") {
         handle_calculator_op(rest, params, &agents_data_dir).await
+    } else if crate::app_network::is_app_network_op(&operation) {
+        handle_app_network_op(&operation, &params).await
     } else if let Some(rest) = operation.strip_prefix("integrations.") {
         if replication_requires_authority(rest) && !client.desktop_authorized {
             return LocalResponse::err("integration replication authority denied");

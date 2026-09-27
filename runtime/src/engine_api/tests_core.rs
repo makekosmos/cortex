@@ -90,6 +90,86 @@
         .is_err());
     }
 
+    fn app_network_grant(scopes: &[&str]) -> LaunchGrant {
+        LaunchGrant {
+            package_id: "com.kosmos.memoria".into(),
+            package_version: "0.6.9".into(),
+            manifest_digest: "digest".into(),
+            rules: vec![],
+            capabilities: vec![crate::runtime_grants::ScopedCapability::AppNetwork {
+                scopes: scopes.iter().map(|scope| scope.to_string()).collect(),
+            }],
+        }
+    }
+
+    #[test]
+    fn launch_scoped_app_network_rpc_requires_named_scope() {
+        let base = app_test_grant();
+        assert!(parse_app_rpc(
+            json!({"operation": "bookMetadata.lookupIsbn", "params": {}}),
+            &base,
+        )
+        .is_err());
+
+        let grant = app_network_grant(&["bookMetadata"]);
+        for operation in ["bookMetadata.lookupIsbn", "bookMetadata.fetchPage"] {
+            assert_eq!(
+                parse_app_rpc(json!({"operation": operation, "params": {}}), &grant)
+                    .expect("granted operation")
+                    .1,
+                operation
+            );
+        }
+        for operation in ["images.fetch", "images.dominantColor", "images.storeCover"] {
+            assert!(
+                parse_app_rpc(json!({"operation": operation, "params": {}}), &grant).is_err(),
+                "missing images scope must deny {operation}"
+            );
+        }
+        for operation in ["bookMetadata.evil", "images.deleteAll"] {
+            assert!(
+                parse_app_rpc(json!({"operation": operation, "params": {}}), &grant).is_err(),
+                "unknown op must be denied: {operation}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn launch_scoped_app_network_authorization_denies_missing_scope() {
+        let dispatcher = crate::engine_dispatch::EngineDispatcher::new(Arc::new(|_| {
+            Box::pin(async { Ok(json!({"ok": true, "data": null})) })
+        }));
+        let params = json!({"url": "https://example.com/cover.png"});
+        let forwarded = authorize_app_request(
+            "images.fetch",
+            params.clone(),
+            &app_network_grant(&["images"]),
+            &dispatcher,
+            &DispatchClient::default(),
+        )
+        .await
+        .expect("granted images scope");
+        assert_eq!(forwarded, params);
+        assert!(authorize_app_request(
+            "images.fetch",
+            params.clone(),
+            &app_network_grant(&["bookMetadata"]),
+            &dispatcher,
+            &DispatchClient::default(),
+        )
+        .await
+        .is_err());
+        let mut worker = app_network_grant(&[]);
+        worker
+            .capabilities
+            .push(crate::runtime_grants::ScopedCapability::WorkerInvoke {
+                operations: vec!["images.*".into()],
+            });
+        assert!(authorize_app_request("images.fetch", params, &worker, &dispatcher, &DispatchClient::default())
+            .await
+            .is_err());
+    }
+
     fn agents_test_grant() -> LaunchGrant {
         LaunchGrant {
             package_id: "com.kosmos.daedalus".into(),
