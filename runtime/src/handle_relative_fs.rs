@@ -527,10 +527,11 @@ fn list_relative_unix(
         validate_components(components)?;
     }
     let directory = open_directory_relative(root, components)?;
-    let scan_fd = unsafe { libc::dup(directory.as_raw_fd()) };
-    if scan_fd < 0 {
-        return Err(io::Error::last_os_error());
-    }
+    // `dup` shares the open file description's directory offset, so scanning
+    // a duplicate would consume the persistent root's stream position and a
+    // repeated listing would start at EOF. Opening "." yields a fresh fd and
+    // stream position instead.
+    let scan_fd = openat(directory.as_raw_fd(), ".", true)?;
     let dir = unsafe { libc::fdopendir(scan_fd) };
     if dir.is_null() {
         unsafe { libc::close(scan_fd) };
@@ -688,10 +689,10 @@ fn walk_dir_unix(
             "directory depth exceeded",
         ));
     }
-    let scan_fd = unsafe { libc::dup(directory.file.as_raw_fd()) };
-    if scan_fd < 0 {
-        return Err(io::Error::last_os_error());
-    }
+    // `dup` shares the directory stream offset with the original open
+    // description, so re-walking the same root twice would start at EOF.
+    // Opening "." yields a fresh fd and stream position instead.
+    let scan_fd = openat(directory.file.as_raw_fd(), ".", true)?;
     let dir = unsafe { libc::fdopendir(scan_fd) };
     if dir.is_null() {
         unsafe {
@@ -2231,6 +2232,24 @@ mod tests {
                 .bytes,
             b"original"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn repeated_root_listings_and_walks_do_not_consume_the_directory_stream() {
+        let (_td, root) = fixture();
+        let first = list_relative(&root, &[], 16).unwrap();
+        assert!(!first.is_empty());
+        // dup() shares the open file description's directory offset; a scan
+        // that reuses it would start at EOF and report an empty root.
+        let second = list_relative(&root, &[], 16).unwrap();
+        assert_eq!(second, first);
+        let first_walk = walk_files(&root, limits()).unwrap();
+        assert!(!first_walk.is_empty());
+        let second_walk = walk_files(&root, limits()).unwrap();
+        assert_eq!(second_walk, first_walk);
+        // Listing the root after a full walk must still see the entries.
+        assert_eq!(list_relative(&root, &[], 16).unwrap(), first);
     }
 
     #[cfg(unix)]
