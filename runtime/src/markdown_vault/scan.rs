@@ -47,8 +47,9 @@ pub fn scan_root(root: &RootHandle, root_path: &std::path::Path) -> io::Result<V
                 &components,
                 MARKDOWN_FILE_MAX_BYTES as usize,
             )?;
-            let content = String::from_utf8(bytes)
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "file is not UTF-8"))?;
+            // `readFileSync(path, "utf8")` decodes lossily — malformed bytes
+            // become U+FFFD rather than aborting the whole scan.
+            let content = String::from_utf8_lossy(&bytes).into_owned();
             scan.files.push(VaultTextFile {
                 relative_path,
                 name,
