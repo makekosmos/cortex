@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   bridge,
   checkoutDirty,
@@ -280,7 +281,10 @@ async function main() {
   )
     process.exitCode = 1;
 }
-if (import.meta.main)
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+)
   main().catch((error) => {
     console.error(`workspace: ${error.message}`);
     process.exitCode = 1;
