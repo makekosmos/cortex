@@ -104,7 +104,6 @@ test("signed Arcadia enforces exact grants and recovers after an Engine crash", 
       false,
       false,
       false,
-      false,
       true,
     );
     const version = apps.versions["com.kosmos.arcadia"];

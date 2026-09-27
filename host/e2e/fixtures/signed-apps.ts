@@ -7,7 +7,6 @@ import { daedalusArchive } from "./daedalus-archive";
 import { dictationArchive } from "./dictation-archive";
 import { arcadiaArchive } from "./arcadia-archive";
 import { memoriaArchive } from "./memoria-archive";
-import { ordoArchive } from "./ordo-archive";
 import { TEST_ONLY_RELEASE, TEST_ONLY_ROOT } from "./signing-keys";
 import { gitEnv } from "../../../scripts/git-env.mjs";
 import type { JsonValue, Manifest, PackageArchive, Permission } from "./signed-app-types";
@@ -269,7 +268,6 @@ export function createSignedApps(
   includeMemoria = false,
   includeDaedalus = false,
   includeDictation = false,
-  includeOrdo = false,
   includeArcadia = false,
 ): SignedApps {
   const apps: Array<{ file: string; manifest: Manifest }> = [
@@ -290,7 +288,6 @@ export function createSignedApps(
   if (includeMemoria) apps.push(memoriaArchive(root, repositoryRoot));
   if (includeDaedalus) apps.push(daedalusArchive(root, repositoryRoot));
   if (includeDictation) apps.push(dictationArchive(root, repositoryRoot));
-  if (includeOrdo) apps.push(ordoArchive(root, repositoryRoot));
   if (includeArcadia) apps.push(arcadiaArchive(root, repositoryRoot));
   return sign(root, repositoryRoot, apps);
 }
