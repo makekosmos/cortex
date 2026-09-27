@@ -66,6 +66,16 @@ fn source_path_resolution_matches_ts_rules() {
 }
 
 #[test]
+fn source_path_with_multibyte_prefix_is_rejected_without_panic() {
+    // Bytes 0..5 of "文件:…"/"файл:…" split a multi-byte char — the `file:`
+    // scheme check used to slice `trimmed[..5]` and panic on such input
+    // (reachable via `filesystem.vault.export` files[].sourcePath).
+    assert_eq!(resolve_vault_source_path("文件:foo.png"), None);
+    assert_eq!(resolve_vault_source_path("файл:x.png"), None);
+    assert_eq!(resolve_vault_source_path("文件:server/x.png"), None);
+}
+
+#[test]
 fn scan_loads_markdown_and_skips_ignored_dirs() {
     let (td, root) = fixture();
     fs::create_dir_all(td.path().join(".git")).unwrap();
