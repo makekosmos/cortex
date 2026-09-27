@@ -19,7 +19,13 @@ pub(crate) struct BookMetadataPage {
 
 /// `looksLikeBookMetadataBrowserChallenge`.
 pub(crate) fn looks_like_browser_challenge(html: &str) -> bool {
-    let probe = html[..html.len().min(100_000)].to_lowercase();
+    // `html[..N]` panics when N splits a multi-byte char — lossy-decoded HTML
+    // is valid UTF-8 but arbitrary byte offsets still are not boundaries.
+    let mut end = html.len().min(100_000);
+    while !html.is_char_boundary(end) {
+        end -= 1;
+    }
+    let probe = html[..end].to_lowercase();
     regex::Regex::new(r"ddos-guard|checking your browser|just a moment|провер(?:ка|яем) браузера")
         .map(|re| re.is_match(&probe))
         .unwrap_or(false)

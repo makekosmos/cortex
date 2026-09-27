@@ -158,10 +158,18 @@ pub(crate) async fn store_cover(
     } else {
         entry
     };
-    let bytes = tokio::task::spawn_blocking(move || std::fs::read(&source).ok())
-        .await
-        .map_err(|_| "unavailable")?
-        .ok_or("not-found")?;
+    // `file.size` gate parity: reject oversized sources by metadata before
+    // reading so an app cannot make the Engine slurp an unbounded file into
+    // memory (`store_bytes` only sees the already-read bytes otherwise).
+    let bytes = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, &'static str> {
+        let meta = std::fs::metadata(&source).map_err(|_| "not-found")?;
+        if meta.len() > MAX_IMAGE_BYTES as u64 {
+            return Err("unavailable");
+        }
+        std::fs::read(&source).map_err(|_| "not-found")
+    })
+    .await
+    .map_err(|_| "unavailable")??;
     let name = format!("{entry}-{}.{}", uuid::Uuid::new_v4(), ext);
     store_bytes(ctx, app_id, "book-covers", &name, &bytes)
 }

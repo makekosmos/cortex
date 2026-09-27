@@ -198,6 +198,35 @@ async fn store_cover_copies_dropped_file_into_app_data() {
     );
 }
 
+#[test]
+fn browser_challenge_probe_truncates_on_char_boundary() {
+    // The 100_000-byte probe cap must land on a char boundary — a multi-byte
+    // char straddling the cap used to panic `looks_like_browser_challenge`.
+    let mut flagged = "just a moment".to_string();
+    flagged.push_str(&"a".repeat(99_986));
+    flagged.push('é'); // occupies bytes 99_999..=100_000
+    flagged.push_str(&"b".repeat(50_000));
+    assert!(browser_page::looks_like_browser_challenge(&flagged));
+    let mut benign = "a".repeat(99_999);
+    benign.push('é');
+    benign.push_str(&"b".repeat(50_000));
+    assert!(!browser_page::looks_like_browser_challenge(&benign));
+}
+
+#[tokio::test]
+async fn store_cover_rejects_oversized_source_without_reading() {
+    let dir = std::env::temp_dir().join(format!("app-net-{}", uuid::Uuid::new_v4()));
+    let source_dir = dir.join("inbox");
+    std::fs::create_dir_all(&source_dir).unwrap();
+    let big = source_dir.join("big.png");
+    std::fs::write(&big, vec![0u8; 10 * 1024 * 1024 + 1]).unwrap();
+    let ctx = ctx(dir, None);
+    assert_eq!(
+        image_ops::store_cover(big.to_str().unwrap(), "b-1", "com.kosmos.memoria", &ctx).await,
+        Err("unavailable")
+    );
+}
+
 #[tokio::test]
 async fn images_fetch_stores_remote_and_returns_color() {
     let png = {
