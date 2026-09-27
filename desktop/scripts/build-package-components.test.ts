@@ -77,3 +77,35 @@ test("components/agenda is the pinned agenda-gpui exe staged under the packaged 
     ),
   ).toBeTruthy();
 });
+
+test("components/memoria is the pinned memoria-gpui exe staged under the packaged name", () => {
+  const source = readFileSync(
+    path.join(import.meta.dirname, "build-package-components.mjs"),
+    "utf8",
+  );
+  const resolver = readFileSync(
+    path.join(import.meta.dirname, "..", "electron", "memoria-navigation.ts"),
+    "utf8",
+  );
+  const packaged = JSON.parse(
+    readFileSync(path.join(import.meta.dirname, "..", "package.json"), "utf8"),
+  );
+  const pins = JSON.parse(
+    readFileSync(path.join(import.meta.dirname, "..", "component-pins.json"), "utf8"),
+  );
+  expect(pins.memoria_gpui.repository).toBe("makekosmos/memoria-gpui");
+  expect(pins.memoria_gpui.commit).toMatch(/^[0-9a-f]{40}$/);
+  expect(source).toContain("KOSMOS_MEMORIA_GPUI_SRC");
+  expect(source).toContain("memoria-gpui");
+  expect(source).toContain("KOSMOS_MEMORIA_VERSION");
+  expect(source).toContain('"Kosmos Memoria.exe"');
+  expect(resolver).toContain('"components", "memoria", "Kosmos Memoria.exe"');
+  expect(resolver).toContain("KOSMOS_MEMORIA_EXECUTABLE");
+  expect(resolver).toContain("KOSMOS_DATA_DIR");
+  expect(
+    packaged.build.win.extraResources.some(
+      (entry: { from: string; to: string }) =>
+        entry.from === ".tmp/components/memoria/win-unpacked" && entry.to === "components/memoria",
+    ),
+  ).toBeTruthy();
+});

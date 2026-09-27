@@ -54,11 +54,27 @@ const agendaReady =
   spawnSync("git", ["rev-parse", "HEAD"], { cwd: agendaSrc, encoding: "utf8" }).stdout?.trim() ===
     agendaPin.commit;
 
+// components/memoria builds from the pinned memoria-gpui checkout
+// (KOSMOS_MEMORIA_GPUI_SRC or ../memoria-gpui), verified against
+// desktop/component-pins.json.
+const memoriaPin = JSON.parse(
+  readFileSync(path.join(desktop, "component-pins.json"), "utf8"),
+).memoria_gpui;
+const memoriaSrc = path.resolve(
+  process.env.KOSMOS_MEMORIA_GPUI_SRC?.trim() || path.join(root, "..", "memoria-gpui"),
+);
+const memoriaReady =
+  !!memoriaPin?.commit &&
+  existsSync(path.join(memoriaSrc, "Cargo.toml")) &&
+  spawnSync("git", ["rev-parse", "HEAD"], { cwd: memoriaSrc, encoding: "utf8" }).stdout?.trim() ===
+    memoriaPin.commit;
+
 const prerequisites =
   process.platform === "win32" &&
   cleanWorktree &&
   dependenciesReady &&
   agendaReady &&
+  memoriaReady &&
   spawnSync("cargo", ["--version"], { encoding: "utf8" }).status === 0 &&
   // electron-builder runs pnpm install for production deps; the host package
   // pulls @makekosmos/* from GitHub Packages, which requires a token.
@@ -191,6 +207,12 @@ test(
     assert.ok(
       !existsSync(path.join(agendaOut, "resources")),
       "agenda component must be the GPUI exe, not an Electron package",
+    );
+    const memoriaOut = path.join(desktop, ".tmp", "components", "memoria", "win-unpacked");
+    assert.ok(existsSync(path.join(memoriaOut, "Kosmos Memoria.exe")), "memoria unpackaged output");
+    assert.ok(
+      !existsSync(path.join(memoriaOut, "resources")),
+      "memoria component must be the GPUI exe, not an Electron package",
     );
     assert.ok(
       existsSync(

@@ -58,6 +58,33 @@ pub fn render(
             }),
     );
 
+    // KOS-156: sibling component entry point — Memoria GPUI launches on the
+    // same data dir / engine.lock.json as this Manager.
+    col = col.child(
+        card()
+            .child(row("Memoria", "Заметки и дневник · нативная оболочка GPUI"))
+            .child(if crate::components::memoria_executable().is_some() {
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(
+                        imago_gpui::button::secondary("open-memoria")
+                            .label("Открыть Memoria")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                let dir = kosmos_gpui_kit::engine::data_dir().ok();
+                                match crate::components::open_memoria(dir.as_deref()) {
+                                    Ok(()) => this.notice = Some("Memoria запущена.".into()),
+                                    Err(e) => this.error = Some(e),
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .into_any_element()
+            } else {
+                empty("Memoria не входит в эту сборку Kosmos").into_any_element()
+            }),
+    );
+
     col = col.child(slot_or(app, "about.info", |v| {
         let mut el = card();
         el = el.child(

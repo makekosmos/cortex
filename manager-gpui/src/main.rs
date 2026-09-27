@@ -4,6 +4,7 @@
 
 mod app;
 mod assets;
+mod components;
 mod devpkg;
 mod fps;
 mod modals;

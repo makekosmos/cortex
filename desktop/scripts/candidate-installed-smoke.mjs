@@ -19,8 +19,9 @@ const engineArchive = path.join(resources, "Kosmos Engine.zip");
 const engineManifest = path.join(resources, "engine-manifest.json");
 const managerExe = path.join(resources, "components", "manager", "Kosmos Manager.exe");
 const agendaExe = path.join(resources, "components", "agenda", "Kosmos Agenda.exe");
+const memoriaExe = path.join(resources, "components", "memoria", "Kosmos Memoria.exe");
 const hostExe = path.join(resources, "components", "host", "Kosmos Package Host.exe");
-for (const file of [engineArchive, engineManifest, managerExe, agendaExe, hostExe]) {
+for (const file of [engineArchive, engineManifest, managerExe, agendaExe, memoriaExe, hostExe]) {
   if (!fs.existsSync(file)) throw new Error(`missing candidate artifact: ${path.basename(file)}`);
 }
 
@@ -315,9 +316,11 @@ const cleanupRoot = () => {
 let engine;
 let manager;
 let agenda;
+let memoria;
 let host;
 let managerPid;
 let agendaPid;
+let memoriaPid;
 let hostPid;
 let summary;
 const before = {
@@ -400,6 +403,27 @@ try {
     );
   await stop(agenda.child, "Agenda");
   agenda = undefined;
+
+  // components/memoria is the memoria-gpui exe (KOS-156): same no-CDP shape
+  // as Agenda — process liveness plus a visible window in normal mode. The
+  // smoke stops it again so later window checks only track Manager/Host.
+  memoria = {
+    child: spawn(memoriaExe, [], {
+      env: normalMode ? env : { ...env, MEMORIA_OFFSCREEN: "1" },
+      stdio: "ignore",
+      windowsHide: !normalMode,
+    }),
+  };
+  memoriaPid = memoria.child.pid;
+  await sleep(2_000);
+  expect(alive(memoriaPid), "Memoria (GPUI) exited during launch");
+  if (normalMode)
+    await waitFor(
+      () => (windowInventory([memoriaPid]).some((item) => item.visibleWindow) ? true : undefined),
+      "Memoria window",
+    );
+  await stop(memoria.child, "Memoria");
+  memoria = undefined;
 
   const refresh = await rpcEventually("packages.refresh_catalog");
   expect(refresh.ok, `Manager did not refresh the default catalog: ${JSON.stringify(refresh)}`);
@@ -770,11 +794,13 @@ try {
       runtimePid: engine.pid,
       managerPid,
       agendaPid,
+      memoriaPid,
       hostPid,
       windows,
       expectedAppPages: {
         manager: { type: "gpui-process", pid: managerPid },
         agenda: { type: "gpui-process", pid: agendaPid },
+        memoria: { type: "gpui-process", pid: memoriaPid },
         host: shellTargets.map(redactedTarget),
       },
     },
@@ -789,6 +815,7 @@ try {
     }
   };
   await attemptCleanup("Host", () => stop(host?.child, "Host"));
+  await attemptCleanup("Memoria", () => stop(memoria?.child, "Memoria"));
   await attemptCleanup("Agenda", () => stop(agenda?.child, "Agenda"));
   await attemptCleanup("Manager", () => stop(manager?.child, "Manager"));
   await attemptCleanup("Runtime", () => terminate(engine, "Runtime"));
@@ -820,7 +847,9 @@ try {
       `data root cleanup: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  const afterOwned = windowInventory([engine?.pid, managerPid, agendaPid, hostPid].filter(Boolean));
+  const afterOwned = windowInventory(
+    [engine?.pid, managerPid, agendaPid, memoriaPid, hostPid].filter(Boolean),
+  );
   const afterKosmos = kosmosProcessInventory();
   const newKosmosProcesses = kosmosProcessDelta(before.kosmosProcesses, afterKosmos);
   if (normalMode && extraVisibleConsoles.length > 0)
