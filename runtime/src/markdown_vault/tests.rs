@@ -58,7 +58,8 @@ fn source_path_resolution_matches_ts_rules() {
     assert_eq!(resolve_vault_source_path("https://x/i.png"), None);
     let url = local_image_url(&absolute.to_string_lossy());
     assert_eq!(resolve_vault_source_path(&url), Some(absolute.clone()));
-    let file_url = format!("file://{}", absolute.display());
+    let url_path = absolute.to_string_lossy().replace('\\', "/");
+    let file_url = ["file:///", &url_path].concat();
     assert_eq!(resolve_vault_source_path(&file_url), Some(absolute));
     // Non-image local-image URLs are rejected (extension allow-list).
     let txt_url = format!("{LOCAL_IMAGE_PROTOCOL}://file/%2Fetc%2Fpasswd.txt");
