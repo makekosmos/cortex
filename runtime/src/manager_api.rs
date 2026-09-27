@@ -187,16 +187,8 @@ impl ManagerState {
             .await
             .map_err(|e| e.to_string())?;
         let rows = response.data.as_array().cloned().unwrap_or_default();
-        let filtered = rows.iter().filter(|row| is_live_public_row(row));
-        let all: Vec<&Value> = filtered.collect();
-        let items: Vec<Value> = all
-            .iter()
-            .skip(offset)
-            .take(limit)
-            .filter_map(|row| safe_row(row, None))
-            .collect();
-        let next_cursor =
-            (offset + items.len() < all.len()).then(|| (offset + items.len()).to_string());
+        let all: Vec<&Value> = rows.iter().filter(|row| is_live_public_row(row)).collect();
+        let (items, next_cursor) = browse_page(&all, offset, limit);
         Ok(json!({"items": items, "next_cursor": next_cursor}))
     }
 
@@ -416,6 +408,22 @@ fn parse_cursor(value: Option<&Value>) -> Result<usize, String> {
         return Err("invalid-cursor".into());
     };
     cursor.parse::<usize>().map_err(|_| "invalid-cursor".into())
+}
+
+fn browse_page(all: &[&Value], offset: usize, limit: usize) -> (Vec<Value>, Option<String>) {
+    // The cursor is an index into `all` (source rows), so it must advance by
+    // the rows this page *scanned*, not the rows the projection kept —
+    // otherwise a page of dropped rows hands the client the same offset
+    // forever.
+    let scanned = all.len().saturating_sub(offset).min(limit);
+    let items: Vec<Value> = all
+        .iter()
+        .skip(offset)
+        .take(limit)
+        .filter_map(|row| safe_row(row, None))
+        .collect();
+    let next_cursor = (offset + scanned < all.len()).then(|| (offset + scanned).to_string());
+    (items, next_cursor)
 }
 
 fn is_live_public_row(row: &Value) -> bool {
@@ -715,6 +723,36 @@ mod tests {
         let tombstone = json!({"typeId": "note_obj", "deletedAt": "2026-02-03T00:00:00Z"});
         assert!(!is_live_public_row(&tombstone));
     }
+    #[test]
+    fn browse_cursor_advances_by_scanned_rows_not_returned_items() {
+        let note = |id: &str| json!({"id": id, "type_id": "note_obj", "title": id});
+        let custom = |id: &str| json!({"id": id, "type_id": "com.example.custom", "title": id});
+        // Rows the projection drops must still move the cursor: a page of
+        // entirely non-canonical rows has to advance, or the client
+        // re-requests the same offset forever.
+        let rows: Vec<Value> = (0..3).map(|i| custom(&format!("c{i}"))).collect();
+        let all: Vec<&Value> = rows.iter().collect();
+        let (items, next_cursor) = browse_page(&all, 0, 2);
+        assert!(items.is_empty());
+        assert_eq!(
+            next_cursor.as_deref(),
+            Some("2"),
+            "dropped rows still advance the cursor"
+        );
+
+        // Mixed page: the cursor must land past every scanned row, otherwise
+        // the next page re-scans rows that were already covered.
+        let rows: Vec<Value> = vec![note("n1"), custom("c0"), note("n2"), note("n3")];
+        let all: Vec<&Value> = rows.iter().collect();
+        let (items, next_cursor) = browse_page(&all, 0, 3);
+        assert_eq!(items.len(), 2);
+        assert_eq!(next_cursor.as_deref(), Some("3"));
+        let (items, next_cursor) = browse_page(&all, 3, 3);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["id"], "n3");
+        assert_eq!(next_cursor, None);
+    }
+
     #[tokio::test]
     async fn bundle_handle_is_one_time_and_cancel_removes() {
         let dir = tempfile::tempdir().unwrap();
