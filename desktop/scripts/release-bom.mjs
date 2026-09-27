@@ -222,7 +222,7 @@ export async function repositoryContext(root, platform, currentCommit) {
   const rust = toolchain.rust;
   const corePathPin = /path = "\.\.\/core\/crates\/ark-core", package = "ark-core"/.test(cargo);
   const arkCoreSource = /ARK_CORE_SOURCE\s*=\s*"core\/crates\/ark-core"/.test(arkCore);
-  const shell = shellApi.match(/KEPLER_API_VERSION\s*=\s*"([^"]+)"/)?.[1];
+  const shell = shellApi.match(/export const KEPLER_API_VERSION\s*=\s*"([^"]+)"/)?.[1];
   const engine = engineApi.match(/pub const API_VERSION: &str = "([^"]+)"/)?.[1];
 
   if (!pnpm || !node || !rust || !corePathPin || !arkCoreSource || !shell || !engine)
