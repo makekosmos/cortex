@@ -27,6 +27,47 @@ pub struct RelativeEntry {
     pub directory: bool,
 }
 
+/// One regular file found by [`walk_entries`] — components only, no bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeEntry {
+    pub components: Vec<String>,
+    pub size: u64,
+}
+
+/// Metadata-only recursive listing used by vault-style scans.
+///
+/// Unlike [`walk_files`] this reads no file contents and — matching Node's
+/// `readdir({ withFileTypes: true })` + `isFile()`/`isDirectory()` semantics —
+/// *skips* symlinks and other non-plain entries instead of failing the whole
+/// scan. `skip_dir` filters directory names before descending (hidden dirs,
+/// `node_modules`).
+pub fn walk_entries(
+    root: &RootHandle,
+    max_depth: usize,
+    max_entries: usize,
+    skip_dir: &dyn Fn(&str) -> bool,
+) -> io::Result<Vec<TreeEntry>> {
+    #[cfg(unix)]
+    {
+        let mut out = Vec::new();
+        walk_entries_unix(
+            root,
+            &mut Vec::new(),
+            0,
+            max_depth,
+            max_entries,
+            skip_dir,
+            &mut out,
+        )?;
+        out.sort_by(|a, b| a.components.cmp(&b.components));
+        Ok(out)
+    }
+    #[cfg(windows)]
+    {
+        windows::walk_entries(root, max_depth, max_entries, skip_dir)
+    }
+}
+
 #[cfg_attr(
     feature = "handle-relative-fs-serde",
     derive(serde::Serialize, serde::Deserialize)
@@ -328,7 +369,7 @@ pub fn file_identity(root: &RootHandle, component: &str) -> io::Result<RootIdent
     }
 }
 
-fn validate_components(components: &[&str]) -> io::Result<()> {
+pub(crate) fn validate_components(components: &[&str]) -> io::Result<()> {
     if components.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -736,6 +777,142 @@ fn walk_dir_unix(
                     });
                     Ok(())
                 }
+            })();
+            prefix.pop();
+            item?;
+        }
+        Ok(())
+    })();
+    unsafe {
+        libc::closedir(dir);
+    }
+    result
+}
+
+#[cfg(unix)]
+fn walk_entries_unix(
+    directory: &RootHandle,
+    prefix: &mut Vec<String>,
+    depth: usize,
+    max_depth: usize,
+    max_entries: usize,
+    skip_dir: &dyn Fn(&str) -> bool,
+    out: &mut Vec<TreeEntry>,
+) -> io::Result<()> {
+    use std::{
+        ffi::CStr,
+        os::unix::io::{AsRawFd, FromRawFd},
+    };
+    if depth > max_depth {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "directory depth exceeded",
+        ));
+    }
+    // `dup` shares the directory stream offset with the original open
+    // description, so re-walking the same root twice would start at EOF.
+    // Opening "." yields a fresh fd and stream position instead.
+    let scan_fd = openat(directory.file.as_raw_fd(), ".", true)?;
+    let dir = unsafe { libc::fdopendir(scan_fd) };
+    if dir.is_null() {
+        unsafe {
+            libc::close(scan_fd);
+        }
+        return Err(io::Error::last_os_error());
+    }
+    let result = (|| {
+        loop {
+            let entry = unsafe { libc::readdir(dir) };
+            if entry.is_null() {
+                break;
+            }
+            let raw = unsafe { CStr::from_ptr((*entry).d_name.as_ptr()) }.to_bytes();
+            if raw == b"." || raw == b".." {
+                continue;
+            }
+            let name = std::str::from_utf8(raw).map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidInput, "filename is not UTF-8")
+            })?;
+            validate_components(&[name])?;
+            let d_type = unsafe { (*entry).d_type };
+            // Dirent.isFile()/isDirectory() parity: links and exotic node
+            // types never get opened, so they cannot redirect the walk.
+            if d_type == libc::DT_LNK
+                || !matches!(d_type, libc::DT_DIR | libc::DT_REG | libc::DT_UNKNOWN)
+            {
+                continue;
+            }
+            prefix.push(name.to_owned());
+            let item = (|| -> io::Result<()> {
+                let is_dir = match d_type {
+                    libc::DT_DIR => true,
+                    libc::DT_REG => false,
+                    _ => {
+                        // Filesystems without d_type reporting need one guarded
+                        // open to classify; ELOOP/not-found entries are skipped.
+                        let fd = openat(directory.file.as_raw_fd(), name, false);
+                        match fd {
+                            Ok(fd) => {
+                                let file = unsafe { std::fs::File::from_raw_fd(fd) };
+                                let meta = file.metadata()?;
+                                if meta.file_type().is_symlink()
+                                    || (!meta.is_dir() && !meta.is_file())
+                                {
+                                    return Ok(());
+                                }
+                                meta.is_dir()
+                            }
+                            Err(error)
+                                if error.kind() == io::ErrorKind::NotFound
+                                    || error.raw_os_error() == Some(libc::ELOOP) =>
+                            {
+                                return Ok(());
+                            }
+                            Err(error) => return Err(error),
+                        }
+                    }
+                };
+                if is_dir {
+                    if skip_dir(name) {
+                        return Ok(());
+                    }
+                    if prefix.len() > max_depth {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            "directory depth exceeded",
+                        ));
+                    }
+                    let fd = openat(directory.file.as_raw_fd(), name, true)?;
+                    let child = RootHandle {
+                        file: unsafe { std::fs::File::from_raw_fd(fd) },
+                    };
+                    return walk_entries_unix(
+                        &child,
+                        prefix,
+                        depth + 1,
+                        max_depth,
+                        max_entries,
+                        skip_dir,
+                        out,
+                    );
+                }
+                if out.len() >= max_entries {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "file count exceeded",
+                    ));
+                }
+                let fd = openat(directory.file.as_raw_fd(), name, false)?;
+                let file = unsafe { std::fs::File::from_raw_fd(fd) };
+                let meta = file.metadata()?;
+                if !meta.is_file() || meta.file_type().is_symlink() {
+                    return Ok(());
+                }
+                out.push(TreeEntry {
+                    components: prefix.clone(),
+                    size: meta.len(),
+                });
+                Ok(())
             })();
             prefix.pop();
             item?;
@@ -1265,6 +1442,13 @@ mod windows {
         )
     }
     fn enumerate(dir: Handle, max_entries: usize) -> io::Result<Vec<Entry>> {
+        enumerate_impl(dir, max_entries, false)
+    }
+    fn enumerate_impl(
+        dir: Handle,
+        max_entries: usize,
+        keep_reparse: bool,
+    ) -> io::Result<Vec<Entry>> {
         let mut buffer = vec![0u8; 64 * 1024];
         let mut out = Vec::new();
         let mut restart = 1u8;
@@ -1300,7 +1484,7 @@ mod windows {
             let mut offset = 0usize;
             while offset < used {
                 let (parsed, next) = parse_directory_record(&buffer, used, offset)?;
-                if parsed.reparse_tag != 0 {
+                if parsed.reparse_tag != 0 && !keep_reparse {
                     return Err(io::Error::new(
                         io::ErrorKind::PermissionDenied,
                         "reparse point",
@@ -1317,7 +1501,7 @@ mod windows {
                     out.push(Entry {
                         name: parsed.name,
                         directory: parsed.directory,
-                        reparse: false,
+                        reparse: parsed.reparse_tag != 0,
                         id: FileId128 {
                             bytes: parsed.file_id,
                         },
@@ -1479,6 +1663,109 @@ mod windows {
             0,
             limits,
             &mut total,
+            &mut out,
+            &root.identity,
+        )?;
+        out.sort_by(|a, b| a.components.cmp(&b.components));
+        Ok(out)
+    }
+    pub fn walk_entries(
+        root: &RootHandle,
+        max_depth: usize,
+        max_entries: usize,
+        skip_dir: &dyn Fn(&str) -> bool,
+    ) -> io::Result<Vec<TreeEntry>> {
+        fn walk(
+            dir: Handle,
+            prefix: &mut Vec<String>,
+            depth: usize,
+            max_depth: usize,
+            max_entries: usize,
+            skip_dir: &dyn Fn(&str) -> bool,
+            out: &mut Vec<TreeEntry>,
+            root_identity: &Identity,
+        ) -> io::Result<()> {
+            if depth > max_depth {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "directory depth exceeded",
+                ));
+            }
+            for entry in enumerate_impl(dir, max_entries, true)? {
+                // Dirent.isFile()/isDirectory() parity: reparse points
+                // (symlinks/junctions) are skipped instead of failing the scan.
+                if entry.reparse {
+                    continue;
+                }
+                prefix.push(entry.name.clone());
+                let result = (|| {
+                    if entry.directory {
+                        if skip_dir(&entry.name) {
+                            return Ok(());
+                        }
+                        let child = relative(dir, &entry.name, true)?;
+                        let _ = validate_opened(
+                            child.raw(),
+                            Some(&Identity {
+                                volume_serial: root_identity.volume_serial,
+                                file_id: entry.id,
+                            }),
+                            true,
+                        )?;
+                        walk(
+                            child.raw(),
+                            prefix,
+                            depth + 1,
+                            max_depth,
+                            max_entries,
+                            skip_dir,
+                            out,
+                            root_identity,
+                        )
+                    } else {
+                        if out.len() >= max_entries {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidInput,
+                                "file count exceeded",
+                            ));
+                        }
+                        let child = relative(dir, &entry.name, false)?;
+                        let _ = validate_opened(
+                            child.raw(),
+                            Some(&Identity {
+                                volume_serial: root_identity.volume_serial,
+                                file_id: entry.id,
+                            }),
+                            false,
+                        )?;
+                        let standard: FileStandardInfo =
+                            query(child.raw(), FILE_STANDARD_INFO_CLASS)?;
+                        if standard.end_of_file < 0 {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidInput,
+                                "invalid file size",
+                            ));
+                        }
+                        out.push(TreeEntry {
+                            components: prefix.clone(),
+                            size: standard.end_of_file as u64,
+                        });
+                        Ok(())
+                    }
+                })();
+                prefix.pop();
+                result?;
+            }
+            Ok(())
+        }
+        let mut out = Vec::new();
+        walk(
+            root.handle.raw(),
+            &mut Vec::new(),
+            0,
+            max_depth,
+            max_entries,
+            skip_dir,
             &mut out,
             &root.identity,
         )?;
@@ -1828,6 +2115,45 @@ mod tests {
         std::os::unix::net::UnixListener::bind(td.path().join("socket")).unwrap();
         let root = open_root(td.path()).unwrap();
         assert!(walk_files(&root, limits()).is_err());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn walk_entries_reports_metadata_and_skips_links() {
+        let td = tempfile::tempdir().unwrap();
+        fs::create_dir_all(td.path().join("nested")).unwrap();
+        fs::create_dir_all(td.path().join("skip-me")).unwrap();
+        fs::write(td.path().join("nested/a.md"), b"12345").unwrap();
+        fs::write(td.path().join("root.md"), b"hi").unwrap();
+        fs::write(td.path().join("skip-me/hidden.md"), b"x").unwrap();
+        symlink(td.path().join("root.md"), td.path().join("link.md")).unwrap();
+        symlink(td.path(), td.path().join("link-dir")).unwrap();
+        std::os::unix::net::UnixListener::bind(td.path().join("socket")).unwrap();
+        let root = open_root(td.path()).unwrap();
+        let entries = walk_entries(&root, 8, 64, &|name| name == "skip-me").unwrap();
+        assert_eq!(
+            entries,
+            vec![
+                TreeEntry {
+                    components: vec!["nested".to_string(), "a.md".to_string()],
+                    size: 5,
+                },
+                TreeEntry {
+                    components: vec!["root.md".to_string()],
+                    size: 2,
+                },
+            ]
+        );
+        // Hidden-dir filter by prefix callback.
+        let entries = walk_entries(&root, 8, 64, &|name| name.starts_with('.')).unwrap();
+        assert_eq!(entries.len(), 3);
+    }
+    #[test]
+    fn walk_entries_enforces_count_cap() {
+        let td = tempfile::tempdir().unwrap();
+        fs::write(td.path().join("a"), b"1").unwrap();
+        fs::write(td.path().join("b"), b"2").unwrap();
+        let root = open_root(td.path()).unwrap();
+        assert!(walk_entries(&root, 8, 1, &|_| false).is_err());
     }
     #[test]
     fn enforces_size_count_and_depth_caps() {

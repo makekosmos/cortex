@@ -146,6 +146,28 @@ pub fn require_app_network_scope(operation: &str, grant: &LaunchGrant) -> Result
     Ok(())
 }
 
+/// Vault filesystem operations (KOS-155). `filesystem.read` scopes open,
+/// scan, read, and close a user-selected directory grant; `filesystem.write`
+/// additionally allows registering an export target and writing beneath it.
+/// Each operation is Engine-owned — an app never sees raw filesystem access.
+pub const FILESYSTEM_READ_OPERATIONS: &[&str] = &[
+    "filesystem.vault.open",
+    "filesystem.vault.read",
+    "filesystem.vault.close",
+];
+pub const FILESYSTEM_WRITE_OPERATIONS: &[&str] =
+    &["filesystem.vault.register", "filesystem.vault.export"];
+
+pub fn filesystem_operation_capability(operation: &str) -> Option<&'static str> {
+    if FILESYSTEM_READ_OPERATIONS.contains(&operation) {
+        Some("filesystem.read")
+    } else if FILESYSTEM_WRITE_OPERATIONS.contains(&operation) {
+        Some("filesystem.write")
+    } else {
+        None
+    }
+}
+
 const MAX_RULES: usize = 64;
 const MAX_CAPABILITIES: usize = 64;
 const MAX_BATCH: usize = 100;
@@ -876,6 +898,28 @@ pub fn compile_manifest_v2(
             scopes: app_network_scopes,
         });
     }
+    let filesystem_operations: Vec<String> = manifest
+        .permissions
+        .iter()
+        .flat_map(|permission| {
+            permission.scopes.iter().filter_map(move |scope| {
+                if filesystem_operation_capability(scope.as_str())
+                    == Some(permission.capability.as_str())
+                {
+                    Some(scope.clone())
+                } else {
+                    None
+                }
+            })
+        })
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    if !filesystem_operations.is_empty() {
+        grant.capabilities.push(ScopedCapability::Filesystem {
+            operations: filesystem_operations,
+        });
+    }
     Ok(grant)
 }
 
@@ -955,6 +999,9 @@ pub enum ScopedCapability {
     /// network ops, distinct from origin-form worker network grants.
     AppNetwork {
         scopes: Vec<String>,
+    },
+    Filesystem {
+        operations: Vec<String>,
     },
 }
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -1086,6 +1133,12 @@ impl LaunchGrant {
     pub fn allows_app_network_scope(&self, scope: &str) -> bool {
         self.capabilities.iter().any(|capability| {
             matches!(capability, ScopedCapability::AppNetwork { scopes } if scopes.iter().any(|allowed| allowed == scope))
+        })
+    }
+
+    pub fn allows_filesystem_operation(&self, operation: &str) -> bool {
+        self.capabilities.iter().any(|capability| {
+            matches!(capability, ScopedCapability::Filesystem { operations } if operations.iter().any(|allowed| allowed == operation))
         })
     }
 
@@ -1418,6 +1471,37 @@ pub fn current_unix() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|x| x.as_secs())
         .unwrap_or(0)
+}
+
+/// Capability lookup covering every scoped app-RPC family (dictation, focus,
+/// agents, filesystem). Returns the capability id when the operation belongs
+/// to a scoped family.
+pub fn scoped_capability(operation: &str) -> Option<&'static str> {
+    dictation_operation_capability(operation)
+        .or_else(|| focus_operation_capability(operation))
+        .or_else(|| agents_operation_capability(operation))
+        .or_else(|| filesystem_operation_capability(operation))
+}
+
+/// `Some(denied)` when `operation` is capability-scoped and the launch grant
+/// does not allow it. `filesystem.*` additionally accepts a worker grant
+/// since every vault operation runs Engine-side (no raw FS in the app).
+pub fn scoped_capability_denied(operation: &str, grant: &LaunchGrant) -> Option<&'static str> {
+    if dictation_operation_capability(operation).is_some() {
+        return (!grant.allows_dictation_operation(operation)).then_some("dictation grant denied");
+    }
+    if focus_operation_capability(operation).is_some() {
+        return (!grant.allows_focus_operation(operation)).then_some("focus grant denied");
+    }
+    if agents_operation_capability(operation).is_some() {
+        return (!grant.allows_agents_operation(operation)).then_some("agents grant denied");
+    }
+    if filesystem_operation_capability(operation).is_some() {
+        return (!grant.allows_filesystem_operation(operation)
+            && !grant.allows_worker_operation(operation))
+        .then_some("filesystem grant denied");
+    }
+    None
 }
 
 #[cfg(test)]
