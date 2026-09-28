@@ -16,17 +16,7 @@ const COMMANDS_BY_CHECK = {
   "manager-gpui": ["pnpm", ["run", "check:manager-gpui"]],
   "native-services": [
     "cargo",
-    [
-      "build",
-      "--locked",
-      "-p",
-      "kepler-watcher",
-      "-p",
-      "kepler-focus-helper",
-      "-p",
-      "kepler-focus-svc",
-      "--bins",
-    ],
+    ["build", "--locked", "-p", "watcher", "-p", "focus-helper", "-p", "focus-svc", "--bins"],
   ],
 };
 
@@ -51,6 +41,9 @@ function commandsFor(plan) {
       ...FULL_CONTRACT_CHECKS.map(commandFor),
     ];
   const commands = [];
+  // The brand-rename gate is a fast git-grep scan; a stray legacy name can
+  // appear in any file, so it runs on every hook invocation.
+  commands.push({ name: "brand", command: "pnpm", args: ["run", "check:brand"] });
   if (plan.mode === "pre-commit")
     commands.push({ name: "source-size", command: "pnpm", args: ["run", "check:source-size"] });
   const files = plan.changed.filter((path) => SOURCE_EXTENSIONS.test(path));

@@ -159,7 +159,7 @@ test("command failures aggregate instead of stopping after the first selected gr
     },
   );
   assert.equal(status, 1);
-  assert.deepEqual(seen, ["desktop-contracts", "manager-gpui"]);
+  assert.deepEqual(seen, ["brand", "desktop-contracts", "manager-gpui"]);
 });
 
 test("full gate runs the root check", async () => {
@@ -203,7 +203,7 @@ test("pre-commit retains the existing source-size safeguard through the planner"
     ),
     0,
   );
-  assert.deepEqual(seen, ["source-size"]);
+  assert.deepEqual(seen, ["brand", "source-size"]);
 });
 
 test("hook entrypoints keep the planner gate", () => {
