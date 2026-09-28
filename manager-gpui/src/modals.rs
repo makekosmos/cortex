@@ -6,8 +6,8 @@ use imago_gpui::button;
 use serde_json::Value;
 
 use crate::app::{Confirm, ManagerApp};
-use kosmos_gpui_kit::fields::vopt;
-use kosmos_gpui_kit::theme::*;
+use mundus_gpui_kit::fields::vopt;
+use mundus_gpui_kit::theme::*;
 
 pub fn render_confirm(confirm: &Confirm, cx: &mut Context<ManagerApp>) -> impl IntoElement {
     div()

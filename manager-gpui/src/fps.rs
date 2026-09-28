@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use ::gpui::{prelude::*, *};
 
 use crate::app::ManagerApp;
-use kosmos_gpui_kit::theme::*;
+use mundus_gpui_kit::theme::*;
 pub struct FpsOverlay {
     manager: WeakEntity<ManagerApp>,
     armed: bool,

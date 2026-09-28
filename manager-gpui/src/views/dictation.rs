@@ -20,7 +20,7 @@ use serde_json::json;
 use crate::app::ManagerApp;
 use crate::views::{dictation_cards, dictation_local};
 use crate::widgets::*;
-use kosmos_gpui_kit::theme::*;
+use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("dictation.state", "dictation.get_state", json!({}));

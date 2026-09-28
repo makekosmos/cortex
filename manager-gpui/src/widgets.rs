@@ -1,16 +1,16 @@
 //! Shared chrome: sidebar, titlebar, Engine banner — the pieces bound to
 //! `ManagerApp`/`View` stay here. View primitives, JSON accessors and window
-//! controls live in `kosmos_gpui_kit` (re-exported for the views). Modals
+//! controls live in `mundus_gpui_kit` (re-exported for the views). Modals
 //! live in `modals.rs`. Shell pieces come from `imago_gpui::chrome`.
 use ::gpui::{prelude::*, *};
 use gpui_component::Sizable;
 use imago_gpui::chrome::{self, SIDEBAR_W};
 
-pub use kosmos_gpui_kit::widgets::*;
+pub use mundus_gpui_kit::widgets::*;
 
 use crate::app::ManagerApp;
 use crate::views;
-use kosmos_gpui_kit::theme::*;
+use mundus_gpui_kit::theme::*;
 
 // --- Chrome -----------------------------------------------------------------
 
@@ -114,7 +114,7 @@ pub fn render_titlebar(
                 .aria_label("Обновить")
                 .accessibility_id("refresh"),
         )
-        // Same frameless min/close row as kosmos_gpui_kit's helper, but with
+        // Same frameless min/close row as mundus_gpui_kit's helper, but with
         // AccessKit role + Russian names (KOS-142).
         .child(chrome::window_controls())
 }

@@ -1,6 +1,6 @@
 //! Sibling packaged components — the Windows installer stages GPUI apps next
 //! to this exe as `resources/components/<name>/<Packaged>.exe`. The shared
-//! `kosmos_gpui_kit::engine` carries the Agenda pair (KOS-137); Memoria
+//! `mundus_gpui_kit::engine` carries the Agenda pair (KOS-137); Memoria
 //! (KOS-156) mirrors the same contract here without a kit bump.
 use std::path::PathBuf;
 

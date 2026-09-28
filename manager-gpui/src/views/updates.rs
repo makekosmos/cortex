@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 
 use crate::app::ManagerApp;
 use crate::widgets::*;
-use kosmos_gpui_kit::theme::*;
+use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("upd.mundus", "updater.status", json!({}));
