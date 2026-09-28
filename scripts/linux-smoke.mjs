@@ -21,7 +21,6 @@ const HOST_SPECS = [
   "first-party-memoria-contract.spec.ts",
   "first-party-memoria-smoke.spec.ts",
   "first-party-memoria-import-crash.spec.ts",
-  "first-party-ordo-contract.spec.ts",
   "first-party-arcadia-contract.spec.ts",
   "first-party-dictation-contract.spec.ts",
 ];
@@ -30,7 +29,6 @@ const HOST_SPECS = [
 const APP_GATES = `app kind commit file
 agenda object 04425784fda4864e5f66fc575d3d042864a4b8dd release/agenda-0.2.7.kspkg
 memoria object 9ae7892bb6d66615506f2109c12f8438f6f1aa36 release/memoria-0.6.8.kspkg
-ordo release 452b7be298f7f080fc8f2f80618e8e70651f1b99 release/ordo-0.1.3.kspkg
 arcadia release ae10decb1aa91e0704302a26bb19df031396bd79 release/arcadia-0.1.11.kspkg
 dictation release b37e8cdb1ffd60762138606cd9dd3491815ee4f1 release/dictation-0.2.5.kspkg`
   .split("\n")

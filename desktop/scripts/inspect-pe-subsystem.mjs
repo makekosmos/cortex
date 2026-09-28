@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const UNINSTALL_ROOT = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
 
@@ -91,7 +92,10 @@ export function inspectInstall(installRoot, expectedVersion) {
   }
 }
 
-if (import.meta.main) {
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+) {
   const rootIndex = process.argv.indexOf("--install-root");
   const versionIndex = process.argv.indexOf("--expected-version");
   const installRoot = rootIndex >= 0 ? process.argv[rootIndex + 1] : "";

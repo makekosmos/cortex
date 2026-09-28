@@ -1,8 +1,4 @@
 use super::{TrayEvent, UnboundedSender};
-use std::env;
-use std::ffi::OsStr;
-use std::os::windows::ffi::OsStrExt;
-use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc::SyncSender;
 
@@ -10,21 +6,27 @@ use windows::core::PCWSTR;
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
-use windows::Win32::UI::Shell::{
-    Shell_NotifyIconW, NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NOTIFYICONDATAW,
-};
+use windows::Win32::UI::Shell::{Shell_NotifyIconW, NIM_ADD};
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyMenu,
-    DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, LoadImageW, PeekMessageW,
-    PostQuitMessage, PostThreadMessageW, RegisterClassW, SetForegroundWindow, TrackPopupMenu,
-    TranslateMessage, HICON, IMAGE_ICON, LR_DEFAULTSIZE, LR_LOADFROMFILE, MF_SEPARATOR, MF_STRING,
-    MSG, PM_NOREMOVE, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_DESTROY, WM_LBUTTONDBLCLK, WM_QUIT,
-    WM_RBUTTONUP, WM_USER, WNDCLASSW, WS_EX_TOOLWINDOW, WS_POPUP,
+    DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, PeekMessageW, PostQuitMessage,
+    PostThreadMessageW, RegisterClassW, SetForegroundWindow, TrackPopupMenu, TranslateMessage,
+    MF_SEPARATOR, MF_STRING, MSG, PM_NOREMOVE, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_DESTROY,
+    WM_LBUTTONDBLCLK, WM_QUIT, WM_RBUTTONUP, WNDCLASSW, WS_EX_TOOLWINDOW, WS_POPUP,
 };
 
-const WM_TRAY_CALLBACK: u32 = WM_USER + 1;
-const MENU_OPEN: usize = 1;
-const MENU_EXIT: usize = 2;
+mod components;
+mod icon;
+mod menu;
+mod paths;
+mod resolve;
+mod wide;
+
+use components::Component;
+use icon::{load_icon, notify_data, remove_tray_icon, resolve_icon_path, WM_TRAY_CALLBACK};
+use menu::{build_menu, MenuAction, MenuPresence};
+use resolve::{resolve_component_executable, resolve_cortex_executable};
+use wide::wide;
 
 static EVENTS: std::sync::OnceLock<UnboundedSender<TrayEvent>> = std::sync::OnceLock::new();
 
@@ -111,7 +113,7 @@ pub fn run(events: UnboundedSender<TrayEvent>, ready: SyncSender<u32>) {
             let _ = TranslateMessage(&message);
             DispatchMessageW(&message);
         }
-        let _ = Shell_NotifyIconW(NIM_DELETE, &notify);
+        remove_tray_icon(&notify);
         let _ = DestroyWindow(window);
         let _ = DestroyIcon(icon);
     }
@@ -125,83 +127,10 @@ pub fn stop(thread_id: u32) {
     }
 }
 
-fn notify_data(window: HWND, icon: HICON) -> NOTIFYICONDATAW {
-    let tip = wide("Kosmos Runtime");
-    let mut data = NOTIFYICONDATAW {
-        cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
-        hWnd: window,
-        uID: 1,
-        uFlags: NIF_MESSAGE | NIF_ICON | NIF_TIP,
-        uCallbackMessage: WM_TRAY_CALLBACK,
-        hIcon: icon,
-        ..Default::default()
-    };
-    let length = tip.len().saturating_sub(1).min(data.szTip.len() - 1);
-    data.szTip[..length].copy_from_slice(&tip[..length]);
-    data
-}
-
-fn load_icon(path: &Path) -> Option<HICON> {
-    let path = wide(path.as_os_str());
-    unsafe {
-        LoadImageW(
-            HINSTANCE::default(),
-            PCWSTR(path.as_ptr()),
-            IMAGE_ICON,
-            0,
-            0,
-            LR_LOADFROMFILE | LR_DEFAULTSIZE,
-        )
-        .ok()
-        .map(|handle| HICON(handle.0))
-    }
-}
-
-fn resolve_icon_path() -> Option<PathBuf> {
-    let mut candidates = Vec::new();
-    if let Some(path) = env::var_os("KOSMOS_TRAY_ICON") {
-        candidates.push(PathBuf::from(path));
-    }
-    if let Ok(exe) = env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            candidates.push(parent.join("tray.ico"));
-            if let Some(app_dir) = parent.parent() {
-                candidates.push(app_dir.join("tray.ico"));
-            }
-        }
-    }
-    for variable in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"] {
-        if let Some(root) = env::var_os(variable) {
-            candidates.push(PathBuf::from(root).join("Kosmos/tray.ico"));
-        }
-    }
-    candidates
-        .into_iter()
-        .find(|path| path.is_file() && path.extension() == Some(OsStr::new("ico")))
-}
-
-fn resolve_cortex_executable() -> Option<PathBuf> {
-    let mut candidates = Vec::new();
-    if let Some(path) = env::var_os("KOSMOS_CORTEX_EXECUTABLE") {
-        candidates.push(PathBuf::from(path));
-    }
-    if let Ok(exe) = env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            candidates.push(parent.join("Kosmos.exe"));
-            if let Some(app_dir) = parent.parent() {
-                candidates.push(app_dir.join("Kosmos.exe"));
-            }
-        }
-    }
-    for variable in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"] {
-        if let Some(root) = env::var_os(variable) {
-            candidates.push(PathBuf::from(root.clone()).join("Programs/Kosmos/Kosmos.exe"));
-            candidates.push(PathBuf::from(root).join("Kosmos/Kosmos.exe"));
-        }
-    }
-    candidates.into_iter().find(|path| path.is_file())
-}
-
+/// Launches the Cortex shell (`Kosmos.exe`). Cortex is not removed yet
+/// (KOS-236 retires it in a later step), so this stays the double-click and
+/// menu "Открыть" target — the same single-instance app that used to own
+/// the tray before `9a940559` moved icon ownership to the Engine.
 fn open_cortex() {
     if let Some(executable) = resolve_cortex_executable() {
         if let Err(error) = Command::new(&executable).spawn() {
@@ -213,20 +142,50 @@ fn open_cortex() {
     }
 }
 
+/// Launches a packaged GPUI component (Manager/Agenda/Memoria), matching
+/// `openManager()`/`openAgenda()`/`openMemoria()` in the Electron shell:
+/// spawn-and-forget, no lifecycle ownership by the Engine.
+fn open_component(component: Component) {
+    if let Some(executable) = resolve_component_executable(component) {
+        if let Err(error) = Command::new(&executable).spawn() {
+            eprintln!(
+                "[kepler-backend] failed to open {} {}: {error}",
+                component.menu_label(),
+                executable.display()
+            );
+        }
+    }
+}
+
+fn current_presence() -> MenuPresence {
+    MenuPresence {
+        cortex: resolve_cortex_executable().is_some(),
+        manager: resolve_component_executable(Component::Manager).is_some(),
+        agenda: resolve_component_executable(Component::Agenda).is_some(),
+        memoria: resolve_component_executable(Component::Memoria).is_some(),
+    }
+}
+
 fn show_context_menu(window: HWND) {
     let Ok(menu) = (unsafe { CreatePopupMenu() }) else {
         return;
     };
-    let open = wide("Открыть");
-    let exit = wide("Выход");
+    let entries = build_menu(current_presence());
+    let labels: Vec<Vec<u16>> = entries
+        .iter()
+        .map(|entry| wide(entry.action.label()))
+        .collect();
     unsafe {
-        let commands = menu_commands(resolve_cortex_executable().is_some());
-        for (index, command) in commands.iter().enumerate() {
-            if index > 0 {
+        for (entry, label) in entries.iter().zip(labels.iter()) {
+            if entry.separator_before {
                 let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
             }
-            let label = if *command == MENU_OPEN { &open } else { &exit };
-            let _ = AppendMenuW(menu, MF_STRING, *command, PCWSTR(label.as_ptr()));
+            let _ = AppendMenuW(
+                menu,
+                MF_STRING,
+                entry.action.command_id(),
+                PCWSTR(label.as_ptr()),
+            );
         }
         let mut point = POINT::default();
         let _ = GetCursorPos(&mut point);
@@ -242,32 +201,17 @@ fn show_context_menu(window: HWND) {
         )
         .0 as usize;
         let _ = DestroyMenu(menu);
-        match command {
-            MENU_OPEN => open_cortex(),
-            MENU_EXIT => {
+        match MenuAction::from_command_id(command) {
+            Some(MenuAction::OpenCortex) => open_cortex(),
+            Some(MenuAction::OpenComponent(component)) => open_component(component),
+            Some(MenuAction::Exit) => {
                 if let Some(events) = EVENTS.get() {
                     let _ = events.send(TrayEvent::Exit);
                 }
             }
-            _ => {}
+            None => {}
         }
     }
-}
-
-fn menu_commands(cortex_present: bool) -> &'static [usize] {
-    if cortex_present {
-        &[MENU_OPEN, MENU_EXIT]
-    } else {
-        &[MENU_EXIT]
-    }
-}
-
-fn wide(value: impl AsRef<OsStr>) -> Vec<u16> {
-    value
-        .as_ref()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect()
 }
 
 unsafe extern "system" fn window_proc(
@@ -288,13 +232,4 @@ unsafe extern "system" fn window_proc(
         _ => return DefWindowProcW(window, message, wparam, lparam),
     }
     LRESULT(0)
-}
-#[cfg(test)]
-mod tests {
-    use super::{menu_commands, MENU_EXIT, MENU_OPEN};
-    #[test]
-    fn cortex_presence_controls_the_exact_tray_menu() {
-        assert_eq!(menu_commands(true), vec![MENU_OPEN, MENU_EXIT]);
-        assert_eq!(menu_commands(false), vec![MENU_EXIT]);
-    }
 }
