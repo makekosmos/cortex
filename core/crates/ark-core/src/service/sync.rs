@@ -2,12 +2,13 @@
 // Sync handlers
 // ---------------------------------------------------------------------------
 
-#[path = "sync/start.rs"]
-mod sync_start;
-#[path = "sync/events.rs"]
-mod sync_events;
-use sync_events::wire_relay_sync_events;
-use sync_start::handle_start_sync;
+use super::*;
+
+mod events;
+mod start;
+use self::events::wire_relay_sync_events;
+// Re-exported so `service.rs` can import it as `self::sync::handle_start_sync`.
+pub(crate) use self::start::handle_start_sync;
 
 #[allow(clippy::too_many_arguments)]
 async fn spawn_sync_client(
@@ -126,9 +127,9 @@ async fn start_seed_client(
     .await;
 }
 
-async fn handle_stop_sync() {
+pub(super) async fn handle_stop_sync(state: &Arc<ServiceState>) {
     let runtime = {
-        let mut guard = SYNC.lock().await;
+        let mut guard = state.sync.lock().await;
         guard.take()
     };
     if let Some(runtime) = runtime {
@@ -147,8 +148,12 @@ async fn handle_stop_sync() {
     }
 }
 
-async fn handle_start_sync_with_params(params: SyncStartParams) -> Result<Value, String> {
+pub(super) async fn handle_start_sync_with_params(
+    state: &Arc<ServiceState>,
+    params: SyncStartParams,
+) -> Result<Value, String> {
     handle_start_sync(
+        state,
         params.space_id,
         params.device_id,
         Some(params.device_name),
@@ -164,16 +169,22 @@ async fn handle_start_sync_with_params(params: SyncStartParams) -> Result<Value,
     .await
 }
 
-fn build_pairing_restart_params(runtime: &SyncRuntime, pairing_code: &str) -> SyncStartParams {
+pub(super) fn build_pairing_restart_params(
+    runtime: &SyncRuntime,
+    pairing_code: &str,
+) -> SyncStartParams {
     let mut params = runtime.start_params.clone();
     params.use_iroh = true;
     params.iroh_peer_ticket = Some(pairing_code.trim().to_string());
     params
 }
 
-async fn handle_broadcast_change(mut entity: SyncEntity) -> Result<Value, String> {
+pub(super) async fn handle_broadcast_change(
+    state: &Arc<ServiceState>,
+    mut entity: SyncEntity,
+) -> Result<Value, String> {
     let runtime = {
-        let guard = SYNC.lock().await;
+        let guard = state.sync.lock().await;
         match guard.as_ref() {
             Some(r) => r.clone(),
             None => return Err("Sync not running".to_string()),
@@ -207,17 +218,17 @@ async fn handle_broadcast_change(mut entity: SyncEntity) -> Result<Value, String
 /// Step 4a: surface our iroh pairing ticket for the runtime/UI. `null` when
 /// sync isn't running or the running runtime didn't select iroh (relay/no
 /// transport, or a build without `iroh-spike`).
-async fn handle_get_own_iroh_ticket() -> Result<Value, String> {
-    let guard = SYNC.lock().await;
+pub(super) async fn handle_get_own_iroh_ticket(state: &Arc<ServiceState>) -> Result<Value, String> {
+    let guard = state.sync.lock().await;
     let ticket = guard
         .as_ref()
         .and_then(|runtime| runtime.iroh_our_ticket.clone());
     Ok(json!(ticket))
 }
 
-async fn handle_get_sync_snapshot() -> Result<Value, String> {
+pub(super) async fn handle_get_sync_snapshot(state: &Arc<ServiceState>) -> Result<Value, String> {
     let runtime = {
-        let guard = SYNC.lock().await;
+        let guard = state.sync.lock().await;
         match guard.as_ref() {
             Some(r) => r.clone(),
             None => {
@@ -292,8 +303,11 @@ async fn handle_get_sync_snapshot() -> Result<Value, String> {
     }))
 }
 
-async fn handle_disconnect_peer(device_id: String) -> Result<Value, String> {
-    let guard = SYNC.lock().await;
+pub(super) async fn handle_disconnect_peer(
+    state: &Arc<ServiceState>,
+    device_id: String,
+) -> Result<Value, String> {
+    let guard = state.sync.lock().await;
     let runtime = match guard.as_ref() {
         Some(r) => r.clone(),
         None => return Err("Sync not running".to_string()),
@@ -338,14 +352,17 @@ async fn handle_disconnect_peer(device_id: String) -> Result<Value, String> {
     Ok(json!(true))
 }
 
-async fn handle_connect_with_pairing_code(pairing_code: String) -> Result<Value, String> {
+pub(super) async fn handle_connect_with_pairing_code(
+    state: &Arc<ServiceState>,
+    pairing_code: String,
+) -> Result<Value, String> {
     let code = pairing_code.trim();
     if code.is_empty() {
         return Err("pairing code is empty".to_string());
     }
 
     let runtime = {
-        let guard = SYNC.lock().await;
+        let guard = state.sync.lock().await;
         match guard.as_ref() {
             Some(r) => r.clone(),
             None => return Err("Sync not running".to_string()),
@@ -355,11 +372,11 @@ async fn handle_connect_with_pairing_code(pairing_code: String) -> Result<Value,
     let restart_params = build_pairing_restart_params(&runtime, code);
     let restore_params = runtime.start_params.clone();
 
-    handle_stop_sync().await;
-    match handle_start_sync_with_params(restart_params).await {
+    handle_stop_sync(state).await;
+    match handle_start_sync_with_params(state, restart_params).await {
         Ok(result) => Ok(result),
         Err(err) => {
-            if let Err(restore_err) = handle_start_sync_with_params(restore_params).await {
+            if let Err(restore_err) = handle_start_sync_with_params(state, restore_params).await {
                 return Err(format!(
                     "connect_with_pairing_code failed: {err}; restoring previous sync also failed: {restore_err}"
                 ));
@@ -371,9 +388,9 @@ async fn handle_connect_with_pairing_code(pairing_code: String) -> Result<Value,
     }
 }
 
-async fn handle_get_connected_peers() -> Result<Value, String> {
+pub(super) async fn handle_get_connected_peers(state: &Arc<ServiceState>) -> Result<Value, String> {
     let runtime = {
-        let guard = SYNC.lock().await;
+        let guard = state.sync.lock().await;
         match guard.as_ref() {
             Some(r) => r.clone(),
             None => return Ok(json!([])),
@@ -433,9 +450,12 @@ async fn handle_get_connected_peers() -> Result<Value, String> {
     Ok(json!(list))
 }
 
-async fn handle_add_seed_peer(addresses: Vec<String>) -> Result<Value, String> {
+pub(super) async fn handle_add_seed_peer(
+    state: &Arc<ServiceState>,
+    addresses: Vec<String>,
+) -> Result<Value, String> {
     let runtime = {
-        let guard = SYNC.lock().await;
+        let guard = state.sync.lock().await;
         match guard.as_ref() {
             Some(r) => r.clone(),
             None => return Err("Sync not running".to_string()),

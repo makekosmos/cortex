@@ -87,7 +87,8 @@ $renameMap = @{
     'kosmos-device-id.txt'       = 'kepler-device-id.txt'
 }
 
-# Имена процессов, которые могут держать БД/файлы (актуальные имена ДО swap'а кода).
+# Имена процессов, которые могут держать БД/файлы (актуальные имена ДО swap'а кода;
+# ark-core-rpc — sidecar старых установок, больше не поставляется, но leftover'ы надо гасить).
 $processesToStop = @('kosmos', 'kosmos-backend', 'kosmos-watcher', 'ark-core-rpc', 'usage-tracker')
 
 # Старая запись в реестре до rebrand.

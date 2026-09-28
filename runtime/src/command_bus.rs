@@ -7,7 +7,7 @@
 // to all subscribers — the owning client filters by `id` on its side.
 //
 // Operations are intercepted by `ws_server` for the `commands.` namespace
-// (register / unregister / list / invoke) so they never reach `ark-core-rpc`.
+// (register / unregister / list / invoke) so they never reach the ARK service.
 
 use std::collections::HashMap;
 use std::sync::Arc;

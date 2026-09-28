@@ -39,6 +39,8 @@ UninstPage instfiles
 !macro KillKosmosProcesses
   nsExec::ExecToLog 'taskkill /F /IM Kosmos.exe'
   nsExec::ExecToLog 'taskkill /F /IM kepler-backend.exe'
+  ; 0.9.x installs leave an orphaned ark-core-rpc.exe child holding the DB.
+  nsExec::ExecToLog 'taskkill /F /IM ark-core-rpc.exe'
   nsExec::ExecToLog 'taskkill /F /IM "Kosmos Manager.exe"'
   nsExec::ExecToLog 'taskkill /F /IM "Kosmos Agenda.exe"'
   nsExec::ExecToLog 'taskkill /F /IM "Kosmos Memoria.exe"'

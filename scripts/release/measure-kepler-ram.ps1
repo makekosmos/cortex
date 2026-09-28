@@ -10,7 +10,9 @@
       - baseline: измеряет standalone-апки (Eden, Delphi, Arrancador)
         плюс их child-процессы (ark-core-rpc) — фотография «до Kepler ecosystem».
       - kepler: измеряет Kepler ecosystem (kepler-shell + Electron child-процессы
-        + kepler-backend + ark-core-rpc) — фотография «после Phase 1».
+        + kepler-backend с in-process ARK) — фотография «после Phase 1».
+        ark-core-rpc больше не child-процесс Engine; если leftover старой
+        установки ещё жив, он попадёт в отчёт отдельной строкой.
 
     Дополнительно режим -Compare читает последние два JSON-отчёта из .tmp и печатает diff.
 
@@ -82,9 +84,11 @@ $BaselineRoleMap = @{
     'ark-core-rpc'   = 'ark-core-rpc'
 }
 
-# Kepler ecosystem: главный shell, backend, ark sidecar.
+# Kepler ecosystem: главный shell, backend (ARK теперь in-process).
 # 'kepler-shell' — dev mode (vite + electron-vite spawn).
 # 'Kepler'       — production build (electron-builder NSIS productName).
+# 'ark-core-rpc' — sidecar старых (pre-in-process) установок: не обязателен,
+#                  но если процесс жив, его тоже замеряем для сравнения.
 $KeplerMainRoleMap = @{
     'kepler-shell'   = 'electron-main'
     'Kepler'         = 'electron-main'
@@ -260,14 +264,12 @@ function Collect-Kepler {
 
     $hasShell    = $pidToRole.Values -contains 'electron-main'
     $hasBackend  = $pidToRole.Values -contains 'kepler-backend'
-    $hasArk      = $pidToRole.Values -contains 'ark-core-rpc'
 
-    if (-not $hasShell -or -not $hasBackend -or -not $hasArk) {
+    if (-not $hasShell -or -not $hasBackend) {
         Write-Host ""
         Write-Host "Не все ожидаемые процессы Kepler ecosystem запущены." -ForegroundColor Yellow
         Write-Host ("    kepler-shell.exe   : {0}" -f $(if ($hasShell)   { 'OK' } else { 'НЕ НАЙДЕН' }))
         Write-Host ("    kepler-backend.exe : {0}" -f $(if ($hasBackend) { 'OK' } else { 'НЕ НАЙДЕН' }))
-        Write-Host ("    ark-core-rpc.exe   : {0}" -f $(if ($hasArk)     { 'OK' } else { 'НЕ НАЙДЕН' }))
         Write-Host ""
         Write-Host "Запусти Kepler ecosystem (kepler-shell), дождись полной загрузки и повтори:" -ForegroundColor Yellow
         Write-Host "    pwsh scripts/release/measure-kepler-ram.ps1 -Mode kepler" -ForegroundColor Yellow

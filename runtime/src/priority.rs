@@ -7,7 +7,7 @@
 //! возвращает приоритет через `THREAD_MODE_BACKGROUND_END`.
 //!
 //! Жёсткие инварианты (см. `.agent/tasks/2026-06-08-background-maintenance-priority`):
-//! - ❌ НЕ `PROCESS_MODE_BACKGROUND_BEGIN` на kepler-backend / ark-core-rpc —
+//! - ❌ НЕ `PROCESS_MODE_BACKGROUND_BEGIN` на kepler-backend —
 //!   это interactive процессы (IPC/WS/search/DB), нельзя ронять весь процесс.
 //! - ❌ НЕ входить в background mode внутри `async fn` через `.await`: task
 //!   может resume на другом потоке pool'а → priority inversion / потерянный

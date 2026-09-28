@@ -10,7 +10,7 @@ use std::{
 
 use httpmock::MockServer;
 use kepler_backend::{
-    ark_host::{resolve_ark_core_rpc_path, ArkHost},
+    ark_host::ArkHost,
     diagnostics::RpcDiagnostics,
     manager_api::ManagerState,
     package_manifest::{
@@ -400,9 +400,9 @@ async fn worker_ark_write_uses_host_and_advances_sync_state() {
         .immutable_entrypoint(&installed)
         .expect("immutable entrypoint");
     let db_path = directory.path().join("ark.db");
-    let ark_binary = resolve_ark_core_rpc_path().expect("ark-core-rpc binary");
+
     let ark = Arc::new(
-        ArkHost::spawn(&ark_binary, db_path.to_str().expect("db path"))
+        ArkHost::open(db_path.to_str().expect("db path"))
             .await
             .expect("ark host"),
     );
@@ -604,8 +604,8 @@ async fn fake_provider_collection_uses_keyring_secret_and_broker_injection() {
 async fn typed_data_request_translates_to_canonical_ark_operations() {
     let directory = tempfile::tempdir().expect("temporary directory");
     let db_path = directory.path().join("ark.db");
-    let ark_binary = resolve_ark_core_rpc_path().expect("ark-core-rpc binary");
-    let ark = ArkHost::spawn(&ark_binary, db_path.to_str().expect("db path"))
+
+    let ark = ArkHost::open(db_path.to_str().expect("db path"))
         .await
         .expect("ark host");
     let note_registration = ark_core::canonical_types::definitions::canonical_type_registrations()
@@ -699,10 +699,9 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
     let executable = store
         .immutable_entrypoint(&installed)
         .expect("immutable entrypoint");
-    let ark_binary = resolve_ark_core_rpc_path().expect("ark-core-rpc binary");
+
     let ark = Arc::new(
-        ArkHost::spawn(
-            &ark_binary,
+        ArkHost::open(
             directory
                 .path()
                 .join("ark.db")

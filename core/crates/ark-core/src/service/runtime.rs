@@ -1,120 +1,15 @@
 // ---------------------------------------------------------------------------
-// Entry point
+// DB helpers — all take `state` (the per-service slot that used to be the
+// sidecar's process-wide `DB`/`DB_PATH`/`BACKUP_GATE` statics).
 // ---------------------------------------------------------------------------
 
-fn main() {
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("tokio runtime");
-    runtime.block_on(async {
-        if let Err(e) = serve().await {
-            eprintln!("ark-core-rpc fatal: {e}");
-            std::process::exit(1);
-        }
-    });
-}
+use super::*;
 
-async fn serve() -> Result<(), String> {
-    // Event channel + stdout writer
-    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<Value>();
-    set_event_sender(event_tx);
-
-    tokio::spawn(async move {
-        while let Some(event) = event_rx.recv().await {
-            write_event_line(&event);
-        }
-    });
-
-    let stdin = tokio::io::stdin();
-    let mut reader = BufReader::new(stdin).lines();
-
-    while let Ok(Some(line)) = reader.next_line().await {
-        let line: String = line;
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let response = match serde_json::from_str::<Value>(trimmed) {
-            Ok(raw) => {
-                let request_id = request_id_from_value(&raw);
-                match serde_json::from_value::<Request>(raw) {
-                    Ok(req) => match handle_request(req).await {
-                        Ok(data) => response_ok(data, request_id),
-                        Err(e) => response_error(e, request_id),
-                    },
-                    Err(e) => response_error(e.to_string(), request_id),
-                }
-            }
-            Err(e) => response_error(e.to_string(), None),
-        };
-        write_response_line(&response);
-    }
-    Ok(())
-}
-
-fn request_id_from_value(value: &Value) -> Option<Value> {
-    // SDK кладёт envelope-id в `_req_id`. Старый формат (`id`) тоже принимаем
-    // для обратной совместимости с прежним протоколом.
-    value
-        .get("_req_id")
-        .cloned()
-        .or_else(|| value.get("id").cloned())
-}
-
-fn response_ok(data: Value, request_id: Option<Value>) -> Value {
-    response_with_optional_id(json!({ "ok": true, "data": data }), request_id)
-}
-
-fn response_error(error: String, request_id: Option<Value>) -> Value {
-    response_with_optional_id(json!({ "ok": false, "error": error }), request_id)
-}
-
-fn response_with_optional_id(mut response: Value, request_id: Option<Value>) -> Value {
-    if let (Value::Object(map), Some(id)) = (&mut response, request_id) {
-        // Эхо envelope-id под `_req_id`. Старый формат (`id`) тоже дублируем
-        // для SDK-версий, читающих legacy-поле.
-        map.insert("_req_id".to_string(), id.clone());
-        map.insert("id".to_string(), id);
-    }
-    response
-}
-
-// ---------------------------------------------------------------------------
-// Stdout writers (shared lock to prevent interleaving of response + event)
-// ---------------------------------------------------------------------------
-
-static STDOUT_LOCK: StdMutex<()> = StdMutex::new(());
-
-fn write_line(value: &Value) {
-    let json = match serde_json::to_string(value) {
-        Ok(s) => s,
-        Err(_) => return,
-    };
-    let _guard = STDOUT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let mut out = std::io::stdout().lock();
-    let _ = out.write_all(json.as_bytes());
-    let _ = out.write_all(b"\n");
-    let _ = out.flush();
-}
-
-fn write_response_line(value: &Value) {
-    write_line(value);
-}
-
-fn write_event_line(value: &Value) {
-    write_line(value);
-}
-
-// ---------------------------------------------------------------------------
-// DB helpers
-// ---------------------------------------------------------------------------
-
-fn with_conn<T, F>(f: F) -> Result<T, String>
+pub(super) fn with_conn<T, F>(state: &ServiceState, f: F) -> Result<T, String>
 where
     F: FnOnce(&rusqlite::Connection) -> Result<T, String>,
 {
-    let outer = DB.lock().unwrap_or_else(|e| e.into_inner());
+    let outer = state.db.lock().unwrap_or_else(|e| e.into_inner());
     let shared = outer
         .as_ref()
         .ok_or_else(|| "Database not initialized. Call Init first.".to_string())?
@@ -127,11 +22,11 @@ where
 /// Выполняет write-замыкание в одной SQLite-транзакции поверх shared conn.
 /// COMMIT при Ok, ROLLBACK при Err. Гарантирует атомарность entity + FTS + sync-meta:
 /// вложенные SAVEPOINT внутри db::* работают внутри этого BEGIN, при ошибке откатывается всё.
-fn with_write_tx<T, F>(f: F) -> Result<T, String>
+pub(super) fn with_write_tx<T, F>(state: &ServiceState, f: F) -> Result<T, String>
 where
     F: FnOnce(&rusqlite::Connection) -> Result<T, String>,
 {
-    with_conn(|conn| {
+    with_conn(state, |conn| {
         conn.execute_batch("BEGIN IMMEDIATE")
             .map_err(|e| e.to_string())?;
         match f(conn) {
@@ -147,8 +42,10 @@ where
     })
 }
 
-fn get_shared_conn() -> Result<Arc<StdMutex<rusqlite::Connection>>, String> {
-    let guard = DB.lock().unwrap_or_else(|e| e.into_inner());
+pub(super) fn get_shared_conn(
+    state: &ServiceState,
+) -> Result<Arc<StdMutex<rusqlite::Connection>>, String> {
+    let guard = state.db.lock().unwrap_or_else(|e| e.into_inner());
     guard
         .as_ref()
         .cloned()
@@ -159,11 +56,11 @@ fn get_shared_conn() -> Result<Arc<StdMutex<rusqlite::Connection>>, String> {
 /// `Connection` (например `conn.restore` в `db_backup_restore`, KOS-51).
 /// Глобальный DB mutex удерживается на всё замыкание: никакой другой ARK op
 /// не выполняется параллельно.
-fn with_conn_mut<T, F>(f: F) -> Result<T, String>
+pub(super) fn with_conn_mut<T, F>(state: &ServiceState, f: F) -> Result<T, String>
 where
     F: FnOnce(&mut rusqlite::Connection) -> Result<T, String>,
 {
-    let outer = DB.lock().unwrap_or_else(|e| e.into_inner());
+    let outer = state.db.lock().unwrap_or_else(|e| e.into_inner());
     let shared = outer
         .as_ref()
         .ok_or_else(|| "Database not initialized. Call Init first.".to_string())?
@@ -173,17 +70,12 @@ where
     f(&mut inner)
 }
 
-/// KOS-51: сериализует background `db_backup` копирование и
-/// `db_backup_restore` — backup и restore никогда не пересекаются.
-/// Порядок захвата всегда `BACKUP_GATE` → DB mutex (deadlock-safe: backup
-/// thread работает на отдельном read-коннекшне и DB mutex не берёт).
-static BACKUP_GATE: StdMutex<()> = StdMutex::new(());
-
 /// Путь к live ARK DB (из Init). Общий accessor для `db_backup`,
 /// `db_backup_list/validate/restore` — restore резолвит `<dir>/backups/`
 /// от этого пути.
-fn current_db_path() -> Result<String, String> {
-    DB_PATH
+pub(super) fn current_db_path(state: &ServiceState) -> Result<String, String> {
+    state
+        .db_path
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone()
@@ -213,7 +105,7 @@ fn backup_pause_ms() -> u64 {
 
 /// Thread-scoped background priority (CPU + I/O) для backup-потока.
 /// `THREAD_MODE_BACKGROUND_BEGIN` на Windows; no-op иначе. RAII (Drop → END).
-/// НЕ process-wide — ark-core-rpc обслуживает интерактивные ARK ops.
+/// НЕ process-wide — сервис обслуживает интерактивные ARK ops.
 #[cfg(windows)]
 mod background_priority {
     pub struct BackgroundThreadGuard {
@@ -328,10 +220,10 @@ fn make_sync_entity(
 /// Fan-out локального изменения всем подключённым пирам (server sessions +
 /// outbound clients + relay/iroh). Не применяет entity к storage и не
 /// перебивает HLC — данные уже записаны через `record_local_*`.
-/// Если SYNC не запущен — тихий no-op.
-async fn broadcast_local_change(entity: SyncEntity) {
+/// Если sync не запущен — тихий no-op.
+pub(super) async fn broadcast_local_change(state: &ServiceState, entity: SyncEntity) {
     let runtime = {
-        let guard = SYNC.lock().await;
+        let guard = state.sync.lock().await;
         match guard.as_ref() {
             Some(r) => r.clone(),
             None => return,
@@ -366,8 +258,8 @@ fn legacy_record(
     props: Value,
     created_at: &str,
     deleted_at: Option<String>,
-) -> ark_core::canonical_types::compatibility::LegacyRecord {
-    ark_core::canonical_types::compatibility::LegacyRecord {
+) -> crate::canonical_types::compatibility::LegacyRecord {
+    crate::canonical_types::compatibility::LegacyRecord {
         id: id.into(),
         legacy_type_id: legacy_type_id.into(),
         title: title.into(),
@@ -381,10 +273,10 @@ fn legacy_record(
 
 fn write_legacy_graph(
     conn: &rusqlite::Connection,
-    records: &[ark_core::canonical_types::compatibility::LegacyRecord],
+    records: &[crate::canonical_types::compatibility::LegacyRecord],
     device_id: Option<String>,
 ) -> Result<Vec<SyncEntity>, String> {
-    ark_core::canonical_types::facades::write_legacy_records(conn, records, "rpc", device_id)
+    crate::canonical_types::facades::write_legacy_records(conn, records, "rpc", device_id)
 }
 
 fn tombstone_legacy(
@@ -393,26 +285,22 @@ fn tombstone_legacy(
     expected_type_id: &str,
     device_id: Option<String>,
 ) -> Result<SyncEntity, String> {
-    ark_core::canonical_types::facades::delete_legacy_object(conn, id, expected_type_id, device_id)
+    crate::canonical_types::facades::delete_legacy_object(conn, id, expected_type_id, device_id)
 }
 
 // ---------------------------------------------------------------------------
 
+mod integration;
+mod legacy;
+mod objects;
+mod system;
+mod types;
+mod usage;
 
-#[path = "runtime/legacy.rs"]
-mod runtime_legacy;
-#[path = "runtime/objects.rs"]
-mod runtime_objects;
-#[path = "runtime/system.rs"]
-mod runtime_system;
-#[path = "runtime/types.rs"]
-mod runtime_types;
-#[path = "runtime/usage.rs"]
-mod runtime_usage;
-#[path = "runtime/integration.rs"]
-mod runtime_integration;
-
-async fn handle_request(request: Request) -> Result<Value, String> {
+pub(crate) async fn handle_request(
+    state: &Arc<ServiceState>,
+    request: Request,
+) -> Result<Value, String> {
     match request {
         request @ (Request::Init { .. }
         | Request::LoadAll
@@ -423,7 +311,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         | Request::UpsertProject { .. }
         | Request::UpsertTag { .. }
         | Request::UpsertTrackedApp { .. }
-        | Request::DeleteTrackedApp { .. }) => runtime_legacy::handle(request).await,
+        | Request::DeleteTrackedApp { .. }) => legacy::handle(state, request).await,
 
         request @ (Request::UpsertUsageSession { .. }
         | Request::DeleteUsageSession { .. }
@@ -434,7 +322,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         | Request::GetUsageAnalytics { .. }
         | Request::ListRecentUsageProcesses { .. }
         | Request::SearchUsageProcesses { .. }
-        | Request::GetUsageGamePlaytimeSummary { .. }) => runtime_usage::handle(request).await,
+        | Request::GetUsageGamePlaytimeSummary { .. }) => usage::handle(state, request).await,
 
         request @ (Request::ListObjects
         | Request::ListObjectSummaries
@@ -451,7 +339,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         | Request::CanonicalAssetSources { .. }
         | Request::CanonicalSetBookCover { .. }
         | Request::UpsertObject { .. }
-        | Request::DeleteObject { .. }) => runtime_objects::handle(request).await,
+        | Request::DeleteObject { .. }) => objects::handle(state, request).await,
 
         request @ (Request::TypesList
         | Request::TypesRegisterPackageDefinitions { .. }
@@ -464,7 +352,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         | Request::DeleteObjectType { .. }
         | Request::ListObjectLinks
         | Request::UpsertObjectLink { .. }
-        | Request::DeleteObjectLink { .. }) => runtime_types::handle(request).await,
+        | Request::DeleteObjectLink { .. }) => types::handle(state, request).await,
 
         request @ (Request::GetSyncKv { .. }
         | Request::SetSyncKv { .. }
@@ -486,7 +374,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         | Request::AddSeedPeer { .. }
         | Request::GetOwnAddresses { .. }
         | Request::GetHostDeviceName
-        | Request::GetOwnIrohTicket) => runtime_system::handle(request).await,
+        | Request::GetOwnIrohTicket) => system::handle(state, request).await,
 
         request @ (Request::IntegrationPersistNodeAuthorization { .. }
         | Request::IntegrationPersistIntegrationGrant { .. }
@@ -499,7 +387,12 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         | Request::IntegrationLookupIssuerEncryptionKey { .. }
         | Request::IntegrationLookupIssuerEncryptionKeyForPublish { .. }
         | Request::IntegrationVerificationStatus { .. }) => {
-            runtime_integration::handle(request).await
+            integration::handle(state, request).await
         }
+
+        // Intercepted by the service worker loop before dispatch; must never
+        // reach `handle_request`.
+        #[cfg(test)]
+        Request::TestPanic => unreachable!("test.panic is intercepted by the service worker"),
     }
 }

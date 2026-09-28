@@ -5,27 +5,17 @@
 // package.json command: `cargo build --manifest-path ../Cargo.toml --bin
 // kepler-backend`.
 //
+// The Engine hosts ark-core in-process — there is no sidecar to provision.
 // iroh-spike dev step: when `KOSMOS_IROH` is set (same env var
 // `platform/runtime/src/sync.rs::start_lan_sync()` reads to decide
-// `use_iroh`), also (re)build `ark-core-rpc` with `--features iroh-spike` so
-// `ArkHost::resolve_ark_core_rpc_path()`'s dev fallback
-// (`target/debug/ark-core-rpc[.exe]`) finds a sidecar binary that
-// actually understands `use_iroh`/`iroh_peer_ticket` in StartSync — without
-// this, KOSMOS_IROH=1 against a non-iroh-spike sidecar gets a clean rejection
-// error (see main.rs handle_start_sync), not a working iroh transport.
-//
-// The sidecar is always provisioned because a fresh Cortex checkout has no
-// sibling Core target directory. The iroh feature is opt-in to keep the
-// default development build smaller.
+// `use_iroh`), kepler-backend itself is built with `--features iroh-spike`
+// so the embedded ARK service understands `use_iroh`/`iroh_peer_ticket` in
+// StartSync. The feature stays opt-in to keep the default development build
+// smaller.
 import { spawnSync } from "node:child_process";
-import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { effectiveCargoTargetDir } from "./runtime-staging.mjs";
-import { ensureArkCoreRpc } from "./ark-core-rpc.mjs";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
-const cortexRoot = path.resolve(shellRoot, "..");
-const targetDir = effectiveCargoTargetDir(shellRoot, cortexRoot, process.env.CARGO_TARGET_DIR);
 
 function run(args) {
   const result = spawnSync("cargo", args, {
@@ -38,19 +28,14 @@ function run(args) {
   }
 }
 
-run(["build", "--manifest-path", "../Cargo.toml", "--bin", "kepler-backend"]);
-
 const irohRequested =
   process.env.KOSMOS_IROH === "1" || /^true$/i.test(process.env.KOSMOS_IROH ?? "");
-ensureArkCoreRpc({
-  debug: true,
-  features: irohRequested ? ["iroh-spike"] : [],
-  prebuiltManifest: process.env.ARK_CORE_RPC_PREBUILT,
-  targetDir: path.join(targetDir, "debug"),
-});
+const keplerArgs = ["build", "--manifest-path", "../Cargo.toml", "--bin", "kepler-backend"];
+if (irohRequested) keplerArgs.push("--features", "iroh-spike");
+run(keplerArgs);
 
 if (irohRequested) {
   console.log(
-    "[build:backend:dev] KOSMOS_IROH set — using ark-core-rpc with --features iroh-spike",
+    "[build:backend:dev] KOSMOS_IROH set — built kepler-backend with --features iroh-spike",
   );
 }

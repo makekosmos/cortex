@@ -8,15 +8,9 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
-export const RUNTIME_BINARIES = [
-  "kepler-backend",
-  "ark-core-rpc",
-  "kepler-focus-helper",
-  "kepler-focus-svc",
-];
+export const RUNTIME_BINARIES = ["kepler-backend", "kepler-focus-helper", "kepler-focus-svc"];
 
 export function acquireBuildLock(root) {
   const lock = path.join(root, ".tmp", "build.active.lock");
@@ -54,27 +48,6 @@ export function effectiveCargoTargetDir(shellRoot, repoRoot, configuredTargetDir
   return configuredTargetDir
     ? path.resolve(shellRoot, configuredTargetDir)
     : path.join(repoRoot, "target");
-}
-
-export function defaultArkCoreTargetDir() {
-  const home = os.homedir();
-  const base =
-    process.platform === "win32"
-      ? (process.env.LOCALAPPDATA ?? path.join(home, "AppData", "Local"))
-      : (process.env.XDG_CACHE_HOME ?? path.join(home, ".cache"));
-  return path.join(base, "kosmos", "ark-target");
-}
-
-export function resolveDevArkCoreRpcPath(targetDir, platform = process.platform) {
-  const suffix = platform === "win32" ? ".exe" : "";
-  const candidate = path.join(targetDir, "debug", `ark-core-rpc${suffix}`);
-  return existsSync(candidate) ? candidate : undefined;
-}
-
-export function setDevArkCoreRpcPath(env, sidecarPath) {
-  if (sidecarPath) env.ARK_CORE_RPC_PATH = sidecarPath;
-  else delete env.ARK_CORE_RPC_PATH;
-  return env;
 }
 
 export function stageRuntimeBinaries(releaseDir, stageDir, platform = process.platform) {

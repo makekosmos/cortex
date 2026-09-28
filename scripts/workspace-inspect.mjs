@@ -251,7 +251,6 @@ export async function inspectDependency(root, name, checkout, pin, stamp) {
 }
 export async function inspectCore(root) {
   const cargo = await readFile(path.join(root, "runtime", "Cargo.toml"), "utf8"),
-    sidecar = await readFile(path.join(root, "desktop", "scripts", "ark-core-rpc.mjs"), "utf8"),
     lock = await readFile(path.join(root, "Cargo.lock"), "utf8");
   const pathPin = cargo.includes('path = "../core/crates/ark-core"'),
     arkPackage = lock.match(/\[\[package\]\]\r?\nname = "ark-core"\r?\n[^[]*/)?.[0];
@@ -262,7 +261,6 @@ export async function inspectCore(root) {
     version: arkPackage?.match(/version = "([^"]+)"/)?.[1] ?? null,
     checks: {
       cargoPin: pathPin && !cargo.includes("github.com/makekosmos/core"),
-      sidecarPin: sidecar.includes('"--path"') && !sidecar.includes('"--rev"'),
       lockPin: Boolean(arkPackage && !/source = /.test(arkPackage)),
     },
   };

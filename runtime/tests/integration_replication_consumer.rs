@@ -6,7 +6,7 @@ mod offline;
 mod support;
 
 use ed25519_dalek::{Signer, SigningKey};
-use kepler_backend::ark_host::{resolve_ark_core_rpc_path, ArkHost};
+use kepler_backend::ark_host::ArkHost;
 use kepler_backend::integrations::handle_operation;
 use kepler_backend::package_service::PackageService;
 use rusqlite::Connection;
@@ -80,11 +80,11 @@ fn sign_prepared(prepared: &Value, signing_key: &SigningKey) -> Value {
 async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
     let setup: IntegrationReplicationSetup =
         support::new_setup_named(support::INTEGRATION_ID).unwrap();
-    let binary = resolve_ark_core_rpc_path().unwrap();
+
     let origin_db = setup.origin_db.to_string_lossy().into_owned();
     let recipient_db = setup.recipient_db.to_string_lossy().into_owned();
-    let origin = ArkHost::spawn(&binary, &origin_db).await.unwrap();
-    let recipient = ArkHost::spawn(&binary, &recipient_db).await.unwrap();
+    let origin = ArkHost::open(&origin_db).await.unwrap();
+    let recipient = ArkHost::open(&recipient_db).await.unwrap();
     let space_id = "integration-replication-headless";
     let auth_secret = "headless-two-node-auth-secret";
     let bootstrap_ticket = std::env::var("KOSMOS_BOOTSTRAP_TICKET").ok();

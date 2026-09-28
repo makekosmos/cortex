@@ -1,6 +1,8 @@
 use super::*;
+use crate::service::runtime::get_shared_conn;
 
-pub(super) async fn handle_start_sync(
+pub(crate) async fn handle_start_sync(
+    state: &Arc<ServiceState>,
     space_id: String,
     device_id: String,
     device_name: Option<String>,
@@ -14,12 +16,12 @@ pub(super) async fn handle_start_sync(
     discovery_enabled: bool,
 ) -> Result<Value, String> {
     // Idempotency: tear down any running runtime first.
-    handle_stop_sync().await;
+    handle_stop_sync(state).await;
 
     let device_name = device_name.unwrap_or_else(get_host_device_name);
     let ws_port = port.unwrap_or(LAN_SYNC_PORT);
 
-    let shared_conn = get_shared_conn()?;
+    let shared_conn = get_shared_conn(state)?;
     let storage = Arc::new(SqliteStorageBackend::new(shared_conn.clone()));
     storage.set_device_id(&device_id)?;
 
@@ -102,17 +104,16 @@ pub(super) async fn handle_start_sync(
     };
     let relay = if transport_choice == TransportChoice::Relay {
         let relay_url = relay_url.clone().expect("Relay choice implies relay_url");
-        let transport: Arc<dyn ark_core::sync_transport::SyncTransport> =
-            Arc::new(ark_core::relay_transport::RelayTransport::new(
-                ark_core::relay_transport::RelayConfig {
-                    url: relay_url.clone(),
-                    space_id: space_id.clone(),
-                    device_id: device_id.clone(),
-                    device_name: device_name.clone(),
-                    api_key: relay_api_key.clone().unwrap_or_default(),
-                    auth_secret: auth_secret.clone(),
-                },
-            ));
+        let transport: Arc<dyn crate::sync_transport::SyncTransport> = Arc::new(
+            crate::relay_transport::RelayTransport::new(crate::relay_transport::RelayConfig {
+                url: relay_url.clone(),
+                space_id: space_id.clone(),
+                device_id: device_id.clone(),
+                device_name: device_name.clone(),
+                api_key: relay_api_key.clone().unwrap_or_default(),
+                auth_secret: auth_secret.clone(),
+            }),
+        );
         let relay_sync = RelaySync::with_transport(
             storage.clone() as Arc<dyn StorageBackend>,
             RelaySyncConfig {
@@ -133,15 +134,15 @@ pub(super) async fn handle_start_sync(
         {
             let secret_key = {
                 let conn = shared_conn.lock().unwrap_or_else(|e| e.into_inner());
-                ark_core::iroh_transport::load_or_generate_secret_key(&conn)
+                crate::iroh_transport::load_or_generate_secret_key(&conn)
                     .map_err(|e| format!("iroh transport: failed to load identity: {e}"))?
             };
             let peer_addr = match iroh_peer_ticket.as_deref() {
-                Some(ticket) => Some(ark_core::iroh_transport::from_ticket(ticket)?),
+                Some(ticket) => Some(crate::iroh_transport::from_ticket(ticket)?),
                 None => None,
             };
-            let iroh_transport = Arc::new(ark_core::iroh_transport::IrohTransport::new(
-                ark_core::iroh_transport::IrohConfig {
+            let iroh_transport = Arc::new(crate::iroh_transport::IrohTransport::new(
+                crate::iroh_transport::IrohConfig {
                     device_id: device_id.clone(),
                     device_name: device_name.clone(),
                     space_id: space_id.clone(),
@@ -165,7 +166,7 @@ pub(super) async fn handle_start_sync(
                     device_name: device_name.clone(),
                     auth_secret: auth_secret.clone(),
                 },
-                iroh_transport.clone() as Arc<dyn ark_core::sync_transport::SyncTransport>,
+                iroh_transport.clone() as Arc<dyn crate::sync_transport::SyncTransport>,
             );
             wire_relay_sync_events(&relay_sync).await;
             relay_sync.start().await?;
@@ -253,108 +254,112 @@ pub(super) async fn handle_start_sync(
     let beacon = Arc::new(BroadcastDiscovery::new());
     if discovery_enabled {
         let beacon_clone = beacon.clone();
-    let server_for_beacon = server.clone();
-    let clients_for_beacon = clients.clone();
-    let storage_for_beacon = storage.clone();
-    let device_id_for_beacon = device_id.clone();
-    let device_name_for_beacon = device_name.clone();
-    let space_id_for_beacon = space_id.clone();
-    let own_addresses_for_beacon = own_addresses.clone();
-    let auth_secret_for_beacon = auth_secret.clone();
-    beacon
-        .set_on_peer_discovered(Arc::new(move |peer: BeaconPeer| {
-            // Callbacks from UDP recv run on tokio tasks — but this one is
-            // invoked from a sync closure. Spawn to an async context so we
-            // can await the storage / server.
-            let server = server_for_beacon.clone();
-            let clients = clients_for_beacon.clone();
-            let storage = storage_for_beacon.clone();
-            let device_id = device_id_for_beacon.clone();
-            let device_name = device_name_for_beacon.clone();
-            let space_id = space_id_for_beacon.clone();
-            let own = own_addresses_for_beacon.clone();
-            let auth_secret = auth_secret_for_beacon.clone();
-            tokio::spawn(async move {
-                let addrs: Vec<String> = if peer.addresses.is_empty() {
-                    vec![peer.address.clone()]
-                } else {
-                    peer.addresses.clone()
-                };
-                let reachable: Vec<String> = addrs
-                    .into_iter()
-                    .filter(|a| !own.contains(a) && is_address_routable(a))
-                    .collect();
-                if reachable.is_empty() {
-                    return;
-                }
-                if server
-                    .get_removed_peer_ids()
-                    .await
-                    .iter()
-                    .any(|id| id == &peer.device_id)
-                {
-                    return;
-                }
-                server
-                    .register_external_peer(&peer.device_id, &peer.device_name, reachable.clone())
-                    .await;
-                emit_event(json!({
-                    "event": "peer_list_updated",
-                    "peers": server.get_connected_peer_entries().await.iter().map(|(id, name)| {
-                        json!({"device_id": id, "device_name": name})
-                    }).collect::<Vec<_>>(),
-                }));
-
-                if server.is_connected_to(&peer.device_id).await {
-                    return;
-                }
-                let existing = clients.lock().await.get(&peer.device_id).cloned();
-                if let Some(existing) = existing {
-                    // Update its peer record so reconnect picks the new addresses.
-                    existing
-                        .update_peer(PeerRecord {
-                            device_id: peer.device_id.clone(),
-                            device_name: peer.device_name.clone(),
-                            addresses: reachable.clone(),
-                            last_seen: chrono::Utc::now()
-                                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-                            last_address: None,
-                        })
+        let server_for_beacon = server.clone();
+        let clients_for_beacon = clients.clone();
+        let storage_for_beacon = storage.clone();
+        let device_id_for_beacon = device_id.clone();
+        let device_name_for_beacon = device_name.clone();
+        let space_id_for_beacon = space_id.clone();
+        let own_addresses_for_beacon = own_addresses.clone();
+        let auth_secret_for_beacon = auth_secret.clone();
+        beacon
+            .set_on_peer_discovered(Arc::new(move |peer: BeaconPeer| {
+                // Callbacks from UDP recv run on tokio tasks — but this one is
+                // invoked from a sync closure. Spawn to an async context so we
+                // can await the storage / server.
+                let server = server_for_beacon.clone();
+                let clients = clients_for_beacon.clone();
+                let storage = storage_for_beacon.clone();
+                let device_id = device_id_for_beacon.clone();
+                let device_name = device_name_for_beacon.clone();
+                let space_id = space_id_for_beacon.clone();
+                let own = own_addresses_for_beacon.clone();
+                let auth_secret = auth_secret_for_beacon.clone();
+                tokio::spawn(async move {
+                    let addrs: Vec<String> = if peer.addresses.is_empty() {
+                        vec![peer.address.clone()]
+                    } else {
+                        peer.addresses.clone()
+                    };
+                    let reachable: Vec<String> = addrs
+                        .into_iter()
+                        .filter(|a| !own.contains(a) && is_address_routable(a))
+                        .collect();
+                    if reachable.is_empty() {
+                        return;
+                    }
+                    if server
+                        .get_removed_peer_ids()
+                        .await
+                        .iter()
+                        .any(|id| id == &peer.device_id)
+                    {
+                        return;
+                    }
+                    server
+                        .register_external_peer(
+                            &peer.device_id,
+                            &peer.device_name,
+                            reachable.clone(),
+                        )
                         .await;
-                    return;
-                }
+                    emit_event(json!({
+                        "event": "peer_list_updated",
+                        "peers": server.get_connected_peer_entries().await.iter().map(|(id, name)| {
+                            json!({"device_id": id, "device_name": name})
+                        }).collect::<Vec<_>>(),
+                    }));
 
-                let peer_rec = PeerRecord {
-                    device_id: peer.device_id.clone(),
-                    device_name: peer.device_name.clone(),
-                    addresses: reachable,
-                    last_seen: chrono::Utc::now()
-                        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-                    last_address: None,
-                };
-                spawn_sync_client(
-                    &server,
-                    &storage,
-                    &clients,
-                    peer_rec,
-                    device_id,
-                    device_name,
-                    space_id,
-                    own,
-                    auth_secret,
-                )
-                .await;
-            });
-        }))
-        .await;
+                    if server.is_connected_to(&peer.device_id).await {
+                        return;
+                    }
+                    let existing = clients.lock().await.get(&peer.device_id).cloned();
+                    if let Some(existing) = existing {
+                        // Update its peer record so reconnect picks the new addresses.
+                        existing
+                            .update_peer(PeerRecord {
+                                device_id: peer.device_id.clone(),
+                                device_name: peer.device_name.clone(),
+                                addresses: reachable.clone(),
+                                last_seen: chrono::Utc::now()
+                                    .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                                last_address: None,
+                            })
+                            .await;
+                        return;
+                    }
+
+                    let peer_rec = PeerRecord {
+                        device_id: peer.device_id.clone(),
+                        device_name: peer.device_name.clone(),
+                        addresses: reachable,
+                        last_seen: chrono::Utc::now()
+                            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                        last_address: None,
+                    };
+                    spawn_sync_client(
+                        &server,
+                        &storage,
+                        &clients,
+                        peer_rec,
+                        device_id,
+                        device_name,
+                        space_id,
+                        own,
+                        auth_secret,
+                    )
+                    .await;
+                });
+            }))
+            .await;
 
         beacon_clone
-        .start(BroadcastDiscoveryOptions {
-            space_id: space_id.clone(),
-            device_id: device_id.clone(),
-            device_name: device_name.clone(),
-            ws_port,
-        })
+            .start(BroadcastDiscoveryOptions {
+                space_id: space_id.clone(),
+                device_id: device_id.clone(),
+                device_name: device_name.clone(),
+                ws_port,
+            })
             .await?;
     }
 
@@ -373,7 +378,7 @@ pub(super) async fn handle_start_sync(
         auth_secret,
         own_addresses: own_addresses_shared,
     };
-    *SYNC.lock().await = Some(Arc::new(runtime));
+    *state.sync.lock().await = Some(Arc::new(runtime));
 
     Ok(json!(true))
 }

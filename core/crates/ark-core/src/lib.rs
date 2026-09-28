@@ -22,6 +22,7 @@ pub mod protocol;
 pub mod relay_sync;
 pub mod relay_transport;
 pub mod schema;
+pub mod service;
 pub mod space;
 pub mod sync_client;
 pub mod sync_server;

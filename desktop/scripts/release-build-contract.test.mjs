@@ -17,12 +17,11 @@ test("release build verifies locally and leaves publishing to the receipt consum
   assert.match(script, /writeReceipt\(/);
   assert.doesNotMatch(script, /publishRelease\(|release create|electron-builder/);
   assert.match(script, /emitProvenance\(/);
-  assert.match(script, /Preflight: source, BOM, pins, and ARK artifact/);
+  assert.match(script, /Preflight: source, BOM, and pins/);
   assert.match(script, /--dry-run/);
   assert.doesNotMatch(script, /--clobber/);
   assert.match(script, /process\.env\.KOSMOS_RELEASE_BOM/);
   assert.match(preflight, /release builds require a clean tracked and source worktree/);
-  assert.match(preflight, /ARK artifact hash does not match BOM/);
 });
 
 test("Engine ships from the same build and version as the GUI (KOS-233)", () => {

@@ -25,7 +25,7 @@
 // Kosmos Kepler backend — headless ARK host runtime.
 //
 // Этот крейт extracted из apps/kepler/ в Phase 0 Kepler-Electron pivot. Содержит
-// весь backend layer без UI: WS server, ark-core-rpc supervisor, singleton,
+// весь backend layer без UI: WS server, in-process ARK host, singleton,
 // lock-file discovery, протокол handshake, auth, LAN sync wiring.
 //
 // Используется двумя binaries:

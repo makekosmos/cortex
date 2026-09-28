@@ -26,16 +26,19 @@ fn remote_entity(object: &ArkObject, title: &str) -> SyncEntity {
 
 #[tokio::test]
 async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
-    let _guard = TEST_DB_MUTEX.lock().await;
+    let state = test_state();
     let dir = tempfile::tempdir().unwrap();
-    handle_request(Request::Init {
-        db_path: dir.path().join("ark.db").to_string_lossy().to_string(),
-    })
+    handle_request(
+        &state,
+        Request::Init {
+            db_path: dir.path().join("ark.db").to_string_lossy().to_string(),
+        },
+    )
     .await
     .unwrap();
 
-    let (vector_object, tombstone_object) = with_write_tx(|conn| {
-        let vector_object = ark_core::canonical_types::ingress::prepare_object(
+    let (vector_object, tombstone_object) = with_write_tx(&state, |conn| {
+        let vector_object = crate::canonical_types::ingress::prepare_object(
             conn,
             task("legacy-vector-task", "vector wins"),
         )
@@ -47,7 +50,7 @@ async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
             r#"{"legacy-vector-task":"2999-01-01T00:00:00.000Z:000001:legacy"}"#,
         )?;
 
-        let tombstone_object = ark_core::canonical_types::ingress::prepare_object(
+        let tombstone_object = crate::canonical_types::ingress::prepare_object(
             conn,
             task("legacy-tombstone-task", "deleted"),
         )
@@ -64,7 +67,7 @@ async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
     })
     .unwrap();
 
-    let backend = SqliteStorageBackend::new(get_shared_conn().unwrap());
+    let backend = SqliteStorageBackend::new(get_shared_conn(&state).unwrap());
     backend
         .apply_entity(&remote_entity(&vector_object, "stale vector overwrite"))
         .await
@@ -75,34 +78,42 @@ async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
         .unwrap();
 
     assert_eq!(
-        with_conn(|conn| db::get_object(conn, &vector_object.id))
+        with_conn(&state, |conn| db::get_object(conn, &vector_object.id))
             .unwrap()
             .unwrap()
             .title,
         "vector wins"
     );
-    assert!(with_conn(|conn| db::get_object(conn, &tombstone_object.id))
-        .unwrap()
-        .is_none());
+    assert!(
+        with_conn(&state, |conn| db::get_object(conn, &tombstone_object.id))
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[tokio::test]
 async fn max_remote_hlc_counter_rolls_back_local_write() {
-    let _guard = TEST_DB_MUTEX.lock().await;
+    let state = test_state();
     let dir = tempfile::tempdir().unwrap();
-    handle_request(Request::Init {
-        db_path: dir.path().join("ark.db").to_string_lossy().to_string(),
-    })
+    handle_request(
+        &state,
+        Request::Init {
+            db_path: dir.path().join("ark.db").to_string_lossy().to_string(),
+        },
+    )
     .await
     .unwrap();
-    handle_request(Request::UpsertObject {
-        object: task("max-counter-task", "original"),
-        expected_snapshot: None,
-        device_id: Some("local-writer".to_string()),
-    })
+    handle_request(
+        &state,
+        Request::UpsertObject {
+            object: task("max-counter-task", "original"),
+            expected_snapshot: None,
+            device_id: Some("local-writer".to_string()),
+        },
+    )
     .await
     .unwrap();
-    with_write_tx(|conn| {
+    with_write_tx(&state, |conn| {
         conn.execute(
             "UPDATE object_sync_versions SET hlc = ?2 WHERE object_id = ?1",
             rusqlite::params![
@@ -115,26 +126,32 @@ async fn max_remote_hlc_counter_rolls_back_local_write() {
     })
     .unwrap();
     let snapshot: ObjectWriteSnapshot = serde_json::from_value(
-        handle_request(Request::GetObjectWriteSnapshot {
-            id: "max-counter-task".to_string(),
-        })
+        handle_request(
+            &state,
+            Request::GetObjectWriteSnapshot {
+                id: "max-counter-task".to_string(),
+            },
+        )
         .await
         .unwrap(),
     )
     .unwrap();
 
     assert_eq!(
-        handle_request(Request::UpsertObject {
-            object: task("max-counter-task", "must roll back"),
-            expected_snapshot: Some(snapshot),
-            device_id: Some("local-writer".to_string()),
-        })
+        handle_request(
+            &state,
+            Request::UpsertObject {
+                object: task("max-counter-task", "must roll back"),
+                expected_snapshot: Some(snapshot),
+                device_id: Some("local-writer".to_string()),
+            }
+        )
         .await
         .unwrap_err(),
         "hlc_counter_overflow"
     );
     assert_eq!(
-        with_conn(|conn| db::get_object(conn, "max-counter-task"))
+        with_conn(&state, |conn| db::get_object(conn, "max-counter-task"))
             .unwrap()
             .unwrap()
             .title,

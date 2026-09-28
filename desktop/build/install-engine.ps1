@@ -168,6 +168,10 @@ if ($installedVersion -and (Compare-EngineVersion $installedVersion $expected.ve
   if (Test-Path -LiteralPath $versionRoot) {
     $engineWasRunning = (Stop-EngineForReplacement (Join-Path $versionRoot 'kepler-backend.exe')) -or $engineWasRunning
   }
+  # Pre-in-process Engines spawned an ark-core-rpc sidecar that survives a
+  # backend kill and still holds the DB open; stop any leftover before
+  # replacing files.
+  Get-Process -Name 'ark-core-rpc' -ErrorAction SilentlyContinue | Stop-Process -Force
 
   if (Test-Path -LiteralPath $temp) { Remove-Item -Recurse -Force -ErrorAction Stop -LiteralPath $temp }
   New-Item -ItemType Directory -Force -Path $temp | Out-Null

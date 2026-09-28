@@ -8,7 +8,6 @@ const subtreePath = "core/crates/ark-core";
 const files = [
   "Cargo.toml",
   "runtime/Cargo.toml",
-  "desktop/scripts/ark-core-rpc.mjs",
   "desktop/scripts/ark-core-source.mjs",
   "Cargo.lock",
 ];
@@ -25,7 +24,10 @@ for (const [file, content] of contents) {
 
 if (!existsSync(`${subtreePath}/Cargo.toml`))
   throw new Error(`in-tree Core subtree is missing: ${subtreePath}`);
-const subtreeManifest = (await readFile(`${subtreePath}/Cargo.toml`, "utf8")).replace(/\r\n/g, "\n");
+const subtreeManifest = (await readFile(`${subtreePath}/Cargo.toml`, "utf8")).replace(
+  /\r\n/g,
+  "\n",
+);
 if (!/^name = "ark-core"$/m.test(subtreeManifest))
   throw new Error(`${subtreePath}/Cargo.toml is not the ark-core crate`);
 
@@ -39,11 +41,6 @@ if (runtime.includes("github.com/makekosmos/core"))
 if (!runtime.includes('path = "../core/crates/ark-core", package = "ark-core"'))
   throw new Error("runtime/Cargo.toml does not depend on the in-tree ark-core subtree");
 
-const sidecar = contents.get("desktop/scripts/ark-core-rpc.mjs");
-if (!sidecar.includes('"--path"'))
-  throw new Error("sidecar installer does not build ark-core-rpc from the in-tree subtree");
-if (sidecar.includes('"--git"') || sidecar.includes('"--rev"'))
-  throw new Error("sidecar installer still fetches ark-core from a remote revision");
 const source = contents.get("desktop/scripts/ark-core-source.mjs");
 if (!source.includes(`"${subtreePath}"`))
   throw new Error("ark-core source module does not point at the in-tree subtree");
@@ -55,4 +52,6 @@ if ((lock.match(/name = "ark-core"/g) ?? []).length !== 1)
   throw new Error("Cargo.lock has an unexpected ark-core package count");
 if (/source = /.test(arkPackage))
   throw new Error("Cargo.lock resolves ark-core from a source other than the workspace path");
-console.log("Core ownership passed: ark-core is local Cortex source, without a nested Git repository.");
+console.log(
+  "Core ownership passed: ark-core is local Cortex source, without a nested Git repository.",
+);

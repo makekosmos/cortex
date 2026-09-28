@@ -378,10 +378,9 @@
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn production_dispatcher_has_real_http_ws_socket_parity_and_owner_isolation() {
         let dir = tempfile::tempdir().expect("fixture dir");
-        let binary = crate::ark_host::resolve_ark_core_rpc_path()
-            .expect("real ark-core-rpc fixture must be built");
+
         let ark = Arc::new(
-            crate::ark_host::ArkHost::spawn(&binary, &dir.path().join("ark.db").to_string_lossy())
+            crate::ark_host::ArkHost::open( &dir.path().join("ark.db").to_string_lossy())
                 .await
                 .expect("ark host fixture"),
         );

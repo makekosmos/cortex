@@ -1,15 +1,15 @@
 use super::*;
 
-pub(super) async fn handle(request: Request) -> Result<Value, String> {
+pub(super) async fn handle(state: &Arc<ServiceState>, request: Request) -> Result<Value, String> {
     match request {
         Request::IntegrationPersistNodeAuthorization {
             authorization_operation,
             node,
             grant,
             device_id,
-        } => with_conn(|conn| {
+        } => with_conn(state, |conn| {
             let operation = parse_authorization_operation(&authorization_operation)?;
-            ark_core::integration_replication::persist_node_authorization(
+            crate::integration_replication::persist_node_authorization(
                 conn,
                 operation,
                 &node,
@@ -18,18 +18,22 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             )?;
             Ok(json!(true))
         }),
-        Request::IntegrationPersistIntegrationGrant { grant, device_id } => with_conn(|conn| {
-            ark_core::integration_replication::persist_integration_grant(conn, &grant, &device_id)?;
-            Ok(json!(true))
-        }),
+        Request::IntegrationPersistIntegrationGrant { grant, device_id } => {
+            with_conn(state, |conn| {
+                crate::integration_replication::persist_integration_grant(
+                    conn, &grant, &device_id,
+                )?;
+                Ok(json!(true))
+            })
+        }
         Request::IntegrationPrepareSignedSync {
             space_id,
             origin_node_id,
             integration_id,
             recipient_node_id,
             message_id,
-        } => with_conn(|conn| {
-            let preparation = ark_core::integration_replication::prepare_signed_sync(
+        } => with_conn(state, |conn| {
+            let preparation = crate::integration_replication::prepare_signed_sync(
                 conn,
                 &space_id,
                 &origin_node_id,
@@ -43,8 +47,8 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             space_id,
             origin_node_id,
             frame,
-        } => with_conn(|conn| {
-            ark_core::integration_replication::validate_outbound_signed_sync(
+        } => with_conn(state, |conn| {
+            crate::integration_replication::validate_outbound_signed_sync(
                 conn,
                 &space_id,
                 &origin_node_id,
@@ -53,14 +57,15 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             Ok(json!(true))
         }),
         Request::IntegrationSendSignedSync { frame } => {
-            let runtime = SYNC
+            let runtime = state
+                .sync
                 .lock()
                 .await
                 .as_ref()
                 .cloned()
                 .ok_or_else(|| "sync not running".to_string())?;
-            with_conn(|conn| {
-                ark_core::integration_replication::validate_outbound_signed_sync(
+            with_conn(state, |conn| {
+                crate::integration_replication::validate_outbound_signed_sync(
                     conn,
                     &runtime.space_id,
                     &runtime.device_id,
@@ -109,8 +114,8 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             ttl_ms,
             expected_fencing_token,
             device_id,
-        } => with_conn(|conn| {
-            let lease = ark_core::db::try_acquire_integration_refresh_lease(
+        } => with_conn(state, |conn| {
+            let lease = crate::db::try_acquire_integration_refresh_lease(
                 conn,
                 &integration_id,
                 &holder_node_id,
@@ -126,20 +131,17 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             envelope,
             device_id,
             now_ms,
-        } => with_conn(|conn| {
-            ark_core::db::publish_integration_credential_envelope(
-                conn,
-                &envelope,
-                &device_id,
-                now_ms,
+        } => with_conn(state, |conn| {
+            crate::db::publish_integration_credential_envelope(
+                conn, &envelope, &device_id, now_ms,
             )?;
             Ok(json!(true))
         }),
         Request::IntegrationLoadLatestCredentialEnvelope {
             integration_id,
             recipient_node_id,
-        } => with_conn(|conn| {
-            let envelope = ark_core::db::load_latest_integration_credential_envelope(
+        } => with_conn(state, |conn| {
+            let envelope = crate::db::load_latest_integration_credential_envelope(
                 conn,
                 &integration_id,
                 &recipient_node_id,
@@ -154,7 +156,8 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             credential_generation,
             expected_issuer_key_id,
         } => {
-            let runtime_space_id = SYNC
+            let runtime_space_id = state
+                .sync
                 .lock()
                 .await
                 .as_ref()
@@ -163,8 +166,8 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             if runtime_space_id != space_id {
                 return Err("integration lookup requested for the wrong space".into());
             }
-            with_conn(|conn| {
-                let key = ark_core::db::load_issuer_encryption_key(
+            with_conn(state, |conn| {
+                let key = crate::db::load_issuer_encryption_key(
                     conn,
                     &space_id,
                     &integration_id,
@@ -183,7 +186,8 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             issuer_node_id,
             expected_issuer_key_id,
         } => {
-            let runtime_space_id = SYNC
+            let runtime_space_id = state
+                .sync
                 .lock()
                 .await
                 .as_ref()
@@ -192,8 +196,8 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             if runtime_space_id != space_id {
                 return Err("integration lookup requested for the wrong space".into());
             }
-            with_conn(|conn| {
-                let key = ark_core::db::load_issuer_encryption_key_for_publish(
+            with_conn(state, |conn| {
+                let key = crate::db::load_issuer_encryption_key_for_publish(
                     conn,
                     &space_id,
                     &integration_id,
@@ -208,8 +212,8 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             integration_id,
             local_node_id,
             now_ms,
-        } => with_conn(|conn| {
-            let status = ark_core::db::integration_verification_status(
+        } => with_conn(state, |conn| {
+            let status = crate::db::integration_verification_status(
                 conn,
                 &integration_id,
                 &local_node_id,
@@ -221,11 +225,13 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
     }
 }
 
-fn parse_authorization_operation(value: &str) -> Result<ark_core::integration_replication::NodeAuthorizationOperation, String> {
+fn parse_authorization_operation(
+    value: &str,
+) -> Result<crate::integration_replication::NodeAuthorizationOperation, String> {
     match value {
-        "authorize" => Ok(ark_core::integration_replication::NodeAuthorizationOperation::Authorize),
-        "revoke" => Ok(ark_core::integration_replication::NodeAuthorizationOperation::Revoke),
-        "rotate" => Ok(ark_core::integration_replication::NodeAuthorizationOperation::Rotate),
+        "authorize" => Ok(crate::integration_replication::NodeAuthorizationOperation::Authorize),
+        "revoke" => Ok(crate::integration_replication::NodeAuthorizationOperation::Revoke),
+        "rotate" => Ok(crate::integration_replication::NodeAuthorizationOperation::Rotate),
         _ => Err("authorization_operation must be authorize, revoke, or rotate".into()),
     }
 }

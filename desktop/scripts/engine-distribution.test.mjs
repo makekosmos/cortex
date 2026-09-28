@@ -18,7 +18,6 @@ test("engine archive is independently verifiable and installable", () => {
   const archive = path.join(root, "Kosmos-Engine-1.2.3.zip");
   for (const name of [
     "kepler-backend.exe",
-    "ark-core-rpc.exe",
     "kepler-focus-helper.exe",
     "kepler-focus-svc.exe",
     "tray.ico",
@@ -45,7 +44,6 @@ test("buildEngineArchive accepts any semver product version", () => {
   mkdirSync(release, { recursive: true });
   for (const name of [
     "kepler-backend.exe",
-    "ark-core-rpc.exe",
     "kepler-focus-helper.exe",
     "kepler-focus-svc.exe",
     "tray.ico",
@@ -66,7 +64,6 @@ test("engine archive rejects tampering", () => {
   mkdirSync(release, { recursive: true });
   for (const name of [
     "kepler-backend.exe",
-    "ark-core-rpc.exe",
     "kepler-focus-helper.exe",
     "kepler-focus-svc.exe",
     "tray.ico",
@@ -87,7 +84,6 @@ test("a valid installed engine is preserved", () => {
   mkdirSync(release, { recursive: true });
   for (const name of [
     "kepler-backend.exe",
-    "ark-core-rpc.exe",
     "kepler-focus-helper.exe",
     "kepler-focus-svc.exe",
     "tray.ico",
@@ -114,7 +110,6 @@ test("installed Engine resolution follows current.json and verifies canonical fi
   mkdirSync(release, { recursive: true });
   for (const name of [
     "kepler-backend.exe",
-    "ark-core-rpc.exe",
     "kepler-focus-helper.exe",
     "kepler-focus-svc.exe",
     "tray.ico",
@@ -130,7 +125,6 @@ test("installed Engine resolution follows current.json and verifies canonical fi
   const resolved = resolveInstalledEngine(engineRoot);
   assert.equal(resolved.version, "1.2.3");
   assert.equal(resolved.backend, path.join(engineRoot, "versions", "1.2.3", "kepler-backend.exe"));
-  assert.equal(resolved.ark, path.join(engineRoot, "versions", "1.2.3", "ark-core-rpc.exe"));
 
   writeFileSync(resolved.backend, "tampered");
   assert.throws(() => resolveInstalledEngine(engineRoot), /engine artifact mismatch/);

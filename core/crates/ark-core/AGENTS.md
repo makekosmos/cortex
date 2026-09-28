@@ -15,7 +15,7 @@
 
 ## Scope
 
-- `crates/ark-core/` is the shared Rust + SQLite runtime and `ark-core-rpc` sidecar.
+- `crates/ark-core/` is the shared Rust + SQLite runtime; the Engine hosts it in-process via `ark_core::service::ArkService`.
 - Electron callers use newline-delimited JSON-RPC; Android/Swift integration goes through UniFFI surfaces.
 - Full RPC/entity reference lives in `https://github.com/makekosmos/docs/blob/main/packages/ark-core.md`; do not inline it here.
 
@@ -32,12 +32,11 @@
 - Schema evolution is additive only: no destructive migrations; prefer idempotent `CREATE TABLE IF NOT EXISTS` / additive indexes.
 - Every direct writer to syncable data must update sync state through the appropriate `record_local_*` / version-vector path.
 - Sync wire messages stay `snake_case`; do not weaken self-peer or routable-address filtering.
-- `ark-core-rpc` stdout is protocol output: keep framing newline-delimited JSON and avoid noisy logs there.
+- The JSON-RPC wire contract stays newline-delimited `snake_case`; the in-process service keeps the same operation set.
 
 ## Commands
 
 - `cargo test --manifest-path crates/ark-core/Cargo.toml` — core tests.
-- `cargo build --manifest-path crates/ark-core/Cargo.toml --bin ark-core-rpc` — sidecar build.
 - `bun run ark:guard:writes` — after data-layer/write-boundary changes.
 - `bun run ark:smoke` — after substantial runtime changes.
 

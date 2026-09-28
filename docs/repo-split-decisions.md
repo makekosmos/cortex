@@ -4,8 +4,8 @@
 `kos-137` (база `942acb9a`) в конце обсуждения.
 
 **Статус (KOS-236):** Electron-оболочка и Electron Package Host удалены из
-репозитория. В продакшене для Windows остаются Engine (`ark-core-rpc` /
-`kepler-backend`, трей + апдейтер + автостарт) и GPUI-компоненты под
+репозитория. В продакшене для Windows остаются Engine (`kepler-backend` с
+in-process ARK, трей + апдейтер + автостарт) и GPUI-компоненты под
 `resources/components/<name>/`. Упомянутые в этом журнале Electron-файлы
 (`desktop/electron/`, `host/electron/`, `desktop/src/`, Vue-UI и e2e) являются
 историческими записями и в дереве больше не существуют.
@@ -108,8 +108,9 @@
 - **Проверено (разведка E3):** обе операции доступны клиенту `manager-gpui` через
   `POST /v1/rpc` без дополнительных грантов — гейтинг по ним живёт только в
   Electron-слое (`extension-permissions.ts`), Engine пропускает. `app_index.*`
-  обрабатывается напрямую, `get_usage_analytics` уходит через ark_host в
-  `ark-core-rpc`. Параметры: `{range_days, top_apps_limit, recent_sessions_limit}`
+  обрабатывается напрямую, `get_usage_analytics` уходит через ark_host во
+  встроенный ARK (раньше — в sidecar `ark-core-rpc`, больше не поставляется).
+  Параметры: `{range_days, top_apps_limit, recent_sessions_limit}`
   и `{limit}`.
 - ⚠️ Иконки: `app_index.list_all` возвращает `icon_ref: "kosmos-icon://app/<id>"`
   — это Electron-протокол, GPUI его не загрузит. Для иконок в Usage-таблице

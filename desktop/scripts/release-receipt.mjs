@@ -28,7 +28,6 @@ export function receiptInputs({ platform, version, currentCommit, bom }) {
       toolchain: bom.value.source.toolchain,
       compatibility: bom.value.compatibility,
       catalog: bom.value.catalog,
-      ark_artifact: bom.value.source.core.ark_artifact,
       package_versions: {
         arca_sdk: bom.value.source.arca_sdk.package?.version ?? null,
         imago: bom.value.source.imago.package?.version ?? null,

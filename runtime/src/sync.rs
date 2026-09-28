@@ -101,9 +101,9 @@ pub async fn start_lan_sync(
 
     // Step 4a: iroh transport selection, mirrors KOSMOS_RELAY_URL above.
     // Reading these env vars is unconditional (cheap, no transport
-    // construction here — this crate talks to the ark-core-rpc sidecar over
+    // construction here — this crate talks to the in-process ARK service,
     // JSON-RPC, it never links iroh directly); they are only ACTED ON by
-    // ark-core-rpc when it was built with the `iroh-spike` Rust feature. A
+    // the embedded ark-core when it was built with the `iroh-spike` Rust feature. A
     // non-iroh-spike sidecar rejects start_sync with an explicit error if
     // KOSMOS_IROH=1 is set, rather than silently ignoring it.
     if let Ok(ticket) = std::env::var("KOSMOS_IROH_PEER_TICKET") {
@@ -135,7 +135,7 @@ pub async fn start_lan_sync(
             return Ok(());
         }
         return Err(format!(
-            "ark-core-rpc rejected fallback start_sync: {}",
+            "ark-core rejected fallback start_sync: {}",
             retry
                 .error
                 .unwrap_or_else(|| "(no error message)".to_string())
@@ -143,7 +143,7 @@ pub async fn start_lan_sync(
         .into());
     }
 
-    Err(format!("ark-core-rpc rejected start_sync: {error}").into())
+    Err(format!("ark-core rejected start_sync: {error}").into())
 }
 
 /// Dev-flow cross-network step: when iroh was requested (`KOSMOS_IROH=1`),
@@ -154,7 +154,7 @@ pub async fn start_lan_sync(
 ///
 /// Call this only after `start_lan_sync` returns `Ok(())` — `GetOwnIrohTicket`
 /// returns `null` until sync has actually started with iroh selected (see
-/// `ark-core-rpc`'s `handle_get_own_iroh_ticket`).
+/// the service's `handle_get_own_iroh_ticket`).
 pub async fn print_iroh_pairing_code_if_enabled(ark: &ArkHost) {
     let iroh_requested = std::env::var("KOSMOS_IROH")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
@@ -182,7 +182,7 @@ pub async fn print_iroh_pairing_code_if_enabled(ark: &ArkHost) {
         Ok(response) => {
             tracing::warn!(
                 error = ?response.error,
-                "get_own_iroh_ticket rejected by ark-core-rpc"
+                "get_own_iroh_ticket rejected by ark-core"
             );
         }
         Err(e) => {

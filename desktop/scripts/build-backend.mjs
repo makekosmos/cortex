@@ -10,7 +10,6 @@ import {
   acquireBuildLock,
   cleanBuildIntermediates,
 } from "./runtime-staging.mjs";
-import { ensureArkCoreRpc } from "./ark-core-rpc.mjs";
 import { buildEngineArchive } from "./engine-distribution.mjs";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -50,7 +49,7 @@ const cargoEnv = {
 const cortexBuildArgs = ["build", "--release", "--manifest-path", "../Cargo.toml"];
 const buildKepler = spawnSync(
   "cargo",
-  [...cortexBuildArgs, "--bin", "kepler-backend", "--features", "windows-gui-subsystem"],
+  [...cortexBuildArgs, "--bin", "kepler-backend", "--features", "windows-gui-subsystem,iroh-spike"],
   {
     cwd: shellRoot,
     stdio: "inherit",
@@ -59,11 +58,7 @@ const buildKepler = spawnSync(
   },
 );
 if ((buildKepler.status ?? 1) !== 0) process.exit(buildKepler.status ?? 1);
-ensureArkCoreRpc({
-  features: ["iroh-spike", "windows-gui-subsystem"],
-  targetDir: path.join(cortexTargetDir, "release"),
-});
-for (const bin of RUNTIME_BINARIES.slice(2)) {
+for (const bin of RUNTIME_BINARIES.slice(1)) {
   const result = spawnSync("cargo", [...cortexBuildArgs, "--bin", bin], {
     cwd: shellRoot,
     stdio: "inherit",
@@ -78,10 +73,9 @@ for (const bin of RUNTIME_BINARIES.slice(2)) {
 // ignore it and silently ship stale binaries from repoRoot/target/release.
 const stageDir = path.join(shellRoot, ".tmp", "runtime.next");
 try {
-  for (const bin of [RUNTIME_BINARIES[0], ...RUNTIME_BINARIES.slice(2)]) {
+  for (const bin of RUNTIME_BINARIES) {
     stageRuntimeBinary(bin, path.join(cortexTargetDir, "release"), stageDir);
   }
-  stageRuntimeBinary(RUNTIME_BINARIES[1], path.join(cortexTargetDir, "release"), stageDir);
   copyFileSync(path.join(shellRoot, "build", "tray.ico"), path.join(stageDir, "tray.ico"));
 } catch (error) {
   console.error(`[build-backend] ${error instanceof Error ? error.message : String(error)}`);

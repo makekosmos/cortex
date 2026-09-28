@@ -7,13 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildEngineArchive } from "./engine-distribution.mjs";
 
-const names = [
-  "kepler-backend.exe",
-  "ark-core-rpc.exe",
-  "kepler-focus-helper.exe",
-  "kepler-focus-svc.exe",
-  "tray.ico",
-];
+const names = ["kepler-backend.exe", "kepler-focus-helper.exe", "kepler-focus-svc.exe", "tray.ico"];
 const script = fileURLToPath(new URL("../build/install-engine.ps1", import.meta.url));
 const SOURCE_COMMIT = "a".repeat(40);
 
@@ -23,7 +17,10 @@ function fixture(version = "1.2.3") {
   mkdirSync(release, { recursive: true });
   for (const name of names) writeFileSync(path.join(release, name), `fixture:${name}`);
   const archive = path.join(root, "engine.zip");
-  const manifest = buildEngineArchive(release, archive, { version, sourceCommit: SOURCE_COMMIT });
+  const manifest = buildEngineArchive(release, archive, {
+    version,
+    sourceCommit: SOURCE_COMMIT,
+  });
   const manifestPath = path.join(root, "manifest.json");
   writeFileSync(manifestPath, JSON.stringify(manifest));
   return { root, archive, manifestPath, manifest };
@@ -111,18 +108,27 @@ test("unsafe manifest paths and sizes are rejected before installation", () => {
   const f = fixture();
   writeFileSync(
     f.manifestPath,
-    JSON.stringify({ ...f.manifest, files: [{ ...f.manifest.files[0], name: "../escape.exe" }] }),
+    JSON.stringify({
+      ...f.manifest,
+      files: [{ ...f.manifest.files[0], name: "../escape.exe" }],
+    }),
   );
   assert.notEqual(runInstall(f).status, 0);
   assert.equal(existsSync(path.join(f.root, "escape.exe")), false);
   writeFileSync(
     f.manifestPath,
-    JSON.stringify({ ...f.manifest, files: [{ ...f.manifest.files[0], name: ".." }] }),
+    JSON.stringify({
+      ...f.manifest,
+      files: [{ ...f.manifest.files[0], name: ".." }],
+    }),
   );
   assert.notEqual(runInstall(f).status, 0);
   writeFileSync(
     f.manifestPath,
-    JSON.stringify({ ...f.manifest, files: [{ ...f.manifest.files[0], size: 1.5 }] }),
+    JSON.stringify({
+      ...f.manifest,
+      files: [{ ...f.manifest.files[0], size: 1.5 }],
+    }),
   );
   assert.notEqual(runInstall(f).status, 0);
 });

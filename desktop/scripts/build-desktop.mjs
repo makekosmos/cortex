@@ -230,7 +230,7 @@ async function main() {
   }
   receiptPath ??= path.join(SHELL_ROOT, "release", "release-receipt.v1.json");
 
-  if (!skipPreflight) log("Preflight: source, BOM, pins, and ARK artifact");
+  if (!skipPreflight) log("Preflight: source, BOM, and pins");
   log(`Platform: ${platform}`);
   log(`Version:  ${version}`);
   if (bom) log(`BOM:      ${bom.value.id} (${bom.digest})`);

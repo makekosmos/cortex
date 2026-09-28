@@ -2,12 +2,8 @@
 
 use futures_util::{SinkExt, StreamExt};
 use kepler_backend::{
-    app_index::AppIndex,
-    ark_host::{resolve_ark_core_rpc_path, ArkHost},
-    file_index::FileIndex,
-    package_service::PackageService,
-    protocol_usage::ProtocolUsageStore,
-    usage_tracker::UsageTrackerDiagnosticsState,
+    app_index::AppIndex, ark_host::ArkHost, file_index::FileIndex, package_service::PackageService,
+    protocol_usage::ProtocolUsageStore, usage_tracker::UsageTrackerDiagnosticsState,
     ws_server::WsServer,
 };
 use serde_json::{json, Value};
@@ -33,12 +29,9 @@ async fn fixture() -> Fixture {
     let data_dir = dir.path().join("data");
     std::fs::create_dir_all(&data_dir).unwrap();
     let ark = Arc::new(
-        ArkHost::spawn(
-            &resolve_ark_core_rpc_path().unwrap(),
-            data_dir.join("ark.db").to_str().unwrap(),
-        )
-        .await
-        .unwrap(),
+        ArkHost::open(data_dir.join("ark.db").to_str().unwrap())
+            .await
+            .unwrap(),
     );
     let app_index = Arc::new(AppIndex::new(&data_dir, data_dir.join("app-icons")).unwrap());
     let file_index = Arc::new(FileIndex::new_disabled(&data_dir).unwrap());

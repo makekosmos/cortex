@@ -1,39 +1,37 @@
 // ---------------------------------------------------------------------------
-// Global state — one SQLite connection plus (optionally) one sync runtime.
+// Request envelope + sync-runtime state types. The former process-wide
+// globals (DB / DB_PATH / SYNC / BACKUP_GATE) now live on `ServiceState`
+// (see `service.rs`) so one process can host several services.
 // ---------------------------------------------------------------------------
 
-static DB: StdMutex<Option<Arc<StdMutex<rusqlite::Connection>>>> = StdMutex::new(None);
-
-// Путь к ARK DB (из Init). Нужен чтобы db_backup открывал ОТДЕЛЬНЫЙ read-коннекшн
-// и не держал глобальный DB mutex на всё копирование.
-static DB_PATH: StdMutex<Option<String>> = StdMutex::new(None);
+use super::*;
 
 #[derive(Clone, Debug)]
-struct SyncStartParams {
-    space_id: String,
-    device_id: String,
-    device_name: String,
-    port: Option<u16>,
-    seed_addresses: Option<Vec<String>>,
-    relay_url: Option<String>,
-    relay_api_key: Option<String>,
-    auth_secret: Option<String>,
-    use_iroh: bool,
-    iroh_peer_ticket: Option<String>,
-    discovery_enabled: bool,
+pub(crate) struct SyncStartParams {
+    pub(crate) space_id: String,
+    pub(crate) device_id: String,
+    pub(crate) device_name: String,
+    pub(crate) port: Option<u16>,
+    pub(crate) seed_addresses: Option<Vec<String>>,
+    pub(crate) relay_url: Option<String>,
+    pub(crate) relay_api_key: Option<String>,
+    pub(crate) auth_secret: Option<String>,
+    pub(crate) use_iroh: bool,
+    pub(crate) iroh_peer_ticket: Option<String>,
+    pub(crate) discovery_enabled: bool,
 }
 
 fn default_discovery_enabled() -> bool {
     true
 }
 
-struct SyncRuntime {
-    server: Arc<SyncServer>,
-    storage: Arc<SqliteStorageBackend>,
-    clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
-    relay: Option<Arc<RelaySync>>,
-    transport_choice: Option<TransportChoice>,
-    start_params: SyncStartParams,
+pub(crate) struct SyncRuntime {
+    pub(crate) server: Arc<SyncServer>,
+    pub(crate) storage: Arc<SqliteStorageBackend>,
+    pub(crate) clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
+    pub(crate) relay: Option<Arc<RelaySync>>,
+    pub(crate) transport_choice: Option<TransportChoice>,
+    pub(crate) start_params: SyncStartParams,
     /// Step 4a: our iroh pairing ticket, captured at construction time when
     /// the iroh transport was selected (`our_ticket()` needs the transport
     /// object directly — `RelaySync` only exposes `Arc<dyn SyncTransport>`,
@@ -41,20 +39,19 @@ struct SyncRuntime {
     /// of threading a concrete `IrohTransport` handle through `SyncRuntime`).
     /// `None` when iroh wasn't selected, or (in a no-`iroh-spike` build)
     /// always `None`.
-    iroh_our_ticket: Option<String>,
-    beacon: Arc<BroadcastDiscovery>,
-    space_id: String,
-    device_id: String,
-    device_name: String,
-    auth_secret: Option<String>,
-    own_addresses: Arc<TokioMutex<Vec<String>>>,
+    pub(crate) iroh_our_ticket: Option<String>,
+    pub(crate) beacon: Arc<BroadcastDiscovery>,
+    pub(crate) space_id: String,
+    pub(crate) device_id: String,
+    pub(crate) device_name: String,
+    pub(crate) auth_secret: Option<String>,
+    pub(crate) own_addresses: Arc<TokioMutex<Vec<String>>>,
 }
 
-static SYNC: TokioMutex<Option<Arc<SyncRuntime>>> = TokioMutex::const_new(None);
-
-// Event emitter moved to `ark_core::events` so that lib modules (notably
-// `db::apply_entity_blocking` for schema-drift sync_error/sync_replay events)
-// can emit too. Binary registers the sender at startup via `set_event_sender`.
+// The `SyncRuntime` slot lives on `ServiceState::sync` (`service.rs`).
+// Events go out through `crate::events` — a process-wide broadcast bus also
+// used by lib modules (notably `db::apply_entity_blocking` for schema-drift
+// sync_error/sync_replay events).
 
 // ---------------------------------------------------------------------------
 // Request enum
@@ -62,16 +59,16 @@ static SYNC: TokioMutex<Option<Arc<SyncRuntime>>> = TokioMutex::const_new(None);
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ObjectWriteSnapshot {
-    exists: bool,
-    type_id: Option<String>,
-    type_version: Option<String>,
-    revision: Option<String>,
+pub(crate) struct ObjectWriteSnapshot {
+    pub(crate) exists: bool,
+    pub(crate) type_id: Option<String>,
+    pub(crate) type_version: Option<String>,
+    pub(crate) revision: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case")]
-enum Request {
+pub(crate) enum Request {
     // --- DB ops (unchanged wire format) ---
     Init {
         #[serde(rename = "dbPath")]
@@ -205,7 +202,7 @@ enum Request {
     },
     #[serde(rename = "canonical.game.upsert")]
     CanonicalGameUpsert {
-        game: ark_core::canonical_types::game::GameUpsertCommand,
+        game: crate::canonical_types::game::GameUpsertCommand,
         #[serde(default)]
         device_id: Option<String>,
     },
@@ -261,7 +258,7 @@ enum Request {
     },
     #[serde(rename = "types.registerPackageDefinitions")]
     TypesRegisterPackageDefinitions {
-        registrations: Vec<ark_core::type_registry::TypeRegistration>,
+        registrations: Vec<crate::type_registry::TypeRegistration>,
     },
     ListObjectTypes,
     GetObjectType {
@@ -471,4 +468,10 @@ enum Request {
         local_node_id: String,
         now_ms: u64,
     },
+
+    /// Test-only fault-injection op: the service worker panics on it so tests
+    /// can verify catch_unwind + reopen at the service boundary.
+    #[cfg(test)]
+    #[serde(rename = "test.panic")]
+    TestPanic,
 }

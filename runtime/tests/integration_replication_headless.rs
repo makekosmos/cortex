@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 use ed25519_dalek::SigningKey;
-use kepler_backend::ark_host::{resolve_ark_core_rpc_path, ArkHost};
+use kepler_backend::ark_host::ArkHost;
 use kepler_backend::integrations::handle_operation;
 use kepler_backend::package_service::PackageService;
 use serde_json::{json, Value};
@@ -118,11 +118,8 @@ fn fixture() -> TwoNodeFixture {
 }
 
 async fn spawn_core_pair(fixture: &TwoNodeFixture) -> (ArkHost, ArkHost) {
-    let binary = resolve_ark_core_rpc_path().unwrap();
-    let origin = ArkHost::spawn(&binary, &fixture.origin_db).await.unwrap();
-    let recipient = ArkHost::spawn(&binary, &fixture.recipient_db)
-        .await
-        .unwrap();
+    let origin = ArkHost::open(&fixture.origin_db).await.unwrap();
+    let recipient = ArkHost::open(&fixture.recipient_db).await.unwrap();
     (origin, recipient)
 }
 
@@ -182,9 +179,7 @@ async fn trusted_cortex_authorization_survives_core_restart() {
     assert_eq!(accepted["accepted"], true);
     drop(origin);
 
-    let restarted = ArkHost::spawn(&resolve_ark_core_rpc_path().unwrap(), &fixture.origin_db)
-        .await
-        .unwrap();
+    let restarted = ArkHost::open(&fixture.origin_db).await.unwrap();
     let accepted_again = handle_operation(
         "replication_persist_grant",
         json!({

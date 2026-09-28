@@ -1,5 +1,11 @@
 # Rust build and Core sidecar reuse
 
+**Status: historical.** The `ark-core-rpc` sidecar and its cache machinery
+(`desktop/scripts/ark-core-rpc.mjs`, `desktop/.tmp/ark-core-rpc`,
+`KOSMOS_ARK_TARGET_DIR`, `ARK_CORE_RPC_PREBUILT`, `ARK_CORE_RPC_PATH`) were
+removed when the Engine started hosting `ark-core` in-process. The sections
+below are kept as the design/measurement record.
+
 ## Baseline
 
 Measured on Windows 10.0.26200.0, x64, Rust/Cargo 1.95.0, Node 24.15.0,

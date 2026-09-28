@@ -1,4 +1,4 @@
-//! Step 4a: pure transport-selection rule shared by the `ark-core-rpc`
+//! Step 4a: pure transport-selection rule used by the in-process service
 //! JSON-RPC binary (`main.rs`) and the UniFFI facade (`ffi.rs`), so both
 //! start-sync entry points pick `RelaySync`'s underlying `SyncTransport`
 //! (relay WebSocket vs. iroh p2p QUIC, behind `iroh-spike`) the same way.
