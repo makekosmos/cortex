@@ -29,44 +29,59 @@ async function runFixture(files) {
   }
 }
 
-test("accepts exactly 300 lines and ignores generated dependencies", async () => {
+test("accepts exactly 500 lines and ignores generated dependencies", async () => {
   const result = await runFixture({
-    "src/limit.rs": lines(300),
-    "node_modules/generated.mjs": lines(600),
+    "src/limit.rs": lines(500),
+    "node_modules/generated.mjs": lines(900),
   });
   assert.equal(result.status, 0, result.stderr);
 });
 
-test("rejects a new source file above 300 lines", async () => {
-  const result = await runFixture({ "src/new-module.mjs": lines(301) });
+test("warns but passes between 300 and 500 lines", async () => {
+  const quiet = await runFixture({ "src/small.rs": lines(300) });
+  assert.equal(quiet.status, 0, quiet.stderr);
+  assert.doesNotMatch(quiet.stderr, /warning/);
+
+  const result = await runFixture({ "src/medium.mjs": lines(301) });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /source size warning: 1 file/);
+  assert.match(result.stderr, /medium\.mjs: 301 lines \(aim for 300\)/);
+});
+
+test("rejects a new source file above 500 lines", async () => {
+  const result = await runFixture({ "src/new-module.mjs": lines(501) });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /new-module\.mjs: 301 lines \(max 300\)/);
+  assert.match(result.stderr, /new-module\.mjs: 501 lines \(max 500\)/);
 });
 
 test("retired Godfile paths cannot reuse an old exemption", async () => {
-  const result = await runFixture({ "runtime/src/integrations.rs": lines(301) });
+  const result = await runFixture({ "runtime/src/integrations.rs": lines(501) });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /runtime\/src\/integrations\.rs: 301 lines/);
+  assert.match(result.stderr, /runtime\/src\/integrations\.rs: 501 lines/);
 });
 
 test("only the explicit debt baseline is grandfathered", async () => {
   const result = await runFixture({
-    "runtime/src/main.rs": lines(301),
-    "runtime/src/package_service/integrations.rs": lines(301),
-    "runtime/src/package_worker_supervisor/authority.rs": lines(301),
-    "runtime/src/package_worker_supervisor/calls_dispatch.rs": lines(301),
-    "runtime/src/package_worker_supervisor/tests/api/opaque_roots.rs": lines(301),
+    "runtime/src/main.rs": lines(501),
+    "runtime/src/package_store.rs": lines(501),
+    "runtime/src/focus.rs": lines(501),
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /5 grandfathered file/);
+  assert.match(result.stdout, /3 grandfathered file/);
+});
+
+test("pruned baseline entries under 500 lines are no longer exempt", async () => {
+  const result = await runFixture({ "runtime/src/ark_host.rs": lines(501) });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /runtime\/src\/ark_host\.rs: 501 lines \(max 500\)/);
 });
 
 test("moved packages/ sources are no longer grandfathered", async () => {
   const result = await runFixture({
-    "packages/huawei-health/src/lib.rs": lines(365),
+    "packages/huawei-health/src/lib.rs": lines(565),
     "runtime/src/package_service/integrations/huawei_login.rs": lines(541),
   });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /packages\/huawei-health\/src\/lib\.rs: 365 lines \(max 300\)/);
-  assert.match(result.stderr, /huawei_login\.rs: 541 lines \(max 300\)/);
+  assert.match(result.stderr, /packages\/huawei-health\/src\/lib\.rs: 565 lines \(max 500\)/);
+  assert.match(result.stderr, /huawei_login\.rs: 541 lines \(max 500\)/);
 });
