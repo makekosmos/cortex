@@ -265,15 +265,19 @@ ipcMain.handle("kepler:diagnostics:trace-start", async () => {
   return { ok: true };
 });
 
+// IPC payloads are untyped at runtime despite the annotation.
+function isNonEmptyString(value: string | undefined): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
 ipcMain.handle("kepler:diagnostics:trace-stop", async (_event, outPath?: string) => {
   // stopRecording writes to whatever path it gets — a renderer-supplied path
   // may only name a new file inside the temp directory; anything else (or a
   // non-string) falls back to Electron's own temp path.
   const tempRoot = path.resolve(app.getPath("temp"));
-  const target =
-    typeof outPath === "string" && outPath
-      ? path.resolve(tempRoot, path.basename(outPath))
-      : undefined;
+  const target = isNonEmptyString(outPath)
+    ? path.resolve(tempRoot, path.basename(outPath))
+    : undefined;
   const tracePath = await contentTracing.stopRecording(target);
   return { path: tracePath };
 });

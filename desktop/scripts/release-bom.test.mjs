@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { documentHash } from "./package-release-utils.mjs";
-import { loadReleaseBom, validateReleaseBom } from "./release-bom.mjs";
+import { loadReleaseBom, repositoryContext, validateReleaseBom } from "./release-bom.mjs";
 
 const context = {
   currentCommit: "a".repeat(40),
@@ -138,6 +138,13 @@ for (const [name, edit, message] of [
     assert.throws(() => validateReleaseBom(value, context), new RegExp(message));
   });
 }
+
+test("reads real API pins from the repository sources", async () => {
+  const root = path.resolve(import.meta.dirname, "..", "..");
+  const real = await repositoryContext(root, "win", context.currentCommit);
+  assert.match(real.api.shell, /^\d+\.\d+\.\d+$/);
+  assert.match(real.api.engine, /^\d+\.\d+\.\d+$/);
+});
 
 test("loads exact BOM bytes and digest", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "cortex-bom-"));
