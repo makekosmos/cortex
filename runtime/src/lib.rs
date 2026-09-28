@@ -22,15 +22,15 @@
     clippy::unnecessary_lazy_evaluations
 )]
 
-// Kosmos Kepler backend — headless ARK host runtime.
+// Mundus backend — headless ARK host runtime.
 //
-// Этот крейт extracted из apps/kepler/ в Phase 0 Kepler-Electron pivot. Содержит
+// Этот крейт extracted из Electron-шелла в Phase 0 pivot. Содержит
 // весь backend layer без UI: WS server, in-process ARK host, singleton,
 // lock-file discovery, протокол handshake, auth, LAN sync wiring.
 //
 // Используется двумя binaries:
-//   * `kepler-backend` (этот крейт) — headless, для Electron Kepler child.
-//   * `kepler` (apps/kepler/) — legacy desktop binary с tray + launcher.
+//   * `mundus-engine` (этот крейт) — headless engine binary.
+//   * `mundus` — legacy desktop binary с tray + launcher.
 //
 // Оба binary запускают идентичный setup; UI binary добавляет tray + launcher
 // поверх; headless binary только ждёт Ctrl+C / parent kill.
@@ -40,10 +40,12 @@ pub mod app_index;
 pub(crate) mod app_network;
 pub mod ark_host;
 pub mod auth;
+pub mod brand;
 pub mod build_info;
 pub mod calculator;
 pub mod command_bus;
 pub mod crash_reporter;
+pub mod data_dir;
 pub mod db_backup;
 pub mod desktop_authority;
 pub mod diagnostics;

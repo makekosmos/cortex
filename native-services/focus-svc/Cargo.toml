@@ -1,11 +1,11 @@
 [package]
-name = "kepler-focus-svc"
+name = "focus-svc"
 version = "0.1.0"
 edition.workspace = true
-description = "Kosmos System Service — privileged hosts blocking and NTFS indexing helper."
+description = "Mundus System Service — privileged hosts blocking and NTFS indexing helper."
 
 [[bin]]
-name = "kepler-focus-svc"
+name = "focus-svc"
 path = "src/main.rs"
 
 [lib]
@@ -14,7 +14,7 @@ path = "src/lib.rs"
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-kepler-focus-helper = { path = "../kepler-focus-helper" }
+focus-helper = { path = "../focus-helper" }
 
 [target.'cfg(windows)'.dependencies]
 ntfs-reader = "0.4.5"

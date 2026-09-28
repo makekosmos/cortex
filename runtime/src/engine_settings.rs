@@ -4,6 +4,8 @@ use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 
 pub const SETTINGS_FILE_NAME: &str = "engine-manager-settings.json";
+// MIGRATION(KOS-267): remove after 2026-11-01. Settings file written by the
+// Electron shell; it lands in the renamed data dir under its old name.
 pub const LEGACY_SHELL_SETTINGS_FILE_NAME: &str = "kepler-shell-settings.json";
 pub const DEFAULT_WARM_TIMEOUT_SECONDS: u64 = 300;
 
@@ -119,7 +121,7 @@ pub fn resolve_usage_tracker(
         *tracker = Value::Object(Map::from_iter([("enabled".into(), Value::Bool(enabled))]));
     }
     if let Err(error) = write_object_atomic(&path, &object) {
-        eprintln!("[kepler-backend] usage tracker settings migration failed: {error}");
+        eprintln!("[mundus-engine] usage tracker settings migration failed: {error}");
     }
     UsageTrackerStartupConfig {
         enabled,

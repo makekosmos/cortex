@@ -2,15 +2,15 @@
 fn main() {
     use embed_manifest::manifest::ExecutionLevel;
     use embed_manifest::{embed_manifest as do_embed, embed_manifest_file, new_manifest};
-    // Service runs under LocalSystem via SCM, не нужно UAC elevation.
-    // Manifest = asInvoker — sub-commands (install/uninstall/...) запускаются
-    // user-mode, и сами вернут needs_elevation:true когда нужны admin rights.
+    // Сначала пробуем embed нашего ручного манифеста; если файл не найден
+    // (build из другого cwd), fallback на synthesized manifest с
+    // requireAdministrator.
     if std::path::Path::new("app.manifest").exists() {
         embed_manifest_file("app.manifest").expect("embed app.manifest");
     } else {
         do_embed(
-            new_manifest("Kosmos.SystemService")
-                .requested_execution_level(ExecutionLevel::AsInvoker),
+            new_manifest("Mundus.Helper")
+                .requested_execution_level(ExecutionLevel::RequireAdministrator),
         )
         .expect("embed synthesized manifest");
     }

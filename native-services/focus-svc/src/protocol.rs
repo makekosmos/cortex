@@ -1,5 +1,5 @@
 //! Wire protocol для named pipe IPC. Request/Response типы + `dispatch`
-//! функция, которая по Request вызывает `kepler_focus_helper::hosts::*` и
+//! функция, которая по Request вызывает `focus_helper::hosts::*` и
 //! возвращает Response. Параметризовано путём к hosts file → тестируемо без
 //! админских прав.
 
@@ -7,7 +7,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use kepler_focus_helper::hosts;
+use focus_helper::hosts;
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(tag = "op", rename_all = "lowercase")]

@@ -17,7 +17,7 @@ use windows_service::service_control_handler::{self, ServiceControlHandlerResult
 use windows_service::service_dispatcher;
 
 use crate::pipe;
-use kepler_focus_svc::{LEGACY_SERVICE_NAME, SERVICE_NAME};
+use focus_svc::{service_names, SERVICE_NAME};
 
 define_windows_service!(ffi_service_main, service_main);
 
@@ -25,19 +25,25 @@ static ACTIVE_SERVICE_NAME: Mutex<&'static str> = Mutex::new(SERVICE_NAME);
 
 /// User-mode entry. Передаёт control SCM который вызовет `service_main`.
 /// Возвращает только когда SCM решит завершить процесс.
+///
+/// MIGRATION(KOS-267): remove after 2026-11-01. A legacy registration
+/// (KosmosSystemSvc / KeplerFocusSvc) may point at this binary path until
+/// the next elevated install — keep answering under those names too.
 pub fn run_as_service_entry() -> ! {
-    set_active_service_name(SERVICE_NAME);
-    match service_dispatcher::start(SERVICE_NAME, ffi_service_main) {
-        Ok(()) => std::process::exit(0),
-        Err(primary) => {
-            set_active_service_name(LEGACY_SERVICE_NAME);
-            if let Err(legacy) = service_dispatcher::start(LEGACY_SERVICE_NAME, ffi_service_main) {
-                eprintln!("service_dispatcher::start failed: primary={primary}; legacy={legacy}");
-                std::process::exit(1);
+    let mut primary = None;
+    for name in service_names() {
+        set_active_service_name(name);
+        match service_dispatcher::start(name, ffi_service_main) {
+            Ok(()) => std::process::exit(0),
+            Err(error) => {
+                if primary.is_none() {
+                    primary = Some(error);
+                }
             }
-            std::process::exit(0);
         }
     }
+    eprintln!("service_dispatcher::start failed: primary={:?}", primary);
+    std::process::exit(1);
 }
 
 fn set_active_service_name(name: &'static str) {

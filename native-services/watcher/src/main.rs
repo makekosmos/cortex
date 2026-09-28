@@ -1,12 +1,12 @@
-// kepler-watcher — мини-watchdog для kepler.exe.
+// watcher — мини-watchdog для mundus-engine.exe.
 //
-// Цель: запустить рядом с собой kepler.exe, держать живым, при crash'е respawn'ить
+// Цель: запустить рядом с собой mundus-engine.exe, держать живым, при crash'е respawn'ить
 // с exp backoff (1s → 30s cap, см. план Decision #10).
 //
 // Сам watcher тоже в HKCU Run (через installer), это значит:
-//   user login → watcher.exe стартует → spawn kepler.exe child
-//   kepler.exe crashes → watcher wait + respawn
-//   user logout → Windows shutdown'ит watcher → его Drop kill'ит kepler child
+//   user login → watcher.exe стартует → spawn mundus-engine.exe child
+//   mundus-engine.exe crashes → watcher wait + respawn
+//   user logout → Windows shutdown'ит watcher → его Drop kill'ит mundus child
 //
 // Сейчас обычный std::process::Command — без tokio, ~50 строк.
 
@@ -20,31 +20,34 @@ const MIN_BACKOFF_MS: u64 = 1_000;
 const MAX_BACKOFF_MS: u64 = 30_000;
 const HEALTHY_RUNTIME_MS: u64 = 60_000; // если процесс жил больше — сбрасываем backoff
 
-fn resolve_kepler_exe() -> PathBuf {
-    if let Ok(p) = env::var("KEPLER_EXE_PATH") {
-        let path = PathBuf::from(p);
-        if path.exists() {
-            return path;
+fn resolve_mundus_exe() -> PathBuf {
+    // MIGRATION(KOS-267): legacy env name accepted until cleanup.
+    for name in ["MUNDUS_EXE_PATH", "KEPLER_EXE_PATH"] {
+        if let Ok(p) = env::var(name) {
+            let path = PathBuf::from(p);
+            if path.exists() {
+                return path;
+            }
         }
     }
     if let Ok(current_exe) = env::current_exe() {
         if let Some(parent) = current_exe.parent() {
-            let candidate = parent.join("kepler.exe");
+            let candidate = parent.join("mundus-engine.exe");
             if candidate.exists() {
                 return candidate;
             }
-            let unix = parent.join("kepler");
+            let unix = parent.join("mundus");
             if unix.exists() {
                 return unix;
             }
         }
     }
-    eprintln!("[watcher] FATAL: cannot find kepler.exe near watcher binary");
+    eprintln!("[watcher] FATAL: cannot find mundus-engine.exe near watcher binary");
     std::process::exit(2);
 }
 
 fn main() {
-    let exe = resolve_kepler_exe();
+    let exe = resolve_mundus_exe();
     eprintln!("[watcher] starting; supervising {exe:?}");
 
     let mut backoff_ms: u64 = MIN_BACKOFF_MS;
@@ -79,7 +82,7 @@ fn main() {
         };
 
         let uptime_ms = started.elapsed().as_millis() as u64;
-        eprintln!("[watcher] kepler exited (status: {status}, uptime: {uptime_ms}ms)",);
+        eprintln!("[watcher] mundus exited (status: {status}, uptime: {uptime_ms}ms)",);
 
         // Если процесс прожил долго — это была "нормальная" работа, backoff обнуляем.
         // Если упал быстро — наращиваем backoff.

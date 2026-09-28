@@ -7,16 +7,16 @@
 
 mod backend_tray;
 
-// Kosmos Kepler backend — native runtime and Windows tray owner.
+// Mundus backend — native runtime and Windows tray owner.
 //
 // По умолчанию запускается как самостоятельный native supervisor. Внутренний
 // `--core-worker` режим содержит сам runtime («Electron only renders, Rust does
 // everything else»). Никакого UI: ни tray, ни launcher, ни окна. Только:
-//   * singleton lock (одна копия kepler-backend на машину),
+//   * singleton lock (одна копия mundus-engine на машину),
 //   * open the ARK service in-process,
 //   * WS server 127.0.0.1:<port>,
 //   * lock-file `engine.lock.json` для discovery.
-//   * start_sync в фоне (если не KEPLER_SKIP_SYNC=1),
+//   * start_sync в фоне (если не MUNDUS_SKIP_SYNC=1),
 //
 // Core не принадлежит Electron: закрытие desktop process его не завершает.
 
@@ -28,7 +28,7 @@ use chrono::Utc;
 use futures_util::{SinkExt, StreamExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use kepler_backend::{
+use engine::{
     ark_host::ArkHost,
     auth, crash_reporter, db_backup,
     dictation::DictationHost,
@@ -69,7 +69,7 @@ struct SetupState {
 }
 
 /// Инициализирует tracing с rolling daily file appender в
-/// `<lock_dir>/logs/kepler-backend.<DATE>`. Возвращает WorkerGuard который
+/// `<lock_dir>/logs/mundus-engine.<DATE>`. Возвращает WorkerGuard который
 /// нужно держать живым (drop = flush + shutdown).
 ///
 /// Env override: `RUST_LOG` controls filter (default `info`).
@@ -80,7 +80,7 @@ fn init_tracing(lock_dir: &std::path::Path) -> tracing_appender::non_blocking::W
     let log_dir = lock_dir.join("logs");
     let _ = std::fs::create_dir_all(&log_dir);
 
-    let file_appender = tracing_appender::rolling::daily(&log_dir, "kepler-backend");
+    let file_appender = tracing_appender::rolling::daily(&log_dir, "mundus-engine");
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
@@ -133,7 +133,7 @@ async fn run_core_worker() -> ExitCode {
     let state = match setup().await {
         Ok(s) => s,
         Err(e) => {
-            observability::stderr(format!("[kepler-backend] FATAL setup: {e}"));
+            observability::stderr(format!("[mundus-engine] FATAL setup: {e}"));
             return ExitCode::from(1);
         }
     };
@@ -157,16 +157,16 @@ async fn run_core_worker() -> ExitCode {
     let desktop_authority = ws.desktop_authority();
     let grant_authority = ws.grant_authority();
 
-    let supervised = std::env::var("KOSMOS_ENGINE_SUPERVISED").as_deref() == Ok("1");
+    let supervised = std::env::var("MUNDUS_ENGINE_SUPERVISED").as_deref() == Ok("1");
     let agents_shutdown = ws.agents_handle();
     let ws_task = tokio::spawn(async move {
         if let Err(e) = ws.run().await {
-            observability::stderr(format!("[kepler-backend] WS server exited: {e}"));
+            observability::stderr(format!("[mundus-engine] WS server exited: {e}"));
         }
     });
     let api_task = tokio::spawn(async move {
         if let Err(e) = api.run().await {
-            observability::stderr(format!("[kepler-backend] Engine HTTP server exited: {e}"));
+            observability::stderr(format!("[mundus-engine] Engine HTTP server exited: {e}"));
         }
     });
     let control_result = run_core_worker_readiness(
@@ -184,7 +184,7 @@ async fn run_core_worker() -> ExitCode {
         Ok(commands) => commands,
         Err(error) => {
             observability::stderr(format!(
-                "[kepler-backend] startup readiness/control failed: {error}"
+                "[mundus-engine] startup readiness/control failed: {error}"
             ));
             api_shutdown.begin_shutdown().await;
             ws_shutdown.begin_shutdown().await;
@@ -207,9 +207,9 @@ async fn run_core_worker() -> ExitCode {
         let opts = UsageTrackerOpts::from_env().with_icon_cache_dir(icon_cache_dir);
         usage_tracker::spawn(ark_for_tracker, opts, usage_diagnostics.clone());
         usage_diagnostics.mark_running();
-        eprintln!("[kepler-backend] usage_tracker spawned (in-process)");
+        eprintln!("[mundus-engine] usage_tracker spawned (in-process)");
     } else {
-        eprintln!("[kepler-backend] usage_tracker disabled by Engine settings");
+        eprintln!("[mundus-engine] usage_tracker disabled by Engine settings");
     }
     // Periodic DB backup. На каждом старте проверяем — если прошло >= 24h
     // с последнего, делаем online backup в `<data_dir>/backups/`. fire-and-forget
@@ -220,7 +220,7 @@ async fn run_core_worker() -> ExitCode {
             .parent()
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| PathBuf::from("."));
-        let delay = startup_delay_ms("KEPLER_BACKUP_DELAY_MS", 120_000);
+        let delay = startup_delay_ms("MUNDUS_BACKUP_DELAY_MS", 120_000);
         tokio::spawn(async move {
             // Уводим backup со startup hot path: тяжёлое копирование БД не должно
             // совпадать с cold-start CPU/IO burst. (Понижение приоритета самого
@@ -234,7 +234,7 @@ async fn run_core_worker() -> ExitCode {
     let _keep_ark_alive = ark;
 
     let (backend_tray, mut tray_events) = backend_tray::start();
-    eprintln!("[kepler-backend] ready. Ctrl+C для shutdown.");
+    eprintln!("[mundus-engine] ready. Ctrl+C для shutdown.");
 
     let mut tray_exit_requested = false;
     let requested_control = if let Some(mut receiver) = control_commands.take() {
@@ -263,7 +263,7 @@ async fn run_core_worker() -> ExitCode {
                                 electron_pid,
                             },
                         ).await {
-                            eprintln!("[kepler-backend] desktop lease acknowledgement failed: {error}");
+                            eprintln!("[mundus-engine] desktop lease acknowledgement failed: {error}");
                         }
                     }
                     Some(ControlMessage::DesktopLeaseRevoked { generation }) => {
@@ -287,7 +287,7 @@ async fn run_core_worker() -> ExitCode {
 
         }
     };
-    eprintln!("[kepler-backend] shutdown signal received, cleaning up");
+    eprintln!("[mundus-engine] shutdown signal received, cleaning up");
     backend_tray.stop();
 
     // Stop new HTTP/WS work before draining runtime-owned processes.
@@ -314,16 +314,18 @@ async fn run_core_worker() -> ExitCode {
 
     if let Err(e) = std::fs::remove_file(&engine_lock_path) {
         observability::stderr(format!(
-            "[kepler-backend] failed to remove Engine lock-file: {e}"
+            "[mundus-engine] failed to remove Engine lock-file: {e}"
         ));
     }
+    // MIGRATION(KOS-267): remove after 2026-11-01.
+    engine::data_dir::remove_legacy_lock_shim();
     drop(_singleton);
-    eprintln!("[kepler-backend] bye");
+    eprintln!("[mundus-engine] bye");
     if let Err(error) = http_shutdown_result {
-        observability::stderr(format!("[kepler-backend] HTTP shutdown failed: {error}"));
+        observability::stderr(format!("[mundus-engine] HTTP shutdown failed: {error}"));
     }
     if let Err(error) = ws_shutdown_result {
-        observability::stderr(format!("[kepler-backend] WS shutdown failed: {error}"));
+        observability::stderr(format!("[mundus-engine] WS shutdown failed: {error}"));
     }
     // Tray Exit is explicit user intent: cleanup failures are logged above but
     // must still surface TRAY_EXIT_CODE so supervisor/Desktop quit.
@@ -386,8 +388,8 @@ async fn setup() -> Result<SetupState, DynError> {
     // NB: до init_tracing нельзя зваать tracing::info!. Banner печатается
     // в stderr через eprintln; tracing включается ниже после crash_reporter.
     eprintln!(
-        "kepler-backend v{} starting (protocol {})",
-        kepler_backend::build_info::display_version(),
+        "mundus-engine v{} starting (protocol {})",
+        engine::build_info::display_version(),
         PROTOCOL_VERSION
     );
 
@@ -401,30 +403,45 @@ async fn setup() -> Result<SetupState, DynError> {
 
     // Install panic hook ASAP — любой последующий panic пишется в
     // <data_dir>/crashes/panic-*.log. Требует RUST_BACKTRACE=1 для
-    // backtrace; Kepler shell сетит этот env при spawn'е backend.
+    // backtrace; Mundus shell сетит этот env при spawn'е backend.
     crash_reporter::install(lock_dir.clone(), correlation_id.clone());
 
     // Phase 4 bug-detection: structured logging. tracing init ДО любых
     // других steps чтобы info!/warn!/error! из setup'а попали в файл.
     let log_guard = init_tracing(&lock_dir);
     tracing::info!(
-        version = kepler_backend::build_info::display_version(),
+        version = engine::build_info::display_version(),
         protocol = ?PROTOCOL_VERSION,
         correlation_id = %correlation_id,
-        "kepler-backend starting"
+        "mundus-engine starting"
     );
+    // MIGRATION(KOS-267): remove after 2026-11-01. Brand-migration runs lazily
+    // inside mundus_data_dir() above — before tracing init — so the report is
+    // replayed here into the log file.
+    if let Some(report) = engine::data_dir::last_report() {
+        if report.roaming_migrated || report.local_entries_moved > 0 || report.fell_back_to_legacy {
+            tracing::info!(
+                roaming_migrated = report.roaming_migrated,
+                local_entries_moved = report.local_entries_moved,
+                fell_back_to_legacy = report.fell_back_to_legacy,
+                "brand data-dir migration report"
+            );
+        }
+    }
 
-    let singleton_path = lock_dir.join("kepler-singleton.lock.db");
+    // MIGRATION(KOS-267): on the legacy dir the singleton name must stay the
+    // legacy one so a still-running 0.9.x Engine excludes this process.
+    let singleton_path = lock_dir.join(engine::data_dir::singleton_lock_name(&lock_dir));
 
     // Acquire through the OS-level SQLite WAL singleton gate.
-    let _singleton = kepler_backend::singleton::SingletonGuard::acquire(&singleton_path)?;
+    let _singleton = engine::singleton::SingletonGuard::acquire(&singleton_path)?;
     if engine_lock_path.exists() {
         std::fs::remove_file(&engine_lock_path)?;
         tracing::info!("discarded stale engine.lock.json");
     }
     tracing::info!(path = ?singleton_path, "singleton acquired");
 
-    let db_path = std::env::var("KOSMOS_DB_PATH")
+    let db_path = std::env::var("MUNDUS_DB_PATH")
         .unwrap_or_else(|_| lock_dir.join("ark.db").to_string_lossy().into_owned());
     tracing::info!(db_path = %db_path, "ark db path");
 
@@ -433,16 +450,15 @@ async fn setup() -> Result<SetupState, DynError> {
 
     let token = auth::generate_token();
     let usage_diagnostics = Arc::new(UsageTrackerDiagnosticsState::default());
-    let test_override = (std::env::var("KOSMOS_TEST_MODE").as_deref() == Ok("1"))
-        .then(|| std::env::var("KEPLER_USAGE_TRACKER").ok())
+    let test_override = (std::env::var("MUNDUS_TEST_MODE").as_deref() == Ok("1"))
+        .then(|| std::env::var("MUNDUS_USAGE_TRACKER").ok())
         .flatten()
         .and_then(|value| match value.as_str() {
             "0" => Some(false),
             "1" => Some(true),
             _ => None,
         });
-    let usage_startup =
-        kepler_backend::engine_settings::resolve_usage_tracker(&lock_dir, test_override);
+    let usage_startup = engine::engine_settings::resolve_usage_tracker(&lock_dir, test_override);
     usage_diagnostics.configure(usage_startup.enabled);
     tracing::info!(
         enabled = usage_startup.enabled,
@@ -464,7 +480,7 @@ async fn setup() -> Result<SetupState, DynError> {
         .map(std::path::PathBuf::from)
         .filter(|path| path.is_dir()),
     );
-    if let Some(value) = std::env::var_os("KOSMOS_WORKER_FILESYSTEM_ROOTS") {
+    if let Some(value) = std::env::var_os("MUNDUS_WORKER_FILESYSTEM_ROOTS") {
         worker_roots.extend(std::env::split_paths(&value).filter(|path| path.is_dir()));
     }
     worker_roots.sort();
@@ -525,25 +541,23 @@ async fn setup() -> Result<SetupState, DynError> {
     // App Index: индексирует Start Menu + UWP. SQLite в lock_dir (рядом с ark.db),
     // icon cache в lock_dir/app-icons/. На старте — load cached синхронно (<10ms),
     // background rescan через spawn ниже.
-    let app_index =
-        match kepler_backend::app_index::AppIndex::new(&lock_dir, lock_dir.join("app-icons")) {
-            Ok(ai) => std::sync::Arc::new(ai),
-            Err(e) => {
-                tracing::warn!(error = %e, "app_index init failed; launcher search будет пустой");
-                // Создаём fallback с empty store — backend стартует, search возвращает [].
-                // Если init упал жёстко, просто паникуем — это infrastructure failure.
-                return Err(format!("app_index init failed: {e}").into());
-            }
-        };
+    let app_index = match engine::app_index::AppIndex::new(&lock_dir, lock_dir.join("app-icons")) {
+        Ok(ai) => std::sync::Arc::new(ai),
+        Err(e) => {
+            tracing::warn!(error = %e, "app_index init failed; launcher search будет пустой");
+            // Создаём fallback с empty store — backend стартует, search возвращает [].
+            // Если init упал жёстко, просто паникуем — это infrastructure failure.
+            return Err(format!("app_index init failed: {e}").into());
+        }
+    };
 
     // File Index v1: host-local filename/path search. Broad startup scans are
     // opt-in only; see postmortems.md § 2026-06-08.
-    let file_index_enabled =
-        kepler_backend::file_index::env_flag_enabled("KEPLER_FILE_INDEX", true);
+    let file_index_enabled = engine::file_index::env_flag_enabled("MUNDUS_FILE_INDEX", true);
     let file_index = match if file_index_enabled {
-        kepler_backend::file_index::FileIndex::new(&lock_dir)
+        engine::file_index::FileIndex::new(&lock_dir)
     } else {
-        kepler_backend::file_index::FileIndex::new_disabled(&lock_dir)
+        engine::file_index::FileIndex::new_disabled(&lock_dir)
     } {
         Ok(index) => std::sync::Arc::new(index),
         Err(e) => return Err(format!("file_index init failed: {e}").into()),
@@ -590,10 +604,14 @@ async fn setup() -> Result<SetupState, DynError> {
         auth_token: token,
         started_at,
         correlation_id,
-        engine_version: kepler_backend::build_info::engine_version().to_string(),
-        source_commit: kepler_backend::build_info::engine_source_commit().to_string(),
+        engine_version: engine::build_info::engine_version().to_string(),
+        source_commit: engine::build_info::engine_source_commit().to_string(),
     };
     lock_file::write_engine_atomic(&engine_lock_path, &engine_lock)?;
+    // MIGRATION(KOS-267): remove after 2026-11-01.
+    // Pinned component builds still discover the Engine only through
+    // `%APPDATA%\Kosmos\engine.lock.json`; mirror the lock until repin.
+    engine::data_dir::write_legacy_lock_shim(&engine_lock);
     tracing::info!(path = ?engine_lock_path, "Engine lock-file written");
 
     // LAN sync must not gate local readiness. If its fixed discovery port is
@@ -602,8 +620,8 @@ async fn setup() -> Result<SetupState, DynError> {
         let ark_for_sync = ark.clone();
         let lock_dir_for_sync = lock_dir.clone();
         tokio::spawn(async move {
-            if std::env::var("KEPLER_SKIP_SYNC").as_deref() == Ok("1") {
-                tracing::info!("KEPLER_SKIP_SYNC=1 — start_sync пропущен");
+            if std::env::var("MUNDUS_SKIP_SYNC").as_deref() == Ok("1") {
+                tracing::info!("MUNDUS_SKIP_SYNC=1 — start_sync пропущен");
                 return;
             }
 
@@ -642,7 +660,7 @@ async fn setup() -> Result<SetupState, DynError> {
     // out while the shell is still waiting for the Ark bridge.
     {
         let ai = app_index.clone();
-        let delay = startup_delay_ms("KEPLER_APP_INDEX_INITIAL_DELAY_MS", 15_000);
+        let delay = startup_delay_ms("MUNDUS_APP_INDEX_INITIAL_DELAY_MS", 15_000);
         tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
             match ai.rescan().await {
@@ -662,11 +680,11 @@ async fn setup() -> Result<SetupState, DynError> {
     // back to walking. Start it only after WS + lock-file are ready, otherwise
     // shell IPC requests time out during backend startup.
     if file_index_enabled
-        && kepler_backend::file_index::env_flag_enabled("KEPLER_FILE_INDEX_INITIAL_RESCAN", true)
+        && engine::file_index::env_flag_enabled("MUNDUS_FILE_INDEX_INITIAL_RESCAN", true)
         && file_index.has_roots()?
     {
         let index = file_index.clone();
-        let delay = startup_delay_ms("KEPLER_FILE_INDEX_INITIAL_DELAY_MS", 20_000);
+        let delay = startup_delay_ms("MUNDUS_FILE_INDEX_INITIAL_DELAY_MS", 20_000);
         tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
             match index.rescan().await {
@@ -685,10 +703,8 @@ async fn setup() -> Result<SetupState, DynError> {
     } else {
         tracing::info!(
             enabled = file_index_enabled,
-            initial_rescan = kepler_backend::file_index::env_flag_enabled(
-                "KEPLER_FILE_INDEX_INITIAL_RESCAN",
-                true
-            ),
+            initial_rescan =
+                engine::file_index::env_flag_enabled("MUNDUS_FILE_INDEX_INITIAL_RESCAN", true),
             has_roots = file_index.has_roots().unwrap_or(false),
             "file_index initial rescan skipped"
         );
@@ -828,9 +844,9 @@ async fn probe_api_v1_ws_dispatch(port: u16, token: &str) -> Result<(), String> 
                 "apiVersion": API_VERSION,
                 "token": token,
                 "pid": std::process::id(),
-                "clientId": "kosmos-runtime-readiness",
-                "clientClass": "kosmos-runtime",
-                "clientVersion": kepler_backend::build_info::display_version(),
+                "clientId": "mundus-runtime-readiness",
+                "clientClass": "mundus-runtime",
+                "clientVersion": engine::build_info::display_version(),
             })
             .to_string(),
         ))
@@ -909,8 +925,8 @@ mod tests {
     }
 
     async fn wait_for_ws_baseline(
-        dispatcher: &kepler_backend::engine_dispatch::EngineDispatcher,
-        command_bus: &Arc<kepler_backend::command_bus::CommandBus>,
+        dispatcher: &engine::engine_dispatch::EngineDispatcher,
+        command_bus: &Arc<engine::command_bus::CommandBus>,
         owners: usize,
         registrations: usize,
     ) {
@@ -1050,10 +1066,9 @@ mod tests {
             "t".repeat(64),
             dir.path().to_path_buf(),
             Arc::new(
-                kepler_backend::app_index::AppIndex::new(dir.path(), dir.path().join("icons"))
-                    .unwrap(),
+                engine::app_index::AppIndex::new(dir.path(), dir.path().join("icons")).unwrap(),
             ),
-            Arc::new(kepler_backend::file_index::FileIndex::new_disabled(dir.path()).unwrap()),
+            Arc::new(engine::file_index::FileIndex::new_disabled(dir.path()).unwrap()),
             usage_diagnostics,
             protocol_usage.clone(),
             package_service.clone(),

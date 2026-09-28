@@ -11,12 +11,12 @@ use windows_service::service::{
 use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 
 use crate::CliResponse;
-use kepler_focus_svc::{uninstall_service_names, LEGACY_SERVICE_NAME, SERVICE_NAME};
+use focus_svc::{service_names, uninstall_service_names, SERVICE_NAME};
 
-pub const SERVICE_DISPLAY_NAME: &str = "Kosmos System Service";
+pub const SERVICE_DISPLAY_NAME: &str = "Mundus System Service";
 pub const SERVICE_DESCRIPTION: &str =
-    "Privileged local service для Kosmos: hosts blocking и fast NTFS file indexing. \
-Можно безопасно удалить: sc stop KosmosSystemSvc && sc delete KosmosSystemSvc.";
+    "Privileged local service для Mundus: hosts blocking и fast NTFS file indexing. \
+Можно безопасно удалить: sc stop MundusSystemSvc && sc delete MundusSystemSvc.";
 
 fn err(msg: impl Into<String>) -> CliResponse {
     CliResponse {
@@ -63,13 +63,18 @@ fn open_installed_service(
     scm: &ServiceManager,
     access: ServiceAccess,
 ) -> Result<(windows_service::service::Service, &'static str), windows_service::Error> {
-    match scm.open_service(SERVICE_NAME, access) {
-        Ok(svc) => Ok((svc, SERVICE_NAME)),
-        Err(primary) => match scm.open_service(LEGACY_SERVICE_NAME, access) {
-            Ok(svc) => Ok((svc, LEGACY_SERVICE_NAME)),
-            Err(_) => Err(primary),
-        },
+    let mut primary = None;
+    for name in service_names() {
+        match scm.open_service(name, access) {
+            Ok(svc) => return Ok((svc, name)),
+            Err(e) => {
+                if primary.is_none() {
+                    primary = Some(e);
+                }
+            }
+        }
     }
+    Err(primary.expect("service_names() is never empty"))
 }
 
 fn is_missing_service_error(e: &windows_service::Error) -> bool {
@@ -114,13 +119,25 @@ pub fn install() -> ! {
         Err(r) => r.print_and_exit(),
     };
 
+    // MIGRATION(KOS-267): remove after 2026-11-01. We are already elevated
+    // here — drop registrations left by previous product generations so the
+    // SCM database only ever carries the current name.
+    for legacy in focus_svc::LEGACY_SERVICE_NAMES {
+        if let Ok(svc) = scm.open_service(
+            legacy,
+            ServiceAccess::QUERY_STATUS | ServiceAccess::STOP | ServiceAccess::DELETE,
+        ) {
+            let _ = stop_and_delete_service(svc, legacy);
+        }
+    }
+
     let info = ServiceInfo {
         name: OsString::from(SERVICE_NAME),
         display_name: OsString::from(SERVICE_DISPLAY_NAME),
         service_type: ServiceType::OWN_PROCESS,
         // AutoStart — service поднимается на каждом boot'е без admin.
         // Гарантирует zero-UAC focus mode после первой установки: pipe всегда
-        // доступен, Kepler не нуждается в правах для запуска service'а.
+        // доступен, Engine не нуждается в правах для запуска service'а.
         start_type: ServiceStartType::AutoStart,
         error_control: ServiceErrorControl::Normal,
         executable_path: exe,

@@ -135,8 +135,8 @@ mod tests {
             PathBuf::from(r"C:\Users\Kirill\note.md")
         );
         assert_eq!(
-            user_path(Path::new(r"\\?\D:\Projects\kosmos\README.md"), 'D'),
-            PathBuf::from(r"D:\Projects\kosmos\README.md")
+            user_path(Path::new(r"\\?\D:\Projects\mundus\README.md"), 'D'),
+            PathBuf::from(r"D:\Projects\mundus\README.md")
         );
     }
 }

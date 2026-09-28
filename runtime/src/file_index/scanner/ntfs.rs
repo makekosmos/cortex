@@ -7,8 +7,13 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-const SYSTEM_SERVICE_PIPE: &str = r"\\.\pipe\kosmos-system-service";
-const LEGACY_FOCUS_SERVICE_PIPE: &str = r"\\.\pipe\kepler-focus-svc";
+const SYSTEM_SERVICE_PIPE: &str = crate::brand::SYSTEM_SERVICE_PIPE;
+// MIGRATION(KOS-267): remove after 2026-11-01. Pipes listened on by system
+// services installed by older product generations.
+const LEGACY_PIPES: [&str; 2] = [
+    r"\\.\pipe\kosmos-system-service", // MIGRATION(KOS-267)
+    r"\\.\pipe\kepler-focus-svc",      // MIGRATION(KOS-267)
+];
 
 pub fn scan_drive_root(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFile>, String> {
     let drive = drive_letter(root)?;
@@ -45,14 +50,21 @@ struct IndexedFileWire {
 
 fn scan_via_service(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFile>, String> {
     match scan_via_service_pipe(SYSTEM_SERVICE_PIPE, root, exclude_noisy) {
-        Ok(files) => Ok(files),
-        Err(primary) => {
-            let legacy = scan_via_service_pipe(LEGACY_FOCUS_SERVICE_PIPE, root, exclude_noisy);
-            legacy.map_err(|legacy_error| {
-                format!("primary pipe failed: {primary}; legacy pipe failed: {legacy_error}")
-            })
+        Ok(files) => return Ok(files),
+        Err(error) => tracing::debug!(
+            target: "file_index",
+            error,
+            "primary service pipe unavailable; trying legacy pipes"
+        ),
+    }
+    let mut last_error = String::from("no legacy pipes configured");
+    for pipe in LEGACY_PIPES {
+        match scan_via_service_pipe(pipe, root, exclude_noisy) {
+            Ok(files) => return Ok(files),
+            Err(error) => last_error = error,
         }
     }
+    Err(last_error)
 }
 
 fn scan_via_service_pipe(
@@ -190,8 +202,8 @@ mod tests {
             PathBuf::from(r"C:\Users\Kirill\note.md")
         );
         assert_eq!(
-            user_path(Path::new(r"\\?\D:\Projects\kosmos\README.md"), 'D'),
-            PathBuf::from(r"D:\Projects\kosmos\README.md")
+            user_path(Path::new(r"\\?\D:\Projects\mundus\README.md"), 'D'),
+            PathBuf::from(r"D:\Projects\mundus\README.md")
         );
     }
 }

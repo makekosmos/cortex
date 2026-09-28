@@ -442,7 +442,7 @@ mod tests {
             inject_mode: InjectMode::ClipboardOnly,
             network_profile: NetworkProfile::CloudflareDoh,
             http_proxy: Some("http://127.0.0.1:8888".into()),
-            transcription_prompt: "Mundus Mundus Groq".into(),
+            transcription_prompt: "Mundus Groq".into(),
             provider: "groq".into(),
             provider_enabled: true,
             model: "whisper-large-v3".into(),
@@ -460,7 +460,7 @@ mod tests {
         assert_eq!(loaded.inject_mode, InjectMode::ClipboardOnly);
         assert_eq!(loaded.network_profile, NetworkProfile::CloudflareDoh);
         assert_eq!(loaded.http_proxy.as_deref(), Some("http://127.0.0.1:8888"));
-        assert_eq!(loaded.transcription_prompt, "Mundus Mundus Groq");
+        assert_eq!(loaded.transcription_prompt, "Mundus Groq");
         assert_eq!(loaded.local_engine, "whisper.cpp");
         assert_eq!(
             loaded.local_model_path.as_deref(),

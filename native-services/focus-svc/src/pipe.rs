@@ -1,4 +1,4 @@
-//! Named pipe accept loop. Слушает `\\.\pipe\kosmos-system-service`, на каждое
+//! Named pipe accept loop. Слушает `\\.\pipe\mundus-system-service`, на каждое
 //! connection — spawn thread, читает один JSON request, выполняет op,
 //! пишет JSON response, закрывает pipe.
 //!
@@ -28,9 +28,9 @@ use windows_sys::Win32::System::Pipes::{
     PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
 };
 
-use kepler_focus_svc::protocol;
+use focus_svc::protocol;
 
-const PIPE_NAME: &str = r"\\.\pipe\kosmos-system-service";
+const PIPE_NAME: &str = r"\\.\pipe\mundus-system-service";
 const BUF_SIZE: u32 = 64 * 1024;
 // "D:(A;;GA;;;AU)" → DACL: Allow GenericAll к группе Authenticated Users.
 // Это минимальный SDDL, при котором non-elevated user-mode процессы могут
@@ -39,8 +39,13 @@ const BUF_SIZE: u32 = 64 * 1024;
 const PIPE_SDDL: &str = "D:(A;;GA;;;AU)";
 
 fn hosts_path_for_dispatch() -> PathBuf {
-    if let Ok(p) = std::env::var("KEPLER_FOCUS_HOSTS_PATH") {
-        return PathBuf::from(p);
+    // MIGRATION(KOS-267): legacy env name accepted until cleanup.
+    for name in ["MUNDUS_FOCUS_HOSTS_PATH", "KEPLER_FOCUS_HOSTS_PATH"] {
+        if let Ok(p) = std::env::var(name) {
+            if !p.is_empty() {
+                return PathBuf::from(p);
+            }
+        }
     }
     let sysroot = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into());
     PathBuf::from(sysroot).join("System32\\drivers\\etc\\hosts")
@@ -150,7 +155,7 @@ unsafe impl Send for PipeHandle {}
 
 fn handle_connection(pipe: PipeHandle) {
     let mut file = unsafe { std::fs::File::from_raw_handle(pipe.0 as _) };
-    let raw = kepler_focus_svc::request_io::read_request_line(&mut file).unwrap_or_default();
+    let raw = focus_svc::request_io::read_request_line(&mut file).unwrap_or_default();
     let resp = protocol::handle_raw(&raw, &hosts_path_for_dispatch());
     let json = serde_json::to_string(&resp)
         .unwrap_or_else(|_| String::from(r#"{"ok":false,"error":"serialize failed"}"#));
