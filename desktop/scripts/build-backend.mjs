@@ -27,7 +27,7 @@ const cortexTargetDir = effectiveCargoTargetDir(
 );
 
 // KOS-233: one product, one version. The Engine no longer has its own
-// per-Engine version config file — it reports the Kosmos Desktop product
+// per-Engine version config file — it reports the Mundus Desktop product
 // version (`desktop/release-versions.json`) and the commit it was built from.
 // Both are baked into the binary at compile time via `option_env!`
 // (see runtime/src/build_info.rs), so they must be set before the `cargo build`
@@ -42,14 +42,14 @@ const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], {
 }).trim();
 const cargoEnv = {
   ...process.env,
-  KOSMOS_ENGINE_VERSION: productVersion,
-  KOSMOS_ENGINE_SOURCE_COMMIT: sourceCommit,
+  MUNDUS_ENGINE_VERSION: productVersion,
+  MUNDUS_ENGINE_SOURCE_COMMIT: sourceCommit,
 };
 
 const cortexBuildArgs = ["build", "--release", "--manifest-path", "../Cargo.toml"];
-const buildKepler = spawnSync(
+const buildMundus = spawnSync(
   "cargo",
-  [...cortexBuildArgs, "--bin", "kepler-backend", "--features", "windows-gui-subsystem,iroh-spike"],
+  [...cortexBuildArgs, "--bin", "mundus-engine", "--features", "windows-gui-subsystem,iroh-spike"],
   {
     cwd: shellRoot,
     stdio: "inherit",
@@ -57,7 +57,7 @@ const buildKepler = spawnSync(
     env: cargoEnv,
   },
 );
-if ((buildKepler.status ?? 1) !== 0) process.exit(buildKepler.status ?? 1);
+if ((buildMundus.status ?? 1) !== 0) process.exit(buildMundus.status ?? 1);
 for (const bin of RUNTIME_BINARIES.slice(1)) {
   const result = spawnSync("cargo", [...cortexBuildArgs, "--bin", bin], {
     cwd: shellRoot,
@@ -91,7 +91,7 @@ if (process.platform === "win32") {
   engineVersion = productVersion;
   const engineDir = path.join(shellRoot, ".tmp", "engine.next");
   mkdirSync(engineDir, { recursive: true });
-  const engineArchive = path.join(engineDir, "Kosmos-Engine.zip");
+  const engineArchive = path.join(engineDir, "Mundus-Engine.zip");
   const engineManifest = buildEngineArchive(stageDir, engineArchive, {
     version: engineVersion,
     sourceCommit,

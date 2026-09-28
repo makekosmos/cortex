@@ -1,4 +1,4 @@
-// DictationHost — singleton в kepler-backend. State machine + broadcast events
+// DictationHost — singleton в mundus-engine. State machine + broadcast events
 // + dispatch для `dictation.*` operations.
 //
 // Аналогично PomodoroHost (`pomodoro_host.rs:48-380`) — Arc<Mutex<State>> +

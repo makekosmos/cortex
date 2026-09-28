@@ -17,7 +17,7 @@ test("release builds materialize runtime before preflight", async () => {
 });
 
 test("release build rejects a missing BOM before invoking makensis", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "kosmos-preflight-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "mundus-preflight-"));
   const marker = path.join(dir, "builder-called");
   const result = spawnSync(
     process.execPath,
@@ -34,7 +34,7 @@ test("release build rejects a missing BOM before invoking makensis", async () =>
       encoding: "utf8",
       env: {
         ...process.env,
-        KOSMOS_NSIS_DIR: marker,
+        MUNDUS_NSIS_DIR: marker,
       },
     },
   );
@@ -88,7 +88,7 @@ test("receipt validation rejects mutation and stale inputs", async () => {
     assertReceiptMatchesBom,
     normalizeArtifactPath,
   } = await import("./release-receipt.mjs");
-  const dir = await mkdtemp(path.join(os.tmpdir(), "kosmos-receipt-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "mundus-receipt-"));
   const artifact = path.join(dir, "installer.exe");
   await writeFile(artifact, "good");
   const bom = {

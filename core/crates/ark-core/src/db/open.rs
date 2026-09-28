@@ -214,7 +214,7 @@ fn ensure_sync_tombstone_type_id(conn: &Connection) -> Result<(), String> {
 
 /// Online backup ARK DB в указанный destination path. Source connection
 /// может оставаться live (SQLite Online Backup API safe для concurrent
-/// readers/writer). Вызывается из db_backup scheduler в kepler-backend
+/// readers/writer). Вызывается из db_backup scheduler в mundus-engine
 /// через `Request::DbBackup`.
 pub fn backup_to_file(conn: &Connection, dest_path: &str) -> Result<(), String> {
     conn.backup(rusqlite::DatabaseName::Main, dest_path, None)

@@ -4,7 +4,7 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
 
 fn main() {
-    if let Some(path) = std::env::var_os("KOSMOS_FIXTURE_ENTRY_MARKER") {
+    if let Some(path) = std::env::var_os("MUNDUS_FIXTURE_ENTRY_MARKER") {
         if let Ok(mut file) = std::fs::File::create(path) {
             let _ = file.write_all(b"entry:1\n");
             let _ = file.sync_all();
@@ -20,7 +20,7 @@ fn main() {
         return;
     };
     let package_id = bootstrap["package_id"].as_str().unwrap_or_default();
-    if let Some(path) = std::env::var_os("KOSMOS_FIXTURE_BOOTSTRAP_MARKER") {
+    if let Some(path) = std::env::var_os("MUNDUS_FIXTURE_BOOTSTRAP_MARKER") {
         use std::fs::OpenOptions;
         if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
             if package_id.ends_with(".fake-provider") {
@@ -185,7 +185,7 @@ fn main() {
         if let Some(id) = provider_call_id {
             if let Ok(result) = result_rx.try_recv() {
                 if result["id"].as_str() == Some(id) {
-                    if let Some(marker) = std::env::var_os("KOSMOS_FAKE_PROVIDER_RESULT_MARKER") {
+                    if let Some(marker) = std::env::var_os("MUNDUS_FAKE_PROVIDER_RESULT_MARKER") {
                         let bytes = if result["ok"] == true {
                             result["result"]["bytes"]
                                 .as_str()

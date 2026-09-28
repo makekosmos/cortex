@@ -2,9 +2,9 @@
 
 use super::support::IntegrationReplicationSetup;
 use ark_core::integration_replication::encryption_key_id;
-use kepler_backend::ark_host::ArkHost;
-use kepler_backend::integrations::handle_operation;
-use kepler_backend::package_service::PackageService;
+use engine::ark_host::ArkHost;
+use engine::integrations::handle_operation;
+use engine::package_service::PackageService;
 use serde_json::json;
 use std::path::Path;
 use std::time::Duration;

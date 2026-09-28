@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use kepler_backend::package_worker_process::{
+use engine::package_worker_process::{
     test_support, FailureStage, LaunchCleanupOwner, WorkerProcess, WorkerProcessError,
 };
 
@@ -25,8 +25,8 @@ struct Markers {
 impl Drop for Markers {
     fn drop(&mut self) {
         unsafe {
-            std::env::remove_var("KOSMOS_FIXTURE_ENTRY_MARKER");
-            std::env::remove_var("KOSMOS_FIXTURE_BOOTSTRAP_MARKER");
+            std::env::remove_var("MUNDUS_FIXTURE_ENTRY_MARKER");
+            std::env::remove_var("MUNDUS_FIXTURE_BOOTSTRAP_MARKER");
         }
         test_support::reset();
     }
@@ -41,8 +41,8 @@ fn markers() -> (tempfile::TempDir, Markers) {
     let entry = directory.path().join("entry.marker");
     let bootstrap = directory.path().join("bootstrap.marker");
     unsafe {
-        std::env::set_var("KOSMOS_FIXTURE_ENTRY_MARKER", &entry);
-        std::env::set_var("KOSMOS_FIXTURE_BOOTSTRAP_MARKER", &bootstrap);
+        std::env::set_var("MUNDUS_FIXTURE_ENTRY_MARKER", &entry);
+        std::env::set_var("MUNDUS_FIXTURE_BOOTSTRAP_MARKER", &bootstrap);
     }
     (
         directory,

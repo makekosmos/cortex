@@ -4,10 +4,9 @@ release/
 .tmp/
 *.log
 
-# Per-worktree dev slot configuration (KEPLER_INSTANCE override).
+# Per-worktree dev slot configuration (MUNDUS_INSTANCE override).
 .env.local
 
 # NSIS buildResources live under build/ — the root build/ is ignored;
 # explicitly whitelist the required files.
 !build/
-!build/icon.png

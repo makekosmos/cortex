@@ -29,8 +29,8 @@ fn external_url_requires_a_fresh_signed_external_listing() {
         Err(TrustError::Unavailable)
     ));
 
-    let mut package = StoreListing::external("com.kosmos.eden", "Eden", "https://kosmos.local/");
-    package.kind = ListingKind::KosmosPackage;
+    let mut package = StoreListing::external("com.kosmos.eden", "Eden", "https://mundus.local/");
+    package.kind = ListingKind::MundusPackage;
     package.distribution = Distribution::Package {
         package_id: "com.kosmos.eden".into(),
         version: "1.0.0".into(),

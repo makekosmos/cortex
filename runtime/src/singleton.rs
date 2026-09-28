@@ -62,14 +62,14 @@ impl Drop for SingletonGuard {
 /// Acquire singleton + удалить stale `engine.lock.json` если он был.
 ///
 /// Почему так: `SingletonGuard` (SQLite WAL exclusive lock на
-/// `kepler-singleton.lock.db`) — настоящий OS-level gate, kernel
+/// `mundus-singleton.lock.db`) — настоящий OS-level gate, kernel
 /// освобождает handle при любой смерти процесса (panic, kill -9, BSOD).
 /// JSON-файл — только discovery-метаданные для shell (ws_port, auth_token).
 ///
 /// Раньше startup гейтился на «PID из JSON жив через `OpenProcess`», что
 /// ломалось на pid reuse: Windows отдавала освободившийся PID другому
 /// процессу (electron, chrome, ...), гейт видел «PID жив» и бесконечно
-/// отказывал в старте. См. postmortems.md § 2026-05-23 — Kepler:
+/// отказывал в старте. См. postmortems.md § 2026-05-23 — Mundus:
 /// singleton conflict из-за pid reuse.
 ///
 /// Возвращает `(guard, Some(stale_pid))` если на диске лежал JSON от
@@ -130,7 +130,7 @@ mod tests {
     #[test]
     fn second_acquire_fails_fast() {
         let dir = tempdir().expect("temp dir");
-        let lock_path = dir.path().join("kepler.lock.db");
+        let lock_path = dir.path().join("mundus.lock.db");
 
         let _first = SingletonGuard::acquire(&lock_path).expect("first lock");
         let second = SingletonGuard::acquire(&lock_path);
@@ -141,7 +141,7 @@ mod tests {
     #[test]
     fn re_acquire_after_drop_works() {
         let dir = tempdir().expect("temp dir");
-        let lock_path = dir.path().join("kepler.lock.db");
+        let lock_path = dir.path().join("mundus.lock.db");
 
         let first = SingletonGuard::acquire(&lock_path).expect("first lock");
         drop(first);
@@ -152,7 +152,7 @@ mod tests {
     #[test]
     fn creates_parent_directory() {
         let dir = tempdir().expect("temp dir");
-        let lock_path = dir.path().join("nested").join("dir").join("kepler.lock.db");
+        let lock_path = dir.path().join("nested").join("dir").join("mundus.lock.db");
         assert!(!lock_path.parent().unwrap().exists());
 
         let _guard = SingletonGuard::acquire(&lock_path).expect("acquire creates parent");
@@ -171,7 +171,7 @@ mod tests {
         let singleton_path = dir.path().join("engine-singleton.lock.db");
 
         // PID текущего теста — это cargo test binary, гарантированно живой и
-        // гарантированно НЕ kepler-backend. Симулирует pid reuse.
+        // гарантированно НЕ mundus-engine. Симулирует pid reuse.
         let stale = sample_lock(std::process::id(), 60803);
         write_engine_atomic(&lock_path, &stale).expect("write stale lock");
 
@@ -194,7 +194,7 @@ mod tests {
             .expect("singleton production source");
         assert!(source.contains("read_engine"));
         assert!(!source.contains("lock_file::read("));
-        assert!(!source.contains("kepler.lock.json"));
+        assert!(!source.contains("mundus.lock.json"));
     }
 
     #[test]

@@ -1095,24 +1095,24 @@
     #[tokio::test]
     async fn mock_transcript_override_requires_test_mode() {
         let _guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
-        std::env::remove_var("KOSMOS_TEST_MODE");
-        std::env::remove_var("KOSMOS_HEADLESS");
+        std::env::remove_var("MUNDUS_TEST_MODE");
+        std::env::remove_var("MUNDUS_HEADLESS");
         std::env::set_var(
-            "KOSMOS_TEST_DICTATION_TRANSCRIPT",
+            "MUNDUS_TEST_DICTATION_TRANSCRIPT",
             "детерминированный текст",
         );
 
         assert_eq!(mock_dictation_transcript_override("mock", None), None);
 
-        std::env::set_var("KOSMOS_TEST_MODE", "1");
+        std::env::set_var("MUNDUS_TEST_MODE", "1");
         assert_eq!(
             mock_dictation_transcript_override("mock", None).as_deref(),
             Some("детерминированный текст")
         );
         assert_eq!(mock_dictation_transcript_override("groq", None), None);
 
-        std::env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
-        std::env::remove_var("KOSMOS_TEST_MODE");
+        std::env::remove_var("MUNDUS_TEST_DICTATION_TRANSCRIPT");
+        std::env::remove_var("MUNDUS_TEST_MODE");
     }
 
     #[test]
@@ -1134,8 +1134,8 @@
     #[tokio::test]
     async fn submit_audio_mock_transcript_succeeds_without_api_key_and_cleans_up() {
         let _guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
-        std::env::set_var("KOSMOS_TEST_MODE", "1");
-        std::env::set_var("KOSMOS_TEST_DICTATION_TRANSCRIPT", "привет из теста");
+        std::env::set_var("MUNDUS_TEST_MODE", "1");
+        std::env::set_var("MUNDUS_TEST_DICTATION_TRANSCRIPT", "привет из теста");
 
         let td = tempfile::TempDir::new().unwrap();
         let mut cfg = test_cfg();
@@ -1203,16 +1203,16 @@
         assert_eq!(stats.data["totalWords"], 3);
         assert_eq!(stats.data["totalRecordSeconds"], 4);
 
-        std::env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
-        std::env::remove_var("KOSMOS_TEST_MODE");
+        std::env::remove_var("MUNDUS_TEST_DICTATION_TRANSCRIPT");
+        std::env::remove_var("MUNDUS_TEST_MODE");
     }
 
     #[tokio::test]
     async fn submit_audio_groq_transcript_succeeds_with_test_api_key_and_cleans_up() {
         let _guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
-        std::env::set_var("KOSMOS_TEST_MODE", "1");
-        std::env::set_var("KOSMOS_TEST_GROQ_API_KEY", "test-groq-api-key");
-        std::env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
+        std::env::set_var("MUNDUS_TEST_MODE", "1");
+        std::env::set_var("MUNDUS_TEST_GROQ_API_KEY", "test-groq-api-key");
+        std::env::remove_var("MUNDUS_TEST_DICTATION_TRANSCRIPT");
 
         use httpmock::prelude::*;
         let server = MockServer::start_async().await;
@@ -1306,17 +1306,17 @@
         assert_eq!(stats.data["totalWords"], 3);
         assert_eq!(stats.data["totalRecordSeconds"], 4);
 
-        std::env::remove_var("KOSMOS_TEST_GROQ_API_KEY");
-        std::env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
-        std::env::remove_var("KOSMOS_TEST_MODE");
+        std::env::remove_var("MUNDUS_TEST_GROQ_API_KEY");
+        std::env::remove_var("MUNDUS_TEST_DICTATION_TRANSCRIPT");
+        std::env::remove_var("MUNDUS_TEST_MODE");
     }
 
     #[tokio::test]
     async fn submit_audio_local_transcript_succeeds_without_api_key_and_cleans_up() {
         let _guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
-        std::env::set_var("KOSMOS_TEST_MODE", "1");
+        std::env::set_var("MUNDUS_TEST_MODE", "1");
         std::env::set_var(
-            "KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT",
+            "MUNDUS_TEST_LOCAL_DICTATION_TRANSCRIPT",
             "локальная расшифровка",
         );
 
@@ -1378,8 +1378,8 @@
         assert!(pending.ok);
         assert_eq!(pending.data["items"].as_array().unwrap().len(), 0);
 
-        std::env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
-        std::env::remove_var("KOSMOS_TEST_MODE");
+        std::env::remove_var("MUNDUS_TEST_LOCAL_DICTATION_TRANSCRIPT");
+        std::env::remove_var("MUNDUS_TEST_MODE");
     }
 
     #[tokio::test]

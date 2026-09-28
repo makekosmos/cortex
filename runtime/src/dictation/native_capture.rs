@@ -51,7 +51,7 @@ fn start_windows(
     let (stop_tx, stop_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::channel();
     let join = std::thread::Builder::new()
-        .name("kosmos-dictation-capture".into())
+        .name("mundus-dictation-capture".into())
         .spawn(move || {
             let result = capture_windows(stop_rx, ready_tx.clone(), level_sink);
             if let Err(error) = &result {

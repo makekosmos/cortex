@@ -6,7 +6,7 @@ use serde_json::json;
 
 use crate::app::ManagerApp;
 use crate::widgets::*;
-use kosmos_gpui_kit::theme::*;
+use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("backups.list", "manager.db_backups.list", json!({}));
@@ -19,9 +19,9 @@ pub fn render(
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
     let mut col = div().flex().flex_col().gap_4().w_full();
-    col = col.child(section("Настройки", "Запуск Kosmos"));
+    col = col.child(section("Настройки", "Запуск Mundus"));
 
-    // Engine-owned autostart: registers `kepler-backend --start` in the HKCU
+    // Engine-owned autostart: registers `mundus-engine --start` in the HKCU
     // Run key — headless Engine at sign-in, no UI window (the standalone
     // Dictation app has its own Run entry and relies on Engine being up).
     col = col.child(slot_or(app, "engine.autostart", |v| {
@@ -29,7 +29,7 @@ pub fn render(
         let enabled = vbool(v, "enabled");
         let mut row_el = row(
             "Автозапуск при входе",
-            "Engine стартует с входом в Windows без UI (kepler-backend --start)",
+            "Engine стартует с входом в Windows без UI (mundus-engine --start)",
         );
         if available {
             row_el = row_el.child(
@@ -78,11 +78,11 @@ pub fn render(
                         button::ghost("open-backups")
                             .label("Открыть папку")
                             .on_click(cx.listener(|this, _, _, cx| {
-                                match kosmos_gpui_kit::engine::data_dir().map(|d| d.join("backups"))
+                                match mundus_gpui_kit::engine::data_dir().map(|d| d.join("backups"))
                                 {
                                     Ok(dir) => {
                                         std::fs::create_dir_all(&dir).ok();
-                                        if let Err(e) = kosmos_gpui_kit::engine::open_path(&dir) {
+                                        if let Err(e) = mundus_gpui_kit::engine::open_path(&dir) {
                                             this.error = Some(e);
                                         }
                                     }

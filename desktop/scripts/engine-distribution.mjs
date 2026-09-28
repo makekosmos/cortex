@@ -1,14 +1,19 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { ENGINE_BINARY, ENGINE_MANIFEST_PRODUCT } from "./brand.mjs";
 import { extractZip, readZip, safeEntryName, writeZip } from "./zip-utils.mjs";
 
 export const ENGINE_FILES = [
-  "kepler-backend.exe",
-  "kepler-focus-helper.exe",
-  "kepler-focus-svc.exe",
+  ENGINE_BINARY,
+  "focus-helper.exe",
+  "focus-svc.exe",
   "tray.ico",
 ];
+
+// MIGRATION(KOS-267): 'kosmos-engine' manifests exist in installed Engine
+// roots written by 0.9.x installers; accept both until cleanup.
+const ENGINE_MANIFEST_PRODUCTS = new Set([ENGINE_MANIFEST_PRODUCT, "kosmos-engine"]);
 
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const ENGINE_VERSION = /^\d+\.\d+\.\d+$/;
@@ -16,7 +21,7 @@ const ENGINE_FILE = /^[A-Za-z0-9._-]+$/;
 const SOURCE_COMMIT = /^[0-9a-f]{40}$/;
 
 function validateEngineManifest(manifest) {
-  if (!manifest || manifest.schema_version !== 1 || manifest.product !== "kosmos-engine")
+  if (!manifest || manifest.schema_version !== 1 || !ENGINE_MANIFEST_PRODUCTS.has(manifest.product))
     throw new Error("invalid engine manifest");
   if (
     Object.prototype.toString.call(manifest.version) !== "[object String]" ||
@@ -56,7 +61,7 @@ export function buildEngineArchive(releaseDir, archive, { version, sourceCommit 
   });
   const manifest = {
     schema_version: 1,
-    product: "kosmos-engine",
+    product: "mundus-engine",
     version,
     source_commit: sourceCommit,
     files: files.map(({ name, sha256: digest, size }) => ({ name, sha256: digest, size })),
@@ -160,7 +165,7 @@ export function resolveInstalledEngine(engineRoot) {
     root,
     version: pointer.version,
     versionRoot: canonicalVersionRoot,
-    backend: fs.realpathSync(path.join(canonicalVersionRoot, "kepler-backend.exe")),
+    backend: fs.realpathSync(path.join(canonicalVersionRoot, "mundus-engine.exe")),
     tray: fs.realpathSync(path.join(canonicalVersionRoot, "tray.ico")),
   };
 }

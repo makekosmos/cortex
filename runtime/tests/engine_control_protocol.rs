@@ -1,8 +1,8 @@
-use hmac::{Hmac, Mac};
-use kepler_backend::engine_control::{
+use engine::engine_control::{
     authentication_tag, ControlChannel, ControlEnvelope, ControlError, ControlMessage,
     ControlPhase, ControlServer, ControlSession, ControlState, CONTROL_PROTOCOL_VERSION,
 };
+use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::time::Instant;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -254,7 +254,7 @@ async fn loopback_server_delivers_only_authenticated_bounded_commands() {
         secret: "controller-secret".into(),
     };
 
-    let _core_commands = kepler_backend::engine_control::start_core_control_with_secret(
+    let _core_commands = engine::engine_control::start_core_control_with_secret(
         state.clone(),
         b"core-secret".to_vec(),
     )
@@ -264,8 +264,7 @@ async fn loopback_server_delivers_only_authenticated_bounded_commands() {
     let mut wrong = state.clone();
     wrong.secret = "wrong".into();
     assert_eq!(
-        kepler_backend::engine_control::send_control(&wrong, ControlMessage::RestartRequested)
-            .await,
+        engine::engine_control::send_control(&wrong, ControlMessage::RestartRequested).await,
         Err(ControlError::Unauthorized)
     );
     server.abort();
@@ -290,7 +289,7 @@ async fn core_control_connection_receives_one_forwarded_stop_and_concurrent_dupl
         owner_identity: "owner-2".into(),
         secret: "controller-secret".into(),
     };
-    let mut core_commands = kepler_backend::engine_control::start_core_control_with_secret(
+    let mut core_commands = engine::engine_control::start_core_control_with_secret(
         state.clone(),
         b"core-secret".to_vec(),
     )
@@ -301,15 +300,10 @@ async fn core_control_connection_receives_one_forwarded_stop_and_concurrent_dupl
     let first_state = state.clone();
     let second_state = state.clone();
     let first = tokio::spawn(async move {
-        kepler_backend::engine_control::send_control(&first_state, ControlMessage::RestartRequested)
-            .await
+        engine::engine_control::send_control(&first_state, ControlMessage::RestartRequested).await
     });
     let second = tokio::spawn(async move {
-        kepler_backend::engine_control::send_control(
-            &second_state,
-            ControlMessage::RestartRequested,
-        )
-        .await
+        engine::engine_control::send_control(&second_state, ControlMessage::RestartRequested).await
     });
     let first_result = first.await.expect("first controller");
     let second_result = second.await.expect("second controller");
@@ -333,7 +327,7 @@ async fn core_ready_handshake_times_out_on_stalled_peer() {
     let endpoint = listener.local_addr().expect("listener address").to_string();
     let peer = tokio::spawn(async move {
         let (_stream, _) = listener.accept().await.expect("accept stalled peer");
-        tokio::time::sleep(kepler_backend::engine_control::CONTROL_IO_TIMEOUT * 2).await;
+        tokio::time::sleep(engine::engine_control::CONTROL_IO_TIMEOUT * 2).await;
     });
     let state = ControlState {
         endpoint,
@@ -343,12 +337,10 @@ async fn core_ready_handshake_times_out_on_stalled_peer() {
         secret: "controller-secret".into(),
     };
     let started = Instant::now();
-    let result = kepler_backend::engine_control::start_core_control_with_secret(
-        state,
-        b"core-secret".to_vec(),
-    )
-    .await;
+    let result =
+        engine::engine_control::start_core_control_with_secret(state, b"core-secret".to_vec())
+            .await;
     assert!(matches!(result, Err(ControlError::Timeout)));
-    assert!(started.elapsed() < kepler_backend::engine_control::CONTROL_IO_TIMEOUT * 2);
+    assert!(started.elapsed() < engine::engine_control::CONTROL_IO_TIMEOUT * 2);
     peer.abort();
 }

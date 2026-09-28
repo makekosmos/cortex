@@ -11,11 +11,11 @@ mod offline;
 mod support;
 
 use ed25519_dalek::Signer;
-use httpmock::MockServer;
-use kepler_backend::{
+use engine::{
     ark_host::ArkHost, integrations::handle_operation, package_service::PackageService,
     package_worker_supervisor::PackageWorkerSupervisor,
 };
+use httpmock::MockServer;
 use serde_json::json;
 use std::{
     path::Path,
@@ -107,7 +107,7 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
         .await
         .unwrap();
 
-    let issuer = kepler_backend::package_service::credential_envelope::load_or_create_identity(
+    let issuer = engine::package_service::credential_envelope::load_or_create_identity(
         &setup.origin.node_id,
     )
     .unwrap();

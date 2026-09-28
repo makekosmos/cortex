@@ -6,7 +6,7 @@ fn app_index_entry_uses_icon_ref_without_inline_data_url() {
         id: "calc".into(),
         name: "Calculator".into(),
         exec_path: "C:\\Windows\\System32\\calc.exe".into(),
-        icon_path: Some("C:\\Kosmos\\icons\\calc.png".into()),
+        icon_path: Some("C:\\Mundus\\icons\\calc.png".into()),
         icon_source: None,
         kind: AppKind::Win32,
         source: "test".into(),
@@ -16,7 +16,7 @@ fn app_index_entry_uses_icon_ref_without_inline_data_url() {
     let entry = app_index_entry_json(&app);
 
     assert_eq!(entry["icon_path"], serde_json::Value::Null);
-    assert_eq!(entry["icon_ref"], "kosmos-icon://app/calc");
+    assert_eq!(entry["icon_ref"], "mundus-icon://app/calc");
 }
 
 #[tokio::test]

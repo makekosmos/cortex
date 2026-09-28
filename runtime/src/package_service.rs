@@ -47,6 +47,7 @@ const PRODUCTION_CATALOG_URL: &str =
 fn production_trust() -> Option<TrustStore> {
     TrustStore::new(
         TrustedKey {
+            // Persisted signed-catalog key id — see docs/brand-legacy-identifiers.md.
             key_id: "kosmos-root-2026".into(),
             public_key: "Si7FgOdf6Xnmpa+0LGZL9pRCeAtLhGpCjga89j4tsaY=".into(),
         },

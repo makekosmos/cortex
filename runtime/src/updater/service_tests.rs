@@ -46,7 +46,7 @@ async fn check_downloads_and_verifies_update_in_background() {
         .mock_async(|when, then| {
             when.method(httpmock::Method::GET).path("/latest.yml");
             then.status(200).body(format!(
-                "version: 99.0.0\nfiles:\n  - url: Kosmos-Setup-99.0.0.exe\n    sha512: {}\n    size: {}\n",
+                "version: 99.0.0\nfiles:\n  - url: Mundus-Setup-99.0.0.exe\n    sha512: {}\n    size: {}\n",
                 hash(&body),
                 body.len()
             ));
@@ -55,7 +55,7 @@ async fn check_downloads_and_verifies_update_in_background() {
     server
         .mock_async(|when, then| {
             when.method(httpmock::Method::GET)
-                .path("/Kosmos-Setup-99.0.0.exe");
+                .path("/Mundus-Setup-99.0.0.exe");
             then.status(200).body(body.clone());
         })
         .await;
@@ -71,14 +71,14 @@ async fn check_downloads_and_verifies_update_in_background() {
     }
     assert_eq!(service.status()["state"], "downloaded");
     assert_eq!(
-        tokio::fs::read(dir.path().join("updates/Kosmos-Setup-99.0.0.exe"))
+        tokio::fs::read(dir.path().join("updates/Mundus-Setup-99.0.0.exe"))
             .await
             .unwrap(),
         body
     );
     assert!(!dir
         .path()
-        .join("updates/Kosmos-Setup-99.0.0.exe.part")
+        .join("updates/Mundus-Setup-99.0.0.exe.part")
         .exists());
 }
 

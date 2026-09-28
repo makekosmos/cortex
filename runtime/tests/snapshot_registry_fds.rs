@@ -1,7 +1,7 @@
 #![cfg(target_os = "linux")]
 #![allow(clippy::unwrap_used)]
 
-use kepler_backend::package_worker_broker::SnapshotRegistry;
+use engine::package_worker_broker::SnapshotRegistry;
 
 // Runs in its own test binary so /proc/self/fd reflects only this process;
 // inside the unit-test binary parallel tests hold transient descriptors and

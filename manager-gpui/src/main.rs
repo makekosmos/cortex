@@ -1,4 +1,4 @@
-//! manager-gpui — GPUI Kosmos Manager. All state is owned by Kosmos Engine;
+//! manager-gpui — GPUI Mundus Manager. All state is owned by Mundus Engine;
 //! this shell only talks /v1/rpc + /v1/status over the local lock contract.
 #![windows_subsystem = "windows"]
 
@@ -46,7 +46,7 @@ fn main() {
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     titlebar: Some(gpui::TitlebarOptions {
-                        title: Some(SharedString::from("Kosmos Manager")),
+                        title: Some(SharedString::from("Mundus Manager")),
                         appears_transparent: true,
                         traffic_light_position: Some(gpui::point(px(12.), px(14.))),
                     }),

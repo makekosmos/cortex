@@ -378,7 +378,7 @@ impl ManagerState {
     pub fn autostart(&self) -> Value {
         // Dev builds too: the manager-gpui settings toggle registers
         // `<exe> --start` — headless engine at sign-in, no UI window.
-        let available = cfg!(windows) && std::env::var_os("KOSMOS_TEST_MODE").is_none();
+        let available = cfg!(windows) && std::env::var_os("MUNDUS_TEST_MODE").is_none();
         let enabled = available && windows_autostart_enabled();
         json!({"enabled": enabled, "available": available, "reason": if available { Value::Null } else { json!("unsupported-platform-or-test") }})
     }
@@ -572,7 +572,7 @@ fn windows_autostart_enabled() -> bool {
             "query",
             r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
             "/v",
-            "Kosmos Engine",
+            crate::brand::AUTOSTART_RUN_VALUE,
         ])
         .output()
         .map(|output| output.status.success())
@@ -592,13 +592,32 @@ fn set_windows_autostart(enabled: bool) -> Result<(), String> {
         let executable = std::env::current_exe().map_err(|e| e.to_string())?;
         let startup_command = format!("\"{}\" --start", executable.display());
         command
-            .args(["add", key, "/v", "Kosmos Engine", "/t", "REG_SZ", "/d"])
+            .args([
+                "add",
+                key,
+                "/v",
+                crate::brand::AUTOSTART_RUN_VALUE,
+                "/t",
+                "REG_SZ",
+                "/d",
+            ])
             .arg(startup_command)
             .args(["/f"]);
     } else {
-        command.args(["delete", key, "/v", "Kosmos Engine", "/f"]);
+        command.args(["delete", key, "/v", crate::brand::AUTOSTART_RUN_VALUE, "/f"]);
     }
     let result = command.output();
+    // MIGRATION(KOS-267): remove after 2026-11-01. A stale legacy Run value
+    // would resurrect the old engine binary; drop the known old names whenever
+    // the autostart preference is touched.
+    if result.as_ref().map(|o| o.status.success()).unwrap_or(false) {
+        for legacy in ["Kosmos Engine", "Kosmos"] {
+            // MIGRATION(KOS-267)
+            let _ = windows_registry_command()
+                .args(["delete", key, "/v", legacy, "/f"])
+                .output();
+        }
+    }
     result.map_err(|e| e.to_string()).and_then(|output| {
         if output.status.success() || !enabled {
             Ok(())
@@ -624,7 +643,7 @@ mod tests {
             .split("#[cfg(test)]")
             .next()
             .unwrap();
-        assert_eq!(production.matches("windows_registry_command()").count(), 3);
+        assert_eq!(production.matches("windows_registry_command()").count(), 4);
         assert_eq!(production.matches("Command::new(\"reg.exe\")").count(), 1);
         assert!(production.contains("command.creation_flags(CREATE_NO_WINDOW)"));
     }

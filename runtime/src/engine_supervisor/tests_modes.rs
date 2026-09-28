@@ -157,13 +157,13 @@ fn cli_control_errors_are_deterministic_and_fail_closed() {
 fn cli_restart_refuses_malformed_control_state_without_connecting() {
     let dir = tempfile::tempdir().expect("control fixture");
     std::fs::write(dir.path().join(CONTROL_STATE_FILE), b"not-json").expect("malformed state");
-    let previous = std::env::var("KOSMOS_DATA_DIR").ok();
-    std::env::set_var("KOSMOS_DATA_DIR", dir.path());
+    let previous = std::env::var("MUNDUS_DATA_DIR").ok();
+    std::env::set_var("MUNDUS_DATA_DIR", dir.path());
     let result = restart_core();
     if let Some(previous) = previous {
-        std::env::set_var("KOSMOS_DATA_DIR", previous);
+        std::env::set_var("MUNDUS_DATA_DIR", previous);
     } else {
-        std::env::remove_var("KOSMOS_DATA_DIR");
+        std::env::remove_var("MUNDUS_DATA_DIR");
     }
     assert_eq!(result, ExitCode::from(2));
 }

@@ -326,7 +326,7 @@ impl WhisperDllEngine {
 }
 
 fn whisper_vad_model_path(command_path: &Option<String>) -> Option<PathBuf> {
-    if let Ok(path) = std::env::var("KOSMOS_WHISPER_CPP_VAD_MODEL") {
+    if let Ok(path) = std::env::var("MUNDUS_WHISPER_CPP_VAD_MODEL") {
         let path = PathBuf::from(path.trim());
         if path.is_file() {
             return Some(path);

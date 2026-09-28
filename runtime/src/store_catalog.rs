@@ -15,7 +15,7 @@ const MAX_DOCUMENT: usize = 1024 * 1024;
 const MAX_ENVELOPE: usize = 2 * 1024 * 1024;
 const PRODUCTION_CATALOG_URL: &str =
     "https://github.com/makekosmos/store/releases/latest/download/catalog.envelope.json";
-const PRODUCTION_KEY_ID: &str = "kosmos-store-2026";
+const PRODUCTION_KEY_ID: &str = "mundus-store-2026";
 const PRODUCTION_PUBLIC_KEY_B64: &str = "it14mzPjoqdgaHXdCDIjCoUgGXf/f5izJrGRUuk3o/A=";
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -123,14 +123,14 @@ impl StoreListing {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
 pub enum ListingKind {
-    KosmosPackage,
+    MundusPackage,
     Integration,
     ExternalApp,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 pub enum PublisherTier {
-    Kosmos,
+    Mundus,
     Verified,
     Community,
 }
@@ -461,11 +461,11 @@ impl StoreCatalogService {
     /// Store discovery has its own compile-time trust root; it never reuses the
     /// Package Index release-key configuration.
     pub fn open_compiled(data_dir: impl AsRef<Path>) -> Result<Self, TrustError> {
-        let key_id = option_env!("KOSMOS_STORE_CATALOG_KEY_ID")
+        let key_id = option_env!("MUNDUS_STORE_CATALOG_KEY_ID")
             .filter(|key_id| !key_id.is_empty())
             .unwrap_or(PRODUCTION_KEY_ID);
         let key =
-            option_env!("KOSMOS_STORE_CATALOG_PUBLIC_KEY_B64").unwrap_or(PRODUCTION_PUBLIC_KEY_B64);
+            option_env!("MUNDUS_STORE_CATALOG_PUBLIC_KEY_B64").unwrap_or(PRODUCTION_PUBLIC_KEY_B64);
         let key = STANDARD
             .decode(key)
             .ok()
@@ -559,7 +559,7 @@ impl StoreCatalogService {
         &self,
         index: &I,
     ) -> Result<CatalogDto, TrustError> {
-        let url = std::env::var("KOSMOS_STORE_CATALOG_URL")
+        let url = std::env::var("MUNDUS_STORE_CATALOG_URL")
             .unwrap_or_else(|_| PRODUCTION_CATALOG_URL.to_string());
         if !https(&url) {
             return Err(TrustError::Unavailable);
@@ -657,7 +657,7 @@ fn validate_document<I: PackageIndexLookup>(
         }
         match (&listing.kind, &listing.distribution, &listing.connects_to) {
             (
-                ListingKind::KosmosPackage,
+                ListingKind::MundusPackage,
                 Distribution::Package {
                     package_id,
                     version,

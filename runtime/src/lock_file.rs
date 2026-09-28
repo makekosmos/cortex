@@ -1,5 +1,5 @@
-// Lock-файл для discovery: Electron-апки находят Engine через engine.lock.json
-// в %APPDATA%\Kosmos\.
+// Lock-файл для discovery: desktop-апки находят Engine через engine.lock.json
+// в %APPDATA%\Mundus\.
 //
 // AC3 spec: lock-файл должен быть нечитаем для другого user account на той же машине.
 // Achieved через:
@@ -27,10 +27,10 @@ pub const ENGINE_LOCK_FILE_FORMAT_VERSION: u32 = 1;
 /// блокирует `freshDataDir` с `EPERM`. Prod НИКОГДА не должен выставлять
 /// этот флаг (lock содержит auth token, без ACL он читаем любым процессом
 /// текущей машины).
-pub const LOCK_PERMISSIONS_DISABLED_ENV: &str = "KOSMOS_LOCK_PERMISSIONS_DISABLED";
+pub const LOCK_PERMISSIONS_DISABLED_ENV: &str = "MUNDUS_LOCK_PERMISSIONS_DISABLED";
 
 fn lock_permissions_disabled() -> bool {
-    std::env::var(LOCK_PERMISSIONS_DISABLED_ENV).as_deref() == Ok("1")
+    crate::brand::env("LOCK_PERMISSIONS_DISABLED").as_deref() == Some("1")
 }
 
 /// Транзиентные fs-ошибки Windows: AV/индексер кратковременно держит хэндл на
@@ -92,43 +92,22 @@ pub enum LockFileError {
 
 /// Resolve the Engine data directory (Win / Unix).
 ///
-/// Test override: если выставлен `KOSMOS_DATA_DIR` env, она полностью заменяет
-/// base directory (lock-файл, singleton, ark.db — всё под этим dir). Это
-/// единственный безопасный способ переопределить путь в Playwright/e2e тестах
-/// — иначе тесты случайно укажут на реальный user data dir и потрут данные.
+/// Test override: если выставлен `MUNDUS_DATA_DIR` env (legacy `MUNDUS_DATA_DIR`
+/// принимается как fallback), она полностью заменяет base directory (lock-файл,
+/// singleton, ark.db — всё под этим dir). Это единственный безопасный способ
+/// переопределить путь в тестах — иначе тесты случайно укажут на реальный
+/// user data dir и потрут данные.
 pub fn default_engine_lock_file_path() -> Result<std::path::PathBuf, LockFileError> {
-    Ok(kosmos_data_dir()?.join(ENGINE_LOCK_FILE_NAME))
+    Ok(crate::data_dir::mundus_data_dir()?.join(ENGINE_LOCK_FILE_NAME))
 }
 
-/// Resolve base directory для всех Kosmos backend файлов: lock, singleton,
-/// дефолтный ark.db. Уважает `KOSMOS_DATA_DIR` env override (тесты),
-/// иначе — `%APPDATA%\Kosmos` (Win) / `$XDG_CONFIG_HOME/Kosmos` (Unix).
-pub fn kosmos_data_dir() -> Result<std::path::PathBuf, LockFileError> {
-    if let Ok(override_dir) = std::env::var("KOSMOS_DATA_DIR") {
-        if !override_dir.is_empty() {
-            return Ok(std::path::PathBuf::from(override_dir));
-        }
-    }
-    kosmos_config_dir()
-}
-
-#[cfg(windows)]
-fn kosmos_config_dir() -> Result<std::path::PathBuf, LockFileError> {
-    let appdata = std::env::var("APPDATA")
-        .map_err(|_| LockFileError::Permissions("%APPDATA% not set".into()))?;
-    Ok(std::path::PathBuf::from(appdata).join("Kosmos"))
-}
-
-#[cfg(unix)]
-fn kosmos_config_dir() -> Result<std::path::PathBuf, LockFileError> {
-    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-        return Ok(std::path::PathBuf::from(xdg).join("Kosmos"));
-    }
-    let home =
-        std::env::var("HOME").map_err(|_| LockFileError::Permissions("$HOME not set".into()))?;
-    Ok(std::path::PathBuf::from(home)
-        .join(".config")
-        .join("Kosmos"))
+/// Resolve base directory для всех Mundus backend файлов: lock, singleton,
+/// дефолтный ark.db. Уважает `MUNDUS_DATA_DIR` env override (тесты; legacy
+/// `MUNDUS_DATA_DIR` fallback), иначе — `%APPDATA%\Mundus` (Win) /
+/// `$XDG_CONFIG_HOME/Mundus` (Unix). Учитывает brand-migration: если переезд
+/// с `%APPDATA%\Kosmos` не удался, эта сессия работает на legacy dir.
+pub fn mundus_data_dir() -> Result<std::path::PathBuf, LockFileError> {
+    crate::data_dir::mundus_data_dir()
 }
 
 /// Атомарная запись lock-файла. Создаёт parent dir, пишет в temp, fsyncит, переименовывает,
@@ -214,7 +193,7 @@ fn apply_owner_only_directory_permissions(path: &Path) -> Result<(), io::Error> 
 fn apply_owner_only_permissions(path: &Path) -> Result<(), LockFileError> {
     if lock_permissions_disabled() {
         crate::observability::stderr(format!(
-            "[kepler-backend] {LOCK_PERMISSIONS_DISABLED_ENV}=1 — chmod 0600 skipped \
+            "[mundus-engine] {LOCK_PERMISSIONS_DISABLED_ENV}=1 — chmod 0600 skipped \
              for {} (test-only path, prod должен не выставлять флаг)",
             path.display()
         ));
@@ -229,7 +208,7 @@ fn apply_owner_only_permissions(path: &Path) -> Result<(), LockFileError> {
 fn apply_owner_only_permissions(path: &Path) -> Result<(), LockFileError> {
     if lock_permissions_disabled() {
         crate::observability::stderr(format!(
-            "[kepler-backend] {LOCK_PERMISSIONS_DISABLED_ENV}=1 — icacls hardening skipped \
+            "[mundus-engine] {LOCK_PERMISSIONS_DISABLED_ENV}=1 — icacls hardening skipped \
              for {} (test-only path, prod должен не выставлять флаг)",
             path.display()
         ));
@@ -294,7 +273,7 @@ mod tests {
     use tempfile::tempdir;
 
     /// Сериализует тесты, которые мутируют process-wide env vars
-    /// (`KOSMOS_DATA_DIR`, `KOSMOS_LOCK_PERMISSIONS_DISABLED`). Без этого
+    /// (`MUNDUS_DATA_DIR`, `MUNDUS_LOCK_PERMISSIONS_DISABLED`). Без этого
     /// параллельные тесты cargo могут race на чтение/запись одной переменной.
     static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
@@ -337,19 +316,43 @@ mod tests {
     }
 
     #[test]
-    fn kosmos_data_dir_respects_env_override() {
+    fn mundus_data_dir_respects_env_override() {
         let _guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: env var, доступ серилизуется через ENV_MUTEX.
         let dir = tempdir().unwrap();
         let override_path = dir.path().to_path_buf();
-        std::env::set_var("KOSMOS_DATA_DIR", &override_path);
-        let resolved = kosmos_data_dir().expect("data dir resolves with override");
+        std::env::set_var("MUNDUS_DATA_DIR", &override_path);
+        let resolved = mundus_data_dir().expect("data dir resolves with override");
         assert_eq!(resolved, override_path);
         assert_eq!(
             default_engine_lock_file_path().unwrap(),
             override_path.join(ENGINE_LOCK_FILE_NAME)
         );
+        std::env::remove_var("MUNDUS_DATA_DIR");
+    }
+
+    #[test]
+    fn mundus_data_dir_accepts_legacy_env_fallback() {
+        // MIGRATION(KOS-267): KOSMOS_DATA_DIR stays a fallback until cleanup.
+        let _guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        // SAFETY: env var, доступ серилизуется через ENV_MUTEX.
+        let dir = tempdir().unwrap();
+        let override_path = dir.path().to_path_buf();
+        std::env::remove_var("MUNDUS_DATA_DIR");
+        std::env::set_var("KOSMOS_DATA_DIR", &override_path); // MIGRATION(KOS-267)
+        assert_eq!(
+            crate::brand::env("DATA_DIR"),
+            Some(override_path.to_string_lossy().into_owned())
+        );
+        // MUNDUS_ wins over the legacy name when both are set.
+        let primary = tempdir().unwrap();
+        std::env::set_var("MUNDUS_DATA_DIR", primary.path());
+        assert_eq!(
+            crate::brand::env("DATA_DIR"),
+            Some(primary.path().to_string_lossy().into_owned())
+        );
         std::env::remove_var("KOSMOS_DATA_DIR");
+        std::env::remove_var("MUNDUS_DATA_DIR");
     }
 
     #[test]
@@ -387,7 +390,7 @@ mod tests {
 
     #[test]
     fn permissions_disabled_env_skips_hardening() {
-        // AC4: при KOSMOS_LOCK_PERMISSIONS_DISABLED=1 запись lock-файла
+        // AC4: при MUNDUS_LOCK_PERMISSIONS_DISABLED=1 запись lock-файла
         // должна пройти без применения hardening (ACL на Win / chmod 0600 на Unix).
         // Файл должен существовать и быть читаемым стандартным путём.
         let _guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());

@@ -17,12 +17,17 @@ function validate(input) {
   if (!Array.isArray(input.revoked_release_keys) || !Array.isArray(input.revoked_packages))
     fail("revocation lists are required");
   const keys = [...input.revoked_release_keys].sort();
-  if (keys.some((key) => Object.prototype.toString.call(key) !== "[object String]" || !key)) fail("invalid revoked release key id");
+  if (keys.some((key) => Object.prototype.toString.call(key) !== "[object String]" || !key))
+    fail("invalid revoked release key id");
   keys.forEach((key) => safeId(key, "revoked release key id"));
   if (new Set(keys).size !== keys.length) fail("duplicate revoked release key id");
   const packages = input.revoked_packages
     .map((item) => {
-      if (!item || Object.prototype.toString.call(item.id) !== "[object String]" || Object.prototype.toString.call(item.version) !== "[object String]")
+      if (
+        !item ||
+        Object.prototype.toString.call(item.id) !== "[object String]" ||
+        Object.prototype.toString.call(item.version) !== "[object String]"
+      )
         fail("revoked package id/version are required");
       safeId(item.id, "revoked package id");
       semver(item.version, "revoked package version");

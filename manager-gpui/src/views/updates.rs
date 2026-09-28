@@ -3,10 +3,10 @@ use serde_json::{json, Value};
 
 use crate::app::ManagerApp;
 use crate::widgets::*;
-use kosmos_gpui_kit::theme::*;
+use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
-    app.call("upd.kosmos", "updater.status", json!({}));
+    app.call("upd.mundus", "updater.status", json!({}));
     app.call("upd.catalog", "store.catalog", json!({}));
     app.call("upd.installed", "packages.list", json!({}));
 }
@@ -21,8 +21,8 @@ pub fn render(
         .flex_col()
         .gap_4()
         .w_full()
-        .child(section("Обновления", "Kosmos и приложения"))
-        .child(render_kosmos(app, cx))
+        .child(section("Обновления", "Mundus и приложения"))
+        .child(render_mundus(app, cx))
         .child(
             card().child(row("Каталог", "Свежесть списка пакетов и цен").child(btn(
                 "upd-refresh",
@@ -39,22 +39,22 @@ pub fn render(
         .into_any_element()
 }
 
-fn render_kosmos(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
-    let status = app.data("upd.kosmos");
+fn render_mundus(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
+    let status = app.data("upd.mundus");
     if status.is_null() {
         return card()
-            .child(row("Kosmos", "Получение статуса обновления…"))
+            .child(row("Mundus", "Получение статуса обновления…"))
             .into_any_element();
     }
     let state = vstr(&status, "state");
     let current = vstr(&status, "currentVersion");
     let next = vstr(&status, "newVersion");
-    let detail = kosmos_status(&status);
+    let detail = mundus_status(&status);
     let mut content = div()
         .flex()
         .flex_col()
         .gap_3()
-        .child(row("Kosmos", detail).child(badge(&current, MUTED_FG())));
+        .child(row("Mundus", detail).child(badge(&current, MUTED_FG())));
 
     if state == "downloading" {
         let percent = vnum(&status, "percent").clamp(0.0, 100.0);
@@ -86,7 +86,7 @@ fn render_kosmos(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
 
     let button = if state == "downloaded" {
         btn(
-            "kosmos-install",
+            "mundus-install",
             "Обновить и перезапустить",
             true,
             cx,
@@ -94,7 +94,7 @@ fn render_kosmos(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
         )
     } else {
         btn(
-            "kosmos-check",
+            "mundus-check",
             "Проверить обновления",
             !matches!(state.as_str(), "checking" | "downloading"),
             cx,
@@ -104,7 +104,7 @@ fn render_kosmos(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
     card().child(content.child(button)).into_any_element()
 }
 
-fn kosmos_status(status: &Value) -> String {
+fn mundus_status(status: &Value) -> String {
     match vstr(status, "state").as_str() {
         "idle" => "Готов к проверке".into(),
         "checking" => "Проверяем новую версию…".into(),

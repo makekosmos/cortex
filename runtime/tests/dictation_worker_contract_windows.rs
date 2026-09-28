@@ -2,7 +2,7 @@
 #![allow(clippy::unwrap_used)]
 
 use async_trait::async_trait;
-use kepler_backend::{
+use engine::{
     package_manifest::{
         ManifestData, ManifestTarget, ManifestV2, PackageKind, PackageManifest, PermissionRequest,
         TargetArch, TargetOs, TargetRuntime, VersionedManifest,
@@ -131,10 +131,7 @@ fn projected_worker_manifest() -> PackageManifest {
 fn install_candidate(
     directory: &TempDir,
     worker: &std::path::Path,
-) -> (
-    Arc<PackageStore>,
-    kepler_backend::package_store::InstalledPackage,
-) {
+) -> (Arc<PackageStore>, engine::package_store::InstalledPackage) {
     let archive_path = directory.path().join("dictation.kspkg");
     let manifest = app_manifest();
     let file = std::fs::File::create(&archive_path).unwrap();
@@ -167,8 +164,8 @@ fn install_candidate(
 
 #[tokio::test]
 async fn compiled_dictation_worker_round_trips_engine_capabilities() {
-    let Some(worker) = std::env::var_os("KOSMOS_DICTATION_WORKER_EXE").map(PathBuf::from) else {
-        eprintln!("NOT_RUN: set KOSMOS_DICTATION_WORKER_EXE to a reviewed candidate");
+    let Some(worker) = std::env::var_os("MUNDUS_DICTATION_WORKER_EXE").map(PathBuf::from) else {
+        eprintln!("NOT_RUN: set MUNDUS_DICTATION_WORKER_EXE to a reviewed candidate");
         return;
     };
     assert!(worker.is_file(), "worker candidate missing: {worker:?}");

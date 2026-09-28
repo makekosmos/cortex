@@ -1,6 +1,6 @@
 # manager-gpui
 
-GPUI-реализация Kosmos Manager — панель управления Engine (KOS-130).
+GPUI-реализация Mundus Manager — панель управления Engine (KOS-130).
 Покрывает разделы и операции через контракт `/v1/rpc` + `/v1/health` +
 `/v1/info`.
 
@@ -10,18 +10,18 @@ GPUI-реализация Kosmos Manager — панель управления E
 cargo run --manifest-path manager-gpui/Cargo.toml
 ```
 
-Приложение читает `engine.lock.json` из `KOSMOS_DATA_DIR` (по умолчанию
-`~/.config/Kosmos` на Linux, `%APPDATA%\Kosmos` на Windows,
-`~/Library/Application Support/Kosmos` на macOS) на каждый запрос — перезапуск
+Приложение читает `engine.lock.json` из `MUNDUS_DATA_DIR` (по умолчанию
+`~/.config/Mundus` на Linux, `%APPDATA%\Mundus` на Windows,
+`~/Library/Application Support/Mundus` на macOS) на каждый запрос — перезапуск
 Engine подхватывается без рестарта приложения.
 
 ## Engine
 
-Manager работает только поверх живого Engine (`kepler-backend`):
+Manager работает только поверх живого Engine (`mundus-engine`):
 
 ```bash
-KOSMOS_DATA_DIR=/tmp/kosmos-dev cargo run -p kepler-backend
-KOSMOS_DATA_DIR=/tmp/kosmos-dev cargo run --manifest-path manager-gpui/Cargo.toml
+MUNDUS_DATA_DIR=/tmp/mundus-dev cargo run -p engine
+MUNDUS_DATA_DIR=/tmp/mundus-dev cargo run --manifest-path manager-gpui/Cargo.toml
 ```
 
 Если Engine не отвечает, внизу показывается баннер с ошибкой и кнопкой

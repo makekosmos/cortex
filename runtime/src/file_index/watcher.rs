@@ -41,7 +41,7 @@ pub fn start(roots: &[PathBuf], store: Arc<FileStore>) -> Option<RecommendedWatc
 }
 
 fn watcher_enabled() -> bool {
-    watcher_enabled_from(std::env::var("KEPLER_FILE_INDEX_WATCHER").ok().as_deref())
+    watcher_enabled_from(std::env::var("MUNDUS_FILE_INDEX_WATCHER").ok().as_deref())
 }
 
 fn watcher_enabled_from(value: Option<&str>) -> bool {
@@ -201,7 +201,7 @@ mod tests {
     #[test]
     fn recursive_watcher_is_opt_in() {
         // Regression: 2026-06-06. Watching broad persisted roots recursively
-        // (for example a whole drive) can keep kepler-backend hot forever from
+        // (for example a whole drive) can keep mundus-engine hot forever from
         // ambient filesystem churn. Startup/manual rescan is the default path.
         assert!(!watcher_enabled_from(None));
         assert!(!watcher_enabled_from(Some("0")));

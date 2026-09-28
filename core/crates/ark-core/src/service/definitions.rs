@@ -315,7 +315,7 @@ pub(crate) enum Request {
 
     /// SQLite Online Backup в указанный path. Source DB остаётся live —
     /// concurrent readers/writer safe. Используется db_backup scheduler
-    /// в kepler-backend (раз в 24h). См. hardening proof loop 2026-05-18.
+    /// в mundus-engine (раз в 24h). См. hardening proof loop 2026-05-18.
     DbBackup {
         dest_path: String,
     },

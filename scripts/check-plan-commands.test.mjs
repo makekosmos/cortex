@@ -37,14 +37,15 @@ test("selective checks emit pnpm run commands and Rust stays on cargo", async ()
     executePlan(createPlan({ mode: "worktree", files }), (command) => seen.push(command.name));
     return seen;
   };
-  assert.deepEqual(run(["desktop/scripts/engine-distribution.mjs"]), ["lint", "format"]);
+  assert.deepEqual(run(["desktop/scripts/engine-distribution.mjs"]), ["brand", "lint", "format"]);
   assert.deepEqual(run(["runtime/src/lib.rs"]), [
+    "brand",
     "rustfmt",
     "clippy",
     "test:rust",
     "runtime-staging",
   ]);
-  assert.deepEqual(run(["native-services/src/main.rs"]), ["native-services"]);
+  assert.deepEqual(run(["native-services/src/main.rs"]), ["brand", "native-services"]);
 });
 
 test("pre-commit emits the source-size safeguard through pnpm", async () => {
@@ -54,7 +55,7 @@ test("pre-commit emits the source-size safeguard through pnpm", async () => {
     { mode: "pre-commit", full: false, checks: [], changed: [], reasons: [] },
     (command) => (seen.push(`${command.command} ${command.args.join(" ")}`), 0),
   );
-  assert.deepEqual(seen, ["pnpm run check:source-size"]);
+  assert.deepEqual(seen, ["pnpm run check:brand", "pnpm run check:source-size"]);
 });
 
 test("lint and format run Node tool entrypoints with verbatim file arguments", async () => {

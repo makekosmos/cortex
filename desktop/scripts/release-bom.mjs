@@ -188,7 +188,7 @@ export function validateReleaseBom(value, context) {
 
 export async function repositoryContext(root, platform, currentCommit) {
   const packageJson = await readJson(path.join(root, "package.json"));
-  const workspace = packageJson.kosmos?.workspace;
+  const workspace = packageJson.mundus?.workspace;
   if (!workspace?.imago || !workspace?.["arca-sdk"])
     fail("package.json workspace pins are incomplete");
   const versions = await readJson(path.join(root, "desktop", "release-versions.json"));

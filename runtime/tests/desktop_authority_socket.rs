@@ -1,11 +1,11 @@
 #![allow(clippy::unwrap_used, clippy::zombie_processes)]
 
-use futures_util::{SinkExt, StreamExt};
-use kepler_backend::{
+use engine::{
     app_index::AppIndex, ark_host::ArkHost, file_index::FileIndex, package_service::PackageService,
     protocol_usage::ProtocolUsageStore, usage_tracker::UsageTrackerDiagnosticsState,
     ws_server::WsServer,
 };
+use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use std::{net::SocketAddr, process::Command, sync::Arc};
 use tempfile::TempDir;
@@ -18,9 +18,9 @@ const GENERATION: u64 = 7;
 struct Fixture {
     _dir: TempDir,
     address: SocketAddr,
-    authority: Arc<kepler_backend::desktop_authority::DesktopAuthorityRegistry>,
-    grants: Arc<kepler_backend::grant_authority::GrantAuthorityRegistry>,
-    snapshots: Arc<kepler_backend::package_worker_broker::SnapshotRegistry>,
+    authority: Arc<engine::desktop_authority::DesktopAuthorityRegistry>,
+    grants: Arc<engine::grant_authority::GrantAuthorityRegistry>,
+    snapshots: Arc<engine::package_worker_broker::SnapshotRegistry>,
     server: Option<WsServer>,
 }
 
@@ -201,7 +201,7 @@ async fn real_socket_generation_replacement_revokes_old_owner_and_is_idempotent(
             "private-credential",
             1
         ),
-        Err(kepler_backend::desktop_authority::AuthorityError::MissingLease)
+        Err(engine::desktop_authority::AuthorityError::MissingLease)
     );
     assert_eq!(
         fixture.authority.bind(

@@ -1,6 +1,6 @@
 #![allow(clippy::panic, clippy::unwrap_used)]
 
-use kepler_backend::{
+use engine::{
     package_manifest::{PackageKind, PackageManifest, VersionedManifest},
     package_store::PackageStore,
     package_worker_protocol::{parse_json_line, WorkerMessage},
@@ -63,7 +63,7 @@ fn denied_grants_fail_closed_before_any_host_operation() {
         engine_api: ">=1.0.0".into(),
         entrypoint: "arcadia-worker.exe".into(),
         publisher: "kosmos".into(),
-        permissions: vec![kepler_backend::package_manifest::PermissionRequest {
+        permissions: vec![engine::package_manifest::PermissionRequest {
             capability: "process.spawn".into(),
             scopes: vec![std::env::temp_dir()
                 .join("outside-arcadia-root")
@@ -164,14 +164,14 @@ fn write_arcadia_archive(directory: &TempDir) -> std::path::PathBuf {
 #[cfg(all(windows, feature = "package-worker-fixture"))]
 #[tokio::test]
 async fn worker_invocation_round_trips_through_the_process_boundary() {
-    use kepler_backend::{
+    use engine::{
         package_worker_process::test_support, package_worker_supervisor::PackageWorkerSupervisor,
     };
 
     let _lock = test_support::serialized();
     let supervisor = PackageWorkerSupervisor::new(1);
     let state = tempfile::tempdir().expect("worker state directory");
-    let manifest = kepler_backend::package_manifest::PackageManifest {
+    let manifest = engine::package_manifest::PackageManifest {
         schema_version: 1,
         id: "fixture.invoke".into(),
         name: "Fixture".into(),
@@ -219,14 +219,14 @@ async fn worker_invocation_round_trips_through_the_process_boundary() {
 #[cfg(all(windows, feature = "package-worker-fixture"))]
 #[tokio::test]
 async fn worker_crash_resolves_pending_invocation() {
-    use kepler_backend::{
+    use engine::{
         package_worker_process::test_support, package_worker_supervisor::PackageWorkerSupervisor,
     };
 
     let _lock = test_support::serialized();
     let supervisor = PackageWorkerSupervisor::new(1);
     let state = tempfile::tempdir().expect("worker state directory");
-    let manifest = kepler_backend::package_manifest::PackageManifest {
+    let manifest = engine::package_manifest::PackageManifest {
         schema_version: 1,
         id: "fixture.crash".into(),
         name: "Fixture".into(),

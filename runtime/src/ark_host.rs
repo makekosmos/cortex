@@ -180,8 +180,7 @@ impl ArkHost {
 }
 
 fn stable_device_id() -> String {
-    std::env::var("KOSMOS_DEVICE_ID")
-        .ok()
+    crate::brand::env("DEVICE_ID")
         .filter(|id| !id.trim().is_empty())
         .map(|id| id.trim().to_owned())
         .unwrap_or_else(|| "ark-host-local".to_owned())

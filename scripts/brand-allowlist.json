@@ -1,0 +1,143 @@
+{
+  "//": "Persisted/remote identifiers that survive the Kosmos→Mundus rebrand (KOS-266). Each pattern is a case-insensitive JS regex; a kosmos|kepler match is legal only when it sits inside one of these pattern occurrences, on a line marked `MIGRATION(KOS-267)`, or in a file listed under `files`. Human-readable doc: docs/brand-legacy-identifiers.md.",
+  "patterns": [
+    {
+      "pattern": "makekosmos",
+      "reason": "GitHub org for cortex + sibling repos (component pins, updater channel makekosmos/desktop, imago/kosmos-gpui-kit deps, docs links). Org rename is a separate change; GitHub redirects keep old URLs working."
+    },
+    {
+      "pattern": "com\\.kosmos\\.",
+      "reason": "Signed-catalog package ids and canonical type ids persisted in user databases (ark.db objects/migration objects). KOS-265 replaces them."
+    },
+    {
+      "pattern": "kosmos-(release|root)-2026",
+      "reason": "Signing key id baked into signed catalogs on package-index and into users' installed trust state. KOS-265 rotates it."
+    },
+    {
+      "pattern": "[\"']kosmos[\"']",
+      "reason": "`publisher: \"kosmos\"` field of signed package manifests (package_manifest.rs validates it) and the `extensions.kosmos` key persisted in user ARK objects. KOS-265."
+    },
+    {
+      "pattern": "kosmos[-_]gpui[-_]kit",
+      "reason": "Pinned external crate/repository (manager-gpui dependency); renamed upstream separately."
+    },
+    {
+      "pattern": "x-kosmos-",
+      "reason": "HTTP header names (x-kosmos-client-pid, x-kosmos-api-version, …) sent by pinned component builds and kosmos-gpui-kit — the Engine must keep accepting them until the pins move."
+    },
+    {
+      "pattern": "vnd\\.kosmos\\.",
+      "reason": "Media types (application/vnd.kosmos.richtext+json) persisted inside user ARK objects."
+    },
+    {
+      "pattern": "@kosmos/",
+      "reason": "Published npm scope for @kosmos/ark / @kosmos/visuals and the WS client_class value `@kosmos/ark` sent by existing clients."
+    },
+    {
+      "pattern": "packages\\.kosmos\\.dev|kosmos\\.dev",
+      "reason": "Package archive host used by the signed catalog and persisted install records; also the DNS zone, renamed with the domain."
+    },
+    {
+      "pattern": "\\bkosmos\\s*:",
+      "reason": "JSON field keys persisted in user ARK objects (extensions.kosmos) and package.json-adjacent pin structures of other repos."
+    },
+    {
+      "pattern": "kepler-shell",
+      "reason": "Electron-era install dir (%LOCALAPPDATA%\\Programs\\kepler-shell) and settings file (kepler-shell-settings.json) handled by the KOS-267 migration."
+    },
+    {
+      "pattern": "kepler-backend",
+      "reason": "Pre-0.10 Engine binary name; running 0.9.x Engines and their Run values are matched by migration code."
+    },
+    {
+      "pattern": "kepler-focus",
+      "reason": "Legacy hosts-file markers (`# === kepler-focus BEGIN/END ===`) and the legacy service pipe \\\\.\\\\pipe\\\\kepler-focus-svc left by installed services."
+    },
+    {
+      "pattern": "kepler-backup|kepler-device-id|kepler-singleton|kepler\\.lock",
+      "reason": "Files a 0.9.x-era Engine wrote into %APPDATA%\\Kosmos that travel with the renamed directory and must still be recognised."
+    },
+    {
+      "pattern": "KosmosSystemSvc|KeplerFocusSvc",
+      "reason": "Service names of installed previous-generation privileged services; kept for lookup/removal until the elevated KOS-267 migration completes on every machine."
+    },
+    {
+      "pattern": "KosmosEngine|Kosmos Engine",
+      "reason": "Legacy standalone-Engine uninstall key, Run value, and Start Menu shortcut names handled by the installer migration."
+    },
+    {
+      "pattern": "com\\.kazui\\.|electron\\.app\\.Kosmos|KeplerKosmos|KosmosKepler",
+      "reason": "Legacy HKCU Run value names / Electron app ids from earlier installer generations."
+    },
+    {
+      "pattern": "Kosmos Runtime|Kosmos\\.exe|Kosmos\\.(lnk|zip)|Kosmos (Manager|Agenda|Memoria|Dictation)",
+      "reason": "Binary/shortcut names of previous product generations that installer and kill-lists must still reference."
+    },
+    {
+      "pattern": "\\\\Kosmos\\\\|\\\\Kosmos\"|\\\\Kosmos'|/Kosmos/|Kosmos\\\\Engine|Programs\\\\Kosmos|APPDATA%?\\\\Kosmos|LOCALAPPDATA%?\\\\Kosmos|join\\(\"Kosmos\"\\)|join\\('Kosmos'\\)",
+      "reason": "Legacy user-data/install paths (%APPDATA%\\Kosmos, %LOCALAPPDATA%\\Kosmos\\Engine, %LOCALAPPDATA%\\Programs\\Kosmos) referenced by migration code and migration tests."
+    },
+    {
+      "pattern": "kosmos-engine",
+      "reason": "product id inside engine-manifest.json files installed by 0.9.x-era installers; the install script must keep validating it."
+    },
+    {
+      "pattern": "KOSMOS_[A-Z_]+|KEPLER_[A-Z_]+",
+      "reason": "Legacy environment variable names kept readable as migration fallbacks (MUNDUS_* is primary) or sent to pinned sibling builds that still read them."
+    },
+    {
+      "pattern": "kosmos-link-v1|kosmos-local|kosmos-icon|extensions[./]kosmos|KosmosHost|kosmos-host|kosmos-desktop|kosmos-kepler|kepler-fallback",
+      "reason": "Persisted identifiers inside user data and wire/catalog contracts: deterministic link-hash seeds, kosmos-local*:// URL schemes written into notes, the extensions.kosmos JSON key, the kosmos-host manifest target runtime, the kosmos-desktop WS client class, the kosmos-kepler keyring service (holds user credentials), and the kepler-fallback device id already written on existing machines."
+    }
+  ],
+  "files": [
+    {
+      "path": "core/AGENTS.md",
+      "reason": "Vendored upstream-monorepo doc: it names live identifiers of that codebase (`kosmos:*`, `window.kepler`, `kepler-focus-*`), which are not ours to rename."
+    },
+    {
+      "path": "core/crates/ark-core/README.md",
+      "reason": "Vendored upstream doc describing that repo's product surface."
+    },
+    {
+      "path": "docs/brand-legacy-identifiers.md",
+      "reason": "This document — it enumerates the legacy identifiers on purpose."
+    },
+    {
+      "path": "scripts/brand-allowlist.json",
+      "reason": "This file — it is the allowlist."
+    },
+    {
+      "path": "scripts/check-brand.mjs",
+      "reason": "The check itself — it contains the search terms in code."
+    },
+    {
+      "path": "runtime/src/brand.rs",
+      "reason": "The brand module — it *defines* the legacy KOSMOS_/KEPLER_ env prefixes consumed as fallbacks."
+    },
+    {
+      "path": "desktop/scripts/brand.mjs",
+      "reason": "Same for the JS build scripts."
+    },
+    {
+      "path": "docs/repo-split-decisions.md",
+      "reason": "Historical decision log; entries describe past states verbatim."
+    },
+    {
+      "path": "handoff/arcadia-installed-contract.md",
+      "reason": "Historical handoff record; contains a verbatim delivered-artifact path."
+    },
+    {
+      "path": "desktop/build/installer-script.test.mjs",
+      "reason": "Migration-behavior test asserting the installer still removes every legacy identifier."
+    },
+    {
+      "path": "desktop/scripts/installer-autostart-migration.test.mjs",
+      "reason": "Migration-behavior test enumerating legacy Run value names."
+    },
+    {
+      "path": "desktop/scripts/engine-bootstrap-contract.test.mjs",
+      "reason": "Contract test asserting the legacy standalone-Engine uninstall key stays registered for migration."
+    }
+  ]
+}

@@ -3,7 +3,7 @@ use super::*;
 pub async fn receive_and_validate(
     marker: &Path,
     setup: &support::IntegrationReplicationSetup,
-    issuer: &kepler_backend::package_service::credential_envelope::HpkeIdentity,
+    issuer: &engine::package_service::credential_envelope::HpkeIdentity,
     recipient_host: &ArkHost,
     recipient_dir: &Path,
     recipient_packages: &mut PackageService,
@@ -28,7 +28,7 @@ pub async fn receive_and_validate(
     .unwrap();
     assert_eq!(received["stored"], true);
     let stored = keyring::Entry::new(
-        "kosmos-kepler",
+        "mundus-mundus",
         &format!("package-integration:{PACKAGE_ID}:{PACKAGE_VERSION}:{SETTING}"),
     )
     .unwrap()

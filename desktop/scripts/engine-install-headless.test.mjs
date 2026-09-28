@@ -7,12 +7,12 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildEngineArchive } from "./engine-distribution.mjs";
 
-const names = ["kepler-backend.exe", "kepler-focus-helper.exe", "kepler-focus-svc.exe", "tray.ico"];
+const names = ["mundus-engine.exe", "focus-helper.exe", "focus-svc.exe", "tray.ico"];
 const script = fileURLToPath(new URL("../build/install-engine.ps1", import.meta.url));
 const SOURCE_COMMIT = "a".repeat(40);
 
 function fixture(version = "1.2.3") {
-  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-engine-headless-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "mundus-engine-headless-"));
   const release = path.join(root, "release");
   mkdirSync(release, { recursive: true });
   for (const name of names) writeFileSync(path.join(release, name), `fixture:${name}`);
@@ -50,20 +50,20 @@ test("fresh install extracts, verifies, and points current.json at the bundled v
   assert.equal(result.status, 0, result.stderr);
   const current = JSON.parse(readFileSync(path.join(f.root, "installed", "current.json"), "utf8"));
   assert.equal(current.version, "1.2.3");
-  const backend = path.join(f.root, "installed", "versions", "1.2.3", "kepler-backend.exe");
-  assert.equal(readFileSync(backend, "utf8"), "fixture:kepler-backend.exe");
+  const backend = path.join(f.root, "installed", "versions", "1.2.3", "mundus-engine.exe");
+  assert.equal(readFileSync(backend, "utf8"), "fixture:mundus-engine.exe");
 });
 
 test("install is idempotent and repairs a corrupted installation from the bundled archive", () => {
   const f = fixture();
   assert.equal(runInstall(f).status, 0);
-  const backend = path.join(f.root, "installed", "versions", "1.2.3", "kepler-backend.exe");
+  const backend = path.join(f.root, "installed", "versions", "1.2.3", "mundus-engine.exe");
   assert.equal(runInstall(f).status, 0);
-  assert.equal(readFileSync(backend, "utf8"), "fixture:kepler-backend.exe");
+  assert.equal(readFileSync(backend, "utf8"), "fixture:mundus-engine.exe");
   writeFileSync(backend, "corrupt");
   const repaired = runInstall(f);
   assert.equal(repaired.status, 0, repaired.stderr);
-  assert.equal(readFileSync(backend, "utf8"), "fixture:kepler-backend.exe");
+  assert.equal(readFileSync(backend, "utf8"), "fixture:mundus-engine.exe");
 });
 
 test("install never downgrades an equal-or-newer, already-verified Engine", () => {
@@ -133,13 +133,13 @@ test("unsafe manifest paths and sizes are rejected before installation", () => {
   assert.notEqual(runInstall(f).status, 0);
 });
 
-test("install takes over an existing standalone Kosmos Engine registration", () => {
+test("install takes over an existing standalone Mundus Engine registration", () => {
   const f = fixture();
   // A scratch registry key/shortcut, never the real machine state — the
-  // script only points at the real "Kosmos Engine" registration when these
+  // script only points at the real "Mundus Engine" registration when these
   // overrides are omitted (see installer.nsi).
-  const legacyKey = `HKCU:\\Software\\KosmosEngineMigrationTest\\${process.pid}-${Date.now()}`;
-  const legacyShortcut = path.join(f.root, "Kosmos Engine.lnk");
+  const legacyKey = `HKCU:\\Software\\MundusEngineMigrationTest\\${process.pid}-${Date.now()}`;
+  const legacyShortcut = path.join(f.root, "Mundus Engine.lnk");
   writeFileSync(legacyShortcut, "fake shortcut");
   const oldEngineRoot = path.join(f.root, "old-standalone-engine");
   mkdirSync(oldEngineRoot, { recursive: true });
@@ -148,7 +148,7 @@ test("install takes over an existing standalone Kosmos Engine registration", () 
     "-NoProfile",
     "-Command",
     `New-Item -Path '${legacyKey}' -Force | Out-Null;
-     New-ItemProperty -LiteralPath '${legacyKey}' -Name DisplayName -Value 'Kosmos Engine' -PropertyType String -Force | Out-Null;
+     New-ItemProperty -LiteralPath '${legacyKey}' -Name DisplayName -Value 'Mundus Engine' -PropertyType String -Force | Out-Null;
      New-ItemProperty -LiteralPath '${legacyKey}' -Name InstallLocation -Value '${oldEngineRoot.replaceAll("\\", "\\\\")}' -PropertyType String -Force | Out-Null;`,
   ]);
   try {

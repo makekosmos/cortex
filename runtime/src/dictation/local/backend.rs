@@ -50,7 +50,7 @@ fn temp_audio_paths() -> Result<(PathBuf, PathBuf), LocalError> {
         .duration_since(UNIX_EPOCH)
         .map_err(|e| LocalError::TempAudio(e.to_string()))?
         .as_nanos();
-    let base = env::temp_dir().join(format!("kosmos-local-dictation-{stamp}"));
+    let base = env::temp_dir().join(format!("mundus-local-dictation-{stamp}"));
     Ok((base.with_extension("wav"), base))
 }
 
@@ -72,7 +72,7 @@ fn cleanup_temp_outputs(wav_path: &Path, out_base: &Path) {
 }
 
 pub(crate) fn local_whisper_threads() -> usize {
-    env::var("KOSMOS_LOCAL_WHISPER_THREADS")
+    env::var("MUNDUS_LOCAL_WHISPER_THREADS")
         .ok()
         .and_then(|value| value.trim().parse::<usize>().ok())
         .filter(|value| *value > 0)
@@ -389,7 +389,7 @@ fn apply_whisper_accelerator_args_blocking(
 }
 
 fn whisper_cpp_vad_model_path(command_path: &Path) -> Option<PathBuf> {
-    if let Ok(path) = env::var("KOSMOS_WHISPER_CPP_VAD_MODEL") {
+    if let Ok(path) = env::var("MUNDUS_WHISPER_CPP_VAD_MODEL") {
         let path = PathBuf::from(path.trim());
         if path.is_file() {
             return Some(path);
@@ -886,9 +886,9 @@ pub async fn preload_server(
         Ok(other) => Err(LocalError::SidecarUnavailable(format!(
             "unexpected preload response: {other:?}"
         ))),
-        // Explicit debug escape hatch: managed product path must use the Kosmos-owned
+        // Explicit debug escape hatch: managed product path must use the Mundus-owned
         // sidecar. Direct whisper-server/cli execution is available only when the
-        // developer opts in with KOSMOS_LOCAL_STT_ALLOW_DIRECT_FALLBACK=1.
+        // developer opts in with MUNDUS_LOCAL_STT_ALLOW_DIRECT_FALLBACK=1.
         Err(LocalError::SidecarUnavailable(_)) if direct_sidecar_fallback_allowed() => {
             preload_with_whisper_backend(engine, model_path, command_path).await
         }
@@ -991,9 +991,9 @@ pub async fn transcribe(req: LocalRequest<'_>) -> Result<TranscriptionResult, Lo
                 "unexpected transcribe response: {other:?}"
             )))
         }
-        // Explicit debug escape hatch: managed product path must use the Kosmos-owned
+        // Explicit debug escape hatch: managed product path must use the Mundus-owned
         // sidecar. Direct whisper-server/cli execution is available only when the
-        // developer opts in with KOSMOS_LOCAL_STT_ALLOW_DIRECT_FALLBACK=1.
+        // developer opts in with MUNDUS_LOCAL_STT_ALLOW_DIRECT_FALLBACK=1.
         Err(LocalError::SidecarUnavailable(_)) if direct_sidecar_fallback_allowed() => {
             transcribe_with_whisper_backend(LocalRequest {
                 wav_bytes: &owned.wav_bytes,

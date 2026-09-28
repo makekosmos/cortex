@@ -39,7 +39,7 @@ pub(super) async fn wait_for_child(child: &mut Child, control: &mut ControlServe
                     Ok(status) => ChildResult::Exited(status),
                     Err(error) => {
                         crate::observability::stderr(format!(
-                            "[kosmos-engine] wait for core failed: {error}"
+                            "[mundus-engine] wait for core failed: {error}"
                         ));
                         ChildResult::Exited(exit_status_failure())
                     }

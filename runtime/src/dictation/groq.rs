@@ -28,7 +28,7 @@ use thiserror::Error;
 
 pub const GROQ_ENDPOINT: &str = "https://api.groq.com/openai/v1/audio/transcriptions";
 
-/// Hardcoded prompt для Whisper. Короткий, с domain-терминами Kosmos/Kepler
+/// Hardcoded prompt для Whisper. Короткий, с domain-терминами Mundus/Mundus
 /// + явно указывает что это русская речь с пунктуацией. Не описывает задачу
 ///   («ты транскрибатор…») — Whisper это копирует в выход. Только пример стиля.
 const HARDCODED_PROMPT: &str = "Привет! Это транскрипция русской речи с правильной пунктуацией — точками, запятыми, тире, вопросительными и восклицательными знаками. В тексте могут встречаться термины: API, Groq, Whisper, GPT, Anthropic, React, TypeScript. Сохраняй естественные паузы и интонацию говорящего.";

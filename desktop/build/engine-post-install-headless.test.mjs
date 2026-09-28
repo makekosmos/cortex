@@ -9,10 +9,10 @@ import { fileURLToPath } from "node:url";
 const script = fileURLToPath(new URL("./engine-post-install.ps1", import.meta.url));
 
 function engineRoot(version = "1.2.3") {
-  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-post-install-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "mundus-post-install-"));
   const versionDir = path.join(root, "versions", version);
   mkdirSync(versionDir, { recursive: true });
-  writeFileSync(path.join(versionDir, "kepler-backend.exe"), "fixture");
+  writeFileSync(path.join(versionDir, "mundus-engine.exe"), "fixture");
   writeFileSync(path.join(root, "current.json"), JSON.stringify({ schema_version: 1, version }));
   return root;
 }
@@ -32,7 +32,7 @@ function run(root, switches, extra = []) {
       "-EngineRoot",
       root,
       "-RunKeyPath",
-      `HKCU:\\Software\\KosmosPostInstallTest\\${process.pid}`,
+      `HKCU:\\Software\\MundusPostInstallTest\\${process.pid}`,
       "-DryRun",
       ...switches,
       ...extra,
@@ -41,13 +41,13 @@ function run(root, switches, extra = []) {
   );
 }
 
-test("valid current.json resolves the installed kepler-backend.exe for autostart", () => {
+test("valid current.json resolves the installed mundus-engine.exe for autostart", () => {
   const root = engineRoot("2.4.6");
   try {
     const result = run(root, ["-SeedAutostart"]);
     assert.equal(result.status, 0, result.stderr);
-    const exe = path.join(root, "versions", "2.4.6", "kepler-backend.exe");
-    assert.ok(result.stdout.includes(`'Kosmos Engine' = "${exe}" --start`), result.stdout);
+    const exe = path.join(root, "versions", "2.4.6", "mundus-engine.exe");
+    assert.ok(result.stdout.includes(`'Mundus Engine' = "${exe}" --start`), result.stdout);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -58,7 +58,7 @@ test("-StartEngine resolves the same binary without blocking", () => {
   try {
     const result = run(root, ["-StartEngine"]);
     assert.equal(result.status, 0, result.stderr);
-    const exe = path.join(root, "versions", "1.2.3", "kepler-backend.exe");
+    const exe = path.join(root, "versions", "1.2.3", "mundus-engine.exe");
     assert.ok(result.stdout.includes(`START "${exe}" --start`), result.stdout);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -66,7 +66,7 @@ test("-StartEngine resolves the same binary without blocking", () => {
 });
 
 test("missing current.json fails closed: non-zero exit, nothing written", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-post-install-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "mundus-post-install-"));
   try {
     const result = run(root, ["-SeedAutostart", "-StartEngine"]);
     assert.notEqual(result.status, 0);
@@ -92,8 +92,8 @@ test("invalid current.json (bad schema or version) fails closed", () => {
   }
 });
 
-test("pointed-at version without a kepler-backend.exe fails closed", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-post-install-"));
+test("pointed-at version without a mundus-engine.exe fails closed", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "mundus-post-install-"));
   writeFileSync(
     path.join(root, "current.json"),
     JSON.stringify({ schema_version: 1, version: "9.9.9" }),

@@ -1,6 +1,6 @@
 // Command bus: in-memory registry of "commands" published by connected WS
-// clients, used by the global launcher (Kosmos) to display searchable
-// open/action items contributed by individual Kepler apps.
+// clients, used by the global launcher (Mundus) to display searchable
+// open/action items contributed by individual Mundus apps.
 //
 // Each connected WS client owns a list of `CommandManifest`. On disconnect,
 // that client's commands are removed automatically. Invocations are broadcast

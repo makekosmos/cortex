@@ -6,10 +6,10 @@
 use super::components::Component;
 use std::path::{Path, PathBuf};
 
-/// Directories that may hold the packaged application (`Kosmos.exe` / Engine
+/// Directories that may hold the packaged application (`Mundus.exe` / Engine
 /// runtime) and, alongside it, `resources/components/<name>/...`. Mirrors the
-/// NSIS per-user install under `%LOCALAPPDATA%\Programs\Kosmos`, or a plain
-/// `<root>\Kosmos` layout under any of `LOCALAPPDATA` / `ProgramFiles` /
+/// NSIS per-user install under `%LOCALAPPDATA%\Programs\Mundus`, or a plain
+/// `<root>\Mundus` layout under any of `LOCALAPPDATA` / `ProgramFiles` /
 /// `ProgramFiles(x86)`. `exe_parent` (the running Engine binary's own
 /// directory) and its parent are included too, so dev/test fixtures that
 /// co-locate everything in one folder still resolve.
@@ -22,13 +22,13 @@ pub fn install_root_candidates(exe_parent: Option<&Path>, env_roots: &[PathBuf])
         }
     }
     for root in env_roots {
-        roots.push(root.join("Programs").join("Kosmos"));
-        roots.push(root.join("Kosmos"));
+        roots.push(root.join("Programs").join("Mundus"));
+        roots.push(root.join("Mundus"));
     }
     roots
 }
 
-/// `<root>\resources\components\<name>\Kosmos <Name>.exe` for every candidate
+/// `<root>\resources\components\<name>\Mundus <Name>.exe` for every candidate
 /// root.
 pub fn component_executable_candidates(roots: &[PathBuf], component: Component) -> Vec<PathBuf> {
     roots
@@ -48,13 +48,13 @@ mod tests {
 
     #[test]
     fn install_roots_include_exe_parent_and_app_dir() {
-        let exe_parent = PathBuf::from(r"C:\Kosmos\Engine\versions\0.1.3");
+        let exe_parent = PathBuf::from(r"C:\Mundus\Engine\versions\0.1.3");
         let roots = install_root_candidates(Some(&exe_parent), &[]);
         assert_eq!(
             roots,
             vec![
-                PathBuf::from(r"C:\Kosmos\Engine\versions\0.1.3"),
-                PathBuf::from(r"C:\Kosmos\Engine\versions"),
+                PathBuf::from(r"C:\Mundus\Engine\versions\0.1.3"),
+                PathBuf::from(r"C:\Mundus\Engine\versions"),
             ]
         );
     }
@@ -66,27 +66,27 @@ mod tests {
         assert_eq!(
             roots,
             vec![
-                PathBuf::from(r"C:\Users\kirill\AppData\Local\Programs\Kosmos"),
-                PathBuf::from(r"C:\Users\kirill\AppData\Local\Kosmos"),
+                PathBuf::from(r"C:\Users\kirill\AppData\Local\Programs\Mundus"),
+                PathBuf::from(r"C:\Users\kirill\AppData\Local\Mundus"),
             ]
         );
     }
 
     #[test]
     fn component_candidates_use_the_resources_components_layout() {
-        let roots = vec![PathBuf::from(r"C:\Kosmos")];
+        let roots = vec![PathBuf::from(r"C:\Mundus")];
         let candidates = component_executable_candidates(&roots, Component::Manager);
         assert_eq!(
             candidates,
             vec![PathBuf::from(
-                r"C:\Kosmos\resources\components\manager\Kosmos Manager.exe"
+                r"C:\Mundus\resources\components\manager\Mundus Manager.exe"
             )]
         );
     }
 
     #[test]
     fn every_component_resolves_to_a_distinct_relative_path() {
-        let roots = vec![PathBuf::from(r"C:\Kosmos")];
+        let roots = vec![PathBuf::from(r"C:\Mundus")];
         let mut relative: Vec<PathBuf> = Component::ALL
             .iter()
             .flat_map(|component| component_executable_candidates(&roots, *component))

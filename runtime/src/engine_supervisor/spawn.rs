@@ -9,19 +9,19 @@ pub(crate) fn spawn_core_worker(
     let mut command = Command::new(executable);
     command
         .arg(CORE_WORKER_ARG)
-        .env("KOSMOS_ENGINE_SUPERVISED", "1")
-        .env("KOSMOS_CONTROL_ENDPOINT", &control_state.endpoint)
+        .env("MUNDUS_ENGINE_SUPERVISED", "1")
+        .env("MUNDUS_CONTROL_ENDPOINT", &control_state.endpoint)
         .env(
-            "KOSMOS_CONTROL_SESSION_ID",
+            "MUNDUS_CONTROL_SESSION_ID",
             &control_state.supervisor_session_id,
         )
         .env(
-            "KOSMOS_CONTROL_GENERATION",
+            "MUNDUS_CONTROL_GENERATION",
             control_state.child_generation.to_string(),
         )
-        .env("KOSMOS_CONTROL_OWNER_ID", &control_state.owner_identity)
+        .env("MUNDUS_CONTROL_OWNER_ID", &control_state.owner_identity)
         .env(
-            "KOSMOS_CORE_CONTROL_SECRET",
+            "MUNDUS_CORE_CONTROL_SECRET",
             engine_control::encode_secret(core_secret),
         )
         .envs(read_sync_env(data_dir))

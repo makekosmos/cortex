@@ -31,20 +31,20 @@ impl Component {
     /// Packaged executable file name inside its component folder.
     pub fn exe_name(self) -> &'static str {
         match self {
-            Component::Manager => "Kosmos Manager.exe",
-            Component::Agenda => "Kosmos Agenda.exe",
-            Component::Memoria => "Kosmos Memoria.exe",
-            Component::Dictation => "Kosmos Dictation.exe",
+            Component::Manager => "Mundus Manager.exe",
+            Component::Agenda => "Agenda.exe",
+            Component::Memoria => "Memoria.exe",
+            Component::Dictation => "Dictation.exe",
         }
     }
 
     /// Environment variable that overrides the resolved path for dev/local runs.
     pub fn env_override(self) -> &'static str {
         match self {
-            Component::Manager => "KOSMOS_MANAGER_EXECUTABLE",
-            Component::Agenda => "KOSMOS_AGENDA_EXECUTABLE",
-            Component::Memoria => "KOSMOS_MEMORIA_EXECUTABLE",
-            Component::Dictation => "KOSMOS_DICTATION_EXECUTABLE",
+            Component::Manager => "MUNDUS_MANAGER_EXECUTABLE",
+            Component::Agenda => "MUNDUS_AGENDA_EXECUTABLE",
+            Component::Memoria => "MUNDUS_MEMORIA_EXECUTABLE",
+            Component::Dictation => "MUNDUS_DICTATION_EXECUTABLE",
         }
     }
 

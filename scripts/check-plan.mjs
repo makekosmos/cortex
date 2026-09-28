@@ -10,6 +10,7 @@ export { executePlan } from "./check-plan-commands.mjs";
 export { parseNameStatus } from "./check-plan-git.mjs";
 
 const CHECK_ORDER = [
+  "brand",
   "desktop-contracts",
   "rustfmt",
   "clippy",

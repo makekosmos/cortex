@@ -5,7 +5,7 @@ use serde_json::json;
 
 use crate::app::ManagerApp;
 use crate::widgets::*;
-use kosmos_gpui_kit::theme::*;
+use mundus_gpui_kit::theme::*;
 
 // --- Локальная модель ------------------------------------------------------------
 

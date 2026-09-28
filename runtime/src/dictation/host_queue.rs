@@ -1,15 +1,15 @@
 const AUTO_RETRY_DELAYS_SEC: [u64; 5] = [1, 5, 10, 20, 40];
 
 fn is_dictation_test_mode() -> bool {
-    matches!(std::env::var("KOSMOS_TEST_MODE").as_deref(), Ok("1"))
-        || matches!(std::env::var("KOSMOS_HEADLESS").as_deref(), Ok("1"))
+    matches!(std::env::var("MUNDUS_TEST_MODE").as_deref(), Ok("1"))
+        || matches!(std::env::var("MUNDUS_HEADLESS").as_deref(), Ok("1"))
 }
 
 fn mock_dictation_transcript_override(provider: &str, fallback: Option<&str>) -> Option<String> {
     if !is_dictation_test_mode() || provider != "mock" {
         return None;
     }
-    if let Ok(transcript) = std::env::var("KOSMOS_TEST_DICTATION_TRANSCRIPT") {
+    if let Ok(transcript) = std::env::var("MUNDUS_TEST_DICTATION_TRANSCRIPT") {
         let transcript = transcript.trim();
         if !transcript.is_empty() {
             return Some(transcript.to_string());

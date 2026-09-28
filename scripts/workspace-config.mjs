@@ -23,26 +23,26 @@ function validatePin(pin, name) {
 }
 export async function loadWorkspace(root) {
   const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8")),
-    pins = packageJson.kosmos?.workspace;
-  if (!isRecord(pins)) fail("package.json is missing kosmos.workspace pins");
+    pins = packageJson.mundus?.workspace;
+  if (!isRecord(pins)) fail("package.json is missing mundus.workspace pins");
   for (const name of NAMES) validatePin(pins[name], name);
   return { packageJson, pins };
 }
 export function resolveMode(env = process.env, base = process.cwd()) {
-  if (env.KOSMOS_WORKSPACE_MODE && env.KOSMOS_WORKSPACE_MODE !== "local")
-    fail("KOSMOS_WORKSPACE_MODE must be omitted or local");
-  if (env.KOSMOS_WORKSPACE_MODE !== "local")
+  if (env.MUNDUS_WORKSPACE_MODE && env.MUNDUS_WORKSPACE_MODE !== "local")
+    fail("MUNDUS_WORKSPACE_MODE must be omitted or local");
+  if (env.MUNDUS_WORKSPACE_MODE !== "local")
     return {
       name: "pinned",
       paths: Object.fromEntries(
         NAMES.map((name) => [name, path.resolve(base, ".tmp", "workspace", name)]),
       ),
     };
-  const sources = { imago: env.KOSMOS_IMAGO_PATH, "arca-sdk": env.KOSMOS_ARCA_SDK_PATH };
+  const sources = { imago: env.MUNDUS_IMAGO_PATH, "arca-sdk": env.MUNDUS_ARCA_SDK_PATH };
   for (const name of NAMES)
     if (!sources[name])
       fail(
-        `local mode requires ${name === "imago" ? "KOSMOS_IMAGO_PATH" : "KOSMOS_ARCA_SDK_PATH"}`,
+        `local mode requires ${name === "imago" ? "MUNDUS_IMAGO_PATH" : "MUNDUS_ARCA_SDK_PATH"}`,
       );
   return {
     name: "local",

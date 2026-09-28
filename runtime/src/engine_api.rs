@@ -37,6 +37,9 @@ const LAUNCH_LEASE_TTL: Duration = Duration::from_secs(300);
 const DATA_GRANT_TTL: Duration = Duration::from_secs(900);
 const MAX_ACTIVE_LAUNCH_LEASES: usize = 2_048;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+// Wire header names stay `x-kosmos-*`: pinned component builds
+// (agenda/memoria/dictation and kosmos-gpui-kit) send exactly these names —
+// persisted contract, see docs/brand-legacy-identifiers.md.
 const CLIENT_PID_HEADER: &str = "x-kosmos-client-pid";
 const API_VERSION_HEADER: &str = "x-kosmos-api-version";
 const CLIENT_CLASS_HEADER: &str = "x-kosmos-client-class";

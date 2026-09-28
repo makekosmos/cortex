@@ -100,7 +100,7 @@ async fn fetch_json(path: &str, ctx: &AppNetworkCtx) -> Result<Option<Value>, &'
     let spec = FetchSpec {
         accept: "application/json",
         accept_language: None,
-        user_agent: "Kosmos Eden/0.5",
+        user_agent: "Mundus Eden/0.5",
         max_bytes: MAX_RESPONSE_BYTES,
         allowed_content: None,
         same_origin_redirects: true,

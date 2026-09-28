@@ -14,13 +14,13 @@ Cortex pins Core revision `169c1967a074ae6658e81d59892247b24332ce29`.
 
 ```text
 rtk proxy cargo build --locked --bin ark-core-rpc --features iroh-spike --target-dir <dedicated> --timings
-rtk proxy cargo build --locked -p kepler-backend --bin kepler-backend --features windows-gui-subsystem --target-dir <dedicated> --timings
+rtk proxy cargo build --locked -p engine --bin mundus-engine --features windows-gui-subsystem --target-dir <dedicated> --timings
 ```
 
 | Build                                            |  Cold | Warm, unchanged | After a Rust edit |    Dedicated target |
 | ------------------------------------------------ | ----: | --------------: | ----------------: | ------------------: |
 | Core `ark-core-rpc`, `iroh-spike`                | 2m47s |           0.93s |            14.25s | 4,591,137,913 bytes |
-| Cortex `kepler-backend`, `windows-gui-subsystem` | 3m29s |           1.01s |            14.39s | 5,322,661,606 bytes |
+| Cortex `mundus-engine`, `windows-gui-subsystem` | 3m29s |           1.01s |            14.39s | 5,322,661,606 bytes |
 
 The six `cargo --timings` HTML reports were kept outside the repository in
 `.tmp/kos14-evidence`; they are evidence, not release inputs. Dedicated
@@ -41,17 +41,17 @@ stop active builds and remove only that directory; the next call reports Cargo
 output and rebuilds it. Do not remove a lock while its recorded process is
 alive.
 
-## `KOSMOS_ARK_TARGET_DIR`
+## `MUNDUS_ARK_TARGET_DIR`
 
 A source build sets `CARGO_TARGET_DIR` for `cargo install` so Cargo output
 stays inside the staging directory instead of the global Cargo target. On
 Windows the staging path under `desktop/.tmp/ark-core-rpc` grows past ~260
 characters once platform, revision, profile, and feature keys join it, and
 `ml64`/`link.exe` then fail with `MASM A1009: line too long` or `LNK1104`.
-Set `KOSMOS_ARK_TARGET_DIR` to a short absolute path to redirect Cargo output:
+Set `MUNDUS_ARK_TARGET_DIR` to a short absolute path to redirect Cargo output:
 
 ```text
-$env:KOSMOS_ARK_TARGET_DIR = 'C:\ark-target'
+$env:MUNDUS_ARK_TARGET_DIR = 'C:\ark-target'
 bun run --cwd desktop dev
 ```
 

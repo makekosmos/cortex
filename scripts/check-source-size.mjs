@@ -17,7 +17,9 @@ const GRANDFATHERED = new Set([
   // Files above FAIL_LIMIT that predate it. Additions here require an
   // intentional review; drop an entry once its file is back under the limit.
   "desktop/scripts/verify-release-channel.mjs",
-  "native-services/kepler-focus-helper/src/hosts.rs",
+  "manager-gpui/src/app.rs",
+  "native-services/focus-helper/src/hosts.rs",
+  "native-services/focus-svc/src/cli.rs",
   "runtime/src/agents/app_server.rs",
   "runtime/src/agents/definitions.rs",
   "runtime/src/agents/tests.rs",

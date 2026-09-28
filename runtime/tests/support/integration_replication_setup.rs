@@ -13,7 +13,7 @@ use ark_core::integration_replication::{
     AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationNodeGrant, NodeStatus,
 };
 use ed25519_dalek::{Signer, SigningKey};
-use kepler_backend::package_service::credential_envelope::load_or_create_identity;
+use engine::package_service::credential_envelope::load_or_create_identity;
 use rusqlite::Connection;
 use serde_json::json;
 use sha2::{Digest, Sha256};

@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use super::{IntegrationReplicationChange, SignedSyncError};
 
-const DOMAIN: &[u8] = b"kosmos.ark.signed-sync.v1";
+const DOMAIN: &[u8] = b"mundus.ark.signed-sync.v1";
 
 pub fn encode_hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";

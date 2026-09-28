@@ -21,7 +21,7 @@ func emit(_ payload: [String: Any]) {
 
 func installParentWatchdogIfNeeded() {
     guard
-        let raw = ProcessInfo.processInfo.environment["KOSMOS_PARENT_PID"],
+        let raw = ProcessInfo.processInfo.environment["MUNDUS_PARENT_PID"],
         let parentPid = Int32(raw)
     else { return }
 

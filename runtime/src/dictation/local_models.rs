@@ -255,11 +255,11 @@ fn default_shared_assets_base() -> PathBuf {
 }
 
 fn default_shared_assets_root() -> PathBuf {
-    default_shared_assets_base().join("Kosmos")
+    default_shared_assets_base().join("Mundus")
 }
 
 fn shared_assets_root(data_dir: &Path) -> PathBuf {
-    if let Ok(dir) = std::env::var("KOSMOS_LOCAL_STT_DIR") {
+    if let Ok(dir) = std::env::var("MUNDUS_LOCAL_STT_DIR") {
         let trimmed = dir.trim();
         if !trimmed.is_empty() {
             return PathBuf::from(trimmed);
@@ -358,7 +358,7 @@ pub fn migrate_legacy_assets(data_dir: &Path) -> io::Result<bool> {
     let shared_root = shared_assets_root(data_dir);
     let mut changed = false;
     let mut roots = vec![data_dir.to_path_buf()];
-    if std::env::var("KOSMOS_LOCAL_STT_DIR").is_err()
+    if std::env::var("MUNDUS_LOCAL_STT_DIR").is_err()
         && !cfg!(test)
         && same_path_or_text(&shared_root, &default_shared_assets_root())
     {
@@ -368,7 +368,8 @@ pub fn migrate_legacy_assets(data_dir: &Path) -> io::Result<bool> {
                 let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
                     continue;
                 };
-                if path.is_dir() && name.starts_with("Kosmos-dev") {
+                let is_dev_dir = name.starts_with("Mundus-dev") || name.starts_with("Kosmos-dev"); // MIGRATION(KOS-267): pre-rename dev worktrees
+                if path.is_dir() && is_dev_dir {
                     roots.push(path);
                 }
             }
@@ -647,7 +648,7 @@ fn managed_command_paths(data_dir: &Path) -> [PathBuf; 2] {
 
 #[cfg(windows)]
 fn vulkan_tools_enabled() -> bool {
-    if std::env::var("KOSMOS_DICTATION_DISABLE_VULKAN").as_deref() == Ok("1") {
+    if std::env::var("MUNDUS_DICTATION_DISABLE_VULKAN").as_deref() == Ok("1") {
         return false;
     }
     vulkan_runtime_available()

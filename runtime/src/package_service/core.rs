@@ -16,8 +16,8 @@ impl PackageService {
         let root = data_dir.as_ref().join("packages");
         retry_io(|| fs::create_dir_all(&root)).map_err(|_| PackageError::Persistence)?;
         let trust = match (
-            option_env!("KOSMOS_PACKAGE_ROOT_KEY_JSON"),
-            option_env!("KOSMOS_PACKAGE_RELEASE_KEYS_JSON"),
+            option_env!("MUNDUS_PACKAGE_ROOT_KEY_JSON"),
+            option_env!("MUNDUS_PACKAGE_RELEASE_KEYS_JSON"),
         ) {
             (Some(root_json), Some(releases)) => serde_json::from_str::<TrustedKey>(root_json)
                 .ok()

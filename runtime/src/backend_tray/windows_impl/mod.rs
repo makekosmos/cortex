@@ -40,11 +40,11 @@ pub fn run(events: UnboundedSender<TrayEvent>, ready: SyncSender<u32>) {
     let _ = EVENTS.set(events);
 
     let Ok(module) = (unsafe { GetModuleHandleW(None) }) else {
-        eprintln!("[kepler-backend] tray: GetModuleHandleW failed");
+        eprintln!("[mundus-engine] tray: GetModuleHandleW failed");
         return;
     };
     let instance = HINSTANCE(module.0);
-    let class_name = wide("KosmosBackendTray");
+    let class_name = wide("MundusBackendTray");
     let class = WNDCLASSW {
         hInstance: instance,
         lpszClassName: PCWSTR(class_name.as_ptr()),
@@ -58,7 +58,7 @@ pub fn run(events: UnboundedSender<TrayEvent>, ready: SyncSender<u32>) {
     let icon_path = match resolve_icon_path() {
         Some(path) => path,
         None => {
-            eprintln!("[kepler-backend] tray icon asset not found");
+            eprintln!("[mundus-engine] tray icon asset not found");
             return;
         }
     };
@@ -66,7 +66,7 @@ pub fn run(events: UnboundedSender<TrayEvent>, ready: SyncSender<u32>) {
         Some(icon) => icon,
         None => {
             eprintln!(
-                "[kepler-backend] tray icon failed to load: {}",
+                "[mundus-engine] tray icon failed to load: {}",
                 icon_path.display()
             );
             return;
@@ -88,7 +88,7 @@ pub fn run(events: UnboundedSender<TrayEvent>, ready: SyncSender<u32>) {
             None,
         )
     }) else {
-        eprintln!("[kepler-backend] tray window creation failed");
+        eprintln!("[mundus-engine] tray window creation failed");
         unsafe {
             let _ = DestroyIcon(icon);
         }
@@ -98,13 +98,13 @@ pub fn run(events: UnboundedSender<TrayEvent>, ready: SyncSender<u32>) {
     let notify = notify_data(window, icon);
     unsafe {
         if !Shell_NotifyIconW(NIM_ADD, &notify).as_bool() {
-            eprintln!("[kepler-backend] Shell_NotifyIconW(NIM_ADD) failed");
+            eprintln!("[mundus-engine] Shell_NotifyIconW(NIM_ADD) failed");
             let _ = DestroyWindow(window);
             let _ = DestroyIcon(icon);
             return;
         }
     }
-    eprintln!("[kepler-backend] tray created");
+    eprintln!("[mundus-engine] tray created");
     tracing::info!(target: "tray", "tray created");
 
     let mut message = MSG::default();
@@ -132,7 +132,7 @@ fn open_component(component: Component) {
     if let Some(executable) = resolve_component_executable(component) {
         if let Err(error) = Command::new(&executable).spawn() {
             eprintln!(
-                "[kepler-backend] failed to open {} {}: {error}",
+                "[mundus-engine] failed to open {} {}: {error}",
                 component.menu_label(),
                 executable.display()
             );

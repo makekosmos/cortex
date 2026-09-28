@@ -21,7 +21,7 @@ async fn scan_searches_regular_files_and_skips_noisy_folders_by_default() {
 
 #[tokio::test]
 async fn disabled_index_exposes_empty_safe_surface() {
-    // Regression: 2026-06-08. KEPLER_FILE_INDEX=0 must be a real kill switch,
+    // Regression: 2026-06-08. MUNDUS_FILE_INDEX=0 must be a real kill switch,
     // not just "skip startup scan while old persisted roots keep working".
     let data = tempdir().unwrap();
     let root = tempdir().unwrap();

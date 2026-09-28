@@ -26,7 +26,7 @@ const input = {
         entrypoint: "index.js",
         publisher: "kosmos",
         permissions: [],
-        targets: [{ runtime: "kosmos-host", os: ["windows"] }],
+        targets: [{ runtime: "mundus-host", os: ["windows"] }],
         data: { access: [], defines: [], mappings: [] },
       },
       archive_url: "https://example.test/demo.kspkg",
@@ -172,7 +172,7 @@ test("catalog accepts strict Package v1 manifest v2 data contract", async () => 
         manifest: {
           ...input.packages[0].manifest,
           schema_version: 2,
-          targets: [{ runtime: "kosmos-host", os: ["windows"] }],
+          targets: [{ runtime: "mundus-host", os: ["windows"] }],
           data: { access: [], defines: [], mappings: [] },
         },
       },
@@ -219,12 +219,12 @@ test("package app stages and signs a v2 archive", { timeout: 15_000 }, async () 
   const t = await mkdtemp(path.join(tmpdir(), "kspkg-app-"));
   const source = path.join(t, "dist");
   await mkdir(source, { recursive: true });
-  await writeFile(path.join(source, "index.html"), "<title>Kosmos</title>");
+  await writeFile(path.join(source, "index.html"), "<title>Mundus</title>");
   const manifest = {
     ...input.packages[0].manifest,
     schema_version: 2,
     id: "com.kosmos.demo",
-    targets: [{ runtime: "kosmos-host", os: ["windows"] }],
+    targets: [{ runtime: "mundus-host", os: ["windows"] }],
     data: { access: [], defines: [], mappings: [] },
     entrypoint: "dist/index.html",
   };

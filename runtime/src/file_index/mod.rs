@@ -1,4 +1,4 @@
-// File Index v1 — host-local filename/path search for Kepler launcher.
+// File Index v1 — host-local filename/path search for Mundus launcher.
 //
 // Storage lives in `<data_dir>/file-index.db`, not ARK. File paths are tied to
 // this machine and the index can be rebuilt from disk.

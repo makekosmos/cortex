@@ -43,7 +43,7 @@ fn phase_to_str(p: Phase) -> &'static str {
     }
 }
 
-/// PomodoroHost — singleton в kepler-backend. Внутри Arc<Mutex<Session>> +
+/// PomodoroHost — singleton в mundus-engine. Внутри Arc<Mutex<Session>> +
 /// broadcast channel с уже-форматированными WS-events (JSON Value).
 pub struct PomodoroHost {
     session: Arc<Mutex<Session>>,
@@ -476,7 +476,7 @@ mod tests {
     fn tmp_data_dir(tag: &str) -> PathBuf {
         let mut p = std::env::temp_dir();
         p.push(format!(
-            "kosmos-pomodoro-test-{}-{}-{}",
+            "mundus-pomodoro-test-{}-{}-{}",
             tag,
             std::process::id(),
             std::time::SystemTime::now()

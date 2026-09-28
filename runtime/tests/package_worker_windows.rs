@@ -8,8 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use httpmock::MockServer;
-use kepler_backend::{
+use engine::{
     ark_host::ArkHost,
     diagnostics::RpcDiagnostics,
     manager_api::ManagerState,
@@ -26,6 +25,7 @@ use kepler_backend::{
     protocol_usage::ProtocolUsageStore,
     usage_tracker::UsageTrackerDiagnosticsState,
 };
+use httpmock::MockServer;
 use sha2::{Digest, Sha256};
 use zip::{write::FileOptions, ZipWriter};
 
@@ -44,10 +44,10 @@ struct FixtureEnv<'a> {
 impl Drop for FixtureEnv<'_> {
     fn drop(&mut self) {
         unsafe {
-            std::env::remove_var("KOSMOS_FIXTURE_ENTRY_MARKER");
-            std::env::remove_var("KOSMOS_FIXTURE_BOOTSTRAP_MARKER");
+            std::env::remove_var("MUNDUS_FIXTURE_ENTRY_MARKER");
+            std::env::remove_var("MUNDUS_FIXTURE_BOOTSTRAP_MARKER");
             if self.result.is_some() {
-                std::env::remove_var("KOSMOS_FAKE_PROVIDER_RESULT_MARKER");
+                std::env::remove_var("MUNDUS_FAKE_PROVIDER_RESULT_MARKER");
             }
         }
     }
@@ -58,8 +58,8 @@ fn fixture_env(directory: &tempfile::TempDir) -> FixtureEnv<'static> {
     let entry = directory.path().join("entry.marker");
     let bootstrap = directory.path().join("bootstrap.marker");
     unsafe {
-        std::env::set_var("KOSMOS_FIXTURE_ENTRY_MARKER", &entry);
-        std::env::set_var("KOSMOS_FIXTURE_BOOTSTRAP_MARKER", &bootstrap);
+        std::env::set_var("MUNDUS_FIXTURE_ENTRY_MARKER", &entry);
+        std::env::set_var("MUNDUS_FIXTURE_BOOTSTRAP_MARKER", &bootstrap);
     }
     FixtureEnv {
         _lock: lock,
@@ -80,12 +80,12 @@ fn manifest(id: &str) -> PackageManifest {
         entrypoint: "package-worker-fixture.exe".into(),
         publisher: "kosmos".into(),
         permissions: if id.ends_with(".ark-write") {
-            vec![kepler_backend::package_manifest::PermissionRequest {
+            vec![engine::package_manifest::PermissionRequest {
                 capability: "ark.write".into(),
                 scopes: vec!["upsert_object_type".into()],
             }]
         } else if id.ends_with(".fake-provider") {
-            vec![kepler_backend::package_manifest::PermissionRequest {
+            vec![engine::package_manifest::PermissionRequest {
                 capability: "network".into(),
                 scopes: vec!["http://127.0.0.1/".into()],
             }]
@@ -113,19 +113,19 @@ fn bridge_manifest() -> PackageManifest {
         entrypoint: "ark-markdown-bridge.exe".into(),
         publisher: "kosmos".into(),
         permissions: vec![
-            kepler_backend::package_manifest::PermissionRequest {
+            engine::package_manifest::PermissionRequest {
                 capability: "ark.read".into(),
                 scopes: vec!["list_objects".into(), "get_object".into()],
             },
-            kepler_backend::package_manifest::PermissionRequest {
+            engine::package_manifest::PermissionRequest {
                 capability: "ark.write".into(),
                 scopes: vec!["upsert_object".into(), "external_refs.upsert".into()],
             },
-            kepler_backend::package_manifest::PermissionRequest {
+            engine::package_manifest::PermissionRequest {
                 capability: "filesystem.read".into(),
                 scopes: vec![],
             },
-            kepler_backend::package_manifest::PermissionRequest {
+            engine::package_manifest::PermissionRequest {
                 capability: "filesystem.write".into(),
                 scopes: vec![],
             },
@@ -154,7 +154,7 @@ fn versioned_manifest(manifest: &PackageManifest) -> VersionedManifest {
         }],
         data: ManifestData {
             access: (manifest.kind == PackageKind::Bridge)
-                .then_some(kepler_backend::package_manifest::DataAccessRule {
+                .then_some(engine::package_manifest::DataAccessRule {
                     type_id: "note".into(),
                     versions: "*".into(),
                     actions: vec![DataAction::Read, DataAction::Update],
@@ -195,10 +195,7 @@ fn assert_owner_only_acl(path: &std::path::Path) {
 fn install_fixture(
     directory: &tempfile::TempDir,
     manifest: &PackageManifest,
-) -> (
-    Arc<PackageStore>,
-    kepler_backend::package_store::InstalledPackage,
-) {
+) -> (Arc<PackageStore>, engine::package_store::InstalledPackage) {
     install_binary(directory, manifest, fixture())
 }
 
@@ -206,10 +203,7 @@ fn install_binary(
     directory: &tempfile::TempDir,
     manifest: &PackageManifest,
     binary: PathBuf,
-) -> (
-    Arc<PackageStore>,
-    kepler_backend::package_store::InstalledPackage,
-) {
+) -> (Arc<PackageStore>, engine::package_store::InstalledPackage) {
     let archive_path = directory.path().join("worker.kspkg");
     let file = std::fs::File::create(&archive_path).expect("archive");
     let mut archive = ZipWriter::new(file);
@@ -461,7 +455,7 @@ async fn fake_provider_collection_uses_keyring_secret_and_broker_injection() {
     let mut markers = fixture_env(&directory);
     let result_marker = directory.path().join("fake-provider-result.json");
     unsafe {
-        std::env::set_var("KOSMOS_FAKE_PROVIDER_RESULT_MARKER", &result_marker);
+        std::env::set_var("MUNDUS_FAKE_PROVIDER_RESULT_MARKER", &result_marker);
     }
     markers.result = Some(result_marker.clone());
 
@@ -482,7 +476,7 @@ async fn fake_provider_collection_uses_keyring_secret_and_broker_injection() {
     let origin = server.url("/");
 
     let keyring_entry = keyring::Entry::new(
-        "kosmos-kepler",
+        "mundus-mundus",
         "package-integration:fixture.fake-provider:1.0.0:session",
     )
     .expect("keyring entry");
@@ -518,40 +512,38 @@ async fn fake_provider_collection_uses_keyring_secret_and_broker_injection() {
             &[],
             "fake-provider-test".into(),
             None,
-            Some(
-                kepler_backend::package_worker_supervisor::IntegrationLaunchConfig {
-                    manifest: IntegrationManifest {
-                        settings: vec![
-                            IntegrationSetting {
-                                key: "endpoint".into(),
-                                label: "Provider endpoint".into(),
-                                kind: IntegrationSettingKind::Text,
-                                description: None,
-                                required: true,
-                                injection: None,
-                            },
-                            IntegrationSetting {
-                                key: "session".into(),
-                                label: "Session".into(),
-                                kind: IntegrationSettingKind::Secret,
-                                description: None,
-                                required: true,
-                                injection: Some(SecretInjection::Header {
-                                    origins: vec![origin],
-                                    name: "Authorization".into(),
-                                    prefix: "Bearer ".into(),
-                                }),
-                            },
-                        ],
-                        login: None,
-                        schedule: None,
-                    },
-                    values: [("endpoint".into(), endpoint)].into_iter().collect(),
-                    secrets: [("session".into(), credential_from_keyring)]
-                        .into_iter()
-                        .collect(),
+            Some(engine::package_worker_supervisor::IntegrationLaunchConfig {
+                manifest: IntegrationManifest {
+                    settings: vec![
+                        IntegrationSetting {
+                            key: "endpoint".into(),
+                            label: "Provider endpoint".into(),
+                            kind: IntegrationSettingKind::Text,
+                            description: None,
+                            required: true,
+                            injection: None,
+                        },
+                        IntegrationSetting {
+                            key: "session".into(),
+                            label: "Session".into(),
+                            kind: IntegrationSettingKind::Secret,
+                            description: None,
+                            required: true,
+                            injection: Some(SecretInjection::Header {
+                                origins: vec![origin],
+                                name: "Authorization".into(),
+                                prefix: "Bearer ".into(),
+                            }),
+                        },
+                    ],
+                    login: None,
+                    schedule: None,
                 },
-            ),
+                values: [("endpoint".into(), endpoint)].into_iter().collect(),
+                secrets: [("session".into(), credential_from_keyring)]
+                    .into_iter()
+                    .collect(),
+            }),
         )
         .await;
     assert_eq!(
@@ -1035,7 +1027,7 @@ async fn secret_bearing_worker_failure_is_redacted_end_to_end() {
         .get_or_init(|| tempfile::tempdir().expect("crash data directory"))
         .path()
         .to_path_buf();
-    kepler_backend::crash_reporter::install(
+    engine::crash_reporter::install(
         crash_root.clone(),
         "00000000-0000-4000-8000-000000000001".into(),
     );
@@ -1149,7 +1141,7 @@ async fn supervisor_pid_unavailable_rolls_back_all_worker_reservations() {
     let supervisor = PackageWorkerSupervisor::new(1);
     let worker = manifest("fixture.pid-unavailable");
     let state = tempfile::tempdir().expect("worker state directory");
-    test_support::fail_next(kepler_backend::package_worker_process::FailureStage::PidUnavailable);
+    test_support::fail_next(engine::package_worker_process::FailureStage::PidUnavailable);
 
     assert_eq!(
         supervisor
@@ -1187,9 +1179,7 @@ async fn supervisor_cleanup_failure_retains_holder_and_disables_replacement() {
         .await
         .expect("worker start");
 
-    test_support::fail_cleanup_next(
-        kepler_backend::package_worker_process::FailureStage::Terminate,
-    );
+    test_support::fail_cleanup_next(engine::package_worker_process::FailureStage::Terminate);
     assert_eq!(
         supervisor.stop(&worker.id, &worker.version).await,
         Err("cleanup-failed")

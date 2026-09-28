@@ -524,7 +524,7 @@ pub async fn invoke_worker_operation(
     }
 
     pub async fn refresh_catalog(&self) -> Result<CatalogSummary, PackageError> {
-        let url = std::env::var("KOSMOS_PACKAGE_CATALOG_URL")
+        let url = std::env::var("MUNDUS_PACKAGE_CATALOG_URL")
             .unwrap_or_else(|_| PRODUCTION_CATALOG_URL.to_string());
         let parsed = reqwest::Url::parse(&url).map_err(|_| PackageError::Invalid)?;
         if parsed.scheme() != "https"

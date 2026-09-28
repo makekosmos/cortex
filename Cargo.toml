@@ -2,10 +2,10 @@
 resolver = "2"
 members = [
   "runtime",
-  "runtime/crates/kosmos-package-protocol",
-  "native-services/kepler-watcher",
-  "native-services/kepler-focus-helper",
-  "native-services/kepler-focus-svc",
+  "runtime/crates/package-protocol",
+  "native-services/watcher",
+  "native-services/focus-helper",
+  "native-services/focus-svc",
   "core/crates/ark-core",
 ]
 # Pinned sibling component checkouts cloned under desktop/.tmp (local builds)

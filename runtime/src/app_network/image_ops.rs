@@ -19,7 +19,7 @@ fn image_spec<'a>() -> FetchSpec<'a> {
     FetchSpec {
         accept: "image/jpeg,image/png",
         accept_language: None,
-        user_agent: "Kosmos Eden/0.5",
+        user_agent: "Mundus Eden/0.5",
         max_bytes: MAX_IMAGE_BYTES,
         allowed_content: Some(ALLOWED_IMAGE_TYPES),
         same_origin_redirects: false,

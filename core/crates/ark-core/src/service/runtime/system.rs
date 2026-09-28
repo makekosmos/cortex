@@ -56,7 +56,7 @@ pub(super) async fn handle(state: &Arc<ServiceState>, request: Request) -> Resul
             // Fire-and-forget: копирование идёт на отдельном background-priority
             // потоке через ОТДЕЛЬНЫЙ read-коннекшн (не держит глобальный DB
             // mutex) — серийный RPC-loop сразу свободен для других запросов.
-            // Завершение сообщается событием `db_backup_result`; kepler-backend
+            // Завершение сообщается событием `db_backup_result`; mundus-engine
             // ждёт его, чтобы записать last_backup_ts + ротацию.
             // KOS-51: BACKUP_GATE удерживается на всё копирование —
             // `db_backup_restore` не может начаться посреди backup'а.

@@ -4,7 +4,7 @@ use super::*;
 #[test]
 fn env_flag_parser_treats_zero_false_off_no_as_disabled() {
     let _guard = ENV_FLAG_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let key = "KEPLER_FILE_INDEX_TEST_FLAG";
+    let key = "MUNDUS_FILE_INDEX_TEST_FLAG";
     let prev = std::env::var(key).ok();
     for value in ["0", "false", "off", "no"] {
         unsafe {

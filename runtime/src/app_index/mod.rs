@@ -45,9 +45,9 @@ pub type Result<T> = std::result::Result<T, AppIndexError>;
 
 /// Пауза (мс) между реальными cold extraction/write попытками, чтобы icon-storm
 /// не бил DWM/GDI/Defender пачкой. Override через
-/// `KEPLER_APP_ICON_EXTRACT_SLEEP_MS`; default 50мс; `0` — без пауз.
+/// `MUNDUS_APP_ICON_EXTRACT_SLEEP_MS`; default 50мс; `0` — без пауз.
 fn icon_extract_sleep() -> u64 {
-    std::env::var("KEPLER_APP_ICON_EXTRACT_SLEEP_MS")
+    std::env::var("MUNDUS_APP_ICON_EXTRACT_SLEEP_MS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(50)

@@ -593,7 +593,7 @@ fn write_relative_unix(root: &RootHandle, components: &[&str], bytes: &[u8]) -> 
     let mut temp = None;
     for _ in 0..128 {
         let candidate = format!(
-            ".kosmos-grant-{}-{}.tmp",
+            ".mundus-grant-{}-{}.tmp",
             std::process::id(),
             TEMP_FILE_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         );
@@ -1941,7 +1941,7 @@ mod windows {
         let mut temp = None;
         for _ in 0..128 {
             let name = format!(
-                ".kosmos-grant-{}-{}.tmp",
+                ".mundus-grant-{}-{}.tmp",
                 std::process::id(),
                 TEMP_FILE_SEQUENCE.fetch_add(1, Ordering::Relaxed)
             );

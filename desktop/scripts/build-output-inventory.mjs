@@ -8,13 +8,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { env } from "./brand.mjs";
 
 const candidates = new Set(["target", "release", ".tmp", "dist", "dist-electron"]);
 const ignored = new Set([".git", "node_modules"]);
 const roots = process.argv.slice(2).map((root) => path.resolve(root));
-const checkpoint = path.resolve(
-  process.env.KOSMOS_INVENTORY_CHECKPOINT ?? "build-output-inventory.jsonl",
-);
+const checkpoint = path.resolve(env("INVENTORY_CHECKPOINT") ?? "build-output-inventory.jsonl");
 const visited = new Set();
 const found = [];
 

@@ -1,7 +1,7 @@
 use super::*;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use ed25519_dalek::{Signer, SigningKey};
-use kepler_backend::{
+use engine::{
     package_manifest::{
         IntegrationManifest, IntegrationSetting, IntegrationSettingKind, ManifestData,
         ManifestTarget, ManifestV2, PackageKind, PermissionRequest, SecretInjection, TargetOs,
@@ -20,17 +20,17 @@ pub(crate) struct Cleanup {
 impl Drop for Cleanup {
     fn drop(&mut self) {
         let _ = keyring::Entry::new(
-            "kosmos-kepler",
+            "mundus-mundus",
             &format!("package-integration:{PACKAGE_ID}:{PACKAGE_VERSION}:{SETTING}"),
         )
         .and_then(|entry| entry.delete_credential());
         for node in ["origin-node", "recipient-node", "foreign-node"] {
-            let _ = kepler_backend::package_service::credential_envelope::clear_identity(node);
+            let _ = engine::package_service::credential_envelope::clear_identity(node);
         }
         unsafe {
-            std::env::remove_var("KOSMOS_FAKE_PROVIDER_RESULT_MARKER");
-            std::env::remove_var("KOSMOS_FIXTURE_ENTRY_MARKER");
-            std::env::remove_var("KOSMOS_FIXTURE_BOOTSTRAP_MARKER");
+            std::env::remove_var("MUNDUS_FAKE_PROVIDER_RESULT_MARKER");
+            std::env::remove_var("MUNDUS_FIXTURE_ENTRY_MARKER");
+            std::env::remove_var("MUNDUS_FIXTURE_BOOTSTRAP_MARKER");
         }
     }
 }
@@ -38,13 +38,13 @@ impl Drop for Cleanup {
 pub fn cleanup(marker: &Path) -> Cleanup {
     let lock = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
     unsafe {
-        std::env::set_var("KOSMOS_FAKE_PROVIDER_RESULT_MARKER", marker);
+        std::env::set_var("MUNDUS_FAKE_PROVIDER_RESULT_MARKER", marker);
         std::env::set_var(
-            "KOSMOS_FIXTURE_ENTRY_MARKER",
+            "MUNDUS_FIXTURE_ENTRY_MARKER",
             marker.with_extension("entry"),
         );
         std::env::set_var(
-            "KOSMOS_FIXTURE_BOOTSTRAP_MARKER",
+            "MUNDUS_FIXTURE_BOOTSTRAP_MARKER",
             marker.with_extension("bootstrap"),
         );
     }
@@ -132,12 +132,12 @@ pub fn signed_catalog(
 ) -> (Vec<u8>, SignatureSet, TrustedKey, TrustedKey) {
     let signing = SigningKey::from_bytes(&[77; 32]);
     let release = TrustedKey {
-        key_id: "kosmos-test-release".into(),
+        key_id: "mundus-test-release".into(),
         public_key: STANDARD.encode(signing.verifying_key().as_bytes()),
     };
     let root_signing = SigningKey::from_bytes(&[78; 32]);
     let root = TrustedKey {
-        key_id: "kosmos-test-root".into(),
+        key_id: "mundus-test-root".into(),
         public_key: STANDARD.encode(root_signing.verifying_key().as_bytes()),
     };
     let document = CatalogDocument {

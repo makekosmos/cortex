@@ -53,7 +53,7 @@ test("release BOM records the pnpm toolchain without changing Rust commands", ()
 test("Desktop and pinned Imago resolve Vue to one type identity", () => {
   // Vue is gone from the shipped product; the shared Imago checkout remains a
   // workspace pin only.
-  const workspace = JSON.parse(read("package.json")).kosmos?.workspace;
+  const workspace = JSON.parse(read("package.json")).mundus?.workspace;
   assert.match(workspace?.imago?.repository ?? "", /^makekosmos\/imago$/);
   assert.match(workspace?.imago?.commit ?? "", /^[0-9a-f]{40}$/);
 });

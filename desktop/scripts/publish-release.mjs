@@ -94,7 +94,7 @@ export async function main() {
       "--repo",
       repository,
       "--title",
-      `Kosmos ${version}`,
+      `Mundus ${version}`,
       "--notes",
       "Immutable release assembled from the attached verification receipt.",
     ],

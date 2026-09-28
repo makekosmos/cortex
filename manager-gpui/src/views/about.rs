@@ -6,7 +6,7 @@ use serde_json::json;
 
 use crate::app::ManagerApp;
 use crate::widgets::*;
-use kosmos_gpui_kit::theme::*;
+use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.status("about.health", "health");
@@ -25,7 +25,7 @@ pub fn render(
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
     let mut col = div().flex().flex_col().gap_4().w_full();
-    col = col.child(section("О приложении", "Версия и сведения о Kosmos"));
+    col = col.child(section("О приложении", "Версия и сведения о Mundus"));
 
     let mut el = card();
     el = el.child(kv("Manager (GPUI)", env!("CARGO_PKG_VERSION")));
@@ -36,7 +36,7 @@ pub fn render(
     col = col.child(
         card()
             .child(row("Agenda", "Задачи и календарь · нативная оболочка GPUI"))
-            .child(if kosmos_gpui_kit::engine::agenda_executable().is_some() {
+            .child(if mundus_gpui_kit::engine::agenda_executable().is_some() {
                 div()
                     .flex()
                     .gap_2()
@@ -44,8 +44,8 @@ pub fn render(
                         imago_gpui::button::secondary("open-agenda")
                             .label("Открыть Agenda")
                             .on_click(cx.listener(|this, _, _, cx| {
-                                let dir = kosmos_gpui_kit::engine::data_dir().ok();
-                                match kosmos_gpui_kit::engine::open_agenda(dir.as_deref()) {
+                                let dir = mundus_gpui_kit::engine::data_dir().ok();
+                                match mundus_gpui_kit::engine::open_agenda(dir.as_deref()) {
                                     Ok(()) => this.notice = Some("Agenda запущена.".into()),
                                     Err(e) => this.error = Some(e),
                                 }
@@ -54,7 +54,7 @@ pub fn render(
                     )
                     .into_any_element()
             } else {
-                empty("Agenda не входит в эту сборку Kosmos").into_any_element()
+                empty("Agenda не входит в эту сборку Mundus").into_any_element()
             }),
     );
 
@@ -71,7 +71,7 @@ pub fn render(
                         imago_gpui::button::secondary("open-memoria")
                             .label("Открыть Memoria")
                             .on_click(cx.listener(|this, _, _, cx| {
-                                let dir = kosmos_gpui_kit::engine::data_dir().ok();
+                                let dir = mundus_gpui_kit::engine::data_dir().ok();
                                 match crate::components::open_memoria(dir.as_deref()) {
                                     Ok(()) => this.notice = Some("Memoria запущена.".into()),
                                     Err(e) => this.error = Some(e),
@@ -81,7 +81,7 @@ pub fn render(
                     )
                     .into_any_element()
             } else {
-                empty("Memoria не входит в эту сборку Kosmos").into_any_element()
+                empty("Memoria не входит в эту сборку Mundus").into_any_element()
             }),
     );
 
@@ -131,10 +131,10 @@ pub fn render(
                         imago_gpui::button::ghost("open-logs")
                             .label("Открыть папку журналов")
                             .on_click(cx.listener(|this, _, _, cx| {
-                                match kosmos_gpui_kit::engine::data_dir().map(|d| d.join("logs")) {
+                                match mundus_gpui_kit::engine::data_dir().map(|d| d.join("logs")) {
                                     Ok(dir) => {
                                         std::fs::create_dir_all(&dir).ok();
-                                        if let Err(e) = kosmos_gpui_kit::engine::open_path(&dir) {
+                                        if let Err(e) = mundus_gpui_kit::engine::open_path(&dir) {
                                             this.error = Some(e);
                                         }
                                     }
@@ -147,11 +147,11 @@ pub fn render(
                         imago_gpui::button::ghost("open-crashes")
                             .label("Открыть отчёты об ошибках")
                             .on_click(cx.listener(|this, _, _, cx| {
-                                match kosmos_gpui_kit::engine::data_dir().map(|d| d.join("crashes"))
+                                match mundus_gpui_kit::engine::data_dir().map(|d| d.join("crashes"))
                                 {
                                     Ok(dir) => {
                                         std::fs::create_dir_all(&dir).ok();
-                                        if let Err(e) = kosmos_gpui_kit::engine::open_path(&dir) {
+                                        if let Err(e) = mundus_gpui_kit::engine::open_path(&dir) {
                                             this.error = Some(e);
                                         }
                                     }
@@ -186,7 +186,7 @@ pub fn render(
     let bundle = app.data("@bundle");
     if !bundle.is_null() {
         let handle = vstr(&bundle, "handle");
-        let name = vopt(&bundle, "suggested_name").unwrap_or_else(|| "kosmos-support.zip".into());
+        let name = vopt(&bundle, "suggested_name").unwrap_or_else(|| "mundus-support.zip".into());
         let path = std::env::var_os("HOME")
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))

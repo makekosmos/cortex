@@ -688,17 +688,17 @@ pub fn send_control_blocking(
 
 pub fn state_from_env() -> Result<ControlState, ControlError> {
     let endpoint =
-        std::env::var("KOSMOS_CONTROL_ENDPOINT").map_err(|_| ControlError::Unavailable)?;
+        std::env::var("MUNDUS_CONTROL_ENDPOINT").map_err(|_| ControlError::Unavailable)?;
     let supervisor_session_id =
-        std::env::var("KOSMOS_CONTROL_SESSION_ID").map_err(|_| ControlError::Unavailable)?;
-    let child_generation = std::env::var("KOSMOS_CONTROL_GENERATION")
+        std::env::var("MUNDUS_CONTROL_SESSION_ID").map_err(|_| ControlError::Unavailable)?;
+    let child_generation = std::env::var("MUNDUS_CONTROL_GENERATION")
         .ok()
         .and_then(|value| value.parse().ok())
         .ok_or(ControlError::Malformed)?;
     let owner_identity =
-        std::env::var("KOSMOS_CONTROL_OWNER_ID").map_err(|_| ControlError::Unavailable)?;
+        std::env::var("MUNDUS_CONTROL_OWNER_ID").map_err(|_| ControlError::Unavailable)?;
     let secret =
-        std::env::var("KOSMOS_CORE_CONTROL_SECRET").map_err(|_| ControlError::Unavailable)?;
+        std::env::var("MUNDUS_CORE_CONTROL_SECRET").map_err(|_| ControlError::Unavailable)?;
     Ok(ControlState {
         endpoint,
         supervisor_session_id,

@@ -5,11 +5,11 @@ pub async fn run_supervisor() -> ExitCode {
         Ok(value) => value,
         Err(()) => return ExitCode::from(2),
     };
-    let data_dir = match lock_file::kosmos_data_dir() {
+    let data_dir = match lock_file::mundus_data_dir() {
         Ok(path) => path,
         Err(error) => {
             crate::observability::stderr(format!(
-                "[kosmos-engine] failed to resolve data dir: {error}"
+                "[mundus-engine] failed to resolve data dir: {error}"
             ));
             return ExitCode::from(1);
         }
@@ -51,7 +51,7 @@ pub async fn run_supervisor() -> ExitCode {
         }
         Err(error) => {
             crate::observability::stderr(format!(
-                "[kosmos-engine] supervisor singleton failed: {error}"
+                "[mundus-engine] supervisor singleton failed: {error}"
             ));
             return ExitCode::from(1);
         }
@@ -63,7 +63,7 @@ pub async fn run_supervisor() -> ExitCode {
     let engine_lock_path = data_dir.join(lock_file::ENGINE_LOCK_FILE_NAME);
     if running_engine_pid(&engine_lock_path).is_some() {
         crate::observability::stderr(
-            "[kosmos-engine] supervisor unavailable: existing core has no verifiable control ownership",
+            "[mundus-engine] supervisor unavailable: existing core has no verifiable control ownership",
         );
         return ExitCode::from(2);
     }
@@ -115,7 +115,7 @@ pub async fn run_supervisor() -> ExitCode {
             match monitor_existing_core(&engine_lock_path).await {
                 MonitorResult::Shutdown => {
                     crate::observability::stderr(
-                        "[kosmos-engine] cannot stop an existing core without authenticated ownership",
+                        "[mundus-engine] cannot stop an existing core without authenticated ownership",
                     );
                     cleanup_state(&state_path);
                     cleanup_state(&control_state_path);
@@ -153,7 +153,7 @@ pub async fn run_supervisor() -> ExitCode {
                         return ExitCode::from(1);
                     }
                     crate::observability::stderr(format!(
-                        "[kosmos-engine] failed to spawn core worker: {}",
+                        "[mundus-engine] failed to spawn core worker: {}",
                         match error {
                             SpawnAttemptError::Spawn(error) => error,
                             SpawnAttemptError::Control | SpawnAttemptError::State => unreachable!(),
@@ -235,7 +235,7 @@ pub async fn run_supervisor() -> ExitCode {
                         run_ms: duration_ms(ran_for),
                     });
                     crate::observability::stderr(format!(
-                        "[kosmos-engine] core exited with {status} after {:.1}s",
+                        "[mundus-engine] core exited with {status} after {:.1}s",
                         ran_for.as_secs_f64()
                     ));
                     crash_streak =
@@ -253,7 +253,7 @@ pub async fn run_supervisor() -> ExitCode {
                 last_exit.as_ref(),
             );
             crate::observability::stderr(format!(
-                "[kosmos-engine] core failed {} times; automatic restart stopped",
+                "[mundus-engine] core failed {} times; automatic restart stopped",
                 RESTART_DELAYS.len()
             ));
             return ExitCode::from(1);

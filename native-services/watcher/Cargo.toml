@@ -1,0 +1,12 @@
+[package]
+name = "watcher"
+version = "0.1.0"
+edition.workspace = true
+description = "Watchdog для Mundus — держит mundus-engine.exe child + respawn с exp backoff."
+
+[[bin]]
+name = "watcher"
+path = "src/main.rs"
+
+[lints]
+workspace = true

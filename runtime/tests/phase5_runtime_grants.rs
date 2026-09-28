@@ -1,6 +1,6 @@
 #![allow(clippy::bool_assert_comparison, clippy::unwrap_used)]
 
-use kepler_backend::runtime_grants::*;
+use engine::runtime_grants::*;
 use serde_json::json;
 
 #[test]

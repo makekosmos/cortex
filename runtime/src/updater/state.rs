@@ -1,7 +1,7 @@
 //! Wire-facing status for `updater.status` — the Manager GPUI view polls
 //! this shape directly. Mirrors the Electron `UpdateState` union
 //! (`desktop/shared/ipc-types.ts`) closely enough to keep the Russian copy
-//! in `useKeplerUpdate.ts` reusable, but flattened into one struct (the
+//! in the Manager updater hook reusable, but flattened into one struct (the
 //! Engine RPC boundary uses flat JSON objects, not tagged unions — see
 //! `runtime/src/pomodoro_host.rs` wire-format note).
 use serde_json::{json, Value};

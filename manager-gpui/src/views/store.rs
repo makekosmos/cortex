@@ -6,7 +6,7 @@ use serde_json::json;
 use crate::app::ManagerApp;
 use crate::views::StoreTab;
 use crate::widgets::*;
-use kosmos_gpui_kit::theme::*;
+use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("store.catalog", "store.catalog", json!({}));
