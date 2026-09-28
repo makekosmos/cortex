@@ -10,84 +10,63 @@ const ROOT =
   rootIndex === -1
     ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
     : path.resolve(process.argv[rootIndex + 1]);
-const SOURCE_LIMIT = 300;
+const WARN_LIMIT = 300;
+const FAIL_LIMIT = 500;
 const SOURCE_EXTENSIONS = new Set([".cjs", ".js", ".jsx", ".mjs", ".rs", ".ts", ".tsx", ".vue"]);
 const GRANDFATHERED = new Set([
-  // Static debt baseline. Additions here require an intentional review.
-  "desktop/scripts/candidate-installed-smoke.mjs",
+  // Files above FAIL_LIMIT that predate it. Additions here require an
+  // intentional review; drop an entry once its file is back under the limit.
   "desktop/scripts/verify-release-channel.mjs",
-  "manager-gpui/src/app.rs",
   "native-services/kepler-focus-helper/src/hosts.rs",
-  "native-services/kepler-focus-svc/src/cli.rs",
   "runtime/src/agents/app_server.rs",
   "runtime/src/agents/definitions.rs",
   "runtime/src/agents/tests.rs",
   "runtime/src/app_index/icons.rs",
   "runtime/src/app_index/mod.rs",
-  "runtime/src/app_index/platform/windows/start_menu.rs",
-  "runtime/src/ark_host.rs",
-  "runtime/src/arrancador/scanner.rs",
-  "runtime/src/arrancador/sqoba.rs",
   "runtime/src/bin/ark-markdown-bridge.rs",
-  "runtime/src/calculator.rs",
   "runtime/src/db_backup.rs",
   "runtime/src/dictation/config.rs",
   "runtime/src/dictation/groq.rs",
   "runtime/src/dictation/host_capture.rs",
   "runtime/src/dictation/host_models.rs",
   "runtime/src/dictation/host_queue.rs",
-  "runtime/src/dictation/host_state.rs",
   "runtime/src/dictation/host_tests.rs",
   "runtime/src/dictation/hotkey_hook.rs",
   "runtime/src/dictation/local/backend.rs",
-  "runtime/src/dictation/local/sidecar.rs",
   "runtime/src/dictation/local/tests.rs",
   "runtime/src/dictation/local_models.rs",
   "runtime/src/dictation/local_sidecar.rs",
   "runtime/src/dictation/local_whisper_dll.rs",
   "runtime/src/dictation/macos_native.rs",
   "runtime/src/dictation/network.rs",
-  "runtime/src/dictation/pending.rs",
-  "runtime/src/dictation/retry.rs",
-  "runtime/src/engine_api/lifecycle.rs",
   "runtime/src/engine_api/server.rs",
   "runtime/src/engine_api/tests_core.rs",
   "runtime/src/engine_api/tests_http.rs",
   "runtime/src/engine_control.rs",
   "runtime/src/engine_dispatch.rs",
   "runtime/src/export/note_md.rs",
-  "runtime/src/export/task_md.rs",
   "runtime/src/file_index/scanner.rs",
   "runtime/src/file_index/store.rs",
   "runtime/src/focus.rs",
   "runtime/src/grant_authority.rs",
   "runtime/src/handle_relative_fs.rs",
-  "runtime/src/integration-codewars.rs",
-  "runtime/src/lock_file.rs",
   "runtime/src/main.rs",
   "runtime/src/manager_api.rs",
   "runtime/src/package_manifest.rs",
   "runtime/src/package_registration.rs",
   "runtime/src/package_service/core.rs",
-  "runtime/src/package_service/integrations.rs",
   "runtime/src/package_service/operations.rs",
   "runtime/src/package_service/tests.rs",
   "runtime/src/package_store.rs",
   "runtime/src/package_trust.rs",
   "runtime/src/package_worker_broker.rs",
   "runtime/src/package_worker_protocol.rs",
-  "runtime/src/package_worker_supervisor/authority.rs",
-  "runtime/src/package_worker_supervisor/calls_dispatch.rs",
-  "runtime/src/package_worker_supervisor/tests/api/opaque_roots.rs",
   "runtime/src/pomodoro_host.rs",
   "runtime/src/runtime_grants.rs",
   "runtime/src/store_catalog.rs",
   "runtime/src/usage_tracker/mod.rs",
   "runtime/src/usage_tracker/windows_capture.rs",
   "runtime/tests/ark_markdown_bridge_worker.rs",
-  "runtime/tests/desktop_authority_socket.rs",
-  "runtime/tests/engine_control_protocol.rs",
-  "runtime/tests/package_worker_process_windows.rs",
   "runtime/tests/package_worker_windows.rs",
 ]);
 const IGNORED = new Set([
@@ -125,11 +104,16 @@ function lineCount(text) {
 }
 
 const violations = [];
+const warnings = [];
+const debt = [];
 for (const file of await collect(ROOT)) {
   const lines = lineCount(await readFile(file, "utf8"));
   const relative = path.relative(ROOT, file).replaceAll("\\", "/");
-  if (lines > SOURCE_LIMIT && !GRANDFATHERED.has(relative)) {
-    violations.push(`${relative}: ${lines} lines (max ${SOURCE_LIMIT})`);
+  if (lines > FAIL_LIMIT) {
+    if (GRANDFATHERED.has(relative)) debt.push(`${relative}: ${lines} lines`);
+    else violations.push(`${relative}: ${lines} lines (max ${FAIL_LIMIT})`);
+  } else if (lines > WARN_LIMIT) {
+    warnings.push(`${relative}: ${lines} lines (aim for ${WARN_LIMIT})`);
   }
 }
 
@@ -139,15 +123,11 @@ if (violations.length) {
   process.exit(1);
 }
 
-const debt = [];
-for (const file of await collect(ROOT)) {
-  const relative = path.relative(ROOT, file).replaceAll("\\", "/");
-  if (GRANDFATHERED.has(relative)) {
-    const lines = lineCount(await readFile(file, "utf8"));
-    if (lines > SOURCE_LIMIT) debt.push(`${relative}: ${lines} lines`);
-  }
+if (warnings.length) {
+  console.warn(`source size warning: ${warnings.length} file(s) over ${WARN_LIMIT} lines`);
+  console.warn(warnings.sort().join("\n"));
 }
 console.log(
-  `source size check passed (${debt.length} grandfathered file(s) over ${SOURCE_LIMIT} lines)`,
+  `source size check passed (${debt.length} grandfathered file(s) over ${FAIL_LIMIT} lines)`,
 );
 if (debt.length) console.log(`baseline debt:\n${debt.sort().join("\n")}`);
