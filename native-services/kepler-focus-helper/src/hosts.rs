@@ -78,11 +78,18 @@ pub fn parse(content: &str) -> (String, Vec<String>, String) {
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
+        // A managed row is exactly `127.0.0.1 <host>` — what
+        // render_managed_block writes. Anything else inside the markers
+        // (foreign `ip name` rows, extra columns) is not ours to re-render.
         let mut parts = trimmed.split_whitespace();
-        let _ip = parts.next();
-        if let Some(host) = parts.next() {
-            let normalized = host.strip_prefix("www.").unwrap_or(host).to_string();
-            if !domains.iter().any(|d: &String| d == &normalized) {
+        if parts.next() != Some("127.0.0.1") {
+            continue;
+        }
+        if let Some(host) = parts.next().filter(|_| parts.next().is_none()) {
+            let normalized = normalize(host);
+            if is_blockable_domain(&normalized)
+                && !domains.iter().any(|d: &String| d == &normalized)
+            {
                 domains.push(normalized);
             }
         }
@@ -135,12 +142,33 @@ fn normalize(domain: &str) -> String {
     d.strip_prefix("www.").unwrap_or(&d).to_string()
 }
 
+/// A blockable entry is a plain DNS hostname: dot-separated ASCII labels,
+/// alphanumeric with `-`, no whitespace/control/IP literals. The service pipe
+/// is open to every authenticated user, so request strings are attacker input —
+/// anything else (e.g. a newline) would smuggle a full `ip name` row into the
+/// hosts file, which resolves names to arbitrary addresses as SYSTEM.
+fn is_blockable_domain(name: &str) -> bool {
+    if name.is_empty() || name.len() > 253 || name.parse::<std::net::IpAddr>().is_ok() {
+        return false;
+    }
+    name.split('.').all(|label| {
+        let bytes = label.as_bytes();
+        !bytes.is_empty()
+            && bytes.len() <= 63
+            && bytes[0].is_ascii_alphanumeric()
+            && bytes[bytes.len() - 1].is_ascii_alphanumeric()
+            && bytes
+                .iter()
+                .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'-')
+    })
+}
+
 /// Возвращает новый content с заданным managed списком (sorted, deduped).
 pub fn render(prefix: &str, domains: &[String], suffix: &str) -> String {
     let mut deduped: Vec<String> = Vec::new();
     for d in domains {
         let n = normalize(d);
-        if n.is_empty() {
+        if !is_blockable_domain(&n) {
             continue;
         }
         if !deduped.iter().any(|x| x == &n) {
@@ -220,7 +248,7 @@ pub fn add_domains(hosts: &Path, new_domains: &[String]) -> Result<Vec<String>> 
     let (prefix, mut domains, suffix) = parse(&content);
     for d in new_domains {
         let n = normalize(d);
-        if n.is_empty() {
+        if !is_blockable_domain(&n) {
             continue;
         }
         if !domains.iter().any(|x| x == &n) {
@@ -410,5 +438,76 @@ mod tests {
         let (_d, hosts) = setup(ORIGINAL);
         let active = read_active_domains(&hosts).unwrap();
         assert!(active.is_empty());
+    }
+
+    #[test]
+    fn add_rejects_entries_that_would_inject_hosts_rows() {
+        let (_d, hosts) = setup(ORIGINAL);
+        // A request string containing a newline would otherwise land a full
+        // `<ip> <name>` row — redirecting any domain to an attacker address.
+        let active = add_domains(
+            &hosts,
+            &[
+                "ok.com".into(),
+                "x\n6.6.6.6 login.live.com".into(),
+                "10.0.0.7 plain-ip.example".into(),
+                "two words.example".into(),
+                "#comment.example".into(),
+            ],
+        )
+        .unwrap();
+        assert_eq!(active, vec!["ok.com".to_string()]);
+        let content = fs::read_to_string(&hosts).unwrap();
+        assert!(content.contains("127.0.0.1 ok.com"));
+        assert!(!content.contains("6.6.6.6"));
+        assert!(!content.contains("login.live.com"));
+        assert!(!content.contains("plain-ip.example"));
+        assert!(!content.contains("words.example"));
+        assert!(!content.contains("#comment.example"));
+    }
+
+    #[test]
+    fn add_rejects_ip_literals_and_malformed_names() {
+        let (_d, hosts) = setup(ORIGINAL);
+        let active = add_domains(
+            &hosts,
+            &[
+                "192.168.0.1".into(),
+                "::1".into(),
+                "-bad.example".into(),
+                "bad-.example".into(),
+                "under_score.example".into(),
+                "..example".into(),
+                "a..example".into(),
+            ],
+        )
+        .unwrap();
+        assert!(active.is_empty());
+        let content = fs::read_to_string(&hosts).unwrap();
+        for bad in [
+            "192.168.0.1",
+            "::1",
+            "-bad.example",
+            "bad-.example",
+            "under_score.example",
+            "..example",
+            "a..example",
+        ] {
+            assert!(!content.contains(bad), "unexpected hosts entry: {bad}");
+        }
+    }
+
+    #[test]
+    fn render_drops_foreign_ip_rows_inside_markers() {
+        // A managed block that already contains an injected `6.6.6.6` row must
+        // not adopt it: only `127.0.0.1 <host>` rows count as managed entries.
+        let content = format!(
+            "{ORIGINAL}{BEGIN_MARKER}\n127.0.0.1 ok.com\n6.6.6.6 login.live.com\n127.0.0.1 a b.example\n{END_MARKER}\n"
+        );
+        let (prefix, domains, suffix) = parse(&content);
+        assert_eq!(domains, vec!["ok.com".to_string()]);
+        let rewritten = render(&prefix, &domains, &suffix);
+        assert!(!rewritten.contains("6.6.6.6"));
+        assert!(!rewritten.contains("a b.example"));
     }
 }

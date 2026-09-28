@@ -3,7 +3,7 @@
 Verified on Ubuntu 24.04 x86_64 (KOS-53, KOS-93, KOS-94, KOS-95, KOS-96,
 KOS-97, KOS-98, KOS-102, KOS-105). The supported gate is the first-party E2E suite, which builds the
 Engine, spawns the pinned `ark-core-rpc` sidecar, installs the signed
-Agenda/Memoria/Ordo/Arcadia/Dictation `.kspkg`, and launches the Electron
+Agenda/Memoria/Arcadia/Dictation `.kspkg`, and launches the Electron
 Host under Xvfb — all in isolated `/tmp` roots with PID-identity cleanup.
 The whole stack — Engine, Host, and the Store catalog gate — is on `main`;
 no feature branch is required.
@@ -79,7 +79,6 @@ xvfb-run -a pnpm --dir host run e2e \
   first-party-agenda-contract.spec.ts first-party-agenda-smoke.spec.ts \
   first-party-memoria-contract.spec.ts first-party-memoria-smoke.spec.ts \
   first-party-memoria-import-crash.spec.ts \
-  first-party-ordo-contract.spec.ts \
   first-party-arcadia-contract.spec.ts \
   first-party-dictation-contract.spec.ts
 ```
@@ -99,13 +98,6 @@ xvfb-run -a pnpm --dir host run e2e \
   card in Всё (Everything), with the note verified through the ARK bridge.
 - `first-party-memoria-import-crash` — an import interrupted after a durable
   entry write rolls back on the next Engine/Host launch.
-- `first-party-ordo-contract` — signed Ordo installs, launches in Host, runs
-  scoped focus/pomodoro operations through `window.kosmosApp.ark`
-  (blocklist upsert/list/resolve, focus activate, pomodoro
-  start/pause/resume/stop), denies out-of-grant operations, and keeps
-  pomodoro + focus state across Engine and Host restarts. Requires the
-  reviewed `release/ordo-0.1.3.kspkg` built in the `ordo/` checkout at the
-  pinned commit (`bun install && bun run package:kspkg`).
 - `first-party-arcadia-contract` — signed Arcadia installs and launches in
   Host through the `kosmos-host` manifest target (the only target declared
   for Linux; the `worker` target stays Windows-only because package workers
@@ -169,7 +161,7 @@ root, then runs the gates in order:
    `engine.lock.json` plus authenticated `GET /v1/health` → 200 before
    shutting it down.
 5. `host-deps`/`host-build` — `pnpm install` + `vite build` for `host/`.
-6. `host-e2e` — the eight first-party contract/smoke specs above.
+6. `host-e2e` — the seven first-party contract/smoke specs above.
 
 Each gate reports `PASS`, `FAIL`, or `NOT_RUN` (a gate is `NOT_RUN` when a
 prerequisite gate did not pass). The run exits non-zero unless every gate
@@ -226,8 +218,9 @@ the Chromium sandbox needs, which the specs disable only on
 
 ## OS-branch audit (KOS-100)
 
-A KOS-100 audit of first-party app product `src/` (Agenda, Memoria, Ordo,
-Arcadia, Dictation, Store) found no `process.platform` or
+A KOS-100 audit of first-party app product `src/` (Agenda, Memoria,
+Arcadia, Dictation, Store; Ordo was audited before its source moved to
+`incubator/ordo-vue`) found no `process.platform` or
 `os.platform` use in renderer code — Electron-main hits under
 `*/electron/`, dev tooling under `*/scripts/`, and test harnesses under
 `*/tests/`/`*/e2e/` are the layers where OS branches belong. The only
@@ -248,5 +241,5 @@ holding the app checkouts:
 
 ```text
 rg -n 'process\.platform|os\.platform|navigator\.platform|navigator\.userAgent|\bwin32\b|\bdarwin\b|data-platform|platform="' \
-  agenda/src memoria/src ordo/src arcadia/src dictation/src
+  agenda/src memoria/src arcadia/src dictation/src
 ```
