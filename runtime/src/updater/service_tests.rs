@@ -1,0 +1,114 @@
+use super::*;
+use base64::Engine as _;
+use httpmock::MockServer;
+use sha2::{Digest, Sha512};
+
+fn hash(bytes: &[u8]) -> String {
+    base64::engine::general_purpose::STANDARD.encode(Sha512::digest(bytes))
+}
+
+async fn service_with_manifest(manifest: String) -> (tempfile::TempDir, Arc<UpdaterService>) {
+    let server = MockServer::start_async().await;
+    server
+        .mock_async(|when, then| {
+            when.method(httpmock::Method::GET).path("/latest.yml");
+            then.status(200).body(manifest);
+        })
+        .await;
+    let dir = tempfile::tempdir().unwrap();
+    let service = UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url());
+    (dir, service)
+}
+
+#[tokio::test]
+async fn equal_and_older_versions_are_not_available() {
+    for candidate in [version::current_version(), "0.0.1".into()] {
+        let manifest =
+            format!("version: {candidate}\nfiles:\n  - url: a.exe\n    sha512: AAA\n    size: 1\n");
+        let (_dir, service) = service_with_manifest(manifest).await;
+        assert_eq!(service.check().await["state"], "not-available");
+    }
+}
+
+#[tokio::test]
+async fn feed_failure_is_an_error_state() {
+    let dir = tempfile::tempdir().unwrap();
+    let service =
+        UpdaterService::with_feed_base(dir.path().to_path_buf(), "http://127.0.0.1:1".into());
+    assert_eq!(service.check().await["state"], "error");
+}
+
+#[tokio::test]
+async fn check_downloads_and_verifies_update_in_background() {
+    let body = b"installer payload".repeat(50);
+    let server = MockServer::start_async().await;
+    server
+        .mock_async(|when, then| {
+            when.method(httpmock::Method::GET).path("/latest.yml");
+            then.status(200).body(format!(
+                "version: 99.0.0\nfiles:\n  - url: Kosmos-Setup-99.0.0.exe\n    sha512: {}\n    size: {}\n",
+                hash(&body),
+                body.len()
+            ));
+        })
+        .await;
+    server
+        .mock_async(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/Kosmos-Setup-99.0.0.exe");
+            then.status(200).body(body.clone());
+        })
+        .await;
+    let dir = tempfile::tempdir().unwrap();
+    let service = UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url());
+
+    assert_eq!(service.check().await["state"], "available");
+    for _ in 0..200 {
+        if service.status()["state"] == "downloaded" {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(service.status()["state"], "downloaded");
+    assert_eq!(
+        tokio::fs::read(dir.path().join("updates/Kosmos-Setup-99.0.0.exe"))
+            .await
+            .unwrap(),
+        body
+    );
+    assert!(!dir
+        .path()
+        .join("updates/Kosmos-Setup-99.0.0.exe.part")
+        .exists());
+}
+
+#[tokio::test]
+async fn download_without_check_is_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let service = UpdaterService::new(dir.path().to_path_buf());
+    assert_eq!(service.download()["state"], "error");
+}
+
+#[tokio::test]
+async fn install_requires_finished_download() {
+    let dir = tempfile::tempdir().unwrap();
+    let service = UpdaterService::new(dir.path().to_path_buf());
+    service.inner.lock().unwrap().pending = Some(PendingUpdate {
+        version: "9.9.9".into(),
+        asset_url: "http://example.invalid/a.exe".into(),
+        sha512: "AAA".into(),
+        size: 1,
+        installer_path: dir.path().join("a.exe"),
+    });
+    assert_eq!(service.install()["state"], "error");
+}
+
+#[test]
+fn desktop_lease_keeps_startup_state_idle() {
+    let dir = tempfile::tempdir().unwrap();
+    let service = UpdaterService::new(dir.path().to_path_buf());
+    let authority = crate::desktop_authority::DesktopAuthorityRegistry::new();
+    authority.register("session".into(), 1, 123, "credential");
+    assert!(authority.len() > 0);
+    assert_eq!(service.status()["state"], "idle");
+}
