@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
@@ -6,12 +7,8 @@ import { test } from "node:test";
 const script = await readFile(path.join(import.meta.dirname, "build-desktop.mjs"), "utf8");
 const preflight = await readFile(path.join(import.meta.dirname, "release-preflight.mjs"), "utf8");
 const backend = await readFile(path.join(import.meta.dirname, "build-backend.mjs"), "utf8");
-const engineRelease = await readFile(
-  path.join(import.meta.dirname, "build-engine-release.mjs"),
-  "utf8",
-);
-const engineVersion = JSON.parse(
-  await readFile(path.join(import.meta.dirname, "..", "engine-version.json"), "utf8"),
+const releaseVersions = JSON.parse(
+  await readFile(path.join(import.meta.dirname, "..", "release-versions.json"), "utf8"),
 );
 
 test("release build verifies locally and leaves publishing to the receipt consumer", () => {
@@ -32,20 +29,18 @@ test("release build verifies locally and leaves publishing to the receipt consum
   assert.match(script, /app\.name\.endsWith\("\.app"\)/);
 });
 
-test("GUI and Engine versions remain independent", () => {
-  assert.equal(engineVersion.version, "0.1.3");
-  assert.match(backend, /KOSMOS_ENGINE_RELEASE/);
-  assert.match(backend, /consumeEngineArtifacts/);
-  assert.match(backend, /KOSMOS_ENGINE_REUSE_INSTALLER/);
-  assert.match(backend, /KOSMOS_ENGINE_REUSE_ARCHIVE/);
-  assert.match(backend, /verifyEngineArchive\(engineArchive, engineManifest\)/);
-  assert.match(
-    backend,
-    /releases\/download\/v\$\{engineVersion\}\/Kosmos-Engine-\$\{engineVersion\}\.zip/,
-  );
-  assert.match(script, /copyEngineRelease\(SHELL_ROOT, engineVersion\)/);
-  assert.match(script, /copyEngineManifest\(SHELL_ROOT, engineVersion\)/);
-  assert.match(script, /collectArtifacts\(outputDir, platform, version, engineVersion\)/);
-  assert.match(script, /rmSync\(path\.join\(SHELL_ROOT, "release", name\)\)/);
-  assert.match(engineRelease, /KOSMOS_ENGINE_RELEASE: "1"/);
+test("Engine ships from the same build and version as the GUI (KOS-233)", () => {
+  // There is exactly one version source: desktop/release-versions.json.
+  // desktop/engine-version.json must not exist, and nothing downloads a
+  // separately published Kosmos-Engine-*.zip during a build.
+  assert.equal(existsSync(path.join(import.meta.dirname, "..", "engine-version.json")), false);
+  assert.ok(releaseVersions.win);
+  assert.doesNotMatch(backend, /KOSMOS_ENGINE_RELEASE/);
+  assert.doesNotMatch(backend, /consumeEngineArtifacts/);
+  assert.doesNotMatch(backend, /releases\/download\/v/);
+  assert.match(backend, /KOSMOS_ENGINE_VERSION: productVersion/);
+  assert.match(backend, /KOSMOS_ENGINE_SOURCE_COMMIT: sourceCommit/);
+  assert.match(backend, /buildEngineArchive\(stageDir, engineArchive/);
+  assert.doesNotMatch(script, /copyEngineRelease\(/);
+  assert.doesNotMatch(script, /copyEngineManifest\(/);
 });

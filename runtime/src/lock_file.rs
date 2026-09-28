@@ -68,6 +68,16 @@ pub struct EngineLockFile {
     pub auth_token: String,
     pub started_at: String,
     pub correlation_id: String,
+    /// Product version this Engine was built as part of (KOS-233: Engine no
+    /// longer has its own release line). Empty for a build that did not go
+    /// through `desktop/scripts/build-backend.mjs`. `#[serde(default)]` so a
+    /// lock-file written by an older Engine still parses.
+    #[serde(default)]
+    pub engine_version: String,
+    /// Git commit this Engine was built from. Same fallback rules as
+    /// `engine_version`.
+    #[serde(default)]
+    pub source_commit: String,
 }
 
 #[derive(Debug, Error)]
@@ -298,7 +308,32 @@ mod tests {
             auth_token: "deadbeef".repeat(8),
             started_at: "2026-07-28T15:00:00Z".into(),
             correlation_id: "00000000-0000-4000-8000-000000000001".into(),
+            engine_version: "0.9.39".into(),
+            source_commit: "a".repeat(40),
         }
+    }
+
+    #[test]
+    fn engine_version_and_source_commit_default_to_empty_for_old_lock_files() {
+        // A lock-file written before KOS-233 lacks these fields; a newer
+        // Engine reading it (e.g. during an in-place upgrade race) must not
+        // fail to parse.
+        let dir = tempdir().unwrap();
+        let path = dir.path().join(ENGINE_LOCK_FILE_NAME);
+        let legacy = serde_json::json!({
+            "format_version": ENGINE_LOCK_FILE_FORMAT_VERSION,
+            "api_version": ProtocolVersion::CURRENT,
+            "pid": std::process::id(),
+            "http_port": 12344,
+            "ws_port": 12345,
+            "auth_token": "deadbeef".repeat(8),
+            "started_at": "2026-07-28T15:00:00Z",
+            "correlation_id": "00000000-0000-4000-8000-000000000001",
+        });
+        fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+        let read = read_engine(&path).unwrap();
+        assert_eq!(read.engine_version, "");
+        assert_eq!(read.source_commit, "");
     }
 
     #[test]

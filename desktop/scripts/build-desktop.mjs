@@ -2,12 +2,11 @@
 
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { loadReleaseBom } from "./release-bom.mjs";
 import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
 import { bytes, documentHash, writeAtomic } from "./package-release-utils.mjs";
 import { runFirstPartyContracts } from "./first-party-release-contracts.mjs";
-import { copyEngineManifest, copyEngineRelease } from "./engine-distribution.mjs";
 import { createReceipt, writeReceipt } from "./release-receipt.mjs";
 import {
   currentCommit,
@@ -65,13 +64,11 @@ function verifyEmbeddedBom(outputDir, platform, digest) {
   return embedded;
 }
 
-function collectArtifacts(outputDir, platform, version, engineVersion) {
+function collectArtifacts(outputDir, platform, version) {
   const channel = platform === "win" ? "latest.yml" : "latest-mac.yml";
-  const versions = [version, engineVersion].filter(Boolean);
   const names = readdirSync(outputDir).filter((name) => {
     if (name === channel) return true;
-    if (name !== "Kosmos-Engine-manifest.json" && !versions.some((value) => name.includes(value)))
-      return false;
+    if (!name.includes(version)) return false;
     return /\.(?:exe|dmg|zip|blockmap|json)$/i.test(name);
   });
   const artifacts = names.map((name) => {
@@ -94,10 +91,10 @@ function compareExpectedArtifacts(expected, actual) {
   }
 }
 
-async function emitProvenance(outputDir, platform, version, bom, engineVersion) {
+async function emitProvenance(outputDir, platform, version, bom) {
   const embedded = verifyEmbeddedBom(outputDir, platform, bom.digest);
   verifyLocalReleaseChannel(outputDir, platform, version);
-  const artifacts = collectArtifacts(outputDir, platform, version, engineVersion);
+  const artifacts = collectArtifacts(outputDir, platform, version);
   compareExpectedArtifacts(bom.value.artifacts, artifacts);
   const provenance = {
     schema_version: 1,
@@ -126,6 +123,7 @@ async function main() {
   let dryRun = false;
   let receiptPath = null;
   let skipPreflight = false;
+  let local = process.env.KOSMOS_RELEASE_LOCAL === "1";
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--platform") {
@@ -138,6 +136,8 @@ async function main() {
       dryRun = true;
     } else if (args[i] === "--skip-preflight") {
       skipPreflight = true;
+    } else if (args[i] === "--local") {
+      local = true;
     }
   }
 
@@ -155,15 +155,6 @@ async function main() {
         version: JSON.parse(readFileSync(path.join(SHELL_ROOT, "release-versions.json"), "utf8"))[
           platform
         ],
-        engineVersion:
-          platform === "win"
-            ? JSON.parse(
-                readFileSync(
-                  path.join(SHELL_ROOT, ".tmp/engine.next/engine-manifest.json"),
-                  "utf8",
-                ),
-              ).version
-            : null,
         currentCommit: currentCommit(),
         bom: await loadReleaseBom(bomPath, {
           root: path.resolve(SHELL_ROOT, ".."),
@@ -171,8 +162,8 @@ async function main() {
           currentCommit: currentCommit(),
         }),
       }
-    : await runReleasePreflight({ platform, bomPath });
-  const { version, engineVersion, bom } = preflight;
+    : await runReleasePreflight({ platform, bomPath, local });
+  const { version, bom } = preflight;
   receiptPath ??= path.join(SHELL_ROOT, "release", "release-receipt.v1.json");
 
   // preflight: everything here is cheap and must happen before compilation.
@@ -190,10 +181,6 @@ async function main() {
     );
     return;
   }
-  if (platform === "win" && existsSync(path.join(SHELL_ROOT, "release")))
-    readdirSync(path.join(SHELL_ROOT, "release"))
-      .filter((name) => /^Kosmos-Engine-\d+\.\d+\.\d+\.(?:zip|json)$/.test(name))
-      .forEach((name) => rmSync(path.join(SHELL_ROOT, "release", name)));
   const eb = resolveElectronBuilder();
   log(`electron-builder: ${eb}`);
   let ebArgs;
@@ -219,10 +206,6 @@ async function main() {
     );
     process.exit(ebResult.status ?? 1);
   }
-  if (platform === "win") {
-    copyEngineRelease(SHELL_ROOT, engineVersion);
-    copyEngineManifest(SHELL_ROOT, engineVersion);
-  }
   log("");
   log("electron-builder succeeded. Emitting release provenance...");
   const releaseFiles = await emitProvenance(
@@ -230,7 +213,6 @@ async function main() {
     platform,
     version,
     bom,
-    engineVersion,
   );
   runFirstPartyContracts(platform);
   const receipt = await createReceipt({

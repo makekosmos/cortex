@@ -58,7 +58,11 @@ test("release build rejects a missing BOM before invoking electron-builder", asy
     {
       cwd: path.join(scripts, ".."),
       encoding: "utf8",
-      env: { ...process.env, KOSMOS_ELECTRON_BUILDER: `${process.execPath} ${builder}` },
+      env: {
+        ...process.env,
+        KOSMOS_ELECTRON_BUILDER: `${process.execPath} ${builder}`,
+        KOSMOS_RELEASE_LOCAL: "1",
+      },
     },
   );
   assert.notEqual(result.status, 0);

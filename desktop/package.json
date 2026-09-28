@@ -8,7 +8,6 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "build:backend": "node scripts/build-backend.mjs",
-    "build:engine": "node scripts/build-engine-release.mjs",
     "build:native:macos": "node scripts/build-macos-native.mjs",
     "build:backend:dev": "node scripts/build-backend-dev.mjs",
     "test:runtime-staging": "node --test scripts/runtime-staging.test.mjs",
@@ -106,8 +105,8 @@
           "to": "engine-manifest.json"
         },
         {
-          "from": "build/ensure-engine.ps1",
-          "to": "ensure-engine.ps1"
+          "from": "build/install-engine.ps1",
+          "to": "install-engine.ps1"
         },
         {
           "from": ".tmp/components/manager/win-unpacked",

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -11,13 +11,9 @@ import {
   cleanBuildIntermediates,
 } from "./runtime-staging.mjs";
 import { ensureArkCoreRpc } from "./ark-core-rpc.mjs";
-import { buildEngineArchive, verifyEngineArchive } from "./engine-distribution.mjs";
-import { consumeEngineArtifacts } from "./engine-consumer.mjs";
+import { buildEngineArchive } from "./engine-distribution.mjs";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
-const engineVersionConfig = JSON.parse(
-  readFileSync(path.join(shellRoot, "engine-version.json"), "utf8"),
-);
 const releaseBuildLock = acquireBuildLock(shellRoot);
 cleanBuildIntermediates(shellRoot);
 process.on("exit", releaseBuildLock);
@@ -31,6 +27,26 @@ const cortexTargetDir = effectiveCargoTargetDir(
   process.env.CARGO_TARGET_DIR,
 );
 
+// KOS-233: one product, one version. The Engine no longer has its own
+// per-Engine version config file — it reports the Kosmos Desktop product
+// version (`desktop/release-versions.json`) and the commit it was built from.
+// Both are baked into the binary at compile time via `option_env!`
+// (see runtime/src/build_info.rs), so they must be set before the `cargo build`
+// calls below, on every platform.
+const releaseVersions = JSON.parse(
+  readFileSync(path.join(shellRoot, "release-versions.json"), "utf8"),
+);
+const productVersion = process.platform === "win32" ? releaseVersions.win : releaseVersions.mac;
+const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], {
+  cwd: shellRoot,
+  encoding: "utf8",
+}).trim();
+const cargoEnv = {
+  ...process.env,
+  KOSMOS_ENGINE_VERSION: productVersion,
+  KOSMOS_ENGINE_SOURCE_COMMIT: sourceCommit,
+};
+
 const cortexBuildArgs = ["build", "--release", "--manifest-path", "../Cargo.toml"];
 const buildKepler = spawnSync(
   "cargo",
@@ -39,6 +55,7 @@ const buildKepler = spawnSync(
     cwd: shellRoot,
     stdio: "inherit",
     windowsHide: true,
+    env: cargoEnv,
   },
 );
 if ((buildKepler.status ?? 1) !== 0) process.exit(buildKepler.status ?? 1);
@@ -51,6 +68,7 @@ for (const bin of RUNTIME_BINARIES.slice(2)) {
     cwd: shellRoot,
     stdio: "inherit",
     windowsHide: true,
+    env: cargoEnv,
   });
   if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1);
 }
@@ -69,61 +87,25 @@ try {
   console.error(`[build-backend] ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
 }
+// KOS-233: the Windows Desktop installer ships the Engine it was built with —
+// packaged from this same `stageDir`/commit, never downloaded from a
+// published release. The zip stays only because the NSIS install step
+// (build/install-engine.ps1) needs a single local archive to hand to
+// Expand-Archive; its contents are always this build's binaries.
 let engineVersion = null;
 if (process.platform === "win32") {
-  const engineRelease = process.env.KOSMOS_ENGINE_RELEASE === "1";
-  engineVersion = engineRelease ? process.env.KOSMOS_ENGINE_VERSION : engineVersionConfig.version;
-  if (engineRelease && !engineVersion) throw new Error("KOSMOS_ENGINE_VERSION is required");
+  engineVersion = productVersion;
   const engineDir = path.join(shellRoot, ".tmp", "engine.next");
-  if (!engineRelease) {
-    const reuse =
-      process.env.KOSMOS_ENGINE_REUSE_MANIFEST ||
-      process.env.KOSMOS_ENGINE_REUSE_ARCHIVE ||
-      process.env.KOSMOS_ENGINE_REUSE_INSTALLER
-        ? {
-            manifest: process.env.KOSMOS_ENGINE_REUSE_MANIFEST,
-            archive: process.env.KOSMOS_ENGINE_REUSE_ARCHIVE,
-            installer: process.env.KOSMOS_ENGINE_REUSE_INSTALLER,
-          }
-        : undefined;
-    await consumeEngineArtifacts({ version: engineVersion, targetDir: engineDir, reuse });
-  } else {
-    const engineArchive = path.join(engineDir, "Kosmos-Engine.zip");
-    mkdirSync(engineDir, { recursive: true });
-    const engineUrl =
-      process.env.KOSMOS_ENGINE_RELEASE_URL ??
-      `https://github.com/makekosmos/desktop/releases/download/v${engineVersion}/Kosmos-Engine-${engineVersion}.zip`;
-    let engineManifest;
-    if (process.env.KOSMOS_ENGINE_REUSE_ARCHIVE) {
-      const sourceArchive = process.env.KOSMOS_ENGINE_REUSE_ARCHIVE;
-      const sourceManifest = process.env.KOSMOS_ENGINE_REUSE_MANIFEST;
-      if (!sourceManifest) throw new Error("KOSMOS_ENGINE_REUSE_MANIFEST is required");
-      copyFileSync(sourceArchive, engineArchive);
-      engineManifest = JSON.parse(readFileSync(sourceManifest, "utf8"));
-      if (
-        engineManifest.version !== engineVersion ||
-        !verifyEngineArchive(engineArchive, engineManifest)
-      )
-        throw new Error(`reused Engine does not match ${engineVersion}`);
-    } else {
-      engineManifest = buildEngineArchive(stageDir, engineArchive, {
-        version: engineVersion,
-        url: engineUrl,
-      });
-    }
-    engineManifest.channel_url =
-      "https://github.com/makekosmos/desktop/releases/latest/download/Kosmos-Engine-manifest.json";
-    writeFileSync(
-      path.join(engineDir, "engine-manifest.json"),
-      JSON.stringify(engineManifest, null, 2) + "\n",
-    );
-    const installer = spawnSync(
-      process.execPath,
-      [path.join(shellRoot, "scripts", "build-engine-installer.mjs")],
-      { cwd: shellRoot, stdio: "inherit", windowsHide: true },
-    );
-    if ((installer.status ?? 1) !== 0) process.exit(installer.status ?? 1);
-  }
+  mkdirSync(engineDir, { recursive: true });
+  const engineArchive = path.join(engineDir, "Kosmos-Engine.zip");
+  const engineManifest = buildEngineArchive(stageDir, engineArchive, {
+    version: engineVersion,
+    sourceCommit,
+  });
+  writeFileSync(
+    path.join(engineDir, "engine-manifest.json"),
+    JSON.stringify(engineManifest, null, 2) + "\n",
+  );
 }
 console.log(`[build-backend] staged Cortex and ARK runtime binaries`);
-if (engineVersion) console.log(`[build-backend] staged standalone engine ${engineVersion}`);
+if (engineVersion) console.log(`[build-backend] staged Engine ${engineVersion} (built from tree)`);

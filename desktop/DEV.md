@@ -29,3 +29,19 @@ smoke use the same backend-ready IPC assertion.
 Set `KOSMOS_SMOKE_LIVE_DNS=1` to add the real
 `dictation.test_connectivity` ARK round-trip and require its `dns_resolve`
 stage to succeed. The default smoke remains deterministic and offline-safe.
+
+## Release preflight (`pnpm run build` / `build:mac`)
+
+`scripts/release-preflight.mjs` gates every release build (KOS-233): it
+requires a clean tracked/source worktree, a `main`-HEAD build, a release
+version strictly greater than the latest published tag for that platform,
+and — for `win` — that `.tmp/engine.next/engine-manifest.json` (built by
+`build:backend` from this same tree) reports the same version and commit as
+the Desktop release.
+
+The `main`-HEAD and latest-published-tag checks need network access and a
+`main` checkout, so they are the only checks skipped with `--local` (or
+`KOSMOS_RELEASE_LOCAL=1`) — use that to build and test a candidate locally
+from a feature branch, or offline. Everything else (clean worktree, BOM, ARK
+artifact, Engine/Desktop version match) still runs. Never pass `--local` for
+a build that will actually be published.

@@ -122,6 +122,8 @@ mod tests {
             auth_token: "deadbeef".repeat(8),
             started_at: "2026-05-23T17:56:07Z".into(),
             correlation_id: "00000000-0000-4000-8000-000000000001".into(),
+            engine_version: String::new(),
+            source_commit: String::new(),
         }
     }
 

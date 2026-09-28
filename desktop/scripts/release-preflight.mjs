@@ -53,28 +53,94 @@ export function verifyArkArtifact(bom) {
     throw new Error(`ARK artifact hash does not match BOM: ${expected.name}`);
 }
 
-export async function runReleasePreflight({ platform, bomPath }) {
+// KOS-233: the Engine is built from the same commit/version as Desktop
+// (build-backend.mjs). This catches a stale `.tmp/engine.next` left over
+// from an earlier, differently-versioned build — the exact class of bug that
+// let a published Engine 0.1.3 silently ship under a local 0.9.38 Desktop.
+export function verifyEngineArtifact(version, commit) {
+  const file = path.join(SHELL_ROOT, ".tmp", "engine.next", "engine-manifest.json");
+  if (!existsSync(file)) throw new Error(`Engine manifest is missing: ${file}`);
+  const manifest = JSON.parse(readFileSync(file, "utf8"));
+  if (manifest.version !== version)
+    throw new Error(
+      `Engine manifest version ${manifest.version} does not match release version ${version} — rerun build:backend`,
+    );
+  if (manifest.source_commit !== commit)
+    throw new Error(
+      `Engine manifest source_commit does not match HEAD — rerun build:backend (stale .tmp/engine.next?)`,
+    );
+  return manifest;
+}
+
+function compareSemver(a, b) {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i += 1) if (pa[i] !== pb[i]) return pa[i] - pb[i];
+  return 0;
+}
+
+// Reject a release that isn't strictly newer than the latest published tag —
+// this is what makes "one product, one version" hold across the whole
+// history, not just at build time. Network-dependent, so it is the one check
+// `--local`/KOSMOS_RELEASE_LOCAL skip: an offline or throwaway local build has
+// no way to reach the GitHub API and does not need this guarantee.
+export async function assertVersionIsPublishable({ platform, version, fetchImpl = fetch }) {
+  const repository = platform === "win" ? "makekosmos/desktop" : "makekosmos/desktop-mac";
+  const response = await fetchImpl(`https://api.github.com/repos/${repository}/releases/latest`);
+  if (!response.ok)
+    throw new Error(
+      `could not read the latest published ${repository} release (HTTP ${response.status}) — pass --local for an offline/local build`,
+    );
+  const data = await response.json();
+  const latest = String(data.tag_name ?? "").replace(/^v/, "");
+  if (!/^\d+\.\d+\.\d+$/.test(latest))
+    throw new Error(`unexpected latest ${repository} tag: ${data.tag_name}`);
+  if (compareSemver(version, latest) <= 0)
+    throw new Error(
+      `release version ${version} must be greater than the latest published ${latest}`,
+    );
+}
+
+// Release builds are cut from `main` HEAD only — this is what "no local flag"
+// buys: the published binary can always be reproduced from a plain `git
+// checkout main`. `--local`/KOSMOS_RELEASE_LOCAL is for testing a build off a
+// feature branch (e.g. this very branch before it merges).
+export function assertBuildingFromMain(
+  repoRoot,
+  currentBranch = () =>
+    execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    }).trim(),
+) {
+  const branch = currentBranch();
+  if (branch !== "main")
+    throw new Error(
+      `release builds must run from main HEAD (current branch: ${branch}) — pass --local (or set KOSMOS_RELEASE_LOCAL=1) for an offline/local build off another ref`,
+    );
+}
+
+export async function runReleasePreflight({ platform, bomPath, local = false }) {
   if (!["win", "mac"].includes(platform)) throw new Error(`Unknown platform "${platform}"`);
   if (!bomPath)
     throw new Error("--bom <path> or KOSMOS_RELEASE_BOM is required for release builds");
   const version = getVersion(platform);
   ensureCleanSource();
   const commit = currentCommit();
+  if (!local) {
+    assertBuildingFromMain(path.resolve(SHELL_ROOT, ".."));
+    await assertVersionIsPublishable({ platform, version });
+  }
   const bom = await loadReleaseBom(bomPath, {
     root: path.resolve(SHELL_ROOT, ".."),
     platform,
     currentCommit: commit,
   });
   verifyArkArtifact(bom);
+  if (platform === "win") verifyEngineArtifact(version, commit);
   return {
     platform,
     version,
-    engineVersion:
-      platform === "win"
-        ? JSON.parse(
-            readFileSync(path.join(SHELL_ROOT, ".tmp/engine.next/engine-manifest.json"), "utf8"),
-          ).version
-        : null,
     currentCommit: commit,
     bom,
   };
@@ -88,12 +154,13 @@ export function resolvePreflightArgs(args, env = process.env) {
   return {
     platform: flagValue("--platform"),
     bomPath: flagValue("--bom") ?? env.KOSMOS_RELEASE_BOM,
+    local: args.includes("--local") || env.KOSMOS_RELEASE_LOCAL === "1",
   };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const { platform, bomPath } = resolvePreflightArgs(process.argv.slice(2));
-  runReleasePreflight({ platform, bomPath })
+  const { platform, bomPath, local } = resolvePreflightArgs(process.argv.slice(2));
+  runReleasePreflight({ platform, bomPath, local })
     .then(({ platform: checkedPlatform, version, bom }) =>
       console.log(`[release-preflight] PASS ${checkedPlatform} v${version} BOM ${bom.value.id}`),
     )
