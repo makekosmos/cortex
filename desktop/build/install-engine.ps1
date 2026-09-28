@@ -4,26 +4,31 @@ param(
   [Parameter(Mandatory = $true)][string]$TargetRoot,
   # Overridable only so headless tests can point migration at a scratch
   # registry key/shortcut instead of the real machine state. Production
-  # (installer.nsh) never passes these — it always migrates the real
+  # (installer.nsi) never passes these — it always migrates the real
   # standalone "Kosmos Engine" registration.
-  [string]$LegacyRegistryKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\KosmosEngine',
+  # MIGRATION(KOS-267): remove after 2026-11-01.
+  [string]$LegacyRegistryKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\KosmosEngine', # MIGRATION(KOS-267)
   [string]$LegacyShortcut
 )
 
-# KOS-233: one product, one version. Kosmos Desktop ships the Engine it was
+# KOS-233: one product, one version. Mundus Desktop ships the Engine it was
 # built with (bundled locally by build-backend.mjs into $Archive/$Manifest —
 # never downloaded from a published release). This script:
-#   1. Installs that Engine into the shared %LOCALAPPDATA%\Kosmos\Engine root
+#   1. Installs that Engine into the shared %LOCALAPPDATA%\Mundus\Engine root
 #      (also used by Manager/Agenda/Memoria), never downgrading a newer,
 #      already-verified installation left by a later Desktop version.
 #   2. Takes over an existing standalone "Kosmos Engine" installation (the
-#      old separate installer's App&Features entry): removes its
+#      old separate installer's Apps & Features entry): removes its
 #      registration and Start Menu shortcut, keeps its data/autostart
 #      preference. Snapshots before changing anything and restores on
-#      failure (same pattern as the Manager transitional release, KOS-134).
+#      failure. MIGRATION(KOS-267): remove after 2026-11-01.
 
 $ErrorActionPreference = 'Stop'
 $semver = '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$'
+
+# Engine binaries from every product generation, oldest first.
+# MIGRATION(KOS-267): remove the legacy names after 2026-11-01.
+$script:EngineBinaryNames = @('mundus-engine.exe', 'kepler-backend.exe') # MIGRATION(KOS-267)
 
 function Get-EngineSha256([string]$Path) {
   $sha = [Security.Cryptography.SHA256]::Create()
@@ -36,7 +41,10 @@ function Compare-EngineVersion([string]$Left, [string]$Right) {
 }
 
 function Assert-Manifest([object]$Value) {
-  if ($Value.schema_version -ne 1 -or $Value.product -ne 'kosmos-engine' -or
+  # MIGRATION(KOS-267): 'kosmos-engine' is the product id written by
+  # MIGRATION(KOS-267): Kosmos-era manifests (installed state on user machines).
+  if ($Value.schema_version -ne 1 -or
+      $Value.product -notin @('mundus-engine', 'kosmos-engine') -or # MIGRATION(KOS-267)
       $Value.version -notmatch $semver) { throw 'invalid engine manifest' }
   if (-not $Value.files -or @($Value.files).Count -eq 0) { throw 'engine manifest files are required' }
   foreach ($file in @($Value.files)) {
@@ -71,9 +79,13 @@ function Test-InstalledEngine([string]$Root) {
 
 function Test-EngineProcess([string]$Path) {
   $fullPath = [IO.Path]::GetFullPath($Path)
-  foreach ($process in @(Get-CimInstance Win32_Process -Filter "Name='kepler-backend.exe'" -ErrorAction Stop)) {
-    if (-not $process.ExecutablePath) { throw 'cannot determine the running Engine path' }
-    if ([IO.Path]::GetFullPath($process.ExecutablePath) -ieq $fullPath) { return $true }
+  # MIGRATION(KOS-267): the running pre-upgrade Engine is still the old binary
+  # name; match both.
+  foreach ($name in $script:EngineBinaryNames) {
+    foreach ($process in @(Get-CimInstance Win32_Process -Filter "Name='$name'" -ErrorAction Stop)) {
+      if (-not $process.ExecutablePath) { throw 'cannot determine the running Engine path' }
+      if ([IO.Path]::GetFullPath($process.ExecutablePath) -ieq $fullPath) { return $true }
+    }
   }
   return $false
 }
@@ -87,25 +99,33 @@ function Stop-EngineForReplacement([string]$Path) {
 }
 function Update-EngineAutostart([string]$VersionRoot) {
   try {
-    $defaultRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Kosmos\Engine')).TrimEnd('\')
+    $defaultRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Mundus\Engine')).TrimEnd('\')
     if ([IO.Path]::GetFullPath($TargetRoot).TrimEnd('\') -ine $defaultRoot) { return }
     $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-    $run = Get-ItemProperty -LiteralPath $runKey -Name 'Kosmos Engine' -ErrorAction Stop
-    if ([string]$run.'Kosmos Engine' -match '(?i)(?:kepler-backend|Kosmos Runtime)\.exe.*--start') {
-      Set-ItemProperty -LiteralPath $runKey -Name 'Kosmos Engine' -Value ('"' + (Join-Path $VersionRoot 'kepler-backend.exe') + '" --start')
+    $exe = Join-Path $VersionRoot 'mundus-engine.exe'
+    # MIGRATION(KOS-267): keep reading/rewriting the legacy Run value names
+    # and binary names until cleanup; always write under the new name.
+    foreach ($name in @('Mundus Engine', 'Kosmos Engine')) { # MIGRATION(KOS-267)
+      $run = Get-ItemProperty -LiteralPath $runKey -Name $name -ErrorAction SilentlyContinue
+      if ($run -and [string]$run.$name -match '(?i)(?:kepler-backend|mundus-engine|Kosmos Runtime)\.exe.*--start') { # MIGRATION(KOS-267)
+        Set-ItemProperty -LiteralPath $runKey -Name 'Mundus Engine' -Value ('"' + $exe + '" --start')
+      }
+      if ($name -ne 'Mundus Engine') {
+        Remove-ItemProperty -LiteralPath $runKey -Name $name -ErrorAction SilentlyContinue
+      }
     }
   } catch { }
 }
 
 # Takes over an existing standalone "Kosmos Engine" Apps&Features entry left
 # by the old separate installer: removes its registration and shortcut, but
-# never touches %APPDATA%\Kosmos (user data) or the LOCALAPPDATA Engine files
-# themselves — those are simply adopted in place. Snapshots first; restores
-# on failure so a locked file never leaves a half-migrated registration.
+# never touches %APPDATA%\Kosmos (user data — the Engine moves it on first
+# start) or the LOCALAPPDATA Engine files themselves.
+# MIGRATION(KOS-267): remove after 2026-11-01.
 function Invoke-EngineMigration {
   $key = $LegacyRegistryKey
   if (-not (Test-Path -LiteralPath $key)) { return }
-  $shortcut = if ($LegacyShortcut) { $LegacyShortcut } else { Join-Path ([Environment]::GetFolderPath('Programs')) 'Kosmos Engine.lnk' }
+  $shortcut = if ($LegacyShortcut) { $LegacyShortcut } else { Join-Path ([Environment]::GetFolderPath('Programs')) 'Kosmos Engine.lnk' } # MIGRATION(KOS-267)
   $props = Get-ItemProperty -LiteralPath $key
   $snapshot = @{}
   foreach ($name in @('DisplayName', 'DisplayVersion', 'Publisher', 'InstallLocation', 'UninstallString', 'QuietUninstallString', 'DisplayIcon', 'NoModify', 'NoRepair')) {
@@ -113,7 +133,7 @@ function Invoke-EngineMigration {
   }
   $shortcutBackup = $null
   if (Test-Path -LiteralPath $shortcut -PathType Leaf) {
-    $shortcutBackup = "$env:TEMP\kosmos-engine-shortcut-$PID.bak"
+    $shortcutBackup = "$env:TEMP\mundus-engine-shortcut-$PID.bak"
     Copy-Item -LiteralPath $shortcut -Destination $shortcutBackup -Force
   }
   try {
@@ -133,7 +153,7 @@ function Invoke-EngineMigration {
     if ($shortcutBackup -and (Test-Path -LiteralPath $shortcutBackup)) {
       Copy-Item -LiteralPath $shortcutBackup -Destination $shortcut -Force
     }
-    throw "Kosmos Engine migration failed and was rolled back: $($_.Exception.Message)"
+    throw "Kosmos Engine migration failed and was rolled back: $($_.Exception.Message)" # MIGRATION(KOS-267)
   } finally {
     if ($shortcutBackup) { Remove-Item -LiteralPath $shortcutBackup -Force -ErrorAction SilentlyContinue }
   }
@@ -163,10 +183,14 @@ if ($installedVersion -and (Compare-EngineVersion $installedVersion $expected.ve
   $engineWasRunning = $false
   if ($installedVersion) {
     $installedPath = Join-Path (Join-Path $TargetRoot 'versions') $installedVersion
-    $engineWasRunning = Stop-EngineForReplacement (Join-Path $installedPath 'kepler-backend.exe')
+    foreach ($name in $script:EngineBinaryNames) {
+      $engineWasRunning = (Stop-EngineForReplacement (Join-Path $installedPath $name)) -or $engineWasRunning
+    }
   }
   if (Test-Path -LiteralPath $versionRoot) {
-    $engineWasRunning = (Stop-EngineForReplacement (Join-Path $versionRoot 'kepler-backend.exe')) -or $engineWasRunning
+    foreach ($name in $script:EngineBinaryNames) {
+      $engineWasRunning = (Stop-EngineForReplacement (Join-Path $versionRoot $name)) -or $engineWasRunning
+    }
   }
   # Pre-in-process Engines spawned an ark-core-rpc sidecar that survives a
   # backend kill and still holds the DB open; stop any leftover before
@@ -203,7 +227,7 @@ if ($installedVersion -and (Compare-EngineVersion $installedVersion $expected.ve
   }
   if ($engineWasRunning) {
     try {
-      Start-Process -FilePath (Join-Path $versionRoot 'kepler-backend.exe') -ArgumentList '--start' -WindowStyle Hidden
+      Start-Process -FilePath (Join-Path $versionRoot 'mundus-engine.exe') -ArgumentList '--start' -WindowStyle Hidden
     } catch {
       Write-Warning "Engine was replaced but could not be restarted: $($_.Exception.Message)"
     }
