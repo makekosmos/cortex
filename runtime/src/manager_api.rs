@@ -3,6 +3,7 @@ use crate::diagnostics::SharedRpcDiagnostics;
 use crate::engine_settings;
 use crate::package_service::PackageService;
 use crate::protocol_usage::ProtocolUsageStore;
+use crate::updater::UpdaterService;
 use crate::usage_tracker::UsageTrackerDiagnosticsState;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -54,6 +55,7 @@ fn canonical_type_sources(types: &[Value]) -> Vec<(&'static str, &'static str, S
 pub struct ManagerState {
     data_dir: Arc<PathBuf>,
     bundles: Arc<Mutex<HashMap<String, BundleEntry>>>,
+    updater: Arc<UpdaterService>,
 }
 
 struct BundleEntry {
@@ -64,9 +66,14 @@ struct BundleEntry {
 impl ManagerState {
     pub fn new(data_dir: PathBuf) -> Self {
         Self {
+            updater: UpdaterService::new(data_dir.clone()),
             data_dir: Arc::new(data_dir),
             bundles: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    pub fn updater(&self) -> Arc<UpdaterService> {
+        self.updater.clone()
     }
 
     pub fn data_dir(&self) -> &Path {

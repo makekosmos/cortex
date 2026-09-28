@@ -82,6 +82,7 @@ pub mod runtime_grants;
 pub mod singleton;
 pub mod store_catalog;
 pub mod sync;
+pub mod updater;
 pub mod usage_tracker;
 pub mod user_data;
 pub mod ws_server;

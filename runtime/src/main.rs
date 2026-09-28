@@ -474,6 +474,7 @@ async fn setup() -> Result<SetupState, DynError> {
     worker_roots.dedup();
     let dictation_host = DictationHost::new(lock_dir.clone());
     let manager_state = ManagerState::new(lock_dir.clone());
+    let updater = manager_state.updater();
     let package_workers = PackageWorkerSupervisor::with_ark_executor(
         API_VERSION_CURRENT.major.into(),
         Arc::new(EngineCapabilityExecutor::new(
@@ -566,6 +567,7 @@ async fn setup() -> Result<SetupState, DynError> {
         manager_state,
     )
     .await?;
+    tokio::spawn(updater.run_startup_check_after_grace(ws.desktop_authority()));
     let port = ws.port();
     tracing::info!(port = port, "WS listening on 127.0.0.1");
     let dispatcher = Arc::new(ws.dispatcher());
