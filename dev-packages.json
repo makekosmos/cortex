@@ -1,7 +1,0 @@
-{
-  "packages": [
-    { "path": "../focus", "url": "http://127.0.0.1:5181/" },
-    { "path": "../agenda", "url": "http://127.0.0.1:5182/" },
-    { "path": "../memoria", "url": "http://127.0.0.1:5183/" }
-  ]
-}

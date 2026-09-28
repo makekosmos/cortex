@@ -4,9 +4,7 @@
 //! path-building logic this wraps.
 
 use super::components::Component;
-use super::paths::{
-    component_executable_candidates, cortex_executable_candidates, install_root_candidates,
-};
+use super::paths::{component_executable_candidates, install_root_candidates};
 use std::env;
 use std::path::PathBuf;
 
@@ -23,21 +21,9 @@ fn install_roots() -> Vec<PathBuf> {
     install_root_candidates(exe_parent.as_deref(), &env_roots)
 }
 
-/// Resolves the packaged Cortex shell executable (`Kosmos.exe`), honouring
-/// `KOSMOS_CORTEX_EXECUTABLE` before falling back to the well-known install
-/// locations.
-pub fn resolve_cortex_executable() -> Option<PathBuf> {
-    let mut candidates = Vec::new();
-    if let Some(path) = env::var_os("KOSMOS_CORTEX_EXECUTABLE") {
-        candidates.push(PathBuf::from(path));
-    }
-    candidates.extend(cortex_executable_candidates(&install_roots()));
-    candidates.into_iter().find(|path| path.is_file())
-}
-
-/// Resolves a packaged GPUI component executable (Manager/Agenda/Memoria),
+/// Resolves a packaged GPUI component executable (Manager/Agenda/Memoria/Dictation),
 /// honouring its dedicated env override before falling back to the
-/// `resources/components/<name>/...` layout shipped next to Cortex.
+/// `resources/components/<name>/...` layout shipped next to the Engine.
 pub fn resolve_component_executable(component: Component) -> Option<PathBuf> {
     let mut candidates = Vec::new();
     if let Some(path) = env::var_os(component.env_override()) {

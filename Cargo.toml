@@ -8,6 +8,9 @@ members = [
   "native-services/kepler-focus-svc",
   "core/crates/ark-core",
 ]
+# Pinned sibling component checkouts cloned under desktop/.tmp (local builds)
+# are standalone crates, never workspace members.
+exclude = ["desktop/.tmp"]
 
 [profile.test]
 debug = 0

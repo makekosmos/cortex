@@ -25,7 +25,7 @@ mod wide;
 use components::Component;
 use icon::{load_icon, notify_data, remove_tray_icon, resolve_icon_path, WM_TRAY_CALLBACK};
 use menu::{build_menu, MenuAction, MenuPresence};
-use resolve::{resolve_component_executable, resolve_cortex_executable};
+use resolve::resolve_component_executable;
 use wide::wide;
 
 static EVENTS: std::sync::OnceLock<UnboundedSender<TrayEvent>> = std::sync::OnceLock::new();
@@ -127,24 +127,7 @@ pub fn stop(thread_id: u32) {
     }
 }
 
-/// Launches the Cortex shell (`Kosmos.exe`). Cortex is not removed yet
-/// (KOS-236 retires it in a later step), so this stays the double-click and
-/// menu "Открыть" target — the same single-instance app that used to own
-/// the tray before `9a940559` moved icon ownership to the Engine.
-fn open_cortex() {
-    if let Some(executable) = resolve_cortex_executable() {
-        if let Err(error) = Command::new(&executable).spawn() {
-            eprintln!(
-                "[kepler-backend] failed to open Cortex {}: {error}",
-                executable.display()
-            );
-        }
-    }
-}
-
-/// Launches a packaged GPUI component (Manager/Agenda/Memoria), matching
-/// `openManager()`/`openAgenda()`/`openMemoria()` in the Electron shell:
-/// spawn-and-forget, no lifecycle ownership by the Engine.
+/// Launches a packaged GPUI component (Manager/Agenda/Memoria/Dictation).
 fn open_component(component: Component) {
     if let Some(executable) = resolve_component_executable(component) {
         if let Err(error) = Command::new(&executable).spawn() {
@@ -159,10 +142,10 @@ fn open_component(component: Component) {
 
 fn current_presence() -> MenuPresence {
     MenuPresence {
-        cortex: resolve_cortex_executable().is_some(),
         manager: resolve_component_executable(Component::Manager).is_some(),
         agenda: resolve_component_executable(Component::Agenda).is_some(),
         memoria: resolve_component_executable(Component::Memoria).is_some(),
+        dictation: resolve_component_executable(Component::Dictation).is_some(),
     }
 }
 
@@ -202,7 +185,7 @@ fn show_context_menu(window: HWND) {
         .0 as usize;
         let _ = DestroyMenu(menu);
         match MenuAction::from_command_id(command) {
-            Some(MenuAction::OpenCortex) => open_cortex(),
+            Some(MenuAction::OpenManager) => open_component(Component::Manager),
             Some(MenuAction::OpenComponent(component)) => open_component(component),
             Some(MenuAction::Exit) => {
                 if let Some(events) = EVENTS.get() {
@@ -223,7 +206,7 @@ unsafe extern "system" fn window_proc(
     match message {
         WM_TRAY_CALLBACK => match lparam.0 as u32 {
             WM_RBUTTONUP => show_context_menu(window),
-            WM_LBUTTONDBLCLK => open_cortex(),
+            WM_LBUTTONDBLCLK => open_component(Component::Manager),
             _ => {}
         },
         WM_DESTROY => {

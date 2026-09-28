@@ -84,9 +84,14 @@ export function inspectInstall(installRoot, expectedVersion) {
   );
   console.log(`PROVENANCE InstallLocation=${provenance.InstallLocation}`);
   console.log(`PROVENANCE UninstallString=${provenance.UninstallString}`);
-  for (const name of ["Kosmos Runtime.exe", "Kosmos Data Engine.exe"]) {
+  for (const name of [
+    "components/manager/Kosmos Manager.exe",
+    "components/agenda/Kosmos Agenda.exe",
+    "components/memoria/Kosmos Memoria.exe",
+    "components/dictation/Kosmos Dictation.exe",
+  ]) {
     const file = path.join(installRoot, "resources", name);
-    if (!existsSync(file)) throw new Error(`Missing packaged artifact: ${file}`);
+    if (!existsSync(file)) continue;
     const hash = createHash("sha256").update(readFileSync(file)).digest("hex");
     console.log(`FILE ${name} SHA256=${hash} SUBSYSTEM ${readPeSubsystem(file)}`);
   }

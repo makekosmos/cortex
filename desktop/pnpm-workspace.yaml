@@ -1,7 +1,4 @@
 allowBuilds:
-  electron: true
-  electron-builder: true
-  electron-winstaller: false
   esbuild: true
   png-to-ico: true
   sharp: true

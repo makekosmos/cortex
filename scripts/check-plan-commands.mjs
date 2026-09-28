@@ -8,11 +8,7 @@ const FORMAT_EXTENSIONS = /\.(?:[cm]?[jt]sx?|vue|json|ya?ml)$/i;
 const requireFromRoot = createRequire(new URL("../package.json", import.meta.url));
 
 const COMMANDS_BY_CHECK = {
-  "desktop-typecheck": ["pnpm", ["run", "typecheck:desktop"]],
-  "host-typecheck": ["pnpm", ["run", "typecheck:host"]],
   "desktop-contracts": ["pnpm", ["run", "test:desktop-contracts"]],
-  "host-contracts": ["pnpm", ["run", "test:host-contracts"]],
-  "first-party-contracts": ["pnpm", ["run", "test:first-party-contracts"]],
   rustfmt: ["pnpm", ["run", "rustfmt"]],
   clippy: ["pnpm", ["run", "clippy"]],
   "test:rust": ["pnpm", ["run", "test:rust"]],
@@ -34,7 +30,7 @@ const COMMANDS_BY_CHECK = {
   ],
 };
 
-const FULL_CONTRACT_CHECKS = ["host-contracts", "first-party-contracts"];
+const FULL_CONTRACT_CHECKS = [];
 
 function commandFor(check) {
   const [command, args] = COMMANDS_BY_CHECK[check];

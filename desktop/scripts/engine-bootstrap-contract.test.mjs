@@ -5,19 +5,14 @@ import test from "node:test";
 
 const desktopRoot = path.resolve(import.meta.dirname, "..");
 const bootstrap = readFileSync(path.join(desktopRoot, "build", "install-engine.ps1"), "utf8");
-const installer = readFileSync(path.join(desktopRoot, "build", "installer.nsh"), "utf8");
-const packageJson = JSON.parse(readFileSync(path.join(desktopRoot, "package.json"), "utf8"));
+const installer = readFileSync(path.join(desktopRoot, "build", "installer.nsi"), "utf8");
 
 test("Desktop installs the Engine it was built with, from local resources", () => {
   // KOS-233: no separate publish/download step. The zip and manifest are the
   // same ones build-backend.mjs staged from this tree into .tmp/engine.next.
-  const winResources = packageJson.build.win.extraResources;
-  assert.ok(winResources.some((entry) => entry.to === "install-engine.ps1"));
-  assert.ok(winResources.some((entry) => entry.to === "Kosmos Engine.zip"));
-  assert.ok(winResources.some((entry) => entry.to === "engine-manifest.json"));
-  assert.doesNotMatch(installer, /ensure-engine\.ps1/);
   assert.match(installer, /install-engine\.ps1/);
   assert.match(installer, /-Archive "\$INSTDIR\\resources\\Kosmos Engine\.zip"/);
+  assert.match(installer, /-Manifest "\$INSTDIR\\resources\\engine-manifest\.json"/);
   assert.doesNotMatch(
     bootstrap,
     /Invoke-WebRequest|installer_url|channel_url|Test-TrustedReleaseUrl/,

@@ -2,168 +2,24 @@
   "name": "kosmos-desktop",
   "version": "0.5.4",
   "private": true,
-  "description": "Kosmos — desktop host for notes, tasks, games, focus, and activity",
+  "description": "Kosmos — desktop packaging for the Engine and GPUI components",
   "author": "Kazui",
   "type": "module",
-  "main": "dist-electron/main.js",
   "scripts": {
     "build:backend": "node scripts/build-backend.mjs",
     "build:native:macos": "node scripts/build-macos-native.mjs",
     "build:backend:dev": "node scripts/build-backend-dev.mjs",
     "test:runtime-staging": "node --test scripts/runtime-staging.test.mjs",
-    "test:dev-run": "node --test scripts/dev-run.test.mjs",
-    "dev:kepler": "node -e \"process.env.KEPLER_DEV='1';require('node:child_process').spawnSync('vite',['--host','127.0.0.1','--port','9912','--strictPort','--configLoader','native'],{stdio:'inherit',shell:true,windowsHide:true,env:process.env});\"",
-    "dev": "pnpm run build:backend:dev && node scripts/dev.mjs",
-    "dev:no-build": "node scripts/dev.mjs",
-    "dev:run": "node scripts/dev.mjs run",
-    "dev:stop": "node scripts/dev.mjs stop",
-    "dev:reset": "node scripts/dev.mjs reset",
-    "dev:diagnostics": "node scripts/dev.mjs diagnostics",
-    "dev:smoke": "node scripts/dev.mjs smoke",
-    "build:js:shell": "tsc && vite build --configLoader native",
-    "build:js": "tsc && vite build --configLoader native",
-    "build": "pnpm run build:backend && node scripts/release-preflight.mjs --platform win && pnpm run build:native:macos && pnpm run build:package-components && pnpm run build:js && node scripts/build-desktop.mjs --platform win --skip-preflight",
-    "build:mac": "pnpm run build:backend && node scripts/release-preflight.mjs --platform mac && pnpm run build:native:macos && pnpm run build:js && node scripts/build-desktop.mjs --platform mac",
+    "build": "pnpm run build:backend && node scripts/release-preflight.mjs --platform win && pnpm run build:native:macos && pnpm run build:package-components && node scripts/build-desktop.mjs --platform win --skip-preflight",
     "verify:channel": "node scripts/verify-release-channel.mjs",
-    "typecheck": "tsc --noEmit",
-    "package:dir": "pnpm run build:backend && node scripts/release-preflight.mjs --platform win && pnpm run build:package-components && pnpm run build:js && electron-builder --dir --publish never",
-    "build:package-components": "node scripts/build-package-components.mjs",
-    "package:mac": "pnpm run build:mac",
-    "test:e2e": "pnpm run build:js && playwright test --config playwright.config.ts",
-    "test:e2e:headed": "pnpm run build:js && playwright test --config playwright.config.ts --headed"
-  },
-  "dependencies": {
-    "@lucide/vue": "^1.16.0",
-    "@phosphor-icons/vue": "^2.2.1",
-    "electron-updater": "^6.3.9"
+    "package:dir": "pnpm run build:backend && node scripts/release-preflight.mjs --platform win && pnpm run build:package-components && node scripts/build-desktop.mjs --platform win --skip-preflight --package-dir",
+    "build:package-components": "node scripts/build-package-components.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
-    "@tailwindcss/vite": "^4.2.2",
     "@types/node": "^24.9.2",
-    "@vitejs/plugin-vue": "^6.0.5",
-    "electron": "^42.2.0",
-    "electron-builder": "^26.8.1",
-    "playwright": "^1.58.2",
     "png-to-ico": "^3.0.1",
     "rcedit": "^5.0.2",
-    "sharp": "^0.35.1",
-    "tailwindcss": "^4.1.16",
-    "typescript": "^6.0.3",
-    "vite": "^8.0.3",
-    "vite-plugin-electron": "1.0.0-beta.2",
-    "vite-plugin-electron-renderer": "^0.14.6",
-    "vue": "3.6.0-rc.7"
+    "sharp": "^0.35.1"
   },
-  "packageManager": "pnpm@12.4.1",
-  "build": {
-    "appId": "com.kazui.kosmos",
-    "productName": "Kosmos",
-    "artifactName": "Kosmos-Setup-${version}.${ext}",
-    "electronLanguages": [
-      "en-US",
-      "ru"
-    ],
-    "afterPack": "./build/afterPack.cjs",
-    "directories": {
-      "output": "release",
-      "buildResources": "build"
-    },
-    "files": [
-      "dist/**/*",
-      "dist-electron/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "build/icon.png",
-        "to": "icon.png"
-      },
-      {
-        "from": "build/tray.ico",
-        "to": "tray.ico"
-      }
-    ],
-    "win": {
-      "icon": "build/icon.ico",
-      "target": "nsis",
-      "signExecutable": false,
-      "publish": [
-        {
-          "provider": "github",
-          "owner": "makekosmos",
-          "repo": "desktop",
-          "releaseType": "release"
-        }
-      ],
-      "extraResources": [
-        {
-          "from": ".tmp/engine.next/Kosmos-Engine.zip",
-          "to": "Kosmos Engine.zip"
-        },
-        {
-          "from": ".tmp/engine.next/engine-manifest.json",
-          "to": "engine-manifest.json"
-        },
-        {
-          "from": "build/install-engine.ps1",
-          "to": "install-engine.ps1"
-        },
-        {
-          "from": ".tmp/components/manager/win-unpacked",
-          "to": "components/manager"
-        },
-        {
-          "from": ".tmp/components/agenda/win-unpacked",
-          "to": "components/agenda"
-        },
-        {
-          "from": ".tmp/components/memoria/win-unpacked",
-          "to": "components/memoria"
-        },
-        {
-          "from": ".tmp/components/host/win-unpacked",
-          "to": "components/host"
-        }
-      ]
-    },
-    "mac": {
-      "icon": "build/icon.png",
-      "target": "dmg",
-      "publish": [
-        {
-          "provider": "github",
-          "owner": "makekosmos",
-          "repo": "desktop-mac",
-          "releaseType": "release"
-        }
-      ],
-      "extraResources": [
-        {
-          "from": ".tmp/runtime.next/kepler-backend",
-          "to": "Kosmos Runtime"
-        },
-        {
-          "from": ".tmp/runtime.next/ark-core-rpc",
-          "to": "Kosmos Data Engine"
-        },
-        {
-          "from": ".tmp/native/macos",
-          "to": "native/macos"
-        }
-      ]
-    },
-    "nsis": {
-      "oneClick": true,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": false,
-      "createDesktopShortcut": false,
-      "createStartMenuShortcut": false,
-      "shortcutName": "Kosmos",
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
-      "runAfterFinish": false,
-      "deleteAppDataOnUninstall": false,
-      "include": "build/installer.nsh"
-    }
-  }
+  "packageManager": "pnpm@12.4.1"
 }

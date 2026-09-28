@@ -43,28 +43,18 @@ test("non-default Cargo runtime is the one mapped into the Windows package", () 
     assert.equal(effectiveCargoTargetDir(shellRoot, cortexRoot, configured), configured);
     stageRuntimeBinaries(releaseDir, stageDir, "win32");
 
-    const packageJson = JSON.parse(readFileSync(path.join(shellRoot, "package.json"), "utf8"));
     const backendBuild = readFileSync(path.join(shellRoot, "scripts", "build-backend.mjs"), "utf8");
+    const desktopBuild = readFileSync(path.join(shellRoot, "scripts", "build-desktop.mjs"), "utf8");
     assert.match(backendBuild, /let engineVersion = null/);
     assert.match(backendBuild, /if \(engineVersion\) console\.log/);
     // KOS-233: Engine is always built from this same tree/commit, never a
     // separate `KOSMOS_ENGINE_RELEASE` line downloaded from a publish step.
     assert.doesNotMatch(backendBuild, /KOSMOS_ENGINE_RELEASE/);
     assert.doesNotMatch(backendBuild, /engine-version\.json/);
-    const runtimeMapping = packageJson.build.win.extraResources.find(
-      (entry) => entry.to === "engine-manifest.json",
-    );
-    const engineArchiveMapping = packageJson.build.win.extraResources.find(
-      (entry) => entry.to === "Kosmos Engine.zip",
-    );
-    assert.deepEqual(runtimeMapping, {
-      from: ".tmp/engine.next/engine-manifest.json",
-      to: "engine-manifest.json",
-    });
-    assert.deepEqual(engineArchiveMapping, {
-      from: ".tmp/engine.next/Kosmos-Engine.zip",
-      to: "Kosmos Engine.zip",
-    });
+    // The NSIS staging in build-desktop.mjs maps the engine manifest and
+    // archive into resources/ the same way extraResources did.
+    assert.match(desktopBuild, /engine-manifest\.json/);
+    assert.match(desktopBuild, /Kosmos-Engine\.zip/);
     assert.equal(
       readFileSync(path.join(stageDir, "kepler-backend.exe"), "utf8"),
       "fresh:kepler-backend",

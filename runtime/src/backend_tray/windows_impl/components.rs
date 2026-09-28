@@ -1,19 +1,22 @@
-//! Descriptors for the packaged GPUI companion apps that the Electron shell
-//! used to launch from its own tray/command palette (Manager, Agenda,
-//! Memoria). Each one ships next to the Cortex shell install as
-//! `resources/components/<dir_name>/<exe_name>` — see
-//! `desktop/electron/manager-navigation.ts`, `agenda-navigation.ts` and
-//! `memoria-navigation.ts` for the Electron-side resolution this mirrors.
+//! Descriptors for the packaged GPUI companion apps that the tray can launch
+//! (Manager, Agenda, Memoria, Dictation). Each one ships next to the Engine
+//! install as `resources/components/<dir_name>/<exe_name>`.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Component {
     Manager,
     Agenda,
     Memoria,
+    Dictation,
 }
 
 impl Component {
-    pub const ALL: [Component; 3] = [Component::Manager, Component::Agenda, Component::Memoria];
+    pub const ALL: [Component; 4] = [
+        Component::Manager,
+        Component::Agenda,
+        Component::Memoria,
+        Component::Dictation,
+    ];
 
     /// Folder name under `resources/components/`.
     pub fn dir_name(self) -> &'static str {
@@ -21,6 +24,7 @@ impl Component {
             Component::Manager => "manager",
             Component::Agenda => "agenda",
             Component::Memoria => "memoria",
+            Component::Dictation => "dictation",
         }
     }
 
@@ -30,18 +34,17 @@ impl Component {
             Component::Manager => "Kosmos Manager.exe",
             Component::Agenda => "Kosmos Agenda.exe",
             Component::Memoria => "Kosmos Memoria.exe",
+            Component::Dictation => "Kosmos Dictation.exe",
         }
     }
 
-    /// Environment variable that overrides the resolved path, mirroring
-    /// `KOSMOS_MANAGER_EXECUTABLE` / `KOSMOS_AGENDA_EXECUTABLE` /
-    /// `KOSMOS_MEMORIA_EXECUTABLE` used by the Electron navigation modules
-    /// for dev/local runs.
+    /// Environment variable that overrides the resolved path for dev/local runs.
     pub fn env_override(self) -> &'static str {
         match self {
             Component::Manager => "KOSMOS_MANAGER_EXECUTABLE",
             Component::Agenda => "KOSMOS_AGENDA_EXECUTABLE",
             Component::Memoria => "KOSMOS_MEMORIA_EXECUTABLE",
+            Component::Dictation => "KOSMOS_DICTATION_EXECUTABLE",
         }
     }
 
@@ -51,6 +54,7 @@ impl Component {
             Component::Manager => "Manager",
             Component::Agenda => "Agenda",
             Component::Memoria => "Memoria",
+            Component::Dictation => "Диктовка",
         }
     }
 }

@@ -131,7 +131,7 @@ test("install takes over an existing standalone Kosmos Engine registration", () 
   const f = fixture();
   // A scratch registry key/shortcut, never the real machine state — the
   // script only points at the real "Kosmos Engine" registration when these
-  // overrides are omitted (see installer.nsh).
+  // overrides are omitted (see installer.nsi).
   const legacyKey = `HKCU:\\Software\\KosmosEngineMigrationTest\\${process.pid}-${Date.now()}`;
   const legacyShortcut = path.join(f.root, "Kosmos Engine.lnk");
   writeFileSync(legacyShortcut, "fake shortcut");

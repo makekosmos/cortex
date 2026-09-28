@@ -9,10 +9,12 @@ pub const MENU_EXIT: usize = 2;
 pub const MENU_MANAGER: usize = 3;
 pub const MENU_AGENDA: usize = 4;
 pub const MENU_MEMORIA: usize = 5;
+pub const MENU_DICTATION: usize = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
-    OpenCortex,
+    /// "Открыть" launches the Manager GPUI.
+    OpenManager,
     OpenComponent(Component),
     Exit,
 }
@@ -20,47 +22,45 @@ pub enum MenuAction {
 impl MenuAction {
     pub fn command_id(self) -> usize {
         match self {
-            MenuAction::OpenCortex => MENU_OPEN,
+            MenuAction::OpenManager => MENU_OPEN,
             MenuAction::OpenComponent(Component::Manager) => MENU_MANAGER,
             MenuAction::OpenComponent(Component::Agenda) => MENU_AGENDA,
             MenuAction::OpenComponent(Component::Memoria) => MENU_MEMORIA,
+            MenuAction::OpenComponent(Component::Dictation) => MENU_DICTATION,
             MenuAction::Exit => MENU_EXIT,
         }
     }
 
     pub fn from_command_id(id: usize) -> Option<MenuAction> {
         match id {
-            MENU_OPEN => Some(MenuAction::OpenCortex),
+            MENU_OPEN => Some(MenuAction::OpenManager),
             MENU_MANAGER => Some(MenuAction::OpenComponent(Component::Manager)),
             MENU_AGENDA => Some(MenuAction::OpenComponent(Component::Agenda)),
             MENU_MEMORIA => Some(MenuAction::OpenComponent(Component::Memoria)),
+            MENU_DICTATION => Some(MenuAction::OpenComponent(Component::Dictation)),
             MENU_EXIT => Some(MenuAction::Exit),
             _ => None,
         }
     }
 
-    /// `Открыть`/`Выход` keep their historic labels (the Cortex-open entry
-    /// predates this menu and the Electron tray it replaced used the same
-    /// wording); GPUI components are labelled by name, matching how the
-    /// command palette lists them (`Открыть Agenda (GPUI)` etc. shortened
-    /// to fit a context menu).
+    /// `Открыть`/`Выход` keep their historic labels; GPUI components are
+    /// labelled by name, matching how the command palette lists them.
     pub fn label(self) -> &'static str {
         match self {
-            MenuAction::OpenCortex => "Открыть",
+            MenuAction::OpenManager => "Открыть",
             MenuAction::OpenComponent(component) => component.menu_label(),
             MenuAction::Exit => "Выход",
         }
     }
 }
 
-/// Which launch targets were actually found on disk — see
-/// `resolve::resolve_cortex_executable` / `resolve_component_executable`.
+/// Which launch targets were actually found on disk — see `resolve_component_executable`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct MenuPresence {
-    pub cortex: bool,
     pub manager: bool,
     pub agenda: bool,
     pub memoria: bool,
+    pub dictation: bool,
 }
 
 impl MenuPresence {
@@ -69,6 +69,7 @@ impl MenuPresence {
             Component::Manager => self.manager,
             Component::Agenda => self.agenda,
             Component::Memoria => self.memoria,
+            Component::Dictation => self.dictation,
         }
     }
 }
@@ -80,16 +81,16 @@ pub struct MenuEntry {
 
 /// Builds the ordered tray menu for the given presence of launch targets.
 /// `Выход` is always present; every open-action appears only when its
-/// executable was actually found, extending the historic
-/// `menu_commands(cortex_present)` behaviour to the GPUI components that
-/// reach parity with the (removed) Electron tray.
+/// executable was actually found.
 pub fn build_menu(presence: MenuPresence) -> Vec<MenuEntry> {
     let mut entries = Vec::new();
-    if presence.cortex {
-        entries.push(MenuAction::OpenCortex);
+    if presence.manager {
+        // The historic "Открыть" entry opens the Manager GPUI.
+        entries.push(MenuAction::OpenManager);
     }
     for component in Component::ALL {
-        if presence.has(component) {
+        // Manager is already reachable through the historic "Открыть" entry.
+        if component != Component::Manager && presence.has(component) {
             entries.push(MenuAction::OpenComponent(component));
         }
     }
@@ -120,9 +121,9 @@ mod tests {
     }
 
     #[test]
-    fn cortex_presence_controls_the_exact_tray_menu() {
+    fn manager_presence_controls_the_open_entry() {
         let presence = MenuPresence {
-            cortex: true,
+            manager: true,
             ..Default::default()
         };
         let ids: Vec<usize> = build_menu(presence)
@@ -141,10 +142,10 @@ mod tests {
     #[test]
     fn every_present_component_appears_in_a_fixed_order() {
         let presence = MenuPresence {
-            cortex: true,
             manager: true,
             agenda: true,
             memoria: true,
+            dictation: true,
         };
         let ids: Vec<usize> = build_menu(presence)
             .iter()
@@ -154,9 +155,9 @@ mod tests {
             ids,
             vec![
                 MENU_OPEN,
-                MENU_MANAGER,
                 MENU_AGENDA,
                 MENU_MEMORIA,
+                MENU_DICTATION,
                 MENU_EXIT
             ]
         );
@@ -165,16 +166,16 @@ mod tests {
     #[test]
     fn a_missing_component_is_simply_skipped() {
         let presence = MenuPresence {
-            cortex: false,
             manager: true,
             agenda: false,
             memoria: true,
+            dictation: false,
         };
         let ids: Vec<usize> = build_menu(presence)
             .iter()
             .map(|e| e.action.command_id())
             .collect();
-        assert_eq!(ids, vec![MENU_MANAGER, MENU_MEMORIA, MENU_EXIT]);
+        assert_eq!(ids, vec![MENU_OPEN, MENU_MEMORIA, MENU_EXIT]);
     }
 
     #[test]
@@ -186,16 +187,19 @@ mod tests {
         };
         let entries = build_menu(presence);
         assert!(!entries[0].separator_before);
-        assert!(entries[1].separator_before);
+        let last = entries.last().expect("exit entry is always present");
+        assert!(matches!(last.action, MenuAction::Exit));
+        assert!(last.separator_before);
     }
 
     #[test]
     fn command_id_round_trips_through_from_command_id() {
         for action in [
-            MenuAction::OpenCortex,
+            MenuAction::OpenManager,
             MenuAction::OpenComponent(Component::Manager),
             MenuAction::OpenComponent(Component::Agenda),
             MenuAction::OpenComponent(Component::Memoria),
+            MenuAction::OpenComponent(Component::Dictation),
             MenuAction::Exit,
         ] {
             assert_eq!(
@@ -208,7 +212,7 @@ mod tests {
 
     #[test]
     fn open_and_exit_keep_their_historic_russian_labels() {
-        assert_eq!(MenuAction::OpenCortex.label(), "Открыть");
+        assert_eq!(MenuAction::OpenManager.label(), "Открыть");
         assert_eq!(MenuAction::Exit.label(), "Выход");
     }
 }

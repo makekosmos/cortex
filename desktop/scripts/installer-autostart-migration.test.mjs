@@ -1,6 +1,7 @@
 import { expect, test } from "../test-support/node-test.mjs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+
 const LEGACY_AUTOSTART_NAMES = [
   "Kosmos",
   "com.kazui.kepler",
@@ -9,52 +10,17 @@ const LEGACY_AUTOSTART_NAMES = [
   "KosmosKepler",
 ];
 
-const installer = readFileSync(path.join(import.meta.dirname, "../build/installer.nsh"), "utf8");
-const installBody = installer.slice(
-  installer.indexOf("!macro customInstall"),
-  installer.indexOf("!macroend", installer.indexOf("!macro customInstall")),
-);
-const freshBranch = installBody.slice(0, installBody.indexOf("${else}"));
-const updateBranch = installBody.slice(installBody.indexOf("${else}"));
+const installer = readFileSync(path.join(import.meta.dirname, "../build/installer.nsi"), "utf8");
 const runKey = "Kosmos Engine";
-const runCommand = '"$INSTDIR\\resources\\Kosmos Runtime.exe" --start';
 
-function migrate(values) {
-  const next = { ...values };
-  const enabled = LEGACY_AUTOSTART_NAMES.some((name) => next[name]);
-  if (enabled) next[runKey] = runCommand;
-  for (const name of LEGACY_AUTOSTART_NAMES) delete next[name];
-  return next;
-}
-
-test("installer migration tracks every authoritative legacy name and is idempotent", () => {
+test("installer autostart owns the Engine, not the shell, and cleans legacy names", () => {
   // Regression: 2026-08-01. Updates must not leave duplicate startup owners.
-  const reads = [...updateBranch.matchAll(/ReadRegStr \$0 .*?Run" "([^"]+)"/g)].map((m) => m[1]);
-  const deletes = [...updateBranch.matchAll(/DeleteRegValue .*?Run" "([^"]+)"/g)].map((m) => m[1]);
-  expect(reads).toEqual(LEGACY_AUTOSTART_NAMES);
-  expect(deletes).toEqual(LEGACY_AUTOSTART_NAMES);
-  // The engine is installed independently; GUI setup must not create an
-  // autostart owner that points into the GUI install directory.
-  expect(installBody).not.toContain("WriteRegStr HKCU");
-  expect(freshBranch).toContain("${ifNot} ${isUpdated}");
-  expect(freshBranch).not.toContain(runCommand);
-  for (const name of LEGACY_AUTOSTART_NAMES) {
-    expect(freshBranch).toContain(
-      `DeleteRegValue HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Run" "${name}"`,
-    );
-  }
+  expect(installer).toContain(`WriteRegStr HKCU "${"${RUN_KEY}"}" "${runKey}"`);
+  // The installer registers the Engine (kepler-backend.exe), never a shell exe.
+  expect(installer).toContain(`kepler-backend.exe" --start`);
+  expect(installer).not.toContain(`"${runKey}" "$INSTDIR\\Kosmos.exe"`);
 
-  const cases = [
-    {},
-    ...LEGACY_AUTOSTART_NAMES.map((name) => ({ [name]: "legacy" })),
-    { Kosmos: "legacy", KeplerKosmos: "legacy" },
-    Object.fromEntries(LEGACY_AUTOSTART_NAMES.map((name) => [name, "legacy"])),
-  ];
-  for (const values of cases) {
-    const migrated = migrate(values);
-    const enabled = LEGACY_AUTOSTART_NAMES.some((name) => values[name]);
-    expect(migrated[runKey]).toBe(enabled ? runCommand : undefined);
-    for (const name of LEGACY_AUTOSTART_NAMES) expect(migrated[name]).toBeUndefined();
-    expect(migrate(migrated)).toEqual(migrated);
+  for (const name of LEGACY_AUTOSTART_NAMES) {
+    expect(installer).toContain(`DeleteRegValue HKCU "${"${RUN_KEY}"}" "${name}"`);
   }
 });

@@ -6,5 +6,9 @@
   "memoria_gpui": {
     "repository": "makekosmos/memoria-gpui",
     "commit": "3b673d522479ca7d738e0f981a379b2e82722966"
+  },
+  "dictation_gpui": {
+    "repository": "makekosmos/dictation",
+    "commit": "44ef78d09b45ce511b163dd6348bb28fbc827921"
   }
 }

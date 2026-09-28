@@ -1,19 +1,18 @@
-//! Pure path-building logic for locating the Cortex shell install and the
-//! GPUI components packaged alongside it. Kept free of `std::env` and
-//! filesystem access so the candidate lists can be tested without touching
-//! a real machine; [`super::resolve`] does the impure env/filesystem work.
+//! Pure path-building logic for locating the packaged GPUI components
+//! alongside the Engine install. Kept free of `std::env` and filesystem
+//! access so the candidate lists can be tested without touching a real
+//! machine; [`super::resolve`] does the impure env/filesystem work.
 
 use super::components::Component;
 use std::path::{Path, PathBuf};
 
-/// Directories that may hold the packaged Cortex shell (`Kosmos.exe`) and,
-/// alongside it, `resources/components/<name>/...`. Mirrors the
-/// electron-builder NSIS layout: a per-user install under
-/// `%LOCALAPPDATA%\Programs\Kosmos`, or a plain `<root>\Kosmos` layout under
-/// any of `LOCALAPPDATA` / `ProgramFiles` / `ProgramFiles(x86)`. `exe_parent`
-/// (the running Engine binary's own directory) and its parent are included
-/// too, so dev/test fixtures that co-locate everything in one folder still
-/// resolve — this mirrors the historic `resolve_cortex_executable` fallback.
+/// Directories that may hold the packaged application (`Kosmos.exe` / Engine
+/// runtime) and, alongside it, `resources/components/<name>/...`. Mirrors the
+/// NSIS per-user install under `%LOCALAPPDATA%\Programs\Kosmos`, or a plain
+/// `<root>\Kosmos` layout under any of `LOCALAPPDATA` / `ProgramFiles` /
+/// `ProgramFiles(x86)`. `exe_parent` (the running Engine binary's own
+/// directory) and its parent are included too, so dev/test fixtures that
+/// co-locate everything in one folder still resolve.
 pub fn install_root_candidates(exe_parent: Option<&Path>, env_roots: &[PathBuf]) -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Some(parent) = exe_parent {
@@ -29,14 +28,8 @@ pub fn install_root_candidates(exe_parent: Option<&Path>, env_roots: &[PathBuf])
     roots
 }
 
-/// `<root>\Kosmos.exe` for every candidate root.
-pub fn cortex_executable_candidates(roots: &[PathBuf]) -> Vec<PathBuf> {
-    roots.iter().map(|root| root.join("Kosmos.exe")).collect()
-}
-
-/// `<root>\resources\components\<name>\Kosmos <Name>.exe` for every
-/// candidate root, matching `resolvePackagedManagerExecutable` /
-/// `resolvePackagedAgendaExecutable` / `resolvePackagedMemoriaExecutable`.
+/// `<root>\resources\components\<name>\Kosmos <Name>.exe` for every candidate
+/// root.
 pub fn component_executable_candidates(roots: &[PathBuf], component: Component) -> Vec<PathBuf> {
     roots
         .iter()
@@ -76,15 +69,6 @@ mod tests {
                 PathBuf::from(r"C:\Users\kirill\AppData\Local\Programs\Kosmos"),
                 PathBuf::from(r"C:\Users\kirill\AppData\Local\Kosmos"),
             ]
-        );
-    }
-
-    #[test]
-    fn cortex_candidates_append_the_executable_name() {
-        let roots = vec![PathBuf::from(r"C:\Kosmos")];
-        assert_eq!(
-            cortex_executable_candidates(&roots),
-            vec![PathBuf::from(r"C:\Kosmos\Kosmos.exe")]
         );
     }
 

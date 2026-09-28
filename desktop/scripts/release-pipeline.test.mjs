@@ -7,45 +7,18 @@ import { test } from "node:test";
 
 const scripts = path.join(import.meta.dirname);
 
-test("all local electron-builder package paths explicitly disable publishing", async () => {
-  const desktop = JSON.parse(await readFile(path.join(scripts, "..", "package.json"), "utf8"));
-  const component = await readFile(path.join(scripts, "build-package-components.mjs"), "utf8");
-  assert.match(desktop.scripts["package:dir"], /--publish never/);
-  assert.match(component, /"--publish",\s*"never"/);
-  const releaseBuild = await readFile(path.join(scripts, "build-desktop.mjs"), "utf8");
-  assert.doesNotMatch(releaseBuild, /gh\s+release\s+(?:view|create)/);
-  assert.match(releaseBuild, /"--publish",\s*"never"/);
-});
-
 test("release builds materialize runtime before preflight", async () => {
   const desktop = JSON.parse(await readFile(path.join(scripts, "..", "package.json"), "utf8"));
   const component = await readFile(path.join(scripts, "build-package-components.mjs"), "utf8");
-  for (const script of [
-    desktop.scripts.build,
-    desktop.scripts["build:mac"],
-    desktop.scripts["package:dir"],
-  ]) {
+  for (const script of [desktop.scripts.build, desktop.scripts["package:dir"]]) {
     assert.ok(script.indexOf("build:backend") < script.indexOf("release-preflight"));
   }
   assert.ok(component.indexOf("release-preflight") < component.indexOf("const version"));
 });
 
-test("macOS release packaging performs final preflight", async () => {
-  const desktop = JSON.parse(await readFile(path.join(scripts, "..", "package.json"), "utf8"));
-  assert.doesNotMatch(
-    desktop.scripts["build:mac"],
-    /build-desktop\.mjs --platform mac --skip-preflight/,
-  );
-});
-
-test("release build rejects a missing BOM before invoking electron-builder", async () => {
+test("release build rejects a missing BOM before invoking makensis", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "kosmos-preflight-"));
   const marker = path.join(dir, "builder-called");
-  const builder = path.join(dir, "builder.mjs");
-  await writeFile(
-    builder,
-    `import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(marker)}, "called");`,
-  );
   const result = spawnSync(
     process.execPath,
     [
@@ -54,14 +27,14 @@ test("release build rejects a missing BOM before invoking electron-builder", asy
       "win",
       "--bom",
       path.join(dir, "missing.json"),
+      "--local",
     ],
     {
       cwd: path.join(scripts, ".."),
       encoding: "utf8",
       env: {
         ...process.env,
-        KOSMOS_ELECTRON_BUILDER: `${process.execPath} ${builder}`,
-        KOSMOS_RELEASE_LOCAL: "1",
+        KOSMOS_NSIS_DIR: marker,
       },
     },
   );
@@ -131,7 +104,7 @@ test("receipt validation rejects mutation and stale inputs", async () => {
         store: { commit: "5".repeat(40) },
         toolchain: { bun: "1.0.0", node: "1.0.0", rust: "1.0.0" },
       },
-      compatibility: { shell_api: "1.0.0", engine_api: "1.0.0", package_schema: 2 },
+      compatibility: { engine_api: "1.0.0", package_schema: 2 },
       catalog: { sequence: 1 },
     },
   };

@@ -12,21 +12,17 @@ const releaseVersions = JSON.parse(
 );
 
 test("release build verifies locally and leaves publishing to the receipt consumer", () => {
-  assert.match(script, /"--publish", "never"/);
+  assert.match(script, /ensureNsis\(/);
   assert.match(script, /createReceipt\(/);
   assert.match(script, /writeReceipt\(/);
-  assert.doesNotMatch(script, /publishRelease\(|release create/);
-  assert.ok(
-    script.indexOf("emitProvenance(", script.indexOf("async function main")) <
-      script.indexOf("runFirstPartyContracts(platform)"),
-  );
+  assert.doesNotMatch(script, /publishRelease\(|release create|electron-builder/);
+  assert.match(script, /emitProvenance\(/);
   assert.match(script, /Preflight: source, BOM, pins, and ARK artifact/);
   assert.match(script, /--dry-run/);
   assert.doesNotMatch(script, /--clobber/);
   assert.match(script, /process\.env\.KOSMOS_RELEASE_BOM/);
   assert.match(preflight, /release builds require a clean tracked and source worktree/);
   assert.match(preflight, /ARK artifact hash does not match BOM/);
-  assert.match(script, /app\.name\.endsWith\("\.app"\)/);
 });
 
 test("Engine ships from the same build and version as the GUI (KOS-233)", () => {

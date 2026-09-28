@@ -1,8 +1,8 @@
 # CosCast
 
-This repository owns the CosCast desktop application and its host-side services:
+This repository owns the Kosmos desktop application and its host-side services:
 
-- `desktop/` — Electron host, preload/IPC, packaging and shell UI;
+- `desktop/` — packaging scripts and resources (no Electron; the shipped Windows package is Engine + GPUI components);
 - `manager-gpui/` — the Kosmos Manager shipped in the Windows package as
   `resources/components/manager/Kosmos Manager.exe`;
 - `agenda-gpui` (sibling repo `makekosmos/agenda-gpui`, pinned in
@@ -11,8 +11,11 @@ This repository owns the CosCast desktop application and its host-side services:
 - `memoria-gpui` (sibling repo `makekosmos/memoria-gpui`, pinned in
   `desktop/component-pins.json`) — the Kosmos Memoria shipped in the
   Windows package as `resources/components/memoria/Kosmos Memoria.exe`;
-- `runtime/` — the Rust backend process supervised by the host;
-- `native-services/` — Windows focus/watcher services used by the host.
+- `dictation` (sibling repo `makekosmos/dictation`, pinned in
+  `desktop/component-pins.json`) — the Kosmos Dictation shipped in the
+  Windows package as `resources/components/dictation/Kosmos Dictation.exe`;
+- `runtime/` — the Rust backend process supervised by the Engine;
+- `native-services/` — Windows focus/watcher services used by the Engine.
 
 ## Current boundary
 
@@ -21,8 +24,9 @@ self-contained; ARK is a pinned Git dependency in `runtime/Cargo.toml`.
 The desktop scripts fetch and cache the matching `ark-core-rpc` sidecar from
 the same Core revision, so a sibling `core` checkout is not required.
 
-Dictation is a separate product in `makekosmos/dictation`; Cortex provides the
-host integration it needs at runtime.
+The shipped Kosmos Desktop for Windows contains no Electron. The product is
+the Kosmos Engine (`ark-core-rpc` / `kepler-backend`, tray + updater +
+autostart) plus GPUI components under `resources/components/<name>/`.
 
 ## What is intentionally not promised
 
@@ -65,8 +69,8 @@ pnpm run test:release-bom
 node desktop/scripts/release-preflight.mjs --platform win --bom path/to/release-bom.json
 
 # Stage packaged components under desktop/.tmp/components (Windows only):
-# manager-gpui is cargo-built for x86_64-pc-windows-msvc and staged as
-# manager/win-unpacked/Kosmos Manager.exe; host stays the Electron build.
+# each GPUI component is cargo-built for x86_64-pc-windows-msvc and staged as
+# <component>/win-unpacked/Kosmos <Name>.exe.
 KOSMOS_RELEASE_BOM=path/to/release-bom.json node desktop/scripts/build-package-components.mjs
 
 # Build + package + verify (never publishes; writes a receipt):
@@ -136,16 +140,17 @@ status is NOT_RUN. Use `--full` when reviewing uncertain changes and treat the
 planner's `reasons` field as the explanation for a full selection.
 
 The build wrapper validates Cortex/Core commits, the pinned pnpm/Node/Rust toolchain, and
-the shell/engine/package API contracts before electron-builder starts. Every local
-electron-builder path uses `--publish never`. It embeds the exact BOM at
-`resources/release-bom.json`, emits `release/release-provenance.json`, and atomically
-writes `release/release-receipt.v1.json` with exact inputs and final artifact hashes.
+the engine/package API contracts before `makensis` starts. The Windows installer is a
+standalone NSIS script (`desktop/build/installer.nsi`) compiled by `makensis`; the build
+downloads the pinned NSIS bundle when `KOSMOS_NSIS_DIR` is unset. It emits
+`release/release-provenance.json` and atomically writes
+`release/release-receipt.v1.json` with exact inputs and final artifact hashes.
 `publish-release.mjs` consumes only that receipt; it never builds or packages. A BOM may
 include expected `artifacts` entries to make a rebuild fail on a hash or size mismatch;
 omitted entries are recorded from the final build.
 
-`pnpm run check` covers layout, source-size, lint, changed-file Oxfmt, all frontend
-typechecks, Rustfmt, workspace Clippy with warnings denied, complete workspace
+`pnpm run check` covers layout, source-size, lint, changed-file Oxfmt,
+Rustfmt, workspace Clippy with warnings denied, complete workspace
 Rust tests, backend tests, and runtime staging. `pnpm install --frozen-lockfile`
 installs Lefthook hooks on a clean checkout; run `pnpm run prepare` if hooks are
 missing. Pre-commit uses the planner against staged files; pre-push uses the

@@ -5,18 +5,19 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const preflight = spawnSync(
-  process.execPath,
-  [path.join(root, "desktop", "scripts", "release-preflight.mjs"), "--platform", "win"],
-  { cwd: path.join(root, "desktop"), stdio: "inherit", windowsHide: true },
-);
-if (preflight.status !== 0) process.exit(preflight.status ?? 1);
+// Release preflight demands a clean worktree and a BOM; local staging (for
+// `build:desktop -- --local`) skips it — the pin checks below still apply.
+if (process.env.KOSMOS_RELEASE_LOCAL !== "1") {
+  const preflight = spawnSync(
+    process.execPath,
+    [path.join(root, "desktop", "scripts", "release-preflight.mjs"), "--platform", "win"],
+    { cwd: path.join(root, "desktop"), stdio: "inherit", windowsHide: true },
+  );
+  if (preflight.status !== 0) process.exit(preflight.status ?? 1);
+}
 const version = JSON.parse(
   readFileSync(path.join(root, "desktop", "release-versions.json"), "utf8"),
 ).win;
-const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-const shell = pnpm.endsWith(".cmd");
-const shellArg = (value) => (shell ? `"${value}"` : value);
 const icons = spawnSync(
   process.execPath,
   [path.join(root, "desktop", "scripts/build-app-icons.mjs")],
@@ -25,9 +26,8 @@ const icons = spawnSync(
 if (icons.status !== 0) process.exit(icons.status ?? 1);
 
 // KOS-134: components/manager ships manager-gpui — a single-file Rust/GPUI
-// exe staged under the packaged name resolvePackagedManagerExecutable()
-// resolves in desktop/electron/manager-navigation.ts. The target triple is
-// the toolchain.target the release BOM records for Windows builds.
+// exe staged under the packaged name the Engine tray resolves. The target
+// triple is the toolchain.target the release BOM records for Windows builds.
 const MANAGER_TARGET = "x86_64-pc-windows-msvc";
 const managerRelease = path.join(root, "manager-gpui", "target", MANAGER_TARGET, "release");
 const managerBuild = spawnSync(
@@ -61,8 +61,7 @@ for (const entry of readdirSync(managerRelease)) {
 }
 
 // KOS-137: components/agenda ships agenda-gpui — same single-file Rust/GPUI
-// shape as Manager, staged under the packaged name
-// resolvePackagedAgendaExecutable() resolves in desktop/electron/agenda-navigation.ts.
+// shape as Manager, staged under the packaged name the Engine tray resolves.
 // agenda-gpui lives in its own repository: resolve the checkout from
 // KOSMOS_AGENDA_GPUI_SRC or the ../agenda-gpui sibling (same convention the
 // sibling extension repos use), then verify it sits on the commit
@@ -139,9 +138,8 @@ for (const entry of readdirSync(agendaRelease)) {
 }
 
 // KOS-156: components/memoria ships memoria-gpui — same single-file
-// Rust/GPUI shape as Agenda, staged under the packaged name
-// resolvePackagedMemoriaExecutable() resolves in
-// desktop/electron/memoria-navigation.ts. memoria-gpui lives in its own
+// Rust/GPUI shape as Agenda, staged under the packaged name the Engine tray
+// resolves. memoria-gpui lives in its own
 // repository: resolve the checkout from KOSMOS_MEMORIA_GPUI_SRC or the
 // ../memoria-gpui sibling, then verify it sits on the commit
 // desktop/component-pins.json records.
@@ -213,31 +211,78 @@ for (const entry of readdirSync(memoriaRelease)) {
     copyFileSync(path.join(memoriaRelease, entry), path.join(memoriaStage, entry));
 }
 
-// components/host stays the Electron Package Host (docs/gpui-host-decision.md).
-for (const component of ["host"]) {
-  const cwd = path.join(root, component);
-  const build = spawnSync(pnpm, ["run", "build"], {
-    cwd,
+// KOS-241: components/dictation ships dictation-gpui — same single-file
+// Rust/GPUI shape as the other components. The root crate is named
+// `dictation-gpui` inside the makekosmos/dictation repository.
+const dictationPin = componentPins.dictation_gpui;
+if (!dictationPin?.commit || !/^[0-9a-f]{40}$/.test(dictationPin.commit)) {
+  console.error(
+    "[build-package-components] component-pins.json dictation_gpui.commit must be a 40-hex commit",
+  );
+  process.exit(1);
+}
+const dictationSrc = path.resolve(
+  process.env.KOSMOS_DICTATION_GPUI_SRC?.trim() || path.join(root, "..", "dictation"),
+);
+if (!existsSync(path.join(dictationSrc, "Cargo.toml"))) {
+  console.error(
+    `[build-package-components] dictation-gpui checkout not found at ${dictationSrc} — ` +
+      `clone ${dictationPin.repository} at ${dictationPin.commit} or set KOSMOS_DICTATION_GPUI_SRC`,
+  );
+  process.exit(1);
+}
+const dictationHead = spawnSync("git", ["rev-parse", "HEAD"], {
+  cwd: dictationSrc,
+  encoding: "utf8",
+  windowsHide: true,
+});
+const dictationCommit = dictationHead.stdout?.trim();
+if (dictationHead.status !== 0 || dictationCommit !== dictationPin.commit) {
+  console.error(
+    `[build-package-components] dictation-gpui at ${dictationSrc} is on ${dictationCommit ?? "unreadable HEAD"}, ` +
+      `component-pins.json requires ${dictationPin.commit}`,
+  );
+  process.exit(1);
+}
+const dictationRelease = path.join(dictationSrc, "target", MANAGER_TARGET, "release");
+const dictationBuild = spawnSync(
+  "cargo",
+  [
+    "build",
+    "--locked",
+    "--release",
+    "--target",
+    MANAGER_TARGET,
+    "--manifest-path",
+    path.join(dictationSrc, "Cargo.toml"),
+    "--target-dir",
+    path.join(dictationSrc, "target"),
+  ],
+  {
+    cwd: dictationSrc,
     stdio: "inherit",
     windowsHide: true,
-    shell,
-  });
-  if (build.status !== 0) process.exit(build.status ?? 1);
-  const output = path.join(root, "desktop", ".tmp", "components", component);
-  const packaged = spawnSync(
-    pnpm,
-    [
-      "exec",
-      "electron-builder",
-      "--win",
-      "--dir",
-      "--publish",
-      "never",
-      `--config.extraMetadata.version=${version}`,
-      "--config.win.signExecutable=false",
-      `--config.directories.output=${shellArg(output)}`,
-    ],
-    { cwd, stdio: "inherit", windowsHide: true, shell },
-  );
-  if (packaged.status !== 0) process.exit(packaged.status ?? 1);
+    env: { ...process.env, KOSMOS_DICTATION_VERSION: version },
+  },
+);
+if (dictationBuild.status !== 0) process.exit(dictationBuild.status ?? 1);
+const dictationExe = path.join(dictationRelease, "dictation-gpui.exe");
+if (!existsSync(dictationExe)) {
+  console.error(`[build-package-components] missing ${dictationExe}`);
+  process.exit(1);
+}
+const dictationStage = path.join(
+  root,
+  "desktop",
+  ".tmp",
+  "components",
+  "dictation",
+  "win-unpacked",
+);
+rmSync(dictationStage, { recursive: true, force: true });
+mkdirSync(dictationStage, { recursive: true });
+copyFileSync(dictationExe, path.join(dictationStage, "Kosmos Dictation.exe"));
+for (const entry of readdirSync(dictationRelease)) {
+  if (entry.toLowerCase().endsWith(".dll"))
+    copyFileSync(path.join(dictationRelease, entry), path.join(dictationStage, entry));
 }

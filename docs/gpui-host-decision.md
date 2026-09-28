@@ -1,5 +1,10 @@
 # Host: Electron → GPUI transition
 
+**Status (KOS-236): complete.** The Electron shell and the Electron Package
+Host are removed. The shipped Kosmos Desktop for Windows is Engine
+(`ark-core-rpc` / `kepler-backend`, tray + updater + autostart) plus GPUI
+components under `resources/components/<name>/`.
+
 **Decision (KOS-145, 2026-09-26; supersedes KOS-131): Kosmos transitions
 fully to GPUI. Electron is a departing layer — every capability it still
 holds is either already ported, has a named GPUI/Rust destination in the

@@ -1,8 +1,8 @@
 # manager-gpui
 
-GPUI-порт Kosmos Manager — панель управления Engine без Electron-обвязки
-(KOS-130). Покрывает тот же набор разделов и операций, что и Vue Manager,
-через тот же контракт `/v1/rpc` + `/v1/health` + `/v1/info`.
+GPUI-реализация Kosmos Manager — панель управления Engine (KOS-130).
+Покрывает разделы и операции через контракт `/v1/rpc` + `/v1/health` +
+`/v1/info`.
 
 ## Запуск
 
@@ -43,9 +43,8 @@ KOSMOS_DATA_DIR=/tmp/kosmos-dev cargo run --manifest-path manager-gpui/Cargo.tom
 | Браузер | `browser.json` `persistData` (тот же файл, что пишет Host) |
 | Разработка | `packages.install_development`, `packages.uninstall` |
 
-Host-only возможности (electron-updater, `dialog.showOpenDialog`,
-`openPackage`, crash reports) остаются в Electron Host — в GPUI они помечены
-как `Host`. См. матрицу паритета в `/home/box/devin-runs/kos-127/parity/`.
+Host-возможности ушли в Engine/Manager: автостарт и апдейтер живут в Engine,
+системные диалоги и crash reports — на уровне ОС/Engine.
 
 ## Разработка
 
