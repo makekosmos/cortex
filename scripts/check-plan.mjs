@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { coveredByCache, diskTree, recordPass } from "./check-plan-cache.mjs";
 import { executePlan } from "./check-plan-commands.mjs";
+import { gitEnv } from "./git-env.mjs";
 import { parseNameStatus } from "./check-plan-git.mjs";
 
 export { executePlan } from "./check-plan-commands.mjs";
@@ -20,22 +22,6 @@ const CHECK_ORDER = [
 ];
 const ASSET_EXTENSIONS = /\.(?:png|jpe?g|gif|svg|webp|ico|avif)$/i;
 const ZERO_SHA = /^0{40}$/;
-
-function gitEnv() {
-  const env = { ...process.env };
-  for (const key of [
-    "GIT_DIR",
-    "GIT_WORK_TREE",
-    "GIT_COMMON_DIR",
-    "GIT_INDEX_FILE",
-    "GIT_OBJECT_DIRECTORY",
-    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-    "GIT_CEILING_DIRECTORIES",
-    "GIT_PREFIX",
-  ])
-    delete env[key];
-  return env;
-}
 
 function git(args) {
   return spawnSync("git", args, { cwd: process.cwd(), encoding: "utf8", env: gitEnv() });
@@ -247,7 +233,23 @@ function main() {
   process.stderr.write(
     `changed → ${plan.changed.length ? plan.changed.join(", ") : "none"}\nchecks → ${plan.checks.join(", ") || "none"}\nreasons → ${plan.reasons.join("; ")}\n`,
   );
-  if (options.run) process.exitCode = executePlan(plan);
+  if (options.run) process.exitCode = runPlan(plan, options);
+}
+
+// A plan whose checks already passed on the identical on-disk tree is not run
+// again. Results are recorded only when the checks left the tree unchanged.
+// `--full` and CHECK_PLAN_NO_CACHE=1 always run.
+function runPlan(plan, options) {
+  const cwd = process.cwd();
+  const useCache = !options.full && process.env.CHECK_PLAN_NO_CACHE !== "1";
+  const tree = useCache ? diskTree(cwd) : null;
+  if (tree && plan.checks.length && coveredByCache(cwd, tree, plan.checks)) {
+    process.stderr.write(`cache → ${plan.checks.join(", ")} already passed on tree ${tree}\n`);
+    return 0;
+  }
+  const status = executePlan(plan);
+  if (status === 0 && tree && diskTree(cwd) === tree) recordPass(cwd, tree, plan.checks);
+  return status;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
