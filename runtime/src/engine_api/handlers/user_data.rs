@@ -1,3 +1,5 @@
+// Persisted wire contract with pinned components — see
+// docs/brand-legacy-identifiers.md.
 const USER_DATA_ROOT_HEADER: &str = "x-kosmos-user-data-root";
 const USER_DATA_APP_HEADER: &str = "x-kosmos-user-data-app";
 const USER_DATA_KEY_HEADER: &str = "x-kosmos-user-data-key";

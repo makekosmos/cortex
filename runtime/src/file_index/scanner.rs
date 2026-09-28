@@ -515,7 +515,7 @@ fn is_dot_hidden(path: &Path) -> bool {
 }
 
 pub fn default_roots() -> Vec<PathBuf> {
-    if let Ok(roots) = std::env::var("KEPLER_FILE_INDEX_ROOTS") {
+    if let Ok(roots) = std::env::var("MUNDUS_FILE_INDEX_ROOTS") {
         return roots
             .split(';')
             .map(str::trim)
@@ -523,7 +523,7 @@ pub fn default_roots() -> Vec<PathBuf> {
             .map(PathBuf::from)
             .collect();
     }
-    if std::env::var("KOSMOS_TEST_MODE").as_deref() == Ok("1") {
+    if std::env::var("MUNDUS_TEST_MODE").as_deref() == Ok("1") {
         return Vec::new();
     }
     // См. postmortems.md § 2026-06-08: broad profile scans are opt-in only.
@@ -559,15 +559,15 @@ mod default_roots_tests {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Сохраняем и восстанавливаем env чтобы не ломать другие тесты в
         // том же процессе.
-        let prev_roots = std::env::var("KEPLER_FILE_INDEX_ROOTS").ok();
-        let prev_test = std::env::var("KOSMOS_TEST_MODE").ok();
+        let prev_roots = std::env::var("MUNDUS_FILE_INDEX_ROOTS").ok();
+        let prev_test = std::env::var("MUNDUS_TEST_MODE").ok();
         // SAFETY: тесты в этом модуле выполняются последовательно (cargo test
         // не запускает несколько тестов одного бинаря параллельно по умолчанию
         // только если --test-threads=1; на больших проектах могут параллельно,
         // но здесь восстановление env идёт сразу).
         unsafe {
-            std::env::set_var("KEPLER_FILE_INDEX_ROOTS", r"C:\;D:\projects");
-            std::env::remove_var("KOSMOS_TEST_MODE");
+            std::env::set_var("MUNDUS_FILE_INDEX_ROOTS", r"C:\;D:\projects");
+            std::env::remove_var("MUNDUS_TEST_MODE");
         }
         let roots = default_roots();
         assert_eq!(
@@ -577,12 +577,12 @@ mod default_roots_tests {
 
         unsafe {
             match prev_roots {
-                Some(v) => std::env::set_var("KEPLER_FILE_INDEX_ROOTS", v),
-                None => std::env::remove_var("KEPLER_FILE_INDEX_ROOTS"),
+                Some(v) => std::env::set_var("MUNDUS_FILE_INDEX_ROOTS", v),
+                None => std::env::remove_var("MUNDUS_FILE_INDEX_ROOTS"),
             }
             match prev_test {
-                Some(v) => std::env::set_var("KOSMOS_TEST_MODE", v),
-                None => std::env::remove_var("KOSMOS_TEST_MODE"),
+                Some(v) => std::env::set_var("MUNDUS_TEST_MODE", v),
+                None => std::env::remove_var("MUNDUS_TEST_MODE"),
             }
         }
     }
@@ -590,14 +590,14 @@ mod default_roots_tests {
     #[test]
     fn production_default_roots_are_empty_without_opt_in() {
         // Regression: 2026-06-08. Startup must not scan USERPROFILE unless the
-        // user/process explicitly opts into roots through KEPLER_FILE_INDEX_ROOTS.
+        // user/process explicitly opts into roots through MUNDUS_FILE_INDEX_ROOTS.
         let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let prev_roots = std::env::var("KEPLER_FILE_INDEX_ROOTS").ok();
-        let prev_test = std::env::var("KOSMOS_TEST_MODE").ok();
+        let prev_roots = std::env::var("MUNDUS_FILE_INDEX_ROOTS").ok();
+        let prev_test = std::env::var("MUNDUS_TEST_MODE").ok();
         let prev_profile = std::env::var("USERPROFILE").ok();
         unsafe {
-            std::env::remove_var("KEPLER_FILE_INDEX_ROOTS");
-            std::env::remove_var("KOSMOS_TEST_MODE");
+            std::env::remove_var("MUNDUS_FILE_INDEX_ROOTS");
+            std::env::remove_var("MUNDUS_TEST_MODE");
             std::env::set_var("USERPROFILE", r"C:\Users\real-user");
         }
 
@@ -607,12 +607,12 @@ mod default_roots_tests {
 
         unsafe {
             match prev_roots {
-                Some(v) => std::env::set_var("KEPLER_FILE_INDEX_ROOTS", v),
-                None => std::env::remove_var("KEPLER_FILE_INDEX_ROOTS"),
+                Some(v) => std::env::set_var("MUNDUS_FILE_INDEX_ROOTS", v),
+                None => std::env::remove_var("MUNDUS_FILE_INDEX_ROOTS"),
             }
             match prev_test {
-                Some(v) => std::env::set_var("KOSMOS_TEST_MODE", v),
-                None => std::env::remove_var("KOSMOS_TEST_MODE"),
+                Some(v) => std::env::set_var("MUNDUS_TEST_MODE", v),
+                None => std::env::remove_var("MUNDUS_TEST_MODE"),
             }
             match prev_profile {
                 Some(v) => std::env::set_var("USERPROFILE", v),
@@ -716,7 +716,7 @@ mod default_roots_tests {
         // a higher-level test path would be pre-filtered by DEFAULT_IGNORE_PATTERNS
         // (tempdir lives under %TEMP% = AppData on Windows).
         let dir = tempfile::Builder::new()
-            .prefix("kosmos-test-")
+            .prefix("mundus-test-")
             .tempdir()
             .unwrap();
         let visible = dir.path().join("visible.txt");

@@ -4,7 +4,7 @@
 // и redacted backtrace в `<data_dir>/crashes/panic-<timestamp>.log`. Default
 // hook не вызывается, потому что он печатает raw panic payload в stderr.
 //
-// Backtrace требует `RUST_BACKTRACE=1` env (выставляется Kepler shell при
+// Backtrace требует `RUST_BACKTRACE=1` env (выставляется Mundus shell при
 // spawn'е backend, см. shell/electron/main.ts → spawnBackend).
 //
 // Файл-фрагмент состоит из:
@@ -85,7 +85,7 @@ fn write_log(path: &Path, body: &str) -> std::io::Result<()> {
 pub fn format_panic_log(info: &std::panic::PanicHookInfo<'_>, correlation_id: &str) -> String {
     let mut out = String::new();
     out.push_str(&format!(
-        "kepler-backend v{} crashed\n",
+        "mundus-engine v{} crashed\n",
         crate::build_info::display_version()
     ));
     out.push_str(&format!("crash_id: {}\n", crate::observability::crash_id()));
@@ -156,7 +156,7 @@ mod tests {
             "log: {log}"
         );
         assert!(log.contains("crash_id:"), "log: {log}");
-        assert!(log.contains("kepler-backend v"), "log: {log}");
+        assert!(log.contains("mundus-engine v"), "log: {log}");
         assert!(log.contains("location:"), "log: {log}");
         assert!(log.contains("backtrace"), "log: {log}");
     }

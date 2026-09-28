@@ -53,13 +53,13 @@ async fn shutdown_signal() {
 }
 
 async fn serve() -> Result<(), String> {
-    let db_path = PathBuf::from(required_env("KOSMOS_DB")?);
-    let ticket_path = PathBuf::from(required_env("KOSMOS_TICKET_FILE")?);
-    let device_id = required_env("KOSMOS_DEVICE_ID")?;
-    let device_name = env::var("KOSMOS_DEVICE_NAME").unwrap_or_else(|_| device_id.clone());
-    let space_id = required_env("KOSMOS_SPACE_ID")?;
-    let auth_secret = optional_file_env("KOSMOS_AUTH_SECRET_FILE")?;
-    let peer_ticket = optional_file_env("KOSMOS_PEER_TICKET_FILE")?;
+    let db_path = PathBuf::from(required_env("MUNDUS_DB")?);
+    let ticket_path = PathBuf::from(required_env("MUNDUS_TICKET_FILE")?);
+    let device_id = required_env("MUNDUS_DEVICE_ID")?;
+    let device_name = env::var("MUNDUS_DEVICE_NAME").unwrap_or_else(|_| device_id.clone());
+    let space_id = required_env("MUNDUS_SPACE_ID")?;
+    let auth_secret = optional_file_env("MUNDUS_AUTH_SECRET_FILE")?;
+    let peer_ticket = optional_file_env("MUNDUS_PEER_TICKET_FILE")?;
 
     if let Some(parent) = db_path.parent() {
         fs::create_dir_all(parent)
@@ -68,7 +68,7 @@ async fn serve() -> Result<(), String> {
     let conn = open_db(
         db_path
             .to_str()
-            .ok_or_else(|| "KOSMOS_DB must be valid UTF-8".to_string())?,
+            .ok_or_else(|| "MUNDUS_DB must be valid UTF-8".to_string())?,
     )?;
     init_schema(&conn)?;
     let secret_key = load_or_generate_secret_key(&conn)?;
@@ -118,7 +118,7 @@ async fn serve() -> Result<(), String> {
 }
 
 fn check_db() -> Result<(), String> {
-    let db_path = required_env("KOSMOS_DB")?;
+    let db_path = required_env("MUNDUS_DB")?;
     let conn = open_db(&db_path)?;
     let integrity: String = conn
         .query_row("PRAGMA quick_check", [], |row| row.get(0))

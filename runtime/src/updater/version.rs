@@ -6,11 +6,11 @@ use semver::Version;
 
 /// Running Engine version, compared against the update feed to decide
 /// whether a newer build is available. KOS-233 will make this equal the
-/// Kosmos Desktop product version via a build-time env var; until that
+/// Mundus Desktop product version via a build-time env var; until that
 /// lands this falls back to the crate version. This function is the single
 /// call site to flip when KOS-233 ships.
 pub(crate) fn current_version() -> String {
-    option_env!("KOSMOS_PRODUCT_VERSION")
+    option_env!("MUNDUS_PRODUCT_VERSION")
         .unwrap_or(env!("CARGO_PKG_VERSION"))
         .to_string()
 }
@@ -38,7 +38,7 @@ mod tests {
     fn current_version_uses_product_version_with_crate_fallback() {
         assert_eq!(
             current_version(),
-            option_env!("KOSMOS_PRODUCT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
+            option_env!("MUNDUS_PRODUCT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
         );
     }
 

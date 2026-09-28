@@ -6,9 +6,9 @@ mod offline;
 mod support;
 
 use ed25519_dalek::{Signer, SigningKey};
-use kepler_backend::ark_host::ArkHost;
-use kepler_backend::integrations::handle_operation;
-use kepler_backend::package_service::PackageService;
+use engine::ark_host::ArkHost;
+use engine::integrations::handle_operation;
+use engine::package_service::PackageService;
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use std::net::TcpListener;
@@ -87,7 +87,7 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
     let recipient = ArkHost::open(&recipient_db).await.unwrap();
     let space_id = "integration-replication-headless";
     let auth_secret = "headless-two-node-auth-secret";
-    let bootstrap_ticket = std::env::var("KOSMOS_BOOTSTRAP_TICKET").ok();
+    let bootstrap_ticket = std::env::var("MUNDUS_BOOTSTRAP_TICKET").ok();
     start_iroh_sync(
         &origin,
         space_id,

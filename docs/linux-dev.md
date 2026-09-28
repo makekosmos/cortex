@@ -19,7 +19,7 @@ corepack prepare pnpm@12.4.1 --activate  # pinned packageManager
 ```
 
 `pkg-config` + `libssl-dev` are required by `openssl-sys` in the Engine.
-`KOSMOS_HEADLESS=1` keeps Engine stubs quiet in tests.
+`MUNDUS_HEADLESS=1` keeps Engine stubs quiet in tests.
 
 ## Engine + ARK
 
@@ -30,16 +30,16 @@ a path dependency; `node scripts/check-core-pin.mjs` checks that wiring and
 rejects a nested `core/.git`.
 
 ```text
-cargo build -p kepler-backend            # writes target/debug/kepler-backend
+cargo build -p engine            # writes target/debug/mundus-engine
 # ark-core is a library dependency; the Engine serves ARK in-process —
-# no ark-core-rpc sidecar to build or provision.
+# no sidecar to build or provision.
 ```
 
 Manual run:
 
 ```text
-KOSMOS_DATA_DIR=/tmp/kosmos-data KOSMOS_HEADLESS=1 target/debug/kepler-backend &
-cat /tmp/kosmos-data/engine.lock.json    # { pid, http_port, auth_token }
+MUNDUS_DATA_DIR=/tmp/mundus-data MUNDUS_HEADLESS=1 target/debug/mundus-engine &
+cat /tmp/mundus-data/engine.lock.json    # { pid, http_port, auth_token }
 curl -H "Authorization: Bearer <auth_token>" http://127.0.0.1:<http_port>/v1/...
 ```
 
@@ -62,11 +62,11 @@ root, then runs the gates in order:
 
 1. `preflight` — Linux plus node/pnpm/cargo/git/bun on `PATH`.
 2. `workspace-deps` — the `workspace.mjs bootstrap` planner pins
-   `.tmp/workspace/{imago,arca-sdk}` to the `kosmos.workspace` commits
+   `.tmp/workspace/{imago,arca-sdk}` to the `mundus.workspace` commits
    (with a manual clone + install + build fallback when the planner cannot
    run) and verifies the built outputs the workspace consumes.
-3. `engine-bootstrap` — builds `kepler-backend`, starts the
-   Engine against an isolated `KOSMOS_DATA_DIR`, and asserts
+3. `engine-bootstrap` — builds `mundus-engine`, starts the
+   Engine against an isolated `MUNDUS_DATA_DIR`, and asserts
    `engine.lock.json` plus authenticated `GET /v1/health` → 200 before
    shutting it down.
 

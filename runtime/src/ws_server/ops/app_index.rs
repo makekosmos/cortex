@@ -82,7 +82,7 @@ pub(in crate::ws_server) async fn handle_app_index_op(
 pub(in crate::ws_server) fn app_icon_ref(app: &crate::app_index::App) -> Option<String> {
     app.icon_path
         .as_ref()
-        .map(|_| format!("kosmos-icon://app/{}", app.id))
+        .map(|_| format!("mundus-icon://app/{}", app.id))
 }
 
 pub(in crate::ws_server) fn app_index_entry_json(app: &crate::app_index::App) -> serde_json::Value {

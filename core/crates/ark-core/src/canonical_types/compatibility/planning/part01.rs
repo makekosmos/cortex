@@ -55,7 +55,7 @@ pub fn project_task_to_delphi(
     let task_bucket = extensions
         .get("kosmos")
         .and_then(Value::as_object)
-        .and_then(|kosmos| kosmos.get("taskBucket"));
+        .and_then(|mundus| mundus.get("taskBucket"));
     if let Some(value) = task_bucket {
         if !value.is_string() {
             return Err(projection_error(

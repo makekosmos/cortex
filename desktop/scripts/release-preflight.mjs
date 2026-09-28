@@ -67,7 +67,7 @@ function compareSemver(a, b) {
 // Reject a release that isn't strictly newer than the latest published tag —
 // this is what makes "one product, one version" hold across the whole
 // history, not just at build time. Network-dependent, so it is the one check
-// `--local`/KOSMOS_RELEASE_LOCAL skip: an offline or throwaway local build has
+// `--local`/MUNDUS_RELEASE_LOCAL skip: an offline or throwaway local build has
 // no way to reach the GitHub API and does not need this guarantee.
 export async function assertVersionIsPublishable({ platform, version, fetchImpl = fetch }) {
   const repository = platform === "win" ? "makekosmos/desktop" : "makekosmos/desktop-mac";
@@ -88,7 +88,7 @@ export async function assertVersionIsPublishable({ platform, version, fetchImpl 
 
 // Release builds are cut from `main` HEAD only — this is what "no local flag"
 // buys: the published binary can always be reproduced from a plain `git
-// checkout main`. `--local`/KOSMOS_RELEASE_LOCAL is for testing a build off a
+// checkout main`. `--local`/MUNDUS_RELEASE_LOCAL is for testing a build off a
 // feature branch (e.g. this very branch before it merges).
 export function assertBuildingFromMain(
   repoRoot,
@@ -101,14 +101,14 @@ export function assertBuildingFromMain(
   const branch = currentBranch();
   if (branch !== "main")
     throw new Error(
-      `release builds must run from main HEAD (current branch: ${branch}) — pass --local (or set KOSMOS_RELEASE_LOCAL=1) for an offline/local build off another ref`,
+      `release builds must run from main HEAD (current branch: ${branch}) — pass --local (or set MUNDUS_RELEASE_LOCAL=1) for an offline/local build off another ref`,
     );
 }
 
 export async function runReleasePreflight({ platform, bomPath, local = false }) {
   if (!["win", "mac"].includes(platform)) throw new Error(`Unknown platform "${platform}"`);
   if (!bomPath)
-    throw new Error("--bom <path> or KOSMOS_RELEASE_BOM is required for release builds");
+    throw new Error("--bom <path> or MUNDUS_RELEASE_BOM is required for release builds");
   const version = getVersion(platform);
   ensureCleanSource();
   const commit = currentCommit();
@@ -137,8 +137,8 @@ export function resolvePreflightArgs(args, env = process.env) {
   };
   return {
     platform: flagValue("--platform"),
-    bomPath: flagValue("--bom") ?? env.KOSMOS_RELEASE_BOM,
-    local: args.includes("--local") || env.KOSMOS_RELEASE_LOCAL === "1",
+    bomPath: flagValue("--bom") ?? env.MUNDUS_RELEASE_BOM,
+    local: args.includes("--local") || env.MUNDUS_RELEASE_LOCAL === "1",
   };
 }
 

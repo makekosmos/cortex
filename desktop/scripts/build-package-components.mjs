@@ -4,10 +4,12 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { env } from "./brand.mjs";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // Release preflight demands a clean worktree and a BOM; local staging (for
 // `build:desktop -- --local`) skips it — the pin checks below still apply.
-if (process.env.KOSMOS_RELEASE_LOCAL !== "1") {
+if (env("RELEASE_LOCAL") !== "1") {
   const preflight = spawnSync(
     process.execPath,
     [path.join(root, "desktop", "scripts", "release-preflight.mjs"), "--platform", "win"],
@@ -54,7 +56,7 @@ if (!existsSync(managerExe)) {
 const managerStage = path.join(root, "desktop", ".tmp", "components", "manager", "win-unpacked");
 rmSync(managerStage, { recursive: true, force: true });
 mkdirSync(managerStage, { recursive: true });
-copyFileSync(managerExe, path.join(managerStage, "Kosmos Manager.exe"));
+copyFileSync(managerExe, path.join(managerStage, "Mundus Manager.exe"));
 for (const entry of readdirSync(managerRelease)) {
   if (entry.toLowerCase().endsWith(".dll"))
     copyFileSync(path.join(managerRelease, entry), path.join(managerStage, entry));
@@ -63,7 +65,8 @@ for (const entry of readdirSync(managerRelease)) {
 // KOS-137: components/agenda ships agenda-gpui — same single-file Rust/GPUI
 // shape as Manager, staged under the packaged name the Engine tray resolves.
 // agenda-gpui lives in its own repository: resolve the checkout from
-// KOSMOS_AGENDA_GPUI_SRC or the ../agenda-gpui sibling (same convention the
+// MUNDUS_AGENDA_GPUI_SRC (legacy KOSMOS_AGENDA_GPUI_SRC also accepted) or the
+// ../agenda-gpui sibling (same convention the
 // sibling extension repos use), then verify it sits on the commit
 // desktop/component-pins.json records.
 const componentPins = JSON.parse(
@@ -77,12 +80,12 @@ if (!agendaPin?.commit || !/^[0-9a-f]{40}$/.test(agendaPin.commit)) {
   process.exit(1);
 }
 const agendaSrc = path.resolve(
-  process.env.KOSMOS_AGENDA_GPUI_SRC?.trim() || path.join(root, "..", "agenda-gpui"),
+  env("AGENDA_GPUI_SRC")?.trim() || path.join(root, "..", "agenda-gpui"),
 );
 if (!existsSync(path.join(agendaSrc, "Cargo.toml"))) {
   console.error(
     `[build-package-components] agenda-gpui checkout not found at ${agendaSrc} — ` +
-      `clone ${agendaPin.repository} at ${agendaPin.commit} or set KOSMOS_AGENDA_GPUI_SRC`,
+      `clone ${agendaPin.repository} at ${agendaPin.commit} or set MUNDUS_AGENDA_GPUI_SRC`,
   );
   process.exit(1);
 }
@@ -117,9 +120,12 @@ const agendaBuild = spawnSync(
     cwd: agendaSrc,
     stdio: "inherit",
     windowsHide: true,
-    // VERSIONINFO inside Kosmos Agenda.exe carries the desktop release
+    // VERSIONINFO inside Agenda.exe carries the desktop release
     // version (agenda-gpui build.rs falls back to its own crate version).
-    env: { ...process.env, KOSMOS_AGENDA_VERSION: version },
+    // The pinned sibling build reads KOSMOS_AGENDA_VERSION for VERSIONINFO;
+    // send the legacy name alongside until the pin moves past the rename.
+    // MIGRATION(KOS-267): drop the KOSMOS_ entry after the repin.
+    env: { ...process.env, MUNDUS_AGENDA_VERSION: version, KOSMOS_AGENDA_VERSION: version }, // MIGRATION(KOS-267)
   },
 );
 if (agendaBuild.status !== 0) process.exit(agendaBuild.status ?? 1);
@@ -131,7 +137,7 @@ if (!existsSync(agendaExe)) {
 const agendaStage = path.join(root, "desktop", ".tmp", "components", "agenda", "win-unpacked");
 rmSync(agendaStage, { recursive: true, force: true });
 mkdirSync(agendaStage, { recursive: true });
-copyFileSync(agendaExe, path.join(agendaStage, "Kosmos Agenda.exe"));
+copyFileSync(agendaExe, path.join(agendaStage, "Agenda.exe"));
 for (const entry of readdirSync(agendaRelease)) {
   if (entry.toLowerCase().endsWith(".dll"))
     copyFileSync(path.join(agendaRelease, entry), path.join(agendaStage, entry));
@@ -140,7 +146,7 @@ for (const entry of readdirSync(agendaRelease)) {
 // KOS-156: components/memoria ships memoria-gpui — same single-file
 // Rust/GPUI shape as Agenda, staged under the packaged name the Engine tray
 // resolves. memoria-gpui lives in its own
-// repository: resolve the checkout from KOSMOS_MEMORIA_GPUI_SRC or the
+// repository: resolve the checkout from MUNDUS_MEMORIA_GPUI_SRC or the
 // ../memoria-gpui sibling, then verify it sits on the commit
 // desktop/component-pins.json records.
 const memoriaPin = componentPins.memoria_gpui;
@@ -151,12 +157,12 @@ if (!memoriaPin?.commit || !/^[0-9a-f]{40}$/.test(memoriaPin.commit)) {
   process.exit(1);
 }
 const memoriaSrc = path.resolve(
-  process.env.KOSMOS_MEMORIA_GPUI_SRC?.trim() || path.join(root, "..", "memoria-gpui"),
+  env("MEMORIA_GPUI_SRC")?.trim() || path.join(root, "..", "memoria-gpui"),
 );
 if (!existsSync(path.join(memoriaSrc, "Cargo.toml"))) {
   console.error(
     `[build-package-components] memoria-gpui checkout not found at ${memoriaSrc} — ` +
-      `clone ${memoriaPin.repository} at ${memoriaPin.commit} or set KOSMOS_MEMORIA_GPUI_SRC`,
+      `clone ${memoriaPin.repository} at ${memoriaPin.commit} or set MUNDUS_MEMORIA_GPUI_SRC`,
   );
   process.exit(1);
 }
@@ -191,9 +197,10 @@ const memoriaBuild = spawnSync(
     cwd: memoriaSrc,
     stdio: "inherit",
     windowsHide: true,
-    // VERSIONINFO inside Kosmos Memoria.exe carries the desktop release
+    // VERSIONINFO inside Memoria.exe carries the desktop release
     // version (memoria-gpui build.rs falls back to its own crate version).
-    env: { ...process.env, KOSMOS_MEMORIA_VERSION: version },
+    // MIGRATION(KOS-267): drop the KOSMOS_ entry after the pin repin.
+    env: { ...process.env, MUNDUS_MEMORIA_VERSION: version, KOSMOS_MEMORIA_VERSION: version }, // MIGRATION(KOS-267)
   },
 );
 if (memoriaBuild.status !== 0) process.exit(memoriaBuild.status ?? 1);
@@ -205,7 +212,7 @@ if (!existsSync(memoriaExe)) {
 const memoriaStage = path.join(root, "desktop", ".tmp", "components", "memoria", "win-unpacked");
 rmSync(memoriaStage, { recursive: true, force: true });
 mkdirSync(memoriaStage, { recursive: true });
-copyFileSync(memoriaExe, path.join(memoriaStage, "Kosmos Memoria.exe"));
+copyFileSync(memoriaExe, path.join(memoriaStage, "Memoria.exe"));
 for (const entry of readdirSync(memoriaRelease)) {
   if (entry.toLowerCase().endsWith(".dll"))
     copyFileSync(path.join(memoriaRelease, entry), path.join(memoriaStage, entry));
@@ -222,12 +229,12 @@ if (!dictationPin?.commit || !/^[0-9a-f]{40}$/.test(dictationPin.commit)) {
   process.exit(1);
 }
 const dictationSrc = path.resolve(
-  process.env.KOSMOS_DICTATION_GPUI_SRC?.trim() || path.join(root, "..", "dictation"),
+  env("DICTATION_GPUI_SRC")?.trim() || path.join(root, "..", "dictation"),
 );
 if (!existsSync(path.join(dictationSrc, "Cargo.toml"))) {
   console.error(
     `[build-package-components] dictation-gpui checkout not found at ${dictationSrc} — ` +
-      `clone ${dictationPin.repository} at ${dictationPin.commit} or set KOSMOS_DICTATION_GPUI_SRC`,
+      `clone ${dictationPin.repository} at ${dictationPin.commit} or set MUNDUS_DICTATION_GPUI_SRC`,
   );
   process.exit(1);
 }
@@ -262,7 +269,8 @@ const dictationBuild = spawnSync(
     cwd: dictationSrc,
     stdio: "inherit",
     windowsHide: true,
-    env: { ...process.env, KOSMOS_DICTATION_VERSION: version },
+    // MIGRATION(KOS-267): drop the KOSMOS_ entry after the pin repin.
+    env: { ...process.env, MUNDUS_DICTATION_VERSION: version, KOSMOS_DICTATION_VERSION: version }, // MIGRATION(KOS-267)
   },
 );
 if (dictationBuild.status !== 0) process.exit(dictationBuild.status ?? 1);
@@ -281,7 +289,7 @@ const dictationStage = path.join(
 );
 rmSync(dictationStage, { recursive: true, force: true });
 mkdirSync(dictationStage, { recursive: true });
-copyFileSync(dictationExe, path.join(dictationStage, "Kosmos Dictation.exe"));
+copyFileSync(dictationExe, path.join(dictationStage, "Dictation.exe"));
 for (const entry of readdirSync(dictationRelease)) {
   if (entry.toLowerCase().endsWith(".dll"))
     copyFileSync(path.join(dictationRelease, entry), path.join(dictationStage, entry));

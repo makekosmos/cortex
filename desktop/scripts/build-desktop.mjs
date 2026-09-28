@@ -18,6 +18,7 @@ import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
 import { bytes, documentHash, writeAtomic } from "./package-release-utils.mjs";
 import { createReceipt, writeReceipt } from "./release-receipt.mjs";
 import { ensureNsis } from "./ensure-nsis.mjs";
+import { env } from "./brand.mjs";
 import {
   currentCommit,
   runReleasePreflight,
@@ -93,7 +94,7 @@ function stageInstaller() {
 
   const engineDir = path.join(SHELL_ROOT, ".tmp", "engine.next");
   for (const [sourceName, targetName] of [
-    ["Kosmos-Engine.zip", "Kosmos Engine.zip"],
+    ["Mundus-Engine.zip", "Mundus Engine.zip"],
     ["engine-manifest.json", "engine-manifest.json"],
   ]) {
     const source = path.join(engineDir, sourceName);
@@ -126,7 +127,7 @@ async function buildWindows(version) {
   const stage = stageInstaller();
   const releaseDir = path.join(SHELL_ROOT, "release");
   mkdirSync(releaseDir, { recursive: true });
-  const outFile = path.join(releaseDir, `Kosmos-Setup-${version}.exe`);
+  const outFile = path.join(releaseDir, `Mundus-Setup-${version}.exe`);
 
   const { makensis, env } = await ensureNsis();
   const args = [
@@ -155,10 +156,10 @@ async function buildWindows(version) {
   const latest = [
     `version: ${version}`,
     "files:",
-    `  - url: Kosmos-Setup-${version}.exe`,
+    `  - url: Mundus-Setup-${version}.exe`,
     `    sha512: ${installerSha512}`,
     `    size: ${installerSize}`,
-    `path: Kosmos-Setup-${version}.exe`,
+    `path: Mundus-Setup-${version}.exe`,
     `sha512: ${installerSha512}`,
     `releaseDate: '${new Date().toISOString()}'`,
     "",
@@ -171,12 +172,12 @@ async function buildWindows(version) {
 async function main() {
   const args = process.argv.slice(2);
   let platform = null;
-  let bomPath = process.env.KOSMOS_RELEASE_BOM ?? null;
+  let bomPath = env("RELEASE_BOM") ?? null;
   let dryRun = false;
   let receiptPath = null;
   let skipPreflight = false;
   let packageDir = false;
-  let local = process.env.KOSMOS_RELEASE_LOCAL === "1";
+  let local = env("RELEASE_LOCAL") === "1";
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--platform") {
@@ -210,7 +211,7 @@ async function main() {
       platform
     ];
   } else {
-    if (!bomPath) die("--bom <path> or KOSMOS_RELEASE_BOM is required for release builds");
+    if (!bomPath) die("--bom <path> or MUNDUS_RELEASE_BOM is required for release builds");
     const preflight = skipPreflight
       ? {
           platform,

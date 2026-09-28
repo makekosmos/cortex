@@ -28,7 +28,7 @@ async function fixture() {
     path.join(root, "package.json"),
     `${JSON.stringify(
       {
-        kosmos: {
+        mundus: {
           workspace: {
             imago: {
               repository: "makekosmos/imago",
@@ -71,7 +71,7 @@ test("missing managed checkouts produce clone actions", async () => {
 test("manifest pin mismatches fail closed", async () => {
   const root = await fixture();
   const manifest = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
-  manifest.kosmos.workspace.imago.commit = commit("c");
+  manifest.mundus.workspace.imago.commit = commit("c");
   await writeFile(path.join(root, "package.json"), JSON.stringify(manifest));
   await assert.rejects(() => loadWorkspace(root), /integrity must be git:c{40}/);
 });
@@ -93,8 +93,8 @@ test("matching clean checkouts produce an idempotent no-op", async () => {
       cwd: checkout,
       encoding: "utf8",
     }).trim();
-    manifest.kosmos.workspace[name].commit = actualCommit;
-    manifest.kosmos.workspace[name].package.integrity = `git:${actualCommit}`;
+    manifest.mundus.workspace[name].commit = actualCommit;
+    manifest.mundus.workspace[name].package.integrity = `git:${actualCommit}`;
     execFileSync("git", ["checkout", "--detach", actualCommit], { cwd: checkout });
   }
   await writeFile(path.join(root, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
@@ -133,8 +133,8 @@ test("bootstrap accepts generated outputs but preserves untracked source", async
     encoding: "utf8",
   }).trim();
   const manifest = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
-  manifest.kosmos.workspace.imago.commit = actual;
-  manifest.kosmos.workspace.imago.package.integrity = `git:${actual}`;
+  manifest.mundus.workspace.imago.commit = actual;
+  manifest.mundus.workspace.imago.package.integrity = `git:${actual}`;
   await writeFile(path.join(root, "package.json"), JSON.stringify(manifest));
   await mkdir(path.join(root, ".tmp", "workspace", "arca-sdk"), { recursive: true });
   const runTool = async (_, args) => ({
@@ -150,7 +150,7 @@ test("bootstrap accepts generated outputs but preserves untracked source", async
   assert.equal(await readFile(path.join(checkout, "untracked.ts"), "utf8"), "changed\n");
   await assert.rejects(
     () =>
-      prepareCheckout("imago", manifest.kosmos.workspace.imago, checkout, async () => ({
+      prepareCheckout("imago", manifest.mundus.workspace.imago, checkout, async () => ({
         status: 0,
         stdout: "1.3.140",
         stderr: "",
@@ -164,7 +164,7 @@ test("bootstrap accepts generated outputs but preserves untracked source", async
     root,
     "imago",
     checkout,
-    manifest.kosmos.workspace.imago,
+    manifest.mundus.workspace.imago,
     stamp,
   );
   assert.equal(inspected.checks.stamp, false);
@@ -206,9 +206,9 @@ test("local mode exposes only explicit overrides", async () => {
   };
   const mode = resolveMode(
     {
-      KOSMOS_WORKSPACE_MODE: "local",
-      KOSMOS_IMAGO_PATH: paths.imago,
-      KOSMOS_ARCA_SDK_PATH: paths["arca-sdk"],
+      MUNDUS_WORKSPACE_MODE: "local",
+      MUNDUS_IMAGO_PATH: paths.imago,
+      MUNDUS_ARCA_SDK_PATH: paths["arca-sdk"],
     },
     root,
   );
@@ -219,8 +219,8 @@ test("local mode exposes only explicit overrides", async () => {
   });
   assert.deepEqual(mode.sources, paths);
   assert.throws(
-    () => resolveMode({ KOSMOS_WORKSPACE_MODE: "local", KOSMOS_IMAGO_PATH: paths.imago }),
-    /KOSMOS_ARCA_SDK_PATH/,
+    () => resolveMode({ MUNDUS_WORKSPACE_MODE: "local", MUNDUS_IMAGO_PATH: paths.imago }),
+    /MUNDUS_ARCA_SDK_PATH/,
   );
 });
 
@@ -228,9 +228,9 @@ test("local missing paths fail doctor", async () => {
   const root = await fixture();
   const result = await doctor(process.cwd(), {
     env: {
-      KOSMOS_WORKSPACE_MODE: "local",
-      KOSMOS_IMAGO_PATH: path.join(root, "missing-imago"),
-      KOSMOS_ARCA_SDK_PATH: path.join(root, "missing-arca"),
+      MUNDUS_WORKSPACE_MODE: "local",
+      MUNDUS_IMAGO_PATH: path.join(root, "missing-imago"),
+      MUNDUS_ARCA_SDK_PATH: path.join(root, "missing-arca"),
     },
   });
   assert.equal(result.components.imago.bridge.status, "source-missing");

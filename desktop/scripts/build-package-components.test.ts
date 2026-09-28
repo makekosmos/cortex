@@ -15,7 +15,7 @@ test("components/manager is the manager-gpui exe staged under the packaged name"
   expect(source).toContain('"--locked"');
   expect(source).toContain("x86_64-pc-windows-msvc");
   expect(source).toContain("manager-gpui");
-  expect(source).toContain('"Kosmos Manager.exe"');
+  expect(source).toContain('"Mundus Manager.exe"');
 });
 
 test("components/agenda is the pinned agenda-gpui exe staged under the packaged name", () => {
@@ -25,12 +25,12 @@ test("components/agenda is the pinned agenda-gpui exe staged under the packaged 
   expect(pins.agenda_gpui.repository).toBe("makekosmos/agenda-gpui");
   expect(pins.agenda_gpui.commit).toMatch(/^[0-9a-f]{40}$/);
   expect(source).toContain("component-pins.json");
-  expect(source).toContain("KOSMOS_AGENDA_GPUI_SRC");
+  expect(source).toContain("MUNDUS_AGENDA_GPUI_SRC");
   expect(source).toContain('"rev-parse", "HEAD"');
   expect(source).toContain("x86_64-pc-windows-msvc");
   expect(source).toContain("agenda-gpui");
-  expect(source).toContain("KOSMOS_AGENDA_VERSION");
-  expect(source).toContain('"Kosmos Agenda.exe"');
+  expect(source).toContain("MUNDUS_AGENDA_VERSION");
+  expect(source).toContain('"Agenda.exe"');
 });
 
 test("components/memoria is the pinned memoria-gpui exe staged under the packaged name", () => {
@@ -39,10 +39,10 @@ test("components/memoria is the pinned memoria-gpui exe staged under the package
   );
   expect(pins.memoria_gpui.repository).toBe("makekosmos/memoria-gpui");
   expect(pins.memoria_gpui.commit).toMatch(/^[0-9a-f]{40}$/);
-  expect(source).toContain("KOSMOS_MEMORIA_GPUI_SRC");
+  expect(source).toContain("MUNDUS_MEMORIA_GPUI_SRC");
   expect(source).toContain("memoria-gpui");
-  expect(source).toContain("KOSMOS_MEMORIA_VERSION");
-  expect(source).toContain('"Kosmos Memoria.exe"');
+  expect(source).toContain("MUNDUS_MEMORIA_VERSION");
+  expect(source).toContain('"Memoria.exe"');
 });
 
 test("components/dictation is the pinned dictation-gpui exe staged under the packaged name", () => {
@@ -51,8 +51,8 @@ test("components/dictation is the pinned dictation-gpui exe staged under the pac
   );
   expect(pins.dictation_gpui.repository).toBe("makekosmos/dictation");
   expect(pins.dictation_gpui.commit).toMatch(/^[0-9a-f]{40}$/);
-  expect(source).toContain("KOSMOS_DICTATION_GPUI_SRC");
+  expect(source).toContain("MUNDUS_DICTATION_GPUI_SRC");
   expect(source).toContain("dictation-gpui");
-  expect(source).toContain("KOSMOS_DICTATION_VERSION");
-  expect(source).toContain('"Kosmos Dictation.exe"');
+  expect(source).toContain("MUNDUS_DICTATION_VERSION");
+  expect(source).toContain('"Dictation.exe"');
 });

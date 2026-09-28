@@ -4,9 +4,9 @@ mod tests {
     #[test]
     fn sidecar_candidates_include_current_platform_names() {
         let current_exe = if cfg!(windows) {
-            Path::new(r"C:\Kosmos\resources\Kosmos Runtime.exe")
+            Path::new(r"C:\Mundus\resources\Mundus.exe")
         } else {
-            Path::new("/opt/kosmos/kosmos-runtime")
+            Path::new("/opt/mundus/mundus-runtime")
         };
         let candidates = local_stt_sidecar_candidate_paths(current_exe);
         let rendered = candidates
@@ -17,14 +17,14 @@ mod tests {
         if cfg!(windows) {
             assert!(rendered
                 .iter()
-                .any(|path| path.ends_with("kosmos-local-stt.exe")));
+                .any(|path| path.ends_with("mundus-local-stt.exe")));
             assert!(rendered
                 .iter()
-                .any(|path| path.ends_with("Kosmos Local STT.exe")));
+                .any(|path| path.ends_with("Mundus Local STT.exe")));
         } else {
             assert!(rendered
                 .iter()
-                .any(|path| path.ends_with("kosmos-local-stt")));
+                .any(|path| path.ends_with("mundus-local-stt")));
         }
     }
 
@@ -51,39 +51,39 @@ mod tests {
     #[tokio::test]
     async fn local_override_is_available_in_unit_tests() {
         let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
-        env::remove_var("KOSMOS_TEST_MODE");
-        env::remove_var("KOSMOS_HEADLESS");
-        env::set_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT", "local transcript");
+        env::remove_var("MUNDUS_TEST_MODE");
+        env::remove_var("MUNDUS_HEADLESS");
+        env::set_var("MUNDUS_TEST_LOCAL_DICTATION_TRANSCRIPT", "local transcript");
         assert_eq!(
             test_override_transcript().as_deref(),
             Some("local transcript")
         );
 
-        env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
+        env::remove_var("MUNDUS_TEST_LOCAL_DICTATION_TRANSCRIPT");
     }
 
     #[tokio::test]
     async fn whisper_cpp_default_idle_unloads_after_timeout() {
         let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
-        env::remove_var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS");
+        env::remove_var("MUNDUS_LOCAL_STT_IDLE_UNLOAD_MS");
 
         assert_eq!(
             local_stt_idle_unload_after_ms_for_engine(DEFAULT_LOCAL_ENGINE),
             Some(5 * 60 * 1000)
         );
 
-        env::set_var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS", "1234");
+        env::set_var("MUNDUS_LOCAL_STT_IDLE_UNLOAD_MS", "1234");
         assert_eq!(
             local_stt_idle_unload_after_ms_for_engine(DEFAULT_LOCAL_ENGINE),
             Some(1234)
         );
-        env::remove_var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS");
+        env::remove_var("MUNDUS_LOCAL_STT_IDLE_UNLOAD_MS");
     }
 
     #[tokio::test]
     async fn resolve_direct_idle_unload_uses_config_then_env_override() {
         let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
-        env::remove_var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS");
+        env::remove_var("MUNDUS_LOCAL_STT_IDLE_UNLOAD_MS");
 
         // Без env var — возвращает config value.
         assert_eq!(resolve_direct_idle_unload_ms(Some(300_000)), Some(300_000));
@@ -91,10 +91,10 @@ mod tests {
         assert_eq!(resolve_direct_idle_unload_ms(Some(60_000)), Some(60_000));
 
         // Env var переопределяет config.
-        env::set_var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS", "9999");
+        env::set_var("MUNDUS_LOCAL_STT_IDLE_UNLOAD_MS", "9999");
         assert_eq!(resolve_direct_idle_unload_ms(Some(300_000)), Some(9999));
         assert_eq!(resolve_direct_idle_unload_ms(None), Some(9999));
-        env::remove_var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS");
+        env::remove_var("MUNDUS_LOCAL_STT_IDLE_UNLOAD_MS");
     }
 
     #[tokio::test]
@@ -144,30 +144,30 @@ mod tests {
     #[tokio::test]
     async fn server_ready_timeout_is_configurable_and_clamped() {
         let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
-        env::remove_var("KOSMOS_LOCAL_STT_SERVER_READY_TIMEOUT_MS");
+        env::remove_var("MUNDUS_LOCAL_STT_SERVER_READY_TIMEOUT_MS");
         assert_eq!(
             local_stt_server_ready_timeout(),
             Duration::from_millis(30_000)
         );
 
-        env::set_var("KOSMOS_LOCAL_STT_SERVER_READY_TIMEOUT_MS", "25000");
+        env::set_var("MUNDUS_LOCAL_STT_SERVER_READY_TIMEOUT_MS", "25000");
         assert_eq!(
             local_stt_server_ready_timeout(),
             Duration::from_millis(25_000)
         );
 
-        env::set_var("KOSMOS_LOCAL_STT_SERVER_READY_TIMEOUT_MS", "1");
+        env::set_var("MUNDUS_LOCAL_STT_SERVER_READY_TIMEOUT_MS", "1");
         assert_eq!(
             local_stt_server_ready_timeout(),
             Duration::from_millis(1_000)
         );
 
-        env::set_var("KOSMOS_LOCAL_STT_SERVER_READY_TIMEOUT_MS", "999999");
+        env::set_var("MUNDUS_LOCAL_STT_SERVER_READY_TIMEOUT_MS", "999999");
         assert_eq!(
             local_stt_server_ready_timeout(),
             Duration::from_millis(300_000)
         );
-        env::remove_var("KOSMOS_LOCAL_STT_SERVER_READY_TIMEOUT_MS");
+        env::remove_var("MUNDUS_LOCAL_STT_SERVER_READY_TIMEOUT_MS");
     }
 
     #[test]
@@ -385,8 +385,8 @@ mod tests {
     #[tokio::test]
     async fn transcribe_prefers_mocked_sidecar_over_direct_whisper_binaries() {
         let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
-        env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
-        env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
+        env::remove_var("MUNDUS_TEST_LOCAL_DICTATION_TRANSCRIPT");
+        env::remove_var("MUNDUS_TEST_DICTATION_TRANSCRIPT");
         install_test_sidecar_mock(Some(TestSidecarMock {
             transcript: Some("sidecar transcript".into()),
             fail_error: None,
@@ -415,8 +415,8 @@ mod tests {
     #[tokio::test]
     async fn transcribe_cleans_sidecar_transcript_before_returning() {
         let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
-        env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
-        env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
+        env::remove_var("MUNDUS_TEST_LOCAL_DICTATION_TRANSCRIPT");
+        env::remove_var("MUNDUS_TEST_DICTATION_TRANSCRIPT");
         let text = "This is a long dictation transcript that should only appear once.";
         install_test_sidecar_mock(Some(TestSidecarMock {
             transcript: Some(format!("{text}\n{text}")),
@@ -448,8 +448,8 @@ mod tests {
     #[tokio::test]
     async fn transcribe_retries_once_after_sidecar_unavailable() {
         let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
-        env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
-        env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
+        env::remove_var("MUNDUS_TEST_LOCAL_DICTATION_TRANSCRIPT");
+        env::remove_var("MUNDUS_TEST_DICTATION_TRANSCRIPT");
         install_test_sidecar_mock(Some(TestSidecarMock {
             transcript: Some("recovered transcript".into()),
             fail_error: None,
@@ -481,9 +481,9 @@ mod tests {
     #[tokio::test]
     async fn test_override_transcript_bypasses_sidecar_requests() {
         let _guard = TEST_SIDECAR_TEST_LOCK.lock().await;
-        env::remove_var("KOSMOS_TEST_DICTATION_TRANSCRIPT");
+        env::remove_var("MUNDUS_TEST_DICTATION_TRANSCRIPT");
         env::set_var(
-            "KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT",
+            "MUNDUS_TEST_LOCAL_DICTATION_TRANSCRIPT",
             "override transcript",
         );
         install_test_sidecar_mock(Some(TestSidecarMock {
@@ -510,6 +510,6 @@ mod tests {
         assert!(recorded_test_sidecar_ops().is_empty());
 
         install_test_sidecar_mock(None);
-        env::remove_var("KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT");
+        env::remove_var("MUNDUS_TEST_LOCAL_DICTATION_TRANSCRIPT");
     }
 }

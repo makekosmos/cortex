@@ -59,7 +59,7 @@ mod tests {
             .mock_async(|when, then| {
                 when.method(httpmock::Method::GET).path("/latest.yml");
                 then.status(200).body(
-                    "version: 0.5.3\nfiles:\n  - url: Kosmos-Setup-0.5.3.exe\n    sha512: AAA\n    size: 10\n",
+                    "version: 0.5.3\nfiles:\n  - url: Mundus-Setup-0.5.3.exe\n    sha512: AAA\n    size: 10\n",
                 );
             })
             .await;
@@ -88,8 +88,8 @@ mod tests {
     #[test]
     fn asset_url_accepts_only_safe_executable_filenames() {
         assert_eq!(
-            asset_url("https://example.test/dl", "Kosmos-Setup-0.5.3.exe").unwrap(),
-            "https://example.test/dl/Kosmos-Setup-0.5.3.exe"
+            asset_url("https://example.test/dl", "Mundus-Setup-0.5.3.exe").unwrap(),
+            "https://example.test/dl/Mundus-Setup-0.5.3.exe"
         );
         for filename in ["../evil.exe", "dir/evil.exe", "evil.exe?x=1", "notes.txt"] {
             assert!(asset_url("https://example.test/dl", filename).is_err());

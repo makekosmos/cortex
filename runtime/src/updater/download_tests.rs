@@ -7,7 +7,7 @@ fn hash(bytes: &[u8]) -> String {
 
 #[tokio::test]
 async fn downloads_fresh_file() {
-    let body = b"kosmos installer bytes".repeat(100);
+    let body = b"mundus installer bytes".repeat(100);
     let server = MockServer::start_async().await;
     server
         .mock_async(|when, then| {
@@ -33,7 +33,7 @@ async fn downloads_fresh_file() {
 
 #[tokio::test]
 async fn resumes_with_range() {
-    let body = b"kosmos installer bytes".repeat(100);
+    let body = b"mundus installer bytes".repeat(100);
     let split = body.len() / 2;
     let server = MockServer::start_async().await;
     server
@@ -61,7 +61,7 @@ async fn resumes_with_range() {
 
 #[tokio::test]
 async fn ignored_range_restarts_partial_file() {
-    let body = b"kosmos installer bytes".repeat(100);
+    let body = b"mundus installer bytes".repeat(100);
     let server = MockServer::start_async().await;
     server
         .mock_async(|when, then| {
@@ -101,7 +101,7 @@ async fn network_failure_preserves_error_kind() {
 
 #[tokio::test]
 async fn verification_checks_size_and_hash() {
-    let body = b"kosmos installer payload";
+    let body = b"mundus installer payload";
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("installer.exe.part");
     tokio::fs::write(&path, body).await.unwrap();

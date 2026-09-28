@@ -25,7 +25,7 @@ pub fn render(
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
     let mut col = div().flex().flex_col().gap_4().w_full();
-    col = col.child(section("О приложении", "Версия и сведения о Kosmos"));
+    col = col.child(section("О приложении", "Версия и сведения о Mundus"));
 
     let mut el = card();
     el = el.child(kv("Manager (GPUI)", env!("CARGO_PKG_VERSION")));
@@ -54,7 +54,7 @@ pub fn render(
                     )
                     .into_any_element()
             } else {
-                empty("Agenda не входит в эту сборку Kosmos").into_any_element()
+                empty("Agenda не входит в эту сборку Mundus").into_any_element()
             }),
     );
 
@@ -81,7 +81,7 @@ pub fn render(
                     )
                     .into_any_element()
             } else {
-                empty("Memoria не входит в эту сборку Kosmos").into_any_element()
+                empty("Memoria не входит в эту сборку Mundus").into_any_element()
             }),
     );
 
@@ -186,7 +186,7 @@ pub fn render(
     let bundle = app.data("@bundle");
     if !bundle.is_null() {
         let handle = vstr(&bundle, "handle");
-        let name = vopt(&bundle, "suggested_name").unwrap_or_else(|| "kosmos-support.zip".into());
+        let name = vopt(&bundle, "suggested_name").unwrap_or_else(|| "mundus-support.zip".into());
         let path = std::env::var_os("HOME")
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))

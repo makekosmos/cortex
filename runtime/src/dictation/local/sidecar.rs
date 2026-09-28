@@ -30,7 +30,7 @@ impl LocalSttSidecarClient {
                 let reader = BufReader::new(stderr);
                 let mut lines = reader.lines();
                 while let Ok(Some(line)) = lines.next_line().await {
-                    eprintln!("[kosmos-local-stt] {line}");
+                    eprintln!("[mundus-local-stt] {line}");
                 }
             });
         }
@@ -292,7 +292,7 @@ async fn send_sidecar_request(request: LocalSttRequest) -> Result<LocalSttRespon
         }
 
         if !matches!(
-            env::var("KOSMOS_TEST_ALLOW_REAL_LOCAL_STT_SIDECAR").as_deref(),
+            env::var("MUNDUS_TEST_ALLOW_REAL_LOCAL_STT_SIDECAR").as_deref(),
             Ok("1")
         ) {
             return Err(LocalError::SidecarUnavailable(

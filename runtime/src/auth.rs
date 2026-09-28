@@ -1,6 +1,6 @@
 // Auth для WS-сессии: bearer token + PID-binding.
 //
-// AC5 (spec): client передаёт в hello-handshake свой PID, Kepler проверяет что
+// AC5 (spec): client передаёт в hello-handshake свой PID, Mundus проверяет что
 // процесс существует и принадлежит тому же user. Полностью реализовано для Windows;
 // на Unix используем kill(pid, 0) — EPERM сигнализирует foreign-user.
 

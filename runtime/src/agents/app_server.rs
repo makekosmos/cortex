@@ -188,7 +188,7 @@ async fn start_app_server(session: &Session) -> Result<AppServerStartup, String>
         .take()
         .ok_or("Codex stdout недоступен")?;
     let mut lines = BufReader::new(stdout).lines();
-    let (init, mut buffered)=rpc_call(&mut stdin,&mut lines,1,"initialize",json!({"clientInfo":{"name":"daedalus","title":"Kosmos Daedalus","version":"0.1.0"},"capabilities":{"experimentalApi":true}})).await?;
+    let (init, mut buffered)=rpc_call(&mut stdin,&mut lines,1,"initialize",json!({"clientInfo":{"name":"daedalus","title":"Mundus Daedalus","version":"0.1.0"},"capabilities":{"experimentalApi":true}})).await?;
     if init.get("error").is_some() {
         return Err(format!("Codex initialize: {}", init["error"]));
     }
@@ -449,9 +449,9 @@ fn turn_policy(mode: &str) -> Value {
 }
 fn codex_command() -> Command {
     // Unit tests may run alongside other runtime tests that mutate the shared
-    // KOSMOS_TEST_MODE environment variable. The fake app-server variables are
+    // MUNDUS_TEST_MODE environment variable. The fake app-server variables are
     // test-only and are the stable selector for this command override.
-    if cfg!(test) || std::env::var("KOSMOS_TEST_MODE").as_deref() == Ok("1") {
+    if cfg!(test) || std::env::var("MUNDUS_TEST_MODE").as_deref() == Ok("1") {
         if let (Ok(executable), Ok(script)) = (
             std::env::var("DAEDALUS_FAKE_APP_SERVER_EXE"),
             std::env::var("DAEDALUS_FAKE_APP_SERVER_SCRIPT"),

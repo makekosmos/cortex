@@ -11,9 +11,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 // Stable worker-facing protocol types live in the standalone
-// `kosmos-package-protocol` crate so out-of-tree workers can pin them by git
+// `package-protocol` crate so out-of-tree workers can pin them by git
 // rev without depending on the runtime source tree.
-pub use kosmos_package_protocol::{BridgeStatus, BridgeWorkerConfig};
+pub use package_protocol::{BridgeStatus, BridgeWorkerConfig};
 
 pub const MAX_LINE_BYTES: usize = 1024 * 1024;
 

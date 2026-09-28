@@ -179,14 +179,14 @@ fn windows_terminal_uses_terminal_paste_shortcut() {
 #[ignore = "requires an interactive Windows session with a focused editable control"]
 fn windows_real_focus_paste_smoke() {
     assert_eq!(
-        std::env::var("KOSMOS_DICTATION_WINDOWS_SMOKE").as_deref(),
+        std::env::var("MUNDUS_DICTATION_WINDOWS_SMOKE").as_deref(),
         Ok("1"),
-        "set KOSMOS_DICTATION_WINDOWS_SMOKE=1 to run the real paste smoke test"
+        "set MUNDUS_DICTATION_WINDOWS_SMOKE=1 to run the real paste smoke test"
     );
     let target = capture_foreground_window().expect("an interactive foreground window");
     let mut adapter = SystemOsAdapter;
     let result = inject_with_adapter(
-        "Kosmos dictation Windows smoke",
+        "Mundus dictation Windows smoke",
         InjectMode::AutoPaste,
         Some(target),
         &mut adapter,

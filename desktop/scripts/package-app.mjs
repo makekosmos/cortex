@@ -10,6 +10,7 @@ import {
   sha256 as validateSha256,
   writeAtomic,
 } from "./package-release-utils.mjs";
+import { env } from "./brand.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 function args(argv) {
@@ -29,13 +30,12 @@ function args(argv) {
   }
   for (const name of ["source", "manifest", "archive", "catalog", "signatures", "archive-url"])
     if (!out[name]) throw new Error(`required argument --${name}`);
-  out.sequence ??= process.env.KOSMOS_PACKAGE_SEQUENCE;
-  out["issued-at"] ??= process.env.KOSMOS_PACKAGE_ISSUED_AT;
-  out["expires-at"] ??= process.env.KOSMOS_PACKAGE_EXPIRES_AT;
+  out.sequence ??= env("PACKAGE_SEQUENCE");
+  out["issued-at"] ??= env("PACKAGE_ISSUED_AT");
+  out["expires-at"] ??= env("PACKAGE_EXPIRES_AT");
   for (const name of ["sequence", "issued-at", "expires-at"])
     if (!out[name]) throw new Error(`required argument --${name}`);
-  if (out.signers.length === 0 && process.env.KOSMOS_PACKAGE_SIGNER)
-    out.signers = [process.env.KOSMOS_PACKAGE_SIGNER];
+  if (out.signers.length === 0 && env("PACKAGE_SIGNER")) out.signers = [env("PACKAGE_SIGNER")];
   if (out.signers.length === 0) throw new Error("configured package signing key is required");
   return out;
 }
@@ -66,7 +66,10 @@ function validateManifest(manifest, source) {
     manifest.publisher !== "kosmos"
   )
     throw new Error("package manifest must be a compiled Manifest v2 package");
-  if (Object.prototype.toString.call(manifest.entrypoint) !== "[object String]" || manifest.entrypoint.startsWith("/"))
+  if (
+    Object.prototype.toString.call(manifest.entrypoint) !== "[object String]" ||
+    manifest.entrypoint.startsWith("/")
+  )
     throw new Error("package entrypoint must be relative");
   const relativeEntrypoint =
     path.basename(source).toLowerCase() === "dist" && manifest.entrypoint.startsWith("dist/")

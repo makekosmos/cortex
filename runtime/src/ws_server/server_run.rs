@@ -29,7 +29,7 @@ impl WsServer {
                     let client_id = match self.dispatcher.allocate_owner() {
                         Ok(owner) => owner,
                         Err(error) => {
-                            eprintln!("[kepler.ws] owner allocation failed: {error}");
+                            eprintln!("[mundus.ws] owner allocation failed: {error}");
                             drop(permit);
                             continue;
                         }
@@ -91,7 +91,7 @@ impl WsServer {
                             protocol_usage, correlation_id, dispatcher, owner_lease,
                             desktop_authority, snapshots, grants, task_shutdown,
                         ).await {
-                            eprintln!("[kepler.ws] connection error: {e}");
+                            eprintln!("[mundus.ws] connection error: {e}");
                         }
                     });
                     let old = self

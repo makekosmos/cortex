@@ -18,12 +18,12 @@ pub(crate) const SUPERVISOR_LOCK_FILE: &str = "engine-supervisor.lock.db";
 pub(crate) const SUPERVISOR_STATE_FILE: &str = "engine-supervisor-state.json";
 pub(crate) const CONTROL_STATE_FILE: &str = "engine-supervisor-control.json";
 pub(crate) const SYNC_ENV_KEYS: &[&str] = &[
-    "KOSMOS_IROH",
-    "KOSMOS_SPACE_ID",
-    "KOSMOS_AUTH_SECRET",
-    "KOSMOS_IROH_PEER_TICKET",
-    "KOSMOS_DEVICE_ID",
-    "KOSMOS_DEVICE_NAME",
+    "MUNDUS_IROH",
+    "MUNDUS_SPACE_ID",
+    "MUNDUS_AUTH_SECRET",
+    "MUNDUS_IROH_PEER_TICKET",
+    "MUNDUS_DEVICE_ID",
+    "MUNDUS_DEVICE_NAME",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

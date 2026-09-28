@@ -19,9 +19,9 @@ pub fn render(
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
     let mut col = div().flex().flex_col().gap_4().w_full();
-    col = col.child(section("Настройки", "Запуск Kosmos"));
+    col = col.child(section("Настройки", "Запуск Mundus"));
 
-    // Engine-owned autostart: registers `kepler-backend --start` in the HKCU
+    // Engine-owned autostart: registers `mundus-engine --start` in the HKCU
     // Run key — headless Engine at sign-in, no UI window (the standalone
     // Dictation app has its own Run entry and relies on Engine being up).
     col = col.child(slot_or(app, "engine.autostart", |v| {
@@ -29,7 +29,7 @@ pub fn render(
         let enabled = vbool(v, "enabled");
         let mut row_el = row(
             "Автозапуск при входе",
-            "Engine стартует с входом в Windows без UI (kepler-backend --start)",
+            "Engine стартует с входом в Windows без UI (mundus-engine --start)",
         );
         if available {
             row_el = row_el.child(

@@ -90,7 +90,7 @@ impl LocalSttSidecarService {
             LocalSttRequest::Status => Ok(LocalSttResponse::Status(self.status())),
             LocalSttRequest::LoadModel { model } | LocalSttRequest::Preload { model } => {
                 if let Err(error) = self.load_embedded_model(&model) {
-                    eprintln!("[kosmos-local-stt] embedded whisper.dll preload fallback: {error}");
+                    eprintln!("[mundus-local-stt] embedded whisper.dll preload fallback: {error}");
                     let warm = preload_with_whisper_backend_model(&model).await?;
                     self.state.loaded_model = warm.then_some(model);
                     self.state.backend = warm.then_some("whisper_server".into());
@@ -127,7 +127,7 @@ impl LocalSttSidecarService {
                             return Err(error);
                         }
                         eprintln!(
-                            "[kosmos-local-stt] embedded whisper.dll transcribe fallback: {error}"
+                            "[mundus-local-stt] embedded whisper.dll transcribe fallback: {error}"
                         );
                         let result =
                             transcribe_with_whisper_backend_model(&model, &wav, &language, &prompt)
@@ -254,7 +254,7 @@ impl LocalSttSidecarService {
 }
 
 fn idle_watch_interval() -> Duration {
-    env::var("KOSMOS_LOCAL_STT_IDLE_WATCH_INTERVAL_MS")
+    env::var("MUNDUS_LOCAL_STT_IDLE_WATCH_INTERVAL_MS")
         .ok()
         .and_then(|value| value.trim().parse::<u64>().ok())
         .map(Duration::from_millis)
@@ -360,7 +360,7 @@ pub async fn run_stdio_service() -> io::Result<()> {
         let envelope = match serde_json::from_str::<LocalSttRequestEnvelope>(trimmed) {
             Ok(value) => value,
             Err(error) => {
-                eprintln!("[kosmos-local-stt] invalid request: {error}");
+                eprintln!("[mundus-local-stt] invalid request: {error}");
                 if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
                     if let Some(request_id) = value
                         .get("requestId")
@@ -569,7 +569,7 @@ mod tests {
     #[tokio::test]
     async fn idle_watcher_unloads_without_new_request() {
         let _guard = ENV_SIDECAR_LOCK.lock().await;
-        env::set_var("KOSMOS_LOCAL_STT_IDLE_WATCH_INTERVAL_MS", "10");
+        env::set_var("MUNDUS_LOCAL_STT_IDLE_WATCH_INTERVAL_MS", "10");
         let service = Arc::new(tokio::sync::Mutex::new(warm_test_service(1)));
         {
             let mut service = service.lock().await;
@@ -582,7 +582,7 @@ mod tests {
 
         shutdown_signal.store(true, Ordering::Relaxed);
         watcher.abort();
-        env::remove_var("KOSMOS_LOCAL_STT_IDLE_WATCH_INTERVAL_MS");
+        env::remove_var("MUNDUS_LOCAL_STT_IDLE_WATCH_INTERVAL_MS");
         assert!(!service.lock().await.status().warm);
     }
 

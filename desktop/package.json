@@ -1,8 +1,8 @@
 {
-  "name": "kosmos-desktop",
+  "name": "mundus-desktop",
   "version": "0.5.4",
   "private": true,
-  "description": "Kosmos — desktop packaging for the Engine and GPUI components",
+  "description": "Mundus — desktop packaging for the Engine and GPUI components",
   "author": "Kazui",
   "type": "module",
   "scripts": {

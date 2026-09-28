@@ -2,7 +2,7 @@
 name = "ark-core"
 version = "0.1.0"
 edition.workspace = true
-description = "Unified DB + sync engine for Kepler/Delphi"
+description = "Unified DB + sync engine for Mundus/Delphi"
 
 [lib]
 name = "ark_core"

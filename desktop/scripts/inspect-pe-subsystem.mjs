@@ -41,10 +41,10 @@ export function readUninstallProvenance(expectedVersion) {
   });
   const record = parseRegistryRecords(output).find(
     (item) =>
-      item.DisplayName?.toLowerCase().includes("kosmos") && item.DisplayVersion === expectedVersion,
+      item.DisplayName?.toLowerCase().includes("mundus") && item.DisplayVersion === expectedVersion,
   );
   if (!record?.UninstallString) {
-    throw new Error(`No Kosmos uninstall record found for version ${expectedVersion}`);
+    throw new Error(`No Mundus uninstall record found for version ${expectedVersion}`);
   }
   if (!record.InstallLocation) {
     const uninstallExe = record.UninstallString.match(/^"([^"]+)"/)?.[1];
@@ -85,10 +85,10 @@ export function inspectInstall(installRoot, expectedVersion) {
   console.log(`PROVENANCE InstallLocation=${provenance.InstallLocation}`);
   console.log(`PROVENANCE UninstallString=${provenance.UninstallString}`);
   for (const name of [
-    "components/manager/Kosmos Manager.exe",
-    "components/agenda/Kosmos Agenda.exe",
-    "components/memoria/Kosmos Memoria.exe",
-    "components/dictation/Kosmos Dictation.exe",
+    "components/manager/Mundus Manager.exe",
+    "components/agenda/Agenda.exe",
+    "components/memoria/Memoria.exe",
+    "components/dictation/Dictation.exe",
   ]) {
     const file = path.join(installRoot, "resources", name);
     if (!existsSync(file)) continue;

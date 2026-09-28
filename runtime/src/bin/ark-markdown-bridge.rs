@@ -1,7 +1,7 @@
 //! First-party Package v1 bridge worker. All ARK and filesystem access goes
 //! through the Engine broker on stdio; this binary never opens SQLite or files.
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use kepler_backend::package_worker_protocol::BridgeStatus;
+use engine::package_worker_protocol::BridgeStatus;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};

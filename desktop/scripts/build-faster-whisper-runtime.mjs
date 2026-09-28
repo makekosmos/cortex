@@ -21,8 +21,8 @@ const FASTER_WHISPER_VERSION = "1.2.1";
 const CUBLAS_VERSION = "12.9.2.10";
 const CUDNN_VERSION = "9.23.2.1";
 
-const RUNTIME_ARCHIVE = "kosmos-faster-whisper-runtime-win-x64.zip";
-const CUDA_ARCHIVE = "kosmos-cuda-libs-cuda12-cudnn9.zip";
+const RUNTIME_ARCHIVE = "mundus-faster-whisper-runtime-win-x64.zip";
+const CUDA_ARCHIVE = "mundus-cuda-libs-cuda12-cudnn9.zip";
 
 function run(cmd, args, opts = {}) {
   const result = spawnSync(cmd, args, {

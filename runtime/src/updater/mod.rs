@@ -1,5 +1,5 @@
-//! Kosmos self-update (KOS-236 "Kosmos без Electron"). Ports the update half
-//! of `desktop/electron/autoupdater-host.ts` into the Engine: today Kosmos
+//! Mundus self-update (KOS-236 "Mundus без Electron"). Ports the update half
+//! of `desktop/electron/autoupdater-host.ts` into the Engine: today Mundus
 //! Desktop updates via electron-updater running inside the Electron shell,
 //! reading `latest.yml` + an NSIS installer from the `makekosmos/desktop`
 //! GitHub releases feed. As Electron is removed, the Engine owns this flow

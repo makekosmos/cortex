@@ -1,19 +1,19 @@
 # CosCast
 
-This repository owns the Kosmos desktop application and its host-side services:
+This repository owns the Mundus desktop application and its host-side services:
 
 - `desktop/` — packaging scripts and resources (no Electron; the shipped Windows package is Engine + GPUI components);
-- `manager-gpui/` — the Kosmos Manager shipped in the Windows package as
-  `resources/components/manager/Kosmos Manager.exe`;
+- `manager-gpui/` — the Mundus Manager shipped in the Windows package as
+  `resources/components/manager/Mundus Manager.exe`;
 - `agenda-gpui` (sibling repo `makekosmos/agenda-gpui`, pinned in
-  `desktop/component-pins.json`) — the Kosmos Agenda shipped in the Windows
-  package as `resources/components/agenda/Kosmos Agenda.exe`;
+  `desktop/component-pins.json`) — the Agenda shipped in the Windows
+  package as `resources/components/agenda/Agenda.exe`;
 - `memoria-gpui` (sibling repo `makekosmos/memoria-gpui`, pinned in
-  `desktop/component-pins.json`) — the Kosmos Memoria shipped in the
-  Windows package as `resources/components/memoria/Kosmos Memoria.exe`;
+  `desktop/component-pins.json`) — the Memoria shipped in the
+  Windows package as `resources/components/memoria/Memoria.exe`;
 - `dictation` (sibling repo `makekosmos/dictation`, pinned in
-  `desktop/component-pins.json`) — the Kosmos Dictation shipped in the
-  Windows package as `resources/components/dictation/Kosmos Dictation.exe`;
+  `desktop/component-pins.json`) — the Dictation shipped in the
+  Windows package as `resources/components/dictation/Dictation.exe`;
 - `runtime/` — the Rust backend process supervised by the Engine;
 - `native-services/` — Windows focus/watcher services used by the Engine.
 
@@ -23,8 +23,8 @@ This repository owns the desktop runtime boundary. Its Rust workspace is
 self-contained; `ark-core` lives in-tree under `core/crates/ark-core` and the
 Engine hosts it in-process, so a sibling `core` checkout is not required.
 
-The shipped Kosmos Desktop for Windows contains no Electron. The product is
-the Kosmos Engine (`kepler-backend` with in-process ARK, tray + updater +
+The shipped Mundus Desktop for Windows contains no Electron. The product is
+the Mundus Engine (`mundus-engine` with in-process ARK, tray + updater +
 autostart) plus GPUI components under `resources/components/<name>/`.
 
 ## What is intentionally not promised
@@ -69,8 +69,8 @@ node desktop/scripts/release-preflight.mjs --platform win --bom path/to/release-
 
 # Stage packaged components under desktop/.tmp/components (Windows only):
 # each GPUI component is cargo-built for x86_64-pc-windows-msvc and staged as
-# <component>/win-unpacked/Kosmos <Name>.exe.
-KOSMOS_RELEASE_BOM=path/to/release-bom.json node desktop/scripts/build-package-components.mjs
+# <component>/win-unpacked/Mundus <Name>.exe.
+MUNDUS_RELEASE_BOM=path/to/release-bom.json node desktop/scripts/build-package-components.mjs
 
 # Build + package + verify (never publishes; writes a receipt):
 node desktop/scripts/build-desktop.mjs --platform win --bom path/to/release-bom.json
@@ -86,12 +86,12 @@ node desktop/scripts/publish-release.mjs --platform win --receipt desktop/releas
 ```
 
 `pnpm run --cwd desktop build` and `build:mac` read the same path from
-`KOSMOS_RELEASE_BOM`, so the existing release commands cannot run without an
+`MUNDUS_RELEASE_BOM`, so the existing release commands cannot run without an
 explicit resolved BOM.
 
 ## Shared workspace checkouts
 
-The root `package.json` `kosmos.workspace` object is the single source of truth
+The root `package.json` `mundus.workspace` object is the single source of truth
 for the pinned Imago and arca-sdk commits, package names, versions, and git
 integrity values. Core remains derived from `runtime/Cargo.toml`, the ARK
 sidecar pin, and the root `toolchain.json` toolchain pins.
@@ -105,9 +105,9 @@ node scripts/workspace.mjs bootstrap --dry-run
 node scripts/workspace.mjs bootstrap
 
 # Explicit local development only; sibling directories are never discovered:
-KOSMOS_WORKSPACE_MODE=local \
-KOSMOS_IMAGO_PATH=/work/imago \
-KOSMOS_ARCA_SDK_PATH=/work/arca-sdk \
+MUNDUS_WORKSPACE_MODE=local \
+MUNDUS_IMAGO_PATH=/work/imago \
+MUNDUS_ARCA_SDK_PATH=/work/arca-sdk \
 node scripts/workspace.mjs doctor
 ```
 
@@ -141,7 +141,7 @@ planner's `reasons` field as the explanation for a full selection.
 The build wrapper validates Cortex/Core commits, the pinned pnpm/Node/Rust toolchain, and
 the engine/package API contracts before `makensis` starts. The Windows installer is a
 standalone NSIS script (`desktop/build/installer.nsi`) compiled by `makensis`; the build
-downloads the pinned NSIS bundle when `KOSMOS_NSIS_DIR` is unset. It emits
+downloads the pinned NSIS bundle when `MUNDUS_NSIS_DIR` is unset. It emits
 `release/release-provenance.json` and atomically writes
 `release/release-receipt.v1.json` with exact inputs and final artifact hashes.
 `publish-release.mjs` consumes only that receipt; it never builds or packages. A BOM may

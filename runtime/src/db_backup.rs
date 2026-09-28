@@ -1,13 +1,13 @@
 // Periodic DB backup scheduler.
 //
 // Делает SQLite Online Backup ARK базы в `<data_dir>/backups/ark.db.backup-YYYY-MM-DD-HHMMSS`
-// раз в N часов (default 24, override через KEPLER_BACKUP_INTERVAL_HOURS).
+// раз в N часов (default 24, override через MUNDUS_BACKUP_INTERVAL_HOURS).
 // Online Backup API не блокирует concurrent readers/writer — safe для live DB.
 //
 // Rotation: после успешного backup'а удаляем старые, оставляя последние
-// `KEPLER_BACKUP_RETAIN_COUNT` (default 7).
+// `MUNDUS_BACKUP_RETAIN_COUNT` (default 7).
 //
-// Last-backup timestamp хранится в sync_kv под ключом `kepler.last_backup_ts`.
+// Last-backup timestamp хранится в sync_kv под ключом `mundus.last_backup_ts`.
 // Если backup упал — логируем eprintln и продолжаем; следующий запуск
 // попробует снова. Failure не должен блокировать backend startup.
 
@@ -20,21 +20,21 @@ use serde_json::json;
 
 use crate::ark_host::ArkHost;
 
-const SYNC_KV_LAST_BACKUP: &str = "kepler.last_backup_ts";
+const SYNC_KV_LAST_BACKUP: &str = "mundus.last_backup_ts";
 const BACKUPS_SUBDIR: &str = "backups";
 const BACKUP_FILE_PREFIX: &str = "ark.db.backup-";
 static BACKUP_ACTIVE: AtomicBool = AtomicBool::new(false);
 static BACKUP_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 
 fn interval_hours() -> u64 {
-    std::env::var("KEPLER_BACKUP_INTERVAL_HOURS")
+    std::env::var("MUNDUS_BACKUP_INTERVAL_HOURS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(24)
 }
 
 fn retain_count() -> usize {
-    std::env::var("KEPLER_BACKUP_RETAIN_COUNT")
+    std::env::var("MUNDUS_BACKUP_RETAIN_COUNT")
         .ok()
         .and_then(|v| v.parse::<usize>().ok())
         .unwrap_or(7)
@@ -72,7 +72,7 @@ async fn write_last_backup_ts(ark: &ArkHost, ts: DateTime<Utc>) -> Result<(), St
 }
 
 fn backup_wait_timeout_secs() -> u64 {
-    std::env::var("KEPLER_BACKUP_WAIT_TIMEOUT_SECS")
+    std::env::var("MUNDUS_BACKUP_WAIT_TIMEOUT_SECS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(900)

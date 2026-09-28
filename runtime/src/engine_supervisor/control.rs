@@ -3,11 +3,11 @@ use super::*;
 const DESKTOP_LEASE_READY_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub fn restart_core() -> ExitCode {
-    let data_dir = match lock_file::kosmos_data_dir() {
+    let data_dir = match lock_file::mundus_data_dir() {
         Ok(path) => path,
         Err(error) => {
             crate::observability::stderr(format!(
-                "[kosmos-engine] restart failed to resolve data dir: {error}"
+                "[mundus-engine] restart failed to resolve data dir: {error}"
             ));
             return ExitCode::from(1);
         }
@@ -17,18 +17,18 @@ pub fn restart_core() -> ExitCode {
     }) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            crate::observability::stderr(format!("[kosmos-engine] restart refused: {error}"));
+            crate::observability::stderr(format!("[mundus-engine] restart refused: {error}"));
             exit_code_for_control_error(error)
         }
     }
 }
 
 pub fn shutdown() -> ExitCode {
-    let data_dir = match lock_file::kosmos_data_dir() {
+    let data_dir = match lock_file::mundus_data_dir() {
         Ok(path) => path,
         Err(error) => {
             crate::observability::stderr(format!(
-                "[kosmos-engine] shutdown failed to resolve data dir: {error}"
+                "[mundus-engine] shutdown failed to resolve data dir: {error}"
             ));
             return ExitCode::from(1);
         }
@@ -38,7 +38,7 @@ pub fn shutdown() -> ExitCode {
     }) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            crate::observability::stderr(format!("[kosmos-engine] shutdown refused: {error}"));
+            crate::observability::stderr(format!("[mundus-engine] shutdown refused: {error}"));
             exit_code_for_control_error(error)
         }
     }
@@ -84,7 +84,7 @@ pub(crate) async fn send_desktop_lease_when_ready(
                     Ok(result) => {
                         if let Err(ref error) = result {
                             crate::observability::stderr(format!(
-                                "[kosmos-engine] desktop lease acknowledgement failed: {error}"
+                                "[mundus-engine] desktop lease acknowledgement failed: {error}"
                             ));
                         }
                         return result;

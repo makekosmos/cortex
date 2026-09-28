@@ -1,8 +1,8 @@
-// Версия WS-протокола Kepler ↔ Electron-апки.
+// Версия WS-протокола Mundus ↔ Electron-апки.
 //
 // Семантика:
 //   MAJOR — breaking wire changes. Клиенты с другим MAJOR должны отказаться коннектиться
-//           и показать toast «Update Kepler/app».
+//           и показать toast «Update Mundus/app».
 //   MINOR — additive, forward-compatible. При mismatch — warning в лог, работаем дальше.
 //   PATCH — bugfix без wire impact. Ignored при сравнении.
 

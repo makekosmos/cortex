@@ -1,12 +1,12 @@
 // Usage tracker module — портированно из services/usage-tracker (Phase E1
-// refactor). Запускается как tokio task внутри kepler-backend, пишет
+// refactor). Запускается как tokio task внутри mundus-engine, пишет
 // foreground-session-данные напрямую в ARK через ArkHost (in-process), без WS
 // round-trip и без отдельного singleton-процесса.
 //
 // Что НЕ переехало (по сравнению со standalone usage-tracker):
 //   * singleton lock — backend сам singleton (через SingletonGuard в main.rs),
 //   * HKCU\Run installer — это shell installer ответственность,
-//   * kepler_client.rs (WS) — мы внутри backend'а, прямой вызов ArkHost.
+//   * mundus_client.rs (WS) — мы внутри backend'а, прямой вызов ArkHost.
 //   * spool — больше не нужен: нет WS round-trip и нет race с cold-start.
 
 #[cfg(target_os = "windows")]
@@ -170,13 +170,13 @@ impl UsageTrackerOpts {
             .and_then(|v| v.parse::<u64>().ok())
             .filter(|v| *v > 0)
             .unwrap_or(DEFAULT_IDLE_SECS);
-        // KEPLER_USAGE_TRACKER_EXCLUDE_EXTRA — comma-separated user добавки
+        // MUNDUS_USAGE_TRACKER_EXCLUDE_EXTRA — comma-separated user добавки
         // поверх дефолтного списка. Пустая строка / отсутствие = только дефолт.
         let mut excludes: Vec<String> = DEFAULT_EXCLUDE_PATTERNS
             .iter()
             .map(|s| (*s).to_string())
             .collect();
-        if let Ok(extra) = std::env::var("KEPLER_USAGE_TRACKER_EXCLUDE_EXTRA") {
+        if let Ok(extra) = std::env::var("MUNDUS_USAGE_TRACKER_EXCLUDE_EXTRA") {
             for token in extra.split(',') {
                 let trimmed = token.trim().to_lowercase();
                 if !trimmed.is_empty() && !excludes.contains(&trimmed) {
@@ -1060,7 +1060,7 @@ async fn resolve_icon_ref(
 }
 
 fn resolve_device_name() -> String {
-    std::env::var("KOSMOS_DEVICE_NAME")
+    std::env::var("MUNDUS_DEVICE_NAME")
         .ok()
         .filter(|v| !v.trim().is_empty())
         .or_else(|| std::env::var("COMPUTERNAME").ok())
@@ -1112,7 +1112,7 @@ mod tests {
     fn opts_from_env_uses_defaults_when_unset() {
         std::env::remove_var("USAGE_TRACKER_POLL_MS");
         std::env::remove_var("USAGE_TRACKER_IDLE_SECS");
-        std::env::remove_var("KEPLER_USAGE_TRACKER_EXCLUDE_EXTRA");
+        std::env::remove_var("MUNDUS_USAGE_TRACKER_EXCLUDE_EXTRA");
         let opts = UsageTrackerOpts::from_env();
         assert_eq!(opts.poll_interval, Duration::from_millis(DEFAULT_POLL_MS));
         assert_eq!(opts.idle_threshold, Duration::from_secs(DEFAULT_IDLE_SECS));

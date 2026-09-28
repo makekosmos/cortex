@@ -1,16 +1,18 @@
 // Dictation config. Не-секреты в JSON, API key — в Windows Credential Manager
 // через `keyring` (см. spec: enterprise standard, не хранится в plaintext).
 //
-// Layout: `<data_dir>/dictation-config.json` где data_dir = `KOSMOS_DATA_DIR`
-// если установлен, иначе `%APPDATA%\Kosmos`.
+// Layout: `<data_dir>/dictation-config.json` где data_dir = `MUNDUS_DATA_DIR`
+// если установлен, иначе `%APPDATA%\Mundus`.
 
 use serde::{Deserialize, Serialize};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-/// Keyring service name (общий для всего Kepler) + key для Groq API ключа.
+/// Keyring service name (общий для всего Mundus) + key для Groq API ключа.
 /// При добавлении других AI-провайдеров — новый username (service остаётся).
 #[cfg(not(test))]
+// Persisted keyring service name — holds user API keys; renaming it would
+// orphan stored credentials. See docs/brand-legacy-identifiers.md.
 const KEYRING_SERVICE: &str = "kosmos-kepler";
 #[cfg(not(test))]
 const KEYRING_USER_GROQ: &str = "groq-api-key";
@@ -131,11 +133,11 @@ impl Default for DictationConfig {
     }
 }
 
-/// `%APPDATA%\Kosmos` или `KOSMOS_DATA_DIR` (тесты, dev-slot). Точно тот же
+/// `%APPDATA%\Mundus` или `MUNDUS_DATA_DIR` (тесты, dev-slot). Точно тот же
 /// slot-based изоляция за счёт env
 /// переменной, которую устанавливает shell через `resolveInstance`.
 pub fn data_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("KOSMOS_DATA_DIR") {
+    if let Ok(dir) = std::env::var("MUNDUS_DATA_DIR") {
         return PathBuf::from(dir);
     }
     let base = std::env::var("APPDATA")
@@ -147,7 +149,7 @@ pub fn data_dir() -> PathBuf {
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from("."))
         });
-    base.join("Kosmos")
+    base.join("Mundus")
 }
 
 pub fn config_path() -> PathBuf {
@@ -357,12 +359,12 @@ fn keyring_entry() -> Result<keyring::Entry, keyring::Error> {
 }
 
 fn test_api_key_override() -> Option<String> {
-    let is_test_like = matches!(std::env::var("KOSMOS_TEST_MODE").as_deref(), Ok("1"))
-        || matches!(std::env::var("KOSMOS_HEADLESS").as_deref(), Ok("1"));
+    let is_test_like = matches!(std::env::var("MUNDUS_TEST_MODE").as_deref(), Ok("1"))
+        || matches!(std::env::var("MUNDUS_HEADLESS").as_deref(), Ok("1"));
     if !is_test_like {
         return None;
     }
-    std::env::var("KOSMOS_TEST_GROQ_API_KEY")
+    std::env::var("MUNDUS_TEST_GROQ_API_KEY")
         .ok()
         .filter(|key| !key.trim().is_empty())
 }
@@ -440,7 +442,7 @@ mod tests {
             inject_mode: InjectMode::ClipboardOnly,
             network_profile: NetworkProfile::CloudflareDoh,
             http_proxy: Some("http://127.0.0.1:8888".into()),
-            transcription_prompt: "Kepler Kosmos Groq".into(),
+            transcription_prompt: "Mundus Mundus Groq".into(),
             provider: "groq".into(),
             provider_enabled: true,
             model: "whisper-large-v3".into(),
@@ -458,7 +460,7 @@ mod tests {
         assert_eq!(loaded.inject_mode, InjectMode::ClipboardOnly);
         assert_eq!(loaded.network_profile, NetworkProfile::CloudflareDoh);
         assert_eq!(loaded.http_proxy.as_deref(), Some("http://127.0.0.1:8888"));
-        assert_eq!(loaded.transcription_prompt, "Kepler Kosmos Groq");
+        assert_eq!(loaded.transcription_prompt, "Mundus Mundus Groq");
         assert_eq!(loaded.local_engine, "whisper.cpp");
         assert_eq!(
             loaded.local_model_path.as_deref(),

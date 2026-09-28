@@ -6,10 +6,10 @@
 //! ```yaml
 //! version: 0.5.3
 //! files:
-//!   - url: Kosmos-Setup-0.5.3.exe
+//!   - url: Mundus-Setup-0.5.3.exe
 //!     sha512: CX4w...==
 //!     size: 122041993
-//! path: Kosmos-Setup-0.5.3.exe
+//! path: Mundus-Setup-0.5.3.exe
 //! sha512: CX4w...==
 //! releaseDate: '2026-06-18T12:18:15.656Z'
 //! ```
@@ -135,10 +135,10 @@ mod tests {
 
     const FIXTURE: &str = r#"version: 0.5.3
 files:
-  - url: Kosmos-Setup-0.5.3.exe
+  - url: Mundus-Setup-0.5.3.exe
     sha512: CX4w1234==
     size: 122041993
-path: Kosmos-Setup-0.5.3.exe
+path: Mundus-Setup-0.5.3.exe
 sha512: CX4w1234==
 releaseDate: '2026-06-18T12:18:15.656Z'
 "#;
@@ -149,19 +149,19 @@ releaseDate: '2026-06-18T12:18:15.656Z'
         assert_eq!(manifest.version, "0.5.3");
         assert_eq!(manifest.files.len(), 1);
         let file = manifest.primary_file().unwrap();
-        assert_eq!(file.url, "Kosmos-Setup-0.5.3.exe");
+        assert_eq!(file.url, "Mundus-Setup-0.5.3.exe");
         assert_eq!(file.sha512, "CX4w1234==");
         assert_eq!(file.size, 122_041_993);
     }
 
     #[test]
     fn handles_multiple_file_entries_and_keeps_the_first() {
-        let text = "version: 1.2.0\nfiles:\n  - url: Kosmos-Setup-1.2.0.exe\n    sha512: AAA\n    size: 10\n  - url: extra.blockmap\n    sha512: BBB\n    size: 20\n";
+        let text = "version: 1.2.0\nfiles:\n  - url: Mundus-Setup-1.2.0.exe\n    sha512: AAA\n    size: 10\n  - url: extra.blockmap\n    sha512: BBB\n    size: 20\n";
         let manifest = parse_latest_yml(text).unwrap();
         assert_eq!(manifest.files.len(), 2);
         assert_eq!(
             manifest.primary_file().unwrap().url,
-            "Kosmos-Setup-1.2.0.exe"
+            "Mundus-Setup-1.2.0.exe"
         );
     }
 

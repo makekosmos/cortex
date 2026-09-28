@@ -47,9 +47,9 @@ const prerequisites =
   process.platform === "win32" &&
   cleanWorktree &&
   dependenciesReady &&
-  componentReady("agenda_gpui", "KOSMOS_AGENDA_GPUI_SRC", "agenda-gpui") &&
-  componentReady("memoria_gpui", "KOSMOS_MEMORIA_GPUI_SRC", "memoria-gpui") &&
-  componentReady("dictation_gpui", "KOSMOS_DICTATION_GPUI_SRC", "dictation") &&
+  componentReady("agenda_gpui", "MUNDUS_AGENDA_GPUI_SRC", "agenda-gpui") &&
+  componentReady("memoria_gpui", "MUNDUS_MEMORIA_GPUI_SRC", "memoria-gpui") &&
+  componentReady("dictation_gpui", "MUNDUS_DICTATION_GPUI_SRC", "dictation") &&
   spawnSync("cargo", ["--version"], { encoding: "utf8" }).status === 0 &&
   git(["rev-parse", "HEAD"]);
 
@@ -61,6 +61,7 @@ async function writeTestBom() {
     currentCommit,
     "release requires the in-tree core/ subtree to ride on the Cortex commit",
   );
+
 
   const engineDir = path.join(desktop, ".tmp", "engine.next");
   mkdirSync(engineDir, { recursive: true });
@@ -113,7 +114,7 @@ async function writeTestBom() {
       },
     ],
   };
-  const file = path.join(await mkdtemp(path.join(os.tmpdir(), "kosmos-bom-")), "bom.json");
+  const file = path.join(await mkdtemp(path.join(os.tmpdir(), "mundus-bom-")), "bom.json");
   await writeFile(file, JSON.stringify(bom, null, 2));
   return file;
 }
@@ -133,7 +134,7 @@ test(
       [path.join(desktop, "scripts", "build-package-components.mjs")],
       {
         cwd: desktop,
-        env: { ...process.env, KOSMOS_RELEASE_BOM: bom },
+        env: { ...process.env, MUNDUS_RELEASE_BOM: bom },
         encoding: "utf8",
         timeout: 14 * 60_000,
       },
@@ -144,13 +145,13 @@ test(
       `exit ${result.status} ${result.error?.code ?? ""}\n${result.stderr}\n${result.stdout.slice(-3000)}`,
     );
 
-    for (const name of ["kosmos", "memoria", "agenda", "arcadia", "dictation"])
+    for (const name of ["mundus", "memoria", "agenda", "dictation"])
       assert.ok(existsSync(path.join(desktop, "build", "app-icons", `${name}.ico`)), name);
     for (const [component, exe] of [
-      ["manager", "Kosmos Manager.exe"],
-      ["agenda", "Kosmos Agenda.exe"],
-      ["memoria", "Kosmos Memoria.exe"],
-      ["dictation", "Kosmos Dictation.exe"],
+      ["manager", "Mundus Manager.exe"],
+      ["agenda", "Agenda.exe"],
+      ["memoria", "Memoria.exe"],
+      ["dictation", "Dictation.exe"],
     ]) {
       const out = path.join(desktop, ".tmp", "components", component, "win-unpacked");
       assert.ok(existsSync(path.join(out, exe)), `${component} unpackaged output`);

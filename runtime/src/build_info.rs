@@ -1,6 +1,6 @@
 // One product, one version (KOS-233): the Engine no longer carries its own
 // `0.1.x` release line. `desktop/scripts/build-backend.mjs` injects the
-// Kosmos Desktop product version (`desktop/release-versions.json`) and the
+// Mundus Desktop product version (`desktop/release-versions.json`) and the
 // source commit it was built from as env vars at compile time; `option_env!`
 // bakes them into the binary. A dev build (`cargo build` outside the desktop
 // build script) has neither set, so both fall back to an empty string rather
@@ -9,8 +9,8 @@
 // This is distinct from `protocol_version::API_VERSION`, which is the
 // Engine↔shell wire contract and does not move with the product version.
 
-const ENGINE_VERSION: Option<&str> = option_env!("KOSMOS_ENGINE_VERSION");
-const ENGINE_SOURCE_COMMIT: Option<&str> = option_env!("KOSMOS_ENGINE_SOURCE_COMMIT");
+const ENGINE_VERSION: Option<&str> = option_env!("MUNDUS_ENGINE_VERSION");
+const ENGINE_SOURCE_COMMIT: Option<&str> = option_env!("MUNDUS_ENGINE_SOURCE_COMMIT");
 
 /// Product version this Engine binary was built as part of (e.g. `"0.9.39"`),
 /// or `""` for a build that did not go through `build-backend.mjs`.
@@ -41,8 +41,8 @@ mod tests {
 
     #[test]
     fn falls_back_to_empty_string_without_injected_env() {
-        // This crate's own test build never sets KOSMOS_ENGINE_VERSION /
-        // KOSMOS_ENGINE_SOURCE_COMMIT, so the fallback path is what actually
+        // This crate's own test build never sets MUNDUS_ENGINE_VERSION /
+        // MUNDUS_ENGINE_SOURCE_COMMIT, so the fallback path is what actually
         // runs here — assert it stays a valid (empty) string, never panics.
         assert!(engine_version().is_empty() || engine_version().is_ascii());
         assert!(

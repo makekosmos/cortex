@@ -107,7 +107,7 @@ async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> Dictation
         let events_tx = host.events_tx.clone();
         let level_capture_id = capture_id.clone();
         std::thread::Builder::new()
-            .name("kosmos-dictation-levels".into())
+            .name("mundus-dictation-levels".into())
             .spawn(move || {
                 for level in level_rx {
                     let _ = events_tx.send(json!({

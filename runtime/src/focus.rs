@@ -1,4 +1,4 @@
-// Focus-mode блоклисты для Kepler.
+// Focus-mode блоклисты для Mundus.
 //
 // Хранение:
 //   - `blocklist_obj` — ARK object_type (lazy-зарегистрирован на первом вызове

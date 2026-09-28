@@ -346,7 +346,7 @@ impl ManagerApp {
                 .worker
                 .commands
                 .send(Command::Rpc {
-                    slot: "upd.kosmos".into(),
+                    slot: "upd.mundus".into(),
                     op: "updater.status",
                     params: json!({}),
                 })

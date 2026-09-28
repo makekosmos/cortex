@@ -98,7 +98,7 @@ fn normalize_path(path: &str) -> String {
 /// `get_usage_analytics` snapshot with an `iconPath` field merged into every
 /// `topApps` row. Mirrors loadUsageRows: app_index.list_all maps
 /// normalized exec paths to app ids, then `app_index.icon_path` resolves the
-/// cached PNG (Electron `kosmos-icon://` equivalent for GPUI). A failing
+/// cached PNG (Electron `mundus-icon://` equivalent for GPUI). A failing
 /// app_index is non-fatal — rows render with letter badges.
 fn usage_report(engine: &Engine) -> Result<Value, String> {
     let mut snapshot = engine.rpc(

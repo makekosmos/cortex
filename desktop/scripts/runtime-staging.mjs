@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 
-export const RUNTIME_BINARIES = ["kepler-backend", "kepler-focus-helper", "kepler-focus-svc"];
+export const RUNTIME_BINARIES = ["mundus-engine", "focus-helper", "focus-svc"];
 
 export function acquireBuildLock(root) {
   const lock = path.join(root, ".tmp", "build.active.lock");

@@ -5,7 +5,7 @@
 //!
 //! The installer is spawned **detached** and this call does not wait for it
 //! or terminate the current process: Engine is not the process that owns
-//! Kosmos's lifetime (Manager + Host are), so who quits and relaunches
+//! Mundus's lifetime (Manager + Host are), so who quits and relaunches
 //! around the silent install is an integration decision left to the caller
 //! (`updater.install` RPC — see `runtime/src/updater/ops.rs` doc comment).
 use std::path::Path;
@@ -48,7 +48,7 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn missing_installer_surfaces_as_io_error() {
-        let missing = Path::new("C:/kosmos-updater-tests/definitely-missing.exe");
+        let missing = Path::new("C:/mundus-updater-tests/definitely-missing.exe");
         let result = launch_silent_detached(missing);
         assert!(matches!(result, Err(UpdaterError::Io(_))));
     }

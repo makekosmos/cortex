@@ -4,7 +4,7 @@
 `kos-137` (база `942acb9a`) в конце обсуждения.
 
 **Статус (KOS-236):** Electron-оболочка и Electron Package Host удалены из
-репозитория. В продакшене для Windows остаются Engine (`kepler-backend` с
+репозитория. В продакшене для Windows остаются Engine (`mundus-engine` с
 in-process ARK, трей + апдейтер + автостарт) и GPUI-компоненты под
 `resources/components/<name>/`. Упомянутые в этом журнале Electron-файлы
 (`desktop/electron/`, `host/electron/`, `desktop/src/`, Vue-UI и e2e) являются
@@ -28,7 +28,7 @@ in-process ARK, трей + апдейтер + автостарт) и GPUI-ком
 
 | # | Элемент | Решение | Статус |
 |---|---|---|---|
-| 1 | `manager/` (Vue Manager) | **Удалить** вместе со всеми ссылками (typecheck, check-plan, source-size, layout, release-preflight, linux-smoke, e2e, `KOSMOS_MANAGER_MAIN`). Для перехода на GPUI не нужен | Готово в worktree `C:\mk\cortex-rm-vue-manager` (ветка `chore/remove-vue-manager`), не закоммичено; перенести в `kos-137` |
+| 1 | `manager/` (Vue Manager) | **Удалить** вместе со всеми ссылками (typecheck, check-plan, source-size, layout, release-preflight, linux-smoke, e2e, `MUNDUS_MANAGER_MAIN`). Для перехода на GPUI не нужен | Готово в worktree `C:\mk\cortex-rm-vue-manager` (ветка `chore/remove-vue-manager`), не закоммичено; перенести в `kos-137` |
 | 2 | `manager-gpui/` | **Остаётся в cortex** как основа единого приложения | Решено |
 | 3 | `packages/*` (bigfrontend, codewars, greatfrontend, hevy, huawei-health, leetcode, toggl, raycast-api, ark-markdown-bridge) | Сторонние пакеты, все **живые**. Вынести из cortex; обновляться независимо от cortex | Решено, репо — см. 3b |
 | 3b | Куда выносить пакеты | Один репо **`integrations`** (новый, **open source**): каждый пакет со своим `manifest.json` и своей версией | Решено |
@@ -37,7 +37,7 @@ in-process ARK, трей + апдейтер + автостарт) и GPUI-ком
 | 5a | Точки входа в Agenda | Agenda — полноценное отдельное приложение: открывается через меню Пуск, ярлык и т.п., а также из дашборда (`manager-gpui`). Через лаунчер — нет | Решено |
 | 6 | Focus | **UI фокуса в cortex не нужен** — фокусом (включая pomodoro) будет **ordo**. Блокировка и Engine-операции `focus.*`/`pomodoro.*` **остаются в cortex** — это привилегированная возможность хоста, приложения взаимодействуют с ОС только через Engine и права манифеста | Решено |
 | 8 | Package Host и легаси extension-host | Легаси `.kext`-рантайм в `desktop/` (**~45 файлов `extension-*`**) — **удалить целиком**. Dictation уходит в GPUI-модуль, launcher заморожен в инкубаторе. Рантайм пакетов один — `host/` (.kspkg). Проверить, нужен ли одноразовый мигратор данных для уже установленных `.kext` | Решено |
-| 9 | Канал для Agenda-GPUI | Остаётся **компонентом установщика** (версия с Kosmos). Roadmap: kind «нативное приложение» в `.kspkg`/Package Index для независимых обновлений — **KOS-138** (Backlog) | Решено |
+| 9 | Канал для Agenda-GPUI | Остаётся **компонентом установщика** (версия с Mundus). Roadmap: kind «нативное приложение» в `.kspkg`/Package Index для независимых обновлений — **KOS-138** (Backlog) | Решено |
 | 10 | `kosmos-gpui-kit` | **Отдельный репо** по образцу imago («imago для GPUI»): тема, виджеты, Engine-клиент из `manager-gpui`. NB: в imago Rust-крейта нет, он TS-only — kit будет новым репо с Rust-crate | Решено |
 | 11 | Мусор в `core/` subtree | **Чистим в cortex сейчас** + отдельно предлагаем ту же чистку в upstream `makekosmos/core`, чтобы не вернулась при подтягивании | Решено |
 | 7 | Dictation | GPUI, **модуль единого приложения cortex** (не отдельный бинарь): пилюля — окно того же GPUI-процесса, настройки — его экран. Весь Vue-UI диктации (`desktop/electron/dictation-pill.ts`, `desktop/src/views/DictationPillView.vue`, `dictation-pill-waveform.ts`, `dictation-model-selection.ts`, `DictationTab.vue`, `useDictationConfig*`, `useDictationPending.ts`) уходит из `desktop/`. Функциональные возможности (`runtime/src/dictation/`: микрофон, модели, транскрибация, хоткей-хук, вставка текста) остаются в cortex и выдаются через права | Решено (модуль cortex-GPUI; старый пакет `makekosmos/dictation` выводится) |
@@ -55,7 +55,7 @@ in-process ARK, трей + апдейтер + автостарт) и GPUI-ком
 ## Заметки к п.5 (Launcher)
 
 - Статические команды шелла из `desktop/electron/commands.ts` (`settings:open`,
-  `kosmos:agenda-gpui`, focus, dictation) вызываются через лаунчер; после его
+  `mundus:agenda-gpui`, focus, dictation) вызываются через лаунчер; после его
   удаления у них остаются только другие точки вызова.
 - `commands.ts` используется не только лаунчером: `main-runtime-integrations.ts`
   берёт оттуда `setDictationShortcutResolver`, `main-commands.ts` — `COMMANDS`.
@@ -71,8 +71,8 @@ in-process ARK, трей + апдейтер + автостарт) и GPUI-ком
   вкладка настроек `views/settings/tabs/Focus*` + `composables/useFocusTab*`.
 - Engine: `runtime/src/focus.rs`, `runtime/src/pomodoro/**`, `runtime/src/pomodoro_host.rs`
   — операции, которые ordo уже вызывает (`focus.*`, `pomodoro.*`).
-- Блокировка: `native-services/kepler-focus-svc`, `kepler-focus-helper`,
-  `kepler-watcher` (18 файлов), клиент `shared/focus-service-*`.
+- Блокировка: `native-services/focus-svc`, `focus-helper`,
+  `watcher` (18 файлов), клиент `shared/focus-service-*`.
 
 ## Заметки к п.7 (Dictation)
 
@@ -93,7 +93,7 @@ in-process ARK, трей + апдейтер + автостарт) и GPUI-ком
 1. Исходниках: `cortex/packages/`, BOM ссылается на `repository: makekosmos/cortex`.
 2. Сборщике `package-index/scripts/build-source-packages.mjs`: требует `--cortex`,
    читает `packages/<provider>`, импортирует `desktop/scripts/zip-utils.mjs` из cortex.
-3. `packages/ark-markdown-bridge/Cargo.toml`: `kepler-backend = { path = "../../runtime" }`
+3. `packages/ark-markdown-bridge/Cargo.toml`: `mundus-engine = { path = "../../runtime" }`
    — заменить на тонкий протокольный crate. Остальные 7 пакетов — самостоятельные
    cargo-проекты без path-зависимостей.
 4. Пакетно-специфичном коде хоста: `runtime/src/package_service/integrations/huawei_login.rs`,
@@ -112,7 +112,7 @@ in-process ARK, трей + апдейтер + автостарт) и GPUI-ком
   встроенный ARK (раньше — в sidecar `ark-core-rpc`, больше не поставляется).
   Параметры: `{range_days, top_apps_limit, recent_sessions_limit}`
   и `{limit}`.
-- ⚠️ Иконки: `app_index.list_all` возвращает `icon_ref: "kosmos-icon://app/<id>"`
+- ⚠️ Иконки: `app_index.list_all` возвращает `icon_ref: "mundus-icon://app/<id>"`
   — это Electron-протокол, GPUI его не загрузит. Для иконок в Usage-таблице
   использовать `app_index.icon_path` (реальный путь на диске).
 
@@ -208,10 +208,10 @@ private, `main` @ `80ced30`, локально `C:\Users\kirill\Coding\makekosmos
   модуль, удалить только legacy-specific `assertExtension*Permission`).
 - **Соседний легаси вне glob** (тоже в удаление): `command-host/*`,
   `main-command-host.ts`, `main-benchmark-open-all.ts`, `main-initial-kext.ts`,
-  `kepler-api.ts`, `local-image-protocol.ts` (electron-копия),
+  `mundus-api.ts`, `local-image-protocol.ts` (electron-копия),
   `book-metadata-{browser,fetch,open-library,connect-proxy}.ts`,
   `image-{dominant-color,dimensions}.ts`, `public-network-address.ts`,
-  `InstallExtensionView.vue` + роут `#install-extension`, `kepler.extension.*`
+  `InstallExtensionView.vue` + роут `#install-extension`, `mundus.extension.*`
   в `preload-bridge.ts`/`shared/ipc-api-types.ts`, `.kext`-скрипты
   (`install-extension.mjs`, `uninstall-extension.mjs`, `publish-extension.mjs`,
   `generate-catalog.mjs`, `extension-package-utils.mjs`, `vite.extensions.config.mjs`),
@@ -242,7 +242,7 @@ private, `main` @ `80ced30`, локально `C:\Users\kirill\Coding\makekosmos
 | 2026-09-24 | W3: my-cosmos → incubator | `chore/my-cosmos-snapshot` @ `c322cd7`; в cortex my-cosmos уже мёртв (нет роута/импортеров) |
 | 2026-09-24 | W1: package-index decouple | `chore/bom-source-build` @ `c1f45a3` (содержит `97200b5` + repin BOM → integrations). `bun run check` PASS 29/29 |
 
-| 2026-09-24 | W2: ark-markdown-bridge decouple | cortex `chore/worker-protocol-crate` @ `7d99757` (crate `kosmos-package-protocol`); integrations @ `1eefaa3` pushed (git+rev pin ждёт мержа cortex-ветки) |
+| 2026-09-24 | W2: ark-markdown-bridge decouple | cortex `chore/worker-protocol-crate` @ `7d99757` (crate `package-protocol`); integrations @ `1eefaa3` pushed (git+rev pin ждёт мержа cortex-ветки) |
 | 2026-09-24 | W6: kosmos-gpui-kit extraction | kit @ `268ffed` pushed (theme/engine/fields/widgets); cortex `chore/gpui-kit-consume` @ `81afa0fa` — manager-gpui потребляет kit по пину |
 | 2026-09-24 | W4: core/ subtree cleanup | `chore/core-subtree-clean` — `73b6db55` + `68691471`, full gate PASS |
 | 2026-09-24 | packages/ + command-host + my-cosmos удалены | `chore/remove-packages` — `2de0411e` + `d4451ab4`; command-host пришлось удалить: зависел от `packages/raycast-api` (`@raycast/api`); манифесты пакетов → `runtime/tests/fixtures/` |

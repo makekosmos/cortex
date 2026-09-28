@@ -173,13 +173,13 @@ fn sync_env_loads_only_runtime_keys() {
     let dir = tempfile::tempdir().expect("tempdir");
     std::fs::write(
         dir.path().join("sync.env"),
-        "KOSMOS_SPACE_ID = personal\nIGNORED_SECRET=nope\n# KOSMOS_IROH=0\n",
+        "MUNDUS_SPACE_ID = personal\nIGNORED_SECRET=nope\n# MUNDUS_IROH=0\n",
     )
     .expect("write sync.env");
 
     assert_eq!(
         read_sync_env(dir.path()),
-        vec![("KOSMOS_SPACE_ID".to_string(), "personal".to_string())]
+        vec![("MUNDUS_SPACE_ID".to_string(), "personal".to_string())]
     );
 }
 

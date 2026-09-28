@@ -1,8 +1,8 @@
 [package]
-name = "kepler-backend"
+name = "engine"
 version = "0.1.0"
 edition.workspace = true
-description = "Kosmos Kepler backend — headless ARK host (WS server, sidecar supervisor, sync)"
+description = "Mundus Engine — headless ARK host (WS server, sidecar supervisor, sync)"
 autobins = false
 
 [features]
@@ -14,11 +14,11 @@ iroh-spike = ["ark-core/iroh-spike"]
 package-worker-fixture = []
 
 [lib]
-name = "kepler_backend"
+name = "engine"
 path = "src/lib.rs"
 
 [[bin]]
-name = "kepler-backend"
+name = "mundus-engine"
 path = "src/main.rs"
 
 [[bin]]
@@ -32,7 +32,7 @@ path = "src/bin/ark-markdown-bridge.rs"
 
 [dependencies]
 ark-core = { path = "../core/crates/ark-core", package = "ark-core" }
-kosmos-package-protocol = { path = "crates/kosmos-package-protocol" }
+package-protocol = { path = "crates/package-protocol" }
 rusqlite.workspace = true
 tokio = { version = "1", features = [
   "rt-multi-thread",

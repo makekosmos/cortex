@@ -93,9 +93,9 @@ fn create_process_suspended(
         "TMP",
         // Fixture markers are test-only process inputs. Production launches
         // never copy these names from the parent environment.
-        "KOSMOS_FIXTURE_ENTRY_MARKER",
-        "KOSMOS_FIXTURE_BOOTSTRAP_MARKER",
-        "KOSMOS_FAKE_PROVIDER_RESULT_MARKER",
+        "MUNDUS_FIXTURE_ENTRY_MARKER",
+        "MUNDUS_FIXTURE_BOOTSTRAP_MARKER",
+        "MUNDUS_FAKE_PROVIDER_RESULT_MARKER",
     ];
     #[cfg(not(any(test, feature = "package-worker-fixture")))]
     let environment_names = ["SystemRoot", "WINDIR", "TEMP", "TMP"];
@@ -108,8 +108,8 @@ fn create_process_suspended(
     }
     if let Some(state_root) = state_root {
         environment.insert(
-            "kosmos_data_dir".into(),
-            ("KOSMOS_DATA_DIR".into(), state_root.as_os_str().to_owned()),
+            "mundus_data_dir".into(),
+            ("MUNDUS_DATA_DIR".into(), state_root.as_os_str().to_owned()),
         );
     }
     let mut env = Vec::<u16>::new();

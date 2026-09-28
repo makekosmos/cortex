@@ -49,7 +49,7 @@ pub struct LocalRequest<'a> {
     pub model_path: Option<&'a str>,
     pub command_path: Option<&'a str>,
     /// Через сколько мс простоя выгружать whisper-server (из config).
-    /// `None` = никогда. Env `KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS` переопределяет.
+    /// `None` = никогда. Env `MUNDUS_LOCAL_STT_IDLE_UNLOAD_MS` переопределяет.
     pub idle_unload_ms: Option<u64>,
 }
 
@@ -126,8 +126,8 @@ pub enum LocalError {
 }
 
 fn is_dictation_test_mode() -> bool {
-    matches!(env::var("KOSMOS_TEST_MODE").as_deref(), Ok("1"))
-        || matches!(env::var("KOSMOS_HEADLESS").as_deref(), Ok("1"))
+    matches!(env::var("MUNDUS_TEST_MODE").as_deref(), Ok("1"))
+        || matches!(env::var("MUNDUS_HEADLESS").as_deref(), Ok("1"))
 }
 
 fn test_override_transcript() -> Option<String> {
@@ -135,8 +135,8 @@ fn test_override_transcript() -> Option<String> {
         return None;
     }
     for key in [
-        "KOSMOS_TEST_LOCAL_DICTATION_TRANSCRIPT",
-        "KOSMOS_TEST_DICTATION_TRANSCRIPT",
+        "MUNDUS_TEST_LOCAL_DICTATION_TRANSCRIPT",
+        "MUNDUS_TEST_DICTATION_TRANSCRIPT",
     ] {
         if let Ok(value) = env::var(key) {
             let trimmed = value.trim();
@@ -154,7 +154,7 @@ fn direct_sidecar_fallback_allowed() -> bool {
     // выключен, включается только явным `=1`.
     if cfg!(test) {
         return matches!(
-            env::var("KOSMOS_LOCAL_STT_ALLOW_DIRECT_FALLBACK").as_deref(),
+            env::var("MUNDUS_LOCAL_STT_ALLOW_DIRECT_FALLBACK").as_deref(),
             Ok("1")
         );
     }
@@ -164,13 +164,13 @@ fn direct_sidecar_fallback_allowed() -> bool {
     // классифицируется как Retryable и pill бесконечно показывает «Жду сеть»
     // для ЛОКАЛЬНОГО провайдера. Явный opt-out — `=0`.
     !matches!(
-        env::var("KOSMOS_LOCAL_STT_ALLOW_DIRECT_FALLBACK").as_deref(),
+        env::var("MUNDUS_LOCAL_STT_ALLOW_DIRECT_FALLBACK").as_deref(),
         Ok("0")
     )
 }
 
 fn local_stt_accelerator() -> LocalSttAccelerator {
-    match env::var("KOSMOS_LOCAL_STT_ACCELERATOR")
+    match env::var("MUNDUS_LOCAL_STT_ACCELERATOR")
         .unwrap_or_default()
         .trim()
         .to_ascii_lowercase()
@@ -183,7 +183,7 @@ fn local_stt_accelerator() -> LocalSttAccelerator {
 }
 
 fn local_stt_profile() -> LocalSttProfile {
-    match env::var("KOSMOS_LOCAL_STT_PROFILE")
+    match env::var("MUNDUS_LOCAL_STT_PROFILE")
         .unwrap_or_default()
         .trim()
         .to_ascii_lowercase()
@@ -195,7 +195,7 @@ fn local_stt_profile() -> LocalSttProfile {
 }
 
 fn local_stt_idle_unload_after_ms_for_engine(engine: &str) -> Option<u64> {
-    if let Ok(value) = env::var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS") {
+    if let Ok(value) = env::var("MUNDUS_LOCAL_STT_IDLE_UNLOAD_MS") {
         return value.trim().parse::<u64>().ok();
     }
     let _ = engine;
@@ -205,14 +205,14 @@ fn local_stt_idle_unload_after_ms_for_engine(engine: &str) -> Option<u64> {
 /// Разрешает idle-unload для DIRECT пути: env var переопределяет config.
 /// `config_value` берётся из `DictationConfig.local_idle_unload_ms`.
 fn resolve_direct_idle_unload_ms(config_value: Option<u64>) -> Option<u64> {
-    if let Ok(value) = env::var("KOSMOS_LOCAL_STT_IDLE_UNLOAD_MS") {
+    if let Ok(value) = env::var("MUNDUS_LOCAL_STT_IDLE_UNLOAD_MS") {
         return value.trim().parse::<u64>().ok();
     }
     config_value
 }
 
 fn local_stt_server_ready_timeout() -> Duration {
-    let millis = env::var("KOSMOS_LOCAL_STT_SERVER_READY_TIMEOUT_MS")
+    let millis = env::var("MUNDUS_LOCAL_STT_SERVER_READY_TIMEOUT_MS")
         .ok()
         .and_then(|value| value.trim().parse::<u64>().ok())
         .unwrap_or(30_000)
@@ -222,9 +222,9 @@ fn local_stt_server_ready_timeout() -> Duration {
 
 fn local_stt_sidecar_binary_names() -> &'static [&'static str] {
     if cfg!(windows) {
-        &["kosmos-local-stt.exe", "Kosmos Local STT.exe"]
+        &["mundus-local-stt.exe", "Mundus Local STT.exe"]
     } else {
-        &["kosmos-local-stt"]
+        &["mundus-local-stt"]
     }
 }
 
@@ -240,7 +240,7 @@ fn local_stt_sidecar_candidate_paths(current_exe: &Path) -> Vec<PathBuf> {
 }
 
 fn local_stt_sidecar_path() -> Result<PathBuf, LocalError> {
-    if let Ok(value) = env::var("KOSMOS_LOCAL_STT_SIDECAR_PATH") {
+    if let Ok(value) = env::var("MUNDUS_LOCAL_STT_SIDECAR_PATH") {
         let trimmed = value.trim();
         if !trimmed.is_empty() {
             return Ok(PathBuf::from(trimmed));

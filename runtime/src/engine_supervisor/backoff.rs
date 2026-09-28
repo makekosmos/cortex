@@ -12,7 +12,7 @@ pub(crate) async fn wait_before_restart(
     };
     write_state(state_path, "restarting", crash_streak, core_pid, last_exit);
     crate::observability::stderr(format!(
-        "[kosmos-engine] restart attempt {}/{} in {}s",
+        "[mundus-engine] restart attempt {}/{} in {}s",
         crash_streak,
         RESTART_DELAYS.len(),
         delay.as_secs()

@@ -1,5 +1,5 @@
 //! Браузер — browser.json persistence toggle. The Vue Manager owns the file
-//! inside Electron userData ("Kosmos Manager"); GPUI reads/writes the same
+//! inside Electron userData ("Mundus Manager"); GPUI reads/writes the same
 //! schema so both shells agree (BrowserSettingsView.vue parity).
 use ::gpui::{prelude::*, *};
 

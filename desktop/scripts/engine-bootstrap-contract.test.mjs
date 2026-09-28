@@ -11,7 +11,7 @@ test("Desktop installs the Engine it was built with, from local resources", () =
   // KOS-233: no separate publish/download step. The zip and manifest are the
   // same ones build-backend.mjs staged from this tree into .tmp/engine.next.
   assert.match(installer, /install-engine\.ps1/);
-  assert.match(installer, /-Archive "\$INSTDIR\\resources\\Kosmos Engine\.zip"/);
+  assert.match(installer, /-Archive "\$INSTDIR\\resources\\Mundus Engine\.zip"/);
   assert.match(installer, /-Manifest "\$INSTDIR\\resources\\engine-manifest\.json"/);
   assert.doesNotMatch(
     bootstrap,
@@ -28,10 +28,10 @@ test("install never downgrades an equal-or-newer verified Engine", () => {
   );
 });
 
-test("install takes over an existing standalone Kosmos Engine registration", () => {
+test("install takes over an existing standalone Mundus Engine registration", () => {
   assert.match(bootstrap, /function Invoke-EngineMigration/);
   assert.match(bootstrap, /Uninstall\\KosmosEngine/);
-  assert.match(bootstrap, /Kosmos Engine\.lnk/);
+  assert.match(bootstrap, /Mundus Engine\.lnk/);
   // Snapshot before changing anything, restore it if the takeover fails —
   // never leave a half-migrated registration (KOS-134 pattern).
   assert.ok(bootstrap.indexOf("$snapshot") < bootstrap.indexOf("Remove-Item -LiteralPath $key"));

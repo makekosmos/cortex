@@ -22,10 +22,10 @@ const WORKSPACE_OUTPUTS = {
 const arg = (name) => flag(process.argv, name);
 const reportPath = path.resolve(repoRoot, arg("--report") ?? ".tmp/linux-smoke-report.md");
 
-const runRoot = fs.mkdtempSync(path.join(os.tmpdir(), "kosmos-linux-smoke-"));
+const runRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mundus-linux-smoke-"));
 const childEnv = {
   ...process.env,
-  KOSMOS_HEADLESS: "1",
+  MUNDUS_HEADLESS: "1",
   XDG_CONFIG_HOME: path.join(runRoot, "xdg-config"),
   XDG_CACHE_HOME: path.join(runRoot, "xdg-cache"),
   XDG_DATA_HOME: path.join(runRoot, "xdg-data"),
@@ -112,15 +112,15 @@ await runGate("engine-bootstrap", ["preflight"], async () => {
     must(step("cargo", ["metadata", "--no-deps", "--format-version=1"]), "cargo metadata"),
   ).target_directory;
   const debug = path.join(target, "debug");
-  const engine = path.join(debug, "kepler-backend");
-  must(step("cargo", ["build", "-p", "kepler-backend"]), "cargo build kepler-backend");
+  const engine = path.join(debug, "mundus-engine");
+  must(step("cargo", ["build", "-p", "engine"]), "cargo build engine");
   const dataDir = path.join(runRoot, "engine-data");
   const engineEnv = {
     ...childEnv,
-    KOSMOS_DATA_DIR: dataDir,
-    KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
-    KEPLER_SKIP_SYNC: "1",
-    KEPLER_USAGE_TRACKER: "0",
+    MUNDUS_DATA_DIR: dataDir,
+    MUNDUS_LOCK_PERMISSIONS_DISABLED: "1",
+    MUNDUS_SKIP_SYNC: "1",
+    MUNDUS_USAGE_TRACKER: "0",
   };
   const child = spawn(engine, [], { env: engineEnv, stdio: "ignore" });
   const readLock = () => {

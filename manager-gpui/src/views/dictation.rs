@@ -165,7 +165,7 @@ fn record_card(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement
     let (label, hint): (&str, &str) = match state.as_str() {
         "recording" => (
             "Идёт запись",
-            "Pill-оверлей показывает приложение Kosmos Dictation; стоп — по хоткею",
+            "Pill-оверлей показывает приложение Dictation; стоп — по хоткею",
         ),
         "transcribing" | "waiting" => ("Распознаю…", "speech.transcribe в Engine"),
         _ => (
@@ -198,7 +198,7 @@ fn record_card(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement
         )
         .child(div().text_size(px(12.)).text_color(c(MUTED_FG())).child(
             "Pill-оверлей и глобальная горячая клавиша — отдельное приложение \
-             Kosmos Dictation (dictation-gpui) поверх событий Engine.",
+             Dictation (dictation-gpui) поверх событий Engine.",
         ))
         .into_any_element()
 }

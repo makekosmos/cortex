@@ -18,7 +18,7 @@ pub const WM_TRAY_CALLBACK: u32 = windows::Win32::UI::WindowsAndMessaging::WM_US
 
 pub fn resolve_icon_path() -> Option<PathBuf> {
     let mut candidates = Vec::new();
-    if let Some(path) = env::var_os("KOSMOS_TRAY_ICON") {
+    if let Some(path) = env::var_os("MUNDUS_TRAY_ICON") {
         candidates.push(PathBuf::from(path));
     }
     if let Ok(exe) = env::current_exe() {
@@ -31,7 +31,7 @@ pub fn resolve_icon_path() -> Option<PathBuf> {
     }
     for variable in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"] {
         if let Some(root) = env::var_os(variable) {
-            candidates.push(PathBuf::from(root).join("Kosmos/tray.ico"));
+            candidates.push(PathBuf::from(root).join("Mundus/tray.ico"));
         }
     }
     candidates
@@ -56,7 +56,7 @@ pub fn load_icon(path: &Path) -> Option<HICON> {
 }
 
 pub fn notify_data(window: HWND, icon: HICON) -> NOTIFYICONDATAW {
-    let tip = wide("Kosmos Runtime");
+    let tip = wide(engine::brand::PRODUCT_NAME);
     let mut data = NOTIFYICONDATAW {
         cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
         hWnd: window,

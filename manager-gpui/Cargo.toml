@@ -2,7 +2,7 @@
 name = "manager-gpui"
 version = "0.1.0"
 edition = "2021"
-description = "GPUI Kosmos Manager — Engine-driven shell parity with the Vue Manager (KOS-130)"
+description = "GPUI Mundus Manager — Engine-driven shell parity with the Vue Manager (KOS-130)"
 default-run = "manager-gpui"
 
 [dependencies]

@@ -2,7 +2,7 @@
 
 use chrono::{TimeZone, Utc};
 use ed25519_dalek::{Signer, SigningKey};
-use kepler_backend::store_catalog::{
+use engine::store_catalog::{
     CacheState, CatalogCache, CatalogDocument, Distribution, EffectiveGrantProjection,
     InstalledListing, ListingKind, PackageIndexLookup, PackageReleaseKind, Role,
     StoreCatalogEnvelope, StoreCatalogService, StoreCatalogTrust, StoreListing, TrustError,
@@ -137,8 +137,8 @@ fn integration_requires_existing_external_listing() {
     let mut doc = document(1);
     let mut integration =
         StoreListing::external("integration.bridge", "Bridge", "https://bridge.example/");
-    integration.kind = kepler_backend::store_catalog::ListingKind::Integration;
-    integration.distribution = kepler_backend::store_catalog::Distribution::Integration {
+    integration.kind = engine::store_catalog::ListingKind::Integration;
+    integration.distribution = engine::store_catalog::Distribution::Integration {
         package_id: "bridge".into(),
         version: "1.0.0".into(),
         connects_to: "external.missing".into(),
@@ -245,7 +245,7 @@ fn catalog_dto_installed_projection_is_typed_and_contains_no_install_authority()
             kind: "app".into(),
             enabled: true,
             revoked: false,
-            publisher: "Kosmos".into(),
+            publisher: "Mundus".into(),
             effective_grants: vec![EffectiveGrantProjection {
                 type_id: "com.kosmos.note".into(),
                 version: "^1.0.0".into(),

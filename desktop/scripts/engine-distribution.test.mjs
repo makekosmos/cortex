@@ -13,13 +13,13 @@ import {
 const SOURCE_COMMIT = "a".repeat(40);
 
 test("engine archive is independently verifiable and installable", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-engine-distribution-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "mundus-engine-distribution-"));
   const release = path.join(root, "release");
-  const archive = path.join(root, "Kosmos-Engine-1.2.3.zip");
+  const archive = path.join(root, "Mundus-Engine-1.2.3.zip");
   for (const name of [
-    "kepler-backend.exe",
-    "kepler-focus-helper.exe",
-    "kepler-focus-svc.exe",
+    "mundus-engine.exe",
+    "focus-helper.exe",
+    "focus-svc.exe",
     "tray.ico",
   ]) {
     mkdirSync(release, { recursive: true });
@@ -32,20 +32,20 @@ test("engine archive is independently verifiable and installable", () => {
   assert.equal(verifyEngineArchive(archive, manifest), true);
   const installed = installEngineArchive(archive, manifest, path.join(root, "engine"));
   assert.equal(
-    readFileSync(path.join(installed, "kepler-backend.exe"), "utf8"),
-    "kepler-backend.exe",
+    readFileSync(path.join(installed, "mundus-engine.exe"), "utf8"),
+    "mundus-engine.exe",
   );
 });
 
 test("buildEngineArchive accepts any semver product version", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-engine-version-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "mundus-engine-version-"));
   const release = path.join(root, "release");
-  const archive = path.join(root, "Kosmos-Engine-0.1.0.zip");
+  const archive = path.join(root, "Mundus-Engine-0.1.0.zip");
   mkdirSync(release, { recursive: true });
   for (const name of [
-    "kepler-backend.exe",
-    "kepler-focus-helper.exe",
-    "kepler-focus-svc.exe",
+    "mundus-engine.exe",
+    "focus-helper.exe",
+    "focus-svc.exe",
     "tray.ico",
   ])
     writeFileSync(path.join(release, name), name);
@@ -58,14 +58,14 @@ test("buildEngineArchive accepts any semver product version", () => {
 });
 
 test("engine archive rejects tampering", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-engine-distribution-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "mundus-engine-distribution-"));
   const release = path.join(root, "release");
   const archive = path.join(root, "engine.zip");
   mkdirSync(release, { recursive: true });
   for (const name of [
-    "kepler-backend.exe",
-    "kepler-focus-helper.exe",
-    "kepler-focus-svc.exe",
+    "mundus-engine.exe",
+    "focus-helper.exe",
+    "focus-svc.exe",
     "tray.ico",
   ])
     writeFileSync(path.join(release, name), "ok");
@@ -78,14 +78,14 @@ test("engine archive rejects tampering", () => {
 });
 
 test("a valid installed engine is preserved", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-engine-distribution-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "mundus-engine-distribution-"));
   const release = path.join(root, "release");
   const archive = path.join(root, "engine.zip");
   mkdirSync(release, { recursive: true });
   for (const name of [
-    "kepler-backend.exe",
-    "kepler-focus-helper.exe",
-    "kepler-focus-svc.exe",
+    "mundus-engine.exe",
+    "focus-helper.exe",
+    "focus-svc.exe",
     "tray.ico",
   ])
     writeFileSync(path.join(release, name), "new");
@@ -97,21 +97,21 @@ test("a valid installed engine is preserved", () => {
   const first = installEngineArchive(archive, manifest, engineRoot);
   const second = installEngineArchive(archive, manifest, engineRoot);
   assert.equal(second, first);
-  assert.equal(readFileSync(path.join(second, "kepler-backend.exe"), "utf8"), "new");
-  writeFileSync(path.join(first, "kepler-backend.exe"), "corrupt");
+  assert.equal(readFileSync(path.join(second, "mundus-engine.exe"), "utf8"), "new");
+  writeFileSync(path.join(first, "mundus-engine.exe"), "corrupt");
   const repaired = installEngineArchive(archive, manifest, engineRoot);
-  assert.equal(readFileSync(path.join(repaired, "kepler-backend.exe"), "utf8"), "new");
+  assert.equal(readFileSync(path.join(repaired, "mundus-engine.exe"), "utf8"), "new");
 });
 
 test("installed Engine resolution follows current.json and verifies canonical files", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-engine-resolve-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "mundus-engine-resolve-"));
   const release = path.join(root, "release");
   const archive = path.join(root, "engine.zip");
   mkdirSync(release, { recursive: true });
   for (const name of [
-    "kepler-backend.exe",
-    "kepler-focus-helper.exe",
-    "kepler-focus-svc.exe",
+    "mundus-engine.exe",
+    "focus-helper.exe",
+    "focus-svc.exe",
     "tray.ico",
   ])
     writeFileSync(path.join(release, name), name);
@@ -124,7 +124,7 @@ test("installed Engine resolution follows current.json and verifies canonical fi
 
   const resolved = resolveInstalledEngine(engineRoot);
   assert.equal(resolved.version, "1.2.3");
-  assert.equal(resolved.backend, path.join(engineRoot, "versions", "1.2.3", "kepler-backend.exe"));
+  assert.equal(resolved.backend, path.join(engineRoot, "versions", "1.2.3", "mundus-engine.exe"));
 
   writeFileSync(resolved.backend, "tampered");
   assert.throws(() => resolveInstalledEngine(engineRoot), /engine artifact mismatch/);

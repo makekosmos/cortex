@@ -24,9 +24,9 @@ function run(cwd, args) {
 }
 
 // These are integration-test fixtures, not production dependencies. Build
-// them explicitly so `cargo test -p kepler-backend --lib` has the same
+// them explicitly so `cargo test -p engine --lib` has the same
 // prerequisites in the standalone Makekosmos layout as in CI.
-run(cortex, ["build", "-p", "kepler-backend", "--bin", "ark-markdown-bridge"]);
+run(cortex, ["build", "-p", "engine", "--bin", "ark-markdown-bridge"]);
 
 if (!existsSync(bridge)) {
   throw new Error(`ark-markdown-bridge fixture was not produced: ${bridge}`);
@@ -53,7 +53,7 @@ if (workspace) {
     "kepler-backend/iroh-spike",
   ]);
   run(cortex, ["test", "-p", "ark-core"]);
-  run(cortex, ["test", "-p", "kepler-backend", "--bins"]);
+  run(cortex, ["test", "-p", "engine", "--bins"]);
 } else {
-  run(cortex, ["test", "-p", "kepler-backend", "--lib", ...process.argv.slice(2)]);
+  run(cortex, ["test", "-p", "engine", "--lib", ...process.argv.slice(2)]);
 }

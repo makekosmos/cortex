@@ -39,7 +39,7 @@ pub(crate) fn is_app_network_op(operation: &str) -> bool {
 /// enabled (mirrors the `package-worker-fixture` escape hatch, but scoped to
 /// this module's `#[cfg(test)]` helpers only).
 pub(crate) struct AppNetworkCtx {
-    /// Kosmos data dir — image writes land in `extension-data/<app>/…`.
+    /// Mundus data dir — image writes land in `extension-data/<app>/…`.
     pub data_dir: PathBuf,
     /// Test-only: allow `http://` + non-public addresses in the fetch layer.
     pub allow_private_http: bool,
@@ -50,7 +50,7 @@ pub(crate) struct AppNetworkCtx {
 impl AppNetworkCtx {
     pub(crate) fn engine() -> Result<Self, &'static str> {
         Ok(Self {
-            data_dir: crate::lock_file::kosmos_data_dir().map_err(|_| "unavailable")?,
+            data_dir: crate::lock_file::mundus_data_dir().map_err(|_| "unavailable")?,
             allow_private_http: false,
             open_library_origin: None,
         })

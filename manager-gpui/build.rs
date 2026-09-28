@@ -26,12 +26,12 @@ mod windows {
         }
         let version = release_version(versions_path);
         let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-        let rc_path = out_dir.join("kosmos-manager.rc");
+        let rc_path = out_dir.join("mundus-manager.rc");
         fs::write(&rc_path, resource_script(icon_path, version))
-            .expect("write Kosmos Manager resource script");
+            .expect("write Mundus Manager resource script");
         embed_resource::compile(&rc_path, embed_resource::NONE)
             .manifest_required()
-            .expect("embed Kosmos Manager icon and version resources");
+            .expect("embed Mundus Manager icon and version resources");
     }
 
     fn resource_script(icon: &Path, [major, minor, patch]: [u32; 3]) -> String {
@@ -53,12 +53,12 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "Kazui"
-            VALUE "FileDescription", "Kosmos Manager"
+            VALUE "FileDescription", "Mundus Manager"
             VALUE "FileVersion", "{version}"
-            VALUE "InternalName", "Kosmos Manager.exe"
+            VALUE "InternalName", "Mundus Manager.exe"
             VALUE "LegalCopyright", "Copyright (C) Kazui"
-            VALUE "OriginalFilename", "Kosmos Manager.exe"
-            VALUE "ProductName", "Kosmos Manager"
+            VALUE "OriginalFilename", "Mundus Manager.exe"
+            VALUE "ProductName", "Mundus Manager"
             VALUE "ProductVersion", "{version}"
         END
     END

@@ -136,7 +136,7 @@ pub fn build_client(
     let builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
         .connect_timeout(Duration::from_secs(5))
-        .user_agent("Kosmos/Kepler dictation");
+        .user_agent("Mundus/Mundus dictation");
 
     finish_client_builder(builder, profile, http_proxy)
 }
@@ -150,7 +150,7 @@ pub fn build_download_client(
 ) -> Result<reqwest::Client, NetworkError> {
     let builder = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(10))
-        .user_agent("Kosmos/Kepler dictation download");
+        .user_agent("Mundus/Mundus dictation download");
 
     finish_client_builder(builder, profile, http_proxy)
 }

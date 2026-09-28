@@ -17,7 +17,7 @@ async function fixture() {
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
-      kosmos: {
+      mundus: {
         workspace: {
           imago: component("makekosmos/imago", "a", "@makekosmos/visuals", "0.1.3"),
           "arca-sdk": component("makekosmos/arca-sdk", "b", "@makekosmos/ark", "0.1.1"),
@@ -28,13 +28,13 @@ async function fixture() {
   return root;
 }
 const localEnv = (root) => ({
-  KOSMOS_WORKSPACE_MODE: "local",
-  KOSMOS_IMAGO_PATH: path.join(root, "local-imago"),
-  KOSMOS_ARCA_SDK_PATH: path.join(root, "local-arca"),
+  MUNDUS_WORKSPACE_MODE: "local",
+  MUNDUS_IMAGO_PATH: path.join(root, "local-imago"),
+  MUNDUS_ARCA_SDK_PATH: path.join(root, "local-arca"),
 });
 
 test("git child env keeps variables set after module import", () => {
-  const key = "KOSMOS_TEST_LATE_ENV",
+  const key = "MUNDUS_TEST_LATE_ENV",
     previous = process.env[key];
   process.env[key] = "late";
   try {
@@ -50,7 +50,7 @@ test("git child env keeps variables set after module import", () => {
 test("local bootstrap creates managed bridges and repeats as noop", async () => {
   const root = await fixture(),
     env = localEnv(root);
-  await Promise.all([mkdir(env.KOSMOS_IMAGO_PATH), mkdir(env.KOSMOS_ARCA_SDK_PATH)]);
+  await Promise.all([mkdir(env.MUNDUS_IMAGO_PATH), mkdir(env.MUNDUS_ARCA_SDK_PATH)]);
   const first = await planBootstrap(root, { env }),
     mode = resolveMode(env, root);
   assert.deepEqual(
@@ -71,7 +71,7 @@ test("local bootstrap creates managed bridges and repeats as noop", async () => 
 test("local bootstrap dry-run plans missing bridges", async () => {
   const root = await fixture(),
     env = localEnv(root);
-  await Promise.all([mkdir(env.KOSMOS_IMAGO_PATH), mkdir(env.KOSMOS_ARCA_SDK_PATH)]);
+  await Promise.all([mkdir(env.MUNDUS_IMAGO_PATH), mkdir(env.MUNDUS_ARCA_SDK_PATH)]);
   const result = await planBootstrap(root, { env, dryRun: true });
   assert.deepEqual(
     result.actions.map(({ action }) => action),
@@ -85,7 +85,7 @@ test("local bootstrap preserves wrong links and existing managed directories", a
   const root = await fixture(),
     env = localEnv(root),
     mode = resolveMode(env, root);
-  await Promise.all([mkdir(env.KOSMOS_IMAGO_PATH), mkdir(env.KOSMOS_ARCA_SDK_PATH)]);
+  await Promise.all([mkdir(env.MUNDUS_IMAGO_PATH), mkdir(env.MUNDUS_ARCA_SDK_PATH)]);
   const wrong = path.join(root, "wrong-imago");
   await mkdir(wrong);
   await mkdir(path.dirname(mode.paths.imago), { recursive: true });

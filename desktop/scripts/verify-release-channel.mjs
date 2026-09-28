@@ -51,6 +51,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { env } from "./brand.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -95,8 +96,8 @@ function sleep(ms) {
 
 /** Resolve gh CLI path. */
 function resolveGh() {
-  if (process.env.KEPLER_GH_PATH && existsSync(process.env.KEPLER_GH_PATH)) {
-    return process.env.KEPLER_GH_PATH;
+  if (env("GH_PATH") && existsSync(env("GH_PATH"))) {
+    return env("GH_PATH");
   }
   const candidates = [
     "C:/Program Files/GitHub CLI/gh.exe",
@@ -166,13 +167,13 @@ function fetchAssetTimestamps(ownerRepo, tag) {
  * Handles:
  *   version: 0.5.3
  *   files:
- *     - url: Kosmos-Setup-0.5.3.exe
+ *     - url: Mundus-Setup-0.5.3.exe
  *       sha512: CX4w...==
  *       size: 122041993
- *     - url: Kosmos-0.5.1.dmg           (mac may list multiple files: dmg + zip)
+ *     - url: Mundus-0.5.1.dmg           (mac may list multiple files: dmg + zip)
  *       sha512: ...
  *       size: ...
- *   path: Kosmos-Setup-0.5.3.exe
+ *   path: Mundus-Setup-0.5.3.exe
  *   sha512: CX4w...==
  *   releaseDate: '2026-06-18T12:18:15.656Z'
  *

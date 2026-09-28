@@ -132,7 +132,7 @@ fn watch_hotkey_once(
     ];
     let mut child = Command::new(helper)
         .args(args)
-        .env("KOSMOS_PARENT_PID", std::process::id().to_string())
+        .env("MUNDUS_PARENT_PID", std::process::id().to_string())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -236,7 +236,7 @@ fn run_capture_once(
     generation: u64,
 ) -> Result<(), String> {
     let mut child = Command::new(helper)
-        .env("KOSMOS_PARENT_PID", std::process::id().to_string())
+        .env("MUNDUS_PARENT_PID", std::process::id().to_string())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -562,7 +562,7 @@ fn run_json_helper_stdin(name: &str, request: Value) -> Result<Value, NativeHelp
 fn resolve_helper(name: &str) -> Result<PathBuf, NativeHelperError> {
     let mut candidates = Vec::new();
 
-    if let Ok(dir) = std::env::var("KOSMOS_MACOS_NATIVE_DIR") {
+    if let Ok(dir) = std::env::var("MUNDUS_MACOS_NATIVE_DIR") {
         push_candidate(&mut candidates, PathBuf::from(dir).join(name));
     }
 

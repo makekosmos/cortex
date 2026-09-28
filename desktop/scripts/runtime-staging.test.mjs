@@ -17,12 +17,12 @@ const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const cortexRoot = path.resolve(shellRoot, "..");
 
 test("non-default Cargo runtime is the one mapped into the Windows package", () => {
-  assert.deepEqual(RUNTIME_BINARIES, ["kepler-backend", "kepler-focus-helper", "kepler-focus-svc"]);
+  assert.deepEqual(RUNTIME_BINARIES, ["mundus-engine", "focus-helper", "focus-svc"]);
   assert.equal(existsSync(path.join(cortexRoot, "core", ".git")), false);
   assert.equal(ARK_CORE_SOURCE, "core/crates/ark-core");
   assert.equal(ARK_CORE_SOURCE_DIR, path.join(cortexRoot, "core", "crates", "ark-core"));
 
-  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-runtime-stage-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "mundus-runtime-stage-"));
   try {
     const configured = path.join(root, "alternate-cargo-target");
     const releaseDir = path.join(configured, "release");
@@ -40,16 +40,16 @@ test("non-default Cargo runtime is the one mapped into the Windows package", () 
     assert.match(backendBuild, /let engineVersion = null/);
     assert.match(backendBuild, /if \(engineVersion\) console\.log/);
     // KOS-233: Engine is always built from this same tree/commit, never a
-    // separate `KOSMOS_ENGINE_RELEASE` line downloaded from a publish step.
-    assert.doesNotMatch(backendBuild, /KOSMOS_ENGINE_RELEASE/);
+    // separate `MUNDUS_ENGINE_RELEASE` line downloaded from a publish step.
+    assert.doesNotMatch(backendBuild, /MUNDUS_ENGINE_RELEASE/);
     assert.doesNotMatch(backendBuild, /engine-version\.json/);
     // The NSIS staging in build-desktop.mjs maps the engine manifest and
     // archive into resources/ the same way extraResources did.
     assert.match(desktopBuild, /engine-manifest\.json/);
-    assert.match(desktopBuild, /Kosmos-Engine\.zip/);
+    assert.match(desktopBuild, /Mundus-Engine\.zip/);
     assert.equal(
-      readFileSync(path.join(stageDir, "kepler-backend.exe"), "utf8"),
-      "fresh:kepler-backend",
+      readFileSync(path.join(stageDir, "mundus-engine.exe"), "utf8"),
+      "fresh:mundus-engine",
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -57,7 +57,7 @@ test("non-default Cargo runtime is the one mapped into the Windows package", () 
 });
 
 test("build retention clears only disposable next outputs and protects active builds", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-runtime-stage-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "mundus-runtime-stage-"));
   try {
     mkdirSync(path.join(root, ".tmp", "runtime.next"), { recursive: true });
     mkdirSync(path.join(root, ".tmp", "engine.next"), { recursive: true });
@@ -72,3 +72,4 @@ test("build retention clears only disposable next outputs and protects active bu
     rmSync(root, { recursive: true, force: true });
   }
 });
+

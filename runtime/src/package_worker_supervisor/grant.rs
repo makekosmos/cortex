@@ -200,8 +200,8 @@ mod tests {
 
     #[test]
     fn empty_process_spawn_scopes_use_only_worker_roots() {
-        let approved = std::env::temp_dir().join("kosmos-approved-root");
-        let outside = std::env::temp_dir().join("kosmos-outside-root");
+        let approved = std::env::temp_dir().join("mundus-approved-root");
+        let outside = std::env::temp_dir().join("mundus-outside-root");
         let mut manifest = process_spawn_manifest();
         hydrate_empty_scopes(&mut manifest, &[], std::slice::from_ref(&approved));
         let (grant, _) = Grant::derive(

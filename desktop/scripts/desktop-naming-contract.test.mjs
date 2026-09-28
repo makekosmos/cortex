@@ -6,6 +6,6 @@ import { fileURLToPath } from "node:url";
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(readFileSync(path.join(scriptsDir, "..", "package.json"), "utf8"));
 
-test("Desktop uses the Kosmos package identity", () => {
-  expect(packageJson.name).toBe("kosmos-desktop");
+test("Desktop uses the Mundus package identity", () => {
+  expect(packageJson.name).toBe("mundus-desktop");
 });

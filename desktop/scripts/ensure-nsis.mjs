@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
+import { env } from "./brand.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const NSIS_URL =
@@ -78,11 +79,12 @@ function nsisEnvFor(makensis) {
 }
 
 export async function ensureNsis() {
-  if (process.env.KOSMOS_NSIS_DIR) {
-    const dir = path.resolve(process.env.KOSMOS_NSIS_DIR);
+  const nsisDir = env("NSIS_DIR");
+  if (nsisDir) {
+    const dir = path.resolve(nsisDir);
     const makensis = findMakensis(dir);
     if (makensis) return { makensis, env: nsisEnvFor(makensis) };
-    throw new Error(`KOSMOS_NSIS_DIR does not contain makensis.exe: ${dir}`);
+    throw new Error(`MUNDUS_NSIS_DIR does not contain makensis.exe: ${dir}`);
   }
 
   const existing = findMakensis(bundleDir);
@@ -98,7 +100,7 @@ export async function ensureNsis() {
     throw new Error(`NSIS bundle sha256 mismatch: expected ${NSIS_SHA256}, got ${hash}`);
   }
 
-  const extractDir = mkdtempSync(path.join(tmpdir(), "kosmos-nsis-"));
+  const extractDir = mkdtempSync(path.join(tmpdir(), "mundus-nsis-"));
   const result = spawnSync("tar", ["-xzf", path.basename(archive), "-C", extractDir], {
     cwd: cacheDir,
     stdio: "inherit",

@@ -27,7 +27,7 @@ async fn launch_suspended_inner(
     owner.claim()?;
     let pipe_name = |suffix: &str| {
         format!(
-            r"\\.\pipe\kosmos-worker-{}-{}-{}",
+            r"\\.\pipe\mundus-worker-{}-{}-{}",
             std::process::id(),
             PIPE_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             suffix

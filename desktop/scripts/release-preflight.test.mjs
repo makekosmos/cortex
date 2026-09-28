@@ -7,17 +7,17 @@ import {
   runReleasePreflight,
 } from "./release-preflight.mjs";
 
-test("missing --bom falls back to KOSMOS_RELEASE_BOM", () => {
+test("missing --bom falls back to MUNDUS_RELEASE_BOM", () => {
   const { platform, bomPath } = resolvePreflightArgs(["--platform", "win"], {
-    KOSMOS_RELEASE_BOM: "bom.json",
+    MUNDUS_RELEASE_BOM: "bom.json",
   });
   assert.equal(platform, "win");
   assert.equal(bomPath, "bom.json");
 });
 
-test("explicit --bom wins over KOSMOS_RELEASE_BOM", () => {
+test("explicit --bom wins over MUNDUS_RELEASE_BOM", () => {
   const { bomPath } = resolvePreflightArgs(["--platform", "win", "--bom", "explicit.json"], {
-    KOSMOS_RELEASE_BOM: "env.json",
+    MUNDUS_RELEASE_BOM: "env.json",
   });
   assert.equal(bomPath, "explicit.json");
 });
@@ -33,7 +33,7 @@ test("a missing flag never resolves to another flag token", () => {
 test("missing BOM surfaces the required-BOM error instead of ENOENT", async () => {
   await assert.rejects(
     () => runReleasePreflight({ platform: "win", bomPath: undefined }),
-    /--bom <path> or KOSMOS_RELEASE_BOM is required for release builds/,
+    /--bom <path> or MUNDUS_RELEASE_BOM is required for release builds/,
   );
 });
 
@@ -45,10 +45,10 @@ test("missing --platform is rejected as unknown platform", async () => {
   );
 });
 
-test("resolvePreflightArgs recognizes --local and KOSMOS_RELEASE_LOCAL (KOS-233)", () => {
+test("resolvePreflightArgs recognizes --local and MUNDUS_RELEASE_LOCAL (KOS-233)", () => {
   assert.equal(resolvePreflightArgs(["--platform", "win", "--local"], {}).local, true);
   assert.equal(
-    resolvePreflightArgs(["--platform", "win"], { KOSMOS_RELEASE_LOCAL: "1" }).local,
+    resolvePreflightArgs(["--platform", "win"], { MUNDUS_RELEASE_LOCAL: "1" }).local,
     true,
   );
   assert.equal(resolvePreflightArgs(["--platform", "win"], {}).local, false);
