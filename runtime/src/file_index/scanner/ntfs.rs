@@ -77,10 +77,20 @@ fn scan_via_service_pipe(
 
     // Regression L4 (2026-05-24): single-line read_line was brittle — service
     // could legitimately return multi-line JSON or a payload bigger than the
-    // BufReader's line buffer. Slurp the whole pipe until EOF.
+    // BufReader's line buffer. Slurp the whole pipe until EOF — but bound it:
+    // the pipe name is well known and the server is not authenticated, so a
+    // squatter (anything holding the name while the real service is down)
+    // could stream a never-ending response and grow Engine memory without
+    // limit. 1 GiB exceeds a legitimate whole-drive MFT listing by a wide
+    // margin (millions of entries at ~150 B each).
+    const MAX_SERVICE_RESPONSE_BYTES: u64 = 1 << 30;
     let mut raw = String::new();
-    pipe.read_to_string(&mut raw)
+    std::io::Read::take(&pipe, MAX_SERVICE_RESPONSE_BYTES + 1)
+        .read_to_string(&mut raw)
         .map_err(|e| format!("read service response failed: {e}"))?;
+    if raw.len() as u64 > MAX_SERVICE_RESPONSE_BYTES {
+        return Err("service response exceeds 1 GiB".to_string());
+    }
     let response: ServiceResponse = serde_json::from_str(raw.trim())
         .map_err(|e| format!("parse service response failed: {e}"))?;
     if !response.ok {
