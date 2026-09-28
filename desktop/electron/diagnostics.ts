@@ -140,10 +140,14 @@ function windowSnapshot(win: BrowserWindow) {
 async function spawnAsync(
   command: string,
   args: string[],
+  extraEnv?: Record<string, string>,
 ): Promise<{ status: number; stderr: string }> {
   return new Promise((resolve) => {
     let stderr = "";
-    const child = spawn(command, args, { windowsHide: true });
+    const child = spawn(command, args, {
+      windowsHide: true,
+      env: extraEnv ? { ...process.env, ...extraEnv } : undefined,
+    });
     child.stderr?.on("data", (chunk) => {
       stderr += chunk.toString();
     });
@@ -196,8 +200,18 @@ async function createBundleZip(): Promise<BundleResult> {
         // ignore
       }
     }
-    const psCmd = `Compress-Archive -Path '${stagingDir}\\*' -DestinationPath '${zipPath}' -Force`;
-    const res = await spawnAsync("powershell.exe", ["-NoProfile", "-Command", psCmd]);
+    // Paths travel via env vars — embedding them in a -Command string breaks on
+    // profiles whose temp path contains an apostrophe (e.g. C:\Users\O'Brien)
+    // and turns that quoting gap into PowerShell command injection.
+    const res = await spawnAsync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-Command",
+        "Compress-Archive -Path (Join-Path $env:KOSMOS_DIAG_STAGING '*') -DestinationPath $env:KOSMOS_DIAG_ZIP -Force",
+      ],
+      { KOSMOS_DIAG_STAGING: stagingDir, KOSMOS_DIAG_ZIP: zipPath },
+    );
     if (res.status !== 0) {
       const stderr = redactText(res.stderr ?? "(no stderr)");
       keplerLog.error("diagnostics", "Compress-Archive failed", { stderr, status: res.status });
