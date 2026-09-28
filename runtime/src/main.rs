@@ -387,7 +387,7 @@ async fn setup() -> Result<SetupState, DynError> {
     // в stderr через eprintln; tracing включается ниже после crash_reporter.
     eprintln!(
         "kepler-backend v{} starting (protocol {})",
-        env!("CARGO_PKG_VERSION"),
+        kepler_backend::build_info::display_version(),
         PROTOCOL_VERSION
     );
 
@@ -408,7 +408,7 @@ async fn setup() -> Result<SetupState, DynError> {
     // других steps чтобы info!/warn!/error! из setup'а попали в файл.
     let log_guard = init_tracing(&lock_dir);
     tracing::info!(
-        version = env!("CARGO_PKG_VERSION"),
+        version = kepler_backend::build_info::display_version(),
         protocol = ?PROTOCOL_VERSION,
         correlation_id = %correlation_id,
         "kepler-backend starting"
@@ -591,6 +591,8 @@ async fn setup() -> Result<SetupState, DynError> {
         auth_token: token,
         started_at,
         correlation_id,
+        engine_version: kepler_backend::build_info::engine_version().to_string(),
+        source_commit: kepler_backend::build_info::engine_source_commit().to_string(),
     };
     lock_file::write_engine_atomic(&engine_lock_path, &engine_lock)?;
     tracing::info!(path = ?engine_lock_path, "Engine lock-file written");
@@ -829,7 +831,7 @@ async fn probe_api_v1_ws_dispatch(port: u16, token: &str) -> Result<(), String> 
                 "pid": std::process::id(),
                 "clientId": "kosmos-runtime-readiness",
                 "clientClass": "kosmos-runtime",
-                "clientVersion": env!("CARGO_PKG_VERSION"),
+                "clientVersion": kepler_backend::build_info::display_version(),
             })
             .to_string(),
         ))

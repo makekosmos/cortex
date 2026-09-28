@@ -102,7 +102,7 @@ export async function cmdPrepare(args) {
       schema_version: 1,
       product: "kosmos-engine",
       version: FIXTURE_ENGINE_VERSION,
-      url: "local-fixture-override",
+      source_commit: gitRevision().sha ?? "0".repeat(40),
       files,
     });
     fs.writeFileSync(

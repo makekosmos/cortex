@@ -70,6 +70,11 @@ async fn handle_authenticated_request(
                 "ok": true,
                 "api_version": API_VERSION,
                 "legacy_protocol_version": PROTOCOL_VERSION,
+                // KOS-233: Engine version is the Kosmos Desktop product
+                // version it shipped with (empty for a dev build not built
+                // through build-backend.mjs), not a separate 0.1.x line.
+                "version": crate::build_info::engine_version(),
+                "build": crate::build_info::engine_source_commit(),
                 "pid": std::process::id(),
                 "ws_port": ws_port,
                 "correlation_id": correlation_id.as_str(),

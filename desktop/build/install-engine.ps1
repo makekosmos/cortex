@@ -1,21 +1,74 @@
 param(
-  [string]$Archive,
-  [string]$Manifest,
+  [Parameter(Mandatory = $true)][string]$Archive,
+  [Parameter(Mandatory = $true)][string]$Manifest,
   [Parameter(Mandatory = $true)][string]$TargetRoot,
-  [string]$Url,
-  [switch]$Uninstall,
-  [string]$Version
+  # Overridable only so headless tests can point migration at a scratch
+  # registry key/shortcut instead of the real machine state. Production
+  # (installer.nsh) never passes these — it always migrates the real
+  # standalone "Kosmos Engine" registration.
+  [string]$LegacyRegistryKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\KosmosEngine',
+  [string]$LegacyShortcut
 )
 
+# KOS-233: one product, one version. Kosmos Desktop ships the Engine it was
+# built with (bundled locally by build-backend.mjs into $Archive/$Manifest —
+# never downloaded from a published release). This script:
+#   1. Installs that Engine into the shared %LOCALAPPDATA%\Kosmos\Engine root
+#      (also used by Manager/Agenda/Memoria), never downgrading a newer,
+#      already-verified installation left by a later Desktop version.
+#   2. Takes over an existing standalone "Kosmos Engine" installation (the
+#      old separate installer's App&Features entry): removes its
+#      registration and Start Menu shortcut, keeps its data/autostart
+#      preference. Snapshots before changing anything and restores on
+#      failure (same pattern as the Manager transitional release, KOS-134).
+
 $ErrorActionPreference = 'Stop'
+$semver = '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$'
+
 function Get-EngineSha256([string]$Path) {
   $sha = [Security.Cryptography.SHA256]::Create()
   try { return ([BitConverter]::ToString($sha.ComputeHash([IO.File]::ReadAllBytes($Path))) -replace '-', '').ToLowerInvariant() }
   finally { $sha.Dispose() }
 }
-function Test-TrustedReleaseUrl([string]$Value) {
-  return $Value -match '^https://github\.com/makekosmos/desktop/releases/(latest/download/|download/v[^/]+/)'
+
+function Compare-EngineVersion([string]$Left, [string]$Right) {
+  ([version]$Left).CompareTo([version]$Right)
 }
+
+function Assert-Manifest([object]$Value) {
+  if ($Value.schema_version -ne 1 -or $Value.product -ne 'kosmos-engine' -or
+      $Value.version -notmatch $semver) { throw 'invalid engine manifest' }
+  if (-not $Value.files -or @($Value.files).Count -eq 0) { throw 'engine manifest files are required' }
+  foreach ($file in @($Value.files)) {
+    if ($file.name -notmatch '^[A-Za-z0-9._-]+$' -or $file.name -in @('.', '..') -or
+        $file.sha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+        (($file.size -isnot [int]) -and ($file.size -isnot [long])) -or $file.size -lt 0) {
+      throw 'invalid engine manifest file'
+    }
+  }
+}
+
+# Returns the installed+verified version at $Root, or $null.
+function Test-InstalledEngine([string]$Root) {
+  try {
+    $currentFile = Join-Path $Root 'current.json'
+    if (-not (Test-Path -LiteralPath $currentFile)) { return $null }
+    $pointer = Get-Content -Raw -LiteralPath $currentFile | ConvertFrom-Json
+    if ($pointer.schema_version -ne 1 -or $pointer.version -notmatch $semver) { return $null }
+    $versionRoot = Join-Path (Join-Path $Root 'versions') $pointer.version
+    $installedManifest = Get-Content -Raw -LiteralPath (Join-Path $versionRoot 'engine-manifest.json') | ConvertFrom-Json
+    Assert-Manifest $installedManifest
+    if ($installedManifest.version -ne $pointer.version) { return $null }
+    foreach ($file in @($installedManifest.files)) {
+      $candidate = Join-Path $versionRoot $file.name
+      if (-not (Test-Path -LiteralPath $candidate -PathType Leaf) -or
+          (Get-Item -LiteralPath $candidate).Length -ne $file.size -or
+          (Get-EngineSha256 $candidate) -ne $file.sha256.ToLowerInvariant()) { return $null }
+    }
+    return $pointer.version
+  } catch { return $null }
+}
+
 function Test-EngineProcess([string]$Path) {
   $fullPath = [IO.Path]::GetFullPath($Path)
   foreach ($process in @(Get-CimInstance Win32_Process -Filter "Name='kepler-backend.exe'" -ErrorAction Stop)) {
@@ -43,154 +96,115 @@ function Update-EngineAutostart([string]$VersionRoot) {
     }
   } catch { }
 }
-if ($Uninstall) {
-  if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw 'invalid Engine uninstall version' }
-  $root = [IO.Path]::GetFullPath($TargetRoot).TrimEnd('\')
-  $versionsRoot = [IO.Path]::GetFullPath((Join-Path $root 'versions')).TrimEnd('\')
-  $versionRoot = [IO.Path]::GetFullPath((Join-Path $versionsRoot $Version)).TrimEnd('\')
-  if (-not $versionRoot.StartsWith("$versionsRoot\", [StringComparison]::OrdinalIgnoreCase)) { throw 'invalid Engine uninstall path' }
-  if (-not (Test-Path -LiteralPath $versionRoot -PathType Container)) { exit 2 }
-  $knownFiles = @('kepler-backend.exe', 'ark-core-rpc.exe', 'kepler-focus-helper.exe', 'kepler-focus-svc.exe', 'engine-manifest.json')
-  foreach ($name in $knownFiles) {
-    $candidate = Join-Path $versionRoot $name
-    if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { throw "Engine file missing: $name" }
-  }
-  # Newer payloads add files the strict check above predates; drop them so the
-  # version directory empties cleanly.
-  $optionalFiles = @('tray.ico')
-  $currentFile = Join-Path $root 'current.json'
-  $currentVersion = $null
-  if (Test-Path -LiteralPath $currentFile) {
-    try { $currentVersion = (Get-Content -Raw -LiteralPath $currentFile | ConvertFrom-Json).version } catch { }
-  }
-  $wasRunning = Stop-EngineForReplacement (Join-Path $versionRoot 'kepler-backend.exe')
-  foreach ($name in $knownFiles) { Remove-Item -Force -LiteralPath (Join-Path $versionRoot $name) -ErrorAction Stop }
-  foreach ($name in $optionalFiles) { Remove-Item -Force -LiteralPath (Join-Path $versionRoot $name) -ErrorAction SilentlyContinue }
-  Remove-Item -LiteralPath $versionRoot -Force -ErrorAction Stop
-  if ($currentVersion -eq $Version) { Remove-Item -Force -LiteralPath $currentFile -ErrorAction Stop; exit 0 }
-  exit 2
-}
-function Download-EngineArchive([string]$DownloadUrl) {
-  if ([string]::IsNullOrWhiteSpace($DownloadUrl)) { $DownloadUrl = $expected.url }
-  if (-not (Test-TrustedReleaseUrl $DownloadUrl)) { throw 'engine download URL is not the trusted release publisher' }
-  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Archive) | Out-Null
-  Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $archiveDownloadTemp
-  Invoke-WebRequest -Uri $DownloadUrl -OutFile $archiveDownloadTemp -UseBasicParsing
-  if (-not (Test-Path -LiteralPath $archiveDownloadTemp -PathType Leaf)) { throw 'engine download did not produce an archive' }
-  if ((Get-EngineSha256 $archiveDownloadTemp) -ne $expected.archive_sha256.ToLowerInvariant()) {
-    Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $archiveDownloadTemp
-    throw 'engine archive hash mismatch after trusted download'
-  }
-  Move-Item -Force -LiteralPath $archiveDownloadTemp -Destination $Archive
-}
-$expected = Get-Content -Raw -LiteralPath $Manifest | ConvertFrom-Json
-if ($expected.schema_version -ne 1 -or $expected.product -ne 'kosmos-engine') { throw 'invalid engine manifest' }
-if ($expected.version -notmatch '^\d+\.\d+\.\d+$') { throw 'invalid engine version' }
-if (-not $expected.files -or @($expected.files).Count -eq 0) { throw 'engine manifest files are required' }
-foreach ($file in @($expected.files)) {
-  if ($file.name -notmatch '^[A-Za-z0-9._-]+$' -or $file.name -in @('.', '..') -or $file.sha256 -notmatch '^[0-9a-fA-F]{64}$' -or (($file.size -isnot [int]) -and ($file.size -isnot [long])) -or $file.size -lt 0) { throw 'invalid engine manifest file' }
-}
-if (-not (Test-TrustedReleaseUrl $expected.url)) { throw 'engine archive URL is not the trusted release publisher' }
-$metadataTemp = Join-Path ([IO.Path]::GetTempPath()) ("kosmos-engine-manifest.$PID.json")
-$archiveDownloadTemp = "$Archive.download.$PID.tmp"
-trap {
-  Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $metadataTemp
-  Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $archiveDownloadTemp
-  throw
-}
-if ($expected.channel_url -and -not (Test-Path -LiteralPath $Archive)) {
-  if (-not (Test-TrustedReleaseUrl $expected.channel_url) -or $expected.channel_url -notmatch '/latest/download/Kosmos-Engine-manifest\.json$') { throw 'engine metadata URL is not the trusted release channel' }
-  Invoke-WebRequest -Uri $expected.channel_url -OutFile $metadataTemp -UseBasicParsing
-  $expected = Get-Content -Raw -LiteralPath $metadataTemp | ConvertFrom-Json
-  if ($expected.schema_version -ne 1 -or $expected.product -ne 'kosmos-engine' -or -not (Test-TrustedReleaseUrl $expected.url)) { throw 'invalid latest engine manifest' }
-  if ($expected.version -notmatch '^\d+\.\d+\.\d+$' -or -not $expected.files -or @($expected.files).Count -eq 0) { throw 'invalid latest engine manifest' }
-  foreach ($file in @($expected.files)) {
-    if ($file.name -notmatch '^[A-Za-z0-9._-]+$' -or $file.name -in @('.', '..') -or $file.sha256 -notmatch '^[0-9a-fA-F]{64}$' -or (($file.size -isnot [int]) -and ($file.size -isnot [long])) -or $file.size -lt 0) { throw 'invalid latest engine manifest' }
-  }
-}
 
-$currentFile = Join-Path $TargetRoot 'current.json'
-if (Test-Path -LiteralPath $currentFile) {
+# Takes over an existing standalone "Kosmos Engine" Apps&Features entry left
+# by the old separate installer: removes its registration and shortcut, but
+# never touches %APPDATA%\Kosmos (user data) or the LOCALAPPDATA Engine files
+# themselves — those are simply adopted in place. Snapshots first; restores
+# on failure so a locked file never leaves a half-migrated registration.
+function Invoke-EngineMigration {
+  $key = $LegacyRegistryKey
+  if (-not (Test-Path -LiteralPath $key)) { return }
+  $shortcut = if ($LegacyShortcut) { $LegacyShortcut } else { Join-Path ([Environment]::GetFolderPath('Programs')) 'Kosmos Engine.lnk' }
+  $props = Get-ItemProperty -LiteralPath $key
+  $snapshot = @{}
+  foreach ($name in @('DisplayName', 'DisplayVersion', 'Publisher', 'InstallLocation', 'UninstallString', 'QuietUninstallString', 'DisplayIcon', 'NoModify', 'NoRepair')) {
+    if ($props.PSObject.Properties.Name -contains $name) { $snapshot[$name] = $props.$name }
+  }
+  $shortcutBackup = $null
+  if (Test-Path -LiteralPath $shortcut -PathType Leaf) {
+    $shortcutBackup = "$env:TEMP\kosmos-engine-shortcut-$PID.bak"
+    Copy-Item -LiteralPath $shortcut -Destination $shortcutBackup -Force
+  }
   try {
-    $current = Get-Content -Raw -LiteralPath $currentFile | ConvertFrom-Json
-    $valid = $current.schema_version -eq 1 -and $current.version -eq $expected.version
-    if ($valid) {
-      $currentRoot = Join-Path (Join-Path $TargetRoot 'versions') $current.version
-      foreach ($file in $expected.files) {
-        $candidate = Join-Path $currentRoot $file.name
-        if (-not (Test-Path -LiteralPath $candidate) -or (Get-Item -LiteralPath $candidate).Length -ne $file.size -or (Get-EngineSha256 $candidate) -ne $file.sha256.ToLowerInvariant()) { $valid = $false; break }
-      }
+    Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction Stop
+    if ($shortcutBackup) { Remove-Item -LiteralPath $shortcut -Force -ErrorAction Stop }
+    if ($snapshot.InstallLocation) {
+      # Best-effort: an orphaned standalone Uninstall.exe is no longer
+      # reachable from Apps & Features, but leaving it around is dead weight.
+      Remove-Item -LiteralPath (Join-Path $snapshot.InstallLocation 'Uninstall.exe') -Force -ErrorAction SilentlyContinue
     }
-    if ($valid) { Update-EngineAutostart $currentRoot; exit 0 }
-  } catch { }
-}
-
-if (-not (Test-Path -LiteralPath $Archive -PathType Leaf)) {
-  if (Test-Path -LiteralPath $Archive) { throw 'engine archive path is not a file' }
-  Download-EngineArchive $Url
-}
-$archiveHash = Get-EngineSha256 $Archive
-if ($archiveHash -ne $expected.archive_sha256.ToLowerInvariant()) {
-  Download-EngineArchive $Url
-}
-
-$temp = Join-Path (Join-Path $TargetRoot 'versions') ("$($expected.version).$PID.tmp")
-$versionRoot = Join-Path (Join-Path $TargetRoot 'versions') $expected.version
-$versionsRoot = [IO.Path]::GetFullPath((Join-Path $TargetRoot 'versions')).TrimEnd('\')
-$temp = [IO.Path]::GetFullPath($temp)
-$versionRoot = [IO.Path]::GetFullPath($versionRoot)
-if (-not $temp.StartsWith("$versionsRoot\", [StringComparison]::OrdinalIgnoreCase) -or
-    -not $versionRoot.StartsWith("$versionsRoot\", [StringComparison]::OrdinalIgnoreCase)) {
-  throw 'invalid Engine installation path'
-}
-$engineWasRunning = $false
-$currentEnginePath = $null
-if (Test-Path -LiteralPath $currentFile) {
-  try {
-    $currentPointer = Get-Content -Raw -LiteralPath $currentFile | ConvertFrom-Json
-    if ($currentPointer.schema_version -eq 1 -and $currentPointer.version -match '^\d+\.\d+\.\d+$') {
-      $currentEnginePath = Join-Path (Join-Path $TargetRoot 'versions') $currentPointer.version
-      $currentEnginePath = Join-Path $currentEnginePath 'kepler-backend.exe'
-    }
-  } catch { }
-}
-if ($currentEnginePath -and (Test-Path -LiteralPath $currentEnginePath)) {
-  $engineWasRunning = Stop-EngineForReplacement $currentEnginePath
-}
-if (Test-Path -LiteralPath $versionRoot) {
-  $newEnginePath = Join-Path $versionRoot 'kepler-backend.exe'
-  if (-not $currentEnginePath -or [IO.Path]::GetFullPath($currentEnginePath) -ine [IO.Path]::GetFullPath($newEnginePath)) {
-    $engineWasRunning = (Stop-EngineForReplacement $newEnginePath) -or $engineWasRunning
-  }
-}
-if (Test-Path -LiteralPath $temp) { Remove-Item -Recurse -Force -ErrorAction Stop -LiteralPath $temp }
-New-Item -ItemType Directory -Force -Path $temp | Out-Null
-Expand-Archive -LiteralPath $Archive -DestinationPath $temp -Force
-foreach ($file in $expected.files) {
-  $candidate = Join-Path $temp $file.name
-  if (-not (Test-Path -LiteralPath $candidate)) { throw "engine file missing: $($file.name)" }
-  $actual = Get-Item -LiteralPath $candidate
-  if ($actual.Length -ne $file.size -or (Get-EngineSha256 $candidate) -ne $file.sha256.ToLowerInvariant()) { throw "engine file mismatch: $($file.name)" }
-}
-New-Item -ItemType Directory -Force -Path (Split-Path -Parent $versionRoot) | Out-Null
-if (Test-Path -LiteralPath $versionRoot) { Remove-Item -Recurse -Force -ErrorAction Stop -LiteralPath $versionRoot }
-if (Test-Path -LiteralPath $versionRoot) { throw 'Engine version directory could not be replaced' }
-Move-Item -LiteralPath $temp -Destination $versionRoot
-foreach ($file in $expected.files) {
-  $candidate = Join-Path $versionRoot $file.name
-  if (-not (Test-Path -LiteralPath $candidate -PathType Leaf) -or
-      (Get-Item -LiteralPath $candidate).Length -ne $file.size -or
-      (Get-EngineSha256 $candidate) -ne $file.sha256.ToLowerInvariant()) { throw "installed Engine file mismatch: $($file.name)" }
-}
-$pointerTemp = "$currentFile.$PID.tmp"
-Set-Content -LiteralPath $pointerTemp -Value (@{ schema_version = 1; version = $expected.version } | ConvertTo-Json -Compress) -Encoding ASCII
-Move-Item -Force -LiteralPath $pointerTemp -Destination $currentFile
-if ($engineWasRunning) {
-  try {
-    Start-Process -FilePath (Join-Path $versionRoot 'kepler-backend.exe') -ArgumentList '--start' -WindowStyle Hidden
   } catch {
-    Write-Warning "Engine was replaced but could not be restarted: $($_.Exception.Message)"
+    New-Item -Path $key -Force | Out-Null
+    foreach ($entry in $snapshot.GetEnumerator()) {
+      $type = if ($entry.Key -in @('NoModify', 'NoRepair')) { 'DWord' } else { 'String' }
+      New-ItemProperty -LiteralPath $key -Name $entry.Key -Value $entry.Value -PropertyType $type -Force | Out-Null
+    }
+    if ($shortcutBackup -and (Test-Path -LiteralPath $shortcutBackup)) {
+      Copy-Item -LiteralPath $shortcutBackup -Destination $shortcut -Force
+    }
+    throw "Kosmos Engine migration failed and was rolled back: $($_.Exception.Message)"
+  } finally {
+    if ($shortcutBackup) { Remove-Item -LiteralPath $shortcutBackup -Force -ErrorAction SilentlyContinue }
   }
 }
-Update-EngineAutostart $versionRoot
-Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $metadataTemp
+
+$expected = Get-Content -Raw -LiteralPath $Manifest | ConvertFrom-Json
+Assert-Manifest $expected
+if (-not (Test-Path -LiteralPath $Archive -PathType Leaf)) { throw "engine archive missing: $Archive" }
+if ($expected.archive_sha256 -and (Get-EngineSha256 $Archive) -ne $expected.archive_sha256.ToLowerInvariant()) {
+  throw 'engine archive hash mismatch'
+}
+
+$installedVersion = Test-InstalledEngine $TargetRoot
+if ($installedVersion -and (Compare-EngineVersion $installedVersion $expected.version) -ge 0) {
+  # Monotonic: never replace an equal-or-newer, already-verified Engine.
+  Update-EngineAutostart (Join-Path (Join-Path $TargetRoot 'versions') $installedVersion)
+} else {
+  $currentFile = Join-Path $TargetRoot 'current.json'
+  $versionsRoot = [IO.Path]::GetFullPath((Join-Path $TargetRoot 'versions')).TrimEnd('\')
+  $versionRoot = [IO.Path]::GetFullPath((Join-Path $versionsRoot $expected.version))
+  $temp = [IO.Path]::GetFullPath((Join-Path $versionsRoot "$($expected.version).$PID.tmp"))
+  if (-not $temp.StartsWith("$versionsRoot\", [StringComparison]::OrdinalIgnoreCase) -or
+      -not $versionRoot.StartsWith("$versionsRoot\", [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'invalid Engine installation path'
+  }
+
+  $engineWasRunning = $false
+  if ($installedVersion) {
+    $installedPath = Join-Path (Join-Path $TargetRoot 'versions') $installedVersion
+    $engineWasRunning = Stop-EngineForReplacement (Join-Path $installedPath 'kepler-backend.exe')
+  }
+  if (Test-Path -LiteralPath $versionRoot) {
+    $engineWasRunning = (Stop-EngineForReplacement (Join-Path $versionRoot 'kepler-backend.exe')) -or $engineWasRunning
+  }
+
+  if (Test-Path -LiteralPath $temp) { Remove-Item -Recurse -Force -ErrorAction Stop -LiteralPath $temp }
+  New-Item -ItemType Directory -Force -Path $temp | Out-Null
+  Expand-Archive -LiteralPath $Archive -DestinationPath $temp -Force
+  foreach ($file in $expected.files) {
+    $candidate = Join-Path $temp $file.name
+    if (-not (Test-Path -LiteralPath $candidate)) { throw "engine file missing: $($file.name)" }
+    $actual = Get-Item -LiteralPath $candidate
+    if ($actual.Length -ne $file.size -or (Get-EngineSha256 $candidate) -ne $file.sha256.ToLowerInvariant()) { throw "engine file mismatch: $($file.name)" }
+  }
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $versionRoot) | Out-Null
+  if (Test-Path -LiteralPath $versionRoot) { Remove-Item -Recurse -Force -ErrorAction Stop -LiteralPath $versionRoot }
+  Move-Item -LiteralPath $temp -Destination $versionRoot
+  foreach ($file in $expected.files) {
+    $candidate = Join-Path $versionRoot $file.name
+    if (-not (Test-Path -LiteralPath $candidate -PathType Leaf) -or
+        (Get-Item -LiteralPath $candidate).Length -ne $file.size -or
+        (Get-EngineSha256 $candidate) -ne $file.sha256.ToLowerInvariant()) { throw "installed Engine file mismatch: $($file.name)" }
+  }
+
+  # Monotonic guard on the pointer itself: a concurrent install of a newer
+  # version (e.g. two Desktop installers racing) must not be clobbered by
+  # this one finishing second.
+  $pointerVersion = Test-InstalledEngine $TargetRoot
+  if (-not $pointerVersion -or (Compare-EngineVersion $expected.version $pointerVersion) -gt 0) {
+    $pointerTemp = "$currentFile.$PID.tmp"
+    Set-Content -LiteralPath $pointerTemp -Value (@{ schema_version = 1; version = $expected.version } | ConvertTo-Json -Compress) -Encoding ASCII
+    Move-Item -Force -LiteralPath $pointerTemp -Destination $currentFile
+  }
+  if ($engineWasRunning) {
+    try {
+      Start-Process -FilePath (Join-Path $versionRoot 'kepler-backend.exe') -ArgumentList '--start' -WindowStyle Hidden
+    } catch {
+      Write-Warning "Engine was replaced but could not be restarted: $($_.Exception.Message)"
+    }
+  }
+  Update-EngineAutostart $versionRoot
+}
+
+Invoke-EngineMigration

@@ -14,6 +14,7 @@ export const ENGINE_FILES = [
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const ENGINE_VERSION = /^\d+\.\d+\.\d+$/;
 const ENGINE_FILE = /^[A-Za-z0-9._-]+$/;
+const SOURCE_COMMIT = /^[0-9a-f]{40}$/;
 
 function validateEngineManifest(manifest) {
   if (!manifest || manifest.schema_version !== 1 || manifest.product !== "kosmos-engine")
@@ -23,6 +24,11 @@ function validateEngineManifest(manifest) {
     !ENGINE_VERSION.test(manifest.version)
   )
     throw new Error("engine version must be semver");
+  if (
+    Object.prototype.toString.call(manifest.source_commit) !== "[object String]" ||
+    !SOURCE_COMMIT.test(manifest.source_commit)
+  )
+    throw new Error("engine source_commit must be a 40-character lowercase commit");
   if (!Array.isArray(manifest.files) || manifest.files.length === 0)
     throw new Error("engine manifest files are required");
   for (const file of manifest.files) {
@@ -41,9 +47,10 @@ function validateEngineManifest(manifest) {
   }
 }
 
-export function buildEngineArchive(releaseDir, archive, { version, url }) {
+export function buildEngineArchive(releaseDir, archive, { version, sourceCommit }) {
   if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error("engine version must be semver");
-  if (!/^https:\/\//.test(url)) throw new Error("engine url must use HTTPS");
+  if (!SOURCE_COMMIT.test(sourceCommit))
+    throw new Error("engine sourceCommit must be a 40-character lowercase commit");
   const files = ENGINE_FILES.map((name) => {
     const data = fs.readFileSync(path.join(releaseDir, name));
     return { name, data, sha256: sha256(data), size: data.length };
@@ -52,7 +59,7 @@ export function buildEngineArchive(releaseDir, archive, { version, url }) {
     schema_version: 1,
     product: "kosmos-engine",
     version,
-    url,
+    source_commit: sourceCommit,
     files: files.map(({ name, sha256: digest, size }) => ({ name, sha256: digest, size })),
   };
   fs.mkdirSync(path.dirname(archive), { recursive: true });
@@ -179,37 +186,4 @@ function verifyInstalledEngine(root, manifest) {
       return false;
     }
   });
-}
-
-export function copyStandaloneEngineArtifact(source, target) {
-  if (!fs.existsSync(source)) throw new Error(`standalone engine archive missing: ${source}`);
-  fs.copyFileSync(source, target);
-}
-
-export function copyEngineRelease(shellRoot, version) {
-  fs.mkdirSync(path.join(shellRoot, "release"), { recursive: true });
-  copyStandaloneEngineArtifact(
-    path.join(shellRoot, ".tmp", "engine.next", "Kosmos-Engine.zip"),
-    path.join(shellRoot, "release", `Kosmos-Engine-${version}.zip`),
-  );
-  const installer = path.join(
-    shellRoot,
-    ".tmp",
-    "engine.next",
-    `Kosmos-Engine-Setup-${version}.exe`,
-  );
-  if (fs.existsSync(installer))
-    copyStandaloneEngineArtifact(
-      installer,
-      path.join(shellRoot, "release", path.basename(installer)),
-    );
-}
-
-export function copyEngineManifest(shellRoot, version) {
-  const source = path.join(shellRoot, ".tmp", "engine.next", "engine-manifest.json");
-  const target = path.join(shellRoot, "release", `Kosmos-Engine-${version}.json`);
-  if (!fs.existsSync(source)) throw new Error(`standalone engine manifest missing: ${source}`);
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.copyFileSync(source, target);
-  fs.copyFileSync(source, path.join(shellRoot, "release", "Kosmos-Engine-manifest.json"));
 }

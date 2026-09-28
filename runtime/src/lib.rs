@@ -40,6 +40,7 @@ pub mod app_index;
 pub(crate) mod app_network;
 pub mod ark_host;
 pub mod auth;
+pub mod build_info;
 pub mod calculator;
 pub mod command_bus;
 pub mod crash_reporter;
