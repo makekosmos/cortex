@@ -266,7 +266,15 @@ ipcMain.handle("kepler:diagnostics:trace-start", async () => {
 });
 
 ipcMain.handle("kepler:diagnostics:trace-stop", async (_event, outPath?: string) => {
-  const tracePath = await contentTracing.stopRecording(outPath);
+  // stopRecording writes to whatever path it gets — a renderer-supplied path
+  // may only name a new file inside the temp directory; anything else (or a
+  // non-string) falls back to Electron's own temp path.
+  const tempRoot = path.resolve(app.getPath("temp"));
+  const target =
+    typeof outPath === "string" && outPath
+      ? path.resolve(tempRoot, path.basename(outPath))
+      : undefined;
+  const tracePath = await contentTracing.stopRecording(target);
   return { path: tracePath };
 });
 
