@@ -39,7 +39,7 @@ if (workspace) {
   // feature; an explicit --test wildcard makes cargo error on it instead of
   // skipping. Run ark-core with default target selection (same coverage as
   // upstream's `cargo test --manifest-path crates/ark-core/Cargo.toml`).
-  // kepler-backend/iroh-spike: the integration replication tests exercise the
+  // engine/iroh-spike: the integration replication tests exercise the
   // in-process ARK service's iroh transport (previously provided by the
   // separately-built ark-core-rpc fixture binary).
   run(cortex, [
@@ -50,7 +50,7 @@ if (workspace) {
     "--test",
     "*",
     "--features",
-    "kepler-backend/iroh-spike",
+    "engine/iroh-spike",
   ]);
   run(cortex, ["test", "-p", "ark-core"]);
   run(cortex, ["test", "-p", "engine", "--bins"]);

@@ -23,6 +23,7 @@ not control. `scripts/check-brand.mjs` enforces this list — it reads
 | `kosmos-engine` | `engine-manifest.json` product field of installed 0.9.x Engines | Installed manifests on user machines; the install script validates both ids. |
 | `kosmos-link-v1` | ARK deterministic link-id hash seed (`ark-core`) | Hash seed — changing it changes every derived link id in user DBs. |
 | `kosmos-local://richtext-image/…`, `kosmos-local-image://file/…` | ARK `richTextImages` keys and note/vault image URLs | Written into persisted note objects; renaming orphans existing references. |
+| `kosmos-icon://` | Electron-era icon protocol referenced by pinned component builds | Wire/display name already sent to and rendered by existing clients. |
 | `extensions.kosmos` JSON key (incl. `/props/extensions/kosmos/…` pointers) | ARK object extensions (`taskBucket` etc.) | Persisted user data. |
 | `kosmos-host` / `TargetRuntime::KosmosHost` | `targets[].runtime` in package manifests | Signed manifests and installed package state use this value. |
 | `kosmos-desktop` | WS `client_class` sent by pinned components; usage-accounting keys | Pinned sibling builds report it; recorded usage keys already contain it. |

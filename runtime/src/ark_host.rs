@@ -181,7 +181,6 @@ impl ArkHost {
 
 fn stable_device_id() -> String {
     crate::brand::env("DEVICE_ID")
-        .ok()
         .filter(|id| !id.trim().is_empty())
         .map(|id| id.trim().to_owned())
         .unwrap_or_else(|| "ark-host-local".to_owned())

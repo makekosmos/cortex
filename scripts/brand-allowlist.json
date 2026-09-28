@@ -86,7 +86,7 @@
       "reason": "Legacy environment variable names kept readable as migration fallbacks (MUNDUS_* is primary) or sent to pinned sibling builds that still read them."
     },
     {
-      "pattern": "kosmos-link-v1|kosmos-local|extensions[./]kosmos|KosmosHost|kosmos-host|kosmos-desktop|kosmos-kepler|kepler-fallback",
+      "pattern": "kosmos-link-v1|kosmos-local|kosmos-icon|extensions[./]kosmos|KosmosHost|kosmos-host|kosmos-desktop|kosmos-kepler|kepler-fallback",
       "reason": "Persisted identifiers inside user data and wire/catalog contracts: deterministic link-hash seeds, kosmos-local*:// URL schemes written into notes, the extensions.kosmos JSON key, the kosmos-host manifest target runtime, the kosmos-desktop WS client class, the kosmos-kepler keyring service (holds user credentials), and the kepler-fallback device id already written on existing machines."
     }
   ],
