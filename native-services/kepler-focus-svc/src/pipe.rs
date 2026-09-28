@@ -6,7 +6,7 @@
 //! security trade-off для personal app, см. CLAUDE.md per-app constraints.
 
 use std::ffi::OsStr;
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::io::FromRawHandle;
 use std::path::PathBuf;
@@ -150,11 +150,7 @@ unsafe impl Send for PipeHandle {}
 
 fn handle_connection(pipe: PipeHandle) {
     let mut file = unsafe { std::fs::File::from_raw_handle(pipe.0 as _) };
-    let mut raw = String::new();
-    {
-        let mut reader = BufReader::new(&mut file);
-        let _ = reader.read_line(&mut raw);
-    }
+    let raw = kepler_focus_svc::request_io::read_request_line(&mut file).unwrap_or_default();
     let resp = protocol::handle_raw(&raw, &hosts_path_for_dispatch());
     let json = serde_json::to_string(&resp)
         .unwrap_or_else(|_| String::from(r#"{"ok":false,"error":"serialize failed"}"#));
