@@ -95,10 +95,11 @@ Function DetectPreviousKosmos
   ; Old Electron installation.
   IfFileExists "$LOCALAPPDATA\Programs\kepler-shell" 0 +2
     StrCpy $R3 0
-  ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{4fe2b964-4d0e-5a72-8728-cca14468c9f0}" "DisplayName"
+  ; The Electron uninstall keys are the bare GUIDs — no braces.
+  ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\4fe2b964-4d0e-5a72-8728-cca14468c9f0" "DisplayName"
   StrCmp $R0 "" +2
     StrCpy $R3 0
-  ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{af85bd72-f4c8-5af3-a0fe-9aa1f0fa5a8d}" "DisplayName"
+  ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\af85bd72-f4c8-5af3-a0fe-9aa1f0fa5a8d" "DisplayName"
   StrCmp $R0 "" +2
     StrCpy $R3 0
 
@@ -130,14 +131,9 @@ do_autostart:
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 +2
     StrCpy $R5 "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
 
-  nsExec::ExecToStack '"$R5" -NoProfile -ExecutionPolicy Bypass -Command "try { $$c=Get-Content -Raw $$env:LOCALAPPDATA\Kosmos\Engine\current.json | ConvertFrom-Json; if ($$c.schema_version -ne 1 -or $$c.version -notmatch ''^\d+\.\d+\.\d+$$'') { throw ''bad current.json'' }; $$c.version.Trim() } catch { exit 1 }"'
-  Pop $0
-  Pop $R6
-  StrCmp $0 "0" 0 autostart_done
-
-  DeleteRegValue HKCU "${RUN_KEY}" "Kosmos Engine"
-  WriteRegStr HKCU "${RUN_KEY}" "Kosmos Engine" '"$LOCALAPPDATA\Kosmos\Engine\versions\$R6\kepler-backend.exe" --start'
-autostart_done:
+  ; Post-install logic lives in a shipped script: NSIS single-quoted strings
+  ; cannot contain inline PowerShell safely.
+  nsExec::ExecToLog '"$R5" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\engine-post-install.ps1" -SeedAutostart'
 FunctionEnd
 
 ; Always start the installed Engine at the end of the install. On interactive
@@ -147,7 +143,7 @@ Function StartEngineAndManager
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 +2
     StrCpy $R5 "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
 
-  nsExec::ExecToLog '"$R5" -NoProfile -ExecutionPolicy Bypass -Command "try { $$v=(Get-Content -Raw $$env:LOCALAPPDATA\Kosmos\Engine\current.json | ConvertFrom-Json).version; Start-Process (Join-Path $$env:LOCALAPPDATA Kosmos\Engine\versions\$$v\kepler-backend.exe) -ArgumentList --start -WindowStyle Hidden } catch { }"'
+  nsExec::ExecToLog '"$R5" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\engine-post-install.ps1" -StartEngine'
 
   IfSilent manager_done
   Exec '"$INSTDIR\resources\components\manager\Kosmos Manager.exe"'
@@ -171,11 +167,15 @@ Section "Install"
   ; Upgrade from an Electron install: remove the old shell payload, its stale
   ; Apps & Features entries, and its autostart Run values. We never run the old
   ; uninstaller and never touch %APPDATA%\Kosmos or %LOCALAPPDATA%\Kosmos.
+  ; Old Electron autostart values are stale regardless of whether the
+  ; kepler-shell payload survived; remove them unconditionally now that
+  ; DetectPreviousKosmos has read them for the migration decision.
+  !insertmacro DeleteOldElectronRunValues
   IfFileExists "$LOCALAPPDATA\Programs\kepler-shell" 0 legacy_cleanup_done
-    !insertmacro DeleteOldElectronRunValues
     RMDir /r "$LOCALAPPDATA\Programs\kepler-shell"
-    DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{4fe2b964-4d0e-5a72-8728-cca14468c9f0}"
-    DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{af85bd72-f4c8-5af3-a0fe-9aa1f0fa5a8d}"
+    ; Bare GUID keys — the real entries have no braces.
+    DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\4fe2b964-4d0e-5a72-8728-cca14468c9f0"
+    DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\af85bd72-f4c8-5af3-a0fe-9aa1f0fa5a8d"
 
     ; Old Electron shortcuts were named Kosmos.lnk or Kepler.lnk on Desktop and
     ; in the Start Menu and pointed into kepler-shell.

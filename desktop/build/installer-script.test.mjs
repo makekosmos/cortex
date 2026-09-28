@@ -26,11 +26,14 @@ test("only removes the shipped payload, not the whole $INSTDIR recursively", () 
 
 test("cleans up the old Electron install under kepler-shell and its GUID keys", () => {
   expect(installSection).toContain('RMDir /r "$LOCALAPPDATA\\Programs\\kepler-shell"');
-  expect(installSection).toContain("{4fe2b964-4d0e-5a72-8728-cca14468c9f0}");
-  expect(installSection).toContain("{af85bd72-f4c8-5af3-a0fe-9aa1f0fa5a8d}");
+  // The real 0.9.x uninstall keys are bare GUIDs — no braces.
+  expect(installer).toContain("Uninstall\\4fe2b964-4d0e-5a72-8728-cca14468c9f0");
+  expect(installer).toContain("Uninstall\\af85bd72-f4c8-5af3-a0fe-9aa1f0fa5a8d");
+  expect(installer).not.toContain("{4fe2b964");
+  expect(installer).not.toContain("{af85bd72");
 });
 
-test("removes old Electron autostart Run values", () => {
+test("removes old Electron autostart Run values unconditionally on install", () => {
   const names = [
     "com.kazui.kosmos",
     "electron.app.Kosmos",
@@ -43,6 +46,14 @@ test("removes old Electron autostart Run values", () => {
   for (const name of names) {
     expect(installer).toContain(`DeleteRegValue HKCU "${runKey}" "${name}"`);
   }
+  // Deletion happens before the kepler-shell guard, not only inside it.
+  const insertAt = installSection.indexOf("!insertmacro DeleteOldElectronRunValues");
+  const keplerGuardAt = installSection.indexOf(
+    'IfFileExists "$LOCALAPPDATA\\Programs\\kepler-shell" 0 legacy_cleanup_done',
+  );
+  expect(insertAt >= 0).toBeTruthy();
+  expect(keplerGuardAt >= 0).toBeTruthy();
+  expect(insertAt).toBeLessThan(keplerGuardAt);
 });
 
 test("stops processes before uninstalling", () => {
@@ -53,9 +64,11 @@ test("stops processes before uninstalling", () => {
 });
 
 test("always starts the Engine at the end of install", () => {
-  expect(installer).toContain("kepler-backend.exe");
-  expect(installer).toContain("--start");
-  expect(installer).toContain("Start-Process");
+  const postInstall = readFileSync(path.join(buildDir, "engine-post-install.ps1"), "utf8");
+  expect(postInstall).toContain("kepler-backend.exe");
+  expect(postInstall).toContain("--start");
+  expect(postInstall).toContain("Start-Process");
+  expect(installer).toContain("engine-post-install.ps1");
 });
 
 test("only opens the Manager on interactive installs", () => {
@@ -68,6 +81,18 @@ test("only opens the Manager on interactive installs", () => {
 test("seeds autostart only conditionally and never using the Desktop VERSION", () => {
   expect(installer).not.toContain("versions\\${VERSION}\\kepler-backend.exe");
   expect(installSection).not.toContain('WriteRegStr HKCU "${RUN_KEY}" "Kosmos Engine"');
+});
+
+test("post-install logic ships as a script file, never inline -Command", () => {
+  expect(installer).not.toContain("-Command");
+  expect(installer).toContain(
+    '-File "$INSTDIR\\resources\\engine-post-install.ps1" -SeedAutostart',
+  );
+  expect(installer).toContain('-File "$INSTDIR\\resources\\engine-post-install.ps1" -StartEngine');
+});
+
+test("no NSIS single-quoted string contains '' (NSIS has no doubled-quote escape)", () => {
+  expect(installer).not.toContain("''");
 });
 
 test("detects previous installs and migrates autostart via dedicated functions", () => {

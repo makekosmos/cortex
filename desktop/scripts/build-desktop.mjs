@@ -100,10 +100,9 @@ function stageInstaller() {
     if (!existsSync(source)) die(`missing engine artifact: ${source}`);
     copyFileSync(source, path.join(resources, targetName));
   }
-  copyFileSync(
-    path.join(SHELL_ROOT, "build", "install-engine.ps1"),
-    path.join(resources, "install-engine.ps1"),
-  );
+  for (const script of ["install-engine.ps1", "engine-post-install.ps1"]) {
+    copyFileSync(path.join(SHELL_ROOT, "build", script), path.join(resources, script));
+  }
   copyFileSync(path.join(SHELL_ROOT, "build", "icon.ico"), path.join(resources, "icon.ico"));
   copyFileSync(path.join(SHELL_ROOT, "build", "tray.ico"), path.join(resources, "tray.ico"));
 
