@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { resolvePreflightArgs, runReleasePreflight } from "./release-preflight.mjs";
+import {
+  assertBuildingFromMain,
+  assertVersionIsPublishable,
+  resolvePreflightArgs,
+  runReleasePreflight,
+} from "./release-preflight.mjs";
 
 test("missing --bom falls back to KOSMOS_RELEASE_BOM", () => {
   const { platform, bomPath } = resolvePreflightArgs(["--platform", "win"], {
@@ -37,5 +42,45 @@ test("missing --platform is rejected as unknown platform", async () => {
   await assert.rejects(
     () => runReleasePreflight({ platform, bomPath: "bom.json" }),
     /Unknown platform/,
+  );
+});
+
+test("resolvePreflightArgs recognizes --local and KOSMOS_RELEASE_LOCAL (KOS-233)", () => {
+  assert.equal(resolvePreflightArgs(["--platform", "win", "--local"], {}).local, true);
+  assert.equal(
+    resolvePreflightArgs(["--platform", "win"], { KOSMOS_RELEASE_LOCAL: "1" }).local,
+    true,
+  );
+  assert.equal(resolvePreflightArgs(["--platform", "win"], {}).local, false);
+});
+
+test("assertBuildingFromMain rejects any branch other than main (KOS-233)", () => {
+  assert.throws(
+    () => assertBuildingFromMain("/repo", () => "kos-233-single-channel"),
+    /must run from main HEAD \(current branch: kos-233-single-channel\)/,
+  );
+  assert.doesNotThrow(() => assertBuildingFromMain("/repo", () => "main"));
+});
+
+test("assertVersionIsPublishable requires a strictly newer version than the latest tag (KOS-233)", async () => {
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ tag_name: "v0.9.38" }) });
+  await assert.rejects(
+    () => assertVersionIsPublishable({ platform: "win", version: "0.9.38", fetchImpl }),
+    /must be greater than the latest published 0\.9\.38/,
+  );
+  await assert.rejects(
+    () => assertVersionIsPublishable({ platform: "win", version: "0.9.37", fetchImpl }),
+    /must be greater than the latest published/,
+  );
+  await assert.doesNotReject(() =>
+    assertVersionIsPublishable({ platform: "win", version: "0.9.39", fetchImpl }),
+  );
+});
+
+test("assertVersionIsPublishable surfaces a clear error when the check is unreachable (KOS-233)", async () => {
+  const fetchImpl = async () => ({ ok: false, status: 503 });
+  await assert.rejects(
+    () => assertVersionIsPublishable({ platform: "win", version: "9.9.9", fetchImpl }),
+    /pass --local/,
   );
 });

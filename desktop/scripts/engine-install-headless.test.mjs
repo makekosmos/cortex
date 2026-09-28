@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildEngineArchive } from "./engine-distribution.mjs";
@@ -15,23 +15,21 @@ const names = [
   "tray.ico",
 ];
 const script = fileURLToPath(new URL("../build/install-engine.ps1", import.meta.url));
+const SOURCE_COMMIT = "a".repeat(40);
 
-function fixture() {
+function fixture(version = "1.2.3") {
   const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-engine-headless-"));
   const release = path.join(root, "release");
   mkdirSync(release, { recursive: true });
   for (const name of names) writeFileSync(path.join(release, name), `fixture:${name}`);
   const archive = path.join(root, "engine.zip");
-  const manifest = buildEngineArchive(release, archive, {
-    version: "1.2.3",
-    url: "https://github.com/makekosmos/desktop/releases/download/v1.2.3/engine.zip",
-  });
+  const manifest = buildEngineArchive(release, archive, { version, sourceCommit: SOURCE_COMMIT });
   const manifestPath = path.join(root, "manifest.json");
   writeFileSync(manifestPath, JSON.stringify(manifest));
   return { root, archive, manifestPath, manifest };
 }
 
-function runInstall({ archive, manifestPath, root, url }) {
+function runInstall({ archive, manifestPath, root }, extraArgs = []) {
   const args = [
     "-NoProfile",
     "-ExecutionPolicy",
@@ -44,116 +42,69 @@ function runInstall({ archive, manifestPath, root, url }) {
     manifestPath,
     "-TargetRoot",
     path.join(root, "installed"),
+    ...extraArgs,
   ];
-  if (url) args.push("-Url", url);
   return spawnSync("powershell", args, { encoding: "utf8" });
 }
 
-function runInstallWithFakeRedownload({ archive, manifestPath, root, sourceArchive }) {
-  const quote = (value) => `'${value.replaceAll("'", "''")}'`;
-  const wrapper = path.join(root, "redownload.ps1");
-  writeFileSync(
-    wrapper,
-    `function Invoke-WebRequest {
-  param([string]$Uri, [string]$OutFile, [switch]$UseBasicParsing)
-  if ($Uri -ne 'https://github.com/makekosmos/desktop/releases/download/v1.2.3/engine.zip') { throw "unexpected download URL: $Uri" }
-  Copy-Item -LiteralPath ${quote(sourceArchive)} -Destination $OutFile -Force
-}
-& ${quote(script)} -Archive ${quote(archive)} -Manifest ${quote(manifestPath)} -TargetRoot ${quote(path.join(root, "installed"))} -Url 'https://github.com/makekosmos/desktop/releases/download/v1.2.3/engine.zip'
-exit $LASTEXITCODE
-`,
-    "utf8",
-  );
-  return spawnSync("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", wrapper], {
-    encoding: "utf8",
-  });
-}
-
-test("stale archive is replaced by a trusted redownload", () => {
+test("fresh install extracts, verifies, and points current.json at the bundled version", () => {
   const f = fixture();
-  const sourceArchive = path.join(f.root, "trusted-engine.zip");
-  cpSync(f.archive, sourceArchive);
-  writeFileSync(f.archive, "stale archive from previous update");
-  const result = runInstallWithFakeRedownload({ ...f, sourceArchive });
+  const result = runInstall(f);
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(readFileSync(f.archive).equals(readFileSync(sourceArchive)), true);
-  assert.equal(
-    JSON.parse(readFileSync(path.join(f.root, "installed", "current.json"), "utf8")).version,
-    "1.2.3",
-  );
-});
-
-test("corrupt redownload preserves the existing archive", () => {
-  const f = fixture();
-  const first = runInstall(f);
-  assert.equal(first.status, 0, first.stderr);
-  const staleArchive = Buffer.from("stale archive from previous update", "utf8");
-  writeFileSync(f.archive, staleArchive);
-  writeFileSync(
-    path.join(f.root, "installed", "current.json"),
-    JSON.stringify({ schema_version: 1, version: "0.0.1" }),
-  );
-  const corruptDownload = path.join(f.root, "corrupt-engine.zip");
-  writeFileSync(corruptDownload, "corrupt trusted response");
-  const result = runInstallWithFakeRedownload({
-    ...f,
-    sourceArchive: corruptDownload,
-  });
-  assert.notEqual(result.status, 0);
-  assert.deepEqual(readFileSync(f.archive), staleArchive);
-  assert.equal(
-    JSON.parse(readFileSync(path.join(f.root, "installed", "current.json"), "utf8")).version,
-    "0.0.1",
-  );
-});
-
-test("GUI dependency installs absent engine and reuses present engine", () => {
-  const f = fixture();
-  const first = runInstall(f);
-  assert.equal(first.status, 0, first.stderr);
   const current = JSON.parse(readFileSync(path.join(f.root, "installed", "current.json"), "utf8"));
-  const backend = path.join(f.root, "installed", "versions", current.version, "kepler-backend.exe");
-  const second = runInstall(f);
-  assert.equal(second.status, 0, second.stderr);
+  assert.equal(current.version, "1.2.3");
+  const backend = path.join(f.root, "installed", "versions", "1.2.3", "kepler-backend.exe");
   assert.equal(readFileSync(backend, "utf8"), "fixture:kepler-backend.exe");
-  cpSync(
-    path.join(f.root, "installed", "versions", current.version),
-    path.join(f.root, "installed", "versions", "0.0.1"),
-    { recursive: true },
-  );
-  writeFileSync(
-    path.join(f.root, "installed", "current.json"),
-    JSON.stringify({ schema_version: 1, version: "0.0.1" }),
-  );
-  const versionRepaired = runInstall(f);
-  assert.equal(versionRepaired.status, 0, versionRepaired.stderr);
-  assert.equal(
-    JSON.parse(readFileSync(path.join(f.root, "installed", "current.json"), "utf8")).version,
-    "1.2.3",
-  );
+});
+
+test("install is idempotent and repairs a corrupted installation from the bundled archive", () => {
+  const f = fixture();
+  assert.equal(runInstall(f).status, 0);
+  const backend = path.join(f.root, "installed", "versions", "1.2.3", "kepler-backend.exe");
+  assert.equal(runInstall(f).status, 0);
+  assert.equal(readFileSync(backend, "utf8"), "fixture:kepler-backend.exe");
   writeFileSync(backend, "corrupt");
   const repaired = runInstall(f);
   assert.equal(repaired.status, 0, repaired.stderr);
   assert.equal(readFileSync(backend, "utf8"), "fixture:kepler-backend.exe");
 });
 
-test("untrusted engine archive blocks GUI dependency install", () => {
-  const f = fixture();
-  writeFileSync(f.archive, "tampered");
-  const result = runInstall({ ...f, url: "https://evil.example/engine.zip" });
-  assert.notEqual(result.status, 0);
-  assert.equal(existsSync(path.join(f.root, "installed")), false);
+test("install never downgrades an equal-or-newer, already-verified Engine", () => {
+  const newer = fixture("2.0.0");
+  assert.equal(runInstall(newer).status, 0);
+  const olderManifestPath = path.join(newer.root, "older-manifest.json");
+  const olderArchive = path.join(newer.root, "older.zip");
+  const olderRelease = path.join(newer.root, "older-release");
+  mkdirSync(olderRelease, { recursive: true });
+  for (const name of names) writeFileSync(path.join(olderRelease, name), `older:${name}`);
+  const olderManifest = buildEngineArchive(olderRelease, olderArchive, {
+    version: "1.0.0",
+    sourceCommit: SOURCE_COMMIT,
+  });
+  writeFileSync(olderManifestPath, JSON.stringify(olderManifest));
+  const result = runInstall({
+    root: newer.root,
+    archive: olderArchive,
+    manifestPath: olderManifestPath,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const current = JSON.parse(
+    readFileSync(path.join(newer.root, "installed", "current.json"), "utf8"),
+  );
+  assert.equal(current.version, "2.0.0", "a lower release must never overwrite a newer pointer");
+  assert.equal(
+    existsSync(path.join(newer.root, "installed", "versions", "1.0.0")),
+    false,
+    "an older build is not even staged once a newer Engine is installed",
+  );
 });
 
-test("untrusted engine publisher metadata blocks GUI dependency install", () => {
+test("untrusted engine archive blocks installation", () => {
   const f = fixture();
-  writeFileSync(
-    f.manifestPath,
-    JSON.stringify({ ...f.manifest, url: "https://evil.example/engine.zip" }),
-  );
+  writeFileSync(f.archive, "tampered");
   const result = runInstall(f);
   assert.notEqual(result.status, 0);
-  assert.equal(existsSync(path.join(f.root, "installed")), false);
+  assert.equal(existsSync(path.join(f.root, "installed", "current.json")), false);
 });
 
 test("unsafe manifest paths and sizes are rejected before installation", () => {
@@ -162,8 +113,7 @@ test("unsafe manifest paths and sizes are rejected before installation", () => {
     f.manifestPath,
     JSON.stringify({ ...f.manifest, files: [{ ...f.manifest.files[0], name: "../escape.exe" }] }),
   );
-  const result = runInstall(f);
-  assert.notEqual(result.status, 0);
+  assert.notEqual(runInstall(f).status, 0);
   assert.equal(existsSync(path.join(f.root, "escape.exe")), false);
   writeFileSync(
     f.manifestPath,
@@ -175,4 +125,56 @@ test("unsafe manifest paths and sizes are rejected before installation", () => {
     JSON.stringify({ ...f.manifest, files: [{ ...f.manifest.files[0], size: 1.5 }] }),
   );
   assert.notEqual(runInstall(f).status, 0);
+});
+
+test("install takes over an existing standalone Kosmos Engine registration", () => {
+  const f = fixture();
+  // A scratch registry key/shortcut, never the real machine state — the
+  // script only points at the real "Kosmos Engine" registration when these
+  // overrides are omitted (see installer.nsi).
+  const legacyKey = `HKCU:\\Software\\KosmosEngineMigrationTest\\${process.pid}-${Date.now()}`;
+  const legacyShortcut = path.join(f.root, "Kosmos Engine.lnk");
+  writeFileSync(legacyShortcut, "fake shortcut");
+  const oldEngineRoot = path.join(f.root, "old-standalone-engine");
+  mkdirSync(oldEngineRoot, { recursive: true });
+  writeFileSync(path.join(oldEngineRoot, "Uninstall.exe"), "old uninstaller");
+  execFileSync("powershell", [
+    "-NoProfile",
+    "-Command",
+    `New-Item -Path '${legacyKey}' -Force | Out-Null;
+     New-ItemProperty -LiteralPath '${legacyKey}' -Name DisplayName -Value 'Kosmos Engine' -PropertyType String -Force | Out-Null;
+     New-ItemProperty -LiteralPath '${legacyKey}' -Name InstallLocation -Value '${oldEngineRoot.replaceAll("\\", "\\\\")}' -PropertyType String -Force | Out-Null;`,
+  ]);
+  try {
+    const result = runInstall(f, [
+      "-LegacyRegistryKey",
+      legacyKey,
+      "-LegacyShortcut",
+      legacyShortcut,
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    const keyGone = spawnSync("powershell", [
+      "-NoProfile",
+      "-Command",
+      `if (Test-Path -LiteralPath '${legacyKey}') { exit 1 } else { exit 0 }`,
+    ]);
+    assert.equal(keyGone.status, 0, "legacy registry entry must be removed");
+    assert.equal(existsSync(legacyShortcut), false, "legacy Start Menu shortcut must be removed");
+    assert.equal(
+      existsSync(path.join(oldEngineRoot, "Uninstall.exe")),
+      false,
+      "orphaned standalone uninstaller is cleaned up",
+    );
+    assert.equal(
+      JSON.parse(readFileSync(path.join(f.root, "installed", "current.json"), "utf8")).version,
+      "1.2.3",
+    );
+  } finally {
+    spawnSync("powershell", [
+      "-NoProfile",
+      "-Command",
+      `Remove-Item -LiteralPath '${legacyKey}' -Recurse -Force -ErrorAction SilentlyContinue`,
+    ]);
+    rmSync(f.root, { recursive: true, force: true });
+  }
 });

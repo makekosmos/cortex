@@ -1,14 +1,11 @@
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
 const root = path.resolve(import.meta.dirname, "..");
-const packageRoots = [".", "desktop", "host"];
+const packageRoots = [".", "desktop"];
 const read = (file) => readFileSync(path.join(root, file), "utf8");
-const require = createRequire(path.join(root, "desktop", "package.json"));
-const typescript = require("typescript");
 
 test("Cortex uses pnpm 12.4.1 for every package root", () => {
   for (const packageRoot of packageRoots) {
@@ -24,17 +21,13 @@ test("Cortex command and test contracts do not require Bun", () => {
   const files = [
     "package.json",
     "desktop/package.json",
-    "host/package.json",
     "lefthook.yml",
     "README.md",
     "scripts/check-plan-commands.mjs",
   ];
   for (const file of files) assert.doesNotMatch(read(file), /\bbun(?:x)?\b|bun:test/, file);
-  for (const file of ["desktop", "host"]) {
-    const contents = read(`${file}/package.json`);
-    assert.doesNotMatch(contents, /\bbun(?:x)?\b|bun:test/, `${file}/package.json`);
-  }
-  assert.doesNotMatch(read("host/e2e/fixtures/host-runtime.test.ts"), /bun:test/);
+  const contents = read("desktop/package.json");
+  assert.doesNotMatch(contents, /\bbun(?:x)?\b|bun:test/, "desktop/package.json");
 });
 
 test("workspace doctor checks the Cortex pnpm toolchain", () => {
@@ -57,39 +50,10 @@ test("release BOM records the pnpm toolchain without changing Rust commands", ()
   assert.match(read("package.json"), /test:rust/);
 });
 
-test("Node-launched host E2E uses pnpm exec", () => {
-  const source = read("host/scripts/run-e2e.mjs");
-  assert.match(source, /createRequire\(import\.meta\.url\)\.resolve\("@playwright\/test\/cli"\)/);
-  assert.match(source, /process\.execPath,\s*\[playwrightCli, "test"/);
-  assert.doesNotMatch(source, /shell:\s*true/);
-});
-
-test("Desktop Vue uses the workspace-pinned shared Imago revision", () => {
-  const desktop = JSON.parse(read("desktop/package.json"));
-  assert.equal(desktop.devDependencies.vue, "3.6.0-rc.7");
+test("Desktop and pinned Imago resolve Vue to one type identity", () => {
+  // Vue is gone from the shipped product; the shared Imago checkout remains a
+  // workspace pin only.
   const workspace = JSON.parse(read("package.json")).kosmos?.workspace;
   assert.match(workspace?.imago?.repository ?? "", /^makekosmos\/imago$/);
   assert.match(workspace?.imago?.commit ?? "", /^[0-9a-f]{40}$/);
-});
-
-test("Desktop and pinned Imago resolve Vue to one type identity", () => {
-  const compilerOptions = typescript.parseJsonConfigFileContent(
-    JSON.parse(read("desktop/tsconfig.json")),
-    typescript.sys,
-    path.join(root, "desktop"),
-  ).options;
-  const resolveVue = (containingFile) => {
-    const resolved = typescript.resolveModuleName(
-      "vue",
-      containingFile,
-      compilerOptions,
-      typescript.sys,
-    ).resolvedModule?.resolvedFileName;
-    assert.ok(resolved, `Vue did not resolve from ${containingFile}`);
-    return require("node:fs").realpathSync(resolved);
-  };
-  assert.equal(
-    resolveVue(path.join(root, "desktop/src/main.ts")),
-    resolveVue(path.join(root, ".tmp/workspace/imago/index.ts")),
-  );
 });

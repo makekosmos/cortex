@@ -27,7 +27,7 @@ const context = {
     },
   },
   toolchain: { pnpm: "12.4.1", node: "24.15.0", rust: "1.95.0" },
-  api: { shell: "1.1.0", engine: "1.0.0", package_manifest: 2 },
+  api: { engine: "1.0.0", package_manifest: 2 },
 };
 
 function bom() {
@@ -62,7 +62,6 @@ function bom() {
       toolchain: { ...context.toolchain, target: "x86_64-pc-windows-msvc" },
     },
     compatibility: {
-      shell_api: context.api.shell,
       engine_api: context.api.engine,
       package_schema: context.api.package_manifest,
     },
@@ -142,7 +141,6 @@ for (const [name, edit, message] of [
 test("reads real API pins from the repository sources", async () => {
   const root = path.resolve(import.meta.dirname, "..", "..");
   const real = await repositoryContext(root, "win", context.currentCommit);
-  assert.match(real.api.shell, /^\d+\.\d+\.\d+$/);
   assert.match(real.api.engine, /^\d+\.\d+\.\d+$/);
 });
 

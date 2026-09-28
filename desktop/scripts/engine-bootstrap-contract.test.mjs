@@ -1,33 +1,46 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
 const desktopRoot = path.resolve(import.meta.dirname, "..");
-const bootstrap = readFileSync(path.join(desktopRoot, "build", "ensure-engine.ps1"), "utf8");
-const installer = readFileSync(path.join(desktopRoot, "build", "installer.nsh"), "utf8");
-const packageJson = JSON.parse(readFileSync(path.join(desktopRoot, "package.json"), "utf8"));
+const bootstrap = readFileSync(path.join(desktopRoot, "build", "install-engine.ps1"), "utf8");
+const installer = readFileSync(path.join(desktopRoot, "build", "installer.nsi"), "utf8");
 
-test("Desktop bootstraps the standalone Engine installer", () => {
-  const winResources = packageJson.build.win.extraResources;
-  assert.ok(winResources.some((entry) => entry.to === "ensure-engine.ps1"));
-  assert.ok(winResources.some((entry) => entry.to === "engine-manifest.json"));
-  assert.doesNotMatch(installer, /Kosmos Engine\.zip/);
-  assert.match(installer, /ensure-engine\.ps1/);
-  assert.match(bootstrap, /installer_url/);
-  assert.match(bootstrap, /installer_sha256/);
-  assert.match(bootstrap, /installer_size/);
-  assert.ok(bootstrap.indexOf("SHA256") < bootstrap.indexOf("Start-Process"));
-  assert.match(bootstrap, /KosmosEngine/);
+test("Desktop installs the Engine it was built with, from local resources", () => {
+  // KOS-233: no separate publish/download step. The zip and manifest are the
+  // same ones build-backend.mjs staged from this tree into .tmp/engine.next.
+  assert.match(installer, /install-engine\.ps1/);
+  assert.match(installer, /-Archive "\$INSTDIR\\resources\\Kosmos Engine\.zip"/);
+  assert.match(installer, /-Manifest "\$INSTDIR\\resources\\engine-manifest\.json"/);
+  assert.doesNotMatch(
+    bootstrap,
+    /Invoke-WebRequest|installer_url|channel_url|Test-TrustedReleaseUrl/,
+  );
   assert.match(bootstrap, /Compare-EngineVersion/);
 });
 
-test("bootstrap metadata rejects a changed installer before invocation", () => {
-  const installerBytes = Buffer.from("trusted installer fixture");
-  const expectedHash = createHash("sha256").update(installerBytes).digest("hex");
-  const changedHash = createHash("sha256").update("tampered").digest("hex");
-  assert.equal(installerBytes.length > 0, true);
-  assert.notEqual(changedHash, expectedHash);
-  assert.match(bootstrap, /hash or size mismatch/);
+test("install never downgrades an equal-or-newer verified Engine", () => {
+  assert.match(bootstrap, /Test-InstalledEngine \$TargetRoot/);
+  assert.match(
+    bootstrap,
+    /\$installedVersion -and \(Compare-EngineVersion \$installedVersion \$expected\.version\) -ge 0/,
+  );
+});
+
+test("install takes over an existing standalone Kosmos Engine registration", () => {
+  assert.match(bootstrap, /function Invoke-EngineMigration/);
+  assert.match(bootstrap, /Uninstall\\KosmosEngine/);
+  assert.match(bootstrap, /Kosmos Engine\.lnk/);
+  // Snapshot before changing anything, restore it if the takeover fails —
+  // never leave a half-migrated registration (KOS-134 pattern).
+  assert.ok(bootstrap.indexOf("$snapshot") < bootstrap.indexOf("Remove-Item -LiteralPath $key"));
+  assert.match(bootstrap, /rolled back/);
+});
+
+test("engine archive hash is verified before extraction", () => {
+  assert.match(bootstrap, /archive_sha256/);
+  assert.ok(bootstrap.indexOf("Get-EngineSha256 $Archive") < bootstrap.indexOf("Expand-Archive"));
+  assert.equal(existsSync(path.join(desktopRoot, "build", "ensure-engine.ps1")), false);
+  assert.equal(existsSync(path.join(desktopRoot, "build", "engine-installer.nsi")), false);
 });

@@ -4,18 +4,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const buildDir = path.dirname(fileURLToPath(import.meta.url));
-const installer = readFileSync(path.join(buildDir, "installer.nsh"), "utf8");
-const desktopPackage = JSON.parse(readFileSync(path.join(buildDir, "..", "package.json"), "utf8"));
-const electronMain = readFileSync(
-  path.join(buildDir, "..", "electron", "main-app-ready.ts"),
-  "utf8",
-);
-const shell = "$INSTDIR\\Kosmos.exe";
+const installer = readFileSync(path.join(buildDir, "installer.nsi"), "utf8");
 
-test("Kosmos shortcuts open the packaged Shell", () => {
+test("Kosmos Start Menu shortcut opens the packaged Manager GPUI", () => {
+  const manager = "$INSTDIR\\resources\\components\\manager\\Kosmos Manager.exe";
   expect(installer).toContain('Delete "$SMPROGRAMS\\CosCast.lnk"');
-  expect(installer).toContain(`CreateShortCut "$SMPROGRAMS\\Kosmos.lnk" "${shell}"`);
-  expect(installer).toContain(`CreateShortCut "$DESKTOP\\Kosmos.lnk" "${shell}"`);
+  expect(installer).toContain('Delete "$DESKTOP\\Kosmos.lnk"');
+  expect(installer).toContain('Delete "$SMPROGRAMS\\Kosmos.lnk"');
+  expect(installer).toContain(`CreateShortCut "$SMPROGRAMS\\Kosmos.lnk" "${manager}"`);
 });
 
 test("Agenda GPUI component gets a guarded Start Menu shortcut with cleanup", () => {
@@ -32,7 +28,9 @@ test("Memoria GPUI component gets a guarded Start Menu shortcut with cleanup", (
   expect(installer).toContain('Delete "$SMPROGRAMS\\Kosmos Memoria.lnk"');
 });
 
-test("rename keeps the legacy app identity and shell IPC namespace", () => {
-  expect(desktopPackage.build.appId).toBe("com.kazui.kosmos");
-  expect(electronMain).toContain('"com.kosmos.shell"');
+test("Dictation GPUI component gets a guarded Start Menu shortcut with cleanup", () => {
+  const dictation = "$INSTDIR\\resources\\components\\dictation\\Kosmos Dictation.exe";
+  expect(installer).toContain(`IfFileExists "${dictation}"`);
+  expect(installer).toContain(`CreateShortCut "$SMPROGRAMS\\Kosmos Dictation.lnk" "${dictation}"`);
+  expect(installer).toContain('Delete "$SMPROGRAMS\\Kosmos Dictation.lnk"');
 });

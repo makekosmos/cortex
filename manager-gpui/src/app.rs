@@ -57,6 +57,7 @@ pub struct ManagerApp {
     /// keystroke and emits `dictation_capture_key` / `_cancelled`.
     pub hotkey_capturing: bool,
     worker_dead: bool,
+    next_updater_poll: Instant,
 }
 
 impl ManagerApp {
@@ -89,6 +90,7 @@ impl ManagerApp {
             action_busy: false,
             hotkey_capturing: false,
             worker_dead: false,
+            next_updater_poll: Instant::now(),
         };
         this.load_current();
         cx.spawn(async move |this, cx| loop {
@@ -337,6 +339,21 @@ impl ManagerApp {
             };
             self.handle_engine_event(event, cx);
             cx.notify();
+        }
+        if self.view == View::Updates && Instant::now() >= self.next_updater_poll {
+            self.next_updater_poll = Instant::now() + std::time::Duration::from_secs(1);
+            if self
+                .worker
+                .commands
+                .send(Command::Rpc {
+                    slot: "upd.kosmos".into(),
+                    op: "updater.status",
+                    params: json!({}),
+                })
+                .is_err()
+            {
+                self.worker_dead = true;
+            }
         }
     }
 

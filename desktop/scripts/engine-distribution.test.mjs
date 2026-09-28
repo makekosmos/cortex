@@ -10,6 +10,8 @@ import {
   verifyEngineArchive,
 } from "./engine-distribution.mjs";
 
+const SOURCE_COMMIT = "a".repeat(40);
+
 test("engine archive is independently verifiable and installable", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-engine-distribution-"));
   const release = path.join(root, "release");
@@ -26,7 +28,7 @@ test("engine archive is independently verifiable and installable", () => {
   }
   const manifest = buildEngineArchive(release, archive, {
     version: "1.2.3",
-    url: "https://example.invalid/engine.zip",
+    sourceCommit: SOURCE_COMMIT,
   });
   assert.equal(verifyEngineArchive(archive, manifest), true);
   const installed = installEngineArchive(archive, manifest, path.join(root, "engine"));
@@ -36,7 +38,7 @@ test("engine archive is independently verifiable and installable", () => {
   );
 });
 
-test("independent engine versions accept a lower release line", () => {
+test("buildEngineArchive accepts any semver product version", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-engine-version-"));
   const release = path.join(root, "release");
   const archive = path.join(root, "Kosmos-Engine-0.1.0.zip");
@@ -51,7 +53,7 @@ test("independent engine versions accept a lower release line", () => {
     writeFileSync(path.join(release, name), name);
   const manifest = buildEngineArchive(release, archive, {
     version: "0.1.0",
-    url: "https://github.com/makekosmos/desktop/releases/download/v0.1.0/Kosmos-Engine-0.1.0.zip",
+    sourceCommit: SOURCE_COMMIT,
   });
   assert.equal(manifest.version, "0.1.0");
   assert.equal(verifyEngineArchive(archive, manifest), true);
@@ -72,7 +74,7 @@ test("engine archive rejects tampering", () => {
     writeFileSync(path.join(release, name), "ok");
   const manifest = buildEngineArchive(release, archive, {
     version: "1.2.3",
-    url: "https://example.invalid/engine.zip",
+    sourceCommit: SOURCE_COMMIT,
   });
   manifest.files[0].sha256 = "0".repeat(64);
   assert.throws(() => verifyEngineArchive(archive, manifest), /engine artifact mismatch/);
@@ -93,7 +95,7 @@ test("a valid installed engine is preserved", () => {
     writeFileSync(path.join(release, name), "new");
   const manifest = buildEngineArchive(release, archive, {
     version: "1.2.3",
-    url: "https://example.invalid/engine.zip",
+    sourceCommit: SOURCE_COMMIT,
   });
   const engineRoot = path.join(root, "engine");
   const first = installEngineArchive(archive, manifest, engineRoot);
@@ -120,7 +122,7 @@ test("installed Engine resolution follows current.json and verifies canonical fi
     writeFileSync(path.join(release, name), name);
   const manifest = buildEngineArchive(release, archive, {
     version: "1.2.3",
-    url: "https://example.invalid/engine.zip",
+    sourceCommit: SOURCE_COMMIT,
   });
   const engineRoot = path.join(root, "installed");
   installEngineArchive(archive, manifest, engineRoot);

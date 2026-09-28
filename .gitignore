@@ -4,7 +4,6 @@ target/
 # Local dependency, build, test, and agent output.
 node_modules/
 dist/
-dist-electron/
 graphify-out/
 test-results/
 artifacts/

@@ -380,20 +380,8 @@ async function main() {
     die("Cannot determine version — pass --version <v> or set version in release-versions.json");
   }
 
-  // Repo resolution: read from build.<platform>.publish[0]
-  const platformPublish = pkg?.build?.[platform]?.publish;
-  if (!platformPublish || !Array.isArray(platformPublish) || platformPublish.length === 0) {
-    die(
-      `Cannot read build.${platform}.publish[0] from package.json — expected array with { provider, owner, repo }.\n` +
-        `(build.publish was removed in favour of per-platform build.win.publish / build.mac.publish)`,
-    );
-  }
-  const publishConfig = platformPublish[0];
-  if (!publishConfig.owner || !publishConfig.repo) {
-    die(`build.${platform}.publish[0] is missing owner or repo`);
-  }
-  const { owner, repo } = publishConfig;
-  const ownerRepo = `${owner}/${repo}`;
+  // The release repositories are fixed for this product line.
+  const ownerRepo = platform === "win" ? "makekosmos/desktop" : "makekosmos/desktop-mac";
   const tag = `v${version}`;
 
   log(`Platform:     ${platform}`);

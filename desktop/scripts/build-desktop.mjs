@@ -1,14 +1,23 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import path from "node:path";
-import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { loadReleaseBom } from "./release-bom.mjs";
 import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
 import { bytes, documentHash, writeAtomic } from "./package-release-utils.mjs";
-import { runFirstPartyContracts } from "./first-party-release-contracts.mjs";
-import { copyEngineManifest, copyEngineRelease } from "./engine-distribution.mjs";
 import { createReceipt, writeReceipt } from "./release-receipt.mjs";
+import { ensureNsis } from "./ensure-nsis.mjs";
 import {
   currentCommit,
   runReleasePreflight,
@@ -16,7 +25,7 @@ import {
 } from "./release-preflight.mjs";
 
 const SHELL_ROOT = PREFLIGHT_ROOT;
-const VALID_PLATFORMS = ["win", "mac"];
+const VALID_PLATFORMS = ["win"];
 function die(msg) {
   console.error(`[build-desktop] FATAL: ${msg}`);
   process.exit(1);
@@ -26,59 +35,18 @@ function log(...args) {
   console.log("[build-desktop]", ...args);
 }
 
-/**
- * Resolve the electron-builder binary.
- * Prefers the local node_modules/.bin/electron-builder(.cmd on Windows).
- * Falls back to globally available "electron-builder".
- */
-function resolveElectronBuilder() {
-  if (process.env.KOSMOS_ELECTRON_BUILDER) return process.env.KOSMOS_ELECTRON_BUILDER;
-  const isWin = process.platform === "win32";
-  const binDir = path.join(SHELL_ROOT, "node_modules", ".bin");
-  // pnpm/npm use .cmd on Windows. Keep the local binary preference before PATH.
-  const candidates = isWin
-    ? ["electron-builder.cmd", "electron-builder.exe"]
-    : ["electron-builder"];
-  for (const name of candidates) {
-    const p = path.join(binDir, name);
-    if (existsSync(p)) return p;
-  }
-  // Fallback: assume on PATH
-  return isWin ? "electron-builder.cmd" : "electron-builder";
-}
-function verifyEmbeddedBom(outputDir, platform, digest) {
-  const candidates = [path.join(outputDir, "win-unpacked", "resources", "release-bom.json")];
-  if (platform === "mac") {
-    for (const directory of readdirSync(outputDir, { withFileTypes: true })) {
-      if (!directory.isDirectory() || !directory.name.startsWith("mac")) continue;
-      const root = path.join(outputDir, directory.name);
-      for (const app of readdirSync(root, { withFileTypes: true })) {
-        if (app.isDirectory() && app.name.endsWith(".app"))
-          candidates.push(path.join(root, app.name, "Contents", "Resources", "release-bom.json"));
-      }
-    }
-  }
-  const embedded = candidates.find(existsSync);
-  if (!embedded) die(`embedded release BOM not found in ${outputDir}`);
-  if (documentHash(readFileSync(embedded)) !== digest)
-    die(`embedded release BOM digest mismatch: ${embedded}`);
-  return embedded;
-}
-
-function collectArtifacts(outputDir, platform, version, engineVersion) {
-  const channel = platform === "win" ? "latest.yml" : "latest-mac.yml";
-  const versions = [version, engineVersion].filter(Boolean);
+function collectArtifacts(outputDir, platform, version) {
+  const channel = "latest.yml";
   const names = readdirSync(outputDir).filter((name) => {
     if (name === channel) return true;
-    if (name !== "Kosmos-Engine-manifest.json" && !versions.some((value) => name.includes(value)))
-      return false;
-    return /\.(?:exe|dmg|zip|blockmap|json)$/i.test(name);
+    if (!name.includes(version)) return false;
+    return /\.(?:exe|json)$/i.test(name);
   });
   const artifacts = names.map((name) => {
     const file = path.join(outputDir, name);
     return { name, sha256: documentHash(readFileSync(file)), size: statSync(file).size };
   });
-  if (!artifacts.some(({ name }) => /\.(?:exe|dmg)$/i.test(name)))
+  if (!artifacts.some(({ name }) => name.endsWith(".exe")))
     die(`no installer artifact found in ${outputDir}`);
   if (!artifacts.some(({ name }) => name === channel)) die(`missing ${channel} in ${outputDir}`);
   return artifacts;
@@ -94,10 +62,9 @@ function compareExpectedArtifacts(expected, actual) {
   }
 }
 
-async function emitProvenance(outputDir, platform, version, bom, engineVersion) {
-  const embedded = verifyEmbeddedBom(outputDir, platform, bom.digest);
+async function emitProvenance(outputDir, platform, version, bom) {
   verifyLocalReleaseChannel(outputDir, platform, version);
-  const artifacts = collectArtifacts(outputDir, platform, version, engineVersion);
+  const artifacts = collectArtifacts(outputDir, platform, version);
   compareExpectedArtifacts(bom.value.artifacts, artifacts);
   const provenance = {
     schema_version: 1,
@@ -105,7 +72,6 @@ async function emitProvenance(outputDir, platform, version, bom, engineVersion) 
     bom_digest: bom.digest,
     platform,
     version,
-    embedded_bom: path.relative(outputDir, embedded),
     artifacts,
   };
   const file = path.join(outputDir, "release-provenance.json");
@@ -119,6 +85,89 @@ async function emitProvenance(outputDir, platform, version, bom, engineVersion) 
   };
 }
 
+function stageInstaller() {
+  const stage = path.join(SHELL_ROOT, ".tmp", "installer-stage");
+  rmSync(stage, { recursive: true, force: true });
+  const resources = path.join(stage, "resources");
+  mkdirSync(resources, { recursive: true });
+
+  const engineDir = path.join(SHELL_ROOT, ".tmp", "engine.next");
+  for (const [sourceName, targetName] of [
+    ["Kosmos-Engine.zip", "Kosmos Engine.zip"],
+    ["engine-manifest.json", "engine-manifest.json"],
+  ]) {
+    const source = path.join(engineDir, sourceName);
+    if (!existsSync(source)) die(`missing engine artifact: ${source}`);
+    copyFileSync(source, path.join(resources, targetName));
+  }
+  for (const script of ["install-engine.ps1", "engine-post-install.ps1"]) {
+    copyFileSync(path.join(SHELL_ROOT, "build", script), path.join(resources, script));
+  }
+  copyFileSync(path.join(SHELL_ROOT, "build", "icon.ico"), path.join(resources, "icon.ico"));
+  copyFileSync(path.join(SHELL_ROOT, "build", "tray.ico"), path.join(resources, "tray.ico"));
+
+  const componentsDir = path.join(resources, "components");
+  for (const component of ["manager", "agenda", "memoria", "dictation"]) {
+    const source = path.join(SHELL_ROOT, ".tmp", "components", component, "win-unpacked");
+    const target = path.join(componentsDir, component);
+    if (!existsSync(source)) continue;
+    cpSync(source, target, { recursive: true });
+  }
+  return stage;
+}
+
+function sha512Base64(file) {
+  const hash = createHash("sha512");
+  hash.update(readFileSync(file));
+  return hash.digest("base64");
+}
+
+async function buildWindows(version) {
+  const stage = stageInstaller();
+  const releaseDir = path.join(SHELL_ROOT, "release");
+  mkdirSync(releaseDir, { recursive: true });
+  const outFile = path.join(releaseDir, `Kosmos-Setup-${version}.exe`);
+
+  const { makensis, env } = await ensureNsis();
+  const args = [
+    `/DVERSION=${version}`,
+    `/DSTAGE_DIR=${stage}`,
+    `/DOUT_FILE=${outFile}`,
+    path.join(SHELL_ROOT, "build", "installer.nsi"),
+  ];
+  log(`makensis: ${makensis}`);
+  log(`Running: ${makensis} ${args.join(" ")}`);
+  const result = spawnSync(makensis, args, {
+    cwd: SHELL_ROOT,
+    stdio: "inherit",
+    windowsHide: true,
+    env: { ...process.env, ...env },
+  });
+  if (result.status !== 0) {
+    console.error("");
+    console.error(`[build-desktop] makensis exited with code ${result.status ?? "(signal)"}`);
+    process.exit(result.status ?? 1);
+  }
+
+  // electron-updater / Engine updater channel file.
+  const installerSha512 = sha512Base64(outFile);
+  const installerSize = statSync(outFile).size;
+  const latest = [
+    `version: ${version}`,
+    "files:",
+    `  - url: Kosmos-Setup-${version}.exe`,
+    `    sha512: ${installerSha512}`,
+    `    size: ${installerSize}`,
+    `path: Kosmos-Setup-${version}.exe`,
+    `sha512: ${installerSha512}`,
+    `releaseDate: '${new Date().toISOString()}'`,
+    "",
+  ].join("\n");
+  await writeAtomic(path.join(releaseDir, "latest.yml"), latest);
+  log(`Installer: ${outFile} (${installerSize} bytes)`);
+  return { releaseDir, outFile };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   let platform = null;
@@ -126,6 +175,8 @@ async function main() {
   let dryRun = false;
   let receiptPath = null;
   let skipPreflight = false;
+  let packageDir = false;
+  let local = process.env.KOSMOS_RELEASE_LOCAL === "1";
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--platform") {
@@ -138,111 +189,85 @@ async function main() {
       dryRun = true;
     } else if (args[i] === "--skip-preflight") {
       skipPreflight = true;
+    } else if (args[i] === "--local") {
+      local = true;
+    } else if (args[i] === "--package-dir") {
+      packageDir = true;
     }
   }
 
-  if (!platform) {
-    die("--platform <win|mac> is required");
-  }
-  if (!VALID_PLATFORMS.includes(platform)) {
+  // Windows is the only supported package target; default to it so
+  // `pnpm run build:desktop -- --local` works without extra flags.
+  platform ??= "win";
+  if (!VALID_PLATFORMS.includes(platform))
     die(`Unknown platform "${platform}". Valid: ${VALID_PLATFORMS.join(", ")}`);
-  }
-  if (!bomPath) die("--bom <path> or KOSMOS_RELEASE_BOM is required for release builds");
+  if (local && bomPath && !existsSync(bomPath)) bomPath = null;
 
-  const preflight = skipPreflight
-    ? {
-        platform,
-        version: JSON.parse(readFileSync(path.join(SHELL_ROOT, "release-versions.json"), "utf8"))[
-          platform
-        ],
-        engineVersion:
-          platform === "win"
-            ? JSON.parse(
-                readFileSync(
-                  path.join(SHELL_ROOT, ".tmp/engine.next/engine-manifest.json"),
-                  "utf8",
-                ),
-              ).version
-            : null,
-        currentCommit: currentCommit(),
-        bom: await loadReleaseBom(bomPath, {
-          root: path.resolve(SHELL_ROOT, ".."),
+  let version;
+  let bom = null;
+  if (local && !bomPath) {
+    version = JSON.parse(readFileSync(path.join(SHELL_ROOT, "release-versions.json"), "utf8"))[
+      platform
+    ];
+  } else {
+    if (!bomPath) die("--bom <path> or KOSMOS_RELEASE_BOM is required for release builds");
+    const preflight = skipPreflight
+      ? {
           platform,
+          version: JSON.parse(readFileSync(path.join(SHELL_ROOT, "release-versions.json"), "utf8"))[
+            platform
+          ],
           currentCommit: currentCommit(),
-        }),
-      }
-    : await runReleasePreflight({ platform, bomPath });
-  const { version, engineVersion, bom } = preflight;
+          bom: await loadReleaseBom(bomPath, {
+            root: path.resolve(SHELL_ROOT, ".."),
+            platform,
+            currentCommit: currentCommit(),
+          }),
+        }
+      : await runReleasePreflight({ platform, bomPath, local });
+    version = preflight.version;
+    bom = preflight.bom;
+  }
   receiptPath ??= path.join(SHELL_ROOT, "release", "release-receipt.v1.json");
 
-  // preflight: everything here is cheap and must happen before compilation.
   if (!skipPreflight) log("Preflight: source, BOM, pins, and ARK artifact");
   log(`Platform: ${platform}`);
   log(`Version:  ${version}`);
-  log(`BOM:      ${bom.value.id} (${bom.digest})`);
+  if (bom) log(`BOM:      ${bom.value.id} (${bom.digest})`);
   log("");
   if (dryRun) {
     log("Dry-run plan:");
-    log(`  build: electron-builder --${platform} --publish never`);
-    log("  verify: local channel, BOM, provenance, first-party contracts, receipt");
+    log(`  build: NSIS installer via makensis`);
+    log("  verify: local channel, BOM, provenance, receipt");
     log(
       `  publish: node scripts/publish-release.mjs --platform ${platform} --receipt ${receiptPath}`,
     );
     return;
   }
-  if (platform === "win" && existsSync(path.join(SHELL_ROOT, "release")))
-    readdirSync(path.join(SHELL_ROOT, "release"))
-      .filter((name) => /^Kosmos-Engine-\d+\.\d+\.\d+\.(?:zip|json)$/.test(name))
-      .forEach((name) => rmSync(path.join(SHELL_ROOT, "release", name)));
-  const eb = resolveElectronBuilder();
-  log(`electron-builder: ${eb}`);
-  let ebArgs;
-  if (platform === "win") {
-    ebArgs = ["--win", "nsis", "--publish", "never", `-c.extraMetadata.version=${version}`];
-  } else {
-    ebArgs = ["--mac", "dmg", "--publish", "never", `-c.extraMetadata.version=${version}`];
+  if (packageDir) {
+    const stage = stageInstaller();
+    log(`Staged installer payload at ${stage}`);
+    return;
   }
-  log(`Running: ${eb} ${ebArgs.join(" ")}`);
-  log("");
 
-  const ebResult = spawnSync(eb, ebArgs, {
-    cwd: SHELL_ROOT,
-    stdio: "inherit",
-    shell: true,
-    windowsHide: true,
-    env: { ...process.env, KOSMOS_RELEASE_BOM_PATH: bom.path },
-  });
-  if (ebResult.status !== 0) {
-    console.error("");
-    console.error(
-      `[build-desktop] electron-builder exited with code ${ebResult.status ?? "(signal)"}`,
-    );
-    process.exit(ebResult.status ?? 1);
-  }
-  if (platform === "win") {
-    copyEngineRelease(SHELL_ROOT, engineVersion);
-    copyEngineManifest(SHELL_ROOT, engineVersion);
-  }
+  const { releaseDir, outFile } = await buildWindows(version);
   log("");
-  log("electron-builder succeeded. Emitting release provenance...");
-  const releaseFiles = await emitProvenance(
-    path.join(SHELL_ROOT, "release"),
-    platform,
-    version,
-    bom,
-    engineVersion,
-  );
-  runFirstPartyContracts(platform);
-  const receipt = await createReceipt({
-    outputDir: path.join(SHELL_ROOT, "release"),
-    platform,
-    version,
-    currentCommit: currentCommit(),
-    bom,
-    files: [...releaseFiles.artifactFiles, ...releaseFiles.metadataFiles],
-  });
-  await writeReceipt(receiptPath, receipt);
-  log(`Verification receipt: ${receiptPath}`);
-  log(`Build + verify complete for ${platform} v${version}. Run publish-release.mjs explicitly.`);
+  if (bom) {
+    log("NSIS installer built. Emitting release provenance...");
+    const releaseFiles = await emitProvenance(releaseDir, platform, version, bom);
+    const receipt = await createReceipt({
+      outputDir: releaseDir,
+      platform,
+      version,
+      currentCommit: currentCommit(),
+      bom,
+      files: [...releaseFiles.artifactFiles, ...releaseFiles.metadataFiles],
+    });
+    await writeReceipt(receiptPath, receipt);
+    log(`Verification receipt: ${receiptPath}`);
+    log(`Build + verify complete for ${platform} v${version}. Run publish-release.mjs explicitly.`);
+  } else {
+    log(`Local build complete: ${outFile}`);
+  }
 }
 main().catch((error) => die(error instanceof Error ? error.message : String(error)));

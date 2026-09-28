@@ -20,18 +20,14 @@ function plan(...args) {
   return { json: JSON.parse(result.stdout), stderr: result.stderr };
 }
 
-test("desktop UI selects desktop typecheck, changed lint, and format", () => {
-  const result = plan("--mode", "worktree", "--files", "desktop/src/App.vue");
-  assert.deepEqual(result.json.checks, ["desktop-typecheck", "lint", "format"]);
+test("desktop scripts select lint and format", () => {
+  const result = plan("--mode", "worktree", "--files", "desktop/scripts/engine-distribution.mjs");
+  assert.deepEqual(result.json.checks, ["lint", "format"]);
   assert.equal(result.json.full, false);
-  assert.match(result.stderr, /desktop\/src\/App\.vue/);
+  assert.match(result.stderr, /desktop\/scripts\/engine-distribution\.mjs/);
 });
 
-test("host contracts, Rust, native, and first-party files expand conservatively", () => {
-  assert.deepEqual(plan("--files", "host/electron/main.ts").json.checks, [
-    "host-typecheck",
-    "host-contracts",
-  ]);
+test("Rust, native, and packaging files expand conservatively", () => {
   assert.deepEqual(plan("--files", "runtime/src/lib.rs").json.checks, [
     "rustfmt",
     "clippy",
@@ -39,7 +35,6 @@ test("host contracts, Rust, native, and first-party files expand conservatively"
     "runtime-staging",
   ]);
   assert.deepEqual(plan("--files", "native-services/src/main.rs").json.checks, ["native-services"]);
-  assert.equal(plan("--files", "host/e2e/first-party-foo.spec.ts").json.full, true);
 });
 
 test("core subtree maps crates to rust checks and inert paths to none", () => {
@@ -157,17 +152,17 @@ test("command failures aggregate instead of stopping after the first selected gr
   const { executePlan } = await import("./check-plan.mjs");
   const seen = [];
   const status = executePlan(
-    { full: false, checks: ["desktop-typecheck", "host-typecheck"], changed: [], reasons: [] },
+    { full: false, checks: ["desktop-contracts", "manager-gpui"], changed: [], reasons: [] },
     (command) => {
       seen.push(command.name);
-      return command.name === "desktop-typecheck" ? 1 : 0;
+      return command.name === "desktop-contracts" ? 1 : 0;
     },
   );
   assert.equal(status, 1);
-  assert.deepEqual(seen, ["desktop-typecheck", "host-typecheck"]);
+  assert.deepEqual(seen, ["desktop-contracts", "manager-gpui"]);
 });
 
-test("full gate runs the root check plus host and first-party contract suites", async () => {
+test("full gate runs the root check", async () => {
   const { executePlan } = await import("./check-plan.mjs");
   const seen = [];
   const status = executePlan(
@@ -178,42 +173,21 @@ test("full gate runs the root check plus host and first-party contract suites", 
     },
   );
   assert.equal(status, 0);
-  assert.deepEqual(seen, [
-    "pnpm run check",
-    "pnpm run test:host-contracts",
-    "pnpm run test:first-party-contracts",
-  ]);
+  assert.deepEqual(seen, ["pnpm run check"]);
 });
 
-test("full gate still fails when a contract suite fails and runs every command", async () => {
+test("full gate still fails when the root check fails", async () => {
   const { executePlan } = await import("./check-plan.mjs");
   const seen = [];
   const status = executePlan(
     { mode: "worktree", full: true, checks: ["full"], changed: [], reasons: [] },
     (command) => {
       seen.push(command.name);
-      return command.name === "host-contracts" ? 1 : 0;
+      return command.name === "full" ? 1 : 0;
     },
   );
   assert.equal(status, 1);
-  assert.deepEqual(seen, ["full", "host-contracts", "first-party-contracts"]);
-});
-
-test("full gate runs the same contract commands an affected plan selects", async () => {
-  const { createPlan, executePlan } = await import("./check-plan.mjs");
-  const run = (plan) => {
-    const seen = [];
-    executePlan(plan, (command) => {
-      seen.push(`${command.command} ${command.args.join(" ")}`);
-      return 0;
-    });
-    return seen;
-  };
-  const affected = run(createPlan({ mode: "worktree", files: ["host/electron/main.ts"] }));
-  assert.ok(affected.includes("pnpm run test:host-contracts"));
-  const full = run(createPlan({ mode: "worktree", full: true }));
-  assert.ok(full.includes("pnpm run test:host-contracts"));
-  assert.ok(full.includes("pnpm run test:first-party-contracts"));
+  assert.deepEqual(seen, ["full"]);
 });
 
 test("pre-commit retains the existing source-size safeguard through the planner", async () => {

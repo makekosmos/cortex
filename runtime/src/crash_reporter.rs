@@ -8,7 +8,7 @@
 // spawn'е backend, см. shell/electron/main.ts → spawnBackend).
 //
 // Файл-фрагмент состоит из:
-//   * version (CARGO_PKG_VERSION)
+//   * version (crate::build_info::display_version())
 //   * timestamp ISO 8601
 //   * фиксированный marker вместо panic payload
 //   * location (file:line:col)
@@ -86,7 +86,7 @@ pub fn format_panic_log(info: &std::panic::PanicHookInfo<'_>, correlation_id: &s
     let mut out = String::new();
     out.push_str(&format!(
         "kepler-backend v{} crashed\n",
-        env!("CARGO_PKG_VERSION")
+        crate::build_info::display_version()
     ));
     out.push_str(&format!("crash_id: {}\n", crate::observability::crash_id()));
     out.push_str(&format!("correlation_id: {correlation_id}\n"));

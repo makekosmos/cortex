@@ -144,10 +144,7 @@ export function validateReleaseBom(value, context) {
   string(toolchain.target, "source.toolchain.target");
 
   const compatibility = object(value.compatibility, "compatibility");
-  semver(compatibility.shell_api, "compatibility.shell_api");
   semver(compatibility.engine_api, "compatibility.engine_api");
-  if (compatibility.shell_api !== context.api.shell)
-    fail("compatibility.shell_api does not match the shell API pin");
   if (compatibility.engine_api !== context.api.engine)
     fail("compatibility.engine_api does not match the engine API pin");
   if (compatibility.package_schema !== context.api.package_manifest)
@@ -203,7 +200,6 @@ export async function repositoryContext(root, platform, currentCommit) {
   const versions = await readJson(path.join(root, "desktop", "release-versions.json"));
   const toolchain = await readJson(path.join(root, "toolchain.json"));
   const cargo = await readFile(path.join(root, "runtime", "Cargo.toml"), "utf8");
-  const shellApi = await readFile(path.join(root, "desktop", "shared", "ipc-api-types.ts"), "utf8");
   const engineApi = await readFile(
     path.join(root, "runtime", "src", "protocol_version.rs"),
     "utf8",
@@ -222,10 +218,9 @@ export async function repositoryContext(root, platform, currentCommit) {
   const rust = toolchain.rust;
   const corePathPin = /path = "\.\.\/core\/crates\/ark-core", package = "ark-core"/.test(cargo);
   const arkCoreSource = /ARK_CORE_SOURCE\s*=\s*"core\/crates\/ark-core"/.test(arkCore);
-  const shell = shellApi.match(/export const KEPLER_API_VERSION\s*=\s*"([^"]+)"/)?.[1];
   const engine = engineApi.match(/pub const API_VERSION: &str = "([^"]+)"/)?.[1];
 
-  if (!pnpm || !node || !rust || !corePathPin || !arkCoreSource || !shell || !engine)
+  if (!pnpm || !node || !rust || !corePathPin || !arkCoreSource || !engine)
     fail("repository pins are incomplete or unreadable");
   if (!/manifest\.schema_version !== 2/.test(catalog))
     fail("package catalog is not pinned to manifest schema 2");
@@ -236,7 +231,7 @@ export async function repositoryContext(root, platform, currentCommit) {
     releaseVersion: versions[platform],
     workspace,
     toolchain: { pnpm, node, rust },
-    api: { shell, engine, package_manifest: 2 },
+    api: { engine, package_manifest: 2 },
   };
 }
 

@@ -21,64 +21,36 @@ const cleanWorktree =
     "--others",
     "--exclude-standard",
     "--",
-    "desktop/src",
-    "desktop/electron",
     "desktop/scripts",
     "desktop/build",
-    "desktop/shared",
-    "host/src",
-    "host/electron",
     "manager-gpui",
     "runtime/src",
     "native-services",
   ]) === "";
 
-// The Manager component is manager-gpui (cargo), so only the desktop and host
-// legs need installed pnpm dependencies.
-const dependenciesReady = ["desktop", "host"].every((component) =>
-  existsSync(path.join(root, component, "node_modules")),
-);
+// The Manager component is manager-gpui (cargo); only the desktop leg needs
+// installed pnpm dependencies.
+const dependenciesReady = existsSync(path.join(desktop, "node_modules"));
 
-// components/agenda builds from the pinned agenda-gpui checkout
-// (KOSMOS_AGENDA_GPUI_SRC or ../agenda-gpui), verified against
-// desktop/component-pins.json.
-const agendaPin = JSON.parse(
-  readFileSync(path.join(desktop, "component-pins.json"), "utf8"),
-).agenda_gpui;
-const agendaSrc = path.resolve(
-  process.env.KOSMOS_AGENDA_GPUI_SRC?.trim() || path.join(root, "..", "agenda-gpui"),
-);
-const agendaReady =
-  !!agendaPin?.commit &&
-  existsSync(path.join(agendaSrc, "Cargo.toml")) &&
-  spawnSync("git", ["rev-parse", "HEAD"], { cwd: agendaSrc, encoding: "utf8" }).stdout?.trim() ===
-    agendaPin.commit;
-
-// components/memoria builds from the pinned memoria-gpui checkout
-// (KOSMOS_MEMORIA_GPUI_SRC or ../memoria-gpui), verified against
-// desktop/component-pins.json.
-const memoriaPin = JSON.parse(
-  readFileSync(path.join(desktop, "component-pins.json"), "utf8"),
-).memoria_gpui;
-const memoriaSrc = path.resolve(
-  process.env.KOSMOS_MEMORIA_GPUI_SRC?.trim() || path.join(root, "..", "memoria-gpui"),
-);
-const memoriaReady =
-  !!memoriaPin?.commit &&
-  existsSync(path.join(memoriaSrc, "Cargo.toml")) &&
-  spawnSync("git", ["rev-parse", "HEAD"], { cwd: memoriaSrc, encoding: "utf8" }).stdout?.trim() ===
-    memoriaPin.commit;
+function componentReady(pinKey, envVar, sibling) {
+  const pin = JSON.parse(readFileSync(path.join(desktop, "component-pins.json"), "utf8"))[pinKey];
+  const source = path.resolve(process.env[envVar]?.trim() || path.join(root, "..", sibling));
+  return (
+    !!pin?.commit &&
+    existsSync(path.join(source, "Cargo.toml")) &&
+    spawnSync("git", ["rev-parse", "HEAD"], { cwd: source, encoding: "utf8" }).stdout?.trim() ===
+      pin.commit
+  );
+}
 
 const prerequisites =
   process.platform === "win32" &&
   cleanWorktree &&
   dependenciesReady &&
-  agendaReady &&
-  memoriaReady &&
+  componentReady("agenda_gpui", "KOSMOS_AGENDA_GPUI_SRC", "agenda-gpui") &&
+  componentReady("memoria_gpui", "KOSMOS_MEMORIA_GPUI_SRC", "memoria-gpui") &&
+  componentReady("dictation_gpui", "KOSMOS_DICTATION_GPUI_SRC", "dictation") &&
   spawnSync("cargo", ["--version"], { encoding: "utf8" }).status === 0 &&
-  // electron-builder runs pnpm install for production deps; the host package
-  // pulls @makekosmos/* from GitHub Packages, which requires a token.
-  !!process.env.NODE_AUTH_TOKEN &&
   git(["rev-parse", "HEAD"]);
 
 async function writeTestBom() {
@@ -122,7 +94,6 @@ async function writeTestBom() {
       toolchain: { ...ctx.toolchain, target: "x86_64-pc-windows-msvc" },
     },
     compatibility: {
-      shell_api: ctx.api.shell,
       engine_api: ctx.api.engine,
       package_schema: ctx.api.package_manifest,
     },
@@ -158,12 +129,12 @@ async function writeTestBom() {
 }
 
 test(
-  "build-package-components.mjs completes icons, builds, and dir packaging",
+  "build-package-components.mjs completes icons and GPUI component packaging",
   {
     timeout: 15 * 60_000,
     skip: prerequisites
       ? false
-      : "requires Windows, a clean committed worktree, installed desktop/host deps, cargo on PATH, and NODE_AUTH_TOKEN for GitHub Packages",
+      : "requires Windows, a clean committed worktree, installed desktop deps, cargo on PATH, and pinned component checkouts",
   },
   async () => {
     const bom = await writeTestBom();
@@ -185,29 +156,18 @@ test(
 
     for (const name of ["kosmos", "memoria", "agenda", "arcadia", "dictation"])
       assert.ok(existsSync(path.join(desktop, "build", "app-icons", `${name}.ico`)), name);
-    const managerOut = path.join(desktop, ".tmp", "components", "manager", "win-unpacked");
-    assert.ok(existsSync(path.join(managerOut, "Kosmos Manager.exe")), "manager unpackaged output");
-    assert.ok(
-      !existsSync(path.join(managerOut, "resources")),
-      "manager component must be the GPUI exe, not an Electron package",
-    );
-    const agendaOut = path.join(desktop, ".tmp", "components", "agenda", "win-unpacked");
-    assert.ok(existsSync(path.join(agendaOut, "Kosmos Agenda.exe")), "agenda unpackaged output");
-    assert.ok(
-      !existsSync(path.join(agendaOut, "resources")),
-      "agenda component must be the GPUI exe, not an Electron package",
-    );
-    const memoriaOut = path.join(desktop, ".tmp", "components", "memoria", "win-unpacked");
-    assert.ok(existsSync(path.join(memoriaOut, "Kosmos Memoria.exe")), "memoria unpackaged output");
-    assert.ok(
-      !existsSync(path.join(memoriaOut, "resources")),
-      "memoria component must be the GPUI exe, not an Electron package",
-    );
-    assert.ok(
-      existsSync(
-        path.join(desktop, ".tmp", "components", "host", "win-unpacked", "Kosmos Package Host.exe"),
-      ),
-      "host unpackaged output",
-    );
+    for (const [component, exe] of [
+      ["manager", "Kosmos Manager.exe"],
+      ["agenda", "Kosmos Agenda.exe"],
+      ["memoria", "Kosmos Memoria.exe"],
+      ["dictation", "Kosmos Dictation.exe"],
+    ]) {
+      const out = path.join(desktop, ".tmp", "components", component, "win-unpacked");
+      assert.ok(existsSync(path.join(out, exe)), `${component} unpackaged output`);
+      assert.ok(
+        !existsSync(path.join(out, "resources")),
+        `${component} component must be the GPUI exe, not an Electron package`,
+      );
+    }
   },
 );

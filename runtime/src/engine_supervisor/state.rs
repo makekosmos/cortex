@@ -10,7 +10,7 @@ pub(crate) fn write_state(
     let state = SupervisorState {
         format_version: 1,
         component: "engine-core",
-        version: env!("CARGO_PKG_VERSION"),
+        version: crate::build_info::engine_version(),
         correlation_id: crate::observability::correlation_id(),
         supervisor_pid: std::process::id(),
         core_pid,

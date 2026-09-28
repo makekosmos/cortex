@@ -1,3 +1,14 @@
+// KOS-236: the Engine tray is the full replacement for the Electron shell's
+// tray/command palette (Manager, Agenda, Memoria, Открыть/Выход) on
+// Windows — see `windows_impl` for the menu contract.
+//
+// macOS/Linux stay a no-op below: this Engine build only ships on Windows
+// today, and a real Linux tray needs a StatusNotifierItem/D-Bus stack
+// (e.g. `ksni`) that (a) has no `deny.toml` in this repo to check it
+// against, and (b) can't be exercised on this Windows-only dev machine —
+// Linux desktop tray support is also fragmented (vanilla GNOME needs an
+// extension). Shipping it unverified would be its own tech debt, so it is
+// left out rather than guessed at.
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 #[derive(Debug)]

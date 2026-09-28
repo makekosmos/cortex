@@ -123,6 +123,14 @@ pub(super) async fn dispatch_standard(
                 error: result.error,
             }
         }
+    } else if let Some(rest) = operation.strip_prefix("updater.") {
+        let result =
+            crate::updater::handle_updater_op(rest, params, &manager_state.updater()).await;
+        LocalResponse {
+            ok: result.ok,
+            data: result.data,
+            error: result.error,
+        }
     } else if let Some(rest) = operation.strip_prefix("app_index.") {
         handle_app_index_op(rest, params, &app_index).await
     } else if let Some(rest) = operation.strip_prefix("calculator.") {
@@ -279,18 +287,5 @@ pub(super) async fn dispatch_standard(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::replication_requires_authority;
-
-    #[test]
-    fn every_replication_operation_requires_desktop_authority() {
-        for operation in [
-            "replication_acquire_refresh_lease",
-            "replication_send_signed_sync",
-            "replication_publish_credential_envelope_v2",
-        ] {
-            assert!(replication_requires_authority(operation));
-        }
-        assert!(!replication_requires_authority("list"));
-    }
-}
+#[path = "dispatch_standard_tests.rs"]
+mod tests;

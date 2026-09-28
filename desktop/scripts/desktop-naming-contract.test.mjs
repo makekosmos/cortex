@@ -6,8 +6,6 @@ import { fileURLToPath } from "node:url";
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(readFileSync(path.join(scriptsDir, "..", "package.json"), "utf8"));
 
-test("Desktop uses the Kosmos package and build identity", () => {
+test("Desktop uses the Kosmos package identity", () => {
   expect(packageJson.name).toBe("kosmos-desktop");
-  expect(packageJson.build.productName).toBe("Kosmos");
-  expect(packageJson.build.artifactName).not.toContain("kepler-shell");
 });

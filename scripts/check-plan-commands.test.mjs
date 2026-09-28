@@ -14,8 +14,7 @@ test("executor commands never require Bun or a shell-resolved shim", async () =>
   const seen = [];
   for (const plan of [
     createPlan({ mode: "worktree", full: true }),
-    createPlan({ mode: "pre-commit", files: ["desktop/src/App.vue"] }),
-    createPlan({ mode: "worktree", files: ["host/electron/main.ts"] }),
+    createPlan({ mode: "pre-commit", files: ["desktop/scripts/engine-distribution.mjs"] }),
     createPlan({ mode: "worktree", files: ["runtime/src/lib.rs"] }),
     createPlan({ mode: "worktree", files: ["native-services/src/main.rs"] }),
   ])
@@ -35,25 +34,17 @@ test("selective checks emit pnpm run commands and Rust stays on cargo", async ()
   const { createPlan, executePlan } = await import("./check-plan.mjs");
   const run = (files) => {
     const seen = [];
-    executePlan(createPlan({ mode: "worktree", files }), (command) =>
-      seen.push(`${command.command} ${command.args.join(" ")}`),
-    );
+    executePlan(createPlan({ mode: "worktree", files }), (command) => seen.push(command.name));
     return seen;
   };
-  assert.deepEqual(run(["desktop/src/App.vue"])[0], "pnpm run typecheck:desktop");
-  assert.deepEqual(run(["host/electron/main.ts"]), [
-    "pnpm run typecheck:host",
-    "pnpm run test:host-contracts",
-  ]);
+  assert.deepEqual(run(["desktop/scripts/engine-distribution.mjs"]), ["lint", "format"]);
   assert.deepEqual(run(["runtime/src/lib.rs"]), [
-    "pnpm run rustfmt",
-    "pnpm run clippy",
-    "pnpm run test:rust",
-    "pnpm --dir desktop run test:runtime-staging",
+    "rustfmt",
+    "clippy",
+    "test:rust",
+    "runtime-staging",
   ]);
-  assert.deepEqual(run(["native-services/src/main.rs"]), [
-    "cargo build --locked -p kepler-watcher -p kepler-focus-helper -p kepler-focus-svc --bins",
-  ]);
+  assert.deepEqual(run(["native-services/src/main.rs"]), ["native-services"]);
 });
 
 test("pre-commit emits the source-size safeguard through pnpm", async () => {
@@ -70,7 +61,7 @@ test("lint and format run Node tool entrypoints with verbatim file arguments", a
   const { createPlan, executePlan } = await import("./check-plan.mjs");
   const seen = [];
   executePlan(
-    createPlan({ mode: "worktree", files: ["desktop/src/with space/App.vue"] }),
+    createPlan({ mode: "worktree", files: ["desktop/scripts/with space/script.mjs"] }),
     (command) => (seen.push(command), 0),
   );
   const lint = seen.find((command) => command.name === "lint");
@@ -78,11 +69,11 @@ test("lint and format run Node tool entrypoints with verbatim file arguments", a
   assert.equal(lint.command, process.execPath);
   assert.match(lint.args[0], /bin[/\\]oxlint$/);
   assert.ok(existsSync(lint.args[0]), lint.args[0]);
-  assert.deepEqual(lint.args.slice(1), ["desktop/src/with space/App.vue"]);
+  assert.deepEqual(lint.args.slice(1), ["desktop/scripts/with space/script.mjs"]);
   assert.equal(format.command, process.execPath);
   assert.match(format.args[0], /bin[/\\]oxfmt$/);
   assert.ok(existsSync(format.args[0]), format.args[0]);
-  assert.deepEqual(format.args.slice(1), ["--check", "desktop/src/with space/App.vue"]);
+  assert.deepEqual(format.args.slice(1), ["--check", "desktop/scripts/with space/script.mjs"]);
 });
 
 test("spawn failures are written to stderr and return non-zero", async () => {
