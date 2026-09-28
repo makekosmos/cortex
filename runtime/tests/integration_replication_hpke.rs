@@ -13,9 +13,7 @@ mod support;
 use ed25519_dalek::Signer;
 use httpmock::MockServer;
 use kepler_backend::{
-    ark_host::{resolve_ark_core_rpc_path, ArkHost},
-    integrations::handle_operation,
-    package_service::PackageService,
+    ark_host::ArkHost, integrations::handle_operation, package_service::PackageService,
     package_worker_supervisor::PackageWorkerSupervisor,
 };
 use serde_json::json;
@@ -53,8 +51,8 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
     let (archive, size, hash) = fixture::archive(dir.path(), &versioned);
     let (catalog, signatures, root, release) = fixture::signed_catalog(&origin, size, &hash);
     let setup = support::new_setup_named(PACKAGE_ID).unwrap();
-    let core_binary = resolve_ark_core_rpc_path().unwrap();
-    let (origin_host, recipient_host) = fixture::start_hosts(&setup, &core_binary).await;
+
+    let (origin_host, recipient_host) = fixture::start_hosts(&setup).await;
     let origin_dir = dir.path().join("origin-runtime");
     let recipient_dir = dir.path().join("recipient-runtime");
     let mut origin_packages =
@@ -239,10 +237,10 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
             .unwrap();
             assert!(
                 response.ok && persisted.is_some(),
-                "recipient did not persist the signed HPKE envelope: response={:?} db={:?} stderr={:?}",
+                "recipient did not persist the signed HPKE envelope: response={:?} db={:?} panics={}",
                 response.error,
                 persisted,
-                recipient_host.stderr_tail_snapshot()
+                recipient_host.panic_count()
             );
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;

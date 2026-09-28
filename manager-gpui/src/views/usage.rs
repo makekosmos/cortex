@@ -1,7 +1,7 @@
 //! Затреканное время — UsageTable.vue / store.ts::loadUsageRows parity.
-//! `get_usage_analytics` is forwarded by Engine to ark-core-rpc; per-row icons
-//! are resolved worker-side via `app_index.icon_path` (`kosmos-icon://` is an
-//! Electron protocol and has no GPUI equivalent).
+//! `get_usage_analytics` is served in-process by the Engine's embedded ARK
+//! service; per-row icons are resolved worker-side via `app_index.icon_path`
+//! (`kosmos-icon://` is an Electron protocol and has no GPUI equivalent).
 use ::gpui::{prelude::*, *};
 use serde_json::Value;
 

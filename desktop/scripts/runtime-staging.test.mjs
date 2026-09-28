@@ -6,29 +6,21 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   effectiveCargoTargetDir,
-  resolveDevArkCoreRpcPath,
-  setDevArkCoreRpcPath,
   acquireBuildLock,
   cleanBuildIntermediates,
   RUNTIME_BINARIES,
   stageRuntimeBinaries,
 } from "./runtime-staging.mjs";
-import { ARK_CORE_SOURCE, ARK_CORE_SOURCE_DIR, arkCoreSourceId } from "./ark-core-rpc.mjs";
+import { ARK_CORE_SOURCE, ARK_CORE_SOURCE_DIR } from "./ark-core-source.mjs";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const cortexRoot = path.resolve(shellRoot, "..");
 
 test("non-default Cargo runtime is the one mapped into the Windows package", () => {
-  assert.deepEqual(RUNTIME_BINARIES, [
-    "kepler-backend",
-    "ark-core-rpc",
-    "kepler-focus-helper",
-    "kepler-focus-svc",
-  ]);
+  assert.deepEqual(RUNTIME_BINARIES, ["kepler-backend", "kepler-focus-helper", "kepler-focus-svc"]);
   assert.equal(existsSync(path.join(cortexRoot, "core", ".git")), false);
   assert.equal(ARK_CORE_SOURCE, "core/crates/ark-core");
   assert.equal(ARK_CORE_SOURCE_DIR, path.join(cortexRoot, "core", "crates", "ark-core"));
-  assert.match(arkCoreSourceId(), /^sha256:[0-9a-f]{64}$/);
 
   const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-runtime-stage-"));
   try {
@@ -76,23 +68,6 @@ test("build retention clears only disposable next outputs and protects active bu
     assert.throws(() => acquireBuildLock(root), /build already active/);
     release();
     assert.equal(existsSync(path.join(root, ".tmp", "build.active.lock")), false);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("dev runtime path replaces a stale ARK_CORE_RPC_PATH", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "kosmos-runtime-stage-"));
-  try {
-    const targetDir = path.join(root, "target");
-    const sidecar = path.join(targetDir, "debug", "ark-core-rpc.exe");
-    mkdirSync(path.dirname(sidecar), { recursive: true });
-    writeFileSync(sidecar, "fresh");
-    const env = { ARK_CORE_RPC_PATH: "stale-dist/ark-core-rpc.exe" };
-    setDevArkCoreRpcPath(env, resolveDevArkCoreRpcPath(targetDir, "win32"));
-    assert.equal(env.ARK_CORE_RPC_PATH, sidecar);
-    setDevArkCoreRpcPath(env, undefined);
-    assert.equal("ARK_CORE_RPC_PATH" in env, false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

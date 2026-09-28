@@ -62,11 +62,6 @@ async function writeTestBom() {
     "release requires the in-tree core/ subtree to ride on the Cortex commit",
   );
 
-  const arkDir = path.join(desktop, ".tmp", "runtime.next");
-  mkdirSync(arkDir, { recursive: true });
-  const arkFile = path.join(arkDir, "ark-core-rpc.exe");
-  const arkBytes = Buffer.from(`kosmos e2e ark artifact ${currentCommit}\n`);
-  writeFileSync(arkFile, arkBytes);
   const engineDir = path.join(desktop, ".tmp", "engine.next");
   mkdirSync(engineDir, { recursive: true });
   writeFileSync(path.join(engineDir, "engine-manifest.json"), JSON.stringify({ version: "0.1.0" }));
@@ -82,11 +77,6 @@ async function writeTestBom() {
         repository: "makekosmos/cortex",
         commit: currentCommit,
         path: "core/",
-        ark_artifact: {
-          name: "ark-core-rpc.exe",
-          sha256: documentHash(arkBytes),
-          size: arkBytes.length,
-        },
       },
       arca_sdk: ctx.workspace["arca-sdk"],
       imago: ctx.workspace.imago,

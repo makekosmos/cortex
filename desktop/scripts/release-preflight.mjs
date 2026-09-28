@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getVersion } from "./release-version.mjs";
 import { loadReleaseBom } from "./release-bom.mjs";
-import { documentHash } from "./package-release-utils.mjs";
 
 export const SHELL_ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -37,15 +36,6 @@ export function ensureCleanSource() {
   ).trim();
   if (tracked || untracked)
     throw new Error("release builds require a clean tracked and source worktree");
-}
-
-export function verifyArkArtifact(bom) {
-  const expected = bom.value.source.core.ark_artifact;
-  const file = path.join(SHELL_ROOT, ".tmp", "runtime.next", expected.name);
-  if (!existsSync(file) || statSync(file).size !== expected.size)
-    throw new Error(`ARK artifact is missing or has the wrong size: ${expected.name}`);
-  if (documentHash(readFileSync(file)) !== expected.sha256)
-    throw new Error(`ARK artifact hash does not match BOM: ${expected.name}`);
 }
 
 // KOS-233: the Engine is built from the same commit/version as Desktop
@@ -131,7 +121,6 @@ export async function runReleasePreflight({ platform, bomPath, local = false }) 
     platform,
     currentCommit: commit,
   });
-  verifyArkArtifact(bom);
   if (platform === "win") verifyEngineArtifact(version, commit);
   return {
     platform,

@@ -1,5 +1,5 @@
 //! UniFFI-exposed facade used by Android (and any future Kotlin/Swift
-//! embedders). Wraps the same DB + sync runtime the `ark-core-rpc` binary
+//! embedders). Wraps the same DB + sync runtime the in-process service
 //! drives, plus a callback-interface listener for async events.
 //!
 //! Design notes:

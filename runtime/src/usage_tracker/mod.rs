@@ -930,7 +930,7 @@ async fn flush_session_heartbeat(
     device_id: &str,
 ) -> Result<(), String> {
     // См. postmortems.md § 2026-06-06. Per-poll writes bump ARK sync state and
-    // keep ark-core-rpc hot; heartbeat is a bounded durability checkpoint. Do
+    // keep the ARK service hot; heartbeat is a bounded durability checkpoint. Do
     // not persist tracked_app here: last_seen_at can wait until session end, and
     // each extra upsert rewrites the sync version vector on large dev DBs.
     persist_usage_session(ark, &active.to_usage_session(identity, None), device_id).await?;

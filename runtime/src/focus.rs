@@ -30,7 +30,7 @@ pub const FOCUS_ACTIVE_STATE_KEY: &str = "focus.active_state";
 ///
 /// Реальный `ArkHost` имплементит этот trait через blanket impl ниже.
 /// Тесты подсовывают `FakeArk` с in-memory state — это позволяет тестировать
-/// focus-логику без запуска ark-core-rpc child-процесса.
+/// focus-логику без запуска ARK-сервиса.
 #[async_trait]
 pub trait FocusArkRequester: Send + Sync {
     async fn request(&self, operation: &str, params: Value) -> Result<Value, String>;

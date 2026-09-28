@@ -5,7 +5,6 @@ import { extractZip, readZip, safeEntryName, writeZip } from "./zip-utils.mjs";
 
 export const ENGINE_FILES = [
   "kepler-backend.exe",
-  "ark-core-rpc.exe",
   "kepler-focus-helper.exe",
   "kepler-focus-svc.exe",
   "tray.ico",
@@ -162,7 +161,6 @@ export function resolveInstalledEngine(engineRoot) {
     version: pointer.version,
     versionRoot: canonicalVersionRoot,
     backend: fs.realpathSync(path.join(canonicalVersionRoot, "kepler-backend.exe")),
-    ark: fs.realpathSync(path.join(canonicalVersionRoot, "ark-core-rpc.exe")),
     tray: fs.realpathSync(path.join(canonicalVersionRoot, "tray.ico")),
   };
 }

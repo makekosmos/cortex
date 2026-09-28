@@ -42,7 +42,6 @@ function bom() {
         repository: "makekosmos/cortex",
         commit: context.currentCommit,
         path: "core/",
-        ark_artifact: { name: "ark-core-rpc.exe", sha256: "a".repeat(64), size: 9454592 },
       },
       arca_sdk: {
         repository: "makekosmos/arca-sdk",

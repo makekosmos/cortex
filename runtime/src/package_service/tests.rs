@@ -860,8 +860,7 @@ pub(crate) mod tests {
             PackageService::open_with_trust(dir.path(), trust_store).expect("service"),
         );
         let ark = std::sync::Arc::new(
-            crate::ark_host::ArkHost::spawn(
-                &crate::ark_host::resolve_ark_core_rpc_path().expect("ark-core-rpc binary"),
+            crate::ark_host::ArkHost::open(
                 dir.path().join("ark.db").to_str().expect("db path"),
             )
             .await
@@ -925,8 +924,7 @@ pub(crate) mod tests {
         let (trust_store, _, _) = trust();
         let restarted = PackageService::open_with_trust(dir.path(), trust_store).expect("restart");
         let ark = std::sync::Arc::new(
-            crate::ark_host::ArkHost::spawn(
-                &crate::ark_host::resolve_ark_core_rpc_path().expect("ark-core-rpc binary"),
+            crate::ark_host::ArkHost::open(
                 dir.path().join("ark.db").to_str().expect("db path"),
             )
             .await
@@ -1010,8 +1008,7 @@ pub(crate) mod tests {
             .unwrap();
         service.enable(&prior.id, &prior.version).unwrap();
         let ark = std::sync::Arc::new(
-            crate::ark_host::ArkHost::spawn(
-                &crate::ark_host::resolve_ark_core_rpc_path().unwrap(),
+            crate::ark_host::ArkHost::open(
                 dir.path().join("ark.db").to_str().unwrap(),
             )
             .await
@@ -1416,7 +1413,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn signed_catalog_bridge_runs_through_service() {
         use crate::{
-            ark_host::{resolve_ark_core_rpc_path, ArkHost},
+            ark_host::ArkHost,
             package_worker_supervisor::PackageWorkerSupervisor,
         };
         use std::sync::Arc;
@@ -1491,8 +1488,7 @@ pub(crate) mod tests {
             .install_from_path(&manifest.id, &manifest.version, archive)
             .unwrap();
         let ark = Arc::new(
-            ArkHost::spawn(
-                &resolve_ark_core_rpc_path().unwrap(),
+            ArkHost::open(
                 dir.path().join("ark.db").to_str().unwrap(),
             )
             .await

@@ -1,10 +1,9 @@
 use super::*;
 pub(super) async fn production_ws_fixture() -> (tempfile::TempDir, WsServer) {
     let dir = tempfile::tempdir().unwrap();
-    let binary = crate::ark_host::resolve_ark_core_rpc_path()
-        .expect("real ark-core-rpc fixture must be built");
+
     let ark = Arc::new(
-        crate::ark_host::ArkHost::spawn(&binary, &dir.path().join("ark.db").to_string_lossy())
+        crate::ark_host::ArkHost::open(&dir.path().join("ark.db").to_string_lossy())
             .await
             .unwrap(),
     );

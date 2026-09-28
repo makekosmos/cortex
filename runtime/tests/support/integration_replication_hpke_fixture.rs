@@ -192,14 +192,11 @@ pub fn free_port() -> u16 {
         .port()
 }
 
-pub async fn start_hosts(
-    setup: &support::IntegrationReplicationSetup,
-    core_binary: &Path,
-) -> (ArkHost, ArkHost) {
-    let origin_host = ArkHost::spawn(core_binary, setup.origin_db.to_str().unwrap())
+pub async fn start_hosts(setup: &support::IntegrationReplicationSetup) -> (ArkHost, ArkHost) {
+    let origin_host = ArkHost::open(setup.origin_db.to_str().unwrap())
         .await
         .unwrap();
-    let recipient_host = ArkHost::spawn(core_binary, setup.recipient_db.to_str().unwrap())
+    let recipient_host = ArkHost::open(setup.recipient_db.to_str().unwrap())
         .await
         .unwrap();
     start_sync(&origin_host, &setup.origin.node_id, free_port(), None).await;

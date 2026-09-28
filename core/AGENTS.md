@@ -16,7 +16,7 @@
 
 - **Kosmos** = Windows-only desktop product + монорепо (Bun workspaces + Cargo workspace).
 - **Kepler** = legacy/internal namespace (`kepler:*`, `window.kepler`, `platform/runtime/`), не user-facing brand.
-- **ARK** = общий Rust+SQLite рантайм (`crates/ark-core`, `ark-core-rpc`).
+- **ARK** = общий Rust+SQLite рантайм (`crates/ark-core`, hosted in-process by the Engine).
 - **Extensions** (`products/<id>/` / legacy `extensions/<id>/`) — Vue-приложения внутри shell.
 - Apps говорят с ARK только через `@kosmos/ark` / Eden shim / `ark_core::db`; direct SQL writes в sync-таблицы запрещены.
 - Перед правкой классифицируй: `NO_LOOP`, `LIGHT_LOOP`, `FULL_LOOP`.

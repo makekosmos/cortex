@@ -13,7 +13,7 @@ mod backend_tray;
 // `--core-worker` режим содержит сам runtime («Electron only renders, Rust does
 // everything else»). Никакого UI: ни tray, ни launcher, ни окна. Только:
 //   * singleton lock (одна копия kepler-backend на машину),
-//   * spawn ark-core-rpc child,
+//   * open the ARK service in-process,
 //   * WS server 127.0.0.1:<port>,
 //   * lock-file `engine.lock.json` для discovery.
 //   * start_sync в фоне (если не KEPLER_SKIP_SYNC=1),
@@ -29,7 +29,7 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use kepler_backend::{
-    ark_host::{self, ArkHost},
+    ark_host::ArkHost,
     auth, crash_reporter, db_backup,
     dictation::DictationHost,
     engine_api::EngineApiServer,
@@ -224,7 +224,7 @@ async fn run_core_worker() -> ExitCode {
         tokio::spawn(async move {
             // Уводим backup со startup hot path: тяжёлое копирование БД не должно
             // совпадать с cold-start CPU/IO burst. (Понижение приоритета самого
-            // копирования внутри ark-core-rpc — Phase 2, см. spec.)
+            // копирования внутри ark-core service — Phase 2, см. spec.)
             tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
             db_backup::maybe_backup_on_startup(ark_for_backup, backup_dir).await;
         });
@@ -424,15 +424,12 @@ async fn setup() -> Result<SetupState, DynError> {
     }
     tracing::info!(path = ?singleton_path, "singleton acquired");
 
-    let ark_binary = ark_host::resolve_ark_core_rpc_path()?;
-    tracing::info!(binary = ?ark_binary, "ark-core-rpc resolved");
-
     let db_path = std::env::var("KOSMOS_DB_PATH")
         .unwrap_or_else(|_| lock_dir.join("ark.db").to_string_lossy().into_owned());
     tracing::info!(db_path = %db_path, "ark db path");
 
-    let ark = Arc::new(ArkHost::spawn(&ark_binary, &db_path).await?);
-    tracing::info!("ark-core-rpc spawned and initialized");
+    let ark = Arc::new(ArkHost::open(&db_path).await?);
+    tracing::info!("ark service opened in-process");
 
     let token = auth::generate_token();
     let usage_diagnostics = Arc::new(UsageTrackerDiagnosticsState::default());
@@ -1040,10 +1037,8 @@ mod tests {
     async fn run_core_worker_readiness_requires_both_production_adapters_and_emits_authenticated_core_ready_once(
     ) {
         let dir = tempfile::tempdir().unwrap();
-        let binary = crate::ark_host::resolve_ark_core_rpc_path()
-            .expect("real ark-core-rpc fixture must be built");
         let ark = Arc::new(
-            ArkHost::spawn(&binary, &dir.path().join("ark.db").to_string_lossy())
+            ArkHost::open(&dir.path().join("ark.db").to_string_lossy())
                 .await
                 .unwrap(),
         );
@@ -1219,6 +1214,8 @@ mod tests {
         assert!(crate_attributes.contains("windows_subsystem = \"windows\""));
 
         let package_build = include_str!("../../desktop/scripts/build-backend.mjs");
-        assert!(package_build.contains("--features\", \"windows-gui-subsystem"));
+        // The arg is a combined feature list (`windows-gui-subsystem,iroh-spike`).
+        assert!(package_build.contains("--features\", \"windows-gui-subsystem,"));
+        assert!(package_build.contains("iroh-spike"));
     }
 }

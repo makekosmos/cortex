@@ -22,7 +22,8 @@ pub(in crate::ws_server) async fn build_diagnostics_snapshot(
           "package_workers": package_service.worker_diagnostics(),
         "correlation_id": correlation_id,
         "ark_core": {
-            "stderr_tail": ark_host.stderr_tail_snapshot(),
+            "mode": "in-process",
+            "panics_recovered": ark_host.panic_count(),
         },
         "engine_supervisor": crate::engine_supervisor::diagnostics_snapshot(data_dir),
         "background_workers": {

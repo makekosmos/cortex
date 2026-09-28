@@ -113,14 +113,11 @@ await runGate("engine-bootstrap", ["preflight"], async () => {
   ).target_directory;
   const debug = path.join(target, "debug");
   const engine = path.join(debug, "kepler-backend");
-  const sidecar = ["desktop/scripts/ark-core-rpc.mjs", "--debug", "--target-dir", debug];
-  must(step("node", sidecar), "ark-core-rpc");
   must(step("cargo", ["build", "-p", "kepler-backend"]), "cargo build kepler-backend");
   const dataDir = path.join(runRoot, "engine-data");
   const engineEnv = {
     ...childEnv,
     KOSMOS_DATA_DIR: dataDir,
-    ARK_CORE_RPC_PATH: path.join(debug, "ark-core-rpc"),
     KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
     KEPLER_SKIP_SYNC: "1",
     KEPLER_USAGE_TRACKER: "0",

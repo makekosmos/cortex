@@ -10,10 +10,6 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "lib"]
 
 [[bin]]
-name = "ark-core-rpc"
-path = "src/main.rs"
-
-[[bin]]
 name = "uniffi-bindgen"
 path = "src/bin/uniffi-bindgen.rs"
 
@@ -78,7 +74,6 @@ proptest = "1.5"
 
 [features]
 bench-fixtures = []
-windows-gui-subsystem = []
 # Phase 5: opt-in для cargo test --features ts-rs (генерирует bindings/*.ts).
 ts-rs = ["dep:ts-rs"]
 # Фаза 0 iroh-spike: см. .agent/tasks/2026-06-16-iroh-transport/spec.md.

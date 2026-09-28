@@ -227,7 +227,7 @@ pub fn backup_to_file(conn: &Connection, dest_path: &str) -> Result<(), String> 
 /// `pause` между шагами, чтобы тяжёлый I/O не насыщал диск (стабильность ПК
 /// важнее скорости бэкапа). WAL + busy_timeout source DB дают консистентный
 /// снапшот при concurrent writer. Вызывается из `Request::DbBackup` на отдельном
-/// background-priority потоке (см. ark-core-rpc main.rs).
+/// background-priority потоке (см. ark-core service worker).
 pub fn backup_to_file_chunked(
     src_db_path: &str,
     dest_path: &str,

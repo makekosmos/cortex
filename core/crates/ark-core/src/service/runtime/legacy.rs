@@ -1,16 +1,17 @@
 use super::*;
 
-pub(super) async fn handle(request: Request) -> Result<Value, String> {
+pub(super) async fn handle(state: &Arc<ServiceState>, request: Request) -> Result<Value, String> {
     match request {
         Request::Init { db_path } => {
             let conn = db::open_db(&db_path)?;
             db::init_schema(&conn)?;
-            *DB.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(StdMutex::new(conn)));
-            *DB_PATH.lock().unwrap_or_else(|e| e.into_inner()) = Some(db_path);
+            *state.db.lock().unwrap_or_else(|e| e.into_inner()) =
+                Some(Arc::new(StdMutex::new(conn)));
+            *state.db_path.lock().unwrap_or_else(|e| e.into_inner()) = Some(db_path);
             Ok(json!(true))
         }
 
-        Request::LoadAll => with_conn(|conn| {
+        Request::LoadAll => with_conn(state, |conn| {
             let data = db::load_all(conn)?;
             serde_json::to_value(data).map_err(|e| e.to_string())
         }),
@@ -38,29 +39,35 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
                 &todo.created_at,
                 None,
             );
-            let entities = with_write_tx(|conn| write_legacy_graph(conn, &[record], device_id))?;
+            let entities =
+                with_write_tx(state, |conn| write_legacy_graph(conn, &[record], device_id))?;
+            let state = Arc::clone(state);
             tokio::spawn(async move {
                 for entity in entities {
-                    broadcast_local_change(entity).await;
+                    broadcast_local_change(&state, entity).await;
                 }
             });
             Ok(json!(true))
         }
 
         Request::DeleteTodo { id, device_id } => {
-            let entity =
-                with_write_tx(|conn| tombstone_legacy(conn, &id, "com.kosmos.task", device_id))?;
+            let entity = with_write_tx(state, |conn| {
+                tombstone_legacy(conn, &id, "com.kosmos.task", device_id)
+            })?;
+            let state = Arc::clone(state);
             tokio::spawn(async move {
-                broadcast_local_change(entity).await;
+                broadcast_local_change(&state, entity).await;
             });
             Ok(json!(true))
         }
 
         Request::DeleteProject { id, device_id } => {
-            let entity =
-                with_write_tx(|conn| tombstone_legacy(conn, &id, "com.kosmos.project", device_id))?;
+            let entity = with_write_tx(state, |conn| {
+                tombstone_legacy(conn, &id, "com.kosmos.project", device_id)
+            })?;
+            let state = Arc::clone(state);
             tokio::spawn(async move {
-                broadcast_local_change(entity).await;
+                broadcast_local_change(&state, entity).await;
             });
             Ok(json!(true))
         }
@@ -73,10 +80,12 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
                 "is_cancelled": todo.is_cancelled, "cancelled_at": todo.cancelled_at, "checklist_items": todo.checklist_items,
                 "recurrence_rule": todo.recurrence_rule, "project_id": todo.project_id, "tag_ids": todo.tag_ids,
             }), &todo.created_at, None)).collect::<Vec<_>>();
-            let entities = with_write_tx(|conn| write_legacy_graph(conn, &records, device_id))?;
+            let entities =
+                with_write_tx(state, |conn| write_legacy_graph(conn, &records, device_id))?;
+            let state = Arc::clone(state);
             tokio::spawn(async move {
                 for entity in entities {
-                    broadcast_local_change(entity).await;
+                    broadcast_local_change(&state, entity).await;
                 }
             });
             Ok(json!(true))
@@ -91,10 +100,12 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
                 &project.created_at,
                 None,
             );
-            let entities = with_write_tx(|conn| write_legacy_graph(conn, &[record], device_id))?;
+            let entities =
+                with_write_tx(state, |conn| write_legacy_graph(conn, &[record], device_id))?;
+            let state = Arc::clone(state);
             tokio::spawn(async move {
                 for entity in entities {
-                    broadcast_local_change(entity).await;
+                    broadcast_local_change(&state, entity).await;
                 }
             });
             Ok(json!(true))
@@ -109,10 +120,12 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
                 &tag.created_at,
                 None,
             );
-            let entities = with_write_tx(|conn| write_legacy_graph(conn, &[record], device_id))?;
+            let entities =
+                with_write_tx(state, |conn| write_legacy_graph(conn, &[record], device_id))?;
+            let state = Arc::clone(state);
             tokio::spawn(async move {
                 for entity in entities {
-                    broadcast_local_change(entity).await;
+                    broadcast_local_change(&state, entity).await;
                 }
             });
             Ok(json!(true))
@@ -122,7 +135,7 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             tracked_app,
             device_id,
         } => {
-            let entity = with_write_tx(|conn| {
+            let entity = with_write_tx(state, |conn| {
                 db::upsert_tracked_app(conn, &tracked_app)?;
                 let hlc = record_local_upsert(conn, "tracked_app", &tracked_app.id, device_id)?;
                 Ok(make_sync_entity(
@@ -133,14 +146,15 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
                     None,
                 ))
             })?;
+            let state = Arc::clone(state);
             tokio::spawn(async move {
-                broadcast_local_change(entity).await;
+                broadcast_local_change(&state, entity).await;
             });
             Ok(json!(true))
         }
 
         Request::DeleteTrackedApp { id, device_id } => {
-            let entity = with_write_tx(|conn| {
+            let entity = with_write_tx(state, |conn| {
                 db::delete_tracked_app(conn, &id)?;
                 let hlc = record_local_delete(conn, "tracked_app", &id, device_id)?;
                 Ok(make_sync_entity(
@@ -151,8 +165,9 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
                     Some(true),
                 ))
             })?;
+            let state = Arc::clone(state);
             tokio::spawn(async move {
-                broadcast_local_change(entity).await;
+                broadcast_local_change(&state, entity).await;
             });
             Ok(json!(true))
         }

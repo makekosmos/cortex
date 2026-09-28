@@ -20,12 +20,11 @@ This repository owns the Kosmos desktop application and its host-side services:
 ## Current boundary
 
 This repository owns the desktop runtime boundary. Its Rust workspace is
-self-contained; ARK is a pinned Git dependency in `runtime/Cargo.toml`.
-The desktop scripts fetch and cache the matching `ark-core-rpc` sidecar from
-the same Core revision, so a sibling `core` checkout is not required.
+self-contained; `ark-core` lives in-tree under `core/crates/ark-core` and the
+Engine hosts it in-process, so a sibling `core` checkout is not required.
 
 The shipped Kosmos Desktop for Windows contains no Electron. The product is
-the Kosmos Engine (`ark-core-rpc` / `kepler-backend`, tray + updater +
+the Kosmos Engine (`kepler-backend` with in-process ARK, tray + updater +
 autostart) plus GPUI components under `resources/components/<name>/`.
 
 ## What is intentionally not promised

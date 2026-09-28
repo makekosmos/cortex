@@ -97,12 +97,6 @@ export function validateReleaseBom(value, context) {
   commit(core.commit, "source.core.commit");
   if (core.commit !== cortex.commit) fail("source.core.commit does not match source.cortex.commit");
   if (core.path !== "core/") fail("source.core.path must be the in-tree core/ subtree");
-  const arkArtifact = object(core.ark_artifact, "source.core.ark_artifact");
-  const arkName = string(arkArtifact.name, "source.core.ark_artifact.name");
-  if (arkName !== (context.platform === "win" ? "ark-core-rpc.exe" : "ark-core-rpc"))
-    fail("source.core.ark_artifact.name does not match build platform");
-  sha256(arkArtifact.sha256, "source.core.ark_artifact.sha256");
-  integer(arkArtifact.size, "source.core.ark_artifact.size");
 
   for (const name of ["arca_sdk", "imago"]) {
     const dependency = object(source[name], `source.${name}`);

@@ -1,7 +1,7 @@
 # Linux development: Engine + first-party packages
 
-Verified on Ubuntu 24.04 x86_64. The supported gate builds the Engine, spawns
-the pinned `ark-core-rpc` sidecar, and exercises the Engine HTTP contract in an
+Verified on Ubuntu 24.04 x86_64. The supported gate builds the Engine (which
+hosts ARK in-process) and exercises the Engine HTTP contract in an
 isolated `/tmp` root. The whole stack — Engine and the Store catalog gate — is
 on `main`; no feature branch is required.
 
@@ -21,7 +21,7 @@ corepack prepare pnpm@12.4.1 --activate  # pinned packageManager
 `pkg-config` + `libssl-dev` are required by `openssl-sys` in the Engine.
 `KOSMOS_HEADLESS=1` keeps Engine stubs quiet in tests.
 
-## Engine + ARK sidecar
+## Engine + ARK
 
 `ark-core` is owned by Cortex and lives under `core/`, without a separate
 Git repository or upstream synchronization. Edit and commit Core changes in
@@ -31,16 +31,11 @@ rejects a nested `core/.git`.
 
 ```text
 cargo build -p kepler-backend            # writes target/debug/kepler-backend
-cargo build -p ark-core --bin ark-core-rpc
-# writes target/debug/ark-core-rpc — or use the cached installer:
-node desktop/scripts/ark-core-rpc.mjs --debug --target-dir target/debug
-# cargo-installs ark-core-rpc from core/crates/ark-core into
-# desktop/.tmp/ark-core-rpc (keyed by subtree content hash), then
-# publishes it to target/debug/
+# ark-core is a library dependency; the Engine serves ARK in-process —
+# no ark-core-rpc sidecar to build or provision.
 ```
 
-The Engine discovers the sidecar via `ARK_CORE_RPC_PATH` or workspace
-candidates (`target/debug/ark-core-rpc` resolves automatically). Manual run:
+Manual run:
 
 ```text
 KOSMOS_DATA_DIR=/tmp/kosmos-data KOSMOS_HEADLESS=1 target/debug/kepler-backend &
@@ -70,7 +65,7 @@ root, then runs the gates in order:
    `.tmp/workspace/{imago,arca-sdk}` to the `kosmos.workspace` commits
    (with a manual clone + install + build fallback when the planner cannot
    run) and verifies the built outputs the workspace consumes.
-3. `engine-bootstrap` — builds `ark-core-rpc` + `kepler-backend`, starts the
+3. `engine-bootstrap` — builds `kepler-backend`, starts the
    Engine against an isolated `KOSMOS_DATA_DIR`, and asserts
    `engine.lock.json` plus authenticated `GET /v1/health` → 200 before
    shutting it down.

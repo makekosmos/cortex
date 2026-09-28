@@ -2,7 +2,7 @@
 
 **Status (KOS-236): complete.** The Electron shell and the Electron Package
 Host are removed. The shipped Kosmos Desktop for Windows is Engine
-(`ark-core-rpc` / `kepler-backend`, tray + updater + autostart) plus GPUI
+(`kepler-backend` with in-process ARK, tray + updater + autostart) plus GPUI
 components under `resources/components/<name>/`.
 
 **Decision (KOS-145, 2026-09-26; supersedes KOS-131): Kosmos transitions
@@ -200,8 +200,8 @@ that spawns them. Steps 1–4 are already landed and listed for the record.
 
 - Engine is the only state owner; every shell (Electron today, GPUI next)
   uses `/v1/rpc` + `engine.lock.json` discovery. No shell opens SQLite.
-- The one-revision BOM (`release-bom.mjs`) covers Host + kepler-backend +
-  ark-core-rpc from a single commit — independent of shell choice.
+- The one-revision BOM (`release-bom.mjs`) covers Host + kepler-backend
+  (in-process ARK) from a single commit — independent of shell choice.
 - `KOSMOS_DATA_DIR` + `KEPLER_INSTANCE` slot isolation remains the instance
   contract for every shell, GPUI included.
 - Hosted-app authority stays Engine-issued: launch leases, broker tokens

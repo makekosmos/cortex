@@ -21,73 +21,71 @@ fn object_write_snapshot(
     })
 }
 
-pub(super) async fn handle(request: Request) -> Result<Value, String> {
+pub(super) async fn handle(state: &Arc<ServiceState>, request: Request) -> Result<Value, String> {
     match request {
-        Request::ListObjects => with_conn(|conn| {
+        Request::ListObjects => with_conn(state, |conn| {
             let objects = db::list_objects(conn)?;
             serde_json::to_value(objects).map_err(|e| e.to_string())
         }),
-        Request::ListObjectSummaries => with_conn(|conn| {
+        Request::ListObjectSummaries => with_conn(state, |conn| {
             let objects = db::list_object_summaries(conn)?;
             serde_json::to_value(objects).map_err(|e| e.to_string())
         }),
-        Request::ListObjectsByType { type_id } => with_conn(|conn| {
+        Request::ListObjectsByType { type_id } => with_conn(state, |conn| {
             let objects = db::list_objects_by_type(conn, &type_id)?;
             serde_json::to_value(objects).map_err(|e| e.to_string())
         }),
-        Request::ListObjectSummariesByType { type_id } => with_conn(|conn| {
+        Request::ListObjectSummariesByType { type_id } => with_conn(state, |conn| {
             let objects = db::list_object_summaries_by_type(conn, &type_id)?;
             serde_json::to_value(objects).map_err(|e| e.to_string())
         }),
-        Request::ListRunningTimeEntries { source } => with_conn(|conn| {
+        Request::ListRunningTimeEntries { source } => with_conn(state, |conn| {
             let objects = db::list_running_time_entries(conn, source.as_deref())?;
             serde_json::to_value(objects).map_err(|e| e.to_string())
         }),
-        Request::GetObjectsByIds { ids } => with_conn(|conn| {
+        Request::GetObjectsByIds { ids } => with_conn(state, |conn| {
             let objects = db::get_objects_by_ids(conn, &ids)?;
             serde_json::to_value(objects).map_err(|e| e.to_string())
         }),
-        Request::SearchObjects { query } => with_conn(|conn| {
+        Request::SearchObjects { query } => with_conn(state, |conn| {
             let results = db::search_objects(conn, &query)?;
             serde_json::to_value(results).map_err(|e| e.to_string())
         }),
-        Request::GetObject { id } => with_conn(|conn| {
+        Request::GetObject { id } => with_conn(state, |conn| {
             let object = db::get_object(conn, &id)?;
             serde_json::to_value(object).map_err(|e| e.to_string())
         }),
-        Request::GetObjectWriteSnapshot { id } => with_conn(|conn| {
+        Request::GetObjectWriteSnapshot { id } => with_conn(state, |conn| {
             serde_json::to_value(object_write_snapshot(conn, &id)?)
                 .map_err(|error| error.to_string())
         }),
         Request::CanonicalGameList { device_id } => {
             let device = local_write_device_id(device_id);
-            with_conn(|conn| {
-                serde_json::to_value(ark_core::canonical_types::game::list_games(conn, &device)?)
+            with_conn(state, |conn| {
+                serde_json::to_value(crate::canonical_types::game::list_games(conn, &device)?)
                     .map_err(|e| e.to_string())
             })
         }
         Request::CanonicalGameGet { id, device_id } => {
             let device = local_write_device_id(device_id);
-            with_conn(|conn| {
-                serde_json::to_value(ark_core::canonical_types::game::get_game(
-                    conn, &id, &device,
-                )?)
-                .map_err(|e| e.to_string())
+            with_conn(state, |conn| {
+                serde_json::to_value(crate::canonical_types::game::get_game(conn, &id, &device)?)
+                    .map_err(|e| e.to_string())
             })
         }
         Request::CanonicalGameUpsert { game, device_id } => {
             let device = local_write_device_id(device_id);
-            let record = with_write_tx(|conn| {
-                ark_core::canonical_types::game::upsert_game(conn, game, &device)
+            let record = with_write_tx(state, |conn| {
+                crate::canonical_types::game::upsert_game(conn, game, &device)
             })?;
             if record.changed {
                 emit_event(json!({"event":"arrancador.changed"}));
             }
             serde_json::to_value(record).map_err(|e| e.to_string())
         }
-        Request::CanonicalAssetSources { object_ids } => with_conn(|conn| {
+        Request::CanonicalAssetSources { object_ids } => with_conn(state, |conn| {
             serde_json::to_value(
-                ark_core::canonical_types::facades::asset_sources(conn, &object_ids)
+                crate::canonical_types::facades::asset_sources(conn, &object_ids)
                     .map_err(|error| error.to_string())?,
             )
             .map_err(|e| e.to_string())
@@ -101,8 +99,8 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
         } => {
             let device_id = local_write_device_id(device_id);
             let book_id_for_event = book_id.clone();
-            let mutation = with_write_tx(|conn| {
-                let mutation = ark_core::canonical_types::facades::set_book_cover(
+            let mutation = with_write_tx(state, |conn| {
+                let mutation = crate::canonical_types::facades::set_book_cover(
                     conn,
                     &book_id,
                     source_ref.as_deref(),
@@ -157,23 +155,24 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
         } => {
             let object_id = object.id.clone();
             let object_type_id = object.type_id.clone();
-            let entity = with_write_tx(|conn| {
+            let entity = with_write_tx(state, |conn| {
                 if let Some(expected) = expected_snapshot {
                     if object_write_snapshot(conn, &object.id)? != expected {
                         return Err("object_conflict:stale_snapshot".to_string());
                     }
                 }
-                let object = ark_core::canonical_types::ingress::prepare_object(conn, object)
+                let object = crate::canonical_types::ingress::prepare_object(conn, object)
                     .map_err(|error| error.to_string())?;
                 db::upsert_object(conn, &object)?;
                 let hlc = record_local_upsert(conn, "object", &object.id, device_id)?;
-                let version_rows = conn.execute(
-                    "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0)
+                let version_rows = conn
+                    .execute(
+                        "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0)
                      ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0
                      WHERE excluded.hlc > object_sync_versions.hlc",
-                    rusqlite::params![object.id, hlc],
-                )
-                .map_err(|error| error.to_string())?;
+                        rusqlite::params![object.id, hlc],
+                    )
+                    .map_err(|error| error.to_string())?;
                 if version_rows != 1 {
                     return Err("object_conflict:stale_revision".to_string());
                 }
@@ -187,8 +186,9 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             })?;
             let eid = object_id.clone();
             let etid = object_type_id.clone();
+            let state = Arc::clone(state);
             tokio::spawn(async move {
-                broadcast_local_change(entity).await;
+                broadcast_local_change(&state, entity).await;
             });
             emit_event(json!({
                 "event": "object_upserted",
@@ -203,7 +203,7 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
             device_id,
         } => {
             let object_id = id.clone();
-            let entity = with_write_tx(|conn| {
+            let entity = with_write_tx(state, |conn| {
                 if let Some(expected) = expected_snapshot {
                     if object_write_snapshot(conn, &id)? != expected {
                         return Err("object_conflict:stale_snapshot".to_string());
@@ -218,13 +218,14 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
                     device_id,
                     type_id.as_deref(),
                 )?;
-                let version_rows = conn.execute(
-                    "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,1)
+                let version_rows = conn
+                    .execute(
+                        "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,1)
                      ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=1
                      WHERE excluded.hlc > object_sync_versions.hlc",
-                    rusqlite::params![id, hlc],
-                )
-                .map_err(|error| error.to_string())?;
+                        rusqlite::params![id, hlc],
+                    )
+                    .map_err(|error| error.to_string())?;
                 if version_rows != 1 {
                     return Err("object_conflict:stale_revision".to_string());
                 }
@@ -239,8 +240,9 @@ pub(super) async fn handle(request: Request) -> Result<Value, String> {
                 ))
             })?;
             let eid = object_id.clone();
+            let state = Arc::clone(state);
             tokio::spawn(async move {
-                broadcast_local_change(entity).await;
+                broadcast_local_change(&state, entity).await;
             });
             emit_event(json!({
                 "event": "object_deleted",

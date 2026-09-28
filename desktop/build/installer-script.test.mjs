@@ -59,6 +59,8 @@ test("removes old Electron autostart Run values unconditionally on install", () 
 test("stops processes before uninstalling", () => {
   expect(uninstallSection).toContain("!insertmacro KillKosmosProcesses");
   expect(macroSection).toContain("taskkill /F /IM kepler-backend.exe");
+  // 0.9.x installs leave an orphaned ark-core-rpc.exe holding the DB.
+  expect(macroSection).toContain("taskkill /F /IM ark-core-rpc.exe");
   expect(macroSection).toContain('taskkill /F /IM "Kosmos Manager.exe"');
   expect(macroSection).toContain("Sleep 500");
 });

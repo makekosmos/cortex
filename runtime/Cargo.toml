@@ -9,6 +9,8 @@ autobins = false
 default = ["handle-relative-fs-serde"]
 handle-relative-fs-serde = []
 windows-gui-subsystem = []
+# Forwarded to ark-core: opt-in iroh transport for start_sync (`use_iroh`).
+iroh-spike = ["ark-core/iroh-spike"]
 package-worker-fixture = []
 
 [lib]

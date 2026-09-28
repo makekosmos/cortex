@@ -14,7 +14,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_INCREMENTAL: '0'
+  CARGO_INCREMENTAL: "0"
 
 jobs:
   build:
@@ -38,15 +38,12 @@ jobs:
         run: cargo +stable build --locked --release --manifest-path manager-gpui/Cargo.toml
       - name: Build Engine
         run: cargo +stable build --locked --release -p kepler-backend --bin kepler-backend
-      - name: Build Core
-        run: cargo +stable build --locked --release --manifest-path core/Cargo.toml -p ark-core --bin ark-core-rpc --features iroh-spike
       - name: Package
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path dist
           Copy-Item manager-gpui/target/release/manager-gpui.exe dist/
           Copy-Item target/release/kepler-backend.exe dist/
-          Copy-Item core/target/release/ark-core-rpc.exe dist/
           Get-ChildItem target/release,core/target/release,manager-gpui/target/release -Filter *.dll | Copy-Item -Destination dist/
           @'
           Start kepler-backend.exe first, then manager-gpui.exe.

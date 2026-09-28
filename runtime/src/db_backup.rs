@@ -172,8 +172,8 @@ fn validated_backups_dir(data_dir: &Path, create: bool) -> Result<Option<PathBuf
 }
 
 /// Дождаться события `db_backup_result` для нашего `dest_str` (backup идёт
-/// async в ark-core-rpc). Bounded таймаутом, чтобы не зависнуть навсегда если
-/// ark-core-rpc умер посреди копирования.
+/// async в ark-core service). Bounded таймаутом, чтобы не зависнуть навсегда если
+/// backup thread умер посреди копирования.
 async fn wait_for_backup_result(
     events: &mut tokio::sync::broadcast::Receiver<(String, serde_json::Value)>,
     dest_str: &str,
@@ -252,7 +252,7 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
         .ok_or("backup dest path is not UTF-8")?
         .to_string();
 
-    // Подписка ДО запроса: backup в ark-core-rpc идёт async на отдельном
+    // Подписка ДО запроса: backup в ark-core service идёт async на отдельном
     // background-priority потоке, событие завершения может прийти раньше, чем
     // мы успеем подписаться после await'а RPC.
     let mut events = ark.subscribe_events();
@@ -260,7 +260,7 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
     eprintln!("[db-backup] starting → {dest_str}");
     let backup_started = std::time::Instant::now();
     // RPC возвращается сразу ({"started": true}) — копирование продолжается в
-    // фоне, не блокируя серийный RPC-loop ark-core-rpc.
+    // фоне, не блокируя серийный request-loop сервиса.
     BACKUP_ACTIVE.store(true, Ordering::SeqCst);
     let start_result = ark
         .request("db_backup", json!({ "dest_path": dest_str.clone() }))
