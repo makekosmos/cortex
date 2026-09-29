@@ -108,14 +108,11 @@ function stageInstaller() {
   copyFileSync(path.join(SHELL_ROOT, "build", "tray.ico"), path.join(resources, "tray.ico"));
 
   const componentsDir = path.join(resources, "components");
-  // KOS-265: only Manager is bundled — Agenda/Memoria/Dictation install as
-  // native apps from GitHub Releases.
-  for (const component of ["manager"]) {
-    const source = path.join(SHELL_ROOT, ".tmp", "components", component, "win-unpacked");
-    const target = path.join(componentsDir, component);
-    if (!existsSync(source)) continue;
-    cpSync(source, target, { recursive: true });
-  }
+  // Manager is the only bundled component — a missing stage is a build
+  // failure, never a silent skip.
+  const managerSource = path.join(SHELL_ROOT, ".tmp", "components", "manager", "win-unpacked");
+  if (!existsSync(managerSource)) die(`missing manager component: ${managerSource}`);
+  cpSync(managerSource, path.join(componentsDir, "manager"), { recursive: true });
   return stage;
 }
 

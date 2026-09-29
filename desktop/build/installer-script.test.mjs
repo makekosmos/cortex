@@ -24,8 +24,10 @@ test("only removes the shipped payload, not the whole $INSTDIR recursively", () 
   expect(installer).toContain('RMDir "$INSTDIR"');
 });
 
-test("cleans up the old Electron install under kepler-shell and its GUID keys", () => {
+test("cleans up the old Electron-era payloads and their GUID keys", () => {
   expect(installSection).toContain('RMDir /r "$LOCALAPPDATA\\Programs\\kepler-shell"');
+  // The Kosmos-era Programs payload goes too.
+  expect(installSection).toContain('RMDir /r "$LOCALAPPDATA\\Programs\\Kosmos"');
   // The real 0.9.x uninstall keys are bare GUIDs — no braces.
   expect(installer).toContain("Uninstall\\4fe2b964-4d0e-5a72-8728-cca14468c9f0");
   expect(installer).toContain("Uninstall\\af85bd72-f4c8-5af3-a0fe-9aa1f0fa5a8d");
@@ -33,10 +35,9 @@ test("cleans up the old Electron install under kepler-shell and its GUID keys", 
   expect(installer).not.toContain("{af85bd72");
 });
 
-test("deletes the brace-less Electron uninstall keys even without kepler-shell", () => {
-  // KOS-265: the GUID keys were previously deleted only inside the
-  // kepler-shell payload branch — a stale Apps & Features entry outlived the
-  // upgrade. MIGRATION(KOS-267): the legacy keys must keep being deleted.
+test("deletes the brace-less Electron uninstall keys unconditionally", () => {
+  // MIGRATION(KOS-267): the legacy keys must keep being deleted whether or
+  // not the old payload dir survived.
   for (const guid of [
     "4fe2b964-4d0e-5a72-8728-cca14468c9f0",
     "af85bd72-f4c8-5af3-a0fe-9aa1f0fa5a8d",
@@ -72,13 +73,18 @@ test("removes old autostart Run values unconditionally on install", () => {
   expect(insertAt).toBeLessThan(legacyProgramDirAt);
 });
 
-test("stops processes before uninstalling", () => {
+test("stops product processes — bundled, store apps and legacy names", () => {
   expect(uninstallSection).toContain("!insertmacro KillProductProcesses");
+  expect(installSection).toContain("!insertmacro KillProductProcesses");
   expect(macroSection).toContain("taskkill /F /IM mundus-engine.exe");
   expect(macroSection).toContain('taskkill /F /IM "Mundus Manager.exe"');
+  // Store-installed apps must be stopped before their dir is removed or
+  // replaced.
+  for (const exe of ["agenda-gpui.exe", "memoria-gpui.exe", "dictation-gpui.exe"]) {
+    expect(macroSection).toContain(`taskkill /F /IM ${exe}`);
+  }
   // MIGRATION(KOS-267): the running pre-upgrade processes carry old names.
   expect(macroSection).toContain("taskkill /F /IM kepler-backend.exe");
-  // 0.9.x installs leave an orphaned ark-core-rpc.exe holding the DB.
   expect(macroSection).toContain("taskkill /F /IM ark-core-rpc.exe");
   expect(macroSection).toContain('taskkill /F /IM "Kosmos Manager.exe"');
   expect(macroSection).toContain("taskkill /F /IM Kosmos.exe");
@@ -113,15 +119,44 @@ test("only opens the Manager on interactive installs", () => {
   expect(installer).toContain("IfSilent");
 });
 
-// KOS-265: Agenda/Memoria/Dictation are store-installed native apps — the
-// 0.9.x→0.10.0 upgrade wipe of $INSTDIR\resources removes their bundled
-// payloads, and no component dir other than manager may be referenced.
-test("bundles only Manager and removes legacy bundled component dirs on upgrade", () => {
+// KOS-265: the install payload ships Manager only — `File` ships whatever
+// build-desktop.mjs staged under resources\components (see the e2e test),
+// and the installer itself must never write or shortcut an app component.
+test("the Install section never writes or shortcuts a bundled app component", () => {
   for (const component of ["agenda", "memoria", "dictation"]) {
-    expect(installer).not.toContain(`components\\${component}\\`);
+    // Component dirs may legitimately appear in RecordLegacyComponents
+    // probes (read-only IfFileExists) — but never in a payload or shortcut
+    // statement.
+    expect(installSection).not.toContain(`components\\${component}\\`);
+    expect(installSection).not.toContain(`CreateShortCut "$SMPROGRAMS\\${component}`);
   }
-  // The upgrade wipe covers resources\components\{agenda,memoria,dictation}.
   expect(installSection).toContain('RMDir /r "$INSTDIR\\resources"');
+});
+
+// The migration marker must be recorded before the payloads it describes
+// are deleted — a marker written after the wipe would always read "absent".
+test("records bundled components before wiping the old payloads", () => {
+  const marker = installer.split("Function RecordLegacyComponents")[1] ?? "";
+  expect(marker).toContain("legacy-components.json");
+  for (const component of ["agenda", "memoria", "dictation"]) {
+    expect(marker).toContain(`components\\${component}`);
+    expect(marker).toContain(`"${component}":$`);
+  }
+  const recordAt = installSection.indexOf("Call RecordLegacyComponents");
+  const kosmosWipeAt = installSection.indexOf('RMDir /r "$LOCALAPPDATA\\Programs\\Kosmos"');
+  const resourcesWipeAt = installSection.indexOf('RMDir /r "$INSTDIR\\resources"');
+  expect(recordAt >= 0).toBeTruthy();
+  expect(kosmosWipeAt >= 0).toBeTruthy();
+  expect(resourcesWipeAt >= 0).toBeTruthy();
+  expect(recordAt).toBeLessThan(kosmosWipeAt);
+  expect(recordAt).toBeLessThan(resourcesWipeAt);
+});
+
+test("uninstall removes the store payload dir but never user data", () => {
+  expect(uninstallSection).toContain('RMDir /r "${APPS_ROOT}"');
+  // User data under the Mundus roots is deliberately kept.
+  expect(uninstallSection).not.toContain('RMDir /r "$APPDATA\\Mundus"');
+  expect(uninstallSection).not.toContain('RMDir /r "$LOCALAPPDATA\\Mundus"');
 });
 
 test("seeds autostart only conditionally and never using the Desktop VERSION", () => {

@@ -23,6 +23,7 @@
 !define RUN_VALUE "Mundus Engine"
 !define ENGINE_ARCHIVE "Mundus Engine.zip"
 !define ENGINE_ROOT "$LOCALAPPDATA\Mundus\Engine"
+!define APPS_ROOT "$LOCALAPPDATA\Mundus\Apps"
 !define MANAGER_EXE "Mundus Manager.exe"
 ; Privileged Engine service (one-time UAC grant). The name mirrors
 ; brand::SYSTEM_SERVICE_NAME in the Engine — keep in sync.
@@ -52,9 +53,14 @@ UninstPage instfiles
   nsExec::ExecToLog 'taskkill /F /IM Mundus.exe'
   nsExec::ExecToLog 'taskkill /F /IM mundus-engine.exe'
   nsExec::ExecToLog 'taskkill /F /IM "Mundus Manager.exe"'
-  nsExec::ExecToLog 'taskkill /F /IM "Agenda.exe"'
-  nsExec::ExecToLog 'taskkill /F /IM "Memoria.exe"'
-  nsExec::ExecToLog 'taskkill /F /IM "Dictation.exe"'
+  ; Store-installed native apps (KOS-265) — must not hold their dir while the
+  ; Engine or an uninstall replaces/removes it.
+  nsExec::ExecToLog 'taskkill /F /IM agenda-gpui.exe'
+  nsExec::ExecToLog 'taskkill /F /IM memoria-gpui.exe'
+  nsExec::ExecToLog 'taskkill /F /IM dictation-gpui.exe'
+  nsExec::ExecToLog 'taskkill /F /IM "Agenda.exe"'                    ; MIGRATION(KOS-267)
+  nsExec::ExecToLog 'taskkill /F /IM "Memoria.exe"'                   ; MIGRATION(KOS-267)
+  nsExec::ExecToLog 'taskkill /F /IM "Dictation.exe"'                 ; MIGRATION(KOS-267)
   ; 0.9.x installs leave an orphaned ark-core-rpc.exe child holding the DB.
   nsExec::ExecToLog 'taskkill /F /IM ark-core-rpc.exe'            ; MIGRATION(KOS-267)
   nsExec::ExecToLog 'taskkill /F /IM Kosmos.exe'                  ; MIGRATION(KOS-267)
@@ -190,12 +196,55 @@ Function StartEngineAndManager
 manager_done:
 FunctionEnd
 
+
+; MIGRATION(KOS-267): remove after 2026-11-01. Before any old payload is
+; deleted, record which bundled components (agenda/memoria/dictation) the
+; previous generation shipped — the Engine reads this marker on first start
+; to auto-install them as store apps. Written unconditionally (all-false on
+; a fresh install): an absent marker and "nothing recorded" mean the same.
+; A write failure only skips the auto-install — the wipe still proceeds.
+Function RecordLegacyComponents
+  ; $R4/$R5/$R6 = "true"/"false" per component; presence in EITHER the 0.9.x
+  ; Programs\Kosmos layout or this installer's previous bundled layout counts.
+  StrCpy $R4 "false"
+  StrCpy $R5 "false"
+  StrCpy $R6 "false"
+  IfFileExists "$LOCALAPPDATA\Programs\Kosmos\resources\components\agenda\*.*" 0 +2   ; MIGRATION(KOS-267)
+    StrCpy $R4 "true"
+  IfFileExists "$INSTDIR\resources\components\agenda\*.*" 0 +2                          ; MIGRATION(KOS-267)
+    StrCpy $R4 "true"
+  IfFileExists "$LOCALAPPDATA\Programs\Kosmos\resources\components\memoria\*.*" 0 +2  ; MIGRATION(KOS-267)
+    StrCpy $R5 "true"
+  IfFileExists "$INSTDIR\resources\components\memoria\*.*" 0 +2                         ; MIGRATION(KOS-267)
+    StrCpy $R5 "true"
+  IfFileExists "$LOCALAPPDATA\Programs\Kosmos\resources\components\dictation\*.*" 0 +2 ; MIGRATION(KOS-267)
+    StrCpy $R6 "true"
+  IfFileExists "$INSTDIR\resources\components\dictation\*.*" 0 +2                       ; MIGRATION(KOS-267)
+    StrCpy $R6 "true"
+  CreateDirectory "$LOCALAPPDATA\Mundus"
+  FileOpen $R7 "$LOCALAPPDATA\Mundus\legacy-components.json" w
+  IfErrors record_failed
+  FileWrite $R7 '{"schema_version":1,"components":{"agenda":$R4,"memoria":$R5,"dictation":$R6}}'
+  FileWrite $R7 '$\r$\n'
+  FileClose $R7
+  Goto record_done
+record_failed:
+  DetailPrint "legacy-components marker write failed — bundled-app migration skipped"
+record_done:
+FunctionEnd
+
 Section "Install"
   SetShellVarContext current
 
   ; Determine whether this is a fresh install or a migration/upgrade before we
   ; remove any state.
   Call DetectPreviousInstall
+
+  ; MIGRATION(KOS-267): must run before the Programs\Kosmos and
+  ; $INSTDIR\resources wipes below — it records which bundled
+  ; components existed so the Engine's first-start migration reads a marker,
+  ; not the deleted directories.
+  Call RecordLegacyComponents                                                       ; MIGRATION(KOS-267)
 
   StrCpy $R0 "$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 +2
@@ -225,6 +274,12 @@ Section "Install"
   ; MIGRATION(KOS-267): Kosmos-era registration + the standalone Engine entry.
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Kosmos" ; MIGRATION(KOS-267)
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KosmosEngine" ; MIGRATION(KOS-267)
+
+  ; Bundled-era component shortcuts — the apps are store-installed now,
+  ; so these point at files the upgrade deletes.
+  Delete "$SMPROGRAMS\Agenda.lnk"
+  Delete "$SMPROGRAMS\Memoria.lnk"
+  Delete "$SMPROGRAMS\Dictation.lnk"
 
   ; Old shortcuts on Desktop and in the Start Menu.
   Delete "$DESKTOP\Kosmos.lnk"                                     ; MIGRATION(KOS-267)
@@ -266,10 +321,6 @@ Section "Install"
   ; Windows entry points open the GPUI Manager.
   CreateShortCut "$SMPROGRAMS\Mundus.lnk" "$INSTDIR\resources\components\manager\${MANAGER_EXE}" "" "$INSTDIR\resources\icon.ico" 0
   CreateShortCut "$DESKTOP\Mundus.lnk" "$INSTDIR\resources\components\manager\${MANAGER_EXE}" "" "$INSTDIR\resources\icon.ico" 0
-
-  ; KOS-265: Agenda/Memoria/Dictation are store-installed native apps — no
-  ; bundled-component Start Menu shortcuts. Stale shortcuts from a bundled
-  ; 0.9.x install are removed in the legacy cleanup above.
 
   Call SeedOrMigrateAutostart
 
@@ -341,9 +392,10 @@ Section "Uninstall"
   DeleteRegValue HKCU "${RUN_KEY}" "${RUN_VALUE}"
   !insertmacro DeleteOldRunValues
 
-  ; Remove only the application payload we ship. User data in
-  ; %APPDATA%\Mundus and %LOCALAPPDATA%\Mundus (including the Engine) is
-  ; intentionally kept.
+  ; Remove the payload we ship and the store-installed native apps (program
+  ; files, not user data). The rest of %APPDATA%\Mundus and
+  ; %LOCALAPPDATA%\Mundus (including the Engine) is intentionally kept.
+  RMDir /r "${APPS_ROOT}"
   RMDir /r "$INSTDIR\resources"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"

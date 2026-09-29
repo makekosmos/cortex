@@ -13,8 +13,11 @@ test("release builds materialize runtime before preflight", async () => {
   for (const script of [desktop.scripts.build, desktop.scripts["package:dir"]]) {
     assert.ok(script.indexOf("build:backend") < script.indexOf("release-preflight"));
   }
-  // Preflight must run before any cargo component build.
-  assert.ok(component.indexOf("release-preflight") < component.indexOf('"cargo"'));
+  // Preflight must run before any cargo component build — both markers
+  // must actually be present for the comparison to mean anything.
+  const pre = component.indexOf("release-preflight");
+  const cargo = component.indexOf('"cargo"');
+  assert.ok(pre >= 0 && cargo >= 0 && pre < cargo);
 });
 
 test("release build rejects a missing BOM before invoking makensis", async () => {

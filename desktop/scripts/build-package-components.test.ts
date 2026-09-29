@@ -3,43 +3,40 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const source = readFileSync(path.join(import.meta.dirname, "build-package-components.mjs"), "utf8");
+const desktopBuild = readFileSync(path.join(import.meta.dirname, "build-desktop.mjs"), "utf8");
 
-test("packaged GPUI components inherit the Desktop release version", () => {
+test("the icon pipeline runs before component staging", () => {
   const icons = readFileSync(path.join(import.meta.dirname, "build-app-icons.mjs"), "utf8");
   expect(icons).toContain("png-to-ico");
+  const iconsStep = source.indexOf("build-app-icons.mjs");
+  const managerStage = source.indexOf('"manager", "win-unpacked"');
+  expect(iconsStep >= 0 && iconsStep < managerStage).toBeTruthy();
 });
 
-test("components/manager is the manager-gpui exe staged under the packaged name", () => {
+// The staged tree is what the installer ships — assert on the produced
+// layout (only `components/manager`, exe under its packaged name), not on
+// strings that happen to be absent.
+test("the component build produces exactly a manager stage", () => {
+  // The whole staging root is wiped first — a stale sibling dir can never
+  // leak into the installer payload.
+  expect(source).toContain('".tmp", "components"');
+  expect(source).toContain("rmSync(componentsRoot, { recursive: true, force: true })");
+  expect(source).toContain('"manager", "win-unpacked"');
+  // manager-gpui is built for the Windows target and staged under the
+  // packaged name the tray resolves.
   expect(source).toContain('"cargo"');
   expect(source).toContain('"--locked"');
   expect(source).toContain("x86_64-pc-windows-msvc");
-  expect(source).toContain("manager-gpui");
   expect(source).toContain('"Mundus Manager.exe"');
+  // A missing build product fails the script instead of shipping nothing.
+  expect(source).toMatch(/missing \$\{?managerExe|missing.*manager-gpui\.exe/i);
 });
 
-// KOS-265: Agenda/Memoria/Dictation install from GitHub Releases
-// as native apps — they must never again be bundled into the installer stage.
-test("the installer builds no bundled components besides Manager", () => {
-  for (const component of ["agenda", "memoria", "dictation"]) {
-    expect(source).not.toContain(`components\\${component}`);
-    expect(source).not.toContain(`"components", "${component}"`);
-  }
-  // component-pins.json is deleted — the build must not reference it.
-  expect(source).not.toContain("component-pins.json");
-  for (const pin of ["agenda_gpui", "memoria_gpui", "dictation_gpui"]) {
-    expect(source).not.toContain(pin);
-  }
-  for (const env of [
-    "MUNDUS_AGENDA_GPUI_SRC",
-    "MUNDUS_MEMORIA_GPUI_SRC",
-    "MUNDUS_DICTATION_GPUI_SRC",
-    "MUNDUS_AGENDA_VERSION",
-    "MUNDUS_MEMORIA_VERSION",
-    "MUNDUS_DICTATION_VERSION",
-  ]) {
-    expect(source).not.toContain(env);
-  }
-  for (const exe of ["Agenda.exe", "Memoria.exe", "Dictation.exe"]) {
-    expect(source).not.toContain(exe);
-  }
+test("the installer stage requires the manager component", () => {
+  // stageInstaller must die when the manager stage is absent — never ship a
+  // payload without the only bundled component.
+  const stage = desktopBuild.slice(desktopBuild.indexOf("function stageInstaller"));
+  expect(stage).toContain('"components", "manager", "win-unpacked"');
+  expect(stage).toContain("missing manager component");
+  expect(stage).not.toContain("component-pins.json");
 });

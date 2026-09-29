@@ -8,7 +8,7 @@ import { env } from "./brand.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // Release preflight demands a clean worktree and a BOM; local staging (for
-// `build:desktop -- --local`) skips it — the pin checks below still apply.
+// `build:desktop -- --local`) skips it.
 if (env("RELEASE_LOCAL") !== "1") {
   const preflight = spawnSync(
     process.execPath,
@@ -24,11 +24,10 @@ const icons = spawnSync(
 );
 if (icons.status !== 0) process.exit(icons.status ?? 1);
 
-// KOS-134: components/manager ships manager-gpui — a single-file Rust/GPUI
-// exe staged under the packaged name the Engine tray resolves. The target
-// triple is the toolchain.target the release BOM records for Windows builds.
-// KOS-265: Agenda/Memoria/Dictation are no longer bundled — the Engine
-// installs them as native apps from GitHub Releases.
+// Manager is the only bundled component: `components/manager` ships
+// manager-gpui, a single-file Rust/GPUI exe under the packaged name the
+// tray resolves. The target triple is the toolchain.target the release BOM
+// records for Windows builds.
 const MANAGER_TARGET = "x86_64-pc-windows-msvc";
 const managerRelease = path.join(root, "manager-gpui", "target", MANAGER_TARGET, "release");
 const managerBuild = spawnSync(
@@ -52,8 +51,11 @@ if (!existsSync(managerExe)) {
   console.error(`[build-package-components] missing ${managerExe}`);
   process.exit(1);
 }
-const managerStage = path.join(root, "desktop", ".tmp", "components", "manager", "win-unpacked");
-rmSync(managerStage, { recursive: true, force: true });
+// Wipe the whole staging area — a stale sibling dir must never reach the
+// installer payload.
+const componentsRoot = path.join(root, "desktop", ".tmp", "components");
+rmSync(componentsRoot, { recursive: true, force: true });
+const managerStage = path.join(componentsRoot, "manager", "win-unpacked");
 mkdirSync(managerStage, { recursive: true });
 copyFileSync(managerExe, path.join(managerStage, "Mundus Manager.exe"));
 for (const entry of readdirSync(managerRelease)) {

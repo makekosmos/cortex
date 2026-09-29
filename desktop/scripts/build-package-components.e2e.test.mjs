@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -46,7 +46,6 @@ async function writeTestBom() {
     currentCommit,
     "release requires the in-tree core/ subtree to ride on the Cortex commit",
   );
-
 
   const engineDir = path.join(desktop, ".tmp", "engine.next");
   mkdirSync(engineDir, { recursive: true });
@@ -105,12 +104,12 @@ async function writeTestBom() {
 }
 
 test(
-  "build-package-components.mjs completes icons and GPUI component packaging",
+  "build-package-components.mjs builds the icons and the Manager component",
   {
     timeout: 15 * 60_000,
     skip: prerequisites
       ? false
-      : "requires Windows, a clean committed worktree, installed desktop deps, cargo on PATH, and pinned component checkouts",
+      : "requires Windows, a clean committed worktree, installed desktop deps, and cargo on PATH",
   },
   async () => {
     const bom = await writeTestBom();
@@ -132,19 +131,19 @@ test(
 
     for (const name of ["mundus", "memoria", "agenda", "dictation"])
       assert.ok(existsSync(path.join(desktop, "build", "app-icons", `${name}.ico`)), name);
-    // KOS-265: only Manager is staged as a bundled component.
-    for (const component of ["agenda", "memoria", "dictation"])
-      assert.ok(
-        !existsSync(path.join(desktop, ".tmp", "components", component)),
-        `${component} must not be staged`,
-      );
-    for (const [component, exe] of [["manager", "Mundus Manager.exe"]]) {
-      const out = path.join(desktop, ".tmp", "components", component, "win-unpacked");
-      assert.ok(existsSync(path.join(out, exe)), `${component} unpackaged output`);
-      assert.ok(
-        !existsSync(path.join(out, "resources")),
-        `${component} component must be the GPUI exe, not an Electron package`,
-      );
-    }
+    // Only Manager is staged as a bundled component — assert on the staged
+    // tree, not on the script text.
+    const componentsDir = path.join(desktop, ".tmp", "components");
+    assert.deepEqual(
+      readdirSync(componentsDir).sort(),
+      ["manager"],
+      "components staging must contain only manager",
+    );
+    const managerOut = path.join(componentsDir, "manager", "win-unpacked");
+    assert.ok(existsSync(path.join(managerOut, "Mundus Manager.exe")), "manager unpackaged output");
+    assert.ok(
+      !existsSync(path.join(managerOut, "resources")),
+      "manager component must be the GPUI exe, not an Electron package",
+    );
   },
 );
