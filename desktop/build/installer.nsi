@@ -249,6 +249,16 @@ Section "Install"
   Delete "$SMPROGRAMS\Kepler.lnk"                                  ; MIGRATION(KOS-267)
   Delete "$DESKTOP\CosCast.lnk"                                    ; MIGRATION(KOS-267)
   Delete "$SMPROGRAMS\CosCast.lnk"                                 ; MIGRATION(KOS-267)
+  ; MIGRATION(KOS-267): remove after 2026-11-01. The Electron-era 0.9.x host
+  ; wrote per-app links into "$SMPROGRAMS\Kosmos\" (tracked by its own index
+  ; file) that point at the removed host. Delete exactly those; the folder
+  ; itself goes only if nothing else is left in it (non-recursive RMDir).
+  Delete "$SMPROGRAMS\Kosmos\Agenda.lnk"                           ; MIGRATION(KOS-267)
+  Delete "$SMPROGRAMS\Kosmos\Memoria.lnk"                          ; MIGRATION(KOS-267)
+  Delete "$SMPROGRAMS\Kosmos\Dictation.lnk"                        ; MIGRATION(KOS-267)
+  Delete "$SMPROGRAMS\Kosmos\Ordo.lnk"                             ; MIGRATION(KOS-267)
+  Delete "$SMPROGRAMS\Kosmos\.kosmos-desktop-host-shortcuts.json"  ; MIGRATION(KOS-267)
+  RMDir "$SMPROGRAMS\Kosmos"                                       ; MIGRATION(KOS-267)
 
   ; Replace the shipped application payload only. User data lives in
   ; %APPDATA%\Mundus and %LOCALAPPDATA%\Mundus and is never touched here.
