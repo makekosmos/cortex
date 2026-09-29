@@ -106,6 +106,9 @@ function stageInstaller() {
   }
   copyFileSync(path.join(SHELL_ROOT, "build", "icon.ico"), path.join(resources, "icon.ico"));
   copyFileSync(path.join(SHELL_ROOT, "build", "tray.ico"), path.join(resources, "tray.ico"));
+  cpSync(path.join(SHELL_ROOT, "build", "installer-assets"), path.join(stage, "installer-assets"), {
+    recursive: true,
+  });
 
   const componentsDir = path.join(resources, "components");
   // Manager is the only bundled component — a missing stage is a build

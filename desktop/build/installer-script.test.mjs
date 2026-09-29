@@ -13,8 +13,39 @@ const macroSection = installer.split("!macro KillProductProcesses")[1] ?? "";
 
 const runKey = "${RUN_KEY}";
 
-test("uses a fixed install directory and never lets the user choose", () => {
+test("uses MUI2 pages: welcome, progress, finish; no directory or license page", () => {
+  expect(installer).toContain("!include MUI2.nsh");
+  expect(installer).toContain("!insertmacro MUI_PAGE_WELCOME");
+  expect(installer).toContain("!insertmacro MUI_PAGE_INSTFILES");
+  expect(installer).toContain("!insertmacro MUI_PAGE_FINISH");
+  expect(installer).toContain("!insertmacro MUI_UNPAGE_CONFIRM");
+  expect(installer).toContain("!insertmacro MUI_UNPAGE_INSTFILES");
   expect(installer).not.toContain("Page directory");
+  expect(installer).not.toContain("Page license");
+});
+
+test("brands MUI with generated Mundus bitmaps, not placeholders", () => {
+  expect(installer).toContain(
+    'MUI_HEADERIMAGE_BITMAP "${STAGE_DIR}\\installer-assets\\header.bmp"',
+  );
+  expect(installer).toContain(
+    'MUI_WELCOMEFINISH_BITMAP "${STAGE_DIR}\\installer-assets\\welcome.bmp"',
+  );
+});
+
+test("auto-selects English or Russian from the system UI language", () => {
+  expect(installer).toContain('!insertmacro MUI_LANGUAGE "English"');
+  expect(installer).toContain('!insertmacro MUI_LANGUAGE "Russian"');
+  expect(installer).toContain("GetUserDefaultUILanguage");
+  expect(installer).toContain("IntCmp $0 1049");
+  expect(installer).toContain("StrCpy $LANGUAGE ${LANG_ENGLISH}");
+  expect(installer).toContain("StrCpy $LANGUAGE ${LANG_RUSSIAN}");
+});
+
+test("finish page offers a checked 'Launch Mundus' checkbox for the Manager", () => {
+  expect(installer).toContain("MUI_FINISHPAGE_RUN");
+  expect(installer).toContain("resources\\components\\manager\\${MANAGER_EXE}");
+  expect(installer).toContain("Launch ${APP_NAME}");
 });
 
 test("only removes the shipped payload, not the whole $INSTDIR recursively", () => {

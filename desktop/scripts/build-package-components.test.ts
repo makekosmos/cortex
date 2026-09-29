@@ -9,6 +9,9 @@ const desktopBuild = readFileSync(path.join(import.meta.dirname, "build-desktop.
 test("the icon pipeline runs before component staging", () => {
   const icons = readFileSync(path.join(import.meta.dirname, "build-app-icons.mjs"), "utf8");
   expect(icons).toContain("png-to-ico");
+  expect(icons).toContain("installer-assets");
+  expect(icons).toContain("header.bmp");
+  expect(icons).toContain("welcome.bmp");
   const iconsStep = source.indexOf("build-app-icons.mjs");
   const managerStage = source.indexOf('"manager", "win-unpacked"');
   expect(iconsStep >= 0 && iconsStep < managerStage).toBeTruthy();
@@ -39,6 +42,11 @@ test("build-desktop fails closed when the staged manager payload is stale or inc
   expect(stage).toContain("MANAGER_EXE");
   expect(stage).toContain("staged manager payload must contain exactly");
   expect(stage).toContain('name.toLowerCase().endsWith(".exe")');
+});
+
+test("build-desktop stages the generated MUI2 bitmaps alongside the payload", () => {
+  const stage = desktopBuild.slice(desktopBuild.indexOf("function stageInstaller"));
+  expect(stage).toContain("installer-assets");
 });
 
 test("the installer stage requires the manager component", () => {
