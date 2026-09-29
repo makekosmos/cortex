@@ -176,6 +176,15 @@ test("the Install section never writes or shortcuts a bundled app component", ()
   expect(installSection).toContain('RMDir /r "$INSTDIR\\resources"');
 });
 
+// MIGRATION(KOS-267): remove after 2026-11-01.
+test("removes the 0.9.x host's per-app Start Menu links without a recursive delete", () => {
+  for (const name of ["Agenda", "Memoria", "Dictation", "Ordo"]) {
+    expect(installSection).toContain(`Delete "$SMPROGRAMS\\Kosmos\\${name}.lnk"`); // MIGRATION(KOS-267): remove after 2026-11-01
+  }
+  expect(installSection).toContain('RMDir "$SMPROGRAMS\\Kosmos"'); // MIGRATION(KOS-267): remove after 2026-11-01
+  expect(installSection).not.toContain('RMDir /r "$SMPROGRAMS\\Kosmos"'); // MIGRATION(KOS-267): remove after 2026-11-01
+});
+
 // The migration marker must be recorded before the payloads it describes
 // are deleted — a marker written after the wipe would always read "absent".
 test("records bundled components before wiping the old payloads", () => {
