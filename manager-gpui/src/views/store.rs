@@ -73,9 +73,10 @@ pub fn render(
             |this, _| {
                 this.action("store.refresh", json!({}));
                 this.action("packages.refresh_catalog", json!({}));
-                // Native app rows re-check GitHub Releases past the TTL;
-                // `call` lands the reply straight into the store.apps slot.
-                this.call("store.apps", "apps.list", json!({ "refresh": true }));
+                // Native app rows re-check GitHub Releases past the TTL —
+                // as a background refresh, so a successful reply can't clear
+                // the catalog-refresh error banner.
+                this.refresh("store.apps", "apps.list", json!({ "refresh": true }));
             },
         ));
     col = col.child(tabs);
@@ -102,9 +103,14 @@ pub fn render(
     match app.store_tab {
         StoreTab::Catalog => {
             col = col.child(render_catalog(app, cx));
-            col = col.child(super::store_apps::render_native_apps(app, cx));
+            col = col.child(super::store_apps::render_native_apps(app, cx, false));
         }
-        StoreTab::Installed => col = col.child(render_installed(app, cx)),
+        // Native apps belong on both tabs — Installed shows just the live
+        // ones, alongside the .kspkg package list.
+        StoreTab::Installed => {
+            col = col.child(super::store_apps::render_native_apps(app, cx, true));
+            col = col.child(render_installed(app, cx));
+        }
     }
     col.into_any_element()
 }

@@ -1,6 +1,7 @@
 //! Native GPUI app rows for the Store view (KOS-265) — the Engine hardcodes
 //! the app list and checks each app's GitHub Releases for updates.
-//! Установить / Обновить / Открыть / Удалить.
+//! Installs run as Engine-side background jobs: this view polls `apps.list`
+//! (see `ManagerApp::drain`) and renders the per-row state machine.
 use ::gpui::{prelude::*, *};
 use serde_json::json;
 
@@ -19,28 +20,82 @@ enum NativeAction {
 }
 
 fn native_actions(item: &serde_json::Value) -> Vec<NativeAction> {
-    let update = item
-        .get("update_version")
-        .and_then(|v| v.as_str())
-        .is_some_and(|v| !v.is_empty());
-    match (vbool(item, "installed"), update) {
-        (false, _) => vec![NativeAction::Install],
-        (true, true) => vec![
-            NativeAction::Update,
-            NativeAction::Open,
-            NativeAction::Uninstall,
-        ],
-        (true, false) => vec![NativeAction::Open, NativeAction::Uninstall],
+    let installed = vbool(item, "installed");
+    let update = vopt(item, "update_version").is_some_and(|v| !v.is_empty());
+    match vstr(item, "state").as_str() {
+        // An in-flight job owns the row — a second tap would only bounce off
+        // the Engine's per-app busy lock.
+        "installing" => vec![],
+        _ if installed && update => {
+            vec![
+                NativeAction::Update,
+                NativeAction::Open,
+                NativeAction::Uninstall,
+            ]
+        }
+        _ if installed => vec![NativeAction::Open, NativeAction::Uninstall],
+        // Offline/unsupported rows offer no network actions.
+        "offline" | "unsupported" => vec![],
+        // not-installed and failed rows both recover via Install.
+        _ => vec![NativeAction::Install],
+    }
+}
+
+/// Badge text + colour for a row's `state`/`failure` fields.
+fn native_status(item: &serde_json::Value) -> (String, u32) {
+    let installed = vbool(item, "installed");
+    match vstr(item, "state").as_str() {
+        "installing" => {
+            let (done, total) = (vnum(item, "download_bytes"), vnum(item, "download_total"));
+            if total > 0.0 {
+                (format!("Установка… {:.0}%", done * 100.0 / total), ACCENT())
+            } else {
+                ("Установка…".into(), ACCENT())
+            }
+        }
+        "failed" => {
+            let detail = match vstr(item, "failure").as_str() {
+                "busy" => "установка уже идёт".to_string(),
+                "app-running" => "закройте приложение и повторите".to_string(),
+                "offline" => "нет сети".to_string(),
+                "integrity" => "архив не прошёл проверку".to_string(),
+                "io" => "ошибка записи на диск".to_string(),
+                "unsupported" => "не поддерживается".to_string(),
+                other => other.to_string(),
+            };
+            (format!("Ошибка: {detail}"), DESTRUCTIVE())
+        }
+        _ if vopt(item, "update_version").is_some_and(|v| !v.is_empty()) => (
+            format!("Обновление v{}", vstr(item, "update_version")),
+            SUCCESS(),
+        ),
+        _ if installed => (
+            format!("Установлено v{}", vstr(item, "installed_version")),
+            SUCCESS(),
+        ),
+        "offline" => ("Нет сети".into(), MUTED_FG()),
+        "unsupported" => ("Недоступно".into(), MUTED_FG()),
+        _ => (format!("v{}", vstr(item, "latest_version")), MUTED_FG()),
     }
 }
 
 /// Native GPUI apps (KOS-265): GitHub Releases rows with
-/// Установить / Обновить / Открыть / Удалить.
-pub(super) fn render_native_apps(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
+/// Установить / Обновить / Открыть / Удалить. `installed_only` narrows the
+/// list for the Установленные tab.
+pub(super) fn render_native_apps(
+    app: &mut ManagerApp,
+    cx: &mut Context<ManagerApp>,
+    installed_only: bool,
+) -> AnyElement {
     slot_or(app, "store.apps", |v| {
-        let items = varr(v, "apps");
+        let items: Vec<&serde_json::Value> = varr(v, "apps")
+            .iter()
+            .filter(|item| !installed_only || vbool(item, "installed"))
+            .collect();
         if items.is_empty() {
-            return empty("").into_any_element();
+            // Nothing to show — render nothing rather than a blank padded
+            // card.
+            return div().into_any_element();
         }
         let mut el = card();
         el = el.child(
@@ -52,54 +107,31 @@ pub(super) fn render_native_apps(app: &mut ManagerApp, cx: &mut Context<ManagerA
         for item in items {
             let id = vstr(item, "id");
             let name = vopt(item, "name").unwrap_or_else(|| id.clone());
-            let installed = vbool(item, "installed");
-            let state = vstr(item, "state");
-            let status = if vopt(item, "update_version").is_some_and(|v| !v.is_empty()) {
-                format!(
-                    "Обновление v{}",
-                    vopt(item, "update_version").unwrap_or_default()
-                )
-            } else if installed {
-                format!("Установлено v{}", vstr(item, "installed_version"))
-            } else if state == "offline" {
-                "Нет сети".to_string()
-            } else if state == "unsupported" {
-                "Недоступно".to_string()
-            } else {
-                format!("v{}", vstr(item, "latest_version"))
-            };
-            let mut r = row(name.clone(), id.clone()).child(badge(
-                status,
-                if installed { SUCCESS() } else { MUTED_FG() },
-            ));
-            // Offline/unsupported rows offer no network actions.
-            if matches!(state.as_str(), "offline" | "unsupported") && !installed {
-                el = el.child(r);
-                continue;
-            }
+            let (status, color) = native_status(item);
+            let mut r = row(name.clone(), id.clone()).child(badge(status, color));
             for action_kind in native_actions(item) {
                 let aid = id.clone();
                 let aname = name.clone();
                 r = r.child(match action_kind {
-                    NativeAction::Install => {
-                        btn_id(&format!("app-install-{id}"), "Установить", {
+                    // Install and update are the same Engine op — the reply
+                    // goes to a side slot (`apps.op`) and drain re-pulls the
+                    // list, so starting a job never blanks the rows.
+                    NativeAction::Install | NativeAction::Update => {
+                        let (element_id, label) = if action_kind == NativeAction::Install {
+                            (format!("app-install-{id}"), "Установить")
+                        } else {
+                            (format!("app-update-{id}"), "Обновить")
+                        };
+                        btn_id(&element_id, label, {
                             cx.listener(move |this, _, _, cx| {
-                                this.action("apps.install", json!({ "id": aid }));
-                                cx.notify();
-                            })
-                        })
-                    }
-                    NativeAction::Update => {
-                        btn_id(&format!("app-update-{id}"), "Обновить", {
-                            cx.listener(move |this, _, _, cx| {
-                                this.action("apps.install", json!({ "id": aid }));
+                                this.refresh("apps.op", "apps.install", json!({ "id": aid }));
                                 cx.notify();
                             })
                         })
                     }
                     NativeAction::Open => btn_id(&format!("app-open-{id}"), "Открыть", {
                         cx.listener(move |this, _, _, cx| {
-                            this.action("apps.launch", json!({ "id": aid }));
+                            this.action("apps.open", json!({ "id": aid }));
                             cx.notify();
                         })
                     }),
@@ -126,7 +158,7 @@ pub(super) fn render_native_apps(app: &mut ManagerApp, cx: &mut Context<ManagerA
 
 #[cfg(test)]
 mod tests {
-    use super::{native_actions, NativeAction};
+    use super::{native_actions, native_status, NativeAction};
     use serde_json::json;
 
     #[test]
@@ -137,7 +169,7 @@ mod tests {
             "installed": false,
             "installed_version": null,
             "latest_version": "0.1.1",
-            "update_available": false,
+            "state": "not-installed",
         });
         assert_eq!(native_actions(&item), vec![NativeAction::Install]);
     }
@@ -149,7 +181,7 @@ mod tests {
             "installed": true,
             "installed_version": "0.1.1",
             "latest_version": "0.1.1",
-            "update_available": false,
+            "state": "installed",
         });
         assert_eq!(
             native_actions(&item),
@@ -165,6 +197,7 @@ mod tests {
             "installed_version": "0.1.0",
             "latest_version": "0.1.1",
             "update_version": "0.1.1",
+            "state": "update-available",
         });
         assert_eq!(
             native_actions(&item),
@@ -173,6 +206,62 @@ mod tests {
                 NativeAction::Open,
                 NativeAction::Uninstall
             ]
+        );
+    }
+
+    #[test]
+    fn installing_row_offers_no_actions_and_reports_progress() {
+        let item = json!({
+            "id": "com.kosmos.agenda",
+            "state": "installing",
+            "download_bytes": 50,
+            "download_total": 100,
+        });
+        assert_eq!(native_actions(&item), Vec::<NativeAction>::new());
+        let (label, _) = native_status(&item);
+        assert_eq!(label, "Установка… 50%");
+    }
+
+    #[test]
+    fn failed_row_retries_install_and_shows_the_typed_reason() {
+        let item = json!({
+            "id": "com.kosmos.agenda",
+            "installed": false,
+            "state": "failed",
+            "failure": "app-running",
+        });
+        assert_eq!(native_actions(&item), vec![NativeAction::Install]);
+        let (label, _) = native_status(&item);
+        assert_eq!(label, "Ошибка: закройте приложение и повторите");
+    }
+
+    #[test]
+    fn failed_installed_row_keeps_open_and_uninstall() {
+        // A failed UPDATE leaves the old version live — its row must still
+        // offer Open/Uninstall.
+        let item = json!({
+            "id": "com.kosmos.agenda",
+            "installed": true,
+            "installed_version": "0.1.0",
+            "state": "failed",
+            "failure": "integrity",
+        });
+        assert_eq!(
+            native_actions(&item),
+            vec![NativeAction::Open, NativeAction::Uninstall]
+        );
+    }
+
+    #[test]
+    fn offline_rows_offer_no_network_action_but_installed_still_opens() {
+        let absent = json!({ "id": "x", "installed": false, "state": "offline" });
+        assert_eq!(native_actions(&absent), Vec::<NativeAction>::new());
+        let present = json!({
+            "id": "x", "installed": true, "installed_version": "1.0", "state": "offline",
+        });
+        assert_eq!(
+            native_actions(&present),
+            vec![NativeAction::Open, NativeAction::Uninstall]
         );
     }
 
