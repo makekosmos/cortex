@@ -39,6 +39,7 @@ mod package;
 mod package_helpers;
 mod package_legacy;
 mod store;
+mod system;
 mod transport;
 
 pub(super) use app_index::*;
@@ -54,4 +55,5 @@ pub(super) use package::*;
 pub(super) use package_helpers::*;
 pub(super) use package_legacy::restore_migration_snapshot;
 pub(super) use store::*;
+pub(super) use system::*;
 pub(super) use transport::*;

@@ -71,6 +71,18 @@ test("stops processes before uninstalling", () => {
   expect(macroSection).toContain("Sleep 500");
 });
 
+test("uninstall removes the privileged service via one elevated runas call", () => {
+  // Detection is unelevated (sc query), the actual teardown is delegated to
+  // the stable service copy's `privileged uninstall` — NSIS stays thin.
+  expect(installer).toContain("Function un.RemovePrivilegedService");
+  expect(installer).toContain('sc.exe query "${PRIVILEGED_SVC_NAME}"');
+  expect(installer).toContain('ExecShell "runas" "${PRIVILEGED_SVC_EXE}" "privileged uninstall"');
+  // One prompt, only when the service is registered, and a user-visible note
+  // when elevation is declined.
+  expect(installer).toContain("elevation declined");
+  expect(uninstallSection).toContain("Call un.RemovePrivilegedService");
+});
+
 test("always starts the Engine at the end of install", () => {
   const postInstall = readFileSync(path.join(buildDir, "engine-post-install.ps1"), "utf8");
   expect(postInstall).toContain("mundus-engine.exe");

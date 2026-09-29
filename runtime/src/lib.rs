@@ -78,6 +78,7 @@ pub mod package_worker_supervisor;
 pub mod pomodoro;
 pub mod pomodoro_host;
 pub mod priority;
+pub mod privileged;
 pub mod protocol_usage;
 pub mod protocol_version;
 pub mod runtime_grants;

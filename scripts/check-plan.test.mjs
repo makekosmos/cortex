@@ -34,7 +34,7 @@ test("Rust, native, and packaging files expand conservatively", () => {
     "test:rust",
     "runtime-staging",
   ]);
-  assert.deepEqual(plan("--files", "native-services/src/main.rs").json.checks, ["native-services"]);
+  assert.deepEqual(plan("--files", "manager-gpui/src/app.rs").json.checks, ["manager-gpui"]);
 });
 
 test("core subtree maps crates to rust checks and inert paths to none", () => {

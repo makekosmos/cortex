@@ -7,7 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildEngineArchive } from "./engine-distribution.mjs";
 
-const names = ["mundus-engine.exe", "focus-helper.exe", "focus-svc.exe", "tray.ico"];
+const names = ["mundus-engine.exe", "tray.ico"];
 const script = fileURLToPath(new URL("../build/install-engine.ps1", import.meta.url));
 const SOURCE_COMMIT = "a".repeat(40);
 

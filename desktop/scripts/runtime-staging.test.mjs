@@ -17,7 +17,7 @@ const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const cortexRoot = path.resolve(shellRoot, "..");
 
 test("non-default Cargo runtime is the one mapped into the Windows package", () => {
-  assert.deepEqual(RUNTIME_BINARIES, ["mundus-engine", "focus-helper", "focus-svc"]);
+  assert.deepEqual(RUNTIME_BINARIES, ["mundus-engine"]);
   assert.equal(existsSync(path.join(cortexRoot, "core", ".git")), false);
   assert.equal(ARK_CORE_SOURCE, "core/crates/ark-core");
   assert.equal(ARK_CORE_SOURCE_DIR, path.join(cortexRoot, "core", "crates", "ark-core"));

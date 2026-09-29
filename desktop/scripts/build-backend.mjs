@@ -58,15 +58,6 @@ const buildMundus = spawnSync(
   },
 );
 if ((buildMundus.status ?? 1) !== 0) process.exit(buildMundus.status ?? 1);
-for (const bin of RUNTIME_BINARIES.slice(1)) {
-  const result = spawnSync("cargo", [...cortexBuildArgs, "--bin", bin], {
-    cwd: shellRoot,
-    stdio: "inherit",
-    windowsHide: true,
-    env: cargoEnv,
-  });
-  if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1);
-}
 
 // Package only binaries produced by this build. In particular, release builds use an
 // alternate CARGO_TARGET_DIR to avoid locks from installed services; package.json used to

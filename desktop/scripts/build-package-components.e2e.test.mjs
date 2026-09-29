@@ -25,7 +25,6 @@ const cleanWorktree =
     "desktop/build",
     "manager-gpui",
     "runtime/src",
-    "native-services",
   ]) === "";
 
 // The Manager component is manager-gpui (cargo); only the desktop leg needs

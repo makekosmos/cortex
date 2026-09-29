@@ -10,7 +10,10 @@ import {
 } from "node:fs";
 import path from "node:path";
 
-export const RUNTIME_BINARIES = ["mundus-engine", "focus-helper", "focus-svc"];
+// Engine privileged ops live inside mundus-engine.exe itself
+// (`mundus-engine privileged install|uninstall|run-service`) — no separate
+// helper exes ship in the distribution.
+export const RUNTIME_BINARIES = ["mundus-engine"];
 
 export function acquireBuildLock(root) {
   const lock = path.join(root, ".tmp", "build.active.lock");
